@@ -1,0 +1,44 @@
+// Integer semantics on the real instruction set (ADR 0007), printed as
+// digits; exits with code 3 to exercise the finisher's failure path.
+// expect-output: 4 2 8 4 b
+// expect-exit: 3
+entry fn main() -> ! {
+    let uart: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+
+    // u8 wraps: 250 + 10 == 4
+    let mut w: u8 = 250;
+    w += 10;
+    *uart = b'0' + w;
+    *uart = b' ';
+
+    // Shift amounts are masked: 33 % 32 == 1, so 1 << 33 == 2
+    let n: u32 = 33;
+    let s: u32 = 1 << n;
+    *uart = b'0' + s as u8;
+    *uart = b' ';
+
+    // Negation wraps: -(-128) == -128, which is 128 as a u8
+    let min: i8 = -128;
+    let neg: i8 = -min;
+    *uart = (neg as u8) - 120 + b'0';
+    *uart = b' ';
+
+    // Signed right shifts keep the sign: -16 >> 2 == -4
+    let a: i32 = -16;
+    let r: i32 = a >> 2;
+    *uart = b'0' + (0 - r) as u8;
+    *uart = b' ';
+
+    // Bytes are integers
+    *uart = b'a' + 1;
+    *uart = b'\n';
+
+    // FINISHER_FAIL with exit code 3
+    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+    *finisher = 0x3333 | 3 << 16;
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    loop {}
+}

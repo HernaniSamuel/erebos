@@ -16,6 +16,8 @@ fn arith() -> u32 {
     let _8: u32;
     let _9: u32;
     let _10: u32;
+    let _11: u32;
+    let _12: u32;
 
     bb0: {
         _1 = const 16_u32;
@@ -25,11 +27,13 @@ fn arith() -> u32 {
         _2 = copy _5;
         _3 = const 3_u8;
         _6 = Shl(copy _2, copy _3);
-        _7 = Shr(copy _1, const 1_u32);
-        _8 = Not(copy _2);
-        _9 = BitXor(copy _7, copy _8);
-        _10 = BitOr(copy _6, copy _9);
-        _0 = copy _10;
+        _7 = copy _6;
+        _8 = Shr(copy _1, const 1_u32);
+        _9 = copy _8;
+        _10 = Not(copy _2);
+        _11 = BitXor(copy _9, copy _10);
+        _12 = BitOr(copy _7, copy _11);
+        _0 = copy _12;
         return;
     }
 }

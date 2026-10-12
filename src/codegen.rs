@@ -2,6 +2,7 @@
 
 use std::path::Path;
 
+use inkwell::AddressSpace;
 use inkwell::OptimizationLevel;
 use inkwell::attributes::{Attribute, AttributeLoc};
 use inkwell::basic_block::BasicBlock as LlvmBlock;
@@ -13,8 +14,8 @@ use inkwell::targets::{
     CodeModel, FileType, InitializationConfig, RelocMode, Target as LlvmTarget, TargetMachine,
     TargetTriple,
 };
-use inkwell::types::IntType;
-use inkwell::values::{FunctionValue, IntValue, PointerValue};
+use inkwell::types::{BasicType, BasicTypeEnum, IntType};
+use inkwell::values::{BasicValue, BasicValueEnum, FunctionValue, IntValue, PointerValue};
 
 use crate::mir::{
     BinOp, Body, Const, IntTy, Local, Mir, Operand, Place, Rvalue, Statement, Terminator, Ty, UnOp,
@@ -96,15 +97,24 @@ fn int_type(context: &Context, int: IntTy) -> IntType<'_> {
     }
 }
 
+/// The LLVM type of a MIR type; `()` and `!` have no representation.
+fn basic_type(context: &Context, ty: Ty) -> Option<BasicTypeEnum<'_>> {
+    match ty {
+        Ty::Int(int) => Some(int_type(context, int).into()),
+        Ty::Ptr(_) => Some(context.ptr_type(AddressSpace::default()).into()),
+        Ty::Unit | Ty::Never => None,
+    }
+}
+
 fn declare<'ctx>(
     context: &'ctx Context,
     module: &Module<'ctx>,
     body: &Body,
 ) -> FunctionValue<'ctx> {
-    let fn_type = match body.ret {
-        Ty::Int(int) => int_type(context, int).fn_type(&[], false),
+    let fn_type = match basic_type(context, body.ret) {
+        Some(ty) => ty.fn_type(&[], false),
         // Both `()` and `!` return nothing; `!` additionally never returns.
-        Ty::Unit | Ty::Never => context.void_type().fn_type(&[], false),
+        None => context.void_type().fn_type(&[], false),
     };
     let function = module.add_function(&body.name, fn_type, None);
 
@@ -124,8 +134,8 @@ fn add_fn_attribute(context: &Context, function: FunctionValue, name: &str) {
     );
 }
 
-/// Lowers one MIR body. Every integer local gets a stack slot; values of
-/// type `()` and `!` have no representation and are skipped.
+/// Lowers one MIR body. Every local with a representation gets a stack
+/// slot; values of type `()` and `!` are skipped.
 struct FnCodegen<'a, 'ctx> {
     context: &'ctx Context,
     body: &'a Body,
@@ -155,13 +165,12 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
         self.slots = self
             .body
             .locals()
-            .map(|(local, decl)| match decl.ty {
-                Ty::Int(int) => Some(
+            .map(|(local, decl)| {
+                basic_type(self.context, decl.ty).map(|ty| {
                     self.builder
-                        .build_alloca(int_type(self.context, int), &local.to_string())
-                        .expect("builder is positioned"),
-                ),
-                Ty::Unit | Ty::Never => None,
+                        .build_alloca(ty, &local.to_string())
+                        .expect("builder is positioned")
+                })
             })
             .collect();
 
@@ -177,27 +186,67 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
     fn statement(&self, statement: &Statement) {
         match statement {
             Statement::Assign(place, rvalue) => {
-                // Assignments of `()` have nothing to store.
-                let Some(slot) = self.slots[place.local.0 as usize] else {
+                // Places of type `()` hold nothing.
+                if basic_type(self.context, self.body.place_ty(*place)).is_none() {
                     return;
-                };
+                }
                 let value = self.rvalue(rvalue);
-                self.builder
-                    .build_store(slot, value)
+                let (address, volatile) = self.address(*place);
+                let store = self
+                    .builder
+                    .build_store(address, value)
                     .expect("builder is positioned");
+                if volatile {
+                    store.set_volatile(true).expect("stores can be volatile");
+                }
             }
         }
     }
 
-    fn rvalue(&self, rvalue: &Rvalue) -> IntValue<'ctx> {
+    /// The address of a place and whether accesses to it are volatile.
+    fn address(&self, place: Place) -> (PointerValue<'ctx>, bool) {
+        let slot = self.slots[place.local.0 as usize].expect("place has a representation");
+        if !place.deref {
+            return (slot, false);
+        }
+        let Ty::Ptr(ptr) = self.body.local_ty(place.local) else {
+            unreachable!("only pointers are dereferenced")
+        };
+        let pointer = self
+            .builder
+            .build_load(self.context.ptr_type(AddressSpace::default()), slot, "")
+            .expect("builder is positioned")
+            .into_pointer_value();
+        (pointer, ptr.volatile)
+    }
+
+    fn read(&self, place: Place) -> BasicValueEnum<'ctx> {
+        let ty = basic_type(self.context, self.body.place_ty(place)).expect("read of `()`");
+        let (address, volatile) = self.address(place);
+        let value = self
+            .builder
+            .build_load(ty, address, "")
+            .expect("builder is positioned");
+        if volatile {
+            value
+                .as_instruction_value()
+                .expect("a load is an instruction")
+                .set_volatile(true)
+                .expect("loads can be volatile");
+        }
+        value
+    }
+
+    fn rvalue(&self, rvalue: &Rvalue) -> BasicValueEnum<'ctx> {
         let b = &self.builder;
+        let int = |operand: &Operand| self.operand(operand).into_int_value();
         let built = match rvalue {
             Rvalue::Use(operand) => return self.operand(operand),
-            Rvalue::Unary(UnOp::Neg, operand) => b.build_int_neg(self.operand(operand), ""),
-            Rvalue::Unary(UnOp::Not, operand) => b.build_not(self.operand(operand), ""),
+            Rvalue::Unary(UnOp::Neg, operand) => b.build_int_neg(int(operand), ""),
+            Rvalue::Unary(UnOp::Not, operand) => b.build_not(int(operand), ""),
             Rvalue::Binary(op, lhs, rhs) => {
-                let int = self.int_of(lhs);
-                let (l, r) = (self.operand(lhs), self.operand(rhs));
+                let ty = self.int_of(lhs);
+                let (l, r) = (int(lhs), int(rhs));
                 // Never `nsw`/`nuw`: integer arithmetic wraps (ADR 0007).
                 match op {
                     BinOp::Add => b.build_int_add(l, r, ""),
@@ -207,25 +256,45 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                     BinOp::BitOr => b.build_or(l, r, ""),
                     BinOp::BitXor => b.build_xor(l, r, ""),
                     BinOp::Shl | BinOp::Shr => {
-                        let amount = self.shift_amount(r, int);
-                        match (op, int.is_signed()) {
+                        let amount = self.shift_amount(r, ty);
+                        match (op, ty.is_signed()) {
                             (BinOp::Shl, _) => b.build_left_shift(l, amount, ""),
                             (_, signed) => b.build_right_shift(l, amount, signed, ""),
                         }
                     }
                 }
             }
-            Rvalue::Cast(operand, to) => {
-                let from = self.int_of(operand);
-                b.build_int_cast_sign_flag(
-                    self.operand(operand),
-                    int_type(self.context, *to),
+            Rvalue::Cast(operand, to) => return self.cast(operand, *to),
+        };
+        built.expect("builder is positioned").into()
+    }
+
+    fn cast(&self, operand: &Operand, to: Ty) -> BasicValueEnum<'ctx> {
+        let value = self.operand(operand);
+        let b = &self.builder;
+        let ptr_type = self.context.ptr_type(AddressSpace::default());
+        let cast = match (self.body.operand_ty(operand), to) {
+            (Ty::Int(from), Ty::Int(to)) => b
+                .build_int_cast_sign_flag(
+                    value.into_int_value(),
+                    int_type(self.context, to),
                     from.is_signed(),
                     "",
                 )
-            }
+                .map(Into::into),
+            // inttoptr/ptrtoint zero-extend or truncate as needed.
+            (Ty::Int(_), Ty::Ptr(_)) => b
+                .build_int_to_ptr(value.into_int_value(), ptr_type, "")
+                .map(Into::into),
+            (Ty::Ptr(_), Ty::Int(to)) => b
+                .build_ptr_to_int(value.into_pointer_value(), int_type(self.context, to), "")
+                .map(Into::into),
+            // All pointers share one LLVM type; mutability, volatility and
+            // pointee only matter to the type checker and to accesses.
+            (Ty::Ptr(_), Ty::Ptr(_)) => return value,
+            (from, to) => unreachable!("cast from `{from}` to `{to}`"),
         };
-        built.expect("builder is positioned")
+        cast.expect("builder is positioned")
     }
 
     /// Shift amounts are masked to the shifted type's width (ADR 0007), which
@@ -249,20 +318,13 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
         }
     }
 
-    fn operand(&self, operand: &Operand) -> IntValue<'ctx> {
+    fn operand(&self, operand: &Operand) -> BasicValueEnum<'ctx> {
         match operand {
-            Operand::Copy(place) => {
-                let slot = self.slots[place.local.0 as usize].expect("integer locals have slots");
-                let ty = int_type(self.context, self.int_of(operand));
-                self.builder
-                    .build_load(ty, slot, "")
-                    .expect("builder is positioned")
-                    .into_int_value()
-            }
+            Operand::Copy(place) => self.read(*place),
             Operand::Const(Const::Int(value, int)) => {
-                int_type(self.context, *int).const_int(*value, false)
+                int_type(self.context, *int).const_int(*value, false).into()
             }
-            Operand::Const(Const::Unit) => unreachable!("`()` is never used as an integer"),
+            Operand::Const(Const::Unit) => unreachable!("`()` has no value to use"),
         }
     }
 
@@ -272,14 +334,12 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
             Terminator::Goto(target) => {
                 b.build_unconditional_branch(self.blocks[target.0 as usize])
             }
-            Terminator::Return => match self.body.ret {
-                Ty::Int(_) => {
-                    let value = self.operand(&Operand::Copy(Place {
-                        local: Local::RETURN,
-                    }));
+            Terminator::Return => match basic_type(self.context, self.body.ret) {
+                Some(_) => {
+                    let value = self.read(Place::local(Local::RETURN));
                     b.build_return(Some(&value))
                 }
-                Ty::Unit | Ty::Never => b.build_return(None),
+                None => b.build_return(None),
             },
             Terminator::Unreachable => b.build_unreachable(),
         };

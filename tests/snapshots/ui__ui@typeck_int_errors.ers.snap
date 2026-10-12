@@ -60,54 +60,64 @@ ty::assign-immutable
  7 │     a = 1;
    ·     ┬
    ·     ╰── assigned here
- 8 │     let f: u32 = 1 as u32;
+ 8 │     5;
    ╰────
 ty::untyped-literal
 
   × cannot tell the type of this literal
-   ╭─[typeck_int_errors.ers:8:18]
+   ╭─[typeck_int_errors.ers:8:5]
  7 │     a = 1;
- 8 │     let f: u32 = 1 as u32;
-   ·                  ┬
-   ·                  ╰── no type is expected here
- 9 │     let mut g: u32 = 0;
+ 8 │     5;
+   ·     ┬
+   ·     ╰── no type is expected here
+ 9 │     let big: u8 = 300 as u8;
    ╰────
   help: literals take the type expected where they appear; bind it first, e.g. `let x: u32 = ...`
         (ADR 0008)
+ty::literal-out-of-range
+
+  × literal out of range for `u8`
+    ╭─[typeck_int_errors.ers:9:19]
+  8 │     5;
+  9 │     let big: u8 = 300 as u8;
+    ·                   ─┬─
+    ·                    ╰── `300` does not fit in `u8`
+ 10 │     let mut g: u32 = 0;
+    ╰────
 ty::shift-out-of-range
 
   × shift amount out of range for `u32`
-    ╭─[typeck_int_errors.ers:10:11]
-  9 │     let mut g: u32 = 0;
- 10 │     g <<= 32;
+    ╭─[typeck_int_errors.ers:11:11]
+ 10 │     let mut g: u32 = 0;
+ 11 │     g <<= 32;
     ·           ─┬
     ·            ╰── must be between 0 and 31
- 11 │     let h: () = 5;
+ 12 │     let h: () = 5;
     ╰────
   help: shifts mask their amount, so this would shift by 0 (ADR 0007)
 ty::mismatched-types
 
   × mismatched types
-    ╭─[typeck_int_errors.ers:11:17]
- 10 │     g <<= 32;
- 11 │     let h: () = 5;
+    ╭─[typeck_int_errors.ers:12:17]
+ 11 │     g <<= 32;
+ 12 │     let h: () = 5;
     ·                 ┬
     ·                 ╰── expected `()`, found an integer
- 12 │ }
+ 13 │ }
     ╰────
 ty::mismatched-types
 
   × mismatched types
-    ╭─[typeck_int_errors.ers:16:5]
- 13 │ 
- 14 │ fn semicolon() -> u32 {
+    ╭─[typeck_int_errors.ers:17:5]
+ 14 │ 
+ 15 │ fn semicolon() -> u32 {
     ·                   ─┬─
     ·                    ╰── expected because of this return type
- 15 │     let x: u32 = 1;
- 16 │     x + 1;
+ 16 │     let x: u32 = 1;
+ 17 │     x + 1;
     ·     ──┬──┬
     ·       │  ╰── remove this semicolon to return the value
     ·       ╰── expected `u32`, found `()`
- 17 │ }
+ 18 │ }
     ╰────
   help: a block's value is its last expression without `;`

@@ -2,8 +2,8 @@
 
 use crate::hir::{self, Hir};
 use crate::mir::{
-    BasicBlock, BasicBlockData, Body, BodyId, Const, Local, LocalDecl, Mir, Operand, Place, Rvalue,
-    Statement, Terminator, Ty,
+    BasicBlock, BasicBlockData, Body, BodyId, Const, Local, LocalDecl, Mir, Operand, Place, Ptr,
+    Rvalue, Statement, Terminator, Ty,
 };
 use crate::ty::TypeckResults;
 
@@ -40,12 +40,7 @@ fn build_body(f: &hir::Fn, types: &TypeckResults) -> Body {
     builder.current = Some(start);
     let value = builder.block(&f.body);
     if ret != Ty::Unit {
-        builder.assign(
-            Place {
-                local: Local::RETURN,
-            },
-            Rvalue::Use(value),
-        );
+        builder.assign(Place::local(Local::RETURN), Rvalue::Use(value));
     }
     if builder.current.is_some() {
         builder.terminate(Terminator::Return);
@@ -71,6 +66,12 @@ fn lower_ty(ty: hir::Ty) -> Ty {
         hir::Ty::Unit => Ty::Unit,
         hir::Ty::Never => Ty::Never,
         hir::Ty::Int(int) => Ty::Int(int),
+        hir::Ty::Ptr(ptr) => Ty::Ptr(Ptr {
+            mutable: ptr.mutable,
+            volatile: ptr.volatile,
+            // Leaked like HIR pointee types; see `hir::Ty::ptr`.
+            pointee: Box::leak(Box::new(lower_ty(*ptr.pointee))),
+        }),
         hir::Ty::Error => unreachable!("MIR is only built for well-typed programs"),
     }
 }
@@ -120,8 +121,7 @@ impl Builder<'_> {
 
     /// Stores `rvalue` in a new temporary and returns a read of it.
     fn temp(&mut self, ty: Ty, rvalue: Rvalue) -> Operand {
-        let local = self.new_local(ty, None);
-        let place = Place { local };
+        let place = Place::local(self.new_local(ty, None));
         self.assign(place, rvalue);
         Operand::Copy(place)
     }
@@ -136,7 +136,7 @@ impl Builder<'_> {
                 hir::Stmt::Let { local, init } => {
                     let value = self.expr(init);
                     let local = self.hir_locals[local.0 as usize];
-                    self.assign(Place { local }, Rvalue::Use(value));
+                    self.assign(Place::local(local), Rvalue::Use(value));
                 }
                 hir::Stmt::Expr { expr, .. } => {
                     self.expr(expr);
@@ -162,32 +162,46 @@ impl Builder<'_> {
             }
             hir::ExprKind::Byte(value) => Operand::Const(Const::Int(*value as u64, hir::IntTy::U8)),
             hir::ExprKind::Unit => Operand::Const(Const::Unit),
-            hir::ExprKind::Local(local) => Operand::Copy(self.place(*local)),
+            hir::ExprKind::Local(local) => Operand::Copy(self.local(*local)),
+            hir::ExprKind::Deref(_) => {
+                let place = self.place(expr);
+                if ty == Ty::Unit {
+                    Operand::Const(Const::Unit)
+                } else {
+                    // Read now: a volatile read must happen exactly here, and
+                    // a later write must not change what was read.
+                    self.temp(ty, Rvalue::Use(Operand::Copy(place)))
+                }
+            }
             hir::ExprKind::Unary(op, operand) => {
                 let operand = self.expr(operand);
                 self.temp(ty, Rvalue::Unary(*op, operand))
             }
             hir::ExprKind::Binary(op, lhs, rhs) => {
-                let lhs = self.expr(lhs);
+                let mut lhs_value = self.expr(lhs);
+                // Reading a local is deferred to where its operand is used;
+                // if evaluating the right side could assign it, read now.
+                if matches!(lhs_value, Operand::Copy(_)) && !is_simple(rhs) {
+                    lhs_value = self.temp(self.operand_ty(lhs_value), Rvalue::Use(lhs_value));
+                }
+                let lhs = lhs_value;
                 let rhs = self.expr(rhs);
                 self.temp(ty, Rvalue::Binary(*op, lhs, rhs))
             }
             hir::ExprKind::Cast(operand, _, _) => {
                 let operand = self.expr(operand);
-                let Ty::Int(int) = ty else {
-                    unreachable!("casts produce integers")
-                };
-                self.temp(ty, Rvalue::Cast(operand, int))
+                self.temp(ty, Rvalue::Cast(operand, ty))
             }
             hir::ExprKind::Assign(place, value) => {
+                // The value is evaluated before the place, as in Rust.
                 let value = self.expr(value);
-                let place = self.assignee(place);
+                let place = self.place(place);
                 self.assign(place, Rvalue::Use(value));
                 Operand::Const(Const::Unit)
             }
             hir::ExprKind::CompoundAssign(op, place, value) => {
                 let value = self.expr(value);
-                let place = self.assignee(place);
+                let place = self.place(place);
                 self.assign(place, Rvalue::Binary(*op, Operand::Copy(place), value));
                 Operand::Const(Const::Unit)
             }
@@ -211,16 +225,52 @@ impl Builder<'_> {
         value
     }
 
-    fn place(&self, local: hir::LocalId) -> Place {
-        Place {
-            local: self.hir_locals[local.0 as usize],
+    fn local(&self, local: hir::LocalId) -> Place {
+        Place::local(self.hir_locals[local.0 as usize])
+    }
+
+    fn operand_ty(&self, operand: Operand) -> Ty {
+        match operand {
+            Operand::Copy(place) => {
+                let ty = self.locals[place.local.0 as usize].ty;
+                match (ty, place.deref) {
+                    (Ty::Ptr(ptr), true) => *ptr.pointee,
+                    (ty, _) => ty,
+                }
+            }
+            Operand::Const(Const::Int(_, int)) => Ty::Int(int),
+            Operand::Const(Const::Unit) => Ty::Unit,
         }
     }
 
-    fn assignee(&self, expr: &hir::Expr) -> Place {
-        match expr.kind {
-            hir::ExprKind::Local(local) => self.place(local),
-            _ => unreachable!("the type checker only allows assigning to locals"),
+    /// Lowers a place expression: a local, or `*pointer`.
+    fn place(&mut self, expr: &hir::Expr) -> Place {
+        match &expr.kind {
+            hir::ExprKind::Local(local) => self.local(*local),
+            hir::ExprKind::Deref(pointer) => {
+                let pointer_ty = lower_ty(self.types.expr_ty(pointer.id));
+                let local = match self.expr(pointer) {
+                    Operand::Copy(place) if !place.deref => place.local,
+                    // The pointer is computed (e.g. a cast): store it first.
+                    other => match self.temp(pointer_ty, Rvalue::Use(other)) {
+                        Operand::Copy(place) => place.local,
+                        Operand::Const(_) => unreachable!("temporaries are places"),
+                    },
+                };
+                Place { local, deref: true }
+            }
+            _ => unreachable!("the type checker only allows locals and `*pointer` as places"),
         }
     }
+}
+
+/// Expressions whose evaluation cannot write to any place.
+fn is_simple(expr: &hir::Expr) -> bool {
+    matches!(
+        expr.kind,
+        hir::ExprKind::Int(_)
+            | hir::ExprKind::Byte(_)
+            | hir::ExprKind::Unit
+            | hir::ExprKind::Local(_)
+    )
 }

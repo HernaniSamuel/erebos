@@ -137,6 +137,14 @@ impl Lowerer<'_> {
         match &ty.kind {
             ast::TyKind::Never => Ty::Never,
             ast::TyKind::Unit => Ty::Unit,
+            ast::TyKind::Ptr {
+                mutable,
+                volatile,
+                pointee,
+            } => {
+                let pointee = self.ty(pointee);
+                Ty::ptr(*mutable, *volatile, pointee)
+            }
             ast::TyKind::Named(name) => match IntTy::from_name(&name.name) {
                 Some(int) => Ty::Int(int),
                 None => {
@@ -226,6 +234,7 @@ impl Lowerer<'_> {
                 None => ExprKind::Unit,
             },
             ast::ExprKind::Unary(op, operand) => ExprKind::Unary(*op, self.boxed(operand)),
+            ast::ExprKind::Deref(operand) => ExprKind::Deref(self.boxed(operand)),
             ast::ExprKind::Binary(op, lhs, rhs) => {
                 ExprKind::Binary(*op, self.boxed(lhs), self.boxed(rhs))
             }

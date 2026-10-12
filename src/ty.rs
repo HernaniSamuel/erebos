@@ -11,7 +11,8 @@
 use std::fmt::Write;
 
 use crate::diag::{Diagnostic, Diagnostics};
-use crate::hir::{Block, Expr, ExprId, ExprKind, Fn, FnKind, Hir, IntTy, Stmt, Ty, UnOp};
+use crate::hir::{Block, Expr, ExprId, ExprKind, Fn, FnKind, Hir, IntTy, Ptr, Stmt, Ty, UnOp};
+use crate::span::Span;
 
 pub struct TypeckResults {
     expr_types: Vec<Ty>,
@@ -191,17 +192,12 @@ impl Checker<'_> {
                 ty
             }
             ExprKind::Cast(operand, target, target_span) => {
-                let from = self.check(f, operand, None);
-                self.require_int(operand, from, "as");
-                if !matches!(target, Ty::Int(_) | Ty::Error) {
-                    self.diags.push(
-                        Diagnostic::error("ty::invalid-cast", format!("cannot cast to `{target}`"))
-                            .label(*target_span, "only integer types can be cast to"),
-                    );
-                    return Ty::Error;
-                }
-                *target
+                self.cast(f, operand, *target, *target_span)
             }
+            ExprKind::Deref(pointer) => match self.pointer(f, pointer) {
+                Some(ptr) => *ptr.pointee,
+                None => Ty::Error,
+            },
             ExprKind::Assign(place, value) => {
                 let place_ty = self.place(f, place);
                 self.check(f, value, Some(place_ty));
@@ -345,15 +341,85 @@ impl Checker<'_> {
         }
     }
 
-    /// Checks that `place` can be assigned to and returns its type.
-    fn place(&mut self, f: &Fn, place: &Expr) -> Ty {
-        let ExprKind::Local(id) = place.kind else {
-            self.check(f, place, None);
+    /// Integers and pointers convert to each other with `as` (ADR 0013). A
+    /// literal operand takes the target type, or `usize` for a pointer
+    /// target (ADR 0017).
+    fn cast(&mut self, f: &Fn, operand: &Expr, target: Ty, target_span: Span) -> Ty {
+        let literal_ty = match target {
+            Ty::Int(_) => Some(target),
+            Ty::Ptr(_) => Some(Ty::Int(IntTy::Usize)),
+            _ => None,
+        };
+        let expected = if needs_expected_type(operand) {
+            literal_ty
+        } else {
+            None
+        };
+        let from = self.check(f, operand, expected);
+        let castable = |ty: Ty| matches!(ty, Ty::Int(_) | Ty::Ptr(_) | Ty::Error | Ty::Never);
+        if !castable(from) {
             self.diags.push(
-                Diagnostic::error("ty::not-assignable", "cannot assign to this expression")
-                    .label(place.span, "not a variable"),
+                Diagnostic::error("ty::invalid-cast", format!("cannot cast `{from}`"))
+                    .label(operand.span, "only integers and pointers can be cast"),
+            );
+        }
+        if !castable(target) {
+            self.diags.push(
+                Diagnostic::error("ty::invalid-cast", format!("cannot cast to `{target}`"))
+                    .label(target_span, "only integers and pointers can be cast to"),
             );
             return Ty::Error;
+        }
+        target
+    }
+
+    /// Types the operand of `*`, which must be a pointer.
+    fn pointer(&mut self, f: &Fn, pointer: &Expr) -> Option<Ptr> {
+        match self.check(f, pointer, None) {
+            Ty::Ptr(ptr) => Some(ptr),
+            Ty::Error | Ty::Never => None,
+            other => {
+                self.diags.push(
+                    Diagnostic::error(
+                        "ty::deref-non-pointer",
+                        format!("cannot dereference `{other}`"),
+                    )
+                    .label(pointer.span, "not a pointer"),
+                );
+                None
+            }
+        }
+    }
+
+    /// Checks that `place` can be assigned to and returns its type.
+    fn place(&mut self, f: &Fn, place: &Expr) -> Ty {
+        let id = match &place.kind {
+            ExprKind::Local(id) => *id,
+            ExprKind::Deref(pointer) => {
+                let Some(ptr) = self.pointer(f, pointer) else {
+                    return Ty::Error;
+                };
+                if !ptr.mutable {
+                    self.diags.push(
+                        Diagnostic::error(
+                            "ty::write-through-const",
+                            "cannot write through a `*const` pointer",
+                        )
+                        .label(pointer.span, format!("has type `{}`", Ty::Ptr(ptr)))
+                        .help("only `*mut` pointers can be written through"),
+                    );
+                }
+                self.expr_types[place.id.0 as usize] = *ptr.pointee;
+                return *ptr.pointee;
+            }
+            _ => {
+                self.check(f, place, None);
+                self.diags.push(
+                    Diagnostic::error("ty::not-assignable", "cannot assign to this expression")
+                        .label(place.span, "not a variable or `*pointer`"),
+                );
+                return Ty::Error;
+            }
         };
         let local = f.local(id);
         if !local.mutable {
@@ -422,6 +488,7 @@ fn expr_label(f: &Fn, expr: &Expr) -> String {
         ExprKind::Unit => "unit".to_owned(),
         ExprKind::Local(id) => format!("local {}", f.local(*id).name),
         ExprKind::Unary(op, _) => format!("{op:?}").to_lowercase(),
+        ExprKind::Deref(_) => "deref".to_owned(),
         ExprKind::Binary(op, _, _) => format!("binary {}", op.symbol()),
         ExprKind::Cast(_, ty, _) => format!("as {ty}"),
         ExprKind::Assign(..) => "assign".to_owned(),

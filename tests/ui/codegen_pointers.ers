@@ -1,0 +1,12 @@
+// emit: llvm-ir
+fn pointers() -> u8 {
+    let uart: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+    *uart = b'!';
+    let plain: *mut u32 = uart as *mut u32;
+    *plain += 1;
+    let addr: usize = plain as usize;
+    *(addr as *const u8)
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

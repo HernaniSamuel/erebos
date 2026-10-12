@@ -1,0 +1,13 @@
+// emit: typeck
+fn errors() {
+    let x: u32 = 1;
+    let a: u32 = *x;
+    let c: *const u8 = 0x10 as *const u8;
+    *c = 1;
+    (x + 1) = 2;
+    let u: u32 = () as u32;
+    let p: *mut u8 = x;
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

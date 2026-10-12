@@ -12,12 +12,14 @@ pub enum TokenKind {
 
     // Keywords
     As,
+    Const,
     Entry,
     Fn,
     Let,
     Loop,
     Mut,
     Panic,
+    Volatile,
 
     // Punctuation
     LParen,
@@ -55,12 +57,14 @@ impl TokenKind {
     pub fn keyword(text: &str) -> Option<TokenKind> {
         Some(match text {
             "as" => TokenKind::As,
+            "const" => TokenKind::Const,
             "entry" => TokenKind::Entry,
             "fn" => TokenKind::Fn,
             "let" => TokenKind::Let,
             "loop" => TokenKind::Loop,
             "mut" => TokenKind::Mut,
             "panic" => TokenKind::Panic,
+            "volatile" => TokenKind::Volatile,
             _ => return None,
         })
     }
@@ -72,12 +76,14 @@ impl TokenKind {
             TokenKind::Int => "integer literal",
             TokenKind::Byte => "byte literal",
             TokenKind::As => "`as`",
+            TokenKind::Const => "`const`",
             TokenKind::Entry => "`entry`",
             TokenKind::Fn => "`fn`",
             TokenKind::Let => "`let`",
             TokenKind::Loop => "`loop`",
             TokenKind::Mut => "`mut`",
             TokenKind::Panic => "`panic`",
+            TokenKind::Volatile => "`volatile`",
             TokenKind::LParen => "`(`",
             TokenKind::RParen => "`)`",
             TokenKind::LBrace => "`{`",

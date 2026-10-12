@@ -84,9 +84,38 @@ pub enum Ty {
     Unit,
     Never,
     Int(IntTy),
+    Ptr(Ptr),
     /// Produced only by the type checker after reporting an error, so one
     /// mistake does not cascade into more. Compatible with every type.
     Error,
+}
+
+/// A raw pointer type (ADR 0013).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Ptr {
+    pub mutable: bool,
+    pub volatile: bool,
+    pub pointee: &'static Ty,
+}
+
+impl Ty {
+    /// Pointee types are leaked so that `Ty` stays `Copy`; a compiler run is
+    /// short and the number of distinct pointer types is tiny.
+    pub fn ptr(mutable: bool, volatile: bool, pointee: Ty) -> Ty {
+        Ty::Ptr(Ptr {
+            mutable,
+            volatile,
+            pointee: Box::leak(Box::new(pointee)),
+        })
+    }
+}
+
+impl fmt::Display for Ptr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mutability = if self.mutable { "mut" } else { "const" };
+        let volatile = if self.volatile { " volatile" } else { "" };
+        write!(f, "*{mutability}{volatile} {}", self.pointee)
+    }
 }
 
 impl fmt::Display for Ty {
@@ -95,6 +124,7 @@ impl fmt::Display for Ty {
             Ty::Unit => f.write_str("()"),
             Ty::Never => f.write_str("!"),
             Ty::Int(int) => write!(f, "{int}"),
+            Ty::Ptr(ptr) => write!(f, "{ptr}"),
             Ty::Error => f.write_str("{error}"),
         }
     }
@@ -134,6 +164,8 @@ pub enum ExprKind {
     Unit,
     Local(LocalId),
     Unary(UnOp, Box<Expr>),
+    /// `*ptr`
+    Deref(Box<Expr>),
     Binary(BinOp, Box<Expr>, Box<Expr>),
     /// `expr as ty`; the span is the written type's.
     Cast(Box<Expr>, Ty, Span),
@@ -150,7 +182,7 @@ impl Expr {
         f(self);
         match &self.kind {
             ExprKind::Int(_) | ExprKind::Byte(_) | ExprKind::Unit | ExprKind::Local(_) => {}
-            ExprKind::Unary(_, e) | ExprKind::Cast(e, _, _) => e.walk(f),
+            ExprKind::Unary(_, e) | ExprKind::Deref(e) | ExprKind::Cast(e, _, _) => e.walk(f),
             ExprKind::Binary(_, a, b)
             | ExprKind::Assign(a, b)
             | ExprKind::CompoundAssign(_, a, b) => {

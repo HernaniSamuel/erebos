@@ -5,7 +5,8 @@ fn errors() {
     let d: u32 = a;
     let e: u32 = -d;
     a = 1;
-    let f: u32 = 1 as u32;
+    5;
+    let big: u8 = 300 as u8;
     let mut g: u32 = 0;
     g <<= 32;
     let h: () = 5;

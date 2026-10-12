@@ -1,0 +1,57 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_pointer_errors.ers
+---
+--- errors ---
+ty::deref-non-pointer
+
+  × cannot dereference `u32`
+   ╭─[typeck_pointer_errors.ers:4:19]
+ 3 │     let x: u32 = 1;
+ 4 │     let a: u32 = *x;
+   ·                   ┬
+   ·                   ╰── not a pointer
+ 5 │     let c: *const u8 = 0x10 as *const u8;
+   ╰────
+ty::write-through-const
+
+  × cannot write through a `*const` pointer
+   ╭─[typeck_pointer_errors.ers:6:6]
+ 5 │     let c: *const u8 = 0x10 as *const u8;
+ 6 │     *c = 1;
+   ·      ┬
+   ·      ╰── has type `*const u8`
+ 7 │     (x + 1) = 2;
+   ╰────
+  help: only `*mut` pointers can be written through
+ty::not-assignable
+
+  × cannot assign to this expression
+   ╭─[typeck_pointer_errors.ers:7:5]
+ 6 │     *c = 1;
+ 7 │     (x + 1) = 2;
+   ·     ───┬───
+   ·        ╰── not a variable or `*pointer`
+ 8 │     let u: u32 = () as u32;
+   ╰────
+ty::invalid-cast
+
+  × cannot cast `()`
+   ╭─[typeck_pointer_errors.ers:8:18]
+ 7 │     (x + 1) = 2;
+ 8 │     let u: u32 = () as u32;
+   ·                  ─┬
+   ·                   ╰── only integers and pointers can be cast
+ 9 │     let p: *mut u8 = x;
+   ╰────
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_pointer_errors.ers:9:22]
+  8 │     let u: u32 = () as u32;
+  9 │     let p: *mut u8 = x;
+    ·                      ┬
+    ·                      ╰── expected `*mut u8`, found `u32`
+ 10 │ }
+    ╰────

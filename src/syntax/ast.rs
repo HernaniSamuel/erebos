@@ -53,6 +53,12 @@ pub enum TyKind {
     Unit,
     /// A type written by name, such as `u32`.
     Named(Ident),
+    /// `*const T`, `*mut T`, optionally `volatile` (ADR 0013).
+    Ptr {
+        mutable: bool,
+        volatile: bool,
+        pointee: Box<Ty>,
+    },
 }
 
 /// `{ stmts; tail }`. The tail is the block's value (ADR 0015).
@@ -101,6 +107,8 @@ pub enum ExprKind {
     /// A name, such as a local variable.
     Name(Ident),
     Unary(UnOp, Box<Expr>),
+    /// `*ptr`
+    Deref(Box<Expr>),
     Binary(BinOp, Box<Expr>, Box<Expr>),
     /// `expr as Type`
     Cast(Box<Expr>, Ty),

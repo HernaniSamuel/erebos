@@ -1,0 +1,51 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/codegen_pointers.ers
+---
+--- llvm-ir ---
+; ModuleID = 'erebos'
+source_filename = "erebos"
+target datalayout = "e-m:e-p:32:32-i64:64-n32-S128"
+target triple = "riscv32-unknown-none-elf"
+
+module asm "\09.section .text.start, \22ax\22, @progbits"
+module asm "\09.globl _start"
+module asm "\09.type _start, @function"
+module asm "_start:"
+module asm "\09li sp, 0x88000000"
+module asm "\09j main"
+
+; Function Attrs: nounwind
+define i8 @pointers() #0 {
+bb0:
+  store volatile i8 33, ptr inttoptr (i32 268435456 to ptr), align 1
+  %0 = load i32, ptr inttoptr (i32 268435456 to ptr), align 4
+  %1 = add i32 %0, 1
+  store i32 %1, ptr inttoptr (i32 268435456 to ptr), align 4
+  %2 = ptrtoint ptr inttoptr (i32 268435456 to ptr) to i32
+  %3 = inttoptr i32 %2 to ptr
+  %4 = load i8, ptr %3, align 1
+  ret i8 %4
+}
+
+; Function Attrs: noreturn nounwind
+define void @main() #1 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: noreturn nounwind
+define void @on_panic() #1 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+attributes #0 = { nounwind }
+attributes #1 = { noreturn nounwind }

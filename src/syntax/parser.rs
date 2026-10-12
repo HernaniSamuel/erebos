@@ -179,6 +179,25 @@ impl Parser<'_> {
                 });
             }
             TokenKind::Ident => TyKind::Named(self.ident()?),
+            TokenKind::Star => {
+                self.bump();
+                let mutable = match self.peek().kind {
+                    TokenKind::Mut => true,
+                    TokenKind::Const => false,
+                    _ => return Err(self.error_expected("`const` or `mut`")),
+                };
+                self.bump();
+                let volatile = self.eat(TokenKind::Volatile).is_some();
+                let pointee = self.ty()?;
+                return Ok(Ty {
+                    span: token.span.to(pointee.span),
+                    kind: TyKind::Ptr {
+                        mutable,
+                        volatile,
+                        pointee: Box::new(pointee),
+                    },
+                });
+            }
             _ => return Err(self.error_expected("a type")),
         };
         Ok(Ty {
@@ -313,15 +332,19 @@ impl Parser<'_> {
     fn prefix(&mut self) -> PResult<Expr> {
         let token = self.peek();
         let op = match token.kind {
-            TokenKind::Minus => UnOp::Neg,
-            TokenKind::Bang => UnOp::Not,
+            TokenKind::Minus => Some(UnOp::Neg),
+            TokenKind::Bang => Some(UnOp::Not),
+            TokenKind::Star => None,
             _ => return self.primary(),
         };
         self.bump();
-        let operand = self.expr_bp(PREFIX_BP)?;
+        let operand = Box::new(self.expr_bp(PREFIX_BP)?);
         Ok(Expr {
             span: token.span.to(operand.span),
-            kind: ExprKind::Unary(op, Box::new(operand)),
+            kind: match op {
+                Some(op) => ExprKind::Unary(op, operand),
+                None => ExprKind::Deref(operand),
+            },
         })
     }
 

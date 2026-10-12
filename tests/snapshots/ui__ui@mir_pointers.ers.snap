@@ -1,0 +1,56 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/mir_pointers.ers
+---
+--- mir ---
+fn pointers() -> u8 {
+    let _0: u8;
+    let _1: *mut volatile u8; // uart
+    let _2: *mut u32; // plain
+    let _3: usize; // addr
+    let _4: *mut volatile u8;
+    let _5: *mut u32;
+    let _6: usize;
+    let _7: *const u8;
+    let _8: u8;
+
+    bb0: {
+        _4 = const 268435456_usize as *mut volatile u8;
+        _1 = copy _4;
+        (*_1) = const 33_u8;
+        _5 = copy _1 as *mut u32;
+        _2 = copy _5;
+        (*_2) = Add(copy (*_2), const 1_u32);
+        _6 = copy _2 as usize;
+        _3 = copy _6;
+        _7 = copy _3 as *const u8;
+        _8 = copy (*_7);
+        _0 = copy _8;
+        return;
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}

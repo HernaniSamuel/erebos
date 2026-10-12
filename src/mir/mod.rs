@@ -85,9 +85,17 @@ impl Body {
         self.locals[local.0 as usize].ty
     }
 
+    pub fn place_ty(&self, place: Place) -> Ty {
+        match (self.local_ty(place.local), place.deref) {
+            (ty, false) => ty,
+            (Ty::Ptr(ptr), true) => *ptr.pointee,
+            (ty, true) => unreachable!("dereference of `{ty}`"),
+        }
+    }
+
     pub fn operand_ty(&self, operand: &Operand) -> Ty {
         match operand {
-            Operand::Copy(place) => self.local_ty(place.local),
+            Operand::Copy(place) => self.place_ty(*place),
             Operand::Const(Const::Int(_, int)) => Ty::Int(*int),
             Operand::Const(Const::Unit) => Ty::Unit,
         }
@@ -106,6 +114,14 @@ pub enum Ty {
     Unit,
     Never,
     Int(IntTy),
+    Ptr(Ptr),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Ptr {
+    pub mutable: bool,
+    pub volatile: bool,
+    pub pointee: &'static Ty,
 }
 
 #[derive(Debug)]
@@ -119,11 +135,21 @@ pub enum Statement {
     Assign(Place, Rvalue),
 }
 
-/// A memory location. Projections (such as dereferences) arrive with
-/// pointers.
+/// A memory location: a local, or what the pointer in a local points to.
+/// Accesses through a `volatile` pointer are volatile (ADR 0013).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Place {
     pub local: Local,
+    pub deref: bool,
+}
+
+impl Place {
+    pub fn local(local: Local) -> Place {
+        Place {
+            local,
+            deref: false,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -144,7 +170,7 @@ pub enum Rvalue {
     Use(Operand),
     Unary(UnOp, Operand),
     Binary(BinOp, Operand, Operand),
-    Cast(Operand, IntTy),
+    Cast(Operand, Ty),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -161,6 +187,11 @@ impl fmt::Display for Ty {
             Ty::Unit => f.write_str("()"),
             Ty::Never => f.write_str("!"),
             Ty::Int(int) => write!(f, "{int}"),
+            Ty::Ptr(ptr) => {
+                let mutability = if ptr.mutable { "mut" } else { "const" };
+                let volatile = if ptr.volatile { " volatile" } else { "" };
+                write!(f, "*{mutability}{volatile} {}", ptr.pointee)
+            }
         }
     }
 }
@@ -179,7 +210,11 @@ impl fmt::Display for Local {
 
 impl fmt::Display for Place {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.local)
+        if self.deref {
+            write!(f, "(*{})", self.local)
+        } else {
+            write!(f, "{}", self.local)
+        }
     }
 }
 
@@ -199,7 +234,7 @@ impl fmt::Display for Rvalue {
             Rvalue::Use(operand) => write!(f, "{operand}"),
             Rvalue::Unary(op, operand) => write!(f, "{op:?}({operand})"),
             Rvalue::Binary(op, lhs, rhs) => write!(f, "{op:?}({lhs}, {rhs})"),
-            Rvalue::Cast(operand, int) => write!(f, "{operand} as {int}"),
+            Rvalue::Cast(operand, ty) => write!(f, "{operand} as {ty}"),
         }
     }
 }
