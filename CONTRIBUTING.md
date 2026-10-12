@@ -57,8 +57,14 @@ cargo test
 
 - **Per-layer snapshot tests** (`insta`) for tokens, AST, HIR, MIR and
   diagnostics. Snapshot changes must be reviewed, not blindly accepted.
-- **End-to-end tests** compile an Erebos program, run it on QEMU, and compare
-  its UART output.
+  Each `tests/ui/*.ers` file is compiled up to the stage named on its first
+  line (`// emit: <stage>`); review new snapshots with `cargo insta review`.
+- **End-to-end tests** (`tests/e2e/*.ers`) compile an Erebos program and boot
+  it on QEMU. They need `qemu-system-riscv32` on `PATH` (or `EREBOS_QEMU`).
+  Until M1 they check that the program runs without CPU exceptions; from M1
+  on they compare UART output and the exit code.
+- `erebos build <file> --emit=<stage>` prints any stage (`tokens`, `ast`,
+  `hir`, `typeck`, `mir`, `llvm-ir`), which is the quickest way to debug.
 - Every bug fix comes with a test that fails without the fix.
 - Every new diagnostic comes with a snapshot of its rendered output.
 

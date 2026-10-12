@@ -5,7 +5,7 @@ and ends with a program running on QEMU, verified by an automated test.
 
 | Milestone | Delivers |
 |-----------|----------|
-| **M0** | `entry fn main() -> ! { loop {} }` compiles to an object file, links, and boots on QEMU. Every layer exists, even if trivial. |
+| **M0** ✅ | `entry fn main() -> ! { loop {} }` compiles to an object file, links, and boots on QEMU. Every layer that has work to do exists, even if trivial (const evaluation waits for M2). |
 | **M1** | Functions, integers, typed `let`, `if`/`while`, raw pointers. Prints "hello" over the QEMU UART via raw pointer writes. |
 | **M2** | Structs, arrays, `const` and const evaluation, modules. |
 | **M3** | `memory { ... }` blocks generating the linker script; `peripheral` blocks with native MMIO. The UART is declared in the language. |
@@ -25,4 +25,8 @@ and ends with a program running on QEMU, verified by an automated test.
   linked with `ld.lld` booted on QEMU `virt`, printed over the UART at
   `0x1000_0000` and exited through the test finisher at `0x0010_0000`
   (ADR 0010).
-- **Next: M0.**
+- **M0 done.** `erebos build` runs lexer, parser, HIR lowering, type
+  checking, MIR building, LLVM codegen and `ld.lld`; the result boots on QEMU
+  through the provisional `_start` (ADR 0012) and is checked by `tests/e2e.rs`.
+- **Next: M1.** Settle the ADR 0007 open questions first. M1 also lets the
+  end-to-end tests check UART output and exit through the test finisher.
