@@ -39,3 +39,12 @@ fn dead_code_after_loop() -> () {
         goto -> bb1;
     }
 }
+
+panic fn on_panic() -> ! {
+    bb0: {
+        goto -> bb1;
+    }
+    bb1: {
+        goto -> bb1;
+    }
+}

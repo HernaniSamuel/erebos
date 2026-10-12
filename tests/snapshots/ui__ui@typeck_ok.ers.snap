@@ -9,3 +9,5 @@ entry fn main() -> !
         expr 1 loop 50..57: !
 fn never_returns() -> ()
     expr 2 loop 88..95: !
+panic fn on_panic() -> !
+    expr 3 loop 130..137: !

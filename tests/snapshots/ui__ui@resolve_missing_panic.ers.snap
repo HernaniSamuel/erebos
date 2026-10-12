@@ -1,0 +1,10 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/resolve_missing_panic.ers
+---
+--- errors ---
+resolve::missing-panic
+
+  × no panic function
+  help: every program declares exactly one: `panic fn on_panic() -> ! { loop {} }`

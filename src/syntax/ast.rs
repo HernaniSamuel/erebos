@@ -15,12 +15,21 @@ pub enum Item {
 
 #[derive(Debug)]
 pub struct FnDecl {
-    pub is_entry: bool,
+    pub kind: FnKind,
     pub name: Ident,
     /// `None` when the `-> Type` part is omitted.
     pub ret: Option<Ty>,
     pub body: Block,
     pub span: Span,
+}
+
+/// Plain functions are called; the program has exactly one entry function
+/// (where execution starts) and one panic function (ADR 0014).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FnKind {
+    Plain,
+    Entry,
+    Panic,
 }
 
 #[derive(Debug)]

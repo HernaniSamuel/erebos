@@ -7,7 +7,7 @@
 use std::fmt::Write;
 
 use crate::diag::{Diagnostic, Diagnostics};
-use crate::hir::{Block, Expr, ExprId, ExprKind, Fn, Hir, Ty};
+use crate::hir::{Block, Expr, ExprId, ExprKind, Fn, FnKind, Hir, Ty};
 use crate::span::Span;
 
 pub struct TypeckResults {
@@ -46,17 +46,29 @@ struct Checker<'a> {
 
 impl Checker<'_> {
     fn fn_(&mut self, f: &Fn) {
-        if f.is_entry && f.ret != Ty::Never {
+        let special = match f.kind {
+            FnKind::Entry => Some((
+                "ty::entry-returns",
+                "entry",
+                "there is nothing to return to on bare metal",
+            )),
+            FnKind::Panic => Some((
+                "ty::panic-returns",
+                "panic",
+                "execution cannot continue after a panic (ADR 0014)",
+            )),
+            FnKind::Plain => None,
+        };
+        if let Some((code, what, why)) = special
+            && f.ret != Ty::Never
+        {
             self.diags.push(
-                Diagnostic::error(
-                    "ty::entry-returns",
-                    "the entry function must never return",
-                )
-                .label(
-                    f.ret_span.unwrap_or(f.name_span),
-                    format!("return type is `{}`", f.ret),
-                )
-                .help("there is nothing to return to on bare metal; declare it `-> !` and end it with a `loop`"),
+                Diagnostic::error(code, format!("the {what} function must never return"))
+                    .label(
+                        f.ret_span.unwrap_or(f.name_span),
+                        format!("return type is `{}`", f.ret),
+                    )
+                    .help(format!("{why}; declare it `-> !` and end it with a `loop`")),
             );
         }
 
@@ -120,9 +132,16 @@ pub fn dump(hir: &Hir, results: &TypeckResults) -> String {
 
     let mut out = String::new();
     for (_, f) in hir.fns() {
-        let entry = if f.is_entry { "entry " } else { "" };
-        writeln!(out, "{entry}fn {}() -> {}", f.name, f.ret).unwrap();
+        writeln!(out, "{}fn {}() -> {}", kind_prefix(f.kind), f.name, f.ret).unwrap();
         block(&mut out, &f.body, results, 1);
     }
     out
+}
+
+fn kind_prefix(kind: FnKind) -> &'static str {
+    match kind {
+        FnKind::Plain => "",
+        FnKind::Entry => "entry ",
+        FnKind::Panic => "panic ",
+    }
 }

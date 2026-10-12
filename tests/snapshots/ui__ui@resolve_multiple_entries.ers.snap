@@ -15,4 +15,5 @@ resolve::multiple-entries
  3 │ entry fn second() -> ! { loop {} }
    ·          ───┬──
    ·             ╰── second entry function
+ 4 │ 
    ╰────

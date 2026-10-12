@@ -6,3 +6,7 @@ entry fn main() -> ! {
 fn idle() {
     loop { loop {} }
 }
+
+panic fn on_panic() -> ! {
+    loop {}
+}

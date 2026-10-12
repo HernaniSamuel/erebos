@@ -1,2 +1,6 @@
 // emit: typeck
 entry fn main() -> ! {}
+
+panic fn on_panic() -> ! {
+    loop {}
+}

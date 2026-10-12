@@ -167,13 +167,13 @@ mod tests {
     #[test]
     fn keywords_identifiers_and_punctuation() {
         use TokenKind::*;
-        let (kinds, diags) = kinds("entry fn main_1() -> ! { loop {} }");
+        let (kinds, diags) = kinds("entry fn main_1() -> ! { loop {} } panic");
         assert!(!diags.has_errors());
         assert_eq!(
             kinds,
             [
                 Entry, Fn, Ident, LParen, RParen, Arrow, Bang, LBrace, Loop, LBrace, RBrace,
-                RBrace, Eof
+                RBrace, Panic, Eof
             ]
         );
     }

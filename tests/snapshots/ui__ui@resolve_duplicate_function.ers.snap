@@ -15,4 +15,5 @@ resolve::duplicate-function
  4 │ fn helper() {}
    ·    ───┬──
    ·       ╰── redefined here
+ 5 │ 
    ╰────

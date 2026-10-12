@@ -7,4 +7,4 @@ input_file: tests/ui/resolve_missing_entry.ers
 resolve::missing-entry
 
   × no entry function
-  help: declare where execution starts: `entry fn main() -> ! { ... }`
+  help: every program declares exactly one: `entry fn main() -> ! { ... }`

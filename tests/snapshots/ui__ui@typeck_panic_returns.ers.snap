@@ -1,0 +1,17 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_panic_returns.ers
+---
+--- errors ---
+ty::panic-returns
+
+  × the panic function must never return
+   ╭─[typeck_panic_returns.ers:3:10]
+ 2 │ entry fn main() -> ! { loop {} }
+ 3 │ panic fn on_panic() {}
+   ·          ────┬───
+   ·              ╰── return type is `()`
+   ╰────
+  help: execution cannot continue after a panic (ADR 0014); declare it `-> !` and end it with a
+        `loop`

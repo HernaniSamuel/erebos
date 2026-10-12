@@ -13,4 +13,5 @@ ty::mismatched-types
    ·                    ┬ ─┬
    ·                    │  ╰── expected `!`, found `()`
    ·                    ╰── expected because of this return type
+ 3 │ 
    ╰────

@@ -10,6 +10,7 @@ pub enum TokenKind {
     Entry,
     Fn,
     Loop,
+    Panic,
 
     // Punctuation
     LParen,
@@ -28,6 +29,7 @@ impl TokenKind {
             "entry" => TokenKind::Entry,
             "fn" => TokenKind::Fn,
             "loop" => TokenKind::Loop,
+            "panic" => TokenKind::Panic,
             _ => return None,
         })
     }
@@ -39,6 +41,7 @@ impl TokenKind {
             TokenKind::Entry => "`entry`",
             TokenKind::Fn => "`fn`",
             TokenKind::Loop => "`loop`",
+            TokenKind::Panic => "`panic`",
             TokenKind::LParen => "`(`",
             TokenKind::RParen => "`)`",
             TokenKind::LBrace => "`{`",

@@ -11,6 +11,7 @@ pub fn build(hir: &Hir, types: &TypeckResults) -> Mir {
         bodies,
         // MIR bodies are built in HIR function order.
         entry: BodyId(hir.entry.0),
+        panic: BodyId(hir.panic.0),
     }
 }
 

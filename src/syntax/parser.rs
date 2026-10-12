@@ -3,7 +3,9 @@
 
 use crate::diag::{Diagnostic, Diagnostics};
 use crate::span::Span;
-use crate::syntax::ast::{Block, Expr, ExprKind, File, FnDecl, Ident, Item, Stmt, Ty, TyKind};
+use crate::syntax::ast::{
+    Block, Expr, ExprKind, File, FnDecl, FnKind, Ident, Item, Stmt, Ty, TyKind,
+};
 use crate::syntax::token::{Token, TokenKind};
 
 /// `tokens` must end with `Eof`, as produced by the lexer.
@@ -106,7 +108,7 @@ impl Parser<'_> {
     fn recover_to_item(&mut self) {
         while !matches!(
             self.peek().kind,
-            TokenKind::Entry | TokenKind::Fn | TokenKind::Eof
+            TokenKind::Entry | TokenKind::Panic | TokenKind::Fn | TokenKind::Eof
         ) {
             self.bump();
         }
@@ -114,7 +116,7 @@ impl Parser<'_> {
 
     fn item(&mut self) -> PResult<Item> {
         match self.peek().kind {
-            TokenKind::Entry | TokenKind::Fn => Ok(Item::Fn(self.fn_decl()?)),
+            TokenKind::Entry | TokenKind::Panic | TokenKind::Fn => Ok(Item::Fn(self.fn_decl()?)),
             _ => {
                 // A stray token, not a missing one: point at the token itself.
                 let err = self.report_unexpected("an item", self.peek().span);
@@ -127,7 +129,13 @@ impl Parser<'_> {
 
     fn fn_decl(&mut self) -> PResult<FnDecl> {
         let start = self.peek().span;
-        let is_entry = self.eat(TokenKind::Entry).is_some();
+        let kind = if self.eat(TokenKind::Entry).is_some() {
+            FnKind::Entry
+        } else if self.eat(TokenKind::Panic).is_some() {
+            FnKind::Panic
+        } else {
+            FnKind::Plain
+        };
         self.expect(TokenKind::Fn)?;
         let name = self.ident()?;
         self.expect(TokenKind::LParen)?;
@@ -138,7 +146,7 @@ impl Parser<'_> {
         };
         let body = self.block()?;
         Ok(FnDecl {
-            is_entry,
+            kind,
             name,
             ret,
             span: start.to(body.span),

@@ -3,12 +3,12 @@
 use std::collections::HashMap;
 
 use crate::diag::{Diagnostic, Diagnostics};
-use crate::hir::{Block, Expr, ExprId, ExprKind, Fn, FnId, Hir, Ty};
+use crate::hir::{Block, Expr, ExprId, ExprKind, Fn, FnId, FnKind, Hir, Ty};
 use crate::span::Span;
 use crate::syntax::ast;
 
-/// Returns `None` only when no HIR can be built at all (no entry function);
-/// other errors are reported and lowering continues.
+/// Returns `None` only when no HIR can be built at all (no entry or panic
+/// function); other errors are reported and lowering continues.
 pub fn lower(file: &ast::File, diags: &mut Diagnostics) -> Option<Hir> {
     let mut lowerer = Lowerer { next_expr: 0 };
     let fns: Vec<Fn> = file
@@ -20,11 +20,13 @@ pub fn lower(file: &ast::File, diags: &mut Diagnostics) -> Option<Hir> {
         .collect();
 
     check_duplicate_names(&fns, diags);
-    let entry = find_entry(&fns, diags)?;
+    let entry = find_unique(&fns, FnKind::Entry, diags);
+    let panic = find_unique(&fns, FnKind::Panic, diags);
 
     Some(Hir {
         fns,
-        entry,
+        entry: entry?,
+        panic: panic?,
         expr_count: lowerer.next_expr,
     })
 }
@@ -47,31 +49,49 @@ fn check_duplicate_names(fns: &[Fn], diags: &mut Diagnostics) {
     }
 }
 
-fn find_entry(fns: &[Fn], diags: &mut Diagnostics) -> Option<FnId> {
-    let mut entries = fns
+/// Finds the single function of a special kind (entry or panic), reporting
+/// a missing or repeated one.
+fn find_unique(fns: &[Fn], kind: FnKind, diags: &mut Diagnostics) -> Option<FnId> {
+    let (what, example) = match kind {
+        FnKind::Entry => ("entry", "entry fn main() -> ! { ... }"),
+        FnKind::Panic => ("panic", "panic fn on_panic() -> ! { loop {} }"),
+        FnKind::Plain => unreachable!("plain functions are not unique"),
+    };
+    let mut found = fns
         .iter()
         .enumerate()
-        .filter(|(_, f)| f.is_entry)
+        .filter(|(_, f)| f.kind == kind)
         .map(|(i, f)| (FnId(i as u32), f));
 
-    let Some((entry, first)) = entries.next() else {
+    let Some((id, first)) = found.next() else {
         diags.push(
-            Diagnostic::error("resolve::missing-entry", "no entry function")
-                .help("declare where execution starts: `entry fn main() -> ! { ... }`"),
+            Diagnostic::error(
+                if kind == FnKind::Entry {
+                    "resolve::missing-entry"
+                } else {
+                    "resolve::missing-panic"
+                },
+                format!("no {what} function"),
+            )
+            .help(format!("every program declares exactly one: `{example}`")),
         );
         return None;
     };
-    for (_, extra) in entries {
+    for (_, extra) in found {
         diags.push(
             Diagnostic::error(
-                "resolve::multiple-entries",
-                "a program has exactly one entry function",
+                if kind == FnKind::Entry {
+                    "resolve::multiple-entries"
+                } else {
+                    "resolve::multiple-panics"
+                },
+                format!("a program has exactly one {what} function"),
             )
-            .label(extra.name_span, "second entry function")
-            .label(first.name_span, "first entry function"),
+            .label(extra.name_span, format!("second {what} function"))
+            .label(first.name_span, format!("first {what} function")),
         );
     }
-    Some(entry)
+    Some(id)
 }
 
 struct Lowerer {
@@ -83,7 +103,11 @@ impl Lowerer {
         Fn {
             name: decl.name.name.clone(),
             name_span: decl.name.span,
-            is_entry: decl.is_entry,
+            kind: match decl.kind {
+                ast::FnKind::Plain => FnKind::Plain,
+                ast::FnKind::Entry => FnKind::Entry,
+                ast::FnKind::Panic => FnKind::Panic,
+            },
             ret: decl.ret.as_ref().map_or(Ty::Unit, lower_ty),
             ret_span: decl.ret.as_ref().map(|ty| ty.span),
             body: self.block(&decl.body),

@@ -20,6 +20,7 @@ pub struct ExprId(pub u32);
 pub struct Hir {
     pub fns: Vec<Fn>,
     pub entry: FnId,
+    pub panic: FnId,
     /// Expression ids are `0..expr_count`.
     pub expr_count: u32,
 }
@@ -41,12 +42,19 @@ impl Hir {
 pub struct Fn {
     pub name: String,
     pub name_span: Span,
-    pub is_entry: bool,
+    pub kind: FnKind,
     pub ret: Ty,
     /// Span of the written return type; `None` when it was omitted.
     pub ret_span: Option<Span>,
     pub body: Block,
     pub span: Span,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FnKind {
+    Plain,
+    Entry,
+    Panic,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

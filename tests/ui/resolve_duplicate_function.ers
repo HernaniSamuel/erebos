@@ -2,3 +2,7 @@
 entry fn main() -> ! { loop {} }
 fn helper() {}
 fn helper() {}
+
+panic fn on_panic() -> ! {
+    loop {}
+}

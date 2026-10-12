@@ -13,3 +13,7 @@ fn dead_code_after_loop() {
     loop {}
     loop {}
 }
+
+panic fn on_panic() -> ! {
+    loop {}
+}

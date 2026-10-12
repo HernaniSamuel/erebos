@@ -9,7 +9,7 @@ Hir {
         Fn {
             name: "main",
             name_span: 22..26,
-            is_entry: true,
+            kind: Entry,
             ret: Never,
             ret_span: Some(
                 32..33,
@@ -36,7 +36,7 @@ Hir {
         Fn {
             name: "idle",
             name_span: 54..58,
-            is_entry: false,
+            kind: Plain,
             ret: Unit,
             ret_span: None,
             body: Block {
@@ -71,9 +71,39 @@ Hir {
             },
             span: 51..85,
         },
+        Fn {
+            name: "on_panic",
+            name_span: 96..104,
+            kind: Panic,
+            ret: Never,
+            ret_span: Some(
+                110..111,
+            ),
+            body: Block {
+                stmts: [
+                    Expr {
+                        id: ExprId(
+                            3,
+                        ),
+                        kind: Loop(
+                            Block {
+                                stmts: [],
+                                span: 123..125,
+                            },
+                        ),
+                        span: 118..125,
+                    },
+                ],
+                span: 112..127,
+            },
+            span: 87..127,
+        },
     ],
     entry: FnId(
         0,
     ),
-    expr_count: 3,
+    panic: FnId(
+        2,
+    ),
+    expr_count: 4,
 }

@@ -4,3 +4,7 @@ entry fn main() -> ! {
 }
 
 fn empty() {}
+
+panic fn on_panic() -> ! {
+    loop {}
+}

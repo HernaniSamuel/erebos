@@ -1,0 +1,18 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/resolve_multiple_panics.ers
+---
+--- errors ---
+resolve::multiple-panics
+
+  × a program has exactly one panic function
+   ╭─[resolve_multiple_panics.ers:4:10]
+ 2 │ entry fn main() -> ! { loop {} }
+ 3 │ panic fn first() -> ! { loop {} }
+   ·          ──┬──
+   ·            ╰── first panic function
+ 4 │ panic fn second() -> ! { loop {} }
+   ·          ───┬──
+   ·             ╰── second panic function
+   ╰────

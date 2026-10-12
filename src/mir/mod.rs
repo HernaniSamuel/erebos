@@ -24,6 +24,7 @@ impl BasicBlock {
 pub struct Mir {
     pub bodies: Vec<Body>,
     pub entry: BodyId,
+    pub panic: BodyId,
 }
 
 impl Mir {
@@ -107,8 +108,14 @@ impl fmt::Display for Mir {
             if i > 0 {
                 writeln!(f)?;
             }
-            let entry = if id == self.entry { "entry " } else { "" };
-            writeln!(f, "{entry}fn {}() -> {} {{", body.name, body.ret)?;
+            let kind = if id == self.entry {
+                "entry "
+            } else if id == self.panic {
+                "panic "
+            } else {
+                ""
+            };
+            writeln!(f, "{kind}fn {}() -> {} {{", body.name, body.ret)?;
             for (bb, data) in body.blocks() {
                 writeln!(f, "    {bb}: {{")?;
                 writeln!(f, "        {};", data.terminator)?;

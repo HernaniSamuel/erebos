@@ -31,5 +31,14 @@ bb0:
   ret void
 }
 
+; Function Attrs: noreturn nounwind
+define void @on_panic() #0 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
 attributes #0 = { noreturn nounwind }
 attributes #1 = { nounwind }

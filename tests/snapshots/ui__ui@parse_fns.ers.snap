@@ -8,7 +8,7 @@ File {
     items: [
         Fn(
             FnDecl {
-                is_entry: true,
+                kind: Entry,
                 name: Ident {
                     name: "main",
                     span: 22..26,
@@ -40,7 +40,7 @@ File {
         ),
         Fn(
             FnDecl {
-                is_entry: false,
+                kind: Plain,
                 name: Ident {
                     name: "helper",
                     span: 54..60,
