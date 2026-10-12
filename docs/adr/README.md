@@ -32,7 +32,7 @@ Do not write one for local implementation details that the code already explains
 | 0004 | [Hand-written lexer and parser](0004-hand-written-lexer-and-parser.md) | Accepted |
 | 0005 | [LLVM backend via inkwell](0005-llvm-backend-via-inkwell.md)     | Accepted |
 | 0006 | [C ABI as the only ABI](0006-c-abi-as-the-only-abi.md)           | Accepted |
-| 0007 | [Wrapping integer arithmetic](0007-wrapping-integer-arithmetic.md) | Proposed |
+| 0007 | [Wrapping integer arithmetic](0007-wrapping-integer-arithmetic.md) | Accepted |
 | 0008 | [Explicit types, no inference](0008-explicit-types-no-inference.md) | Accepted |
 | 0009 | [Defer borrow checking](0009-defer-borrow-checking.md)           | Accepted |
 | 0010 | [First target: riscv32 on QEMU `virt`](0010-first-target-riscv32-qemu-virt.md) | Accepted |

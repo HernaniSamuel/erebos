@@ -15,8 +15,7 @@ and ends with a program running on QEMU, verified by an automated test.
 
 ## Pending decisions
 
-- ADR 0007 open questions (shifts, division by zero). Must be settled before
-  M1 implements those operators.
+- How panics work (needed by M1 for division by zero, ADR 0007).
 
 ## Status
 
@@ -28,5 +27,5 @@ and ends with a program running on QEMU, verified by an automated test.
 - **M0 done.** `erebos build` runs lexer, parser, HIR lowering, type
   checking, MIR building, LLVM codegen and `ld.lld`; the result boots on QEMU
   through the provisional `_start` (ADR 0012) and is checked by `tests/e2e.rs`.
-- **Next: M1.** Settle the ADR 0007 open questions first. M1 also lets the
-  end-to-end tests check UART output and exit through the test finisher.
+- **Next: M1.** It also lets the end-to-end tests check UART output and exit
+  through the test finisher.
