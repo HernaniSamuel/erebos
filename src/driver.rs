@@ -7,7 +7,7 @@ use std::str::FromStr;
 use crate::diag::{self, Diagnostics};
 use crate::span::{FileId, SourceMap};
 use crate::syntax::{lexer, parser};
-use crate::{hir, ty};
+use crate::{hir, mir, ty};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Stage {
@@ -15,10 +15,17 @@ pub enum Stage {
     Ast,
     Hir,
     Typeck,
+    Mir,
 }
 
 impl Stage {
-    pub const ALL: &[Stage] = &[Stage::Tokens, Stage::Ast, Stage::Hir, Stage::Typeck];
+    pub const ALL: &[Stage] = &[
+        Stage::Tokens,
+        Stage::Ast,
+        Stage::Hir,
+        Stage::Typeck,
+        Stage::Mir,
+    ];
 
     pub fn name(self) -> &'static str {
         match self {
@@ -26,6 +33,7 @@ impl Stage {
             Stage::Ast => "ast",
             Stage::Hir => "hir",
             Stage::Typeck => "typeck",
+            Stage::Mir => "mir",
         }
     }
 }
@@ -105,6 +113,16 @@ fn run_to(
     let types = ty::check(&hir, diags);
     if stage == Stage::Typeck {
         return Some(ty::dump(&hir, &types));
+    }
+
+    // Later phases rely on well-typed input.
+    if diags.has_errors() {
+        return None;
+    }
+
+    let mir = mir::build(&hir, &types);
+    if stage == Stage::Mir {
+        return Some(mir.to_string());
     }
 
     unreachable!("every stage returns above")

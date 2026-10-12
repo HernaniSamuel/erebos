@@ -4,6 +4,7 @@
 pub mod diag;
 pub mod driver;
 pub mod hir;
+pub mod mir;
 pub mod span;
 pub mod syntax;
 pub mod ty;

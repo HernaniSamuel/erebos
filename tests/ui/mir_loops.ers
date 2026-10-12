@@ -1,0 +1,15 @@
+// emit: mir
+entry fn main() -> ! {
+    loop {}
+}
+
+fn nested() -> ! {
+    loop { loop {} }
+}
+
+fn empty() {}
+
+fn dead_code_after_loop() {
+    loop {}
+    loop {}
+}
