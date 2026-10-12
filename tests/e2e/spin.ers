@@ -1,0 +1,4 @@
+// The smallest Erebos program: boot and spin forever.
+entry fn main() -> ! {
+    loop {}
+}

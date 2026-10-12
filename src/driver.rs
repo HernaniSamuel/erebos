@@ -1,13 +1,16 @@
-//! Runs the pipeline. `dump` stops after a given stage and returns its
-//! textual form; it backs `--emit` and the snapshot tests.
+//! Runs the pipeline. `build` produces an executable; `dump` stops after a
+//! given stage and returns its textual form, backing `--emit` and the
+//! snapshot tests.
 
 use std::fmt;
+use std::fs;
+use std::path::Path;
 use std::str::FromStr;
 
 use crate::diag::{self, Diagnostic, Diagnostics};
 use crate::span::{FileId, SourceMap};
 use crate::syntax::{lexer, parser};
-use crate::{codegen, hir, mir, target, ty};
+use crate::{codegen, hir, link, mir, target, ty};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Stage {
@@ -72,71 +75,107 @@ pub fn dump(name: &str, text: &str, stage: Stage, color: bool) -> Result<String,
     let file = sources.add(name, text);
     let mut diags = Diagnostics::default();
 
-    let output = run_to(&sources, file, stage, &mut diags);
+    let output = match front_end(&sources, file, Some(stage), &mut diags) {
+        FrontEnd::Dump(dump) => Some(dump),
+        FrontEnd::Mir(mir) => codegen::emit_llvm_ir(&mir, &target::RISCV32_VIRT)
+            .map_err(|e| diags.push(Diagnostic::error("codegen::llvm", e)))
+            .ok(),
+        FrontEnd::Failed => None,
+    };
     match output {
         Some(output) if !diags.has_errors() => Ok(output),
         _ => Err(diag::render(&diags.into_vec(), &sources, color)),
     }
 }
 
-/// Returns the dump of `stage`, or `None` if an earlier stage failed.
-fn run_to(
+/// Compiles `input` into an ELF executable at `output`. On failure, returns
+/// the rendered diagnostics or error message.
+pub fn build(input: &Path, output: &Path, color: bool) -> Result<(), String> {
+    let text = fs::read_to_string(input)
+        .map_err(|e| format!("error: cannot read `{}`: {e}", input.display()))?;
+    let mut sources = SourceMap::default();
+    let file = sources.add(input.display().to_string(), text);
+    let mut diags = Diagnostics::default();
+
+    let mir = match front_end(&sources, file, None, &mut diags) {
+        FrontEnd::Mir(mir) if !diags.has_errors() => mir,
+        _ => return Err(diag::render(&diags.into_vec(), &sources, color)),
+    };
+
+    // Intermediate files sit next to the output and are removed afterwards.
+    let target = &target::RISCV32_VIRT;
+    let object = output.with_extension("o");
+    let script = output.with_extension("ld");
+    let result = codegen::emit_object(&mir, target, &object)
+        .and_then(|()| {
+            fs::write(&script, link::linker_script(target))
+                .map_err(|e| format!("cannot write `{}`: {e}", script.display()))
+        })
+        .and_then(|()| link::link(&object, &script, output));
+    let _ = fs::remove_file(&object);
+    let _ = fs::remove_file(&script);
+    result.map_err(|e| format!("error: {e}"))
+}
+
+enum FrontEnd {
+    /// Stopped at the requested stage.
+    Dump(String),
+    /// Ran to completion (or the requested stage comes after MIR).
+    Mir(mir::Mir),
+    /// A stage failed; the errors are in the diagnostics.
+    Failed,
+}
+
+/// Runs everything up to MIR, stopping early at `stop` if it is a front-end
+/// stage.
+fn front_end(
     sources: &SourceMap,
     file: FileId,
-    stage: Stage,
+    stop: Option<Stage>,
     diags: &mut Diagnostics,
-) -> Option<String> {
+) -> FrontEnd {
     let text = &sources.file(file).text;
 
     // Syntax phases keep going after errors to report as much as possible.
     let tokens = lexer::lex(file, text, diags);
-    if stage == Stage::Tokens {
+    if stop == Some(Stage::Tokens) {
         let dump = tokens
             .iter()
             .map(|t| format!("{t:?} {:?}\n", sources.snippet(t.span)))
             .collect();
-        return Some(dump);
+        return FrontEnd::Dump(dump);
     }
 
     let ast = parser::parse(text, &tokens, diags);
-    if stage == Stage::Ast {
-        return Some(format!("{ast:#?}\n"));
+    if stop == Some(Stage::Ast) {
+        return FrontEnd::Dump(format!("{ast:#?}\n"));
     }
 
     // Semantic phases need a well-formed input.
     if diags.has_errors() {
-        return None;
+        return FrontEnd::Failed;
     }
 
-    let hir = hir::lower(&ast, diags)?;
-    if stage == Stage::Hir {
-        return Some(format!("{hir:#?}\n"));
+    let Some(hir) = hir::lower(&ast, diags) else {
+        return FrontEnd::Failed;
+    };
+    if stop == Some(Stage::Hir) {
+        return FrontEnd::Dump(format!("{hir:#?}\n"));
     }
 
     let types = ty::check(&hir, diags);
-    if stage == Stage::Typeck {
-        return Some(ty::dump(&hir, &types));
+    if stop == Some(Stage::Typeck) {
+        return FrontEnd::Dump(ty::dump(&hir, &types));
     }
 
     // Later phases rely on well-typed input.
     if diags.has_errors() {
-        return None;
+        return FrontEnd::Failed;
     }
 
     let mir = mir::build(&hir, &types);
-    if stage == Stage::Mir {
-        return Some(mir.to_string());
+    if stop == Some(Stage::Mir) {
+        return FrontEnd::Dump(mir.to_string());
     }
-
-    if stage == Stage::LlvmIr {
-        return match codegen::emit_llvm_ir(&mir, &target::RISCV32_VIRT) {
-            Ok(ir) => Some(ir),
-            Err(e) => {
-                diags.push(Diagnostic::error("codegen::llvm", e));
-                None
-            }
-        };
-    }
-
-    unreachable!("every stage returns above")
+    FrontEnd::Mir(mir)
 }
