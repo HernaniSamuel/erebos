@@ -2,4 +2,6 @@
 //! output of the layer before it.
 
 pub mod diag;
+pub mod driver;
 pub mod span;
+pub mod syntax;

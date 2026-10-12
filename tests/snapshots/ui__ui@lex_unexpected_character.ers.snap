@@ -1,0 +1,15 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/lex_unexpected_character.ers
+---
+--- errors ---
+lexer::unexpected-character
+
+  × unexpected character '$'
+   ╭─[lex_unexpected_character.ers:2:7]
+ 1 │ // emit: tokens
+ 2 │ fn mai$n() {}
+   ·       ┬
+   ·       ╰── not valid here
+   ╰────

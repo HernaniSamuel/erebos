@@ -1,0 +1,4 @@
+// emit: tokens
+entry fn main() -> ! {
+    loop {} // spin forever
+}

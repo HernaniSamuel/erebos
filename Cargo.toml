@@ -5,3 +5,6 @@ edition = "2024"
 
 [dependencies]
 miette = { version = "7.6", features = ["fancy-no-backtrace"] }
+
+[dev-dependencies]
+insta = { version = "1.49.0", features = ["glob"] }

@@ -1,0 +1,16 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/lex_unterminated_comment.ers
+---
+--- errors ---
+lexer::unterminated-comment
+
+  × unterminated block comment
+   ╭─[lex_unterminated_comment.ers:2:13]
+ 1 │ // emit: tokens
+ 2 │ fn main() { /* never closed
+   ·             ─┬
+   ·              ╰── comment starts here
+   ╰────
+  help: add `*/` to close the comment

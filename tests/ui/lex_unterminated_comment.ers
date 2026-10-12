@@ -1,0 +1,2 @@
+// emit: tokens
+fn main() { /* never closed

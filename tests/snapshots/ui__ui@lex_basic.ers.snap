@@ -1,0 +1,19 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/lex_basic.ers
+---
+--- tokens ---
+Entry 16..21 "entry"
+Fn 22..24 "fn"
+Ident 25..29 "main"
+LParen 29..30 "("
+RParen 30..31 ")"
+Arrow 32..34 "->"
+Bang 35..36 "!"
+LBrace 37..38 "{"
+Loop 43..47 "loop"
+LBrace 48..49 "{"
+RBrace 49..50 "}"
+RBrace 67..68 "}"
+Eof 69..69 ""
