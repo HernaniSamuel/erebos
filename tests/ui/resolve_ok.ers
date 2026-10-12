@@ -1,0 +1,8 @@
+// emit: hir
+entry fn main() -> ! {
+    loop {}
+}
+
+fn idle() {
+    loop { loop {} }
+}

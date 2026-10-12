@@ -5,23 +5,25 @@ use std::fmt;
 use std::str::FromStr;
 
 use crate::diag::{self, Diagnostics};
-use crate::span::FileId;
-use crate::span::SourceMap;
+use crate::hir;
+use crate::span::{FileId, SourceMap};
 use crate::syntax::{lexer, parser};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Stage {
     Tokens,
     Ast,
+    Hir,
 }
 
 impl Stage {
-    pub const ALL: &[Stage] = &[Stage::Tokens, Stage::Ast];
+    pub const ALL: &[Stage] = &[Stage::Tokens, Stage::Ast, Stage::Hir];
 
     pub fn name(self) -> &'static str {
         match self {
             Stage::Tokens => "tokens",
             Stage::Ast => "ast",
+            Stage::Hir => "hir",
         }
     }
 }
@@ -58,36 +60,44 @@ pub fn dump(name: &str, text: &str, stage: Stage, color: bool) -> Result<String,
     let mut diags = Diagnostics::default();
 
     let output = run_to(&sources, file, stage, &mut diags);
-    if diags.has_errors() {
-        return Err(diag::render(&diags.into_vec(), &sources, color));
+    match output {
+        Some(output) if !diags.has_errors() => Ok(output),
+        _ => Err(diag::render(&diags.into_vec(), &sources, color)),
     }
-    Ok(output)
 }
 
-fn run_to(sources: &SourceMap, file: FileId, stage: Stage, diags: &mut Diagnostics) -> String {
+/// Returns the dump of `stage`, or `None` if an earlier stage failed.
+fn run_to(
+    sources: &SourceMap,
+    file: FileId,
+    stage: Stage,
+    diags: &mut Diagnostics,
+) -> Option<String> {
     let text = &sources.file(file).text;
 
     // Syntax phases keep going after errors to report as much as possible.
     let tokens = lexer::lex(file, text, diags);
     if stage == Stage::Tokens {
-        return tokens
+        let dump = tokens
             .iter()
-            .map(|t| {
-                format!(
-                    "{t:?} {:?}
-",
-                    sources.snippet(t.span)
-                )
-            })
+            .map(|t| format!("{t:?} {:?}\n", sources.snippet(t.span)))
             .collect();
+        return Some(dump);
     }
 
     let ast = parser::parse(text, &tokens, diags);
     if stage == Stage::Ast {
-        return format!(
-            "{ast:#?}
-"
-        );
+        return Some(format!("{ast:#?}\n"));
+    }
+
+    // Semantic phases need a well-formed input.
+    if diags.has_errors() {
+        return None;
+    }
+
+    let hir = hir::lower(&ast, diags)?;
+    if stage == Stage::Hir {
+        return Some(format!("{hir:#?}\n"));
     }
 
     unreachable!("every stage returns above")

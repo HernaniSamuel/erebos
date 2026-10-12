@@ -1,0 +1,4 @@
+// emit: hir
+entry fn main() -> ! { loop {} }
+fn helper() {}
+fn helper() {}

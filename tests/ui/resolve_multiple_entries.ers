@@ -1,0 +1,3 @@
+// emit: hir
+entry fn first() -> ! { loop {} }
+entry fn second() -> ! { loop {} }

@@ -1,0 +1,4 @@
+// emit: hir
+fn main() -> ! {
+    loop {}
+}

@@ -1,0 +1,10 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/resolve_missing_entry.ers
+---
+--- errors ---
+resolve::missing-entry
+
+  × no entry function
+  help: declare where execution starts: `entry fn main() -> ! { ... }`

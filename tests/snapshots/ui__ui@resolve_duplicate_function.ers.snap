@@ -1,0 +1,18 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/resolve_duplicate_function.ers
+---
+--- errors ---
+resolve::duplicate-function
+
+  × the function `helper` is defined more than once
+   ╭─[resolve_duplicate_function.ers:4:4]
+ 2 │ entry fn main() -> ! { loop {} }
+ 3 │ fn helper() {}
+   ·    ───┬──
+   ·       ╰── first defined here
+ 4 │ fn helper() {}
+   ·    ───┬──
+   ·       ╰── redefined here
+   ╰────
