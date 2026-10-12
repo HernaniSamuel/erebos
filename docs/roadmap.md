@@ -15,6 +15,14 @@ and ends with a program running on QEMU, verified by an automated test.
 
 ## Pending decisions
 
-- First target: ARM Cortex-M (`lm3s6965evb` on QEMU) or RISC-V (`riscv32 virt`).
-- ADR 0007 open questions (shifts, division by zero).
-- LLVM version pinned for development (ADR 0005).
+- ADR 0007 open questions (shifts, division by zero). Must be settled before
+  M1 implements those operators.
+
+## Status
+
+- Environment ready and verified (ADR 0011): an `inkwell` + LLVM 22 smoke test
+  emitted a valid `riscv32` object file, and a hand-written assembly program
+  linked with `ld.lld` booted on QEMU `virt`, printed over the UART at
+  `0x1000_0000` and exited through the test finisher at `0x0010_0000`
+  (ADR 0010).
+- **Next: M0.**

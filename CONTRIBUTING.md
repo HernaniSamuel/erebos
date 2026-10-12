@@ -73,9 +73,47 @@ cargo test
 
 ## Development environment
 
-- Rust: stable toolchain (edition 2024).
-- LLVM: a development build providing `llvm-config` and static libraries is
-  required by `inkwell` (ADR 0005). *Version and setup instructions: TBD.*
-- `ld.lld` for linking.
-- QEMU (`qemu-system-arm` or `qemu-system-riscv32`, depending on the first
-  target) for end-to-end tests. *TBD.*
+Native Windows (ADR 0011):
+
+1. **Visual Studio Build Tools** with the "Desktop development with C++"
+   workload (MSVC linker and Windows SDK).
+2. **Rust** via rustup, toolchain `stable-x86_64-pc-windows-msvc`.
+3. **LLVM 22** (required by `inkwell`, ADR 0005). Do not use the LLVM
+   installer; download the full archive from the LLVM GitHub releases:
+   `clang+llvm-22.1.x-x86_64-pc-windows-msvc.tar.xz`, then, in **Git Bash**
+   (the Windows 10 `tar.exe` cannot decompress `.xz`):
+
+   ```sh
+   mkdir -p /c/llvm-22
+   tar -xJf clang+llvm-22.1.x-x86_64-pc-windows-msvc.tar.xz -C /c/llvm-22 --strip-components=1
+
+   # The archive's llvm-config lists xml2s.lib (libxml2) as a system library but
+   # does not ship it. Only LLVMWindowsManifest uses it, and inkwell never does,
+   # so an empty stub library satisfies the linker.
+   echo '/* empty libxml2 stub */' > xml2s_stub.c
+   /c/llvm-22/bin/clang.exe --target=x86_64-pc-windows-msvc -c xml2s_stub.c -o xml2s_stub.obj
+   /c/llvm-22/bin/llvm-lib.exe /out:C:/llvm-22/lib/xml2s.lib xml2s_stub.obj
+   ```
+
+   Then, in PowerShell:
+
+   ```powershell
+   [Environment]::SetEnvironmentVariable('LLVM_SYS_221_PREFIX', 'C:\llvm-22', 'User')
+   ```
+
+   Restart the terminal / VS Code afterwards so the variable is picked up.
+   `C:\llvm-22\bin\ld.lld.exe` is the linker used for Erebos programs.
+4. **QEMU** for the riscv32 target (ADR 0010): the Windows installer from
+   <https://qemu.weilnetz.de/w64/>, with `C:\Program Files\qemu` on `PATH`.
+
+Verify:
+
+```powershell
+C:\llvm-22\bin\llvm-config.exe --version   # 22.x
+C:\llvm-22\bin\ld.lld.exe --version
+qemu-system-riscv32 --version
+```
+
+On Linux, the equivalent is LLVM 22 from <https://apt.llvm.org>
+(`llvm-22-dev`, `libpolly-22-dev`, `lld-22`), `LLVM_SYS_221_PREFIX=/usr/lib/llvm-22`
+and `qemu-system-misc`.
