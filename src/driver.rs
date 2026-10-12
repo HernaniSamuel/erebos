@@ -4,10 +4,10 @@
 use std::fmt;
 use std::str::FromStr;
 
-use crate::diag::{self, Diagnostics};
+use crate::diag::{self, Diagnostic, Diagnostics};
 use crate::span::{FileId, SourceMap};
 use crate::syntax::{lexer, parser};
-use crate::{hir, mir, ty};
+use crate::{codegen, hir, mir, target, ty};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Stage {
@@ -16,6 +16,7 @@ pub enum Stage {
     Hir,
     Typeck,
     Mir,
+    LlvmIr,
 }
 
 impl Stage {
@@ -25,6 +26,7 @@ impl Stage {
         Stage::Hir,
         Stage::Typeck,
         Stage::Mir,
+        Stage::LlvmIr,
     ];
 
     pub fn name(self) -> &'static str {
@@ -34,6 +36,7 @@ impl Stage {
             Stage::Hir => "hir",
             Stage::Typeck => "typeck",
             Stage::Mir => "mir",
+            Stage::LlvmIr => "llvm-ir",
         }
     }
 }
@@ -123,6 +126,16 @@ fn run_to(
     let mir = mir::build(&hir, &types);
     if stage == Stage::Mir {
         return Some(mir.to_string());
+    }
+
+    if stage == Stage::LlvmIr {
+        return match codegen::emit_llvm_ir(&mir, &target::RISCV32_VIRT) {
+            Ok(ir) => Some(ir),
+            Err(e) => {
+                diags.push(Diagnostic::error("codegen::llvm", e));
+                None
+            }
+        };
     }
 
     unreachable!("every stage returns above")

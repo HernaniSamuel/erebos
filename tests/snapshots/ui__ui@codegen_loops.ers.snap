@@ -1,0 +1,35 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/codegen_loops.ers
+---
+--- llvm-ir ---
+; ModuleID = 'erebos'
+source_filename = "erebos"
+target datalayout = "e-m:e-p:32:32-i64:64-n32-S128"
+target triple = "riscv32-unknown-none-elf"
+
+module asm "\09.section .text.start, \22ax\22, @progbits"
+module asm "\09.globl _start"
+module asm "\09.type _start, @function"
+module asm "_start:"
+module asm "\09li sp, 0x88000000"
+module asm "\09j main"
+
+; Function Attrs: noreturn nounwind
+define void @main() #0 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: nounwind
+define void @empty() #1 {
+bb0:
+  ret void
+}
+
+attributes #0 = { noreturn nounwind }
+attributes #1 = { nounwind }

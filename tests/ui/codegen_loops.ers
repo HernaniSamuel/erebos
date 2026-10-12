@@ -1,0 +1,6 @@
+// emit: llvm-ir
+entry fn main() -> ! {
+    loop {}
+}
+
+fn empty() {}

@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+inkwell = { version = "0.10", default-features = false, features = ["llvm22-1", "target-riscv"] }
 miette = { version = "7.6", features = ["fancy-no-backtrace"] }
 
 [dev-dependencies]
