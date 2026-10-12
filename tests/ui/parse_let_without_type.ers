@@ -1,0 +1,4 @@
+// emit: ast
+fn f() {
+    let count = 0;
+}

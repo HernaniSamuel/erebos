@@ -12,16 +12,16 @@ parser::unexpected-token
  2 │ fn missing_body()
    ·                  ▲
    ·                  ╰── expected `{`
- 3 │ fn bad_return() -> main {}
+ 3 │ fn bad_return() -> 42 {}
    ╰────
 parser::unexpected-token
 
-  × expected a type, found identifier
+  × expected a type, found integer literal
    ╭─[parse_recovery.ers:3:20]
  2 │ fn missing_body()
- 3 │ fn bad_return() -> main {}
-   ·                    ──┬─
-   ·                      ╰── expected a type
+ 3 │ fn bad_return() -> 42 {}
+   ·                    ─┬
+   ·                     ╰── expected a type
  4 │ entry fn fine() -> ! { loop {} }
    ╰────
 parser::unexpected-token

@@ -14,8 +14,10 @@ Hir {
             ret_span: Some(
                 32..33,
             ),
+            locals: [],
             body: Block {
-                stmts: [
+                stmts: [],
+                tail: Some(
                     Expr {
                         id: ExprId(
                             0,
@@ -23,12 +25,13 @@ Hir {
                         kind: Loop(
                             Block {
                                 stmts: [],
+                                tail: None,
                                 span: 45..47,
                             },
                         ),
                         span: 40..47,
                     },
-                ],
+                ),
                 span: 34..49,
             },
             span: 13..49,
@@ -39,15 +42,18 @@ Hir {
             kind: Plain,
             ret: Unit,
             ret_span: None,
+            locals: [],
             body: Block {
-                stmts: [
+                stmts: [],
+                tail: Some(
                     Expr {
                         id: ExprId(
                             1,
                         ),
                         kind: Loop(
                             Block {
-                                stmts: [
+                                stmts: [],
+                                tail: Some(
                                     Expr {
                                         id: ExprId(
                                             2,
@@ -55,18 +61,19 @@ Hir {
                                         kind: Loop(
                                             Block {
                                                 stmts: [],
+                                                tail: None,
                                                 span: 79..81,
                                             },
                                         ),
                                         span: 74..81,
                                     },
-                                ],
+                                ),
                                 span: 72..83,
                             },
                         ),
                         span: 67..83,
                     },
-                ],
+                ),
                 span: 61..85,
             },
             span: 51..85,
@@ -79,8 +86,10 @@ Hir {
             ret_span: Some(
                 110..111,
             ),
+            locals: [],
             body: Block {
-                stmts: [
+                stmts: [],
+                tail: Some(
                     Expr {
                         id: ExprId(
                             3,
@@ -88,12 +97,13 @@ Hir {
                         kind: Loop(
                             Block {
                                 stmts: [],
+                                tail: None,
                                 span: 123..125,
                             },
                         ),
                         span: 118..125,
                     },
-                ],
+                ),
                 span: 112..127,
             },
             span: 87..127,

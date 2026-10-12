@@ -156,8 +156,10 @@ fn front_end(
         return FrontEnd::Failed;
     }
 
-    let Some(hir) = hir::lower(&ast, diags) else {
-        return FrontEnd::Failed;
+    let hir = match hir::lower(&ast, diags) {
+        // Type checking needs every name resolved.
+        Some(hir) if !diags.has_errors() || stop == Some(Stage::Hir) => hir,
+        _ => return FrontEnd::Failed,
     };
     if stop == Some(Stage::Hir) {
         return FrontEnd::Dump(format!("{hir:#?}\n"));

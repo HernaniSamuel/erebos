@@ -1,0 +1,82 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/mir_ints.ers
+---
+--- mir ---
+fn arith() -> u32 {
+    let _0: u32;
+    let _1: u32; // x
+    let _2: u32; // y
+    let _3: u8; // n
+    let _4: u32;
+    let _5: u32;
+    let _6: u32;
+    let _7: u32;
+    let _8: u32;
+    let _9: u32;
+    let _10: u32;
+
+    bb0: {
+        _1 = const 16_u32;
+        _1 = Add(copy _1, const 2_u32);
+        _4 = Mul(copy _1, const 3_u32);
+        _5 = Sub(copy _4, const 1_u32);
+        _2 = copy _5;
+        _3 = const 3_u8;
+        _6 = Shl(copy _2, copy _3);
+        _7 = Shr(copy _1, const 1_u32);
+        _8 = Not(copy _2);
+        _9 = BitXor(copy _7, copy _8);
+        _10 = BitOr(copy _6, copy _9);
+        _0 = copy _10;
+        return;
+    }
+}
+
+fn signed() -> i8 {
+    let _0: i8;
+    let _1: i8; // a
+    let _2: i16; // b
+    let _3: i8;
+    let _4: i16;
+    let _5: i16;
+    let _6: i8;
+    let _7: i8;
+
+    bb0: {
+        _3 = Neg(const 128_i8);
+        _1 = copy _3;
+        _4 = copy _1 as i16;
+        _5 = Shr(copy _4, const 1_i16);
+        _2 = copy _5;
+        _6 = copy _2 as i8;
+        _7 = Neg(copy _6);
+        _0 = copy _7;
+        return;
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}

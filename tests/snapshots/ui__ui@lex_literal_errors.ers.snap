@@ -1,0 +1,87 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/lex_literal_errors.ers
+---
+--- errors ---
+lexer::leading-zero
+
+  × decimal literals cannot have leading zeros
+   ╭─[lex_literal_errors.ers:2:1]
+ 1 │ // emit: tokens
+ 2 │ 017 0x 0b102 99999999999999999999999
+   · ─┬─
+   ·  ╰── leading zero
+ 3 │ b'' b'ab' b'é' b'\q'
+   ╰────
+  help: write octal as `0o17`; in C, `017` would silently be 15
+lexer::empty-int
+
+  × missing digits after the base prefix
+   ╭─[lex_literal_errors.ers:2:5]
+ 1 │ // emit: tokens
+ 2 │ 017 0x 0b102 99999999999999999999999
+   ·     ─┬
+   ·      ╰── no digits
+ 3 │ b'' b'ab' b'é' b'\q'
+   ╰────
+lexer::invalid-digit
+
+  × invalid digit for a base 2 literal
+   ╭─[lex_literal_errors.ers:2:8]
+ 1 │ // emit: tokens
+ 2 │ 017 0x 0b102 99999999999999999999999
+   ·        ──┬──
+   ·          ╰── invalid digit
+ 3 │ b'' b'ab' b'é' b'\q'
+   ╰────
+lexer::int-too-large
+
+  × integer literal is too large
+   ╭─[lex_literal_errors.ers:2:14]
+ 1 │ // emit: tokens
+ 2 │ 017 0x 0b102 99999999999999999999999
+   ·              ───────────┬───────────
+   ·                         ╰── does not fit in 64 bits
+ 3 │ b'' b'ab' b'é' b'\q'
+   ╰────
+lexer::invalid-byte
+
+  × empty byte literal
+   ╭─[lex_literal_errors.ers:3:1]
+ 2 │ 017 0x 0b102 99999999999999999999999
+ 3 │ b'' b'ab' b'é' b'\q'
+   · ─┬─
+   ·  ╰── invalid byte literal
+   ╰────
+  help: escapes: \n \r \t \\ \' \0 and \xNN for any byte (ADR 0016)
+lexer::invalid-byte
+
+  × a byte literal holds exactly one byte
+   ╭─[lex_literal_errors.ers:3:5]
+ 2 │ 017 0x 0b102 99999999999999999999999
+ 3 │ b'' b'ab' b'é' b'\q'
+   ·     ──┬──
+   ·       ╰── invalid byte literal
+   ╰────
+  help: escapes: \n \r \t \\ \' \0 and \xNN for any byte (ADR 0016)
+lexer::invalid-byte
+
+  × only printable ASCII can be written directly
+   ╭─[lex_literal_errors.ers:3:11]
+ 2 │ 017 0x 0b102 99999999999999999999999
+ 3 │ b'' b'ab' b'é' b'\q'
+   ·           ──┬─
+   ·             ╰── invalid byte literal
+   ╰────
+  help: escapes: \n \r \t \\ \' \0 and \xNN for any byte (ADR 0016)
+lexer::invalid-byte
+
+  × unknown escape sequence
+   ╭─[lex_literal_errors.ers:3:17]
+ 2 │ 017 0x 0b102 99999999999999999999999
+ 3 │ b'' b'ab' b'é' b'\q'
+   ·                ──┬──
+   ·                  ╰── invalid byte literal
+   ╰────
+  help: escapes: \n \r \t \\ \' \0 and \xNN for any byte (ADR 0016)

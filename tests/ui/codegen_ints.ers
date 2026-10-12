@@ -1,0 +1,17 @@
+// emit: llvm-ir
+fn arith() -> u32 {
+    let mut x: u32 = 0x10;
+    x += 2;
+    let y: u32 = x * 3 - 1;
+    let n: u8 = 3;
+    (y << n) | (x >> 1) ^ !y
+}
+
+fn signed() -> i8 {
+    let a: i8 = -128;
+    let b: i16 = a as i16 >> 1;
+    -(b as i8)
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

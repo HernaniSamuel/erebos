@@ -1,0 +1,113 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_int_errors.ers
+---
+--- errors ---
+ty::literal-out-of-range
+
+  × literal out of range for `u8`
+   ╭─[typeck_int_errors.ers:3:17]
+ 2 │ fn errors() {
+ 3 │     let a: u8 = 256;
+   ·                 ─┬─
+   ·                  ╰── `256` does not fit in `u8`
+ 4 │     let b: i8 = -129;
+   ╰────
+ty::literal-out-of-range
+
+  × literal out of range for `i8`
+   ╭─[typeck_int_errors.ers:4:17]
+ 3 │     let a: u8 = 256;
+ 4 │     let b: i8 = -129;
+   ·                 ──┬─
+   ·                   ╰── `-129` does not fit in `i8`
+ 5 │     let d: u32 = a;
+   ╰────
+ty::mismatched-types
+
+  × mismatched types
+   ╭─[typeck_int_errors.ers:5:18]
+ 4 │     let b: i8 = -129;
+ 5 │     let d: u32 = a;
+   ·                  ┬
+   ·                  ╰── expected `u32`, found `u8`
+ 6 │     let e: u32 = -d;
+   ╰────
+  help: integer types never convert implicitly; use `as u32` (ADR 0008)
+ty::negate-unsigned
+
+  × cannot negate a value of unsigned type `u32`
+   ╭─[typeck_int_errors.ers:6:18]
+ 5 │     let d: u32 = a;
+ 6 │     let e: u32 = -d;
+   ·                  ─┬
+   ·                   ╰── unsigned
+ 7 │     a = 1;
+   ╰────
+  help: for a wrapping negation, write `0 - x`
+ty::assign-immutable
+
+  × cannot assign to `a`, which is not `mut`
+   ╭─[typeck_int_errors.ers:7:5]
+ 2 │ fn errors() {
+ 3 │     let a: u8 = 256;
+   ·         ┬
+   ·         ╰── help: declare it `let mut a`
+ 4 │     let b: i8 = -129;
+ 5 │     let d: u32 = a;
+ 6 │     let e: u32 = -d;
+ 7 │     a = 1;
+   ·     ┬
+   ·     ╰── assigned here
+ 8 │     let f: u32 = 1 as u32;
+   ╰────
+ty::untyped-literal
+
+  × cannot tell the type of this literal
+   ╭─[typeck_int_errors.ers:8:18]
+ 7 │     a = 1;
+ 8 │     let f: u32 = 1 as u32;
+   ·                  ┬
+   ·                  ╰── no type is expected here
+ 9 │     let mut g: u32 = 0;
+   ╰────
+  help: literals take the type expected where they appear; bind it first, e.g. `let x: u32 = ...`
+        (ADR 0008)
+ty::shift-out-of-range
+
+  × shift amount out of range for `u32`
+    ╭─[typeck_int_errors.ers:10:11]
+  9 │     let mut g: u32 = 0;
+ 10 │     g <<= 32;
+    ·           ─┬
+    ·            ╰── must be between 0 and 31
+ 11 │     let h: () = 5;
+    ╰────
+  help: shifts mask their amount, so this would shift by 0 (ADR 0007)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_int_errors.ers:11:17]
+ 10 │     g <<= 32;
+ 11 │     let h: () = 5;
+    ·                 ┬
+    ·                 ╰── expected `()`, found an integer
+ 12 │ }
+    ╰────
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_int_errors.ers:16:5]
+ 13 │ 
+ 14 │ fn semicolon() -> u32 {
+    ·                   ─┬─
+    ·                    ╰── expected because of this return type
+ 15 │     let x: u32 = 1;
+ 16 │     x + 1;
+    ·     ──┬──┬
+    ·       │  ╰── remove this semicolon to return the value
+    ·       ╰── expected `u32`, found `()`
+ 17 │ }
+    ╰────
+  help: a block's value is its last expression without `;`

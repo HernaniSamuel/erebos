@@ -1,0 +1,41 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_ints.ers
+---
+--- typeck ---
+fn shadowing() -> u32
+    let x: u8
+    let x: u32
+    expr 0 int 1 56..57: u8
+    expr 1 binary + 76..88: u32
+    expr 2 as u32 76..84: u32
+    expr 3 local x 76..77: u8
+    expr 4 int 1 87..88: u32
+    expr 5 local x 94..95: u32
+fn literals() -> i64
+    let min: i8
+    let byte: u8
+    let wide: u64
+    let mut acc: i64
+    expr 6 neg 140..144: i8
+    expr 7 int 128 141..144: i8
+    expr 8 binary + 165..173: u8
+    expr 9 byte 97 165..169: u8
+    expr 10 int 1 172..173: u8
+    expr 11 int 18446744073709551615 195..216: u64
+    expr 12 binary + 241..255: i64
+    expr 13 int 1 241..242: i64
+    expr 14 as i64 245..255: i64
+    expr 15 local min 245..248: i8
+    expr 16 assign *= 261..269: ()
+    expr 17 local acc 261..264: i64
+    expr 18 int 3 268..269: i64
+    expr 19 assign <<= 275..287: ()
+    expr 20 local acc 275..278: i64
+    expr 21 local byte 283..287: u8
+    expr 22 local acc 293..296: i64
+entry fn main() -> !
+    expr 23 loop 323..330: !
+panic fn on_panic() -> !
+    expr 24 loop 360..367: !

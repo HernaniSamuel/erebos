@@ -1,6 +1,7 @@
 //! Abstract syntax tree: what the programmer wrote, with spans, and no
 //! meaning attached yet.
 
+pub use crate::ops::{BinOp, UnOp};
 use crate::span::Span;
 
 #[derive(Debug)]
@@ -48,17 +49,39 @@ pub struct Ty {
 pub enum TyKind {
     /// `!`
     Never,
+    /// `()`
+    Unit,
+    /// A type written by name, such as `u32`.
+    Named(Ident),
 }
 
+/// `{ stmts; tail }`. The tail is the block's value (ADR 0015).
 #[derive(Debug)]
 pub struct Block {
     pub stmts: Vec<Stmt>,
+    pub tail: Option<Box<Expr>>,
     pub span: Span,
 }
 
 #[derive(Debug)]
 pub enum Stmt {
-    Expr(Expr),
+    Let(Let),
+    /// An expression statement. `semi` is the span of its `;`, if written
+    /// (block-like expressions such as `loop` may omit it).
+    Expr {
+        expr: Expr,
+        semi: Option<Span>,
+    },
+}
+
+/// `let [mut] name: Type = init;`
+#[derive(Debug)]
+pub struct Let {
+    pub mutable: bool,
+    pub name: Ident,
+    pub ty: Ty,
+    pub init: Expr,
+    pub span: Span,
 }
 
 #[derive(Debug)]
@@ -69,5 +92,29 @@ pub struct Expr {
 
 #[derive(Debug)]
 pub enum ExprKind {
+    /// Integer literal; `value` is `None` if the lexer rejected it.
+    Int(Option<u64>),
+    /// Byte literal `b'x'`; `None` if the lexer rejected it.
+    Byte(Option<u8>),
+    /// `()`
+    Unit,
+    /// A name, such as a local variable.
+    Name(Ident),
+    Unary(UnOp, Box<Expr>),
+    Binary(BinOp, Box<Expr>, Box<Expr>),
+    /// `expr as Type`
+    Cast(Box<Expr>, Ty),
+    /// `place = value`
+    Assign(Box<Expr>, Box<Expr>),
+    /// `place op= value`
+    CompoundAssign(BinOp, Box<Expr>, Box<Expr>),
+    Block(Block),
     Loop(Block),
+}
+
+impl ExprKind {
+    /// Block-like expressions may stand as statements without `;`.
+    pub fn is_block_like(&self) -> bool {
+        matches!(self, ExprKind::Block(_) | ExprKind::Loop(_))
+    }
 }

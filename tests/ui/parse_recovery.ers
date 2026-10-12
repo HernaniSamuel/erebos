@@ -1,5 +1,5 @@
 // emit: ast
 fn missing_body()
-fn bad_return() -> main {}
+fn bad_return() -> 42 {}
 entry fn fine() -> ! { loop {} }
 loop

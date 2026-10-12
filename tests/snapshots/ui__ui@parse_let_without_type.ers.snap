@@ -1,0 +1,17 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/parse_let_without_type.ers
+---
+--- errors ---
+parser::let-without-type
+
+  × expected `:`, found `=`
+   ╭─[parse_let_without_type.ers:3:15]
+ 2 │ fn f() {
+ 3 │     let count = 0;
+   ·               ┬
+   ·               ╰── expected `: Type`
+ 4 │ }
+   ╰────
+  help: every `let` states its type, e.g. `let count: u32 = ...` (ADR 0008)

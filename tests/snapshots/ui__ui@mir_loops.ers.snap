@@ -5,45 +5,60 @@ input_file: tests/ui/mir_loops.ers
 ---
 --- mir ---
 entry fn main() -> ! {
+    let _0: !;
+
     bb0: {
         goto -> bb1;
     }
+
     bb1: {
         goto -> bb1;
     }
 }
 
 fn nested() -> ! {
+    let _0: !;
+
     bb0: {
         goto -> bb1;
     }
+
     bb1: {
         goto -> bb2;
     }
+
     bb2: {
         goto -> bb2;
     }
 }
 
 fn empty() -> () {
+    let _0: ();
+
     bb0: {
         return;
     }
 }
 
 fn dead_code_after_loop() -> () {
+    let _0: ();
+
     bb0: {
         goto -> bb1;
     }
+
     bb1: {
         goto -> bb1;
     }
 }
 
 panic fn on_panic() -> ! {
+    let _0: !;
+
     bb0: {
         goto -> bb1;
     }
+
     bb1: {
         goto -> bb1;
     }

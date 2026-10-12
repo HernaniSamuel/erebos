@@ -1,0 +1,12 @@
+// emit: hir
+fn f() {
+    let a: u33 = 1;
+    let b: u32 = missing + 1;
+    {
+        let inner: u32 = 2;
+    }
+    let c: u32 = inner;
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

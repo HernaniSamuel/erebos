@@ -1,0 +1,19 @@
+// emit: typeck
+fn shadowing() -> u32 {
+    let x: u8 = 1;
+    let x: u32 = x as u32 + 1;
+    x
+}
+
+fn literals() -> i64 {
+    let min: i8 = -128;
+    let byte: u8 = b'a' + 1;
+    let wide: u64 = 0xFFFF_FFFF_FFFF_FFFF;
+    let mut acc: i64 = 1 + min as i64;
+    acc *= 3;
+    acc <<= byte;
+    acc
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

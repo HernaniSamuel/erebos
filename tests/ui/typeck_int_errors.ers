@@ -1,0 +1,20 @@
+// emit: typeck
+fn errors() {
+    let a: u8 = 256;
+    let b: i8 = -129;
+    let d: u32 = a;
+    let e: u32 = -d;
+    a = 1;
+    let f: u32 = 1 as u32;
+    let mut g: u32 = 0;
+    g <<= 32;
+    let h: () = 5;
+}
+
+fn semicolon() -> u32 {
+    let x: u32 = 1;
+    x + 1;
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

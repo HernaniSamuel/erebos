@@ -1,0 +1,4 @@
+// emit: ast
+fn f() {
+    x = -a as u8 + b * c << 2 | d;
+}

@@ -2,6 +2,9 @@
 //! (ADR 0010); this module is where target-specific values live until a
 //! real target abstraction is needed.
 
+/// Width of pointers, `usize` and `isize`. Fixed while there is one target.
+pub const POINTER_BITS: u32 = 32;
+
 pub struct Target {
     pub llvm_triple: &'static str,
     pub llvm_cpu: &'static str,
