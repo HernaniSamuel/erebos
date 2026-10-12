@@ -4,3 +4,4 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+miette = { version = "7.6", features = ["fancy-no-backtrace"] }
