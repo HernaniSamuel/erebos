@@ -61,8 +61,10 @@ cargo test
   line (`// emit: <stage>`); review new snapshots with `cargo insta review`.
 - **End-to-end tests** (`tests/e2e/*.ers`) compile an Erebos program and boot
   it on QEMU. They need `qemu-system-riscv32` on `PATH` (or `EREBOS_QEMU`).
-  Until M1 they check that the program runs without CPU exceptions; from M1
-  on they compare UART output and the exit code.
+  A program declares `// expect-output: <line>` (repeatable) and
+  `// expect-exit: <code>`; it must print exactly those lines and stop QEMU
+  through the test finisher with that code. A program without
+  `expect-exit` must run forever. Any CPU exception fails the test.
 - `erebos build <file> --emit=<stage>` prints any stage (`tokens`, `ast`,
   `hir`, `typeck`, `mir`, `llvm-ir`), which is the quickest way to debug.
 - Every bug fix comes with a test that fails without the fix.
