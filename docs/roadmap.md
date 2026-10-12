@@ -6,8 +6,8 @@ and ends with a program running on QEMU, verified by an automated test.
 | Milestone | Delivers |
 |-----------|----------|
 | **M0** ✅ | `entry fn main() -> ! { loop {} }` compiles to an object file, links, and boots on QEMU. Every layer that has work to do exists, even if trivial (const evaluation waits for M2). |
-| **M1** | Functions, integers, typed `let`, `if`/`while`, raw pointers. Prints "hello" over the QEMU UART via raw pointer writes. |
-| **M2** | Structs, arrays, `const` and const evaluation, modules. |
+| **M1** | Functions, integers, typed `let`, `if`/`while`, raw and volatile pointers (ADR 0013), byte literals (ADR 0016), the panic function (ADR 0014). Prints "hello" over the QEMU UART via raw pointer writes. |
+| **M2** | Structs, arrays, byte strings, `const` and const evaluation, modules; panic location and reason (ADR 0014). |
 | **M3** | `memory { ... }` blocks generating the linker script; `peripheral` blocks with native MMIO. The UART is declared in the language. |
 | **M4** | Interrupt handlers, vector tables, inline `asm`. |
 | **M5** | Moves/ownership, then references and borrow checking (ADR 0009). |
@@ -15,7 +15,7 @@ and ends with a program running on QEMU, verified by an automated test.
 
 ## Pending decisions
 
-- How panics work (needed by M1 for division by zero, ADR 0007).
+- None.
 
 ## Status
 

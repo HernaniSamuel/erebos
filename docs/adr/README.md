@@ -38,3 +38,7 @@ Do not write one for local implementation details that the code already explains
 | 0010 | [First target: riscv32 on QEMU `virt`](0010-first-target-riscv32-qemu-virt.md) | Accepted |
 | 0011 | [Development environment: native Windows with prebuilt LLVM 22](0011-development-environment.md) | Accepted |
 | 0012 | [Provisional compiler-generated startup code](0012-provisional-compiler-generated-startup.md) | Accepted |
+| 0013 | [Provisional volatile pointers](0013-provisional-volatile-pointers.md) | Accepted |
+| 0014 | [Panic handler](0014-panic-handler.md)                          | Accepted |
+| 0015 | [Expression-oriented blocks and implicit unit return](0015-expression-oriented-blocks.md) | Accepted |
+| 0016 | [Literals: integers and bytes; no chars, strings or floats](0016-literals-bytes-no-floats.md) | Accepted |
