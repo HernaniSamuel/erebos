@@ -1,0 +1,78 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_control_flow.ers
+---
+--- typeck ---
+fn precedence() -> bool
+    let flags: u32
+    let ready: bool
+    expr 0 int 6 63..64: u32
+    expr 1 bool true 88..92: bool
+    expr 2 logical || 98..131: bool
+    expr 3 logical && 98..121: bool
+    expr 4 binary == 98..112: bool
+    expr 5 binary & 98..107: u32
+    expr 6 local flags 98..103: u32
+    expr 7 int 4 106..107: u32
+    expr 8 int 0 111..112: u32
+    expr 9 local ready 116..121: bool
+    expr 10 not 125..131: bool
+    expr 11 local ready 126..131: bool
+fn values() -> u32
+    let mut n: u32
+    let first: u32
+    let pick: u32
+    expr 12 int 0 177..178: u32
+    expr 13 loop 201..284: u32
+    expr 14 assign += 216..222: ()
+    expr 15 local n 216..217: u32
+    expr 16 int 1 221..222: u32
+    expr 17 if 232..278: ()
+    expr 18 binary > 235..245: bool
+    expr 19 binary * 235..240: u32
+    expr 20 local n 235..236: u32
+    expr 21 local n 239..240: u32
+    expr 22 int 20 243..245: u32
+    expr 23 break 260..267: !
+    expr 24 local n 266..267: u32
+    expr 25 if 306..359: u32
+    expr 26 binary > 309..318: bool
+    expr 27 local first 309..314: u32
+    expr 28 int 4 317..318: u32
+    expr 29 int 7 321..322: u32
+    expr 30 if 330..359: u32
+    expr 31 binary > 333..342: bool
+    expr 32 local first 333..338: u32
+    expr 33 int 2 341..342: u32
+    expr 34 int 8 345..346: u32
+    expr 35 block 354..359: u32
+    expr 36 int 9 356..357: u32
+    expr 37 while 365..457: ()
+    expr 38 binary < 371..377: bool
+    expr 39 local n 371..372: u32
+    expr 40 int 10 375..377: u32
+    expr 41 assign += 388..394: ()
+    expr 42 local n 388..389: u32
+    expr 43 int 1 393..394: u32
+    expr 44 if 404..451: ()
+    expr 45 binary == 407..417: bool
+    expr 46 binary & 407..412: u32
+    expr 47 local n 407..408: u32
+    expr 48 int 1 411..412: u32
+    expr 49 int 1 416..417: u32
+    expr 50 continue 432..440: !
+    expr 51 if 462..504: ()
+    expr 52 binary == 465..474: bool
+    expr 53 local pick 465..469: u32
+    expr 54 int 7 473..474: u32
+    expr 55 return 485..497: !
+    expr 56 local first 492..497: u32
+    expr 57 binary + 509..529: u32
+    expr 58 as u32 509..522: u32
+    expr 59 bool true 510..514: bool
+    expr 60 local pick 525..529: u32
+entry fn main() -> !
+    expr 61 loop 556..563: !
+panic fn on_panic() -> !
+    expr 62 loop 593..600: !

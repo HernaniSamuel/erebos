@@ -1,0 +1,24 @@
+// emit: typeck
+fn errors() -> u32 {
+    let x: u32 = 1;
+    let wide: u64 = 2;
+    let small: i32 = 3;
+    if x { }
+    let a: u32 = if true { 1 } else { false };
+    let b: bool = wide < small;
+    let c: bool = true < false;
+    let d: bool = x as bool;
+    let e: u32 = loop {
+        if true { break 1; }
+        break;
+    };
+    let f: u32 = if true { 2 };
+    return;
+}
+
+fn spins() -> ! {
+    while true {}
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

@@ -1,0 +1,94 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/codegen_control_flow.ers
+---
+--- llvm-ir ---
+; ModuleID = 'erebos'
+source_filename = "erebos"
+target datalayout = "e-m:e-p:32:32-i64:64-n32-S128"
+target triple = "riscv32-unknown-none-elf"
+
+module asm "\09.section .text.start, \22ax\22, @progbits"
+module asm "\09.globl _start"
+module asm "\09.type _start, @function"
+module asm "_start:"
+module asm "\09li sp, 0x88000000"
+module asm "\09j main"
+
+; Function Attrs: nounwind
+define i32 @branches() #0 {
+bb0:
+  %0 = icmp ugt i32 3, 1
+  br i1 %0, label %bb1, label %bb2
+
+bb1:                                              ; preds = %bb0
+  %1 = icmp ult i32 3, 5
+  br label %bb3
+
+bb2:                                              ; preds = %bb0
+  br label %bb3
+
+bb3:                                              ; preds = %bb2, %bb1
+  %_6.0 = phi i1 [ %1, %bb1 ], [ false, %bb2 ]
+  br label %bb4
+
+bb4:                                              ; preds = %bb8, %bb3
+  br i1 %_6.0, label %bb5, label %bb6
+
+bb5:                                              ; preds = %bb4
+  br label %bb7
+
+bb6:                                              ; preds = %bb4
+  br label %bb8
+
+bb7:                                              ; preds = %bb5
+  br label %bb9
+
+bb8:                                              ; preds = %bb6
+  br label %bb4
+
+bb9:                                              ; preds = %bb10, %bb7
+  %_4.0 = phi i32 [ 0, %bb7 ], [ %3, %bb10 ]
+  %2 = icmp ult i32 %_4.0, 3
+  br i1 %2, label %bb10, label %bb11
+
+bb10:                                             ; preds = %bb9
+  %3 = add i32 %_4.0, 1
+  br label %bb9
+
+bb11:                                             ; preds = %bb9
+  %4 = icmp eq i32 %_4.0, 3
+  br i1 %4, label %bb12, label %bb13
+
+bb12:                                             ; preds = %bb11
+  br label %bb14
+
+bb13:                                             ; preds = %bb11
+  br label %bb14
+
+bb14:                                             ; preds = %bb13, %bb12
+  %_11.0 = phi i32 [ 10, %bb12 ], [ 20, %bb13 ]
+  ret i32 %_11.0
+}
+
+; Function Attrs: noreturn nounwind
+define void @main() #1 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: noreturn nounwind
+define void @on_panic() #1 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+attributes #0 = { nounwind }
+attributes #1 = { noreturn nounwind }

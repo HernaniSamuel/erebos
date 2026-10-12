@@ -1,0 +1,11 @@
+// emit: hir
+fn errors() {
+    break;
+    continue;
+    while true {
+        break 5;
+    }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

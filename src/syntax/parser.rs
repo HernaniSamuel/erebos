@@ -4,7 +4,8 @@
 use crate::diag::{Diagnostic, Diagnostics};
 use crate::span::Span;
 use crate::syntax::ast::{
-    BinOp, Block, Expr, ExprKind, File, FnDecl, FnKind, Ident, Item, Let, Stmt, Ty, TyKind, UnOp,
+    BinOp, Block, Expr, ExprKind, File, FnDecl, FnKind, Ident, Item, Let, LogicalOp, Stmt, Ty,
+    TyKind, UnOp,
 };
 use crate::syntax::lexer;
 use crate::syntax::token::{Token, TokenKind};
@@ -227,7 +228,14 @@ impl Parser<'_> {
                 }
                 TokenKind::Let => stmts.push(Stmt::Let(self.let_stmt()?)),
                 _ => {
-                    let expr = self.expr()?;
+                    // As in Rust, a statement starting with a block-like
+                    // expression ends with it: `if c { } - 1` is not a
+                    // subtraction.
+                    let expr = if self.at_block_like() {
+                        self.primary()?
+                    } else {
+                        self.expr()?
+                    };
                     if let Some(semi) = self.eat(TokenKind::Semi) {
                         stmts.push(Stmt::Expr {
                             expr,
@@ -249,6 +257,13 @@ impl Parser<'_> {
             tail,
             span: open.span.to(close.span),
         })
+    }
+
+    fn at_block_like(&self) -> bool {
+        matches!(
+            self.peek().kind,
+            TokenKind::LBrace | TokenKind::If | TokenKind::While | TokenKind::Loop
+        )
     }
 
     fn let_stmt(&mut self) -> PResult<Let> {
@@ -320,10 +335,27 @@ impl Parser<'_> {
             let (l, r) = (Box::new(lhs), Box::new(rhs));
             let kind = match op {
                 Infix::Binary(op) => ExprKind::Binary(op, l, r),
+                Infix::Logical(op) => ExprKind::Logical(op, l, r),
                 Infix::Assign => ExprKind::Assign(l, r),
                 Infix::CompoundAssign(op) => ExprKind::CompoundAssign(op, l, r),
             };
             lhs = Expr { kind, span };
+
+            // `a < b < c` compiles in C and is almost always a bug.
+            if left_bp == COMPARE_BP
+                && let Some((COMPARE_BP, _, _)) = infix(self.peek().kind)
+            {
+                let next = self.peek();
+                self.diags.push(
+                    Diagnostic::error(
+                        "parser::chained-comparison",
+                        "comparison operators cannot be chained",
+                    )
+                    .label(lhs.span.to(next.span), "chained here")
+                    .help("compare twice and combine: `a < b && b < c`"),
+                );
+                return Err(Reported);
+            }
         }
         Ok(lhs)
     }
@@ -359,6 +391,39 @@ impl Parser<'_> {
             TokenKind::Byte => {
                 self.bump();
                 ExprKind::Byte(lexer::byte_value(text).ok())
+            }
+            TokenKind::True | TokenKind::False => {
+                self.bump();
+                ExprKind::Bool(token.kind == TokenKind::True)
+            }
+            TokenKind::Continue => {
+                self.bump();
+                ExprKind::Continue
+            }
+            TokenKind::Break | TokenKind::Return => {
+                self.bump();
+                let value = if self.at_expr_end() {
+                    None
+                } else {
+                    Some(Box::new(self.expr()?))
+                };
+                let span = value.as_ref().map_or(token.span, |v| token.span.to(v.span));
+                let kind = if token.kind == TokenKind::Break {
+                    ExprKind::Break(value)
+                } else {
+                    ExprKind::Return(value)
+                };
+                return Ok(Expr { kind, span });
+            }
+            TokenKind::If => return self.if_expr(),
+            TokenKind::While => {
+                self.bump();
+                let cond = Box::new(self.expr()?);
+                let body = self.block()?;
+                return Ok(Expr {
+                    span: token.span.to(body.span),
+                    kind: ExprKind::While { cond, body },
+                });
             }
             TokenKind::Ident => ExprKind::Name(self.ident()?),
             TokenKind::LParen => {
@@ -401,16 +466,55 @@ impl Parser<'_> {
     }
 }
 
+impl Parser<'_> {
+    /// Whether the next token ends an expression, so `break`/`return` have
+    /// no value.
+    fn at_expr_end(&self) -> bool {
+        matches!(
+            self.peek().kind,
+            TokenKind::Semi | TokenKind::RBrace | TokenKind::RParen | TokenKind::Eof
+        )
+    }
+
+    fn if_expr(&mut self) -> PResult<Expr> {
+        let start = self.bump().span;
+        let cond = Box::new(self.expr()?);
+        let then = self.block()?;
+        let mut span = start.to(then.span);
+        let else_ = if self.eat(TokenKind::Else).is_some() {
+            let else_ = if self.at(TokenKind::If) {
+                self.if_expr()?
+            } else {
+                let block = self.block()?;
+                Expr {
+                    span: block.span,
+                    kind: ExprKind::Block(block),
+                }
+            };
+            span = span.to(else_.span);
+            Some(Box::new(else_))
+        } else {
+            None
+        };
+        Ok(Expr {
+            kind: ExprKind::If { cond, then, else_ },
+            span,
+        })
+    }
+}
+
 enum Infix {
     Binary(BinOp),
+    Logical(LogicalOp),
     Assign,
     CompoundAssign(BinOp),
 }
 
 /// Binding powers, loosest first, following Rust's precedence. A left power
 /// lower than the right one makes an operator left-associative; assignment
-/// is right-associative. Gaps are left for comparisons and logical operators.
+/// is right-associative.
 const ASSIGN_BP: (u8, u8) = (2, 1);
+const COMPARE_BP: u8 = 7;
 const AS_BP: u8 = 21;
 const PREFIX_BP: u8 = 23;
 
@@ -427,6 +531,14 @@ fn infix(kind: TokenKind) -> Option<(u8, u8, Infix)> {
         TokenKind::CaretEq => (l, r, CompoundAssign(BinOp::BitXor)),
         TokenKind::ShlEq => (l, r, CompoundAssign(BinOp::Shl)),
         TokenKind::ShrEq => (l, r, CompoundAssign(BinOp::Shr)),
+        TokenKind::OrOr => (3, 4, Infix::Logical(LogicalOp::Or)),
+        TokenKind::AndAnd => (5, 6, Infix::Logical(LogicalOp::And)),
+        TokenKind::EqEq => (COMPARE_BP, 8, Binary(BinOp::Eq)),
+        TokenKind::Ne => (COMPARE_BP, 8, Binary(BinOp::Ne)),
+        TokenKind::Lt => (COMPARE_BP, 8, Binary(BinOp::Lt)),
+        TokenKind::Le => (COMPARE_BP, 8, Binary(BinOp::Le)),
+        TokenKind::Gt => (COMPARE_BP, 8, Binary(BinOp::Gt)),
+        TokenKind::Ge => (COMPARE_BP, 8, Binary(BinOp::Ge)),
         TokenKind::Pipe => (9, 10, Binary(BinOp::BitOr)),
         TokenKind::Caret => (11, 12, Binary(BinOp::BitXor)),
         TokenKind::Amp => (13, 14, Binary(BinOp::BitAnd)),

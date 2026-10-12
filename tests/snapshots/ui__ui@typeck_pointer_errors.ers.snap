@@ -42,7 +42,7 @@ ty::invalid-cast
  7 │     (x + 1) = 2;
  8 │     let u: u32 = () as u32;
    ·                  ─┬
-   ·                   ╰── only integers and pointers can be cast
+   ·                   ╰── only integers, pointers and `bool` can be cast
  9 │     let p: *mut u8 = x;
    ╰────
 ty::mismatched-types

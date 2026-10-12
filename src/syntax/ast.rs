@@ -1,7 +1,7 @@
 //! Abstract syntax tree: what the programmer wrote, with spans, and no
 //! meaning attached yet.
 
-pub use crate::ops::{BinOp, UnOp};
+pub use crate::ops::{BinOp, LogicalOp, UnOp};
 use crate::span::Span;
 
 #[derive(Debug)]
@@ -102,6 +102,8 @@ pub enum ExprKind {
     Int(Option<u64>),
     /// Byte literal `b'x'`; `None` if the lexer rejected it.
     Byte(Option<u8>),
+    /// `true` or `false`
+    Bool(bool),
     /// `()`
     Unit,
     /// A name, such as a local variable.
@@ -110,6 +112,8 @@ pub enum ExprKind {
     /// `*ptr`
     Deref(Box<Expr>),
     Binary(BinOp, Box<Expr>, Box<Expr>),
+    /// `&&` and `||`, which short-circuit.
+    Logical(LogicalOp, Box<Expr>, Box<Expr>),
     /// `expr as Type`
     Cast(Box<Expr>, Ty),
     /// `place = value`
@@ -117,12 +121,30 @@ pub enum ExprKind {
     /// `place op= value`
     CompoundAssign(BinOp, Box<Expr>, Box<Expr>),
     Block(Block),
+    /// `if cond { .. } else ..`; the `else` part is a block or another `if`.
+    If {
+        cond: Box<Expr>,
+        then: Block,
+        else_: Option<Box<Expr>>,
+    },
+    While {
+        cond: Box<Expr>,
+        body: Block,
+    },
     Loop(Block),
+    /// `break` or `break value`
+    Break(Option<Box<Expr>>),
+    Continue,
+    /// `return` or `return value`
+    Return(Option<Box<Expr>>),
 }
 
 impl ExprKind {
     /// Block-like expressions may stand as statements without `;`.
     pub fn is_block_like(&self) -> bool {
-        matches!(self, ExprKind::Block(_) | ExprKind::Loop(_))
+        matches!(
+            self,
+            ExprKind::Block(_) | ExprKind::If { .. } | ExprKind::While { .. } | ExprKind::Loop(_)
+        )
     }
 }

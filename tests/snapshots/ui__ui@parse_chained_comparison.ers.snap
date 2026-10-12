@@ -1,0 +1,17 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/parse_chained_comparison.ers
+---
+--- errors ---
+parser::chained-comparison
+
+  × comparison operators cannot be chained
+   ╭─[parse_chained_comparison.ers:3:20]
+ 2 │ fn f() {
+ 3 │     let ok: bool = 1 < 2 < 3;
+   ·                    ───┬───
+   ·                       ╰── chained here
+ 4 │ }
+   ╰────
+  help: compare twice and combine: `a < b && b < c`

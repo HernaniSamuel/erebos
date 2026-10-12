@@ -3,7 +3,6 @@
 use std::path::Path;
 
 use inkwell::AddressSpace;
-use inkwell::OptimizationLevel;
 use inkwell::attributes::{Attribute, AttributeLoc};
 use inkwell::basic_block::BasicBlock as LlvmBlock;
 use inkwell::builder::Builder;
@@ -16,6 +15,7 @@ use inkwell::targets::{
 };
 use inkwell::types::{BasicType, BasicTypeEnum, IntType};
 use inkwell::values::{BasicValue, BasicValueEnum, FunctionValue, IntValue, PointerValue};
+use inkwell::{IntPredicate, OptimizationLevel};
 
 use crate::mir::{
     BinOp, Body, Const, IntTy, Local, Mir, Operand, Place, Rvalue, Statement, Terminator, Ty, UnOp,
@@ -100,6 +100,7 @@ fn int_type(context: &Context, int: IntTy) -> IntType<'_> {
 /// The LLVM type of a MIR type; `()` and `!` have no representation.
 fn basic_type(context: &Context, ty: Ty) -> Option<BasicTypeEnum<'_>> {
     match ty {
+        Ty::Bool => Some(context.bool_type().into()),
         Ty::Int(int) => Some(int_type(context, int).into()),
         Ty::Ptr(_) => Some(context.ptr_type(AddressSpace::default()).into()),
         Ty::Unit | Ty::Never => None,
@@ -244,8 +245,10 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
             Rvalue::Use(operand) => return self.operand(operand),
             Rvalue::Unary(UnOp::Neg, operand) => b.build_int_neg(int(operand), ""),
             Rvalue::Unary(UnOp::Not, operand) => b.build_not(int(operand), ""),
+            Rvalue::Binary(op, lhs, rhs) if op.is_comparison() => {
+                return self.compare(*op, lhs, rhs).into();
+            }
             Rvalue::Binary(op, lhs, rhs) => {
-                let ty = self.int_of(lhs);
                 let (l, r) = (int(lhs), int(rhs));
                 // Never `nsw`/`nuw`: integer arithmetic wraps (ADR 0007).
                 match op {
@@ -256,17 +259,48 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                     BinOp::BitOr => b.build_or(l, r, ""),
                     BinOp::BitXor => b.build_xor(l, r, ""),
                     BinOp::Shl | BinOp::Shr => {
+                        let ty = self.int_of(lhs);
                         let amount = self.shift_amount(r, ty);
                         match (op, ty.is_signed()) {
                             (BinOp::Shl, _) => b.build_left_shift(l, amount, ""),
                             (_, signed) => b.build_right_shift(l, amount, signed, ""),
                         }
                     }
+                    _ => unreachable!("comparisons are handled above"),
                 }
             }
             Rvalue::Cast(operand, to) => return self.cast(operand, *to),
         };
         built.expect("builder is positioned").into()
+    }
+
+    /// Integers compare by their signedness; `bool` and pointers compare as
+    /// unsigned values (pointers by address).
+    fn compare(&self, op: BinOp, lhs: &Operand, rhs: &Operand) -> IntValue<'ctx> {
+        let signed = matches!(self.body.operand_ty(lhs), Ty::Int(int) if int.is_signed());
+        let predicate = match (op, signed) {
+            (BinOp::Eq, _) => IntPredicate::EQ,
+            (BinOp::Ne, _) => IntPredicate::NE,
+            (BinOp::Lt, true) => IntPredicate::SLT,
+            (BinOp::Lt, false) => IntPredicate::ULT,
+            (BinOp::Le, true) => IntPredicate::SLE,
+            (BinOp::Le, false) => IntPredicate::ULE,
+            (BinOp::Gt, true) => IntPredicate::SGT,
+            (BinOp::Gt, false) => IntPredicate::UGT,
+            (BinOp::Ge, true) => IntPredicate::SGE,
+            (BinOp::Ge, false) => IntPredicate::UGE,
+            _ => unreachable!("`{}` is not a comparison", op.symbol()),
+        };
+        let as_int = |operand: &Operand| match self.operand(operand) {
+            BasicValueEnum::PointerValue(ptr) => self
+                .builder
+                .build_ptr_to_int(ptr, int_type(self.context, IntTy::Usize), "")
+                .expect("builder is positioned"),
+            value => value.into_int_value(),
+        };
+        self.builder
+            .build_int_compare(predicate, as_int(lhs), as_int(rhs), "")
+            .expect("builder is positioned")
     }
 
     fn cast(&self, operand: &Operand, to: Ty) -> BasicValueEnum<'ctx> {
@@ -279,6 +313,15 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                     value.into_int_value(),
                     int_type(self.context, to),
                     from.is_signed(),
+                    "",
+                )
+                .map(Into::into),
+            // `true as u8 == 1`
+            (Ty::Bool, Ty::Int(to)) => b
+                .build_int_cast_sign_flag(
+                    value.into_int_value(),
+                    int_type(self.context, to),
+                    false,
                     "",
                 )
                 .map(Into::into),
@@ -324,6 +367,11 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
             Operand::Const(Const::Int(value, int)) => {
                 int_type(self.context, *int).const_int(*value, false).into()
             }
+            Operand::Const(Const::Bool(value)) => self
+                .context
+                .bool_type()
+                .const_int(u64::from(*value), false)
+                .into(),
             Operand::Const(Const::Unit) => unreachable!("`()` has no value to use"),
         }
     }
@@ -334,6 +382,11 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
             Terminator::Goto(target) => {
                 b.build_unconditional_branch(self.blocks[target.0 as usize])
             }
+            Terminator::If { cond, then, else_ } => b.build_conditional_branch(
+                self.operand(&cond).into_int_value(),
+                self.blocks[then.0 as usize],
+                self.blocks[else_.0 as usize],
+            ),
             Terminator::Return => match basic_type(self.context, self.body.ret) {
                 Some(_) => {
                     let value = self.read(Place::local(Local::RETURN));

@@ -97,6 +97,7 @@ impl Body {
         match operand {
             Operand::Copy(place) => self.place_ty(*place),
             Operand::Const(Const::Int(_, int)) => Ty::Int(*int),
+            Operand::Const(Const::Bool(_)) => Ty::Bool,
             Operand::Const(Const::Unit) => Ty::Unit,
         }
     }
@@ -113,6 +114,7 @@ pub struct LocalDecl {
 pub enum Ty {
     Unit,
     Never,
+    Bool,
     Int(IntTy),
     Ptr(Ptr),
 }
@@ -162,6 +164,7 @@ pub enum Operand {
 pub enum Const {
     /// The bits of an integer of the given type.
     Int(u64, IntTy),
+    Bool(bool),
     Unit,
 }
 
@@ -176,6 +179,12 @@ pub enum Rvalue {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Terminator {
     Goto(BasicBlock),
+    /// Jumps to `then` if `cond` (a `bool`) is true, else to `else_`.
+    If {
+        cond: Operand,
+        then: BasicBlock,
+        else_: BasicBlock,
+    },
     Return,
     /// Control never reaches the end of this block.
     Unreachable,
@@ -186,6 +195,7 @@ impl fmt::Display for Ty {
         match self {
             Ty::Unit => f.write_str("()"),
             Ty::Never => f.write_str("!"),
+            Ty::Bool => f.write_str("bool"),
             Ty::Int(int) => write!(f, "{int}"),
             Ty::Ptr(ptr) => {
                 let mutability = if ptr.mutable { "mut" } else { "const" };
@@ -223,6 +233,7 @@ impl fmt::Display for Operand {
         match self {
             Operand::Copy(place) => write!(f, "copy {place}"),
             Operand::Const(Const::Int(value, int)) => write!(f, "const {value}_{int}"),
+            Operand::Const(Const::Bool(value)) => write!(f, "const {value}"),
             Operand::Const(Const::Unit) => f.write_str("const ()"),
         }
     }
@@ -251,6 +262,9 @@ impl fmt::Display for Terminator {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Terminator::Goto(target) => write!(f, "goto -> {target}"),
+            Terminator::If { cond, then, else_ } => {
+                write!(f, "if {cond} -> [true: {then}, false: {else_}]")
+            }
             Terminator::Return => f.write_str("return"),
             Terminator::Unreachable => f.write_str("unreachable"),
         }

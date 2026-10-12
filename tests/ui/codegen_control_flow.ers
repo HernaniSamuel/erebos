@@ -1,0 +1,18 @@
+// emit: llvm-ir
+fn branches() -> u32 {
+    let n: u32 = 3;
+    let both: bool = n > 1 && n < 5;
+    let first: u32 = loop {
+        if both {
+            break n;
+        }
+    };
+    let mut i: u32 = 0;
+    while i < first {
+        i += 1;
+    }
+    if i == 3 { 10 } else { 20 }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

@@ -17,6 +17,7 @@ pub fn lower(file: &ast::File, diags: &mut Diagnostics) -> Option<Hir> {
         diags,
         locals: Vec::new(),
         scopes: Vec::new(),
+        loops: Vec::new(),
     };
     let fns: Vec<Fn> = file
         .items
@@ -109,12 +110,16 @@ struct Lowerer<'a> {
     locals: Vec<Local>,
     /// Innermost scope last. A `let` shadows earlier names, as in Rust.
     scopes: Vec<HashMap<String, LocalId>>,
+    /// Enclosing loops, innermost last: the expression id and whether it is
+    /// a `while` (whose `break` carries no value).
+    loops: Vec<(ExprId, bool)>,
 }
 
 impl Lowerer<'_> {
     fn fn_decl(&mut self, decl: &ast::FnDecl) -> Fn {
         self.locals.clear();
         self.scopes.clear();
+        self.loops.clear();
         let ret = decl.ret.as_ref().map_or(Ty::Unit, |ty| self.ty(ty));
         let body = self.block(&decl.body);
         Fn {
@@ -145,6 +150,7 @@ impl Lowerer<'_> {
                 let pointee = self.ty(pointee);
                 Ty::ptr(*mutable, *volatile, pointee)
             }
+            ast::TyKind::Named(name) if name.name == "bool" => Ty::Bool,
             ast::TyKind::Named(name) => match IntTy::from_name(&name.name) {
                 Some(int) => Ty::Int(int),
                 None => {
@@ -226,6 +232,7 @@ impl Lowerer<'_> {
             // stops before HIR when there are syntax errors.
             ast::ExprKind::Int(value) => ExprKind::Int(value.unwrap_or(0)),
             ast::ExprKind::Byte(value) => ExprKind::Byte(value.unwrap_or(0)),
+            ast::ExprKind::Bool(value) => ExprKind::Bool(*value),
             ast::ExprKind::Unit => ExprKind::Unit,
             ast::ExprKind::Name(name) => match self.resolve(name) {
                 Some(local) => ExprKind::Local(local),
@@ -238,6 +245,9 @@ impl Lowerer<'_> {
             ast::ExprKind::Binary(op, lhs, rhs) => {
                 ExprKind::Binary(*op, self.boxed(lhs), self.boxed(rhs))
             }
+            ast::ExprKind::Logical(op, lhs, rhs) => {
+                ExprKind::Logical(*op, self.boxed(lhs), self.boxed(rhs))
+            }
             ast::ExprKind::Cast(operand, ty) => {
                 ExprKind::Cast(self.boxed(operand), self.ty(ty), ty.span)
             }
@@ -248,12 +258,68 @@ impl Lowerer<'_> {
                 ExprKind::CompoundAssign(*op, self.boxed(place), self.boxed(value))
             }
             ast::ExprKind::Block(block) => ExprKind::Block(self.block(block)),
-            ast::ExprKind::Loop(body) => ExprKind::Loop(self.block(body)),
+            ast::ExprKind::If { cond, then, else_ } => ExprKind::If {
+                cond: self.boxed(cond),
+                then: self.block(then),
+                else_: else_.as_ref().map(|e| self.boxed(e)),
+            },
+            ast::ExprKind::While { cond, body } => {
+                let cond = self.boxed(cond);
+                self.loops.push((id, true));
+                let body = self.block(body);
+                self.loops.pop();
+                ExprKind::While { cond, body }
+            }
+            ast::ExprKind::Loop(body) => {
+                self.loops.push((id, false));
+                let body = self.block(body);
+                self.loops.pop();
+                ExprKind::Loop(body)
+            }
+            ast::ExprKind::Break(value) => {
+                let target = self.loop_target(expr.span, "break");
+                if let (Some((_, true)), Some(value)) = (self.loops.last(), value) {
+                    self.diags.push(
+                        Diagnostic::error(
+                            "resolve::break-value-in-while",
+                            "`break` with a value is only allowed in `loop`",
+                        )
+                        .label(value.span, "a `while` loop has no value")
+                        .help("use `loop` with an `if` to break with a value"),
+                    );
+                }
+                ExprKind::Break {
+                    target,
+                    value: value.as_ref().map(|e| self.boxed(e)),
+                }
+            }
+            ast::ExprKind::Continue => ExprKind::Continue {
+                target: self.loop_target(expr.span, "continue"),
+            },
+            ast::ExprKind::Return(value) => ExprKind::Return(value.as_ref().map(|e| self.boxed(e))),
         };
         Expr {
             id,
             kind,
             span: expr.span,
+        }
+    }
+
+    /// The innermost enclosing loop. Outside a loop this reports an error and
+    /// returns a placeholder, since lowering errors stop the pipeline.
+    fn loop_target(&mut self, span: Span, keyword: &str) -> ExprId {
+        match self.loops.last() {
+            Some(&(id, _)) => id,
+            None => {
+                self.diags.push(
+                    Diagnostic::error(
+                        "resolve::outside-loop",
+                        format!("`{keyword}` outside of a loop"),
+                    )
+                    .label(span, "not inside `loop` or `while`"),
+                );
+                ExprId(0)
+            }
         }
     }
 

@@ -63,17 +63,22 @@ impl Lexer<'_> {
                 '}' => TokenKind::RBrace,
                 ':' => TokenKind::Colon,
                 ';' => TokenKind::Semi,
+                '!' if self.eat('=') => TokenKind::Ne,
                 '!' => TokenKind::Bang,
                 '-' if self.eat('>') => TokenKind::Arrow,
                 '+' => self.with_eq(TokenKind::Plus, TokenKind::PlusEq),
                 '-' => self.with_eq(TokenKind::Minus, TokenKind::MinusEq),
                 '*' => self.with_eq(TokenKind::Star, TokenKind::StarEq),
+                '&' if self.eat('&') => TokenKind::AndAnd,
                 '&' => self.with_eq(TokenKind::Amp, TokenKind::AmpEq),
+                '|' if self.eat('|') => TokenKind::OrOr,
                 '|' => self.with_eq(TokenKind::Pipe, TokenKind::PipeEq),
                 '^' => self.with_eq(TokenKind::Caret, TokenKind::CaretEq),
-                '=' => TokenKind::Eq,
+                '=' => self.with_eq(TokenKind::Eq, TokenKind::EqEq),
                 '<' if self.eat('<') => self.with_eq(TokenKind::Shl, TokenKind::ShlEq),
+                '<' => self.with_eq(TokenKind::Lt, TokenKind::Le),
                 '>' if self.eat('>') => self.with_eq(TokenKind::Shr, TokenKind::ShrEq),
+                '>' => self.with_eq(TokenKind::Gt, TokenKind::Ge),
                 '0'..='9' => {
                     self.number(start);
                     TokenKind::Int

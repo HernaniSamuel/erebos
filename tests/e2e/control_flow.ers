@@ -1,0 +1,77 @@
+// Loops, branches and short-circuit evaluation on the emulated CPU.
+// expect-output: 0123456789
+// expect-output: 5 7 5 1
+// expect-output: ok
+// expect-output: su
+// expect-exit: 0
+entry fn main() -> ! {
+    let uart: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+
+    // while
+    let mut i: u8 = 0;
+    while i < 10 {
+        *uart = b'0' + i;
+        i += 1;
+    }
+    *uart = b'\n';
+
+    // loop with a value: the first n with n * n > 20
+    let mut n: u32 = 0;
+    let first: u32 = loop {
+        n += 1;
+        if n * n > 20 {
+            break n;
+        }
+    };
+    *uart = b'0' + first as u8;
+    *uart = b' ';
+
+    // if as an expression, with else if
+    let pick: u8 = if first > 4 { 7 } else if first > 2 { 8 } else { 9 };
+    *uart = b'0' + pick;
+    *uart = b' ';
+
+    // continue: count the even numbers below 10
+    let mut k: u8 = 0;
+    let mut evens: u8 = 0;
+    while k < 10 {
+        k += 1;
+        if k & 1 == 1 {
+            continue;
+        }
+        evens += 1;
+    }
+    *uart = b'0' + evens;
+    *uart = b' ';
+
+    // bool converts to integers
+    let three: u8 = 3;
+    *uart = b'0' + (three < 4) as u8;
+    *uart = b'\n';
+
+    // && and || skip their right side when the left decides
+    let a: bool = false && { *uart = b'X'; true };
+    let b: bool = true || { *uart = b'Y'; true };
+    let c: bool = true && { *uart = b'o'; true };
+    let d: bool = false || { *uart = b'k'; true };
+    *uart = b'\n';
+
+    // comparisons follow signedness
+    let neg: i8 = -1;
+    if neg < 0 {
+        *uart = b's';
+    }
+    let big: u8 = 255;
+    if big > 0 {
+        *uart = b'u';
+    }
+    *uart = b'\n';
+
+    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+    *finisher = 0x5555;
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    loop {}
+}

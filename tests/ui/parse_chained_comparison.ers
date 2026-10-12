@@ -1,0 +1,4 @@
+// emit: ast
+fn f() {
+    let ok: bool = 1 < 2 < 3;
+}

@@ -29,6 +29,7 @@ fn build_body(f: &hir::Fn, types: &TypeckResults) -> Body {
         hir_locals: Vec::new(),
         blocks: Vec::new(),
         current: None,
+        loops: Vec::new(),
     };
     // HIR locals become MIR locals `_1..`, in declaration order.
     for local in &f.locals {
@@ -65,6 +66,7 @@ fn lower_ty(ty: hir::Ty) -> Ty {
     match ty {
         hir::Ty::Unit => Ty::Unit,
         hir::Ty::Never => Ty::Never,
+        hir::Ty::Bool => Ty::Bool,
         hir::Ty::Int(int) => Ty::Int(int),
         hir::Ty::Ptr(ptr) => Ty::Ptr(Ptr {
             mutable: ptr.mutable,
@@ -90,6 +92,19 @@ struct Builder<'a> {
     /// The block code is currently appended to; `None` after control flow
     /// has diverged, so following code is unreachable and not emitted.
     current: Option<BasicBlock>,
+    /// Enclosing loops, innermost last.
+    loops: Vec<LoopScope>,
+}
+
+struct LoopScope {
+    /// The HIR expression of the loop, which `break`/`continue` name.
+    id: hir::ExprId,
+    /// Where `continue` jumps.
+    continue_to: BasicBlock,
+    /// Where `break` jumps; created by the first `break`.
+    break_to: Option<BasicBlock>,
+    /// Where `break value` stores the value, for loops with a value.
+    result: Option<Place>,
 }
 
 impl Builder<'_> {
@@ -114,9 +129,12 @@ impl Builder<'_> {
         }
     }
 
+    /// Ends the current block. In unreachable code there is none, and
+    /// nothing is emitted.
     fn terminate(&mut self, terminator: Terminator) {
-        let bb = self.current.take().expect("no block to terminate");
-        self.blocks[bb.0 as usize].terminator = Some(terminator);
+        if let Some(bb) = self.current.take() {
+            self.blocks[bb.0 as usize].terminator = Some(terminator);
+        }
     }
 
     /// Stores `rvalue` in a new temporary and returns a read of it.
@@ -161,6 +179,7 @@ impl Builder<'_> {
                 Operand::Const(Const::Int(*value, int))
             }
             hir::ExprKind::Byte(value) => Operand::Const(Const::Int(*value as u64, hir::IntTy::U8)),
+            hir::ExprKind::Bool(value) => Operand::Const(Const::Bool(*value)),
             hir::ExprKind::Unit => Operand::Const(Const::Unit),
             hir::ExprKind::Local(local) => Operand::Copy(self.local(*local)),
             hir::ExprKind::Deref(_) => {
@@ -206,13 +225,105 @@ impl Builder<'_> {
                 Operand::Const(Const::Unit)
             }
             hir::ExprKind::Block(block) => self.block(block),
-            hir::ExprKind::Loop(body) => {
+            hir::ExprKind::Logical(op, lhs, rhs) => self.logical(*op, lhs, rhs),
+            hir::ExprKind::If { cond, then, else_ } => {
+                let cond = self.expr(cond);
+                let result = self.result_place(ty);
+                let then_bb = self.new_block();
+                let else_bb = self.new_block();
+                self.terminate(Terminator::If {
+                    cond,
+                    then: then_bb,
+                    else_: else_bb,
+                });
+
+                self.current = Some(then_bb);
+                let value = self.block(then);
+                self.store_result(result, value);
+                let then_end = self.current.take();
+
+                self.current = Some(else_bb);
+                if let Some(else_) = else_ {
+                    let value = self.expr(else_);
+                    self.store_result(result, value);
+                }
+                let else_end = self.current.take();
+
+                self.join(&[then_end, else_end]);
+                self.read_result(result)
+            }
+            hir::ExprKind::While { cond, body } => {
                 let head = self.new_block();
                 self.terminate(Terminator::Goto(head));
                 self.current = Some(head);
-                self.block(body);
+                let cond = self.expr(cond);
+                let body_bb = self.new_block();
+                let exit = self.new_block();
+                self.terminate(Terminator::If {
+                    cond,
+                    then: body_bb,
+                    else_: exit,
+                });
+                self.current = Some(body_bb);
+                self.in_loop(expr.id, head, Some(exit), None, |this| {
+                    this.block(body);
+                });
                 if self.current.is_some() {
                     self.terminate(Terminator::Goto(head));
+                }
+                self.current = Some(exit);
+                Operand::Const(Const::Unit)
+            }
+            hir::ExprKind::Loop(body) => {
+                let result = self.result_place(ty);
+                let head = self.new_block();
+                self.terminate(Terminator::Goto(head));
+                self.current = Some(head);
+                let scope = self.in_loop(expr.id, head, None, result, |this| {
+                    this.block(body);
+                });
+                if self.current.is_some() {
+                    self.terminate(Terminator::Goto(head));
+                }
+                // Without a `break`, nothing follows the loop.
+                self.current = scope.break_to;
+                self.read_result(result)
+            }
+            hir::ExprKind::Break { target, value } => {
+                let value = value.as_ref().map(|v| self.expr(v));
+                let index = self.loop_index(*target);
+                if let (Some(place), Some(value)) = (self.loops[index].result, value) {
+                    self.assign(place, Rvalue::Use(value));
+                }
+                if self.current.is_some() {
+                    let exit = match self.loops[index].break_to {
+                        Some(exit) => exit,
+                        None => {
+                            let exit = self.new_block();
+                            self.loops[index].break_to = Some(exit);
+                            exit
+                        }
+                    };
+                    self.terminate(Terminator::Goto(exit));
+                }
+                Operand::Const(Const::Unit)
+            }
+            hir::ExprKind::Continue { target } => {
+                let head = self.loops[self.loop_index(*target)].continue_to;
+                if self.current.is_some() {
+                    self.terminate(Terminator::Goto(head));
+                }
+                Operand::Const(Const::Unit)
+            }
+            hir::ExprKind::Return(value) => {
+                let value = value.as_ref().map(|v| self.expr(v));
+                if let Some(value) = value
+                    && self.locals[0].ty != Ty::Unit
+                {
+                    self.assign(Place::local(Local::RETURN), Rvalue::Use(value));
+                }
+                if self.current.is_some() {
+                    self.terminate(Terminator::Return);
                 }
                 Operand::Const(Const::Unit)
             }
@@ -223,6 +334,93 @@ impl Builder<'_> {
             self.terminate(Terminator::Unreachable);
         }
         value
+    }
+
+    /// `a && b` is `if a { b } else { false }`; `a || b` is
+    /// `if a { true } else { b }`.
+    fn logical(&mut self, op: hir::LogicalOp, lhs: &hir::Expr, rhs: &hir::Expr) -> Operand {
+        let lhs = self.expr(lhs);
+        let result = Place::local(self.new_local(Ty::Bool, None));
+        let rhs_bb = self.new_block();
+        let short_bb = self.new_block();
+        let (then, else_) = match op {
+            hir::LogicalOp::And => (rhs_bb, short_bb),
+            hir::LogicalOp::Or => (short_bb, rhs_bb),
+        };
+        self.terminate(Terminator::If {
+            cond: lhs,
+            then,
+            else_,
+        });
+
+        self.current = Some(rhs_bb);
+        let value = self.expr(rhs);
+        self.assign(result, Rvalue::Use(value));
+        let rhs_end = self.current.take();
+
+        self.current = Some(short_bb);
+        let short = op == hir::LogicalOp::Or;
+        self.assign(result, Rvalue::Use(Operand::Const(Const::Bool(short))));
+        let short_end = self.current.take();
+
+        self.join(&[rhs_end, short_end]);
+        Operand::Copy(result)
+    }
+
+    /// Continues in a new block reached from every branch end that is still
+    /// open; if none is, the code after the branches is unreachable.
+    fn join(&mut self, ends: &[Option<BasicBlock>]) {
+        let open: Vec<BasicBlock> = ends.iter().flatten().copied().collect();
+        if open.is_empty() {
+            return;
+        }
+        let join = self.new_block();
+        for end in open {
+            self.current = Some(end);
+            self.terminate(Terminator::Goto(join));
+        }
+        self.current = Some(join);
+    }
+
+    /// A place for the value of a branching expression, if it has one.
+    fn result_place(&mut self, ty: Ty) -> Option<Place> {
+        matches!(ty, Ty::Bool | Ty::Int(_) | Ty::Ptr(_))
+            .then(|| Place::local(self.new_local(ty, None)))
+    }
+
+    fn store_result(&mut self, result: Option<Place>, value: Operand) {
+        if let Some(place) = result {
+            self.assign(place, Rvalue::Use(value));
+        }
+    }
+
+    fn read_result(&self, result: Option<Place>) -> Operand {
+        result.map_or(Operand::Const(Const::Unit), Operand::Copy)
+    }
+
+    fn in_loop(
+        &mut self,
+        id: hir::ExprId,
+        continue_to: BasicBlock,
+        break_to: Option<BasicBlock>,
+        result: Option<Place>,
+        body: impl FnOnce(&mut Self),
+    ) -> LoopScope {
+        self.loops.push(LoopScope {
+            id,
+            continue_to,
+            break_to,
+            result,
+        });
+        body(self);
+        self.loops.pop().expect("pushed above")
+    }
+
+    fn loop_index(&self, target: hir::ExprId) -> usize {
+        self.loops
+            .iter()
+            .rposition(|scope| scope.id == target)
+            .expect("lowering resolved the loop")
     }
 
     fn local(&self, local: hir::LocalId) -> Place {
@@ -239,6 +437,7 @@ impl Builder<'_> {
                 }
             }
             Operand::Const(Const::Int(_, int)) => Ty::Int(int),
+            Operand::Const(Const::Bool(_)) => Ty::Bool,
             Operand::Const(Const::Unit) => Ty::Unit,
         }
     }
@@ -270,6 +469,7 @@ fn is_simple(expr: &hir::Expr) -> bool {
         expr.kind,
         hir::ExprKind::Int(_)
             | hir::ExprKind::Byte(_)
+            | hir::ExprKind::Bool(_)
             | hir::ExprKind::Unit
             | hir::ExprKind::Local(_)
     )

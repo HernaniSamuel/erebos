@@ -11,7 +11,9 @@
 use std::fmt::Write;
 
 use crate::diag::{Diagnostic, Diagnostics};
-use crate::hir::{Block, Expr, ExprId, ExprKind, Fn, FnKind, Hir, IntTy, Ptr, Stmt, Ty, UnOp};
+use crate::hir::{
+    BinOp, Block, Expr, ExprId, ExprKind, Fn, FnKind, Hir, IntTy, Ptr, Stmt, Ty, UnOp,
+};
 use crate::span::Span;
 
 pub struct TypeckResults {
@@ -29,6 +31,7 @@ pub fn check(hir: &Hir, diags: &mut Diagnostics) -> TypeckResults {
         // Overwritten for every expression; the placeholder is never read.
         expr_types: vec![Ty::Error; hir.expr_count as usize],
         diags,
+        loops: Vec::new(),
     };
     for (_, f) in hir.fns() {
         checker.fn_(f);
@@ -50,6 +53,8 @@ fn needs_expected_type(expr: &Expr) -> bool {
     match &expr.kind {
         ExprKind::Int(_) => true,
         ExprKind::Unary(_, operand) => needs_expected_type(operand),
+        // A comparison is a `bool` whatever its operands are.
+        ExprKind::Binary(op, _, _) if op.is_comparison() => false,
         ExprKind::Binary(op, lhs, _) if op.is_shift() => needs_expected_type(lhs),
         ExprKind::Binary(_, lhs, rhs) => needs_expected_type(lhs) && needs_expected_type(rhs),
         _ => false,
@@ -68,6 +73,16 @@ fn literal_value(expr: &Expr) -> Option<i128> {
 struct Checker<'a> {
     expr_types: Vec<Ty>,
     diags: &'a mut Diagnostics,
+    /// Enclosing `loop`/`while` expressions, innermost last.
+    loops: Vec<LoopCtx>,
+}
+
+struct LoopCtx {
+    id: ExprId,
+    /// The type expected of the loop's value, if any.
+    expected: Option<Ty>,
+    /// The type of the first `break`, which later ones must match.
+    break_ty: Option<Ty>,
 }
 
 impl Checker<'_> {
@@ -99,7 +114,8 @@ impl Checker<'_> {
         }
 
         let body_ty = self.block(f, &f.body, Some(f.ret));
-        if !coerces(body_ty, f.ret) {
+        // A tail expression was already checked against the return type.
+        if f.body.tail.is_none() && !coerces(body_ty, f.ret) {
             self.report_body_mismatch(f, body_ty);
         }
     }
@@ -154,8 +170,12 @@ impl Checker<'_> {
     fn check(&mut self, f: &Fn, expr: &Expr, expected: Option<Ty>) -> Ty {
         let ty = self.expr_kind(f, expr, expected);
         self.expr_types[expr.id.0 as usize] = ty;
+        // A block passes the expected type to its tail, which reports any
+        // mismatch itself.
+        let reported_inside = matches!(&expr.kind, ExprKind::Block(b) if b.tail.is_some());
         if let Some(expected) = expected
             && !coerces(ty, expected)
+            && !reported_inside
         {
             self.mismatch(expr, expected, ty);
         }
@@ -170,6 +190,10 @@ impl Checker<'_> {
                 "integer types never convert implicitly; use `as {expected}` (ADR 0008)"
             ));
         }
+        if expected == Ty::Never && matches!(expr.kind, ExprKind::While { .. }) {
+            diag =
+                diag.help("a `while` loop can finish even with `true`; use `loop` to run forever");
+        }
         self.diags.push(diag);
     }
 
@@ -177,19 +201,41 @@ impl Checker<'_> {
         match &expr.kind {
             ExprKind::Int(value) => self.int_literal(expr, *value, false, expected),
             ExprKind::Byte(_) => Ty::Int(IntTy::U8),
+            ExprKind::Bool(_) => Ty::Bool,
             ExprKind::Unit => Ty::Unit,
             ExprKind::Local(local) => f.local(*local).ty,
             ExprKind::Unary(op, operand) => self.unary(f, expr, *op, operand, expected),
             ExprKind::Binary(op, lhs, rhs) if op.is_shift() => {
                 let lhs_ty = self.check(f, lhs, expected);
-                self.require_int(lhs, lhs_ty, op.symbol());
+                self.require(lhs, lhs_ty, op.symbol(), Operands::Int);
                 self.shift_amount(f, rhs, lhs_ty);
                 lhs_ty
             }
+            ExprKind::Binary(op, lhs, rhs) if op.is_comparison() => {
+                // Both sides have one type, never converted (ADR 0008).
+                let ty = self.same_type_operands(f, lhs, rhs, None);
+                let allowed = if matches!(op, BinOp::Eq | BinOp::Ne) {
+                    Operands::Equatable
+                } else {
+                    Operands::Ordered
+                };
+                self.require(expr, ty, op.symbol(), allowed);
+                Ty::Bool
+            }
             ExprKind::Binary(op, lhs, rhs) => {
                 let ty = self.same_type_operands(f, lhs, rhs, expected);
-                self.require_int(expr, ty, op.symbol());
+                let allowed = if op.is_bitwise() {
+                    Operands::IntOrBool
+                } else {
+                    Operands::Int
+                };
+                self.require(expr, ty, op.symbol(), allowed);
                 ty
+            }
+            ExprKind::Logical(_, lhs, rhs) => {
+                self.check(f, lhs, Some(Ty::Bool));
+                self.check(f, rhs, Some(Ty::Bool));
+                Ty::Bool
             }
             ExprKind::Cast(operand, target, target_span) => {
                 self.cast(f, operand, *target, *target_span)
@@ -205,7 +251,12 @@ impl Checker<'_> {
             }
             ExprKind::CompoundAssign(op, place, value) => {
                 let place_ty = self.place(f, place);
-                self.require_int(place, place_ty, op.symbol());
+                let allowed = if op.is_bitwise() {
+                    Operands::IntOrBool
+                } else {
+                    Operands::Int
+                };
+                self.require(place, place_ty, op.symbol(), allowed);
                 if op.is_shift() {
                     self.shift_amount(f, value, place_ty);
                 } else {
@@ -214,11 +265,117 @@ impl Checker<'_> {
                 Ty::Unit
             }
             ExprKind::Block(block) => self.block(f, block, expected),
+            ExprKind::If { cond, then, else_ } => {
+                self.check(f, cond, Some(Ty::Bool));
+                let Some(else_) = else_ else {
+                    // Without `else`, the missing branch has type `()`.
+                    if let Some(want) = expected
+                        && !coerces(Ty::Unit, want)
+                    {
+                        self.diags.push(
+                            Diagnostic::error(
+                                "ty::if-without-else",
+                                format!("`if` without `else` has no `{want}` value"),
+                            )
+                            .label(expr.span, format!("expected `{want}`"))
+                            .help("add an `else` branch for when the condition is false"),
+                        );
+                        self.block(f, then, Some(want));
+                        return Ty::Error;
+                    }
+                    self.block(f, then, Some(Ty::Unit));
+                    return Ty::Unit;
+                };
+                match expected {
+                    Some(expected) => {
+                        self.block(f, then, Some(expected));
+                        self.check(f, else_, Some(expected));
+                        expected
+                    }
+                    None => {
+                        // The first branch that can finish gives the type.
+                        let then_ty = self.block(f, then, None);
+                        let else_expected = (then_ty != Ty::Never).then_some(then_ty);
+                        let else_ty = self.check(f, else_, else_expected);
+                        if then_ty == Ty::Never {
+                            else_ty
+                        } else {
+                            then_ty
+                        }
+                    }
+                }
+            }
+            ExprKind::While { cond, body } => {
+                self.check(f, cond, Some(Ty::Bool));
+                self.in_loop(expr.id, None, |this| this.block(f, body, Some(Ty::Unit)));
+                // The condition is not evaluated at compile time, so even
+                // `while true` may finish.
+                Ty::Unit
+            }
             ExprKind::Loop(body) => {
-                self.block(f, body, Some(Ty::Unit));
-                // There is no `break` yet, so a loop never finishes.
+                let ctx = self.in_loop(expr.id, expected, |this| {
+                    this.block(f, body, Some(Ty::Unit))
+                });
+                // Without a `break`, a loop never finishes.
+                ctx.break_ty.unwrap_or(Ty::Never)
+            }
+            ExprKind::Break { target, value } => {
+                self.break_(f, expr, *target, value.as_deref());
                 Ty::Never
             }
+            ExprKind::Continue { .. } => Ty::Never,
+            ExprKind::Return(value) => {
+                match value {
+                    Some(value) => {
+                        self.check(f, value, Some(f.ret));
+                    }
+                    None if !coerces(Ty::Unit, f.ret) => self.mismatch(expr, f.ret, Ty::Unit),
+                    None => {}
+                }
+                Ty::Never
+            }
+        }
+    }
+
+    fn in_loop(
+        &mut self,
+        id: ExprId,
+        expected: Option<Ty>,
+        body: impl FnOnce(&mut Self) -> Ty,
+    ) -> LoopCtx {
+        self.loops.push(LoopCtx {
+            id,
+            expected,
+            break_ty: None,
+        });
+        body(self);
+        self.loops.pop().expect("pushed above")
+    }
+
+    /// The value of a `break` must have the loop's expected type or, without
+    /// one, the type of the loop's first `break`.
+    fn break_(&mut self, f: &Fn, expr: &Expr, target: ExprId, value: Option<&Expr>) {
+        let index = self
+            .loops
+            .iter()
+            .rposition(|ctx| ctx.id == target)
+            .expect("lowering resolved the loop");
+        let ctx = &self.loops[index];
+        let want = ctx.expected.or(ctx.break_ty);
+        let ty = match value {
+            Some(value) => self.check(f, value, want),
+            None => {
+                if let Some(want) = want
+                    && !coerces(Ty::Unit, want)
+                {
+                    self.mismatch(expr, want, Ty::Unit);
+                }
+                Ty::Unit
+            }
+        };
+        let ctx = &mut self.loops[index];
+        if ctx.break_ty.is_none() {
+            ctx.break_ty = Some(want.unwrap_or(ty));
         }
     }
 
@@ -278,6 +435,10 @@ impl Checker<'_> {
             _ => self.check(f, operand, expected),
         };
         match (op, ty) {
+            (UnOp::Not, ty) => {
+                self.require(expr, ty, "!", Operands::IntOrBool);
+                ty
+            }
             (UnOp::Neg, Ty::Int(int)) if !int.is_signed() => {
                 self.diags.push(
                     Diagnostic::error(
@@ -289,9 +450,8 @@ impl Checker<'_> {
                 );
                 Ty::Error
             }
-            _ => {
-                let symbol = if op == UnOp::Neg { "-" } else { "!" };
-                self.require_int(expr, ty, symbol);
+            (UnOp::Neg, ty) => {
+                self.require(expr, ty, "-", Operands::Int);
                 ty
             }
         }
@@ -319,7 +479,7 @@ impl Checker<'_> {
             self.check(f, amount, Some(shifted));
         } else {
             let ty = self.check(f, amount, None);
-            self.require_int(amount, ty, "<<");
+            self.require(amount, ty, "<<", Operands::Int);
         }
         if let (Ty::Int(int), Some(value)) = (shifted, literal_value(amount))
             && !(0..int.bits() as i128).contains(&value)
@@ -357,11 +517,35 @@ impl Checker<'_> {
         };
         let from = self.check(f, operand, expected);
         let castable = |ty: Ty| matches!(ty, Ty::Int(_) | Ty::Ptr(_) | Ty::Error | Ty::Never);
+        if from == Ty::Bool {
+            // `true as u8 == 1`; a bool converts to integers only.
+            if !matches!(target, Ty::Int(_) | Ty::Error) {
+                self.diags.push(
+                    Diagnostic::error(
+                        "ty::invalid-cast",
+                        format!("cannot cast `bool` to `{target}`"),
+                    )
+                    .label(target_span, "a `bool` converts only to integer types"),
+                );
+                return Ty::Error;
+            }
+            return target;
+        }
         if !castable(from) {
             self.diags.push(
-                Diagnostic::error("ty::invalid-cast", format!("cannot cast `{from}`"))
-                    .label(operand.span, "only integers and pointers can be cast"),
+                Diagnostic::error("ty::invalid-cast", format!("cannot cast `{from}`")).label(
+                    operand.span,
+                    "only integers, pointers and `bool` can be cast",
+                ),
             );
+        }
+        if target == Ty::Bool {
+            self.diags.push(
+                Diagnostic::error("ty::invalid-cast", "cannot cast to `bool`")
+                    .label(target_span, "no conversion to `bool`")
+                    .help("say what you mean with a comparison, such as `x != 0`"),
+            );
+            return Ty::Error;
         }
         if !castable(target) {
             self.diags.push(
@@ -439,12 +623,25 @@ impl Checker<'_> {
         local.ty
     }
 
-    fn require_int(&mut self, expr: &Expr, ty: Ty, op: &str) {
-        if !matches!(ty, Ty::Int(_) | Ty::Error | Ty::Never) {
+    fn require(&mut self, expr: &Expr, ty: Ty, op: &str, allowed: Operands) {
+        let ok = match ty {
+            Ty::Error | Ty::Never => true,
+            Ty::Int(_) => true,
+            Ty::Bool => matches!(allowed, Operands::IntOrBool | Operands::Equatable),
+            Ty::Ptr(_) => matches!(allowed, Operands::Equatable | Operands::Ordered),
+            Ty::Unit => false,
+        };
+        if !ok {
+            let what = match allowed {
+                Operands::Int => "an integer",
+                Operands::IntOrBool => "an integer or `bool`",
+                Operands::Equatable => "integers, pointers or `bool`",
+                Operands::Ordered => "integers or pointers",
+            };
             self.diags.push(
                 Diagnostic::error(
                     "ty::invalid-operand",
-                    format!("`{op}` needs an integer, found `{ty}`"),
+                    format!("`{op}` needs {what}, found `{ty}`"),
                 )
                 .label(expr.span, format!("has type `{ty}`")),
             );
@@ -481,8 +678,26 @@ pub fn dump(hir: &Hir, results: &TypeckResults) -> String {
     out
 }
 
+/// The types an operator accepts.
+#[derive(Clone, Copy)]
+enum Operands {
+    Int,
+    IntOrBool,
+    /// `==` and `!=`
+    Equatable,
+    /// `<`, `<=`, `>`, `>=`
+    Ordered,
+}
+
 fn expr_label(f: &Fn, expr: &Expr) -> String {
     match &expr.kind {
+        ExprKind::Bool(value) => format!("bool {value}"),
+        ExprKind::Logical(op, _, _) => format!("logical {}", op.symbol()),
+        ExprKind::If { .. } => "if".to_owned(),
+        ExprKind::While { .. } => "while".to_owned(),
+        ExprKind::Break { .. } => "break".to_owned(),
+        ExprKind::Continue { .. } => "continue".to_owned(),
+        ExprKind::Return(_) => "return".to_owned(),
         ExprKind::Int(value) => format!("int {value}"),
         ExprKind::Byte(value) => format!("byte {value}"),
         ExprKind::Unit => "unit".to_owned(),

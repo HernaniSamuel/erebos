@@ -1,0 +1,30 @@
+// emit: typeck
+fn precedence() -> bool {
+    let flags: u32 = 6;
+    let ready: bool = true;
+    flags & 4 == 0 && ready || !ready
+}
+
+fn values() -> u32 {
+    let mut n: u32 = 0;
+    let first: u32 = loop {
+        n += 1;
+        if n * n > 20 {
+            break n;
+        }
+    };
+    let pick: u32 = if first > 4 { 7 } else if first > 2 { 8 } else { 9 };
+    while n < 10 {
+        n += 1;
+        if n & 1 == 1 {
+            continue;
+        }
+    }
+    if pick == 7 {
+        return first;
+    }
+    (true as u32) + pick
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

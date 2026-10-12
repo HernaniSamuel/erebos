@@ -1,0 +1,100 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_control_flow_errors.ers
+---
+--- errors ---
+ty::mismatched-types
+
+  × mismatched types
+   ╭─[typeck_control_flow_errors.ers:6:8]
+ 5 │     let small: i32 = 3;
+ 6 │     if x { }
+   ·        ┬
+   ·        ╰── expected `bool`, found `u32`
+ 7 │     let a: u32 = if true { 1 } else { false };
+   ╰────
+ty::mismatched-types
+
+  × mismatched types
+   ╭─[typeck_control_flow_errors.ers:7:39]
+ 6 │     if x { }
+ 7 │     let a: u32 = if true { 1 } else { false };
+   ·                                       ──┬──
+   ·                                         ╰── expected `u32`, found `bool`
+ 8 │     let b: bool = wide < small;
+   ╰────
+ty::mismatched-types
+
+  × mismatched types
+   ╭─[typeck_control_flow_errors.ers:8:26]
+ 7 │     let a: u32 = if true { 1 } else { false };
+ 8 │     let b: bool = wide < small;
+   ·                          ──┬──
+   ·                            ╰── expected `u64`, found `i32`
+ 9 │     let c: bool = true < false;
+   ╰────
+  help: integer types never convert implicitly; use `as u64` (ADR 0008)
+ty::invalid-operand
+
+  × `<` needs integers or pointers, found `bool`
+    ╭─[typeck_control_flow_errors.ers:9:19]
+  8 │     let b: bool = wide < small;
+  9 │     let c: bool = true < false;
+    ·                   ──────┬─────
+    ·                         ╰── has type `bool`
+ 10 │     let d: bool = x as bool;
+    ╰────
+ty::invalid-cast
+
+  × cannot cast to `bool`
+    ╭─[typeck_control_flow_errors.ers:10:24]
+  9 │     let c: bool = true < false;
+ 10 │     let d: bool = x as bool;
+    ·                        ──┬─
+    ·                          ╰── no conversion to `bool`
+ 11 │     let e: u32 = loop {
+    ╰────
+  help: say what you mean with a comparison, such as `x != 0`
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_control_flow_errors.ers:13:9]
+ 12 │         if true { break 1; }
+ 13 │         break;
+    ·         ──┬──
+    ·           ╰── expected `u32`, found `()`
+ 14 │     };
+    ╰────
+ty::if-without-else
+
+  × `if` without `else` has no `u32` value
+    ╭─[typeck_control_flow_errors.ers:15:18]
+ 14 │     };
+ 15 │     let f: u32 = if true { 2 };
+    ·                  ──────┬──────
+    ·                        ╰── expected `u32`
+ 16 │     return;
+    ╰────
+  help: add an `else` branch for when the condition is false
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_control_flow_errors.ers:16:5]
+ 15 │     let f: u32 = if true { 2 };
+ 16 │     return;
+    ·     ───┬──
+    ·        ╰── expected `u32`, found `()`
+ 17 │ }
+    ╰────
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_control_flow_errors.ers:20:5]
+ 19 │ fn spins() -> ! {
+ 20 │     while true {}
+    ·     ──────┬──────
+    ·           ╰── expected `!`, found `()`
+ 21 │ }
+    ╰────
+  help: a `while` loop can finish even with `true`; use `loop` to run forever

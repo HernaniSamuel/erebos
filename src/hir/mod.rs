@@ -9,7 +9,7 @@ pub use lower::lower;
 use std::fmt;
 
 pub use crate::int::IntTy;
-pub use crate::ops::{BinOp, UnOp};
+pub use crate::ops::{BinOp, LogicalOp, UnOp};
 use crate::span::Span;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -83,6 +83,7 @@ pub struct Local {
 pub enum Ty {
     Unit,
     Never,
+    Bool,
     Int(IntTy),
     Ptr(Ptr),
     /// Produced only by the type checker after reporting an error, so one
@@ -123,6 +124,7 @@ impl fmt::Display for Ty {
         match self {
             Ty::Unit => f.write_str("()"),
             Ty::Never => f.write_str("!"),
+            Ty::Bool => f.write_str("bool"),
             Ty::Int(int) => write!(f, "{int}"),
             Ty::Ptr(ptr) => write!(f, "{ptr}"),
             Ty::Error => f.write_str("{error}"),
@@ -161,18 +163,38 @@ pub struct Expr {
 pub enum ExprKind {
     Int(u64),
     Byte(u8),
+    Bool(bool),
     Unit,
     Local(LocalId),
     Unary(UnOp, Box<Expr>),
     /// `*ptr`
     Deref(Box<Expr>),
     Binary(BinOp, Box<Expr>, Box<Expr>),
+    Logical(LogicalOp, Box<Expr>, Box<Expr>),
     /// `expr as ty`; the span is the written type's.
     Cast(Box<Expr>, Ty, Span),
     Assign(Box<Expr>, Box<Expr>),
     CompoundAssign(BinOp, Box<Expr>, Box<Expr>),
     Block(Block),
+    If {
+        cond: Box<Expr>,
+        then: Block,
+        else_: Option<Box<Expr>>,
+    },
+    While {
+        cond: Box<Expr>,
+        body: Block,
+    },
     Loop(Block),
+    /// Leaves the loop expression `target` (a `loop` or `while`).
+    Break {
+        target: ExprId,
+        value: Option<Box<Expr>>,
+    },
+    Continue {
+        target: ExprId,
+    },
+    Return(Option<Box<Expr>>),
 }
 
 impl Expr {
@@ -181,15 +203,35 @@ impl Expr {
     pub fn walk(&self, f: &mut impl FnMut(&Expr)) {
         f(self);
         match &self.kind {
-            ExprKind::Int(_) | ExprKind::Byte(_) | ExprKind::Unit | ExprKind::Local(_) => {}
+            ExprKind::Int(_)
+            | ExprKind::Byte(_)
+            | ExprKind::Bool(_)
+            | ExprKind::Unit
+            | ExprKind::Local(_)
+            | ExprKind::Continue { .. }
+            | ExprKind::Break { value: None, .. }
+            | ExprKind::Return(None) => {}
+            ExprKind::Break { value: Some(e), .. } | ExprKind::Return(Some(e)) => e.walk(f),
             ExprKind::Unary(_, e) | ExprKind::Deref(e) | ExprKind::Cast(e, _, _) => e.walk(f),
             ExprKind::Binary(_, a, b)
+            | ExprKind::Logical(_, a, b)
             | ExprKind::Assign(a, b)
             | ExprKind::CompoundAssign(_, a, b) => {
                 a.walk(f);
                 b.walk(f);
             }
             ExprKind::Block(block) | ExprKind::Loop(block) => block.walk(f),
+            ExprKind::If { cond, then, else_ } => {
+                cond.walk(f);
+                then.walk(f);
+                if let Some(else_) = else_ {
+                    else_.walk(f);
+                }
+            }
+            ExprKind::While { cond, body } => {
+                cond.walk(f);
+                body.walk(f);
+            }
         }
     }
 }

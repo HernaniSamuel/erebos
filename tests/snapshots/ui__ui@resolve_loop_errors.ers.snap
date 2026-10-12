@@ -1,0 +1,37 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/resolve_loop_errors.ers
+---
+--- errors ---
+resolve::outside-loop
+
+  × `break` outside of a loop
+   ╭─[resolve_loop_errors.ers:3:5]
+ 2 │ fn errors() {
+ 3 │     break;
+   ·     ──┬──
+   ·       ╰── not inside `loop` or `while`
+ 4 │     continue;
+   ╰────
+resolve::outside-loop
+
+  × `continue` outside of a loop
+   ╭─[resolve_loop_errors.ers:4:5]
+ 3 │     break;
+ 4 │     continue;
+   ·     ────┬───
+   ·         ╰── not inside `loop` or `while`
+ 5 │     while true {
+   ╰────
+resolve::break-value-in-while
+
+  × `break` with a value is only allowed in `loop`
+   ╭─[resolve_loop_errors.ers:6:15]
+ 5 │     while true {
+ 6 │         break 5;
+   ·               ┬
+   ·               ╰── a `while` loop has no value
+ 7 │     }
+   ╰────
+  help: use `loop` with an `if` to break with a value
