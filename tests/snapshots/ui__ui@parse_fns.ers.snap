@@ -1,0 +1,81 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/parse_fns.ers
+---
+--- ast ---
+File {
+    items: [
+        Fn(
+            FnDecl {
+                is_entry: true,
+                name: Ident {
+                    name: "main",
+                    span: 22..26,
+                },
+                ret: Some(
+                    Ty {
+                        kind: Never,
+                        span: 32..33,
+                    },
+                ),
+                body: Block {
+                    stmts: [
+                        Expr(
+                            Expr {
+                                kind: Loop(
+                                    Block {
+                                        stmts: [],
+                                        span: 45..47,
+                                    },
+                                ),
+                                span: 40..47,
+                            },
+                        ),
+                    ],
+                    span: 34..49,
+                },
+                span: 13..49,
+            },
+        ),
+        Fn(
+            FnDecl {
+                is_entry: false,
+                name: Ident {
+                    name: "helper",
+                    span: 54..60,
+                },
+                ret: None,
+                body: Block {
+                    stmts: [
+                        Expr(
+                            Expr {
+                                kind: Loop(
+                                    Block {
+                                        stmts: [
+                                            Expr(
+                                                Expr {
+                                                    kind: Loop(
+                                                        Block {
+                                                            stmts: [],
+                                                            span: 81..83,
+                                                        },
+                                                    ),
+                                                    span: 76..83,
+                                                },
+                                            ),
+                                        ],
+                                        span: 74..85,
+                                    },
+                                ),
+                                span: 69..85,
+                            },
+                        ),
+                    ],
+                    span: 63..87,
+                },
+                span: 51..87,
+            },
+        ),
+    ],
+}

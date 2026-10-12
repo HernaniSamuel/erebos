@@ -1,0 +1,16 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/parse_unclosed_block.ers
+---
+--- errors ---
+parser::unclosed-block
+
+  × unclosed block
+   ╭─[parse_unclosed_block.ers:3:10]
+ 2 │ entry fn main() -> ! {
+ 3 │     loop {
+   ·          ┬▲
+   ·          │╰── expected `}`
+   ·          ╰── this `{` is never closed
+   ╰────

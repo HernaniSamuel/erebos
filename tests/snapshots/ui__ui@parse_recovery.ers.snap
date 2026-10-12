@@ -1,0 +1,35 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/parse_recovery.ers
+---
+--- errors ---
+parser::unexpected-token
+
+  × expected `{`, found `fn`
+   ╭─[parse_recovery.ers:2:18]
+ 1 │ // emit: ast
+ 2 │ fn missing_body()
+   ·                  ▲
+   ·                  ╰── expected `{`
+ 3 │ fn bad_return() -> main {}
+   ╰────
+parser::unexpected-token
+
+  × expected a type, found identifier
+   ╭─[parse_recovery.ers:3:20]
+ 2 │ fn missing_body()
+ 3 │ fn bad_return() -> main {}
+   ·                    ──┬─
+   ·                      ╰── expected a type
+ 4 │ entry fn fine() -> ! { loop {} }
+   ╰────
+parser::unexpected-token
+
+  × expected an item, found `loop`
+   ╭─[parse_recovery.ers:5:1]
+ 4 │ entry fn fine() -> ! { loop {} }
+ 5 │ loop
+   · ──┬─
+   ·   ╰── expected an item
+   ╰────

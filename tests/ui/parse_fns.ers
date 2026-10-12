@@ -1,0 +1,8 @@
+// emit: ast
+entry fn main() -> ! {
+    loop {}
+}
+
+fn helper() {
+    loop { loop {} }
+}

@@ -5,20 +5,23 @@ use std::fmt;
 use std::str::FromStr;
 
 use crate::diag::{self, Diagnostics};
+use crate::span::FileId;
 use crate::span::SourceMap;
-use crate::syntax::lexer;
+use crate::syntax::{lexer, parser};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Stage {
     Tokens,
+    Ast,
 }
 
 impl Stage {
-    pub const ALL: &[Stage] = &[Stage::Tokens];
+    pub const ALL: &[Stage] = &[Stage::Tokens, Stage::Ast];
 
     pub fn name(self) -> &'static str {
         match self {
             Stage::Tokens => "tokens",
+            Stage::Ast => "ast",
         }
     }
 }
@@ -54,16 +57,38 @@ pub fn dump(name: &str, text: &str, stage: Stage, color: bool) -> Result<String,
     let file = sources.add(name, text);
     let mut diags = Diagnostics::default();
 
-    let tokens = lexer::lex(file, text, &mut diags);
-    let output = match stage {
-        Stage::Tokens => tokens
-            .iter()
-            .map(|t| format!("{t:?} {:?}\n", sources.snippet(t.span)))
-            .collect(),
-    };
-
+    let output = run_to(&sources, file, stage, &mut diags);
     if diags.has_errors() {
         return Err(diag::render(&diags.into_vec(), &sources, color));
     }
     Ok(output)
+}
+
+fn run_to(sources: &SourceMap, file: FileId, stage: Stage, diags: &mut Diagnostics) -> String {
+    let text = &sources.file(file).text;
+
+    // Syntax phases keep going after errors to report as much as possible.
+    let tokens = lexer::lex(file, text, diags);
+    if stage == Stage::Tokens {
+        return tokens
+            .iter()
+            .map(|t| {
+                format!(
+                    "{t:?} {:?}
+",
+                    sources.snippet(t.span)
+                )
+            })
+            .collect();
+    }
+
+    let ast = parser::parse(text, &tokens, diags);
+    if stage == Stage::Ast {
+        return format!(
+            "{ast:#?}
+"
+        );
+    }
+
+    unreachable!("every stage returns above")
 }
