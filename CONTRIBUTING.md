@@ -102,6 +102,10 @@ Native Windows (ADR 0011):
    ```
 
    Restart the terminal / VS Code afterwards so the variable is picked up.
+
+   The archive's libraries use the static C runtime (`libcmt`), so the
+   repository's `.cargo/config.toml` builds Rust with `+crt-static` too.
+   Mixing runtimes makes the compiler crash on exit; do not remove it.
    `C:\llvm-22\bin\ld.lld.exe` is the linker used for Erebos programs.
 4. **QEMU** for the riscv32 target (ADR 0010): the Windows installer from
    <https://qemu.weilnetz.de/w64/>, with `C:\Program Files\qemu` on `PATH`.

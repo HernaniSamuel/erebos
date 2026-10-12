@@ -1,0 +1,12 @@
+# The prebuilt LLVM for Windows is compiled against the static C runtime
+# (libcmt). Rust must use the same one, or the two runtimes free each other's
+# memory and the process crashes on exit. See CONTRIBUTING.md.
+#
+# The target is set explicitly so these flags apply only to the compiler
+# itself, not to build scripts: llvm-sys's build script would otherwise see
+# `crt-static` and try to link Windows system libraries statically.
+[build]
+target = "x86_64-pc-windows-msvc"
+
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
