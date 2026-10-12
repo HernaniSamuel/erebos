@@ -1,0 +1,2 @@
+// emit: typeck
+entry fn main() -> ! {}

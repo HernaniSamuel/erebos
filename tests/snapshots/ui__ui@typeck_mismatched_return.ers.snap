@@ -1,0 +1,16 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_mismatched_return.ers
+---
+--- errors ---
+ty::mismatched-types
+
+  × mismatched types
+   ╭─[typeck_mismatched_return.ers:2:22]
+ 1 │ // emit: typeck
+ 2 │ entry fn main() -> ! {}
+   ·                    ┬ ─┬
+   ·                    │  ╰── expected `!`, found `()`
+   ·                    ╰── expected because of this return type
+   ╰────

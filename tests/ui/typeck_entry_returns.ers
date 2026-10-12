@@ -1,0 +1,4 @@
+// emit: typeck
+entry fn main() {
+    loop {}
+}

@@ -1,0 +1,8 @@
+// emit: typeck
+entry fn main() -> ! {
+    loop { loop {} }
+}
+
+fn never_returns() {
+    loop {}
+}

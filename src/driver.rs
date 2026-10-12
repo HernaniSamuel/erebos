@@ -5,25 +5,27 @@ use std::fmt;
 use std::str::FromStr;
 
 use crate::diag::{self, Diagnostics};
-use crate::hir;
 use crate::span::{FileId, SourceMap};
 use crate::syntax::{lexer, parser};
+use crate::{hir, ty};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Stage {
     Tokens,
     Ast,
     Hir,
+    Typeck,
 }
 
 impl Stage {
-    pub const ALL: &[Stage] = &[Stage::Tokens, Stage::Ast, Stage::Hir];
+    pub const ALL: &[Stage] = &[Stage::Tokens, Stage::Ast, Stage::Hir, Stage::Typeck];
 
     pub fn name(self) -> &'static str {
         match self {
             Stage::Tokens => "tokens",
             Stage::Ast => "ast",
             Stage::Hir => "hir",
+            Stage::Typeck => "typeck",
         }
     }
 }
@@ -98,6 +100,11 @@ fn run_to(
     let hir = hir::lower(&ast, diags)?;
     if stage == Stage::Hir {
         return Some(format!("{hir:#?}\n"));
+    }
+
+    let types = ty::check(&hir, diags);
+    if stage == Stage::Typeck {
+        return Some(ty::dump(&hir, &types));
     }
 
     unreachable!("every stage returns above")

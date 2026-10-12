@@ -1,0 +1,17 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_entry_returns.ers
+---
+--- errors ---
+ty::entry-returns
+
+  × the entry function must never return
+   ╭─[typeck_entry_returns.ers:2:10]
+ 1 │ // emit: typeck
+ 2 │ entry fn main() {
+   ·          ──┬─
+   ·            ╰── return type is `()`
+ 3 │     loop {}
+   ╰────
+  help: there is nothing to return to on bare metal; declare it `-> !` and end it with a `loop`

@@ -6,3 +6,4 @@ pub mod driver;
 pub mod hir;
 pub mod span;
 pub mod syntax;
+pub mod ty;

@@ -1,0 +1,11 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_ok.ers
+---
+--- typeck ---
+entry fn main() -> !
+    expr 0 loop 43..59: !
+        expr 1 loop 50..57: !
+fn never_returns() -> ()
+    expr 2 loop 88..95: !
