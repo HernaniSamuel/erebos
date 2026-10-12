@@ -37,3 +37,4 @@ Do not write one for local implementation details that the code already explains
 | 0009 | [Defer borrow checking](0009-defer-borrow-checking.md)           | Accepted |
 | 0010 | [First target: riscv32 on QEMU `virt`](0010-first-target-riscv32-qemu-virt.md) | Accepted |
 | 0011 | [Development environment: native Windows with prebuilt LLVM 22](0011-development-environment.md) | Accepted |
+| 0012 | [Provisional compiler-generated startup code](0012-provisional-compiler-generated-startup.md) | Accepted |
