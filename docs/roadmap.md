@@ -13,6 +13,15 @@ and ends with a program running on QEMU, verified by an automated test.
 | **M5** | Moves/ownership, then references and borrow checking (ADR 0009). |
 | **M6** | Generics via monomorphization. |
 
+## Deferred ideas
+
+Agreed as useful, not yet scheduled:
+
+- `match` on integers (states, commands, register codes) — likely M2.
+- `for i in 0..n` over integer ranges, without general iterators.
+- Loop labels (`'outer: loop`) to break out of nested loops.
+- Warnings (unreachable code, unused variables); today there are only errors.
+
 ## Pending decisions
 
 - None.
