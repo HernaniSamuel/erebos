@@ -1,0 +1,28 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/resolve_reserved_runtime_name.ers
+---
+--- errors ---
+resolve::reserved-name
+
+  × `__udivdi3` is a reserved name
+   ╭─[resolve_reserved_runtime_name.ers:3:4]
+ 2 │ // Names starting with `__` belong to the runtime (ADR 0020).
+ 3 │ fn __udivdi3(n: u64, d: u64) -> u64 { n }
+   ·    ────┬────
+   ·        ╰── names starting with `__` are reserved
+ 4 │ fn __helper() {}
+   ╰────
+  help: the runtime support functions use them (ADR 0020)
+resolve::reserved-name
+
+  × `__helper` is a reserved name
+   ╭─[resolve_reserved_runtime_name.ers:4:4]
+ 3 │ fn __udivdi3(n: u64, d: u64) -> u64 { n }
+ 4 │ fn __helper() {}
+   ·    ────┬───
+   ·        ╰── names starting with `__` are reserved
+ 5 │ 
+   ╰────
+  help: the runtime support functions use them (ADR 0020)

@@ -68,14 +68,19 @@ impl fmt::Display for Stage {
     }
 }
 
-/// Runs the pipeline on one file up to `stage`. On failure, returns the
+/// The runtime support functions, compiled into every program (ADR 0020).
+pub const RUNTIME_SOURCE: &str = include_str!("../rt/builtins.ers");
+const RUNTIME_NAME: &str = "rt/builtins.ers";
+
+/// Runs the pipeline on one file up to `stage`. Dumps show the program
+/// alone, without the runtime support functions. On failure, returns the
 /// rendered diagnostics.
 pub fn dump(name: &str, text: &str, stage: Stage, color: bool) -> Result<String, String> {
     let mut sources = SourceMap::default();
     let file = sources.add(name, text);
     let mut diags = Diagnostics::default();
 
-    let output = match front_end(&sources, file, Some(stage), &mut diags) {
+    let output = match front_end(&sources, file, None, Some(stage), &mut diags) {
         FrontEnd::Dump(dump) => Some(dump),
         FrontEnd::Mir(mir) => codegen::emit_llvm_ir(&mir, &target::RISCV32_VIRT)
             .map_err(|e| diags.push(Diagnostic::error("codegen::llvm", e)))
@@ -97,7 +102,8 @@ pub fn build(input: &Path, output: &Path, color: bool) -> Result<(), String> {
     let file = sources.add(input.display().to_string(), text);
     let mut diags = Diagnostics::default();
 
-    let mir = match front_end(&sources, file, None, &mut diags) {
+    let runtime = sources.add(RUNTIME_NAME, RUNTIME_SOURCE);
+    let mir = match front_end(&sources, file, Some(runtime), None, &mut diags) {
         FrontEnd::Mir(mir) if !diags.has_errors() => mir,
         _ => return Err(diag::render(&diags.into_vec(), &sources, color)),
     };
@@ -131,6 +137,7 @@ enum FrontEnd {
 fn front_end(
     sources: &SourceMap,
     file: FileId,
+    runtime: Option<FileId>,
     stop: Option<Stage>,
     diags: &mut Diagnostics,
 ) -> FrontEnd {
@@ -151,12 +158,18 @@ fn front_end(
         return FrontEnd::Dump(format!("{ast:#?}\n"));
     }
 
+    let runtime_ast = runtime.map(|rt| {
+        let text = &sources.file(rt).text;
+        let tokens = lexer::lex(rt, text, diags);
+        parser::parse(text, &tokens, diags)
+    });
+
     // Semantic phases need a well-formed input.
     if diags.has_errors() {
         return FrontEnd::Failed;
     }
 
-    let hir = match hir::lower(&ast, diags) {
+    let hir = match hir::lower(&ast, runtime_ast.as_ref(), diags) {
         // Type checking needs every name resolved.
         Some(hir) if !diags.has_errors() || stop == Some(Stage::Hir) => hir,
         _ => return FrontEnd::Failed,

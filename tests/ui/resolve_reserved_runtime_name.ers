@@ -1,0 +1,7 @@
+// emit: hir
+// Names starting with `__` belong to the runtime (ADR 0020).
+fn __udivdi3(n: u64, d: u64) -> u64 { n }
+fn __helper() {}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

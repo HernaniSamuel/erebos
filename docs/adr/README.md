@@ -45,3 +45,4 @@ Do not write one for local implementation details that the code already explains
 | 0017 | [Literal operands of `as` take the target type](0017-literal-cast-operands.md) | Accepted |
 | 0018 | [Evaluation order](0018-evaluation-order.md)                   | Accepted |
 | 0019 | [Conversions, pointer representation and pointer validity](0019-integer-pointer-conversions-and-operator-details.md) | Accepted |
+| 0020 | [Runtime support functions written in Erebos](0020-runtime-support-functions-in-erebos.md) | Accepted |

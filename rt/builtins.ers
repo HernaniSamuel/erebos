@@ -1,0 +1,54 @@
+// Runtime support functions (ADR 0020).
+//
+// RV32 has no instruction for 64-bit division, so LLVM lowers `/` and `%` on
+// u64 and i64 to calls to these functions, named as in libgcc/compiler-rt.
+// They are compiled into every program, in plain Erebos, so nothing runs
+// that the repository does not show (ADR 0002).
+//
+// They must not use `/` or `%` on 64-bit values themselves: LLVM would turn
+// that into a call back to them. A zero divisor never reaches them, since
+// division checks happen before the call (ADR 0007).
+
+// Restoring binary long division: one quotient bit per step, from the top.
+// Returns the remainder if `remainder` is true, otherwise the quotient.
+fn __erebos_udivmod64(n: u64, d: u64, remainder: bool) -> u64 {
+    let mut quotient: u64 = 0;
+    let mut rest: u64 = 0;
+    let mut bit: u32 = 64;
+    while bit > 0 {
+        bit -= 1;
+        rest = (rest << 1) | ((n >> bit) & 1);
+        if rest >= d {
+            rest -= d;
+            quotient |= 1 << bit;
+        }
+    }
+    if remainder { rest } else { quotient }
+}
+
+// The magnitude of a signed value; `0 - MIN` wraps to MIN, which is 2^63
+// as a u64, so every value has its exact magnitude.
+fn __erebos_magnitude64(x: i64) -> u64 {
+    if x < 0 { (0 - x) as u64 } else { x as u64 }
+}
+
+fn __udivdi3(n: u64, d: u64) -> u64 {
+    __erebos_udivmod64(n, d, false)
+}
+
+fn __umoddi3(n: u64, d: u64) -> u64 {
+    __erebos_udivmod64(n, d, true)
+}
+
+// Signed division truncates toward zero: the quotient is negative when
+// exactly one operand is.
+fn __divdi3(a: i64, b: i64) -> i64 {
+    let magnitude: u64 = __erebos_udivmod64(__erebos_magnitude64(a), __erebos_magnitude64(b), false);
+    if (a < 0) != (b < 0) { 0 - magnitude as i64 } else { magnitude as i64 }
+}
+
+// The remainder takes the sign of the dividend.
+fn __moddi3(a: i64, b: i64) -> i64 {
+    let magnitude: u64 = __erebos_udivmod64(__erebos_magnitude64(a), __erebos_magnitude64(b), true);
+    if a < 0 { 0 - magnitude as i64 } else { magnitude as i64 }
+}

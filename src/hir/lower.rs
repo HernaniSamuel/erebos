@@ -9,14 +9,43 @@ use crate::hir::{
 use crate::span::Span;
 use crate::syntax::ast;
 
-/// Returns `None` only when no HIR can be built at all (no entry or panic
-/// function); other errors are reported and lowering continues.
-pub fn lower(file: &ast::File, diags: &mut Diagnostics) -> Option<Hir> {
+/// Lowers a program, together with the runtime support functions when
+/// given (ADR 0020). Returns `None` only when no HIR can be built at all (no
+/// entry or panic function); other errors are reported and lowering
+/// continues.
+pub fn lower(
+    program: &ast::File,
+    runtime: Option<&ast::File>,
+    diags: &mut Diagnostics,
+) -> Option<Hir> {
+    let decls: Vec<&ast::FnDecl> = program
+        .items
+        .iter()
+        .chain(runtime.into_iter().flat_map(|rt| &rt.items))
+        .map(|item| match item {
+            ast::Item::Fn(decl) => decl,
+        })
+        .collect();
+
+    // Names starting with `__` belong to the runtime (ADR 0020).
+    for item in &program.items {
+        let ast::Item::Fn(decl) = item;
+        if decl.name.name.starts_with("__") {
+            diags.push(
+                Diagnostic::error(
+                    "resolve::reserved-name",
+                    format!("`{}` is a reserved name", decl.name.name),
+                )
+                .label(decl.name.span, "names starting with `__` are reserved")
+                .help("the runtime support functions use them (ADR 0020)"),
+            );
+        }
+    }
+
     // Functions are global: any body may call any function, declared before
     // or after it. A repeated name keeps its first definition.
     let mut fn_ids = HashMap::new();
-    for (i, item) in file.items.iter().enumerate() {
-        let ast::Item::Fn(decl) = item;
+    for (i, decl) in decls.iter().enumerate() {
         fn_ids
             .entry(decl.name.name.clone())
             .or_insert((FnId(i as u32), decl.kind));
@@ -30,13 +59,7 @@ pub fn lower(file: &ast::File, diags: &mut Diagnostics) -> Option<Hir> {
         scopes: Vec::new(),
         loops: Vec::new(),
     };
-    let fns: Vec<Fn> = file
-        .items
-        .iter()
-        .map(|item| match item {
-            ast::Item::Fn(decl) => lowerer.fn_decl(decl),
-        })
-        .collect();
+    let fns: Vec<Fn> = decls.iter().map(|decl| lowerer.fn_decl(decl)).collect();
     let expr_count = lowerer.next_expr;
 
     check_duplicate_names(&fns, diags);
