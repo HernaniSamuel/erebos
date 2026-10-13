@@ -1,0 +1,31 @@
+---
+source: tests/ui.rs
+assertion_line: 27
+expression: output
+input_file: tests/ui/typeck_diverging_if.ers
+---
+--- typeck ---
+fn g() -> ()
+fn statement(c: bool) -> u32
+    expr 0 if 193..230: !
+    expr 1 local c 196..197: bool
+    expr 2 return 200..208: !
+    expr 3 int 1 207..208: u32
+    expr 4 block 217..230: !
+    expr 5 return 219..227: !
+    expr 6 int 2 226..227: u32
+    expr 7 call 235..238: ()
+fn expected(c: bool) -> u32
+    let x: u32
+    expr 8 if 290..327: !
+    expr 9 local c 293..294: bool
+    expr 10 return 297..305: !
+    expr 11 int 1 304..305: u32
+    expr 12 block 314..327: !
+    expr 13 return 316..324: !
+    expr 14 int 2 323..324: u32
+    expr 15 local x 333..334: u32
+entry fn main() -> !
+    expr 16 loop 361..368: !
+panic fn on_panic() -> !
+    expr 17 loop 398..405: !

@@ -348,9 +348,15 @@ impl Checker<'_> {
                 };
                 match expected {
                     Some(expected) => {
-                        self.checked_block(f, then, expected, None);
-                        self.check(f, else_, Some(expected));
-                        expected
+                        let then_ty = self.checked_block(f, then, expected, None);
+                        let else_ty = self.check(f, else_, Some(expected));
+                        // If neither branch finishes, neither does the `if`,
+                        // so the code after it is unreachable.
+                        if then_ty == Ty::Never && else_ty == Ty::Never {
+                            Ty::Never
+                        } else {
+                            expected
+                        }
                     }
                     None => {
                         // The first branch that can finish gives the type.

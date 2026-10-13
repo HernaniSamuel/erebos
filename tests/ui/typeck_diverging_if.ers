@@ -1,0 +1,17 @@
+// emit: typeck
+// Regression: an `if` whose branches both diverge has type `!`, also as a
+// statement without `;` and where a value is expected.
+fn g() {}
+
+fn statement(c: bool) -> u32 {
+    if c { return 1; } else { return 2; }
+    g();
+}
+
+fn expected(c: bool) -> u32 {
+    let x: u32 = if c { return 1; } else { return 2; };
+    x
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }
