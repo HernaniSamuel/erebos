@@ -1,0 +1,78 @@
+// Integer and pointer conversions with `as` (ADR 0019), checked on the
+// emulated CPU.
+// expect-output: 4294967295 255
+// expect-output: 44 255 4294967295
+// expect-output: -2 -1 1
+// expect-output: 2147488308 2147488308
+// expect-exit: 0
+
+fn putc(byte: u8) {
+    let thr: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+    *thr = byte;
+}
+
+fn exit(code: u32) -> ! {
+    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+    *finisher = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    loop {}
+}
+
+fn print_u32(n: u32) {
+    if n >= 10 {
+        print_u32(n / 10);
+    }
+    putc(b'0' + (n % 10) as u8);
+}
+
+fn print_i32(n: i32) {
+    if n < 0 {
+        putc(b'-');
+        print_u32((0 - n) as u32);
+    } else {
+        print_u32(n as u32);
+    }
+}
+
+entry fn main() -> ! {
+    // Widening follows the source: signed sign-extends, unsigned zero-extends.
+    let m1: i8 = -1;
+    print_u32(m1 as usize as u32);
+    putc(b' ');
+    let ff: u8 = 255;
+    print_u32(ff as usize as u32);
+    putc(b'\n');
+
+    // Narrowing keeps the low bits; same width reinterprets the bits.
+    let big: u32 = 300;
+    print_u32((big as u8) as u32);
+    putc(b' ');
+    let n: i32 = -1;
+    print_u32((n as u8) as u32);
+    putc(b' ');
+    print_u32(n as u32);
+    putc(b'\n');
+
+    let s: i16 = -2;
+    print_i32(s as i32);
+    putc(b' ');
+    let t: u16 = 65535;
+    print_i32((t as i16) as i32);
+    putc(b' ');
+    print_u32(true as u32);
+    putc(b'\n');
+
+    // A pointer converted to usize is its address, and back again.
+    let p: *mut u8 = 0x8000_1234 as *mut u8;
+    let addr: usize = p as usize;
+    print_u32(addr as u32);
+    putc(b' ');
+    let q: *const u32 = addr as *const u32;
+    print_u32(q as usize as u32);
+    putc(b'\n');
+
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(1)
+}

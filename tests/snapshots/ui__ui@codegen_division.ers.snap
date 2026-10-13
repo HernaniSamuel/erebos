@@ -16,7 +16,7 @@ module asm "_start:"
 module asm "\09li sp, 0x88000000"
 module asm "\09j main"
 
-; Function Attrs: nounwind
+; Function Attrs: nounwind null_pointer_is_valid
 define i32 @unsigned(i32 %0, i32 %1) #0 {
 bb0:
   %2 = icmp eq i32 %1, 0
@@ -31,7 +31,7 @@ bb2:                                              ; preds = %bb0
   ret i32 %3
 }
 
-; Function Attrs: nounwind
+; Function Attrs: nounwind null_pointer_is_valid
 define i32 @signed(i32 %0, i32 %1) #0 {
 bb0:
   %2 = icmp eq i32 %1, 0
@@ -57,7 +57,7 @@ bb5:                                              ; preds = %bb4, %bb3
   ret i32 %_4.0
 }
 
-; Function Attrs: nounwind
+; Function Attrs: nounwind null_pointer_is_valid
 define i32 @constants(i32 %0) #0 {
 bb0:
   %1 = sdiv i32 %0, 3
@@ -66,7 +66,7 @@ bb0:
   ret i32 %3
 }
 
-; Function Attrs: noreturn nounwind
+; Function Attrs: noreturn nounwind null_pointer_is_valid
 define void @main() #1 {
 bb0:
   br label %bb1
@@ -75,7 +75,7 @@ bb1:                                              ; preds = %bb1, %bb0
   br label %bb1
 }
 
-; Function Attrs: noreturn nounwind
+; Function Attrs: noreturn nounwind null_pointer_is_valid
 define void @on_panic() #1 {
 bb0:
   br label %bb1
@@ -84,5 +84,5 @@ bb1:                                              ; preds = %bb1, %bb0
   br label %bb1
 }
 
-attributes #0 = { nounwind }
-attributes #1 = { noreturn nounwind }
+attributes #0 = { nounwind null_pointer_is_valid }
+attributes #1 = { noreturn nounwind null_pointer_is_valid }

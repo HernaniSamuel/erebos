@@ -16,7 +16,7 @@ module asm "_start:"
 module asm "\09li sp, 0x88000000"
 module asm "\09j main"
 
-; Function Attrs: noreturn nounwind
+; Function Attrs: noreturn nounwind null_pointer_is_valid
 define void @main() #0 {
 bb0:
   br label %bb1
@@ -25,13 +25,13 @@ bb1:                                              ; preds = %bb1, %bb0
   br label %bb1
 }
 
-; Function Attrs: nounwind
+; Function Attrs: nounwind null_pointer_is_valid
 define void @empty() #1 {
 bb0:
   ret void
 }
 
-; Function Attrs: noreturn nounwind
+; Function Attrs: noreturn nounwind null_pointer_is_valid
 define void @on_panic() #0 {
 bb0:
   br label %bb1
@@ -40,5 +40,5 @@ bb1:                                              ; preds = %bb1, %bb0
   br label %bb1
 }
 
-attributes #0 = { noreturn nounwind }
-attributes #1 = { nounwind }
+attributes #0 = { noreturn nounwind null_pointer_is_valid }
+attributes #1 = { nounwind null_pointer_is_valid }

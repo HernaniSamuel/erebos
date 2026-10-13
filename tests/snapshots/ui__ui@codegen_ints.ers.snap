@@ -16,7 +16,7 @@ module asm "_start:"
 module asm "\09li sp, 0x88000000"
 module asm "\09j main"
 
-; Function Attrs: nounwind
+; Function Attrs: nounwind null_pointer_is_valid
 define i32 @arith() #0 {
 bb0:
   %0 = add i32 16, 2
@@ -32,7 +32,7 @@ bb0:
   ret i32 %9
 }
 
-; Function Attrs: nounwind
+; Function Attrs: nounwind null_pointer_is_valid
 define signext i8 @signed() #0 {
 bb0:
   %0 = sext i8 -128 to i16
@@ -42,7 +42,7 @@ bb0:
   ret i8 %3
 }
 
-; Function Attrs: noreturn nounwind
+; Function Attrs: noreturn nounwind null_pointer_is_valid
 define void @main() #1 {
 bb0:
   br label %bb1
@@ -51,7 +51,7 @@ bb1:                                              ; preds = %bb1, %bb0
   br label %bb1
 }
 
-; Function Attrs: noreturn nounwind
+; Function Attrs: noreturn nounwind null_pointer_is_valid
 define void @on_panic() #1 {
 bb0:
   br label %bb1
@@ -60,5 +60,5 @@ bb1:                                              ; preds = %bb1, %bb0
   br label %bb1
 }
 
-attributes #0 = { nounwind }
-attributes #1 = { noreturn nounwind }
+attributes #0 = { nounwind null_pointer_is_valid }
+attributes #1 = { noreturn nounwind null_pointer_is_valid }

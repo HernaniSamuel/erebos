@@ -16,14 +16,14 @@ module asm "_start:"
 module asm "\09li sp, 0x88000000"
 module asm "\09j main"
 
-; Function Attrs: nounwind
+; Function Attrs: nounwind null_pointer_is_valid
 define void @putc(i8 zeroext %0) #0 {
 bb0:
   store volatile i8 %0, ptr inttoptr (i32 268435456 to ptr), align 1
   ret void
 }
 
-; Function Attrs: noreturn nounwind
+; Function Attrs: noreturn nounwind null_pointer_is_valid
 define void @exit(i32 %0) #1 {
 bb0:
   %1 = icmp eq i32 %0, 0
@@ -46,14 +46,14 @@ bb4:                                              ; preds = %bb4, %bb3
   br label %bb4
 }
 
-; Function Attrs: nounwind
+; Function Attrs: nounwind null_pointer_is_valid
 define signext i16 @negate(i16 signext %0) #0 {
 bb0:
   %1 = sub i16 0, %0
   ret i16 %1
 }
 
-; Function Attrs: nounwind
+; Function Attrs: nounwind null_pointer_is_valid
 define zeroext i1 @greet() #0 {
 bb0:
   call void @putc(i8 104)
@@ -62,7 +62,7 @@ bb0:
   ret i1 %1
 }
 
-; Function Attrs: noreturn nounwind
+; Function Attrs: noreturn nounwind null_pointer_is_valid
 define void @main() #1 {
 bb0:
   %0 = call i1 @greet()
@@ -70,12 +70,12 @@ bb0:
   unreachable
 }
 
-; Function Attrs: noreturn nounwind
+; Function Attrs: noreturn nounwind null_pointer_is_valid
 define void @on_panic() #1 {
 bb0:
   call void @exit(i32 1)
   unreachable
 }
 
-attributes #0 = { nounwind }
-attributes #1 = { noreturn nounwind }
+attributes #0 = { nounwind null_pointer_is_valid }
+attributes #1 = { noreturn nounwind null_pointer_is_valid }
