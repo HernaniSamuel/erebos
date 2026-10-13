@@ -49,6 +49,7 @@ become language constructs. The compiler is written in Rust and uses LLVM via
 ```
 docs/adr/       Architecture Decision Records (binding)
 docs/roadmap.md Milestones and pending decisions
+docs/reference.md The language as implemented (keep in sync with the compiler)
 src/            Compiler (single crate; modules per layer, see ADR 0003)
 rt/             Runtime support functions in Erebos, built into every program (ADR 0020)
 tests/ui/       Snapshot tests per compiler stage
