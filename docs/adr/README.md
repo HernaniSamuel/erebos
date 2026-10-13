@@ -43,3 +43,5 @@ Do not write one for local implementation details that the code already explains
 | 0015 | [Expression-oriented blocks and implicit unit return](0015-expression-oriented-blocks.md) | Accepted |
 | 0016 | [Literals: integers and bytes; no chars, strings or floats](0016-literals-bytes-no-floats.md) | Accepted |
 | 0017 | [Literal operands of `as` take the target type](0017-literal-cast-operands.md) | Accepted |
+| 0018 | [Evaluation order](0018-evaluation-order.md)                   | Proposed |
+| 0019 | [Integer/pointer conversions and operator details](0019-integer-pointer-conversions-and-operator-details.md) | Proposed |
