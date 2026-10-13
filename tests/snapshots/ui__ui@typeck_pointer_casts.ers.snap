@@ -1,0 +1,39 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_pointer_casts.ers
+---
+--- errors ---
+ty::pointer-cast-width
+
+  × cannot cast `u32` to a pointer
+   ╭─[typeck_pointer_casts.ers:4:22]
+ 3 │ fn conversions(addr: u32, p: *mut u8) {
+ 4 │     let a: *mut u8 = addr as *mut u8;
+   ·                      ──┬─
+   ·                        ╰── has type `u32`
+ 5 │     let b: u32 = p as u32;
+   ╰────
+  help: only `usize` converts to pointers; write `x as usize as *mut u8` (ADR 0019)
+ty::pointer-cast-width
+
+  × cannot cast a pointer to `u32`
+   ╭─[typeck_pointer_casts.ers:5:23]
+ 4 │     let a: *mut u8 = addr as *mut u8;
+ 5 │     let b: u32 = p as u32;
+   ·                       ─┬─
+   ·                        ╰── not `usize`
+ 6 │     let small: i8 = -1;
+   ╰────
+  help: pointers convert only to `usize`; write `p as usize as u32` (ADR 0019)
+ty::pointer-cast-width
+
+  × cannot cast `i8` to a pointer
+   ╭─[typeck_pointer_casts.ers:7:24]
+ 6 │     let small: i8 = -1;
+ 7 │     let c: *const u8 = small as *const u8;
+   ·                        ──┬──
+   ·                          ╰── has type `i8`
+ 8 │     let ok: *mut u8 = addr as usize as *mut u8;
+   ╰────
+  help: only `usize` converts to pointers; write `x as usize as *const u8` (ADR 0019)

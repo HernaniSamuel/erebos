@@ -1,6 +1,6 @@
 # 0019. Conversions, pointer representation and pointer validity
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-13
 
 ## Context
@@ -10,10 +10,11 @@ their semantics would be hard to change later: how integers widen and
 narrow, what a pointer is as a number, and what converting an integer to a
 pointer does and does not promise.
 
-Today any integer type converts to and from a pointer, and integer-to-pointer
-conversion **zero-extends** (LLVM `inttoptr`) whatever the signedness: on a
-64-bit target, `-1_i8 as *mut u8` would be `0xFF`, while Rust sign-extends
-signed integers. It goes unnoticed only because the one target is 32-bit.
+Until this decision, any integer type converted to and from a pointer, and
+integer-to-pointer conversion **zero-extended** (LLVM `inttoptr`) whatever
+the signedness: on a 64-bit target, `-1_i8 as *mut u8` would have been `0xFF`,
+while Rust sign-extends signed integers. It went unnoticed only because the
+one target is 32-bit.
 
 ## Decision
 
@@ -33,11 +34,11 @@ depends only on the source's signedness and the two widths:
 There is no conversion to `bool` (write `x != 0`). This matches Rust and is
 what two's-complement hardware does (ADR 0007).
 
-### Integers and pointers (proposed change)
+### Integers and pointers
 
-Only `usize` converts to a pointer, and a pointer only converts to `usize`.
-Other integer types first convert to `usize` under the rules above, so the
-extension is always visible:
+Only `usize` converts to a pointer, and a pointer only converts to `usize`
+(error `ty::pointer-cast-width` otherwise). Other integer types first convert
+to `usize` under the rules above, so any extension is always visible:
 
 ```
 let addr: u32 = 0x8000_1234;
@@ -106,5 +107,5 @@ undefined and optimizes them away.
 
 - **Any integer width, Rust's extension rules** — familiar, but the extension
   is invisible at the conversion.
-- **Keep the current behavior** — zero-extending signed values differs from
+- **Keep the previous behavior** — zero-extending signed values differs from
   Rust and surprises.

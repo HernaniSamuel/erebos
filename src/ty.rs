@@ -655,6 +655,36 @@ impl Checker<'_> {
             );
             return Ty::Error;
         }
+        // Pointers convert only to and from `usize`, so any widening or
+        // narrowing is a visible integer conversion (ADR 0019).
+        let usize_ty = Ty::Int(IntTy::Usize);
+        match (from, target) {
+            (Ty::Int(_), Ty::Ptr(_)) if from != usize_ty => {
+                self.diags.push(
+                    Diagnostic::error(
+                        "ty::pointer-cast-width",
+                        format!("cannot cast `{from}` to a pointer"),
+                    )
+                    .label(operand.span, format!("has type `{from}`"))
+                    .help(format!(
+                        "only `usize` converts to pointers; write `x as usize as {target}` (ADR 0019)"
+                    )),
+                );
+            }
+            (Ty::Ptr(_), Ty::Int(_)) if target != usize_ty => {
+                self.diags.push(
+                    Diagnostic::error(
+                        "ty::pointer-cast-width",
+                        format!("cannot cast a pointer to `{target}`"),
+                    )
+                    .label(target_span, "not `usize`")
+                    .help(format!(
+                        "pointers convert only to `usize`; write `p as usize as {target}` (ADR 0019)"
+                    )),
+                );
+            }
+            _ => {}
+        }
         target
     }
 

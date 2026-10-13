@@ -1,0 +1,14 @@
+// emit: typeck
+// Pointers convert only to and from usize (ADR 0019).
+fn conversions(addr: u32, p: *mut u8) {
+    let a: *mut u8 = addr as *mut u8;
+    let b: u32 = p as u32;
+    let small: i8 = -1;
+    let c: *const u8 = small as *const u8;
+    let ok: *mut u8 = addr as usize as *mut u8;
+    let back: u32 = ok as usize as u32;
+    let literal: *mut u8 = 0x8000_0000 as *mut u8;
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }
