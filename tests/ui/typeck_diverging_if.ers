@@ -8,6 +8,11 @@ fn statement(c: bool) -> u32 {
     g();
 }
 
+fn chain(a: bool, b: bool) -> u32 {
+    if a { return 1; } else if b { return 2; } else { return 3; }
+    g();
+}
+
 fn expected(c: bool) -> u32 {
     let x: u32 = if c { return 1; } else { return 2; };
     x

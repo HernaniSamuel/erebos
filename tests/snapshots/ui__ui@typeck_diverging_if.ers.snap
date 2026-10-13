@@ -1,6 +1,5 @@
 ---
 source: tests/ui.rs
-assertion_line: 27
 expression: output
 input_file: tests/ui/typeck_diverging_if.ers
 ---
@@ -15,17 +14,30 @@ fn statement(c: bool) -> u32
     expr 5 return 219..227: !
     expr 6 int 2 226..227: u32
     expr 7 call 235..238: ()
+fn chain(a: bool, b: bool) -> u32
+    expr 8 if 283..344: !
+    expr 9 local a 286..287: bool
+    expr 10 return 290..298: !
+    expr 11 int 1 297..298: u32
+    expr 12 if 307..344: !
+    expr 13 local b 310..311: bool
+    expr 14 return 314..322: !
+    expr 15 int 2 321..322: u32
+    expr 16 block 331..344: !
+    expr 17 return 333..341: !
+    expr 18 int 3 340..341: u32
+    expr 19 call 349..352: ()
 fn expected(c: bool) -> u32
     let x: u32
-    expr 8 if 290..327: !
-    expr 9 local c 293..294: bool
-    expr 10 return 297..305: !
-    expr 11 int 1 304..305: u32
-    expr 12 block 314..327: !
-    expr 13 return 316..324: !
-    expr 14 int 2 323..324: u32
-    expr 15 local x 333..334: u32
+    expr 20 if 404..441: !
+    expr 21 local c 407..408: bool
+    expr 22 return 411..419: !
+    expr 23 int 1 418..419: u32
+    expr 24 block 428..441: !
+    expr 25 return 430..438: !
+    expr 26 int 2 437..438: u32
+    expr 27 local x 447..448: u32
 entry fn main() -> !
-    expr 16 loop 361..368: !
+    expr 28 loop 475..482: !
 panic fn on_panic() -> !
-    expr 17 loop 398..405: !
+    expr 29 loop 512..519: !
