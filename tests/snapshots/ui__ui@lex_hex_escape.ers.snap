@@ -1,0 +1,36 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/lex_hex_escape.ers
+---
+--- errors ---
+lexer::invalid-byte
+
+  × unknown escape sequence
+   ╭─[lex_hex_escape.ers:2:1]
+ 1 │ // emit: tokens
+ 2 │ b'\x+F' b'\x-1' b'\x0G'
+   · ───┬───
+   ·    ╰── invalid byte literal
+   ╰────
+  help: escapes: \n \r \t \\ \' \" \0 and \xNN for any byte (ADR 0016)
+lexer::invalid-byte
+
+  × unknown escape sequence
+   ╭─[lex_hex_escape.ers:2:9]
+ 1 │ // emit: tokens
+ 2 │ b'\x+F' b'\x-1' b'\x0G'
+   ·         ───┬───
+   ·            ╰── invalid byte literal
+   ╰────
+  help: escapes: \n \r \t \\ \' \" \0 and \xNN for any byte (ADR 0016)
+lexer::invalid-byte
+
+  × unknown escape sequence
+   ╭─[lex_hex_escape.ers:2:17]
+ 1 │ // emit: tokens
+ 2 │ b'\x+F' b'\x-1' b'\x0G'
+   ·                 ───┬───
+   ·                    ╰── invalid byte literal
+   ╰────
+  help: escapes: \n \r \t \\ \' \" \0 and \xNN for any byte (ADR 0016)

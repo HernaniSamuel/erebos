@@ -386,6 +386,13 @@ impl Builder<'_> {
             _ => None,
         };
 
+        // The type checker rejects literal zero divisors; this keeps the
+        // guarantee for a zero constant that reaches MIR any other way.
+        if constant == Some(0) {
+            self.call(None, self.panic, Vec::new());
+            self.terminate(Terminator::Unreachable);
+            return Operand::Const(Const::Int(0, int));
+        }
         if constant.is_none() {
             let zero = Operand::Const(Const::Int(0, int));
             let is_zero = self.temp(Ty::Bool, Rvalue::Binary(BinOp::Eq, rhs, zero));

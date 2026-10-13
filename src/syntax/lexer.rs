@@ -211,7 +211,7 @@ impl Lexer<'_> {
             self.diags.push(
                 Diagnostic::error("lexer::invalid-byte", message)
                     .label(span, "invalid byte literal")
-                    .help(r"escapes: \n \r \t \\ \' \0 and \xNN for any byte (ADR 0016)"),
+                    .help(r#"escapes: \n \r \t \\ \' \" \0 and \xNN for any byte (ADR 0016)"#),
             );
         }
     }
@@ -322,7 +322,8 @@ pub fn byte_value(text: &str) -> Result<u8, ByteError> {
             Some('"') => b'"',
             Some('x') => {
                 let hex: String = chars.by_ref().take(2).collect();
-                if hex.len() != 2 {
+                // Checked here because `from_str_radix` accepts a sign (`+F`).
+                if hex.len() != 2 || !hex.chars().all(|c| c.is_ascii_hexdigit()) {
                     return Err(ByteError::BadEscape);
                 }
                 u8::from_str_radix(&hex, 16).map_err(|_| ByteError::BadEscape)?

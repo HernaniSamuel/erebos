@@ -54,6 +54,14 @@ pub fn lower(file: &ast::File, diags: &mut Diagnostics) -> Option<Hir> {
 fn check_duplicate_names(fns: &[Fn], diags: &mut Diagnostics) {
     let mut seen: HashMap<&str, Span> = HashMap::new();
     for f in fns {
+        // The compiler defines `_start` itself (ADR 0012).
+        if f.name == "_start" {
+            diags.push(
+                Diagnostic::error("resolve::reserved-name", "`_start` is a reserved name")
+                    .label(f.name_span, "reserved for the startup code")
+                    .help("the compiler generates `_start`, which sets up the stack and jumps to the entry function (ADR 0012)"),
+            );
+        }
         if let Some(&first) = seen.get(f.name.as_str()) {
             diags.push(
                 Diagnostic::error(
@@ -135,7 +143,22 @@ impl Lowerer<'_> {
         self.loops.clear();
         let ret = decl.ret.as_ref().map_or(Ty::Unit, |ty| self.ty(ty));
         self.scopes.push(HashMap::new());
+        let mut param_names: HashMap<&str, Span> = HashMap::new();
         for param in &decl.params {
+            if let Some(&first) = param_names.get(param.name.name.as_str()) {
+                self.diags.push(
+                    Diagnostic::error(
+                        "resolve::duplicate-param",
+                        format!(
+                            "the parameter `{}` is declared more than once",
+                            param.name.name
+                        ),
+                    )
+                    .label(param.name.span, "declared again here")
+                    .label(first, "first declared here"),
+                );
+            }
+            param_names.insert(&param.name.name, param.name.span);
             let ty = self.ty(&param.ty);
             self.declare(&param.name, ty, param.mutable);
         }

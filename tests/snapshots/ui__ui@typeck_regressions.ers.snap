@@ -1,0 +1,60 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_regressions.ers
+---
+--- errors ---
+ty::mismatched-types
+
+  × mismatched types
+   ╭─[typeck_regressions.ers:5:23]
+ 4 │ fn missing_value(c: bool) -> u32 {
+ 5 │     let x: u32 = if c { } else { 5 };
+   ·                       ─┬─
+   ·                        ╰── expected `u32`, found `()`
+ 6 │     let y: u32 = if c { g(); } else { 7 };
+   ╰────
+ty::mismatched-types
+
+  × mismatched types
+   ╭─[typeck_regressions.ers:6:25]
+ 5 │     let x: u32 = if c { } else { 5 };
+ 6 │     let y: u32 = if c { g(); } else { 7 };
+   ·                         ─┬─┬
+   ·                          │ ╰── remove this semicolon to return the value
+   ·                          ╰── expected `u32`, found `()`
+ 7 │     x + y
+   ╰────
+  help: a block's value is its last expression without `;`
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_regressions.ers:13:12]
+ 12 │ fn dropped(c: bool) -> u32 {
+ 13 │     if c { g() } else { g() }
+    ·            ─┬─
+    ·             ╰── expected `()`, found `u32`
+ 14 │     3
+    ╰────
+  help: this value would be discarded; add `;` after it if that is intended
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_regressions.ers:13:25]
+ 12 │ fn dropped(c: bool) -> u32 {
+ 13 │     if c { g() } else { g() }
+    ·                         ─┬─
+    ·                          ╰── expected `()`, found `u32`
+ 14 │     3
+    ╰────
+  help: this value would be discarded; add `;` after it if that is intended
+ty::invalid-operand
+
+  × `>>` needs an integer, found `bool`
+    ╭─[typeck_regressions.ers:18:10]
+ 17 │ fn shift(x: u32, b: bool) -> u32 {
+ 18 │     x >> b
+    ·          ┬
+    ·          ╰── has type `bool`
+ 19 │ }
+    ╰────

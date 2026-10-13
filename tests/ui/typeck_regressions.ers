@@ -1,0 +1,22 @@
+// emit: typeck
+// Regression: a branch without a value where one is expected used to pass
+// type checking and crash codegen.
+fn missing_value(c: bool) -> u32 {
+    let x: u32 = if c { } else { 5 };
+    let y: u32 = if c { g(); } else { 7 };
+    x + y
+}
+
+// Regression: a block-like statement's value used to be dropped silently.
+fn g() -> u32 { 1 }
+fn dropped(c: bool) -> u32 {
+    if c { g() } else { g() }
+    3
+}
+
+fn shift(x: u32, b: bool) -> u32 {
+    x >> b
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

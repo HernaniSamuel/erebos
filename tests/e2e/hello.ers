@@ -1,11 +1,14 @@
 // Writes to the UART through a volatile pointer, then stops QEMU through
 // the test finisher (ADR 0010).
-// expect-output: hi
+// expect-output: hello
 // expect-exit: 0
 entry fn main() -> ! {
     let uart: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
     *uart = b'h';
-    *uart = b'i';
+    *uart = b'e';
+    *uart = b'l';
+    *uart = b'l';
+    *uart = b'o';
     *uart = b'\n';
 
     let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;

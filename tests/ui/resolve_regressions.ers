@@ -1,0 +1,8 @@
+// emit: hir
+// Regression: `_start` is reserved (ADR 0012) and used to fail at link time;
+// duplicate parameters used to shadow each other silently.
+fn _start() {}
+fn h(a: u32, a: u32) -> u32 { a }
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

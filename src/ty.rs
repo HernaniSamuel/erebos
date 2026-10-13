@@ -66,6 +66,7 @@ fn needs_expected_type(expr: &Expr) -> bool {
 fn literal_value(expr: &Expr) -> Option<i128> {
     match &expr.kind {
         ExprKind::Int(value) => Some(*value as i128),
+        ExprKind::Byte(value) => Some(*value as i128),
         ExprKind::Unary(UnOp::Neg, operand) => literal_value(operand).map(|v| -v),
         _ => None,
     }
@@ -117,11 +118,18 @@ impl Checker<'_> {
 
         self.params(f);
 
-        let body_ty = self.block(f, &f.body, Some(f.ret));
-        // A tail expression was already checked against the return type.
-        if f.body.tail.is_none() && !coerces(body_ty, f.ret) {
-            self.report_body_mismatch(f, body_ty);
+        self.checked_block(f, &f.body, f.ret, f.ret_span);
+    }
+
+    /// Checks a block against an expected type. A tail expression reports its
+    /// own mismatch; without a tail, the block itself is reported here.
+    /// `because` points at what set the expectation, such as a return type.
+    fn checked_block(&mut self, f: &Fn, block: &Block, expected: Ty, because: Option<Span>) -> Ty {
+        let ty = self.block(f, block, Some(expected));
+        if block.tail.is_none() && !coerces(ty, expected) {
+            self.report_block_mismatch(block, expected, ty, because);
         }
+        ty
     }
 
     /// Parameters carry values, so `()` and `!` make no sense there; the entry
@@ -156,25 +164,29 @@ impl Checker<'_> {
         }
     }
 
-    fn report_body_mismatch(&mut self, f: &Fn, body_ty: Ty) {
-        let body = &f.body;
-        let found_at = match (&body.tail, body.stmts.last()) {
-            (Some(tail), _) => tail.span,
-            (None, Some(Stmt::Expr { expr, .. })) => expr.span,
-            _ => body.span,
+    /// A block without a tail whose type is not the expected one.
+    fn report_block_mismatch(
+        &mut self,
+        block: &Block,
+        expected: Ty,
+        found: Ty,
+        because: Option<Span>,
+    ) {
+        let found_at = match block.stmts.last() {
+            Some(Stmt::Expr { expr, .. }) => expr.span,
+            _ => block.span,
         };
         let mut diag = Diagnostic::error("ty::mismatched-types", "mismatched types")
-            .label(found_at, format!("expected `{}`, found `{body_ty}`", f.ret));
-        if let Some(ret_span) = f.ret_span {
-            diag = diag.label(ret_span, "expected because of this return type");
+            .label(found_at, format!("expected `{expected}`, found `{found}`"));
+        if let Some(because) = because {
+            diag = diag.label(because, "expected because of this return type");
         }
         // ADR 0015: a value followed by `;` by habit.
-        if body.tail.is_none()
-            && let Some(Stmt::Expr {
-                expr,
-                semi: Some(semi),
-            }) = body.stmts.last()
-            && coerces(self.expr_types[expr.id.0 as usize], f.ret)
+        if let Some(Stmt::Expr {
+            expr,
+            semi: Some(semi),
+        }) = block.stmts.last()
+            && coerces(self.expr_types[expr.id.0 as usize], expected)
         {
             diag = diag
                 .label(*semi, "remove this semicolon to return the value")
@@ -190,6 +202,9 @@ impl Checker<'_> {
         for stmt in &block.stmts {
             let ty = match stmt {
                 Stmt::Let { local, init } => self.check(f, init, Some(f.local(*local).ty)),
+                // A statement without `;` (`if`, `loop`, ...) must not
+                // silently drop a value (ADR 0015).
+                Stmt::Expr { expr, semi: None } => self.check(f, expr, Some(Ty::Unit)),
                 Stmt::Expr { expr, .. } => self.check(f, expr, None),
             };
             diverges |= ty == Ty::Never;
@@ -213,7 +228,10 @@ impl Checker<'_> {
             && !coerces(ty, expected)
             && !reported_inside
         {
-            self.mismatch(expr, expected, ty);
+            match &expr.kind {
+                ExprKind::Block(block) => self.report_block_mismatch(block, expected, ty, None),
+                _ => self.mismatch(expr, expected, ty),
+            }
         }
         ty
     }
@@ -225,6 +243,9 @@ impl Checker<'_> {
             diag = diag.help(format!(
                 "integer types never convert implicitly; use `as {expected}` (ADR 0008)"
             ));
+        }
+        if expected == Ty::Unit && !matches!(found, Ty::Unit | Ty::Never | Ty::Error) {
+            diag = diag.help("this value would be discarded; add `;` after it if that is intended");
         }
         if expected == Ty::Never && matches!(expr.kind, ExprKind::While { .. }) {
             diag =
@@ -245,7 +266,7 @@ impl Checker<'_> {
             ExprKind::Binary(op, lhs, rhs) if op.is_shift() => {
                 let lhs_ty = self.check(f, lhs, expected);
                 self.require(lhs, lhs_ty, op.symbol(), Operands::Int);
-                self.shift_amount(f, rhs, lhs_ty);
+                self.shift_amount(f, rhs, lhs_ty, op.symbol());
                 lhs_ty
             }
             ExprKind::Binary(op, lhs, rhs) if op.is_comparison() => {
@@ -296,7 +317,7 @@ impl Checker<'_> {
                 };
                 self.require(place, place_ty, op.symbol(), allowed);
                 if op.is_shift() {
-                    self.shift_amount(f, value, place_ty);
+                    self.shift_amount(f, value, place_ty, op.symbol());
                 } else {
                     self.check(f, value, Some(place_ty));
                     self.check_divisor(*op, value);
@@ -327,7 +348,7 @@ impl Checker<'_> {
                 };
                 match expected {
                     Some(expected) => {
-                        self.block(f, then, Some(expected));
+                        self.checked_block(f, then, expected, None);
                         self.check(f, else_, Some(expected));
                         expected
                     }
@@ -554,12 +575,12 @@ impl Checker<'_> {
     /// Shift amounts may be any integer type and are masked to the operand
     /// width (ADR 0007); a literal amount takes the shifted type, and a
     /// constant amount must be smaller than the width.
-    fn shift_amount(&mut self, f: &Fn, amount: &Expr, shifted: Ty) {
+    fn shift_amount(&mut self, f: &Fn, amount: &Expr, shifted: Ty, op: &str) {
         if needs_expected_type(amount) {
             self.check(f, amount, Some(shifted));
         } else {
             let ty = self.check(f, amount, None);
-            self.require(amount, ty, "<<", Operands::Int);
+            self.require(amount, ty, op, Operands::Int);
         }
         if let (Ty::Int(int), Some(value)) = (shifted, literal_value(amount))
             && !(0..int.bits() as i128).contains(&value)
