@@ -69,6 +69,9 @@ cargo test
   undefined behavior, so a difference means the generated IR is wrong.
 - `erebos build <file> [-O] --emit=<stage>` prints any stage (`tokens`, `ast`,
   `hir`, `typeck`, `mir`, `llvm-ir`), which is the quickest way to debug.
+- **Fuzzing** (`tests/fuzz.rs`) mutates the test programs and requires the
+  compiler to answer every input with output or diagnostics, never a panic.
+  The seed is fixed; set `EREBOS_FUZZ_ITERATIONS` to run more inputs.
 - Every bug fix comes with a test that fails without the fix.
 - Every new diagnostic comes with a snapshot of its rendered output.
 
