@@ -6,7 +6,7 @@
 
 use std::fs;
 
-use erebos::driver::{self, Stage};
+use erebos::driver::{self, OptLevel, Stage};
 
 #[test]
 fn ui() {
@@ -20,7 +20,7 @@ fn ui() {
             .unwrap_or(*Stage::ALL.last().unwrap());
 
         let name = path.file_name().unwrap().to_string_lossy();
-        let output = match driver::dump(&name, &text, stage, false) {
+        let output = match driver::dump(&name, &text, stage, OptLevel::None, false) {
             Ok(dump) => format!("--- {stage} ---\n{dump}"),
             Err(diags) => format!("--- errors ---\n{diags}"),
         };

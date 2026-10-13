@@ -26,23 +26,49 @@ use crate::mir::{
 use crate::target::Target;
 
 /// Returns the textual LLVM IR, for `--emit=llvm-ir`.
-pub fn emit_llvm_ir(mir: &Mir, target: &Target) -> Result<String, String> {
-    let machine = target_machine(target)?;
+/// How much LLVM optimizes. Without optimization, locals are still promoted
+/// to registers (`mem2reg`), which keeps the IR readable.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum OptLevel {
+    #[default]
+    None,
+    /// LLVM's `-O2` pipeline.
+    Speed,
+}
+
+impl OptLevel {
+    fn passes(self) -> &'static str {
+        match self {
+            OptLevel::None => "mem2reg",
+            OptLevel::Speed => "default<O2>",
+        }
+    }
+
+    fn backend(self) -> OptimizationLevel {
+        match self {
+            OptLevel::None => OptimizationLevel::None,
+            OptLevel::Speed => OptimizationLevel::Default,
+        }
+    }
+}
+
+pub fn emit_llvm_ir(mir: &Mir, target: &Target, opt: OptLevel) -> Result<String, String> {
+    let machine = target_machine(target, opt)?;
     let context = Context::create();
-    let module = lower(&context, mir, target, &machine);
+    let module = lower(&context, mir, target, &machine, opt);
     Ok(module.print_to_string().to_string())
 }
 
-pub fn emit_object(mir: &Mir, target: &Target, path: &Path) -> Result<(), String> {
-    let machine = target_machine(target)?;
+pub fn emit_object(mir: &Mir, target: &Target, opt: OptLevel, path: &Path) -> Result<(), String> {
+    let machine = target_machine(target, opt)?;
     let context = Context::create();
-    let module = lower(&context, mir, target, &machine);
+    let module = lower(&context, mir, target, &machine, opt);
     machine
         .write_to_file(&module, FileType::Object, path)
         .map_err(|e| format!("cannot write `{}`: {e}", path.display()))
 }
 
-fn target_machine(target: &Target) -> Result<TargetMachine, String> {
+fn target_machine(target: &Target, opt: OptLevel) -> Result<TargetMachine, String> {
     LlvmTarget::initialize_riscv(&InitializationConfig::default());
     let triple = TargetTriple::create(target.llvm_triple);
     let llvm_target = LlvmTarget::from_triple(&triple).map_err(|e| e.to_string())?;
@@ -51,7 +77,7 @@ fn target_machine(target: &Target) -> Result<TargetMachine, String> {
             &triple,
             target.llvm_cpu,
             target.llvm_features,
-            OptimizationLevel::Default,
+            opt.backend(),
             // Bare metal: code runs at its link address.
             RelocMode::Static,
             CodeModel::Small,
@@ -64,6 +90,7 @@ fn lower<'ctx>(
     mir: &Mir,
     target: &Target,
     machine: &TargetMachine,
+    opt: OptLevel,
 ) -> Module<'ctx> {
     let module = context.create_module("erebos");
     module.set_triple(&machine.get_triple());
@@ -83,10 +110,10 @@ fn lower<'ctx>(
     if let Err(e) = module.verify() {
         panic!("codegen produced invalid LLVM IR: {}", e.to_string());
     }
-    // Locals start as stack slots; promote them to registers.
+    // Locals start as stack slots; every level promotes them to registers.
     module
-        .run_passes("mem2reg", machine, PassBuilderOptions::create())
-        .expect("mem2reg is a valid pass pipeline");
+        .run_passes(opt.passes(), machine, PassBuilderOptions::create())
+        .expect("the pass pipelines are valid");
     module
 }
 

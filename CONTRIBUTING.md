@@ -65,7 +65,9 @@ cargo test
   `// expect-exit: <code>`; it must print exactly those lines and stop QEMU
   through the test finisher with that code. A program without
   `expect-exit` must run forever. Any CPU exception fails the test.
-- `erebos build <file> --emit=<stage>` prints any stage (`tokens`, `ast`,
+  Every program runs both unoptimized and with `-O`: the optimizer exploits
+  undefined behavior, so a difference means the generated IR is wrong.
+- `erebos build <file> [-O] --emit=<stage>` prints any stage (`tokens`, `ast`,
   `hir`, `typeck`, `mir`, `llvm-ir`), which is the quickest way to debug.
 - Every bug fix comes with a test that fails without the fix.
 - Every new diagnostic comes with a snapshot of its rendered output.

@@ -22,6 +22,12 @@ Agreed as useful, not yet scheduled:
 - Loop labels (`'outer: loop`) to break out of nested loops.
 - Warnings (unreachable code, unused variables); today there are only errors.
 
+## Notes for M2
+
+- With arrays, LLVM's `-O` pipeline turns copy and fill loops into calls to
+  `memcpy`/`memset`. `rt/` must provide them (ADR 0020), marked so LLVM does
+  not turn their own loops back into calls to themselves.
+
 ## Pending decisions
 
 - None.

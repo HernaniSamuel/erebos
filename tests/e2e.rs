@@ -13,6 +13,10 @@
 //! the program must run forever: after a while QEMU must still be up.
 //! Either way, the CPU must raise no exception or guest error; a
 //! miscompiled program faults almost immediately and floods that log.
+//!
+//! Every program runs twice: unoptimized and with `-O`. The optimizer
+//! exploits any undefined behavior in the generated IR, so agreement between
+//! the two is evidence that the IR means what the language says.
 
 use std::env;
 use std::fs;
@@ -21,6 +25,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
+
+use erebos::driver::OptLevel;
 
 /// How long a program that never exits is watched.
 const RUN_FOREVER_CHECK: Duration = Duration::from_millis(1500);
@@ -40,7 +46,8 @@ fn e2e() {
 
     let failures: Vec<String> = programs
         .iter()
-        .filter_map(|program| run(program).err())
+        .flat_map(|program| [OptLevel::None, OptLevel::Speed].map(|opt| run(program, opt)))
+        .filter_map(Result::err)
         .collect();
     assert!(failures.is_empty(), "\n{}", failures.join("\n\n"));
 }
@@ -64,16 +71,24 @@ fn expectation(source: &str) -> Expectation {
     Expectation { output, exit }
 }
 
-fn run(program: &Path) -> Result<(), String> {
-    let name = program.file_stem().unwrap().to_string_lossy();
+fn run(program: &Path, opt: OptLevel) -> Result<(), String> {
+    let stem = program.file_stem().unwrap().to_string_lossy();
+    let name = match opt {
+        OptLevel::None => stem.to_string(),
+        OptLevel::Speed => format!("{stem} (-O)"),
+    };
+    let file = match opt {
+        OptLevel::None => stem.to_string(),
+        OptLevel::Speed => format!("{stem}.opt"),
+    };
     let expected = expectation(&fs::read_to_string(program).unwrap());
     let work = Path::new(env!("CARGO_TARGET_TMPDIR")).join("e2e");
     fs::create_dir_all(&work).unwrap();
-    let elf = work.join(format!("{name}.elf"));
-    let log = work.join(format!("{name}.qemu.log"));
+    let elf = work.join(format!("{file}.elf"));
+    let log = work.join(format!("{file}.qemu.log"));
     let _ = fs::remove_file(&log);
 
-    erebos::driver::build(program, &elf, false)
+    erebos::driver::build(program, &elf, opt, false)
         .map_err(|e| format!("{name}: build failed\n{e}"))?;
 
     let mut qemu = Command::new(qemu_path())

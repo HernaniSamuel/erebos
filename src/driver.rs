@@ -7,6 +7,7 @@ use std::fs;
 use std::path::Path;
 use std::str::FromStr;
 
+pub use crate::codegen::OptLevel;
 use crate::diag::{self, Diagnostic, Diagnostics};
 use crate::span::{FileId, SourceMap};
 use crate::syntax::{lexer, parser};
@@ -75,14 +76,20 @@ const RUNTIME_NAME: &str = "rt/builtins.ers";
 /// Runs the pipeline on one file up to `stage`. Dumps show the program
 /// alone, without the runtime support functions. On failure, returns the
 /// rendered diagnostics.
-pub fn dump(name: &str, text: &str, stage: Stage, color: bool) -> Result<String, String> {
+pub fn dump(
+    name: &str,
+    text: &str,
+    stage: Stage,
+    opt: OptLevel,
+    color: bool,
+) -> Result<String, String> {
     let mut sources = SourceMap::default();
     let file = sources.add(name, text);
     let mut diags = Diagnostics::default();
 
     let output = match front_end(&sources, file, None, Some(stage), &mut diags) {
         FrontEnd::Dump(dump) => Some(dump),
-        FrontEnd::Mir(mir) => codegen::emit_llvm_ir(&mir, &target::RISCV32_VIRT)
+        FrontEnd::Mir(mir) => codegen::emit_llvm_ir(&mir, &target::RISCV32_VIRT, opt)
             .map_err(|e| diags.push(Diagnostic::error("codegen::llvm", e)))
             .ok(),
         FrontEnd::Failed => None,
@@ -95,7 +102,7 @@ pub fn dump(name: &str, text: &str, stage: Stage, color: bool) -> Result<String,
 
 /// Compiles `input` into an ELF executable at `output`. On failure, returns
 /// the rendered diagnostics or error message.
-pub fn build(input: &Path, output: &Path, color: bool) -> Result<(), String> {
+pub fn build(input: &Path, output: &Path, opt: OptLevel, color: bool) -> Result<(), String> {
     let text = fs::read_to_string(input)
         .map_err(|e| format!("error: cannot read `{}`: {e}", input.display()))?;
     let mut sources = SourceMap::default();
@@ -112,7 +119,7 @@ pub fn build(input: &Path, output: &Path, color: bool) -> Result<(), String> {
     let target = &target::RISCV32_VIRT;
     let object = output.with_extension("o");
     let script = output.with_extension("ld");
-    let result = codegen::emit_object(&mir, target, &object)
+    let result = codegen::emit_object(&mir, target, opt, &object)
         .and_then(|()| {
             fs::write(&script, link::linker_script(target))
                 .map_err(|e| format!("cannot write `{}`: {e}", script.display()))

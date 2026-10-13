@@ -5,18 +5,20 @@ use std::io::{self, IsTerminal};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use erebos::driver::{self, Stage};
+use erebos::driver::{self, OptLevel, Stage};
 
 const USAGE: &str = "\
-usage: erebos build <input.ers> [-o <output>] [--emit=<stage>]
+usage: erebos build <input.ers> [-o <output>] [-O] [--emit=<stage>]
 
   -o <output>      executable to write (default: <input> with .elf)
+  -O               optimize (LLVM -O2)
   --emit=<stage>   print a compiler stage instead of building:
                    tokens, ast, hir, typeck, mir, llvm-ir";
 
 struct Args {
     input: PathBuf,
     output: Option<PathBuf>,
+    opt: OptLevel,
     emit: Option<Stage>,
 }
 
@@ -29,11 +31,14 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Args, String> {
 
     let mut input = None;
     let mut output = None;
+    let mut opt = OptLevel::None;
     let mut emit = None;
     while let Some(arg) = args.next() {
         if arg == "-o" {
             let path = args.next().ok_or("`-o` needs a path")?;
             output = Some(PathBuf::from(path));
+        } else if arg == "-O" {
+            opt = OptLevel::Speed;
         } else if let Some(stage) = arg.strip_prefix("--emit=") {
             emit = Some(stage.parse()?);
         } else if arg.starts_with('-') {
@@ -46,6 +51,7 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Args, String> {
     Ok(Args {
         input: input.ok_or("missing input file")?,
         output,
+        opt,
         emit,
     })
 }
@@ -63,13 +69,21 @@ fn main() -> ExitCode {
     let result = match args.emit {
         Some(stage) => std::fs::read_to_string(&args.input)
             .map_err(|e| format!("error: cannot read `{}`: {e}", args.input.display()))
-            .and_then(|text| driver::dump(&args.input.display().to_string(), &text, stage, color))
+            .and_then(|text| {
+                driver::dump(
+                    &args.input.display().to_string(),
+                    &text,
+                    stage,
+                    args.opt,
+                    color,
+                )
+            })
             .map(|dump| print!("{dump}")),
         None => {
             let output = args
                 .output
                 .unwrap_or_else(|| args.input.with_extension("elf"));
-            driver::build(&args.input, &output, color)
+            driver::build(&args.input, &output, args.opt, color)
         }
     };
 
