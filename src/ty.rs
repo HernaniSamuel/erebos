@@ -12,7 +12,7 @@ use std::fmt::Write;
 
 use crate::diag::{Diagnostic, Diagnostics};
 use crate::hir::{
-    BinOp, Block, Expr, ExprId, ExprKind, Fn, FnKind, Hir, IntTy, Ptr, Stmt, Ty, UnOp,
+    self, BinOp, Block, Expr, ExprId, ExprKind, Fn, FnKind, Hir, IntTy, Ptr, Stmt, Ty, UnOp,
 };
 use crate::span::Span;
 
@@ -28,6 +28,7 @@ impl TypeckResults {
 
 pub fn check(hir: &Hir, diags: &mut Diagnostics) -> TypeckResults {
     let mut checker = Checker {
+        hir,
         // Overwritten for every expression; the placeholder is never read.
         expr_types: vec![Ty::Error; hir.expr_count as usize],
         diags,
@@ -71,6 +72,7 @@ fn literal_value(expr: &Expr) -> Option<i128> {
 }
 
 struct Checker<'a> {
+    hir: &'a Hir,
     expr_types: Vec<Ty>,
     diags: &'a mut Diagnostics,
     /// Enclosing `loop`/`while` expressions, innermost last.
@@ -113,10 +115,44 @@ impl Checker<'_> {
             );
         }
 
+        self.params(f);
+
         let body_ty = self.block(f, &f.body, Some(f.ret));
         // A tail expression was already checked against the return type.
         if f.body.tail.is_none() && !coerces(body_ty, f.ret) {
             self.report_body_mismatch(f, body_ty);
+        }
+    }
+
+    /// Parameters carry values, so `()` and `!` make no sense there; the entry
+    /// and panic functions are called by no one and take none.
+    fn params(&mut self, f: &Fn) {
+        if f.kind != FnKind::Plain
+            && let Some(first) = f.params().first()
+        {
+            let what = if f.kind == FnKind::Entry {
+                "entry"
+            } else {
+                "panic"
+            };
+            self.diags.push(
+                Diagnostic::error(
+                    "ty::special-fn-params",
+                    format!("the {what} function takes no parameters"),
+                )
+                .label(first.span, "parameter here"),
+            );
+        }
+        for param in f.params() {
+            if matches!(param.ty, Ty::Unit | Ty::Never) {
+                self.diags.push(
+                    Diagnostic::error(
+                        "ty::param-type",
+                        format!("a parameter cannot have type `{}`", param.ty),
+                    )
+                    .label(param.span, "has no value to pass"),
+                );
+            }
         }
     }
 
@@ -204,6 +240,7 @@ impl Checker<'_> {
             ExprKind::Bool(_) => Ty::Bool,
             ExprKind::Unit => Ty::Unit,
             ExprKind::Local(local) => f.local(*local).ty,
+            ExprKind::Call { callee, args } => self.call(f, expr, *callee, args),
             ExprKind::Unary(op, operand) => self.unary(f, expr, *op, operand, expected),
             ExprKind::Binary(op, lhs, rhs) if op.is_shift() => {
                 let lhs_ty = self.check(f, lhs, expected);
@@ -335,6 +372,35 @@ impl Checker<'_> {
                 Ty::Never
             }
         }
+    }
+
+    /// Each argument is checked against its parameter's type.
+    fn call(&mut self, f: &Fn, expr: &Expr, callee: hir::FnId, args: &[Expr]) -> Ty {
+        let target = self.hir.fn_(callee);
+        let params = target.params();
+        if args.len() != params.len() {
+            let plural = if params.len() == 1 { "" } else { "s" };
+            self.diags.push(
+                Diagnostic::error(
+                    "ty::wrong-arg-count",
+                    format!(
+                        "`{}` takes {} argument{plural}, but {} {} given",
+                        target.name,
+                        params.len(),
+                        args.len(),
+                        if args.len() == 1 { "was" } else { "were" }
+                    ),
+                )
+                .label(expr.span, "in this call")
+                .label(target.name_span, "declared here"),
+            );
+        }
+        for (i, arg) in args.iter().enumerate() {
+            // Extra arguments were reported above; `{error}` keeps them quiet.
+            let expected = params.get(i).map_or(Ty::Error, |param| param.ty);
+            self.check(f, arg, Some(expected));
+        }
+        target.ret
     }
 
     fn in_loop(
@@ -658,8 +724,20 @@ pub fn dump(hir: &Hir, results: &TypeckResults) -> String {
             FnKind::Entry => "entry ",
             FnKind::Panic => "panic ",
         };
-        writeln!(out, "{kind}fn {}() -> {}", f.name, f.ret).unwrap();
-        for local in &f.locals {
+        let params: Vec<String> = f
+            .params()
+            .iter()
+            .map(|p| format!("{}: {}", p.name, p.ty))
+            .collect();
+        writeln!(
+            out,
+            "{kind}fn {}({}) -> {}",
+            f.name,
+            params.join(", "),
+            f.ret
+        )
+        .unwrap();
+        for local in &f.locals[f.param_count..] {
             let mutable = if local.mutable { "mut " } else { "" };
             writeln!(out, "    let {mutable}{}: {}", local.name, local.ty).unwrap();
         }
@@ -702,6 +780,7 @@ fn expr_label(f: &Fn, expr: &Expr) -> String {
         ExprKind::Byte(value) => format!("byte {value}"),
         ExprKind::Unit => "unit".to_owned(),
         ExprKind::Local(id) => format!("local {}", f.local(*id).name),
+        ExprKind::Call { .. } => "call".to_owned(),
         ExprKind::Unary(op, _) => format!("{op:?}").to_lowercase(),
         ExprKind::Deref(_) => "deref".to_owned(),
         ExprKind::Binary(op, _, _) => format!("binary {}", op.symbol()),

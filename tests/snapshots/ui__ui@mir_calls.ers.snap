@@ -1,0 +1,106 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/mir_calls.ers
+---
+--- mir ---
+fn putc(_1: u8) -> () {
+    let _0: ();
+    let _1: u8; // byte
+    let _2: *mut volatile u8; // uart
+    let _3: *mut volatile u8;
+
+    bb0: {
+        _3 = const 268435456_usize as *mut volatile u8;
+        _2 = copy _3;
+        (*_2) = copy _1;
+        return;
+    }
+}
+
+fn exit(_1: u32) -> ! {
+    let _0: !;
+    let _1: u32; // code
+    let _2: *mut volatile u32; // finisher
+    let _3: *mut volatile u32;
+    let _4: bool;
+    let _5: u32;
+    let _6: u32;
+    let _7: u32;
+
+    bb0: {
+        _3 = const 1048576_usize as *mut volatile u32;
+        _2 = copy _3;
+        _4 = Eq(copy _1, const 0_u32);
+        if copy _4 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _5 = const 21845_u32;
+        goto -> bb3;
+    }
+
+    bb2: {
+        _6 = Shl(copy _1, const 16_u32);
+        _7 = BitOr(copy _6, const 13107_u32);
+        _5 = copy _7;
+        goto -> bb3;
+    }
+
+    bb3: {
+        (*_2) = copy _5;
+        goto -> bb4;
+    }
+
+    bb4: {
+        goto -> bb4;
+    }
+}
+
+fn negate(_1: i16) -> i16 {
+    let _0: i16;
+    let _1: i16; // x
+    let _2: i16;
+
+    bb0: {
+        _2 = Neg(copy _1);
+        _0 = copy _2;
+        return;
+    }
+}
+
+fn greet() -> bool {
+    let _0: bool;
+    let _1: i16;
+    let _2: i16;
+    let _3: bool;
+
+    bb0: {
+        call putc(const 104_u8);
+        _1 = Neg(const 2_i16);
+        _2 = call negate(copy _1);
+        _3 = Eq(copy _2, const 2_i16);
+        _0 = copy _3;
+        return;
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+    let _1: bool;
+
+    bb0: {
+        _1 = call greet();
+        call exit(const 0_u32);
+        unreachable;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        call exit(const 1_u32);
+        unreachable;
+    }
+}

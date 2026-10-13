@@ -13,6 +13,7 @@ File {
                     name: "main",
                     span: 22..26,
                 },
+                params: [],
                 ret: Some(
                     Ty {
                         kind: Never,
@@ -45,6 +46,7 @@ File {
                     name: "helper",
                     span: 54..60,
                 },
+                params: [],
                 ret: None,
                 body: Block {
                     stmts: [],

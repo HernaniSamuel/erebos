@@ -13,8 +13,11 @@ use inkwell::targets::{
     CodeModel, FileType, InitializationConfig, RelocMode, Target as LlvmTarget, TargetMachine,
     TargetTriple,
 };
-use inkwell::types::{BasicType, BasicTypeEnum, IntType};
-use inkwell::values::{BasicValue, BasicValueEnum, FunctionValue, IntValue, PointerValue};
+use inkwell::types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum, IntType};
+use inkwell::values::{
+    BasicMetadataValueEnum, BasicValue, BasicValueEnum, FunctionValue, IntValue, PointerValue,
+    ValueKind,
+};
 use inkwell::{IntPredicate, OptimizationLevel};
 
 use crate::mir::{
@@ -72,7 +75,7 @@ fn lower<'ctx>(
         .map(|(_, body)| declare(context, &module, body))
         .collect();
     for ((_, body), &function) in mir.bodies().zip(&fns) {
-        FnCodegen::new(context, body, function).define();
+        FnCodegen::new(context, body, function, &fns).define();
     }
 
     module.set_inline_assembly(&start_stub(target, &mir.body(mir.entry).name));
@@ -112,27 +115,53 @@ fn declare<'ctx>(
     module: &Module<'ctx>,
     body: &Body,
 ) -> FunctionValue<'ctx> {
+    let params: Vec<BasicMetadataTypeEnum> = body
+        .params()
+        .iter()
+        .map(|param| {
+            basic_type(context, param.ty)
+                .expect("the type checker rejects `()` and `!` parameters")
+                .into()
+        })
+        .collect();
     let fn_type = match basic_type(context, body.ret) {
-        Some(ty) => ty.fn_type(&[], false),
+        Some(ty) => ty.fn_type(&params, false),
         // Both `()` and `!` return nothing; `!` additionally never returns.
-        None => context.void_type().fn_type(&[], false),
+        None => context.void_type().fn_type(&params, false),
     };
     let function = module.add_function(&body.name, fn_type, None);
 
     // There is no unwinding on bare metal (ADR 0002).
-    add_fn_attribute(context, function, "nounwind");
+    add_attribute(context, function, AttributeLoc::Function, "nounwind");
     if body.ret == Ty::Never {
-        add_fn_attribute(context, function, "noreturn");
+        add_attribute(context, function, AttributeLoc::Function, "noreturn");
+    }
+    // The C ABI (ADR 0006) widens narrow integers to a full register; LLVM
+    // needs to be told how, as clang does.
+    for (i, param) in body.params().iter().enumerate() {
+        if let Some(ext) = extension(param.ty) {
+            add_attribute(context, function, AttributeLoc::Param(i as u32), ext);
+        }
+    }
+    if let Some(ext) = extension(body.ret) {
+        add_attribute(context, function, AttributeLoc::Return, ext);
     }
     function
 }
 
-fn add_fn_attribute(context: &Context, function: FunctionValue, name: &str) {
+/// How the RISC-V psABI extends a value narrower than a register.
+fn extension(ty: Ty) -> Option<&'static str> {
+    match ty {
+        Ty::Bool => Some("zeroext"),
+        Ty::Int(int) if int.bits() < 32 && int.is_signed() => Some("signext"),
+        Ty::Int(int) if int.bits() < 32 => Some("zeroext"),
+        _ => None,
+    }
+}
+
+fn add_attribute(context: &Context, function: FunctionValue, loc: AttributeLoc, name: &str) {
     let kind = Attribute::get_named_enum_kind_id(name);
-    function.add_attribute(
-        AttributeLoc::Function,
-        context.create_enum_attribute(kind, 0),
-    );
+    function.add_attribute(loc, context.create_enum_attribute(kind, 0));
 }
 
 /// Lowers one MIR body. Every local with a representation gets a stack
@@ -140,13 +169,21 @@ fn add_fn_attribute(context: &Context, function: FunctionValue, name: &str) {
 struct FnCodegen<'a, 'ctx> {
     context: &'ctx Context,
     body: &'a Body,
+    function: FunctionValue<'ctx>,
+    /// Every function of the module, indexed by body id.
+    fns: &'a [FunctionValue<'ctx>],
     builder: Builder<'ctx>,
     blocks: Vec<LlvmBlock<'ctx>>,
     slots: Vec<Option<PointerValue<'ctx>>>,
 }
 
 impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
-    fn new(context: &'ctx Context, body: &'a Body, function: FunctionValue<'ctx>) -> Self {
+    fn new(
+        context: &'ctx Context,
+        body: &'a Body,
+        function: FunctionValue<'ctx>,
+        fns: &'a [FunctionValue<'ctx>],
+    ) -> Self {
         let blocks = body
             .blocks()
             .map(|(bb, _)| context.append_basic_block(function, &bb.to_string()))
@@ -154,6 +191,8 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
         FnCodegen {
             context,
             body,
+            function,
+            fns,
             builder: context.create_builder(),
             blocks,
             slots: Vec::new(),
@@ -174,6 +213,17 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                 })
             })
             .collect();
+        // Parameters arrive in registers; give them their slots `_1..`.
+        for i in 0..self.body.param_count {
+            let value = self
+                .function
+                .get_nth_param(i as u32)
+                .expect("declared with this many parameters");
+            let slot = self.slots[i + 1].expect("parameters have a representation");
+            self.builder
+                .build_store(slot, value)
+                .expect("builder is positioned");
+        }
 
         for (bb, data) in self.body.blocks() {
             self.builder.position_at_end(self.blocks[bb.0 as usize]);
@@ -199,6 +249,27 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                     .expect("builder is positioned");
                 if volatile {
                     store.set_volatile(true).expect("stores can be volatile");
+                }
+            }
+            Statement::Call { dest, callee, args } => {
+                let args: Vec<BasicMetadataValueEnum> =
+                    args.iter().map(|arg| self.operand(arg).into()).collect();
+                let call = self
+                    .builder
+                    .build_call(self.fns[callee.0 as usize], &args, "")
+                    .expect("builder is positioned");
+                if let Some(dest) = dest {
+                    let ValueKind::Basic(value) = call.try_as_basic_value() else {
+                        unreachable!("calls with a destination return a value")
+                    };
+                    let (address, volatile) = self.address(*dest);
+                    let store = self
+                        .builder
+                        .build_store(address, value)
+                        .expect("builder is positioned");
+                    if volatile {
+                        store.set_volatile(true).expect("stores can be volatile");
+                    }
                 }
             }
         }

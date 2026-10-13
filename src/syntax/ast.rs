@@ -18,6 +18,7 @@ pub enum Item {
 pub struct FnDecl {
     pub kind: FnKind,
     pub name: Ident,
+    pub params: Vec<Param>,
     /// `None` when the `-> Type` part is omitted.
     pub ret: Option<Ty>,
     pub body: Block,
@@ -31,6 +32,14 @@ pub enum FnKind {
     Plain,
     Entry,
     Panic,
+}
+
+/// `[mut] name: Type`
+#[derive(Debug)]
+pub struct Param {
+    pub mutable: bool,
+    pub name: Ident,
+    pub ty: Ty,
 }
 
 #[derive(Debug)]
@@ -108,6 +117,8 @@ pub enum ExprKind {
     Unit,
     /// A name, such as a local variable.
     Name(Ident),
+    /// `name(args)`: a call to a function.
+    Call(Ident, Vec<Expr>),
     Unary(UnOp, Box<Expr>),
     /// `*ptr`
     Deref(Box<Expr>),

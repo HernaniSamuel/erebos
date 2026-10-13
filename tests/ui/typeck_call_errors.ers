@@ -1,0 +1,14 @@
+// emit: typeck
+fn two(a: u32, b: u32) {}
+
+fn takes_unit(u: ()) {}
+
+fn errors() {
+    two(1);
+    two(1, 2, 3);
+    let small: u8 = 1;
+    two(small, 2);
+}
+
+entry fn main(x: u32) -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

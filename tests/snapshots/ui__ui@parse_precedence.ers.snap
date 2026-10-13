@@ -13,6 +13,7 @@ File {
                     name: "f",
                     span: 16..17,
                 },
+                params: [],
                 ret: None,
                 body: Block {
                     stmts: [

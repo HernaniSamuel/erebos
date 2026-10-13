@@ -1,0 +1,51 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/resolve_call_errors.ers
+---
+--- errors ---
+resolve::not-a-function
+
+  × `x` is a variable, not a function
+   ╭─[resolve_call_errors.ers:6:5]
+ 4 │ fn errors() {
+ 5 │     let x: u32 = 1;
+   ·         ┬
+   ·         ╰── declared here
+ 6 │     x();
+   ·     ┬
+   ·     ╰── called here
+ 7 │     main();
+   ╰────
+resolve::call-entry
+
+  × the entry function cannot be called
+   ╭─[resolve_call_errors.ers:7:5]
+ 6 │     x();
+ 7 │     main();
+   ·     ──┬─
+   ·       ╰── called here
+ 8 │     missing();
+   ╰────
+  help: execution starts there; it is not a function to call
+resolve::unknown-function
+
+  × cannot find function `missing`
+   ╭─[resolve_call_errors.ers:8:5]
+ 7 │     main();
+ 8 │     missing();
+   ·     ───┬───
+   ·        ╰── not found
+ 9 │     let f: u32 = helper;
+   ╰────
+resolve::unknown-name
+
+  × cannot find `helper` in this scope
+    ╭─[resolve_call_errors.ers:9:18]
+  8 │     missing();
+  9 │     let f: u32 = helper;
+    ·                  ───┬──
+    ·                     ╰── a function, which is not a value
+ 10 │ }
+    ╰────
+  help: call it: `helper(...)`

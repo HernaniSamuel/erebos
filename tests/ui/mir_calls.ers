@@ -1,0 +1,29 @@
+// emit: mir
+fn putc(byte: u8) {
+    let uart: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+    *uart = byte;
+}
+
+fn exit(code: u32) -> ! {
+    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+    *finisher = if code == 0 { 0x5555 } else { code << 16 | 0x3333 };
+    loop {}
+}
+
+fn negate(x: i16) -> i16 {
+    -x
+}
+
+fn greet() -> bool {
+    putc(b'h');
+    negate(-2) == 2
+}
+
+entry fn main() -> ! {
+    greet();
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(1)
+}

@@ -36,6 +36,7 @@ pub enum TokenKind {
     RBrace,
     Arrow,
     Colon,
+    Comma,
     Semi,
 
     // Operators
@@ -122,6 +123,7 @@ impl TokenKind {
             TokenKind::RBrace => "`}`",
             TokenKind::Arrow => "`->`",
             TokenKind::Colon => "`:`",
+            TokenKind::Comma => "`,`",
             TokenKind::Semi => "`;`",
             TokenKind::Bang => "`!`",
             TokenKind::Plus => "`+`",

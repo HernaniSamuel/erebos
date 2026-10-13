@@ -14,6 +14,7 @@ Hir {
             ret_span: Some(
                 32..33,
             ),
+            param_count: 0,
             locals: [],
             body: Block {
                 stmts: [],
@@ -42,6 +43,7 @@ Hir {
             kind: Plain,
             ret: Unit,
             ret_span: None,
+            param_count: 0,
             locals: [],
             body: Block {
                 stmts: [],
@@ -86,6 +88,7 @@ Hir {
             ret_span: Some(
                 110..111,
             ),
+            param_count: 0,
             locals: [],
             body: Block {
                 stmts: [],

@@ -1,0 +1,49 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_calls.ers
+---
+--- typeck ---
+fn add(a: u32, b: u32) -> u32
+    expr 0 binary + 52..57: u32
+    expr 1 local a 52..53: u32
+    expr 2 local b 56..57: u32
+fn fib(n: u32) -> u32
+    expr 3 if 89..136: u32
+    expr 4 binary < 92..97: bool
+    expr 5 local n 92..93: u32
+    expr 6 int 2 96..97: u32
+    expr 7 local n 100..101: u32
+    expr 8 block 109..136: u32
+    expr 9 binary + 111..134: u32
+    expr 10 call 111..121: u32
+    expr 11 binary - 115..120: u32
+    expr 12 local n 115..116: u32
+    expr 13 int 1 119..120: u32
+    expr 14 call 124..134: u32
+    expr 15 binary - 128..133: u32
+    expr 16 local n 128..129: u32
+    expr 17 int 2 132..133: u32
+fn countdown(n: u8) -> bool
+    expr 18 while 178..213: ()
+    expr 19 binary > 184..189: bool
+    expr 20 local n 184..185: u8
+    expr 21 int 0 188..189: u8
+    expr 22 assign -= 200..206: ()
+    expr 23 local n 200..201: u8
+    expr 24 int 1 205..206: u8
+    expr 25 call 218..228: bool
+    expr 26 local n 226..227: u8
+fn is_zero(x: u8) -> bool
+    expr 27 binary == 264..270: bool
+    expr 28 local x 264..265: u8
+    expr 29 int 0 269..270: u8
+fn calls() -> u32
+    expr 30 call 298..313: u32
+    expr 31 int 1 302..303: u32
+    expr 32 call 305..312: u32
+    expr 33 int 10 309..311: u32
+entry fn main() -> !
+    expr 34 loop 340..347: !
+panic fn on_panic() -> !
+    expr 35 loop 377..384: !

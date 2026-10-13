@@ -50,6 +50,7 @@ fn build_body(f: &hir::Fn, types: &TypeckResults) -> Body {
     Body {
         name: f.name.clone(),
         ret,
+        param_count: f.param_count,
         locals: builder.locals,
         blocks: builder
             .blocks
@@ -182,6 +183,19 @@ impl Builder<'_> {
             hir::ExprKind::Bool(value) => Operand::Const(Const::Bool(*value)),
             hir::ExprKind::Unit => Operand::Const(Const::Unit),
             hir::ExprKind::Local(local) => Operand::Copy(self.local(*local)),
+            hir::ExprKind::Call { callee, args } => {
+                let args = self.operands(args);
+                let dest = self.result_place(ty);
+                if let Some(bb) = self.current {
+                    self.blocks[bb.0 as usize].statements.push(Statement::Call {
+                        dest,
+                        // MIR bodies are built in HIR function order.
+                        callee: BodyId(callee.0),
+                        args,
+                    });
+                }
+                self.read_result(dest)
+            }
             hir::ExprKind::Deref(_) => {
                 let place = self.place(expr);
                 if ty == Ty::Unit {
@@ -334,6 +348,20 @@ impl Builder<'_> {
             self.terminate(Terminator::Unreachable);
         }
         value
+    }
+
+    /// Lowers expressions left to right. A deferred local read is taken
+    /// before any later expression that could assign it.
+    fn operands(&mut self, exprs: &[hir::Expr]) -> Vec<Operand> {
+        let mut operands = Vec::with_capacity(exprs.len());
+        for (i, expr) in exprs.iter().enumerate() {
+            let mut operand = self.expr(expr);
+            if matches!(operand, Operand::Copy(_)) && !exprs[i + 1..].iter().all(is_simple) {
+                operand = self.temp(self.operand_ty(operand), Rvalue::Use(operand));
+            }
+            operands.push(operand);
+        }
+        operands
     }
 
     /// `a && b` is `if a { b } else { false }`; `a || b` is

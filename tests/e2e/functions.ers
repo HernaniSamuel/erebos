@@ -1,0 +1,54 @@
+// The M1 goal program: UART output and exit through functions, plus
+// recursion and calls to functions declared later.
+// expect-output: hi
+// expect-output: 012
+// expect-output: 55 89
+// expect-exit: 0
+
+fn putc(byte: u8) {
+    let thr: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+    *thr = byte;
+}
+
+fn exit(code: u32) -> ! {
+    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+    *finisher = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    exit(1)
+}
+
+entry fn main() -> ! {
+    putc(b'h'); putc(b'i'); putc(b'\n');
+    let mut i: u32 = 0;
+    while i < 3 {
+        putc(b'0' + i as u8);
+        i += 1;
+    }
+    putc(b'\n');
+
+    print_u8(fib(10) as u8);
+    putc(b' ');
+    print_u8(fib(11) as u8);
+    putc(b'\n');
+    exit(0)
+}
+
+fn fib(n: u32) -> u32 {
+    if n < 2 { n } else { fib(n - 1) + fib(n - 2) }
+}
+
+/// Prints a value below 100 without division (which arrives later).
+fn print_u8(mut n: u8) {
+    let mut tens: u8 = 0;
+    while n >= 10 {
+        n -= 10;
+        tens += 1;
+    }
+    if tens > 0 {
+        putc(b'0' + tens);
+    }
+    putc(b'0' + n);
+}

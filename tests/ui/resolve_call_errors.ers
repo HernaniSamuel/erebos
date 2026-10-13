@@ -1,0 +1,13 @@
+// emit: hir
+fn helper() {}
+
+fn errors() {
+    let x: u32 = 1;
+    x();
+    main();
+    missing();
+    let f: u32 = helper;
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

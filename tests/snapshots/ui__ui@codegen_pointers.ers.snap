@@ -17,7 +17,7 @@ module asm "\09li sp, 0x88000000"
 module asm "\09j main"
 
 ; Function Attrs: nounwind
-define i8 @pointers() #0 {
+define zeroext i8 @pointers() #0 {
 bb0:
   store volatile i8 33, ptr inttoptr (i32 268435456 to ptr), align 1
   %0 = load i32, ptr inttoptr (i32 268435456 to ptr), align 4

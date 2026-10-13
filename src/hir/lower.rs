@@ -12,7 +12,18 @@ use crate::syntax::ast;
 /// Returns `None` only when no HIR can be built at all (no entry or panic
 /// function); other errors are reported and lowering continues.
 pub fn lower(file: &ast::File, diags: &mut Diagnostics) -> Option<Hir> {
+    // Functions are global: any body may call any function, declared before
+    // or after it. A repeated name keeps its first definition.
+    let mut fn_ids = HashMap::new();
+    for (i, item) in file.items.iter().enumerate() {
+        let ast::Item::Fn(decl) = item;
+        fn_ids
+            .entry(decl.name.name.clone())
+            .or_insert((FnId(i as u32), decl.kind));
+    }
+
     let mut lowerer = Lowerer {
+        fn_ids,
         next_expr: 0,
         diags,
         locals: Vec::new(),
@@ -104,6 +115,8 @@ fn find_unique(fns: &[Fn], kind: FnKind, diags: &mut Diagnostics) -> Option<FnId
 }
 
 struct Lowerer<'a> {
+    /// Every function's id and kind, by name.
+    fn_ids: HashMap<String, (FnId, ast::FnKind)>,
     next_expr: u32,
     diags: &'a mut Diagnostics,
     /// Locals of the function being lowered.
@@ -121,7 +134,13 @@ impl Lowerer<'_> {
         self.scopes.clear();
         self.loops.clear();
         let ret = decl.ret.as_ref().map_or(Ty::Unit, |ty| self.ty(ty));
+        self.scopes.push(HashMap::new());
+        for param in &decl.params {
+            let ty = self.ty(&param.ty);
+            self.declare(&param.name, ty, param.mutable);
+        }
         let body = self.block(&decl.body);
+        self.scopes.pop();
         Fn {
             name: decl.name.name.clone(),
             name_span: decl.name.span,
@@ -132,6 +151,7 @@ impl Lowerer<'_> {
             },
             ret,
             ret_span: decl.ret.as_ref().map(|ty| ty.span),
+            param_count: decl.params.len(),
             locals: std::mem::take(&mut self.locals),
             body,
             span: decl.span,
@@ -186,17 +206,7 @@ impl Lowerer<'_> {
                 // `let x: u32 = x;` refers to an outer `x`.
                 let init = self.expr(&let_.init);
                 let ty = self.ty(&let_.ty);
-                let local = LocalId(self.locals.len() as u32);
-                self.locals.push(Local {
-                    name: let_.name.name.clone(),
-                    ty,
-                    mutable: let_.mutable,
-                    span: let_.name.span,
-                });
-                self.scopes
-                    .last_mut()
-                    .expect("statements are inside a block")
-                    .insert(let_.name.name.clone(), local);
+                let local = self.declare(&let_.name, ty, let_.mutable);
                 Stmt::Let { local, init }
             }
             ast::Stmt::Expr { expr, semi } => Stmt::Expr {
@@ -206,22 +216,83 @@ impl Lowerer<'_> {
         }
     }
 
-    fn resolve(&mut self, name: &ast::Ident) -> Option<LocalId> {
-        let found = self
-            .scopes
+    /// Adds a local to the innermost scope, shadowing earlier ones.
+    fn declare(&mut self, name: &ast::Ident, ty: Ty, mutable: bool) -> LocalId {
+        let local = LocalId(self.locals.len() as u32);
+        self.locals.push(Local {
+            name: name.name.clone(),
+            ty,
+            mutable,
+            span: name.span,
+        });
+        self.scopes
+            .last_mut()
+            .expect("locals are declared inside a scope")
+            .insert(name.name.clone(), local);
+        local
+    }
+
+    fn find_local(&self, name: &str) -> Option<LocalId> {
+        self.scopes
             .iter()
             .rev()
-            .find_map(|scope| scope.get(&name.name).copied());
+            .find_map(|scope| scope.get(name).copied())
+    }
+
+    fn resolve(&mut self, name: &ast::Ident) -> Option<LocalId> {
+        let found = self.find_local(&name.name);
         if found.is_none() {
-            self.diags.push(
-                Diagnostic::error(
-                    "resolve::unknown-name",
-                    format!("cannot find `{}` in this scope", name.name),
-                )
-                .label(name.span, "not found"),
+            let mut diag = Diagnostic::error(
+                "resolve::unknown-name",
+                format!("cannot find `{}` in this scope", name.name),
             );
+            if self.fn_ids.contains_key(&name.name) {
+                diag = diag
+                    .label(name.span, "a function, which is not a value")
+                    .help(format!("call it: `{}(...)`", name.name));
+            } else {
+                diag = diag.label(name.span, "not found");
+            }
+            self.diags.push(diag);
         }
         found
+    }
+
+    /// Resolves the callee of a call. Locals shadow functions, as in Rust.
+    fn resolve_fn(&mut self, name: &ast::Ident) -> Option<FnId> {
+        if let Some(local) = self.find_local(&name.name) {
+            let declared = self.locals[local.0 as usize].span;
+            self.diags.push(
+                Diagnostic::error(
+                    "resolve::not-a-function",
+                    format!("`{}` is a variable, not a function", name.name),
+                )
+                .label(name.span, "called here")
+                .label(declared, "declared here"),
+            );
+            return None;
+        }
+        match self.fn_ids.get(&name.name) {
+            Some(&(_, ast::FnKind::Entry)) => {
+                self.diags.push(
+                    Diagnostic::error("resolve::call-entry", "the entry function cannot be called")
+                        .label(name.span, "called here")
+                        .help("execution starts there; it is not a function to call"),
+                );
+                None
+            }
+            Some(&(id, _)) => Some(id),
+            None => {
+                self.diags.push(
+                    Diagnostic::error(
+                        "resolve::unknown-function",
+                        format!("cannot find function `{}`", name.name),
+                    )
+                    .label(name.span, "not found"),
+                );
+                None
+            }
+        }
     }
 
     fn expr(&mut self, expr: &ast::Expr) -> Expr {
@@ -240,6 +311,15 @@ impl Lowerer<'_> {
                 // the pipeline.
                 None => ExprKind::Unit,
             },
+            ast::ExprKind::Call(name, args) => {
+                let callee = self.resolve_fn(name);
+                let args = args.iter().map(|arg| self.expr(arg)).collect();
+                match callee {
+                    Some(callee) => ExprKind::Call { callee, args },
+                    // Reported; lowering errors stop the pipeline.
+                    None => ExprKind::Unit,
+                }
+            }
             ast::ExprKind::Unary(op, operand) => ExprKind::Unary(*op, self.boxed(operand)),
             ast::ExprKind::Deref(operand) => ExprKind::Deref(self.boxed(operand)),
             ast::ExprKind::Binary(op, lhs, rhs) => {

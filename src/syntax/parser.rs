@@ -4,8 +4,8 @@
 use crate::diag::{Diagnostic, Diagnostics};
 use crate::span::Span;
 use crate::syntax::ast::{
-    BinOp, Block, Expr, ExprKind, File, FnDecl, FnKind, Ident, Item, Let, LogicalOp, Stmt, Ty,
-    TyKind, UnOp,
+    BinOp, Block, Expr, ExprKind, File, FnDecl, FnKind, Ident, Item, Let, LogicalOp, Param, Stmt,
+    Ty, TyKind, UnOp,
 };
 use crate::syntax::lexer;
 use crate::syntax::token::{Token, TokenKind};
@@ -141,7 +141,7 @@ impl Parser<'_> {
         self.expect(TokenKind::Fn)?;
         let name = self.ident()?;
         self.expect(TokenKind::LParen)?;
-        self.expect(TokenKind::RParen)?;
+        let params = self.comma_list(Self::param)?;
         let ret = match self.eat(TokenKind::Arrow) {
             Some(_) => Some(self.ty()?),
             None => None,
@@ -150,10 +150,33 @@ impl Parser<'_> {
         Ok(FnDecl {
             kind,
             name,
+            params,
             ret,
             span: start.to(body.span),
             body,
         })
+    }
+
+    fn param(&mut self) -> PResult<Param> {
+        let mutable = self.eat(TokenKind::Mut).is_some();
+        let name = self.ident()?;
+        self.expect(TokenKind::Colon)?;
+        let ty = self.ty()?;
+        Ok(Param { mutable, name, ty })
+    }
+
+    /// Parses `item, item, ...)` after an opening `(`, allowing a trailing
+    /// comma, and consumes the `)`.
+    fn comma_list<T>(&mut self, mut item: impl FnMut(&mut Self) -> PResult<T>) -> PResult<Vec<T>> {
+        let mut items = Vec::new();
+        while !self.at(TokenKind::RParen) {
+            items.push(item(self)?);
+            if self.eat(TokenKind::Comma).is_none() {
+                break;
+            }
+        }
+        self.expect(TokenKind::RParen)?;
+        Ok(items)
     }
 
     fn ident(&mut self) -> PResult<Ident> {
@@ -425,7 +448,18 @@ impl Parser<'_> {
                     kind: ExprKind::While { cond, body },
                 });
             }
-            TokenKind::Ident => ExprKind::Name(self.ident()?),
+            TokenKind::Ident => {
+                let name = self.ident()?;
+                if self.eat(TokenKind::LParen).is_some() {
+                    let args = self.comma_list(Self::expr)?;
+                    let end = self.tokens[self.pos - 1].span;
+                    return Ok(Expr {
+                        span: token.span.to(end),
+                        kind: ExprKind::Call(name, args),
+                    });
+                }
+                ExprKind::Name(name)
+            }
             TokenKind::LParen => {
                 self.bump();
                 if let Some(close) = self.eat(TokenKind::RParen) {

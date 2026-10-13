@@ -1,0 +1,71 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_call_errors.ers
+---
+--- errors ---
+ty::param-type
+
+  × a parameter cannot have type `()`
+   ╭─[typeck_call_errors.ers:4:15]
+ 3 │ 
+ 4 │ fn takes_unit(u: ()) {}
+   ·               ┬
+   ·               ╰── has no value to pass
+ 5 │ 
+   ╰────
+ty::wrong-arg-count
+
+  × `two` takes 2 arguments, but 1 was given
+   ╭─[typeck_call_errors.ers:2:4]
+ 1 │ // emit: typeck
+ 2 │ fn two(a: u32, b: u32) {}
+   ·    ─┬─
+   ·     ╰── declared here
+ 3 │ 
+   ╰────
+   ╭─[typeck_call_errors.ers:7:5]
+ 6 │ fn errors() {
+ 7 │     two(1);
+   ·     ───┬──
+   ·        ╰── in this call
+ 8 │     two(1, 2, 3);
+   ╰────
+ty::wrong-arg-count
+
+  × `two` takes 2 arguments, but 3 were given
+   ╭─[typeck_call_errors.ers:2:4]
+ 1 │ // emit: typeck
+ 2 │ fn two(a: u32, b: u32) {}
+   ·    ─┬─
+   ·     ╰── declared here
+ 3 │ 
+   ╰────
+   ╭─[typeck_call_errors.ers:8:5]
+ 7 │     two(1);
+ 8 │     two(1, 2, 3);
+   ·     ──────┬─────
+   ·           ╰── in this call
+ 9 │     let small: u8 = 1;
+   ╰────
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_call_errors.ers:10:9]
+  9 │     let small: u8 = 1;
+ 10 │     two(small, 2);
+    ·         ──┬──
+    ·           ╰── expected `u32`, found `u8`
+ 11 │ }
+    ╰────
+  help: integer types never convert implicitly; use `as u32` (ADR 0008)
+ty::special-fn-params
+
+  × the entry function takes no parameters
+    ╭─[typeck_call_errors.ers:13:15]
+ 12 │ 
+ 13 │ entry fn main(x: u32) -> ! { loop {} }
+    ·               ┬
+    ·               ╰── parameter here
+ 14 │ panic fn on_panic() -> ! { loop {} }
+    ╰────

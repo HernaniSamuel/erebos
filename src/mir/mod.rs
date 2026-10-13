@@ -60,6 +60,8 @@ pub struct Body {
     /// Symbol name; Erebos uses the C ABI and does not mangle (ADR 0006).
     pub name: String,
     pub ret: Ty,
+    /// Locals `_1..=_n` hold the `n` parameters, in order.
+    pub param_count: usize,
     /// `locals[0]` is the return place.
     pub locals: Vec<LocalDecl>,
     /// `blocks[0]` is the start block; nothing jumps back to it.
@@ -79,6 +81,10 @@ impl Body {
             .iter()
             .enumerate()
             .map(|(i, l)| (Local(i as u32), l))
+    }
+
+    pub fn params(&self) -> &[LocalDecl] {
+        &self.locals[1..=self.param_count]
     }
 
     pub fn local_ty(&self, local: Local) -> Ty {
@@ -135,6 +141,12 @@ pub struct BasicBlockData {
 #[derive(Debug)]
 pub enum Statement {
     Assign(Place, Rvalue),
+    /// Calls a function; `dest` receives the result, if it has one.
+    Call {
+        dest: Option<Place>,
+        callee: BodyId,
+        args: Vec<Operand>,
+    },
 }
 
 /// A memory location: a local, or what the pointer in a local points to.
@@ -250,10 +262,23 @@ impl fmt::Display for Rvalue {
     }
 }
 
-impl fmt::Display for Statement {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
+impl Mir {
+    fn fmt_statement(&self, statement: &Statement, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match statement {
             Statement::Assign(place, rvalue) => write!(f, "{place} = {rvalue}"),
+            Statement::Call { dest, callee, args } => {
+                if let Some(dest) = dest {
+                    write!(f, "{dest} = ")?;
+                }
+                write!(f, "call {}(", self.body(*callee).name)?;
+                for (i, arg) in args.iter().enumerate() {
+                    if i > 0 {
+                        f.write_str(", ")?;
+                    }
+                    write!(f, "{arg}")?;
+                }
+                f.write_str(")")
+            }
         }
     }
 }
@@ -284,7 +309,14 @@ impl fmt::Display for Mir {
             } else {
                 ""
             };
-            writeln!(f, "{kind}fn {}() -> {} {{", body.name, body.ret)?;
+            write!(f, "{kind}fn {}(", body.name)?;
+            for (i, param) in body.params().iter().enumerate() {
+                if i > 0 {
+                    f.write_str(", ")?;
+                }
+                write!(f, "_{}: {}", i + 1, param.ty)?;
+            }
+            writeln!(f, ") -> {} {{", body.ret)?;
             for (local, decl) in body.locals() {
                 write!(f, "    let {local}: {};", decl.ty)?;
                 match &decl.name {
@@ -296,7 +328,9 @@ impl fmt::Display for Mir {
                 writeln!(f)?;
                 writeln!(f, "    {bb}: {{")?;
                 for statement in &data.statements {
-                    writeln!(f, "        {statement};")?;
+                    f.write_str("        ")?;
+                    self.fmt_statement(statement, f)?;
+                    writeln!(f, ";")?;
                 }
                 writeln!(f, "        {};", data.terminator)?;
                 writeln!(f, "    }}")?;

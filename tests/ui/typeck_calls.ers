@@ -1,0 +1,26 @@
+// emit: typeck
+fn add(a: u32, b: u32) -> u32 {
+    a + b
+}
+
+fn fib(n: u32) -> u32 {
+    if n < 2 { n } else { fib(n - 1) + fib(n - 2) }
+}
+
+fn countdown(mut n: u8) -> bool {
+    while n > 0 {
+        n -= 1;
+    }
+    is_zero(n)
+}
+
+fn is_zero(x: u8) -> bool {
+    x == 0
+}
+
+fn calls() -> u32 {
+    add(1, fib(10))
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

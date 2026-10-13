@@ -33,7 +33,7 @@ bb0:
 }
 
 ; Function Attrs: nounwind
-define i8 @signed() #0 {
+define signext i8 @signed() #0 {
 bb0:
   %0 = sext i8 -128 to i16
   %1 = ashr i16 %0, 1

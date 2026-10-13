@@ -59,6 +59,8 @@ pub struct Fn {
     pub ret: Ty,
     /// Span of the written return type; `None` when it was omitted.
     pub ret_span: Option<Span>,
+    /// Parameters are the first `param_count` locals, in order.
+    pub param_count: usize,
     pub locals: Vec<Local>,
     pub body: Block,
     pub span: Span,
@@ -68,6 +70,10 @@ impl Fn {
     pub fn local(&self, id: LocalId) -> &Local {
         &self.locals[id.0 as usize]
     }
+
+    pub fn params(&self) -> &[Local] {
+        &self.locals[..self.param_count]
+    }
 }
 
 #[derive(Debug)]
@@ -75,7 +81,7 @@ pub struct Local {
     pub name: String,
     pub ty: Ty,
     pub mutable: bool,
-    /// Span of the name in its `let`.
+    /// Span of the name where it is declared.
     pub span: Span,
 }
 
@@ -166,6 +172,10 @@ pub enum ExprKind {
     Bool(bool),
     Unit,
     Local(LocalId),
+    Call {
+        callee: FnId,
+        args: Vec<Expr>,
+    },
     Unary(UnOp, Box<Expr>),
     /// `*ptr`
     Deref(Box<Expr>),
@@ -212,6 +222,11 @@ impl Expr {
             | ExprKind::Break { value: None, .. }
             | ExprKind::Return(None) => {}
             ExprKind::Break { value: Some(e), .. } | ExprKind::Return(Some(e)) => e.walk(f),
+            ExprKind::Call { args, .. } => {
+                for arg in args {
+                    arg.walk(f);
+                }
+            }
             ExprKind::Unary(_, e) | ExprKind::Deref(e) | ExprKind::Cast(e, _, _) => e.walk(f),
             ExprKind::Binary(_, a, b)
             | ExprKind::Logical(_, a, b)

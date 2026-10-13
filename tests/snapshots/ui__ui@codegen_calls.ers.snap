@@ -1,0 +1,81 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/codegen_calls.ers
+---
+--- llvm-ir ---
+; ModuleID = 'erebos'
+source_filename = "erebos"
+target datalayout = "e-m:e-p:32:32-i64:64-n32-S128"
+target triple = "riscv32-unknown-none-elf"
+
+module asm "\09.section .text.start, \22ax\22, @progbits"
+module asm "\09.globl _start"
+module asm "\09.type _start, @function"
+module asm "_start:"
+module asm "\09li sp, 0x88000000"
+module asm "\09j main"
+
+; Function Attrs: nounwind
+define void @putc(i8 zeroext %0) #0 {
+bb0:
+  store volatile i8 %0, ptr inttoptr (i32 268435456 to ptr), align 1
+  ret void
+}
+
+; Function Attrs: noreturn nounwind
+define void @exit(i32 %0) #1 {
+bb0:
+  %1 = icmp eq i32 %0, 0
+  br i1 %1, label %bb1, label %bb2
+
+bb1:                                              ; preds = %bb0
+  br label %bb3
+
+bb2:                                              ; preds = %bb0
+  %2 = shl i32 %0, 16
+  %3 = or i32 %2, 13107
+  br label %bb3
+
+bb3:                                              ; preds = %bb2, %bb1
+  %_5.0 = phi i32 [ 21845, %bb1 ], [ %3, %bb2 ]
+  store volatile i32 %_5.0, ptr inttoptr (i32 1048576 to ptr), align 4
+  br label %bb4
+
+bb4:                                              ; preds = %bb4, %bb3
+  br label %bb4
+}
+
+; Function Attrs: nounwind
+define signext i16 @negate(i16 signext %0) #0 {
+bb0:
+  %1 = sub i16 0, %0
+  ret i16 %1
+}
+
+; Function Attrs: nounwind
+define zeroext i1 @greet() #0 {
+bb0:
+  call void @putc(i8 104)
+  %0 = call i16 @negate(i16 -2)
+  %1 = icmp eq i16 %0, 2
+  ret i1 %1
+}
+
+; Function Attrs: noreturn nounwind
+define void @main() #1 {
+bb0:
+  %0 = call i1 @greet()
+  call void @exit(i32 0)
+  unreachable
+}
+
+; Function Attrs: noreturn nounwind
+define void @on_panic() #1 {
+bb0:
+  call void @exit(i32 1)
+  unreachable
+}
+
+attributes #0 = { nounwind }
+attributes #1 = { noreturn nounwind }
