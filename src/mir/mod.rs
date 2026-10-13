@@ -184,6 +184,8 @@ pub enum Const {
 pub enum Rvalue {
     Use(Operand),
     Unary(UnOp, Operand),
+    /// `Div` and `Rem` here always have a valid divisor: the builder emits
+    /// the zero and `MIN / -1` checks of ADR 0007 before them.
     Binary(BinOp, Operand, Operand),
     Cast(Operand, Ty),
 }
@@ -244,7 +246,9 @@ impl fmt::Display for Operand {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Operand::Copy(place) => write!(f, "copy {place}"),
-            Operand::Const(Const::Int(value, int)) => write!(f, "const {value}_{int}"),
+            Operand::Const(Const::Int(bits, int)) => {
+                write!(f, "const {}_{int}", int.display_bits(*bits))
+            }
             Operand::Const(Const::Bool(value)) => write!(f, "const {value}"),
             Operand::Const(Const::Unit) => f.write_str("const ()"),
         }

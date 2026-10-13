@@ -267,6 +267,7 @@ impl Checker<'_> {
                     Operands::Int
                 };
                 self.require(expr, ty, op.symbol(), allowed);
+                self.check_divisor(*op, rhs);
                 ty
             }
             ExprKind::Logical(_, lhs, rhs) => {
@@ -298,6 +299,7 @@ impl Checker<'_> {
                     self.shift_amount(f, value, place_ty);
                 } else {
                     self.check(f, value, Some(place_ty));
+                    self.check_divisor(*op, value);
                 }
                 Ty::Unit
             }
@@ -401,6 +403,18 @@ impl Checker<'_> {
             self.check(f, arg, Some(expected));
         }
         target.ret
+    }
+
+    /// Division by zero panics at run time (ADR 0007); a literal zero
+    /// divisor is certainly a mistake, so it is rejected here.
+    fn check_divisor(&mut self, op: BinOp, divisor: &Expr) {
+        if matches!(op, BinOp::Div | BinOp::Rem) && literal_value(divisor) == Some(0) {
+            self.diags.push(
+                Diagnostic::error("ty::division-by-zero", "division by zero")
+                    .label(divisor.span, "this divisor is zero")
+                    .help("at run time this would call the panic function (ADR 0007)"),
+            );
+        }
     }
 
     fn in_loop(

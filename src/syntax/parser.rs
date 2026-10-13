@@ -560,6 +560,8 @@ fn infix(kind: TokenKind) -> Option<(u8, u8, Infix)> {
         TokenKind::PlusEq => (l, r, CompoundAssign(BinOp::Add)),
         TokenKind::MinusEq => (l, r, CompoundAssign(BinOp::Sub)),
         TokenKind::StarEq => (l, r, CompoundAssign(BinOp::Mul)),
+        TokenKind::SlashEq => (l, r, CompoundAssign(BinOp::Div)),
+        TokenKind::PercentEq => (l, r, CompoundAssign(BinOp::Rem)),
         TokenKind::AmpEq => (l, r, CompoundAssign(BinOp::BitAnd)),
         TokenKind::PipeEq => (l, r, CompoundAssign(BinOp::BitOr)),
         TokenKind::CaretEq => (l, r, CompoundAssign(BinOp::BitXor)),
@@ -581,6 +583,8 @@ fn infix(kind: TokenKind) -> Option<(u8, u8, Infix)> {
         TokenKind::Plus => (17, 18, Binary(BinOp::Add)),
         TokenKind::Minus => (17, 18, Binary(BinOp::Sub)),
         TokenKind::Star => (19, 20, Binary(BinOp::Mul)),
+        TokenKind::Slash => (19, 20, Binary(BinOp::Div)),
+        TokenKind::Percent => (19, 20, Binary(BinOp::Rem)),
         _ => return None,
     })
 }

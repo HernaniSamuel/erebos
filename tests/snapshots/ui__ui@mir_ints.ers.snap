@@ -42,21 +42,19 @@ fn signed() -> i8 {
     let _0: i8;
     let _1: i8; // a
     let _2: i16; // b
-    let _3: i8;
+    let _3: i16;
     let _4: i16;
-    let _5: i16;
+    let _5: i8;
     let _6: i8;
-    let _7: i8;
 
     bb0: {
-        _3 = Neg(const 128_i8);
-        _1 = copy _3;
-        _4 = copy _1 as i16;
-        _5 = Shr(copy _4, const 1_i16);
-        _2 = copy _5;
-        _6 = copy _2 as i8;
-        _7 = Neg(copy _6);
-        _0 = copy _7;
+        _1 = const -128_i8;
+        _3 = copy _1 as i16;
+        _4 = Shr(copy _3, const 1_i16);
+        _2 = copy _4;
+        _5 = copy _2 as i8;
+        _6 = Neg(copy _5);
+        _0 = copy _6;
         return;
     }
 }

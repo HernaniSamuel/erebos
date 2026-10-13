@@ -1,0 +1,88 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/codegen_division.ers
+---
+--- llvm-ir ---
+; ModuleID = 'erebos'
+source_filename = "erebos"
+target datalayout = "e-m:e-p:32:32-i64:64-n32-S128"
+target triple = "riscv32-unknown-none-elf"
+
+module asm "\09.section .text.start, \22ax\22, @progbits"
+module asm "\09.globl _start"
+module asm "\09.type _start, @function"
+module asm "_start:"
+module asm "\09li sp, 0x88000000"
+module asm "\09j main"
+
+; Function Attrs: nounwind
+define i32 @unsigned(i32 %0, i32 %1) #0 {
+bb0:
+  %2 = icmp eq i32 %1, 0
+  br i1 %2, label %bb1, label %bb2
+
+bb1:                                              ; preds = %bb0
+  call void @on_panic()
+  unreachable
+
+bb2:                                              ; preds = %bb0
+  %3 = udiv i32 %0, %1
+  ret i32 %3
+}
+
+; Function Attrs: nounwind
+define i32 @signed(i32 %0, i32 %1) #0 {
+bb0:
+  %2 = icmp eq i32 %1, 0
+  br i1 %2, label %bb1, label %bb2
+
+bb1:                                              ; preds = %bb0
+  call void @on_panic()
+  unreachable
+
+bb2:                                              ; preds = %bb0
+  %3 = icmp eq i32 %1, -1
+  br i1 %3, label %bb3, label %bb4
+
+bb3:                                              ; preds = %bb2
+  br label %bb5
+
+bb4:                                              ; preds = %bb2
+  %4 = srem i32 %0, %1
+  br label %bb5
+
+bb5:                                              ; preds = %bb4, %bb3
+  %_4.0 = phi i32 [ 0, %bb3 ], [ %4, %bb4 ]
+  ret i32 %_4.0
+}
+
+; Function Attrs: nounwind
+define i32 @constants(i32 %0) #0 {
+bb0:
+  %1 = sdiv i32 %0, 3
+  %2 = sub i32 0, %0
+  %3 = add i32 %1, %2
+  ret i32 %3
+}
+
+; Function Attrs: noreturn nounwind
+define void @main() #1 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: noreturn nounwind
+define void @on_panic() #1 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+attributes #0 = { nounwind }
+attributes #1 = { noreturn nounwind }

@@ -70,6 +70,9 @@ impl Lexer<'_> {
                 '+' => self.with_eq(TokenKind::Plus, TokenKind::PlusEq),
                 '-' => self.with_eq(TokenKind::Minus, TokenKind::MinusEq),
                 '*' => self.with_eq(TokenKind::Star, TokenKind::StarEq),
+                // Comments were skipped above, so this `/` divides.
+                '/' => self.with_eq(TokenKind::Slash, TokenKind::SlashEq),
+                '%' => self.with_eq(TokenKind::Percent, TokenKind::PercentEq),
                 '&' if self.eat('&') => TokenKind::AndAnd,
                 '&' => self.with_eq(TokenKind::Amp, TokenKind::AmpEq),
                 '|' if self.eat('|') => TokenKind::OrOr,

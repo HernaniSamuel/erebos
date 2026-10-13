@@ -2,26 +2,31 @@
 
 use crate::hir::{self, Hir};
 use crate::mir::{
-    BasicBlock, BasicBlockData, Body, BodyId, Const, Local, LocalDecl, Mir, Operand, Place, Ptr,
-    Rvalue, Statement, Terminator, Ty,
+    BasicBlock, BasicBlockData, BinOp, Body, BodyId, Const, Local, LocalDecl, Mir, Operand, Place,
+    Ptr, Rvalue, Statement, Terminator, Ty, UnOp,
 };
 use crate::ty::TypeckResults;
 
 /// The input must have passed type checking without errors.
 pub fn build(hir: &Hir, types: &TypeckResults) -> Mir {
-    let bodies = hir.fns().map(|(_, f)| build_body(f, types)).collect();
+    // MIR bodies are built in HIR function order.
+    let panic = BodyId(hir.panic.0);
+    let bodies = hir
+        .fns()
+        .map(|(_, f)| build_body(f, types, panic))
+        .collect();
     Mir {
         bodies,
-        // MIR bodies are built in HIR function order.
         entry: BodyId(hir.entry.0),
-        panic: BodyId(hir.panic.0),
+        panic,
     }
 }
 
-fn build_body(f: &hir::Fn, types: &TypeckResults) -> Body {
+fn build_body(f: &hir::Fn, types: &TypeckResults, panic: BodyId) -> Body {
     let ret = lower_ty(f.ret);
     let mut builder = Builder {
         types,
+        panic,
         locals: vec![LocalDecl {
             ty: ret,
             name: None,
@@ -86,6 +91,8 @@ struct PartialBlock {
 
 struct Builder<'a> {
     types: &'a TypeckResults,
+    /// The panic function (ADR 0014).
+    panic: BodyId,
     locals: Vec<LocalDecl>,
     /// MIR local of each HIR local.
     hir_locals: Vec<Local>,
@@ -186,14 +193,8 @@ impl Builder<'_> {
             hir::ExprKind::Call { callee, args } => {
                 let args = self.operands(args);
                 let dest = self.result_place(ty);
-                if let Some(bb) = self.current {
-                    self.blocks[bb.0 as usize].statements.push(Statement::Call {
-                        dest,
-                        // MIR bodies are built in HIR function order.
-                        callee: BodyId(callee.0),
-                        args,
-                    });
-                }
+                // MIR bodies are built in HIR function order.
+                self.call(dest, BodyId(callee.0), args);
                 self.read_result(dest)
             }
             hir::ExprKind::Deref(_) => {
@@ -205,6 +206,14 @@ impl Builder<'_> {
                     // a later write must not change what was read.
                     self.temp(ty, Rvalue::Use(Operand::Copy(place)))
                 }
+            }
+            // A negative literal is a constant, so `x / -1` is known to divide
+            // by -1 (two's complement: `-v` is `0 - v`, wrapped).
+            hir::ExprKind::Unary(UnOp::Neg, operand)
+                if let hir::ExprKind::Int(value) = operand.kind
+                    && let Ty::Int(int) = ty =>
+            {
+                Operand::Const(Const::Int(value.wrapping_neg() & int.mask(), int))
             }
             hir::ExprKind::Unary(op, operand) => {
                 let operand = self.expr(operand);
@@ -219,7 +228,11 @@ impl Builder<'_> {
                 }
                 let lhs = lhs_value;
                 let rhs = self.expr(rhs);
-                self.temp(ty, Rvalue::Binary(*op, lhs, rhs))
+                if matches!(op, BinOp::Div | BinOp::Rem) {
+                    self.divide(*op, lhs, rhs, ty)
+                } else {
+                    self.temp(ty, Rvalue::Binary(*op, lhs, rhs))
+                }
             }
             hir::ExprKind::Cast(operand, _, _) => {
                 let operand = self.expr(operand);
@@ -235,7 +248,13 @@ impl Builder<'_> {
             hir::ExprKind::CompoundAssign(op, place, value) => {
                 let value = self.expr(value);
                 let place = self.place(place);
-                self.assign(place, Rvalue::Binary(*op, Operand::Copy(place), value));
+                if matches!(op, BinOp::Div | BinOp::Rem) {
+                    let ty = self.operand_ty(Operand::Copy(place));
+                    let quotient = self.divide(*op, Operand::Copy(place), value, ty);
+                    self.assign(place, Rvalue::Use(quotient));
+                } else {
+                    self.assign(place, Rvalue::Binary(*op, Operand::Copy(place), value));
+                }
                 Operand::Const(Const::Unit)
             }
             hir::ExprKind::Block(block) => self.block(block),
@@ -348,6 +367,82 @@ impl Builder<'_> {
             self.terminate(Terminator::Unreachable);
         }
         value
+    }
+
+    /// Division and remainder with the checks of ADR 0007, so that the
+    /// `Div`/`Rem` left in MIR always have a valid divisor:
+    ///
+    /// - a zero divisor calls the panic function;
+    /// - for signed types, a divisor of -1 gives `-lhs` (so `MIN / -1` wraps
+    ///   to `MIN`) and a remainder of 0, never reaching the division.
+    ///
+    /// Checks that a constant divisor makes pointless are left out.
+    fn divide(&mut self, op: BinOp, lhs: Operand, rhs: Operand, ty: Ty) -> Operand {
+        let Ty::Int(int) = ty else {
+            unreachable!("division of `{ty}`")
+        };
+        let constant = match rhs {
+            Operand::Const(Const::Int(value, _)) => Some(value & int.mask()),
+            _ => None,
+        };
+
+        if constant.is_none() {
+            let zero = Operand::Const(Const::Int(0, int));
+            let is_zero = self.temp(Ty::Bool, Rvalue::Binary(BinOp::Eq, rhs, zero));
+            let panic_bb = self.new_block();
+            let ok_bb = self.new_block();
+            self.terminate(Terminator::If {
+                cond: is_zero,
+                then: panic_bb,
+                else_: ok_bb,
+            });
+            self.current = Some(panic_bb);
+            self.call(None, self.panic, Vec::new());
+            self.terminate(Terminator::Unreachable);
+            self.current = Some(ok_bb);
+        }
+
+        let minus_one = int.mask();
+        let by_minus_one = || match op {
+            BinOp::Div => Rvalue::Unary(UnOp::Neg, lhs),
+            _ => Rvalue::Use(Operand::Const(Const::Int(0, int))),
+        };
+        match constant {
+            _ if !int.is_signed() => self.temp(ty, Rvalue::Binary(op, lhs, rhs)),
+            Some(value) if value == minus_one => self.temp(ty, by_minus_one()),
+            Some(_) => self.temp(ty, Rvalue::Binary(op, lhs, rhs)),
+            None => {
+                let result = Place::local(self.new_local(ty, None));
+                let m1 = Operand::Const(Const::Int(minus_one, int));
+                let is_m1 = self.temp(Ty::Bool, Rvalue::Binary(BinOp::Eq, rhs, m1));
+                let m1_bb = self.new_block();
+                let div_bb = self.new_block();
+                self.terminate(Terminator::If {
+                    cond: is_m1,
+                    then: m1_bb,
+                    else_: div_bb,
+                });
+
+                self.current = Some(m1_bb);
+                self.assign(result, by_minus_one());
+                let m1_end = self.current.take();
+
+                self.current = Some(div_bb);
+                self.assign(result, Rvalue::Binary(op, lhs, rhs));
+                let div_end = self.current.take();
+
+                self.join(&[m1_end, div_end]);
+                Operand::Copy(result)
+            }
+        }
+    }
+
+    fn call(&mut self, dest: Option<Place>, callee: BodyId, args: Vec<Operand>) {
+        if let Some(bb) = self.current {
+            self.blocks[bb.0 as usize]
+                .statements
+                .push(Statement::Call { dest, callee, args });
+        }
     }
 
     /// Lowers expressions left to right. A deferred local read is taken
@@ -493,12 +588,13 @@ impl Builder<'_> {
 
 /// Expressions whose evaluation cannot write to any place.
 fn is_simple(expr: &hir::Expr) -> bool {
-    matches!(
-        expr.kind,
+    match &expr.kind {
         hir::ExprKind::Int(_)
-            | hir::ExprKind::Byte(_)
-            | hir::ExprKind::Bool(_)
-            | hir::ExprKind::Unit
-            | hir::ExprKind::Local(_)
-    )
+        | hir::ExprKind::Byte(_)
+        | hir::ExprKind::Bool(_)
+        | hir::ExprKind::Unit
+        | hir::ExprKind::Local(_) => true,
+        hir::ExprKind::Unary(UnOp::Neg, operand) => matches!(operand.kind, hir::ExprKind::Int(_)),
+        _ => false,
+    }
 }

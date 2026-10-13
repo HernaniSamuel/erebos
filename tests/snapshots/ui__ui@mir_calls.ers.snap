@@ -72,15 +72,13 @@ fn negate(_1: i16) -> i16 {
 fn greet() -> bool {
     let _0: bool;
     let _1: i16;
-    let _2: i16;
-    let _3: bool;
+    let _2: bool;
 
     bb0: {
         call putc(const 104_u8);
-        _1 = Neg(const 2_i16);
-        _2 = call negate(copy _1);
-        _3 = Eq(copy _2, const 2_i16);
-        _0 = copy _3;
+        _1 = call negate(const -2_i16);
+        _2 = Eq(copy _1, const 2_i16);
+        _0 = copy _2;
         return;
     }
 }

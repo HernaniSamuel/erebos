@@ -1,0 +1,15 @@
+// emit: llvm-ir
+fn unsigned(a: u32, b: u32) -> u32 {
+    a / b
+}
+
+fn signed(a: i32, b: i32) -> i32 {
+    a % b
+}
+
+fn constants(a: i32) -> i32 {
+    a / 3 + a / -1
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

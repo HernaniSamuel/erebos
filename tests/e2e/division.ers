@@ -1,0 +1,77 @@
+// Division and remainder (ADR 0007): truncation toward zero, the sign of
+// the remainder, and MIN / -1 wrapping to MIN, with constant and run-time
+// divisors.
+// expect-output: 42 7 0
+// expect-output: -3 -1
+// expect-output: -2147483648 0
+// expect-output: -2147483648 0
+// expect-exit: 0
+
+fn putc(byte: u8) {
+    let thr: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+    *thr = byte;
+}
+
+fn exit(code: u32) -> ! {
+    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+    *finisher = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    loop {}
+}
+
+fn print_u32(n: u32) {
+    if n >= 10 {
+        print_u32(n / 10);
+    }
+    putc(b'0' + (n % 10) as u8);
+}
+
+fn print_i32(n: i32) {
+    if n < 0 {
+        putc(b'-');
+        // Wrapping negation: MIN stays MIN, which is 2^31 as a u32.
+        print_u32((0 - n) as u32);
+    } else {
+        print_u32(n as u32);
+    }
+}
+
+fn div(a: i32, b: i32) -> i32 {
+    a / b
+}
+
+fn rem(a: i32, b: i32) -> i32 {
+    a % b
+}
+
+entry fn main() -> ! {
+    print_u32(294 / 7);
+    putc(b' ');
+    print_u32(294 % 41);
+    putc(b' ');
+    print_u32(6 % 3);
+    putc(b'\n');
+
+    print_i32(div(-7, 2));
+    putc(b' ');
+    print_i32(rem(-7, 2));
+    putc(b'\n');
+
+    // Constant divisor: the compiler knows it is -1.
+    let min: i32 = -2147483648;
+    print_i32(min / -1);
+    putc(b' ');
+    print_i32(min % -1);
+    putc(b'\n');
+
+    // Run-time divisor: checked when the program runs.
+    print_i32(div(min, -1));
+    putc(b' ');
+    print_i32(rem(min, -1));
+    putc(b'\n');
+
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(1)
+}

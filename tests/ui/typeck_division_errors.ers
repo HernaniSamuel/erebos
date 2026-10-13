@@ -1,0 +1,10 @@
+// emit: typeck
+fn errors(x: u32, flag: bool) {
+    let a: u32 = x / 0;
+    let mut b: u32 = x;
+    b %= 0;
+    let c: bool = flag / flag;
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

@@ -83,6 +83,28 @@ impl IntTy {
             (1 << value_bits) - 1
         }
     }
+
+    /// All bits of this type set: the representation of -1, or of the
+    /// unsigned maximum.
+    pub fn mask(self) -> u64 {
+        if self.bits() == 64 {
+            u64::MAX
+        } else {
+            (1 << self.bits()) - 1
+        }
+    }
+
+    /// The value `bits` represents in this type, for display: signed types
+    /// show negative values with a minus sign.
+    pub fn display_bits(self, bits: u64) -> String {
+        let bits = bits & self.mask();
+        if self.is_signed() {
+            let shift = 64 - self.bits();
+            (((bits << shift) as i64) >> shift).to_string()
+        } else {
+            bits.to_string()
+        }
+    }
 }
 
 impl fmt::Display for IntTy {

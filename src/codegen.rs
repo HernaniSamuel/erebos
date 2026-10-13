@@ -326,6 +326,17 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                     BinOp::Add => b.build_int_add(l, r, ""),
                     BinOp::Sub => b.build_int_sub(l, r, ""),
                     BinOp::Mul => b.build_int_mul(l, r, ""),
+                    // MIR guarantees a nonzero divisor and no `MIN / -1`
+                    // (ADR 0007), where LLVM's division is undefined.
+                    BinOp::Div | BinOp::Rem => {
+                        let signed = self.int_of(lhs).is_signed();
+                        match (op, signed) {
+                            (BinOp::Div, true) => b.build_int_signed_div(l, r, ""),
+                            (BinOp::Div, false) => b.build_int_unsigned_div(l, r, ""),
+                            (_, true) => b.build_int_signed_rem(l, r, ""),
+                            (_, false) => b.build_int_unsigned_rem(l, r, ""),
+                        }
+                    }
                     BinOp::BitAnd => b.build_and(l, r, ""),
                     BinOp::BitOr => b.build_or(l, r, ""),
                     BinOp::BitXor => b.build_xor(l, r, ""),
