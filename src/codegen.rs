@@ -135,7 +135,12 @@ fn declare<'ctx>(
     add_attribute(context, function, AttributeLoc::Function, "nounwind");
     // Address 0 is an ordinary address on bare metal (ADR 0019); without
     // this, LLVM treats accesses to it as undefined and may delete them.
-    add_attribute(context, function, AttributeLoc::Function, "null_pointer_is_valid");
+    add_attribute(
+        context,
+        function,
+        AttributeLoc::Function,
+        "null_pointer_is_valid",
+    );
     if body.ret == Ty::Never {
         add_attribute(context, function, AttributeLoc::Function, "noreturn");
     }
