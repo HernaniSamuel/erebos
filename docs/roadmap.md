@@ -6,7 +6,7 @@ and ends with a program running on QEMU, verified by an automated test.
 | Milestone | Delivers |
 |-----------|----------|
 | **M0** ✅ | `entry fn main() -> ! { loop {} }` compiles to an object file, links, and boots on QEMU. Every layer that has work to do exists, even if trivial (const evaluation waits for M2). |
-| **M1** | Functions, integers, typed `let`, `if`/`while`, raw and volatile pointers (ADR 0013), byte literals (ADR 0016), the panic function (ADR 0014). Prints "hello" over the QEMU UART via raw pointer writes. |
+| **M1** ✅ | Functions, integers, `bool`, typed `let`, `if`/`while`/`loop`, raw and volatile pointers (ADR 0013), byte literals (ADR 0016), checked division (ADR 0007), the panic function (ADR 0014). Prints "hello" over the QEMU UART via raw pointer writes. |
 | **M2** | Structs, arrays, byte strings, `const` and const evaluation, modules; panic location and reason (ADR 0014). |
 | **M3** | `memory { ... }` blocks generating the linker script; `peripheral` blocks with native MMIO. The UART is declared in the language. |
 | **M4** | Interrupt handlers, vector tables, inline `asm`. |
@@ -36,5 +36,9 @@ Agreed as useful, not yet scheduled:
 - **M0 done.** `erebos build` runs lexer, parser, HIR lowering, type
   checking, MIR building, LLVM codegen and `ld.lld`; the result boots on QEMU
   through the provisional `_start` (ADR 0012) and is checked by `tests/e2e.rs`.
-- **Next: M1.** It also lets the end-to-end tests check UART output and exit
-  through the test finisher.
+- **M1 done.** Programs with functions, recursion, loops, branches, integer
+  arithmetic and volatile pointers print over the UART and exit QEMU through
+  the test finisher; end-to-end tests compare their output and exit code.
+  The language is Turing-complete.
+- **Next: M2.** Before starting, revisit the panic function's signature
+  (location and reason, ADR 0014) and decide whether `match` joins M2.
