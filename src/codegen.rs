@@ -21,7 +21,8 @@ use inkwell::values::{
 use inkwell::{IntPredicate, OptimizationLevel};
 
 use crate::mir::{
-    BinOp, Body, Const, IntTy, Local, Mir, Operand, Place, Rvalue, Statement, Terminator, Ty, UnOp,
+    BinOp, Body, Const, IntTy, Local, Mir, Operand, Place, PlaceElem, Rvalue, Statement,
+    Terminator, Ty, UnOp,
 };
 use crate::target::Target;
 
@@ -306,21 +307,33 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
         }
     }
 
-    /// The address of a place and whether accesses to it are volatile.
+    /// The address of a place and whether accesses to it are volatile. A
+    /// place is volatile when the last pointer on its path is (ADR 0023).
     fn address(&self, place: Place) -> (PointerValue<'ctx>, bool) {
         let slot = self.slots[place.local.0 as usize].expect("place has a representation");
-        if !place.deref {
-            return (slot, false);
+        let mut address = (slot, false);
+        let mut ty = self.body.local_ty(place.local);
+        for elem in place.projection {
+            match (elem, ty) {
+                (PlaceElem::Deref, Ty::Ptr(ptr)) => {
+                    let (at, volatile) = address;
+                    let load = self
+                        .builder
+                        .build_load(self.context.ptr_type(AddressSpace::default()), at, "")
+                        .expect("builder is positioned");
+                    if volatile {
+                        load.as_instruction_value()
+                            .expect("a load is an instruction")
+                            .set_volatile(true)
+                            .expect("loads can be volatile");
+                    }
+                    address = (load.into_pointer_value(), ptr.volatile);
+                    ty = *ptr.pointee;
+                }
+                (PlaceElem::Deref, ty) => unreachable!("dereference of `{ty}`"),
+            }
         }
-        let Ty::Ptr(ptr) = self.body.local_ty(place.local) else {
-            unreachable!("only pointers are dereferenced")
-        };
-        let pointer = self
-            .builder
-            .build_load(self.context.ptr_type(AddressSpace::default()), slot, "")
-            .expect("builder is positioned")
-            .into_pointer_value();
-        (pointer, ptr.volatile)
+        address
     }
 
     /// Locals are private to the function, so they hold values as in
@@ -328,7 +341,7 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
     /// representation (ADR 0022).
     fn representation(&self, place: Place) -> Option<BasicTypeEnum<'ctx>> {
         let ty = self.body.place_ty(place);
-        if place.deref {
+        if place.is_indirect() {
             memory_type(self.context, ty)
         } else {
             basic_type(self.context, ty)

@@ -92,11 +92,13 @@ impl Body {
     }
 
     pub fn place_ty(&self, place: Place) -> Ty {
-        match (self.local_ty(place.local), place.deref) {
-            (ty, false) => ty,
-            (Ty::Ptr(ptr), true) => *ptr.pointee,
-            (ty, true) => unreachable!("dereference of `{ty}`"),
-        }
+        place
+            .projection
+            .iter()
+            .fold(self.local_ty(place.local), |ty, elem| match (elem, ty) {
+                (PlaceElem::Deref, Ty::Ptr(ptr)) => *ptr.pointee,
+                (PlaceElem::Deref, ty) => unreachable!("dereference of `{ty}`"),
+            })
     }
 
     pub fn operand_ty(&self, operand: &Operand) -> Ty {
@@ -149,20 +151,43 @@ pub enum Statement {
     },
 }
 
-/// A memory location: a local, or what the pointer in a local points to.
-/// Accesses through a `volatile` pointer are volatile (ADR 0013).
+/// A memory location: a local, followed by projections that step from it
+/// to another location. Accesses through a `volatile` pointer are volatile
+/// (ADR 0013).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Place {
     pub local: Local,
-    pub deref: bool,
+    /// Leaked like pointee types (see `hir::Ty::ptr`), so places stay `Copy`.
+    pub projection: &'static [PlaceElem],
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PlaceElem {
+    /// What the pointer held in the place points to.
+    Deref,
 }
 
 impl Place {
     pub fn local(local: Local) -> Place {
         Place {
             local,
-            deref: false,
+            projection: &[],
         }
+    }
+
+    /// This place followed by one more projection.
+    pub fn project(self, elem: PlaceElem) -> Place {
+        let mut projection = self.projection.to_vec();
+        projection.push(elem);
+        Place {
+            local: self.local,
+            projection: projection.leak(),
+        }
+    }
+
+    /// Whether the place reaches memory through a pointer.
+    pub fn is_indirect(self) -> bool {
+        self.projection.contains(&PlaceElem::Deref)
     }
 }
 
@@ -234,11 +259,13 @@ impl fmt::Display for Local {
 
 impl fmt::Display for Place {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.deref {
-            write!(f, "(*{})", self.local)
-        } else {
-            write!(f, "{}", self.local)
+        let mut text = self.local.to_string();
+        for elem in self.projection {
+            text = match elem {
+                PlaceElem::Deref => format!("(*{text})"),
+            };
         }
+        f.write_str(&text)
     }
 }
 

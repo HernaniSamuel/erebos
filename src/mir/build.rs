@@ -3,7 +3,7 @@
 use crate::hir::{self, Hir};
 use crate::mir::{
     BasicBlock, BasicBlockData, BinOp, Body, BodyId, Const, Local, LocalDecl, Mir, Operand, Place,
-    Ptr, Rvalue, Statement, Terminator, Ty, UnOp,
+    PlaceElem, Ptr, Rvalue, Statement, Terminator, Ty, UnOp,
 };
 use crate::ty::TypeckResults;
 
@@ -559,17 +559,23 @@ impl Builder<'_> {
 
     fn operand_ty(&self, operand: Operand) -> Ty {
         match operand {
-            Operand::Copy(place) => {
-                let ty = self.locals[place.local.0 as usize].ty;
-                match (ty, place.deref) {
-                    (Ty::Ptr(ptr), true) => *ptr.pointee,
-                    (ty, _) => ty,
-                }
-            }
+            Operand::Copy(place) => self.place_ty(place),
             Operand::Const(Const::Int(_, int)) => Ty::Int(int),
             Operand::Const(Const::Bool(_)) => Ty::Bool,
             Operand::Const(Const::Unit) => Ty::Unit,
         }
+    }
+
+    fn place_ty(&self, place: Place) -> Ty {
+        place
+            .projection
+            .iter()
+            .fold(self.locals[place.local.0 as usize].ty, |ty, elem| {
+                match (elem, ty) {
+                    (PlaceElem::Deref, Ty::Ptr(ptr)) => *ptr.pointee,
+                    (PlaceElem::Deref, ty) => unreachable!("dereference of `{ty}`"),
+                }
+            })
     }
 
     /// Lowers a place expression: a local, or `*pointer`.
@@ -578,15 +584,15 @@ impl Builder<'_> {
             hir::ExprKind::Local(local) => self.local(*local),
             hir::ExprKind::Deref(pointer) => {
                 let pointer_ty = lower_ty(self.types.expr_ty(pointer.id));
-                let local = match self.expr(pointer) {
-                    Operand::Copy(place) if !place.deref => place.local,
+                let base = match self.expr(pointer) {
+                    Operand::Copy(place) => place,
                     // The pointer is computed (e.g. a cast): store it first.
                     other => match self.temp(pointer_ty, Rvalue::Use(other)) {
-                        Operand::Copy(place) => place.local,
+                        Operand::Copy(place) => place,
                         Operand::Const(_) => unreachable!("temporaries are places"),
                     },
                 };
-                Place { local, deref: true }
+                base.project(PlaceElem::Deref)
             }
             _ => unreachable!("the type checker only allows locals and `*pointer` as places"),
         }
