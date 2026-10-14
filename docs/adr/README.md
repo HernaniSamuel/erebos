@@ -52,3 +52,5 @@ Do not write one for local implementation details that the code already explains
 | 0024 | [Implicit conversion from `*mut T` to `*const T`](0024-mut-to-const-pointer-conversion.md) | Accepted |
 | 0025 | [Aggregates across calls on riscv32](0025-aggregates-across-calls.md) | Accepted |
 | 0026 | [External functions](0026-external-functions.md) | Accepted |
+| 0027 | [Compile-time execution (comptime)](0027-compile-time-execution.md) | Accepted |
+| 0028 | [On-demand type checking and evaluation](0028-on-demand-compilation.md) | Accepted |
