@@ -50,3 +50,5 @@ Do not write one for local implementation details that the code already explains
 | 0022 | [Data layout and alignment control](0022-data-layout-and-alignment.md) | Accepted |
 | 0023 | [Volatile access guarantees](0023-volatile-access-guarantees.md) | Accepted |
 | 0024 | [Implicit conversion from `*mut T` to `*const T`](0024-mut-to-const-pointer-conversion.md) | Accepted |
+| 0025 | [Aggregates across calls on riscv32](0025-aggregates-across-calls.md) | Accepted |
+| 0026 | [External functions](0026-external-functions.md) | Accepted |
