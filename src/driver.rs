@@ -4,7 +4,7 @@
 
 use std::fmt;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 pub use crate::codegen::OptLevel;
@@ -100,9 +100,16 @@ pub fn dump(
     }
 }
 
-/// Compiles `input` into an ELF executable at `output`. On failure, returns
-/// the rendered diagnostics or error message.
-pub fn build(input: &Path, output: &Path, opt: OptLevel, color: bool) -> Result<(), String> {
+/// Compiles `input` into an ELF executable at `output`, linked with the
+/// object files `link` (ADR 0026). On failure, returns the rendered
+/// diagnostics or error message.
+pub fn build(
+    input: &Path,
+    output: &Path,
+    link: &[PathBuf],
+    opt: OptLevel,
+    color: bool,
+) -> Result<(), String> {
     let text = fs::read_to_string(input)
         .map_err(|e| format!("error: cannot read `{}`: {e}", input.display()))?;
     let mut sources = SourceMap::default();
@@ -124,7 +131,7 @@ pub fn build(input: &Path, output: &Path, opt: OptLevel, color: bool) -> Result<
             fs::write(&script, link::linker_script(target))
                 .map_err(|e| format!("cannot write `{}`: {e}", script.display()))
         })
-        .and_then(|()| link::link(&object, &script, output));
+        .and_then(|()| link::link(&object, link, &script, output));
     let _ = fs::remove_file(&object);
     let _ = fs::remove_file(&script);
     result.map_err(|e| format!("error: {e}"))

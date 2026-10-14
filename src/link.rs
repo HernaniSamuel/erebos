@@ -27,13 +27,15 @@ pub fn linker_script(target: &Target) -> String {
     )
 }
 
-/// Links `object` into an ELF executable at `output`.
-pub fn link(object: &Path, script: &Path, output: &Path) -> Result<(), String> {
+/// Links `object`, with the other objects `extra`, into an ELF executable at
+/// `output`.
+pub fn link(object: &Path, extra: &[PathBuf], script: &Path, output: &Path) -> Result<(), String> {
     let lld = find_lld();
     let result = Command::new(&lld)
         .arg("-T")
         .arg(script)
         .arg(object)
+        .args(extra)
         .arg("-o")
         .arg(output)
         .output()

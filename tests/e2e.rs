@@ -6,6 +6,8 @@
 //! ```text
 //! // expect-output: hi        (one line of UART output; may repeat)
 //! // expect-exit: 0           (exit code written to the test finisher)
+//! // link-c: helpers.c        (a C file, next to the program, compiled
+//! //                           with clang and linked in; may repeat)
 //! ```
 //!
 //! With `expect-exit`, the program must stop QEMU through the test finisher
@@ -17,6 +19,8 @@
 //! Every program runs twice: unoptimized and with `-O`. The optimizer
 //! exploits any undefined behavior in the generated IR, so agreement between
 //! the two is evidence that the IR means what the language says.
+
+mod common;
 
 use std::env;
 use std::fs;
@@ -55,12 +59,17 @@ fn e2e() {
 struct Expectation {
     output: String,
     exit: Option<i32>,
+    link_c: Vec<String>,
 }
 
 fn expectation(source: &str) -> Expectation {
     let mut output = String::new();
     let mut exit = None;
+    let mut link_c = Vec::new();
     for line in source.lines() {
+        if let Some(file) = line.strip_prefix("// link-c:") {
+            link_c.push(file.trim().to_owned());
+        }
         if let Some(text) = line.strip_prefix("// expect-output:") {
             output.push_str(text.strip_prefix(' ').unwrap_or(text));
             output.push('\n');
@@ -68,7 +77,11 @@ fn expectation(source: &str) -> Expectation {
             exit = Some(code.trim().parse().expect("expect-exit takes an integer"));
         }
     }
-    Expectation { output, exit }
+    Expectation {
+        output,
+        exit,
+        link_c,
+    }
 }
 
 fn run(program: &Path, opt: OptLevel) -> Result<(), String> {
@@ -88,7 +101,13 @@ fn run(program: &Path, opt: OptLevel) -> Result<(), String> {
     let log = work.join(format!("{file}.qemu.log"));
     let _ = fs::remove_file(&log);
 
-    erebos::driver::build(program, &elf, opt, false)
+    let objects = expected
+        .link_c
+        .iter()
+        .map(|file| compile_c(&program.with_file_name(file), &work, opt))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("{name}: {e}"))?;
+    erebos::driver::build(program, &elf, &objects, opt, false)
         .map_err(|e| format!("{name}: build failed\n{e}"))?;
 
     let mut qemu = Command::new(qemu_path())
@@ -168,6 +187,38 @@ fn run(program: &Path, opt: OptLevel) -> Result<(), String> {
         ));
     }
     Ok(())
+}
+
+/// Compiles a C file for the target with clang, optimized like the program.
+fn compile_c(source: &Path, work: &Path, opt: OptLevel) -> Result<PathBuf, String> {
+    let stem = source.file_stem().unwrap().to_string_lossy();
+    let (level, suffix) = match opt {
+        OptLevel::None => ("-O0", ""),
+        OptLevel::Speed => ("-O2", ".opt"),
+    };
+    let object = work.join(format!("{stem}{suffix}.c.o"));
+    let clang = common::clang_path();
+    let output = Command::new(&clang)
+        .args(common::CLANG_TARGET)
+        .args(["-std=c11", "-Wall", "-Werror", "-c", level])
+        .arg(source)
+        .arg("-o")
+        .arg(&object)
+        .output()
+        .map_err(|e| {
+            format!(
+                "cannot run `{}` ({e}); install clang or set EREBOS_CLANG",
+                clang.display()
+            )
+        })?;
+    if !output.status.success() {
+        return Err(format!(
+            "clang failed on {}:\n{}",
+            source.display(),
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+    Ok(object)
 }
 
 /// `EREBOS_QEMU` wins; otherwise `qemu-system-riscv32` from `PATH`.

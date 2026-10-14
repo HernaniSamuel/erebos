@@ -8,9 +8,10 @@ use std::process::ExitCode;
 use erebos::driver::{self, OptLevel, Stage};
 
 const USAGE: &str = "\
-usage: erebos build <input.ers> [-o <output>] [-O] [--emit=<stage>]
+usage: erebos build <input.ers> [-o <output>] [-O] [--link <file.o>]... [--emit=<stage>]
 
   -o <output>      executable to write (default: <input> with .elf)
+  --link <file.o>  an object file to link with, defining `extern fn`s
   -O               optimize (LLVM -O2)
   --emit=<stage>   print a compiler stage instead of building:
                    tokens, ast, hir, typeck, mir, llvm-ir";
@@ -18,6 +19,7 @@ usage: erebos build <input.ers> [-o <output>] [-O] [--emit=<stage>]
 struct Args {
     input: PathBuf,
     output: Option<PathBuf>,
+    link: Vec<PathBuf>,
     opt: OptLevel,
     emit: Option<Stage>,
 }
@@ -31,12 +33,15 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Args, String> {
 
     let mut input = None;
     let mut output = None;
+    let mut link = Vec::new();
     let mut opt = OptLevel::None;
     let mut emit = None;
     while let Some(arg) = args.next() {
         if arg == "-o" {
             let path = args.next().ok_or("`-o` needs a path")?;
             output = Some(PathBuf::from(path));
+        } else if arg == "--link" {
+            link.push(PathBuf::from(args.next().ok_or("`--link` needs a path")?));
         } else if arg == "-O" {
             opt = OptLevel::Speed;
         } else if let Some(stage) = arg.strip_prefix("--emit=") {
@@ -51,6 +56,7 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Args, String> {
     Ok(Args {
         input: input.ok_or("missing input file")?,
         output,
+        link,
         opt,
         emit,
     })
@@ -83,7 +89,7 @@ fn main() -> ExitCode {
             let output = args
                 .output
                 .unwrap_or_else(|| args.input.with_extension("elf"));
-            driver::build(&args.input, &output, args.opt, color)
+            driver::build(&args.input, &output, &args.link, args.opt, color)
         }
     };
 

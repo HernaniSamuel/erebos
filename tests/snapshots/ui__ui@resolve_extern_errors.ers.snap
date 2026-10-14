@@ -1,0 +1,31 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/resolve_extern_errors.ers
+---
+--- errors ---
+resolve::mut-extern-param
+
+  × a parameter of an `extern fn` cannot be `mut`
+   ╭─[resolve_extern_errors.ers:2:21]
+ 1 │ // emit: hir
+ 2 │ extern fn c_add(mut a: u32, b: u32) -> u32;
+   ·                     ┬
+   ·                     ╰── has no body to change it in
+ 3 │ extern fn memcpy(dest: *mut u8, src: *const u8, n: usize) -> *mut u8;
+   ╰────
+  help: remove `mut` (ADR 0026)
+resolve::duplicate-function
+
+  × the function `c_add` is defined more than once
+   ╭─[resolve_extern_errors.ers:4:11]
+ 1 │ // emit: hir
+ 2 │ extern fn c_add(mut a: u32, b: u32) -> u32;
+   ·           ──┬──
+   ·             ╰── first defined here
+ 3 │ extern fn memcpy(dest: *mut u8, src: *const u8, n: usize) -> *mut u8;
+ 4 │ extern fn c_add(a: u32) -> u32;
+   ·           ──┬──
+   ·             ╰── redefined here
+ 5 │ 
+   ╰────

@@ -7,10 +7,11 @@
 //! them all. Needs clang, found like `ld.lld`: `EREBOS_CLANG`, then the LLVM
 //! we build against (`LLVM_SYS_221_PREFIX`), then `PATH`.
 
-use std::env;
+mod common;
+
 use std::fmt::Write;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 use erebos::driver::{self, OptLevel, Stage};
@@ -74,17 +75,10 @@ fn struct_layouts_match_c() {
     let c_file = work.join("checks.c");
     fs::write(&c_file, &checks).unwrap();
 
-    let clang = clang_path();
+    let clang = common::clang_path();
     let output = Command::new(&clang)
-        .args([
-            "--target=riscv32-unknown-elf",
-            "-march=rv32imac",
-            "-mabi=ilp32",
-            "-ffreestanding",
-            "-std=c11",
-            "-fsyntax-only",
-            "-I",
-        ])
+        .args(common::CLANG_TARGET)
+        .args(["-std=c11", "-fsyntax-only", "-I"])
         .arg(&dir)
         .arg(&c_file)
         .output()
@@ -99,18 +93,4 @@ fn struct_layouts_match_c() {
         "clang disagrees with the compiler's layouts:\n{}\n--- checks ---\n{checks}",
         String::from_utf8_lossy(&output.stderr)
     );
-}
-
-fn clang_path() -> PathBuf {
-    if let Some(path) = env::var_os("EREBOS_CLANG") {
-        return path.into();
-    }
-    let exe = format!("clang{}", env::consts::EXE_SUFFIX);
-    if let Some(prefix) = env::var_os("LLVM_SYS_221_PREFIX") {
-        let candidate = Path::new(&prefix).join("bin").join(&exe);
-        if candidate.exists() {
-            return candidate;
-        }
-    }
-    exe.into()
 }

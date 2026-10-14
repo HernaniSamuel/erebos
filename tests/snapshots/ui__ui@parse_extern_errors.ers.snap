@@ -1,0 +1,34 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/parse_extern_errors.ers
+---
+--- errors ---
+parser::unexpected-token
+
+  × expected `;`, found `{`
+   ╭─[parse_extern_errors.ers:2:23]
+ 1 │ // An `extern fn` has no body, and cannot be the entry or panic function.
+ 2 │ extern fn with_body() { }
+   ·                       ┬
+   ·                       ╰── expected `;`
+ 3 │ extern entry fn start() -> !;
+   ╰────
+parser::unexpected-token
+
+  × expected `fn`, found `entry`
+   ╭─[parse_extern_errors.ers:3:8]
+ 2 │ extern fn with_body() { }
+ 3 │ extern entry fn start() -> !;
+   ·        ──┬──
+   ·          ╰── expected `fn`
+   ╰────
+parser::unexpected-token
+
+  × expected `{`, found `;`
+   ╭─[parse_extern_errors.ers:3:29]
+ 2 │ extern fn with_body() { }
+ 3 │ extern entry fn start() -> !;
+   ·                             ┬
+   ·                             ╰── expected `{`
+   ╰────

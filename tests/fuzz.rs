@@ -90,6 +90,8 @@ const SNIPPETS: &[&str] = &[
     "#[align(3)]",
     "#",
     "#[packed] struct P { a: u8, b: u32 }",
+    "extern",
+    "extern fn e(a: u32) -> u32;",
 ];
 
 /// xorshift64: small, deterministic, good enough to pick mutations.

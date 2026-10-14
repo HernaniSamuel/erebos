@@ -48,7 +48,8 @@ pub struct FnDecl {
     pub params: Vec<Param>,
     /// `None` when the `-> Type` part is omitted.
     pub ret: Option<Ty>,
-    pub body: Block,
+    /// `None` for an `extern fn`, defined outside the program (ADR 0026).
+    pub body: Option<Block>,
     pub span: Span,
 }
 

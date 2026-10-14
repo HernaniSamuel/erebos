@@ -16,119 +16,121 @@ File {
                 },
                 params: [],
                 ret: None,
-                body: Block {
-                    stmts: [
-                        Expr {
-                            expr: Expr {
-                                kind: Assign(
-                                    Expr {
-                                        kind: Name(
-                                            Ident {
-                                                name: "x",
-                                                span: 26..27,
-                                            },
-                                        ),
-                                        span: 26..27,
-                                    },
-                                    Expr {
-                                        kind: Binary(
-                                            BitOr,
-                                            Expr {
-                                                kind: Binary(
-                                                    Shl,
-                                                    Expr {
-                                                        kind: Binary(
-                                                            Add,
-                                                            Expr {
-                                                                kind: Cast(
-                                                                    Expr {
-                                                                        kind: Unary(
-                                                                            Neg,
-                                                                            Expr {
-                                                                                kind: Name(
-                                                                                    Ident {
-                                                                                        name: "a",
-                                                                                        span: 31..32,
-                                                                                    },
-                                                                                ),
-                                                                                span: 31..32,
-                                                                            },
-                                                                        ),
-                                                                        span: 30..32,
-                                                                    },
-                                                                    Ty {
-                                                                        kind: Named(
-                                                                            Ident {
-                                                                                name: "u8",
-                                                                                span: 36..38,
-                                                                            },
-                                                                        ),
-                                                                        span: 36..38,
-                                                                    },
-                                                                ),
-                                                                span: 30..38,
-                                                            },
-                                                            Expr {
-                                                                kind: Binary(
-                                                                    Mul,
-                                                                    Expr {
-                                                                        kind: Name(
-                                                                            Ident {
-                                                                                name: "b",
-                                                                                span: 41..42,
-                                                                            },
-                                                                        ),
-                                                                        span: 41..42,
-                                                                    },
-                                                                    Expr {
-                                                                        kind: Name(
-                                                                            Ident {
-                                                                                name: "c",
-                                                                                span: 45..46,
-                                                                            },
-                                                                        ),
-                                                                        span: 45..46,
-                                                                    },
-                                                                ),
-                                                                span: 41..46,
-                                                            },
-                                                        ),
-                                                        span: 30..46,
-                                                    },
-                                                    Expr {
-                                                        kind: Int(
-                                                            Some(
-                                                                2,
+                body: Some(
+                    Block {
+                        stmts: [
+                            Expr {
+                                expr: Expr {
+                                    kind: Assign(
+                                        Expr {
+                                            kind: Name(
+                                                Ident {
+                                                    name: "x",
+                                                    span: 26..27,
+                                                },
+                                            ),
+                                            span: 26..27,
+                                        },
+                                        Expr {
+                                            kind: Binary(
+                                                BitOr,
+                                                Expr {
+                                                    kind: Binary(
+                                                        Shl,
+                                                        Expr {
+                                                            kind: Binary(
+                                                                Add,
+                                                                Expr {
+                                                                    kind: Cast(
+                                                                        Expr {
+                                                                            kind: Unary(
+                                                                                Neg,
+                                                                                Expr {
+                                                                                    kind: Name(
+                                                                                        Ident {
+                                                                                            name: "a",
+                                                                                            span: 31..32,
+                                                                                        },
+                                                                                    ),
+                                                                                    span: 31..32,
+                                                                                },
+                                                                            ),
+                                                                            span: 30..32,
+                                                                        },
+                                                                        Ty {
+                                                                            kind: Named(
+                                                                                Ident {
+                                                                                    name: "u8",
+                                                                                    span: 36..38,
+                                                                                },
+                                                                            ),
+                                                                            span: 36..38,
+                                                                        },
+                                                                    ),
+                                                                    span: 30..38,
+                                                                },
+                                                                Expr {
+                                                                    kind: Binary(
+                                                                        Mul,
+                                                                        Expr {
+                                                                            kind: Name(
+                                                                                Ident {
+                                                                                    name: "b",
+                                                                                    span: 41..42,
+                                                                                },
+                                                                            ),
+                                                                            span: 41..42,
+                                                                        },
+                                                                        Expr {
+                                                                            kind: Name(
+                                                                                Ident {
+                                                                                    name: "c",
+                                                                                    span: 45..46,
+                                                                                },
+                                                                            ),
+                                                                            span: 45..46,
+                                                                        },
+                                                                    ),
+                                                                    span: 41..46,
+                                                                },
                                                             ),
-                                                        ),
-                                                        span: 50..51,
-                                                    },
-                                                ),
-                                                span: 30..51,
-                                            },
-                                            Expr {
-                                                kind: Name(
-                                                    Ident {
-                                                        name: "d",
-                                                        span: 54..55,
-                                                    },
-                                                ),
-                                                span: 54..55,
-                                            },
-                                        ),
-                                        span: 30..55,
-                                    },
+                                                            span: 30..46,
+                                                        },
+                                                        Expr {
+                                                            kind: Int(
+                                                                Some(
+                                                                    2,
+                                                                ),
+                                                            ),
+                                                            span: 50..51,
+                                                        },
+                                                    ),
+                                                    span: 30..51,
+                                                },
+                                                Expr {
+                                                    kind: Name(
+                                                        Ident {
+                                                            name: "d",
+                                                            span: 54..55,
+                                                        },
+                                                    ),
+                                                    span: 54..55,
+                                                },
+                                            ),
+                                            span: 30..55,
+                                        },
+                                    ),
+                                    span: 26..55,
+                                },
+                                semi: Some(
+                                    55..56,
                                 ),
-                                span: 26..55,
                             },
-                            semi: Some(
-                                55..56,
-                            ),
-                        },
-                    ],
-                    tail: None,
-                    span: 20..58,
-                },
+                        ],
+                        tail: None,
+                        span: 20..58,
+                    },
+                ),
                 span: 13..58,
             },
         ),

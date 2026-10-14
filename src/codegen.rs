@@ -103,7 +103,10 @@ fn lower<'ctx>(
         .map(|(_, body)| declare(context, &module, body))
         .collect();
     for ((_, body), &function) in mir.bodies().zip(&fns) {
-        FnCodegen::new(context, body, function, &fns).define();
+        // An `extern fn` stays a declaration for the linker to resolve.
+        if !body.external {
+            FnCodegen::new(context, body, function, &fns).define();
+        }
     }
 
     module.set_inline_assembly(&start_stub(target, &mir.body(mir.entry).name));

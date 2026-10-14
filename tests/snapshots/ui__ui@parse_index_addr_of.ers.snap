@@ -56,251 +56,253 @@ File {
                     },
                 ],
                 ret: None,
-                body: Block {
-                    stmts: [
-                        Expr {
-                            expr: Expr {
-                                kind: Assign(
-                                    Expr {
-                                        kind: Index(
-                                            Expr {
-                                                kind: Name(
-                                                    Ident {
-                                                        name: "p",
-                                                        span: 139..140,
-                                                    },
-                                                ),
-                                                span: 139..140,
-                                            },
-                                            Expr {
-                                                kind: Name(
-                                                    Ident {
-                                                        name: "i",
-                                                        span: 141..142,
-                                                    },
-                                                ),
-                                                span: 141..142,
-                                            },
-                                        ),
-                                        span: 139..143,
-                                    },
-                                    Expr {
-                                        kind: Binary(
-                                            Add,
-                                            Expr {
-                                                kind: Deref(
-                                                    Expr {
-                                                        kind: Index(
-                                                            Expr {
-                                                                kind: Name(
-                                                                    Ident {
-                                                                        name: "p",
-                                                                        span: 147..148,
-                                                                    },
-                                                                ),
-                                                                span: 147..148,
-                                                            },
-                                                            Expr {
-                                                                kind: Int(
-                                                                    Some(
-                                                                        0,
-                                                                    ),
-                                                                ),
-                                                                span: 149..150,
-                                                            },
-                                                        ),
-                                                        span: 147..151,
-                                                    },
-                                                ),
-                                                span: 146..151,
-                                            },
-                                            Expr {
-                                                kind: Unary(
-                                                    Neg,
-                                                    Expr {
-                                                        kind: Index(
-                                                            Expr {
-                                                                kind: Name(
-                                                                    Ident {
-                                                                        name: "p",
-                                                                        span: 155..156,
-                                                                    },
-                                                                ),
-                                                                span: 155..156,
-                                                            },
-                                                            Expr {
-                                                                kind: Binary(
-                                                                    Add,
-                                                                    Expr {
-                                                                        kind: Name(
-                                                                            Ident {
-                                                                                name: "i",
-                                                                                span: 157..158,
-                                                                            },
-                                                                        ),
-                                                                        span: 157..158,
-                                                                    },
-                                                                    Expr {
-                                                                        kind: Int(
-                                                                            Some(
-                                                                                1,
-                                                                            ),
-                                                                        ),
-                                                                        span: 161..162,
-                                                                    },
-                                                                ),
-                                                                span: 157..162,
-                                                            },
-                                                        ),
-                                                        span: 155..163,
-                                                    },
-                                                ),
-                                                span: 154..163,
-                                            },
-                                        ),
-                                        span: 146..163,
-                                    },
-                                ),
-                                span: 139..163,
-                            },
-                            semi: Some(
-                                163..164,
-                            ),
-                        },
-                        Let(
-                            Let {
-                                mutable: false,
-                                name: Ident {
-                                    name: "q",
-                                    span: 173..174,
-                                },
-                                ty: Ty {
-                                    kind: Ptr {
-                                        mutable: false,
-                                        volatile: false,
-                                        pointee: Ty {
-                                            kind: Named(
-                                                Ident {
-                                                    name: "u8",
-                                                    span: 183..185,
-                                                },
-                                            ),
-                                            span: 183..185,
-                                        },
-                                    },
-                                    span: 176..185,
-                                },
-                                init: Expr {
-                                    kind: AddrOf {
-                                        mutable: false,
-                                        place: Expr {
+                body: Some(
+                    Block {
+                        stmts: [
+                            Expr {
+                                expr: Expr {
+                                    kind: Assign(
+                                        Expr {
                                             kind: Index(
                                                 Expr {
                                                     kind: Name(
                                                         Ident {
                                                             name: "p",
-                                                            span: 199..200,
+                                                            span: 139..140,
                                                         },
                                                     ),
-                                                    span: 199..200,
+                                                    span: 139..140,
                                                 },
                                                 Expr {
-                                                    kind: Int(
-                                                        Some(
-                                                            1,
-                                                        ),
-                                                    ),
-                                                    span: 201..202,
-                                                },
-                                            ),
-                                            span: 199..203,
-                                        },
-                                    },
-                                    span: 188..203,
-                                },
-                                span: 169..204,
-                            },
-                        ),
-                        Let(
-                            Let {
-                                mutable: false,
-                                name: Ident {
-                                    name: "r",
-                                    span: 213..214,
-                                },
-                                ty: Ty {
-                                    kind: Ptr {
-                                        mutable: true,
-                                        volatile: false,
-                                        pointee: Ty {
-                                            kind: Ptr {
-                                                mutable: true,
-                                                volatile: false,
-                                                pointee: Ty {
-                                                    kind: Named(
-                                                        Ident {
-                                                            name: "u8",
-                                                            span: 226..228,
-                                                        },
-                                                    ),
-                                                    span: 226..228,
-                                                },
-                                            },
-                                            span: 221..228,
-                                        },
-                                    },
-                                    span: 216..228,
-                                },
-                                init: Expr {
-                                    kind: Cast(
-                                        Expr {
-                                            kind: AddrOf {
-                                                mutable: true,
-                                                place: Expr {
                                                     kind: Name(
                                                         Ident {
-                                                            name: "p",
-                                                            span: 240..241,
+                                                            name: "i",
+                                                            span: 141..142,
                                                         },
                                                     ),
-                                                    span: 240..241,
+                                                    span: 141..142,
                                                 },
-                                            },
-                                            span: 231..241,
+                                            ),
+                                            span: 139..143,
                                         },
-                                        Ty {
-                                            kind: Ptr {
-                                                mutable: true,
-                                                volatile: false,
-                                                pointee: Ty {
-                                                    kind: Ptr {
-                                                        mutable: true,
-                                                        volatile: false,
-                                                        pointee: Ty {
-                                                            kind: Named(
-                                                                Ident {
-                                                                    name: "u8",
-                                                                    span: 255..257,
+                                        Expr {
+                                            kind: Binary(
+                                                Add,
+                                                Expr {
+                                                    kind: Deref(
+                                                        Expr {
+                                                            kind: Index(
+                                                                Expr {
+                                                                    kind: Name(
+                                                                        Ident {
+                                                                            name: "p",
+                                                                            span: 147..148,
+                                                                        },
+                                                                    ),
+                                                                    span: 147..148,
+                                                                },
+                                                                Expr {
+                                                                    kind: Int(
+                                                                        Some(
+                                                                            0,
+                                                                        ),
+                                                                    ),
+                                                                    span: 149..150,
                                                                 },
                                                             ),
-                                                            span: 255..257,
+                                                            span: 147..151,
                                                         },
-                                                    },
-                                                    span: 250..257,
+                                                    ),
+                                                    span: 146..151,
                                                 },
-                                            },
-                                            span: 245..257,
+                                                Expr {
+                                                    kind: Unary(
+                                                        Neg,
+                                                        Expr {
+                                                            kind: Index(
+                                                                Expr {
+                                                                    kind: Name(
+                                                                        Ident {
+                                                                            name: "p",
+                                                                            span: 155..156,
+                                                                        },
+                                                                    ),
+                                                                    span: 155..156,
+                                                                },
+                                                                Expr {
+                                                                    kind: Binary(
+                                                                        Add,
+                                                                        Expr {
+                                                                            kind: Name(
+                                                                                Ident {
+                                                                                    name: "i",
+                                                                                    span: 157..158,
+                                                                                },
+                                                                            ),
+                                                                            span: 157..158,
+                                                                        },
+                                                                        Expr {
+                                                                            kind: Int(
+                                                                                Some(
+                                                                                    1,
+                                                                                ),
+                                                                            ),
+                                                                            span: 161..162,
+                                                                        },
+                                                                    ),
+                                                                    span: 157..162,
+                                                                },
+                                                            ),
+                                                            span: 155..163,
+                                                        },
+                                                    ),
+                                                    span: 154..163,
+                                                },
+                                            ),
+                                            span: 146..163,
                                         },
                                     ),
-                                    span: 231..257,
+                                    span: 139..163,
                                 },
-                                span: 209..258,
+                                semi: Some(
+                                    163..164,
+                                ),
                             },
-                        ),
-                    ],
-                    tail: None,
-                    span: 133..260,
-                },
+                            Let(
+                                Let {
+                                    mutable: false,
+                                    name: Ident {
+                                        name: "q",
+                                        span: 173..174,
+                                    },
+                                    ty: Ty {
+                                        kind: Ptr {
+                                            mutable: false,
+                                            volatile: false,
+                                            pointee: Ty {
+                                                kind: Named(
+                                                    Ident {
+                                                        name: "u8",
+                                                        span: 183..185,
+                                                    },
+                                                ),
+                                                span: 183..185,
+                                            },
+                                        },
+                                        span: 176..185,
+                                    },
+                                    init: Expr {
+                                        kind: AddrOf {
+                                            mutable: false,
+                                            place: Expr {
+                                                kind: Index(
+                                                    Expr {
+                                                        kind: Name(
+                                                            Ident {
+                                                                name: "p",
+                                                                span: 199..200,
+                                                            },
+                                                        ),
+                                                        span: 199..200,
+                                                    },
+                                                    Expr {
+                                                        kind: Int(
+                                                            Some(
+                                                                1,
+                                                            ),
+                                                        ),
+                                                        span: 201..202,
+                                                    },
+                                                ),
+                                                span: 199..203,
+                                            },
+                                        },
+                                        span: 188..203,
+                                    },
+                                    span: 169..204,
+                                },
+                            ),
+                            Let(
+                                Let {
+                                    mutable: false,
+                                    name: Ident {
+                                        name: "r",
+                                        span: 213..214,
+                                    },
+                                    ty: Ty {
+                                        kind: Ptr {
+                                            mutable: true,
+                                            volatile: false,
+                                            pointee: Ty {
+                                                kind: Ptr {
+                                                    mutable: true,
+                                                    volatile: false,
+                                                    pointee: Ty {
+                                                        kind: Named(
+                                                            Ident {
+                                                                name: "u8",
+                                                                span: 226..228,
+                                                            },
+                                                        ),
+                                                        span: 226..228,
+                                                    },
+                                                },
+                                                span: 221..228,
+                                            },
+                                        },
+                                        span: 216..228,
+                                    },
+                                    init: Expr {
+                                        kind: Cast(
+                                            Expr {
+                                                kind: AddrOf {
+                                                    mutable: true,
+                                                    place: Expr {
+                                                        kind: Name(
+                                                            Ident {
+                                                                name: "p",
+                                                                span: 240..241,
+                                                            },
+                                                        ),
+                                                        span: 240..241,
+                                                    },
+                                                },
+                                                span: 231..241,
+                                            },
+                                            Ty {
+                                                kind: Ptr {
+                                                    mutable: true,
+                                                    volatile: false,
+                                                    pointee: Ty {
+                                                        kind: Ptr {
+                                                            mutable: true,
+                                                            volatile: false,
+                                                            pointee: Ty {
+                                                                kind: Named(
+                                                                    Ident {
+                                                                        name: "u8",
+                                                                        span: 255..257,
+                                                                    },
+                                                                ),
+                                                                span: 255..257,
+                                                            },
+                                                        },
+                                                        span: 250..257,
+                                                    },
+                                                },
+                                                span: 245..257,
+                                            },
+                                        ),
+                                        span: 231..257,
+                                    },
+                                    span: 209..258,
+                                },
+                            ),
+                        ],
+                        tail: None,
+                        span: 133..260,
+                    },
+                ),
                 span: 106..260,
             },
         ),

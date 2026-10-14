@@ -1,0 +1,7 @@
+// emit: hir
+extern fn c_add(mut a: u32, b: u32) -> u32;
+extern fn memcpy(dest: *mut u8, src: *const u8, n: usize) -> *mut u8;
+extern fn c_add(a: u32) -> u32;
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

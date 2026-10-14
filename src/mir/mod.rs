@@ -75,6 +75,9 @@ pub struct Body {
     /// A runtime support function (ADR 0020). LLVM must not turn its code
     /// into calls to the runtime, which may be the function itself.
     pub runtime: bool,
+    /// Defined outside the program (ADR 0026): no locals besides the
+    /// parameters, and no blocks.
+    pub external: bool,
 }
 
 impl Body {
@@ -504,12 +507,17 @@ impl fmt::Display for Mir {
             } else {
                 ""
             };
-            write!(f, "{kind}fn {}(", body.name)?;
+            let external = if body.external { "extern " } else { "" };
+            write!(f, "{external}{kind}fn {}(", body.name)?;
             for (i, param) in body.params().iter().enumerate() {
                 if i > 0 {
                     f.write_str(", ")?;
                 }
                 write!(f, "_{}: {}", i + 1, param.ty)?;
+            }
+            if body.external {
+                writeln!(f, ") -> {};", body.ret)?;
+                continue;
             }
             writeln!(f, ") -> {} {{", body.ret)?;
             for (local, decl) in body.locals() {

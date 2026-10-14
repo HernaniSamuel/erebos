@@ -71,19 +71,22 @@ fn build_body(f: &hir::Fn, types: &TypeckResults, structs: &[StructRef], panic: 
         builder.hir_locals.push(mir_local);
     }
 
-    let start = builder.new_block();
-    builder.current = Some(start);
-    let value = builder.block(&f.body);
-    if ret != Ty::Unit {
-        builder.assign(Place::local(Local::RETURN), Rvalue::Use(value));
-    }
-    if builder.current.is_some() {
-        builder.terminate(Terminator::Return);
+    if let Some(body) = &f.body {
+        let start = builder.new_block();
+        builder.current = Some(start);
+        let value = builder.block(body);
+        if ret != Ty::Unit {
+            builder.assign(Place::local(Local::RETURN), Rvalue::Use(value));
+        }
+        if builder.current.is_some() {
+            builder.terminate(Terminator::Return);
+        }
     }
 
     Body {
         name: f.name.clone(),
         runtime: f.runtime,
+        external: f.body.is_none(),
         ret,
         param_count: f.param_count,
         locals: builder.locals,

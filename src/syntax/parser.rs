@@ -117,6 +117,7 @@ impl Parser<'_> {
             TokenKind::Entry
                 | TokenKind::Panic
                 | TokenKind::Fn
+                | TokenKind::Extern
                 | TokenKind::Struct
                 | TokenKind::Pound
                 | TokenKind::Eof
@@ -131,7 +132,7 @@ impl Parser<'_> {
             attrs.push(self.attr()?);
         }
         match self.peek().kind {
-            TokenKind::Entry | TokenKind::Panic | TokenKind::Fn => {
+            TokenKind::Entry | TokenKind::Panic | TokenKind::Fn | TokenKind::Extern => {
                 Ok(Item::Fn(self.fn_decl(attrs)?))
             }
             TokenKind::Struct => Ok(Item::Struct(self.struct_decl(attrs)?)),
@@ -172,7 +173,10 @@ impl Parser<'_> {
 
     fn fn_decl(&mut self, attrs: Vec<Attr>) -> PResult<FnDecl> {
         let start = self.peek().span;
-        let kind = if self.eat(TokenKind::Entry).is_some() {
+        let external = self.eat(TokenKind::Extern).is_some();
+        let kind = if external {
+            FnKind::Plain
+        } else if self.eat(TokenKind::Entry).is_some() {
             FnKind::Entry
         } else if self.eat(TokenKind::Panic).is_some() {
             FnKind::Panic
@@ -187,6 +191,18 @@ impl Parser<'_> {
             Some(_) => Some(self.ty()?),
             None => None,
         };
+        if external {
+            let semi = self.expect(TokenKind::Semi)?;
+            return Ok(FnDecl {
+                attrs,
+                kind,
+                name,
+                params,
+                ret,
+                span: start.to(semi.span),
+                body: None,
+            });
+        }
         let body = self.block()?;
         Ok(FnDecl {
             attrs,
@@ -195,7 +211,7 @@ impl Parser<'_> {
             params,
             ret,
             span: start.to(body.span),
-            body,
+            body: Some(body),
         })
     }
 

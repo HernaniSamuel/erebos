@@ -1,0 +1,13 @@
+// emit: mir
+// An `extern fn` is defined outside the program; calls to it are ordinary
+// calls (ADR 0026).
+extern fn c_add(a: u32, b: u32) -> u32;
+extern fn c_reset();
+
+fn twice(x: u32) -> u32 {
+    c_reset();
+    c_add(x, x)
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

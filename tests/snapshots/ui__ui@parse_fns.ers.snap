@@ -21,22 +21,24 @@ File {
                         span: 32..33,
                     },
                 ),
-                body: Block {
-                    stmts: [],
-                    tail: Some(
-                        Expr {
-                            kind: Loop(
-                                Block {
-                                    stmts: [],
-                                    tail: None,
-                                    span: 45..47,
-                                },
-                            ),
-                            span: 40..47,
-                        },
-                    ),
-                    span: 34..49,
-                },
+                body: Some(
+                    Block {
+                        stmts: [],
+                        tail: Some(
+                            Expr {
+                                kind: Loop(
+                                    Block {
+                                        stmts: [],
+                                        tail: None,
+                                        span: 45..47,
+                                    },
+                                ),
+                                span: 40..47,
+                            },
+                        ),
+                        span: 34..49,
+                    },
+                ),
                 span: 13..49,
             },
         ),
@@ -50,33 +52,35 @@ File {
                 },
                 params: [],
                 ret: None,
-                body: Block {
-                    stmts: [],
-                    tail: Some(
-                        Expr {
-                            kind: Loop(
-                                Block {
-                                    stmts: [],
-                                    tail: Some(
-                                        Expr {
-                                            kind: Loop(
-                                                Block {
-                                                    stmts: [],
-                                                    tail: None,
-                                                    span: 81..83,
-                                                },
-                                            ),
-                                            span: 76..83,
-                                        },
-                                    ),
-                                    span: 74..85,
-                                },
-                            ),
-                            span: 69..85,
-                        },
-                    ),
-                    span: 63..87,
-                },
+                body: Some(
+                    Block {
+                        stmts: [],
+                        tail: Some(
+                            Expr {
+                                kind: Loop(
+                                    Block {
+                                        stmts: [],
+                                        tail: Some(
+                                            Expr {
+                                                kind: Loop(
+                                                    Block {
+                                                        stmts: [],
+                                                        tail: None,
+                                                        span: 81..83,
+                                                    },
+                                                ),
+                                                span: 76..83,
+                                            },
+                                        ),
+                                        span: 74..85,
+                                    },
+                                ),
+                                span: 69..85,
+                            },
+                        ),
+                        span: 63..87,
+                    },
+                ),
                 span: 51..87,
             },
         ),

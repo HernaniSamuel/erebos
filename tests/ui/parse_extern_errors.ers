@@ -1,0 +1,3 @@
+// An `extern fn` has no body, and cannot be the entry or panic function.
+extern fn with_body() { }
+extern entry fn start() -> !;

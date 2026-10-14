@@ -218,7 +218,9 @@ impl Checker<'_> {
             }
         }
 
-        self.checked_block(f, &f.body, f.ret, f.ret_span);
+        if let Some(body) = &f.body {
+            self.checked_block(f, body, f.ret, f.ret_span);
+        }
     }
 
     /// The type queried by `size_of`, `align_of` or `offset_of` must have a
@@ -1368,9 +1370,10 @@ pub fn dump(hir: &Hir, results: &TypeckResults) -> String {
             .iter()
             .map(|p| format!("{}: {}", p.name, p.ty))
             .collect();
+        let external = if f.body.is_none() { "extern " } else { "" };
         writeln!(
             out,
-            "{kind}fn {}({}) -> {}",
+            "{external}{kind}fn {}({}) -> {}",
             f.name,
             params.join(", "),
             f.ret
@@ -1380,7 +1383,10 @@ pub fn dump(hir: &Hir, results: &TypeckResults) -> String {
             let mutable = if local.mutable { "mut " } else { "" };
             writeln!(out, "    let {mutable}{}: {}", local.name, local.ty).unwrap();
         }
-        f.body.walk(&mut |e| {
+        let Some(body) = &f.body else {
+            continue;
+        };
+        body.walk(&mut |e| {
             let ty = results.expr_ty(e.id);
             writeln!(
                 out,

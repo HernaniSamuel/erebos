@@ -90,7 +90,8 @@ pub struct Fn {
     /// Parameters are the first `param_count` locals, in order.
     pub param_count: usize,
     pub locals: Vec<Local>,
-    pub body: Block,
+    /// `None` for an `extern fn`, defined outside the program (ADR 0026).
+    pub body: Option<Block>,
     pub span: Span,
     /// Defined by the runtime support functions (ADR 0020).
     pub runtime: bool,

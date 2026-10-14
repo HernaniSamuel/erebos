@@ -491,10 +491,20 @@ impl Lowerer<'_> {
                 );
             }
             param_names.insert(&param.name.name, param.name.span);
+            if param.mutable && decl.body.is_none() {
+                self.diags.push(
+                    Diagnostic::error(
+                        "resolve::mut-extern-param",
+                        "a parameter of an `extern fn` cannot be `mut`",
+                    )
+                    .label(param.name.span, "has no body to change it in")
+                    .help("remove `mut` (ADR 0026)"),
+                );
+            }
             let ty = self.ty(&param.ty);
             self.declare(&param.name, ty, param.mutable);
         }
-        let body = self.block(&decl.body);
+        let body = decl.body.as_ref().map(|body| self.block(body));
         self.scopes.pop();
         Fn {
             name: decl.name.name.clone(),
