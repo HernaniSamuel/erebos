@@ -1,0 +1,86 @@
+// The runtime's memory functions (ADR 0020), called directly and, at `-O`,
+// through loops that LLVM turns into calls to them. If the runtime's own
+// loops became calls to themselves, these would recurse until the stack
+// overflowed.
+// expect-output: hello
+// expect-output: hhello
+// expect-output: ello
+// expect-output: xxxxx
+// expect-output: 256
+// expect-exit: 0
+
+fn putc(byte: u8) {
+    let thr: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+    *thr = byte;
+}
+
+fn exit(code: u32) -> ! {
+    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+    *finisher = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    loop {}
+}
+
+fn print_u32(n: u32) {
+    if n >= 10 {
+        print_u32(n / 10);
+    }
+    putc(b'0' + (n % 10) as u8);
+}
+
+fn print(buf: *const u8, n: usize) {
+    let mut i: usize = 0;
+    while i < n {
+        putc(buf[i]);
+        i += 1;
+    }
+    putc(b'\n');
+}
+
+// Free RAM, well away from the program and the stack.
+fn scratch() -> *mut u8 {
+    0x8100_0000 as *mut u8
+}
+
+entry fn main() -> ! {
+    let a: *mut u8 = scratch();
+    a[0] = b'h';
+    a[1] = b'e';
+    a[2] = b'l';
+    a[3] = b'l';
+    a[4] = b'o';
+    let b: *mut u8 = &raw mut a[16];
+    memcpy(b, a as *const u8, 5);
+    print(b as *const u8, 5);
+
+    // Overlapping, destination above the source: copies backwards.
+    memmove(&raw mut b[1], b as *const u8, 5);
+    print(b as *const u8, 6);
+
+    // Overlapping, destination below the source.
+    memmove(b, &raw const b[2], 4);
+    print(b as *const u8, 4);
+
+    memset(b, 0x178, 5);
+    print(b as *const u8, 5);
+
+    // A fill loop, which `-O` turns into a call to `memset`.
+    let big: *mut u8 = &raw mut a[1024];
+    let mut i: usize = 0;
+    while i < 256 {
+        big[i] = 1;
+        i += 1;
+    }
+    let mut sum: u32 = 0;
+    i = 0;
+    while i < 256 {
+        sum += big[i] as u32;
+        i += 1;
+    }
+    print_u32(sum);
+    putc(b'\n');
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(1)
+}

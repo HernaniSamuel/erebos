@@ -66,6 +66,9 @@ pub struct Body {
     pub locals: Vec<LocalDecl>,
     /// `blocks[0]` is the start block; nothing jumps back to it.
     pub blocks: Vec<BasicBlockData>,
+    /// A runtime support function (ADR 0020). LLVM must not turn its code
+    /// into calls to the runtime, which may be the function itself.
+    pub runtime: bool,
 }
 
 impl Body {

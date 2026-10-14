@@ -27,19 +27,39 @@ pub fn lower(
         })
         .collect();
 
-    // Names starting with `__` belong to the runtime (ADR 0020).
+    // Names starting with `__` belong to the runtime (ADR 0020), and so do
+    // the C names it defines, such as `memcpy`.
+    let runtime_names: Vec<&str> = runtime
+        .into_iter()
+        .flat_map(|rt| &rt.items)
+        .map(|item| match item {
+            ast::Item::Fn(decl) => decl.name.name.as_str(),
+        })
+        .collect();
     for item in &program.items {
         let ast::Item::Fn(decl) = item;
-        if decl.name.name.starts_with("__") {
-            diags.push(
-                Diagnostic::error(
-                    "resolve::reserved-name",
-                    format!("`{}` is a reserved name", decl.name.name),
-                )
-                .label(decl.name.span, "names starting with `__` are reserved")
-                .help("the runtime support functions use them (ADR 0020)"),
-            );
-        }
+        let name = decl.name.name.as_str();
+        let (label, help) = if name.starts_with("__") {
+            (
+                "names starting with `__` are reserved".to_owned(),
+                "the runtime support functions use them (ADR 0020)".to_owned(),
+            )
+        } else if runtime_names.contains(&name) {
+            (
+                "the runtime defines this function".to_owned(),
+                format!("call the runtime's `{name}` instead of defining it (ADR 0020)"),
+            )
+        } else {
+            continue;
+        };
+        diags.push(
+            Diagnostic::error(
+                "resolve::reserved-name",
+                format!("`{name}` is a reserved name"),
+            )
+            .label(decl.name.span, label)
+            .help(help),
+        );
     }
 
     // Functions are global: any body may call any function, declared before
@@ -59,7 +79,10 @@ pub fn lower(
         scopes: Vec::new(),
         loops: Vec::new(),
     };
-    let fns: Vec<Fn> = decls.iter().map(|decl| lowerer.fn_decl(decl)).collect();
+    let mut fns: Vec<Fn> = decls.iter().map(|decl| lowerer.fn_decl(decl)).collect();
+    for f in &mut fns[program.items.len()..] {
+        f.runtime = true;
+    }
     let expr_count = lowerer.next_expr;
 
     check_duplicate_names(&fns, diags);
@@ -75,7 +98,7 @@ pub fn lower(
 }
 
 fn check_duplicate_names(fns: &[Fn], diags: &mut Diagnostics) {
-    let mut seen: HashMap<&str, Span> = HashMap::new();
+    let mut seen: HashMap<&str, (Span, bool)> = HashMap::new();
     for f in fns {
         // The compiler defines `_start` itself (ADR 0012).
         if f.name == "_start" {
@@ -85,7 +108,12 @@ fn check_duplicate_names(fns: &[Fn], diags: &mut Diagnostics) {
                     .help("the compiler generates `_start`, which sets up the stack and jumps to the entry function (ADR 0012)"),
             );
         }
-        if let Some(&first) = seen.get(f.name.as_str()) {
+        if let Some(&(first, first_runtime)) = seen.get(f.name.as_str()) {
+            // A program function named like a runtime one was reported as
+            // a reserved name; the two live in different files.
+            if f.runtime != first_runtime {
+                continue;
+            }
             diags.push(
                 Diagnostic::error(
                     "resolve::duplicate-function",
@@ -95,7 +123,7 @@ fn check_duplicate_names(fns: &[Fn], diags: &mut Diagnostics) {
                 .label(first, "first defined here"),
             );
         } else {
-            seen.insert(&f.name, f.name_span);
+            seen.insert(&f.name, (f.name_span, f.runtime));
         }
     }
 }
@@ -201,6 +229,7 @@ impl Lowerer<'_> {
             locals: std::mem::take(&mut self.locals),
             body,
             span: decl.span,
+            runtime: false,
         }
     }
 
@@ -458,5 +487,67 @@ impl Lowerer<'_> {
 
     fn boxed(&mut self, expr: &ast::Expr) -> Box<Expr> {
         Box::new(self.expr(expr))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::span::SourceMap;
+    use crate::syntax::{lexer, parser};
+
+    fn parse(
+        sources: &mut SourceMap,
+        name: &str,
+        text: &str,
+        diags: &mut Diagnostics,
+    ) -> ast::File {
+        let file = sources.add(name, text);
+        let tokens = lexer::lex(file, text, diags);
+        parser::parse(text, &tokens, diags)
+    }
+
+    /// Dumps leave the runtime out, so snapshot tests cannot show this.
+    #[test]
+    fn runtime_names_are_reserved_in_the_program_only() {
+        let mut sources = SourceMap::default();
+        let mut diags = Diagnostics::default();
+        let program = parse(
+            &mut sources,
+            "main.ers",
+            "entry fn main() -> ! { loop {} }
+             panic fn on_panic() -> ! { loop {} }
+             fn memcpy() {}
+             fn __helper() {}
+",
+            &mut diags,
+        );
+        let runtime = parse(
+            &mut sources,
+            "rt.ers",
+            "fn memcpy() {}
+",
+            &mut diags,
+        );
+        let main = program_file(&program);
+        lower(&program, Some(&runtime), &mut diags);
+
+        let reported: Vec<_> = diags
+            .into_vec()
+            .into_iter()
+            .map(|d| (d.code, d.labels.iter().all(|l| l.span.file == main)))
+            .collect();
+        assert_eq!(
+            reported,
+            [
+                ("resolve::reserved-name", true),
+                ("resolve::reserved-name", true)
+            ]
+        );
+    }
+
+    fn program_file(file: &ast::File) -> crate::span::FileId {
+        let ast::Item::Fn(decl) = &file.items[0];
+        decl.span.file
     }
 }

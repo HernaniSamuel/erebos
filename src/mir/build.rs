@@ -54,6 +54,7 @@ fn build_body(f: &hir::Fn, types: &TypeckResults, panic: BodyId) -> Body {
 
     Body {
         name: f.name.clone(),
+        runtime: f.runtime,
         ret,
         param_count: f.param_count,
         locals: builder.locals,

@@ -171,6 +171,16 @@ fn declare<'ctx>(
 
     // There is no unwinding on bare metal (ADR 0002).
     add_attribute(context, function, AttributeLoc::Function, "nounwind");
+    // What clang's `-fno-builtin` sets. LLVM replaces copy and fill loops
+    // with calls to `memcpy` and `memset`; it spares functions with those
+    // two names, but relying on that heuristic for the whole runtime would
+    // leave the others free to call into themselves.
+    if body.runtime {
+        function.add_attribute(
+            AttributeLoc::Function,
+            context.create_string_attribute("no-builtins", ""),
+        );
+    }
     // Address 0 is an ordinary address on bare metal (ADR 0019); without
     // this, LLVM treats accesses to it as undefined and may delete them.
     add_attribute(

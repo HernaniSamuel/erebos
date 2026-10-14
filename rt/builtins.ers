@@ -1,13 +1,57 @@
 // Runtime support functions (ADR 0020).
 //
-// RV32 has no instruction for 64-bit division, so LLVM lowers `/` and `%` on
-// u64 and i64 to calls to these functions, named as in libgcc/compiler-rt.
-// They are compiled into every program, in plain Erebos, so nothing runs
-// that the repository does not show (ADR 0002).
+// LLVM emits calls to these functions, named as in libgcc/compiler-rt and
+// the C library, for operations the target has no instruction for. They
+// are compiled into every program, in plain Erebos, so nothing runs that
+// the repository does not show (ADR 0002). The compiler marks them
+// `no-builtins`, so LLVM does not turn their loops back into calls.
+
+// --- Memory ---------------------------------------------------------------
 //
-// They must not use `/` or `%` on 64-bit values themselves: LLVM would turn
-// that into a call back to them. A zero divisor never reaches them, since
-// division checks happen before the call (ADR 0007).
+// Copies and fills of large arrays and structs become calls to these, and
+// at `-O` so do copy and fill loops. Byte by byte: small and obviously
+// right; speed can come later.
+
+fn memcpy(dest: *mut u8, src: *const u8, n: usize) -> *mut u8 {
+    let mut i: usize = 0;
+    while i < n {
+        dest[i] = src[i];
+        i += 1;
+    }
+    dest
+}
+
+// Like `memcpy`, but the two areas may overlap: copying backwards when the
+// destination is above the source never overwrites bytes not yet copied.
+fn memmove(dest: *mut u8, src: *const u8, n: usize) -> *mut u8 {
+    if (dest as usize) < (src as usize) {
+        return memcpy(dest, src, n);
+    }
+    let mut i: usize = n;
+    while i > 0 {
+        i -= 1;
+        dest[i] = src[i];
+    }
+    dest
+}
+
+// `c` is a C `int`; only its low byte is stored.
+fn memset(dest: *mut u8, c: i32, n: usize) -> *mut u8 {
+    let byte: u8 = c as u8;
+    let mut i: usize = 0;
+    while i < n {
+        dest[i] = byte;
+        i += 1;
+    }
+    dest
+}
+
+// --- 64-bit division --------------------------------------------------------
+//
+// RV32 has no instruction for 64-bit division, so LLVM lowers `/` and `%` on
+// u64 and i64 to these. They must not use `/` or `%` on 64-bit values
+// themselves. A zero divisor never reaches them, since division checks
+// happen before the call (ADR 0007).
 
 // Restoring binary long division: one quotient bit per step, from the top.
 // Returns the remainder if `remainder` is true, otherwise the quotient.
