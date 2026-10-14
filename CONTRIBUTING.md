@@ -57,8 +57,10 @@ cargo test
 
 - **Per-layer snapshot tests** (`insta`) for tokens, AST, HIR, MIR and
   diagnostics. Snapshot changes must be reviewed, not blindly accepted.
-  Each `tests/ui/*.ers` file is compiled up to the stage named on its first
-  line (`// emit: <stage>`); review new snapshots with `cargo insta review`.
+  Each `tests/ui/*.ers` file is compiled up to the stage named in its header
+  (`// emit: <stage>`); with `// opt: both` it is also compiled with `-O`,
+  and both results go in the snapshot. Review new snapshots with
+  `cargo insta review`.
 - **End-to-end tests** (`tests/e2e/*.ers`) compile an Erebos program and boot
   it on QEMU. They need `qemu-system-riscv32` on `PATH` (or `EREBOS_QEMU`).
   A program declares `// expect-output: <line>` (repeatable) and
@@ -69,6 +71,12 @@ cargo test
   undefined behavior, so a difference means the generated IR is wrong.
 - `erebos build <file> [-O] --emit=<stage>` prints any stage (`tokens`, `ast`,
   `hir`, `typeck`, `mir`, `llvm-ir`), which is the quickest way to debug.
+- **Layout against C** (`tests/c_layout.rs`) compiles the structs of
+  `tests/layout/structs.ers` and their C twins in `tests/layout/structs.h`,
+  and has clang check that every size, alignment and offset agrees
+  (ADR 0022). It needs clang: `EREBOS_CLANG`, or the one in the LLVM
+  archive (`C:\llvm-22\bin\clang.exe`). A struct added to one file needs
+  its twin in the other.
 - **Fuzzing** (`tests/fuzz.rs`) mutates the test programs and requires the
   compiler to answer every input with output or diagnostics, never a panic.
   The seed is fixed; set `EREBOS_FUZZ_ITERATIONS` to run more inputs.

@@ -20,7 +20,7 @@ updated, and a program on QEMU.
 
 | Step | Delivers | Program on QEMU |
 |------|----------|-----------------|
-| **M2.1** Structs and arrays | `struct`, `[T; N]`, fields, checked indexing, `&raw const/mut` (ADR 0021); C layout, `size_of`/`align_of`/`offset_of`, `#[packed]`, `#[align(N)]`, `bool` loads (ADR 0022); unchecked pointer indexing (ADR 0021); volatile access widths (ADR 0023); `memcpy`/`memset` in `rt/` | a ring buffer on the stack |
+| **M2.1** ✅ Structs and arrays | `struct`, `[T; N]`, fields, checked indexing, `&raw const/mut` (ADR 0021); C layout, `size_of`/`align_of`/`offset_of`, `#[packed]`, `#[align(N)]`, `bool` loads (ADR 0022); unchecked pointer indexing (ADR 0021); volatile access widths (ADR 0023); `memcpy`/`memset` in `rt/` | a ring buffer on the stack |
 | **M2.2** Aggregates across calls | passing and returning structs and arrays by value with the riscv32 C ABI (small ones in registers, large ones through a hidden pointer) | calls a C function built with clang, to prove the ABI is the real one |
 | **M2.3** Constants, statics and byte strings | `const` with compile-time evaluation; `static`/`static mut`, `#[align(N)]` on statics; `_start` initializes `.data` and `.bss`; `b"..."`; slices `*const [T]` | prints with a real `print` function |
 | **M2.4** Enums and `match` | enums with explicit discriminants (`enum Mode: u8 { Off = 0, Run = 3 }`), `match` on integers, `bool` and enums; then payloads, nested patterns and exhaustiveness | a state machine |
@@ -60,13 +60,19 @@ Agreed as useful, not yet scheduled:
 
 ## Notes for M2
 
-- With arrays, LLVM's `-O` pipeline turns copy and fill loops into calls to
-  `memcpy`/`memset`. `rt/` must provide them (ADR 0020), marked so LLVM does
-  not turn their own loops back into calls to themselves.
+- Struct and array literals are built in a temporary and then copied into
+  their variable. Building them in place would save a copy at `-O0`; `-O`
+  already removes it.
+- M2.2 decides how zero-sized types cross calls; C has no equivalent
+  (ADR 0022).
 
 ## Pending decisions
 
-- None.
+- **`*mut T` to `*const T`.** Rust converts implicitly; Erebos converts
+  nothing implicitly (ADR 0008), so `memcpy(dest, src as *const u8, n)`
+  needs the cast when `src` is `*mut u8`. Dropping mutability cannot break
+  anything, so allowing just this one conversion is worth deciding before
+  more code depends on either answer.
 
 ## Status
 
@@ -82,4 +88,10 @@ Agreed as useful, not yet scheduled:
   arithmetic and volatile pointers print over the UART and exit QEMU through
   the test finisher; end-to-end tests compare their output and exit code.
   The language is Turing-complete.
-- **Next: M2.1** (structs and arrays). ADRs 0021, 0022 and 0023 are accepted.
+- **M2.1 done.** Structs, arrays, checked and unchecked indexing, `&raw`,
+  C layout with `#[packed]` and `#[align(N)]`, layout queries, and the
+  volatile guarantees of ADR 0023. The milestone program, a ring buffer on
+  the stack, runs on QEMU; layouts are checked against clang, and volatile
+  accesses in LLVM IR with and without `-O`. `rt/` provides `memcpy`,
+  `memmove` and `memset`.
+- **Next: M2.2** (aggregates across calls).
