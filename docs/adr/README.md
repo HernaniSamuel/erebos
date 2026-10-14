@@ -46,3 +46,6 @@ Do not write one for local implementation details that the code already explains
 | 0018 | [Evaluation order](0018-evaluation-order.md)                   | Accepted |
 | 0019 | [Conversions, pointer representation and pointer validity](0019-integer-pointer-conversions-and-operator-details.md) | Accepted |
 | 0020 | [Runtime support functions written in Erebos](0020-runtime-support-functions-in-erebos.md) | Accepted |
+| 0021 | [Structs and arrays](0021-structs-and-arrays.md)               | Accepted |
+| 0022 | [Data layout and alignment control](0022-data-layout-and-alignment.md) | Accepted |
+| 0023 | [Volatile access guarantees](0023-volatile-access-guarantees.md) | Accepted |
