@@ -13,6 +13,8 @@ mod build;
 pub use build::build;
 
 use std::fmt;
+use std::ptr;
+use std::sync::OnceLock;
 
 pub use crate::int::IntTy;
 pub use crate::layout::Layout;
@@ -39,6 +41,8 @@ impl Local {
 
 #[derive(Debug)]
 pub struct Mir {
+    /// Every struct type, for dumps; types refer to them directly.
+    pub structs: Vec<StructRef>,
     pub bodies: Vec<Body>,
     pub entry: BodyId,
     pub panic: BodyId,
@@ -103,6 +107,7 @@ impl Body {
             .fold(self.local_ty(place.local), |ty, elem| match (elem, ty) {
                 (PlaceElem::Deref | PlaceElem::Offset(_), Ty::Ptr(ptr)) => *ptr.pointee,
                 (PlaceElem::Index(_) | PlaceElem::ConstIndex(_), Ty::Array(elem, _)) => *elem,
+                (PlaceElem::Field(index), Ty::Struct(s)) => s.def().fields()[*index as usize].ty,
                 (elem, ty) => unreachable!("projection {elem:?} of `{ty}`"),
             })
     }
@@ -133,13 +138,78 @@ pub enum Ty {
     Ptr(Ptr),
     /// `[T; N]`; the element type is leaked like pointee types.
     Array(&'static Ty, u64),
+    Struct(StructRef),
+}
+
+/// A struct type with its layout (ADR 0022), shared by every type naming
+/// it. Leaked like pointee types, so that types stay `Copy`.
+pub struct StructDef {
+    pub name: String,
+    pub layout: Layout,
+    /// Set once every struct exists, since a field may point back to the
+    /// struct that contains it.
+    fields: OnceLock<Vec<Field>>,
+}
+
+#[derive(Debug)]
+pub struct Field {
+    pub name: String,
+    pub ty: Ty,
+    /// In bytes, from the start of the struct.
+    pub offset: u64,
+}
+
+impl StructDef {
+    pub fn fields(&self) -> &[Field] {
+        self.fields.get().expect("fields are set when MIR is built")
+    }
+
+    pub fn set_fields(&self, fields: Vec<Field>) {
+        self.fields
+            .set(fields)
+            .expect("the fields of a struct are set once");
+    }
+}
+
+/// A struct type. Two are the same type exactly when they are the same
+/// definition; comparing contents could recurse through self-pointers.
+#[derive(Clone, Copy)]
+pub struct StructRef(&'static StructDef);
+
+impl StructRef {
+    /// Defines a struct; its fields are set later, with `set_fields`.
+    pub fn new(name: String, layout: Layout) -> StructRef {
+        StructRef(Box::leak(Box::new(StructDef {
+            name,
+            layout,
+            fields: OnceLock::new(),
+        })))
+    }
+
+    pub fn def(self) -> &'static StructDef {
+        self.0
+    }
+}
+
+impl PartialEq for StructRef {
+    fn eq(&self, other: &Self) -> bool {
+        ptr::eq(self.0, other.0)
+    }
+}
+
+impl Eq for StructRef {}
+
+impl fmt::Debug for StructRef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0.name)
+    }
 }
 
 impl Ty {
-    /// Arrays (and, later, structs): values made of other values, which
-    /// are copied in memory rather than held in registers.
+    /// Arrays and structs: values made of other values, which are copied
+    /// in memory rather than held in registers.
     pub fn is_aggregate(self) -> bool {
-        matches!(self, Ty::Array(..))
+        matches!(self, Ty::Array(..) | Ty::Struct(_))
     }
 
     /// Size and alignment (ADR 0022), as computed for the type checker.
@@ -162,6 +232,7 @@ impl Ty {
                     align: elem.align,
                 }
             }
+            Ty::Struct(s) => s.def().layout,
         }
     }
 }
@@ -213,6 +284,8 @@ pub enum PlaceElem {
     Index(Local),
     /// Element `i` of the array in the place, for an `i` known in bounds.
     ConstIndex(u64),
+    /// Field `i` of the struct in the place, in declaration order.
+    Field(u32),
 }
 
 impl Place {
@@ -297,6 +370,7 @@ impl fmt::Display for Ty {
                 write!(f, "*{mutability}{volatile} {}", ptr.pointee)
             }
             Ty::Array(elem, len) => write!(f, "[{elem}; {len}]"),
+            Ty::Struct(s) => f.write_str(&s.def().name),
         }
     }
 }
@@ -322,6 +396,7 @@ impl fmt::Display for Place {
                 PlaceElem::Offset(index) => format!("(*({text} + {index}))"),
                 PlaceElem::Index(index) => format!("{text}[{index}]"),
                 PlaceElem::ConstIndex(index) => format!("{text}[{index}]"),
+                PlaceElem::Field(index) => format!("{text}.{index}"),
             };
         }
         f.write_str(&text)
@@ -392,6 +467,28 @@ impl fmt::Display for Terminator {
 
 impl fmt::Display for Mir {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for s in &self.structs {
+            let def = s.def();
+            let fields: Vec<String> = def
+                .fields()
+                .iter()
+                .enumerate()
+                .map(|(i, field)| format!("{i} {}: {} at {}", field.name, field.ty, field.offset))
+                .collect();
+            let fields = if fields.is_empty() {
+                "{}".to_owned()
+            } else {
+                format!("{{ {} }}", fields.join(", "))
+            };
+            writeln!(
+                f,
+                "struct {} {fields} // size {}, align {}",
+                def.name, def.layout.size, def.layout.align
+            )?;
+        }
+        if !self.structs.is_empty() {
+            writeln!(f)?;
+        }
         for (i, (id, body)) in self.bodies().enumerate() {
             if i > 0 {
                 writeln!(f)?;

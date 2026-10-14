@@ -1,0 +1,16 @@
+// emit: ast
+// A `{` after a condition opens the body, so `y { ... }` there is not a
+// struct literal; inside parentheses it is again.
+struct Point {
+    x: i32,
+    y: i32,
+}
+
+struct Empty {}
+
+fn f(p: *mut Point, a: i32, b: i32) {
+    let q: Point = Point { y: 2, x: 1, };
+    (*p).x = q.y;
+    if a == b { }
+    while (Point { x: a, y: b }).x < 3 { }
+}

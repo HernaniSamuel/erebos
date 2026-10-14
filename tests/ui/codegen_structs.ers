@@ -1,0 +1,19 @@
+// emit: llvm-ir
+// Structs are bytes to LLVM, aligned as their layout says; fields are
+// reached by offset. Through a volatile pointer, each field is one access
+// of its own width (ADR 0023).
+struct Regs { data: u8, status: u8, control: u32 }
+
+fn device(regs: *mut volatile Regs) -> u8 {
+    (*regs).control = 1;
+    (*regs).data = (*regs).status;
+    (*regs).data
+}
+
+fn local() -> u32 {
+    let r: Regs = Regs { data: 1, status: 2, control: 3 };
+    r.control
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

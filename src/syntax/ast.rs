@@ -12,6 +12,21 @@ pub struct File {
 #[derive(Debug)]
 pub enum Item {
     Fn(FnDecl),
+    Struct(StructDecl),
+}
+
+/// `struct Name { field: Type, ... }` (ADR 0021)
+#[derive(Debug)]
+pub struct StructDecl {
+    pub name: Ident,
+    pub fields: Vec<FieldDecl>,
+    pub span: Span,
+}
+
+#[derive(Debug)]
+pub struct FieldDecl {
+    pub name: Ident,
+    pub ty: Ty,
 }
 
 #[derive(Debug)]
@@ -125,6 +140,10 @@ pub enum ExprKind {
     Name(Ident),
     /// `name(args)`: a call to a function.
     Call(Ident, Vec<Expr>),
+    /// `Name { field: value, ... }`, fields in the order written.
+    StructLit(Ident, Vec<FieldInit>),
+    /// `base.field`
+    Field(Box<Expr>, Ident),
     Unary(UnOp, Box<Expr>),
     /// `*ptr`
     Deref(Box<Expr>),
@@ -161,6 +180,13 @@ pub enum ExprKind {
     Continue,
     /// `return` or `return value`
     Return(Option<Box<Expr>>),
+}
+
+/// `field: value` in a struct literal.
+#[derive(Debug)]
+pub struct FieldInit {
+    pub name: Ident,
+    pub value: Expr,
 }
 
 impl ExprKind {

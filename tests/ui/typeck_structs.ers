@@ -1,0 +1,25 @@
+// emit: typeck
+// Layout follows C rules without reordering (ADR 0022): each field at the
+// next offset aligned for it, the size rounded up to the alignment.
+struct S { a: u8, b: u32, c: u16 }
+struct Wide { flag: bool, big: u64 }
+struct Nested { first: u8, s: S, tail: [u16; 3] }
+struct Empty {}
+struct HasEmpty { a: u8, e: Empty, b: u8 }
+struct Node { value: u32, next: *mut Node }
+struct Bytes { data: [u8; 3] }
+
+fn fields(p: *mut S, n: *const Nested) -> u32 {
+    let mut s: S = S { c: 3, a: 1, b: 2 };
+    s.b = s.a as u32 + s.c as u32;
+    (*p).c = 7;
+    let inner: S = (*n).s;
+    let first: *const u16 = &raw const (*n).tail[0];
+    let mut node: Node = Node { value: 1, next: 0 as *mut Node };
+    node.next = &raw mut node;
+    let e: Empty = Empty {};
+    (*node.next).value + inner.b
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

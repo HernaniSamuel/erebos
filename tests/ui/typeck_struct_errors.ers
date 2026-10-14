@@ -1,0 +1,23 @@
+// emit: typeck
+struct Point { x: i32, y: i32 }
+struct Loop { again: Loop }
+struct A { b: B }
+struct B { a: [A; 2] }
+struct Huge { a: [u8; 2_000_000_000], b: [u8; 2_000_000_000] }
+struct Uses { l: Loop }
+
+fn errors(p: *mut Point, v: *mut volatile Point, n: u32) {
+    let q: Point = Point { x: 1, y: 2 };
+    q.x = 5;
+    let z: i32 = q.z;
+    let w: u32 = n.x;
+    let x: i32 = p.x;
+    let same: bool = q == q;
+    let copy: Point = *v;
+    let y: i32 = (*v).y;
+}
+
+fn by_value(p: Point) {}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

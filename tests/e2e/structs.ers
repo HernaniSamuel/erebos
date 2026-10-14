@@ -1,0 +1,132 @@
+// Structs (ADR 0021): literals, fields, copies, structs in arrays and
+// arrays in structs, a linked list through pointers, and a device driven
+// through a struct describing its registers.
+// expect-output: hi from a struct
+// expect-output: 21
+// expect-output: 3 4 7
+// expect-output: 1 2 3
+// expect-output: 60
+// expect-output: T F
+// expect-exit: 0
+
+// The QEMU `virt` UART (a 16550): the transmit register is at offset 0.
+struct Uart {
+    thr: u8,
+}
+
+struct Finisher {
+    command: u32,
+}
+
+fn uart() -> *mut volatile Uart {
+    0x1000_0000 as *mut volatile Uart
+}
+
+fn putc(byte: u8) {
+    (*uart()).thr = byte;
+}
+
+fn exit(code: u32) -> ! {
+    let finisher: *mut volatile Finisher = 0x0010_0000 as *mut volatile Finisher;
+    (*finisher).command = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    loop {}
+}
+
+fn print_u32(n: u32) {
+    if n >= 10 {
+        print_u32(n / 10);
+    }
+    putc(b'0' + (n % 10) as u8);
+}
+
+struct Pair {
+    first: u32,
+    second: u32,
+}
+
+fn next(counter: *mut u32) -> u32 {
+    *counter += 1;
+    *counter
+}
+
+struct Point {
+    x: u32,
+    y: u32,
+}
+
+struct Segment {
+    from: Point,
+    to: Point,
+}
+
+struct Node {
+    value: u32,
+    next: *const Node,
+}
+
+struct Flags {
+    on: bool,
+    off: bool,
+}
+
+entry fn main() -> ! {
+    let message: [u8; 16] = [
+        b'h', b'i', b' ', b'f', b'r', b'o', b'm', b' ',
+        b'a', b' ', b's', b't', b'r', b'u', b'c', b't',
+    ];
+    let mut i: usize = 0;
+    while i < 16 {
+        putc(message[i]);
+        i += 1;
+    }
+    putc(b'\n');
+
+    // Fields run in the order written, not the order declared.
+    let mut n: u32 = 0;
+    let pair: Pair = Pair { second: next(&raw mut n), first: next(&raw mut n) };
+    print_u32(pair.first);
+    print_u32(pair.second);
+    putc(b'\n');
+
+    // A copy is independent; writing one field leaves the others intact.
+    let a: Segment = Segment { from: Point { x: 1, y: 2 }, to: Point { x: 3, y: 4 } };
+    let mut b: Segment = a;
+    b.from = b.to;
+    b.to.y = 7;
+    print_u32(b.from.x);
+    putc(b' ');
+    print_u32(b.from.y);
+    putc(b' ');
+    print_u32(b.to.y);
+    putc(b'\n');
+    print_u32(a.from.x);
+    putc(b' ');
+    print_u32(a.from.y);
+    putc(b' ');
+    print_u32(a.to.x);
+    putc(b'\n');
+
+    // A linked list on the stack.
+    let third: Node = Node { value: 30, next: 0 as *const Node };
+    let second: Node = Node { value: 20, next: &raw const third };
+    let first: Node = Node { value: 10, next: &raw const second };
+    let mut sum: u32 = 0;
+    let mut node: *const Node = &raw const first;
+    while node != 0 as *const Node {
+        sum += (*node).value;
+        node = (*node).next;
+    }
+    print_u32(sum);
+    putc(b'\n');
+
+    let flags: [Flags; 2] = [Flags { on: true, off: false }, Flags { on: false, off: false }];
+    putc(if flags[0].on { b'T' } else { b'F' });
+    putc(b' ');
+    putc(if flags[1].on || flags[0].off { b'T' } else { b'F' });
+    putc(b'\n');
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(1)
+}

@@ -5,6 +5,7 @@ input_file: tests/ui/resolve_ok.ers
 ---
 --- hir ---
 Hir {
+    structs: [],
     fns: [
         Fn {
             name: "main",

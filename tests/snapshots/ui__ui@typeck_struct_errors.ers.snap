@@ -1,0 +1,120 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_struct_errors.ers
+---
+--- errors ---
+ty::infinite-size
+
+  × `Loop` contains itself
+   ╭─[typeck_struct_errors.ers:3:8]
+ 2 │ struct Point { x: i32, y: i32 }
+ 3 │ struct Loop { again: Loop }
+   ·        ──┬─
+   ·          ╰── would have infinite size
+ 4 │ struct A { b: B }
+   ╰────
+  help: contain a pointer instead, such as `*mut Loop` (ADR 0021)
+ty::infinite-size
+
+  × these structs contain each other: A -> B -> A
+   ╭─[typeck_struct_errors.ers:4:8]
+ 3 │ struct Loop { again: Loop }
+ 4 │ struct A { b: B }
+   ·        ┬
+   ·        ╰── would have infinite size
+ 5 │ struct B { a: [A; 2] }
+   ·        ┬
+   ·        ╰── part of the cycle
+ 6 │ struct Huge { a: [u8; 2_000_000_000], b: [u8; 2_000_000_000] }
+   ╰────
+  help: contain a pointer instead, such as `*mut A` (ADR 0021)
+ty::too-large
+
+  × `Huge` is too large
+   ╭─[typeck_struct_errors.ers:6:8]
+ 5 │ struct B { a: [A; 2] }
+ 6 │ struct Huge { a: [u8; 2_000_000_000], b: [u8; 2_000_000_000] }
+   ·        ──┬─
+   ·          ╰── does not fit in the address space
+ 7 │ struct Uses { l: Loop }
+   ╰────
+  help: objects are limited to 2147483647 bytes on this target
+ty::assign-immutable
+
+  × cannot assign to `q`, which is not `mut`
+    ╭─[typeck_struct_errors.ers:11:5]
+  9 │ fn errors(p: *mut Point, v: *mut volatile Point, n: u32) {
+ 10 │     let q: Point = Point { x: 1, y: 2 };
+    ·         ┬
+    ·         ╰── help: declare it `let mut q`
+ 11 │     q.x = 5;
+    ·     ─┬─
+    ·      ╰── assigned here
+ 12 │     let z: i32 = q.z;
+    ╰────
+ty::unknown-field
+
+  × `Point` has no field `z`
+    ╭─[typeck_struct_errors.ers:12:20]
+ 11 │     q.x = 5;
+ 12 │     let z: i32 = q.z;
+    ·                    ┬
+    ·                    ╰── unknown field
+ 13 │     let w: u32 = n.x;
+    ╰────
+  help: its fields are `x`, `y`
+ty::no-fields
+
+  × `u32` has no fields
+    ╭─[typeck_struct_errors.ers:13:20]
+ 12 │     let z: i32 = q.z;
+ 13 │     let w: u32 = n.x;
+    ·                    ┬
+    ·                    ╰── no such field
+ 14 │     let x: i32 = p.x;
+    ╰────
+ty::no-fields
+
+  × `*mut Point` has no fields
+    ╭─[typeck_struct_errors.ers:14:20]
+ 13 │     let w: u32 = n.x;
+ 14 │     let x: i32 = p.x;
+    ·                    ┬
+    ·                    ╰── no such field
+ 15 │     let same: bool = q == q;
+    ╰────
+  help: dereference the pointer first: `(*p).x` (ADR 0021)
+ty::invalid-operand
+
+  × `==` needs integers, pointers or `bool`, found `Point`
+    ╭─[typeck_struct_errors.ers:15:22]
+ 14 │     let x: i32 = p.x;
+ 15 │     let same: bool = q == q;
+    ·                      ───┬──
+    ·                         ╰── has type `Point`
+ 16 │     let copy: Point = *v;
+    ╰────
+ty::volatile-aggregate
+
+  × a volatile `Point` cannot be accessed as a whole
+    ╭─[typeck_struct_errors.ers:16:23]
+ 15 │     let same: bool = q == q;
+ 16 │     let copy: Point = *v;
+    ·                       ─┬
+    ·                        ╰── access its elements or fields one at a time
+ 17 │     let y: i32 = (*v).y;
+    ╰────
+  help: the width and number of the bus accesses would be up to the compiler (ADR 0023)
+ty::aggregate-by-value
+
+  × `Point` cannot be passed or returned by value yet
+    ╭─[typeck_struct_errors.ers:20:13]
+ 19 │ 
+ 20 │ fn by_value(p: Point) {}
+    ·             ┬
+    ·             ╰── an array or struct
+ 21 │ 
+    ╰────
+  help: pass a pointer instead, such as `*const Point`; aggregates by value arrive with the target
+        ABI for them (ADR 0006)

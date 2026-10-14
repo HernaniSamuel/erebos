@@ -4,7 +4,8 @@ use std::collections::HashMap;
 
 use crate::diag::{Diagnostic, Diagnostics};
 use crate::hir::{
-    Block, Expr, ExprId, ExprKind, Fn, FnId, FnKind, Hir, IntTy, Local, LocalId, Stmt, Ty,
+    Block, Expr, ExprId, ExprKind, FieldDef, Fn, FnId, FnKind, Hir, IntTy, Local, LocalId, Stmt,
+    StructDef, StructId, StructTy, Ty,
 };
 use crate::span::Span;
 use crate::syntax::ast;
@@ -18,27 +19,41 @@ pub fn lower(
     runtime: Option<&ast::File>,
     diags: &mut Diagnostics,
 ) -> Option<Hir> {
-    let decls: Vec<&ast::FnDecl> = program
-        .items
-        .iter()
-        .chain(runtime.into_iter().flat_map(|rt| &rt.items))
-        .map(|item| match item {
-            ast::Item::Fn(decl) => decl,
+    let items = || {
+        program
+            .items
+            .iter()
+            .chain(runtime.into_iter().flat_map(|rt| &rt.items))
+    };
+    let decls: Vec<&ast::FnDecl> = items()
+        .filter_map(|item| match item {
+            ast::Item::Fn(decl) => Some(decl),
+            ast::Item::Struct(_) => None,
         })
         .collect();
+    let struct_decls: Vec<&ast::StructDecl> = items()
+        .filter_map(|item| match item {
+            ast::Item::Struct(decl) => Some(decl),
+            ast::Item::Fn(_) => None,
+        })
+        .collect();
+    let program_fns = program
+        .items
+        .iter()
+        .filter(|item| matches!(item, ast::Item::Fn(_)))
+        .count();
 
     // Names starting with `__` belong to the runtime (ADR 0020), and so do
     // the C names it defines, such as `memcpy`.
     let runtime_names: Vec<&str> = runtime
         .into_iter()
         .flat_map(|rt| &rt.items)
-        .map(|item| match item {
-            ast::Item::Fn(decl) => decl.name.name.as_str(),
-        })
+        .map(item_name)
+        .map(|name| name.name.as_str())
         .collect();
     for item in &program.items {
-        let ast::Item::Fn(decl) = item;
-        let name = decl.name.name.as_str();
+        let ident = item_name(item);
+        let name = ident.name.as_str();
         let (label, help) = if name.starts_with("__") {
             (
                 "names starting with `__` are reserved".to_owned(),
@@ -57,9 +72,42 @@ pub fn lower(
                 "resolve::reserved-name",
                 format!("`{name}` is a reserved name"),
             )
-            .label(decl.name.span, label)
+            .label(ident.span, label)
             .help(help),
         );
+    }
+
+    // Structs are global too, and their names are types.
+    let mut struct_ids: HashMap<String, StructId> = HashMap::new();
+    let mut struct_tys = Vec::new();
+    for (i, decl) in struct_decls.iter().enumerate() {
+        let name = &decl.name.name;
+        let builtin = name == "bool" || IntTy::from_name(name).is_some();
+        if builtin {
+            diags.push(
+                Diagnostic::error(
+                    "resolve::duplicate-type",
+                    format!("`{name}` is a built-in type"),
+                )
+                .label(decl.name.span, "cannot be redefined"),
+            );
+        } else if let Some(first) = struct_ids.get(name) {
+            let first = struct_decls[first.0 as usize].name.span;
+            diags.push(
+                Diagnostic::error(
+                    "resolve::duplicate-type",
+                    format!("the struct `{name}` is defined more than once"),
+                )
+                .label(decl.name.span, "redefined here")
+                .label(first, "first defined here"),
+            );
+        } else {
+            struct_ids.insert(name.clone(), StructId(i as u32));
+        }
+        struct_tys.push(StructTy {
+            id: StructId(i as u32),
+            name: Box::leak(name.clone().into_boxed_str()),
+        });
     }
 
     // Functions are global: any body may call any function, declared before
@@ -73,14 +121,21 @@ pub fn lower(
 
     let mut lowerer = Lowerer {
         fn_ids,
+        struct_ids,
+        struct_tys,
+        struct_decls: &struct_decls,
         next_expr: 0,
         diags,
         locals: Vec::new(),
         scopes: Vec::new(),
         loops: Vec::new(),
     };
+    let structs: Vec<StructDef> = struct_decls
+        .iter()
+        .map(|decl| lowerer.struct_decl(decl))
+        .collect();
     let mut fns: Vec<Fn> = decls.iter().map(|decl| lowerer.fn_decl(decl)).collect();
-    for f in &mut fns[program.items.len()..] {
+    for f in &mut fns[program_fns..] {
         f.runtime = true;
     }
     let expr_count = lowerer.next_expr;
@@ -90,11 +145,19 @@ pub fn lower(
     let panic = find_unique(&fns, FnKind::Panic, diags);
 
     Some(Hir {
+        structs,
         fns,
         entry: entry?,
         panic: panic?,
         expr_count,
     })
+}
+
+fn item_name(item: &ast::Item) -> &ast::Ident {
+    match item {
+        ast::Item::Fn(decl) => &decl.name,
+        ast::Item::Struct(decl) => &decl.name,
+    }
 }
 
 fn check_duplicate_names(fns: &[Fn], diags: &mut Diagnostics) {
@@ -176,6 +239,10 @@ fn find_unique(fns: &[Fn], kind: FnKind, diags: &mut Diagnostics) -> Option<FnId
 struct Lowerer<'a> {
     /// Every function's id and kind, by name.
     fn_ids: HashMap<String, (FnId, ast::FnKind)>,
+    /// Every struct's id, by name.
+    struct_ids: HashMap<String, StructId>,
+    struct_tys: Vec<StructTy>,
+    struct_decls: &'a [&'a ast::StructDecl],
     next_expr: u32,
     diags: &'a mut Diagnostics,
     /// Locals of the function being lowered.
@@ -188,6 +255,128 @@ struct Lowerer<'a> {
 }
 
 impl Lowerer<'_> {
+    fn struct_decl(&mut self, decl: &ast::StructDecl) -> StructDef {
+        let mut seen: HashMap<&str, Span> = HashMap::new();
+        for field in &decl.fields {
+            if let Some(&first) = seen.get(field.name.name.as_str()) {
+                self.diags.push(
+                    Diagnostic::error(
+                        "resolve::duplicate-field",
+                        format!("the field `{}` is declared more than once", field.name.name),
+                    )
+                    .label(field.name.span, "declared again here")
+                    .label(first, "first declared here"),
+                );
+            }
+            seen.entry(&field.name.name).or_insert(field.name.span);
+        }
+        StructDef {
+            name: decl.name.name.clone(),
+            name_span: decl.name.span,
+            fields: decl
+                .fields
+                .iter()
+                .map(|field| FieldDef {
+                    name: field.name.name.clone(),
+                    span: field.name.span,
+                    ty: self.ty(&field.ty),
+                })
+                .collect(),
+        }
+    }
+
+    /// `Name { field: value, ... }`: every field exactly once, in any order.
+    fn struct_lit(
+        &mut self,
+        expr: &ast::Expr,
+        name: &ast::Ident,
+        inits: &[ast::FieldInit],
+    ) -> ExprKind {
+        let id = self.struct_ids.get(&name.name).copied();
+        let fields: Vec<(Option<u32>, Expr)> = inits
+            .iter()
+            .map(|init| {
+                let decl = id.map(|id| self.struct_decls[id.0 as usize]);
+                let index = decl.and_then(|decl| {
+                    decl.fields
+                        .iter()
+                        .position(|f| f.name.name == init.name.name)
+                });
+                (index.map(|i| i as u32), self.expr(&init.value))
+            })
+            .collect();
+        let Some(id) = id else {
+            self.diags.push(
+                Diagnostic::error(
+                    "resolve::unknown-type",
+                    format!("unknown struct `{}`", name.name),
+                )
+                .label(name.span, "not a struct"),
+            );
+            return ExprKind::Unit;
+        };
+        let decl = self.struct_decls[id.0 as usize];
+        let mut given: Vec<Option<Span>> = vec![None; decl.fields.len()];
+        for (init, (index, _)) in inits.iter().zip(&fields) {
+            match index {
+                None => self.diags.push(
+                    Diagnostic::error(
+                        "resolve::unknown-field",
+                        format!("`{}` has no field `{}`", name.name, init.name.name),
+                    )
+                    .label(init.name.span, "unknown field")
+                    .label(decl.name.span, format!("`{}` is declared here", name.name)),
+                ),
+                Some(i) => match given[*i as usize] {
+                    Some(first) => self.diags.push(
+                        Diagnostic::error(
+                            "resolve::duplicate-field",
+                            format!("the field `{}` is given more than once", init.name.name),
+                        )
+                        .label(init.name.span, "given again here")
+                        .label(first, "first given here"),
+                    ),
+                    None => given[*i as usize] = Some(init.name.span),
+                },
+            }
+        }
+        // A field declared twice was reported; only its first counts.
+        let missing: Vec<&str> = decl
+            .fields
+            .iter()
+            .zip(&given)
+            .enumerate()
+            .filter(|(i, (field, given))| {
+                given.is_none()
+                    && decl.fields[..*i]
+                        .iter()
+                        .all(|earlier| earlier.name.name != field.name.name)
+            })
+            .map(|(_, (field, _))| field.name.name.as_str())
+            .collect();
+        if !missing.is_empty() {
+            let list = missing
+                .iter()
+                .map(|name| format!("`{name}`"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            self.diags.push(
+                Diagnostic::error(
+                    "resolve::missing-fields",
+                    format!("missing fields in `{}`: {list}", name.name),
+                )
+                .label(expr.span, "every field must be given (ADR 0021)"),
+            );
+        }
+        ExprKind::StructLit(
+            self.struct_tys[id.0 as usize],
+            fields
+                .into_iter()
+                .filter_map(|(index, value)| Some((index?, value)))
+                .collect(),
+        )
+    }
+
     fn fn_decl(&mut self, decl: &ast::FnDecl) -> Fn {
         self.locals.clear();
         self.scopes.clear();
@@ -250,6 +439,9 @@ impl Lowerer<'_> {
             ast::TyKind::Named(name) if name.name == "bool" => Ty::Bool,
             ast::TyKind::Named(name) => match IntTy::from_name(&name.name) {
                 Some(int) => Ty::Int(int),
+                None if self.struct_ids.contains_key(&name.name) => {
+                    Ty::Struct(self.struct_tys[self.struct_ids[&name.name].0 as usize])
+                }
                 None => {
                     self.diags.push(
                         Diagnostic::error(
@@ -405,6 +597,10 @@ impl Lowerer<'_> {
             }
             ast::ExprKind::Unary(op, operand) => ExprKind::Unary(*op, self.boxed(operand)),
             ast::ExprKind::Deref(operand) => ExprKind::Deref(self.boxed(operand)),
+            ast::ExprKind::StructLit(name, fields) => self.struct_lit(expr, name, fields),
+            ast::ExprKind::Field(base, field) => {
+                ExprKind::Field(self.boxed(base), field.name.clone(), field.span)
+            }
             ast::ExprKind::Index(base, index) => {
                 ExprKind::Index(self.boxed(base), self.boxed(index))
             }
@@ -555,7 +751,6 @@ mod tests {
     }
 
     fn program_file(file: &ast::File) -> crate::span::FileId {
-        let ast::Item::Fn(decl) = &file.items[0];
-        decl.span.file
+        item_name(&file.items[0]).span.file
     }
 }

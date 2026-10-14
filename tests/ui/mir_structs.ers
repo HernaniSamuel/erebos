@@ -1,0 +1,19 @@
+// emit: mir
+// Fields of a literal are evaluated in the order written and stored as
+// they are evaluated (ADR 0018, 0021).
+struct Pair { first: u32, second: u32 }
+
+fn next(counter: *mut u32) -> u32 {
+    *counter += 1;
+    *counter
+}
+
+fn pairs(p: *mut Pair) -> u32 {
+    let mut n: u32 = 0;
+    let pair: Pair = Pair { second: next(&raw mut n), first: next(&raw mut n) };
+    (*p).second = pair.first;
+    (*p).first
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

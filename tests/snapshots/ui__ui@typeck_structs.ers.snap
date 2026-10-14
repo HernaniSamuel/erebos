@@ -1,0 +1,68 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_structs.ers
+---
+--- typeck ---
+struct S { a: u8 at 0, b: u32 at 4, c: u16 at 8 } size 12, align 4
+struct Wide { flag: bool at 0, big: u64 at 8 } size 16, align 8
+struct Nested { first: u8 at 0, s: S at 4, tail: [u16; 3] at 16 } size 24, align 4
+struct Empty {} size 0, align 1
+struct HasEmpty { a: u8 at 0, e: Empty at 1, b: u8 at 1 } size 2, align 1
+struct Node { value: u32 at 0, next: *mut Node at 4 } size 8, align 4
+struct Bytes { data: [u8; 3] at 0 } size 3, align 1
+fn fields(p: *mut S, n: *const Nested) -> u32
+    let mut s: S
+    let inner: S
+    let first: *const u16
+    let mut node: Node
+    let e: Empty
+    expr 0 struct S 484..506: S
+    expr 1 int 3 491..492: u16
+    expr 2 int 1 497..498: u8
+    expr 3 int 2 503..504: u32
+    expr 4 assign 512..541: ()
+    expr 5 field b 512..515: u32
+    expr 6 local s 512..513: S
+    expr 7 binary + 518..541: u32
+    expr 8 as u32 518..528: u32
+    expr 9 field a 518..521: u8
+    expr 10 local s 518..519: S
+    expr 11 as u32 531..541: u32
+    expr 12 field c 531..534: u16
+    expr 13 local s 531..532: S
+    expr 14 assign 547..557: ()
+    expr 15 field c 547..553: u16
+    expr 16 deref 547..551: S
+    expr 17 local p 549..550: *mut S
+    expr 18 int 7 556..557: u16
+    expr 19 field s 578..584: S
+    expr 20 deref 578..582: Nested
+    expr 21 local n 580..581: *const Nested
+    expr 22 &raw const 614..637: *const u16
+    expr 23 index 625..637: u16
+    expr 24 field tail 625..634: [u16; 3]
+    expr 25 deref 625..629: Nested
+    expr 26 local n 627..628: *const Nested
+    expr 27 int 0 635..636: usize
+    expr 28 struct Node 664..703: Node
+    expr 29 int 1 678..679: u32
+    expr 30 as *mut Node 687..701: *mut Node
+    expr 31 int 0 687..688: usize
+    expr 32 assign 709..734: ()
+    expr 33 field next 709..718: *mut Node
+    expr 34 local node 709..713: Node
+    expr 35 &raw mut 721..734: *mut Node
+    expr 36 local node 730..734: Node
+    expr 37 struct Empty 755..763: Empty
+    expr 38 binary + 769..797: u32
+    expr 39 field value 769..787: u32
+    expr 40 deref 769..781: Node
+    expr 41 field next 771..780: *mut Node
+    expr 42 local node 771..775: Node
+    expr 43 field b 790..797: u32
+    expr 44 local inner 790..795: S
+entry fn main() -> !
+    expr 45 loop 824..831: !
+panic fn on_panic() -> !
+    expr 46 loop 861..868: !

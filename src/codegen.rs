@@ -135,7 +135,7 @@ fn basic_type(context: &Context, ty: Ty) -> Option<BasicTypeEnum<'_>> {
         Ty::Bool => Some(context.bool_type().into()),
         Ty::Int(int) => Some(int_type(context, int).into()),
         Ty::Ptr(_) => Some(context.ptr_type(AddressSpace::default()).into()),
-        Ty::Unit | Ty::Never | Ty::Array(..) => None,
+        Ty::Unit | Ty::Never | Ty::Array(..) | Ty::Struct(_) => None,
     }
 }
 
@@ -147,6 +147,11 @@ fn memory_type(context: &Context, ty: Ty) -> Option<BasicTypeEnum<'_>> {
         Ty::Array(elem, len) => {
             let len = u32::try_from(len).expect("the type checker limits sizes");
             Some(element_type(context, *elem).array_type(len).into())
+        }
+        // Bytes laid out by MIR (ADR 0022); fields are reached by offset.
+        Ty::Struct(s) => {
+            let size = u32::try_from(s.def().layout.size).expect("the type checker limits sizes");
+            Some(context.i8_type().array_type(size).into())
         }
         _ => basic_type(context, ty),
     }
@@ -285,9 +290,18 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
             .locals()
             .map(|(local, _)| {
                 self.representation(Place::local(local)).map(|ty| {
-                    self.builder
+                    let slot = self
+                        .builder
                         .build_alloca(ty, &local.to_string())
-                        .expect("builder is positioned")
+                        .expect("builder is positioned");
+                    // A struct is an array of bytes to LLVM, which would
+                    // otherwise align it to 1.
+                    let align = self.body.local_ty(local).layout().align;
+                    slot.as_instruction_value()
+                        .expect("an alloca is an instruction")
+                        .set_alignment(u32::try_from(align).expect("alignments are small"))
+                        .expect("the alignment is a power of two");
+                    slot
                 })
             })
             .collect();
@@ -358,8 +372,9 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
         let mut address = (slot, false);
         let mut ty = self.body.local_ty(place.local);
         let usize_type = int_type(self.context, IntTy::Usize);
+        let byte_type = self.context.i8_type().into();
         for elem in place.projection {
-            let index = match (elem, ty) {
+            let (step, index) = match (elem, ty) {
                 (PlaceElem::Deref, Ty::Ptr(ptr)) => {
                     address = (self.load_pointer(address), ptr.volatile);
                     ty = *ptr.pointee;
@@ -368,15 +383,25 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                 (PlaceElem::Offset(index), Ty::Ptr(ptr)) => {
                     address = (self.load_pointer(address), ptr.volatile);
                     ty = *ptr.pointee;
-                    self.read(Place::local(*index)).into_int_value()
+                    let index = self.read(Place::local(*index)).into_int_value();
+                    (element_type(self.context, ty), index)
                 }
                 (PlaceElem::Index(index), Ty::Array(elem, _)) => {
                     ty = *elem;
-                    self.read(Place::local(*index)).into_int_value()
+                    let index = self.read(Place::local(*index)).into_int_value();
+                    (element_type(self.context, ty), index)
                 }
                 (PlaceElem::ConstIndex(index), Ty::Array(elem, _)) => {
                     ty = *elem;
-                    usize_type.const_int(*index, false)
+                    (
+                        element_type(self.context, ty),
+                        usize_type.const_int(*index, false),
+                    )
+                }
+                (PlaceElem::Field(index), Ty::Struct(s)) => {
+                    let field = &s.def().fields()[*index as usize];
+                    ty = field.ty;
+                    (byte_type, usize_type.const_int(field.offset, false))
                 }
                 (elem, ty) => unreachable!("projection {elem:?} of `{ty}`"),
             };
@@ -384,11 +409,8 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
             // (ADR 0021).
             // SAFETY: the element type is sized and the index is an integer,
             // as LLVM requires of a `getelementptr`.
-            let element = unsafe {
-                self.builder
-                    .build_gep(element_type(self.context, ty), address.0, &[index], "")
-            }
-            .expect("builder is positioned");
+            let element = unsafe { self.builder.build_gep(step, address.0, &[index], "") }
+                .expect("builder is positioned");
             address.0 = element;
         }
         address
@@ -438,7 +460,12 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
     /// reach, uses the memory representation (ADR 0022).
     fn representation(&self, place: Place) -> Option<BasicTypeEnum<'ctx>> {
         let ty = self.body.place_ty(place);
-        if ty.is_aggregate() || place.is_indirect() || self.in_memory[place.local.0 as usize] {
+        // A projection reaches into memory: through a pointer, or into an
+        // aggregate, which lives in memory.
+        if ty.is_aggregate()
+            || !place.projection.is_empty()
+            || self.in_memory[place.local.0 as usize]
+        {
             memory_type(self.context, ty)
         } else {
             basic_type(self.context, ty)

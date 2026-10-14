@@ -73,6 +73,14 @@ const SNIPPETS: &[&str] = &[
     "&",
     "*const volatile [u32; 2]",
     "memcpy",
+    "struct",
+    "struct S { a: u8, b: u32 }",
+    "struct L { l: L }",
+    "S { a: 1, b: 2 }",
+    ".a",
+    ".b",
+    ".",
+    "*mut volatile S",
 ];
 
 /// xorshift64: small, deterministic, good enough to pick mutations.

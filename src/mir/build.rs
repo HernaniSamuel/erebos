@@ -2,30 +2,59 @@
 
 use crate::hir::{self, Hir};
 use crate::mir::{
-    BasicBlock, BasicBlockData, BinOp, Body, BodyId, Const, Local, LocalDecl, Mir, Operand, Place,
-    PlaceElem, Ptr, Rvalue, Statement, Terminator, Ty, UnOp,
+    BasicBlock, BasicBlockData, BinOp, Body, BodyId, Const, Field, Local, LocalDecl, Mir, Operand,
+    Place, PlaceElem, Ptr, Rvalue, Statement, StructRef, Terminator, Ty, UnOp,
 };
 use crate::ty::TypeckResults;
 
 /// The input must have passed type checking without errors.
 pub fn build(hir: &Hir, types: &TypeckResults) -> Mir {
+    // Every struct exists before any field type refers to one.
+    let layout = |i: usize| {
+        types
+            .layouts
+            .struct_(hir::StructId(i as u32))
+            .expect("well-typed programs have layouts")
+    };
+    let structs: Vec<StructRef> = hir
+        .structs
+        .iter()
+        .enumerate()
+        .map(|(i, def)| StructRef::new(def.name.clone(), layout(i).layout))
+        .collect();
+    for (i, (def, s)) in hir.structs.iter().zip(&structs).enumerate() {
+        let fields = def
+            .fields
+            .iter()
+            .zip(&layout(i).offsets)
+            .map(|(field, &offset)| Field {
+                name: field.name.clone(),
+                ty: lower_ty(field.ty, &structs),
+                offset,
+            })
+            .collect();
+        s.def().set_fields(fields);
+    }
+
     // MIR bodies are built in HIR function order.
     let panic = BodyId(hir.panic.0);
     let bodies = hir
         .fns()
-        .map(|(_, f)| build_body(f, types, panic))
+        .map(|(_, f)| build_body(f, types, &structs, panic))
         .collect();
     Mir {
+        structs,
         bodies,
         entry: BodyId(hir.entry.0),
         panic,
     }
 }
 
-fn build_body(f: &hir::Fn, types: &TypeckResults, panic: BodyId) -> Body {
-    let ret = lower_ty(f.ret);
+fn build_body(f: &hir::Fn, types: &TypeckResults, structs: &[StructRef], panic: BodyId) -> Body {
+    let ret = lower_ty(f.ret, structs);
     let mut builder = Builder {
         types,
+        structs,
         panic,
         locals: vec![LocalDecl {
             ty: ret,
@@ -38,7 +67,7 @@ fn build_body(f: &hir::Fn, types: &TypeckResults, panic: BodyId) -> Body {
     };
     // HIR locals become MIR locals `_1..`, in declaration order.
     for local in &f.locals {
-        let mir_local = builder.new_local(lower_ty(local.ty), Some(local.name.clone()));
+        let mir_local = builder.new_local(lower_ty(local.ty, structs), Some(local.name.clone()));
         builder.hir_locals.push(mir_local);
     }
 
@@ -69,7 +98,7 @@ fn build_body(f: &hir::Fn, types: &TypeckResults, panic: BodyId) -> Body {
     }
 }
 
-fn lower_ty(ty: hir::Ty) -> Ty {
+fn lower_ty(ty: hir::Ty, structs: &[StructRef]) -> Ty {
     match ty {
         hir::Ty::Unit => Ty::Unit,
         hir::Ty::Never => Ty::Never,
@@ -79,9 +108,10 @@ fn lower_ty(ty: hir::Ty) -> Ty {
             mutable: ptr.mutable,
             volatile: ptr.volatile,
             // Leaked like HIR pointee types; see `hir::Ty::ptr`.
-            pointee: Box::leak(Box::new(lower_ty(*ptr.pointee))),
+            pointee: Box::leak(Box::new(lower_ty(*ptr.pointee, structs))),
         }),
-        hir::Ty::Array(elem, len) => Ty::Array(Box::leak(Box::new(lower_ty(*elem))), len),
+        hir::Ty::Array(elem, len) => Ty::Array(Box::leak(Box::new(lower_ty(*elem, structs))), len),
+        hir::Ty::Struct(s) => Ty::Struct(structs[s.id.0 as usize]),
         hir::Ty::Error => unreachable!("MIR is only built for well-typed programs"),
     }
 }
@@ -93,6 +123,7 @@ struct PartialBlock {
 
 struct Builder<'a> {
     types: &'a TypeckResults,
+    structs: &'a [StructRef],
     /// The panic function (ADR 0014).
     panic: BodyId,
     locals: Vec<LocalDecl>,
@@ -180,7 +211,7 @@ impl Builder<'_> {
     /// Lowers an expression and returns its value. Expressions of type `()`
     /// and `!` return `const ()`.
     fn expr(&mut self, expr: &hir::Expr) -> Operand {
-        let ty = lower_ty(self.types.expr_ty(expr.id));
+        let ty = self.ty_of(expr);
         let value = match &expr.kind {
             hir::ExprKind::Int(value) => {
                 let Ty::Int(int) = ty else {
@@ -217,7 +248,17 @@ impl Builder<'_> {
                 self.call(dest, BodyId(callee.0), args);
                 self.read_result(dest)
             }
-            hir::ExprKind::Deref(_) | hir::ExprKind::Index(..) => {
+            hir::ExprKind::StructLit(_, fields) => {
+                let value = Place::local(self.new_local(ty, None));
+                // In the order written, each stored as soon as it is
+                // evaluated (ADR 0018).
+                for (index, init) in fields {
+                    let init = self.expr(init);
+                    self.assign(value.project(PlaceElem::Field(*index)), Rvalue::Use(init));
+                }
+                Operand::Copy(value)
+            }
+            hir::ExprKind::Deref(_) | hir::ExprKind::Index(..) | hir::ExprKind::Field(..) => {
                 let place = self.place(expr);
                 if matches!(ty, Ty::Unit | Ty::Never) {
                     Operand::Const(Const::Unit)
@@ -644,6 +685,11 @@ impl Builder<'_> {
             .expect("lowering resolved the loop")
     }
 
+    /// The MIR type of an expression, from the type checker.
+    fn ty_of(&self, expr: &hir::Expr) -> Ty {
+        lower_ty(self.types.expr_ty(expr.id), self.structs)
+    }
+
     fn local(&self, local: hir::LocalId) -> Place {
         Place::local(self.hir_locals[local.0 as usize])
     }
@@ -665,6 +711,9 @@ impl Builder<'_> {
                 match (elem, ty) {
                     (PlaceElem::Deref | PlaceElem::Offset(_), Ty::Ptr(ptr)) => *ptr.pointee,
                     (PlaceElem::Index(_) | PlaceElem::ConstIndex(_), Ty::Array(elem, _)) => *elem,
+                    (PlaceElem::Field(index), Ty::Struct(s)) => {
+                        s.def().fields()[*index as usize].ty
+                    }
                     (elem, ty) => unreachable!("projection {elem:?} of `{ty}`"),
                 }
             })
@@ -673,7 +722,7 @@ impl Builder<'_> {
     /// A place holding the value of a pointer expression. If code evaluated
     /// later could assign the pointer, it is read now (ADR 0018).
     fn pointer_place(&mut self, pointer: &hir::Expr, later_writes: bool) -> Place {
-        let pointer_ty = lower_ty(self.types.expr_ty(pointer.id));
+        let pointer_ty = self.ty_of(pointer);
         match self.expr(pointer) {
             Operand::Copy(place) if !later_writes => place,
             // Computed (e.g. a cast), or about to be read late: store it.
@@ -701,7 +750,7 @@ impl Builder<'_> {
                 .project(PlaceElem::Deref),
             hir::ExprKind::Index(base, index) => {
                 let later_writes = later_writes || !is_simple(index);
-                match lower_ty(self.types.expr_ty(base.id)) {
+                match self.ty_of(base) {
                     Ty::Array(_, len) => {
                         let base = self.place_then(base, later_writes);
                         let elem = self.array_index(index, len);
@@ -714,8 +763,11 @@ impl Builder<'_> {
                     }
                 }
             }
+            hir::ExprKind::Field(base, _, _) => self
+                .place_then(base, later_writes)
+                .project(PlaceElem::Field(self.types.field(expr.id))),
             _ => {
-                let ty = lower_ty(self.types.expr_ty(expr.id));
+                let ty = self.ty_of(expr);
                 match self.expr(expr) {
                     Operand::Copy(place) => place,
                     other => match self.temp(ty, Rvalue::Use(other)) {

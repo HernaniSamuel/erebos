@@ -8,6 +8,7 @@
 //! The result is a side table from [`ExprId`] to [`Ty`]; HIR plus this table
 //! is the "typed HIR" that MIR building consumes.
 
+use std::collections::HashMap;
 use std::fmt::Write;
 
 use crate::diag::{Diagnostic, Diagnostics};
@@ -15,25 +16,36 @@ use crate::hir::{
     self, BinOp, Block, Expr, ExprId, ExprKind, Fn, FnKind, Hir, IntTy, LocalId, Ptr, Stmt, Ty,
     UnOp,
 };
-use crate::layout;
+use crate::layout::{self, Layouts};
 use crate::span::Span;
 use crate::target;
 
 pub struct TypeckResults {
     expr_types: Vec<Ty>,
+    /// The field index of each field access.
+    fields: HashMap<ExprId, u32>,
+    pub layouts: Layouts,
 }
 
 impl TypeckResults {
     pub fn expr_ty(&self, id: ExprId) -> Ty {
         self.expr_types[id.0 as usize]
     }
+
+    /// The index of the field that the field access `id` reads.
+    pub fn field(&self, id: ExprId) -> u32 {
+        self.fields[&id]
+    }
 }
 
 pub fn check(hir: &Hir, diags: &mut Diagnostics) -> TypeckResults {
+    let layouts = Layouts::compute(hir, diags);
     let mut checker = Checker {
         hir,
         // Overwritten for every expression; the placeholder is never read.
         expr_types: vec![Ty::Error; hir.expr_count as usize],
+        fields: HashMap::new(),
+        layouts,
         diags,
         loops: Vec::new(),
     };
@@ -42,6 +54,8 @@ pub fn check(hir: &Hir, diags: &mut Diagnostics) -> TypeckResults {
     }
     TypeckResults {
         expr_types: checker.expr_types,
+        fields: checker.fields,
+        layouts: checker.layouts,
     }
 }
 
@@ -87,6 +101,8 @@ fn literal_value(expr: &Expr) -> Option<i128> {
 struct Checker<'a> {
     hir: &'a Hir,
     expr_types: Vec<Ty>,
+    fields: HashMap<ExprId, u32>,
+    layouts: Layouts,
     diags: &'a mut Diagnostics,
     /// Enclosing `loop`/`while` expressions, innermost last.
     loops: Vec<LoopCtx>,
@@ -172,7 +188,7 @@ impl Checker<'_> {
             self.aggregate_by_value(f.ret, f.ret_span.unwrap_or(f.name_span));
         }
         for local in &f.locals {
-            if layout::of(local.ty).is_none() {
+            if self.layouts.of(local.ty).is_none() {
                 self.too_large(local.ty, local.span, "does not fit in the address space");
             }
         }
@@ -311,7 +327,9 @@ impl Checker<'_> {
         self.expr_types[expr.id.0 as usize] = ty;
         // Variables were checked where they are declared; any other
         // aggregate value needs a temporary of its size.
-        if ty.is_aggregate() && !matches!(expr.kind, ExprKind::Local(_)) && layout::of(ty).is_none()
+        if ty.is_aggregate()
+            && !matches!(expr.kind, ExprKind::Local(_))
+            && self.layouts.of(ty).is_none()
         {
             self.too_large(
                 ty,
@@ -367,6 +385,14 @@ impl Checker<'_> {
                 }
             }
             ExprKind::Local(local) => f.local(*local).ty,
+            ExprKind::StructLit(s, fields) => {
+                let hir = self.hir;
+                let def = hir.struct_(s.id);
+                for (index, value) in fields {
+                    self.check(f, value, Some(def.fields[*index as usize].ty));
+                }
+                Ty::Struct(*s)
+            }
             ExprKind::Call { callee, args } => self.call(f, expr, *callee, args),
             ExprKind::Unary(op, operand) => self.unary(f, expr, *op, operand, expected),
             ExprKind::Binary(op, lhs, rhs) if op.is_shift() => {
@@ -405,10 +431,10 @@ impl Checker<'_> {
             ExprKind::Cast(operand, target, target_span) => {
                 self.cast(f, operand, *target, *target_span)
             }
-            ExprKind::Deref(_) | ExprKind::Index(..) => {
+            ExprKind::Deref(_) | ExprKind::Index(..) | ExprKind::Field(..) => {
                 let info = self
                     .place_info(f, expr)
-                    .expect("dereferences and indexing are places");
+                    .expect("dereferences, indexing and fields are places");
                 self.access(&info, expr.span);
                 info.ty
             }
@@ -933,6 +959,10 @@ impl Checker<'_> {
                 .label(pointer.span, "not a pointer");
                 self.through_pointer(ty, pointer, error)
             }
+            ExprKind::Field(base, name, name_span) => {
+                let (ty, base_place) = self.base(f, base);
+                self.field(expr, ty, base_place, name, *name_span)
+            }
             ExprKind::Index(base, index) => {
                 // An array is indexed where it is; anything else is read as
                 // a value, which must be a pointer.
@@ -957,7 +987,7 @@ impl Checker<'_> {
                         self.access(&info, base.span);
                     }
                     if let Ty::Ptr(ptr) = ty
-                        && layout::of(*ptr.pointee).is_none()
+                        && self.layouts.of(*ptr.pointee).is_none()
                     {
                         self.too_large(
                             *ptr.pointee,
@@ -978,6 +1008,81 @@ impl Checker<'_> {
         };
         self.expr_types[expr.id.0 as usize] = info.ty;
         Some(info)
+    }
+
+    /// The type of the base of a field access or of indexing, and its
+    /// place: the base's own if it is a place expression, or else a
+    /// temporary holding its value.
+    fn base(&mut self, f: &Fn, base: &Expr) -> (Ty, PlaceInfo) {
+        match self.place_info(f, base) {
+            Some(info) => (info.ty, info),
+            None => {
+                let ty = self.check(f, base, None);
+                let temporary = PlaceInfo {
+                    ty,
+                    immutable: Some(Immutable::Temporary(base.span)),
+                    via: None,
+                };
+                (ty, temporary)
+            }
+        }
+    }
+
+    /// `base.name`, where `base` has type `ty` and place `base_place`.
+    fn field(
+        &mut self,
+        expr: &Expr,
+        ty: Ty,
+        base_place: PlaceInfo,
+        name: &str,
+        name_span: Span,
+    ) -> PlaceInfo {
+        let hir = self.hir;
+        let s = match ty {
+            Ty::Struct(s) => s,
+            Ty::Never => {
+                return PlaceInfo {
+                    ty: Ty::Never,
+                    ..PlaceInfo::ERROR
+                };
+            }
+            Ty::Error => return PlaceInfo::ERROR,
+            other => {
+                let mut diag =
+                    Diagnostic::error("ty::no-fields", format!("`{other}` has no fields"))
+                        .label(name_span, "no such field");
+                if let Ty::Ptr(ptr) = other
+                    && let Ty::Struct(_) = *ptr.pointee
+                {
+                    diag = diag.help(format!(
+                        "dereference the pointer first: `(*p).{name}` (ADR 0021)"
+                    ));
+                }
+                self.diags.push(diag);
+                return PlaceInfo::ERROR;
+            }
+        };
+        let def = hir.struct_(s.id);
+        let Some(index) = def.fields.iter().position(|field| field.name == name) else {
+            let names: Vec<String> = def.fields.iter().map(|f| format!("`{}`", f.name)).collect();
+            let mut diag = Diagnostic::error(
+                "ty::unknown-field",
+                format!("`{}` has no field `{name}`", s.name),
+            )
+            .label(name_span, "unknown field");
+            diag = if names.is_empty() {
+                diag.help(format!("`{}` has no fields", s.name))
+            } else {
+                diag.help(format!("its fields are {}", names.join(", ")))
+            };
+            self.diags.push(diag);
+            return PlaceInfo::ERROR;
+        };
+        self.fields.insert(expr.id, index as u32);
+        PlaceInfo {
+            ty: def.fields[index].ty,
+            ..base_place
+        }
     }
 
     /// Checks that `place` can be assigned to and returns its type.
@@ -1098,7 +1203,7 @@ impl Checker<'_> {
             Ty::Bool => matches!(allowed, Operands::IntOrBool | Operands::Equatable),
             Ty::Ptr(_) => matches!(allowed, Operands::Equatable | Operands::Ordered),
             // Aggregates compare part by part (ADR 0021).
-            Ty::Unit | Ty::Array(..) => false,
+            Ty::Unit | Ty::Array(..) | Ty::Struct(_) => false,
         };
         if !ok {
             let what = match allowed {
@@ -1118,9 +1223,32 @@ impl Checker<'_> {
     }
 }
 
-/// Lists every function's locals and expression types, for `--emit=typeck`.
+/// Lists struct layouts, then every function's locals and expression types,
+/// for `--emit=typeck`.
 pub fn dump(hir: &Hir, results: &TypeckResults) -> String {
     let mut out = String::new();
+    for (i, def) in hir.structs.iter().enumerate() {
+        let Some(layout) = results.layouts.struct_(hir::StructId(i as u32)) else {
+            continue;
+        };
+        let fields: Vec<String> = def
+            .fields
+            .iter()
+            .zip(&layout.offsets)
+            .map(|(field, offset)| format!("{}: {} at {offset}", field.name, field.ty))
+            .collect();
+        let fields = if fields.is_empty() {
+            "{}".to_owned()
+        } else {
+            format!("{{ {} }}", fields.join(", "))
+        };
+        writeln!(
+            out,
+            "struct {} {fields} size {}, align {}",
+            def.name, layout.layout.size, layout.layout.align
+        )
+        .unwrap();
+    }
     for (_, f) in hir.fns() {
         let kind = match f.kind {
             FnKind::Plain => "",
@@ -1183,6 +1311,8 @@ fn expr_label(f: &Fn, expr: &Expr) -> String {
         ExprKind::Byte(value) => format!("byte {value}"),
         ExprKind::Unit => "unit".to_owned(),
         ExprKind::Array(_) => "array".to_owned(),
+        ExprKind::StructLit(s, _) => format!("struct {}", s.name),
+        ExprKind::Field(_, name, _) => format!("field {name}"),
         ExprKind::Repeat(..) => "repeat".to_owned(),
         ExprKind::Local(id) => format!("local {}", f.local(*id).name),
         ExprKind::Call { .. } => "call".to_owned(),

@@ -4,8 +4,8 @@
 use crate::diag::{Diagnostic, Diagnostics};
 use crate::span::Span;
 use crate::syntax::ast::{
-    BinOp, Block, Expr, ExprKind, File, FnDecl, FnKind, Ident, Item, Let, LogicalOp, Param, Stmt,
-    Ty, TyKind, UnOp,
+    BinOp, Block, Expr, ExprKind, FieldDecl, FieldInit, File, FnDecl, FnKind, Ident, Item, Let,
+    LogicalOp, Param, Stmt, StructDecl, Ty, TyKind, UnOp,
 };
 use crate::syntax::lexer;
 use crate::syntax::token::{Token, TokenKind};
@@ -17,6 +17,7 @@ pub fn parse(text: &str, tokens: &[Token], diags: &mut Diagnostics) -> File {
         tokens,
         pos: 0,
         diags,
+        no_struct: false,
     };
     parser.file()
 }
@@ -31,6 +32,9 @@ struct Parser<'a> {
     tokens: &'a [Token],
     pos: usize,
     diags: &'a mut Diagnostics,
+    /// Set while parsing the condition of `if` or `while`, where `{` opens
+    /// the body: `if x == y { ... }` is not a struct literal `y { ... }`.
+    no_struct: bool,
 }
 
 impl Parser<'_> {
@@ -110,7 +114,11 @@ impl Parser<'_> {
     fn recover_to_item(&mut self) {
         while !matches!(
             self.peek().kind,
-            TokenKind::Entry | TokenKind::Panic | TokenKind::Fn | TokenKind::Eof
+            TokenKind::Entry
+                | TokenKind::Panic
+                | TokenKind::Fn
+                | TokenKind::Struct
+                | TokenKind::Eof
         ) {
             self.bump();
         }
@@ -119,6 +127,7 @@ impl Parser<'_> {
     fn item(&mut self) -> PResult<Item> {
         match self.peek().kind {
             TokenKind::Entry | TokenKind::Panic | TokenKind::Fn => Ok(Item::Fn(self.fn_decl()?)),
+            TokenKind::Struct => Ok(Item::Struct(self.struct_decl()?)),
             _ => {
                 // A stray token, not a missing one: point at the token itself.
                 let err = self.report_unexpected("an item", self.peek().span);
@@ -155,6 +164,37 @@ impl Parser<'_> {
             span: start.to(body.span),
             body,
         })
+    }
+
+    fn struct_decl(&mut self) -> PResult<StructDecl> {
+        let start = self.bump().span;
+        let name = self.ident()?;
+        self.expect(TokenKind::LBrace)?;
+        let fields = self.brace_list(|p| {
+            let name = p.ident()?;
+            p.expect(TokenKind::Colon)?;
+            let ty = p.ty()?;
+            Ok(FieldDecl { name, ty })
+        })?;
+        Ok(StructDecl {
+            name,
+            fields,
+            span: start.to(self.tokens[self.pos - 1].span),
+        })
+    }
+
+    /// Parses `item, item, ...}` after an opening `{`, allowing a trailing
+    /// comma, and consumes the `}`.
+    fn brace_list<T>(&mut self, mut item: impl FnMut(&mut Self) -> PResult<T>) -> PResult<Vec<T>> {
+        let mut items = Vec::new();
+        while !self.at(TokenKind::RBrace) {
+            items.push(item(self)?);
+            if self.eat(TokenKind::Comma).is_none() {
+                break;
+            }
+        }
+        self.expect(TokenKind::RBrace)?;
+        Ok(items)
     }
 
     fn param(&mut self) -> PResult<Param> {
@@ -242,6 +282,13 @@ impl Parser<'_> {
     }
 
     fn block(&mut self) -> PResult<Block> {
+        let saved = std::mem::replace(&mut self.no_struct, false);
+        let block = self.block_inner();
+        self.no_struct = saved;
+        block
+    }
+
+    fn block_inner(&mut self) -> PResult<Block> {
         let open = self.expect(TokenKind::LBrace)?;
         let mut stmts = Vec::new();
         let mut tail = None;
@@ -335,6 +382,23 @@ impl Parser<'_> {
 
     fn expr(&mut self) -> PResult<Expr> {
         self.expr_bp(0)
+    }
+
+    /// An expression inside delimiters, where struct literals are allowed
+    /// again even within a condition.
+    fn nested_expr(&mut self) -> PResult<Expr> {
+        let saved = std::mem::replace(&mut self.no_struct, false);
+        let expr = self.expr();
+        self.no_struct = saved;
+        expr
+    }
+
+    /// The condition of `if` or `while`, which a `{` ends.
+    fn condition(&mut self) -> PResult<Expr> {
+        let saved = std::mem::replace(&mut self.no_struct, true);
+        let expr = self.expr();
+        self.no_struct = saved;
+        expr
     }
 
     /// Pratt parser: parses an expression whose operators all bind at least
@@ -447,18 +511,27 @@ impl Parser<'_> {
         })
     }
 
-    /// A primary expression followed by any indexing.
+    /// A primary expression followed by any indexing and field accesses.
     fn postfix(&mut self) -> PResult<Expr> {
         let mut expr = self.primary()?;
-        while self.eat(TokenKind::LBracket).is_some() {
-            let index = self.expr()?;
-            let close = self.expect(TokenKind::RBracket)?;
-            expr = Expr {
-                span: expr.span.to(close.span),
-                kind: ExprKind::Index(Box::new(expr), Box::new(index)),
-            };
+        loop {
+            if self.eat(TokenKind::LBracket).is_some() {
+                let index = self.nested_expr()?;
+                let close = self.expect(TokenKind::RBracket)?;
+                expr = Expr {
+                    span: expr.span.to(close.span),
+                    kind: ExprKind::Index(Box::new(expr), Box::new(index)),
+                };
+            } else if self.eat(TokenKind::Dot).is_some() {
+                let field = self.ident()?;
+                expr = Expr {
+                    span: expr.span.to(field.span),
+                    kind: ExprKind::Field(Box::new(expr), field),
+                };
+            } else {
+                return Ok(expr);
+            }
         }
-        Ok(expr)
     }
 
     fn primary(&mut self) -> PResult<Expr> {
@@ -499,7 +572,7 @@ impl Parser<'_> {
             TokenKind::If => return self.if_expr(),
             TokenKind::While => {
                 self.bump();
-                let cond = Box::new(self.expr()?);
+                let cond = Box::new(self.condition()?);
                 let body = self.block()?;
                 return Ok(Expr {
                     span: token.span.to(body.span),
@@ -509,11 +582,24 @@ impl Parser<'_> {
             TokenKind::Ident => {
                 let name = self.ident()?;
                 if self.eat(TokenKind::LParen).is_some() {
-                    let args = self.comma_list(Self::expr)?;
+                    let args = self.comma_list(Self::nested_expr)?;
                     let end = self.tokens[self.pos - 1].span;
                     return Ok(Expr {
                         span: token.span.to(end),
                         kind: ExprKind::Call(name, args),
+                    });
+                }
+                if !self.no_struct && self.eat(TokenKind::LBrace).is_some() {
+                    let fields = self.brace_list(|p| {
+                        let name = p.ident()?;
+                        p.expect(TokenKind::Colon)?;
+                        let value = p.nested_expr()?;
+                        Ok(FieldInit { name, value })
+                    })?;
+                    let end = self.tokens[self.pos - 1].span;
+                    return Ok(Expr {
+                        span: token.span.to(end),
+                        kind: ExprKind::StructLit(name, fields),
                     });
                 }
                 ExprKind::Name(name)
@@ -526,7 +612,7 @@ impl Parser<'_> {
                         span: token.span.to(close.span),
                     });
                 }
-                let inner = self.expr()?;
+                let inner = self.nested_expr()?;
                 let close = self.expect(TokenKind::RParen)?;
                 // Parentheses only group; widen the span to what was written.
                 return Ok(Expr {
@@ -589,7 +675,7 @@ impl Parser<'_> {
         let open = self.bump();
         let mut elems = Vec::new();
         if !self.at(TokenKind::RBracket) {
-            let first = self.expr()?;
+            let first = self.nested_expr()?;
             if self.eat(TokenKind::Semi).is_some() {
                 let len = self.array_len()?;
                 let close = self.expect(TokenKind::RBracket)?;
@@ -600,7 +686,7 @@ impl Parser<'_> {
             }
             elems.push(first);
             while self.eat(TokenKind::Comma).is_some() && !self.at(TokenKind::RBracket) {
-                elems.push(self.expr()?);
+                elems.push(self.nested_expr()?);
             }
         }
         let close = self.expect(TokenKind::RBracket)?;
@@ -612,7 +698,7 @@ impl Parser<'_> {
 
     fn if_expr(&mut self) -> PResult<Expr> {
         let start = self.bump().span;
-        let cond = Box::new(self.expr()?);
+        let cond = Box::new(self.condition()?);
         let then = self.block()?;
         let mut span = start.to(then.span);
         let else_ = if self.eat(TokenKind::Else).is_some() {

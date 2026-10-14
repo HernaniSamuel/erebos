@@ -1,0 +1,118 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/resolve_struct_errors.ers
+---
+--- errors ---
+resolve::duplicate-type
+
+  × the struct `Point` is defined more than once
+   ╭─[resolve_struct_errors.ers:3:8]
+ 1 │ // emit: hir
+ 2 │ struct Point { x: i32, y: i32, x: u8 }
+   ·        ──┬──
+   ·          ╰── first defined here
+ 3 │ struct Point { z: i32 }
+   ·        ──┬──
+   ·          ╰── redefined here
+ 4 │ struct u8 { a: bool }
+   ╰────
+resolve::duplicate-type
+
+  × `u8` is a built-in type
+   ╭─[resolve_struct_errors.ers:4:8]
+ 3 │ struct Point { z: i32 }
+ 4 │ struct u8 { a: bool }
+   ·        ─┬
+   ·         ╰── cannot be redefined
+ 5 │ struct Holder { inner: Missing }
+   ╰────
+resolve::duplicate-field
+
+  × the field `x` is declared more than once
+   ╭─[resolve_struct_errors.ers:2:32]
+ 1 │ // emit: hir
+ 2 │ struct Point { x: i32, y: i32, x: u8 }
+   ·                ┬               ┬
+   ·                │               ╰── declared again here
+   ·                ╰── first declared here
+ 3 │ struct Point { z: i32 }
+   ╰────
+resolve::unknown-type
+
+  × unknown type `Missing`
+   ╭─[resolve_struct_errors.ers:5:24]
+ 4 │ struct u8 { a: bool }
+ 5 │ struct Holder { inner: Missing }
+   ·                        ───┬───
+   ·                           ╰── not a type
+ 6 │ 
+   ╰────
+resolve::duplicate-field
+
+  × the field `x` is given more than once
+   ╭─[resolve_struct_errors.ers:8:34]
+ 7 │ fn f() {
+ 8 │     let a: Point = Point { x: 1, x: 2, z: 3 };
+   ·                            ┬     ┬
+   ·                            │     ╰── given again here
+   ·                            ╰── first given here
+ 9 │     let b: Point = Point { x: 1 };
+   ╰────
+resolve::unknown-field
+
+  × `Point` has no field `z`
+   ╭─[resolve_struct_errors.ers:2:8]
+ 1 │ // emit: hir
+ 2 │ struct Point { x: i32, y: i32, x: u8 }
+   ·        ──┬──
+   ·          ╰── `Point` is declared here
+ 3 │ struct Point { z: i32 }
+   ╰────
+   ╭─[resolve_struct_errors.ers:8:40]
+ 7 │ fn f() {
+ 8 │     let a: Point = Point { x: 1, x: 2, z: 3 };
+   ·                                        ┬
+   ·                                        ╰── unknown field
+ 9 │     let b: Point = Point { x: 1 };
+   ╰────
+resolve::missing-fields
+
+  × missing fields in `Point`: `y`
+   ╭─[resolve_struct_errors.ers:8:20]
+ 7 │ fn f() {
+ 8 │     let a: Point = Point { x: 1, x: 2, z: 3 };
+   ·                    ─────────────┬────────────
+   ·                                 ╰── every field must be given (ADR 0021)
+ 9 │     let b: Point = Point { x: 1 };
+   ╰────
+resolve::missing-fields
+
+  × missing fields in `Point`: `y`
+    ╭─[resolve_struct_errors.ers:9:20]
+  8 │     let a: Point = Point { x: 1, x: 2, z: 3 };
+  9 │     let b: Point = Point { x: 1 };
+    ·                    ───────┬──────
+    ·                           ╰── every field must be given (ADR 0021)
+ 10 │     let c: Nowhere = Nowhere { x: 1 };
+    ╰────
+resolve::unknown-type
+
+  × unknown struct `Nowhere`
+    ╭─[resolve_struct_errors.ers:10:22]
+  9 │     let b: Point = Point { x: 1 };
+ 10 │     let c: Nowhere = Nowhere { x: 1 };
+    ·                      ───┬───
+    ·                         ╰── not a struct
+ 11 │ }
+    ╰────
+resolve::unknown-type
+
+  × unknown type `Nowhere`
+    ╭─[resolve_struct_errors.ers:10:12]
+  9 │     let b: Point = Point { x: 1 };
+ 10 │     let c: Nowhere = Nowhere { x: 1 };
+    ·            ───┬───
+    ·               ╰── not a type
+ 11 │ }
+    ╰────

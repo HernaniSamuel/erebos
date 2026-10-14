@@ -1,0 +1,14 @@
+// emit: hir
+struct Point { x: i32, y: i32, x: u8 }
+struct Point { z: i32 }
+struct u8 { a: bool }
+struct Holder { inner: Missing }
+
+fn f() {
+    let a: Point = Point { x: 1, x: 2, z: 3 };
+    let b: Point = Point { x: 1 };
+    let c: Nowhere = Nowhere { x: 1 };
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

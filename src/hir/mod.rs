@@ -18,12 +18,17 @@ pub struct FnId(pub u32);
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ExprId(pub u32);
 
+/// A struct, indexing [`Hir::structs`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct StructId(pub u32);
+
 /// A local variable, indexing [`Fn::locals`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct LocalId(pub u32);
 
 #[derive(Debug)]
 pub struct Hir {
+    pub structs: Vec<StructDef>,
     pub fns: Vec<Fn>,
     pub entry: FnId,
     pub panic: FnId,
@@ -42,6 +47,25 @@ impl Hir {
     pub fn fn_(&self, id: FnId) -> &Fn {
         &self.fns[id.0 as usize]
     }
+
+    pub fn struct_(&self, id: StructId) -> &StructDef {
+        &self.structs[id.0 as usize]
+    }
+}
+
+/// `struct Name { field: Type, ... }` (ADR 0021)
+#[derive(Debug)]
+pub struct StructDef {
+    pub name: String,
+    pub name_span: Span,
+    pub fields: Vec<FieldDef>,
+}
+
+#[derive(Debug)]
+pub struct FieldDef {
+    pub name: String,
+    pub span: Span,
+    pub ty: Ty,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -96,9 +120,18 @@ pub enum Ty {
     Ptr(Ptr),
     /// `[T; N]`; the element type is leaked like pointee types.
     Array(&'static Ty, u64),
+    Struct(StructTy),
     /// Produced only by the type checker after reporting an error, so one
     /// mistake does not cascade into more. Compatible with every type.
     Error,
+}
+
+/// A struct type. The name is carried along (leaked, like pointee types)
+/// so that types display on their own.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct StructTy {
+    pub id: StructId,
+    pub name: &'static str,
 }
 
 /// A raw pointer type (ADR 0013).
@@ -124,9 +157,9 @@ impl Ty {
         Ty::Array(Box::leak(Box::new(elem)), len)
     }
 
-    /// Arrays (and, later, structs): values made of other values.
+    /// Arrays and structs: values made of other values.
     pub fn is_aggregate(self) -> bool {
-        matches!(self, Ty::Array(..))
+        matches!(self, Ty::Array(..) | Ty::Struct(_))
     }
 }
 
@@ -147,6 +180,7 @@ impl fmt::Display for Ty {
             Ty::Int(int) => write!(f, "{int}"),
             Ty::Ptr(ptr) => write!(f, "{ptr}"),
             Ty::Array(elem, len) => write!(f, "[{elem}; {len}]"),
+            Ty::Struct(s) => f.write_str(s.name),
             Ty::Error => f.write_str("{error}"),
         }
     }
@@ -194,6 +228,11 @@ pub enum ExprKind {
         callee: FnId,
         args: Vec<Expr>,
     },
+    /// `Name { field: value, ... }`: field indices with their values, in
+    /// the order written, which is the order they are evaluated in.
+    StructLit(StructTy, Vec<(u32, Expr)>),
+    /// `base.field`; the type checker resolves the field.
+    Field(Box<Expr>, String, Span),
     Unary(UnOp, Box<Expr>),
     /// `*ptr`
     Deref(Box<Expr>),
@@ -252,7 +291,12 @@ impl Expr {
                     arg.walk(f);
                 }
             }
-            ExprKind::Repeat(e, _) => e.walk(f),
+            ExprKind::Repeat(e, _) | ExprKind::Field(e, _, _) => e.walk(f),
+            ExprKind::StructLit(_, fields) => {
+                for (_, value) in fields {
+                    value.walk(f);
+                }
+            }
             ExprKind::Unary(_, e)
             | ExprKind::Deref(e)
             | ExprKind::Cast(e, _, _)
