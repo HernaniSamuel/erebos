@@ -1,0 +1,290 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/parse_comptime.ers
+---
+--- ast ---
+File {
+    items: [
+        Const(
+            ConstDecl {
+                attrs: [],
+                name: Ident {
+                    name: "SIZE",
+                    span: 104..108,
+                },
+                ty: Ty {
+                    kind: Named(
+                        Ident {
+                            name: "usize",
+                            span: 110..115,
+                        },
+                    ),
+                    span: 110..115,
+                },
+                value: Expr {
+                    kind: Binary(
+                        Mul,
+                        Expr {
+                            kind: Int(
+                                Some(
+                                    4,
+                                ),
+                            ),
+                            span: 118..119,
+                        },
+                        Expr {
+                            kind: Int(
+                                Some(
+                                    1024,
+                                ),
+                            ),
+                            span: 122..126,
+                        },
+                    ),
+                    span: 118..126,
+                },
+                span: 98..127,
+            },
+        ),
+        Comptime(
+            ComptimeDecl {
+                attrs: [],
+                block: Block {
+                    stmts: [
+                        Expr {
+                            expr: Expr {
+                                kind: Call(
+                                    Ident {
+                                        name: "assert",
+                                        span: 144..150,
+                                    },
+                                    [
+                                        Expr {
+                                            kind: Binary(
+                                                Gt,
+                                                Expr {
+                                                    kind: Name(
+                                                        Ident {
+                                                            name: "SIZE",
+                                                            span: 151..155,
+                                                        },
+                                                    ),
+                                                    span: 151..155,
+                                                },
+                                                Expr {
+                                                    kind: Int(
+                                                        Some(
+                                                            0,
+                                                        ),
+                                                    ),
+                                                    span: 158..159,
+                                                },
+                                            ),
+                                            span: 151..159,
+                                        },
+                                    ],
+                                ),
+                                span: 144..160,
+                            },
+                            semi: Some(
+                                160..161,
+                            ),
+                        },
+                    ],
+                    tail: None,
+                    span: 138..163,
+                },
+                span: 129..163,
+            },
+        ),
+        Fn(
+            FnDecl {
+                attrs: [],
+                kind: Plain,
+                name: Ident {
+                    name: "f",
+                    span: 168..169,
+                },
+                params: [
+                    Param {
+                        mutable: false,
+                        name: Ident {
+                            name: "y",
+                            span: 170..171,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Ident {
+                                    name: "u32",
+                                    span: 173..176,
+                                },
+                            ),
+                            span: 173..176,
+                        },
+                    },
+                ],
+                ret: Some(
+                    Ty {
+                        kind: Named(
+                            Ident {
+                                name: "u32",
+                                span: 181..184,
+                            },
+                        ),
+                        span: 181..184,
+                    },
+                ),
+                body: Some(
+                    Block {
+                        stmts: [
+                            Let(
+                                Let {
+                                    mutable: false,
+                                    name: Ident {
+                                        name: "a",
+                                        span: 195..196,
+                                    },
+                                    ty: Ty {
+                                        kind: Named(
+                                            Ident {
+                                                name: "u32",
+                                                span: 198..201,
+                                            },
+                                        ),
+                                        span: 198..201,
+                                    },
+                                    init: Expr {
+                                        kind: Comptime(
+                                            Expr {
+                                                kind: Binary(
+                                                    Add,
+                                                    Expr {
+                                                        kind: Call(
+                                                            Ident {
+                                                                name: "g",
+                                                                span: 213..214,
+                                                            },
+                                                            [
+                                                                Expr {
+                                                                    kind: Int(
+                                                                        Some(
+                                                                            1,
+                                                                        ),
+                                                                    ),
+                                                                    span: 215..216,
+                                                                },
+                                                            ],
+                                                        ),
+                                                        span: 213..217,
+                                                    },
+                                                    Expr {
+                                                        kind: Int(
+                                                            Some(
+                                                                2,
+                                                            ),
+                                                        ),
+                                                        span: 220..221,
+                                                    },
+                                                ),
+                                                span: 213..221,
+                                            },
+                                        ),
+                                        span: 204..221,
+                                    },
+                                    span: 191..222,
+                                },
+                            ),
+                            Let(
+                                Let {
+                                    mutable: false,
+                                    name: Ident {
+                                        name: "b",
+                                        span: 231..232,
+                                    },
+                                    ty: Ty {
+                                        kind: Named(
+                                            Ident {
+                                                name: "u32",
+                                                span: 234..237,
+                                            },
+                                        ),
+                                        span: 234..237,
+                                    },
+                                    init: Expr {
+                                        kind: Binary(
+                                            Add,
+                                            Expr {
+                                                kind: Comptime(
+                                                    Expr {
+                                                        kind: Call(
+                                                            Ident {
+                                                                name: "g",
+                                                                span: 250..251,
+                                                            },
+                                                            [
+                                                                Expr {
+                                                                    kind: Int(
+                                                                        Some(
+                                                                            1,
+                                                                        ),
+                                                                    ),
+                                                                    span: 252..253,
+                                                                },
+                                                            ],
+                                                        ),
+                                                        span: 250..254,
+                                                    },
+                                                ),
+                                                span: 240..255,
+                                            },
+                                            Expr {
+                                                kind: Name(
+                                                    Ident {
+                                                        name: "y",
+                                                        span: 258..259,
+                                                    },
+                                                ),
+                                                span: 258..259,
+                                            },
+                                        ),
+                                        span: 240..259,
+                                    },
+                                    span: 227..260,
+                                },
+                            ),
+                        ],
+                        tail: Some(
+                            Expr {
+                                kind: Binary(
+                                    Add,
+                                    Expr {
+                                        kind: Name(
+                                            Ident {
+                                                name: "a",
+                                                span: 265..266,
+                                            },
+                                        ),
+                                        span: 265..266,
+                                    },
+                                    Expr {
+                                        kind: Name(
+                                            Ident {
+                                                name: "b",
+                                                span: 269..270,
+                                            },
+                                        ),
+                                        span: 269..270,
+                                    },
+                                ),
+                                span: 265..270,
+                            },
+                        ),
+                        span: 185..272,
+                    },
+                ),
+                span: 165..272,
+            },
+        ),
+    ],
+}

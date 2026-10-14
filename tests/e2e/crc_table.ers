@@ -1,0 +1,83 @@
+// The M2.3a milestone program: a CRC-32 table computed by the compiler
+// (ADR 0027, 0029), used at run time to check a message against its known
+// CRC, with layout checks run at compile time.
+// expect-output: crc 3421780262
+// expect-output: table 1373503546
+// expect-exit: 0
+
+struct Uart { thr: u8 }
+const UART: *mut volatile Uart = 0x1000_0000 as *mut volatile Uart;
+const FINISHER: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+
+// The reflected CRC-32 polynomial of Ethernet, zlib and PNG.
+const POLYNOMIAL: u32 = 0xEDB8_8320;
+const CRC_TABLE: [u32; 256] = crc_table(POLYNOMIAL);
+
+fn crc_table(polynomial: u32) -> [u32; 256] {
+    let mut table: [u32; 256] = [0; 256];
+    let mut i: usize = 0;
+    while i < 256 {
+        let mut c: u32 = i as u32;
+        let mut bit: u32 = 0;
+        while bit < 8 {
+            c = if c & 1 != 0 { polynomial ^ (c >> 1) } else { c >> 1 };
+            bit += 1;
+        }
+        table[i] = c;
+        i += 1;
+    }
+    table
+}
+
+fn crc32(data: *const u8, n: usize) -> u32 {
+    let mut crc: u32 = 0xFFFF_FFFF;
+    let mut i: usize = 0;
+    while i < n {
+        crc = CRC_TABLE[((crc ^ data[i] as u32) & 0xFF) as usize] ^ (crc >> 8);
+        i += 1;
+    }
+    crc ^ 0xFFFF_FFFF
+}
+
+struct Header { kind: u8, len: u32, crc: u32 }
+
+#[packed]
+struct WireHeader { kind: u8, len: u32, crc: u32 }
+
+comptime {
+    assert(CRC_TABLE[1] == 0x7707_3096);
+    assert(size_of(Header) == 12);
+    assert(size_of(WireHeader) == 9);
+    assert(offset_of(WireHeader, crc) == 5);
+}
+
+fn putc(byte: u8) {
+    (*UART).thr = byte;
+}
+
+fn print_u32(n: u32) {
+    if n >= 10 {
+        print_u32(n / 10);
+    }
+    putc(b'0' + (n % 10) as u8);
+}
+
+entry fn main() -> ! {
+    let message: [u8; 9] = [b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9'];
+    let crc: u32 = crc32(&raw const message as *const u8, 9);
+    putc(b'c'); putc(b'r'); putc(b'c'); putc(b' ');
+    print_u32(crc);
+    putc(b'\n');
+    // A table entry read at run time, from the data the compiler emitted.
+    let index: usize = message[0] as usize;
+    putc(b't'); putc(b'a'); putc(b'b'); putc(b'l'); putc(b'e'); putc(b' ');
+    print_u32(CRC_TABLE[index]);
+    putc(b'\n');
+    *FINISHER = if crc == 0xCBF4_3926 { 0x5555 } else { (1 << 16) | 0x3333 };
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    *FINISHER = (2 << 16) | 0x3333;
+    loop {}
+}

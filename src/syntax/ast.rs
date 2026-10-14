@@ -13,6 +13,27 @@ pub struct File {
 pub enum Item {
     Fn(FnDecl),
     Struct(StructDecl),
+    Const(ConstDecl),
+    Comptime(ComptimeDecl),
+}
+
+/// `const NAME: Type = value;` (ADR 0029)
+#[derive(Debug)]
+pub struct ConstDecl {
+    pub attrs: Vec<Attr>,
+    pub name: Ident,
+    pub ty: Ty,
+    pub value: Expr,
+    pub span: Span,
+}
+
+/// `comptime { ... }` at item level, run when the program is compiled
+/// (ADR 0029).
+#[derive(Debug)]
+pub struct ComptimeDecl {
+    pub attrs: Vec<Attr>,
+    pub block: Block,
+    pub span: Span,
 }
 
 /// `struct Name { field: Type, ... }` (ADR 0021)
@@ -163,6 +184,8 @@ pub enum ExprKind {
     AlignOf(Ty),
     /// `offset_of(T, field)` (ADR 0022)
     OffsetOf(Ty, Ident),
+    /// `comptime expr`, evaluated by the compiler (ADR 0029)
+    Comptime(Box<Expr>),
     Unary(UnOp, Box<Expr>),
     /// `*ptr`
     Deref(Box<Expr>),

@@ -1,0 +1,26 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/codegen_unreachable_checks.ers
+---
+--- errors ---
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[codegen_unreachable_checks.ers:16:25]
+ 15 │ fn branch(c: bool) -> u32 {
+ 16 │     (return 3) + if c { 1 } else { 2 }
+    ·                         ┬
+    ·                         ╰── expected `!`, found an integer
+ 17 │ }
+    ╰────
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[codegen_unreachable_checks.ers:16:36]
+ 15 │ fn branch(c: bool) -> u32 {
+ 16 │     (return 3) + if c { 1 } else { 2 }
+    ·                                    ┬
+    ·                                    ╰── expected `!`, found an integer
+ 17 │ }
+    ╰────

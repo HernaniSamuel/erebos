@@ -1,0 +1,13 @@
+// emit: hir
+// Compile-time code cannot use run-time variables, nor leave with `return`
+// (ADR 0029).
+fn uses(x: u32) -> u32 {
+    let y: u32 = comptime x + 1;
+    let z: u32 = comptime { return 3; };
+    loop {
+        let w: u32 = comptime { break; 1 };
+    }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

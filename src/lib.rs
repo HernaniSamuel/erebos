@@ -4,6 +4,7 @@
 pub mod codegen;
 pub mod diag;
 pub mod driver;
+pub mod eval;
 pub mod hir;
 pub mod int;
 pub mod layout;

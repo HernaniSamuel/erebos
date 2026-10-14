@@ -4,8 +4,8 @@
 use crate::diag::{Diagnostic, Diagnostics};
 use crate::span::Span;
 use crate::syntax::ast::{
-    Attr, BinOp, Block, Expr, ExprKind, FieldDecl, FieldInit, File, FnDecl, FnKind, Ident, Item,
-    Let, LogicalOp, Param, Stmt, StructDecl, Ty, TyKind, UnOp,
+    Attr, BinOp, Block, ComptimeDecl, ConstDecl, Expr, ExprKind, FieldDecl, FieldInit, File,
+    FnDecl, FnKind, Ident, Item, Let, LogicalOp, Param, Stmt, StructDecl, Ty, TyKind, UnOp,
 };
 use crate::syntax::lexer;
 use crate::syntax::token::{Token, TokenKind};
@@ -119,6 +119,8 @@ impl Parser<'_> {
                 | TokenKind::Fn
                 | TokenKind::Extern
                 | TokenKind::Struct
+                | TokenKind::Const
+                | TokenKind::Comptime
                 | TokenKind::Pound
                 | TokenKind::Eof
         ) {
@@ -136,6 +138,16 @@ impl Parser<'_> {
                 Ok(Item::Fn(self.fn_decl(attrs)?))
             }
             TokenKind::Struct => Ok(Item::Struct(self.struct_decl(attrs)?)),
+            TokenKind::Const => Ok(Item::Const(self.const_decl(attrs)?)),
+            TokenKind::Comptime => {
+                let start = self.bump().span;
+                let block = self.block()?;
+                Ok(Item::Comptime(ComptimeDecl {
+                    attrs,
+                    span: start.to(block.span),
+                    block,
+                }))
+            }
             _ => {
                 // A stray token, not a missing one: point at the token itself.
                 let err = self.report_unexpected("an item", self.peek().span);
@@ -212,6 +224,23 @@ impl Parser<'_> {
             ret,
             span: start.to(body.span),
             body: Some(body),
+        })
+    }
+
+    fn const_decl(&mut self, attrs: Vec<Attr>) -> PResult<ConstDecl> {
+        let start = self.bump().span;
+        let name = self.ident()?;
+        self.expect(TokenKind::Colon)?;
+        let ty = self.ty()?;
+        self.expect(TokenKind::Eq)?;
+        let value = self.expr()?;
+        let semi = self.expect(TokenKind::Semi)?;
+        Ok(ConstDecl {
+            attrs,
+            name,
+            ty,
+            value,
+            span: start.to(semi.span),
         })
     }
 
@@ -358,6 +387,19 @@ impl Parser<'_> {
                     self.bump();
                 }
                 TokenKind::Let => stmts.push(Stmt::Let(self.let_stmt()?)),
+                TokenKind::Const => {
+                    let token = self.peek();
+                    self.diags.push(
+                        Diagnostic::error(
+                            "parser::local-const",
+                            "`const` items cannot be declared inside a function",
+                        )
+                        .label(token.span, "inside a function")
+                        .help("compute the value at compile time with `let name: T = comptime ...;`, or move the `const` out of the function (ADR 0029)"),
+                    );
+                    // Consumed, so that the rest of the block parses.
+                    self.const_decl(Vec::new())?;
+                }
                 _ => {
                     // As in Rust, a statement starting with a block-like
                     // expression ends with it: `if c { } - 1` is not a
@@ -603,6 +645,16 @@ impl Parser<'_> {
             TokenKind::Continue => {
                 self.bump();
                 ExprKind::Continue
+            }
+            // Like `return`, it covers the whole expression to its right
+            // (ADR 0029).
+            TokenKind::Comptime => {
+                self.bump();
+                let value = self.expr()?;
+                return Ok(Expr {
+                    span: token.span.to(value.span),
+                    kind: ExprKind::Comptime(Box::new(value)),
+                });
             }
             TokenKind::Break | TokenKind::Return => {
                 self.bump();

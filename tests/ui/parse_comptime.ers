@@ -1,0 +1,14 @@
+// emit: ast
+// `comptime` covers the whole expression to its right, like `return`
+// (ADR 0029).
+const SIZE: usize = 4 * 1024;
+
+comptime {
+    assert(SIZE > 0);
+}
+
+fn f(y: u32) -> u32 {
+    let a: u32 = comptime g(1) + 2;
+    let b: u32 = (comptime g(1)) + y;
+    a + b
+}

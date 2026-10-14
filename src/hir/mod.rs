@@ -18,6 +18,10 @@ pub struct FnId(pub u32);
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ExprId(pub u32);
 
+/// A constant, indexing [`Hir::consts`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct ConstId(pub u32);
+
 /// A struct, indexing [`Hir::structs`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct StructId(pub u32);
@@ -29,7 +33,12 @@ pub struct LocalId(pub u32);
 #[derive(Debug)]
 pub struct Hir {
     pub structs: Vec<StructDef>,
+    /// Functions, then the bodies that run at compile time: one for each
+    /// constant and each `comptime` block, in source order.
     pub fns: Vec<Fn>,
+    pub consts: Vec<ConstDef>,
+    /// The bodies of `comptime { ... }` items.
+    pub comptime_blocks: Vec<FnId>,
     pub entry: FnId,
     pub panic: FnId,
     /// Expression ids are `0..expr_count`.
@@ -51,6 +60,29 @@ impl Hir {
     pub fn struct_(&self, id: StructId) -> &StructDef {
         &self.structs[id.0 as usize]
     }
+
+    pub fn const_(&self, id: ConstId) -> &ConstDef {
+        &self.consts[id.0 as usize]
+    }
+}
+
+/// `const NAME: Type = value;` (ADR 0029). The value is computed by running
+/// `init`, a body of its own whose return value is the constant.
+#[derive(Debug)]
+pub struct ConstDef {
+    pub name: String,
+    pub name_span: Span,
+    pub ty: Ty,
+    pub init: FnId,
+}
+
+/// What a body that runs at compile time computes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Comptime {
+    /// The value of a constant.
+    Const(ConstId),
+    /// A `comptime { ... }` item.
+    Block,
 }
 
 /// `struct Name { field: Type, ... }` (ADR 0021)
@@ -95,6 +127,8 @@ pub struct Fn {
     pub span: Span,
     /// Defined by the runtime support functions (ADR 0020).
     pub runtime: bool,
+    /// A body run only at compile time, never part of the program.
+    pub comptime: Option<Comptime>,
 }
 
 impl Fn {
@@ -224,6 +258,10 @@ pub enum ExprKind {
     Byte(u8),
     Bool(bool),
     Unit,
+    /// A constant (ADR 0029): a value, not a place.
+    Const(ConstId),
+    /// `comptime expr`, evaluated at compile time (ADR 0029).
+    Comptime(Box<Expr>),
     /// `[a, b, c]`
     Array(Vec<Expr>),
     /// `[value; N]`
@@ -288,7 +326,7 @@ pub enum ExprKind {
 impl Expr {
     /// Calls `f` on this expression and every expression inside it, in
     /// source order.
-    pub fn walk(&self, f: &mut impl FnMut(&Expr)) {
+    pub fn walk<'a>(&'a self, f: &mut impl FnMut(&'a Expr)) {
         f(self);
         match &self.kind {
             ExprKind::Int(_)
@@ -298,6 +336,7 @@ impl Expr {
             | ExprKind::SizeOf(_)
             | ExprKind::AlignOf(_)
             | ExprKind::OffsetOf(..)
+            | ExprKind::Const(_)
             | ExprKind::Local(_)
             | ExprKind::Continue { .. }
             | ExprKind::Break { value: None, .. }
@@ -308,7 +347,10 @@ impl Expr {
                     arg.walk(f);
                 }
             }
-            ExprKind::Repeat(e, _) | ExprKind::Field(e, _, _) | ExprKind::Assert(e) => e.walk(f),
+            ExprKind::Repeat(e, _)
+            | ExprKind::Field(e, _, _)
+            | ExprKind::Assert(e)
+            | ExprKind::Comptime(e) => e.walk(f),
             ExprKind::StructLit(_, fields) => {
                 for (_, value) in fields {
                     value.walk(f);
@@ -343,7 +385,7 @@ impl Expr {
 }
 
 impl Block {
-    pub fn walk(&self, f: &mut impl FnMut(&Expr)) {
+    pub fn walk<'a>(&'a self, f: &mut impl FnMut(&'a Expr)) {
         for stmt in &self.stmts {
             match stmt {
                 Stmt::Let { init, .. } => init.walk(f),

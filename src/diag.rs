@@ -63,6 +63,14 @@ impl Diagnostics {
         !self.list.is_empty()
     }
 
+    pub fn len(&self) -> usize {
+        self.list.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.list.is_empty()
+    }
+
     pub fn append(&mut self, other: Diagnostics) {
         self.list.extend(other.list);
     }

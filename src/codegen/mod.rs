@@ -9,7 +9,7 @@ use inkwell::attributes::{Attribute, AttributeLoc};
 use inkwell::basic_block::BasicBlock as LlvmBlock;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
-use inkwell::module::Module;
+use inkwell::module::{Linkage, Module};
 use inkwell::passes::PassBuilderOptions;
 use inkwell::targets::{
     CodeModel, FileType, InitializationConfig, RelocMode, Target as LlvmTarget, TargetMachine,
@@ -102,24 +102,30 @@ fn lower<'ctx>(
 
     // Declare everything first so bodies can refer to any function.
     let abis: Vec<FnAbi> = mir.bodies().map(|(_, body)| FnAbi::of(body)).collect();
-    let fns: Vec<FunctionValue> = mir
+    // Bodies run at compile time are not part of the program (ADR 0029).
+    let fns: Vec<Option<FunctionValue>> = mir
         .bodies()
         .zip(&abis)
-        .map(|((_, body), abi)| declare(context, &module, body, abi))
+        .map(|((_, body), abi)| (!body.comptime).then(|| declare(context, &module, body, abi)))
         .collect();
-    for (((_, body), &function), abi) in mir.bodies().zip(&fns).zip(&abis) {
+    let data: Vec<PointerValue> = mir
+        .data
+        .iter()
+        .enumerate()
+        .map(|(i, data)| const_data(context, &module, i, data))
+        .collect();
+    let shared = Shared {
+        fns: &fns,
+        abis: &abis,
+        data: &data,
+        panic: mir.panic.0 as usize,
+    };
+    for (((_, body), function), abi) in mir.bodies().zip(&fns).zip(&abis) {
         // An `extern fn` stays a declaration for the linker to resolve.
-        if !body.external {
-            FnCodegen::new(
-                context,
-                body,
-                abi,
-                function,
-                &fns,
-                &abis,
-                mir.panic.0 as usize,
-            )
-            .define();
+        if let Some(function) = function
+            && !body.external
+        {
+            FnCodegen::new(context, body, abi, *function, &shared).define();
         }
     }
 
@@ -178,6 +184,24 @@ fn memory_type(context: &Context, ty: Ty) -> Option<BasicTypeEnum<'_>> {
 /// type `ty` in memory.
 fn element_type(context: &Context, ty: Ty) -> BasicTypeEnum<'_> {
     memory_type(context, ty).unwrap_or_else(|| context.i8_type().array_type(0).into())
+}
+
+/// Read-only data computed at compile time (ADR 0029), as a private
+/// constant.
+fn const_data<'ctx>(
+    context: &'ctx Context,
+    module: &Module<'ctx>,
+    index: usize,
+    data: &crate::mir::ConstData,
+) -> PointerValue<'ctx> {
+    let bytes = context.const_string(&data.bytes, false);
+    let global = module.add_global(bytes.get_type(), None, &format!("data{index}"));
+    global.set_initializer(&bytes);
+    global.set_constant(true);
+    global.set_linkage(Linkage::Private);
+    global.set_unnamed_addr(true);
+    global.set_alignment(u32::try_from(data.align).expect("alignments are small"));
+    global.as_pointer_value()
 }
 
 /// The LLVM type of an aggregate held in registers (ADR 0025).
@@ -328,8 +352,10 @@ struct FnCodegen<'a, 'ctx> {
     function: FunctionValue<'ctx>,
     /// Every function of the module and how it is called, indexed by body
     /// id.
-    fns: &'a [FunctionValue<'ctx>],
+    fns: &'a [Option<FunctionValue<'ctx>>],
     abis: &'a [FnAbi],
+    /// Read-only data computed at compile time, by id.
+    data: &'a [PointerValue<'ctx>],
     /// The panic function, which failed checks call (ADR 0014).
     panic: usize,
     builder: Builder<'ctx>,
@@ -340,16 +366,33 @@ struct FnCodegen<'a, 'ctx> {
     in_memory: Vec<bool>,
 }
 
+/// What every function of the module refers to.
+#[derive(Clone, Copy)]
+struct Shared<'a, 'ctx> {
+    /// Every function and how it is called, by body id; bodies run at
+    /// compile time have no function.
+    fns: &'a [Option<FunctionValue<'ctx>>],
+    abis: &'a [FnAbi],
+    /// Read-only data computed at compile time, by id.
+    data: &'a [PointerValue<'ctx>],
+    /// The panic function, which failed checks call (ADR 0014).
+    panic: usize,
+}
+
 impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
     fn new(
         context: &'ctx Context,
         body: &'a Body,
         abi: &'a FnAbi,
         function: FunctionValue<'ctx>,
-        fns: &'a [FunctionValue<'ctx>],
-        abis: &'a [FnAbi],
-        panic: usize,
+        shared: &Shared<'a, 'ctx>,
     ) -> Self {
+        let Shared {
+            fns,
+            abis,
+            data,
+            panic,
+        } = *shared;
         let blocks = body
             .blocks()
             .map(|(bb, _)| context.append_basic_block(function, &bb.to_string()))
@@ -369,6 +412,7 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
             function,
             fns,
             abis,
+            data,
             panic,
             builder: context.create_builder(),
             blocks,
@@ -388,6 +432,10 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                 // caller's copy, or the memory it returns into (ADR 0025).
                 if let Some(pointer) = self.memory_param(local) {
                     return Some(pointer);
+                }
+                // Bound to read-only data, which is its memory.
+                if let Some(data) = self.body.locals[local.0 as usize].constant {
+                    return Some(self.data[data.0 as usize]);
                 }
                 self.representation(Place::local(local)).map(|ty| {
                     let slot = self
@@ -429,6 +477,12 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
             }
             self.terminator(data.terminator);
         }
+    }
+
+    /// A function of the program; only those run at compile time have no
+    /// code, and nothing at run time calls them.
+    fn function(&self, body: usize) -> FunctionValue<'ctx> {
+        self.fns[body].expect("the program calls only functions of the program")
     }
 
     /// The LLVM parameter that is the memory of `local`: a parameter
@@ -545,7 +599,7 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
         }
         let call = self
             .builder
-            .build_call(self.fns[callee], &values, "")
+            .build_call(self.function(callee), &values, "")
             .expect("builder is positioned");
         if abi.ret_mode == PassMode::Indirect {
             for attribute in sret_attributes(self.context, abi.ret) {
@@ -954,7 +1008,7 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
             },
             Terminator::Unreachable => b.build_unreachable(),
             Terminator::Panic(_) => {
-                b.build_call(self.fns[self.panic], &[], "")
+                b.build_call(self.function(self.panic), &[], "")
                     .expect("builder is positioned");
                 b.build_unreachable()
             }

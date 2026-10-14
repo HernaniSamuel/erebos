@@ -92,6 +92,15 @@ const SNIPPETS: &[&str] = &[
     "#[packed] struct P { a: u8, b: u32 }",
     "extern",
     "extern fn e(a: u32) -> u32;",
+    "comptime",
+    "comptime {",
+    "comptime { assert(false); }",
+    "const",
+    "const K: u32 = K;",
+    "const T: [u8; 2] = [1, 2];",
+    "assert(",
+    "T[i]",
+    "loop { }",
 ];
 
 /// xorshift64: small, deterministic, good enough to pick mutations.

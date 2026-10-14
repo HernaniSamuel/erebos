@@ -1,0 +1,20 @@
+// emit: typeck
+// Constants are values, not places (ADR 0029); a constant that needs its own
+// value is a cycle (ADR 0028).
+const LIMIT: u32 = 10;
+const SELF: u32 = SELF + 1;
+const FIRST: u32 = SECOND * 2;
+const SECOND: u32 = third();
+const WRONG: u8 = 300;
+const TYPED: u32 = true;
+
+fn third() -> u32 { FIRST }
+
+fn misuse() {
+    LIMIT = 5;
+    let p: *const u32 = &raw const LIMIT;
+    let x: u8 = comptime 300;
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

@@ -1,0 +1,222 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/eval_errors.ers
+---
+--- errors ---
+eval::panic
+
+  × the evaluation called the panic function: division by zero
+   ╭─[eval_errors.ers:4:21]
+ 3 │ // the failure, the calls on the way and what was being evaluated.
+ 4 │ const DIVIDE: u32 = 10 / zero();
+   ·       ───┬──        ─────┬─────
+   ·          │               ╰── division by zero
+   ·          ╰── while evaluating the constant `DIVIDE`
+ 5 │ const FOREVER: u32 = { loop {} };
+   ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::step-limit
+
+  × the evaluation did not finish within 10000000 steps
+   ╭─[eval_errors.ers:5:24]
+ 4 │ const DIVIDE: u32 = 10 / zero();
+ 5 │ const FOREVER: u32 = { loop {} };
+   ·       ───┬───          ───┬───
+   ·          │                ╰── still running here
+   ·          ╰── while evaluating the constant `FOREVER`
+ 6 │ const RECURSE: u32 = deep(0);
+   ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::extern-call
+
+  × `c_function` is an `extern fn`, which cannot run at compile time
+   ╭─[eval_errors.ers:8:21]
+ 7 │ const DEVICE: u8 = read_uart();
+ 8 │ const C_CODE: u32 = c_function();
+   ·       ───┬──        ──────┬─────
+   ·          │                ╰── called here
+   ·          ╰── while evaluating the constant `C_CODE`
+ 9 │ const PADDING: u32 = padding();
+   ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::pointer-escapes
+
+  × the value holds a pointer into memory that exists only at compile time
+    ╭─[eval_errors.ers:10:1]
+  9 │ const PADDING: u32 = padding();
+ 10 │ const ESCAPES: *const u32 = local_address();
+    · ──────────────────────┬─────────────────────┬
+    ·                       │                     ╰── while evaluating the constant `ESCAPES`
+    ·                       ╰── this value
+ 11 │ const TO_INT: usize = address_as_int();
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::assertion-failed
+
+  × assertion failed
+    ╭─[eval_errors.ers:22:5]
+ 20 │ 
+ 21 │ comptime {
+    · ────┬───
+    ·     ╰── while evaluating this `comptime` block
+ 22 │     assert(size_of(Padded) == 5);
+    ·     ──────────────┬─────────────
+    ·                   ╰── assertion failed
+ 23 │ }
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::call-depth
+
+  × the evaluation nested more than 256 calls
+   ╭─[eval_errors.ers:6:7]
+ 5 │ const FOREVER: u32 = { loop {} };
+ 6 │ const RECURSE: u32 = deep(0);
+   ·       ───┬───        ───┬───
+   ·          │              ╰── called here
+   ·          ╰── while evaluating the constant `RECURSE`
+ 7 │ const DEVICE: u8 = read_uart();
+   ╰────
+    ╭─[eval_errors.ers:26:26]
+ 25 │ fn zero() -> u32 { 0 }
+ 26 │ fn deep(n: u32) -> u32 { deep(n + 1) }
+    ·                          ─────┬─────
+    ·                               ╰── one call too deep
+ 27 │ fn read_uart() -> u8 {
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::volatile-access
+
+  × a volatile access cannot happen at compile time
+   ╭─[eval_errors.ers:7:7]
+ 6 │ const RECURSE: u32 = deep(0);
+ 7 │ const DEVICE: u8 = read_uart();
+   ·       ───┬──       ─────┬─────
+   ·          │              ╰── called here
+   ·          ╰── while evaluating the constant `DEVICE`
+ 8 │ const C_CODE: u32 = c_function();
+   ╰────
+    ╭─[eval_errors.ers:29:5]
+ 28 │     let uart: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+ 29 │     *uart
+    ·     ──┬──
+    ·       ╰── accessed here
+ 30 │ }
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::uninit-read
+
+  × these bytes were never written
+    ╭─[eval_errors.ers:9:7]
+  8 │ const C_CODE: u32 = c_function();
+  9 │ const PADDING: u32 = padding();
+    ·       ───┬───        ────┬────
+    ·          │               ╰── called here
+    ·          ╰── while evaluating the constant `PADDING`
+ 10 │ const ESCAPES: *const u32 = local_address();
+    ╰────
+    ╭─[eval_errors.ers:35:5]
+ 34 │     let bytes: *const u8 = &raw const p as *const u8;
+ 35 │     bytes[1] as u32
+    ·     ────┬───
+    ·         ╰── read here
+ 36 │ }
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::pointer-to-int
+
+  × this pointer's address only exists after linking
+    ╭─[eval_errors.ers:11:7]
+ 10 │ const ESCAPES: *const u32 = local_address();
+ 11 │ const TO_INT: usize = address_as_int();
+    ·       ───┬──          ────────┬───────
+    ·          │                    ╰── called here
+    ·          ╰── while evaluating the constant `TO_INT`
+ 12 │ const COMPARE: bool = compare_objects();
+    ╰────
+    ╭─[eval_errors.ers:43:5]
+ 42 │     let x: u32 = 5;
+ 43 │     &raw const x as usize
+    ·     ──────────┬──────────
+    ·               ╰── converted here
+ 44 │ }
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::pointer-compare
+
+  × these pointers cannot be compared at compile time, since their addresses only exist after
+  │ linking
+    ╭─[eval_errors.ers:12:7]
+ 11 │ const TO_INT: usize = address_as_int();
+ 12 │ const COMPARE: bool = compare_objects();
+    ·       ───┬───         ────────┬────────
+    ·          │                    ╰── called here
+    ·          ╰── while evaluating the constant `COMPARE`
+ 13 │ const ADDRESS: u32 = read_address();
+    ╰────
+    ╭─[eval_errors.ers:48:5]
+ 47 │     let b: u32 = 2;
+ 48 │     &raw const a < &raw const b
+    ·     ─────────────┬─────────────
+    ·                  ╰── compared here
+ 49 │ }
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::invalid-access
+
+  × address 0x80000000 only exists when the program runs, so it cannot be read or written at
+  │ compile time
+    ╭─[eval_errors.ers:13:7]
+ 12 │ const COMPARE: bool = compare_objects();
+ 13 │ const ADDRESS: u32 = read_address();
+    ·       ───┬───        ───────┬──────
+    ·          │                  ╰── called here
+    ·          ╰── while evaluating the constant `ADDRESS`
+ 14 │ const PANIC: u32 = explicit_panic();
+    ╰────
+    ╭─[eval_errors.ers:51:5]
+ 50 │ fn read_address() -> u32 {
+ 51 │     *(0x8000_0000 as *const u32)
+    ·     ──────────────┬─────────────
+    ·                   ╰── accessed here
+ 52 │ }
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::panic
+
+  × the evaluation called the panic function
+    ╭─[eval_errors.ers:14:7]
+ 13 │ const ADDRESS: u32 = read_address();
+ 14 │ const PANIC: u32 = explicit_panic();
+    ·       ──┬──        ────────┬───────
+    ·         │                  ╰── called here
+    ·         ╰── while evaluating the constant `PANIC`
+ 15 │ const BOUNDS: u32 = out_of_bounds(4);
+    ╰────
+    ╭─[eval_errors.ers:54:5]
+ 53 │ fn explicit_panic() -> u32 {
+ 54 │     on_panic()
+    ·     ─────┬────
+    ·          ╰── called here
+ 55 │ }
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::panic
+
+  × the evaluation called the panic function: index out of bounds
+    ╭─[eval_errors.ers:15:7]
+ 14 │ const PANIC: u32 = explicit_panic();
+ 15 │ const BOUNDS: u32 = out_of_bounds(4);
+    ·       ───┬──        ────────┬───────
+    ·          │                  ╰── called here
+    ·          ╰── while evaluating the constant `BOUNDS`
+ 16 │ const MMIO: *mut volatile u32 = &raw mut (*(0x1000_0000 as *mut Regs)).ctrl as *mut volatile u32;
+    ╰────
+    ╭─[eval_errors.ers:58:5]
+ 57 │     let t: [u32; 4] = [1, 2, 3, 4];
+ 58 │     t[i]
+    ·     ──┬─
+    ·       ╰── index out of bounds
+ 59 │ }
+    ╰────
+  help: this code runs at compile time (ADR 0027)

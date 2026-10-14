@@ -10,7 +10,7 @@
 
 mod build;
 
-pub use build::build_body;
+pub use build::{build_body, build_expr_body};
 
 use std::fmt;
 use std::ptr;
@@ -19,6 +19,7 @@ use std::sync::OnceLock;
 pub use crate::int::IntTy;
 pub use crate::layout::Layout;
 pub use crate::ops::{BinOp, UnOp};
+use crate::span::Span;
 use crate::target;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -43,6 +44,9 @@ impl Local {
 pub struct Mir {
     /// Every struct type, for dumps; types refer to them directly.
     pub structs: Vec<StructRef>,
+    /// Read-only data computed at compile time, which constant locals are
+    /// bound to (ADR 0029).
+    pub data: Vec<ConstData>,
     pub bodies: Vec<Body>,
     pub entry: BodyId,
     pub panic: BodyId,
@@ -61,10 +65,14 @@ impl Mir {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Body {
     /// Symbol name; Erebos uses the C ABI and does not mangle (ADR 0006).
     pub name: String,
+    pub span: Span,
+    /// Runs only at compile time: a constant's value or a `comptime`
+    /// block, never part of the program (ADR 0029).
+    pub comptime: bool,
     pub ret: Ty,
     /// Locals `_1..=_n` hold the `n` parameters, in order.
     pub param_count: usize,
@@ -125,11 +133,25 @@ impl Body {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct LocalDecl {
     pub ty: Ty,
     /// The source name, for user variables; temporaries have none.
     pub name: Option<String>,
+    /// Bound to read-only data computed at compile time: the local holds
+    /// it from the start, and is never written (ADR 0029).
+    pub constant: Option<DataId>,
+}
+
+/// Read-only data computed at compile time, indexing [`Mir::data`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct DataId(pub u32);
+
+#[derive(Clone, Debug)]
+pub struct ConstData {
+    /// Laid out as on the target, padding zero (ADR 0027).
+    pub bytes: Vec<u8>,
+    pub align: u64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -250,13 +272,17 @@ pub struct Ptr {
     pub pointee: &'static Ty,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct BasicBlockData {
     pub statements: Vec<Statement>,
+    /// Where each statement comes from in the source, for the errors of
+    /// compile-time evaluation.
+    pub spans: Vec<Span>,
     pub terminator: Terminator,
+    pub terminator_span: Span,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Statement {
     Assign(Place, Rvalue),
     /// Calls a function; `dest` receives the result, if it has one.
@@ -334,7 +360,7 @@ pub enum Const {
     Unit,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Rvalue {
     Use(Operand),
     Unary(UnOp, Operand),
@@ -533,7 +559,8 @@ impl fmt::Display for Mir {
                 ""
             };
             let external = if body.external { "extern " } else { "" };
-            write!(f, "{external}{kind}fn {}(", body.name)?;
+            let comptime = if body.comptime { "comptime " } else { "" };
+            write!(f, "{external}{comptime}{kind}fn {}(", body.name)?;
             for (i, param) in body.params().iter().enumerate() {
                 if i > 0 {
                     f.write_str(", ")?;
@@ -546,7 +573,11 @@ impl fmt::Display for Mir {
             }
             writeln!(f, ") -> {} {{", body.ret)?;
             for (local, decl) in body.locals() {
-                write!(f, "    let {local}: {};", decl.ty)?;
+                write!(f, "    let {local}: {}", decl.ty)?;
+                if let Some(data) = decl.constant {
+                    write!(f, " = data{}", data.0)?;
+                }
+                f.write_str(";")?;
                 match &decl.name {
                     Some(name) => writeln!(f, " // {name}")?,
                     None => writeln!(f)?,

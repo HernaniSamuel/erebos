@@ -1,0 +1,6 @@
+// A `const` belongs at the top level; inside a function, `comptime` gives a
+// value computed at compile time (ADR 0029).
+fn f() -> u32 {
+    const X: u32 = 1;
+    X
+}

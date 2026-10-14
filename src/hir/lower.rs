@@ -4,8 +4,8 @@ use std::collections::HashMap;
 
 use crate::diag::{Diagnostic, Diagnostics};
 use crate::hir::{
-    Block, Expr, ExprId, ExprKind, FieldDef, Fn, FnId, FnKind, Hir, IntTy, Local, LocalId, Stmt,
-    StructDef, StructId, StructTy, Ty,
+    Block, Comptime, ConstDef, ConstId, Expr, ExprId, ExprKind, FieldDef, Fn, FnId, FnKind, Hir,
+    IntTy, Local, LocalId, Stmt, StructDef, StructId, StructTy, Ty,
 };
 use crate::span::Span;
 use crate::syntax::ast;
@@ -28,13 +28,25 @@ pub fn lower(
     let decls: Vec<&ast::FnDecl> = items()
         .filter_map(|item| match item {
             ast::Item::Fn(decl) => Some(decl),
-            ast::Item::Struct(_) => None,
+            _ => None,
         })
         .collect();
     let struct_decls: Vec<&ast::StructDecl> = items()
         .filter_map(|item| match item {
             ast::Item::Struct(decl) => Some(decl),
-            ast::Item::Fn(_) => None,
+            _ => None,
+        })
+        .collect();
+    let const_decls: Vec<&ast::ConstDecl> = items()
+        .filter_map(|item| match item {
+            ast::Item::Const(decl) => Some(decl),
+            _ => None,
+        })
+        .collect();
+    let comptime_decls: Vec<&ast::ComptimeDecl> = items()
+        .filter_map(|item| match item {
+            ast::Item::Comptime(decl) => Some(decl),
+            _ => None,
         })
         .collect();
     let program_fns = program
@@ -48,11 +60,13 @@ pub fn lower(
     let runtime_names: Vec<&str> = runtime
         .into_iter()
         .flat_map(|rt| &rt.items)
-        .map(item_name)
+        .filter_map(item_name)
         .map(|name| name.name.as_str())
         .collect();
     for item in &program.items {
-        let ident = item_name(item);
+        let Some(ident) = item_name(item) else {
+            continue;
+        };
         let name = ident.name.as_str();
         let (label, help) = if name == "assert" {
             (
@@ -116,8 +130,19 @@ pub fn lower(
             .or_insert((FnId(i as u32), decl.kind));
     }
 
+    // Constants too; a repeated name keeps its first definition.
+    let mut const_ids = HashMap::new();
+    for (i, decl) in const_decls.iter().enumerate() {
+        const_ids
+            .entry(decl.name.name.clone())
+            .or_insert(ConstId(i as u32));
+    }
+
     let mut lowerer = Lowerer {
         fn_ids,
+        const_ids,
+        comptime_floor: None,
+        in_comptime: false,
         struct_ids,
         struct_tys,
         struct_decls: &struct_decls,
@@ -135,6 +160,21 @@ pub fn lower(
     for f in &mut fns[program_fns..] {
         f.runtime = true;
     }
+    // Bodies run at compile time follow the functions, so function ids
+    // stay those of the declarations.
+    let mut consts = Vec::new();
+    for (i, decl) in const_decls.iter().enumerate() {
+        let init = FnId(fns.len() as u32);
+        let id = ConstId(i as u32);
+        let (def, body) = lowerer.const_decl(decl, id, init);
+        consts.push(def);
+        fns.push(body);
+    }
+    let mut comptime_blocks = Vec::new();
+    for decl in &comptime_decls {
+        comptime_blocks.push(FnId(fns.len() as u32));
+        fns.push(lowerer.comptime_decl(decl));
+    }
     let expr_count = lowerer.next_expr;
 
     check_duplicate_items(program, runtime, diags);
@@ -145,16 +185,20 @@ pub fn lower(
     Some(Hir {
         structs,
         fns,
+        consts,
+        comptime_blocks,
         entry: entry?,
         panic: panic?,
         expr_count,
     })
 }
 
-fn item_name(item: &ast::Item) -> &ast::Ident {
+fn item_name(item: &ast::Item) -> Option<&ast::Ident> {
     match item {
-        ast::Item::Fn(decl) => &decl.name,
-        ast::Item::Struct(decl) => &decl.name,
+        ast::Item::Fn(decl) => Some(&decl.name),
+        ast::Item::Struct(decl) => Some(&decl.name),
+        ast::Item::Const(decl) => Some(&decl.name),
+        ast::Item::Comptime(_) => None,
     }
 }
 
@@ -172,7 +216,9 @@ fn check_duplicate_items(
     );
     let mut seen: HashMap<&str, (Span, bool)> = HashMap::new();
     for (item, in_runtime) in items {
-        let name = item_name(item);
+        let Some(name) = item_name(item) else {
+            continue;
+        };
         match seen.get(name.name.as_str()) {
             // A program item named like a runtime one was reported as a
             // reserved name; the two live in different files.
@@ -252,6 +298,14 @@ fn find_unique(fns: &[Fn], kind: FnKind, diags: &mut Diagnostics) -> Option<FnId
 struct Lowerer<'a> {
     /// Every function's id and kind, by name.
     fn_ids: HashMap<String, (FnId, ast::FnKind)>,
+    /// Every constant's id, by name.
+    const_ids: HashMap<String, ConstId>,
+    /// Inside `comptime expr`, the number of scopes outside it: their
+    /// variables exist only at run time (ADR 0029).
+    comptime_floor: Option<usize>,
+    /// Lowering code that runs at compile time, where `return` has no
+    /// function to leave.
+    in_comptime: bool,
     /// Every struct's id, by name.
     struct_ids: HashMap<String, StructId>,
     struct_tys: Vec<StructTy>,
@@ -357,8 +411,9 @@ impl Lowerer<'_> {
         (packed.is_some(), align)
     }
 
-    /// Functions take no attributes yet.
-    fn fn_attrs(&mut self, attrs: &[ast::Attr]) {
+    /// Items other than structs take no attributes yet; `what` names the
+    /// item.
+    fn no_attrs(&mut self, attrs: &[ast::Attr], what: &str) {
         for attr in attrs {
             match attr.name.name.as_str() {
                 "packed" | "align" => self.diags.push(
@@ -366,11 +421,79 @@ impl Lowerer<'_> {
                         "resolve::misplaced-attribute",
                         format!("`#[{}]` applies only to structs", attr.name.name),
                     )
-                    .label(attr.span, "not allowed on a function"),
+                    .label(attr.span, format!("not allowed on {what}")),
                 ),
                 _ => self.unknown_attr(attr),
             }
         }
+    }
+
+    /// A constant, and the body that computes its value (ADR 0029).
+    fn const_decl(&mut self, decl: &ast::ConstDecl, id: ConstId, init: FnId) -> (ConstDef, Fn) {
+        self.no_attrs(&decl.attrs, "a constant");
+        let ty = self.ty(&decl.ty);
+        let value = self.comptime_body(|this| this.expr(&decl.value));
+        let def = ConstDef {
+            name: decl.name.name.clone(),
+            name_span: decl.name.span,
+            ty,
+            init,
+        };
+        let body = Fn {
+            name: decl.name.name.clone(),
+            name_span: decl.name.span,
+            kind: FnKind::Plain,
+            ret: ty,
+            ret_span: Some(decl.ty.span),
+            param_count: 0,
+            locals: std::mem::take(&mut self.locals),
+            body: Some(Block {
+                stmts: Vec::new(),
+                span: value.span,
+                tail: Some(Box::new(value)),
+            }),
+            span: decl.span,
+            runtime: false,
+            comptime: Some(Comptime::Const(id)),
+        };
+        (def, body)
+    }
+
+    /// A `comptime { ... }` item, as a body returning `()`.
+    fn comptime_decl(&mut self, decl: &ast::ComptimeDecl) -> Fn {
+        self.no_attrs(&decl.attrs, "a `comptime` block");
+        let block = self.comptime_body(|this| this.block(&decl.block));
+        Fn {
+            name: "comptime".to_owned(),
+            name_span: Span::new(
+                decl.span.file,
+                decl.span.lo as usize,
+                decl.span.lo as usize + 8,
+            ),
+            kind: FnKind::Plain,
+            ret: Ty::Unit,
+            ret_span: None,
+            param_count: 0,
+            locals: std::mem::take(&mut self.locals),
+            body: Some(block),
+            span: decl.span,
+            runtime: false,
+            comptime: Some(Comptime::Block),
+        }
+    }
+
+    /// Lowers code run at compile time on its own: no variables, loops or
+    /// function around it.
+    fn comptime_body<T>(&mut self, lower: impl FnOnce(&mut Self) -> T) -> T {
+        self.locals.clear();
+        self.scopes.clear();
+        self.loops.clear();
+        self.scopes.push(HashMap::new());
+        let was_comptime = std::mem::replace(&mut self.in_comptime, true);
+        let result = lower(self);
+        self.in_comptime = was_comptime;
+        self.scopes.pop();
+        result
     }
 
     fn unknown_attr(&mut self, attr: &ast::Attr) {
@@ -482,7 +605,7 @@ impl Lowerer<'_> {
     }
 
     fn fn_decl(&mut self, decl: &ast::FnDecl) -> Fn {
-        self.fn_attrs(&decl.attrs);
+        self.no_attrs(&decl.attrs, "a function");
         self.locals.clear();
         self.scopes.clear();
         self.loops.clear();
@@ -534,6 +657,7 @@ impl Lowerer<'_> {
             body,
             span: decl.span,
             runtime: false,
+            comptime: None,
         }
     }
 
@@ -617,29 +741,53 @@ impl Lowerer<'_> {
     }
 
     fn find_local(&self, name: &str) -> Option<LocalId> {
-        self.scopes
-            .iter()
-            .rev()
-            .find_map(|scope| scope.get(name).copied())
+        self.find_local_scope(name).map(|(local, _)| local)
     }
 
-    fn resolve(&mut self, name: &ast::Ident) -> Option<LocalId> {
-        let found = self.find_local(&name.name);
-        if found.is_none() {
-            let mut diag = Diagnostic::error(
-                "resolve::unknown-name",
-                format!("cannot find `{}` in this scope", name.name),
-            );
-            if self.fn_ids.contains_key(&name.name) {
-                diag = diag
-                    .label(name.span, "a function, which is not a value")
-                    .help(format!("call it: `{}(...)`", name.name));
-            } else {
-                diag = diag.label(name.span, "not found");
+    /// The local `name` refers to, and the index of its scope.
+    fn find_local_scope(&self, name: &str) -> Option<(LocalId, usize)> {
+        self.scopes
+            .iter()
+            .enumerate()
+            .rev()
+            .find_map(|(depth, scope)| scope.get(name).map(|&local| (local, depth)))
+    }
+
+    /// A name used as a value: a local, shadowing a constant of the same
+    /// name, or a constant.
+    fn resolve(&mut self, name: &ast::Ident) -> Option<ExprKind> {
+        if let Some((local, depth)) = self.find_local_scope(&name.name) {
+            if self.comptime_floor.is_some_and(|floor| depth < floor) {
+                let declared = self.locals[local.0 as usize].span;
+                self.diags.push(
+                    Diagnostic::error(
+                        "ty::not-comptime",
+                        format!("`{}` is only known at run time", name.name),
+                    )
+                    .label(name.span, "used at compile time")
+                    .label(declared, "a variable of the running program")
+                    .help("compile-time code can use constants, literals and function calls (ADR 0029)"),
+                );
+                return None;
             }
-            self.diags.push(diag);
+            return Some(ExprKind::Local(local));
         }
-        found
+        if let Some(&id) = self.const_ids.get(&name.name) {
+            return Some(ExprKind::Const(id));
+        }
+        let mut diag = Diagnostic::error(
+            "resolve::unknown-name",
+            format!("cannot find `{}` in this scope", name.name),
+        );
+        if self.fn_ids.contains_key(&name.name) {
+            diag = diag
+                .label(name.span, "a function, which is not a value")
+                .help(format!("call it: `{}(...)`", name.name));
+        } else {
+            diag = diag.label(name.span, "not found");
+        }
+        self.diags.push(diag);
+        None
     }
 
     /// Resolves the callee of a call. Locals shadow functions, as in Rust.
@@ -696,7 +844,7 @@ impl Lowerer<'_> {
                 ExprKind::Repeat(self.boxed(value), len.unwrap_or(0))
             }
             ast::ExprKind::Name(name) => match self.resolve(name) {
-                Some(local) => ExprKind::Local(local),
+                Some(kind) => kind,
                 // Reported; any placeholder works since lowering errors stop
                 // the pipeline.
                 None => ExprKind::Unit,
@@ -801,7 +949,35 @@ impl Lowerer<'_> {
             ast::ExprKind::Continue => ExprKind::Continue {
                 target: self.loop_target(expr.span, "continue"),
             },
-            ast::ExprKind::Return(value) => ExprKind::Return(value.as_ref().map(|e| self.boxed(e))),
+            ast::ExprKind::Return(value) => {
+                if self.in_comptime {
+                    self.diags.push(
+                        Diagnostic::error(
+                            "resolve::return-in-comptime",
+                            "`return` cannot leave code that runs at compile time",
+                        )
+                        .label(expr.span, "no function to return from")
+                        .help(
+                            "compile-time code gives its value as its last expression (ADR 0029)",
+                        ),
+                    );
+                }
+                ExprKind::Return(value.as_ref().map(|e| self.boxed(e)))
+            }
+            ast::ExprKind::Comptime(inner) => {
+                // The enclosing function's variables and loops exist only at
+                // run time (ADR 0029).
+                let floor = self.comptime_floor.replace(self.scopes.len());
+                let loops = std::mem::take(&mut self.loops);
+                let was_comptime = std::mem::replace(&mut self.in_comptime, true);
+                self.scopes.push(HashMap::new());
+                let inner = self.boxed(inner);
+                self.scopes.pop();
+                self.in_comptime = was_comptime;
+                self.loops = loops;
+                self.comptime_floor = floor;
+                ExprKind::Comptime(inner)
+            }
         };
         Expr {
             id,
@@ -890,6 +1066,9 @@ mod tests {
     }
 
     fn program_file(file: &ast::File) -> crate::span::FileId {
-        item_name(&file.items[0]).span.file
+        item_name(&file.items[0])
+            .expect("the first item has a name")
+            .span
+            .file
     }
 }

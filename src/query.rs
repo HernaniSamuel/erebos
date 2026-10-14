@@ -1,13 +1,34 @@
-//! On-demand compilation (ADR 0028). Type checking, layouts and MIR are
-//! computed per item when first needed, remembered, and protected against
-//! cycles; the driver then asks for every item, so the whole program is
-//! still compiled.
+//! On-demand compilation (ADR 0028). Type checking, layouts, MIR and
+//! compile-time values are computed per item when first needed, remembered,
+//! and protected against cycles; the driver then asks for every item, so
+//! the whole program is still compiled.
+
+use std::collections::HashMap;
+use std::rc::Rc;
 
 use crate::diag::{Diagnostic, Diagnostics};
-use crate::hir::{self, FnId, Hir, StructId};
+use crate::eval::{self, ConstValue, Origin};
+use crate::hir::{self, ConstId, ExprId, ExprKind, FnId, Hir, StructId};
 use crate::layout::{self, Layout, MAX_ALIGN, MAX_SIZE, StructLayout};
-use crate::mir::{self, BodyId, Field, Mir, Ptr, StructRef};
+use crate::mir::{self, BodyId, ConstData, DataId, Field, Mir, Ptr, StructRef};
+use crate::span::Span;
 use crate::ty::{self, Tables};
+
+/// Where a piece of constant data comes from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum DataSource {
+    Const(ConstId),
+    Comptime(ExprId),
+}
+
+/// An item being computed; one requested again while in progress depends
+/// on itself.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Item {
+    Body(FnId),
+    Const(ConstId),
+    Comptime(ExprId),
+}
 
 /// The progress of one item through a query.
 enum State<T> {
@@ -21,8 +42,8 @@ pub struct Queries<'h> {
     pub diags: Diagnostics,
     /// What type checking found out about expressions so far.
     pub tables: Tables,
-    /// Type checking of each function.
-    checked: Vec<State<()>>,
+    /// Type checking of each function: whether it found no errors.
+    checked: Vec<State<bool>>,
     /// The layout of each struct; `None` when it contains itself or is too
     /// large, both reported.
     layouts: Vec<State<Option<StructLayout>>>,
@@ -31,8 +52,17 @@ pub struct Queries<'h> {
     layout_stack: Vec<StructId>,
     /// The MIR type of each struct.
     mir_structs: Vec<Option<StructRef>>,
-    /// The MIR of each function.
-    bodies: Vec<Option<mir::Body>>,
+    /// The MIR of each function; `None` if it cannot be built.
+    bodies: Vec<State<Option<Rc<mir::Body>>>>,
+    /// The value of each constant; `None` if it failed, which was reported.
+    consts: Vec<State<Option<ConstValue>>>,
+    /// The value of each `comptime` expression.
+    comptime: HashMap<ExprId, State<Option<ConstValue>>>,
+    /// Read-only data computed at compile time, and what it came from.
+    data: Vec<ConstData>,
+    data_ids: HashMap<DataSource, DataId>,
+    /// Items being computed, outermost first.
+    in_progress: Vec<(Item, Span, String)>,
 }
 
 impl<'h> Queries<'h> {
@@ -45,29 +75,175 @@ impl<'h> Queries<'h> {
             layouts: hir.structs.iter().map(|_| State::NotStarted).collect(),
             layout_stack: Vec::new(),
             mir_structs: vec![None; hir.structs.len()],
-            bodies: hir.fns.iter().map(|_| None).collect(),
+            bodies: hir.fns.iter().map(|_| State::NotStarted).collect(),
+            consts: hir.consts.iter().map(|_| State::NotStarted).collect(),
+            comptime: HashMap::new(),
+            data: Vec::new(),
+            data_ids: HashMap::new(),
+            in_progress: Vec::new(),
         }
     }
 
     /// Checks every item, in source order, whether or not something else
     /// needed it.
     pub fn check_all(&mut self) {
-        for id in 0..self.hir.structs.len() {
+        let hir = self.hir;
+        for id in 0..hir.structs.len() {
             self.struct_layout(StructId(id as u32));
         }
-        for id in 0..self.hir.fns.len() {
+        for id in 0..hir.fns.len() {
             self.typeck_fn(FnId(id as u32));
+        }
+        // Every constant and check is evaluated, used or not (ADR 0029).
+        for id in 0..hir.consts.len() {
+            self.const_value(ConstId(id as u32));
+        }
+        for &block in &hir.comptime_blocks {
+            self.comptime_block(block);
+        }
+        for (id, f) in hir.fns() {
+            let Some(body) = &f.body else {
+                continue;
+            };
+            if !self.typeck_fn(id) {
+                continue;
+            }
+            let mut inner = Vec::new();
+            body.walk(&mut |e| {
+                if let ExprKind::Comptime(value) = &e.kind {
+                    inner.push(&**value);
+                }
+            });
+            for value in inner {
+                self.comptime_value(id, value);
+            }
         }
     }
 
-    pub fn typeck_fn(&mut self, id: FnId) {
-        let state = &mut self.checked[id.0 as usize];
-        if !matches!(state, State::NotStarted) {
-            return;
+    /// Type checks a function, once; returns whether it had no errors.
+    pub fn typeck_fn(&mut self, id: FnId) -> bool {
+        match self.checked[id.0 as usize] {
+            State::Done(ok) => return ok,
+            // Checking does not depend on other bodies, so this is a
+            // request from an evaluation inside the body itself, which
+            // will find the cycle when it needs the body's MIR.
+            State::InProgress => return false,
+            State::NotStarted => {}
         }
-        *state = State::InProgress;
-        ty::check_fn(self, self.hir.fn_(id));
-        self.checked[id.0 as usize] = State::Done(());
+        self.checked[id.0 as usize] = State::InProgress;
+        let before = self.diags.len();
+        let hir = self.hir;
+        ty::check_fn(self, hir.fn_(id));
+        let ok = self.diags.len() == before;
+        self.checked[id.0 as usize] = State::Done(ok);
+        ok
+    }
+
+    /// Marks `item` in progress, or reports a cycle if it already is.
+    fn start(&mut self, item: Item, span: Span, what: String) -> bool {
+        let Some(at) = self.in_progress.iter().position(|(i, _, _)| *i == item) else {
+            self.in_progress.push((item, span, what));
+            return true;
+        };
+        let (_, first, first_what) = &self.in_progress[at];
+        let mut diag = Diagnostic::error(
+            "ty::cycle",
+            format!("{first_what} depends on its own value"),
+        )
+        .label(*first, "needed while computing itself");
+        for (_, span, what) in &self.in_progress[at + 1..] {
+            if span.file == first.file {
+                diag = diag.label(*span, format!("through {what}"));
+            }
+        }
+        self.diags
+            .push(diag.help("break the cycle: a value cannot depend on itself (ADR 0028)"));
+        false
+    }
+
+    fn finish(&mut self, item: Item) {
+        let (done, _, _) = self.in_progress.pop().expect("started");
+        debug_assert_eq!(done, item);
+    }
+
+    /// The value of a constant (ADR 0029), computed once.
+    pub fn const_value(&mut self, id: ConstId) -> Option<ConstValue> {
+        match &self.consts[id.0 as usize] {
+            State::Done(value) => return value.clone(),
+            State::InProgress | State::NotStarted => {}
+        }
+        let hir = self.hir;
+        let def = hir.const_(id);
+        let what = format!("the constant `{}`", def.name);
+        if !self.start(Item::Const(id), def.name_span, what.clone()) {
+            return None;
+        }
+        self.consts[id.0 as usize] = State::InProgress;
+        let value = self.mir_body(def.init).and_then(|body| {
+            let origin = Origin {
+                what,
+                span: def.name_span,
+            };
+            eval::evaluate(self, body, origin)
+        });
+        self.finish(Item::Const(id));
+        self.consts[id.0 as usize] = State::Done(value.clone());
+        value
+    }
+
+    /// Runs a `comptime { ... }` item.
+    fn comptime_block(&mut self, id: FnId) {
+        let f = self.hir.fn_(id);
+        let span = f.name_span;
+        if let Some(body) = self.mir_body(id) {
+            let origin = Origin {
+                what: "this `comptime` block".to_owned(),
+                span,
+            };
+            eval::evaluate(self, body, origin);
+        }
+    }
+
+    /// The value of `comptime expr` (ADR 0029), where `expr` is part of
+    /// function `id`.
+    pub fn comptime_value(&mut self, id: FnId, expr: &hir::Expr) -> Option<ConstValue> {
+        if let Some(State::Done(value)) = self.comptime.get(&expr.id) {
+            return value.clone();
+        }
+        let what = "this `comptime` expression".to_owned();
+        if !self.start(Item::Comptime(expr.id), expr.span, what.clone()) {
+            return None;
+        }
+        self.comptime.insert(expr.id, State::InProgress);
+        let value = mir::build_expr_body(self, id, expr).and_then(|body| {
+            let origin = Origin {
+                what,
+                span: expr.span,
+            };
+            eval::evaluate(self, Rc::new(body), origin)
+        });
+        self.finish(Item::Comptime(expr.id));
+        self.comptime.insert(expr.id, State::Done(value.clone()));
+        value
+    }
+
+    /// Read-only data for a value computed at compile time, stored once
+    /// per source.
+    pub fn const_data(&mut self, source: DataSource, value: &ConstValue, align: u64) -> DataId {
+        if let Some(&id) = self.data_ids.get(&source) {
+            return id;
+        }
+        let id = DataId(self.data.len() as u32);
+        self.data.push(ConstData {
+            bytes: value.bytes.clone(),
+            align,
+        });
+        self.data_ids.insert(source, id);
+        id
+    }
+
+    pub fn data(&self, id: DataId) -> &[u8] {
+        &self.data[id.0 as usize].bytes
     }
 
     /// The layout of `ty`, or `None` if it is larger than the target can
@@ -271,16 +447,38 @@ impl<'h> Queries<'h> {
         }
     }
 
-    /// The MIR of a function, built from its checked HIR.
-    pub fn mir_body(&mut self, id: FnId) -> &mir::Body {
-        if self.bodies[id.0 as usize].is_none() {
-            self.typeck_fn(id);
-            let body = mir::build_body(self, self.hir.fn_(id));
-            self.bodies[id.0 as usize] = Some(body);
+    /// The MIR of a function, built from its checked HIR; `None` if it
+    /// had errors, or needs a value that failed (both reported).
+    pub fn mir_body(&mut self, id: FnId) -> Option<Rc<mir::Body>> {
+        match &self.bodies[id.0 as usize] {
+            State::Done(body) => return body.clone(),
+            State::InProgress | State::NotStarted => {}
         }
-        self.bodies[id.0 as usize]
-            .as_ref()
-            .expect("built just above")
+        if !self.typeck_fn(id) {
+            self.bodies[id.0 as usize] = State::Done(None);
+            return None;
+        }
+        // A function's body may need a `comptime` value that needs the
+        // function itself. A constant's body is only built for the constant,
+        // which catches its own cycles.
+        let f = self.hir.fn_(id);
+        let tracked = f.comptime.is_none();
+        if tracked
+            && !self.start(
+                Item::Body(id),
+                f.name_span,
+                format!("the function `{}`", f.name),
+            )
+        {
+            return None;
+        }
+        self.bodies[id.0 as usize] = State::InProgress;
+        let body = mir::build_body(self, id).map(Rc::new);
+        if tracked {
+            self.finish(Item::Body(id));
+        }
+        self.bodies[id.0 as usize] = State::Done(body.clone());
+        body
     }
 
     /// The MIR of the whole program, in source order. The program must have
@@ -294,10 +492,14 @@ impl<'h> Queries<'h> {
         }
         Mir {
             structs,
+            data: self.data,
             bodies: self
                 .bodies
                 .into_iter()
-                .map(|body| body.expect("every body was built"))
+                .map(|body| match body {
+                    State::Done(Some(body)) => Rc::unwrap_or_clone(body),
+                    _ => unreachable!("every body of a well-typed program is built"),
+                })
                 .collect(),
             entry: BodyId(self.hir.entry.0),
             panic: BodyId(self.hir.panic.0),

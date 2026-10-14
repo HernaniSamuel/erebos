@@ -1,0 +1,18 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/parse_local_const.ers
+---
+--- errors ---
+parser::local-const
+
+  × `const` items cannot be declared inside a function
+   ╭─[parse_local_const.ers:4:5]
+ 3 │ fn f() -> u32 {
+ 4 │     const X: u32 = 1;
+   ·     ──┬──
+   ·       ╰── inside a function
+ 5 │     X
+   ╰────
+  help: compute the value at compile time with `let name: T = comptime ...;`, or move the `const`
+        out of the function (ADR 0029)

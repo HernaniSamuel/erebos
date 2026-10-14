@@ -91,7 +91,7 @@ fn comparable(ty: Ty) -> Ty {
 fn needs_expected_type(expr: &Expr) -> bool {
     match &expr.kind {
         ExprKind::Int(_) => true,
-        ExprKind::Unary(_, operand) => needs_expected_type(operand),
+        ExprKind::Unary(_, operand) | ExprKind::Comptime(operand) => needs_expected_type(operand),
         // A comparison is a `bool` whatever its operands are.
         ExprKind::Binary(op, _, _) if op.is_comparison() => false,
         ExprKind::Binary(op, lhs, _) if op.is_shift() => needs_expected_type(lhs),
@@ -208,6 +208,12 @@ impl Checker<'_, '_> {
         }
 
         self.params(f);
+        // A constant's type is not a return type.
+        let because = if f.comptime.is_some() {
+            None
+        } else {
+            f.ret_span
+        };
         for local in &f.locals {
             if self.q.layout_of(local.ty).is_none() {
                 self.too_large(local.ty, local.span, "does not fit in the address space");
@@ -215,7 +221,7 @@ impl Checker<'_, '_> {
         }
 
         if let Some(body) = &f.body {
-            self.checked_block(f, body, f.ret, f.ret_span);
+            self.checked_block(f, body, f.ret, because);
         }
     }
 
@@ -352,7 +358,8 @@ impl Checker<'_, '_> {
         }
         // A block passes the expected type to its tail, which reports any
         // mismatch itself.
-        let reported_inside = matches!(&expr.kind, ExprKind::Block(b) if b.tail.is_some());
+        let reported_inside = matches!(&expr.kind, ExprKind::Block(b) if b.tail.is_some())
+            || matches!(expr.kind, ExprKind::Comptime(_));
         if let Some(expected) = expected
             && !coerces(ty, expected)
             && !reported_inside
@@ -406,6 +413,10 @@ impl Checker<'_, '_> {
                 }
             }
             ExprKind::Local(local) => f.local(*local).ty,
+            ExprKind::Const(id) => self.hir.const_(*id).ty,
+            // The value is computed later; its type is checked here, with
+            // the expected type passed through (ADR 0029).
+            ExprKind::Comptime(inner) => self.check(f, inner, expected),
             ExprKind::SizeOf(ty) | ExprKind::AlignOf(ty) => {
                 self.queried_layout(*ty, expr.span);
                 Ty::Int(IntTy::Usize)
@@ -1354,6 +1365,11 @@ pub fn dump(q: &mut Queries) -> String {
             .map(|p| format!("{}: {}", p.name, p.ty))
             .collect();
         let external = if f.body.is_none() { "extern " } else { "" };
+        let external = if f.comptime.is_some() {
+            "comptime "
+        } else {
+            external
+        };
         writeln!(
             out,
             "{external}{kind}fn {}({}) -> {}",
@@ -1375,7 +1391,7 @@ pub fn dump(q: &mut Queries) -> String {
                 out,
                 "    expr {} {} {:?}: {ty}",
                 e.id.0,
-                expr_label(f, e),
+                expr_label(hir, f, e),
                 e.span
             )
             .unwrap();
@@ -1395,7 +1411,7 @@ enum Operands {
     Ordered,
 }
 
-fn expr_label(f: &Fn, expr: &Expr) -> String {
+fn expr_label(hir: &Hir, f: &Fn, expr: &Expr) -> String {
     match &expr.kind {
         ExprKind::Bool(value) => format!("bool {value}"),
         ExprKind::Logical(op, _, _) => format!("logical {}", op.symbol()),
@@ -1407,6 +1423,8 @@ fn expr_label(f: &Fn, expr: &Expr) -> String {
         ExprKind::Int(value) => format!("int {value}"),
         ExprKind::Byte(value) => format!("byte {value}"),
         ExprKind::Unit => "unit".to_owned(),
+        ExprKind::Const(id) => format!("const {}", hir.const_(*id).name),
+        ExprKind::Comptime(_) => "comptime".to_owned(),
         ExprKind::Array(_) => "array".to_owned(),
         ExprKind::StructLit(s, _) => format!("struct {}", s.name),
         ExprKind::Field(_, name, _) => format!("field {name}"),

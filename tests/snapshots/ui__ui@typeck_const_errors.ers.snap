@@ -1,0 +1,89 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_const_errors.ers
+---
+--- errors ---
+ty::cycle
+
+  × the constant `SELF` depends on its own value
+   ╭─[typeck_const_errors.ers:5:7]
+ 4 │ const LIMIT: u32 = 10;
+ 5 │ const SELF: u32 = SELF + 1;
+   ·       ──┬─
+   ·         ╰── needed while computing itself
+ 6 │ const FIRST: u32 = SECOND * 2;
+   ╰────
+  help: break the cycle: a value cannot depend on itself (ADR 0028)
+ty::cycle
+
+  × the constant `FIRST` depends on its own value
+    ╭─[typeck_const_errors.ers:6:7]
+  5 │ const SELF: u32 = SELF + 1;
+  6 │ const FIRST: u32 = SECOND * 2;
+    ·       ──┬──
+    ·         ╰── needed while computing itself
+  7 │ const SECOND: u32 = third();
+    ·       ───┬──
+    ·          ╰── through the constant `SECOND`
+  8 │ const WRONG: u8 = 300;
+  9 │ const TYPED: u32 = true;
+ 10 │ 
+ 11 │ fn third() -> u32 { FIRST }
+    ·    ──┬──
+    ·      ╰── through the function `third`
+ 12 │ 
+    ╰────
+  help: break the cycle: a value cannot depend on itself (ADR 0028)
+ty::literal-out-of-range
+
+  × literal out of range for `u8`
+   ╭─[typeck_const_errors.ers:8:19]
+ 7 │ const SECOND: u32 = third();
+ 8 │ const WRONG: u8 = 300;
+   ·                   ─┬─
+   ·                    ╰── `300` does not fit in `u8`
+ 9 │ const TYPED: u32 = true;
+   ╰────
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_const_errors.ers:9:20]
+  8 │ const WRONG: u8 = 300;
+  9 │ const TYPED: u32 = true;
+    ·                    ──┬─
+    ·                      ╰── expected `u32`, found `bool`
+ 10 │ 
+    ╰────
+ty::not-assignable
+
+  × cannot assign to this expression
+    ╭─[typeck_const_errors.ers:14:5]
+ 13 │ fn misuse() {
+ 14 │     LIMIT = 5;
+    ·     ──┬──
+    ·       ╰── not a variable, `*pointer` or `a[index]`
+ 15 │     let p: *const u32 = &raw const LIMIT;
+    ╰────
+ty::not-a-place
+
+  × `&raw` needs a place in memory
+    ╭─[typeck_const_errors.ers:15:36]
+ 14 │     LIMIT = 5;
+ 15 │     let p: *const u32 = &raw const LIMIT;
+    ·                                    ──┬──
+    ·                                      ╰── a value, not a place
+ 16 │     let x: u8 = comptime 300;
+    ╰────
+  help: take the address of a variable, `*pointer` or `a[index]`; to point at a value, store it in
+        a `let` first
+ty::literal-out-of-range
+
+  × literal out of range for `u8`
+    ╭─[typeck_const_errors.ers:16:26]
+ 15 │     let p: *const u32 = &raw const LIMIT;
+ 16 │     let x: u8 = comptime 300;
+    ·                          ─┬─
+    ·                           ╰── `300` does not fit in `u8`
+ 17 │ }
+    ╰────

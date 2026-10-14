@@ -1,0 +1,20 @@
+// emit: llvm-ir
+// Regression (found by fuzzing): checks lowered after an expression of type
+// `!` opened blocks that looked reachable, and used the `()` standing for
+// the diverging value.
+fn index(i: usize) -> u32 {
+    let mut b: [u32; 4] = [0; 4];
+    b[i] = return 1;
+    b[0]
+}
+
+fn divide(x: u32) -> u32 {
+    x / (return 2)
+}
+
+fn branch(c: bool) -> u32 {
+    (return 3) + if c { 1 } else { 2 }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

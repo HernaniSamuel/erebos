@@ -1,0 +1,217 @@
+// Differential test of compile-time execution (ADR 0027, 0029): every
+// function runs twice, once by the compiler (`comptime`) and once on the
+// target, with inputs from C that LLVM cannot see through, and the two
+// results must agree.
+// link-c: comptime_differential.c
+// expect-output: differential ok
+// expect-exit: 0
+
+extern fn opaque_u8(x: u8) -> u8;
+extern fn opaque_u16(x: u16) -> u16;
+extern fn opaque_u32(x: u32) -> u32;
+extern fn opaque_u64(x: u64) -> u64;
+extern fn opaque_i8(x: i8) -> i8;
+extern fn opaque_i16(x: i16) -> i16;
+extern fn opaque_i32(x: i32) -> i32;
+extern fn opaque_i64(x: i64) -> i64;
+extern fn opaque_usize(x: usize) -> usize;
+
+fn mix(hash: u64, value: u64) -> u64 {
+    hash * 1_000_003 + value
+}
+
+fn u8_ops(a: u8, b: u8) -> u64 {
+    let mut h: u64 = 0;
+    h = mix(h, (a + b) as u64);
+    h = mix(h, (a - b) as u64);
+    h = mix(h, (a * b) as u64);
+    h = mix(h, (a / b) as u64);
+    h = mix(h, (a % b) as u64);
+    h = mix(h, (a << b) as u64);
+    h = mix(h, (a >> b) as u64);
+    h = mix(h, (a & b | a ^ b) as u64);
+    h = mix(h, !a as u64);
+    mix(h, (a < b) as u64)
+}
+
+fn i8_ops(a: i8, b: i8) -> u64 {
+    let mut h: u64 = 0;
+    h = mix(h, (a + b) as u64);
+    h = mix(h, (a - b) as u64);
+    h = mix(h, (a * b) as u64);
+    h = mix(h, (a / b) as u64);
+    h = mix(h, (a % b) as u64);
+    h = mix(h, (a >> 3) as u64);
+    h = mix(h, (a << b) as u64);
+    h = mix(h, (-a) as u64);
+    mix(h, (a < b) as u64)
+}
+
+fn u16_ops(a: u16, b: u16) -> u64 {
+    mix(mix(mix((a * b) as u64, (a / b) as u64), (a % b) as u64), (a >> b) as u64)
+}
+
+fn i16_ops(a: i16, b: i16) -> u64 {
+    mix(mix(mix((a * b) as u64, (a / b) as u64), (a % b) as u64), (a >> b) as u64)
+}
+
+fn u32_ops(a: u32, b: u32) -> u64 {
+    let mut h: u64 = 0;
+    h = mix(h, (a + b) as u64);
+    h = mix(h, (a * b) as u64);
+    h = mix(h, (a / b) as u64);
+    h = mix(h, (a % b) as u64);
+    h = mix(h, (a << b) as u64);
+    mix(h, (a >> b) as u64)
+}
+
+fn i32_ops(a: i32, b: i32) -> u64 {
+    let mut h: u64 = 0;
+    h = mix(h, (a - b) as u64);
+    h = mix(h, (a * b) as u64);
+    h = mix(h, (a / b) as u64);
+    h = mix(h, (a % b) as u64);
+    h = mix(h, (a >> b) as u64);
+    mix(h, (a >= b) as u64)
+}
+
+fn u64_ops(a: u64, b: u64) -> u64 {
+    let mut h: u64 = 0;
+    h = mix(h, a + b);
+    h = mix(h, a * b);
+    h = mix(h, a / b);
+    h = mix(h, a % b);
+    h = mix(h, a << b);
+    mix(h, a >> b)
+}
+
+fn i64_ops(a: i64, b: i64) -> u64 {
+    let mut h: u64 = 0;
+    h = mix(h, (a * b) as u64);
+    h = mix(h, (a / b) as u64);
+    h = mix(h, (a % b) as u64);
+    h = mix(h, (a >> b) as u64);
+    mix(h, (a < b) as u64)
+}
+
+fn conversions(x: i32, y: u32) -> u64 {
+    let mut h: u64 = 0;
+    h = mix(h, x as u8 as u64);
+    h = mix(h, x as i8 as u64);
+    h = mix(h, x as i16 as u32 as u64);
+    h = mix(h, x as u64);
+    h = mix(h, x as i64 as u64);
+    h = mix(h, y as i8 as i64 as u64);
+    h = mix(h, y as u16 as u64);
+    h = mix(h, y as usize as u64);
+    h = mix(h, (x < 0) as u8 as u64);
+    mix(h, y as isize as i64 as u64)
+}
+
+struct Pair { a: u32, b: u32 }
+struct Mixed { flag: bool, value: u16, pair: Pair }
+
+fn pointers(address: usize) -> u64 {
+    // Addresses computed from an integer, never accessed (ADR 0029).
+    let p: *const Pair = address as *const Pair;
+    let field: *const u32 = &raw const (*p).b;
+    let element: *const Pair = &raw const p[3];
+    let byte: *const u8 = &raw const (p as *const u8)[5];
+    mix(mix(field as usize as u64, element as usize as u64), byte as usize as u64)
+}
+
+fn aggregates(k: u32) -> u64 {
+    let a: [Pair; 3] = [Pair { a: k, b: k + 1 }; 3];
+    let mut b: [Pair; 3] = a;
+    b[1].b = 7;
+    let s: Pair = b[1];
+    let m: Mixed = Mixed { flag: true, value: 0xFFFF, pair: s };
+    let mut h: u64 = 0;
+    h = mix(h, a[1].b as u64);
+    h = mix(h, s.a as u64);
+    h = mix(h, s.b as u64);
+    h = mix(h, m.value as u64);
+    h = mix(h, m.flag as u64);
+    mix(h, m.pair.b as u64)
+}
+
+fn bools(v: u8) -> u64 {
+    // Any nonzero byte is `true` (ADR 0022).
+    let byte: u8 = v;
+    let flag: *const bool = &raw const byte as *const bool;
+    (*flag) as u64
+}
+
+fn layout() -> u64 {
+    let mut h: u64 = size_of(Mixed) as u64;
+    h = mix(h, align_of(Mixed) as u64);
+    h = mix(h, offset_of(Mixed, pair) as u64);
+    mix(h, size_of([Pair; 3]) as u64)
+}
+
+struct Uart { thr: u8 }
+
+fn putc(byte: u8) {
+    let uart: *mut volatile Uart = 0x1000_0000 as *mut volatile Uart;
+    (*uart).thr = byte;
+}
+
+fn print_u64(n: u64) {
+    if n >= 10 {
+        print_u64(n / 10);
+    }
+    putc(b'0' + (n % 10) as u8);
+}
+
+fn check(id: u32, at_compile_time: u64, at_run_time: u64) -> u32 {
+    if at_compile_time == at_run_time {
+        return 0;
+    }
+    putc(b'#');
+    print_u64(id as u64);
+    putc(b' ');
+    print_u64(at_compile_time);
+    putc(b' ');
+    print_u64(at_run_time);
+    putc(b'\n');
+    1
+}
+
+entry fn main() -> ! {
+    let mut failures: u32 = 0;
+    failures += check(1, comptime u8_ops(200, 100), u8_ops(opaque_u8(200), opaque_u8(100)));
+    failures += check(2, comptime u8_ops(7, 9), u8_ops(opaque_u8(7), opaque_u8(9)));
+    failures += check(3, comptime i8_ops(-128, -1), i8_ops(opaque_i8(-128), opaque_i8(-1)));
+    failures += check(4, comptime i8_ops(-7, 2), i8_ops(opaque_i8(-7), opaque_i8(2)));
+    failures += check(5, comptime u16_ops(65_000, 300), u16_ops(opaque_u16(65_000), opaque_u16(300)));
+    failures += check(6, comptime i16_ops(-30_000, 7), i16_ops(opaque_i16(-30_000), opaque_i16(7)));
+    failures += check(7, comptime u32_ops(4_000_000_000, 7), u32_ops(opaque_u32(4_000_000_000), opaque_u32(7)));
+    failures += check(8, comptime u32_ops(3, 33), u32_ops(opaque_u32(3), opaque_u32(33)));
+    failures += check(9, comptime i32_ops(-2_147_483_648, -1), i32_ops(opaque_i32(-2_147_483_648), opaque_i32(-1)));
+    failures += check(10, comptime i32_ops(-7, 3), i32_ops(opaque_i32(-7), opaque_i32(3)));
+    failures += check(11, comptime u64_ops(18_000_000_000_000_000_000, 3), u64_ops(opaque_u64(18_000_000_000_000_000_000), opaque_u64(3)));
+    failures += check(12, comptime u64_ops(12_345_678_901, 65), u64_ops(opaque_u64(12_345_678_901), opaque_u64(65)));
+    failures += check(13, comptime i64_ops(-9_000_000_000_000_000_000, 7), i64_ops(opaque_i64(-9_000_000_000_000_000_000), opaque_i64(7)));
+    failures += check(14, comptime conversions(-300, 4_000_000_000), conversions(opaque_i32(-300), opaque_u32(4_000_000_000)));
+    failures += check(15, comptime conversions(70_000, 200), conversions(opaque_i32(70_000), opaque_u32(200)));
+    failures += check(16, comptime pointers(0x8000_0000), pointers(opaque_usize(0x8000_0000)));
+    failures += check(17, comptime pointers(0xFFFF_FFF0), pointers(opaque_usize(0xFFFF_FFF0)));
+    failures += check(18, comptime aggregates(41), aggregates(opaque_u32(41)));
+    failures += check(19, comptime bools(2), bools(opaque_u8(2)));
+    failures += check(20, comptime bools(0), bools(opaque_u8(0)));
+    failures += check(21, comptime layout(), layout());
+    if failures == 0 {
+        putc(b'd'); putc(b'i'); putc(b'f'); putc(b'f'); putc(b'e'); putc(b'r'); putc(b'e');
+        putc(b'n'); putc(b't'); putc(b'i'); putc(b'a'); putc(b'l'); putc(b' '); putc(b'o');
+        putc(b'k'); putc(b'\n');
+    }
+    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+    *finisher = if failures == 0 { 0x5555 } else { (failures << 16) | 0x3333 };
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+    *finisher = (99 << 16) | 0x3333;
+    loop {}
+}

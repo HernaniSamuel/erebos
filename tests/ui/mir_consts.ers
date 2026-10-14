@@ -1,0 +1,21 @@
+// emit: mir
+// A scalar constant becomes an immediate; an aggregate one is read-only data,
+// and indexing it or reading a field reads that part only (ADR 0029).
+// Constants may use each other in any order (ADR 0028).
+const TOTAL: u32 = BASE + OFFSETS[1];
+const BASE: u32 = 100;
+const OFFSETS: [u32; 3] = offsets();
+const ORIGIN: Point = Point { x: 3, y: 4 };
+struct Point { x: u32, y: u32 }
+
+fn offsets() -> [u32; 3] {
+    [10, 20, 30]
+}
+
+fn uses(i: usize) -> u32 {
+    let whole: [u32; 3] = OFFSETS;
+    TOTAL + OFFSETS[i] + ORIGIN.y + whole[0] + comptime offsets()[2] * 2
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

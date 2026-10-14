@@ -1,0 +1,62 @@
+// emit: mir
+// Every error of compile-time evaluation (ADR 0027, 0029), each pointing at
+// the failure, the calls on the way and what was being evaluated.
+const DIVIDE: u32 = 10 / zero();
+const FOREVER: u32 = { loop {} };
+const RECURSE: u32 = deep(0);
+const DEVICE: u8 = read_uart();
+const C_CODE: u32 = c_function();
+const PADDING: u32 = padding();
+const ESCAPES: *const u32 = local_address();
+const TO_INT: usize = address_as_int();
+const COMPARE: bool = compare_objects();
+const ADDRESS: u32 = read_address();
+const PANIC: u32 = explicit_panic();
+const BOUNDS: u32 = out_of_bounds(4);
+const MMIO: *mut volatile u32 = &raw mut (*(0x1000_0000 as *mut Regs)).ctrl as *mut volatile u32;
+
+struct Padded { a: u8, b: u32 }
+struct Regs { data: u32, ctrl: u32 }
+
+comptime {
+    assert(size_of(Padded) == 5);
+}
+
+fn zero() -> u32 { 0 }
+fn deep(n: u32) -> u32 { deep(n + 1) }
+fn read_uart() -> u8 {
+    let uart: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+    *uart
+}
+extern fn c_function() -> u32;
+fn padding() -> u32 {
+    let p: Padded = Padded { a: 1, b: 2 };
+    let bytes: *const u8 = &raw const p as *const u8;
+    bytes[1] as u32
+}
+fn local_address() -> *const u32 {
+    let x: u32 = 5;
+    &raw const x
+}
+fn address_as_int() -> usize {
+    let x: u32 = 5;
+    &raw const x as usize
+}
+fn compare_objects() -> bool {
+    let a: u32 = 1;
+    let b: u32 = 2;
+    &raw const a < &raw const b
+}
+fn read_address() -> u32 {
+    *(0x8000_0000 as *const u32)
+}
+fn explicit_panic() -> u32 {
+    on_panic()
+}
+fn out_of_bounds(i: usize) -> u32 {
+    let t: [u32; 4] = [1, 2, 3, 4];
+    t[i]
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

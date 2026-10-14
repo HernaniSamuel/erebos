@@ -1,33 +1,23 @@
 //! Typed HIR -> MIR, one function at a time (ADR 0028).
 
+use std::collections::HashMap;
+
+use crate::eval::ConstValue;
 use crate::hir;
 use crate::mir::{
-    BasicBlock, BasicBlockData, BinOp, Body, BodyId, Const, Local, LocalDecl, Operand, PanicCause,
-    Place, PlaceElem, Rvalue, Statement, Terminator, Ty, UnOp,
+    BasicBlock, BasicBlockData, BinOp, Body, BodyId, Const, DataId, Local, LocalDecl, Operand,
+    PanicCause, Place, PlaceElem, Rvalue, Statement, Terminator, Ty, UnOp,
 };
-use crate::query::Queries;
+use crate::query::{DataSource, Queries};
+use crate::span::Span;
 
-/// The MIR of a function that passed type checking.
-pub fn build_body(q: &mut Queries, f: &hir::Fn) -> Body {
+/// The MIR of a function that passed type checking, or `None` if a value
+/// it needs from compile-time evaluation failed, which was reported.
+pub fn build_body(q: &mut Queries, id: hir::FnId) -> Option<Body> {
+    let hir = q.hir;
+    let f = hir.fn_(id);
     let ret = q.mir_ty(f.ret);
-    let mut builder = Builder {
-        q,
-        locals: vec![LocalDecl {
-            ty: ret,
-            name: None,
-        }],
-        hir_locals: Vec::new(),
-        blocks: Vec::new(),
-        current: None,
-        loops: Vec::new(),
-    };
-    // HIR locals become MIR locals `_1..`, in declaration order.
-    for local in &f.locals {
-        let ty = builder.q.mir_ty(local.ty);
-        let mir_local = builder.new_local(ty, Some(local.name.clone()));
-        builder.hir_locals.push(mir_local);
-    }
-
+    let mut builder = Builder::new(q, id, ret);
     if let Some(body) = &f.body {
         let start = builder.new_block();
         builder.current = Some(start);
@@ -39,32 +29,51 @@ pub fn build_body(q: &mut Queries, f: &hir::Fn) -> Body {
             builder.terminate(Terminator::Return);
         }
     }
+    builder.finish(
+        f.name.clone(),
+        f.span,
+        f.comptime.is_some(),
+        f.runtime,
+        f.body.is_none(),
+    )
+}
 
-    Body {
-        name: f.name.clone(),
-        runtime: f.runtime,
-        external: f.body.is_none(),
-        ret,
-        param_count: f.param_count,
-        locals: builder.locals,
-        blocks: builder
-            .blocks
-            .into_iter()
-            .map(|b| BasicBlockData {
-                statements: b.statements,
-                terminator: b.terminator.expect("every block is terminated"),
-            })
-            .collect(),
+/// A body that computes `expr`, part of function `id`, alone: the MIR that
+/// `comptime expr` runs (ADR 0029).
+pub fn build_expr_body(q: &mut Queries, id: hir::FnId, expr: &hir::Expr) -> Option<Body> {
+    let ty = q.tables.expr_ty(expr.id);
+    let ret = q.mir_ty(ty);
+    let mut builder = Builder::new(q, id, ret);
+    builder.span = expr.span;
+    let start = builder.new_block();
+    builder.current = Some(start);
+    let value = builder.expr(expr);
+    if !matches!(ret, Ty::Unit | Ty::Never) {
+        builder.assign(Place::local(Local::RETURN), Rvalue::Use(value));
     }
+    if builder.current.is_some() {
+        builder.terminate(Terminator::Return);
+    }
+    builder.finish("comptime".to_owned(), expr.span, true, false, false)
 }
 
 struct PartialBlock {
     statements: Vec<Statement>,
-    terminator: Option<Terminator>,
+    spans: Vec<Span>,
+    terminator: Option<(Terminator, Span)>,
 }
 
 struct Builder<'a, 'h> {
     q: &'a mut Queries<'h>,
+    /// The function being built, or containing the expression being built.
+    fn_id: hir::FnId,
+    /// The source of the code being built, for statements' spans.
+    span: Span,
+    /// A value from compile-time evaluation was missing; the body cannot
+    /// be used.
+    failed: bool,
+    /// The local bound to each piece of constant data used.
+    const_locals: HashMap<DataId, Local>,
     locals: Vec<LocalDecl>,
     /// MIR local of each HIR local.
     hir_locals: Vec<Local>,
@@ -87,25 +96,106 @@ struct LoopScope {
     result: Option<Place>,
 }
 
+impl<'a, 'h> Builder<'a, 'h> {
+    fn new(q: &'a mut Queries<'h>, fn_id: hir::FnId, ret: Ty) -> Builder<'a, 'h> {
+        let hir = q.hir;
+        let f = hir.fn_(fn_id);
+        let mut builder = Builder {
+            q,
+            fn_id,
+            span: f.span,
+            failed: false,
+            const_locals: HashMap::new(),
+            locals: vec![LocalDecl {
+                ty: ret,
+                name: None,
+                constant: None,
+            }],
+            hir_locals: Vec::new(),
+            blocks: Vec::new(),
+            current: None,
+            loops: Vec::new(),
+        };
+        // HIR locals become MIR locals `_1..`, in declaration order.
+        for local in &f.locals {
+            let ty = builder.q.mir_ty(local.ty);
+            let mir_local = builder.new_local(ty, Some(local.name.clone()));
+            builder.hir_locals.push(mir_local);
+        }
+        builder
+    }
+
+    fn finish(
+        self,
+        name: String,
+        span: Span,
+        comptime: bool,
+        runtime: bool,
+        external: bool,
+    ) -> Option<Body> {
+        if self.failed {
+            return None;
+        }
+        let param_count = if comptime {
+            0
+        } else {
+            self.q.hir.fn_(self.fn_id).param_count
+        };
+        Some(Body {
+            name,
+            span,
+            comptime,
+            runtime,
+            external,
+            ret: self.locals[0].ty,
+            param_count,
+            locals: self.locals,
+            blocks: self
+                .blocks
+                .into_iter()
+                .map(|b| {
+                    let (terminator, terminator_span) =
+                        b.terminator.expect("every block is terminated");
+                    BasicBlockData {
+                        statements: b.statements,
+                        spans: b.spans,
+                        terminator,
+                        terminator_span,
+                    }
+                })
+                .collect(),
+        })
+    }
+}
+
 impl Builder<'_, '_> {
     fn new_local(&mut self, ty: Ty, name: Option<String>) -> Local {
-        self.locals.push(LocalDecl { ty, name });
+        self.locals.push(LocalDecl {
+            ty,
+            name,
+            constant: None,
+        });
         Local(self.locals.len() as u32 - 1)
     }
 
     fn new_block(&mut self) -> BasicBlock {
         self.blocks.push(PartialBlock {
             statements: Vec::new(),
+            spans: Vec::new(),
             terminator: None,
         });
         BasicBlock(self.blocks.len() as u32 - 1)
     }
 
     fn assign(&mut self, place: Place, rvalue: Rvalue) {
+        self.push(Statement::Assign(place, rvalue));
+    }
+
+    fn push(&mut self, statement: Statement) {
         if let Some(bb) = self.current {
-            self.blocks[bb.0 as usize]
-                .statements
-                .push(Statement::Assign(place, rvalue));
+            let block = &mut self.blocks[bb.0 as usize];
+            block.statements.push(statement);
+            block.spans.push(self.span);
         }
     }
 
@@ -113,7 +203,53 @@ impl Builder<'_, '_> {
     /// nothing is emitted.
     fn terminate(&mut self, terminator: Terminator) {
         if let Some(bb) = self.current.take() {
-            self.blocks[bb.0 as usize].terminator = Some(terminator);
+            self.blocks[bb.0 as usize].terminator = Some((terminator, self.span));
+        }
+    }
+
+    /// The local bound to a value computed at compile time, for an
+    /// aggregate, which is read from read-only data in place (ADR 0029).
+    fn const_local(&mut self, ty: Ty, source: DataSource, value: &ConstValue) -> Local {
+        let data = self.q.const_data(source, value, ty.layout().align);
+        if let Some(&local) = self.const_locals.get(&data) {
+            return local;
+        }
+        self.locals.push(LocalDecl {
+            ty,
+            name: None,
+            constant: Some(data),
+        });
+        let local = Local(self.locals.len() as u32 - 1);
+        self.const_locals.insert(data, local);
+        local
+    }
+
+    /// A value computed at compile time, as an operand of type `ty`.
+    fn const_operand(&mut self, ty: Ty, source: DataSource, value: Option<ConstValue>) -> Operand {
+        let Some(value) = value else {
+            // Reported where it failed; the body is not used.
+            self.failed = true;
+            return match ty {
+                Ty::Int(int) => Operand::Const(Const::Int(0, int)),
+                Ty::Bool => Operand::Const(Const::Bool(false)),
+                Ty::Unit | Ty::Never => Operand::Const(Const::Unit),
+                ty => Operand::Copy(Place::local(self.new_local(ty, None))),
+            };
+        };
+        match ty {
+            Ty::Int(int) => Operand::Const(Const::Int(value.int(int.bytes() as usize), int)),
+            Ty::Bool => Operand::Const(Const::Bool(value.bytes[0] != 0)),
+            Ty::Unit | Ty::Never => Operand::Const(Const::Unit),
+            // Made from an integer: an evaluation cannot give any other.
+            Ty::Ptr(_) => {
+                let usize_ty = hir::IntTy::Usize;
+                let address =
+                    Operand::Const(Const::Int(value.int(usize_ty.bytes() as usize), usize_ty));
+                self.temp(ty, Rvalue::Cast(address, ty))
+            }
+            Ty::Array(..) | Ty::Struct(_) => {
+                Operand::Copy(Place::local(self.const_local(ty, source, &value)))
+            }
         }
     }
 
@@ -150,6 +286,19 @@ impl Builder<'_, '_> {
     /// Lowers an expression and returns its value. Expressions of type `()`
     /// and `!` return `const ()`.
     fn expr(&mut self, expr: &hir::Expr) -> Operand {
+        // Unreachable code emits nothing. Lowering it anyway could open
+        // blocks that look reachable, and use the `()` that stands for the
+        // value of what diverged.
+        if self.current.is_none() {
+            return Operand::Const(Const::Unit);
+        }
+        let outer = std::mem::replace(&mut self.span, expr.span);
+        let value = self.expr_kind(expr);
+        self.span = outer;
+        value
+    }
+
+    fn expr_kind(&mut self, expr: &hir::Expr) -> Operand {
         let ty = self.ty_of(expr);
         let value = match &expr.kind {
             hir::ExprKind::Int(value) => {
@@ -161,6 +310,14 @@ impl Builder<'_, '_> {
             hir::ExprKind::Byte(value) => Operand::Const(Const::Int(*value as u64, hir::IntTy::U8)),
             hir::ExprKind::Bool(value) => Operand::Const(Const::Bool(*value)),
             hir::ExprKind::Unit => Operand::Const(Const::Unit),
+            hir::ExprKind::Const(id) => {
+                let value = self.q.const_value(*id);
+                self.const_operand(ty, DataSource::Const(*id), value)
+            }
+            hir::ExprKind::Comptime(inner) => {
+                let value = self.q.comptime_value(self.fn_id, inner);
+                self.const_operand(ty, DataSource::Comptime(inner.id), value)
+            }
             // Layout queries are constants (ADR 0022).
             hir::ExprKind::SizeOf(ty) => usize_const(self.layout(*ty).size),
             hir::ExprKind::AlignOf(ty) => usize_const(self.layout(*ty).align),
@@ -409,6 +566,9 @@ impl Builder<'_, '_> {
         let Ty::Int(int) = ty else {
             unreachable!("division of `{ty}`")
         };
+        if self.current.is_none() {
+            return Operand::Const(Const::Int(0, int));
+        }
         let constant = match rhs {
             Operand::Const(Const::Int(value, _)) => Some(value & int.mask()),
             _ => None,
@@ -472,9 +632,11 @@ impl Builder<'_, '_> {
 
     fn call(&mut self, dest: Option<Place>, callee: BodyId, args: Vec<Operand>) {
         if let Some(bb) = self.current {
-            self.blocks[bb.0 as usize]
+            let block = &mut self.blocks[bb.0 as usize];
+            block
                 .statements
                 .push(Statement::Call { dest, callee, args });
+            block.spans.push(self.span);
         }
     }
 
@@ -592,6 +754,9 @@ impl Builder<'_, '_> {
 
     /// Continues only if `ok` is true; otherwise calls the panic function.
     fn panic_unless(&mut self, ok: Operand, cause: PanicCause) {
+        if self.current.is_none() {
+            return;
+        }
         let ok_bb = self.new_block();
         let panic_bb = self.new_block();
         self.terminate(Terminator::If {
