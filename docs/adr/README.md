@@ -54,3 +54,4 @@ Do not write one for local implementation details that the code already explains
 | 0026 | [External functions](0026-external-functions.md) | Accepted |
 | 0027 | [Compile-time execution (comptime)](0027-compile-time-execution.md) | Accepted |
 | 0028 | [On-demand type checking and evaluation](0028-on-demand-compilation.md) | Accepted |
+| 0029 | [Constants and comptime expressions](0029-constants-and-comptime-syntax.md) | Accepted |
