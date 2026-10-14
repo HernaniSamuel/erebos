@@ -1,0 +1,9 @@
+// emit: hir
+// Functions, structs and constants share one namespace (ADR 0029).
+struct Point { x: i32 }
+fn Point() {}
+fn helper() {}
+struct helper { a: u8 }
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

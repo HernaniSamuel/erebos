@@ -359,8 +359,8 @@ Every error has a stable code, shown with the message.
 | `resolve::unknown-function` | call to a function that does not exist |
 | `resolve::not-a-function` | call to a variable |
 | `resolve::call-entry` | call to the entry function |
-| `resolve::duplicate-function` | two functions with one name |
-| `resolve::duplicate-type` | two structs with one name, or a struct named like a built-in type |
+| `resolve::duplicate-item` | two items (functions, structs, constants) with one name |
+| `resolve::duplicate-type` | a struct named like a built-in type |
 | `resolve::duplicate-param` | two parameters with one name |
 | `resolve::mut-extern-param` | a `mut` parameter in an `extern fn` |
 | `resolve::duplicate-field` | a field declared, or given in a literal, twice |

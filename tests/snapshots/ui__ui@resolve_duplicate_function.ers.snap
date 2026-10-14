@@ -4,9 +4,9 @@ expression: output
 input_file: tests/ui/resolve_duplicate_function.ers
 ---
 --- errors ---
-resolve::duplicate-function
+resolve::duplicate-item
 
-  × the function `helper` is defined more than once
+  × `helper` is defined more than once
    ╭─[resolve_duplicate_function.ers:4:4]
  2 │ entry fn main() -> ! { loop {} }
  3 │ fn helper() {}
@@ -17,3 +17,4 @@ resolve::duplicate-function
    ·       ╰── redefined here
  5 │ 
    ╰────
+  help: functions, structs and constants share one namespace (ADR 0029)

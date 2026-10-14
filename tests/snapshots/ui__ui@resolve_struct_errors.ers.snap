@@ -15,9 +15,9 @@ resolve::duplicate-field
    ·                ╰── first declared here
  3 │ struct Point { z: i32 }
    ╰────
-resolve::duplicate-type
+resolve::duplicate-item
 
-  × the struct `Point` is defined more than once
+  × `Point` is defined more than once
    ╭─[resolve_struct_errors.ers:3:8]
  1 │ // emit: hir
  2 │ struct Point { x: i32, y: i32, x: u8 }
@@ -28,6 +28,7 @@ resolve::duplicate-type
    ·          ╰── redefined here
  4 │ struct u8 { a: bool }
    ╰────
+  help: functions, structs and constants share one namespace (ADR 0029)
 resolve::duplicate-type
 
   × `u8` is a built-in type

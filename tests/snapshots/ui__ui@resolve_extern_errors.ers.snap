@@ -15,9 +15,9 @@ resolve::mut-extern-param
  3 │ extern fn memcpy(dest: *mut u8, src: *const u8, n: usize) -> *mut u8;
    ╰────
   help: remove `mut` (ADR 0026)
-resolve::duplicate-function
+resolve::duplicate-item
 
-  × the function `c_add` is defined more than once
+  × `c_add` is defined more than once
    ╭─[resolve_extern_errors.ers:4:11]
  1 │ // emit: hir
  2 │ extern fn c_add(mut a: u32, b: u32) -> u32;
@@ -29,3 +29,4 @@ resolve::duplicate-function
    ·             ╰── redefined here
  5 │ 
    ╰────
+  help: functions, structs and constants share one namespace (ADR 0029)

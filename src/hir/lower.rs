@@ -91,18 +91,10 @@ pub fn lower(
                 )
                 .label(decl.name.span, "cannot be redefined"),
             );
-        } else if let Some(first) = struct_ids.get(name) {
-            let first = struct_decls[first.0 as usize].name.span;
-            diags.push(
-                Diagnostic::error(
-                    "resolve::duplicate-type",
-                    format!("the struct `{name}` is defined more than once"),
-                )
-                .label(decl.name.span, "redefined here")
-                .label(first, "first defined here"),
-            );
         } else {
-            struct_ids.insert(name.clone(), StructId(i as u32));
+            // A repeated name keeps its first definition and is reported
+            // with the other items below.
+            struct_ids.entry(name.clone()).or_insert(StructId(i as u32));
         }
         struct_tys.push(StructTy {
             id: StructId(i as u32),
@@ -140,7 +132,8 @@ pub fn lower(
     }
     let expr_count = lowerer.next_expr;
 
-    check_duplicate_names(&fns, diags);
+    check_duplicate_items(program, runtime, diags);
+    check_start(&fns, diags);
     let entry = find_unique(&fns, FnKind::Entry, diags);
     let panic = find_unique(&fns, FnKind::Panic, diags);
 
@@ -160,34 +153,49 @@ fn item_name(item: &ast::Item) -> &ast::Ident {
     }
 }
 
-fn check_duplicate_names(fns: &[Fn], diags: &mut Diagnostics) {
+/// Functions, structs and constants share one namespace (ADR 0029).
+fn check_duplicate_items(
+    program: &ast::File,
+    runtime: Option<&ast::File>,
+    diags: &mut Diagnostics,
+) {
+    let items = program.items.iter().map(|item| (item, false)).chain(
+        runtime
+            .into_iter()
+            .flat_map(|rt| &rt.items)
+            .map(|item| (item, true)),
+    );
     let mut seen: HashMap<&str, (Span, bool)> = HashMap::new();
-    for f in fns {
-        // The compiler defines `_start` itself (ADR 0012).
-        if f.name == "_start" {
-            diags.push(
-                Diagnostic::error("resolve::reserved-name", "`_start` is a reserved name")
-                    .label(f.name_span, "reserved for the startup code")
-                    .help("the compiler generates `_start`, which sets up the stack and jumps to the entry function (ADR 0012)"),
-            );
-        }
-        if let Some(&(first, first_runtime)) = seen.get(f.name.as_str()) {
-            // A program function named like a runtime one was reported as
-            // a reserved name; the two live in different files.
-            if f.runtime != first_runtime {
-                continue;
-            }
-            diags.push(
+    for (item, in_runtime) in items {
+        let name = item_name(item);
+        match seen.get(name.name.as_str()) {
+            // A program item named like a runtime one was reported as a
+            // reserved name; the two live in different files.
+            Some(&(_, first_in_runtime)) if first_in_runtime != in_runtime => {}
+            Some(&(first, _)) => diags.push(
                 Diagnostic::error(
-                    "resolve::duplicate-function",
-                    format!("the function `{}` is defined more than once", f.name),
+                    "resolve::duplicate-item",
+                    format!("`{}` is defined more than once", name.name),
                 )
-                .label(f.name_span, "redefined here")
-                .label(first, "first defined here"),
-            );
-        } else {
-            seen.insert(&f.name, (f.name_span, f.runtime));
+                .label(name.span, "redefined here")
+                .label(first, "first defined here")
+                .help("functions, structs and constants share one namespace (ADR 0029)"),
+            ),
+            None => {
+                seen.insert(&name.name, (name.span, in_runtime));
+            }
         }
+    }
+}
+
+/// The compiler defines `_start` itself (ADR 0012).
+fn check_start(fns: &[Fn], diags: &mut Diagnostics) {
+    for f in fns.iter().filter(|f| f.name == "_start") {
+        diags.push(
+            Diagnostic::error("resolve::reserved-name", "`_start` is a reserved name")
+                .label(f.name_span, "reserved for the startup code")
+                .help("the compiler generates `_start`, which sets up the stack and jumps to the entry function (ADR 0012)"),
+        );
     }
 }
 

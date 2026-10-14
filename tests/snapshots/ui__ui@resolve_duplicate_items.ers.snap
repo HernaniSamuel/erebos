@@ -1,0 +1,34 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/resolve_duplicate_items.ers
+---
+--- errors ---
+resolve::duplicate-item
+
+  × `Point` is defined more than once
+   ╭─[resolve_duplicate_items.ers:4:4]
+ 2 │ // Functions, structs and constants share one namespace (ADR 0029).
+ 3 │ struct Point { x: i32 }
+   ·        ──┬──
+   ·          ╰── first defined here
+ 4 │ fn Point() {}
+   ·    ──┬──
+   ·      ╰── redefined here
+ 5 │ fn helper() {}
+   ╰────
+  help: functions, structs and constants share one namespace (ADR 0029)
+resolve::duplicate-item
+
+  × `helper` is defined more than once
+   ╭─[resolve_duplicate_items.ers:6:8]
+ 4 │ fn Point() {}
+ 5 │ fn helper() {}
+   ·    ───┬──
+   ·       ╰── first defined here
+ 6 │ struct helper { a: u8 }
+   ·        ───┬──
+   ·           ╰── redefined here
+ 7 │ 
+   ╰────
+  help: functions, structs and constants share one namespace (ADR 0029)
