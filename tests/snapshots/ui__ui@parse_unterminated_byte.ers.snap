@@ -1,0 +1,16 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/parse_unterminated_byte.ers
+---
+--- errors ---
+lexer::unterminated-byte
+
+  × unterminated byte literal
+   ╭─[parse_unterminated_byte.ers:5:5]
+ 4 │ fn f() -> u8 {
+ 5 │     b'
+   ·     ─┬
+   ·      ╰── missing closing `'`
+ 6 │ }
+   ╰────

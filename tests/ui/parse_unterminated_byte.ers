@@ -1,0 +1,6 @@
+// emit: ast
+// Regression (found by fuzzing): an unterminated byte literal at the end of
+// a line crashed the parser, which read its value.
+fn f() -> u8 {
+    b'
+}

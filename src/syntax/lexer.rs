@@ -205,6 +205,7 @@ impl Lexer<'_> {
         let span = self.span_from(start);
         if let Err(e) = byte_value(&self.text[start..self.pos]) {
             let message = match e {
+                ByteError::Unterminated => "unterminated byte literal",
                 ByteError::Empty => "empty byte literal",
                 ByteError::TooMany => "a byte literal holds exactly one byte",
                 ByteError::NotAscii => "only printable ASCII can be written directly",
@@ -302,6 +303,8 @@ pub fn int_value(text: &str) -> Result<u64, IntError> {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ByteError {
+    /// No closing `'`; the lexer reports it before the value is asked for.
+    Unterminated,
     Empty,
     TooMany,
     NotAscii,
@@ -310,7 +313,12 @@ pub enum ByteError {
 
 /// The value of a byte literal's source text, including `b'` and `'`.
 pub fn byte_value(text: &str) -> Result<u8, ByteError> {
-    let inner = &text[2..text.len() - 1];
+    let Some(inner) = text
+        .strip_prefix("b'")
+        .and_then(|rest| rest.strip_suffix('\''))
+    else {
+        return Err(ByteError::Unterminated);
+    };
     let mut chars = inner.chars();
     let value = match chars.next() {
         None => return Err(ByteError::Empty),
@@ -432,5 +440,8 @@ mod tests {
         assert_eq!(byte_value("b'é'"), Err(ByteError::NotAscii));
         assert_eq!(byte_value(r"b'\q'"), Err(ByteError::BadEscape));
         assert_eq!(byte_value(r"b'\x4'"), Err(ByteError::BadEscape));
+        // Tokens of unterminated literals, as the parser sees them.
+        assert_eq!(byte_value("b'"), Err(ByteError::Unterminated));
+        assert_eq!(byte_value("b'a"), Err(ByteError::Unterminated));
     }
 }
