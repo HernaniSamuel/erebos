@@ -2,6 +2,7 @@
 // Aggregate constants are private read-only data, with zero padding
 // (ADR 0027, 0029); indexing one reads a single element from it.
 const TABLE: [u16; 4] = [1, 2, 3, 4];
+const SCALE: u32 = 1000;
 const PADDED: Padded = Padded { a: 0xAA, b: 0xBBBB_BBBB };
 struct Padded { a: u8, b: u32 }
 
@@ -11,7 +12,7 @@ fn element(i: usize) -> u16 {
 
 fn field() -> u32 {
     let copy: Padded = PADDED;
-    copy.b + PADDED.a as u32
+    copy.b + PADDED.a as u32 * SCALE
 }
 
 entry fn main() -> ! { loop {} }

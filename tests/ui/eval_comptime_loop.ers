@@ -1,0 +1,9 @@
+// emit: mir
+// A `comptime` block that never ends stops at the step budget: `loop {}`
+// executes no statement, but every terminator is a step (ADR 0029).
+comptime {
+    loop {}
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

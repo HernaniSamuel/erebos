@@ -65,7 +65,7 @@ fn print_u32(n: u32) {
 
 entry fn main() -> ! {
     let message: [u8; 9] = [b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9'];
-    let crc: u32 = crc32(&raw const message as *const u8, 9);
+    let crc: u32 = crc32(&raw const message as *const u8, MESSAGE_LEN);
     putc(b'c'); putc(b'r'); putc(b'c'); putc(b' ');
     print_u32(crc);
     putc(b'\n');
@@ -82,3 +82,7 @@ panic fn on_panic() -> ! {
     *FINISHER = (2 << 16) | 0x3333;
     loop {}
 }
+
+// Declared after the functions using it: items may depend on each other in
+// any order (ADR 0028).
+const MESSAGE_LEN: usize = 9;

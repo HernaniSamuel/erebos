@@ -1,0 +1,20 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/eval_comptime_loop.ers
+---
+--- errors ---
+eval::step-limit
+
+  × the evaluation did not finish within 10000000 steps
+   ╭─[eval_comptime_loop.ers:5:5]
+ 3 │ // executes no statement, but every terminator is a step (ADR 0029).
+ 4 │ comptime {
+   · ────┬───
+   ·     ╰── while evaluating this `comptime` block
+ 5 │     loop {}
+   ·     ───┬───
+   ·        ╰── still running here
+ 6 │ }
+   ╰────
+  help: this code runs at compile time (ADR 0027)
