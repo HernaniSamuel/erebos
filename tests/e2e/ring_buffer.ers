@@ -1,0 +1,109 @@
+// The M2.1 milestone program: a ring buffer on the stack, built from a
+// struct holding an array, used through pointers, wrapping around its end.
+// expect-output: hel
+// expect-output: full at !
+// expect-output: lo, ring
+// expect-output: empty
+// expect-exit: 0
+
+struct Uart {
+    thr: u8,
+}
+
+fn putc(byte: u8) {
+    let uart: *mut volatile Uart = 0x1000_0000 as *mut volatile Uart;
+    (*uart).thr = byte;
+}
+
+fn exit(code: u32) -> ! {
+    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+    *finisher = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    loop {}
+}
+
+struct Ring {
+    slots: [u8; 8],
+    // Where the next byte is written.
+    head: usize,
+    // Where the next byte is read.
+    tail: usize,
+    len: usize,
+}
+
+fn push(ring: *mut Ring, byte: u8) -> bool {
+    if (*ring).len == size_of([u8; 8]) {
+        return false;
+    }
+    (*ring).slots[(*ring).head] = byte;
+    (*ring).head = ((*ring).head + 1) % 8;
+    (*ring).len += 1;
+    true
+}
+
+fn pop(ring: *mut Ring, byte: *mut u8) -> bool {
+    if (*ring).len == 0 {
+        return false;
+    }
+    *byte = (*ring).slots[(*ring).tail];
+    (*ring).tail = ((*ring).tail + 1) % 8;
+    (*ring).len -= 1;
+    true
+}
+
+fn push_all(ring: *mut Ring, text: *const u8, n: usize) {
+    let mut i: usize = 0;
+    while i < n {
+        if !push(ring, text[i]) {
+            let full: [u8; 8] = [b'f', b'u', b'l', b'l', b' ', b'a', b't', b' '];
+            let mut j: usize = 0;
+            while j < 8 {
+                putc(full[j]);
+                j += 1;
+            }
+            putc(text[i]);
+            putc(b'\n');
+            return;
+        }
+        i += 1;
+    }
+}
+
+fn pop_some(ring: *mut Ring, n: u32) {
+    let mut byte: u8 = 0;
+    let mut i: u32 = 0;
+    while i < n && pop(ring, &raw mut byte) {
+        putc(byte);
+        i += 1;
+    }
+    putc(b'\n');
+}
+
+entry fn main() -> ! {
+    let mut ring: Ring = Ring { slots: [0; 8], head: 0, tail: 0, len: 0 };
+    let r: *mut Ring = &raw mut ring;
+
+    let hello: [u8; 5] = [b'h', b'e', b'l', b'l', b'o'];
+    push_all(r, &raw const hello as *const u8, 5);
+    pop_some(r, 3);
+
+    // Wraps around the end of the array, then overflows.
+    let more: [u8; 7] = [b',', b' ', b'r', b'i', b'n', b'g', b'!'];
+    push_all(r, &raw const more as *const u8, 7);
+    pop_some(r, 100);
+
+    let mut byte: u8 = 0;
+    if !pop(r, &raw mut byte) {
+        let empty: [u8; 5] = [b'e', b'm', b'p', b't', b'y'];
+        let mut i: usize = 0;
+        while i < 5 {
+            putc(empty[i]);
+            i += 1;
+        }
+        putc(b'\n');
+    }
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(1)
+}
