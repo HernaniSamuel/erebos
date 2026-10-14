@@ -127,13 +127,23 @@ fn int_type(context: &Context, int: IntTy) -> IntType<'_> {
     }
 }
 
-/// The LLVM type of a MIR type; `()` and `!` have no representation.
+/// The LLVM type of a MIR value, as held in registers; `()` and `!` have no
+/// representation.
 fn basic_type(context: &Context, ty: Ty) -> Option<BasicTypeEnum<'_>> {
     match ty {
         Ty::Bool => Some(context.bool_type().into()),
         Ty::Int(int) => Some(int_type(context, int).into()),
         Ty::Ptr(_) => Some(context.ptr_type(AddressSpace::default()).into()),
         Ty::Unit | Ty::Never => None,
+    }
+}
+
+/// The LLVM type of a MIR value in memory. A `bool` occupies a byte
+/// (ADR 0022), unlike in registers.
+fn memory_type(context: &Context, ty: Ty) -> Option<BasicTypeEnum<'_>> {
+    match ty {
+        Ty::Bool => Some(context.i8_type().into()),
+        _ => basic_type(context, ty),
     }
 }
 
@@ -277,14 +287,7 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                     return;
                 }
                 let value = self.rvalue(rvalue);
-                let (address, volatile) = self.address(*place);
-                let store = self
-                    .builder
-                    .build_store(address, value)
-                    .expect("builder is positioned");
-                if volatile {
-                    store.set_volatile(true).expect("stores can be volatile");
-                }
+                self.write(*place, value);
             }
             Statement::Call { dest, callee, args } => {
                 let args: Vec<BasicMetadataValueEnum> =
@@ -297,14 +300,7 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                     let ValueKind::Basic(value) = call.try_as_basic_value() else {
                         unreachable!("calls with a destination return a value")
                     };
-                    let (address, volatile) = self.address(*dest);
-                    let store = self
-                        .builder
-                        .build_store(address, value)
-                        .expect("builder is positioned");
-                    if volatile {
-                        store.set_volatile(true).expect("stores can be volatile");
-                    }
+                    self.write(*dest, value);
                 }
             }
         }
@@ -327,12 +323,24 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
         (pointer, ptr.volatile)
     }
 
+    /// Locals are private to the function, so they hold values as in
+    /// registers; memory reached through a pointer uses the memory
+    /// representation (ADR 0022).
+    fn representation(&self, place: Place) -> Option<BasicTypeEnum<'ctx>> {
+        let ty = self.body.place_ty(place);
+        if place.deref {
+            memory_type(self.context, ty)
+        } else {
+            basic_type(self.context, ty)
+        }
+    }
+
     fn read(&self, place: Place) -> BasicValueEnum<'ctx> {
-        let ty = basic_type(self.context, self.body.place_ty(place)).expect("read of `()`");
+        let memory = self.representation(place).expect("read of `()`");
         let (address, volatile) = self.address(place);
         let value = self
             .builder
-            .build_load(ty, address, "")
+            .build_load(memory, address, "")
             .expect("builder is positioned");
         if volatile {
             value
@@ -341,7 +349,40 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                 .set_volatile(true)
                 .expect("loads can be volatile");
         }
-        value
+        if memory != self.context.i8_type().into() || self.body.place_ty(place) != Ty::Bool {
+            return value;
+        }
+        // Any nonzero byte is `true`, so every byte is a valid `bool` in
+        // memory, wherever it came from (ADR 0022).
+        let zero = self.context.i8_type().const_zero();
+        self.builder
+            .build_int_compare(IntPredicate::NE, value.into_int_value(), zero, "")
+            .expect("builder is positioned")
+            .into()
+    }
+
+    /// Writes a value in the place's representation: a `bool` in memory
+    /// becomes a byte holding 0 or 1.
+    fn write(&self, place: Place, value: BasicValueEnum<'ctx>) {
+        let (address, volatile) = self.address(place);
+        let value = match (self.representation(place), value) {
+            (Some(BasicTypeEnum::IntType(memory)), BasicValueEnum::IntValue(int))
+                if memory != int.get_type() =>
+            {
+                self.builder
+                    .build_int_z_extend(int, memory, "")
+                    .expect("builder is positioned")
+                    .into()
+            }
+            (_, value) => value,
+        };
+        let store = self
+            .builder
+            .build_store(address, value)
+            .expect("builder is positioned");
+        if volatile {
+            store.set_volatile(true).expect("stores can be volatile");
+        }
     }
 
     fn rvalue(&self, rvalue: &Rvalue) -> BasicValueEnum<'ctx> {

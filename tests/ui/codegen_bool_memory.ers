@@ -1,0 +1,12 @@
+// emit: llvm-ir
+// A `bool` in memory is a byte; any nonzero byte reads as `true` (ADR 0022).
+fn read(p: *const bool) -> bool {
+    *p
+}
+
+fn write(p: *mut bool, value: bool) {
+    *p = value;
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }
