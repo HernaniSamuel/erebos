@@ -1,6 +1,6 @@
 # 0003. Layered compiler pipeline
 
-- Status: Accepted
+- Status: Accepted; amended by 0028 (on-demand scheduling)
 - Date: 2026-10-12
 
 ## Context

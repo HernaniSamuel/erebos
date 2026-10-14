@@ -28,7 +28,7 @@ Do not write one for local implementation details that the code already explains
 |------|------------------------------------------------------------------|----------|
 | 0001 | [Record architecture decisions](0001-record-architecture-decisions.md) | Accepted |
 | 0002 | [Bare-metal-only scope](0002-bare-metal-only-scope.md)           | Accepted |
-| 0003 | [Layered compiler pipeline](0003-layered-compiler-pipeline.md)   | Accepted |
+| 0003 | [Layered compiler pipeline](0003-layered-compiler-pipeline.md)   | Accepted, amended by 0028 |
 | 0004 | [Hand-written lexer and parser](0004-hand-written-lexer-and-parser.md) | Accepted |
 | 0005 | [LLVM backend via inkwell](0005-llvm-backend-via-inkwell.md)     | Accepted |
 | 0006 | [C ABI as the only ABI](0006-c-abi-as-the-only-abi.md)           | Accepted |
