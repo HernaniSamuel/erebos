@@ -1,0 +1,175 @@
+// The M2.2 milestone program: structs and arrays by value between Erebos
+// and C compiled by clang, one function per row of the table of ADR 0025,
+// in both directions.
+// link-c: c_abi.c
+// expect-output: one 8
+// expect-output: three 3 2 1
+// expect-output: word 42
+// expect-output: pair 10 4
+// expect-output: wide 15000000000
+// expect-output: big 2 4 6, mine 1 2 3
+// expect-output: packed 7 1000007
+// expect-output: bytes 23456
+// expect-output: huge 136
+// expect-output: late 18 21
+// expect-output: empty 12
+// expect-output: from c 213664
+// expect-exit: 0
+
+struct One { a: u8 }
+struct Three { a: u8, b: u8, c: u8 }
+struct Word { a: u32 }
+struct Pair { a: u32, b: u32 }
+struct Wide { a: u64 }
+struct Big { a: u32, b: u32, c: u32 }
+#[packed]
+struct Packed { a: u8, b: u32 }
+struct Huge { w: [u32; 16] }
+struct Empty {}
+
+extern fn c_one(x: One) -> One;
+extern fn c_three(x: Three) -> Three;
+extern fn c_word(x: Word) -> Word;
+extern fn c_pair(x: Pair) -> Pair;
+extern fn c_wide(x: Wide) -> Wide;
+extern fn c_big(x: Big) -> Big;
+extern fn c_packed(x: Packed) -> Packed;
+extern fn c_bytes(x: [u8; 5]) -> [u8; 5];
+extern fn c_huge_sum(h: Huge) -> u32;
+extern fn c_late(a: u32, b: u32, c: u32, d: u32, e: u32, f: u32, g: u32, x: Pair) -> Pair;
+extern fn c_around_empty(a: u32, e: Empty, b: u32) -> u32;
+extern fn c_calls_erebos() -> u32;
+
+// Called from C.
+fn erebos_swap(p: Pair) -> Pair {
+    Pair { a: p.b, b: p.a }
+}
+
+// Changes its copy, as C's `c_big` does.
+fn erebos_big(mut b: Big, k: u32) -> Big {
+    b.a += k;
+    b.b += k;
+    b.c += k;
+    b
+}
+
+fn erebos_three(t: Three) -> Three {
+    Three { a: t.c, b: t.b, c: t.a }
+}
+
+struct Uart { thr: u8 }
+
+fn putc(byte: u8) {
+    let uart: *mut volatile Uart = 0x1000_0000 as *mut volatile Uart;
+    (*uart).thr = byte;
+}
+
+fn exit(code: u32) -> ! {
+    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+    *finisher = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    loop {}
+}
+
+fn print_u64(n: u64) {
+    if n >= 10 {
+        print_u64(n / 10);
+    }
+    putc(b'0' + (n % 10) as u8);
+}
+
+fn label(text: [u8; 6]) {
+    let mut i: usize = 0;
+    while i < 6 && text[i] != b' ' {
+        putc(text[i]);
+        i += 1;
+    }
+    putc(b' ');
+}
+
+fn number(n: u64) {
+    print_u64(n);
+    putc(b' ');
+}
+
+fn last(n: u64) {
+    print_u64(n);
+    putc(b'\n');
+}
+
+entry fn main() -> ! {
+    label([b'o', b'n', b'e', b' ', b' ', b' ']);
+    last(c_one(One { a: 7 }).a as u64);
+
+    let three: Three = c_three(Three { a: 1, b: 2, c: 3 });
+    label([b't', b'h', b'r', b'e', b'e', b' ']);
+    number(three.a as u64);
+    number(three.b as u64);
+    last(three.c as u64);
+
+    label([b'w', b'o', b'r', b'd', b' ', b' ']);
+    last(c_word(Word { a: 21 }).a as u64);
+
+    let pair: Pair = c_pair(Pair { a: 7, b: 3 });
+    label([b'p', b'a', b'i', b'r', b' ', b' ']);
+    number(pair.a as u64);
+    last(pair.b as u64);
+
+    label([b'w', b'i', b'd', b'e', b' ', b' ']);
+    last(c_wide(Wide { a: 5_000_000_000 }).a);
+
+    // A large argument is the callee's copy (ADR 0025).
+    let mine: Big = Big { a: 1, b: 2, c: 3 };
+    let big: Big = c_big(mine);
+    label([b'b', b'i', b'g', b' ', b' ', b' ']);
+    number(big.a as u64);
+    number(big.b as u64);
+    print_u64(big.c as u64);
+    putc(b',');
+    putc(b' ');
+    label([b'm', b'i', b'n', b'e', b' ', b' ']);
+    number(mine.a as u64);
+    number(mine.b as u64);
+    last(mine.c as u64);
+
+    let packed: Packed = c_packed(Packed { a: 7, b: 1_000_000 });
+    label([b'p', b'a', b'c', b'k', b'e', b'd']);
+    number(packed.a as u64);
+    last(packed.b as u64);
+
+    let bytes: [u8; 5] = c_bytes([1, 2, 3, 4, 5]);
+    label([b'b', b'y', b't', b'e', b's', b' ']);
+    let mut i: usize = 0;
+    while i < 5 {
+        print_u64(bytes[i] as u64);
+        i += 1;
+    }
+    putc(b'\n');
+
+    let mut huge: Huge = Huge { w: [0; 16] };
+    i = 0;
+    while i < 16 {
+        huge.w[i] = i as u32 + 1;
+        i += 1;
+    }
+    label([b'h', b'u', b'g', b'e', b' ', b' ']);
+    last(c_huge_sum(huge) as u64);
+
+    let late: Pair = c_late(1, 2, 3, 4, 5, 6, 7, Pair { a: 8, b: 3 });
+    label([b'l', b'a', b't', b'e', b' ', b' ']);
+    number(late.a as u64);
+    last(late.b as u64);
+
+    label([b'e', b'm', b'p', b't', b'y', b' ']);
+    last(c_around_empty(1, Empty {}, 2) as u64);
+
+    // swap(1, 2) = (2, 1); big(1, 2, 3) + 10 = 36; three(4, 5, 6) = (6, 5, 4)
+    label([b'f', b'r', b'o', b'm', b' ', b' ']);
+    putc(b'c');
+    putc(b' ');
+    last(c_calls_erebos() as u64);
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(1)
+}

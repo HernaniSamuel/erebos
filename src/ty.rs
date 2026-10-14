@@ -209,9 +209,6 @@ impl Checker<'_> {
         }
 
         self.params(f);
-        if f.ret.is_aggregate() {
-            self.aggregate_by_value(f.ret, f.ret_span.unwrap_or(f.name_span));
-        }
         for local in &f.locals {
             if self.layouts.of(local.ty).is_none() {
                 self.too_large(local.ty, local.span, "does not fit in the address space");
@@ -239,21 +236,6 @@ impl Checker<'_> {
                     "objects are limited to {} bytes on this target",
                     layout::MAX_SIZE
                 )),
-        );
-    }
-
-    /// Aggregates cross calls only once the target ABI for them exists
-    /// (ADR 0006, M2.2).
-    fn aggregate_by_value(&mut self, ty: Ty, span: Span) {
-        self.diags.push(
-            Diagnostic::error(
-                "ty::aggregate-by-value",
-                format!("`{ty}` cannot be passed or returned by value yet"),
-            )
-            .label(span, "an array or struct")
-            .help(format!(
-                "pass a pointer instead, such as `*const {ty}`; aggregates by value arrive with the target ABI for them (ADR 0006)"
-            )),
         );
     }
 
@@ -288,9 +270,6 @@ impl Checker<'_> {
             );
         }
         for param in f.params() {
-            if param.ty.is_aggregate() {
-                self.aggregate_by_value(param.ty, param.span);
-            }
             if matches!(param.ty, Ty::Unit | Ty::Never) {
                 self.diags.push(
                     Diagnostic::error(

@@ -1,0 +1,216 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/codegen_aggregate_abi.ers
+---
+--- llvm-ir ---
+; ModuleID = 'erebos'
+source_filename = "erebos"
+target datalayout = "e-m:e-p:32:32-i64:64-n32-S128"
+target triple = "riscv32-unknown-none-elf"
+
+module asm "\09.section .text.start, \22ax\22, @progbits"
+module asm "\09.globl _start"
+module asm "\09.type _start, @function"
+module asm "_start:"
+module asm "\09li sp, 0x88000000"
+module asm "\09j main"
+
+; Function Attrs: nounwind null_pointer_is_valid
+define i32 @three(i32 %0) #0 {
+bb0:
+  %1 = alloca i32, align 8
+  %2 = alloca i32, align 8
+  %_0 = alloca [3 x i8], align 1
+  %_1 = alloca [3 x i8], align 1
+  store i32 %0, ptr %2, align 4
+  call void @llvm.memcpy.p0.p0.i32(ptr align 1 %_1, ptr align 8 %2, i32 3, i1 false)
+  call void @llvm.memcpy.p0.p0.i32(ptr align 1 %_0, ptr align 1 %_1, i32 3, i1 false)
+  call void @llvm.memcpy.p0.p0.i32(ptr align 8 %1, ptr align 1 %_0, i32 3, i1 false)
+  %3 = load i32, ptr %1, align 4
+  ret i32 %3
+}
+
+; Function Attrs: nounwind null_pointer_is_valid
+define [2 x i32] @pair([2 x i32] %0) #0 {
+bb0:
+  %1 = alloca [2 x i32], align 8
+  %2 = alloca [2 x i32], align 8
+  %_0 = alloca [8 x i8], align 4
+  %_1 = alloca [8 x i8], align 4
+  store [2 x i32] %0, ptr %2, align 4
+  call void @llvm.memcpy.p0.p0.i32(ptr align 4 %_1, ptr align 8 %2, i32 8, i1 false)
+  call void @llvm.memcpy.p0.p0.i32(ptr align 4 %_0, ptr align 4 %_1, i32 8, i1 false)
+  call void @llvm.memcpy.p0.p0.i32(ptr align 8 %1, ptr align 4 %_0, i32 8, i1 false)
+  %3 = load [2 x i32], ptr %1, align 4
+  ret [2 x i32] %3
+}
+
+; Function Attrs: nounwind null_pointer_is_valid
+define i64 @wide(i64 %0) #0 {
+bb0:
+  %1 = alloca i64, align 8
+  %2 = alloca i64, align 8
+  %_0 = alloca [8 x i8], align 8
+  %_1 = alloca [8 x i8], align 8
+  store i64 %0, ptr %2, align 8
+  call void @llvm.memcpy.p0.p0.i32(ptr align 8 %_1, ptr align 8 %2, i32 8, i1 false)
+  call void @llvm.memcpy.p0.p0.i32(ptr align 8 %_0, ptr align 8 %_1, i32 8, i1 false)
+  call void @llvm.memcpy.p0.p0.i32(ptr align 8 %1, ptr align 8 %_0, i32 8, i1 false)
+  %3 = load i64, ptr %1, align 8
+  ret i64 %3
+}
+
+; Function Attrs: nounwind null_pointer_is_valid
+define void @big(ptr sret([12 x i8]) align 4 %0, ptr %1) #0 {
+bb0:
+  %2 = getelementptr i8, ptr %1, i32 0
+  store i32 1, ptr %2, align 4
+  call void @llvm.memcpy.p0.p0.i32(ptr align 4 %0, ptr align 4 %1, i32 12, i1 false)
+  ret void
+}
+
+; Function Attrs: nounwind null_pointer_is_valid
+define void @empty(i32 %0, i32 %1) #0 {
+bb0:
+  ret void
+}
+
+; Function Attrs: nounwind null_pointer_is_valid
+define i32 @caller() #0 {
+bb0:
+  %0 = alloca [2 x i32], align 8
+  %1 = alloca [2 x i32], align 8
+  %2 = alloca [12 x i8], align 4
+  %_1 = alloca [12 x i8], align 4
+  %_2 = alloca [12 x i8], align 4
+  %_3 = alloca [12 x i8], align 4
+  %_6 = alloca [8 x i8], align 4
+  %_7 = alloca [8 x i8], align 4
+  %3 = getelementptr i8, ptr %_2, i32 0
+  store i32 1, ptr %3, align 4
+  %4 = getelementptr i8, ptr %_2, i32 4
+  store i32 2, ptr %4, align 4
+  %5 = getelementptr i8, ptr %_2, i32 8
+  store i32 3, ptr %5, align 4
+  call void @llvm.memcpy.p0.p0.i32(ptr align 4 %2, ptr align 4 %_2, i32 12, i1 false)
+  call void @big(ptr sret([12 x i8]) align 4 %_3, ptr %2)
+  call void @llvm.memcpy.p0.p0.i32(ptr align 4 %_1, ptr align 4 %_3, i32 12, i1 false)
+  %6 = getelementptr i8, ptr %_1, i32 8
+  %7 = load i32, ptr %6, align 4
+  %8 = getelementptr i8, ptr %_6, i32 0
+  store i32 4, ptr %8, align 4
+  %9 = getelementptr i8, ptr %_6, i32 4
+  store i32 5, ptr %9, align 4
+  call void @llvm.memcpy.p0.p0.i32(ptr align 8 %1, ptr align 4 %_6, i32 8, i1 false)
+  %10 = load [2 x i32], ptr %1, align 4
+  %11 = call [2 x i32] @pair([2 x i32] %10)
+  store [2 x i32] %11, ptr %0, align 4
+  call void @llvm.memcpy.p0.p0.i32(ptr align 4 %_7, ptr align 8 %0, i32 8, i1 false)
+  %12 = getelementptr i8, ptr %_7, i32 0
+  %13 = load i32, ptr %12, align 4
+  %14 = add i32 %7, %13
+  ret i32 %14
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @main() #1 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @on_panic() #1 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: readwrite)
+declare void @llvm.memcpy.p0.p0.i32(ptr noalias writeonly captures(none), ptr noalias readonly captures(none), i32, i1 immarg) #2
+
+attributes #0 = { nounwind null_pointer_is_valid }
+attributes #1 = { noreturn nounwind null_pointer_is_valid }
+attributes #2 = { nocallback nofree nounwind willreturn memory(argmem: readwrite) }
+--- llvm-ir -O ---
+; ModuleID = 'erebos'
+source_filename = "erebos"
+target datalayout = "e-m:e-p:32:32-i64:64-n32-S128"
+target triple = "riscv32-unknown-none-elf"
+
+module asm "\09.section .text.start, \22ax\22, @progbits"
+module asm "\09.globl _start"
+module asm "\09.type _start, @function"
+module asm "_start:"
+module asm "\09li sp, 0x88000000"
+module asm "\09j main"
+
+; Function Attrs: mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(none)
+define range(i32 0, 16777216) i32 @three(i32 %0) local_unnamed_addr #0 {
+bb0:
+  %.sroa.0.0.insert.ext = and i32 %0, 16777215
+  ret i32 %.sroa.0.0.insert.ext
+}
+
+; Function Attrs: mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(none)
+define [2 x i32] @pair([2 x i32] returned %0) local_unnamed_addr #0 {
+bb0:
+  ret [2 x i32] %0
+}
+
+; Function Attrs: mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(none)
+define i64 @wide(i64 returned %0) local_unnamed_addr #0 {
+bb0:
+  ret i64 %0
+}
+
+; Function Attrs: mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(argmem: readwrite)
+define void @big(ptr writeonly sret([12 x i8]) align 4 captures(none) initializes((0, 12)) %0, ptr captures(none) initializes((0, 4)) %1) local_unnamed_addr #1 {
+bb0:
+  store i32 1, ptr %1, align 4
+  tail call void @llvm.memcpy.p0.p0.i32(ptr noundef align 4 dereferenceable(12) %0, ptr noundef align 4 dereferenceable(12) %1, i32 12, i1 false)
+  ret void
+}
+
+; Function Attrs: mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(none)
+define void @empty(i32 %0, i32 %1) local_unnamed_addr #0 {
+bb0:
+  ret void
+}
+
+; Function Attrs: mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(none)
+define noundef i32 @caller() local_unnamed_addr #0 {
+bb0:
+  ret i32 7
+}
+
+; Function Attrs: nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none)
+define void @main() local_unnamed_addr #2 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none)
+define void @on_panic() local_unnamed_addr #2 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: mustprogress nocallback nofree nounwind willreturn memory(argmem: readwrite)
+declare void @llvm.memcpy.p0.p0.i32(ptr noalias writeonly captures(none), ptr noalias readonly captures(none), i32, i1 immarg) #3
+
+attributes #0 = { mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(none) }
+attributes #1 = { mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(argmem: readwrite) }
+attributes #2 = { nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none) }
+attributes #3 = { mustprogress nocallback nofree nounwind willreturn memory(argmem: readwrite) }

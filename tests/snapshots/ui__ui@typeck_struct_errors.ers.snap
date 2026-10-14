@@ -106,15 +106,3 @@ ty::volatile-aggregate
  17 │     let y: i32 = (*v).y;
     ╰────
   help: the width and number of the bus accesses would be up to the compiler (ADR 0023)
-ty::aggregate-by-value
-
-  × `Point` cannot be passed or returned by value yet
-    ╭─[typeck_struct_errors.ers:20:13]
- 19 │ 
- 20 │ fn by_value(p: Point) {}
-    ·             ┬
-    ·             ╰── an array or struct
- 21 │ 
-    ╰────
-  help: pass a pointer instead, such as `*const Point`; aggregates by value arrive with the target
-        ABI for them (ADR 0006)

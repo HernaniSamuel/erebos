@@ -144,30 +144,6 @@ ty::untyped-literal
  16 │ }
     ╰────
   help: bind it first, e.g. `let a: [u8; 3] = ...` (ADR 0008)
-ty::aggregate-by-value
-
-  × `[u8; 4]` cannot be passed or returned by value yet
-    ╭─[typeck_array_errors.ers:18:13]
- 17 │ 
- 18 │ fn by_value(a: [u8; 4]) -> [u8; 4] {
-    ·             ┬
-    ·             ╰── an array or struct
- 19 │     a
-    ╰────
-  help: pass a pointer instead, such as `*const [u8; 4]`; aggregates by value arrive with the
-        target ABI for them (ADR 0006)
-ty::aggregate-by-value
-
-  × `[u8; 4]` cannot be passed or returned by value yet
-    ╭─[typeck_array_errors.ers:18:28]
- 17 │ 
- 18 │ fn by_value(a: [u8; 4]) -> [u8; 4] {
-    ·                            ───┬───
-    ·                               ╰── an array or struct
- 19 │     a
-    ╰────
-  help: pass a pointer instead, such as `*const [u8; 4]`; aggregates by value arrive with the
-        target ABI for them (ADR 0006)
 ty::too-large
 
   × `[u8; 3000000000]` is too large

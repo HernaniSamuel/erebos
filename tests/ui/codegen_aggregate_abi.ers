@@ -1,0 +1,27 @@
+// emit: llvm-ir
+// opt: both
+// Aggregates by value follow the riscv32 C ABI (ADR 0025), with the same
+// signatures clang gives the C twins: `i32` up to 4 bytes, `i64` or
+// `[2 x i32]` up to 8, a pointer beyond, nothing for zero-sized types.
+struct Three { a: u8, b: u8, c: u8 }
+struct Pair { a: u32, b: u32 }
+struct Wide { a: u64 }
+struct Big { a: u32, b: u32, c: u32 }
+struct Empty {}
+
+fn three(x: Three) -> Three { x }
+fn pair(x: Pair) -> Pair { x }
+fn wide(x: Wide) -> Wide { x }
+fn big(mut x: Big) -> Big {
+    x.a = 1;
+    x
+}
+fn empty(a: u32, e: Empty, b: u32) -> Empty { e }
+
+fn caller() -> u32 {
+    let b: Big = big(Big { a: 1, b: 2, c: 3 });
+    b.c + pair(Pair { a: 4, b: 5 }).a
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

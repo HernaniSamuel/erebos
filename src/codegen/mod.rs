@@ -1,5 +1,7 @@
 //! MIR -> LLVM IR -> object file, through inkwell (ADR 0005).
 
+mod abi;
+
 use std::path::Path;
 
 use inkwell::AddressSpace;
@@ -13,7 +15,7 @@ use inkwell::targets::{
     CodeModel, FileType, InitializationConfig, RelocMode, Target as LlvmTarget, TargetMachine,
     TargetTriple,
 };
-use inkwell::types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum, IntType};
+use inkwell::types::{AnyType, BasicMetadataTypeEnum, BasicType, BasicTypeEnum, IntType};
 use inkwell::values::{
     BasicMetadataValueEnum, BasicValue, BasicValueEnum, FunctionValue, IntValue, PointerValue,
     ValueKind,
@@ -25,6 +27,7 @@ use crate::mir::{
     Terminator, Ty, UnOp,
 };
 use crate::target::Target;
+use abi::{Cast, FnAbi, PassMode};
 
 /// Returns the textual LLVM IR, for `--emit=llvm-ir`.
 /// How much LLVM optimizes. Without optimization, locals are still promoted
@@ -98,14 +101,16 @@ fn lower<'ctx>(
     module.set_data_layout(&machine.get_target_data().get_data_layout());
 
     // Declare everything first so bodies can refer to any function.
+    let abis: Vec<FnAbi> = mir.bodies().map(|(_, body)| FnAbi::of(body)).collect();
     let fns: Vec<FunctionValue> = mir
         .bodies()
-        .map(|(_, body)| declare(context, &module, body))
+        .zip(&abis)
+        .map(|((_, body), abi)| declare(context, &module, body, abi))
         .collect();
-    for ((_, body), &function) in mir.bodies().zip(&fns) {
+    for (((_, body), &function), abi) in mir.bodies().zip(&fns).zip(&abis) {
         // An `extern fn` stays a declaration for the linker to resolve.
         if !body.external {
-            FnCodegen::new(context, body, function, &fns).define();
+            FnCodegen::new(context, body, abi, function, &fns, &abis).define();
         }
     }
 
@@ -166,26 +171,70 @@ fn element_type(context: &Context, ty: Ty) -> BasicTypeEnum<'_> {
     memory_type(context, ty).unwrap_or_else(|| context.i8_type().array_type(0).into())
 }
 
+/// The LLVM type of an aggregate held in registers (ADR 0025).
+fn cast_type(context: &Context, cast: Cast) -> BasicTypeEnum<'_> {
+    match cast {
+        Cast::Word => context.i32_type().into(),
+        Cast::Long => context.i64_type().into(),
+        Cast::Pair => context.i32_type().array_type(2).into(),
+    }
+}
+
+/// The LLVM type that carries a value of type `ty` passed as `mode`.
+fn abi_type(context: &Context, ty: Ty, mode: PassMode) -> Option<BasicTypeEnum<'_>> {
+    match mode {
+        PassMode::Ignore => None,
+        PassMode::Direct => basic_type(context, ty),
+        PassMode::Cast(cast) => Some(cast_type(context, cast)),
+        PassMode::Indirect => Some(context.ptr_type(AddressSpace::default()).into()),
+    }
+}
+
+/// Marks the hidden pointer to a returned aggregate, as clang does.
+fn sret_attributes(context: &Context, ty: Ty) -> [Attribute; 2] {
+    let memory = memory_type(context, ty).expect("aggregates live in memory");
+    let sret = context.create_type_attribute(
+        Attribute::get_named_enum_kind_id("sret"),
+        memory.as_any_type_enum(),
+    );
+    let align = context.create_enum_attribute(
+        Attribute::get_named_enum_kind_id("align"),
+        ty.layout().align,
+    );
+    [sret, align]
+}
+
 fn declare<'ctx>(
     context: &'ctx Context,
     module: &Module<'ctx>,
     body: &Body,
+    abi: &FnAbi,
 ) -> FunctionValue<'ctx> {
-    let params: Vec<BasicMetadataTypeEnum> = body
-        .params()
-        .iter()
-        .map(|param| {
-            basic_type(context, param.ty)
-                .expect("the type checker rejects `()` and `!` parameters")
-                .into()
-        })
-        .collect();
-    let fn_type = match basic_type(context, body.ret) {
+    let ptr = context.ptr_type(AddressSpace::default());
+    let mut params: Vec<BasicMetadataTypeEnum> = Vec::new();
+    if abi.ret_mode == PassMode::Indirect {
+        params.push(ptr.into());
+    }
+    params.extend(
+        abi.params
+            .iter()
+            .filter_map(|&(ty, mode)| abi_type(context, ty, mode))
+            .map(BasicMetadataTypeEnum::from),
+    );
+    let fn_type = match abi_type(context, abi.ret, abi.ret_mode) {
+        Some(_) if abi.ret_mode == PassMode::Indirect => {
+            context.void_type().fn_type(&params, false)
+        }
         Some(ty) => ty.fn_type(&params, false),
         // Both `()` and `!` return nothing; `!` additionally never returns.
         None => context.void_type().fn_type(&params, false),
     };
     let function = module.add_function(&body.name, fn_type, None);
+    if abi.ret_mode == PassMode::Indirect {
+        for attribute in sret_attributes(context, abi.ret) {
+            function.add_attribute(AttributeLoc::Param(0), attribute);
+        }
+    }
 
     // There is no unwinding on bare metal (ADR 0002).
     add_attribute(context, function, AttributeLoc::Function, "nounwind");
@@ -212,9 +261,9 @@ fn declare<'ctx>(
     }
     // The C ABI (ADR 0006) widens narrow integers to a full register; LLVM
     // needs to be told how, as clang does.
-    for (i, param) in body.params().iter().enumerate() {
-        if let Some(ext) = extension(param.ty) {
-            add_attribute(context, function, AttributeLoc::Param(i as u32), ext);
+    for (i, &(ty, _)) in abi.params.iter().enumerate() {
+        if let (Some(ext), Some(index)) = (extension(ty), abi.llvm_param(i)) {
+            add_attribute(context, function, AttributeLoc::Param(index), ext);
         }
     }
     if let Some(ext) = extension(body.ret) {
@@ -266,9 +315,12 @@ impl Address<'_> {
 struct FnCodegen<'a, 'ctx> {
     context: &'ctx Context,
     body: &'a Body,
+    abi: &'a FnAbi,
     function: FunctionValue<'ctx>,
-    /// Every function of the module, indexed by body id.
+    /// Every function of the module and how it is called, indexed by body
+    /// id.
     fns: &'a [FunctionValue<'ctx>],
+    abis: &'a [FnAbi],
     builder: Builder<'ctx>,
     blocks: Vec<LlvmBlock<'ctx>>,
     slots: Vec<Option<PointerValue<'ctx>>>,
@@ -281,8 +333,10 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
     fn new(
         context: &'ctx Context,
         body: &'a Body,
+        abi: &'a FnAbi,
         function: FunctionValue<'ctx>,
         fns: &'a [FunctionValue<'ctx>],
+        abis: &'a [FnAbi],
     ) -> Self {
         let blocks = body
             .blocks()
@@ -299,8 +353,10 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
         FnCodegen {
             context,
             body,
+            abi,
             function,
             fns,
+            abis,
             builder: context.create_builder(),
             blocks,
             slots: Vec::new(),
@@ -315,6 +371,11 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
             .body
             .locals()
             .map(|(local, _)| {
+                // An aggregate passed in memory already has a place: the
+                // caller's copy, or the memory it returns into (ADR 0025).
+                if let Some(pointer) = self.memory_param(local) {
+                    return Some(pointer);
+                }
                 self.representation(Place::local(local)).map(|ty| {
                     let slot = self
                         .builder
@@ -331,13 +392,21 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                 })
             })
             .collect();
-        // Parameters arrive in registers; give them their slots `_1..`.
-        for i in 0..self.body.param_count {
+        // Parameters in registers get their slots `_1..`.
+        for (i, &(ty, mode)) in self.abi.params.iter().enumerate() {
+            let place = Place::local(Local(i as u32 + 1));
+            let Some(index) = self.abi.llvm_param(i) else {
+                continue;
+            };
             let value = self
                 .function
-                .get_nth_param(i as u32)
+                .get_nth_param(index)
                 .expect("declared with this many parameters");
-            self.write(Place::local(Local(i as u32 + 1)), value);
+            match mode {
+                PassMode::Direct => self.write(place, value),
+                PassMode::Cast(_) => self.store_cast(value, self.address(place), ty),
+                PassMode::Ignore | PassMode::Indirect => {}
+            }
         }
 
         for (bb, data) in self.body.blocks() {
@@ -346,6 +415,141 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                 self.statement(statement);
             }
             self.terminator(data.terminator);
+        }
+    }
+
+    /// The LLVM parameter that is the memory of `local`: a parameter
+    /// passed indirectly, or the return place when the result is.
+    fn memory_param(&self, local: Local) -> Option<PointerValue<'ctx>> {
+        let index = match local.0 as usize {
+            0 if self.abi.ret_mode == PassMode::Indirect => 0,
+            0 => return None,
+            i if i <= self.abi.params.len() && self.abi.params[i - 1].1 == PassMode::Indirect => {
+                self.abi.llvm_param(i - 1)?
+            }
+            _ => return None,
+        };
+        let param = self
+            .function
+            .get_nth_param(index)
+            .expect("declared with this many parameters");
+        Some(param.into_pointer_value())
+    }
+
+    /// A stack slot for a temporary, in the start block so that LLVM can
+    /// promote it.
+    fn entry_alloca(&self, ty: BasicTypeEnum<'ctx>, align: u64) -> PointerValue<'ctx> {
+        let builder = self.context.create_builder();
+        match self.blocks[0].get_first_instruction() {
+            Some(first) => builder.position_before(&first),
+            None => builder.position_at_end(self.blocks[0]),
+        }
+        let slot = builder.build_alloca(ty, "").expect("builder is positioned");
+        slot.as_instruction_value()
+            .expect("an alloca is an instruction")
+            .set_alignment(u32::try_from(align).expect("alignments are small"))
+            .expect("the alignment is a power of two");
+        slot
+    }
+
+    /// The bytes of an aggregate of type `ty` at `address`, read as its
+    /// register form. The bytes beyond its size are unspecified (ADR 0025).
+    fn load_cast(&self, address: Address<'ctx>, ty: Ty, cast: Cast) -> BasicValueEnum<'ctx> {
+        let cast_ty = cast_type(self.context, cast);
+        let temp = self.entry_alloca(cast_ty, 8);
+        self.copy_bytes(temp, 8, address.ptr, address.align(ty), ty.layout().size);
+        self.builder
+            .build_load(cast_ty, temp, "")
+            .expect("builder is positioned")
+    }
+
+    /// Stores the register form of an aggregate of type `ty` at `address`.
+    fn store_cast(&self, value: BasicValueEnum<'ctx>, address: Address<'ctx>, ty: Ty) {
+        let temp = self.entry_alloca(value.get_type(), 8);
+        self.builder
+            .build_store(temp, value)
+            .expect("builder is positioned");
+        self.copy_bytes(address.ptr, address.align(ty), temp, 8, ty.layout().size);
+    }
+
+    fn copy_bytes(
+        &self,
+        to: PointerValue<'ctx>,
+        to_align: u32,
+        from: PointerValue<'ctx>,
+        from_align: u32,
+        size: u64,
+    ) {
+        if size == 0 {
+            return;
+        }
+        let size = int_type(self.context, IntTy::Usize).const_int(size, false);
+        self.builder
+            .build_memcpy(to, to_align, from, from_align, size)
+            .expect("the alignment is a power of two");
+    }
+
+    /// A call, with arguments and result passed as the callee's ABI says
+    /// (ADR 0025).
+    fn call(&self, dest: Option<Place>, callee: usize, args: &[Operand]) {
+        let abi = &self.abis[callee];
+        let mut values: Vec<BasicMetadataValueEnum> = Vec::new();
+        // An aggregate result is written straight into its destination, a
+        // fresh temporary, or into a slot of its own if it is unused.
+        if abi.ret_mode == PassMode::Indirect {
+            let result = match dest {
+                Some(dest) => self.address(dest).ptr,
+                None => {
+                    let memory = memory_type(self.context, abi.ret).expect("an aggregate");
+                    self.entry_alloca(memory, abi.ret.layout().align)
+                }
+            };
+            values.push(result.into());
+        }
+        for (arg, &(ty, mode)) in args.iter().zip(&abi.params) {
+            let place = || match arg {
+                Operand::Copy(place) => *place,
+                Operand::Const(_) => unreachable!("aggregates are places"),
+            };
+            match mode {
+                PassMode::Ignore => {}
+                PassMode::Direct => values.push(self.operand(arg).into()),
+                PassMode::Cast(cast) => {
+                    let value = self.load_cast(self.address(place()), ty, cast);
+                    values.push(value.into());
+                }
+                PassMode::Indirect => {
+                    // The callee may change its copy (ADR 0025).
+                    let layout = ty.layout();
+                    let memory = memory_type(self.context, ty).expect("an aggregate");
+                    let copy = self.entry_alloca(memory, layout.align);
+                    let source = self.address(place());
+                    let align = u32::try_from(layout.align).expect("alignments are small");
+                    self.copy_bytes(copy, align, source.ptr, source.align(ty), layout.size);
+                    values.push(copy.into());
+                }
+            }
+        }
+        let call = self
+            .builder
+            .build_call(self.fns[callee], &values, "")
+            .expect("builder is positioned");
+        if abi.ret_mode == PassMode::Indirect {
+            for attribute in sret_attributes(self.context, abi.ret) {
+                call.add_attribute(AttributeLoc::Param(0), attribute);
+            }
+        }
+        let Some(dest) = dest else {
+            return;
+        };
+        let value = || match call.try_as_basic_value() {
+            ValueKind::Basic(value) => value,
+            _ => unreachable!("the callee returns a value"),
+        };
+        match abi.ret_mode {
+            PassMode::Direct => self.write(dest, value()),
+            PassMode::Cast(_) => self.store_cast(value(), self.address(dest), abi.ret),
+            PassMode::Ignore | PassMode::Indirect => {}
         }
     }
 
@@ -367,18 +571,7 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                 self.write(*place, value);
             }
             Statement::Call { dest, callee, args } => {
-                let args: Vec<BasicMetadataValueEnum> =
-                    args.iter().map(|arg| self.operand(arg).into()).collect();
-                let call = self
-                    .builder
-                    .build_call(self.fns[callee.0 as usize], &args, "")
-                    .expect("builder is positioned");
-                if let Some(dest) = dest {
-                    let ValueKind::Basic(value) = call.try_as_basic_value() else {
-                        unreachable!("calls with a destination return a value")
-                    };
-                    self.write(*dest, value);
-                }
+                self.call(*dest, callee.0 as usize, args);
             }
         }
     }
@@ -733,12 +926,18 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                 self.blocks[then.0 as usize],
                 self.blocks[else_.0 as usize],
             ),
-            Terminator::Return => match basic_type(self.context, self.body.ret) {
-                Some(_) => {
+            Terminator::Return => match self.abi.ret_mode {
+                PassMode::Direct => {
                     let value = self.read(Place::local(Local::RETURN));
                     b.build_return(Some(&value))
                 }
-                None => b.build_return(None),
+                PassMode::Cast(cast) => {
+                    let result = self.address(Place::local(Local::RETURN));
+                    let value = self.load_cast(result, self.abi.ret, cast);
+                    b.build_return(Some(&value))
+                }
+                // Written through the hidden pointer already.
+                PassMode::Ignore | PassMode::Indirect => b.build_return(None),
             },
             Terminator::Unreachable => b.build_unreachable(),
         };
