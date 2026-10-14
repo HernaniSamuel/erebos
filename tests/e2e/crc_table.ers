@@ -11,12 +11,13 @@ const FINISHER: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
 
 // The reflected CRC-32 polynomial of Ethernet, zlib and PNG.
 const POLYNOMIAL: u32 = 0xEDB8_8320;
-const CRC_TABLE: [u32; 256] = crc_table(POLYNOMIAL);
+const TABLE_SIZE: usize = 1 << 8;
+const CRC_TABLE: [u32; TABLE_SIZE] = crc_table(POLYNOMIAL);
 
-fn crc_table(polynomial: u32) -> [u32; 256] {
-    let mut table: [u32; 256] = [0; 256];
+fn crc_table(polynomial: u32) -> [u32; TABLE_SIZE] {
+    let mut table: [u32; TABLE_SIZE] = [0; TABLE_SIZE];
     let mut i: usize = 0;
-    while i < 256 {
+    while i < TABLE_SIZE {
         let mut c: u32 = i as u32;
         let mut bit: u32 = 0;
         while bit < 8 {

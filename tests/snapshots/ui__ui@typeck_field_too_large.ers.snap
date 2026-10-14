@@ -1,0 +1,17 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_field_too_large.ers
+---
+--- errors ---
+ty::too-large
+
+  × `[u16; 4294967292]` is too large
+   ╭─[typeck_field_too_large.ers:4:27]
+ 3 │ // left its struct without a layout, and nothing reported it.
+ 4 │ struct Huge { header: u8, data: [u16; !3] }
+   ·                           ──┬─
+   ·                             ╰── this field does not fit in the address space
+ 5 │ struct Holds { inner: Huge }
+   ╰────
+  help: objects are limited to 2147483647 bytes on this target

@@ -8,13 +8,10 @@ ty::not-comptime
 
   × `x` is only known at run time
    ╭─[resolve_comptime_errors.ers:5:27]
- 3 │ // (ADR 0029).
  4 │ fn uses(x: u32) -> u32 {
-   ·         ┬
-   ·         ╰── a variable of the running program
  5 │     let y: u32 = comptime x + 1;
    ·                           ┬
-   ·                           ╰── used at compile time
+   ·                           ╰── a variable of the running program, used at compile time
  6 │     let z: u32 = comptime { return 3; };
    ╰────
   help: compile-time code can use constants, literals and function calls (ADR 0029)

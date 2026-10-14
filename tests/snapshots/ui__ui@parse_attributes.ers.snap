@@ -66,12 +66,14 @@ File {
                             span: 63..68,
                         },
                         arg: Some(
-                            (
-                                Some(
-                                    64,
+                            Expr {
+                                kind: Int(
+                                    Some(
+                                        64,
+                                    ),
                                 ),
-                                69..71,
-                            ),
+                                span: 69..71,
+                            },
                         ),
                         span: 61..73,
                     },

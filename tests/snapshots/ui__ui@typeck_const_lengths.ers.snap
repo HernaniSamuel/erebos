@@ -1,0 +1,62 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_const_lengths.ers
+---
+--- typeck ---
+#[align(64)] struct Descriptor { addr: u32 at 0, len: u32 at 4 } size 64, align 64
+struct Ring { items: [u16; 6] at 0, head: u8 at 12 } size 14, align 2
+fn slots(n: usize) -> usize
+    expr 2 binary * 296..301: usize
+    expr 3 local n 296..297: usize
+    expr 4 int 2 300..301: usize
+fn buffers() -> usize
+    let sector: [u8; 1024]
+    let four: [u8; 4]
+    let same: [u8; 4]
+    let ring: Ring
+    expr 5 repeat 469..489: [u8; 1024]
+    expr 6 int 0 470..471: u8
+    expr 13 array 519..531: [u8; 4]
+    expr 14 int 1 520..521: u8
+    expr 15 int 2 523..524: u8
+    expr 16 int 3 526..527: u8
+    expr 17 int 4 529..530: u8
+    expr 21 local four 557..561: [u8; 4]
+    expr 22 struct Ring 584..622: Ring
+    expr 23 repeat 598..611: [u16; 6]
+    expr 24 int 0 599..600: u16
+    expr 27 int 0 619..620: u8
+    expr 28 binary + 628..663: usize
+    expr 29 size_of(Descriptor) 628..647: usize
+    expr 30 size_of(Ring) 650..663: usize
+entry fn main() -> !
+    expr 31 loop 690..697: !
+panic fn on_panic() -> !
+    expr 32 loop 727..734: !
+comptime fn SECTOR() -> usize
+    expr 33 int 512 201..204: usize
+comptime fn LINE() -> usize
+    expr 34 int 64 226..228: usize
+comptime fn SLOTS() -> usize
+    expr 35 call 251..259: usize
+    expr 36 int 3 257..258: usize
+comptime fn length() -> usize
+    expr 0 const LINE 313..317: usize
+comptime fn length() -> usize
+    expr 1 const SLOTS 390..395: usize
+comptime fn length() -> usize
+    expr 7 binary + 473..488: usize
+    expr 8 const SECTOR 473..479: usize
+    expr 9 const SECTOR 482..488: usize
+comptime fn length() -> usize
+    expr 10 binary * 455..465: usize
+    expr 11 int 2 455..456: usize
+    expr 12 const SECTOR 459..465: usize
+comptime fn length() -> usize
+    expr 18 binary + 510..515: usize
+    expr 19 int 2 510..511: usize
+    expr 20 int 2 514..515: usize
+comptime fn length() -> usize
+    expr 25 call 602..610: usize
+    expr 26 int 3 608..609: usize

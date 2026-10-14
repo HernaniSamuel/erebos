@@ -1,0 +1,27 @@
+// emit: typeck
+// Array lengths, repeat counts and `#[align]` take values computed at compile
+// time; types compare by the values of their lengths, and show them
+// (ADR 0029).
+const SECTOR: usize = 512;
+const LINE: usize = 64;
+const SLOTS: usize = slots(3);
+
+fn slots(n: usize) -> usize {
+    n * 2
+}
+
+#[align(LINE)]
+struct Descriptor { addr: u32, len: u32 }
+
+struct Ring { items: [u16; SLOTS], head: u8 }
+
+fn buffers() -> usize {
+    let sector: [u8; 2 * SECTOR] = [0; SECTOR + SECTOR];
+    let four: [u8; 2 + 2] = [1, 2, 3, 4];
+    let same: [u8; 4] = four;
+    let ring: Ring = Ring { items: [0; slots(3)], head: 0 };
+    size_of(Descriptor) + size_of(Ring)
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

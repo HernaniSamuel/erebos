@@ -55,9 +55,8 @@ pub struct FieldDecl {
 #[derive(Debug)]
 pub struct Attr {
     pub name: Ident,
-    /// The integer argument, with its span; the value is `None` if the
-    /// lexer rejected the literal.
-    pub arg: Option<(Option<u64>, Span)>,
+    /// The argument, an expression computed at compile time (ADR 0029).
+    pub arg: Option<Box<Expr>>,
     pub span: Span,
 }
 
@@ -117,8 +116,8 @@ pub enum TyKind {
         volatile: bool,
         pointee: Box<Ty>,
     },
-    /// `[T; N]`; `len` is `None` if the lexer rejected the literal.
-    Array { elem: Box<Ty>, len: Option<u64> },
+    /// `[T; N]`, where `N` is computed at compile time (ADR 0029).
+    Array { elem: Box<Ty>, len: Box<Expr> },
 }
 
 /// `{ stmts; tail }`. The tail is the block's value (ADR 0015).
@@ -168,8 +167,8 @@ pub enum ExprKind {
     Unit,
     /// `[a, b, c]`
     Array(Vec<Expr>),
-    /// `[value; N]`; `None` if the lexer rejected the length.
-    Repeat(Box<Expr>, Option<u64>),
+    /// `[value; N]`, where `N` is computed at compile time (ADR 0029).
+    Repeat(Box<Expr>, Box<Expr>),
     /// A name, such as a local variable.
     Name(Ident),
     /// `name(args)`: a call to a function.

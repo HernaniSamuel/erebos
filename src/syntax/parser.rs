@@ -164,14 +164,9 @@ impl Parser<'_> {
         self.expect(TokenKind::LBracket)?;
         let name = self.ident()?;
         let arg = if self.eat(TokenKind::LParen).is_some() {
-            let token = self.peek();
-            if token.kind != TokenKind::Int {
-                return Err(self.error_expected("an integer literal"));
-            }
-            self.bump();
-            let value = lexer::int_value(&self.text[token.span.range()]).ok();
+            let value = self.nested_expr()?;
             self.expect(TokenKind::RParen)?;
-            Some((value, token.span))
+            Some(Box::new(value))
         } else {
             None
         };
@@ -786,15 +781,10 @@ impl Parser<'_> {
         })
     }
 
-    /// The length of an array type or repeat expression: an integer
-    /// literal (constant expressions come with `const`, M2.3).
-    fn array_len(&mut self) -> PResult<Option<u64>> {
-        let token = self.peek();
-        if token.kind != TokenKind::Int {
-            return Err(self.error_expected("an integer literal for the length"));
-        }
-        self.bump();
-        Ok(lexer::int_value(&self.text[token.span.range()]).ok())
+    /// The length of an array type or repeat expression, computed at
+    /// compile time (ADR 0029).
+    fn array_len(&mut self) -> PResult<Box<Expr>> {
+        Ok(Box::new(self.nested_expr()?))
     }
 
     /// `[a, b, c]` or `[value; N]` (ADR 0021).

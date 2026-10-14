@@ -8,7 +8,7 @@ use std::rc::Rc;
 
 use crate::diag::{Diagnostic, Diagnostics};
 use crate::eval::{self, ConstValue, Origin};
-use crate::hir::{self, ConstId, ExprId, ExprKind, FnId, Hir, StructId};
+use crate::hir::{self, ArrayLen, Comptime, ConstId, ExprId, ExprKind, FnId, Hir, StructId};
 use crate::layout::{self, Layout, MAX_ALIGN, MAX_SIZE, StructLayout};
 use crate::mir::{self, BodyId, ConstData, DataId, Field, Mir, Ptr, StructRef};
 use crate::span::Span;
@@ -25,9 +25,25 @@ pub enum DataSource {
 /// on itself.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Item {
+    /// Type checking a body, which may need values computed at compile
+    /// time, such as the length of an array type.
+    Check(FnId),
     Body(FnId),
     Const(ConstId),
     Comptime(ExprId),
+    /// A `usize` computed at compile time, such as an array length.
+    Value(FnId),
+    Layout(StructId),
+}
+
+/// How diagnostics name a body.
+fn describe(hir: &Hir, f: &hir::Fn) -> String {
+    match f.comptime {
+        Some(Comptime::Const(id)) => format!("the constant `{}`", hir.const_(id).name),
+        Some(Comptime::Block) => "this `comptime` block".to_owned(),
+        Some(Comptime::Value) => "this value".to_owned(),
+        None => format!("the function `{}`", f.name),
+    }
 }
 
 /// The progress of one item through a query.
@@ -47,9 +63,7 @@ pub struct Queries<'h> {
     /// The layout of each struct; `None` when it contains itself or is too
     /// large, both reported.
     layouts: Vec<State<Option<StructLayout>>>,
-    /// Structs being laid out, outermost first: one found here again
-    /// contains itself.
-    layout_stack: Vec<StructId>,
+
     /// The MIR type of each struct.
     mir_structs: Vec<Option<StructRef>>,
     /// The MIR of each function; `None` if it cannot be built.
@@ -58,6 +72,9 @@ pub struct Queries<'h> {
     consts: Vec<State<Option<ConstValue>>>,
     /// The value of each `comptime` expression.
     comptime: HashMap<ExprId, State<Option<ConstValue>>>,
+    /// The value of each array length, repeat count and `#[align]`
+    /// argument computed at compile time.
+    values: HashMap<FnId, Option<u64>>,
     /// Read-only data computed at compile time, and what it came from.
     data: Vec<ConstData>,
     data_ids: HashMap<DataSource, DataId>,
@@ -73,11 +90,12 @@ impl<'h> Queries<'h> {
             tables: Tables::new(hir.expr_count),
             checked: hir.fns.iter().map(|_| State::NotStarted).collect(),
             layouts: hir.structs.iter().map(|_| State::NotStarted).collect(),
-            layout_stack: Vec::new(),
+
             mir_structs: vec![None; hir.structs.len()],
             bodies: hir.fns.iter().map(|_| State::NotStarted).collect(),
             consts: hir.consts.iter().map(|_| State::NotStarted).collect(),
             comptime: HashMap::new(),
+            values: HashMap::new(),
             data: Vec::new(),
             data_ids: HashMap::new(),
             in_progress: Vec::new(),
@@ -102,6 +120,11 @@ impl<'h> Queries<'h> {
             self.comptime_block(block);
         }
         for (id, f) in hir.fns() {
+            if f.comptime == Some(Comptime::Value) {
+                self.array_len(ArrayLen::Comptime(id));
+            }
+        }
+        for (id, f) in hir.fns() {
             let Some(body) = &f.body else {
                 continue;
             };
@@ -122,19 +145,28 @@ impl<'h> Queries<'h> {
 
     /// Type checks a function, once; returns whether it had no errors.
     pub fn typeck_fn(&mut self, id: FnId) -> bool {
-        match self.checked[id.0 as usize] {
-            State::Done(ok) => return ok,
-            // Checking does not depend on other bodies, so this is a
-            // request from an evaluation inside the body itself, which
-            // will find the cycle when it needs the body's MIR.
-            State::InProgress => return false,
-            State::NotStarted => {}
+        if let State::Done(ok) = self.checked[id.0 as usize] {
+            return ok;
+        }
+        let hir = self.hir;
+        let f = hir.fn_(id);
+        if !self.start(Item::Check(id), f.name_span, describe(hir, f)) {
+            return false;
         }
         self.checked[id.0 as usize] = State::InProgress;
         let before = self.diags.len();
-        let hir = self.hir;
-        ty::check_fn(self, hir.fn_(id));
-        let ok = self.diags.len() == before;
+        ty::check_fn(self, f);
+        // An error found elsewhere, such as a length that failed to
+        // evaluate, leaves `{error}` types here without a new diagnostic.
+        let mut poisoned = [f.ret]
+            .into_iter()
+            .chain(f.locals.iter().map(|local| local.ty))
+            .any(|ty| self.normalize(ty) == hir::Ty::Error);
+        if let Some(body) = &f.body {
+            body.walk(&mut |e| poisoned |= self.tables.expr_ty(e.id) == hir::Ty::Error);
+        }
+        let ok = self.diags.len() == before && !poisoned;
+        self.finish(Item::Check(id));
         self.checked[id.0 as usize] = State::Done(ok);
         ok
     }
@@ -145,14 +177,30 @@ impl<'h> Queries<'h> {
             self.in_progress.push((item, span, what));
             return true;
         };
+        // Structs laid out inside each other, with no evaluation between:
+        // containment by value (ADR 0021).
+        let structs: Option<Vec<StructId>> = self.in_progress[at..]
+            .iter()
+            .map(|(item, _, _)| match item {
+                Item::Layout(id) => Some(*id),
+                _ => None,
+            })
+            .collect();
+        if let Some(structs) = structs {
+            self.report_containment_cycle(&structs);
+            return false;
+        }
         let (_, first, first_what) = &self.in_progress[at];
         let mut diag = Diagnostic::error(
             "ty::cycle",
             format!("{first_what} depends on its own value"),
         )
         .label(*first, "needed while computing itself");
+        // Checking a body and computing its value share a span.
+        let mut seen = vec![*first];
         for (_, span, what) in &self.in_progress[at + 1..] {
-            if span.file == first.file {
+            if span.file == first.file && !seen.contains(span) {
+                seen.push(*span);
                 diag = diag.label(*span, format!("through {what}"));
             }
         }
@@ -227,6 +275,53 @@ impl<'h> Queries<'h> {
         value
     }
 
+    /// The value of an array length, repeat count or `#[align]` argument,
+    /// or `None` if it failed (reported).
+    pub fn array_len(&mut self, len: ArrayLen) -> Option<u64> {
+        let id = match len {
+            ArrayLen::Known(len) => return Some(len),
+            ArrayLen::Comptime(id) => id,
+        };
+        if let Some(value) = self.values.get(&id) {
+            return *value;
+        }
+        let span = self.hir.fn_(id).span;
+        let what = "this value".to_owned();
+        if !self.start(Item::Value(id), span, what.clone()) {
+            return None;
+        }
+        let value = self.mir_body(id).and_then(|body| {
+            let origin = Origin { what, span };
+            eval::evaluate(self, body, origin)
+        });
+        self.finish(Item::Value(id));
+        let value = value.map(|value| value.int(crate::target::POINTER_BYTES as usize));
+        self.values.insert(id, value);
+        value
+    }
+
+    /// `ty` with every array length known, or `{error}` if one failed
+    /// (reported).
+    pub fn normalize(&mut self, ty: hir::Ty) -> hir::Ty {
+        if ty.is_normal() {
+            return ty;
+        }
+        match ty {
+            hir::Ty::Array(elem, len) => {
+                let elem = self.normalize(*elem);
+                match (self.array_len(len), elem) {
+                    (_, hir::Ty::Error) | (None, _) => hir::Ty::Error,
+                    (Some(len), elem) => hir::Ty::array(elem, len),
+                }
+            }
+            hir::Ty::Ptr(ptr) => match self.normalize(*ptr.pointee) {
+                hir::Ty::Error => hir::Ty::Error,
+                pointee => hir::Ty::ptr(ptr.mutable, ptr.volatile, pointee),
+            },
+            ty => ty,
+        }
+    }
+
     /// Read-only data for a value computed at compile time, stored once
     /// per source.
     pub fn const_data(&mut self, source: DataSource, value: &ConstValue, align: u64) -> DataId {
@@ -249,6 +344,7 @@ impl<'h> Queries<'h> {
     /// The layout of `ty`, or `None` if it is larger than the target can
     /// hold. A struct without a layout, already reported, counts as empty.
     pub fn layout_of(&mut self, ty: hir::Ty) -> Option<Layout> {
+        let ty = self.normalize(ty);
         let empty = Layout { size: 0, align: 1 };
         layout::of(ty, &mut |id| {
             Some(self.struct_layout(id).map_or(empty, |s| s.layout))
@@ -258,35 +354,49 @@ impl<'h> Queries<'h> {
     /// Lays out a struct with C rules (ADR 0022), reporting structs that
     /// contain themselves, too large ones, and misused attributes.
     pub fn struct_layout(&mut self, id: StructId) -> Option<StructLayout> {
-        match &self.layouts[id.0 as usize] {
-            State::Done(layout) => return layout.clone(),
-            State::InProgress => {
-                self.report_containment_cycle(id);
-                return None;
-            }
-            State::NotStarted => {}
+        if let State::Done(layout) = &self.layouts[id.0 as usize] {
+            return layout.clone();
+        }
+        let hir = self.hir;
+        let def = hir.struct_(id);
+        let what = format!("the layout of `{}`", def.name);
+        if !self.start(Item::Layout(id), def.name_span, what) {
+            return None;
         }
         self.layouts[id.0 as usize] = State::InProgress;
-        self.layout_stack.push(id);
 
         // Fields in declaration order, each at the next offset aligned for
         // it; the size is rounded up to the alignment. `#[packed]` drops
         // the padding and the alignment.
-        let hir = self.hir;
-        let def = hir.struct_(id);
         let mut offsets = Vec::with_capacity(def.fields.len());
         let mut end = Some(0);
         let mut align = 1;
         let mut complete = true;
         let mut over_aligned = def.align.is_some();
         for field in &def.fields {
-            let field_layout =
-                layout::of(field.ty, &mut |id| self.struct_layout(id).map(|s| s.layout));
+            let field_ty = self.normalize(field.ty);
+            let mut inner_failed = false;
+            let field_layout = layout::of(field_ty, &mut |id| {
+                let inner = self.struct_layout(id).map(|s| s.layout);
+                inner_failed |= inner.is_none();
+                inner
+            });
             let Some(field_layout) = field_layout else {
+                // A struct inside without a layout was reported; otherwise
+                // the field alone is too large.
+                if !inner_failed {
+                    self.diags.push(
+                        Diagnostic::error("ty::too-large", format!("`{field_ty}` is too large"))
+                            .label(field.span, "this field does not fit in the address space")
+                            .help(format!(
+                                "objects are limited to {MAX_SIZE} bytes on this target"
+                            )),
+                    );
+                }
                 complete = false;
                 continue;
             };
-            if self.over_aligned(field.ty) {
+            if self.over_aligned(field_ty) {
                 over_aligned = true;
                 if def.packed {
                     self.diags.push(
@@ -306,7 +416,11 @@ impl<'h> Queries<'h> {
             offsets.push(offset.unwrap_or(0));
             end = offset.and_then(|offset| offset.checked_add(field_layout.size));
         }
-        if let Some((wanted, span)) = def.align {
+        let wanted = match def.align {
+            Some((len, span)) => self.array_len(len).map(|wanted| (wanted, span)),
+            None => None,
+        };
+        if let Some((wanted, span)) = wanted {
             let problem = if !wanted.is_power_of_two() {
                 Some("an alignment is a power of two".to_owned())
             } else if wanted > MAX_ALIGN {
@@ -330,7 +444,7 @@ impl<'h> Queries<'h> {
         }
         let size = end.and_then(|end| layout::align_up(end, align));
 
-        self.layout_stack.pop();
+        self.finish(Item::Layout(id));
         let layout = match (complete, size) {
             (true, Some(size)) if size <= MAX_SIZE => Some(StructLayout {
                 layout: Layout { size, align },
@@ -367,17 +481,11 @@ impl<'h> Queries<'h> {
         }
     }
 
-    /// `id` was found while laying itself out: the structs on the stack
-    /// from `id` onwards contain each other by value.
-    fn report_containment_cycle(&mut self, id: StructId) {
-        let start = self
-            .layout_stack
-            .iter()
-            .position(|&s| s == id)
-            .expect("a struct in progress is on the stack");
+    /// Structs found while laying themselves out contain each other by
+    /// value; the first is the one found again.
+    fn report_containment_cycle(&mut self, cycle: &[StructId]) {
         let hir = self.hir;
-        let cycle = &self.layout_stack[start..];
-        let first = hir.struct_(id);
+        let first = hir.struct_(cycle[0]);
         let message = if cycle.len() == 1 {
             format!("`{}` contains itself", first.name)
         } else {
@@ -440,6 +548,9 @@ impl<'h> Queries<'h> {
                 pointee: Box::leak(Box::new(self.mir_ty(*ptr.pointee))),
             }),
             hir::Ty::Array(elem, len) => {
+                let len = self
+                    .array_len(len)
+                    .expect("MIR is only built for well-typed programs");
                 mir::Ty::Array(Box::leak(Box::new(self.mir_ty(*elem))), len)
             }
             hir::Ty::Struct(s) => mir::Ty::Struct(self.mir_struct(s.id)),

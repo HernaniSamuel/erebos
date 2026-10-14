@@ -38,15 +38,25 @@ File {
                                                     ),
                                                     span: 33..36,
                                                 },
-                                                len: Some(
-                                                    2,
-                                                ),
+                                                len: Expr {
+                                                    kind: Int(
+                                                        Some(
+                                                            2,
+                                                        ),
+                                                    ),
+                                                    span: 38..39,
+                                                },
                                             },
                                             span: 32..40,
                                         },
-                                        len: Some(
-                                            3,
-                                        ),
+                                        len: Expr {
+                                            kind: Int(
+                                                Some(
+                                                    3,
+                                                ),
+                                            ),
+                                            span: 42..43,
+                                        },
                                     },
                                     span: 31..44,
                                 },
@@ -77,9 +87,14 @@ File {
                                                 ),
                                                 span: 60..62,
                                             },
-                                            len: Some(
-                                                4,
-                                            ),
+                                            len: Expr {
+                                                kind: Int(
+                                                    Some(
+                                                        4,
+                                                    ),
+                                                ),
+                                                span: 64..65,
+                                            },
                                         },
                                         span: 59..66,
                                     },
@@ -143,9 +158,14 @@ File {
                                                 ),
                                                 span: 96..99,
                                             },
-                                            len: Some(
-                                                16,
-                                            ),
+                                            len: Expr {
+                                                kind: Int(
+                                                    Some(
+                                                        16,
+                                                    ),
+                                                ),
+                                                span: 101..103,
+                                            },
                                         },
                                         span: 95..104,
                                     },
@@ -159,9 +179,14 @@ File {
                                                 ),
                                                 span: 108..109,
                                             },
-                                            Some(
-                                                16,
-                                            ),
+                                            Expr {
+                                                kind: Int(
+                                                    Some(
+                                                        16,
+                                                    ),
+                                                ),
+                                                span: 111..113,
+                                            },
                                         ),
                                         span: 107..114,
                                     },
@@ -186,9 +211,14 @@ File {
                                                 ),
                                                 span: 128..130,
                                             },
-                                            len: Some(
-                                                0,
-                                            ),
+                                            len: Expr {
+                                                kind: Int(
+                                                    Some(
+                                                        0,
+                                                    ),
+                                                ),
+                                                span: 132..133,
+                                            },
                                         },
                                         span: 127..134,
                                     },

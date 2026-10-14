@@ -83,6 +83,9 @@ pub enum Comptime {
     Const(ConstId),
     /// A `comptime { ... }` item.
     Block,
+    /// A `usize` the program needs at compile time: an array length, a
+    /// repeat count, the argument of `#[align]`.
+    Value,
 }
 
 /// `struct Name { field: Type, ... }` (ADR 0021)
@@ -94,7 +97,7 @@ pub struct StructDef {
     /// `#[packed]`: alignment 1, no padding (ADR 0022).
     pub packed: bool,
     /// `#[align(N)]`, with the span of `N` (ADR 0022).
-    pub align: Option<(u64, Span)>,
+    pub align: Option<(ArrayLen, Span)>,
 }
 
 #[derive(Debug)]
@@ -158,11 +161,39 @@ pub enum Ty {
     Int(IntTy),
     Ptr(Ptr),
     /// `[T; N]`; the element type is leaked like pointee types.
-    Array(&'static Ty, u64),
+    Array(&'static Ty, ArrayLen),
     Struct(StructTy),
     /// Produced only by the type checker after reporting an error, so one
     /// mistake does not cascade into more. Compatible with every type.
     Error,
+}
+
+/// The length of an array: known, or computed at compile time by a body of
+/// its own (ADR 0029). Types are normalized before use, so that only known
+/// lengths are compared.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ArrayLen {
+    Known(u64),
+    Comptime(FnId),
+}
+
+impl ArrayLen {
+    /// The length of a normalized type.
+    pub fn known(self) -> u64 {
+        match self {
+            ArrayLen::Known(len) => len,
+            ArrayLen::Comptime(_) => unreachable!("types are normalized before use"),
+        }
+    }
+}
+
+impl fmt::Display for ArrayLen {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ArrayLen::Known(len) => write!(f, "{len}"),
+            ArrayLen::Comptime(_) => f.write_str("_"),
+        }
+    }
 }
 
 /// A struct type. The name is carried along (leaked, like pointee types)
@@ -193,7 +224,20 @@ impl Ty {
     }
 
     pub fn array(elem: Ty, len: u64) -> Ty {
+        Ty::array_of(elem, ArrayLen::Known(len))
+    }
+
+    pub fn array_of(elem: Ty, len: ArrayLen) -> Ty {
         Ty::Array(Box::leak(Box::new(elem)), len)
+    }
+
+    /// Whether every array length in the type is known.
+    pub fn is_normal(self) -> bool {
+        match self {
+            Ty::Array(elem, len) => matches!(len, ArrayLen::Known(_)) && elem.is_normal(),
+            Ty::Ptr(ptr) => ptr.pointee.is_normal(),
+            _ => true,
+        }
     }
 
     /// Arrays and structs: values made of other values.
@@ -265,7 +309,7 @@ pub enum ExprKind {
     /// `[a, b, c]`
     Array(Vec<Expr>),
     /// `[value; N]`
-    Repeat(Box<Expr>, u64),
+    Repeat(Box<Expr>, ArrayLen),
     Local(LocalId),
     Call {
         callee: FnId,

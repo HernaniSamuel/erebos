@@ -4,8 +4,8 @@ use std::collections::HashMap;
 
 use crate::diag::{Diagnostic, Diagnostics};
 use crate::hir::{
-    Block, Comptime, ConstDef, ConstId, Expr, ExprId, ExprKind, FieldDef, Fn, FnId, FnKind, Hir,
-    IntTy, Local, LocalId, Stmt, StructDef, StructId, StructTy, Ty,
+    ArrayLen, Block, Comptime, ConstDef, ConstId, Expr, ExprId, ExprKind, FieldDef, Fn, FnId,
+    FnKind, Hir, IntTy, Local, LocalId, Stmt, StructDef, StructId, StructTy, Ty,
 };
 use crate::span::Span;
 use crate::syntax::ast;
@@ -141,6 +141,9 @@ pub fn lower(
     let mut lowerer = Lowerer {
         fn_ids,
         const_ids,
+        // Values computed at compile time get bodies after every other.
+        value_base: (decls.len() + const_decls.len() + comptime_decls.len()) as u32,
+        values: Vec::new(),
         comptime_floor: None,
         in_comptime: false,
         struct_ids,
@@ -175,6 +178,8 @@ pub fn lower(
         comptime_blocks.push(FnId(fns.len() as u32));
         fns.push(lowerer.comptime_decl(decl));
     }
+    debug_assert_eq!(fns.len() as u32, lowerer.value_base);
+    fns.append(&mut lowerer.values);
     let expr_count = lowerer.next_expr;
 
     check_duplicate_items(program, runtime, diags);
@@ -306,6 +311,10 @@ struct Lowerer<'a> {
     /// Lowering code that runs at compile time, where `return` has no
     /// function to leave.
     in_comptime: bool,
+    /// The id of the first body of a value computed at compile time, and
+    /// those bodies.
+    value_base: u32,
+    values: Vec<Fn>,
     /// Every struct's id, by name.
     struct_ids: HashMap<String, StructId>,
     struct_tys: Vec<StructTy>,
@@ -357,22 +366,21 @@ impl Lowerer<'_> {
 
     /// Layout attributes (ADR 0022): `#[packed]` and `#[align(N)]`, at
     /// most once each, and not together. Returns them.
-    fn struct_attrs(&mut self, attrs: &[ast::Attr]) -> (bool, Option<(u64, Span)>) {
+    fn struct_attrs(&mut self, attrs: &[ast::Attr]) -> (bool, Option<(ArrayLen, Span)>) {
         let mut packed: Option<Span> = None;
-        let mut align: Option<(u64, Span)> = None;
+        let mut align: Option<(ArrayLen, Span)> = None;
         let mut align_attr: Option<Span> = None;
         for attr in attrs {
             let first = match attr.name.name.as_str() {
                 "packed" => {
-                    if let Some((_, arg)) = attr.arg {
-                        self.attr_error(arg, "`#[packed]` takes no argument", "remove this");
+                    if let Some(arg) = &attr.arg {
+                        self.attr_error(arg.span, "`#[packed]` takes no argument", "remove this");
                     }
                     packed.replace(attr.span)
                 }
                 "align" => {
-                    match attr.arg {
-                        // A rejected literal was reported by the lexer.
-                        Some((value, arg)) => align = value.map(|value| (value, arg)),
+                    match &attr.arg {
+                        Some(arg) => align = Some((self.array_len(arg), arg.span)),
                         None => self.attr_error(
                             attr.span,
                             "`#[align]` takes an alignment, such as `#[align(64)]`",
@@ -480,6 +488,47 @@ impl Lowerer<'_> {
             runtime: false,
             comptime: Some(Comptime::Block),
         }
+    }
+
+    /// A `usize` needed at compile time (ADR 0029): known for a literal, as
+    /// most are, or computed by a body of its own.
+    fn array_len(&mut self, expr: &ast::Expr) -> ArrayLen {
+        if let ast::ExprKind::Int(value) = expr.kind {
+            // A rejected literal was reported by the lexer.
+            return ArrayLen::Known(value.unwrap_or(0));
+        }
+        let id = FnId(self.value_base + self.values.len() as u32);
+        // Variables around it exist only at run time, and are reported as
+        // such if used; its own are its body's.
+        let locals = std::mem::take(&mut self.locals);
+        let loops = std::mem::take(&mut self.loops);
+        let floor = self.comptime_floor.replace(self.scopes.len());
+        let was_comptime = std::mem::replace(&mut self.in_comptime, true);
+        self.scopes.push(HashMap::new());
+        let value = self.expr(expr);
+        self.scopes.pop();
+        self.in_comptime = was_comptime;
+        self.comptime_floor = floor;
+        self.loops = loops;
+        let body_locals = std::mem::replace(&mut self.locals, locals);
+        self.values.push(Fn {
+            name: "length".to_owned(),
+            name_span: expr.span,
+            kind: FnKind::Plain,
+            ret: Ty::Int(IntTy::Usize),
+            ret_span: None,
+            param_count: 0,
+            locals: body_locals,
+            body: Some(Block {
+                stmts: Vec::new(),
+                span: expr.span,
+                tail: Some(Box::new(value)),
+            }),
+            span: expr.span,
+            runtime: false,
+            comptime: Some(Comptime::Value),
+        });
+        ArrayLen::Comptime(id)
     }
 
     /// Lowers code run at compile time on its own: no variables, loops or
@@ -673,8 +722,11 @@ impl Lowerer<'_> {
                 let pointee = self.ty(pointee);
                 Ty::ptr(*mutable, *volatile, pointee)
             }
-            // A rejected length was reported by the lexer.
-            ast::TyKind::Array { elem, len } => Ty::array(self.ty(elem), len.unwrap_or(0)),
+            ast::TyKind::Array { elem, len } => {
+                let elem = self.ty(elem);
+                let len = self.array_len(len);
+                Ty::array_of(elem, len)
+            }
             ast::TyKind::Named(name) if name.name == "bool" => Ty::Bool,
             ast::TyKind::Named(name) => match IntTy::from_name(&name.name) {
                 Some(int) => Ty::Int(int),
@@ -758,14 +810,12 @@ impl Lowerer<'_> {
     fn resolve(&mut self, name: &ast::Ident) -> Option<ExprKind> {
         if let Some((local, depth)) = self.find_local_scope(&name.name) {
             if self.comptime_floor.is_some_and(|floor| depth < floor) {
-                let declared = self.locals[local.0 as usize].span;
                 self.diags.push(
                     Diagnostic::error(
                         "ty::not-comptime",
                         format!("`{}` is only known at run time", name.name),
                     )
-                    .label(name.span, "used at compile time")
-                    .label(declared, "a variable of the running program")
+                    .label(name.span, "a variable of the running program, used at compile time")
                     .help("compile-time code can use constants, literals and function calls (ADR 0029)"),
                 );
                 return None;
@@ -841,7 +891,8 @@ impl Lowerer<'_> {
                 ExprKind::Array(elems.iter().map(|e| self.expr(e)).collect())
             }
             ast::ExprKind::Repeat(value, len) => {
-                ExprKind::Repeat(self.boxed(value), len.unwrap_or(0))
+                let value = self.boxed(value);
+                ExprKind::Repeat(value, self.array_len(len))
             }
             ast::ExprKind::Name(name) => match self.resolve(name) {
                 Some(kind) => kind,

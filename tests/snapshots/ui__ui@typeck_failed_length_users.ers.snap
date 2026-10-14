@@ -1,0 +1,17 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_failed_length_users.ers
+---
+--- errors ---
+ty::division-by-zero
+
+  × division by zero
+   ╭─[typeck_failed_length_users.ers:7:27]
+ 6 │ 
+ 7 │ fn offsets() -> [u32; 3 / 0] {
+   ·                           ┬
+   ·                           ╰── this divisor is zero
+ 8 │     [10, 20, 30]
+   ╰────
+  help: at run time this would call the panic function (ADR 0007)

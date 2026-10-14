@@ -1,0 +1,65 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_const_length_errors.ers
+---
+--- errors ---
+ty::cycle
+
+  × the constant `SELF_SIZED` depends on its own value
+   ╭─[typeck_const_length_errors.ers:5:7]
+ 4 │ const SECTOR: u32 = 512;
+ 5 │ const SELF_SIZED: usize = size_of([u8; SELF_SIZED]);
+   ·       ─────┬────                       ─────┬────
+   ·            │                                ╰── through this value
+   ·            ╰── needed while computing itself
+ 6 │ 
+   ╰────
+  help: break the cycle: a value cannot depend on itself (ADR 0028)
+ty::cycle
+
+  × the layout of `Contains` depends on its own value
+   ╭─[typeck_const_length_errors.ers:7:8]
+ 6 │ 
+ 7 │ struct Contains { a: [u8; size_of(Contains)] }
+   ·        ────┬───           ────────┬────────
+   ·            │                      ╰── through this value
+   ·            ╰── needed while computing itself
+ 8 │ 
+   ╰────
+  help: break the cycle: a value cannot depend on itself (ADR 0028)
+ty::cycle
+
+  × the layout of `Aligned` depends on its own value
+    ╭─[typeck_const_length_errors.ers:10:8]
+  8 │ 
+  9 │ #[align(align_of(Aligned))]
+    ·         ────────┬────────
+    ·                 ╰── through this value
+ 10 │ struct Aligned { x: u32 }
+    ·        ───┬───
+    ·           ╰── needed while computing itself
+ 11 │ 
+    ╰────
+  help: break the cycle: a value cannot depend on itself (ADR 0028)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_const_length_errors.ers:13:17]
+ 12 │ fn errors() {
+ 13 │     let a: [u8; SECTOR] = [0; 512];
+    ·                 ───┬──
+    ·                    ╰── expected `usize`, found `u32`
+ 14 │     let c: [u8; 4] = [0; 2 + 1];
+    ╰────
+  help: integer types never convert implicitly; use `as usize` (ADR 0008)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_const_length_errors.ers:14:22]
+ 13 │     let a: [u8; SECTOR] = [0; 512];
+ 14 │     let c: [u8; 4] = [0; 2 + 1];
+    ·                      ─────┬────
+    ·                           ╰── expected `[u8; 4]`, found `[u8; 3]`
+ 15 │ }
+    ╰────

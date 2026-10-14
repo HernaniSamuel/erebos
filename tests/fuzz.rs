@@ -101,6 +101,11 @@ const SNIPPETS: &[&str] = &[
     "assert(",
     "T[i]",
     "loop { }",
+    "[u8; K]",
+    "[0; K]",
+    "[u8; size_of(S)]",
+    "#[align(K)]",
+    "K as usize",
 ];
 
 /// xorshift64: small, deterministic, good enough to pick mutations.

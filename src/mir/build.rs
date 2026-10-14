@@ -343,6 +343,10 @@ impl Builder<'_, '_> {
                 Operand::Copy(array)
             }
             hir::ExprKind::Repeat(value, len) => {
+                let len = &self
+                    .q
+                    .array_len(*len)
+                    .expect("well-typed programs have their lengths");
                 // Evaluated exactly once, whatever the length (ADR 0021).
                 let value = self.expr(value);
                 let array = Place::local(self.new_local(ty, None));

@@ -1,0 +1,12 @@
+// emit: typeck
+// Regression (found by fuzzing): a length that fails to evaluate gives
+// `{error}` types to the code using it, reported once, at the length; that
+// code must not be lowered to MIR.
+const OFFSETS: [u32; 3] = offsets();
+
+fn offsets() -> [u32; 3 / 0] {
+    [10, 20, 30]
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

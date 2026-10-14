@@ -1,0 +1,18 @@
+// emit: typeck
+// A length is a `usize` known at compile time (ADR 0029); a layout or a
+// length that needs itself is a cycle (ADR 0028).
+const SECTOR: u32 = 512;
+const SELF_SIZED: usize = size_of([u8; SELF_SIZED]);
+
+struct Contains { a: [u8; size_of(Contains)] }
+
+#[align(align_of(Aligned))]
+struct Aligned { x: u32 }
+
+fn errors() {
+    let a: [u8; SECTOR] = [0; 512];
+    let c: [u8; 4] = [0; 2 + 1];
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

@@ -1,0 +1,9 @@
+// emit: hir
+// A length is computed at compile time, so it cannot use a variable of the
+// running program (ADR 0029).
+fn buffer(n: usize) {
+    let b: [u8; n] = [0; 4];
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

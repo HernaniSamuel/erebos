@@ -1,0 +1,17 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/resolve_runtime_length.ers
+---
+--- errors ---
+ty::not-comptime
+
+  × `n` is only known at run time
+   ╭─[resolve_runtime_length.ers:5:17]
+ 4 │ fn buffer(n: usize) {
+ 5 │     let b: [u8; n] = [0; 4];
+   ·                 ┬
+   ·                 ╰── a variable of the running program, used at compile time
+ 6 │ }
+   ╰────
+  help: compile-time code can use constants, literals and function calls (ADR 0029)

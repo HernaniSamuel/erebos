@@ -1,0 +1,8 @@
+// emit: typeck
+// Regression (found by fuzzing): a field too large for the address space
+// left its struct without a layout, and nothing reported it.
+struct Huge { header: u8, data: [u16; !3] }
+struct Holds { inner: Huge }
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

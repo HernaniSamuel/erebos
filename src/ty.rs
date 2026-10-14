@@ -56,6 +56,7 @@ pub fn check_fn(q: &mut Queries, f: &Fn) {
     let mut checker = Checker {
         q,
         hir,
+        ret: Ty::Error,
         loops: Vec::new(),
     };
     checker.fn_(f);
@@ -122,6 +123,8 @@ fn literal_value(expr: &Expr) -> Option<i128> {
 struct Checker<'a, 'h> {
     q: &'a mut Queries<'h>,
     hir: &'h Hir,
+    /// The return type of the function being checked, normalized.
+    ret: Ty,
     /// Enclosing `loop`/`while` expressions, innermost last.
     loops: Vec<LoopCtx>,
 }
@@ -194,6 +197,7 @@ impl Checker<'_, '_> {
             )),
             FnKind::Plain => None,
         };
+        self.ret = self.norm(f.ret);
         if let Some((code, what, why)) = special
             && f.ret != Ty::Never
         {
@@ -221,8 +225,17 @@ impl Checker<'_, '_> {
         }
 
         if let Some(body) = &f.body {
-            self.checked_block(f, body, f.ret, because);
+            self.checked_block(f, body, self.ret, because);
         }
+    }
+
+    /// A type as written, with its array lengths computed (ADR 0029).
+    fn norm(&mut self, ty: Ty) -> Ty {
+        self.q.normalize(ty)
+    }
+
+    fn local_ty(&mut self, f: &Fn, id: LocalId) -> Ty {
+        self.norm(f.local(id).ty)
     }
 
     /// The type queried by `size_of`, `align_of` or `offset_of` must have a
@@ -324,7 +337,10 @@ impl Checker<'_, '_> {
         let mut diverges = false;
         for stmt in &block.stmts {
             let ty = match stmt {
-                Stmt::Let { local, init } => self.check(f, init, Some(f.local(*local).ty)),
+                Stmt::Let { local, init } => {
+                    let ty = self.local_ty(f, *local);
+                    self.check(f, init, Some(ty))
+                }
                 // A statement without `;` (`if`, `loop`, ...) must not
                 // silently drop a value (ADR 0015).
                 Stmt::Expr { expr, semi: None } => self.check(f, expr, Some(Ty::Unit)),
@@ -407,13 +423,13 @@ impl Checker<'_, '_> {
             ExprKind::Array(elems) => self.array(f, expr, elems, expected),
             ExprKind::Repeat(value, len) => {
                 let ty = self.check(f, value, element_of(expected));
-                match ty {
-                    Ty::Error => Ty::Error,
-                    ty => Ty::array(ty, *len),
+                match (ty, self.q.array_len(*len)) {
+                    (Ty::Error, _) | (_, None) => Ty::Error,
+                    (ty, Some(len)) => Ty::array(ty, len),
                 }
             }
-            ExprKind::Local(local) => f.local(*local).ty,
-            ExprKind::Const(id) => self.hir.const_(*id).ty,
+            ExprKind::Local(local) => self.local_ty(f, *local),
+            ExprKind::Const(id) => self.norm(self.hir.const_(*id).ty),
             // The value is computed later; its type is checked here, with
             // the expected type passed through (ADR 0029).
             ExprKind::Comptime(inner) => self.check(f, inner, expected),
@@ -442,7 +458,8 @@ impl Checker<'_, '_> {
                 let hir = self.hir;
                 let def = hir.struct_(s.id);
                 for (index, value) in fields {
-                    self.check(f, value, Some(def.fields[*index as usize].ty));
+                    let ty = self.norm(def.fields[*index as usize].ty);
+                    self.check(f, value, Some(ty));
                 }
                 Ty::Struct(*s)
             }
@@ -483,7 +500,8 @@ impl Checker<'_, '_> {
                 Ty::Bool
             }
             ExprKind::Cast(operand, target, target_span) => {
-                self.cast(f, operand, *target, *target_span)
+                let target = self.norm(*target);
+                self.cast(f, operand, target, *target_span)
             }
             ExprKind::Deref(_) | ExprKind::Index(..) | ExprKind::Field(..) => {
                 let info = self
@@ -587,9 +605,9 @@ impl Checker<'_, '_> {
             ExprKind::Return(value) => {
                 match value {
                     Some(value) => {
-                        self.check(f, value, Some(f.ret));
+                        self.check(f, value, Some(self.ret));
                     }
-                    None if !coerces(Ty::Unit, f.ret) => self.mismatch(expr, f.ret, Ty::Unit),
+                    None if !coerces(Ty::Unit, self.ret) => self.mismatch(expr, self.ret, Ty::Unit),
                     None => {}
                 }
                 Ty::Never
@@ -680,9 +698,10 @@ impl Checker<'_, '_> {
         for (i, arg) in args.iter().enumerate() {
             // Extra arguments were reported above; `{error}` keeps them quiet.
             let expected = params.get(i).map_or(Ty::Error, |param| param.ty);
+            let expected = self.norm(expected);
             self.check(f, arg, Some(expected));
         }
-        target.ret
+        self.norm(target.ret)
     }
 
     /// Division by zero panics at run time (ADR 0007); a literal zero
@@ -1022,7 +1041,7 @@ impl Checker<'_, '_> {
             ExprKind::Local(id) => {
                 let local = f.local(*id);
                 PlaceInfo {
-                    ty: local.ty,
+                    ty: self.norm(local.ty),
                     immutable: (!local.mutable).then_some(Immutable::Local(*id)),
                     via: None,
                     misaligned: false,
@@ -1051,7 +1070,7 @@ impl Checker<'_, '_> {
                 };
                 self.check(f, index, Some(Ty::Int(IntTy::Usize)));
                 if let Ty::Array(elem, len) = ty {
-                    self.constant_index(index, len);
+                    self.constant_index(index, len.known());
                     let base_place = base_place.unwrap_or(PlaceInfo {
                         immutable: Some(Immutable::Temporary(base.span)),
                         ..PlaceInfo::ERROR
@@ -1159,7 +1178,7 @@ impl Checker<'_, '_> {
         };
         self.q.tables.fields.insert(expr.id, index as u32);
         PlaceInfo {
-            ty: def.fields[index].ty,
+            ty: self.norm(def.fields[index].ty),
             misaligned: base_place.misaligned || def.packed,
             ..base_place
         }
@@ -1334,7 +1353,10 @@ pub fn dump(q: &mut Queries) -> String {
             .fields
             .iter()
             .zip(&layout.offsets)
-            .map(|(field, offset)| format!("{}: {} at {offset}", field.name, field.ty))
+            .map(|(field, offset)| {
+                let ty = q.normalize(field.ty);
+                format!("{}: {ty} at {offset}", field.name)
+            })
             .collect();
         let fields = if fields.is_empty() {
             "{}".to_owned()
@@ -1343,7 +1365,10 @@ pub fn dump(q: &mut Queries) -> String {
         };
         let attrs = match (def.packed, def.align) {
             (true, _) => "#[packed] ".to_owned(),
-            (false, Some((align, _))) => format!("#[align({align})] "),
+            (false, Some((align, _))) => match q.array_len(align) {
+                Some(align) => format!("#[align({align})] "),
+                None => "#[align(?)] ".to_owned(),
+            },
             (false, None) => String::new(),
         };
         writeln!(
@@ -1362,7 +1387,7 @@ pub fn dump(q: &mut Queries) -> String {
         let params: Vec<String> = f
             .params()
             .iter()
-            .map(|p| format!("{}: {}", p.name, p.ty))
+            .map(|p| format!("{}: {}", p.name, q.normalize(p.ty)))
             .collect();
         let external = if f.body.is_none() { "extern " } else { "" };
         let external = if f.comptime.is_some() {
@@ -1375,12 +1400,13 @@ pub fn dump(q: &mut Queries) -> String {
             "{external}{kind}fn {}({}) -> {}",
             f.name,
             params.join(", "),
-            f.ret
+            q.normalize(f.ret)
         )
         .unwrap();
         for local in &f.locals[f.param_count..] {
             let mutable = if local.mutable { "mut " } else { "" };
-            writeln!(out, "    let {mutable}{}: {}", local.name, local.ty).unwrap();
+            let ty = q.normalize(local.ty);
+            writeln!(out, "    let {mutable}{}: {ty}", local.name).unwrap();
         }
         let Some(body) = &f.body else {
             continue;

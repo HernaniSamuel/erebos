@@ -47,7 +47,7 @@ pub fn of(ty: Ty, struct_layout: &mut impl FnMut(StructId) -> Option<Layout>) ->
         Ty::Array(elem, len) => {
             let elem = of(*elem, struct_layout)?;
             Layout {
-                size: elem.size.checked_mul(len)?,
+                size: elem.size.checked_mul(len.known())?,
                 align: elem.align,
             }
         }
