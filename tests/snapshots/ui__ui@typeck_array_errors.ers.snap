@@ -4,17 +4,6 @@ expression: output
 input_file: tests/ui/typeck_array_errors.ers
 ---
 --- errors ---
-ty::too-large
-
-  × `[u8; 3000000000]` is too large
-    ╭─[typeck_array_errors.ers:14:9]
- 13 │     let i: u32 = [1, 2] as u32;
- 14 │     let huge: [u8; 3_000_000_000] = [0; 3_000_000_000];
-    ·         ──┬─
-    ·           ╰── does not fit in the address space
- 15 │     [1, 2];
-    ╰────
-  help: objects are limited to 2147483647 bytes on this target
 ty::mismatched-types
 
   × mismatched types
@@ -122,6 +111,17 @@ ty::untyped-literal
  14 │     let huge: [u8; 3_000_000_000] = [0; 3_000_000_000];
     ╰────
   help: bind it first, e.g. `let a: [u8; 3] = ...` (ADR 0008)
+ty::too-large
+
+  × `[u8; 3000000000]` is too large
+    ╭─[typeck_array_errors.ers:14:9]
+ 13 │     let i: u32 = [1, 2] as u32;
+ 14 │     let huge: [u8; 3_000_000_000] = [0; 3_000_000_000];
+    ·         ──┬─
+    ·           ╰── does not fit in the address space
+ 15 │     [1, 2];
+    ╰────
+  help: objects are limited to 2147483647 bytes on this target
 ty::too-large
 
   × `[u8; 3000000000]` is too large

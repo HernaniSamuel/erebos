@@ -63,7 +63,18 @@ impl Diagnostics {
         !self.list.is_empty()
     }
 
-    pub fn into_vec(self) -> Vec<Diagnostic> {
+    /// The diagnostics in source order: by the position of their primary
+    /// label, in order of emission at the same position, unlabeled ones
+    /// last. Layers run on demand (ADR 0028), so emission order depends
+    /// on the schedule; this order does not.
+    pub fn into_vec(mut self) -> Vec<Diagnostic> {
+        self.list.sort_by_key(|diag| {
+            let at = diag
+                .labels
+                .first()
+                .map(|label| (label.span.file, label.span.lo));
+            (at.is_none(), at)
+        });
         self.list
     }
 }
@@ -145,6 +156,31 @@ impl miette::Diagnostic for WithSource<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn diagnostics_come_out_in_source_order() {
+        let mut sources = SourceMap::default();
+        let file = sources.add(
+            "test.ers",
+            "fn main() {}
+",
+        );
+        let mut diags = Diagnostics::default();
+        diags.push(Diagnostic::error("test::unlabeled", "no position"));
+        diags.push(Diagnostic::error("test::late", "late").label(Span::new(file, 9, 10), ""));
+        diags.push(Diagnostic::error("test::early", "early").label(Span::new(file, 3, 7), ""));
+        diags.push(Diagnostic::error("test::early-too", "same").label(Span::new(file, 3, 4), ""));
+        let codes: Vec<_> = diags.into_vec().iter().map(|d| d.code).collect();
+        assert_eq!(
+            codes,
+            [
+                "test::early",
+                "test::early-too",
+                "test::late",
+                "test::unlabeled"
+            ]
+        );
+    }
 
     #[test]
     fn renders_code_message_label_and_help() {

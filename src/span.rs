@@ -3,7 +3,7 @@
 
 use std::fmt;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct FileId(u32);
 
 /// A half-open byte range `lo..hi` inside one source file.

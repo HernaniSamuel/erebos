@@ -4,17 +4,6 @@ expression: output
 input_file: tests/ui/resolve_regressions.ers
 ---
 --- errors ---
-resolve::duplicate-param
-
-  × the parameter `a` is declared more than once
-   ╭─[resolve_regressions.ers:5:14]
- 4 │ fn _start() {}
- 5 │ fn h(a: u32, a: u32) -> u32 { a }
-   ·      ┬       ┬
-   ·      │       ╰── declared again here
-   ·      ╰── first declared here
- 6 │ 
-   ╰────
 resolve::reserved-name
 
   × `_start` is a reserved name
@@ -27,3 +16,14 @@ resolve::reserved-name
    ╰────
   help: the compiler generates `_start`, which sets up the stack and jumps to the entry function
         (ADR 0012)
+resolve::duplicate-param
+
+  × the parameter `a` is declared more than once
+   ╭─[resolve_regressions.ers:5:14]
+ 4 │ fn _start() {}
+ 5 │ fn h(a: u32, a: u32) -> u32 { a }
+   ·      ┬       ┬
+   ·      │       ╰── declared again here
+   ·      ╰── first declared here
+ 6 │ 
+   ╰────
