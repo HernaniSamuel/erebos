@@ -61,8 +61,27 @@ pub fn check(hir: &Hir, diags: &mut Diagnostics) -> TypeckResults {
 
 /// Whether a value of type `from` may be used where `to` is expected.
 /// `!` has no values, so it fits anywhere; `{error}` was already reported.
+/// The one conversion is from `*mut T` to `*const T` (ADR 0024).
 fn coerces(from: Ty, to: Ty) -> bool {
-    from == to || matches!(from, Ty::Never | Ty::Error) || to == Ty::Error
+    from == to
+        || matches!(from, Ty::Never | Ty::Error)
+        || to == Ty::Error
+        || matches!((from, to), (Ty::Ptr(from), Ty::Ptr(to))
+            if from.mutable && !to.mutable
+                && from.volatile == to.volatile
+                && from.pointee == to.pointee)
+}
+
+/// The type that accepts `ty` and, if it is a pointer, the pointer with the
+/// other mutability: the type a comparison expects of its second operand.
+fn comparable(ty: Ty) -> Ty {
+    match ty {
+        Ty::Ptr(ptr) => Ty::Ptr(Ptr {
+            mutable: false,
+            ..ptr
+        }),
+        ty => ty,
+    }
 }
 
 /// Expressions that cannot be typed on their own: integer literals, and
@@ -377,6 +396,14 @@ impl Checker<'_> {
         if expected == Ty::Unit && !matches!(found, Ty::Unit | Ty::Never | Ty::Error) {
             diag = diag.help("this value would be discarded; add `;` after it if that is intended");
         }
+        if let (Ty::Ptr(want), Ty::Ptr(have)) = (expected, found)
+            && want.mutable
+            && !have.mutable
+        {
+            diag = diag.help(
+                "a `*const` pointer never becomes `*mut` implicitly; cast with `as` if writing through it is allowed",
+            );
+        }
         if expected == Ty::Never && matches!(expr.kind, ExprKind::While { .. }) {
             diag =
                 diag.help("a `while` loop can finish even with `true`; use `loop` to run forever");
@@ -437,8 +464,9 @@ impl Checker<'_> {
                 lhs_ty
             }
             ExprKind::Binary(op, lhs, rhs) if op.is_comparison() => {
-                // Both sides have one type, never converted (ADR 0008).
-                let ty = self.same_type_operands(f, lhs, rhs, None);
+                // Both sides have one type, never converted (ADR 0008),
+                // except that pointers may differ in mutability (ADR 0024).
+                let ty = self.same_type_operands(f, lhs, rhs, None, comparable);
                 let allowed = if matches!(op, BinOp::Eq | BinOp::Ne) {
                     Operands::Equatable
                 } else {
@@ -448,7 +476,7 @@ impl Checker<'_> {
                 Ty::Bool
             }
             ExprKind::Binary(op, lhs, rhs) => {
-                let ty = self.same_type_operands(f, lhs, rhs, expected);
+                let ty = self.same_type_operands(f, lhs, rhs, expected, |ty| ty);
                 let allowed = if op.is_bitwise() {
                     Operands::IntOrBool
                 } else {
@@ -796,14 +824,23 @@ impl Checker<'_> {
 
     /// Both operands must have the same integer type. Whichever side can be
     /// typed alone gives its type to the other (`1 + x` and `x + 1`).
-    fn same_type_operands(&mut self, f: &Fn, lhs: &Expr, rhs: &Expr, expected: Option<Ty>) -> Ty {
+    /// `second` gives the type expected of the operand typed second from
+    /// the type of the first.
+    fn same_type_operands(
+        &mut self,
+        f: &Fn,
+        lhs: &Expr,
+        rhs: &Expr,
+        expected: Option<Ty>,
+        second: fn(Ty) -> Ty,
+    ) -> Ty {
         if expected.is_none() && needs_expected_type(lhs) && !needs_expected_type(rhs) {
             let rhs_ty = self.check(f, rhs, None);
-            self.check(f, lhs, Some(rhs_ty));
+            self.check(f, lhs, Some(second(rhs_ty)));
             rhs_ty
         } else {
             let lhs_ty = self.check(f, lhs, expected);
-            self.check(f, rhs, Some(lhs_ty));
+            self.check(f, rhs, Some(second(lhs_ty)));
             lhs_ty
         }
     }
@@ -1416,5 +1453,25 @@ mod tests {
         assert!(coerces(u8_, Ty::Error));
         assert!(!coerces(Ty::Int(IntTy::U32), u8_));
         assert!(!coerces(Ty::Unit, Ty::Never));
+    }
+
+    #[test]
+    fn mut_pointers_coerce_to_const() {
+        let u8_ = Ty::Int(IntTy::U8);
+        let mut_ = Ty::ptr(true, false, u8_);
+        let const_ = Ty::ptr(false, false, u8_);
+        assert!(coerces(mut_, const_));
+        assert!(!coerces(const_, mut_));
+        // Volatility never changes implicitly.
+        assert!(!coerces(mut_, Ty::ptr(false, true, u8_)));
+        // Only the outermost pointer converts.
+        assert!(coerces(
+            Ty::ptr(true, false, mut_),
+            Ty::ptr(false, false, mut_)
+        ));
+        assert!(!coerces(
+            Ty::ptr(true, false, mut_),
+            Ty::ptr(true, false, const_)
+        ));
     }
 }

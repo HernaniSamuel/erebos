@@ -1,0 +1,12 @@
+// emit: typeck
+// Only `*mut T` to `*const T`, at the outermost pointer, keeping volatility
+// (ADR 0024).
+fn errors(c: *const u8, m: *mut u8, mm: *mut *mut u8) {
+    let a: *mut u8 = c;
+    let b: *const volatile u8 = m;
+    let d: *mut *const u8 = mm;
+    let e: *const u16 = m;
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

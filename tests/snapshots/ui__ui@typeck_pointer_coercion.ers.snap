@@ -1,0 +1,41 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_pointer_coercion.ers
+---
+--- typeck ---
+struct View { data: *const u8 at 0 } size 4, align 4
+fn read(p: *const u8) -> u8
+    expr 0 deref 152..154: u8
+    expr 1 local p 153..154: *const u8
+fn coercions(buf: *mut u8, other: *const u8, regs: *mut volatile u32) -> *const u8
+    let a: u8
+    let b: *const u8
+    let view: View
+    let list: [*const u8; 2]
+    let same: bool
+    let r: *const volatile u32
+    let nested: *const *mut u8
+    expr 2 call 259..268: u8
+    expr 3 local buf 264..267: *mut u8
+    expr 4 local buf 293..296: *mut u8
+    expr 5 struct View 319..337: View
+    expr 6 local buf 332..335: *mut u8
+    expr 7 array 370..382: [*const u8; 2]
+    expr 8 local buf 371..374: *mut u8
+    expr 9 local other 376..381: *const u8
+    expr 10 logical && 405..433: bool
+    expr 11 binary == 405..417: bool
+    expr 12 local buf 405..408: *mut u8
+    expr 13 local other 412..417: *const u8
+    expr 14 binary == 421..433: bool
+    expr 15 local other 421..426: *const u8
+    expr 16 local buf 430..433: *mut u8
+    expr 17 local regs 468..472: *mut volatile u32
+    expr 18 &raw const 507..521: *const *mut u8
+    expr 19 local buf 518..521: *mut u8
+    expr 20 local buf 527..530: *mut u8
+entry fn main() -> !
+    expr 21 loop 557..564: !
+panic fn on_panic() -> !
+    expr 22 loop 594..601: !

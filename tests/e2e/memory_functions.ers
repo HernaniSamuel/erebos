@@ -49,19 +49,19 @@ entry fn main() -> ! {
     a[3] = b'l';
     a[4] = b'o';
     let b: *mut u8 = &raw mut a[16];
-    memcpy(b, a as *const u8, 5);
-    print(b as *const u8, 5);
+    memcpy(b, a, 5);
+    print(b, 5);
 
     // Overlapping, destination above the source: copies backwards.
-    memmove(&raw mut b[1], b as *const u8, 5);
-    print(b as *const u8, 6);
+    memmove(&raw mut b[1], b, 5);
+    print(b, 6);
 
     // Overlapping, destination below the source.
     memmove(b, &raw const b[2], 4);
-    print(b as *const u8, 4);
+    print(b, 4);
 
     memset(b, 0x178, 5);
-    print(b as *const u8, 5);
+    print(b, 5);
 
     // A fill loop, which `-O` turns into a call to `memset`.
     let big: *mut u8 = &raw mut a[1024];

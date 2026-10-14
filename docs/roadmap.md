@@ -68,11 +68,7 @@ Agreed as useful, not yet scheduled:
 
 ## Pending decisions
 
-- **`*mut T` to `*const T`.** Rust converts implicitly; Erebos converts
-  nothing implicitly (ADR 0008), so `memcpy(dest, src as *const u8, n)`
-  needs the cast when `src` is `*mut u8`. Dropping mutability cannot break
-  anything, so allowing just this one conversion is worth deciding before
-  more code depends on either answer.
+- None. (`*mut T` to `*const T` is now implicit, ADR 0024.)
 
 ## Status
 

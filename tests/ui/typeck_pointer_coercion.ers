@@ -1,0 +1,21 @@
+// emit: typeck
+// A `*mut T` is accepted where a `*const T` is expected (ADR 0024).
+struct View { data: *const u8 }
+
+fn read(p: *const u8) -> u8 {
+    *p
+}
+
+fn coercions(buf: *mut u8, other: *const u8, regs: *mut volatile u32) -> *const u8 {
+    let a: u8 = read(buf);
+    let b: *const u8 = buf;
+    let view: View = View { data: buf };
+    let list: [*const u8; 2] = [buf, other];
+    let same: bool = buf == other && other == buf;
+    let r: *const volatile u32 = regs;
+    let nested: *const *mut u8 = &raw const buf;
+    buf
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

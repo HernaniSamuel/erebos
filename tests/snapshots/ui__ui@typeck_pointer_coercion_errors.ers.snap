@@ -1,0 +1,48 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_pointer_coercion_errors.ers
+---
+--- errors ---
+ty::mismatched-types
+
+  × mismatched types
+   ╭─[typeck_pointer_coercion_errors.ers:5:22]
+ 4 │ fn errors(c: *const u8, m: *mut u8, mm: *mut *mut u8) {
+ 5 │     let a: *mut u8 = c;
+   ·                      ┬
+   ·                      ╰── expected `*mut u8`, found `*const u8`
+ 6 │     let b: *const volatile u8 = m;
+   ╰────
+  help: a `*const` pointer never becomes `*mut` implicitly; cast with `as` if writing through it
+        is allowed
+ty::mismatched-types
+
+  × mismatched types
+   ╭─[typeck_pointer_coercion_errors.ers:6:33]
+ 5 │     let a: *mut u8 = c;
+ 6 │     let b: *const volatile u8 = m;
+   ·                                 ┬
+   ·                                 ╰── expected `*const volatile u8`, found `*mut u8`
+ 7 │     let d: *mut *const u8 = mm;
+   ╰────
+ty::mismatched-types
+
+  × mismatched types
+   ╭─[typeck_pointer_coercion_errors.ers:7:29]
+ 6 │     let b: *const volatile u8 = m;
+ 7 │     let d: *mut *const u8 = mm;
+   ·                             ─┬
+   ·                              ╰── expected `*mut *const u8`, found `*mut *mut u8`
+ 8 │     let e: *const u16 = m;
+   ╰────
+ty::mismatched-types
+
+  × mismatched types
+   ╭─[typeck_pointer_coercion_errors.ers:8:25]
+ 7 │     let d: *mut *const u8 = mm;
+ 8 │     let e: *const u16 = m;
+   ·                         ┬
+   ·                         ╰── expected `*const u16`, found `*mut u8`
+ 9 │ }
+   ╰────

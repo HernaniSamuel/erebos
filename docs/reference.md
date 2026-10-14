@@ -202,7 +202,11 @@ and `a < b < c` is an error.
 ### Typing
 
 - Both operands of an arithmetic, bitwise or comparison operator have the
-  same type; nothing converts implicitly, not even `*mut T` to `*const T`.
+  same type; nothing converts implicitly (ADR 0008), with one exception:
+  where a `*const T` is expected, a `*mut T` with the same `T` and
+  volatility is accepted, since it only loses permission to write
+  (ADR 0024). Only the outermost pointer converts, and comparisons accept
+  the two in either order.
 - A literal takes the type expected where it appears; with no expected type
   it is an error. In `x + 1` the `1` takes the type of `x`. A literal
   operand of `as` takes the target type, or `usize` for a pointer target

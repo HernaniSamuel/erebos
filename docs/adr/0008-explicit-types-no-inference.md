@@ -1,6 +1,6 @@
 # 0008. Explicit types, no inference
 
-- Status: Accepted
+- Status: Accepted; amended by 0024 (`*mut T` to `*const T`)
 - Date: 2026-10-12
 
 ## Context
