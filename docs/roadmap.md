@@ -22,7 +22,7 @@ updated, and a program on QEMU.
 |------|----------|-----------------|
 | **M2.1** ✅ Structs and arrays | `struct`, `[T; N]`, fields, checked indexing, `&raw const/mut` (ADR 0021); C layout, `size_of`/`align_of`/`offset_of`, `#[packed]`, `#[align(N)]`, `bool` loads (ADR 0022); unchecked pointer indexing (ADR 0021); volatile access widths (ADR 0023); `memcpy`/`memset` in `rt/` | a ring buffer on the stack |
 | **M2.2** ✅ Aggregates across calls | passing and returning structs and arrays by value with the riscv32 C ABI (small ones in registers, large ones through a hidden pointer) | calls a C function built with clang, to prove the ABI is the real one |
-| **M2.3a** Compile-time execution | the MIR interpreter and on-demand checking (ADR 0027, 0028); `const` items; `comptime` expressions and blocks; array lengths and attribute arguments computed at compile time | a lookup table computed by the compiler, and `comptime` checks of struct layouts |
+| **M2.3a** ✅ Compile-time execution | the MIR interpreter and on-demand checking (ADR 0027, 0028); `const` items; `comptime` expressions and blocks; array lengths and attribute arguments computed at compile time | a lookup table computed by the compiler, and `comptime` checks of struct layouts |
 | **M2.3b** Statics and byte strings | `static`/`static mut` with compile-time initializers, `#[align(N)]` on statics; `_start` initializes `.data` and `.bss`; `b"..."`; slices `*const [T]` | prints with a real `print` function |
 | **M2.4** Enums and `match` | enums with explicit discriminants (`enum Mode: u8 { Off = 0, Run = 3 }`), `match` on integers, `bool` and enums; then payloads, nested patterns and exhaustiveness | a state machine |
 | **M2.5** `Option` and `Result` | built into the compiler until generics exist; the `?` operator | a number parser returning `Result` |
@@ -97,6 +97,11 @@ Agreed as useful, not yet scheduled:
   ABI (ADR 0025), and `extern fn` declares functions defined elsewhere
   (ADR 0026). The milestone program exchanges aggregates of every size
   class with C code compiled by clang, in both directions.
-- **Next: M2.3a** (compile-time execution). ADRs 0027 and 0028 are
-  accepted: Erebos adopts Zig's comptime model, and the pipeline runs on
-  demand.
+- **M2.3a done.** Erebos runs code at compile time in the Zig model
+  (ADR 0027): a MIR interpreter with the target's semantics computes
+  constants, `comptime` expressions and checks, array lengths and
+  `#[align]` arguments, on demand and with cycles reported (ADR 0028,
+  0029). The milestone program computes a CRC-32 table at compile time and
+  checks a message on QEMU; a differential test compares 21 functions run
+  by the compiler and on the target, and builds are reproducible.
+- **Next: M2.3b** (statics and byte strings).

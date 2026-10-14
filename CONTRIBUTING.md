@@ -80,6 +80,8 @@ cargo test
   (ADR 0022). It needs clang: `EREBOS_CLANG`, or the one in the LLVM
   archive (`C:\llvm-22\bin\clang.exe`). A struct added to one file needs
   its twin in the other.
+- **Reproducible builds** (`tests/reproducible.rs`) compile a program twice
+  at each level and require identical executables (ADR 0027).
 - **Fuzzing** (`tests/fuzz.rs`) mutates the test programs and requires the
   compiler to answer every input with output or diagnostics, never a panic.
   The seed is fixed; set `EREBOS_FUZZ_ITERATIONS` to run more inputs.

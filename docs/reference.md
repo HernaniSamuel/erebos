@@ -1,4 +1,4 @@
-# Erebos language reference (M2.2)
+# Erebos language reference (M2.3a)
 
 This describes the language as the compiler implements it today. The
 reasoning behind each rule lives in the ADRs (`docs/adr/`), cited as
@@ -8,8 +8,10 @@ one of them.
 ## Programs
 
 A program is one source file (`.ers`) plus the runtime support functions
-(`rt/builtins.ers`, ADR 0020). It is a list of items, functions, external
-functions and structs, in any order. It must contain exactly one **entry function** and
+(`rt/builtins.ers`, ADR 0020). It is a list of items, in any order:
+functions, external functions, structs, constants and `comptime` blocks.
+Items share one namespace, and may refer to each other whatever their
+order (ADR 0028). It must contain exactly one **entry function** and
 one **panic function**:
 
 ```
@@ -36,9 +38,9 @@ The target is RV32IMAC on QEMU `virt` (ADR 0010).
 - **Identifiers:** `[A-Za-z_][A-Za-z0-9_]*`. Names starting with `__` are
   reserved for the runtime, and so are the C names it defines (`memcpy`,
   `memmove`, `memset`) and `_start`.
-- **Keywords:** `align_of as break const continue else entry extern false
-  fn if let loop mut offset_of panic return size_of struct true volatile
-  while`.
+- **Keywords:** `align_of as break comptime const continue else entry
+  extern false fn if let loop mut offset_of panic return size_of struct true
+  volatile while`. `assert` is a built-in function, and a reserved name.
   `raw` is a keyword only right after `&`.
 - **Integer literals** (ADR 0016): `42`, `0x2A`, `0o52`, `0b10_1010`; `_`
   separates digits. A decimal literal with a leading zero (`017`) is an
@@ -58,7 +60,7 @@ The target is RV32IMAC on QEMU `virt` (ADR 0010).
 | `!` | never: an expression that does not finish |
 | `*const T`, `*mut T` | raw pointers |
 | `*const volatile T`, `*mut volatile T` | raw pointers whose accesses are volatile (ADR 0013, 0023) |
-| `[T; N]` | an array of `N` values of type `T`; `N` is an integer literal (ADR 0021) |
+| `[T; N]` | an array of `N` values of type `T`; `N` is a `usize` computed at compile time (ADR 0021, 0029) |
 | `Name` | a struct declared with `struct Name { ... }` (ADR 0021) |
 
 Every `let`, parameter and return type is written explicitly; there is no
@@ -203,6 +205,67 @@ unspecified values.
 - A `bool` in memory is a byte: storing writes 0 or 1, and any nonzero byte
   reads as `true`.
 
+## Compile-time execution (ADR 0027, 0029)
+
+The compiler runs ordinary Erebos code wherever a value must be known
+before the program runs. Any function can be called there; whether it can
+run is found out by running it.
+
+```
+const BAUD: u32 = 115_200;
+const DIVISOR: u32 = clock_hz() / (16 * BAUD);
+const UART: *mut volatile Uart = 0x1000_0000 as *mut volatile Uart;
+const CRC_TABLE: [u32; 256] = crc_table(0xEDB8_8320);
+
+comptime {
+    assert(size_of(Header) == 7);
+}
+
+fn f() -> u32 {
+    let d: u32 = comptime baud_divisor(48_000_000, BAUD);
+    d
+}
+```
+
+- **`const` items** have an explicit type and any initializer. A constant
+  is a value, not a place: it has no address (`&raw const` is an error) and
+  cannot be assigned. Using it whole copies it; indexing it or reading a
+  field reads only that part, straight from read-only data. Every constant
+  is evaluated, used or not. `const` inside a function is an error; use
+  `let x: T = comptime ...;`.
+- **`comptime expr`** evaluates `expr` at compile time. Like `return`, it
+  covers the whole expression to its right: `comptime f(1) + y` is
+  `comptime (f(1) + y)`; write `(comptime f(1)) + y` to limit it. It passes
+  the expected type through.
+- **`comptime { ... }`** items run their block when the program is
+  compiled, typically for checks with `assert`.
+- **`assert(cond)`**, built in: at run time a false condition calls the
+  panic function; at compile time it fails the compilation.
+- **Values required at compile time:** array lengths, repeat counts
+  (`[v; N]`) and the argument of `#[align(N)]` are `usize` expressions,
+  such as `[u8; 2 * SECTOR]`. Two array types are the same when their
+  lengths have the same value; diagnostics show the value.
+
+What runs at compile time follows the target exactly (32-bit `usize`,
+wrapping arithmetic, the layouts above), and cannot:
+
+- use the enclosing function's variables (`ty::not-comptime`), nor `return`
+  out of it;
+- access memory through a volatile pointer, call an `extern fn`, or read or
+  write through a pointer made from an integer (computing an address from
+  one, as in `&raw mut (*UART).ctrl`, is fine);
+- convert a pointer into compiler memory to an integer, order pointers
+  into different objects, or give such a pointer as its result;
+- read bytes never written, such as padding;
+- call the panic function, explicitly or through a failed check; the panic
+  function's body never runs at compile time;
+- run more than 10,000,000 steps (MIR statements and terminators) or nest
+  more than 256 calls. Each evaluation has its own budget.
+
+A value that needs itself, directly or through other items, is a
+`ty::cycle`. Data the compiler emits has zero padding, so builds are
+reproducible byte for byte.
+
 ## Expressions
 
 ### Operators, from tightest to loosest
@@ -222,6 +285,7 @@ unspecified values.
 | 11 | `&&` | left |
 | 12 | `\|\|` | left |
 | 13 | `=` `+=` `-=` `*=` `/=` `%=` `&=` `\|=` `^=` `<<=` `>>=` | right |
+| 14 | `return`, `break` and `comptime` with a value | cover the whole expression to their right |
 
 So `flags & MASK == 0` means `(flags & MASK) == 0`, `*p.x` means `*(p.x)`,
 and `a < b < c` is an error.
@@ -333,7 +397,8 @@ erebos build program.ers [-o program.elf] [-O] [--link file.o]... [--emit=<stage
 `-O` enables LLVM optimizations. `--link` adds an object file defining
 `extern fn`s; it may be repeated. `--emit` prints a compiler stage instead:
 `tokens`, `ast`, `hir`, `typeck`, `mir` or `llvm-ir` (dumps leave out the
-runtime; `typeck` and `mir` start with every struct's layout). See
+runtime; `typeck` and `mir` start with every struct's layout, and list the
+bodies run at compile time as `comptime fn`). See
 `CONTRIBUTING.md` for setup and running on QEMU.
 
 ## Diagnostics
@@ -354,6 +419,7 @@ Every error has a stable code, shown with the message.
 | `parser::unclosed-block` | `{` without its `}` |
 | `parser::let-without-type` | `let` without `: Type` |
 | `parser::chained-comparison` | `a < b < c` |
+| `parser::local-const` | `const` inside a function body |
 | `resolve::unknown-name` | name not in scope |
 | `resolve::unknown-type` | type or struct name that does not exist |
 | `resolve::unknown-function` | call to a function that does not exist |
@@ -376,6 +442,7 @@ Every error has a stable code, shown with the message.
 | `resolve::missing-panic`, `resolve::multiple-panics` | not exactly one `panic fn` |
 | `resolve::outside-loop` | `break`/`continue` outside a loop |
 | `resolve::break-value-in-while` | `break value` in a `while` |
+| `resolve::return-in-comptime` | `return` in code run at compile time |
 | `ty::mismatched-types` | a value of the wrong type |
 | `ty::untyped-literal` | a literal or array literal with no expected type |
 | `ty::literal-out-of-range` | literal does not fit its type |
@@ -403,9 +470,22 @@ Every error has a stable code, shown with the message.
 | `ty::infinite-size` | structs that contain themselves, directly or through each other |
 | `ty::invalid-align` | `#[align(N)]` with `N` not a power of two, too large or below the natural alignment |
 | `ty::aligned-in-packed` | a packed struct containing a type with `#[align(N)]` |
+| `ty::not-comptime` | a run-time variable where a compile-time value is required |
+| `ty::cycle` | an item whose value or layout needs itself |
 | `ty::if-without-else` | `if` without `else` where a value is expected |
 | `ty::wrong-arg-count` | call with the wrong number of arguments |
 | `ty::param-type` | parameter of type `()` or `!` |
 | `ty::special-fn-params` | entry or panic function with parameters |
 | `ty::entry-returns`, `ty::panic-returns` | entry or panic function that can return |
+| `eval::panic` | compile-time code reached the panic function: a zero divisor, an index out of bounds, an explicit call |
+| `eval::assertion-failed` | `assert` with a false condition at compile time |
+| `eval::step-limit` | compile-time code ran more than 10,000,000 steps |
+| `eval::call-depth` | compile-time code nested more than 256 calls |
+| `eval::volatile-access` | a volatile access at compile time |
+| `eval::extern-call` | a call to an `extern fn` at compile time |
+| `eval::invalid-access` | reading or writing through a pointer made from an integer, or outside an object |
+| `eval::pointer-to-int` | a pointer into compiler memory converted or read as an integer |
+| `eval::pointer-compare` | comparing pointers whose addresses only exist after linking |
+| `eval::uninit-read` | reading bytes never written, such as padding |
+| `eval::pointer-escapes` | a compile-time result holding a pointer into compiler memory |
 | `codegen::llvm` | LLVM rejected the target; an environment problem |
