@@ -1,0 +1,29 @@
+// Structs whose layout `tests/c_layout.rs` checks against clang, compiling
+// the C declarations in `structs.h` for the same target (ADR 0022). Every
+// struct here must have a C twin of the same name there.
+
+struct S { a: u8, b: u32, c: u16 }
+struct Wide { flag: bool, big: u64, small: i8 }
+struct Nested { first: u8, s: S, tail: [u16; 3] }
+struct Signed { a: i8, b: i16, c: i32, d: i64, e: isize }
+struct Pointers { tag: u8, next: *mut Pointers, data: *const u16 }
+struct Arrays { bytes: [u8; 5], words: [u32; 2], grid: [[u16; 3]; 2] }
+struct OfStructs { items: [S; 3], count: u8 }
+
+#[packed]
+struct Header { kind: u8, len: u32, tag: u16 }
+
+#[packed]
+struct PackedNested { a: u8, s: S, w: Wide }
+
+#[align(64)]
+struct Descriptor { addr: u32, len: u32 }
+
+#[align(16)]
+struct Small { x: u8 }
+
+struct Mixed { tag: u8, header: Header, tail: u16 }
+struct HoldsAligned { a: u8, d: Descriptor, b: u8 }
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

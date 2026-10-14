@@ -20,7 +20,7 @@ pub fn build(hir: &Hir, types: &TypeckResults) -> Mir {
         .structs
         .iter()
         .enumerate()
-        .map(|(i, def)| StructRef::new(def.name.clone(), layout(i).layout))
+        .map(|(i, def)| StructRef::new(def.name.clone(), layout(i).layout, def.packed))
         .collect();
     for (i, (def, s)) in hir.structs.iter().zip(&structs).enumerate() {
         let fields = def

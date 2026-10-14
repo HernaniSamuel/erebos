@@ -1,0 +1,74 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/resolve_attribute_errors.ers
+---
+--- errors ---
+resolve::unknown-attribute
+
+  × unknown attribute `#[inline]`
+   ╭─[resolve_attribute_errors.ers:2:3]
+ 1 │ // emit: hir
+ 2 │ #[inline]
+   ·   ───┬──
+   ·      ╰── not an attribute
+ 3 │ struct A { x: u8 }
+   ╰────
+  help: the attributes are `#[packed]` and `#[align(N)]`, on structs (ADR 0022)
+resolve::attribute-argument
+
+  × `#[packed]` takes no argument
+   ╭─[resolve_attribute_errors.ers:5:10]
+ 4 │ 
+ 5 │ #[packed(1)]
+   ·          ┬
+   ·          ╰── remove this
+ 6 │ #[packed]
+   ╰────
+resolve::duplicate-attribute
+
+  × `#[packed]` is given more than once
+   ╭─[resolve_attribute_errors.ers:6:1]
+ 4 │ 
+ 5 │ #[packed(1)]
+   · ──────┬─────
+   ·       ╰── first given here
+ 6 │ #[packed]
+   · ────┬────
+   ·     ╰── given again here
+ 7 │ struct B { x: u8 }
+   ╰────
+resolve::attribute-argument
+
+  × `#[align]` takes an alignment, such as `#[align(64)]`
+    ╭─[resolve_attribute_errors.ers:9:1]
+  8 │ 
+  9 │ #[align]
+    · ────┬───
+    ·     ╰── no alignment
+ 10 │ struct C { x: u8 }
+    ╰────
+resolve::conflicting-attributes
+
+  × `#[packed]` and `#[align]` cannot be combined
+    ╭─[resolve_attribute_errors.ers:12:1]
+ 11 │ 
+ 12 │ #[packed]
+    · ────┬────
+    ·     ╰── alignment 1
+ 13 │ #[align(8)]
+    · ─────┬─────
+    ·      ╰── a higher alignment
+ 14 │ struct D { x: u8 }
+    ╰────
+  help: `#[packed]` lowers alignment and `#[align]` raises it (ADR 0022)
+resolve::misplaced-attribute
+
+  × `#[packed]` applies only to structs
+    ╭─[resolve_attribute_errors.ers:16:1]
+ 15 │ 
+ 16 │ #[packed]
+    · ────┬────
+    ·     ╰── not allowed on a function
+ 17 │ fn f() {}
+    ╰────

@@ -8,6 +8,7 @@ File {
     items: [
         Struct(
             StructDecl {
+                attrs: [],
                 name: Ident {
                     name: "Point",
                     span: 144..149,
@@ -49,6 +50,7 @@ File {
         ),
         Struct(
             StructDecl {
+                attrs: [],
                 name: Ident {
                     name: "Empty",
                     span: 186..191,
@@ -59,6 +61,7 @@ File {
         ),
         Fn(
             FnDecl {
+                attrs: [],
                 kind: Plain,
                 name: Ident {
                     name: "f",

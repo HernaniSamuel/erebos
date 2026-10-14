@@ -46,6 +46,9 @@ pub enum TokenKind {
     Semi,
     Dot,
 
+    /// `#`, which starts an attribute.
+    Pound,
+
     // Operators
     Bang,
     Plus,
@@ -147,6 +150,7 @@ impl TokenKind {
             TokenKind::Comma => "`,`",
             TokenKind::Semi => "`;`",
             TokenKind::Dot => "`.`",
+            TokenKind::Pound => "`#`",
             TokenKind::Bang => "`!`",
             TokenKind::Plus => "`+`",
             TokenKind::Minus => "`-`",

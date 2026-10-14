@@ -1,0 +1,6 @@
+// emit: ast
+#[packed]
+struct Header { kind: u8, len: u32 }
+
+#[align(64)]
+struct Descriptor { addr: u32, len: u32 }

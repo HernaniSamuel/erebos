@@ -24,7 +24,13 @@ pub struct StructLayout {
     pub layout: Layout,
     /// The offset of each field, in declaration order.
     pub offsets: Vec<u64>,
+    /// Asks for more than its natural alignment, through `#[align(N)]` on
+    /// it or on something it contains; a packed struct could not keep it.
+    pub over_aligned: bool,
 }
+
+/// The largest alignment `#[align(N)]` accepts: the address space itself.
+pub const MAX_ALIGN: u64 = 1 << (target::POINTER_BITS - 1);
 
 /// The layout of every struct of a program. A struct has none when it
 /// contains itself or is too large; both are reported.
@@ -135,21 +141,63 @@ impl Builder<'_> {
 
         // C rules (ADR 0022): fields in declaration order, each at the next
         // offset aligned for it; the size is rounded up to the alignment.
+        // `#[packed]` drops the padding and the alignment.
         let hir = self.hir;
         let def = hir.struct_(id);
         let mut offsets = Vec::with_capacity(def.fields.len());
         let mut end = Some(0);
         let mut align = 1;
         let mut complete = true;
+        let mut over_aligned = def.align.is_some();
         for field in &def.fields {
             let Some(field_layout) = of(field.ty, &mut |id| self.struct_(id)) else {
                 complete = false;
                 continue;
             };
-            align = align.max(field_layout.align);
-            let offset = end.and_then(|end| align_up(end, field_layout.align));
+            if self.over_aligned(field.ty) {
+                over_aligned = true;
+                if def.packed {
+                    self.diags.push(
+                        Diagnostic::error(
+                            "ty::aligned-in-packed",
+                            format!("a packed struct cannot contain `{}`", field.ty),
+                        )
+                        .label(field.span, "asks for an alignment through `#[align]`")
+                        .label(def.name_span, "packed: alignment 1")
+                        .help("the alignment it asks for could not be kept (ADR 0022)"),
+                    );
+                }
+            }
+            let field_align = if def.packed { 1 } else { field_layout.align };
+            align = align.max(field_align);
+            let offset = end.and_then(|end| align_up(end, field_align));
             offsets.push(offset.unwrap_or(0));
             end = offset.and_then(|offset| offset.checked_add(field_layout.size));
+        }
+        if let Some((wanted, span)) = def.align {
+            let problem = if !wanted.is_power_of_two() {
+                Some("an alignment is a power of two".to_owned())
+            } else if wanted > MAX_ALIGN {
+                Some(format!("alignments go up to {MAX_ALIGN}"))
+            } else if wanted < align {
+                Some(format!(
+                    "`{}` already needs alignment {align}; `#[align]` only raises it",
+                    def.name
+                ))
+            } else {
+                None
+            };
+            match problem {
+                Some(problem) => self.diags.push(
+                    Diagnostic::error(
+                        "ty::invalid-align",
+                        format!("invalid alignment {wanted}"),
+                    )
+                    .label(span, problem)
+                    .help("`#[align(N)]` takes a power of two not below the natural alignment (ADR 0022)"),
+                ),
+                None => align = wanted,
+            }
         }
         let size = end.and_then(|end| align_up(end, align));
 
@@ -158,6 +206,7 @@ impl Builder<'_> {
             (true, Some(size)) if size <= MAX_SIZE => Some(StructLayout {
                 layout: Layout { size, align },
                 offsets,
+                over_aligned,
             }),
             (true, _) => {
                 self.diags.push(
@@ -174,6 +223,18 @@ impl Builder<'_> {
         };
         self.state[id.0 as usize] = State::Done(layout.clone());
         layout.map(|s| s.layout)
+    }
+
+    /// Whether `ty` contains a struct with `#[align(N)]`.
+    fn over_aligned(&self, ty: Ty) -> bool {
+        match ty {
+            Ty::Struct(s) => matches!(
+                &self.state[s.id.0 as usize],
+                State::Done(Some(layout)) if layout.over_aligned
+            ),
+            Ty::Array(elem, _) => self.over_aligned(*elem),
+            _ => false,
+        }
     }
 
     /// `id` was found while laying itself out: the structs on the stack

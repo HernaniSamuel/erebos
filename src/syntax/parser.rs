@@ -4,8 +4,8 @@
 use crate::diag::{Diagnostic, Diagnostics};
 use crate::span::Span;
 use crate::syntax::ast::{
-    BinOp, Block, Expr, ExprKind, FieldDecl, FieldInit, File, FnDecl, FnKind, Ident, Item, Let,
-    LogicalOp, Param, Stmt, StructDecl, Ty, TyKind, UnOp,
+    Attr, BinOp, Block, Expr, ExprKind, FieldDecl, FieldInit, File, FnDecl, FnKind, Ident, Item,
+    Let, LogicalOp, Param, Stmt, StructDecl, Ty, TyKind, UnOp,
 };
 use crate::syntax::lexer;
 use crate::syntax::token::{Token, TokenKind};
@@ -118,6 +118,7 @@ impl Parser<'_> {
                 | TokenKind::Panic
                 | TokenKind::Fn
                 | TokenKind::Struct
+                | TokenKind::Pound
                 | TokenKind::Eof
         ) {
             self.bump();
@@ -125,9 +126,15 @@ impl Parser<'_> {
     }
 
     fn item(&mut self) -> PResult<Item> {
+        let mut attrs = Vec::new();
+        while self.at(TokenKind::Pound) {
+            attrs.push(self.attr()?);
+        }
         match self.peek().kind {
-            TokenKind::Entry | TokenKind::Panic | TokenKind::Fn => Ok(Item::Fn(self.fn_decl()?)),
-            TokenKind::Struct => Ok(Item::Struct(self.struct_decl()?)),
+            TokenKind::Entry | TokenKind::Panic | TokenKind::Fn => {
+                Ok(Item::Fn(self.fn_decl(attrs)?))
+            }
+            TokenKind::Struct => Ok(Item::Struct(self.struct_decl(attrs)?)),
             _ => {
                 // A stray token, not a missing one: point at the token itself.
                 let err = self.report_unexpected("an item", self.peek().span);
@@ -138,7 +145,32 @@ impl Parser<'_> {
         }
     }
 
-    fn fn_decl(&mut self) -> PResult<FnDecl> {
+    /// `#[name]` or `#[name(N)]`.
+    fn attr(&mut self) -> PResult<Attr> {
+        let pound = self.bump();
+        self.expect(TokenKind::LBracket)?;
+        let name = self.ident()?;
+        let arg = if self.eat(TokenKind::LParen).is_some() {
+            let token = self.peek();
+            if token.kind != TokenKind::Int {
+                return Err(self.error_expected("an integer literal"));
+            }
+            self.bump();
+            let value = lexer::int_value(&self.text[token.span.range()]).ok();
+            self.expect(TokenKind::RParen)?;
+            Some((value, token.span))
+        } else {
+            None
+        };
+        let close = self.expect(TokenKind::RBracket)?;
+        Ok(Attr {
+            name,
+            arg,
+            span: pound.span.to(close.span),
+        })
+    }
+
+    fn fn_decl(&mut self, attrs: Vec<Attr>) -> PResult<FnDecl> {
         let start = self.peek().span;
         let kind = if self.eat(TokenKind::Entry).is_some() {
             FnKind::Entry
@@ -157,6 +189,7 @@ impl Parser<'_> {
         };
         let body = self.block()?;
         Ok(FnDecl {
+            attrs,
             kind,
             name,
             params,
@@ -166,7 +199,7 @@ impl Parser<'_> {
         })
     }
 
-    fn struct_decl(&mut self) -> PResult<StructDecl> {
+    fn struct_decl(&mut self, attrs: Vec<Attr>) -> PResult<StructDecl> {
         let start = self.bump().span;
         let name = self.ident()?;
         self.expect(TokenKind::LBrace)?;
@@ -177,6 +210,7 @@ impl Parser<'_> {
             Ok(FieldDecl { name, ty })
         })?;
         Ok(StructDecl {
+            attrs,
             name,
             fields,
             span: start.to(self.tokens[self.pos - 1].span),

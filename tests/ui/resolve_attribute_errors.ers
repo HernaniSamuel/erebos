@@ -1,0 +1,20 @@
+// emit: hir
+#[inline]
+struct A { x: u8 }
+
+#[packed(1)]
+#[packed]
+struct B { x: u8 }
+
+#[align]
+struct C { x: u8 }
+
+#[packed]
+#[align(8)]
+struct D { x: u8 }
+
+#[packed]
+fn f() {}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

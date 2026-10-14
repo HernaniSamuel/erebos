@@ -21,7 +21,7 @@ use inkwell::values::{
 use inkwell::{IntPredicate, OptimizationLevel};
 
 use crate::mir::{
-    BinOp, Body, Const, IntTy, Local, Mir, Operand, Place, PlaceElem, Rvalue, Statement,
+    BinOp, Body, Const, IntTy, Local, Mir, Operand, Place, PlaceElem, Ptr, Rvalue, Statement,
     Terminator, Ty, UnOp,
 };
 use crate::target::Target;
@@ -235,6 +235,29 @@ fn add_attribute(context: &Context, function: FunctionValue, loc: AttributeLoc, 
     function.add_attribute(loc, context.create_enum_attribute(kind, 0));
 }
 
+/// Where a place is in memory, and how it may be accessed.
+#[derive(Clone, Copy)]
+struct Address<'ctx> {
+    ptr: PointerValue<'ctx>,
+    /// The last pointer on the path to the place is volatile (ADR 0023).
+    volatile: bool,
+    /// The path from that pointer goes through a field of a `#[packed]`
+    /// struct, so the place may be misaligned (ADR 0022).
+    misaligned: bool,
+}
+
+impl Address<'_> {
+    /// The alignment to promise LLVM for an access of type `ty`.
+    fn align(self, ty: Ty) -> u32 {
+        let align = if self.misaligned {
+            1
+        } else {
+            ty.layout().align
+        };
+        u32::try_from(align).expect("alignments are small")
+    }
+}
+
 /// Lowers one MIR body. Every local with a representation gets a stack
 /// slot; values of type `()` and `!` are skipped.
 struct FnCodegen<'a, 'ctx> {
@@ -357,31 +380,36 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
         }
     }
 
-    /// The address of a place and whether accesses to it are volatile. A
-    /// place is volatile when the last pointer on its path is (ADR 0023).
-    fn address(&self, place: Place) -> (PointerValue<'ctx>, bool) {
+    /// The address of a place. A place is volatile when the last pointer on
+    /// its path is (ADR 0023).
+    fn address(&self, place: Place) -> Address<'ctx> {
         let Some(slot) = self.slots[place.local.0 as usize] else {
             // A local of type `()` occupies no memory; its address is any
             // aligned one (ADR 0022).
             let one = int_type(self.context, IntTy::Usize).const_int(1, false);
-            return (
-                one.const_to_pointer(self.context.ptr_type(AddressSpace::default())),
-                false,
-            );
+            return Address {
+                ptr: one.const_to_pointer(self.context.ptr_type(AddressSpace::default())),
+                volatile: false,
+                misaligned: false,
+            };
         };
-        let mut address = (slot, false);
+        let mut address = Address {
+            ptr: slot,
+            volatile: false,
+            misaligned: false,
+        };
         let mut ty = self.body.local_ty(place.local);
         let usize_type = int_type(self.context, IntTy::Usize);
         let byte_type = self.context.i8_type().into();
         for elem in place.projection {
             let (step, index) = match (elem, ty) {
                 (PlaceElem::Deref, Ty::Ptr(ptr)) => {
-                    address = (self.load_pointer(address), ptr.volatile);
+                    address = self.through(address, ptr);
                     ty = *ptr.pointee;
                     continue;
                 }
                 (PlaceElem::Offset(index), Ty::Ptr(ptr)) => {
-                    address = (self.load_pointer(address), ptr.volatile);
+                    address = self.through(address, ptr);
                     ty = *ptr.pointee;
                     let index = self.read(Place::local(*index)).into_int_value();
                     (element_type(self.context, ty), index)
@@ -401,6 +429,7 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                 (PlaceElem::Field(index), Ty::Struct(s)) => {
                     let field = &s.def().fields()[*index as usize];
                     ty = field.ty;
+                    address.misaligned |= s.def().packed;
                     (byte_type, usize_type.const_int(field.offset, false))
                 }
                 (elem, ty) => unreachable!("projection {elem:?} of `{ty}`"),
@@ -409,11 +438,45 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
             // (ADR 0021).
             // SAFETY: the element type is sized and the index is an integer,
             // as LLVM requires of a `getelementptr`.
-            let element = unsafe { self.builder.build_gep(step, address.0, &[index], "") }
+            let element = unsafe { self.builder.build_gep(step, address.ptr, &[index], "") }
                 .expect("builder is positioned");
-            address.0 = element;
+            address.ptr = element;
         }
         address
+    }
+
+    /// The address a pointer stored at `address` points to. Pointers are
+    /// assumed aligned (ADR 0019).
+    fn through(&self, address: Address<'ctx>, ptr: Ptr) -> Address<'ctx> {
+        let load = self
+            .builder
+            .build_load(
+                self.context.ptr_type(AddressSpace::default()),
+                address.ptr,
+                "",
+            )
+            .expect("builder is positioned");
+        self.set_access(load, address, Ty::Ptr(ptr));
+        Address {
+            ptr: load.into_pointer_value(),
+            volatile: ptr.volatile,
+            misaligned: false,
+        }
+    }
+
+    /// Makes a load or store as volatile and as aligned as its place.
+    fn set_access(&self, access: BasicValueEnum<'ctx>, address: Address<'ctx>, ty: Ty) {
+        let instruction = access
+            .as_instruction_value()
+            .expect("loads and stores are instructions");
+        if address.volatile {
+            instruction
+                .set_volatile(true)
+                .expect("loads and stores can be volatile");
+        }
+        instruction
+            .set_alignment(address.align(ty))
+            .expect("loads and stores have an alignment");
     }
 
     /// Copies an aggregate. Places that may overlap (reached through
@@ -427,32 +490,19 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
         let may_overlap = [dest, source]
             .iter()
             .any(|place| place.is_indirect() || self.in_memory[place.local.0 as usize]);
-        let (to, _) = self.address(dest);
-        let (from, _) = self.address(source);
+        let ty = self.body.place_ty(dest);
+        let to = self.address(dest);
+        let from = self.address(source);
         let size = int_type(self.context, IntTy::Usize).const_int(layout.size, false);
-        let align = u32::try_from(layout.align).expect("alignments are small");
+        let (to_align, from_align) = (to.align(ty), from.align(ty));
         let copy = if may_overlap {
-            self.builder.build_memmove(to, align, from, align, size)
+            self.builder
+                .build_memmove(to.ptr, to_align, from.ptr, from_align, size)
         } else {
-            self.builder.build_memcpy(to, align, from, align, size)
+            self.builder
+                .build_memcpy(to.ptr, to_align, from.ptr, from_align, size)
         };
         copy.expect("the alignment is a power of two");
-    }
-
-    /// Reads the pointer stored at `address`, volatile if the place holding
-    /// it is.
-    fn load_pointer(&self, (address, volatile): (PointerValue<'ctx>, bool)) -> PointerValue<'ctx> {
-        let load = self
-            .builder
-            .build_load(self.context.ptr_type(AddressSpace::default()), address, "")
-            .expect("builder is positioned");
-        if volatile {
-            load.as_instruction_value()
-                .expect("a load is an instruction")
-                .set_volatile(true)
-                .expect("loads can be volatile");
-        }
-        load.into_pointer_value()
     }
 
     /// Locals are private to the function, so they hold values as in
@@ -474,18 +524,12 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
 
     fn read(&self, place: Place) -> BasicValueEnum<'ctx> {
         let memory = self.representation(place).expect("read of `()`");
-        let (address, volatile) = self.address(place);
+        let address = self.address(place);
         let value = self
             .builder
-            .build_load(memory, address, "")
+            .build_load(memory, address.ptr, "")
             .expect("builder is positioned");
-        if volatile {
-            value
-                .as_instruction_value()
-                .expect("a load is an instruction")
-                .set_volatile(true)
-                .expect("loads can be volatile");
-        }
+        self.set_access(value, address, self.body.place_ty(place));
         if memory != self.context.i8_type().into() || self.body.place_ty(place) != Ty::Bool {
             return value;
         }
@@ -501,7 +545,7 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
     /// Writes a value in the place's representation: a `bool` in memory
     /// becomes a byte holding 0 or 1.
     fn write(&self, place: Place, value: BasicValueEnum<'ctx>) {
-        let (address, volatile) = self.address(place);
+        let address = self.address(place);
         let value = match (self.representation(place), value) {
             (Some(BasicTypeEnum::IntType(memory)), BasicValueEnum::IntValue(int))
                 if memory != int.get_type() =>
@@ -515,11 +559,14 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
         };
         let store = self
             .builder
-            .build_store(address, value)
+            .build_store(address.ptr, value)
             .expect("builder is positioned");
-        if volatile {
+        if address.volatile {
             store.set_volatile(true).expect("stores can be volatile");
         }
+        store
+            .set_alignment(address.align(self.body.place_ty(place)))
+            .expect("stores have an alignment");
     }
 
     fn rvalue(&self, rvalue: &Rvalue) -> BasicValueEnum<'ctx> {
@@ -565,7 +612,7 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                 }
             }
             Rvalue::Cast(operand, to) => return self.cast(operand, *to),
-            Rvalue::AddressOf { place, .. } => return self.address(*place).0.into(),
+            Rvalue::AddressOf { place, .. } => return self.address(*place).ptr.into(),
         };
         built.expect("builder is positioned").into()
     }

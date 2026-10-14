@@ -117,6 +117,9 @@ struct PlaceInfo {
     /// The last pointer on the path to the place, which decides whether
     /// accesses are volatile (ADR 0023).
     via: Option<Ptr>,
+    /// The path from that pointer goes through a field of a `#[packed]`
+    /// struct, so the place may be misaligned (ADR 0022).
+    misaligned: bool,
 }
 
 impl PlaceInfo {
@@ -125,6 +128,7 @@ impl PlaceInfo {
         ty: Ty::Error,
         immutable: None,
         via: None,
+        misaligned: false,
     };
 
     /// The place a pointer points to; `pointer` is the pointer's expression.
@@ -133,6 +137,8 @@ impl PlaceInfo {
             ty: *ptr.pointee,
             immutable: (!ptr.mutable).then_some(Immutable::ConstPointer(ptr, pointer)),
             via: Some(ptr),
+            // Pointers are assumed aligned (ADR 0019).
+            misaligned: false,
         }
     }
 }
@@ -940,6 +946,16 @@ impl Checker<'_> {
     /// widest access, nor a whole aggregate.
     fn access(&mut self, place: &PlaceInfo, span: Span) {
         let volatile = place.via.is_some_and(|ptr| ptr.volatile);
+        if volatile && !place.ty.is_aggregate() && self.may_be_misaligned(place) {
+            self.diags.push(
+                Diagnostic::error(
+                    "ty::volatile-packed-field",
+                    format!("a volatile `{}` here may be misaligned", place.ty),
+                )
+                .label(span, "reached through a field of a `#[packed]` struct")
+                .help("it would be split into several accesses; register blocks use the default layout, with explicit padding fields (ADR 0022, 0023)"),
+            );
+        }
         if volatile && place.ty.is_aggregate() {
             self.diags.push(
                 Diagnostic::error(
@@ -977,6 +993,7 @@ impl Checker<'_> {
                     ty: local.ty,
                     immutable: (!local.mutable).then_some(Immutable::Local(*id)),
                     via: None,
+                    misaligned: false,
                 }
             }
             ExprKind::Deref(pointer) => {
@@ -1051,6 +1068,7 @@ impl Checker<'_> {
                     ty,
                     immutable: Some(Immutable::Temporary(base.span)),
                     via: None,
+                    misaligned: false,
                 };
                 (ty, temporary)
             }
@@ -1110,6 +1128,7 @@ impl Checker<'_> {
         self.fields.insert(expr.id, index as u32);
         PlaceInfo {
             ty: def.fields[index].ty,
+            misaligned: base_place.misaligned || def.packed,
             ..base_place
         }
     }
@@ -1163,6 +1182,11 @@ impl Checker<'_> {
         }
         self.access(&info, place.span);
         info.ty
+    }
+
+    /// A place inside a packed struct whose type needs alignment.
+    fn may_be_misaligned(&self, place: &PlaceInfo) -> bool {
+        place.misaligned && self.layouts.of(place.ty).is_some_and(|l| l.align > 1)
     }
 
     /// `&raw const place` or `&raw mut place` (ADR 0021). The address of a
@@ -1219,6 +1243,19 @@ impl Checker<'_> {
                 None => {}
             }
         }
+        if self.may_be_misaligned(&info) {
+            self.diags.push(
+                Diagnostic::error(
+                    "ty::packed-field-address",
+                    format!("cannot take the address of a `{}` that may be misaligned", info.ty),
+                )
+                .label(place.span, "reached through a field of a `#[packed]` struct")
+                .help(format!(
+                    "a `*const {}` promises alignment, and dereferencing a misaligned one may trap; copy the value into a `let` first (ADR 0022)",
+                    info.ty
+                )),
+            );
+        }
         match info.ty {
             Ty::Error => Ty::Error,
             ty => Ty::ptr(mutable, false, ty),
@@ -1271,9 +1308,14 @@ pub fn dump(hir: &Hir, results: &TypeckResults) -> String {
         } else {
             format!("{{ {} }}", fields.join(", "))
         };
+        let attrs = match (def.packed, def.align) {
+            (true, _) => "#[packed] ".to_owned(),
+            (false, Some((align, _))) => format!("#[align({align})] "),
+            (false, None) => String::new(),
+        };
         writeln!(
             out,
-            "struct {} {fields} size {}, align {}",
+            "{attrs}struct {} {fields} size {}, align {}",
             def.name, layout.layout.size, layout.layout.align
         )
         .unwrap();

@@ -1,0 +1,23 @@
+// emit: llvm-ir
+// Fields of a packed struct are accessed with alignment 1, nested places
+// too; an over-aligned struct gets an over-aligned stack slot (ADR 0022).
+#[packed]
+struct Header { kind: u8, len: u32, inner: Point }
+
+struct Point { x: u32, y: u32 }
+
+#[align(64)]
+struct Descriptor { addr: u32 }
+
+fn packed(h: *mut Header) -> u32 {
+    (*h).len = 1;
+    (*h).inner.y
+}
+
+fn aligned() -> usize {
+    let d: Descriptor = Descriptor { addr: 1 };
+    &raw const d as usize
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

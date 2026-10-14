@@ -85,6 +85,11 @@ const SNIPPETS: &[&str] = &[
     "align_of(u64)",
     "offset_of(S, b)",
     "size_of",
+    "#[packed]",
+    "#[align(64)]",
+    "#[align(3)]",
+    "#",
+    "#[packed] struct P { a: u8, b: u32 }",
 ];
 
 /// xorshift64: small, deterministic, good enough to pick mutations.

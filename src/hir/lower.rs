@@ -270,7 +270,10 @@ impl Lowerer<'_> {
             }
             seen.entry(&field.name.name).or_insert(field.name.span);
         }
+        let (packed, align) = self.struct_attrs(&decl.attrs);
         StructDef {
+            packed,
+            align,
             name: decl.name.name.clone(),
             name_span: decl.name.span,
             fields: decl
@@ -283,6 +286,94 @@ impl Lowerer<'_> {
                 })
                 .collect(),
         }
+    }
+
+    /// Layout attributes (ADR 0022): `#[packed]` and `#[align(N)]`, at
+    /// most once each, and not together. Returns them.
+    fn struct_attrs(&mut self, attrs: &[ast::Attr]) -> (bool, Option<(u64, Span)>) {
+        let mut packed: Option<Span> = None;
+        let mut align: Option<(u64, Span)> = None;
+        let mut align_attr: Option<Span> = None;
+        for attr in attrs {
+            let first = match attr.name.name.as_str() {
+                "packed" => {
+                    if let Some((_, arg)) = attr.arg {
+                        self.attr_error(arg, "`#[packed]` takes no argument", "remove this");
+                    }
+                    packed.replace(attr.span)
+                }
+                "align" => {
+                    match attr.arg {
+                        // A rejected literal was reported by the lexer.
+                        Some((value, arg)) => align = value.map(|value| (value, arg)),
+                        None => self.attr_error(
+                            attr.span,
+                            "`#[align]` takes an alignment, such as `#[align(64)]`",
+                            "no alignment",
+                        ),
+                    }
+                    align_attr.replace(attr.span)
+                }
+                _ => {
+                    self.unknown_attr(attr);
+                    None
+                }
+            };
+            if let Some(first) = first {
+                self.diags.push(
+                    Diagnostic::error(
+                        "resolve::duplicate-attribute",
+                        format!("`#[{}]` is given more than once", attr.name.name),
+                    )
+                    .label(attr.span, "given again here")
+                    .label(first, "first given here"),
+                );
+            }
+        }
+        if let (Some(packed), Some(align)) = (packed, align_attr) {
+            self.diags.push(
+                Diagnostic::error(
+                    "resolve::conflicting-attributes",
+                    "`#[packed]` and `#[align]` cannot be combined",
+                )
+                .label(packed, "alignment 1")
+                .label(align, "a higher alignment")
+                .help("`#[packed]` lowers alignment and `#[align]` raises it (ADR 0022)"),
+            );
+        }
+        (packed.is_some(), align)
+    }
+
+    /// Functions take no attributes yet.
+    fn fn_attrs(&mut self, attrs: &[ast::Attr]) {
+        for attr in attrs {
+            match attr.name.name.as_str() {
+                "packed" | "align" => self.diags.push(
+                    Diagnostic::error(
+                        "resolve::misplaced-attribute",
+                        format!("`#[{}]` applies only to structs", attr.name.name),
+                    )
+                    .label(attr.span, "not allowed on a function"),
+                ),
+                _ => self.unknown_attr(attr),
+            }
+        }
+    }
+
+    fn unknown_attr(&mut self, attr: &ast::Attr) {
+        self.diags.push(
+            Diagnostic::error(
+                "resolve::unknown-attribute",
+                format!("unknown attribute `#[{}]`", attr.name.name),
+            )
+            .label(attr.name.span, "not an attribute")
+            .help("the attributes are `#[packed]` and `#[align(N)]`, on structs (ADR 0022)"),
+        );
+    }
+
+    fn attr_error(&mut self, span: Span, message: &str, label: &str) {
+        self.diags
+            .push(Diagnostic::error("resolve::attribute-argument", message).label(span, label));
     }
 
     /// `Name { field: value, ... }`: every field exactly once, in any order.
@@ -378,6 +469,7 @@ impl Lowerer<'_> {
     }
 
     fn fn_decl(&mut self, decl: &ast::FnDecl) -> Fn {
+        self.fn_attrs(&decl.attrs);
         self.locals.clear();
         self.scopes.clear();
         self.loops.clear();

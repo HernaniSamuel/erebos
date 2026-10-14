@@ -8,6 +8,7 @@ File {
     items: [
         Fn(
             FnDecl {
+                attrs: [],
                 kind: Plain,
                 name: Ident {
                     name: "f",

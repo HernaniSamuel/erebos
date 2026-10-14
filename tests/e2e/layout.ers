@@ -1,0 +1,131 @@
+// Layout conformance (ADR 0022): sizes, alignments and offsets against
+// values computed by hand, packed fields round-tripping through
+// misaligned addresses, and over-aligned locals at aligned addresses.
+// expect-output: layout ok
+// expect-output: packed 305419896 171
+// expect-output: aligned ok
+// expect-exit: 0
+
+fn putc(byte: u8) {
+    let thr: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+    *thr = byte;
+}
+
+fn exit(code: u32) -> ! {
+    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+    *finisher = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    loop {}
+}
+
+fn print_u32(n: u32) {
+    if n >= 10 {
+        print_u32(n / 10);
+    }
+    putc(b'0' + (n % 10) as u8);
+}
+
+fn print(text: *const u8, n: usize) {
+    let mut i: usize = 0;
+    while i < n {
+        putc(text[i]);
+        i += 1;
+    }
+}
+
+// Reports the first check that fails, by number, and stops.
+fn check(id: u32, actual: usize, expected: usize) {
+    if actual != expected {
+        let failed: [u8; 13] = [
+            b'c', b'h', b'e', b'c', b'k', b' ', b'f', b'a', b'i', b'l', b'e', b'd', b' ',
+        ];
+        print(&raw const failed as *const u8, 13);
+        print_u32(id);
+        putc(b'\n');
+        exit(2);
+    }
+}
+
+struct S { a: u8, b: u32, c: u16 }
+struct Wide { flag: bool, big: u64 }
+struct Nested { first: u8, s: S, tail: [u16; 3] }
+struct Empty {}
+struct HasEmpty { a: u8, e: Empty, b: u8 }
+
+#[packed]
+struct Header { kind: u8, len: u32, tag: u16 }
+
+#[align(64)]
+struct Descriptor { addr: u32, len: u32 }
+
+struct Mixed { tag: u8, header: Header, tail: u16 }
+
+entry fn main() -> ! {
+    check(1, size_of(u8), 1);
+    check(2, size_of(u64), 8);
+    check(3, align_of(u64), 8);
+    check(4, size_of(*const u8), 4);
+    check(5, size_of(bool), 1);
+    check(6, size_of(()), 0);
+    check(10, size_of(S), 12);
+    check(11, align_of(S), 4);
+    check(12, offset_of(S, b), 4);
+    check(13, offset_of(S, c), 8);
+    check(20, size_of(Wide), 16);
+    check(21, offset_of(Wide, big), 8);
+    check(30, size_of(Nested), 24);
+    check(31, offset_of(Nested, s), 4);
+    check(32, offset_of(Nested, tail), 16);
+    check(40, size_of(Empty), 0);
+    check(41, align_of(Empty), 1);
+    check(42, size_of([u32; 0]), 0);
+    check(43, align_of([u32; 0]), 4);
+    check(44, size_of(HasEmpty), 2);
+    check(45, offset_of(HasEmpty, b), 1);
+    check(50, size_of(Header), 7);
+    check(51, align_of(Header), 1);
+    check(52, offset_of(Header, len), 1);
+    check(53, offset_of(Header, tag), 5);
+    check(60, size_of(Descriptor), 64);
+    check(61, align_of(Descriptor), 64);
+    check(70, size_of(Mixed), 10);
+    check(71, offset_of(Mixed, header), 1);
+    check(72, offset_of(Mixed, tail), 8);
+    check(80, size_of([Descriptor; 3]), 192);
+    let layout: [u8; 9] = [b'l', b'a', b'y', b'o', b'u', b't', b' ', b'o', b'k'];
+    print(&raw const layout as *const u8, 9);
+    putc(b'\n');
+
+    // A packed header at an odd address: its `u32` straddles words.
+    let buffer: *mut u8 = 0x8100_0001 as *mut u8;
+    let header: *mut Header = buffer as *mut Header;
+    (*header).kind = 171;
+    (*header).len = 0x1234_5678;
+    (*header).tag = 0xBEEF;
+    let copy: Header = *header;
+    let packed: [u8; 7] = [b'p', b'a', b'c', b'k', b'e', b'd', b' '];
+    print(&raw const packed as *const u8, 7);
+    print_u32(copy.len);
+    putc(b' ');
+    print_u32(copy.kind as u32);
+    putc(b'\n');
+    // The bytes are where the layout says, little-endian.
+    check(90, buffer[1] as usize, 0x78);
+    check(91, buffer[4] as usize, 0x12);
+    check(92, buffer[5] as usize, 0xEF);
+
+    // Over-aligned locals are placed at aligned addresses.
+    let pad: u8 = 1;
+    let descriptor: Descriptor = Descriptor { addr: pad as u32, len: 2 };
+    let other: [Descriptor; 2] = [descriptor; 2];
+    check(100, (&raw const descriptor as usize) % 64, 0);
+    check(101, (&raw const other as usize) % 64, 0);
+    check(102, (&raw const other[1] as usize) % 64, 0);
+    let aligned: [u8; 10] = [b'a', b'l', b'i', b'g', b'n', b'e', b'd', b' ', b'o', b'k'];
+    print(&raw const aligned as *const u8, 10);
+    putc(b'\n');
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(1)
+}

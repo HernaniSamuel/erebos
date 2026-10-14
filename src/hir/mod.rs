@@ -59,6 +59,10 @@ pub struct StructDef {
     pub name: String,
     pub name_span: Span,
     pub fields: Vec<FieldDef>,
+    /// `#[packed]`: alignment 1, no padding (ADR 0022).
+    pub packed: bool,
+    /// `#[align(N)]`, with the span of `N` (ADR 0022).
+    pub align: Option<(u64, Span)>,
 }
 
 #[derive(Debug)]

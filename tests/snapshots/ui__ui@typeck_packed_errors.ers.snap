@@ -1,0 +1,123 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_packed_errors.ers
+---
+--- errors ---
+ty::aligned-in-packed
+
+  × a packed struct cannot contain `Aligned`
+    ╭─[typeck_packed_errors.ers:16:30]
+ 15 │ #[packed]
+ 16 │ struct HoldsAligned { a: u8, b: Aligned }
+    ·        ──────┬─────          ┬
+    ·              │               ╰── asks for an alignment through `#[align]`
+    ·              ╰── packed: alignment 1
+ 17 │ 
+    ╰────
+  help: the alignment it asks for could not be kept (ADR 0022)
+ty::aligned-in-packed
+
+  × a packed struct cannot contain `[Aligned; 2]`
+    ╭─[typeck_packed_errors.ers:19:35]
+ 18 │ #[packed]
+ 19 │ struct HoldsAlignedArray { a: u8, b: [Aligned; 2] }
+    ·        ────────┬────────          ┬
+    ·                │                  ╰── asks for an alignment through `#[align]`
+    ·                ╰── packed: alignment 1
+ 20 │ 
+    ╰────
+  help: the alignment it asks for could not be kept (ADR 0022)
+ty::invalid-align
+
+  × invalid alignment 3
+    ╭─[typeck_packed_errors.ers:21:9]
+ 20 │ 
+ 21 │ #[align(3)]
+    ·         ┬
+    ·         ╰── an alignment is a power of two
+ 22 │ struct Three { x: u8 }
+    ╰────
+  help: `#[align(N)]` takes a power of two not below the natural alignment (ADR 0022)
+ty::invalid-align
+
+  × invalid alignment 2
+    ╭─[typeck_packed_errors.ers:24:9]
+ 23 │ 
+ 24 │ #[align(2)]
+    ·         ┬
+    ·         ╰── `BelowNatural` already needs alignment 4; `#[align]` only raises it
+ 25 │ struct BelowNatural { x: u32 }
+    ╰────
+  help: `#[align(N)]` takes a power of two not below the natural alignment (ADR 0022)
+ty::invalid-align
+
+  × invalid alignment 4294967296
+    ╭─[typeck_packed_errors.ers:27:9]
+ 26 │ 
+ 27 │ #[align(4294967296)]
+    ·         ─────┬────
+    ·              ╰── alignments go up to 2147483648
+ 28 │ struct TooBig { x: u8 }
+    ╰────
+  help: `#[align(N)]` takes a power of two not below the natural alignment (ADR 0022)
+ty::packed-field-address
+
+  × cannot take the address of a `u32` that may be misaligned
+    ╭─[typeck_packed_errors.ers:31:38]
+ 30 │ fn errors(h: *mut Header, o: *const Outer, vp: *mut volatile Header, i: usize) {
+ 31 │     let len: *const u32 = &raw const (*h).len;
+    ·                                      ────┬───
+    ·                                          ╰── reached through a field of a `#[packed]` struct
+ 32 │     let inner: *const Point = &raw const (*h).inner;
+    ╰────
+  help: a `*const u32` promises alignment, and dereferencing a misaligned one may trap; copy the
+        value into a `let` first (ADR 0022)
+ty::packed-field-address
+
+  × cannot take the address of a `Point` that may be misaligned
+    ╭─[typeck_packed_errors.ers:32:42]
+ 31 │     let len: *const u32 = &raw const (*h).len;
+ 32 │     let inner: *const Point = &raw const (*h).inner;
+    ·                                          ─────┬────
+    ·                                               ╰── reached through a field of a `#[packed]` struct
+ 33 │     let x: *const u32 = &raw const (*o).header.inner.x;
+    ╰────
+  help: a `*const Point` promises alignment, and dereferencing a misaligned one may trap; copy the
+        value into a `let` first (ADR 0022)
+ty::packed-field-address
+
+  × cannot take the address of a `u32` that may be misaligned
+    ╭─[typeck_packed_errors.ers:33:36]
+ 32 │     let inner: *const Point = &raw const (*h).inner;
+ 33 │     let x: *const u32 = &raw const (*o).header.inner.x;
+    ·                                    ─────────┬─────────
+    ·                                             ╰── reached through a field of a `#[packed]` struct
+ 34 │     let ok: *const u8 = &raw const (*h).bytes[i];
+    ╰────
+  help: a `*const u32` promises alignment, and dereferencing a misaligned one may trap; copy the
+        value into a `let` first (ADR 0022)
+ty::volatile-packed-field
+
+  × a volatile `u32` here may be misaligned
+    ╭─[typeck_packed_errors.ers:36:5]
+ 35 │     let kind: *mut u8 = &raw mut (*h).kind;
+ 36 │     (*vp).len = 1;
+    ·     ────┬────
+    ·         ╰── reached through a field of a `#[packed]` struct
+ 37 │     let y: u32 = (*vp).inner.y;
+    ╰────
+  help: it would be split into several accesses; register blocks use the default layout, with
+        explicit padding fields (ADR 0022, 0023)
+ty::volatile-packed-field
+
+  × a volatile `u32` here may be misaligned
+    ╭─[typeck_packed_errors.ers:37:18]
+ 36 │     (*vp).len = 1;
+ 37 │     let y: u32 = (*vp).inner.y;
+    ·                  ──────┬──────
+    ·                        ╰── reached through a field of a `#[packed]` struct
+ 38 │     let byte: u8 = (*vp).bytes[i];
+    ╰────
+  help: it would be split into several accesses; register blocks use the default layout, with
+        explicit padding fields (ADR 0022, 0023)

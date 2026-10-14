@@ -18,6 +18,7 @@ pub enum Item {
 /// `struct Name { field: Type, ... }` (ADR 0021)
 #[derive(Debug)]
 pub struct StructDecl {
+    pub attrs: Vec<Attr>,
     pub name: Ident,
     pub fields: Vec<FieldDecl>,
     pub span: Span,
@@ -29,8 +30,19 @@ pub struct FieldDecl {
     pub ty: Ty,
 }
 
+/// `#[name]` or `#[name(N)]` before an item (ADR 0022).
+#[derive(Debug)]
+pub struct Attr {
+    pub name: Ident,
+    /// The integer argument, with its span; the value is `None` if the
+    /// lexer rejected the literal.
+    pub arg: Option<(Option<u64>, Span)>,
+    pub span: Span,
+}
+
 #[derive(Debug)]
 pub struct FnDecl {
+    pub attrs: Vec<Attr>,
     pub kind: FnKind,
     pub name: Ident,
     pub params: Vec<Param>,

@@ -1,0 +1,29 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_packed_align.ers
+---
+--- typeck ---
+#[packed] struct Header { kind: u8 at 0, len: u32 at 1 } size 5, align 1
+#[align(64)] struct Descriptor { addr: u32 at 0, len: u32 at 4 } size 64, align 64
+struct Mixed { tag: u8 at 0, header: Header at 1, tail: u16 at 6 } size 8, align 2
+struct Ring { slots: [Descriptor; 2] at 0, head: u8 at 128 } size 192, align 64
+#[packed] struct Inner { a: u8 at 0, b: u32 at 1 } size 5, align 1
+fn copies(h: *const Header) -> u32
+    let local: Header
+    let kind: *const u8
+    expr 0 deref 432..434: Header
+    expr 1 local h 433..434: *const Header
+    expr 2 &raw const 462..483: *const u8
+    expr 3 field kind 473..483: u8
+    expr 4 local local 473..478: Header
+    expr 5 binary + 489..509: u32
+    expr 6 field len 489..498: u32
+    expr 7 local local 489..494: Header
+    expr 8 field len 501..509: u32
+    expr 9 deref 501..505: Header
+    expr 10 local h 503..504: *const Header
+entry fn main() -> !
+    expr 11 loop 536..543: !
+panic fn on_panic() -> !
+    expr 12 loop 573..580: !

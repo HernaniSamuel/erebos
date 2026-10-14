@@ -67,6 +67,7 @@ impl Lexer<'_> {
                 ',' => TokenKind::Comma,
                 ';' => TokenKind::Semi,
                 '.' => TokenKind::Dot,
+                '#' => TokenKind::Pound,
                 '!' if self.eat('=') => TokenKind::Ne,
                 '!' => TokenKind::Bang,
                 '-' if self.eat('>') => TokenKind::Arrow,

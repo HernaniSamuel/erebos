@@ -1,0 +1,42 @@
+// emit: typeck
+// A place reached through a field of a packed struct may be misaligned:
+// no pointer to it if its type needs alignment, and no volatile access
+// (ADR 0022, 0023).
+#[packed]
+struct Header { kind: u8, len: u32, inner: Point, bytes: [u8; 4] }
+
+struct Point { x: u32, y: u32 }
+
+struct Outer { first: u8, header: Header }
+
+#[align(8)]
+struct Aligned { x: u32 }
+
+#[packed]
+struct HoldsAligned { a: u8, b: Aligned }
+
+#[packed]
+struct HoldsAlignedArray { a: u8, b: [Aligned; 2] }
+
+#[align(3)]
+struct Three { x: u8 }
+
+#[align(2)]
+struct BelowNatural { x: u32 }
+
+#[align(4294967296)]
+struct TooBig { x: u8 }
+
+fn errors(h: *mut Header, o: *const Outer, vp: *mut volatile Header, i: usize) {
+    let len: *const u32 = &raw const (*h).len;
+    let inner: *const Point = &raw const (*h).inner;
+    let x: *const u32 = &raw const (*o).header.inner.x;
+    let ok: *const u8 = &raw const (*h).bytes[i];
+    let kind: *mut u8 = &raw mut (*h).kind;
+    (*vp).len = 1;
+    let y: u32 = (*vp).inner.y;
+    let byte: u8 = (*vp).bytes[i];
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

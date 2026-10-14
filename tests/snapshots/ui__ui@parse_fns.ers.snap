@@ -8,6 +8,7 @@ File {
     items: [
         Fn(
             FnDecl {
+                attrs: [],
                 kind: Entry,
                 name: Ident {
                     name: "main",
@@ -41,6 +42,7 @@ File {
         ),
         Fn(
             FnDecl {
+                attrs: [],
                 kind: Plain,
                 name: Ident {
                     name: "helper",

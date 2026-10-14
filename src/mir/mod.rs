@@ -146,6 +146,8 @@ pub enum Ty {
 pub struct StructDef {
     pub name: String,
     pub layout: Layout,
+    /// `#[packed]`: its fields may be misaligned (ADR 0022).
+    pub packed: bool,
     /// Set once every struct exists, since a field may point back to the
     /// struct that contains it.
     fields: OnceLock<Vec<Field>>,
@@ -178,10 +180,11 @@ pub struct StructRef(&'static StructDef);
 
 impl StructRef {
     /// Defines a struct; its fields are set later, with `set_fields`.
-    pub fn new(name: String, layout: Layout) -> StructRef {
+    pub fn new(name: String, layout: Layout, packed: bool) -> StructRef {
         StructRef(Box::leak(Box::new(StructDef {
             name,
             layout,
+            packed,
             fields: OnceLock::new(),
         })))
     }
@@ -480,9 +483,10 @@ impl fmt::Display for Mir {
             } else {
                 format!("{{ {} }}", fields.join(", "))
             };
+            let packed = if def.packed { "#[packed] " } else { "" };
             writeln!(
                 f,
-                "struct {} {fields} // size {}, align {}",
+                "{packed}struct {} {fields} // size {}, align {}",
                 def.name, def.layout.size, def.layout.align
             )?;
         }

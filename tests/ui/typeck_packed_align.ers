@@ -1,0 +1,24 @@
+// emit: typeck
+// `#[packed]`: alignment 1, no padding. `#[align(N)]`: alignment N, size
+// rounded up to it (ADR 0022).
+#[packed]
+struct Header { kind: u8, len: u32 }
+
+#[align(64)]
+struct Descriptor { addr: u32, len: u32 }
+
+struct Mixed { tag: u8, header: Header, tail: u16 }
+
+struct Ring { slots: [Descriptor; 2], head: u8 }
+
+#[packed]
+struct Inner { a: u8, b: u32 }
+
+fn copies(h: *const Header) -> u32 {
+    let local: Header = *h;
+    let kind: *const u8 = &raw const local.kind;
+    local.len + (*h).len
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

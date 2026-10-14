@@ -1,0 +1,119 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/parse_attributes.ers
+---
+--- ast ---
+File {
+    items: [
+        Struct(
+            StructDecl {
+                attrs: [
+                    Attr {
+                        name: Ident {
+                            name: "packed",
+                            span: 15..21,
+                        },
+                        arg: None,
+                        span: 13..22,
+                    },
+                ],
+                name: Ident {
+                    name: "Header",
+                    span: 30..36,
+                },
+                fields: [
+                    FieldDecl {
+                        name: Ident {
+                            name: "kind",
+                            span: 39..43,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Ident {
+                                    name: "u8",
+                                    span: 45..47,
+                                },
+                            ),
+                            span: 45..47,
+                        },
+                    },
+                    FieldDecl {
+                        name: Ident {
+                            name: "len",
+                            span: 49..52,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Ident {
+                                    name: "u32",
+                                    span: 54..57,
+                                },
+                            ),
+                            span: 54..57,
+                        },
+                    },
+                ],
+                span: 23..59,
+            },
+        ),
+        Struct(
+            StructDecl {
+                attrs: [
+                    Attr {
+                        name: Ident {
+                            name: "align",
+                            span: 63..68,
+                        },
+                        arg: Some(
+                            (
+                                Some(
+                                    64,
+                                ),
+                                69..71,
+                            ),
+                        ),
+                        span: 61..73,
+                    },
+                ],
+                name: Ident {
+                    name: "Descriptor",
+                    span: 81..91,
+                },
+                fields: [
+                    FieldDecl {
+                        name: Ident {
+                            name: "addr",
+                            span: 94..98,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Ident {
+                                    name: "u32",
+                                    span: 100..103,
+                                },
+                            ),
+                            span: 100..103,
+                        },
+                    },
+                    FieldDecl {
+                        name: Ident {
+                            name: "len",
+                            span: 105..108,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Ident {
+                                    name: "u32",
+                                    span: 110..113,
+                                },
+                            ),
+                            span: 110..113,
+                        },
+                    },
+                ],
+                span: 74..115,
+            },
+        ),
+    ],
+}

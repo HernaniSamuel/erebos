@@ -1,0 +1,65 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/codegen_packed_align.ers
+---
+--- llvm-ir ---
+; ModuleID = 'erebos'
+source_filename = "erebos"
+target datalayout = "e-m:e-p:32:32-i64:64-n32-S128"
+target triple = "riscv32-unknown-none-elf"
+
+module asm "\09.section .text.start, \22ax\22, @progbits"
+module asm "\09.globl _start"
+module asm "\09.type _start, @function"
+module asm "_start:"
+module asm "\09li sp, 0x88000000"
+module asm "\09j main"
+
+; Function Attrs: nounwind null_pointer_is_valid
+define i32 @packed(ptr %0) #0 {
+bb0:
+  %1 = getelementptr i8, ptr %0, i32 1
+  store i32 1, ptr %1, align 1
+  %2 = getelementptr i8, ptr %0, i32 5
+  %3 = getelementptr i8, ptr %2, i32 4
+  %4 = load i32, ptr %3, align 1
+  ret i32 %4
+}
+
+; Function Attrs: nounwind null_pointer_is_valid
+define i32 @aligned() #0 {
+bb0:
+  %_1 = alloca [64 x i8], align 64
+  %_2 = alloca [64 x i8], align 64
+  %0 = getelementptr i8, ptr %_2, i32 0
+  store i32 1, ptr %0, align 4
+  call void @llvm.memmove.p0.p0.i32(ptr align 64 %_1, ptr align 64 %_2, i32 64, i1 false)
+  %1 = ptrtoint ptr %_1 to i32
+  ret i32 %1
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @main() #1 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @on_panic() #1 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: readwrite)
+declare void @llvm.memmove.p0.p0.i32(ptr writeonly captures(none), ptr readonly captures(none), i32, i1 immarg) #2
+
+attributes #0 = { nounwind null_pointer_is_valid }
+attributes #1 = { noreturn nounwind null_pointer_is_valid }
+attributes #2 = { nocallback nofree nounwind willreturn memory(argmem: readwrite) }
