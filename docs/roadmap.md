@@ -10,7 +10,7 @@ and ends with a program running on QEMU, verified by an automated test.
 | **M2** | Compound data, enums and modules, in the steps below. |
 | **M3** | `memory { ... }` blocks generating the linker script; `peripheral` blocks with native MMIO. The UART is declared in the language. |
 | **M4** | Interrupt handlers, vector tables, inline `asm`, compiler and hardware fences (ADR 0023). |
-| **M5** | Moves/ownership, then references and borrow checking (ADR 0009). |
+| **M5** | Moves/ownership, then references and borrow checking (ADR 0009); methods (`impl`, `self`, `&self`, `&mut self`, `x.f()`). |
 | **M6** | Generics via monomorphization. |
 
 ## M2 steps
@@ -42,6 +42,13 @@ Decisions already agreed for the later steps (their ADRs come with the step):
   the same syntax, so programs do not change. `?` requires the same error
   type, with no conversion. `Option<*mut T>` takes 8 bytes: address 0 is
   valid (ADR 0019), so there is no null niche for `None`.
+
+Until M5, there are no methods: functions are free and take their receiver
+explicitly (`fn rect_area(r: *const Rect) -> u32`), and modules (M2.6)
+provide namespacing. Method receivers are references (`&self`,
+`&mut self`), and taking an address implicitly at `x.f()` would be an
+implicit conversion (ADR 0008), so methods wait for references instead of
+being designed twice.
 
 ## Deferred ideas
 
