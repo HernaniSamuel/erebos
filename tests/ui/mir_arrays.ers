@@ -1,0 +1,13 @@
+// emit: mir
+// Literal elements are stored as they are evaluated; `[v; N]` evaluates
+// `v` once and fills in a loop; a run-time index is checked against the
+// length, a constant one is not (ADR 0021).
+fn arrays(v: u8, i: usize, p: *mut [u8; 4]) -> u8 {
+    let a: [u8; 2] = [v, 7];
+    let b: [u8; 4] = [v; 4];
+    (*p)[i] = a[1];
+    b[i]
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

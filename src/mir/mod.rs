@@ -15,7 +15,9 @@ pub use build::build;
 use std::fmt;
 
 pub use crate::int::IntTy;
+pub use crate::layout::Layout;
 pub use crate::ops::{BinOp, UnOp};
+use crate::target;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BodyId(pub u32);
@@ -100,7 +102,8 @@ impl Body {
             .iter()
             .fold(self.local_ty(place.local), |ty, elem| match (elem, ty) {
                 (PlaceElem::Deref | PlaceElem::Offset(_), Ty::Ptr(ptr)) => *ptr.pointee,
-                (_, ty) => unreachable!("dereference of `{ty}`"),
+                (PlaceElem::Index(_) | PlaceElem::ConstIndex(_), Ty::Array(elem, _)) => *elem,
+                (elem, ty) => unreachable!("projection {elem:?} of `{ty}`"),
             })
     }
 
@@ -128,6 +131,39 @@ pub enum Ty {
     Bool,
     Int(IntTy),
     Ptr(Ptr),
+    /// `[T; N]`; the element type is leaked like pointee types.
+    Array(&'static Ty, u64),
+}
+
+impl Ty {
+    /// Arrays (and, later, structs): values made of other values, which
+    /// are copied in memory rather than held in registers.
+    pub fn is_aggregate(self) -> bool {
+        matches!(self, Ty::Array(..))
+    }
+
+    /// Size and alignment (ADR 0022), as computed for the type checker.
+    pub fn layout(self) -> Layout {
+        match self {
+            Ty::Unit | Ty::Never => Layout { size: 0, align: 1 },
+            Ty::Bool => Layout { size: 1, align: 1 },
+            Ty::Int(int) => Layout {
+                size: int.bytes(),
+                align: int.bytes(),
+            },
+            Ty::Ptr(_) => Layout {
+                size: target::POINTER_BYTES,
+                align: target::POINTER_BYTES,
+            },
+            Ty::Array(elem, len) => {
+                let elem = elem.layout();
+                Layout {
+                    size: elem.size * len,
+                    align: elem.align,
+                }
+            }
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -172,6 +208,11 @@ pub enum PlaceElem {
     /// points to, with `i` the `usize` in the local. The address arithmetic
     /// wraps and is never checked (ADR 0021).
     Offset(Local),
+    /// Element `i` of the array in the place, with `i` the `usize` in the
+    /// local. MIR building has already checked the bounds.
+    Index(Local),
+    /// Element `i` of the array in the place, for an `i` known in bounds.
+    ConstIndex(u64),
 }
 
 impl Place {
@@ -255,6 +296,7 @@ impl fmt::Display for Ty {
                 let volatile = if ptr.volatile { " volatile" } else { "" };
                 write!(f, "*{mutability}{volatile} {}", ptr.pointee)
             }
+            Ty::Array(elem, len) => write!(f, "[{elem}; {len}]"),
         }
     }
 }
@@ -278,6 +320,8 @@ impl fmt::Display for Place {
             text = match elem {
                 PlaceElem::Deref => format!("(*{text})"),
                 PlaceElem::Offset(index) => format!("(*({text} + {index}))"),
+                PlaceElem::Index(index) => format!("{text}[{index}]"),
+                PlaceElem::ConstIndex(index) => format!("{text}[{index}]"),
             };
         }
         f.write_str(&text)

@@ -1,0 +1,30 @@
+// emit: typeck
+fn errors(x: u32, n: u32, vp: *mut volatile [u8; 2]) {
+    let a: [u8; 3] = [1, 2];
+    let b: [u8; 2] = [1, x];
+    let c: [u8; 2] = [1, 2];
+    let d: u8 = c[2];
+    let e: u8 = c[n];
+    let f: bool = c == c;
+    let g: [u8; 2] = *vp;
+    *vp = c;
+    [b'a', 2][0] = 3;
+    let h: u32 = x[0];
+    let i: u32 = [1, 2] as u32;
+    let huge: [u8; 3_000_000_000] = [0; 3_000_000_000];
+    [1, 2];
+}
+
+fn by_value(a: [u8; 4]) -> [u8; 4] {
+    a
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }
+
+fn huge_values(p: *const [u8; 5_000_000_000]) -> u8 {
+    let a: u8 = [b'a'; 3_000_000_000][0];
+    let b: u8 = (*p)[1];
+    let c: u8 = p[1][0];
+    b
+}

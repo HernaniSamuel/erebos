@@ -68,6 +68,8 @@ pub enum TyKind {
         volatile: bool,
         pointee: Box<Ty>,
     },
+    /// `[T; N]`; `len` is `None` if the lexer rejected the literal.
+    Array { elem: Box<Ty>, len: Option<u64> },
 }
 
 /// `{ stmts; tail }`. The tail is the block's value (ADR 0015).
@@ -115,6 +117,10 @@ pub enum ExprKind {
     Bool(bool),
     /// `()`
     Unit,
+    /// `[a, b, c]`
+    Array(Vec<Expr>),
+    /// `[value; N]`; `None` if the lexer rejected the length.
+    Repeat(Box<Expr>, Option<u64>),
     /// A name, such as a local variable.
     Name(Ident),
     /// `name(args)`: a call to a function.

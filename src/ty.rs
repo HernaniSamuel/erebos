@@ -15,6 +15,7 @@ use crate::hir::{
     self, BinOp, Block, Expr, ExprId, ExprKind, Fn, FnKind, Hir, IntTy, LocalId, Ptr, Stmt, Ty,
     UnOp,
 };
+use crate::layout;
 use crate::span::Span;
 use crate::target;
 
@@ -64,6 +65,15 @@ fn needs_expected_type(expr: &Expr) -> bool {
     }
 }
 
+/// The element type an expected array type asks for.
+fn element_of(expected: Option<Ty>) -> Option<Ty> {
+    match expected {
+        Some(Ty::Array(elem, _)) => Some(*elem),
+        Some(Ty::Error) => Some(Ty::Error),
+        _ => None,
+    }
+}
+
 /// The value of a constant shift amount, if the amount is a literal.
 fn literal_value(expr: &Expr) -> Option<i128> {
     match &expr.kind {
@@ -83,6 +93,7 @@ struct Checker<'a> {
 }
 
 /// What the type checker knows about a place expression.
+#[derive(Clone, Copy)]
 struct PlaceInfo {
     ty: Ty,
     /// Why the place cannot be written, if it cannot.
@@ -110,11 +121,14 @@ impl PlaceInfo {
     }
 }
 
+#[derive(Clone, Copy)]
 enum Immutable {
     /// A local declared without `mut`.
     Local(LocalId),
     /// A place reached through a `*const` pointer, written at the span.
     ConstPointer(Ptr, Span),
+    /// Part of a value that lives in no variable, written at the span.
+    Temporary(Span),
 }
 
 struct LoopCtx {
@@ -154,8 +168,42 @@ impl Checker<'_> {
         }
 
         self.params(f);
+        if f.ret.is_aggregate() {
+            self.aggregate_by_value(f.ret, f.ret_span.unwrap_or(f.name_span));
+        }
+        for local in &f.locals {
+            if layout::of(local.ty).is_none() {
+                self.too_large(local.ty, local.span, "does not fit in the address space");
+            }
+        }
 
         self.checked_block(f, &f.body, f.ret, f.ret_span);
+    }
+
+    fn too_large(&mut self, ty: Ty, span: Span, label: &str) {
+        self.diags.push(
+            Diagnostic::error("ty::too-large", format!("`{ty}` is too large"))
+                .label(span, label)
+                .help(format!(
+                    "objects are limited to {} bytes on this target",
+                    layout::MAX_SIZE
+                )),
+        );
+    }
+
+    /// Aggregates cross calls only once the target ABI for them exists
+    /// (ADR 0006, M2.2).
+    fn aggregate_by_value(&mut self, ty: Ty, span: Span) {
+        self.diags.push(
+            Diagnostic::error(
+                "ty::aggregate-by-value",
+                format!("`{ty}` cannot be passed or returned by value yet"),
+            )
+            .label(span, "an array or struct")
+            .help(format!(
+                "pass a pointer instead, such as `*const {ty}`; aggregates by value arrive with the target ABI for them (ADR 0006)"
+            )),
+        );
     }
 
     /// Checks a block against an expected type. A tail expression reports its
@@ -189,6 +237,9 @@ impl Checker<'_> {
             );
         }
         for param in f.params() {
+            if param.ty.is_aggregate() {
+                self.aggregate_by_value(param.ty, param.span);
+            }
             if matches!(param.ty, Ty::Unit | Ty::Never) {
                 self.diags.push(
                     Diagnostic::error(
@@ -258,6 +309,16 @@ impl Checker<'_> {
     fn check(&mut self, f: &Fn, expr: &Expr, expected: Option<Ty>) -> Ty {
         let ty = self.expr_kind(f, expr, expected);
         self.expr_types[expr.id.0 as usize] = ty;
+        // Variables were checked where they are declared; any other
+        // aggregate value needs a temporary of its size.
+        if ty.is_aggregate() && !matches!(expr.kind, ExprKind::Local(_)) && layout::of(ty).is_none()
+        {
+            self.too_large(
+                ty,
+                expr.span,
+                "this value does not fit in the address space",
+            );
+        }
         // A block passes the expected type to its tail, which reports any
         // mismatch itself.
         let reported_inside = matches!(&expr.kind, ExprKind::Block(b) if b.tail.is_some());
@@ -297,6 +358,14 @@ impl Checker<'_> {
             ExprKind::Byte(_) => Ty::Int(IntTy::U8),
             ExprKind::Bool(_) => Ty::Bool,
             ExprKind::Unit => Ty::Unit,
+            ExprKind::Array(elems) => self.array(f, expr, elems, expected),
+            ExprKind::Repeat(value, len) => {
+                let ty = self.check(f, value, element_of(expected));
+                match ty {
+                    Ty::Error => Ty::Error,
+                    ty => Ty::array(ty, *len),
+                }
+            }
             ExprKind::Local(local) => f.local(*local).ty,
             ExprKind::Call { callee, args } => self.call(f, expr, *callee, args),
             ExprKind::Unary(op, operand) => self.unary(f, expr, *op, operand, expected),
@@ -441,6 +510,65 @@ impl Checker<'_> {
                 }
                 Ty::Never
             }
+        }
+    }
+
+    /// `[a, b, c]`: the elements share one type, which the expected array
+    /// type gives or, without one, the first element typed on its own.
+    fn array(&mut self, f: &Fn, expr: &Expr, elems: &[Expr], expected: Option<Ty>) -> Ty {
+        let elem_ty = match element_of(expected) {
+            Some(want) => {
+                for elem in elems {
+                    self.check(f, elem, Some(want));
+                }
+                want
+            }
+            None => match elems.iter().position(|e| !needs_expected_type(e)) {
+                Some(first) => {
+                    let ty = self.check(f, &elems[first], None);
+                    for (i, elem) in elems.iter().enumerate() {
+                        if i != first {
+                            self.check(f, elem, Some(ty));
+                        }
+                    }
+                    ty
+                }
+                None => {
+                    self.diags.push(
+                        Diagnostic::error(
+                            "ty::untyped-literal",
+                            "cannot tell the type of this array's elements",
+                        )
+                        .label(expr.span, "no type is expected here")
+                        .help("bind it first, e.g. `let a: [u8; 3] = ...` (ADR 0008)"),
+                    );
+                    for elem in elems {
+                        self.check(f, elem, Some(Ty::Error));
+                    }
+                    Ty::Error
+                }
+            },
+        };
+        match elem_ty {
+            Ty::Error => Ty::Error,
+            ty => Ty::array(ty, elems.len() as u64),
+        }
+    }
+
+    /// A constant index must be in bounds; at run time any other index is
+    /// checked (ADR 0021).
+    fn constant_index(&mut self, index: &Expr, len: u64) {
+        if let Some(value) = literal_value(index)
+            && value >= i128::from(len)
+        {
+            self.diags.push(
+                Diagnostic::error("ty::index-out-of-bounds", "index out of bounds")
+                    .label(
+                        index.span,
+                        format!("the length is {len} but the index is {value}"),
+                    )
+                    .help("at run time this would call the panic function (ADR 0021)"),
+            );
         }
     }
 
@@ -746,7 +874,7 @@ impl Checker<'_> {
             },
             Ty::Error => PlaceInfo::ERROR,
             _ => {
-                self.diags.push(error.label(pointer.span, "not a pointer"));
+                self.diags.push(error);
                 PlaceInfo::ERROR
             }
         }
@@ -754,9 +882,19 @@ impl Checker<'_> {
 
     /// Checks a read or write of a place. A volatile access is exactly one
     /// instruction (ADR 0023), so it cannot be wider than the target's
-    /// widest access.
+    /// widest access, nor a whole aggregate.
     fn access(&mut self, place: &PlaceInfo, span: Span) {
         let volatile = place.via.is_some_and(|ptr| ptr.volatile);
+        if volatile && place.ty.is_aggregate() {
+            self.diags.push(
+                Diagnostic::error(
+                    "ty::volatile-aggregate",
+                    format!("a volatile `{}` cannot be accessed as a whole", place.ty),
+                )
+                .label(span, "access its elements or fields one at a time")
+                .help("the width and number of the bus accesses would be up to the compiler (ADR 0023)"),
+            );
+        }
         if let (true, Ty::Int(int)) = (volatile, place.ty)
             && int.bits() > target::WIDEST_ACCESS_BITS
         {
@@ -791,18 +929,50 @@ impl Checker<'_> {
                 let error = Diagnostic::error(
                     "ty::deref-non-pointer",
                     format!("cannot dereference `{ty}`"),
-                );
+                )
+                .label(pointer.span, "not a pointer");
                 self.through_pointer(ty, pointer, error)
             }
             ExprKind::Index(base, index) => {
-                let ty = self.check(f, base, None);
+                // An array is indexed where it is; anything else is read as
+                // a value, which must be a pointer.
+                let base_place = self.place_info(f, base);
+                let ty = match base_place {
+                    Some(info) => info.ty,
+                    None => self.check(f, base, None),
+                };
                 self.check(f, index, Some(Ty::Int(IntTy::Usize)));
-                let error = Diagnostic::error(
-                    "ty::cannot-index",
-                    format!("cannot index a value of type `{ty}`"),
-                );
-                // Unchecked, as in C (ADR 0021).
-                self.through_pointer(ty, base, error)
+                if let Ty::Array(elem, len) = ty {
+                    self.constant_index(index, len);
+                    let base_place = base_place.unwrap_or(PlaceInfo {
+                        immutable: Some(Immutable::Temporary(base.span)),
+                        ..PlaceInfo::ERROR
+                    });
+                    PlaceInfo {
+                        ty: *elem,
+                        ..base_place
+                    }
+                } else {
+                    if let Some(info) = base_place {
+                        self.access(&info, base.span);
+                    }
+                    if let Ty::Ptr(ptr) = ty
+                        && layout::of(*ptr.pointee).is_none()
+                    {
+                        self.too_large(
+                            *ptr.pointee,
+                            base.span,
+                            "the distance between elements does not fit in the address space",
+                        );
+                    }
+                    let error = Diagnostic::error(
+                        "ty::cannot-index",
+                        format!("cannot index a value of type `{ty}`"),
+                    )
+                    .label(base.span, "not an array or a pointer");
+                    // Unchecked, as in C (ADR 0021).
+                    self.through_pointer(ty, base, error)
+                }
             }
             _ => return None,
         };
@@ -816,7 +986,7 @@ impl Checker<'_> {
             self.check(f, place, None);
             self.diags.push(
                 Diagnostic::error("ty::not-assignable", "cannot assign to this expression")
-                    .label(place.span, "not a variable, `*pointer` or `pointer[index]`"),
+                    .label(place.span, "not a variable, `*pointer` or `a[index]`"),
             );
             return Ty::Error;
         };
@@ -845,6 +1015,16 @@ impl Checker<'_> {
                     .help("only `*mut` pointers can be written through"),
                 );
             }
+            Some(Immutable::Temporary(base)) => {
+                self.diags.push(
+                    Diagnostic::error(
+                        "ty::not-assignable",
+                        "cannot assign to part of a temporary value",
+                    )
+                    .label(base, "this value lives in no variable")
+                    .help("store it in a `let mut` first"),
+                );
+            }
             None => {}
         }
         self.access(&info, place.span);
@@ -859,7 +1039,7 @@ impl Checker<'_> {
             self.diags.push(
                 Diagnostic::error("ty::not-a-place", "`&raw` needs a place in memory")
                     .label(place.span, "a value, not a place")
-                    .help("take the address of a variable, `*pointer` or `pointer[index]`; to point at a value, store it in a `let` first"),
+                    .help("take the address of a variable, `*pointer` or `a[index]`; to point at a value, store it in a `let` first"),
             );
             return Ty::Error;
         };
@@ -892,6 +1072,16 @@ impl Checker<'_> {
                         .help("use `&raw const`, or a `*mut` pointer"),
                     );
                 }
+                Some(Immutable::Temporary(base)) => {
+                    self.diags.push(
+                        Diagnostic::error(
+                            "ty::address-of-immutable",
+                            "cannot take a `*mut` address of part of a temporary value",
+                        )
+                        .label(base, "this value lives in no variable")
+                        .help("store it in a `let mut` first"),
+                    );
+                }
                 None => {}
             }
         }
@@ -907,7 +1097,8 @@ impl Checker<'_> {
             Ty::Int(_) => true,
             Ty::Bool => matches!(allowed, Operands::IntOrBool | Operands::Equatable),
             Ty::Ptr(_) => matches!(allowed, Operands::Equatable | Operands::Ordered),
-            Ty::Unit => false,
+            // Aggregates compare part by part (ADR 0021).
+            Ty::Unit | Ty::Array(..) => false,
         };
         if !ok {
             let what = match allowed {
@@ -991,6 +1182,8 @@ fn expr_label(f: &Fn, expr: &Expr) -> String {
         ExprKind::Int(value) => format!("int {value}"),
         ExprKind::Byte(value) => format!("byte {value}"),
         ExprKind::Unit => "unit".to_owned(),
+        ExprKind::Array(_) => "array".to_owned(),
+        ExprKind::Repeat(..) => "repeat".to_owned(),
         ExprKind::Local(id) => format!("local {}", f.local(*id).name),
         ExprKind::Call { .. } => "call".to_owned(),
         ExprKind::Unary(op, _) => format!("{op:?}").to_lowercase(),

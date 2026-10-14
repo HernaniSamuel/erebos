@@ -1,0 +1,75 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_arrays.ers
+---
+--- typeck ---
+fn arrays(x: u16, i: usize, m: *mut [[u16; 2]; 3]) -> u16
+    let a: [u16; 3]
+    let b: [u16; 3]
+    let c: [bool; 4]
+    let mut d: [u16; 3]
+    let e: [u16; 0]
+    let f: [u16; 2]
+    let p: *const u16
+    expr 0 array 229..238: [u16; 3]
+    expr 1 int 1 230..231: u16
+    expr 2 int 2 233..234: u16
+    expr 3 local x 236..237: u16
+    expr 4 array 262..271: [u16; 3]
+    expr 5 local x 263..264: u16
+    expr 6 int 1 266..267: u16
+    expr 7 int 2 269..270: u16
+    expr 8 repeat 296..305: [bool; 4]
+    expr 9 bool true 297..301: bool
+    expr 10 local a 333..334: [u16; 3]
+    expr 11 assign 340..358: ()
+    expr 12 index 340..344: u16
+    expr 13 local d 340..341: [u16; 3]
+    expr 14 local i 342..343: usize
+    expr 15 binary + 347..358: u16
+    expr 16 index 347..351: u16
+    expr 17 local b 347..348: [u16; 3]
+    expr 18 int 0 349..350: usize
+    expr 19 index 354..358: u16
+    expr 20 local d 354..355: [u16; 3]
+    expr 21 int 2 356..357: usize
+    expr 22 assign 364..381: ()
+    expr 23 index 364..374: u16
+    expr 24 index 364..371: [u16; 2]
+    expr 25 deref 364..368: [[u16; 2]; 3]
+    expr 26 local m 366..367: *mut [[u16; 2]; 3]
+    expr 27 local i 369..370: usize
+    expr 28 int 1 372..373: usize
+    expr 29 index 377..381: u16
+    expr 30 local d 377..378: [u16; 3]
+    expr 31 int 1 379..380: usize
+    expr 32 array 405..407: [u16; 0]
+    expr 33 if 431..465: [u16; 2]
+    expr 34 index 434..438: bool
+    expr 35 local c 434..435: [bool; 4]
+    expr 36 local i 436..437: usize
+    expr 37 array 441..447: [u16; 2]
+    expr 38 int 1 442..443: u16
+    expr 39 int 2 445..446: u16
+    expr 40 block 455..465: [u16; 2]
+    expr 41 repeat 457..463: [u16; 2]
+    expr 42 local x 458..459: u16
+    expr 43 &raw const 491..506: *const u16
+    expr 44 index 502..506: u16
+    expr 45 local d 502..503: [u16; 3]
+    expr 46 int 1 504..505: usize
+    expr 47 binary + 512..529: u16
+    expr 48 index 512..516: u16
+    expr 49 local f 512..513: [u16; 2]
+    expr 50 int 1 514..515: usize
+    expr 51 index 519..529: u16
+    expr 52 index 519..526: [u16; 2]
+    expr 53 deref 519..523: [[u16; 2]; 3]
+    expr 54 local m 521..522: *mut [[u16; 2]; 3]
+    expr 55 int 2 524..525: usize
+    expr 56 local i 527..528: usize
+entry fn main() -> !
+    expr 57 loop 556..563: !
+panic fn on_panic() -> !
+    expr 58 loop 593..600: !

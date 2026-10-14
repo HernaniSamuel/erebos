@@ -1,0 +1,18 @@
+// emit: typeck
+// Arrays (ADR 0021): literals take their element type from the expected
+// type or from the first element with a type of its own.
+fn arrays(x: u16, i: usize, m: *mut [[u16; 2]; 3]) -> u16 {
+    let a: [u16; 3] = [1, 2, x];
+    let b: [u16; 3] = [x, 1, 2];
+    let c: [bool; 4] = [true; 4];
+    let mut d: [u16; 3] = a;
+    d[i] = b[0] + d[2];
+    (*m)[i][1] = d[1];
+    let e: [u16; 0] = [];
+    let f: [u16; 2] = if c[i] { [1, 2] } else { [x; 2] };
+    let p: *const u16 = &raw const d[1];
+    f[1] + (*m)[2][i]
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

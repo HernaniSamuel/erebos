@@ -5,6 +5,9 @@
 /// Width of pointers, `usize` and `isize`. Fixed while there is one target.
 pub const POINTER_BITS: u32 = 32;
 
+/// Size and alignment of pointers, `usize` and `isize`, in bytes.
+pub const POINTER_BYTES: u64 = POINTER_BITS as u64 / 8;
+
 /// The widest memory access a single instruction performs. A volatile
 /// access must be one instruction (ADR 0023), so nothing wider can be
 /// volatile.

@@ -1,0 +1,112 @@
+// Arrays on the stack (ADR 0021): literals, `[v; N]`, indexing, copies and
+// elements reached through pointers.
+// expect-output: 15
+// expect-output: 1 2 3 4 5 8 9
+// expect-output: 1 1 1
+// expect-output: 7 0 0 7
+// expect-output: abc abd
+// expect-exit: 0
+
+fn putc(byte: u8) {
+    let thr: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+    *thr = byte;
+}
+
+fn exit(code: u32) -> ! {
+    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+    *finisher = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    loop {}
+}
+
+fn print_u32(n: u32) {
+    if n >= 10 {
+        print_u32(n / 10);
+    }
+    putc(b'0' + (n % 10) as u8);
+}
+
+fn sort(a: *mut [u32; 7]) {
+    let mut i: usize = 0;
+    while i < 7 {
+        let mut j: usize = 0;
+        while j + 1 < 7 - i {
+            if (*a)[j] > (*a)[j + 1] {
+                let t: u32 = (*a)[j];
+                (*a)[j] = (*a)[j + 1];
+                (*a)[j + 1] = t;
+            }
+            j += 1;
+        }
+        i += 1;
+    }
+}
+
+fn counter(count: *mut u32) -> u8 {
+    *count += 1;
+    7
+}
+
+entry fn main() -> ! {
+    let a: [u32; 5] = [1, 2, 3, 4, 5];
+    let mut sum: u32 = 0;
+    let mut i: usize = 0;
+    while i < 5 {
+        sum += a[i];
+        i += 1;
+    }
+    print_u32(sum);
+    putc(b'\n');
+
+    let mut b: [u32; 7] = [9, 4, 1, 8, 5, 3, 2];
+    sort(&raw mut b);
+    i = 0;
+    while i < 7 {
+        if i > 0 {
+            putc(b' ');
+        }
+        print_u32(b[i]);
+        i += 1;
+    }
+    putc(b'\n');
+
+    // `[v; N]` evaluates `v` exactly once, even for N of 0 and 1.
+    let mut count: u32 = 0;
+    let none: [u8; 0] = [counter(&raw mut count); 0];
+    print_u32(count);
+    putc(b' ');
+    count = 0;
+    let one: [u8; 1] = [counter(&raw mut count); 1];
+    print_u32(count);
+    putc(b' ');
+    count = 0;
+    let many: [u8; 5] = [counter(&raw mut count); 5];
+    print_u32(count);
+    putc(b'\n');
+
+    // Writing one element leaves the others intact.
+    let mut grid: [[u8; 2]; 2] = [[7, 0], [0, 7]];
+    let row: [u8; 2] = grid[1];
+    grid[0][1] = row[0];
+    print_u32(grid[0][0] as u32);
+    putc(b' ');
+    print_u32(grid[0][1] as u32);
+    putc(b' ');
+    print_u32(grid[1][0] as u32);
+    putc(b' ');
+    print_u32(grid[1][1] as u32 + one[0] as u32 - many[4] as u32);
+    putc(b'\n');
+
+    // A copy is independent of the original.
+    let word: [u8; 3] = [b'a', b'b', b'c'];
+    let mut other: [u8; 3] = word;
+    other[2] = b'd';
+    putc(word[0]); putc(word[1]); putc(word[2]);
+    putc(b' ');
+    putc(other[0]); putc(other[1]); putc(other[2]);
+    putc(b'\n');
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(1)
+}

@@ -62,6 +62,11 @@ impl IntTy {
         }
     }
 
+    /// Size in bytes, which is also the alignment (ADR 0022).
+    pub fn bytes(self) -> u64 {
+        u64::from(self.bits() / 8)
+    }
+
     pub fn is_signed(self) -> bool {
         matches!(
             self,

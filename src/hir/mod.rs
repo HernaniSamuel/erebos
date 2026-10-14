@@ -94,6 +94,8 @@ pub enum Ty {
     Bool,
     Int(IntTy),
     Ptr(Ptr),
+    /// `[T; N]`; the element type is leaked like pointee types.
+    Array(&'static Ty, u64),
     /// Produced only by the type checker after reporting an error, so one
     /// mistake does not cascade into more. Compatible with every type.
     Error,
@@ -117,6 +119,15 @@ impl Ty {
             pointee: Box::leak(Box::new(pointee)),
         })
     }
+
+    pub fn array(elem: Ty, len: u64) -> Ty {
+        Ty::Array(Box::leak(Box::new(elem)), len)
+    }
+
+    /// Arrays (and, later, structs): values made of other values.
+    pub fn is_aggregate(self) -> bool {
+        matches!(self, Ty::Array(..))
+    }
 }
 
 impl fmt::Display for Ptr {
@@ -135,6 +146,7 @@ impl fmt::Display for Ty {
             Ty::Bool => f.write_str("bool"),
             Ty::Int(int) => write!(f, "{int}"),
             Ty::Ptr(ptr) => write!(f, "{ptr}"),
+            Ty::Array(elem, len) => write!(f, "[{elem}; {len}]"),
             Ty::Error => f.write_str("{error}"),
         }
     }
@@ -173,6 +185,10 @@ pub enum ExprKind {
     Byte(u8),
     Bool(bool),
     Unit,
+    /// `[a, b, c]`
+    Array(Vec<Expr>),
+    /// `[value; N]`
+    Repeat(Box<Expr>, u64),
     Local(LocalId),
     Call {
         callee: FnId,
@@ -231,11 +247,12 @@ impl Expr {
             | ExprKind::Break { value: None, .. }
             | ExprKind::Return(None) => {}
             ExprKind::Break { value: Some(e), .. } | ExprKind::Return(Some(e)) => e.walk(f),
-            ExprKind::Call { args, .. } => {
+            ExprKind::Call { args, .. } | ExprKind::Array(args) => {
                 for arg in args {
                     arg.walk(f);
                 }
             }
+            ExprKind::Repeat(e, _) => e.walk(f),
             ExprKind::Unary(_, e)
             | ExprKind::Deref(e)
             | ExprKind::Cast(e, _, _)

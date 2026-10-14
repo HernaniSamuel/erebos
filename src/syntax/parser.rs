@@ -203,6 +203,17 @@ impl Parser<'_> {
                 });
             }
             TokenKind::Ident => TyKind::Named(self.ident()?),
+            TokenKind::LBracket => {
+                self.bump();
+                let elem = Box::new(self.ty()?);
+                self.expect(TokenKind::Semi)?;
+                let len = self.array_len()?;
+                let close = self.expect(TokenKind::RBracket)?;
+                return Ok(Ty {
+                    kind: TyKind::Array { elem, len },
+                    span: token.span.to(close.span),
+                });
+            }
             TokenKind::Star => {
                 self.bump();
                 let mutable = match self.peek().kind {
@@ -530,6 +541,7 @@ impl Parser<'_> {
                     kind: ExprKind::Block(block),
                 });
             }
+            TokenKind::LBracket => return self.array(),
             TokenKind::Loop => {
                 self.bump();
                 let body = self.block()?;
@@ -559,6 +571,43 @@ impl Parser<'_> {
                 | TokenKind::RBracket
                 | TokenKind::Eof
         )
+    }
+
+    /// The length of an array type or repeat expression: an integer
+    /// literal (constant expressions come with `const`, M2.3).
+    fn array_len(&mut self) -> PResult<Option<u64>> {
+        let token = self.peek();
+        if token.kind != TokenKind::Int {
+            return Err(self.error_expected("an integer literal for the length"));
+        }
+        self.bump();
+        Ok(lexer::int_value(&self.text[token.span.range()]).ok())
+    }
+
+    /// `[a, b, c]` or `[value; N]` (ADR 0021).
+    fn array(&mut self) -> PResult<Expr> {
+        let open = self.bump();
+        let mut elems = Vec::new();
+        if !self.at(TokenKind::RBracket) {
+            let first = self.expr()?;
+            if self.eat(TokenKind::Semi).is_some() {
+                let len = self.array_len()?;
+                let close = self.expect(TokenKind::RBracket)?;
+                return Ok(Expr {
+                    kind: ExprKind::Repeat(Box::new(first), len),
+                    span: open.span.to(close.span),
+                });
+            }
+            elems.push(first);
+            while self.eat(TokenKind::Comma).is_some() && !self.at(TokenKind::RBracket) {
+                elems.push(self.expr()?);
+            }
+        }
+        let close = self.expect(TokenKind::RBracket)?;
+        Ok(Expr {
+            kind: ExprKind::Array(elems),
+            span: open.span.to(close.span),
+        })
     }
 
     fn if_expr(&mut self) -> PResult<Expr> {

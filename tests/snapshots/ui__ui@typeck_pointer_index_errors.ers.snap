@@ -11,7 +11,7 @@ ty::cannot-index
  2 │ fn errors(p: *const u8, n: u32, x: u8) {
  3 │     n[0];
    ·     ┬
-   ·     ╰── not a pointer
+   ·     ╰── not an array or a pointer
  4 │     p[n];
    ╰────
 ty::mismatched-types
@@ -86,8 +86,8 @@ ty::not-a-place
    ·                                   ╰── a value, not a place
  9 │     let d: *const u8 = &raw const errors(p, n, x);
    ╰────
-  help: take the address of a variable, `*pointer` or `pointer[index]`; to point at a value, store
-        it in a `let` first
+  help: take the address of a variable, `*pointer` or `a[index]`; to point at a value, store it in
+        a `let` first
 ty::not-a-place
 
   × `&raw` needs a place in memory
@@ -98,8 +98,8 @@ ty::not-a-place
     ·                                          ╰── a value, not a place
  10 │ }
     ╰────
-  help: take the address of a variable, `*pointer` or `pointer[index]`; to point at a value, store
-        it in a `let` first
+  help: take the address of a variable, `*pointer` or `a[index]`; to point at a value, store it in
+        a `let` first
 ty::volatile-too-wide
 
   × a volatile `u64` cannot be accessed in one instruction

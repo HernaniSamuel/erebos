@@ -129,13 +129,13 @@ fn int_type(context: &Context, int: IntTy) -> IntType<'_> {
 }
 
 /// The LLVM type of a MIR value, as held in registers; `()` and `!` have no
-/// representation.
+/// representation, and aggregates live only in memory.
 fn basic_type(context: &Context, ty: Ty) -> Option<BasicTypeEnum<'_>> {
     match ty {
         Ty::Bool => Some(context.bool_type().into()),
         Ty::Int(int) => Some(int_type(context, int).into()),
         Ty::Ptr(_) => Some(context.ptr_type(AddressSpace::default()).into()),
-        Ty::Unit | Ty::Never => None,
+        Ty::Unit | Ty::Never | Ty::Array(..) => None,
     }
 }
 
@@ -144,8 +144,18 @@ fn basic_type(context: &Context, ty: Ty) -> Option<BasicTypeEnum<'_>> {
 fn memory_type(context: &Context, ty: Ty) -> Option<BasicTypeEnum<'_>> {
     match ty {
         Ty::Bool => Some(context.i8_type().into()),
+        Ty::Array(elem, len) => {
+            let len = u32::try_from(len).expect("the type checker limits sizes");
+            Some(element_type(context, *elem).array_type(len).into())
+        }
         _ => basic_type(context, ty),
     }
+}
+
+/// The type whose size is the distance between consecutive elements of
+/// type `ty` in memory.
+fn element_type(context: &Context, ty: Ty) -> BasicTypeEnum<'_> {
+    memory_type(context, ty).unwrap_or_else(|| context.i8_type().array_type(0).into())
 }
 
 fn declare<'ctx>(
@@ -303,7 +313,14 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
         match statement {
             Statement::Assign(place, rvalue) => {
                 // Places of type `()` hold nothing.
-                if basic_type(self.context, self.body.place_ty(*place)).is_none() {
+                if self.representation(*place).is_none() {
+                    return;
+                }
+                if self.body.place_ty(*place).is_aggregate() {
+                    let Rvalue::Use(Operand::Copy(source)) = rvalue else {
+                        unreachable!("aggregates are only copied")
+                    };
+                    self.copy(*place, *source);
                     return;
                 }
                 let value = self.rvalue(rvalue);
@@ -340,35 +357,64 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
         };
         let mut address = (slot, false);
         let mut ty = self.body.local_ty(place.local);
+        let usize_type = int_type(self.context, IntTy::Usize);
         for elem in place.projection {
-            match (elem, ty) {
+            let index = match (elem, ty) {
                 (PlaceElem::Deref, Ty::Ptr(ptr)) => {
                     address = (self.load_pointer(address), ptr.volatile);
                     ty = *ptr.pointee;
+                    continue;
                 }
                 (PlaceElem::Offset(index), Ty::Ptr(ptr)) => {
-                    let pointer = self.load_pointer(address);
-                    let index = self.read(Place::local(*index)).into_int_value();
-                    // Not `inbounds`: the arithmetic wraps and is never
-                    // undefined (ADR 0021).
-                    // SAFETY: the element type is sized and the index is an
-                    // integer, as LLVM requires of a `getelementptr`.
-                    let element = unsafe {
-                        self.builder.build_gep(
-                            self.element_type(*ptr.pointee),
-                            pointer,
-                            &[index],
-                            "",
-                        )
-                    }
-                    .expect("builder is positioned");
-                    address = (element, ptr.volatile);
+                    address = (self.load_pointer(address), ptr.volatile);
                     ty = *ptr.pointee;
+                    self.read(Place::local(*index)).into_int_value()
                 }
-                (_, ty) => unreachable!("dereference of `{ty}`"),
+                (PlaceElem::Index(index), Ty::Array(elem, _)) => {
+                    ty = *elem;
+                    self.read(Place::local(*index)).into_int_value()
+                }
+                (PlaceElem::ConstIndex(index), Ty::Array(elem, _)) => {
+                    ty = *elem;
+                    usize_type.const_int(*index, false)
+                }
+                (elem, ty) => unreachable!("projection {elem:?} of `{ty}`"),
+            };
+            // Not `inbounds`: the arithmetic wraps and is never undefined
+            // (ADR 0021).
+            // SAFETY: the element type is sized and the index is an integer,
+            // as LLVM requires of a `getelementptr`.
+            let element = unsafe {
+                self.builder
+                    .build_gep(element_type(self.context, ty), address.0, &[index], "")
             }
+            .expect("builder is positioned");
+            address.0 = element;
         }
         address
+    }
+
+    /// Copies an aggregate. Places that may overlap (reached through
+    /// pointers, or a local whose address is taken) use `memmove`, which
+    /// LLVM turns into `memcpy` where it can tell they do not.
+    fn copy(&self, dest: Place, source: Place) {
+        let layout = self.body.place_ty(dest).layout();
+        if layout.size == 0 {
+            return;
+        }
+        let may_overlap = [dest, source]
+            .iter()
+            .any(|place| place.is_indirect() || self.in_memory[place.local.0 as usize]);
+        let (to, _) = self.address(dest);
+        let (from, _) = self.address(source);
+        let size = int_type(self.context, IntTy::Usize).const_int(layout.size, false);
+        let align = u32::try_from(layout.align).expect("alignments are small");
+        let copy = if may_overlap {
+            self.builder.build_memmove(to, align, from, align, size)
+        } else {
+            self.builder.build_memcpy(to, align, from, align, size)
+        };
+        copy.expect("the alignment is a power of two");
     }
 
     /// Reads the pointer stored at `address`, volatile if the place holding
@@ -387,18 +433,12 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
         load.into_pointer_value()
     }
 
-    /// The type whose size is the distance between consecutive elements of
-    /// type `ty` in memory.
-    fn element_type(&self, ty: Ty) -> BasicTypeEnum<'ctx> {
-        memory_type(self.context, ty).unwrap_or_else(|| self.context.i8_type().array_type(0).into())
-    }
-
     /// Locals are private to the function, so they hold values as in
     /// registers; memory reached through a pointer, or that a pointer may
     /// reach, uses the memory representation (ADR 0022).
     fn representation(&self, place: Place) -> Option<BasicTypeEnum<'ctx>> {
         let ty = self.body.place_ty(place);
-        if place.is_indirect() || self.in_memory[place.local.0 as usize] {
+        if ty.is_aggregate() || place.is_indirect() || self.in_memory[place.local.0 as usize] {
             memory_type(self.context, ty)
         } else {
             basic_type(self.context, ty)

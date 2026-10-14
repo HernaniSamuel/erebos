@@ -245,6 +245,8 @@ impl Lowerer<'_> {
                 let pointee = self.ty(pointee);
                 Ty::ptr(*mutable, *volatile, pointee)
             }
+            // A rejected length was reported by the lexer.
+            ast::TyKind::Array { elem, len } => Ty::array(self.ty(elem), len.unwrap_or(0)),
             ast::TyKind::Named(name) if name.name == "bool" => Ty::Bool,
             ast::TyKind::Named(name) => match IntTy::from_name(&name.name) {
                 Some(int) => Ty::Int(int),
@@ -380,6 +382,12 @@ impl Lowerer<'_> {
             ast::ExprKind::Byte(value) => ExprKind::Byte(value.unwrap_or(0)),
             ast::ExprKind::Bool(value) => ExprKind::Bool(*value),
             ast::ExprKind::Unit => ExprKind::Unit,
+            ast::ExprKind::Array(elems) => {
+                ExprKind::Array(elems.iter().map(|e| self.expr(e)).collect())
+            }
+            ast::ExprKind::Repeat(value, len) => {
+                ExprKind::Repeat(self.boxed(value), len.unwrap_or(0))
+            }
             ast::ExprKind::Name(name) => match self.resolve(name) {
                 Some(local) => ExprKind::Local(local),
                 // Reported; any placeholder works since lowering errors stop

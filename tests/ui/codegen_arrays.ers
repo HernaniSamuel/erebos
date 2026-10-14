@@ -1,0 +1,13 @@
+// emit: llvm-ir
+// Elements are reached with `getelementptr` (no `inbounds`); whole arrays
+// are copied with `memcpy` between locals and `memmove` through pointers.
+fn copies(p: *mut [u32; 8], i: usize) -> u32 {
+    let a: [u32; 8] = *p;
+    let mut b: [u32; 8] = a;
+    b[i] = 1;
+    *p = b;
+    (*p)[i]
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

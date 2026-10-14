@@ -1,0 +1,98 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/mir_arrays.ers
+---
+--- mir ---
+fn arrays(_1: u8, _2: usize, _3: *mut [u8; 4]) -> u8 {
+    let _0: u8;
+    let _1: u8; // v
+    let _2: usize; // i
+    let _3: *mut [u8; 4]; // p
+    let _4: [u8; 2]; // a
+    let _5: [u8; 4]; // b
+    let _6: [u8; 2];
+    let _7: [u8; 4];
+    let _8: usize;
+    let _9: bool;
+    let _10: u8;
+    let _11: usize;
+    let _12: bool;
+    let _13: usize;
+    let _14: bool;
+    let _15: u8;
+
+    bb0: {
+        _6[0] = copy _1;
+        _6[1] = const 7_u8;
+        _4 = copy _6;
+        _8 = const 0_usize;
+        goto -> bb1;
+    }
+
+    bb1: {
+        _9 = Lt(copy _8, const 4_usize);
+        if copy _9 -> [true: bb2, false: bb3];
+    }
+
+    bb2: {
+        _7[_8] = copy _1;
+        _8 = Add(copy _8, const 1_usize);
+        goto -> bb1;
+    }
+
+    bb3: {
+        _5 = copy _7;
+        _10 = copy _4[1];
+        _11 = copy _2;
+        _12 = Lt(copy _11, const 4_usize);
+        if copy _12 -> [true: bb4, false: bb5];
+    }
+
+    bb4: {
+        (*_3)[_11] = copy _10;
+        _13 = copy _2;
+        _14 = Lt(copy _13, const 4_usize);
+        if copy _14 -> [true: bb6, false: bb7];
+    }
+
+    bb5: {
+        call on_panic();
+        unreachable;
+    }
+
+    bb6: {
+        _15 = copy _5[_13];
+        _0 = copy _15;
+        return;
+    }
+
+    bb7: {
+        call on_panic();
+        unreachable;
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}

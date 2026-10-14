@@ -60,6 +60,19 @@ const SNIPPETS: &[&str] = &[
     "u64",
     "/ b'\\0'",
     "_start",
+    "[",
+    "]",
+    "[0]",
+    "[i]",
+    "[0; 4]",
+    "[1, 2]",
+    "[u8; 4]",
+    "[u8; 0]",
+    "&raw const",
+    "&raw mut",
+    "&",
+    "*const volatile [u32; 2]",
+    "memcpy",
 ];
 
 /// xorshift64: small, deterministic, good enough to pick mutations.

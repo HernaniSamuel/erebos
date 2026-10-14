@@ -81,6 +81,7 @@ fn lower_ty(ty: hir::Ty) -> Ty {
             // Leaked like HIR pointee types; see `hir::Ty::ptr`.
             pointee: Box::leak(Box::new(lower_ty(*ptr.pointee))),
         }),
+        hir::Ty::Array(elem, len) => Ty::Array(Box::leak(Box::new(lower_ty(*elem))), len),
         hir::Ty::Error => unreachable!("MIR is only built for well-typed programs"),
     }
 }
@@ -190,6 +191,24 @@ impl Builder<'_> {
             hir::ExprKind::Byte(value) => Operand::Const(Const::Int(*value as u64, hir::IntTy::U8)),
             hir::ExprKind::Bool(value) => Operand::Const(Const::Bool(*value)),
             hir::ExprKind::Unit => Operand::Const(Const::Unit),
+            hir::ExprKind::Array(elems) => {
+                let array = Place::local(self.new_local(ty, None));
+                // Each element is stored as soon as it is evaluated, so a
+                // later element cannot change it (ADR 0018).
+                for (i, elem) in elems.iter().enumerate() {
+                    let value = self.expr(elem);
+                    let place = array.project(PlaceElem::ConstIndex(i as u64));
+                    self.assign(place, Rvalue::Use(value));
+                }
+                Operand::Copy(array)
+            }
+            hir::ExprKind::Repeat(value, len) => {
+                // Evaluated exactly once, whatever the length (ADR 0021).
+                let value = self.expr(value);
+                let array = Place::local(self.new_local(ty, None));
+                self.fill(array, value, *len);
+                Operand::Copy(array)
+            }
             hir::ExprKind::Local(local) => Operand::Copy(self.local(*local)),
             hir::ExprKind::Call { callee, args } => {
                 let args = self.operands(args);
@@ -525,8 +544,69 @@ impl Builder<'_> {
 
     /// A place for the value of a branching expression, if it has one.
     fn result_place(&mut self, ty: Ty) -> Option<Place> {
-        matches!(ty, Ty::Bool | Ty::Int(_) | Ty::Ptr(_))
-            .then(|| Place::local(self.new_local(ty, None)))
+        (!matches!(ty, Ty::Unit | Ty::Never)).then(|| Place::local(self.new_local(ty, None)))
+    }
+
+    /// Stores `value` in every element of the array `array`: a loop over
+    /// the indices, which LLVM turns into `memset` where it can.
+    fn fill(&mut self, array: Place, value: Operand, len: u64) {
+        let usize_ty = hir::IntTy::Usize;
+        if len == 1 {
+            self.assign(array.project(PlaceElem::ConstIndex(0)), Rvalue::Use(value));
+            return;
+        }
+        if len == 0 || self.current.is_none() {
+            return;
+        }
+        let i = self.new_local(Ty::Int(usize_ty), None);
+        let index = Place::local(i);
+        self.assign(index, Rvalue::Use(Operand::Const(Const::Int(0, usize_ty))));
+        let head = self.new_block();
+        self.terminate(Terminator::Goto(head));
+        self.current = Some(head);
+        let more = self.temp(
+            Ty::Bool,
+            Rvalue::Binary(
+                BinOp::Lt,
+                Operand::Copy(index),
+                Operand::Const(Const::Int(len, usize_ty)),
+            ),
+        );
+        let body = self.new_block();
+        let exit = self.new_block();
+        self.terminate(Terminator::If {
+            cond: more,
+            then: body,
+            else_: exit,
+        });
+        self.current = Some(body);
+        // `i < len`, so the element exists.
+        self.assign(array.project(PlaceElem::Index(i)), Rvalue::Use(value));
+        self.assign(
+            index,
+            Rvalue::Binary(
+                BinOp::Add,
+                Operand::Copy(index),
+                Operand::Const(Const::Int(1, usize_ty)),
+            ),
+        );
+        self.terminate(Terminator::Goto(head));
+        self.current = Some(exit);
+    }
+
+    /// Continues only if `ok` is true; otherwise calls the panic function.
+    fn panic_unless(&mut self, ok: Operand) {
+        let ok_bb = self.new_block();
+        let panic_bb = self.new_block();
+        self.terminate(Terminator::If {
+            cond: ok,
+            then: ok_bb,
+            else_: panic_bb,
+        });
+        self.current = Some(panic_bb);
+        self.call(None, self.panic, Vec::new());
+        self.terminate(Terminator::Unreachable);
+        self.current = Some(ok_bb);
     }
 
     fn store_result(&mut self, result: Option<Place>, value: Operand) {
@@ -584,18 +664,18 @@ impl Builder<'_> {
             .fold(self.locals[place.local.0 as usize].ty, |ty, elem| {
                 match (elem, ty) {
                     (PlaceElem::Deref | PlaceElem::Offset(_), Ty::Ptr(ptr)) => *ptr.pointee,
-                    (_, ty) => unreachable!("dereference of `{ty}`"),
+                    (PlaceElem::Index(_) | PlaceElem::ConstIndex(_), Ty::Array(elem, _)) => *elem,
+                    (elem, ty) => unreachable!("projection {elem:?} of `{ty}`"),
                 }
             })
     }
 
-    /// A place holding the value of a pointer expression. With `then`, an
-    /// expression evaluated after the pointer: if it could assign the
-    /// pointer, the pointer is read first (ADR 0018).
-    fn pointer_place(&mut self, pointer: &hir::Expr, then: Option<&hir::Expr>) -> Place {
+    /// A place holding the value of a pointer expression. If code evaluated
+    /// later could assign the pointer, it is read now (ADR 0018).
+    fn pointer_place(&mut self, pointer: &hir::Expr, later_writes: bool) -> Place {
         let pointer_ty = lower_ty(self.types.expr_ty(pointer.id));
         match self.expr(pointer) {
-            Operand::Copy(place) if then.is_none_or(is_simple) => place,
+            Operand::Copy(place) if !later_writes => place,
             // Computed (e.g. a cast), or about to be read late: store it.
             other => match self.temp(pointer_ty, Rvalue::Use(other)) {
                 Operand::Copy(place) => place,
@@ -604,24 +684,79 @@ impl Builder<'_> {
         }
     }
 
-    /// Lowers a place expression: a local, `*pointer` or `pointer[index]`.
+    /// Lowers a place expression: a local, `*pointer` or `base[index]`.
+    /// Any other expression is evaluated into a temporary, whose place is
+    /// returned.
     fn place(&mut self, expr: &hir::Expr) -> Place {
+        self.place_then(expr, false)
+    }
+
+    /// `later_writes`: code evaluated after this place, but before it is
+    /// accessed, may assign variables (ADR 0018).
+    fn place_then(&mut self, expr: &hir::Expr, later_writes: bool) -> Place {
         match &expr.kind {
             hir::ExprKind::Local(local) => self.local(*local),
-            hir::ExprKind::Deref(pointer) => {
-                self.pointer_place(pointer, None).project(PlaceElem::Deref)
+            hir::ExprKind::Deref(pointer) => self
+                .pointer_place(pointer, later_writes)
+                .project(PlaceElem::Deref),
+            hir::ExprKind::Index(base, index) => {
+                let later_writes = later_writes || !is_simple(index);
+                match lower_ty(self.types.expr_ty(base.id)) {
+                    Ty::Array(_, len) => {
+                        let base = self.place_then(base, later_writes);
+                        let elem = self.array_index(index, len);
+                        base.project(elem)
+                    }
+                    _ => {
+                        let base = self.pointer_place(base, later_writes);
+                        let index = self.fixed_index(index);
+                        base.project(PlaceElem::Offset(index))
+                    }
+                }
             }
-            hir::ExprKind::Index(pointer, index) => {
-                let base = self.pointer_place(pointer, Some(index));
-                // The index is fixed now: a later write to its variable
-                // must not move the place.
-                let value = self.expr(index);
-                let index = self.new_local(Ty::Int(hir::IntTy::Usize), None);
-                self.assign(Place::local(index), Rvalue::Use(value));
-                base.project(PlaceElem::Offset(index))
+            _ => {
+                let ty = lower_ty(self.types.expr_ty(expr.id));
+                match self.expr(expr) {
+                    Operand::Copy(place) => place,
+                    other => match self.temp(ty, Rvalue::Use(other)) {
+                        Operand::Copy(place) => place,
+                        Operand::Const(_) => unreachable!("temporaries are places"),
+                    },
+                }
             }
-            _ => unreachable!("the type checker only allows locals and `*pointer` as places"),
         }
+    }
+
+    /// Evaluates an index into a new local, so that a later write to its
+    /// variable does not move the place.
+    fn fixed_index(&mut self, index: &hir::Expr) -> Local {
+        let value = self.expr(index);
+        let local = self.new_local(Ty::Int(hir::IntTy::Usize), None);
+        self.assign(Place::local(local), Rvalue::Use(value));
+        local
+    }
+
+    /// The projection to element `index` of an array of `len` elements,
+    /// after checking the bounds (ADR 0021). A constant index was checked
+    /// by the type checker.
+    fn array_index(&mut self, index: &hir::Expr, len: u64) -> PlaceElem {
+        if let hir::ExprKind::Int(value) = index.kind
+            && value < len
+        {
+            return PlaceElem::ConstIndex(value);
+        }
+        let local = self.fixed_index(index);
+        let usize_ty = hir::IntTy::Usize;
+        let in_bounds = self.temp(
+            Ty::Bool,
+            Rvalue::Binary(
+                BinOp::Lt,
+                Operand::Copy(Place::local(local)),
+                Operand::Const(Const::Int(len, usize_ty)),
+            ),
+        );
+        self.panic_unless(in_bounds);
+        PlaceElem::Index(local)
     }
 }
 

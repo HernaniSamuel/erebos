@@ -32,7 +32,7 @@ ty::not-assignable
  6 │     *c = 1;
  7 │     (x + 1) = 2;
    ·     ───┬───
-   ·        ╰── not a variable, `*pointer` or `pointer[index]`
+   ·        ╰── not a variable, `*pointer` or `a[index]`
  8 │     let u: u32 = () as u32;
    ╰────
 ty::invalid-cast

@@ -1,0 +1,296 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/parse_arrays.ers
+---
+--- ast ---
+File {
+    items: [
+        Fn(
+            FnDecl {
+                kind: Plain,
+                name: Ident {
+                    name: "arrays",
+                    span: 16..22,
+                },
+                params: [
+                    Param {
+                        mutable: false,
+                        name: Ident {
+                            name: "m",
+                            span: 23..24,
+                        },
+                        ty: Ty {
+                            kind: Ptr {
+                                mutable: true,
+                                volatile: false,
+                                pointee: Ty {
+                                    kind: Array {
+                                        elem: Ty {
+                                            kind: Array {
+                                                elem: Ty {
+                                                    kind: Named(
+                                                        Ident {
+                                                            name: "u16",
+                                                            span: 33..36,
+                                                        },
+                                                    ),
+                                                    span: 33..36,
+                                                },
+                                                len: Some(
+                                                    2,
+                                                ),
+                                            },
+                                            span: 32..40,
+                                        },
+                                        len: Some(
+                                            3,
+                                        ),
+                                    },
+                                    span: 31..44,
+                                },
+                            },
+                            span: 26..44,
+                        },
+                    },
+                ],
+                ret: None,
+                body: Block {
+                    stmts: [
+                        Let(
+                            Let {
+                                mutable: false,
+                                name: Ident {
+                                    name: "a",
+                                    span: 56..57,
+                                },
+                                ty: Ty {
+                                    kind: Array {
+                                        elem: Ty {
+                                            kind: Named(
+                                                Ident {
+                                                    name: "u8",
+                                                    span: 60..62,
+                                                },
+                                            ),
+                                            span: 60..62,
+                                        },
+                                        len: Some(
+                                            4,
+                                        ),
+                                    },
+                                    span: 59..66,
+                                },
+                                init: Expr {
+                                    kind: Array(
+                                        [
+                                            Expr {
+                                                kind: Int(
+                                                    Some(
+                                                        1,
+                                                    ),
+                                                ),
+                                                span: 70..71,
+                                            },
+                                            Expr {
+                                                kind: Int(
+                                                    Some(
+                                                        2,
+                                                    ),
+                                                ),
+                                                span: 73..74,
+                                            },
+                                            Expr {
+                                                kind: Int(
+                                                    Some(
+                                                        3,
+                                                    ),
+                                                ),
+                                                span: 76..77,
+                                            },
+                                            Expr {
+                                                kind: Int(
+                                                    Some(
+                                                        4,
+                                                    ),
+                                                ),
+                                                span: 79..80,
+                                            },
+                                        ],
+                                    ),
+                                    span: 69..82,
+                                },
+                                span: 52..83,
+                            },
+                        ),
+                        Let(
+                            Let {
+                                mutable: false,
+                                name: Ident {
+                                    name: "b",
+                                    span: 92..93,
+                                },
+                                ty: Ty {
+                                    kind: Array {
+                                        elem: Ty {
+                                            kind: Named(
+                                                Ident {
+                                                    name: "u32",
+                                                    span: 96..99,
+                                                },
+                                            ),
+                                            span: 96..99,
+                                        },
+                                        len: Some(
+                                            16,
+                                        ),
+                                    },
+                                    span: 95..104,
+                                },
+                                init: Expr {
+                                    kind: Repeat(
+                                        Expr {
+                                            kind: Int(
+                                                Some(
+                                                    0,
+                                                ),
+                                            ),
+                                            span: 108..109,
+                                        },
+                                        Some(
+                                            16,
+                                        ),
+                                    ),
+                                    span: 107..114,
+                                },
+                                span: 88..115,
+                            },
+                        ),
+                        Let(
+                            Let {
+                                mutable: false,
+                                name: Ident {
+                                    name: "e",
+                                    span: 124..125,
+                                },
+                                ty: Ty {
+                                    kind: Array {
+                                        elem: Ty {
+                                            kind: Named(
+                                                Ident {
+                                                    name: "u8",
+                                                    span: 128..130,
+                                                },
+                                            ),
+                                            span: 128..130,
+                                        },
+                                        len: Some(
+                                            0,
+                                        ),
+                                    },
+                                    span: 127..134,
+                                },
+                                init: Expr {
+                                    kind: Array(
+                                        [],
+                                    ),
+                                    span: 137..139,
+                                },
+                                span: 120..140,
+                            },
+                        ),
+                        Expr {
+                            expr: Expr {
+                                kind: Assign(
+                                    Expr {
+                                        kind: Index(
+                                            Expr {
+                                                kind: Index(
+                                                    Expr {
+                                                        kind: Deref(
+                                                            Expr {
+                                                                kind: Name(
+                                                                    Ident {
+                                                                        name: "m",
+                                                                        span: 147..148,
+                                                                    },
+                                                                ),
+                                                                span: 147..148,
+                                                            },
+                                                        ),
+                                                        span: 145..149,
+                                                    },
+                                                    Expr {
+                                                        kind: Int(
+                                                            Some(
+                                                                1,
+                                                            ),
+                                                        ),
+                                                        span: 150..151,
+                                                    },
+                                                ),
+                                                span: 145..152,
+                                            },
+                                            Expr {
+                                                kind: Int(
+                                                    Some(
+                                                        0,
+                                                    ),
+                                                ),
+                                                span: 153..154,
+                                            },
+                                        ),
+                                        span: 145..155,
+                                    },
+                                    Expr {
+                                        kind: Cast(
+                                            Expr {
+                                                kind: Index(
+                                                    Expr {
+                                                        kind: Name(
+                                                            Ident {
+                                                                name: "a",
+                                                                span: 158..159,
+                                                            },
+                                                        ),
+                                                        span: 158..159,
+                                                    },
+                                                    Expr {
+                                                        kind: Int(
+                                                            Some(
+                                                                3,
+                                                            ),
+                                                        ),
+                                                        span: 160..161,
+                                                    },
+                                                ),
+                                                span: 158..162,
+                                            },
+                                            Ty {
+                                                kind: Named(
+                                                    Ident {
+                                                        name: "u16",
+                                                        span: 166..169,
+                                                    },
+                                                ),
+                                                span: 166..169,
+                                            },
+                                        ),
+                                        span: 158..169,
+                                    },
+                                ),
+                                span: 145..169,
+                            },
+                            semi: Some(
+                                169..170,
+                            ),
+                        },
+                    ],
+                    tail: None,
+                    span: 46..172,
+                },
+                span: 13..172,
+            },
+        ),
+    ],
+}

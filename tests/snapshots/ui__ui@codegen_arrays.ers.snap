@@ -1,0 +1,78 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/codegen_arrays.ers
+---
+--- llvm-ir ---
+; ModuleID = 'erebos'
+source_filename = "erebos"
+target datalayout = "e-m:e-p:32:32-i64:64-n32-S128"
+target triple = "riscv32-unknown-none-elf"
+
+module asm "\09.section .text.start, \22ax\22, @progbits"
+module asm "\09.globl _start"
+module asm "\09.type _start, @function"
+module asm "_start:"
+module asm "\09li sp, 0x88000000"
+module asm "\09j main"
+
+; Function Attrs: nounwind null_pointer_is_valid
+define i32 @copies(ptr %0, i32 %1) #0 {
+bb0:
+  %_3 = alloca [8 x i32], align 4
+  %_4 = alloca [8 x i32], align 4
+  %_5 = alloca [8 x i32], align 4
+  call void @llvm.memmove.p0.p0.i32(ptr align 4 %_5, ptr align 4 %0, i32 32, i1 false)
+  call void @llvm.memcpy.p0.p0.i32(ptr align 4 %_3, ptr align 4 %_5, i32 32, i1 false)
+  call void @llvm.memcpy.p0.p0.i32(ptr align 4 %_4, ptr align 4 %_3, i32 32, i1 false)
+  %2 = icmp ult i32 %1, 8
+  br i1 %2, label %bb1, label %bb2
+
+bb1:                                              ; preds = %bb0
+  %3 = getelementptr i32, ptr %_4, i32 %1
+  store i32 1, ptr %3, align 4
+  call void @llvm.memmove.p0.p0.i32(ptr align 4 %0, ptr align 4 %_4, i32 32, i1 false)
+  %4 = icmp ult i32 %1, 8
+  br i1 %4, label %bb3, label %bb4
+
+bb2:                                              ; preds = %bb0
+  call void @on_panic()
+  unreachable
+
+bb3:                                              ; preds = %bb1
+  %5 = getelementptr i32, ptr %0, i32 %1
+  %6 = load i32, ptr %5, align 4
+  ret i32 %6
+
+bb4:                                              ; preds = %bb1
+  call void @on_panic()
+  unreachable
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @main() #1 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @on_panic() #1 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: readwrite)
+declare void @llvm.memmove.p0.p0.i32(ptr writeonly captures(none), ptr readonly captures(none), i32, i1 immarg) #2
+
+; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: readwrite)
+declare void @llvm.memcpy.p0.p0.i32(ptr noalias writeonly captures(none), ptr noalias readonly captures(none), i32, i1 immarg) #2
+
+attributes #0 = { nounwind null_pointer_is_valid }
+attributes #1 = { noreturn nounwind null_pointer_is_valid }
+attributes #2 = { nocallback nofree nounwind willreturn memory(argmem: readwrite) }

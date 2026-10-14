@@ -6,6 +6,7 @@ pub mod diag;
 pub mod driver;
 pub mod hir;
 pub mod int;
+pub mod layout;
 pub mod link;
 pub mod mir;
 pub mod ops;
