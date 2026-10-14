@@ -144,6 +144,12 @@ pub enum ExprKind {
     StructLit(Ident, Vec<FieldInit>),
     /// `base.field`
     Field(Box<Expr>, Ident),
+    /// `size_of(T)` (ADR 0022)
+    SizeOf(Ty),
+    /// `align_of(T)` (ADR 0022)
+    AlignOf(Ty),
+    /// `offset_of(T, field)` (ADR 0022)
+    OffsetOf(Ty, Ident),
     Unary(UnOp, Box<Expr>),
     /// `*ptr`
     Deref(Box<Expr>),

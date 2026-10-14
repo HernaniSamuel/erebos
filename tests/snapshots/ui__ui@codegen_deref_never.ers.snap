@@ -43,5 +43,12 @@ bb1:                                              ; preds = %bb1, %bb0
   br label %bb1
 }
 
+; Function Attrs: nounwind null_pointer_is_valid
+define zeroext i8 @field() #0 {
+bb0:
+  call void @on_panic()
+  unreachable
+}
+
 attributes #0 = { nounwind null_pointer_is_valid }
 attributes #1 = { noreturn nounwind null_pointer_is_valid }

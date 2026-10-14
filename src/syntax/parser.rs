@@ -628,6 +628,9 @@ impl Parser<'_> {
                 });
             }
             TokenKind::LBracket => return self.array(),
+            TokenKind::SizeOf | TokenKind::AlignOf | TokenKind::OffsetOf => {
+                return self.layout_query();
+            }
             TokenKind::Loop => {
                 self.bump();
                 let body = self.block()?;
@@ -657,6 +660,28 @@ impl Parser<'_> {
                 | TokenKind::RBracket
                 | TokenKind::Eof
         )
+    }
+
+    /// `size_of(T)`, `align_of(T)` or `offset_of(T, field)`: their
+    /// argument is a type, not an expression (ADR 0022).
+    fn layout_query(&mut self) -> PResult<Expr> {
+        let keyword = self.bump();
+        self.expect(TokenKind::LParen)?;
+        let ty = self.ty()?;
+        let kind = match keyword.kind {
+            TokenKind::SizeOf => ExprKind::SizeOf(ty),
+            TokenKind::AlignOf => ExprKind::AlignOf(ty),
+            _ => {
+                self.expect(TokenKind::Comma)?;
+                let field = self.ident()?;
+                ExprKind::OffsetOf(ty, field)
+            }
+        };
+        let close = self.expect(TokenKind::RParen)?;
+        Ok(Expr {
+            kind,
+            span: keyword.span.to(close.span),
+        })
     }
 
     /// The length of an array type or repeat expression: an integer

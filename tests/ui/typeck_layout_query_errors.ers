@@ -1,0 +1,13 @@
+// emit: typeck
+struct S { a: u8 }
+
+fn errors() {
+    let a: usize = offset_of(u32, a);
+    let b: usize = offset_of(S, b);
+    let c: usize = size_of([u8; 3_000_000_000]);
+    let d: u32 = size_of(S);
+    let e: usize = offset_of(!, a);
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

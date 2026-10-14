@@ -233,6 +233,13 @@ pub enum ExprKind {
     StructLit(StructTy, Vec<(u32, Expr)>),
     /// `base.field`; the type checker resolves the field.
     Field(Box<Expr>, String, Span),
+    /// `size_of(T)`, a `usize` constant.
+    SizeOf(Ty),
+    /// `align_of(T)`, a `usize` constant.
+    AlignOf(Ty),
+    /// `offset_of(T, field)`, a `usize` constant; the type checker resolves
+    /// the field.
+    OffsetOf(Ty, String, Span),
     Unary(UnOp, Box<Expr>),
     /// `*ptr`
     Deref(Box<Expr>),
@@ -281,6 +288,9 @@ impl Expr {
             | ExprKind::Byte(_)
             | ExprKind::Bool(_)
             | ExprKind::Unit
+            | ExprKind::SizeOf(_)
+            | ExprKind::AlignOf(_)
+            | ExprKind::OffsetOf(..)
             | ExprKind::Local(_)
             | ExprKind::Continue { .. }
             | ExprKind::Break { value: None, .. }

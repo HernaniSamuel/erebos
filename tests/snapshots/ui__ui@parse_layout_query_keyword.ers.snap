@@ -1,0 +1,16 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/parse_layout_query_keyword.ers
+---
+--- errors ---
+parser::unexpected-token
+
+  × expected identifier, found `size_of`
+   ╭─[parse_layout_query_keyword.ers:3:9]
+ 2 │ fn f() {
+ 3 │     let size_of: usize = 4;
+   ·         ───┬───
+   ·            ╰── expected identifier
+ 4 │ }
+   ╰────

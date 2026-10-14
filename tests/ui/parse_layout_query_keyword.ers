@@ -1,0 +1,4 @@
+// `size_of`, `align_of` and `offset_of` are keywords (ADR 0022).
+fn f() {
+    let size_of: usize = 4;
+}

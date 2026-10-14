@@ -1,0 +1,59 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_layout_query_errors.ers
+---
+--- errors ---
+ty::no-fields
+
+  × `u32` has no fields
+   ╭─[typeck_layout_query_errors.ers:5:35]
+ 4 │ fn errors() {
+ 5 │     let a: usize = offset_of(u32, a);
+   ·                                   ┬
+   ·                                   ╰── no such field
+ 6 │     let b: usize = offset_of(S, b);
+   ╰────
+ty::unknown-field
+
+  × `S` has no field `b`
+   ╭─[typeck_layout_query_errors.ers:6:33]
+ 5 │     let a: usize = offset_of(u32, a);
+ 6 │     let b: usize = offset_of(S, b);
+   ·                                 ┬
+   ·                                 ╰── unknown field
+ 7 │     let c: usize = size_of([u8; 3_000_000_000]);
+   ╰────
+  help: its fields are `a`
+ty::too-large
+
+  × `[u8; 3000000000]` is too large
+   ╭─[typeck_layout_query_errors.ers:7:20]
+ 6 │     let b: usize = offset_of(S, b);
+ 7 │     let c: usize = size_of([u8; 3_000_000_000]);
+   ·                    ──────────────┬─────────────
+   ·                                  ╰── larger than any object can be
+ 8 │     let d: u32 = size_of(S);
+   ╰────
+  help: objects are limited to 2147483647 bytes on this target
+ty::mismatched-types
+
+  × mismatched types
+   ╭─[typeck_layout_query_errors.ers:8:18]
+ 7 │     let c: usize = size_of([u8; 3_000_000_000]);
+ 8 │     let d: u32 = size_of(S);
+   ·                  ─────┬────
+   ·                       ╰── expected `u32`, found `usize`
+ 9 │     let e: usize = offset_of(!, a);
+   ╰────
+  help: integer types never convert implicitly; use `as u32` (ADR 0008)
+ty::no-fields
+
+  × `!` has no fields
+    ╭─[typeck_layout_query_errors.ers:9:33]
+  8 │     let d: u32 = size_of(S);
+  9 │     let e: usize = offset_of(!, a);
+    ·                                 ┬
+    ·                                 ╰── no such field
+ 10 │ }
+    ╰────

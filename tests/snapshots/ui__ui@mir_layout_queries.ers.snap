@@ -1,0 +1,54 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/mir_layout_queries.ers
+---
+--- mir ---
+struct S { 0 a: u8 at 0, 1 b: u32 at 4, 2 c: u16 at 8 } // size 12, align 4
+
+fn queries() -> usize {
+    let _0: usize;
+    let _1: usize;
+    let _2: usize;
+    let _3: usize;
+    let _4: usize;
+    let _5: usize;
+    let _6: usize;
+    let _7: usize;
+
+    bb0: {
+        _1 = Add(const 12_usize, const 4_usize);
+        _2 = copy _1;
+        _3 = Add(copy _2, const 8_usize);
+        _4 = copy _3;
+        _5 = Add(copy _4, const 24_usize);
+        _6 = copy _5;
+        _7 = Add(copy _6, const 4_usize);
+        _0 = copy _7;
+        return;
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}

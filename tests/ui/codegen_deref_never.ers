@@ -9,3 +9,10 @@ fn index() -> u8 {
 
 entry fn main() -> ! { loop {} }
 panic fn on_panic() -> ! { * loop {} }
+
+// Also found by fuzzing: a field of an expression of type `!`.
+struct S { b: u8 }
+
+fn field() -> u8 {
+    on_panic().b
+}

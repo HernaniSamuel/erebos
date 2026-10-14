@@ -196,6 +196,14 @@ impl Checker<'_> {
         self.checked_block(f, &f.body, f.ret, f.ret_span);
     }
 
+    /// The type queried by `size_of`, `align_of` or `offset_of` must have a
+    /// layout (ADR 0022).
+    fn queried_layout(&mut self, ty: Ty, span: Span) {
+        if self.layouts.of(ty).is_none() {
+            self.too_large(ty, span, "larger than any object can be");
+        }
+    }
+
     fn too_large(&mut self, ty: Ty, span: Span, label: &str) {
         self.diags.push(
             Diagnostic::error("ty::too-large", format!("`{ty}` is too large"))
@@ -385,6 +393,27 @@ impl Checker<'_> {
                 }
             }
             ExprKind::Local(local) => f.local(*local).ty,
+            ExprKind::SizeOf(ty) | ExprKind::AlignOf(ty) => {
+                self.queried_layout(*ty, expr.span);
+                Ty::Int(IntTy::Usize)
+            }
+            ExprKind::OffsetOf(ty, name, name_span) => {
+                self.queried_layout(*ty, expr.span);
+                match ty {
+                    // The struct is not accessed: any place will do.
+                    Ty::Struct(_) => {
+                        self.field(expr, *ty, PlaceInfo::ERROR, name, *name_span);
+                    }
+                    Ty::Error => {}
+                    // Even `!`: unlike an expression, a written type is
+                    // not unreachable code.
+                    other => self.diags.push(
+                        Diagnostic::error("ty::no-fields", format!("`{other}` has no fields"))
+                            .label(*name_span, "no such field"),
+                    ),
+                }
+                Ty::Int(IntTy::Usize)
+            }
             ExprKind::StructLit(s, fields) => {
                 let hir = self.hir;
                 let def = hir.struct_(s.id);
@@ -1313,6 +1342,9 @@ fn expr_label(f: &Fn, expr: &Expr) -> String {
         ExprKind::Array(_) => "array".to_owned(),
         ExprKind::StructLit(s, _) => format!("struct {}", s.name),
         ExprKind::Field(_, name, _) => format!("field {name}"),
+        ExprKind::SizeOf(ty) => format!("size_of({ty})"),
+        ExprKind::AlignOf(ty) => format!("align_of({ty})"),
+        ExprKind::OffsetOf(ty, name, _) => format!("offset_of({ty}, {name})"),
         ExprKind::Repeat(..) => "repeat".to_owned(),
         ExprKind::Local(id) => format!("local {}", f.local(*id).name),
         ExprKind::Call { .. } => "call".to_owned(),

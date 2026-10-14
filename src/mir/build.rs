@@ -222,6 +222,20 @@ impl Builder<'_> {
             hir::ExprKind::Byte(value) => Operand::Const(Const::Int(*value as u64, hir::IntTy::U8)),
             hir::ExprKind::Bool(value) => Operand::Const(Const::Bool(*value)),
             hir::ExprKind::Unit => Operand::Const(Const::Unit),
+            // Layout queries are constants (ADR 0022).
+            hir::ExprKind::SizeOf(ty) => self.usize_const(self.layout(*ty).size),
+            hir::ExprKind::AlignOf(ty) => self.usize_const(self.layout(*ty).align),
+            hir::ExprKind::OffsetOf(ty, _, _) => {
+                let hir::Ty::Struct(s) = ty else {
+                    unreachable!("the type checker allows only structs")
+                };
+                let layout = self
+                    .types
+                    .layouts
+                    .struct_(s.id)
+                    .expect("well-typed programs have layouts");
+                self.usize_const(layout.offsets[self.types.field(expr.id) as usize])
+            }
             hir::ExprKind::Array(elems) => {
                 let array = Place::local(self.new_local(ty, None));
                 // Each element is stored as soon as it is evaluated, so a
@@ -685,6 +699,17 @@ impl Builder<'_> {
             .expect("lowering resolved the loop")
     }
 
+    fn layout(&self, ty: hir::Ty) -> crate::layout::Layout {
+        self.types
+            .layouts
+            .of(ty)
+            .expect("well-typed programs have layouts")
+    }
+
+    fn usize_const(&self, value: u64) -> Operand {
+        Operand::Const(Const::Int(value, hir::IntTy::Usize))
+    }
+
     /// The MIR type of an expression, from the type checker.
     fn ty_of(&self, expr: &hir::Expr) -> Ty {
         lower_ty(self.types.expr_ty(expr.id), self.structs)
@@ -763,9 +788,14 @@ impl Builder<'_> {
                     }
                 }
             }
-            hir::ExprKind::Field(base, _, _) => self
-                .place_then(base, later_writes)
-                .project(PlaceElem::Field(self.types.field(expr.id))),
+            hir::ExprKind::Field(base, _, _) => {
+                let base_place = self.place_then(base, later_writes);
+                // A base of type `!` is never computed, and has no fields.
+                if self.ty_of(base) == Ty::Never {
+                    return base_place;
+                }
+                base_place.project(PlaceElem::Field(self.types.field(expr.id)))
+            }
             _ => {
                 let ty = self.ty_of(expr);
                 match self.expr(expr) {

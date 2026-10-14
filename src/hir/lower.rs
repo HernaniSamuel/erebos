@@ -601,6 +601,11 @@ impl Lowerer<'_> {
             ast::ExprKind::Field(base, field) => {
                 ExprKind::Field(self.boxed(base), field.name.clone(), field.span)
             }
+            ast::ExprKind::SizeOf(ty) => ExprKind::SizeOf(self.ty(ty)),
+            ast::ExprKind::AlignOf(ty) => ExprKind::AlignOf(self.ty(ty)),
+            ast::ExprKind::OffsetOf(ty, field) => {
+                ExprKind::OffsetOf(self.ty(ty), field.name.clone(), field.span)
+            }
             ast::ExprKind::Index(base, index) => {
                 ExprKind::Index(self.boxed(base), self.boxed(index))
             }

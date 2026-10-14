@@ -11,6 +11,7 @@ pub enum TokenKind {
     Byte,
 
     // Keywords
+    AlignOf,
     As,
     Break,
     Const,
@@ -23,8 +24,10 @@ pub enum TokenKind {
     Let,
     Loop,
     Mut,
+    OffsetOf,
     Panic,
     Return,
+    SizeOf,
     Struct,
     True,
     Volatile,
@@ -81,6 +84,7 @@ pub enum TokenKind {
 impl TokenKind {
     pub fn keyword(text: &str) -> Option<TokenKind> {
         Some(match text {
+            "align_of" => TokenKind::AlignOf,
             "as" => TokenKind::As,
             "break" => TokenKind::Break,
             "const" => TokenKind::Const,
@@ -93,8 +97,10 @@ impl TokenKind {
             "let" => TokenKind::Let,
             "loop" => TokenKind::Loop,
             "mut" => TokenKind::Mut,
+            "offset_of" => TokenKind::OffsetOf,
             "panic" => TokenKind::Panic,
             "return" => TokenKind::Return,
+            "size_of" => TokenKind::SizeOf,
             "struct" => TokenKind::Struct,
             "true" => TokenKind::True,
             "volatile" => TokenKind::Volatile,
@@ -109,6 +115,7 @@ impl TokenKind {
             TokenKind::Ident => "identifier",
             TokenKind::Int => "integer literal",
             TokenKind::Byte => "byte literal",
+            TokenKind::AlignOf => "`align_of`",
             TokenKind::As => "`as`",
             TokenKind::Break => "`break`",
             TokenKind::Const => "`const`",
@@ -121,8 +128,10 @@ impl TokenKind {
             TokenKind::Let => "`let`",
             TokenKind::Loop => "`loop`",
             TokenKind::Mut => "`mut`",
+            TokenKind::OffsetOf => "`offset_of`",
             TokenKind::Panic => "`panic`",
             TokenKind::Return => "`return`",
+            TokenKind::SizeOf => "`size_of`",
             TokenKind::Struct => "`struct`",
             TokenKind::True => "`true`",
             TokenKind::Volatile => "`volatile`",

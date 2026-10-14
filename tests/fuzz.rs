@@ -81,6 +81,10 @@ const SNIPPETS: &[&str] = &[
     ".b",
     ".",
     "*mut volatile S",
+    "size_of(S)",
+    "align_of(u64)",
+    "offset_of(S, b)",
+    "size_of",
 ];
 
 /// xorshift64: small, deterministic, good enough to pick mutations.
