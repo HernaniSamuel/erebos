@@ -1,0 +1,32 @@
+// emit: llvm-ir
+// opt: both
+// ADR 0023: every volatile access is one load or store of the scalar's
+// width, never merged, removed or reordered, with or without `-O`.
+struct Channel { status: u8, data: u16 }
+
+struct Regs {
+    control: u32,
+    inner: Channel,
+    fifo: [u8; 4],
+    channels: [Channel; 2],
+}
+
+fn accesses(regs: *mut volatile Regs, i: usize) -> u32 {
+    (*regs).control = 1;                   // scalar field: store i32
+    (*regs).control = 1;                   // again: not merged
+    (*regs).inner.data = 2;                // nested field: store i16
+    (*regs).fifo[i] = 3;                   // array element: store i8
+    (*regs).channels[1].status = 4;        // field of an element: store i8
+    (*regs).control += 5;                  // one load, one store
+    let twice: u32 = (*regs).control + (*regs).control; // two loads, in order
+    let unused: u8 = (*regs).fifo[0];      // read even if unused
+    twice
+}
+
+fn scalar(reg: *mut volatile u32) {
+    *reg = 0;
+    *reg = 0;
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }
