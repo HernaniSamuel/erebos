@@ -1,0 +1,39 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_volatile_too_wide.ers
+---
+--- errors ---
+ty::volatile-too-wide
+
+  × a volatile `u64` cannot be accessed in one instruction
+   ╭─[typeck_volatile_too_wide.ers:5:5]
+ 4 │ fn timer(mtime: *mut volatile u64) -> u64 {
+ 5 │     *mtime = 0;
+   ·     ───┬──
+   ·        ╰── the widest single access is 32 bits
+ 6 │     *mtime += 1;
+   ╰────
+  help: access it as `u32` halves, in the order the device needs (ADR 0023)
+ty::volatile-too-wide
+
+  × a volatile `u64` cannot be accessed in one instruction
+   ╭─[typeck_volatile_too_wide.ers:6:5]
+ 5 │     *mtime = 0;
+ 6 │     *mtime += 1;
+   ·     ───┬──
+   ·        ╰── the widest single access is 32 bits
+ 7 │     *mtime
+   ╰────
+  help: access it as `u32` halves, in the order the device needs (ADR 0023)
+ty::volatile-too-wide
+
+  × a volatile `u64` cannot be accessed in one instruction
+   ╭─[typeck_volatile_too_wide.ers:7:5]
+ 6 │     *mtime += 1;
+ 7 │     *mtime
+   ·     ───┬──
+   ·        ╰── the widest single access is 32 bits
+ 8 │ }
+   ╰────
+  help: access it as `u32` halves, in the order the device needs (ADR 0023)

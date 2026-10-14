@@ -15,6 +15,7 @@ use crate::hir::{
     self, BinOp, Block, Expr, ExprId, ExprKind, Fn, FnKind, Hir, IntTy, Ptr, Stmt, Ty, UnOp,
 };
 use crate::span::Span;
+use crate::target;
 
 pub struct TypeckResults {
     expr_types: Vec<Ty>,
@@ -300,7 +301,10 @@ impl Checker<'_> {
                 self.cast(f, operand, *target, *target_span)
             }
             ExprKind::Deref(pointer) => match self.pointer(f, pointer) {
-                Some(ptr) => *ptr.pointee,
+                Some(ptr) => {
+                    self.access(ptr, expr.span);
+                    *ptr.pointee
+                }
                 None => Ty::Error,
             },
             ExprKind::Assign(place, value) => {
@@ -712,6 +716,27 @@ impl Checker<'_> {
         }
     }
 
+    /// Checks an access through `ptr`. A volatile access is exactly one
+    /// instruction (ADR 0023), so it cannot be wider than the target's
+    /// widest access.
+    fn access(&mut self, ptr: Ptr, span: Span) {
+        if let (true, Ty::Int(int)) = (ptr.volatile, *ptr.pointee)
+            && int.bits() > target::WIDEST_ACCESS_BITS
+        {
+            let half = target::WIDEST_ACCESS_BITS;
+            self.diags.push(
+                Diagnostic::error(
+                    "ty::volatile-too-wide",
+                    format!("a volatile `{int}` cannot be accessed in one instruction"),
+                )
+                .label(span, format!("the widest single access is {half} bits"))
+                .help(format!(
+                    "access it as `u{half}` halves, in the order the device needs (ADR 0023)"
+                )),
+            );
+        }
+    }
+
     /// Checks that `place` can be assigned to and returns its type.
     fn place(&mut self, f: &Fn, place: &Expr) -> Ty {
         let id = match &place.kind {
@@ -730,6 +755,7 @@ impl Checker<'_> {
                         .help("only `*mut` pointers can be written through"),
                     );
                 }
+                self.access(ptr, place.span);
                 self.expr_types[place.id.0 as usize] = *ptr.pointee;
                 return *ptr.pointee;
             }

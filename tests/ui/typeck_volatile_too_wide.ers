@@ -1,0 +1,15 @@
+// emit: typeck
+// A volatile access is exactly one instruction (ADR 0023); riscv32 has no
+// 64-bit load or store.
+fn timer(mtime: *mut volatile u64) -> u64 {
+    *mtime = 0;
+    *mtime += 1;
+    *mtime
+}
+
+fn halves(mtime: *const volatile u32) -> u32 {
+    *mtime
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }
