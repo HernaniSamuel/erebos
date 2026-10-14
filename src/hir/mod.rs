@@ -238,6 +238,8 @@ pub enum ExprKind {
     StructLit(StructTy, Vec<(u32, Expr)>),
     /// `base.field`; the type checker resolves the field.
     Field(Box<Expr>, String, Span),
+    /// `assert(cond)`, built in (ADR 0029).
+    Assert(Box<Expr>),
     /// `size_of(T)`, a `usize` constant.
     SizeOf(Ty),
     /// `align_of(T)`, a `usize` constant.
@@ -306,7 +308,7 @@ impl Expr {
                     arg.walk(f);
                 }
             }
-            ExprKind::Repeat(e, _) | ExprKind::Field(e, _, _) => e.walk(f),
+            ExprKind::Repeat(e, _) | ExprKind::Field(e, _, _) | ExprKind::Assert(e) => e.walk(f),
             ExprKind::StructLit(_, fields) => {
                 for (_, value) in fields {
                     value.walk(f);

@@ -110,7 +110,16 @@ fn lower<'ctx>(
     for (((_, body), &function), abi) in mir.bodies().zip(&fns).zip(&abis) {
         // An `extern fn` stays a declaration for the linker to resolve.
         if !body.external {
-            FnCodegen::new(context, body, abi, function, &fns, &abis).define();
+            FnCodegen::new(
+                context,
+                body,
+                abi,
+                function,
+                &fns,
+                &abis,
+                mir.panic.0 as usize,
+            )
+            .define();
         }
     }
 
@@ -321,6 +330,8 @@ struct FnCodegen<'a, 'ctx> {
     /// id.
     fns: &'a [FunctionValue<'ctx>],
     abis: &'a [FnAbi],
+    /// The panic function, which failed checks call (ADR 0014).
+    panic: usize,
     builder: Builder<'ctx>,
     blocks: Vec<LlvmBlock<'ctx>>,
     slots: Vec<Option<PointerValue<'ctx>>>,
@@ -337,6 +348,7 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
         function: FunctionValue<'ctx>,
         fns: &'a [FunctionValue<'ctx>],
         abis: &'a [FnAbi],
+        panic: usize,
     ) -> Self {
         let blocks = body
             .blocks()
@@ -357,6 +369,7 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
             function,
             fns,
             abis,
+            panic,
             builder: context.create_builder(),
             blocks,
             slots: Vec::new(),
@@ -940,6 +953,11 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                 PassMode::Ignore | PassMode::Indirect => b.build_return(None),
             },
             Terminator::Unreachable => b.build_unreachable(),
+            Terminator::Panic(_) => {
+                b.build_call(self.fns[self.panic], &[], "")
+                    .expect("builder is positioned");
+                b.build_unreachable()
+            }
         };
         result.expect("builder is positioned");
     }

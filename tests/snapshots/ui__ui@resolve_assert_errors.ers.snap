@@ -1,0 +1,28 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/resolve_assert_errors.ers
+---
+--- errors ---
+resolve::reserved-name
+
+  × `assert` is a reserved name
+   ╭─[resolve_assert_errors.ers:2:4]
+ 1 │ // emit: hir
+ 2 │ fn assert() {}
+   ·    ───┬──
+   ·       ╰── a built-in function has this name
+ 3 │ 
+   ╰────
+  help: `assert(cond)` is built in (ADR 0029)
+ty::wrong-arg-count
+
+  × `assert` takes 1 argument, but 2 were given
+   ╭─[resolve_assert_errors.ers:5:5]
+ 4 │ fn errors(x: u32) {
+ 5 │     assert(true, false);
+   ·     ─────────┬─────────
+   ·              ╰── in this call
+ 6 │ }
+   ╰────
+  help: `assert(cond)` checks one `bool` (ADR 0029)

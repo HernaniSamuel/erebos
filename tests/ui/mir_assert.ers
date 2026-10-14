@@ -1,0 +1,11 @@
+// emit: mir
+// `assert(cond)` calls the panic function when `cond` is false; failed
+// checks name their cause in MIR (ADR 0029).
+fn checked(a: u32, b: u32, i: usize) -> u32 {
+    assert(a < 10);
+    let t: [u32; 2] = [a, b];
+    t[i] / b
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

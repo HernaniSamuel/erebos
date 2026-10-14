@@ -361,6 +361,30 @@ pub enum Terminator {
     Return,
     /// Control never reaches the end of this block.
     Unreachable,
+    /// A check failed: calls the panic function (ADR 0014), which never
+    /// returns.
+    Panic(PanicCause),
+}
+
+/// Why the compiler's own checks call the panic function.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PanicCause {
+    /// A zero divisor (ADR 0007).
+    DivisionByZero,
+    /// An array index not below the length (ADR 0021).
+    IndexOutOfBounds,
+    /// `assert` with a false condition (ADR 0029).
+    AssertionFailed,
+}
+
+impl PanicCause {
+    pub fn describe(self) -> &'static str {
+        match self {
+            PanicCause::DivisionByZero => "division by zero",
+            PanicCause::IndexOutOfBounds => "index out of bounds",
+            PanicCause::AssertionFailed => "assertion failed",
+        }
+    }
 }
 
 impl fmt::Display for Ty {
@@ -467,6 +491,7 @@ impl fmt::Display for Terminator {
             }
             Terminator::Return => f.write_str("return"),
             Terminator::Unreachable => f.write_str("unreachable"),
+            Terminator::Panic(cause) => write!(f, "panic({})", cause.describe()),
         }
     }
 }

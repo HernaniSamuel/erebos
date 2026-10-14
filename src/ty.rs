@@ -504,6 +504,10 @@ impl Checker<'_> {
                 }
                 Ty::Unit
             }
+            ExprKind::Assert(cond) => {
+                self.check(f, cond, Some(Ty::Bool));
+                Ty::Unit
+            }
             ExprKind::Block(block) => self.block(f, block, expected),
             ExprKind::If { cond, then, else_ } => {
                 self.check(f, cond, Some(Ty::Bool));
@@ -1422,6 +1426,7 @@ fn expr_label(f: &Fn, expr: &Expr) -> String {
         ExprKind::Assign(..) => "assign".to_owned(),
         ExprKind::CompoundAssign(op, _, _) => format!("assign {}=", op.symbol()),
         ExprKind::Block(_) => "block".to_owned(),
+        ExprKind::Assert(_) => "assert".to_owned(),
         ExprKind::Loop(_) => "loop".to_owned(),
     }
 }

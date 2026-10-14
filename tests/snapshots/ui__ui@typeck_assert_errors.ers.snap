@@ -1,0 +1,16 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_assert_errors.ers
+---
+--- errors ---
+ty::mismatched-types
+
+  × mismatched types
+   ╭─[typeck_assert_errors.ers:3:12]
+ 2 │ fn errors(x: u32) {
+ 3 │     assert(x);
+   ·            ┬
+   ·            ╰── expected `bool`, found `u32`
+ 4 │ }
+   ╰────

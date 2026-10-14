@@ -54,7 +54,12 @@ pub fn lower(
     for item in &program.items {
         let ident = item_name(item);
         let name = ident.name.as_str();
-        let (label, help) = if name.starts_with("__") {
+        let (label, help) = if name == "assert" {
+            (
+                "a built-in function has this name".to_owned(),
+                "`assert(cond)` is built in (ADR 0029)".to_owned(),
+            )
+        } else if name.starts_with("__") {
             (
                 "names starting with `__` are reserved".to_owned(),
                 "the runtime support functions use them (ADR 0020)".to_owned(),
@@ -696,6 +701,25 @@ impl Lowerer<'_> {
                 // the pipeline.
                 None => ExprKind::Unit,
             },
+            ast::ExprKind::Call(name, args) if name.name == "assert" => {
+                let mut args: Vec<Expr> = args.iter().map(|arg| self.expr(arg)).collect();
+                if args.len() != 1 {
+                    self.diags.push(
+                        Diagnostic::error(
+                            "ty::wrong-arg-count",
+                            format!("`assert` takes 1 argument, but {} were given", args.len()),
+                        )
+                        .label(expr.span, "in this call")
+                        .help("`assert(cond)` checks one `bool` (ADR 0029)"),
+                    );
+                    return Expr {
+                        id,
+                        kind: ExprKind::Unit,
+                        span: expr.span,
+                    };
+                }
+                ExprKind::Assert(Box::new(args.remove(0)))
+            }
             ast::ExprKind::Call(name, args) => {
                 let callee = self.resolve_fn(name);
                 let args = args.iter().map(|arg| self.expr(arg)).collect();

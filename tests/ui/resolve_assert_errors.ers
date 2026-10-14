@@ -1,0 +1,9 @@
+// emit: hir
+fn assert() {}
+
+fn errors(x: u32) {
+    assert(true, false);
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

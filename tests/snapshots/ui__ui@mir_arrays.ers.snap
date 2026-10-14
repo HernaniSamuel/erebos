@@ -57,8 +57,7 @@ fn arrays(_1: u8, _2: usize, _3: *mut [u8; 4]) -> u8 {
     }
 
     bb5: {
-        call on_panic();
-        unreachable;
+        panic(index out of bounds);
     }
 
     bb6: {
@@ -68,8 +67,7 @@ fn arrays(_1: u8, _2: usize, _3: *mut [u8; 4]) -> u8 {
     }
 
     bb7: {
-        call on_panic();
-        unreachable;
+        panic(index out of bounds);
     }
 }
 

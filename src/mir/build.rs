@@ -3,7 +3,7 @@
 use crate::hir::{self, Hir};
 use crate::mir::{
     BasicBlock, BasicBlockData, BinOp, Body, BodyId, Const, Field, Local, LocalDecl, Mir, Operand,
-    Place, PlaceElem, Ptr, Rvalue, Statement, StructRef, Terminator, Ty, UnOp,
+    PanicCause, Place, PlaceElem, Ptr, Rvalue, Statement, StructRef, Terminator, Ty, UnOp,
 };
 use crate::ty::TypeckResults;
 
@@ -40,7 +40,7 @@ pub fn build(hir: &Hir, types: &TypeckResults) -> Mir {
     let panic = BodyId(hir.panic.0);
     let bodies = hir
         .fns()
-        .map(|(_, f)| build_body(f, types, &structs, panic))
+        .map(|(_, f)| build_body(f, types, &structs))
         .collect();
     Mir {
         structs,
@@ -50,12 +50,11 @@ pub fn build(hir: &Hir, types: &TypeckResults) -> Mir {
     }
 }
 
-fn build_body(f: &hir::Fn, types: &TypeckResults, structs: &[StructRef], panic: BodyId) -> Body {
+fn build_body(f: &hir::Fn, types: &TypeckResults, structs: &[StructRef]) -> Body {
     let ret = lower_ty(f.ret, structs);
     let mut builder = Builder {
         types,
         structs,
-        panic,
         locals: vec![LocalDecl {
             ty: ret,
             name: None,
@@ -127,8 +126,6 @@ struct PartialBlock {
 struct Builder<'a> {
     types: &'a TypeckResults,
     structs: &'a [StructRef],
-    /// The panic function (ADR 0014).
-    panic: BodyId,
     locals: Vec<LocalDecl>,
     /// MIR local of each HIR local.
     hir_locals: Vec<Local>,
@@ -345,6 +342,11 @@ impl Builder<'_> {
                 }
                 Operand::Const(Const::Unit)
             }
+            hir::ExprKind::Assert(cond) => {
+                let cond = self.expr(cond);
+                self.panic_unless(cond, PanicCause::AssertionFailed);
+                Operand::Const(Const::Unit)
+            }
             hir::ExprKind::Block(block) => self.block(block),
             hir::ExprKind::Logical(op, lhs, rhs) => self.logical(*op, lhs, rhs),
             hir::ExprKind::If { cond, then, else_ } => {
@@ -477,8 +479,7 @@ impl Builder<'_> {
         // The type checker rejects literal zero divisors; this keeps the
         // guarantee for a zero constant that reaches MIR any other way.
         if constant == Some(0) {
-            self.call(None, self.panic, Vec::new());
-            self.terminate(Terminator::Unreachable);
+            self.terminate(Terminator::Panic(PanicCause::DivisionByZero));
             return Operand::Const(Const::Int(0, int));
         }
         if constant.is_none() {
@@ -492,8 +493,7 @@ impl Builder<'_> {
                 else_: ok_bb,
             });
             self.current = Some(panic_bb);
-            self.call(None, self.panic, Vec::new());
-            self.terminate(Terminator::Unreachable);
+            self.terminate(Terminator::Panic(PanicCause::DivisionByZero));
             self.current = Some(ok_bb);
         }
 
@@ -653,7 +653,7 @@ impl Builder<'_> {
     }
 
     /// Continues only if `ok` is true; otherwise calls the panic function.
-    fn panic_unless(&mut self, ok: Operand) {
+    fn panic_unless(&mut self, ok: Operand, cause: PanicCause) {
         let ok_bb = self.new_block();
         let panic_bb = self.new_block();
         self.terminate(Terminator::If {
@@ -662,8 +662,7 @@ impl Builder<'_> {
             else_: panic_bb,
         });
         self.current = Some(panic_bb);
-        self.call(None, self.panic, Vec::new());
-        self.terminate(Terminator::Unreachable);
+        self.terminate(Terminator::Panic(cause));
         self.current = Some(ok_bb);
     }
 
@@ -840,7 +839,7 @@ impl Builder<'_> {
                 Operand::Const(Const::Int(len, usize_ty)),
             ),
         );
-        self.panic_unless(in_bounds);
+        self.panic_unless(in_bounds, PanicCause::IndexOutOfBounds);
         PlaceElem::Index(local)
     }
 }
