@@ -63,6 +63,10 @@ impl Diagnostics {
         !self.list.is_empty()
     }
 
+    pub fn append(&mut self, other: Diagnostics) {
+        self.list.extend(other.list);
+    }
+
     /// The diagnostics in source order: by the position of their primary
     /// label, in order of emission at the same position, unlabeled ones
     /// last. Layers run on demand (ADR 0028), so emission order depends

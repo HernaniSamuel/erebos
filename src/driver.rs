@@ -9,6 +9,7 @@ use std::str::FromStr;
 
 pub use crate::codegen::OptLevel;
 use crate::diag::{self, Diagnostic, Diagnostics};
+use crate::query::Queries;
 use crate::span::{FileId, SourceMap};
 use crate::syntax::{lexer, parser};
 use crate::{codegen, hir, link, mir, target, ty};
@@ -192,17 +193,23 @@ fn front_end(
         return FrontEnd::Dump(format!("{hir:#?}\n"));
     }
 
-    let types = ty::check(&hir, diags);
+    // Every item is checked, on demand of the others and then in order
+    // (ADR 0028).
+    let mut queries = Queries::new(&hir);
+    queries.check_all();
     if stop == Some(Stage::Typeck) {
-        return FrontEnd::Dump(ty::dump(&hir, &types));
+        let dump = ty::dump(&mut queries);
+        diags.append(queries.diags);
+        return FrontEnd::Dump(dump);
     }
 
     // Later phases rely on well-typed input.
-    if diags.has_errors() {
+    if diags.has_errors() || queries.diags.has_errors() {
+        diags.append(queries.diags);
         return FrontEnd::Failed;
     }
 
-    let mir = mir::build(&hir, &types);
+    let mir = queries.into_mir();
     if stop == Some(Stage::Mir) {
         return FrontEnd::Dump(mir.to_string());
     }

@@ -10,7 +10,7 @@
 
 mod build;
 
-pub use build::build;
+pub use build::build_body;
 
 use std::fmt;
 use std::ptr;

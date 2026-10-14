@@ -6,28 +6,40 @@
 //! and why `x + 1` works: the `1` is checked against the type of `x`.
 //!
 //! The result is a side table from [`ExprId`] to [`Ty`]; HIR plus this table
-//! is the "typed HIR" that MIR building consumes.
+//! is the "typed HIR" that MIR building consumes. Functions are checked one
+//! at a time, on demand (ADR 0028).
 
 use std::collections::HashMap;
 use std::fmt::Write;
 
-use crate::diag::{Diagnostic, Diagnostics};
+use crate::diag::Diagnostic;
 use crate::hir::{
     self, BinOp, Block, Expr, ExprId, ExprKind, Fn, FnKind, Hir, IntTy, LocalId, Ptr, Stmt, Ty,
     UnOp,
 };
-use crate::layout::{self, Layouts};
+use crate::layout;
+use crate::query::Queries;
 use crate::span::Span;
 use crate::target;
 
-pub struct TypeckResults {
+/// What type checking found out about expressions, for every function
+/// checked so far.
+pub struct Tables {
     expr_types: Vec<Ty>,
     /// The field index of each field access.
     fields: HashMap<ExprId, u32>,
-    pub layouts: Layouts,
 }
 
-impl TypeckResults {
+impl Tables {
+    pub fn new(expr_count: u32) -> Tables {
+        Tables {
+            // Overwritten for every expression checked; the placeholder is
+            // never read.
+            expr_types: vec![Ty::Error; expr_count as usize],
+            fields: HashMap::new(),
+        }
+    }
+
     pub fn expr_ty(&self, id: ExprId) -> Ty {
         self.expr_types[id.0 as usize]
     }
@@ -38,25 +50,15 @@ impl TypeckResults {
     }
 }
 
-pub fn check(hir: &Hir, diags: &mut Diagnostics) -> TypeckResults {
-    let layouts = Layouts::compute(hir, diags);
+/// Checks one function; `query` decides when.
+pub fn check_fn(q: &mut Queries, f: &Fn) {
+    let hir = q.hir;
     let mut checker = Checker {
+        q,
         hir,
-        // Overwritten for every expression; the placeholder is never read.
-        expr_types: vec![Ty::Error; hir.expr_count as usize],
-        fields: HashMap::new(),
-        layouts,
-        diags,
         loops: Vec::new(),
     };
-    for (_, f) in hir.fns() {
-        checker.fn_(f);
-    }
-    TypeckResults {
-        expr_types: checker.expr_types,
-        fields: checker.fields,
-        layouts: checker.layouts,
-    }
+    checker.fn_(f);
 }
 
 /// Whether a value of type `from` may be used where `to` is expected.
@@ -117,12 +119,9 @@ fn literal_value(expr: &Expr) -> Option<i128> {
     }
 }
 
-struct Checker<'a> {
-    hir: &'a Hir,
-    expr_types: Vec<Ty>,
-    fields: HashMap<ExprId, u32>,
-    layouts: Layouts,
-    diags: &'a mut Diagnostics,
+struct Checker<'a, 'h> {
+    q: &'a mut Queries<'h>,
+    hir: &'h Hir,
     /// Enclosing `loop`/`while` expressions, innermost last.
     loops: Vec<LoopCtx>,
 }
@@ -180,7 +179,7 @@ struct LoopCtx {
     break_ty: Option<Ty>,
 }
 
-impl Checker<'_> {
+impl Checker<'_, '_> {
     fn fn_(&mut self, f: &Fn) {
         let special = match f.kind {
             FnKind::Entry => Some((
@@ -198,7 +197,7 @@ impl Checker<'_> {
         if let Some((code, what, why)) = special
             && f.ret != Ty::Never
         {
-            self.diags.push(
+            self.q.diags.push(
                 Diagnostic::error(code, format!("the {what} function must never return"))
                     .label(
                         f.ret_span.unwrap_or(f.name_span),
@@ -210,7 +209,7 @@ impl Checker<'_> {
 
         self.params(f);
         for local in &f.locals {
-            if self.layouts.of(local.ty).is_none() {
+            if self.q.layout_of(local.ty).is_none() {
                 self.too_large(local.ty, local.span, "does not fit in the address space");
             }
         }
@@ -223,13 +222,13 @@ impl Checker<'_> {
     /// The type queried by `size_of`, `align_of` or `offset_of` must have a
     /// layout (ADR 0022).
     fn queried_layout(&mut self, ty: Ty, span: Span) {
-        if self.layouts.of(ty).is_none() {
+        if self.q.layout_of(ty).is_none() {
             self.too_large(ty, span, "larger than any object can be");
         }
     }
 
     fn too_large(&mut self, ty: Ty, span: Span, label: &str) {
-        self.diags.push(
+        self.q.diags.push(
             Diagnostic::error("ty::too-large", format!("`{ty}` is too large"))
                 .label(span, label)
                 .help(format!(
@@ -261,7 +260,7 @@ impl Checker<'_> {
             } else {
                 "panic"
             };
-            self.diags.push(
+            self.q.diags.push(
                 Diagnostic::error(
                     "ty::special-fn-params",
                     format!("the {what} function takes no parameters"),
@@ -271,7 +270,7 @@ impl Checker<'_> {
         }
         for param in f.params() {
             if matches!(param.ty, Ty::Unit | Ty::Never) {
-                self.diags.push(
+                self.q.diags.push(
                     Diagnostic::error(
                         "ty::param-type",
                         format!("a parameter cannot have type `{}`", param.ty),
@@ -304,13 +303,13 @@ impl Checker<'_> {
             expr,
             semi: Some(semi),
         }) = block.stmts.last()
-            && coerces(self.expr_types[expr.id.0 as usize], expected)
+            && coerces(self.q.tables.expr_types[expr.id.0 as usize], expected)
         {
             diag = diag
                 .label(*semi, "remove this semicolon to return the value")
                 .help("a block's value is its last expression without `;`");
         }
-        self.diags.push(diag);
+        self.q.diags.push(diag);
     }
 
     /// A block's type is its tail's, or `()` without one; a block that cannot
@@ -338,12 +337,12 @@ impl Checker<'_> {
     /// `expected` if there is one. Returns the expression's own type.
     fn check(&mut self, f: &Fn, expr: &Expr, expected: Option<Ty>) -> Ty {
         let ty = self.expr_kind(f, expr, expected);
-        self.expr_types[expr.id.0 as usize] = ty;
+        self.q.tables.expr_types[expr.id.0 as usize] = ty;
         // Variables were checked where they are declared; any other
         // aggregate value needs a temporary of its size.
         if ty.is_aggregate()
             && !matches!(expr.kind, ExprKind::Local(_))
-            && self.layouts.of(ty).is_none()
+            && self.q.layout_of(ty).is_none()
         {
             self.too_large(
                 ty,
@@ -389,7 +388,7 @@ impl Checker<'_> {
             diag =
                 diag.help("a `while` loop can finish even with `true`; use `loop` to run forever");
         }
-        self.diags.push(diag);
+        self.q.diags.push(diag);
     }
 
     fn expr_kind(&mut self, f: &Fn, expr: &Expr, expected: Option<Ty>) -> Ty {
@@ -421,7 +420,7 @@ impl Checker<'_> {
                     Ty::Error => {}
                     // Even `!`: unlike an expression, a written type is
                     // not unreachable code.
-                    other => self.diags.push(
+                    other => self.q.diags.push(
                         Diagnostic::error("ty::no-fields", format!("`{other}` has no fields"))
                             .label(*name_span, "no such field"),
                     ),
@@ -516,7 +515,7 @@ impl Checker<'_> {
                     if let Some(want) = expected
                         && !coerces(Ty::Unit, want)
                     {
-                        self.diags.push(
+                        self.q.diags.push(
                             Diagnostic::error(
                                 "ty::if-without-else",
                                 format!("`if` without `else` has no `{want}` value"),
@@ -608,7 +607,7 @@ impl Checker<'_> {
                     ty
                 }
                 None => {
-                    self.diags.push(
+                    self.q.diags.push(
                         Diagnostic::error(
                             "ty::untyped-literal",
                             "cannot tell the type of this array's elements",
@@ -635,7 +634,7 @@ impl Checker<'_> {
         if let Some(value) = literal_value(index)
             && value >= i128::from(len)
         {
-            self.diags.push(
+            self.q.diags.push(
                 Diagnostic::error("ty::index-out-of-bounds", "index out of bounds")
                     .label(
                         index.span,
@@ -652,7 +651,7 @@ impl Checker<'_> {
         let params = target.params();
         if args.len() != params.len() {
             let plural = if params.len() == 1 { "" } else { "s" };
-            self.diags.push(
+            self.q.diags.push(
                 Diagnostic::error(
                     "ty::wrong-arg-count",
                     format!(
@@ -679,7 +678,7 @@ impl Checker<'_> {
     /// divisor is certainly a mistake, so it is rejected here.
     fn check_divisor(&mut self, op: BinOp, divisor: &Expr) {
         if matches!(op, BinOp::Div | BinOp::Rem) && literal_value(divisor) == Some(0) {
-            self.diags.push(
+            self.q.diags.push(
                 Diagnostic::error("ty::division-by-zero", "division by zero")
                     .label(divisor.span, "this divisor is zero")
                     .help("at run time this would call the panic function (ADR 0007)"),
@@ -740,7 +739,7 @@ impl Checker<'_> {
                 };
                 if value > limit {
                     let sign = if negated { "-" } else { "" };
-                    self.diags.push(
+                    self.q.diags.push(
                         Diagnostic::error(
                             "ty::literal-out-of-range",
                             format!("literal out of range for `{int}`"),
@@ -755,14 +754,14 @@ impl Checker<'_> {
             }
             Some(Ty::Error) => Ty::Error,
             Some(other) => {
-                self.diags.push(
+                self.q.diags.push(
                     Diagnostic::error("ty::mismatched-types", "mismatched types")
                         .label(expr.span, format!("expected `{other}`, found an integer")),
                 );
                 Ty::Error
             }
             None => {
-                self.diags.push(
+                self.q.diags.push(
                     Diagnostic::error(
                         "ty::untyped-literal",
                         "cannot tell the type of this literal",
@@ -779,7 +778,7 @@ impl Checker<'_> {
         let ty = match (op, &operand.kind) {
             (UnOp::Neg, ExprKind::Int(value)) => {
                 let ty = self.int_literal(expr, *value, true, expected);
-                self.expr_types[operand.id.0 as usize] = ty;
+                self.q.tables.expr_types[operand.id.0 as usize] = ty;
                 ty
             }
             _ => self.check(f, operand, expected),
@@ -790,7 +789,7 @@ impl Checker<'_> {
                 ty
             }
             (UnOp::Neg, Ty::Int(int)) if !int.is_signed() => {
-                self.diags.push(
+                self.q.diags.push(
                     Diagnostic::error(
                         "ty::negate-unsigned",
                         format!("cannot negate a value of unsigned type `{int}`"),
@@ -843,7 +842,7 @@ impl Checker<'_> {
         if let (Ty::Int(int), Some(value)) = (shifted, literal_value(amount))
             && !(0..int.bits() as i128).contains(&value)
         {
-            self.diags.push(
+            self.q.diags.push(
                 Diagnostic::error(
                     "ty::shift-out-of-range",
                     format!("shift amount out of range for `{int}`"),
@@ -879,7 +878,7 @@ impl Checker<'_> {
         if from == Ty::Bool {
             // `true as u8 == 1`; a bool converts to integers only.
             if !matches!(target, Ty::Int(_) | Ty::Error) {
-                self.diags.push(
+                self.q.diags.push(
                     Diagnostic::error(
                         "ty::invalid-cast",
                         format!("cannot cast `bool` to `{target}`"),
@@ -891,7 +890,7 @@ impl Checker<'_> {
             return target;
         }
         if !castable(from) {
-            self.diags.push(
+            self.q.diags.push(
                 Diagnostic::error("ty::invalid-cast", format!("cannot cast `{from}`")).label(
                     operand.span,
                     "only integers, pointers and `bool` can be cast",
@@ -899,7 +898,7 @@ impl Checker<'_> {
             );
         }
         if target == Ty::Bool {
-            self.diags.push(
+            self.q.diags.push(
                 Diagnostic::error("ty::invalid-cast", "cannot cast to `bool`")
                     .label(target_span, "no conversion to `bool`")
                     .help("say what you mean with a comparison, such as `x != 0`"),
@@ -907,7 +906,7 @@ impl Checker<'_> {
             return Ty::Error;
         }
         if !castable(target) {
-            self.diags.push(
+            self.q.diags.push(
                 Diagnostic::error("ty::invalid-cast", format!("cannot cast to `{target}`"))
                     .label(target_span, "only integers and pointers can be cast to"),
             );
@@ -918,7 +917,7 @@ impl Checker<'_> {
         let usize_ty = Ty::Int(IntTy::Usize);
         match (from, target) {
             (Ty::Int(_), Ty::Ptr(_)) if from != usize_ty => {
-                self.diags.push(
+                self.q.diags.push(
                     Diagnostic::error(
                         "ty::pointer-cast-width",
                         format!("cannot cast `{from}` to a pointer"),
@@ -930,7 +929,7 @@ impl Checker<'_> {
                 );
             }
             (Ty::Ptr(_), Ty::Int(_)) if target != usize_ty => {
-                self.diags.push(
+                self.q.diags.push(
                     Diagnostic::error(
                         "ty::pointer-cast-width",
                         format!("cannot cast a pointer to `{target}`"),
@@ -957,7 +956,7 @@ impl Checker<'_> {
             },
             Ty::Error => PlaceInfo::ERROR,
             _ => {
-                self.diags.push(error);
+                self.q.diags.push(error);
                 PlaceInfo::ERROR
             }
         }
@@ -969,7 +968,7 @@ impl Checker<'_> {
     fn access(&mut self, place: &PlaceInfo, span: Span) {
         let volatile = place.via.is_some_and(|ptr| ptr.volatile);
         if volatile && !place.ty.is_aggregate() && self.may_be_misaligned(place) {
-            self.diags.push(
+            self.q.diags.push(
                 Diagnostic::error(
                     "ty::volatile-packed-field",
                     format!("a volatile `{}` here may be misaligned", place.ty),
@@ -979,7 +978,7 @@ impl Checker<'_> {
             );
         }
         if volatile && place.ty.is_aggregate() {
-            self.diags.push(
+            self.q.diags.push(
                 Diagnostic::error(
                     "ty::volatile-aggregate",
                     format!("a volatile `{}` cannot be accessed as a whole", place.ty),
@@ -992,7 +991,7 @@ impl Checker<'_> {
             && int.bits() > target::WIDEST_ACCESS_BITS
         {
             let half = target::WIDEST_ACCESS_BITS;
-            self.diags.push(
+            self.q.diags.push(
                 Diagnostic::error(
                     "ty::volatile-too-wide",
                     format!("a volatile `{int}` cannot be accessed in one instruction"),
@@ -1055,7 +1054,7 @@ impl Checker<'_> {
                         self.access(&info, base.span);
                     }
                     if let Ty::Ptr(ptr) = ty
-                        && self.layouts.of(*ptr.pointee).is_none()
+                        && self.q.layout_of(*ptr.pointee).is_none()
                     {
                         self.too_large(
                             *ptr.pointee,
@@ -1074,7 +1073,7 @@ impl Checker<'_> {
             }
             _ => return None,
         };
-        self.expr_types[expr.id.0 as usize] = info.ty;
+        self.q.tables.expr_types[expr.id.0 as usize] = info.ty;
         Some(info)
     }
 
@@ -1127,7 +1126,7 @@ impl Checker<'_> {
                         "dereference the pointer first: `(*p).{name}` (ADR 0021)"
                     ));
                 }
-                self.diags.push(diag);
+                self.q.diags.push(diag);
                 return PlaceInfo::ERROR;
             }
         };
@@ -1144,10 +1143,10 @@ impl Checker<'_> {
             } else {
                 diag.help(format!("its fields are {}", names.join(", ")))
             };
-            self.diags.push(diag);
+            self.q.diags.push(diag);
             return PlaceInfo::ERROR;
         };
-        self.fields.insert(expr.id, index as u32);
+        self.q.tables.fields.insert(expr.id, index as u32);
         PlaceInfo {
             ty: def.fields[index].ty,
             misaligned: base_place.misaligned || def.packed,
@@ -1159,7 +1158,7 @@ impl Checker<'_> {
     fn place(&mut self, f: &Fn, place: &Expr) -> Ty {
         let Some(info) = self.place_info(f, place) else {
             self.check(f, place, None);
-            self.diags.push(
+            self.q.diags.push(
                 Diagnostic::error("ty::not-assignable", "cannot assign to this expression")
                     .label(place.span, "not a variable, `*pointer` or `a[index]`"),
             );
@@ -1168,7 +1167,7 @@ impl Checker<'_> {
         match info.immutable {
             Some(Immutable::Local(id)) => {
                 let local = f.local(id);
-                self.diags.push(
+                self.q.diags.push(
                     Diagnostic::error(
                         "ty::assign-immutable",
                         format!("cannot assign to `{}`, which is not `mut`", local.name),
@@ -1181,7 +1180,7 @@ impl Checker<'_> {
                 );
             }
             Some(Immutable::ConstPointer(ptr, pointer)) => {
-                self.diags.push(
+                self.q.diags.push(
                     Diagnostic::error(
                         "ty::write-through-const",
                         "cannot write through a `*const` pointer",
@@ -1191,7 +1190,7 @@ impl Checker<'_> {
                 );
             }
             Some(Immutable::Temporary(base)) => {
-                self.diags.push(
+                self.q.diags.push(
                     Diagnostic::error(
                         "ty::not-assignable",
                         "cannot assign to part of a temporary value",
@@ -1207,8 +1206,8 @@ impl Checker<'_> {
     }
 
     /// A place inside a packed struct whose type needs alignment.
-    fn may_be_misaligned(&self, place: &PlaceInfo) -> bool {
-        place.misaligned && self.layouts.of(place.ty).is_some_and(|l| l.align > 1)
+    fn may_be_misaligned(&mut self, place: &PlaceInfo) -> bool {
+        place.misaligned && self.q.layout_of(place.ty).is_some_and(|l| l.align > 1)
     }
 
     /// `&raw const place` or `&raw mut place` (ADR 0021). The address of a
@@ -1216,7 +1215,7 @@ impl Checker<'_> {
     fn addr_of(&mut self, f: &Fn, mutable: bool, place: &Expr) -> Ty {
         let Some(info) = self.place_info(f, place) else {
             self.check(f, place, None);
-            self.diags.push(
+            self.q.diags.push(
                 Diagnostic::error("ty::not-a-place", "`&raw` needs a place in memory")
                     .label(place.span, "a value, not a place")
                     .help("take the address of a variable, `*pointer` or `a[index]`; to point at a value, store it in a `let` first"),
@@ -1227,7 +1226,7 @@ impl Checker<'_> {
             match info.immutable {
                 Some(Immutable::Local(id)) => {
                     let local = f.local(id);
-                    self.diags.push(
+                    self.q.diags.push(
                         Diagnostic::error(
                             "ty::address-of-immutable",
                             format!(
@@ -1243,7 +1242,7 @@ impl Checker<'_> {
                     );
                 }
                 Some(Immutable::ConstPointer(ptr, pointer)) => {
-                    self.diags.push(
+                    self.q.diags.push(
                         Diagnostic::error(
                             "ty::address-of-immutable",
                             "cannot take a `*mut` address through a `*const` pointer",
@@ -1253,7 +1252,7 @@ impl Checker<'_> {
                     );
                 }
                 Some(Immutable::Temporary(base)) => {
-                    self.diags.push(
+                    self.q.diags.push(
                         Diagnostic::error(
                             "ty::address-of-immutable",
                             "cannot take a `*mut` address of part of a temporary value",
@@ -1266,7 +1265,7 @@ impl Checker<'_> {
             }
         }
         if self.may_be_misaligned(&info) {
-            self.diags.push(
+            self.q.diags.push(
                 Diagnostic::error(
                     "ty::packed-field-address",
                     format!("cannot take the address of a `{}` that may be misaligned", info.ty),
@@ -1300,7 +1299,7 @@ impl Checker<'_> {
                 Operands::Equatable => "integers, pointers or `bool`",
                 Operands::Ordered => "integers or pointers",
             };
-            self.diags.push(
+            self.q.diags.push(
                 Diagnostic::error(
                     "ty::invalid-operand",
                     format!("`{op}` needs {what}, found `{ty}`"),
@@ -1313,10 +1312,11 @@ impl Checker<'_> {
 
 /// Lists struct layouts, then every function's locals and expression types,
 /// for `--emit=typeck`.
-pub fn dump(hir: &Hir, results: &TypeckResults) -> String {
+pub fn dump(q: &mut Queries) -> String {
+    let hir = q.hir;
     let mut out = String::new();
     for (i, def) in hir.structs.iter().enumerate() {
-        let Some(layout) = results.layouts.struct_(hir::StructId(i as u32)) else {
+        let Some(layout) = q.struct_layout(hir::StructId(i as u32)) else {
             continue;
         };
         let fields: Vec<String> = def
@@ -1370,7 +1370,7 @@ pub fn dump(hir: &Hir, results: &TypeckResults) -> String {
             continue;
         };
         body.walk(&mut |e| {
-            let ty = results.expr_ty(e.id);
+            let ty = q.tables.expr_ty(e.id);
             writeln!(
                 out,
                 "    expr {} {} {:?}: {ty}",

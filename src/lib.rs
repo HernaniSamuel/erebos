@@ -10,6 +10,7 @@ pub mod layout;
 pub mod link;
 pub mod mir;
 pub mod ops;
+pub mod query;
 pub mod span;
 pub mod syntax;
 pub mod target;
