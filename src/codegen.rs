@@ -221,6 +221,9 @@ struct FnCodegen<'a, 'ctx> {
     builder: Builder<'ctx>,
     blocks: Vec<LlvmBlock<'ctx>>,
     slots: Vec<Option<PointerValue<'ctx>>>,
+    /// Locals whose address is taken, so that their slot is memory others
+    /// can access, in the memory representation (ADR 0022).
+    in_memory: Vec<bool>,
 }
 
 impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
@@ -234,6 +237,14 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
             .blocks()
             .map(|(bb, _)| context.append_basic_block(function, &bb.to_string()))
             .collect();
+        let mut in_memory = vec![false; body.locals.len()];
+        for (_, data) in body.blocks() {
+            for statement in &data.statements {
+                if let Statement::Assign(_, Rvalue::AddressOf { place, .. }) = statement {
+                    in_memory[place.local.0 as usize] = true;
+                }
+            }
+        }
         FnCodegen {
             context,
             body,
@@ -242,6 +253,7 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
             builder: context.create_builder(),
             blocks,
             slots: Vec::new(),
+            in_memory,
         }
     }
 
@@ -251,8 +263,8 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
         self.slots = self
             .body
             .locals()
-            .map(|(local, decl)| {
-                basic_type(self.context, decl.ty).map(|ty| {
+            .map(|(local, _)| {
+                self.representation(Place::local(local)).map(|ty| {
                     self.builder
                         .build_alloca(ty, &local.to_string())
                         .expect("builder is positioned")
@@ -265,10 +277,7 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                 .function
                 .get_nth_param(i as u32)
                 .expect("declared with this many parameters");
-            let slot = self.slots[i + 1].expect("parameters have a representation");
-            self.builder
-                .build_store(slot, value)
-                .expect("builder is positioned");
+            self.write(Place::local(Local(i as u32 + 1)), value);
         }
 
         for (bb, data) in self.body.blocks() {
@@ -310,38 +319,76 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
     /// The address of a place and whether accesses to it are volatile. A
     /// place is volatile when the last pointer on its path is (ADR 0023).
     fn address(&self, place: Place) -> (PointerValue<'ctx>, bool) {
-        let slot = self.slots[place.local.0 as usize].expect("place has a representation");
+        let Some(slot) = self.slots[place.local.0 as usize] else {
+            // A local of type `()` occupies no memory; its address is any
+            // aligned one (ADR 0022).
+            let one = int_type(self.context, IntTy::Usize).const_int(1, false);
+            return (
+                one.const_to_pointer(self.context.ptr_type(AddressSpace::default())),
+                false,
+            );
+        };
         let mut address = (slot, false);
         let mut ty = self.body.local_ty(place.local);
         for elem in place.projection {
             match (elem, ty) {
                 (PlaceElem::Deref, Ty::Ptr(ptr)) => {
-                    let (at, volatile) = address;
-                    let load = self
-                        .builder
-                        .build_load(self.context.ptr_type(AddressSpace::default()), at, "")
-                        .expect("builder is positioned");
-                    if volatile {
-                        load.as_instruction_value()
-                            .expect("a load is an instruction")
-                            .set_volatile(true)
-                            .expect("loads can be volatile");
-                    }
-                    address = (load.into_pointer_value(), ptr.volatile);
+                    address = (self.load_pointer(address), ptr.volatile);
                     ty = *ptr.pointee;
                 }
-                (PlaceElem::Deref, ty) => unreachable!("dereference of `{ty}`"),
+                (PlaceElem::Offset(index), Ty::Ptr(ptr)) => {
+                    let pointer = self.load_pointer(address);
+                    let index = self.read(Place::local(*index)).into_int_value();
+                    // Not `inbounds`: the arithmetic wraps and is never
+                    // undefined (ADR 0021).
+                    // SAFETY: the element type is sized and the index is an
+                    // integer, as LLVM requires of a `getelementptr`.
+                    let element = unsafe {
+                        self.builder.build_gep(
+                            self.element_type(*ptr.pointee),
+                            pointer,
+                            &[index],
+                            "",
+                        )
+                    }
+                    .expect("builder is positioned");
+                    address = (element, ptr.volatile);
+                    ty = *ptr.pointee;
+                }
+                (_, ty) => unreachable!("dereference of `{ty}`"),
             }
         }
         address
     }
 
+    /// Reads the pointer stored at `address`, volatile if the place holding
+    /// it is.
+    fn load_pointer(&self, (address, volatile): (PointerValue<'ctx>, bool)) -> PointerValue<'ctx> {
+        let load = self
+            .builder
+            .build_load(self.context.ptr_type(AddressSpace::default()), address, "")
+            .expect("builder is positioned");
+        if volatile {
+            load.as_instruction_value()
+                .expect("a load is an instruction")
+                .set_volatile(true)
+                .expect("loads can be volatile");
+        }
+        load.into_pointer_value()
+    }
+
+    /// The type whose size is the distance between consecutive elements of
+    /// type `ty` in memory.
+    fn element_type(&self, ty: Ty) -> BasicTypeEnum<'ctx> {
+        memory_type(self.context, ty).unwrap_or_else(|| self.context.i8_type().array_type(0).into())
+    }
+
     /// Locals are private to the function, so they hold values as in
-    /// registers; memory reached through a pointer uses the memory
-    /// representation (ADR 0022).
+    /// registers; memory reached through a pointer, or that a pointer may
+    /// reach, uses the memory representation (ADR 0022).
     fn representation(&self, place: Place) -> Option<BasicTypeEnum<'ctx>> {
         let ty = self.body.place_ty(place);
-        if place.is_indirect() {
+        if place.is_indirect() || self.in_memory[place.local.0 as usize] {
             memory_type(self.context, ty)
         } else {
             basic_type(self.context, ty)
@@ -441,6 +488,7 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                 }
             }
             Rvalue::Cast(operand, to) => return self.cast(operand, *to),
+            Rvalue::AddressOf { place, .. } => return self.address(*place).0.into(),
         };
         built.expect("builder is positioned").into()
     }

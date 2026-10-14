@@ -368,6 +368,13 @@ impl Lowerer<'_> {
             }
             ast::ExprKind::Unary(op, operand) => ExprKind::Unary(*op, self.boxed(operand)),
             ast::ExprKind::Deref(operand) => ExprKind::Deref(self.boxed(operand)),
+            ast::ExprKind::Index(base, index) => {
+                ExprKind::Index(self.boxed(base), self.boxed(index))
+            }
+            ast::ExprKind::AddrOf { mutable, place } => ExprKind::AddrOf {
+                mutable: *mutable,
+                place: self.boxed(place),
+            },
             ast::ExprKind::Binary(op, lhs, rhs) => {
                 ExprKind::Binary(*op, self.boxed(lhs), self.boxed(rhs))
             }

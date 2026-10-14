@@ -1,0 +1,18 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/parse_bare_ampersand.ers
+---
+--- errors ---
+parser::unexpected-token
+
+  × expected `raw`, found identifier
+   ╭─[parse_bare_ampersand.ers:3:6]
+ 2 │ fn f(x: u32) -> *const u32 {
+ 3 │     &x
+   ·      ┬
+   ·      ╰── expected `raw`
+ 4 │ }
+   ╰────
+  help: addresses are taken with `&raw const place` or `&raw mut place`; `&` alone is reserved for
+        references (ADR 0021)

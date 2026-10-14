@@ -383,14 +383,16 @@ impl Parser<'_> {
         Ok(lhs)
     }
 
-    /// Prefix operators, then a primary expression.
+    /// Prefix operators, then a primary expression with its postfix
+    /// operators.
     fn prefix(&mut self) -> PResult<Expr> {
         let token = self.peek();
         let op = match token.kind {
             TokenKind::Minus => Some(UnOp::Neg),
             TokenKind::Bang => Some(UnOp::Not),
             TokenKind::Star => None,
-            _ => return self.primary(),
+            TokenKind::Amp => return self.addr_of(),
+            _ => return self.postfix(),
         };
         self.bump();
         let operand = Box::new(self.expr_bp(PREFIX_BP)?);
@@ -401,6 +403,51 @@ impl Parser<'_> {
                 None => ExprKind::Deref(operand),
             },
         })
+    }
+
+    /// `&raw const place` or `&raw mut place`. A plain `&` is left for
+    /// references (M5), so that its meaning never changes (ADR 0021).
+    fn addr_of(&mut self) -> PResult<Expr> {
+        let amp = self.bump();
+        let raw = self.peek();
+        if raw.kind != TokenKind::Ident || &self.text[raw.span.range()] != "raw" {
+            let found = raw.kind.describe();
+            self.diags.push(
+                Diagnostic::error(
+                    "parser::unexpected-token",
+                    format!("expected `raw`, found {found}"),
+                )
+                .label(self.missing_token_span(), "expected `raw`")
+                .help("addresses are taken with `&raw const place` or `&raw mut place`; `&` alone is reserved for references (ADR 0021)"),
+            );
+            return Err(Reported);
+        }
+        self.bump();
+        let mutable = match self.peek().kind {
+            TokenKind::Mut => true,
+            TokenKind::Const => false,
+            _ => return Err(self.error_expected("`const` or `mut`")),
+        };
+        self.bump();
+        let place = Box::new(self.expr_bp(PREFIX_BP)?);
+        Ok(Expr {
+            span: amp.span.to(place.span),
+            kind: ExprKind::AddrOf { mutable, place },
+        })
+    }
+
+    /// A primary expression followed by any indexing.
+    fn postfix(&mut self) -> PResult<Expr> {
+        let mut expr = self.primary()?;
+        while self.eat(TokenKind::LBracket).is_some() {
+            let index = self.expr()?;
+            let close = self.expect(TokenKind::RBracket)?;
+            expr = Expr {
+                span: expr.span.to(close.span),
+                kind: ExprKind::Index(Box::new(expr), Box::new(index)),
+            };
+        }
+        Ok(expr)
     }
 
     fn primary(&mut self) -> PResult<Expr> {
@@ -506,7 +553,11 @@ impl Parser<'_> {
     fn at_expr_end(&self) -> bool {
         matches!(
             self.peek().kind,
-            TokenKind::Semi | TokenKind::RBrace | TokenKind::RParen | TokenKind::Eof
+            TokenKind::Semi
+                | TokenKind::RBrace
+                | TokenKind::RParen
+                | TokenKind::RBracket
+                | TokenKind::Eof
         )
     }
 

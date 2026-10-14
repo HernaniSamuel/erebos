@@ -1,0 +1,113 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_pointer_index_errors.ers
+---
+--- errors ---
+ty::cannot-index
+
+  × cannot index a value of type `u32`
+   ╭─[typeck_pointer_index_errors.ers:3:5]
+ 2 │ fn errors(p: *const u8, n: u32, x: u8) {
+ 3 │     n[0];
+   ·     ┬
+   ·     ╰── not a pointer
+ 4 │     p[n];
+   ╰────
+ty::mismatched-types
+
+  × mismatched types
+   ╭─[typeck_pointer_index_errors.ers:4:7]
+ 3 │     n[0];
+ 4 │     p[n];
+   ·       ┬
+   ·       ╰── expected `usize`, found `u32`
+ 5 │     p[0] = 1;
+   ╰────
+  help: integer types never convert implicitly; use `as usize` (ADR 0008)
+ty::write-through-const
+
+  × cannot write through a `*const` pointer
+   ╭─[typeck_pointer_index_errors.ers:5:5]
+ 4 │     p[n];
+ 5 │     p[0] = 1;
+   ·     ┬
+   ·     ╰── has type `*const u8`
+ 6 │     let a: *mut u8 = &raw mut x;
+   ╰────
+  help: only `*mut` pointers can be written through
+ty::address-of-immutable
+
+  × cannot take a `*mut` address of `x`, which is not `mut`
+   ╭─[typeck_pointer_index_errors.ers:2:33]
+ 1 │ // emit: typeck
+ 2 │ fn errors(p: *const u8, n: u32, x: u8) {
+   ·                                 ┬
+   ·                                 ╰── help: declare it `let mut x`
+ 3 │     n[0];
+   ╰────
+   ╭─[typeck_pointer_index_errors.ers:6:31]
+ 5 │     p[0] = 1;
+ 6 │     let a: *mut u8 = &raw mut x;
+   ·                               ┬
+   ·                               ╰── address taken here
+ 7 │     let b: *mut u8 = &raw mut p[1];
+   ╰────
+ty::address-of-immutable
+
+  × cannot take a `*mut` address through a `*const` pointer
+   ╭─[typeck_pointer_index_errors.ers:7:31]
+ 6 │     let a: *mut u8 = &raw mut x;
+ 7 │     let b: *mut u8 = &raw mut p[1];
+   ·                               ┬
+   ·                               ╰── has type `*const u8`
+ 8 │     let c: *const u8 = &raw const 1;
+   ╰────
+  help: use `&raw const`, or a `*mut` pointer
+ty::untyped-literal
+
+  × cannot tell the type of this literal
+   ╭─[typeck_pointer_index_errors.ers:8:35]
+ 7 │     let b: *mut u8 = &raw mut p[1];
+ 8 │     let c: *const u8 = &raw const 1;
+   ·                                   ┬
+   ·                                   ╰── no type is expected here
+ 9 │     let d: *const u8 = &raw const errors(p, n, x);
+   ╰────
+  help: literals take the type expected where they appear; bind it first, e.g. `let x: u32 = ...`
+        (ADR 0008)
+ty::not-a-place
+
+  × `&raw` needs a place in memory
+   ╭─[typeck_pointer_index_errors.ers:8:35]
+ 7 │     let b: *mut u8 = &raw mut p[1];
+ 8 │     let c: *const u8 = &raw const 1;
+   ·                                   ┬
+   ·                                   ╰── a value, not a place
+ 9 │     let d: *const u8 = &raw const errors(p, n, x);
+   ╰────
+  help: take the address of a variable, `*pointer` or `pointer[index]`; to point at a value, store
+        it in a `let` first
+ty::not-a-place
+
+  × `&raw` needs a place in memory
+    ╭─[typeck_pointer_index_errors.ers:9:35]
+  8 │     let c: *const u8 = &raw const 1;
+  9 │     let d: *const u8 = &raw const errors(p, n, x);
+    ·                                   ───────┬───────
+    ·                                          ╰── a value, not a place
+ 10 │ }
+    ╰────
+  help: take the address of a variable, `*pointer` or `pointer[index]`; to point at a value, store
+        it in a `let` first
+ty::volatile-too-wide
+
+  × a volatile `u64` cannot be accessed in one instruction
+    ╭─[typeck_pointer_index_errors.ers:13:5]
+ 12 │ fn wide(clock: *mut volatile u64) -> u64 {
+ 13 │     clock[1]
+    ·     ────┬───
+    ·         ╰── the widest single access is 32 bits
+ 14 │ }
+    ╰────
+  help: access it as `u32` halves, in the order the device needs (ADR 0023)

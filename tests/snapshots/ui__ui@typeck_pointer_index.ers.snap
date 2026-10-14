@@ -1,0 +1,52 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_pointer_index.ers
+---
+--- typeck ---
+fn element(p: *const u16, i: usize) -> u16
+    expr 0 binary + 180..191: u16
+    expr 1 index 180..184: u16
+    expr 2 local p 180..181: *const u16
+    expr 3 local i 182..183: usize
+    expr 4 index 187..191: u16
+    expr 5 local p 187..188: *const u16
+    expr 6 int 0 189..190: usize
+fn write(p: *mut u16, i: usize) -> ()
+    expr 7 assign 233..241: ()
+    expr 8 index 233..237: u16
+    expr 9 local p 233..234: *mut u16
+    expr 10 local i 235..236: usize
+    expr 11 int 1 240..241: u16
+    expr 12 assign += 247..263: ()
+    expr 13 index 247..255: u16
+    expr 14 local p 247..248: *mut u16
+    expr 15 binary + 249..254: usize
+    expr 16 local i 249..250: usize
+    expr 17 int 1 253..254: usize
+    expr 18 index 259..263: u16
+    expr 19 local p 259..260: *mut u16
+    expr 20 local i 261..262: usize
+fn addresses(p: *mut u16) -> *const u16
+    let mut x: u16
+    let a: *mut u16
+    let b: *const u16
+    let c: *mut u16
+    expr 21 int 1 331..332: u16
+    expr 22 &raw mut 356..366: *mut u16
+    expr 23 local x 365..366: u16
+    expr 24 &raw const 392..405: *const u16
+    expr 25 deref 403..405: u16
+    expr 26 local a 404..405: *mut u16
+    expr 27 &raw mut 429..442: *mut u16
+    expr 28 index 438..442: u16
+    expr 29 local p 438..439: *mut u16
+    expr 30 int 2 440..441: usize
+    expr 31 &raw const 448..463: *const u16
+    expr 32 index 459..463: u16
+    expr 33 local p 459..460: *mut u16
+    expr 34 int 1 461..462: usize
+entry fn main() -> !
+    expr 35 loop 490..497: !
+panic fn on_panic() -> !
+    expr 36 loop 527..534: !

@@ -197,9 +197,9 @@ impl Builder<'_> {
                 self.call(dest, BodyId(callee.0), args);
                 self.read_result(dest)
             }
-            hir::ExprKind::Deref(_) => {
+            hir::ExprKind::Deref(_) | hir::ExprKind::Index(..) => {
                 let place = self.place(expr);
-                if ty == Ty::Unit {
+                if matches!(ty, Ty::Unit | Ty::Never) {
                     Operand::Const(Const::Unit)
                 } else {
                     // Read now: a volatile read must happen exactly here, and
@@ -233,6 +233,16 @@ impl Builder<'_> {
                 } else {
                     self.temp(ty, Rvalue::Binary(*op, lhs, rhs))
                 }
+            }
+            hir::ExprKind::AddrOf { mutable, place } => {
+                let place = self.place(place);
+                self.temp(
+                    ty,
+                    Rvalue::AddressOf {
+                        mutable: *mutable,
+                        place,
+                    },
+                )
             }
             hir::ExprKind::Cast(operand, _, _) => {
                 let operand = self.expr(operand);
@@ -572,27 +582,42 @@ impl Builder<'_> {
             .iter()
             .fold(self.locals[place.local.0 as usize].ty, |ty, elem| {
                 match (elem, ty) {
-                    (PlaceElem::Deref, Ty::Ptr(ptr)) => *ptr.pointee,
-                    (PlaceElem::Deref, ty) => unreachable!("dereference of `{ty}`"),
+                    (PlaceElem::Deref | PlaceElem::Offset(_), Ty::Ptr(ptr)) => *ptr.pointee,
+                    (_, ty) => unreachable!("dereference of `{ty}`"),
                 }
             })
     }
 
-    /// Lowers a place expression: a local, or `*pointer`.
+    /// A place holding the value of a pointer expression. With `then`, an
+    /// expression evaluated after the pointer: if it could assign the
+    /// pointer, the pointer is read first (ADR 0018).
+    fn pointer_place(&mut self, pointer: &hir::Expr, then: Option<&hir::Expr>) -> Place {
+        let pointer_ty = lower_ty(self.types.expr_ty(pointer.id));
+        match self.expr(pointer) {
+            Operand::Copy(place) if then.is_none_or(is_simple) => place,
+            // Computed (e.g. a cast), or about to be read late: store it.
+            other => match self.temp(pointer_ty, Rvalue::Use(other)) {
+                Operand::Copy(place) => place,
+                Operand::Const(_) => unreachable!("temporaries are places"),
+            },
+        }
+    }
+
+    /// Lowers a place expression: a local, `*pointer` or `pointer[index]`.
     fn place(&mut self, expr: &hir::Expr) -> Place {
         match &expr.kind {
             hir::ExprKind::Local(local) => self.local(*local),
             hir::ExprKind::Deref(pointer) => {
-                let pointer_ty = lower_ty(self.types.expr_ty(pointer.id));
-                let base = match self.expr(pointer) {
-                    Operand::Copy(place) => place,
-                    // The pointer is computed (e.g. a cast): store it first.
-                    other => match self.temp(pointer_ty, Rvalue::Use(other)) {
-                        Operand::Copy(place) => place,
-                        Operand::Const(_) => unreachable!("temporaries are places"),
-                    },
-                };
-                base.project(PlaceElem::Deref)
+                self.pointer_place(pointer, None).project(PlaceElem::Deref)
+            }
+            hir::ExprKind::Index(pointer, index) => {
+                let base = self.pointer_place(pointer, Some(index));
+                // The index is fixed now: a later write to its variable
+                // must not move the place.
+                let value = self.expr(index);
+                let index = self.new_local(Ty::Int(hir::IntTy::Usize), None);
+                self.assign(Place::local(index), Rvalue::Use(value));
+                base.project(PlaceElem::Offset(index))
             }
             _ => unreachable!("the type checker only allows locals and `*pointer` as places"),
         }

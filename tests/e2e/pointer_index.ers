@@ -1,0 +1,61 @@
+// Unchecked indexing through pointers and `&raw` (ADR 0021).
+// expect-output: abcde c
+// expect-output: 7 T
+// expect-output: !
+// expect-exit: 0
+
+fn putc(byte: u8) {
+    let thr: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+    thr[0] = byte;
+}
+
+fn exit(code: u32) -> ! {
+    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+    *finisher = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    loop {}
+}
+
+fn fill(buf: *mut u8, n: usize, first: u8) {
+    let mut i: usize = 0;
+    while i < n {
+        buf[i] = first + i as u8;
+        i += 1;
+    }
+}
+
+entry fn main() -> ! {
+    // Free RAM, well away from the program and the stack.
+    let buf: *mut u8 = 0x8100_0000 as *mut u8;
+    fill(buf, 5, b'a');
+    let mut i: usize = 0;
+    while i < 5 {
+        putc(buf[i]);
+        i += 1;
+    }
+    let third: *mut u8 = &raw mut buf[2];
+    putc(b' ');
+    putc(*third);
+    putc(b'\n');
+
+    let mut x: u32 = 5;
+    let p: *mut u32 = &raw mut x;
+    *p = 7;
+    putc(b'0' + x as u8);
+    putc(b' ');
+
+    // A `bool` in memory reads `true` for any nonzero byte (ADR 0022).
+    let mut flag: bool = false;
+    let byte: *mut u8 = &raw mut flag as *mut u8;
+    *byte = 2;
+    putc(if flag { b'T' } else { b'F' });
+    putc(b'\n');
+
+    let uart: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+    uart[0] = b'!';
+    uart[0] = b'\n';
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(1)
+}

@@ -96,8 +96,8 @@ impl Body {
             .projection
             .iter()
             .fold(self.local_ty(place.local), |ty, elem| match (elem, ty) {
-                (PlaceElem::Deref, Ty::Ptr(ptr)) => *ptr.pointee,
-                (PlaceElem::Deref, ty) => unreachable!("dereference of `{ty}`"),
+                (PlaceElem::Deref | PlaceElem::Offset(_), Ty::Ptr(ptr)) => *ptr.pointee,
+                (_, ty) => unreachable!("dereference of `{ty}`"),
             })
     }
 
@@ -165,6 +165,10 @@ pub struct Place {
 pub enum PlaceElem {
     /// What the pointer held in the place points to.
     Deref,
+    /// The element `i` places after the one the pointer held in the place
+    /// points to, with `i` the `usize` in the local. The address arithmetic
+    /// wraps and is never checked (ADR 0021).
+    Offset(Local),
 }
 
 impl Place {
@@ -187,7 +191,9 @@ impl Place {
 
     /// Whether the place reaches memory through a pointer.
     pub fn is_indirect(self) -> bool {
-        self.projection.contains(&PlaceElem::Deref)
+        self.projection
+            .iter()
+            .any(|elem| matches!(elem, PlaceElem::Deref | PlaceElem::Offset(_)))
     }
 }
 
@@ -213,6 +219,11 @@ pub enum Rvalue {
     /// the zero and `MIN / -1` checks of ADR 0007 before them.
     Binary(BinOp, Operand, Operand),
     Cast(Operand, Ty),
+    /// `&raw const place` or `&raw mut place`.
+    AddressOf {
+        mutable: bool,
+        place: Place,
+    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -263,6 +274,7 @@ impl fmt::Display for Place {
         for elem in self.projection {
             text = match elem {
                 PlaceElem::Deref => format!("(*{text})"),
+                PlaceElem::Offset(index) => format!("(*({text} + {index}))"),
             };
         }
         f.write_str(&text)
@@ -289,6 +301,10 @@ impl fmt::Display for Rvalue {
             Rvalue::Unary(op, operand) => write!(f, "{op:?}({operand})"),
             Rvalue::Binary(op, lhs, rhs) => write!(f, "{op:?}({lhs}, {rhs})"),
             Rvalue::Cast(operand, ty) => write!(f, "{operand} as {ty}"),
+            Rvalue::AddressOf { mutable, place } => {
+                let mutability = if *mutable { "mut" } else { "const" };
+                write!(f, "&raw {mutability} {place}")
+            }
         }
     }
 }

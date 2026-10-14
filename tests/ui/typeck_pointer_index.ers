@@ -1,0 +1,22 @@
+// emit: typeck
+// `p[i]` is the unchecked place at `p + i * size_of(T)`, and `&raw` takes
+// the address of any place (ADR 0021).
+fn element(p: *const u16, i: usize) -> u16 {
+    p[i] + p[0]
+}
+
+fn write(p: *mut u16, i: usize) {
+    p[i] = 1;
+    p[i + 1] += p[i];
+}
+
+fn addresses(p: *mut u16) -> *const u16 {
+    let mut x: u16 = 1;
+    let a: *mut u16 = &raw mut x;
+    let b: *const u16 = &raw const *a;
+    let c: *mut u16 = &raw mut p[2];
+    &raw const p[1]
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

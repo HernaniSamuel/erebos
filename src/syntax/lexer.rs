@@ -61,6 +61,8 @@ impl Lexer<'_> {
                 ')' => TokenKind::RParen,
                 '{' => TokenKind::LBrace,
                 '}' => TokenKind::RBrace,
+                '[' => TokenKind::LBracket,
+                ']' => TokenKind::RBracket,
                 ':' => TokenKind::Colon,
                 ',' => TokenKind::Comma,
                 ';' => TokenKind::Semi,

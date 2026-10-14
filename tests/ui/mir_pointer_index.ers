@@ -1,0 +1,16 @@
+// emit: mir
+// The index is fixed in a temporary before the access, and the pointer is
+// read first when the index could change it (ADR 0018).
+fn index(mut p: *mut u32, i: usize) -> u32 {
+    p[i] = 5;
+    p[{ p = p; i }]
+}
+
+fn address(p: *mut u32) -> *mut u32 {
+    let mut x: u32 = 0;
+    let a: *mut u32 = &raw mut x;
+    &raw mut p[3]
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

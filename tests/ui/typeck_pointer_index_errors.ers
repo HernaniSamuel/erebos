@@ -1,0 +1,17 @@
+// emit: typeck
+fn errors(p: *const u8, n: u32, x: u8) {
+    n[0];
+    p[n];
+    p[0] = 1;
+    let a: *mut u8 = &raw mut x;
+    let b: *mut u8 = &raw mut p[1];
+    let c: *const u8 = &raw const 1;
+    let d: *const u8 = &raw const errors(p, n, x);
+}
+
+fn wide(clock: *mut volatile u64) -> u64 {
+    clock[1]
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

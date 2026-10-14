@@ -1,0 +1,63 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/codegen_pointer_index.ers
+---
+--- llvm-ir ---
+; ModuleID = 'erebos'
+source_filename = "erebos"
+target datalayout = "e-m:e-p:32:32-i64:64-n32-S128"
+target triple = "riscv32-unknown-none-elf"
+
+module asm "\09.section .text.start, \22ax\22, @progbits"
+module asm "\09.globl _start"
+module asm "\09.type _start, @function"
+module asm "_start:"
+module asm "\09li sp, 0x88000000"
+module asm "\09j main"
+
+; Function Attrs: nounwind null_pointer_is_valid
+define zeroext i16 @element(ptr %0, i32 %1) #0 {
+bb0:
+  %2 = getelementptr i16, ptr %0, i32 %1
+  %3 = load i16, ptr %2, align 2
+  ret i16 %3
+}
+
+; Function Attrs: nounwind null_pointer_is_valid
+define void @device(ptr %0) #0 {
+bb0:
+  %1 = getelementptr i32, ptr %0, i32 1
+  %2 = load volatile i32, ptr %1, align 4
+  %3 = getelementptr i32, ptr %0, i32 2
+  store volatile i32 %2, ptr %3, align 4
+  ret void
+}
+
+; Function Attrs: nounwind null_pointer_is_valid
+define zeroext i1 @flag() #0 {
+bb0:
+  %0 = icmp ne i8 2, 0
+  ret i1 %0
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @main() #1 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @on_panic() #1 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+attributes #0 = { nounwind null_pointer_is_valid }
+attributes #1 = { noreturn nounwind null_pointer_is_valid }

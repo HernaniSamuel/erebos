@@ -1,0 +1,11 @@
+// emit: llvm-ir
+// Regression (found by fuzzing): dereferencing or indexing an expression of
+// type `!` crashed the compiler. The pointer is never computed, so the place
+// has type `!` too.
+fn index() -> u8 {
+    let x: u8 = (loop {})[0];
+    x
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { * loop {} }

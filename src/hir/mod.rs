@@ -179,6 +179,13 @@ pub enum ExprKind {
     Unary(UnOp, Box<Expr>),
     /// `*ptr`
     Deref(Box<Expr>),
+    /// `base[index]`
+    Index(Box<Expr>, Box<Expr>),
+    /// `&raw const place` or `&raw mut place`
+    AddrOf {
+        mutable: bool,
+        place: Box<Expr>,
+    },
     Binary(BinOp, Box<Expr>, Box<Expr>),
     Logical(LogicalOp, Box<Expr>, Box<Expr>),
     /// `expr as ty`; the span is the written type's.
@@ -227,8 +234,12 @@ impl Expr {
                     arg.walk(f);
                 }
             }
-            ExprKind::Unary(_, e) | ExprKind::Deref(e) | ExprKind::Cast(e, _, _) => e.walk(f),
+            ExprKind::Unary(_, e)
+            | ExprKind::Deref(e)
+            | ExprKind::Cast(e, _, _)
+            | ExprKind::AddrOf { place: e, .. } => e.walk(f),
             ExprKind::Binary(_, a, b)
+            | ExprKind::Index(a, b)
             | ExprKind::Logical(_, a, b)
             | ExprKind::Assign(a, b)
             | ExprKind::CompoundAssign(_, a, b) => {

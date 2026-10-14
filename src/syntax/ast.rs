@@ -122,6 +122,13 @@ pub enum ExprKind {
     Unary(UnOp, Box<Expr>),
     /// `*ptr`
     Deref(Box<Expr>),
+    /// `base[index]`
+    Index(Box<Expr>, Box<Expr>),
+    /// `&raw const place` or `&raw mut place` (ADR 0021)
+    AddrOf {
+        mutable: bool,
+        place: Box<Expr>,
+    },
     Binary(BinOp, Box<Expr>, Box<Expr>),
     /// `&&` and `||`, which short-circuit.
     Logical(LogicalOp, Box<Expr>, Box<Expr>),

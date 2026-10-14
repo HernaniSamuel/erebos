@@ -1,0 +1,8 @@
+// emit: ast
+// Postfix indexing binds tighter than prefix operators; `&raw` takes a
+// place (ADR 0021).
+fn f(p: *mut u8, i: usize) {
+    p[i] = *p[0] + -p[i + 1];
+    let q: *const u8 = &raw const p[1];
+    let r: *mut *mut u8 = &raw mut p as *mut *mut u8;
+}

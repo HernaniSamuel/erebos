@@ -12,7 +12,8 @@ use std::fmt::Write;
 
 use crate::diag::{Diagnostic, Diagnostics};
 use crate::hir::{
-    self, BinOp, Block, Expr, ExprId, ExprKind, Fn, FnKind, Hir, IntTy, Ptr, Stmt, Ty, UnOp,
+    self, BinOp, Block, Expr, ExprId, ExprKind, Fn, FnKind, Hir, IntTy, LocalId, Ptr, Stmt, Ty,
+    UnOp,
 };
 use crate::span::Span;
 use crate::target;
@@ -79,6 +80,41 @@ struct Checker<'a> {
     diags: &'a mut Diagnostics,
     /// Enclosing `loop`/`while` expressions, innermost last.
     loops: Vec<LoopCtx>,
+}
+
+/// What the type checker knows about a place expression.
+struct PlaceInfo {
+    ty: Ty,
+    /// Why the place cannot be written, if it cannot.
+    immutable: Option<Immutable>,
+    /// The last pointer on the path to the place, which decides whether
+    /// accesses are volatile (ADR 0023).
+    via: Option<Ptr>,
+}
+
+impl PlaceInfo {
+    /// The place of an expression that failed to type; already reported.
+    const ERROR: PlaceInfo = PlaceInfo {
+        ty: Ty::Error,
+        immutable: None,
+        via: None,
+    };
+
+    /// The place a pointer points to; `pointer` is the pointer's expression.
+    fn through(ptr: Ptr, pointer: Span) -> PlaceInfo {
+        PlaceInfo {
+            ty: *ptr.pointee,
+            immutable: (!ptr.mutable).then_some(Immutable::ConstPointer(ptr, pointer)),
+            via: Some(ptr),
+        }
+    }
+}
+
+enum Immutable {
+    /// A local declared without `mut`.
+    Local(LocalId),
+    /// A place reached through a `*const` pointer, written at the span.
+    ConstPointer(Ptr, Span),
 }
 
 struct LoopCtx {
@@ -300,13 +336,14 @@ impl Checker<'_> {
             ExprKind::Cast(operand, target, target_span) => {
                 self.cast(f, operand, *target, *target_span)
             }
-            ExprKind::Deref(pointer) => match self.pointer(f, pointer) {
-                Some(ptr) => {
-                    self.access(ptr, expr.span);
-                    *ptr.pointee
-                }
-                None => Ty::Error,
-            },
+            ExprKind::Deref(_) | ExprKind::Index(..) => {
+                let info = self
+                    .place_info(f, expr)
+                    .expect("dereferences and indexing are places");
+                self.access(&info, expr.span);
+                info.ty
+            }
+            ExprKind::AddrOf { mutable, place } => self.addr_of(f, *mutable, place),
             ExprKind::Assign(place, value) => {
                 let place_ty = self.place(f, place);
                 self.check(f, value, Some(place_ty));
@@ -698,29 +735,29 @@ impl Checker<'_> {
         target
     }
 
-    /// Types the operand of `*`, which must be a pointer.
-    fn pointer(&mut self, f: &Fn, pointer: &Expr) -> Option<Ptr> {
-        match self.check(f, pointer, None) {
-            Ty::Ptr(ptr) => Some(ptr),
-            Ty::Error | Ty::Never => None,
-            other => {
-                self.diags.push(
-                    Diagnostic::error(
-                        "ty::deref-non-pointer",
-                        format!("cannot dereference `{other}`"),
-                    )
-                    .label(pointer.span, "not a pointer"),
-                );
-                None
+    /// The place a pointer of type `ty` leads to, for `*` and `[]`. A
+    /// pointer of type `!` is never computed, so neither is the place.
+    fn through_pointer(&mut self, ty: Ty, pointer: &Expr, error: Diagnostic) -> PlaceInfo {
+        match ty {
+            Ty::Ptr(ptr) => PlaceInfo::through(ptr, pointer.span),
+            Ty::Never => PlaceInfo {
+                ty: Ty::Never,
+                ..PlaceInfo::ERROR
+            },
+            Ty::Error => PlaceInfo::ERROR,
+            _ => {
+                self.diags.push(error.label(pointer.span, "not a pointer"));
+                PlaceInfo::ERROR
             }
         }
     }
 
-    /// Checks an access through `ptr`. A volatile access is exactly one
+    /// Checks a read or write of a place. A volatile access is exactly one
     /// instruction (ADR 0023), so it cannot be wider than the target's
     /// widest access.
-    fn access(&mut self, ptr: Ptr, span: Span) {
-        if let (true, Ty::Int(int)) = (ptr.volatile, *ptr.pointee)
+    fn access(&mut self, place: &PlaceInfo, span: Span) {
+        let volatile = place.via.is_some_and(|ptr| ptr.volatile);
+        if let (true, Ty::Int(int)) = (volatile, place.ty)
             && int.bits() > target::WIDEST_ACCESS_BITS
         {
             let half = target::WIDEST_ACCESS_BITS;
@@ -737,53 +774,131 @@ impl Checker<'_> {
         }
     }
 
+    /// Types a place expression: a local, `*pointer` or `pointer[index]`.
+    /// Returns `None`, having typed nothing, if `expr` is not a place.
+    fn place_info(&mut self, f: &Fn, expr: &Expr) -> Option<PlaceInfo> {
+        let info = match &expr.kind {
+            ExprKind::Local(id) => {
+                let local = f.local(*id);
+                PlaceInfo {
+                    ty: local.ty,
+                    immutable: (!local.mutable).then_some(Immutable::Local(*id)),
+                    via: None,
+                }
+            }
+            ExprKind::Deref(pointer) => {
+                let ty = self.check(f, pointer, None);
+                let error = Diagnostic::error(
+                    "ty::deref-non-pointer",
+                    format!("cannot dereference `{ty}`"),
+                );
+                self.through_pointer(ty, pointer, error)
+            }
+            ExprKind::Index(base, index) => {
+                let ty = self.check(f, base, None);
+                self.check(f, index, Some(Ty::Int(IntTy::Usize)));
+                let error = Diagnostic::error(
+                    "ty::cannot-index",
+                    format!("cannot index a value of type `{ty}`"),
+                );
+                // Unchecked, as in C (ADR 0021).
+                self.through_pointer(ty, base, error)
+            }
+            _ => return None,
+        };
+        self.expr_types[expr.id.0 as usize] = info.ty;
+        Some(info)
+    }
+
     /// Checks that `place` can be assigned to and returns its type.
     fn place(&mut self, f: &Fn, place: &Expr) -> Ty {
-        let id = match &place.kind {
-            ExprKind::Local(id) => *id,
-            ExprKind::Deref(pointer) => {
-                let Some(ptr) = self.pointer(f, pointer) else {
-                    return Ty::Error;
-                };
-                if !ptr.mutable {
+        let Some(info) = self.place_info(f, place) else {
+            self.check(f, place, None);
+            self.diags.push(
+                Diagnostic::error("ty::not-assignable", "cannot assign to this expression")
+                    .label(place.span, "not a variable, `*pointer` or `pointer[index]`"),
+            );
+            return Ty::Error;
+        };
+        match info.immutable {
+            Some(Immutable::Local(id)) => {
+                let local = f.local(id);
+                self.diags.push(
+                    Diagnostic::error(
+                        "ty::assign-immutable",
+                        format!("cannot assign to `{}`, which is not `mut`", local.name),
+                    )
+                    .label(place.span, "assigned here")
+                    .label(
+                        local.span,
+                        format!("help: declare it `let mut {}`", local.name),
+                    ),
+                );
+            }
+            Some(Immutable::ConstPointer(ptr, pointer)) => {
+                self.diags.push(
+                    Diagnostic::error(
+                        "ty::write-through-const",
+                        "cannot write through a `*const` pointer",
+                    )
+                    .label(pointer, format!("has type `{}`", Ty::Ptr(ptr)))
+                    .help("only `*mut` pointers can be written through"),
+                );
+            }
+            None => {}
+        }
+        self.access(&info, place.span);
+        info.ty
+    }
+
+    /// `&raw const place` or `&raw mut place` (ADR 0021). The address of a
+    /// place is taken without accessing it.
+    fn addr_of(&mut self, f: &Fn, mutable: bool, place: &Expr) -> Ty {
+        let Some(info) = self.place_info(f, place) else {
+            self.check(f, place, None);
+            self.diags.push(
+                Diagnostic::error("ty::not-a-place", "`&raw` needs a place in memory")
+                    .label(place.span, "a value, not a place")
+                    .help("take the address of a variable, `*pointer` or `pointer[index]`; to point at a value, store it in a `let` first"),
+            );
+            return Ty::Error;
+        };
+        if mutable {
+            match info.immutable {
+                Some(Immutable::Local(id)) => {
+                    let local = f.local(id);
                     self.diags.push(
                         Diagnostic::error(
-                            "ty::write-through-const",
-                            "cannot write through a `*const` pointer",
+                            "ty::address-of-immutable",
+                            format!(
+                                "cannot take a `*mut` address of `{}`, which is not `mut`",
+                                local.name
+                            ),
                         )
-                        .label(pointer.span, format!("has type `{}`", Ty::Ptr(ptr)))
-                        .help("only `*mut` pointers can be written through"),
+                        .label(place.span, "address taken here")
+                        .label(
+                            local.span,
+                            format!("help: declare it `let mut {}`", local.name),
+                        ),
                     );
                 }
-                self.access(ptr, place.span);
-                self.expr_types[place.id.0 as usize] = *ptr.pointee;
-                return *ptr.pointee;
+                Some(Immutable::ConstPointer(ptr, pointer)) => {
+                    self.diags.push(
+                        Diagnostic::error(
+                            "ty::address-of-immutable",
+                            "cannot take a `*mut` address through a `*const` pointer",
+                        )
+                        .label(pointer, format!("has type `{}`", Ty::Ptr(ptr)))
+                        .help("use `&raw const`, or a `*mut` pointer"),
+                    );
+                }
+                None => {}
             }
-            _ => {
-                self.check(f, place, None);
-                self.diags.push(
-                    Diagnostic::error("ty::not-assignable", "cannot assign to this expression")
-                        .label(place.span, "not a variable or `*pointer`"),
-                );
-                return Ty::Error;
-            }
-        };
-        let local = f.local(id);
-        if !local.mutable {
-            self.diags.push(
-                Diagnostic::error(
-                    "ty::assign-immutable",
-                    format!("cannot assign to `{}`, which is not `mut`", local.name),
-                )
-                .label(place.span, "assigned here")
-                .label(
-                    local.span,
-                    format!("help: declare it `let mut {}`", local.name),
-                ),
-            );
         }
-        self.expr_types[place.id.0 as usize] = local.ty;
-        local.ty
+        match info.ty {
+            Ty::Error => Ty::Error,
+            ty => Ty::ptr(mutable, false, ty),
+        }
     }
 
     fn require(&mut self, expr: &Expr, ty: Ty, op: &str, allowed: Operands) {
@@ -880,6 +995,9 @@ fn expr_label(f: &Fn, expr: &Expr) -> String {
         ExprKind::Call { .. } => "call".to_owned(),
         ExprKind::Unary(op, _) => format!("{op:?}").to_lowercase(),
         ExprKind::Deref(_) => "deref".to_owned(),
+        ExprKind::Index(..) => "index".to_owned(),
+        ExprKind::AddrOf { mutable: true, .. } => "&raw mut".to_owned(),
+        ExprKind::AddrOf { mutable: false, .. } => "&raw const".to_owned(),
         ExprKind::Binary(op, _, _) => format!("binary {}", op.symbol()),
         ExprKind::Cast(_, ty, _) => format!("as {ty}"),
         ExprKind::Assign(..) => "assign".to_owned(),
