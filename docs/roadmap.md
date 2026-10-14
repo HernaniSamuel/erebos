@@ -21,7 +21,7 @@ updated, and a program on QEMU.
 | Step | Delivers | Program on QEMU |
 |------|----------|-----------------|
 | **M2.1** ✅ Structs and arrays | `struct`, `[T; N]`, fields, checked indexing, `&raw const/mut` (ADR 0021); C layout, `size_of`/`align_of`/`offset_of`, `#[packed]`, `#[align(N)]`, `bool` loads (ADR 0022); unchecked pointer indexing (ADR 0021); volatile access widths (ADR 0023); `memcpy`/`memset` in `rt/` | a ring buffer on the stack |
-| **M2.2** Aggregates across calls | passing and returning structs and arrays by value with the riscv32 C ABI (small ones in registers, large ones through a hidden pointer) | calls a C function built with clang, to prove the ABI is the real one |
+| **M2.2** ✅ Aggregates across calls | passing and returning structs and arrays by value with the riscv32 C ABI (small ones in registers, large ones through a hidden pointer) | calls a C function built with clang, to prove the ABI is the real one |
 | **M2.3** Constants, statics and byte strings | `const` with compile-time evaluation; `static`/`static mut`, `#[align(N)]` on statics; `_start` initializes `.data` and `.bss`; `b"..."`; slices `*const [T]` | prints with a real `print` function |
 | **M2.4** Enums and `match` | enums with explicit discriminants (`enum Mode: u8 { Off = 0, Run = 3 }`), `match` on integers, `bool` and enums; then payloads, nested patterns and exhaustiveness | a state machine |
 | **M2.5** `Option` and `Result` | built into the compiler until generics exist; the `?` operator | a number parser returning `Result` |
@@ -63,8 +63,9 @@ Agreed as useful, not yet scheduled:
 - Struct and array literals are built in a temporary and then copied into
   their variable. Building them in place would save a copy at `-O0`; `-O`
   already removes it.
-- M2.2 decides how zero-sized types cross calls; C has no equivalent
-  (ADR 0022).
+- A large argument is copied by the caller and, if it is a variable,
+  that copy is all there is; a temporary argument could be passed without
+  the copy. `-O` removes most of it already.
 
 ## Pending decisions
 
@@ -90,4 +91,8 @@ Agreed as useful, not yet scheduled:
   the stack, runs on QEMU; layouts are checked against clang, and volatile
   accesses in LLVM IR with and without `-O`. `rt/` provides `memcpy`,
   `memmove` and `memset`.
-- **Next: M2.2** (aggregates across calls).
+- **M2.2 done.** Structs and arrays cross calls by value with the riscv32 C
+  ABI (ADR 0025), and `extern fn` declares functions defined elsewhere
+  (ADR 0026). The milestone program exchanges aggregates of every size
+  class with C code compiled by clang, in both directions.
+- **Next: M2.3** (constants, statics and byte strings).

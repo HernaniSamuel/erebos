@@ -1,4 +1,4 @@
-# Erebos language reference (M2.1)
+# Erebos language reference (M2.2)
 
 This describes the language as the compiler implements it today. The
 reasoning behind each rule lives in the ADRs (`docs/adr/`), cited as
@@ -8,8 +8,8 @@ one of them.
 ## Programs
 
 A program is one source file (`.ers`) plus the runtime support functions
-(`rt/builtins.ers`, ADR 0020). It is a list of items, functions and
-structs, in any order. It must contain exactly one **entry function** and
+(`rt/builtins.ers`, ADR 0020). It is a list of items, functions, external
+functions and structs, in any order. It must contain exactly one **entry function** and
 one **panic function**:
 
 ```
@@ -36,8 +36,9 @@ The target is RV32IMAC on QEMU `virt` (ADR 0010).
 - **Identifiers:** `[A-Za-z_][A-Za-z0-9_]*`. Names starting with `__` are
   reserved for the runtime, and so are the C names it defines (`memcpy`,
   `memmove`, `memset`) and `_start`.
-- **Keywords:** `align_of as break const continue else entry false fn if
-  let loop mut offset_of panic return size_of struct true volatile while`.
+- **Keywords:** `align_of as break const continue else entry extern false
+  fn if let loop mut offset_of panic return size_of struct true volatile
+  while`.
   `raw` is a keyword only right after `&`.
 - **Integer literals** (ADR 0016): `42`, `0x2A`, `0o52`, `0b10_1010`; `_`
   separates digits. A decimal literal with a leading zero (`017`) is an
@@ -76,12 +77,38 @@ fn add(a: u32, mut b: u32) -> u32 {
 - Functions may be called before their declaration, and may recurse.
 - Arguments are checked against parameter types with no conversion.
 - Parameters cannot have type `()` or `!`.
-- Aggregates cannot be parameters or return types yet; pass a pointer
-  (M2.2 adds them, ADR 0006).
 - There are no methods: functions take their receiver explicitly, such as
   `fn area(r: *const Rect) -> u32` (methods come with references, M5).
 - All functions use the C ABI of the target (ADR 0006); symbol names are not
-  mangled.
+  mangled, so C code can call any Erebos function by its name.
+
+### Aggregates by value (ADR 0025)
+
+Structs and arrays are parameters and return values like any other type,
+passed as the riscv32 C ABI says:
+
+| Aggregate | Argument | Return value |
+|-----------|----------|--------------|
+| size 0 | not passed | nothing |
+| up to 4 bytes | one register | `a0` |
+| up to 8 bytes | a register pair | `a0`, `a1` |
+| larger | a pointer to a copy the caller makes | memory the caller provides, through a hidden first argument |
+
+A parameter is always the callee's own copy: changing it never changes the
+caller's value. Arrays pass like a struct of the same layout; C, which has
+no arrays by value, wraps them in a struct.
+
+### External functions (ADR 0026)
+
+```
+extern fn c_checksum(data: *const u8, n: usize) -> u32;
+```
+
+declares a function defined outside the program, in C, assembly or a
+vendor library, which the linker finds; `erebos build --link file.o` adds
+the object file. It is called like any function. Its parameters cannot be
+`mut`, and nothing checks the declaration against the definition: as in C,
+a mismatch is undefined.
 
 ## Statements and blocks
 
@@ -300,10 +327,11 @@ names.
 ## Building
 
 ```
-erebos build program.ers [-o program.elf] [-O] [--emit=<stage>]
+erebos build program.ers [-o program.elf] [-O] [--link file.o]... [--emit=<stage>]
 ```
 
-`-O` enables LLVM optimizations. `--emit` prints a compiler stage instead:
+`-O` enables LLVM optimizations. `--link` adds an object file defining
+`extern fn`s; it may be repeated. `--emit` prints a compiler stage instead:
 `tokens`, `ast`, `hir`, `typeck`, `mir` or `llvm-ir` (dumps leave out the
 runtime; `typeck` and `mir` start with every struct's layout). See
 `CONTRIBUTING.md` for setup and running on QEMU.
@@ -334,6 +362,7 @@ Every error has a stable code, shown with the message.
 | `resolve::duplicate-function` | two functions with one name |
 | `resolve::duplicate-type` | two structs with one name, or a struct named like a built-in type |
 | `resolve::duplicate-param` | two parameters with one name |
+| `resolve::mut-extern-param` | a `mut` parameter in an `extern fn` |
 | `resolve::duplicate-field` | a field declared, or given in a literal, twice |
 | `resolve::unknown-field` | a struct literal names a field the struct does not have |
 | `resolve::missing-fields` | a struct literal leaves fields out |
@@ -370,7 +399,6 @@ Every error has a stable code, shown with the message.
 | `ty::volatile-too-wide` | volatile access wider than the target's widest access |
 | `ty::volatile-aggregate` | volatile access to a whole struct or array |
 | `ty::volatile-packed-field` | volatile access to a possibly misaligned place inside a packed struct |
-| `ty::aggregate-by-value` | struct or array as a parameter or return type |
 | `ty::too-large` | a value larger than half the address space |
 | `ty::infinite-size` | structs that contain themselves, directly or through each other |
 | `ty::invalid-align` | `#[align(N)]` with `N` not a power of two, too large or below the natural alignment |

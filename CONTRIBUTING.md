@@ -67,6 +67,9 @@ cargo test
   `// expect-exit: <code>`; it must print exactly those lines and stop QEMU
   through the test finisher with that code. A program without
   `expect-exit` must run forever. Any CPU exception fails the test.
+  `// link-c: file.c` (repeatable) compiles a C file next to the program
+  with clang for the target, at the matching optimization level, and links
+  it in; the program declares its functions with `extern fn`.
   Every program runs both unoptimized and with `-O`: the optimizer exploits
   undefined behavior, so a difference means the generated IR is wrong.
 - `erebos build <file> [-O] --emit=<stage>` prints any stage (`tokens`, `ast`,
