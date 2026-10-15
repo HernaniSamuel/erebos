@@ -1,6 +1,6 @@
 # 0025. Aggregates across calls on riscv32
 
-- Status: Accepted
+- Status: Accepted; amended by 0031 (slices across calls)
 - Date: 2026-10-14
 
 ## Context

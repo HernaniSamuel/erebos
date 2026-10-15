@@ -1,6 +1,6 @@
 # 0019. Conversions, pointer representation and pointer validity
 
-- Status: Accepted
+- Status: Accepted; amended by 0031 (only thin pointers are addresses)
 - Date: 2026-10-13
 
 ## Context

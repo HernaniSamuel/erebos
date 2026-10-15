@@ -42,7 +42,7 @@ Decisions already agreed for the later steps (their ADRs come with the step):
   `[T; N]` is; in M6 they become ordinary comptime functions in `core`
   returning enums (ADR 0027), with the same syntax, so programs do not
   change. They are written with parentheses, like any comptime call. `?` requires the same error
-  type, with no conversion. `Option<*mut T>` takes 8 bytes: address 0 is
+  type, with no conversion. `Option(*mut T)` takes 8 bytes: address 0 is
   valid (ADR 0019), so there is no null niche for `None`.
 
 Until M5, there are no methods: functions are free and take their receiver
@@ -71,7 +71,45 @@ Agreed as useful, not yet scheduled:
 
 ## Pending decisions
 
-- None. (`*mut T` to `*const T` is now implicit, ADR 0024.)
+Questions accepted ADRs leave to a later step, to settle in that step's
+ADRs:
+
+- **M2.4:**
+  - In a `match`, whether a name is a constant to compare with or a new
+    variable (ADR 0029).
+  - What an enum read from memory or a register holds when its value is
+    no variant, at run time and at compile time; ADR 0022 answered the same
+    question for `bool`.
+- **M2.6:**
+  - Symbol names with modules: functions and statics are emitted under
+    their own names (ADR 0006, 0026, 0030). With modules, names must be
+    unique across the program, or be mangled with an attribute to export
+    them.
+  - The panic handler's signature: location, reason and message
+    (ADR 0014, 0031).
+- **M4:**
+  - Sharing a `static mut` with interrupt handlers (ADR 0030).
+  - Compiler and hardware fences (ADR 0023).
+  - Moving `_start` into the language (ADR 0012, 0030).
+- **M5:**
+  - Constants and statics of types that must not be copied: duplicating a
+    peripheral handle is a bug ownership should catch (ADR 0021), but a
+    constant is copied at each use and reading a static copies it.
+  - Copy versus move (ADR 0021), and borrow checking (ADR 0009).
+  - The `(*s)[i]` syntax for slice elements (ADR 0031).
+  - Whether the MIR analyses run before compile-time evaluation, which
+    today runs MIR they have not checked (ADR 0033).
+- **M6:**
+  - `compile_error` (ADR 0031).
+  - Requirements on type arguments (ADR 0027).
+  - ADR 0027 writes return types Zig-style (`fn max(comptime T: type,
+    a: T, b: T) T`); by ADR 0015 a function without `->` returns `()`, so
+    the M6 ADR writes `-> T`.
+
+Documentation owed:
+
+- The informal grammar reference ADR 0004 asks for in `docs/`; with
+  `comptime` precedence and expressions inside types, it is overdue.
 
 ## Status
 

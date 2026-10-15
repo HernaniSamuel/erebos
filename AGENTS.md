@@ -23,12 +23,14 @@ become language constructs. The compiler is written in Rust and uses LLVM via
 
 - Everything in the repository is in **English**, even when the conversation
   is in another language.
-- Respect layer boundaries (ADR 0003): a compiler layer only consumes the
-  output of the layer directly before it. Codegen never sees the AST.
+- Respect layer boundaries (ADR 0003, 0028): a compiler layer only consumes
+  the output of the layer directly before it. The one edge back: type
+  checking and MIR building ask the compile-time evaluator for values, and
+  get values, never MIR. Codegen sees only MIR and evaluated data.
 - No type inference and no implicit conversions (ADR 0008).
 - Integer `+ - *` wrap; never emit `nsw`/`nuw` (ADR 0007).
-- Only the target C ABI exists (ADR 0006). Aggregates are passed by pointer
-  until per-target ABI lowering is implemented.
+- Only the target C ABI exists (ADR 0006). Aggregates cross calls by value,
+  with the riscv32 rules of ADR 0025.
 - Hand-written lexer and parser; do not add parser generators (ADR 0004).
 - User errors produce `miette` diagnostics with spans, never panics.
 - Do not add dependencies without stating why in the commit body.

@@ -2,6 +2,7 @@
 
 - Status: Proposed | Accepted | Superseded by NNNN | Rejected
 - Date: YYYY-MM-DD
+- Amends: NNNN (only if it changes part of an accepted ADR)
 
 ## Context
 

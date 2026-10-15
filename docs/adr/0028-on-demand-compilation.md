@@ -1,6 +1,6 @@
 # 0028. On-demand type checking and evaluation
 
-- Status: Accepted
+- Status: Accepted; amended by 0033 (MIR building also asks for values)
 - Date: 2026-10-14
 - Amends: 0003
 

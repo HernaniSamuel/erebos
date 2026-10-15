@@ -1,6 +1,6 @@
 # 0012. Provisional compiler-generated startup code
 
-- Status: Accepted
+- Status: Accepted; amended by 0030 (`_start` initializes `.data` and `.bss`)
 - Date: 2026-10-12
 
 ## Context

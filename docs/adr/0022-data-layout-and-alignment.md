@@ -1,6 +1,6 @@
 # 0022. Data layout and alignment control
 
-- Status: Accepted
+- Status: Accepted; amended by 0030 (the alignment of `.data` and `.bss`), 0031 (unsized types and the layout of slices)
 - Date: 2026-10-14
 
 ## Context

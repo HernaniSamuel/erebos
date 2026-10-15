@@ -1,6 +1,6 @@
 # 0027. Compile-time execution (comptime)
 
-- Status: Accepted
+- Status: Accepted; amended by 0030 (comparing pointers at compile time)
 - Date: 2026-10-14
 
 ## Context

@@ -1,6 +1,6 @@
 # 0018. Evaluation order
 
-- Status: Accepted
+- Status: Accepted; amended by 0031 (the message of `assert` runs only if it fails)
 - Date: 2026-10-13
 
 ## Context

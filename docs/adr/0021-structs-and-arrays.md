@@ -1,6 +1,6 @@
 # 0021. Structs and arrays
 
-- Status: Accepted
+- Status: Accepted; amended by 0031 (indexing slice pointers), 0032 (indices known at compile time)
 - Date: 2026-10-14
 
 ## Context

@@ -1,6 +1,6 @@
 # 0023. Volatile access guarantees
 
-- Status: Accepted
+- Status: Accepted; amended by 0031 (slices are aggregates for volatile accesses)
 - Date: 2026-10-14
 
 ## Context

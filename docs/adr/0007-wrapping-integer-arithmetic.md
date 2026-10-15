@@ -1,6 +1,6 @@
 # 0007. Wrapping integer arithmetic
 
-- Status: Accepted
+- Status: Accepted; amended by 0032 (checks on values known at compile time)
 - Date: 2026-10-12
 
 ## Context
