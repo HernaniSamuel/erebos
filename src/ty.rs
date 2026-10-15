@@ -141,6 +141,9 @@ struct PlaceInfo {
     /// The path from that pointer goes through a field of a `#[packed]`
     /// struct, so the place may be misaligned (ADR 0022).
     misaligned: bool,
+    /// Part of a constant's value, which has no address (ADR 0029): it
+    /// can be read, but `&raw` of it is not a place.
+    constant: bool,
 }
 
 impl PlaceInfo {
@@ -150,7 +153,20 @@ impl PlaceInfo {
         immutable: None,
         via: None,
         misaligned: false,
+        constant: false,
     };
+
+    /// The value of `base`, which is not a place expression, indexed or
+    /// projected where it is.
+    fn temporary(ty: Ty, base: &Expr) -> PlaceInfo {
+        PlaceInfo {
+            ty,
+            immutable: Some(Immutable::Temporary(base.span)),
+            via: None,
+            misaligned: false,
+            constant: matches!(base.kind, ExprKind::Const(_)),
+        }
+    }
 
     /// The place a pointer points to; `pointer` is the pointer's expression.
     fn through(ptr: Ptr, pointer: Span) -> PlaceInfo {
@@ -160,6 +176,7 @@ impl PlaceInfo {
             via: Some(ptr),
             // Pointers are assumed aligned (ADR 0019).
             misaligned: false,
+            constant: false,
         }
     }
 }
@@ -1045,6 +1062,7 @@ impl Checker<'_, '_> {
                     immutable: (!local.mutable).then_some(Immutable::Local(*id)),
                     via: None,
                     misaligned: false,
+                    constant: false,
                 }
             }
             ExprKind::Deref(pointer) => {
@@ -1071,10 +1089,7 @@ impl Checker<'_, '_> {
                 self.check(f, index, Some(Ty::Int(IntTy::Usize)));
                 if let Ty::Array(elem, len) = ty {
                     self.constant_index(index, len.known());
-                    let base_place = base_place.unwrap_or(PlaceInfo {
-                        immutable: Some(Immutable::Temporary(base.span)),
-                        ..PlaceInfo::ERROR
-                    });
+                    let base_place = base_place.unwrap_or_else(|| PlaceInfo::temporary(ty, base));
                     PlaceInfo {
                         ty: *elem,
                         ..base_place
@@ -1115,13 +1130,7 @@ impl Checker<'_, '_> {
             Some(info) => (info.ty, info),
             None => {
                 let ty = self.check(f, base, None);
-                let temporary = PlaceInfo {
-                    ty,
-                    immutable: Some(Immutable::Temporary(base.span)),
-                    via: None,
-                    misaligned: false,
-                };
-                (ty, temporary)
+                (ty, PlaceInfo::temporary(ty, base))
             }
         }
     }
@@ -1243,15 +1252,20 @@ impl Checker<'_, '_> {
     /// `&raw const place` or `&raw mut place` (ADR 0021). The address of a
     /// place is taken without accessing it.
     fn addr_of(&mut self, f: &Fn, mutable: bool, place: &Expr) -> Ty {
+        let not_a_place = Diagnostic::error("ty::not-a-place", "`&raw` needs a place in memory")
+            .label(place.span, "a value, not a place")
+            .help("take the address of a variable, `*pointer` or `a[index]`; to point at a value, store it in a `let` first");
         let Some(info) = self.place_info(f, place) else {
             self.check(f, place, None);
-            self.q.diags.push(
-                Diagnostic::error("ty::not-a-place", "`&raw` needs a place in memory")
-                    .label(place.span, "a value, not a place")
-                    .help("take the address of a variable, `*pointer` or `a[index]`; to point at a value, store it in a `let` first"),
-            );
+            self.q.diags.push(not_a_place);
             return Ty::Error;
         };
+        // An element or field of a constant is read where the constant's
+        // data is, but has no address of its own (ADR 0029).
+        if info.constant {
+            self.q.diags.push(not_a_place);
+            return Ty::Error;
+        }
         if mutable {
             match info.immutable {
                 Some(Immutable::Local(id)) => {

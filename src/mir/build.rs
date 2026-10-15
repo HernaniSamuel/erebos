@@ -409,7 +409,7 @@ impl Builder<'_, '_> {
                 }
             }
             hir::ExprKind::AddrOf { mutable, place } => {
-                let place = self.place(place);
+                let place = self.place_then(place, false, true);
                 self.temp(
                     ty,
                     Rvalue::AddressOf {
@@ -867,12 +867,14 @@ impl Builder<'_, '_> {
     /// Any other expression is evaluated into a temporary, whose place is
     /// returned.
     fn place(&mut self, expr: &hir::Expr) -> Place {
-        self.place_then(expr, false)
+        self.place_then(expr, false, false)
     }
 
     /// `later_writes`: code evaluated after this place, but before it is
-    /// accessed, may assign variables (ADR 0018).
-    fn place_then(&mut self, expr: &hir::Expr, later_writes: bool) -> Place {
+    /// accessed, may assign variables (ADR 0018). `address`: the place's
+    /// address is taken, so a value computed at compile time is copied
+    /// into a local first: its data has no address (ADR 0029).
+    fn place_then(&mut self, expr: &hir::Expr, later_writes: bool, address: bool) -> Place {
         match &expr.kind {
             hir::ExprKind::Local(local) => self.local(*local),
             hir::ExprKind::Deref(pointer) => self
@@ -882,7 +884,7 @@ impl Builder<'_, '_> {
                 let later_writes = later_writes || !is_simple(index);
                 match self.ty_of(base) {
                     Ty::Array(_, len) => {
-                        let base = self.place_then(base, later_writes);
+                        let base = self.place_then(base, later_writes, address);
                         let elem = self.array_index(index, len);
                         base.project(elem)
                     }
@@ -894,7 +896,7 @@ impl Builder<'_, '_> {
                 }
             }
             hir::ExprKind::Field(base, _, _) => {
-                let base_place = self.place_then(base, later_writes);
+                let base_place = self.place_then(base, later_writes, address);
                 // A base of type `!` is never computed, and has no fields.
                 if self.ty_of(base) == Ty::Never {
                     return base_place;
@@ -904,7 +906,11 @@ impl Builder<'_, '_> {
             _ => {
                 let ty = self.ty_of(expr);
                 match self.expr(expr) {
-                    Operand::Copy(place) => place,
+                    Operand::Copy(place)
+                        if !(address && self.locals[place.local.0 as usize].constant.is_some()) =>
+                    {
+                        place
+                    }
                     other => match self.temp(ty, Rvalue::Use(other)) {
                         Operand::Copy(place) => place,
                         Operand::Const(_) => unreachable!("temporaries are places"),

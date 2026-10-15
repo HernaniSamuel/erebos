@@ -1,0 +1,16 @@
+// emit: typeck
+// A constant is a value, not a place (ADR 0029), and neither are its
+// elements and fields: `&raw` of any of them is `ty::not-a-place`.
+const T: [u32; 4] = [1, 2, 3, 4];
+const S: Pair = Pair { f: 5, a: [6, 7, 8] };
+struct Pair { f: u32, a: [u16; 3] }
+
+fn addresses() {
+    let element: *const u32 = &raw const T[1];
+    let field: *const u32 = &raw const S.f;
+    let nested: *const u16 = &raw const S.a[2];
+    let mutable: *mut u32 = &raw mut T[0];
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

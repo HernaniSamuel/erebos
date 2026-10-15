@@ -1,0 +1,21 @@
+// emit: typeck
+// Through a pointer held in a constant, indexing and fields are places as
+// usual (ADR 0029); reading the elements and fields of a constant is too.
+const UART: *mut Regs = 0x1000_0000 as *mut Regs;
+const BASE: *mut u32 = 0x2000_0000 as *mut u32;
+const T: [u32; 4] = [1, 2, 3, 4];
+const S: Pair = Pair { f: 5, a: [6, 7, 8] };
+struct Regs { data: u32, ctrl: u32 }
+struct Pair { f: u32, a: [u16; 3] }
+
+fn through_pointers() -> *mut u32 {
+    let ctrl: *mut u32 = &raw mut (*UART).ctrl;
+    &raw mut BASE[1]
+}
+
+fn reads(i: usize) -> u32 {
+    T[i] + S.f + S.a[2] as u32
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

@@ -1,0 +1,54 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_const_place_errors.ers
+---
+--- errors ---
+ty::not-a-place
+
+  × `&raw` needs a place in memory
+    ╭─[typeck_const_place_errors.ers:9:42]
+  8 │ fn addresses() {
+  9 │     let element: *const u32 = &raw const T[1];
+    ·                                          ──┬─
+    ·                                            ╰── a value, not a place
+ 10 │     let field: *const u32 = &raw const S.f;
+    ╰────
+  help: take the address of a variable, `*pointer` or `a[index]`; to point at a value, store it in
+        a `let` first
+ty::not-a-place
+
+  × `&raw` needs a place in memory
+    ╭─[typeck_const_place_errors.ers:10:40]
+  9 │     let element: *const u32 = &raw const T[1];
+ 10 │     let field: *const u32 = &raw const S.f;
+    ·                                        ─┬─
+    ·                                         ╰── a value, not a place
+ 11 │     let nested: *const u16 = &raw const S.a[2];
+    ╰────
+  help: take the address of a variable, `*pointer` or `a[index]`; to point at a value, store it in
+        a `let` first
+ty::not-a-place
+
+  × `&raw` needs a place in memory
+    ╭─[typeck_const_place_errors.ers:11:41]
+ 10 │     let field: *const u32 = &raw const S.f;
+ 11 │     let nested: *const u16 = &raw const S.a[2];
+    ·                                         ───┬──
+    ·                                            ╰── a value, not a place
+ 12 │     let mutable: *mut u32 = &raw mut T[0];
+    ╰────
+  help: take the address of a variable, `*pointer` or `a[index]`; to point at a value, store it in
+        a `let` first
+ty::not-a-place
+
+  × `&raw` needs a place in memory
+    ╭─[typeck_const_place_errors.ers:12:38]
+ 11 │     let nested: *const u16 = &raw const S.a[2];
+ 12 │     let mutable: *mut u32 = &raw mut T[0];
+    ·                                      ──┬─
+    ·                                        ╰── a value, not a place
+ 13 │ }
+    ╰────
+  help: take the address of a variable, `*pointer` or `a[index]`; to point at a value, store it in
+        a `let` first

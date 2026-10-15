@@ -1,0 +1,23 @@
+// emit: mir
+// A `comptime` value is a value like the call it replaces: `&raw` of part
+// of it takes the address of a fresh local holding a copy, as for `t()`,
+// never of its read-only data (ADR 0029). Reading part of it goes straight
+// to the data.
+fn t() -> [u32; 2] {
+    [5, 6]
+}
+
+fn address() -> *const u32 {
+    &raw const (comptime t())[1]
+}
+
+fn address_of_call() -> *const u32 {
+    &raw const (t())[1]
+}
+
+fn read() -> u32 {
+    (comptime t())[1]
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

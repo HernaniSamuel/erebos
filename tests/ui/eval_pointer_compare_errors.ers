@@ -1,7 +1,8 @@
 // emit: mir
 // Pointer comparisons whose run-time answer is not known at compile time
 // are `eval::pointer-compare`; comparing or reading through a pointer to a
-// variable of a returned call is `eval::dangling-pointer` (ADR 0030).
+// variable of a returned call is `eval::dangling-pointer` (ADR 0030), also
+// when it points into the copy of a `comptime` value (ADR 0029).
 const PAST_END: bool = past_end();
 const ZERO_SIZED: bool = zero_sized();
 const ACROSS: bool = across();
@@ -9,6 +10,7 @@ const WRAPPED: bool = wrapped();
 const WITH_ADDRESS: bool = with_address();
 const DANGLING_COMPARE: bool = addr(1) == addr(2);
 const DANGLING_READ: u32 = *addr(1);
+const DANGLING_COMPTIME: bool = comptime_element() == comptime_element();
 
 fn past_end() -> bool {
     let a: u32 = 1;
@@ -43,6 +45,14 @@ fn with_address() -> bool {
 fn addr(x: u32) -> *const u32 {
     let v: u32 = x;
     &raw const v
+}
+
+fn comptime_element() -> *const u32 {
+    &raw const (comptime pair())[1]
+}
+
+fn pair() -> [u32; 2] {
+    [5, 6]
 }
 
 entry fn main() -> ! { loop {} }

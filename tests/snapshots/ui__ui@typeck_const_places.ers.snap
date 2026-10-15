@@ -1,0 +1,54 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_const_places.ers
+---
+--- typeck ---
+struct Regs { data: u32 at 0, ctrl: u32 at 4 } size 8, align 4
+struct Pair { f: u32 at 0, a: [u16; 3] at 4 } size 12, align 4
+fn through_pointers() -> *mut u32
+    let ctrl: *mut u32
+    expr 0 &raw mut 478..499: *mut u32
+    expr 1 field ctrl 487..499: u32
+    expr 2 deref 487..494: Regs
+    expr 3 const UART 489..493: *mut Regs
+    expr 4 &raw mut 505..521: *mut u32
+    expr 5 index 514..521: u32
+    expr 6 const BASE 514..518: *mut u32
+    expr 7 int 1 519..520: usize
+fn reads(i: usize) -> u32
+    expr 8 binary + 557..583: u32
+    expr 9 binary + 557..567: u32
+    expr 10 index 557..561: u32
+    expr 11 const T 557..558: [u32; 4]
+    expr 12 local i 559..560: usize
+    expr 13 field f 564..567: u32
+    expr 14 const S 564..565: Pair
+    expr 15 as u32 570..583: u32
+    expr 16 index 570..576: u16
+    expr 17 field a 570..573: [u16; 3]
+    expr 18 const S 570..571: Pair
+    expr 19 int 2 574..575: usize
+entry fn main() -> !
+    expr 20 loop 610..617: !
+panic fn on_panic() -> !
+    expr 21 loop 647..654: !
+comptime fn UART() -> *mut Regs
+    expr 22 as *mut Regs 190..214: *mut Regs
+    expr 23 int 268435456 190..201: usize
+comptime fn BASE() -> *mut u32
+    expr 24 as *mut u32 239..262: *mut u32
+    expr 25 int 536870912 239..250: usize
+comptime fn T() -> [u32; 4]
+    expr 26 array 284..296: [u32; 4]
+    expr 27 int 1 285..286: u32
+    expr 28 int 2 288..289: u32
+    expr 29 int 3 291..292: u32
+    expr 30 int 4 294..295: u32
+comptime fn S() -> Pair
+    expr 31 struct Pair 314..341: Pair
+    expr 32 int 5 324..325: u32
+    expr 33 array 330..339: [u16; 3]
+    expr 34 int 6 331..332: u16
+    expr 35 int 7 334..335: u16
+    expr 36 int 8 337..338: u16
