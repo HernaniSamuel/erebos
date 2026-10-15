@@ -1,0 +1,66 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/codegen_statics.ers
+---
+--- llvm-ir ---
+; ModuleID = 'erebos'
+source_filename = "erebos"
+target datalayout = "e-m:e-p:32:32-i64:64-n32-S128"
+target triple = "riscv32-unknown-none-elf"
+
+module asm "\09.section .text.start, \22ax\22, @progbits"
+module asm "\09.globl _start"
+module asm "\09.type _start, @function"
+module asm "_start:"
+module asm "\09li sp, 0x88000000"
+module asm "\09j main"
+
+@TABLE = constant [6 x i8] c"\01\00\02\00\03\00", align 2
+@CONFIG = global [8 x i8] c"\03\00\00\00\00\C2\01\00", align 4
+@TICKS = global [4 x i8] zeroinitializer, align 4
+@DMA_BUF = global [8 x i8] zeroinitializer, align 64
+
+; Function Attrs: nounwind null_pointer_is_valid
+define i32 @tick() #0 {
+bb0:
+  %0 = load i32, ptr @TICKS, align 4
+  %1 = add i32 %0, 1
+  store i32 %1, ptr @TICKS, align 4
+  %2 = load i32, ptr @TICKS, align 4
+  %3 = getelementptr i16, ptr @TABLE, i32 2
+  %4 = load i16, ptr %3, align 2
+  %5 = zext i16 %4 to i32
+  %6 = add i32 %2, %5
+  %7 = getelementptr i8, ptr @CONFIG, i32 4
+  %8 = load i32, ptr %7, align 4
+  %9 = add i32 %6, %8
+  ret i32 %9
+}
+
+; Function Attrs: nounwind null_pointer_is_valid
+define ptr @buffer() #0 {
+bb0:
+  ret ptr @DMA_BUF
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @main() #1 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @on_panic() #1 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+attributes #0 = { nounwind null_pointer_is_valid }
+attributes #1 = { noreturn nounwind null_pointer_is_valid }

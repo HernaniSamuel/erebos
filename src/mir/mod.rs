@@ -47,6 +47,8 @@ pub struct Mir {
     /// Read-only data computed at compile time, which constant locals are
     /// bound to (ADR 0029).
     pub data: Vec<ConstData>,
+    /// Every static, in source order (ADR 0030).
+    pub statics: Vec<Static>,
     pub bodies: Vec<Body>,
     pub entry: BodyId,
     pub panic: BodyId,
@@ -129,6 +131,7 @@ impl Body {
             Operand::Const(Const::Int(_, int)) => Ty::Int(*int),
             Operand::Const(Const::Bool(_)) => Ty::Bool,
             Operand::Const(Const::Unit) => Ty::Unit,
+            Operand::Const(Const::Static(s)) => s.def().address_ty(),
         }
     }
 }
@@ -150,6 +153,78 @@ pub struct DataId(pub u32);
 #[derive(Clone, Debug)]
 pub struct ConstData {
     /// Laid out as on the target, padding zero (ADR 0027).
+    pub bytes: Vec<u8>,
+    pub align: u64,
+}
+
+/// A static, indexing [`Mir::statics`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct StaticId(pub u32);
+
+/// What MIR knows of a static (ADR 0030); its memory is a [`Static`].
+pub struct StaticDef {
+    pub id: StaticId,
+    /// Its symbol name (ADR 0030).
+    pub name: String,
+    pub ty: Ty,
+    /// `static mut`: written by the program.
+    pub mutable: bool,
+    /// `*mut T` for a `static mut`, else `*const T`.
+    address_ty: Ty,
+}
+
+impl StaticDef {
+    /// The type of its address.
+    pub fn address_ty(&self) -> Ty {
+        self.address_ty
+    }
+}
+
+/// A static, as operands name it. Leaked like struct definitions, so that
+/// constants stay `Copy` and dumps can name it.
+#[derive(Clone, Copy)]
+pub struct StaticRef(&'static StaticDef);
+
+impl StaticRef {
+    pub fn new(id: StaticId, name: String, ty: Ty, mutable: bool) -> StaticRef {
+        let address_ty = Ty::Ptr(Ptr {
+            mutable,
+            volatile: false,
+            pointee: Box::leak(Box::new(ty)),
+        });
+        StaticRef(Box::leak(Box::new(StaticDef {
+            id,
+            name,
+            ty,
+            mutable,
+            address_ty,
+        })))
+    }
+
+    pub fn def(self) -> &'static StaticDef {
+        self.0
+    }
+}
+
+impl PartialEq for StaticRef {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.id == other.0.id
+    }
+}
+
+impl Eq for StaticRef {}
+
+impl fmt::Debug for StaticRef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0.name)
+    }
+}
+
+/// The memory of a static: its initial value, laid out as on the target
+/// with padding zero (ADR 0027), and its alignment.
+#[derive(Clone, Debug)]
+pub struct Static {
+    pub def: StaticRef,
     pub bytes: Vec<u8>,
     pub align: u64,
 }
@@ -358,6 +433,9 @@ pub enum Const {
     Int(u64, IntTy),
     Bool(bool),
     Unit,
+    /// The address of a static (ADR 0030), through which it is read and
+    /// written.
+    Static(StaticRef),
 }
 
 #[derive(Clone, Debug)]
@@ -468,6 +546,7 @@ impl fmt::Display for Operand {
             }
             Operand::Const(Const::Bool(value)) => write!(f, "const {value}"),
             Operand::Const(Const::Unit) => f.write_str("const ()"),
+            Operand::Const(Const::Static(s)) => write!(f, "const static {}", s.def().name),
         }
     }
 }
@@ -545,6 +624,18 @@ impl fmt::Display for Mir {
             )?;
         }
         if !self.structs.is_empty() {
+            writeln!(f)?;
+        }
+        for s in &self.statics {
+            let def = s.def.def();
+            let mutability = if def.mutable { "mut " } else { "" };
+            writeln!(
+                f,
+                "static {mutability}{}: {}; // align {}",
+                def.name, def.ty, s.align
+            )?;
+        }
+        if !self.statics.is_empty() {
             writeln!(f)?;
         }
         for (i, (id, body)) in self.bodies().enumerate() {

@@ -1,0 +1,27 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/parse_static_errors.ers
+---
+--- errors ---
+parser::unexpected-token
+
+  × expected `=`, found `;`
+   ╭─[parse_static_errors.ers:4:21]
+ 3 │ // `parser::local-static` (ADR 0030).
+ 4 │ static NO_VALUE: u32;
+   ·                     ┬
+   ·                     ╰── expected `=`
+ 5 │ 
+   ╰────
+parser::local-static
+
+  × `static` items cannot be declared inside a function
+   ╭─[parse_static_errors.ers:7:5]
+ 6 │ fn f() -> u32 {
+ 7 │     static mut LOCAL: u32 = 1;
+   ·     ───┬──
+   ·        ╰── inside a function
+ 8 │     2
+   ╰────
+  help: move the `static` out of the function (ADR 0030)

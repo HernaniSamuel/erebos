@@ -14,6 +14,7 @@ pub enum Item {
     Fn(FnDecl),
     Struct(StructDecl),
     Const(ConstDecl),
+    Static(StaticDecl),
     Comptime(ComptimeDecl),
 }
 
@@ -21,6 +22,18 @@ pub enum Item {
 #[derive(Debug)]
 pub struct ConstDecl {
     pub attrs: Vec<Attr>,
+    pub name: Ident,
+    pub ty: Ty,
+    pub value: Expr,
+    pub span: Span,
+}
+
+/// `static NAME: Type = value;` or `static mut NAME: Type = value;`
+/// (ADR 0030)
+#[derive(Debug)]
+pub struct StaticDecl {
+    pub attrs: Vec<Attr>,
+    pub mutable: bool,
     pub name: Ident,
     pub ty: Ty,
     pub value: Expr,

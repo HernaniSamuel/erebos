@@ -1,0 +1,164 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/eval_statics.ers
+---
+--- mir ---
+struct Padded { 0 a: u8 at 0, 1 b: u32 at 4 } // size 8, align 4
+
+static PADDED: Padded; // align 4
+static TABLE: [u32; 3]; // align 4
+static mut COUNT: u32; // align 4
+
+fn padding() -> u8 {
+    let _0: u8;
+    let _1: *const u8; // bytes
+    let _2: *const Padded;
+    let _3: *const Padded;
+    let _4: *const u8;
+    let _5: usize;
+    let _6: u8;
+
+    bb0: {
+        _2 = const static PADDED;
+        _3 = &raw const (*_2);
+        _4 = copy _3 as *const u8;
+        _1 = copy _4;
+        _5 = const 1_usize;
+        _6 = copy (*(_1 + _5));
+        _0 = copy _6;
+        return;
+    }
+}
+
+fn compare() -> [bool; 3] {
+    let _0: [bool; 3];
+    let _1: *mut u32; // count
+    let _2: *mut u32;
+    let _3: *mut u32;
+    let _4: [bool; 3];
+    let _5: *const [u32; 3];
+    let _6: *const u32;
+    let _7: *const u32;
+    let _8: *const Padded;
+    let _9: *const u32;
+    let _10: bool;
+    let _11: *const [u32; 3];
+    let _12: *const u32;
+    let _13: *const u32;
+    let _14: *const Padded;
+    let _15: *const u32;
+    let _16: bool;
+    let _17: *const [u32; 3];
+    let _18: *const u32;
+    let _19: *const u32;
+    let _20: *const [u32; 3];
+    let _21: *const u32;
+    let _22: bool;
+
+    bb0: {
+        _2 = const static COUNT;
+        _3 = &raw mut (*_2);
+        _1 = copy _3;
+        _5 = const static TABLE;
+        _6 = &raw const (*_5)[0];
+        _7 = copy _6;
+        _8 = const static PADDED;
+        _9 = &raw const (*_8).1;
+        _10 = Eq(copy _7, copy _9);
+        _4[0] = copy _10;
+        _11 = const static TABLE;
+        _12 = &raw const (*_11)[0];
+        _13 = copy _12;
+        _14 = const static PADDED;
+        _15 = &raw const (*_14).1;
+        _16 = Ne(copy _13, copy _15);
+        _4[1] = copy _16;
+        _17 = const static TABLE;
+        _18 = &raw const (*_17)[0];
+        _19 = copy _18;
+        _20 = const static TABLE;
+        _21 = &raw const (*_20)[2];
+        _22 = Lt(copy _19, copy _21);
+        _4[2] = copy _22;
+        _0 = copy _4;
+        return;
+    }
+}
+
+fn answers() -> u32 {
+    let _0: u32;
+    let _1: u8; // p
+    let _2: u32; // sum
+    let _3: [bool; 3]; // c
+    let _4: [bool; 3];
+
+    bb0: {
+        _1 = const 0_u8;
+        _2 = const 190_u32;
+        _4[0] = const false;
+        _4[1] = const true;
+        _4[2] = const true;
+        _3 = copy _4;
+        _0 = copy _2;
+        return;
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+comptime fn PADDED() -> Padded {
+    let _0: Padded;
+    let _1: Padded;
+
+    bb0: {
+        _1.0 = const 170_u8;
+        _1.1 = const 3149642683_u32;
+        _0 = copy _1;
+        return;
+    }
+}
+
+comptime fn TABLE() -> [u32; 3] {
+    let _0: [u32; 3];
+    let _1: [u32; 3];
+
+    bb0: {
+        _1[0] = const 10_u32;
+        _1[1] = const 20_u32;
+        _1[2] = const 30_u32;
+        _0 = copy _1;
+        return;
+    }
+}
+
+comptime fn COUNT() -> u32 {
+    let _0: u32;
+
+    bb0: {
+        _0 = const 0_u32;
+        return;
+    }
+}

@@ -5,7 +5,8 @@ use crate::diag::{Diagnostic, Diagnostics};
 use crate::span::Span;
 use crate::syntax::ast::{
     Attr, BinOp, Block, ComptimeDecl, ConstDecl, Expr, ExprKind, FieldDecl, FieldInit, File,
-    FnDecl, FnKind, Ident, Item, Let, LogicalOp, Param, Stmt, StructDecl, Ty, TyKind, UnOp,
+    FnDecl, FnKind, Ident, Item, Let, LogicalOp, Param, StaticDecl, Stmt, StructDecl, Ty, TyKind,
+    UnOp,
 };
 use crate::syntax::lexer;
 use crate::syntax::token::{Token, TokenKind};
@@ -120,6 +121,7 @@ impl Parser<'_> {
                 | TokenKind::Extern
                 | TokenKind::Struct
                 | TokenKind::Const
+                | TokenKind::Static
                 | TokenKind::Comptime
                 | TokenKind::Pound
                 | TokenKind::Eof
@@ -139,6 +141,7 @@ impl Parser<'_> {
             }
             TokenKind::Struct => Ok(Item::Struct(self.struct_decl(attrs)?)),
             TokenKind::Const => Ok(Item::Const(self.const_decl(attrs)?)),
+            TokenKind::Static => Ok(Item::Static(self.static_decl(attrs)?)),
             TokenKind::Comptime => {
                 let start = self.bump().span;
                 let block = self.block()?;
@@ -232,6 +235,25 @@ impl Parser<'_> {
         let semi = self.expect(TokenKind::Semi)?;
         Ok(ConstDecl {
             attrs,
+            name,
+            ty,
+            value,
+            span: start.to(semi.span),
+        })
+    }
+
+    fn static_decl(&mut self, attrs: Vec<Attr>) -> PResult<StaticDecl> {
+        let start = self.bump().span;
+        let mutable = self.eat(TokenKind::Mut).is_some();
+        let name = self.ident()?;
+        self.expect(TokenKind::Colon)?;
+        let ty = self.ty()?;
+        self.expect(TokenKind::Eq)?;
+        let value = self.expr()?;
+        let semi = self.expect(TokenKind::Semi)?;
+        Ok(StaticDecl {
+            attrs,
+            mutable,
             name,
             ty,
             value,
@@ -394,6 +416,18 @@ impl Parser<'_> {
                     );
                     // Consumed, so that the rest of the block parses.
                     self.const_decl(Vec::new())?;
+                }
+                TokenKind::Static => {
+                    let token = self.peek();
+                    self.diags.push(
+                        Diagnostic::error(
+                            "parser::local-static",
+                            "`static` items cannot be declared inside a function",
+                        )
+                        .label(token.span, "inside a function")
+                        .help("move the `static` out of the function (ADR 0030)"),
+                    );
+                    self.static_decl(Vec::new())?;
                 }
                 _ => {
                     // As in Rust, a statement starting with a block-like

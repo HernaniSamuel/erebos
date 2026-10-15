@@ -1,0 +1,12 @@
+// emit: llvm-ir
+// A static keeps its name as its symbol, even when it is the name the
+// compiler would give constant data, which is renamed instead (ADR 0030).
+static data0: u32 = 7;
+const TABLE: [u32; 2] = [1, 2];
+
+fn read(i: usize) -> u32 {
+    data0 + TABLE[i]
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

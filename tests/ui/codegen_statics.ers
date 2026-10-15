@@ -1,0 +1,22 @@
+// emit: llvm-ir
+// Each static is a global named by it, visible to the linker, with its
+// initial bytes and alignment: a `static` is constant, a `static mut` is
+// not, and one all zero has a zero initializer (ADR 0030).
+static TABLE: [u16; 3] = [1, 2, 3];
+static mut CONFIG: Config = Config { mode: 3, baud: 115_200 };
+static mut TICKS: u32 = 0;
+#[align(64)]
+static mut DMA_BUF: [u8; 8] = [0; 8];
+struct Config { mode: u8, baud: u32 }
+
+fn tick() -> u32 {
+    TICKS += 1;
+    TICKS + TABLE[2] as u32 + CONFIG.baud
+}
+
+fn buffer() -> *mut u8 {
+    &raw mut DMA_BUF as *mut u8
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

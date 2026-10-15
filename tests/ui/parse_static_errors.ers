@@ -1,0 +1,12 @@
+// emit: ast
+// A static needs an initializer, and is an item: one inside a function is
+// `parser::local-static` (ADR 0030).
+static NO_VALUE: u32;
+
+fn f() -> u32 {
+    static mut LOCAL: u32 = 1;
+    2
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

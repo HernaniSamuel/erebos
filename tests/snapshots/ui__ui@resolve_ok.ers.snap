@@ -126,6 +126,7 @@ Hir {
         },
     ],
     consts: [],
+    statics: [],
     comptime_blocks: [],
     entry: FnId(
         0,

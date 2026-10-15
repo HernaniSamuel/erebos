@@ -1,0 +1,9 @@
+// emit: ast
+// `static` and `static mut` items, with a type, an initializer and
+// attributes (ADR 0030).
+static TABLE: [u8; 2] = [1, 2];
+#[align(64)]
+static mut BUF: [u8; 4] = [0; 4];
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

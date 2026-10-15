@@ -14,8 +14,8 @@ use std::fmt::Write;
 
 use crate::diag::Diagnostic;
 use crate::hir::{
-    self, BinOp, Block, Expr, ExprId, ExprKind, Fn, FnKind, Hir, IntTy, LocalId, Ptr, Stmt, Ty,
-    UnOp,
+    self, BinOp, Block, Expr, ExprId, ExprKind, Fn, FnKind, Hir, IntTy, LocalId, Ptr, StaticId,
+    Stmt, Ty, UnOp,
 };
 use crate::layout;
 use crate::query::Queries;
@@ -179,6 +179,8 @@ enum Immutable {
     ConstPointer(Ptr, Span),
     /// Part of a value that lives in no variable, written at the span.
     Temporary(Span),
+    /// A `static`, which never changes (ADR 0030).
+    Static(StaticId),
 }
 
 struct LoopCtx {
@@ -509,10 +511,13 @@ impl Checker<'_, '_> {
                 let target = self.norm(*target);
                 self.cast(f, operand, target, *target_span)
             }
-            ExprKind::Deref(_) | ExprKind::Index(..) | ExprKind::Field(..) => {
+            ExprKind::Deref(_)
+            | ExprKind::Index(..)
+            | ExprKind::Field(..)
+            | ExprKind::Static(_) => {
                 let info = self
                     .place_info(f, expr)
-                    .expect("dereferences, indexing and fields are places");
+                    .expect("dereferences, indexing, fields and statics are places");
                 self.access(&info, expr.span);
                 info.ty
             }
@@ -1006,6 +1011,16 @@ impl Checker<'_, '_> {
                     constant: false,
                 }
             }
+            ExprKind::Static(id) => {
+                let def = self.hir.static_(*id);
+                PlaceInfo {
+                    ty: self.norm(def.ty),
+                    immutable: (!def.mutable).then_some(Immutable::Static(*id)),
+                    via: None,
+                    misaligned: false,
+                    constant: false,
+                }
+            }
             ExprKind::Deref(pointer) => {
                 let ty = self.check(f, pointer, None);
                 let error = Diagnostic::error(
@@ -1178,6 +1193,20 @@ impl Checker<'_, '_> {
                     .help("store it in a `let mut` first"),
                 );
             }
+            Some(Immutable::Static(id)) => {
+                let def = self.hir.static_(id);
+                self.q.diags.push(
+                    Diagnostic::error(
+                        "ty::assign-immutable",
+                        format!("cannot assign to `{}`, which is not `mut`", def.name),
+                    )
+                    .label(place.span, "assigned here")
+                    .label(
+                        def.name_span,
+                        format!("help: declare it `static mut {}`", def.name),
+                    ),
+                );
+            }
             None => {}
         }
         self.access(&info, place.span);
@@ -1243,6 +1272,23 @@ impl Checker<'_, '_> {
                         )
                         .label(base, "this value lives in no variable")
                         .help("store it in a `let mut` first"),
+                    );
+                }
+                Some(Immutable::Static(id)) => {
+                    let def = self.hir.static_(id);
+                    self.q.diags.push(
+                        Diagnostic::error(
+                            "ty::address-of-immutable",
+                            format!(
+                                "cannot take a `*mut` address of `{}`, which is not `mut`",
+                                def.name
+                            ),
+                        )
+                        .label(place.span, "address taken here")
+                        .label(
+                            def.name_span,
+                            format!("help: declare it `static mut {}`", def.name),
+                        ),
                     );
                 }
                 None => {}
@@ -1404,6 +1450,7 @@ fn expr_label(hir: &Hir, f: &Fn, expr: &Expr) -> String {
         ExprKind::Byte(value) => format!("byte {value}"),
         ExprKind::Unit => "unit".to_owned(),
         ExprKind::Const(id) => format!("const {}", hir.const_(*id).name),
+        ExprKind::Static(id) => format!("static {}", hir.static_(*id).name),
         ExprKind::Comptime(_) => "comptime".to_owned(),
         ExprKind::Array(_) => "array".to_owned(),
         ExprKind::StructLit(s, _) => format!("struct {}", s.name),

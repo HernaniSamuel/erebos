@@ -1,0 +1,33 @@
+// emit: mir
+// Reading a `static` at compile time gives its value, with padding zero;
+// taking a static's address needs no value, and pointers strictly inside
+// two statics are different (ADR 0030).
+struct Padded { a: u8, b: u32 }
+static PADDED: Padded = Padded { a: 0xAA, b: 0xBBBB_BBBB };
+static TABLE: [u32; 3] = [10, 20, 30];
+static mut COUNT: u32 = 0;
+
+fn padding() -> u8 {
+    let bytes: *const u8 = &raw const PADDED as *const u8;
+    bytes[1]
+}
+
+fn compare() -> [bool; 3] {
+    let count: *mut u32 = &raw mut COUNT;
+    [
+        &raw const TABLE[0] == &raw const PADDED.b,
+        &raw const TABLE[0] != &raw const PADDED.b,
+        &raw const TABLE[0] < &raw const TABLE[2],
+    ]
+}
+
+// Expected: 0; 20 + 0xAA; false, true, true.
+fn answers() -> u32 {
+    let p: u8 = comptime padding();
+    let sum: u32 = comptime TABLE[1] + PADDED.a as u32;
+    let c: [bool; 3] = [comptime compare()[0], comptime compare()[1], comptime compare()[2]];
+    sum
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

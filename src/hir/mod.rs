@@ -22,6 +22,10 @@ pub struct ExprId(pub u32);
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ConstId(pub u32);
 
+/// A static, indexing [`Hir::statics`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct StaticId(pub u32);
+
 /// A struct, indexing [`Hir::structs`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct StructId(pub u32);
@@ -34,9 +38,10 @@ pub struct LocalId(pub u32);
 pub struct Hir {
     pub structs: Vec<StructDef>,
     /// Functions, then the bodies that run at compile time: one for each
-    /// constant and each `comptime` block, in source order.
+    /// constant, each static and each `comptime` block, in source order.
     pub fns: Vec<Fn>,
     pub consts: Vec<ConstDef>,
+    pub statics: Vec<StaticDef>,
     /// The bodies of `comptime { ... }` items.
     pub comptime_blocks: Vec<FnId>,
     pub entry: FnId,
@@ -64,6 +69,10 @@ impl Hir {
     pub fn const_(&self, id: ConstId) -> &ConstDef {
         &self.consts[id.0 as usize]
     }
+
+    pub fn static_(&self, id: StaticId) -> &StaticDef {
+        &self.statics[id.0 as usize]
+    }
 }
 
 /// `const NAME: Type = value;` (ADR 0029). The value is computed by running
@@ -76,11 +85,27 @@ pub struct ConstDef {
     pub init: FnId,
 }
 
+/// `static NAME: Type = value;` or `static mut` (ADR 0030): one object in
+/// memory, whose initial value is computed by running `init`.
+#[derive(Debug)]
+pub struct StaticDef {
+    pub name: String,
+    pub name_span: Span,
+    pub mutable: bool,
+    pub ty: Ty,
+    pub ty_span: Span,
+    pub init: FnId,
+    /// `#[align(N)]`, with the span of `N` (ADR 0030).
+    pub align: Option<(ArrayLen, Span)>,
+}
+
 /// What a body that runs at compile time computes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Comptime {
     /// The value of a constant.
     Const(ConstId),
+    /// The initial value of a static.
+    Static(StaticId),
     /// A `comptime { ... }` item.
     Block,
     /// A `usize` the program needs at compile time: an array length, a
@@ -304,6 +329,8 @@ pub enum ExprKind {
     Unit,
     /// A constant (ADR 0029): a value, not a place.
     Const(ConstId),
+    /// A static (ADR 0030): a place.
+    Static(StaticId),
     /// `comptime expr`, evaluated at compile time (ADR 0029).
     Comptime(Box<Expr>),
     /// `[a, b, c]`
@@ -381,6 +408,7 @@ impl Expr {
             | ExprKind::AlignOf(_)
             | ExprKind::OffsetOf(..)
             | ExprKind::Const(_)
+            | ExprKind::Static(_)
             | ExprKind::Local(_)
             | ExprKind::Continue { .. }
             | ExprKind::Break { value: None, .. }

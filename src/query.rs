@@ -8,9 +8,11 @@ use std::rc::Rc;
 
 use crate::diag::{Diagnostic, Diagnostics};
 use crate::eval::{self, ConstValue, Origin};
-use crate::hir::{self, ArrayLen, Comptime, ConstId, ExprId, ExprKind, FnId, Hir, StructId};
+use crate::hir::{
+    self, ArrayLen, Comptime, ConstId, ExprId, ExprKind, FnId, Hir, StaticId, StructId,
+};
 use crate::layout::{self, Layout, MAX_ALIGN, MAX_SIZE, StructLayout};
-use crate::mir::{self, BodyId, ConstData, DataId, Field, Mir, Ptr, StructRef};
+use crate::mir::{self, BodyId, ConstData, DataId, Field, Mir, Ptr, StaticRef, StructRef};
 use crate::span::Span;
 use crate::ty::{self, Tables};
 
@@ -30,6 +32,7 @@ enum Item {
     Check(FnId),
     Body(FnId),
     Const(ConstId),
+    Static(StaticId),
     Comptime(ExprId),
     /// A `usize` computed at compile time, such as an array length.
     Value(FnId),
@@ -40,6 +43,7 @@ enum Item {
 fn describe(hir: &Hir, f: &hir::Fn) -> String {
     match f.comptime {
         Some(Comptime::Const(id)) => format!("the constant `{}`", hir.const_(id).name),
+        Some(Comptime::Static(id)) => format!("the static `{}`", hir.static_(id).name),
         Some(Comptime::Block) => "this `comptime` block".to_owned(),
         Some(Comptime::Value) => "this value".to_owned(),
         None => format!("the function `{}`", f.name),
@@ -70,6 +74,13 @@ pub struct Queries<'h> {
     bodies: Vec<State<Option<Rc<mir::Body>>>>,
     /// The value of each constant; `None` if it failed, which was reported.
     consts: Vec<State<Option<ConstValue>>>,
+    /// The initial value of each static; `None` if it failed (reported).
+    statics: Vec<State<Option<ConstValue>>>,
+    /// The alignment of each static; `None` if its type has no layout or
+    /// its `#[align]` is invalid (reported).
+    static_aligns: Vec<Option<Option<u64>>>,
+    /// The MIR view of each static.
+    mir_statics: Vec<Option<StaticRef>>,
     /// The value of each `comptime` expression.
     comptime: HashMap<ExprId, State<Option<ConstValue>>>,
     /// The value of each array length, repeat count and `#[align]`
@@ -94,6 +105,9 @@ impl<'h> Queries<'h> {
             mir_structs: vec![None; hir.structs.len()],
             bodies: hir.fns.iter().map(|_| State::NotStarted).collect(),
             consts: hir.consts.iter().map(|_| State::NotStarted).collect(),
+            statics: hir.statics.iter().map(|_| State::NotStarted).collect(),
+            static_aligns: vec![None; hir.statics.len()],
+            mir_statics: vec![None; hir.statics.len()],
             comptime: HashMap::new(),
             values: HashMap::new(),
             data: Vec::new(),
@@ -115,6 +129,11 @@ impl<'h> Queries<'h> {
         // Every constant and check is evaluated, used or not (ADR 0029).
         for id in 0..hir.consts.len() {
             self.const_value(ConstId(id as u32));
+        }
+        // So is every static (ADR 0030).
+        for id in 0..hir.statics.len() {
+            self.static_align(StaticId(id as u32));
+            self.static_value(StaticId(id as u32));
         }
         for &block in &hir.comptime_blocks {
             self.comptime_block(block);
@@ -237,6 +256,94 @@ impl<'h> Queries<'h> {
         self.finish(Item::Const(id));
         self.consts[id.0 as usize] = State::Done(value.clone());
         value
+    }
+
+    /// The initial value of a static (ADR 0030), computed once.
+    pub fn static_value(&mut self, id: StaticId) -> Option<ConstValue> {
+        match &self.statics[id.0 as usize] {
+            State::Done(value) => return value.clone(),
+            State::InProgress | State::NotStarted => {}
+        }
+        let hir = self.hir;
+        let def = hir.static_(id);
+        let what = format!("the static `{}`", def.name);
+        if !self.start(Item::Static(id), def.name_span, what.clone()) {
+            return None;
+        }
+        self.statics[id.0 as usize] = State::InProgress;
+        let value = self.mir_body(def.init).and_then(|body| {
+            let origin = Origin {
+                what,
+                span: def.name_span,
+            };
+            eval::evaluate(self, body, origin)
+        });
+        self.finish(Item::Static(id));
+        self.statics[id.0 as usize] = State::Done(value.clone());
+        value
+    }
+
+    /// The alignment of a static: its type's, raised by `#[align(N)]`,
+    /// which does not change its size (ADR 0030). `None` if its type has no
+    /// layout or the alignment is invalid, reported once.
+    pub fn static_align(&mut self, id: StaticId) -> Option<u64> {
+        if let Some(align) = self.static_aligns[id.0 as usize] {
+            return align;
+        }
+        let hir = self.hir;
+        let def = hir.static_(id);
+        let ty = self.normalize(def.ty);
+        let align = match self.layout_of(ty) {
+            None if ty == hir::Ty::Error => None,
+            None => {
+                self.diags.push(
+                    Diagnostic::error("ty::too-large", format!("`{ty}` is too large"))
+                        .label(def.ty_span, "does not fit in the address space")
+                        .help(format!(
+                            "objects are limited to {MAX_SIZE} bytes on this target"
+                        )),
+                );
+                None
+            }
+            Some(layout) => match def.align {
+                Some((len, span)) => self.array_len(len).and_then(|wanted| {
+                    self.checked_align(wanted, span, layout.align, &format!("`{ty}`"))
+                }),
+                None => Some(layout.align),
+            },
+        };
+        self.static_aligns[id.0 as usize] = Some(align);
+        align
+    }
+
+    /// `#[align(N)]` with `N` computed as `wanted`, for something whose
+    /// natural alignment is `natural` (ADR 0022, 0030): `N` if it is a
+    /// power of two, at most `MAX_ALIGN` and not below `natural`, else
+    /// `None`, reported.
+    fn checked_align(
+        &mut self,
+        wanted: u64,
+        span: Span,
+        natural: u64,
+        subject: &str,
+    ) -> Option<u64> {
+        let problem = if !wanted.is_power_of_two() {
+            "an alignment is a power of two".to_owned()
+        } else if wanted > MAX_ALIGN {
+            format!("alignments go up to {MAX_ALIGN}")
+        } else if wanted < natural {
+            format!("{subject} already needs alignment {natural}; `#[align]` only raises it")
+        } else {
+            return Some(wanted);
+        };
+        self.diags.push(
+            Diagnostic::error("ty::invalid-align", format!("invalid alignment {wanted}"))
+                .label(span, problem)
+                .help(
+                    "`#[align(N)]` takes a power of two not below the natural alignment (ADR 0022)",
+                ),
+        );
+        None
     }
 
     /// Runs a `comptime { ... }` item.
@@ -420,27 +527,11 @@ impl<'h> Queries<'h> {
             Some((len, span)) => self.array_len(len).map(|wanted| (wanted, span)),
             None => None,
         };
-        if let Some((wanted, span)) = wanted {
-            let problem = if !wanted.is_power_of_two() {
-                Some("an alignment is a power of two".to_owned())
-            } else if wanted > MAX_ALIGN {
-                Some(format!("alignments go up to {MAX_ALIGN}"))
-            } else if wanted < align {
-                Some(format!(
-                    "`{}` already needs alignment {align}; `#[align]` only raises it",
-                    def.name
-                ))
-            } else {
-                None
-            };
-            match problem {
-                Some(problem) => self.diags.push(
-                    Diagnostic::error("ty::invalid-align", format!("invalid alignment {wanted}"))
-                        .label(span, problem)
-                        .help("`#[align(N)]` takes a power of two not below the natural alignment (ADR 0022)"),
-                ),
-                None => align = wanted,
-            }
+        if let Some((wanted, span)) = wanted
+            && let Some(wanted) =
+                self.checked_align(wanted, span, align, &format!("`{}`", def.name))
+        {
+            align = wanted;
         }
         let size = end.and_then(|end| layout::align_up(end, align));
 
@@ -532,6 +623,19 @@ impl<'h> Queries<'h> {
             })
             .collect();
         s.def().set_fields(fields);
+        s
+    }
+
+    /// The MIR view of a static.
+    pub fn mir_static(&mut self, id: StaticId) -> StaticRef {
+        if let Some(s) = self.mir_statics[id.0 as usize] {
+            return s;
+        }
+        let hir = self.hir;
+        let def = hir.static_(id);
+        let ty = self.mir_ty(def.ty);
+        let s = StaticRef::new(mir::StaticId(id.0), def.name.clone(), ty, def.mutable);
+        self.mir_statics[id.0 as usize] = Some(s);
         s
     }
 
@@ -656,9 +760,25 @@ impl<'h> Queries<'h> {
         for id in 0..self.hir.fns.len() {
             self.mir_body(FnId(id as u32));
         }
+        let statics = (0..self.hir.statics.len())
+            .map(|id| {
+                let id = StaticId(id as u32);
+                mir::Static {
+                    def: self.mir_static(id),
+                    bytes: self
+                        .static_value(id)
+                        .expect("every static of a program without errors has a value")
+                        .bytes,
+                    align: self
+                        .static_align(id)
+                        .expect("every static of a program without errors has an alignment"),
+                }
+            })
+            .collect();
         Mir {
             structs,
             data: self.data,
+            statics,
             bodies: self
                 .bodies
                 .into_iter()

@@ -1,0 +1,120 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/eval_static_errors.ers
+---
+--- errors ---
+ty::cycle
+
+  × the static `A` depends on its own value
+   ╭─[eval_static_errors.ers:6:8]
+ 5 │ // by the rules for different objects.
+ 6 │ static A: u32 = B + 1;
+   ·        ┬
+   ·        ╰── needed while computing itself
+ 7 │ static B: u32 = A + 1;
+   ·        ┬
+   ·        ╰── through the static `B`
+ 8 │ static mut COUNT: u32 = 0;
+   ╰────
+  help: break the cycle: a value cannot depend on itself (ADR 0028)
+eval::static-mut
+
+  × `COUNT` is a `static mut`, whose value is only known when the program runs
+    ╭─[eval_static_errors.ers:12:23]
+ 11 │ 
+ 12 │ const READ_MUT: u32 = COUNT;
+    ·       ────┬───        ──┬──
+    ·           │             ╰── read here
+    ·           ╰── while evaluating the constant `READ_MUT`
+ 13 │ const WRITE_MUT: u32 = write_mut();
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::pointer-compare
+
+  × pointers into different objects have no order known at compile time, since their addresses
+  │ only exist after linking
+    ╭─[eval_static_errors.ers:15:23]
+ 14 │ const WRITE_STATIC: u32 = write_static();
+ 15 │ const ORDERED: bool = &raw const LIMIT < &raw const TABLE as *const u32;
+    ·       ───┬───         ────────────────────────┬────────────────────────
+    ·          │                                    ╰── compared here
+    ·          ╰── while evaluating the constant `ORDERED`
+ 16 │ const PAST_END: bool = past_end();
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::static-mut
+
+  × `COUNT` is a `static mut`, whose value is only known when the program runs
+    ╭─[eval_static_errors.ers:19:5]
+ 12 │ const READ_MUT: u32 = COUNT;
+ 13 │ const WRITE_MUT: u32 = write_mut();
+    ·       ────┬────        ─────┬─────
+    ·           │                 ╰── called here
+    ·           ╰── while evaluating the constant `WRITE_MUT`
+ 14 │ const WRITE_STATIC: u32 = write_static();
+ 15 │ const ORDERED: bool = &raw const LIMIT < &raw const TABLE as *const u32;
+ 16 │ const PAST_END: bool = past_end();
+ 17 │ 
+ 18 │ fn write_mut() -> u32 {
+ 19 │     COUNT = 1;
+    ·     ────┬────
+    ·         ╰── written here
+ 20 │     0
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::read-only-write
+
+  × `LIMIT` is a `static`, which cannot be written
+    ╭─[eval_static_errors.ers:25:5]
+ 13 │ const WRITE_MUT: u32 = write_mut();
+ 14 │ const WRITE_STATIC: u32 = write_static();
+    ·       ──────┬─────        ───────┬──────
+    ·             │                    ╰── called here
+    ·             ╰── while evaluating the constant `WRITE_STATIC`
+ 15 │ const ORDERED: bool = &raw const LIMIT < &raw const TABLE as *const u32;
+ 16 │ const PAST_END: bool = past_end();
+ 17 │ 
+ 18 │ fn write_mut() -> u32 {
+ 19 │     COUNT = 1;
+ 20 │     0
+ 21 │ }
+ 22 │ 
+ 23 │ fn write_static() -> u32 {
+ 24 │     let p: *mut u32 = &raw const LIMIT as *mut u32;
+ 25 │     *p = 11;
+    ·     ───┬───
+    ·        ╰── written here
+ 26 │     LIMIT
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::pointer-compare
+
+  × a pointer that is not strictly inside its object may equal a pointer into another object at
+  │ run time
+    ╭─[eval_static_errors.ers:31:5]
+ 15 │ const ORDERED: bool = &raw const LIMIT < &raw const TABLE as *const u32;
+ 16 │ const PAST_END: bool = past_end();
+    ·       ────┬───         ─────┬────
+    ·           │                 ╰── called here
+    ·           ╰── while evaluating the constant `PAST_END`
+ 17 │ 
+ 18 │ fn write_mut() -> u32 {
+ 19 │     COUNT = 1;
+ 20 │     0
+ 21 │ }
+ 22 │ 
+ 23 │ fn write_static() -> u32 {
+ 24 │     let p: *mut u32 = &raw const LIMIT as *mut u32;
+ 25 │     *p = 11;
+ 26 │     LIMIT
+ 27 │ }
+ 28 │ 
+ 29 │ fn past_end() -> bool {
+ 30 │     let end: *const u32 = &raw const (&raw const TABLE as *const u32)[2];
+ 31 │     end == &raw const LIMIT
+    ·     ───────────┬───────────
+    ·                ╰── compared here
+ 32 │ }
+    ╰────
+  help: this code runs at compile time (ADR 0027)

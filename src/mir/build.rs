@@ -379,7 +379,10 @@ impl Builder<'_, '_> {
                 }
                 Operand::Copy(value)
             }
-            hir::ExprKind::Deref(_) | hir::ExprKind::Index(..) | hir::ExprKind::Field(..) => {
+            hir::ExprKind::Deref(_)
+            | hir::ExprKind::Index(..)
+            | hir::ExprKind::Field(..)
+            | hir::ExprKind::Static(_) => {
                 let place = self.place(expr);
                 if matches!(ty, Ty::Unit | Ty::Never) {
                     Operand::Const(Const::Unit)
@@ -900,6 +903,7 @@ impl Builder<'_, '_> {
             Operand::Const(Const::Int(_, int)) => Ty::Int(int),
             Operand::Const(Const::Bool(_)) => Ty::Bool,
             Operand::Const(Const::Unit) => Ty::Unit,
+            Operand::Const(Const::Static(s)) => s.def().address_ty(),
         }
     }
 
@@ -933,9 +937,9 @@ impl Builder<'_, '_> {
         }
     }
 
-    /// Lowers a place expression: a local, `*pointer` or `base[index]`.
-    /// Any other expression is evaluated into a temporary, whose place is
-    /// returned.
+    /// Lowers a place expression: a local, a static, `*pointer` or
+    /// `base[index]`. Any other expression is evaluated into a temporary,
+    /// whose place is returned.
     fn place(&mut self, expr: &hir::Expr) -> Place {
         self.place_then(expr, false, false)
     }
@@ -947,6 +951,16 @@ impl Builder<'_, '_> {
     fn place_then(&mut self, expr: &hir::Expr, later_writes: bool, address: bool) -> Place {
         match &expr.kind {
             hir::ExprKind::Local(local) => self.local(*local),
+            // Reached through its address, so that every access happens
+            // where it is written (ADR 0030).
+            hir::ExprKind::Static(id) => {
+                let s = self.q.mir_static(*id);
+                let address = Rvalue::Use(Operand::Const(Const::Static(s)));
+                match self.temp(s.def().address_ty(), address) {
+                    Operand::Copy(place) => place.project(PlaceElem::Deref),
+                    Operand::Const(_) => unreachable!("temporaries are places"),
+                }
+            }
             hir::ExprKind::Deref(pointer) => self
                 .pointer_place(pointer, later_writes)
                 .project(PlaceElem::Deref),

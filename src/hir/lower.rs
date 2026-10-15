@@ -5,7 +5,8 @@ use std::collections::HashMap;
 use crate::diag::{Diagnostic, Diagnostics};
 use crate::hir::{
     ArrayLen, Block, Comptime, ConstDef, ConstId, Expr, ExprId, ExprKind, FieldDef, Fn, FnId,
-    FnKind, Hir, IntTy, Local, LocalId, Stmt, StructDef, StructId, StructTy, Ty,
+    FnKind, Hir, IntTy, Local, LocalId, StaticDef, StaticId, Stmt, StructDef, StructId, StructTy,
+    Ty,
 };
 use crate::span::Span;
 use crate::syntax::ast;
@@ -40,6 +41,12 @@ pub fn lower(
     let const_decls: Vec<&ast::ConstDecl> = items()
         .filter_map(|item| match item {
             ast::Item::Const(decl) => Some(decl),
+            _ => None,
+        })
+        .collect();
+    let static_decls: Vec<&ast::StaticDecl> = items()
+        .filter_map(|item| match item {
+            ast::Item::Static(decl) => Some(decl),
             _ => None,
         })
         .collect();
@@ -138,11 +145,21 @@ pub fn lower(
             .or_insert(ConstId(i as u32));
     }
 
+    // Statics too, in the same namespace.
+    let mut static_ids = HashMap::new();
+    for (i, decl) in static_decls.iter().enumerate() {
+        static_ids
+            .entry(decl.name.name.clone())
+            .or_insert(StaticId(i as u32));
+    }
+
     let mut lowerer = Lowerer {
         fn_ids,
         const_ids,
+        static_ids,
         // Values computed at compile time get bodies after every other.
-        value_base: (decls.len() + const_decls.len() + comptime_decls.len()) as u32,
+        value_base: (decls.len() + const_decls.len() + static_decls.len() + comptime_decls.len())
+            as u32,
         values: Vec::new(),
         comptime_floor: None,
         in_comptime: false,
@@ -173,6 +190,13 @@ pub fn lower(
         consts.push(def);
         fns.push(body);
     }
+    let mut statics = Vec::new();
+    for (i, decl) in static_decls.iter().enumerate() {
+        let init = FnId(fns.len() as u32);
+        let (def, body) = lowerer.static_decl(decl, StaticId(i as u32), init);
+        statics.push(def);
+        fns.push(body);
+    }
     let mut comptime_blocks = Vec::new();
     for decl in &comptime_decls {
         comptime_blocks.push(FnId(fns.len() as u32));
@@ -191,6 +215,7 @@ pub fn lower(
         structs,
         fns,
         consts,
+        statics,
         comptime_blocks,
         entry: entry?,
         panic: panic?,
@@ -203,11 +228,13 @@ fn item_name(item: &ast::Item) -> Option<&ast::Ident> {
         ast::Item::Fn(decl) => Some(&decl.name),
         ast::Item::Struct(decl) => Some(&decl.name),
         ast::Item::Const(decl) => Some(&decl.name),
+        ast::Item::Static(decl) => Some(&decl.name),
         ast::Item::Comptime(_) => None,
     }
 }
 
-/// Functions, structs and constants share one namespace (ADR 0029).
+/// Functions, structs, constants and statics share one namespace
+/// (ADR 0029, 0030).
 fn check_duplicate_items(
     program: &ast::File,
     runtime: Option<&ast::File>,
@@ -235,7 +262,7 @@ fn check_duplicate_items(
                 )
                 .label(name.span, "redefined here")
                 .label(first, "first defined here")
-                .help("functions, structs and constants share one namespace (ADR 0029)"),
+                .help("functions, structs, constants and statics share one namespace (ADR 0029, 0030)"),
             ),
             None => {
                 seen.insert(&name.name, (name.span, in_runtime));
@@ -244,7 +271,8 @@ fn check_duplicate_items(
     }
 }
 
-/// The compiler defines `_start` itself (ADR 0012).
+/// The compiler defines `_start` itself (ADR 0012). The bodies include
+/// those computing constants and statics, named after them.
 fn check_start(fns: &[Fn], diags: &mut Diagnostics) {
     for f in fns.iter().filter(|f| f.name == "_start") {
         diags.push(
@@ -305,6 +333,8 @@ struct Lowerer<'a> {
     fn_ids: HashMap<String, (FnId, ast::FnKind)>,
     /// Every constant's id, by name.
     const_ids: HashMap<String, ConstId>,
+    /// Every static's id, by name.
+    static_ids: HashMap<String, StaticId>,
     /// Inside `comptime expr`, the number of scopes outside it: their
     /// variables exist only at run time (ADR 0029).
     comptime_floor: Option<usize>,
@@ -419,21 +449,98 @@ impl Lowerer<'_> {
         (packed.is_some(), align)
     }
 
-    /// Items other than structs take no attributes yet; `what` names the
-    /// item.
+    /// Items other than structs and statics take no attributes yet; `what`
+    /// names the item.
     fn no_attrs(&mut self, attrs: &[ast::Attr], what: &str) {
         for attr in attrs {
             match attr.name.name.as_str() {
-                "packed" | "align" => self.diags.push(
-                    Diagnostic::error(
-                        "resolve::misplaced-attribute",
-                        format!("`#[{}]` applies only to structs", attr.name.name),
-                    )
-                    .label(attr.span, format!("not allowed on {what}")),
-                ),
+                "packed" | "align" => self.misplaced_attr(attr, what),
                 _ => self.unknown_attr(attr),
             }
         }
+    }
+
+    fn misplaced_attr(&mut self, attr: &ast::Attr, what: &str) {
+        let applies_to = if attr.name.name == "align" {
+            "structs and statics"
+        } else {
+            "structs"
+        };
+        self.diags.push(
+            Diagnostic::error(
+                "resolve::misplaced-attribute",
+                format!("`#[{}]` applies only to {applies_to}", attr.name.name),
+            )
+            .label(attr.span, format!("not allowed on {what}")),
+        );
+    }
+
+    /// `#[align(N)]`, at most once, is the only attribute of a static
+    /// (ADR 0030). Returns it.
+    fn static_attrs(&mut self, attrs: &[ast::Attr]) -> Option<(ArrayLen, Span)> {
+        let mut align: Option<(ArrayLen, Span)> = None;
+        let mut align_attr: Option<Span> = None;
+        for attr in attrs {
+            match attr.name.name.as_str() {
+                "align" => {
+                    match &attr.arg {
+                        Some(arg) => align = Some((self.array_len(arg), arg.span)),
+                        None => self.attr_error(
+                            attr.span,
+                            "`#[align]` takes an alignment, such as `#[align(64)]`",
+                            "no alignment",
+                        ),
+                    }
+                    if let Some(first) = align_attr.replace(attr.span) {
+                        self.diags.push(
+                            Diagnostic::error(
+                                "resolve::duplicate-attribute",
+                                "`#[align]` is given more than once",
+                            )
+                            .label(attr.span, "given again here")
+                            .label(first, "first given here"),
+                        );
+                    }
+                }
+                "packed" => self.misplaced_attr(attr, "a static"),
+                _ => self.unknown_attr(attr),
+            }
+        }
+        align
+    }
+
+    /// A static, and the body that computes its initial value (ADR 0030).
+    fn static_decl(&mut self, decl: &ast::StaticDecl, id: StaticId, init: FnId) -> (StaticDef, Fn) {
+        let align = self.static_attrs(&decl.attrs);
+        let ty = self.ty(&decl.ty);
+        let value = self.comptime_body(|this| this.expr(&decl.value));
+        let def = StaticDef {
+            name: decl.name.name.clone(),
+            name_span: decl.name.span,
+            mutable: decl.mutable,
+            ty,
+            ty_span: decl.ty.span,
+            init,
+            align,
+        };
+        let body = Fn {
+            name: decl.name.name.clone(),
+            name_span: decl.name.span,
+            kind: FnKind::Plain,
+            ret: ty,
+            ret_span: Some(decl.ty.span),
+            param_count: 0,
+            locals: std::mem::take(&mut self.locals),
+            body: Some(Block {
+                stmts: Vec::new(),
+                span: value.span,
+                tail: Some(Box::new(value)),
+            }),
+            span: decl.span,
+            runtime: false,
+            comptime: Some(Comptime::Static(id)),
+        };
+        (def, body)
     }
 
     /// A constant, and the body that computes its value (ADR 0029).
@@ -552,7 +659,7 @@ impl Lowerer<'_> {
                 format!("unknown attribute `#[{}]`", attr.name.name),
             )
             .label(attr.name.span, "not an attribute")
-            .help("the attributes are `#[packed]` and `#[align(N)]`, on structs (ADR 0022)"),
+            .help("the attributes are `#[packed]` and `#[align(N)]` on structs (ADR 0022), and `#[align(N)]` on statics (ADR 0030)"),
         );
     }
 
@@ -805,8 +912,8 @@ impl Lowerer<'_> {
             .find_map(|(depth, scope)| scope.get(name).map(|&local| (local, depth)))
     }
 
-    /// A name used as a value: a local, shadowing a constant of the same
-    /// name, or a constant.
+    /// A name used as a value: a local, shadowing an item of the same name,
+    /// or a constant or static.
     fn resolve(&mut self, name: &ast::Ident) -> Option<ExprKind> {
         if let Some((local, depth)) = self.find_local_scope(&name.name) {
             if self.comptime_floor.is_some_and(|floor| depth < floor) {
@@ -824,6 +931,9 @@ impl Lowerer<'_> {
         }
         if let Some(&id) = self.const_ids.get(&name.name) {
             return Some(ExprKind::Const(id));
+        }
+        if let Some(&id) = self.static_ids.get(&name.name) {
+            return Some(ExprKind::Static(id));
         }
         let mut diag = Diagnostic::error(
             "resolve::unknown-name",

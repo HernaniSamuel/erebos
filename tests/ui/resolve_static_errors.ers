@@ -1,0 +1,20 @@
+// emit: hir
+// Statics share the namespace of items, take `#[align(N)]` and no other
+// attribute, and cannot be named `_start` (ADR 0030).
+static counter: u32 = 0;
+fn counter() {}
+
+#[packed]
+static PACKED: u32 = 0;
+
+#[align(8)]
+#[align(16)]
+static TWICE: u32 = 0;
+
+#[align(4)]
+const ALIGNED: u32 = 0;
+
+static _start: u32 = 0;
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

@@ -1,0 +1,22 @@
+// emit: mir
+// A static is reached through its address, so every access is a load or a
+// store where it is written: in `TICKS + bump()`, `TICKS` is read before
+// the call (ADR 0018, 0030).
+static mut TICKS: u32 = 0;
+static LIMIT: u32 = 10;
+
+fn bump() -> u32 {
+    TICKS += 1;
+    0
+}
+
+fn read() -> u32 {
+    TICKS + bump()
+}
+
+fn address() -> *const u32 {
+    &raw const LIMIT
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

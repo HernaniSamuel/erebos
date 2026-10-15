@@ -1,0 +1,35 @@
+// emit: mir
+// Statics at compile time (ADR 0030): a static whose value needs itself is
+// a cycle; a `static mut` cannot be read or written; a `static` cannot be
+// written, even through a cast pointer; pointers into two statics compare
+// by the rules for different objects.
+static A: u32 = B + 1;
+static B: u32 = A + 1;
+static mut COUNT: u32 = 0;
+static LIMIT: u32 = 10;
+static TABLE: [u32; 2] = [1, 2];
+
+const READ_MUT: u32 = COUNT;
+const WRITE_MUT: u32 = write_mut();
+const WRITE_STATIC: u32 = write_static();
+const ORDERED: bool = &raw const LIMIT < &raw const TABLE as *const u32;
+const PAST_END: bool = past_end();
+
+fn write_mut() -> u32 {
+    COUNT = 1;
+    0
+}
+
+fn write_static() -> u32 {
+    let p: *mut u32 = &raw const LIMIT as *mut u32;
+    *p = 11;
+    LIMIT
+}
+
+fn past_end() -> bool {
+    let end: *const u32 = &raw const (&raw const TABLE as *const u32)[2];
+    end == &raw const LIMIT
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

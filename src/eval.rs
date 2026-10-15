@@ -7,14 +7,14 @@
 //! their addresses only exist after linking. A pointer made from an integer
 //! is just that integer: it can be computed with, but not read through.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::rc::Rc;
 
 use crate::diag::Diagnostic;
 use crate::int::IntTy;
 use crate::mir::{
     BasicBlock, BinOp, Body, Const, Local, Operand, PanicCause, Place, PlaceElem, Rvalue,
-    Statement, Terminator, Ty, UnOp,
+    Statement, StaticRef, Terminator, Ty, UnOp,
 };
 use crate::query::Queries;
 use crate::span::Span;
@@ -57,6 +57,7 @@ pub fn evaluate(q: &mut Queries, body: Rc<Body>, origin: Origin) -> Option<Const
     let mut interp = Interp {
         q,
         allocs: Vec::new(),
+        statics: HashMap::new(),
         frames: Vec::new(),
         steps: 0,
     };
@@ -74,7 +75,7 @@ pub fn evaluate(q: &mut Queries, body: Rc<Body>, origin: Origin) -> Option<Const
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct AllocId(u32);
 
-/// One object: a local, or a constant's data.
+/// One object: a local, a constant's data, or a static.
 struct Alloc {
     bytes: Vec<u8>,
     written: Vec<bool>,
@@ -83,6 +84,16 @@ struct Alloc {
     /// False once the call it belongs to has returned: its stack slot is
     /// reused at run time, so pointers to it are dangling (ADR 0030).
     live: bool,
+    /// The static this object is, if it is one.
+    static_: Option<StaticObject>,
+}
+
+/// A static at compile time (ADR 0030): read-only, and its bytes loaded
+/// from its value only when read, so that taking its address needs no
+/// value.
+struct StaticObject {
+    def: StaticRef,
+    loaded: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -163,6 +174,8 @@ type EvalResult<T> = Result<T, Failure>;
 struct Interp<'a, 'h> {
     q: &'a mut Queries<'h>,
     allocs: Vec<Alloc>,
+    /// The object of each static used, by id: one per evaluation.
+    statics: HashMap<u32, AllocId>,
     frames: Vec<Frame>,
     steps: u64,
 }
@@ -306,8 +319,24 @@ impl Interp<'_, '_> {
             written: vec![written; len],
             pointers: BTreeMap::new(),
             live: true,
+            static_: None,
         });
         AllocId(self.allocs.len() as u32 - 1)
+    }
+
+    /// The object of a static, made when first used.
+    fn static_alloc(&mut self, s: StaticRef) -> AllocId {
+        let id = s.def().id.0;
+        if let Some(&alloc) = self.statics.get(&id) {
+            return alloc;
+        }
+        let alloc = self.new_alloc(vec![0; s.def().ty.layout().size as usize], false);
+        self.allocs[alloc.0 as usize].static_ = Some(StaticObject {
+            def: s,
+            loaded: false,
+        });
+        self.statics.insert(id, alloc);
+        alloc
     }
 
     fn frame(&self) -> &Frame {
@@ -538,13 +567,15 @@ impl Interp<'_, '_> {
         Ok(self.read_at(place, span)?.int())
     }
 
-    /// The object and offset an access of `size` bytes reaches. Only reads
-    /// and writes are refused here; computing a place never is (ADR 0029).
+    /// The object and offset an access of `size` bytes reaches, a write if
+    /// `write`. Only reads and writes are refused here; computing a place
+    /// never is (ADR 0029).
     fn access(
-        &self,
+        &mut self,
         place: PlaceRef,
         size: u64,
         span: Span,
+        write: bool,
     ) -> EvalResult<Option<(AllocId, usize)>> {
         if size == 0 {
             return Ok(None);
@@ -571,6 +602,29 @@ impl Interp<'_, '_> {
                 if !object.live {
                     return Err(self.dangling("accessed here", span));
                 }
+                if let Some(s) = &object.static_ {
+                    let def = s.def.def();
+                    let label = if write { "written here" } else { "read here" };
+                    if def.mutable {
+                        return Err(self.error(
+                            "eval::static-mut",
+                            format!(
+                                "`{}` is a `static mut`, whose value is only known when the program runs",
+                                def.name
+                            ),
+                            label,
+                            span,
+                        ));
+                    }
+                    if write {
+                        return Err(self.error(
+                            "eval::read-only-write",
+                            format!("`{}` is a `static`, which cannot be written", def.name),
+                            label,
+                            span,
+                        ));
+                    }
+                }
                 let len = object.bytes.len() as u64;
                 if u64::from(offset) + size > len {
                     return Err(self.error(
@@ -580,14 +634,30 @@ impl Interp<'_, '_> {
                         span,
                     ));
                 }
+                self.load_static(alloc)?;
                 Ok(Some((alloc, offset as usize)))
             }
         }
     }
 
-    fn read_at(&self, place: PlaceRef, span: Span) -> EvalResult<Scalar> {
+    /// Loads the bytes of a static's object from its value, once.
+    fn load_static(&mut self, alloc: AllocId) -> EvalResult<()> {
+        let object = &self.allocs[alloc.0 as usize];
+        let Some(StaticObject { def, loaded: false }) = object.static_ else {
+            return Ok(());
+        };
+        let id = crate::hir::StaticId(def.def().id.0);
+        let value = self.q.static_value(id).ok_or(Failure::Poisoned)?;
+        let object = &mut self.allocs[alloc.0 as usize];
+        object.written = vec![true; value.bytes.len()];
+        object.bytes = value.bytes;
+        object.static_ = Some(StaticObject { def, loaded: true });
+        Ok(())
+    }
+
+    fn read_at(&mut self, place: PlaceRef, span: Span) -> EvalResult<Scalar> {
         let size = place.ty.layout().size;
-        let Some((alloc, offset)) = self.access(place, size, span)? else {
+        let Some((alloc, offset)) = self.access(place, size, span, false)? else {
             return Ok(Scalar::Int(0));
         };
         let size = size as usize;
@@ -634,7 +704,7 @@ impl Interp<'_, '_> {
 
     fn write_at(&mut self, place: PlaceRef, value: Scalar, span: Span) -> EvalResult<()> {
         let size = place.ty.layout().size;
-        let Some((alloc, offset)) = self.access(place, size, span)? else {
+        let Some((alloc, offset)) = self.access(place, size, span, true)? else {
             return Ok(());
         };
         let size = size as usize;
@@ -667,10 +737,10 @@ impl Interp<'_, '_> {
     /// pointers among them.
     fn copy_at(&mut self, to: PlaceRef, from: PlaceRef, span: Span) -> EvalResult<()> {
         let size = to.ty.layout().size;
-        let Some((source, at)) = self.access(from, size, span)? else {
+        let Some((source, at)) = self.access(from, size, span, false)? else {
             return Ok(());
         };
-        let Some((dest, to_at)) = self.access(to, size, span)? else {
+        let Some((dest, to_at)) = self.access(to, size, span, true)? else {
             return Ok(());
         };
         let size = size as usize;
@@ -706,6 +776,10 @@ impl Interp<'_, '_> {
             Operand::Const(Const::Int(value, int)) => Ok(Scalar::Int(value & int.mask())),
             Operand::Const(Const::Bool(value)) => Ok(Scalar::Int(u64::from(*value))),
             Operand::Const(Const::Unit) => Ok(Scalar::Int(0)),
+            Operand::Const(Const::Static(s)) => Ok(Scalar::Ptr(Pointer::Mem {
+                alloc: self.static_alloc(*s),
+                offset: 0,
+            })),
         }
     }
 

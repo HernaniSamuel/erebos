@@ -108,6 +108,13 @@ fn lower<'ctx>(
         .zip(&abis)
         .map(|((_, body), abi)| (!body.comptime).then(|| declare(context, &module, body, abi)))
         .collect();
+    // Statics keep their names: declared before the private data, which
+    // LLVM renames instead if a name is taken (ADR 0030).
+    let statics: Vec<PointerValue> = mir
+        .statics
+        .iter()
+        .map(|s| static_global(context, &module, s))
+        .collect();
     let data: Vec<PointerValue> = mir
         .data
         .iter()
@@ -118,6 +125,7 @@ fn lower<'ctx>(
         fns: &fns,
         abis: &abis,
         data: &data,
+        statics: &statics,
         panic: mir.panic.0 as usize,
     };
     for (((_, body), function), abi) in mir.bodies().zip(&fns).zip(&abis) {
@@ -184,6 +192,24 @@ fn memory_type(context: &Context, ty: Ty) -> Option<BasicTypeEnum<'_>> {
 /// type `ty` in memory.
 fn element_type(context: &Context, ty: Ty) -> BasicTypeEnum<'_> {
     memory_type(context, ty).unwrap_or_else(|| context.i8_type().array_type(0).into())
+}
+
+/// A static (ADR 0030): a global named by it, visible to the linker, with
+/// its initial bytes; a `static` is constant, so that LLVM may use its
+/// value instead of reading it.
+fn static_global<'ctx>(
+    context: &'ctx Context,
+    module: &Module<'ctx>,
+    s: &crate::mir::Static,
+) -> PointerValue<'ctx> {
+    let def = s.def.def();
+    let bytes = context.const_string(&s.bytes, false);
+    let global = module.add_global(bytes.get_type(), None, &def.name);
+    global.set_initializer(&bytes);
+    global.set_constant(!def.mutable);
+    global.set_linkage(Linkage::External);
+    global.set_alignment(u32::try_from(s.align).expect("alignments are small"));
+    global.as_pointer_value()
 }
 
 /// Read-only data computed at compile time (ADR 0029), as a private
@@ -356,6 +382,8 @@ struct FnCodegen<'a, 'ctx> {
     abis: &'a [FnAbi],
     /// Read-only data computed at compile time, by id.
     data: &'a [PointerValue<'ctx>],
+    /// The global of each static, by id.
+    statics: &'a [PointerValue<'ctx>],
     /// The panic function, which failed checks call (ADR 0014).
     panic: usize,
     builder: Builder<'ctx>,
@@ -375,6 +403,8 @@ struct Shared<'a, 'ctx> {
     abis: &'a [FnAbi],
     /// Read-only data computed at compile time, by id.
     data: &'a [PointerValue<'ctx>],
+    /// The global of each static, by id.
+    statics: &'a [PointerValue<'ctx>],
     /// The panic function, which failed checks call (ADR 0014).
     panic: usize,
 }
@@ -391,6 +421,7 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
             fns,
             abis,
             data,
+            statics,
             panic,
         } = *shared;
         let blocks = body
@@ -413,6 +444,7 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
             fns,
             abis,
             data,
+            statics,
             panic,
             builder: context.create_builder(),
             blocks,
@@ -979,6 +1011,7 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                 .const_int(u64::from(*value), false)
                 .into(),
             Operand::Const(Const::Unit) => unreachable!("`()` has no value to use"),
+            Operand::Const(Const::Static(s)) => self.statics[s.def().id.0 as usize].into(),
         }
     }
 

@@ -1,0 +1,65 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/resolve_static_errors.ers
+---
+--- errors ---
+resolve::duplicate-item
+
+  × `counter` is defined more than once
+   ╭─[resolve_static_errors.ers:5:4]
+ 3 │ // attribute, and cannot be named `_start` (ADR 0030).
+ 4 │ static counter: u32 = 0;
+   ·        ───┬───
+   ·           ╰── first defined here
+ 5 │ fn counter() {}
+   ·    ───┬───
+   ·       ╰── redefined here
+ 6 │ 
+   ╰────
+  help: functions, structs, constants and statics share one namespace (ADR 0029, 0030)
+resolve::misplaced-attribute
+
+  × `#[packed]` applies only to structs
+   ╭─[resolve_static_errors.ers:7:1]
+ 6 │ 
+ 7 │ #[packed]
+   · ────┬────
+   ·     ╰── not allowed on a static
+ 8 │ static PACKED: u32 = 0;
+   ╰────
+resolve::duplicate-attribute
+
+  × `#[align]` is given more than once
+    ╭─[resolve_static_errors.ers:11:1]
+  9 │ 
+ 10 │ #[align(8)]
+    · ─────┬─────
+    ·      ╰── first given here
+ 11 │ #[align(16)]
+    · ──────┬─────
+    ·       ╰── given again here
+ 12 │ static TWICE: u32 = 0;
+    ╰────
+resolve::misplaced-attribute
+
+  × `#[align]` applies only to structs and statics
+    ╭─[resolve_static_errors.ers:14:1]
+ 13 │ 
+ 14 │ #[align(4)]
+    · ─────┬─────
+    ·      ╰── not allowed on a constant
+ 15 │ const ALIGNED: u32 = 0;
+    ╰────
+resolve::reserved-name
+
+  × `_start` is a reserved name
+    ╭─[resolve_static_errors.ers:17:8]
+ 16 │ 
+ 17 │ static _start: u32 = 0;
+    ·        ───┬──
+    ·           ╰── reserved for the startup code
+ 18 │ 
+    ╰────
+  help: the compiler generates `_start`, which sets up the stack and jumps to the entry function
+        (ADR 0012)
