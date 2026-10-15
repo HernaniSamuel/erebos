@@ -1,0 +1,20 @@
+// emit: mir
+// Regression: a function whose types need a struct without a layout is not
+// lowered to MIR, which needs layouts, and reports nothing more; it used to
+// crash the compiler. Other functions are still lowered and checked
+// (ADR 0032).
+struct Endless { next: Endless }
+
+const USES: u32 = uses_endless();
+
+fn uses_endless() -> u32 {
+    let p: *const Endless = 0 as *const Endless;
+    1
+}
+
+fn divides(x: u32) -> u32 {
+    x / 0
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

@@ -1,0 +1,38 @@
+// emit: mir
+// Code that cannot run under a condition known at compile time is not
+// checked (ADR 0032): the branch an `if` never takes, the right side of
+// `&&` and `||` when the left one decides, the body of a `while` known to
+// be `false`. A read through a constant pointer is never known: it may be a
+// device register.
+const BITS: u32 = 32;
+const ZERO: u32 = 0;
+const CTRL: *mut volatile u32 = 0x1000_0000 as *mut volatile u32;
+
+fn mask() -> u32 {
+    if BITS < 32 { (1 << BITS) - 1 } else { 0xFFFF_FFFF }
+}
+
+fn fits(x: u32) -> bool {
+    BITS >= 32 || (x >> BITS) == 0
+}
+
+fn both(x: u32) -> bool {
+    BITS < 32 && (x >> BITS) == 0
+}
+
+fn never(x: u32) {
+    while BITS < 32 {
+        let y: u32 = x / ZERO;
+    }
+}
+
+fn literal(x: u32) -> u32 {
+    if false { x / 0 } else { x }
+}
+
+fn register(x: u32) -> u32 {
+    x >> *CTRL
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

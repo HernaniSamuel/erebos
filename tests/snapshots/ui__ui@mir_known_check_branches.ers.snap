@@ -1,0 +1,222 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/mir_known_check_branches.ers
+---
+--- mir ---
+fn mask() -> u32 {
+    let _0: u32;
+    let _1: bool;
+    let _2: u32;
+    let _3: u32;
+    let _4: u32;
+
+    bb0: {
+        _1 = Lt(const 32_u32, const 32_u32);
+        if copy _1 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _3 = Shl(const 1_u32, const 32_u32);
+        _4 = Sub(copy _3, const 1_u32);
+        _2 = copy _4;
+        goto -> bb3;
+    }
+
+    bb2: {
+        _2 = const 4294967295_u32;
+        goto -> bb3;
+    }
+
+    bb3: {
+        _0 = copy _2;
+        return;
+    }
+}
+
+fn fits(_1: u32) -> bool {
+    let _0: bool;
+    let _1: u32; // x
+    let _2: bool;
+    let _3: bool;
+    let _4: u32;
+    let _5: u32;
+    let _6: bool;
+
+    bb0: {
+        _2 = Ge(const 32_u32, const 32_u32);
+        if copy _2 -> [true: bb2, false: bb1];
+    }
+
+    bb1: {
+        _4 = copy _1;
+        _5 = Shr(copy _4, const 32_u32);
+        _6 = Eq(copy _5, const 0_u32);
+        _3 = copy _6;
+        goto -> bb3;
+    }
+
+    bb2: {
+        _3 = const true;
+        goto -> bb3;
+    }
+
+    bb3: {
+        _0 = copy _3;
+        return;
+    }
+}
+
+fn both(_1: u32) -> bool {
+    let _0: bool;
+    let _1: u32; // x
+    let _2: bool;
+    let _3: bool;
+    let _4: u32;
+    let _5: u32;
+    let _6: bool;
+
+    bb0: {
+        _2 = Lt(const 32_u32, const 32_u32);
+        if copy _2 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _4 = copy _1;
+        _5 = Shr(copy _4, const 32_u32);
+        _6 = Eq(copy _5, const 0_u32);
+        _3 = copy _6;
+        goto -> bb3;
+    }
+
+    bb2: {
+        _3 = const false;
+        goto -> bb3;
+    }
+
+    bb3: {
+        _0 = copy _3;
+        return;
+    }
+}
+
+fn never(_1: u32) -> () {
+    let _0: ();
+    let _1: u32; // x
+    let _2: u32; // y
+    let _3: bool;
+    let _4: u32;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        _3 = Lt(const 32_u32, const 32_u32);
+        if copy _3 -> [true: bb2, false: bb3];
+    }
+
+    bb2: {
+        _4 = copy _1;
+        panic(division by zero);
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn literal(_1: u32) -> u32 {
+    let _0: u32;
+    let _1: u32; // x
+    let _2: u32;
+
+    bb0: {
+        if const false -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        panic(division by zero);
+    }
+
+    bb2: {
+        _2 = copy _1;
+        goto -> bb3;
+    }
+
+    bb3: {
+        _0 = copy _2;
+        return;
+    }
+}
+
+fn register(_1: u32) -> u32 {
+    let _0: u32;
+    let _1: u32; // x
+    let _2: u32;
+    let _3: *mut volatile u32;
+    let _4: u32;
+    let _5: u32;
+
+    bb0: {
+        _2 = copy _1;
+        _3 = const 268435456_usize as *mut volatile u32;
+        _4 = copy (*_3);
+        _5 = Shr(copy _2, copy _4);
+        _0 = copy _5;
+        return;
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+comptime fn BITS() -> u32 {
+    let _0: u32;
+
+    bb0: {
+        _0 = const 32_u32;
+        return;
+    }
+}
+
+comptime fn ZERO() -> u32 {
+    let _0: u32;
+
+    bb0: {
+        _0 = const 0_u32;
+        return;
+    }
+}
+
+comptime fn CTRL() -> *mut volatile u32 {
+    let _0: *mut volatile u32;
+    let _1: *mut volatile u32;
+
+    bb0: {
+        _1 = const 268435456_usize as *mut volatile u32;
+        _0 = copy _1;
+        return;
+    }
+}

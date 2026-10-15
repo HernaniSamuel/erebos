@@ -3,7 +3,6 @@ fn errors(x: u32, n: u32, vp: *mut volatile [u8; 2]) {
     let a: [u8; 3] = [1, 2];
     let b: [u8; 2] = [1, x];
     let c: [u8; 2] = [1, 2];
-    let d: u8 = c[2];
     let e: u8 = c[n];
     let f: bool = c == c;
     let g: [u8; 2] = *vp;

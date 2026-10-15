@@ -128,7 +128,7 @@ impl<'h> Queries<'h> {
             let Some(body) = &f.body else {
                 continue;
             };
-            if !self.typeck_fn(id) {
+            if !self.typeck_fn(id) || self.needs_missing_layout(id) {
                 continue;
             }
             let mut inner = Vec::new();
@@ -559,13 +559,14 @@ impl<'h> Queries<'h> {
     }
 
     /// The MIR of a function, built from its checked HIR; `None` if it
-    /// had errors, or needs a value that failed (both reported).
+    /// had errors, a check of ADR 0032 failed, or it needs a value that
+    /// failed (all reported).
     pub fn mir_body(&mut self, id: FnId) -> Option<Rc<mir::Body>> {
         match &self.bodies[id.0 as usize] {
             State::Done(body) => return body.clone(),
             State::InProgress | State::NotStarted => {}
         }
-        if !self.typeck_fn(id) {
+        if !self.typeck_fn(id) || self.needs_missing_layout(id) {
             self.bodies[id.0 as usize] = State::Done(None);
             return None;
         }
@@ -592,8 +593,62 @@ impl<'h> Queries<'h> {
         body
     }
 
+    /// Lowers every function that type checks to MIR, which checks the
+    /// values known at compile time (ADR 0032), whatever errors other
+    /// functions have.
+    pub fn lower_all(&mut self) {
+        for id in 0..self.hir.fns.len() {
+            self.mir_body(FnId(id as u32));
+        }
+    }
+
+    /// Whether lowering function `id` needs the layout of a struct that has
+    /// none, which was reported at the struct. Like a body that does not
+    /// type check, it is then left out without a new diagnostic.
+    fn needs_missing_layout(&mut self, id: FnId) -> bool {
+        let f = self.hir.fn_(id);
+        let mut types = vec![f.ret];
+        types.extend(f.locals.iter().map(|local| local.ty));
+        if let Some(body) = &f.body {
+            body.walk(&mut |e| {
+                types.push(self.tables.expr_ty(e.id));
+                if let ExprKind::SizeOf(ty) | ExprKind::AlignOf(ty) | ExprKind::OffsetOf(ty, _, _) =
+                    &e.kind
+                {
+                    types.push(*ty);
+                }
+            });
+        }
+        let mut seen = Vec::new();
+        types.into_iter().any(|ty| self.lacks_layout(ty, &mut seen))
+    }
+
+    /// Whether the MIR type of `ty` needs a struct without a layout; the
+    /// structs in `seen` were looked at already.
+    fn lacks_layout(&mut self, ty: hir::Ty, seen: &mut Vec<StructId>) -> bool {
+        match ty {
+            hir::Ty::Ptr(ptr) => self.lacks_layout(*ptr.pointee, seen),
+            hir::Ty::Array(elem, _) => self.lacks_layout(*elem, seen),
+            hir::Ty::Struct(s) => {
+                if seen.contains(&s.id) {
+                    return false;
+                }
+                seen.push(s.id);
+                if self.struct_layout(s.id).is_none() {
+                    return true;
+                }
+                let hir = self.hir;
+                hir.struct_(s.id)
+                    .fields
+                    .iter()
+                    .any(|field| self.lacks_layout(field.ty, seen))
+            }
+            _ => false,
+        }
+    }
+
     /// The MIR of the whole program, in source order. The program must have
-    /// passed type checking without errors.
+    /// been lowered without errors.
     pub fn into_mir(mut self) -> Mir {
         let structs = (0..self.hir.structs.len())
             .map(|id| self.mir_struct(StructId(id as u32)))

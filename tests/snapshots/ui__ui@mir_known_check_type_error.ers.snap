@@ -1,0 +1,27 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/mir_known_check_type_error.ers
+---
+--- errors ---
+ty::mismatched-types
+
+  × mismatched types
+   ╭─[mir_known_check_type_error.ers:8:5]
+ 7 │ fn type_error() -> u32 {
+ 8 │     true
+   ·     ──┬─
+   ·       ╰── expected `u32`, found `bool`
+ 9 │ }
+   ╰────
+ty::division-by-zero
+
+  × division by zero
+    ╭─[mir_known_check_type_error.ers:12:9]
+ 11 │ fn divides(x: u32) -> u32 {
+ 12 │     x / ZERO
+    ·         ──┬─
+    ·           ╰── this divisor is zero
+ 13 │ }
+    ╰────
+  help: at run time this would call the panic function (ADR 0007)

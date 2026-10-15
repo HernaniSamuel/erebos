@@ -11,8 +11,13 @@ use crate::mir::{
 use crate::query::{DataSource, Queries};
 use crate::span::Span;
 
+use known::Known;
+
+mod known;
+
 /// The MIR of a function that passed type checking, or `None` if a value
-/// it needs from compile-time evaluation failed, which was reported.
+/// it needs from compile-time evaluation failed, or a check on a value
+/// known at compile time failed (ADR 0032), both reported.
 pub fn build_body(q: &mut Queries, id: hir::FnId) -> Option<Body> {
     let hir = q.hir;
     let f = hir.fn_(id);
@@ -69,9 +74,18 @@ struct Builder<'a, 'h> {
     fn_id: hir::FnId,
     /// The source of the code being built, for statements' spans.
     span: Span,
-    /// A value from compile-time evaluation was missing; the body cannot
-    /// be used.
+    /// A value from compile-time evaluation was missing, or a check
+    /// failed; the body cannot be used.
     failed: bool,
+    /// Whether the checks of ADR 0032 apply: off in code that cannot run.
+    checks: bool,
+    /// Values known at compile time, by expression.
+    known: HashMap<hir::ExprId, Known>,
+    /// The values of the constants and `comptime` expressions used, asked
+    /// once: asking again for one being computed would report its cycle
+    /// again.
+    const_values: HashMap<hir::ConstId, Option<ConstValue>>,
+    comptime_values: HashMap<hir::ExprId, Option<ConstValue>>,
     /// The local bound to each piece of constant data used.
     const_locals: HashMap<DataId, Local>,
     locals: Vec<LocalDecl>,
@@ -105,6 +119,10 @@ impl<'a, 'h> Builder<'a, 'h> {
             fn_id,
             span: f.span,
             failed: false,
+            checks: true,
+            known: HashMap::new(),
+            const_values: HashMap::new(),
+            comptime_values: HashMap::new(),
             const_locals: HashMap::new(),
             locals: vec![LocalDecl {
                 ty: ret,
@@ -311,25 +329,15 @@ impl Builder<'_, '_> {
             hir::ExprKind::Bool(value) => Operand::Const(Const::Bool(*value)),
             hir::ExprKind::Unit => Operand::Const(Const::Unit),
             hir::ExprKind::Const(id) => {
-                let value = self.q.const_value(*id);
+                let value = self.const_value(*id);
                 self.const_operand(ty, DataSource::Const(*id), value)
             }
             hir::ExprKind::Comptime(inner) => {
-                let value = self.q.comptime_value(self.fn_id, inner);
+                let value = self.comptime_value(inner);
                 self.const_operand(ty, DataSource::Comptime(inner.id), value)
             }
-            // Layout queries are constants (ADR 0022).
-            hir::ExprKind::SizeOf(ty) => usize_const(self.layout(*ty).size),
-            hir::ExprKind::AlignOf(ty) => usize_const(self.layout(*ty).align),
-            hir::ExprKind::OffsetOf(ty, _, _) => {
-                let hir::Ty::Struct(s) = ty else {
-                    unreachable!("the type checker allows only structs")
-                };
-                let layout = self
-                    .q
-                    .struct_layout(s.id)
-                    .expect("well-typed programs have layouts");
-                usize_const(layout.offsets[self.q.tables.field(expr.id) as usize])
+            hir::ExprKind::SizeOf(_) | hir::ExprKind::AlignOf(_) | hir::ExprKind::OffsetOf(..) => {
+                usize_const(self.layout_query(expr))
             }
             hir::ExprKind::Array(elems) => {
                 let array = Place::local(self.new_local(ty, None));
@@ -400,9 +408,17 @@ impl Builder<'_, '_> {
                 if matches!(lhs_value, Operand::Copy(_)) && !is_simple(rhs) {
                     lhs_value = self.temp(self.operand_ty(lhs_value), Rvalue::Use(lhs_value));
                 }
+                let lhs_ty = self.operand_ty(lhs_value);
                 let lhs = lhs_value;
-                let rhs = self.expr(rhs);
-                if matches!(op, BinOp::Div | BinOp::Rem) {
+                let rhs_value = self.expr(rhs);
+                if op.is_shift() {
+                    self.check_shift(lhs_ty, rhs);
+                }
+                // After a reported zero divisor the body is not used, but
+                // the code after it is built, to check it too.
+                let reported = self.check_divisor(*op, rhs);
+                let rhs = rhs_value;
+                if matches!(op, BinOp::Div | BinOp::Rem) && !reported {
                     self.divide(*op, lhs, rhs, ty)
                 } else {
                     self.temp(ty, Rvalue::Binary(*op, lhs, rhs))
@@ -429,10 +445,15 @@ impl Builder<'_, '_> {
                 self.assign(place, Rvalue::Use(value));
                 Operand::Const(Const::Unit)
             }
-            hir::ExprKind::CompoundAssign(op, place, value) => {
-                let value = self.expr(value);
+            hir::ExprKind::CompoundAssign(op, place, value_expr) => {
+                let value = self.expr(value_expr);
                 let place = self.place(place);
-                if matches!(op, BinOp::Div | BinOp::Rem) {
+                if op.is_shift() {
+                    let shifted = self.operand_ty(Operand::Copy(place));
+                    self.check_shift(shifted, value_expr);
+                }
+                let reported = self.check_divisor(*op, value_expr);
+                if matches!(op, BinOp::Div | BinOp::Rem) && !reported {
                     let ty = self.operand_ty(Operand::Copy(place));
                     let quotient = self.divide(*op, Operand::Copy(place), value, ty);
                     self.assign(place, Rvalue::Use(quotient));
@@ -449,7 +470,9 @@ impl Builder<'_, '_> {
             hir::ExprKind::Block(block) => self.block(block),
             hir::ExprKind::Logical(op, lhs, rhs) => self.logical(*op, lhs, rhs),
             hir::ExprKind::If { cond, then, else_ } => {
-                let cond = self.expr(cond);
+                let cond_expr = cond;
+                let cond = self.expr(cond_expr);
+                let known = self.known_condition(cond_expr);
                 let result = self.result_place(ty);
                 let then_bb = self.new_block();
                 let else_bb = self.new_block();
@@ -460,13 +483,13 @@ impl Builder<'_, '_> {
                 });
 
                 self.current = Some(then_bb);
-                let value = self.block(then);
+                let value = self.checked_if(known != Some(false), |this| this.block(then));
                 self.store_result(result, value);
                 let then_end = self.current.take();
 
                 self.current = Some(else_bb);
                 if let Some(else_) = else_ {
-                    let value = self.expr(else_);
+                    let value = self.checked_if(known != Some(true), |this| this.expr(else_));
                     self.store_result(result, value);
                 }
                 let else_end = self.current.take();
@@ -478,7 +501,9 @@ impl Builder<'_, '_> {
                 let head = self.new_block();
                 self.terminate(Terminator::Goto(head));
                 self.current = Some(head);
-                let cond = self.expr(cond);
+                let cond_expr = cond;
+                let cond = self.expr(cond_expr);
+                let known = self.known_condition(cond_expr);
                 let body_bb = self.new_block();
                 let exit = self.new_block();
                 self.terminate(Terminator::If {
@@ -487,8 +512,10 @@ impl Builder<'_, '_> {
                     else_: exit,
                 });
                 self.current = Some(body_bb);
-                self.in_loop(expr.id, head, Some(exit), None, |this| {
-                    this.block(body);
+                self.checked_if(known != Some(false), |this| {
+                    this.in_loop(expr.id, head, Some(exit), None, |this| {
+                        this.block(body);
+                    })
                 });
                 if self.current.is_some() {
                     self.terminate(Terminator::Goto(head));
@@ -578,8 +605,8 @@ impl Builder<'_, '_> {
             _ => None,
         };
 
-        // The type checker rejects literal zero divisors; this keeps the
-        // guarantee for a zero constant that reaches MIR any other way.
+        // A known zero divisor is rejected where it can run (ADR 0032); in
+        // code that cannot, this keeps the `Div`/`Rem` left in MIR valid.
         if constant == Some(0) {
             self.terminate(Terminator::Panic(PanicCause::DivisionByZero));
             return Operand::Const(Const::Int(0, int));
@@ -661,7 +688,11 @@ impl Builder<'_, '_> {
     /// `a && b` is `if a { b } else { false }`; `a || b` is
     /// `if a { true } else { b }`.
     fn logical(&mut self, op: hir::LogicalOp, lhs: &hir::Expr, rhs: &hir::Expr) -> Operand {
-        let lhs = self.expr(lhs);
+        let lhs_expr = lhs;
+        let lhs = self.expr(lhs_expr);
+        // The right side never runs when the left one decides the result.
+        let short = op == hir::LogicalOp::Or;
+        let decided = self.known_condition(lhs_expr) == Some(short);
         let result = Place::local(self.new_local(Ty::Bool, None));
         let rhs_bb = self.new_block();
         let short_bb = self.new_block();
@@ -676,12 +707,11 @@ impl Builder<'_, '_> {
         });
 
         self.current = Some(rhs_bb);
-        let value = self.expr(rhs);
+        let value = self.checked_if(!decided, |this| this.expr(rhs));
         self.assign(result, Rvalue::Use(value));
         let rhs_end = self.current.take();
 
         self.current = Some(short_bb);
-        let short = op == hir::LogicalOp::Or;
         self.assign(result, Rvalue::Use(Operand::Const(Const::Bool(short))));
         let short_end = self.current.take();
 
@@ -806,6 +836,46 @@ impl Builder<'_, '_> {
             .iter()
             .rposition(|scope| scope.id == target)
             .expect("lowering resolved the loop")
+    }
+
+    /// The value of a constant, asked once per body.
+    fn const_value(&mut self, id: hir::ConstId) -> Option<ConstValue> {
+        if let Some(value) = self.const_values.get(&id) {
+            return value.clone();
+        }
+        let value = self.q.const_value(id);
+        self.const_values.insert(id, value.clone());
+        value
+    }
+
+    /// The value of `comptime inner`, asked once per body.
+    fn comptime_value(&mut self, inner: &hir::Expr) -> Option<ConstValue> {
+        if let Some(value) = self.comptime_values.get(&inner.id) {
+            return value.clone();
+        }
+        let value = self.q.comptime_value(self.fn_id, inner);
+        self.comptime_values.insert(inner.id, value.clone());
+        value
+    }
+
+    /// `size_of`, `align_of` or `offset_of`, which are constants
+    /// (ADR 0022).
+    fn layout_query(&mut self, expr: &hir::Expr) -> u64 {
+        match &expr.kind {
+            hir::ExprKind::SizeOf(ty) => self.layout(*ty).size,
+            hir::ExprKind::AlignOf(ty) => self.layout(*ty).align,
+            hir::ExprKind::OffsetOf(ty, _, _) => {
+                let hir::Ty::Struct(s) = ty else {
+                    unreachable!("the type checker allows only structs")
+                };
+                let layout = self
+                    .q
+                    .struct_layout(s.id)
+                    .expect("well-typed programs have layouts");
+                layout.offsets[self.q.tables.field(expr.id) as usize]
+            }
+            _ => unreachable!("not a layout query"),
+        }
     }
 
     fn layout(&mut self, ty: hir::Ty) -> crate::layout::Layout {
@@ -938,9 +1008,10 @@ impl Builder<'_, '_> {
     }
 
     /// The projection to element `index` of an array of `len` elements,
-    /// after checking the bounds (ADR 0021). A constant index was checked
-    /// by the type checker.
+    /// after checking the bounds (ADR 0021): an index known at compile time
+    /// while building, any other at run time (ADR 0032).
     fn array_index(&mut self, index: &hir::Expr, len: u64) -> PlaceElem {
+        self.check_index(index, len);
         if let hir::ExprKind::Int(value) = index.kind
             && value < len
         {

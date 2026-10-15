@@ -1,4 +1,4 @@
-// emit: typeck
+// emit: mir
 // Regression (found by fuzzing): a length that fails to evaluate gives
 // `{error}` types to the code using it, reported once, at the length; that
 // code must not be lowered to MIR.

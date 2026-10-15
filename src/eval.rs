@@ -715,12 +715,7 @@ impl Interp<'_, '_> {
             Rvalue::Unary(op, operand) => {
                 let ty = self.frame().body.operand_ty(operand);
                 let value = self.operand(operand, span)?.int();
-                Ok(Scalar::Int(match (op, ty) {
-                    (UnOp::Neg, Ty::Int(int)) => value.wrapping_neg() & int.mask(),
-                    (UnOp::Not, Ty::Int(int)) => !value & int.mask(),
-                    (UnOp::Not, _) => u64::from(value == 0),
-                    (op, ty) => unreachable!("{op:?} of `{ty}`"),
-                }))
+                Ok(Scalar::Int(unary(*op, ty, value)))
             }
             Rvalue::Binary(op, lhs, rhs) => {
                 let ty = self.frame().body.operand_ty(lhs);
@@ -746,24 +741,12 @@ impl Interp<'_, '_> {
     /// Compares as the target would, or fails where the run-time answer
     /// is not known (ADR 0030).
     fn compare(&self, op: BinOp, ty: Ty, l: Scalar, r: Scalar, span: Span) -> EvalResult<bool> {
-        use std::cmp::Ordering;
         let ordering = match (l, r) {
-            (Scalar::Int(a), Scalar::Int(b)) => match ty {
-                Ty::Int(int) if int.is_signed() => sign_extend(a, int).cmp(&sign_extend(b, int)),
-                _ => a.cmp(&b),
-            },
+            (Scalar::Int(a), Scalar::Int(b)) => int_ordering(ty, a, b),
             (Scalar::Ptr(l), Scalar::Ptr(r)) => self.compare_pointers(op, l, r, span)?,
             (l, r) => unreachable!("comparing {l:?} with {r:?}: operands of one type"),
         };
-        Ok(match op {
-            BinOp::Eq => ordering == Ordering::Equal,
-            BinOp::Ne => ordering != Ordering::Equal,
-            BinOp::Lt => ordering == Ordering::Less,
-            BinOp::Le => ordering != Ordering::Greater,
-            BinOp::Gt => ordering == Ordering::Greater,
-            BinOp::Ge => ordering != Ordering::Less,
-            _ => unreachable!("`{}` is not a comparison", op.symbol()),
-        })
+        Ok(answer(op, ordering))
     }
 
     /// How two pointers compare at run time, or an error where that is not
@@ -859,14 +842,7 @@ impl Interp<'_, '_> {
     /// Conversions with `as` (ADR 0019).
     fn cast(&self, value: Scalar, from: Ty, to: Ty, span: Span) -> EvalResult<Scalar> {
         Ok(match (from, to, value) {
-            (Ty::Int(from), Ty::Int(to), Scalar::Int(v)) => {
-                let wide = if from.is_signed() {
-                    sign_extend(v, from) as u64
-                } else {
-                    v
-                };
-                Scalar::Int(wide & to.mask())
-            }
+            (Ty::Int(from), Ty::Int(to), Scalar::Int(v)) => Scalar::Int(cast_int(v, from, to)),
             (Ty::Bool, Ty::Int(_), value) => value,
             (Ty::Int(_), Ty::Ptr(_), Scalar::Int(v)) => Scalar::Ptr(Pointer::Addr(v as u32)),
             (Ty::Ptr(_), Ty::Int(to), Scalar::Ptr(Pointer::Addr(a))) => {
@@ -906,15 +882,62 @@ fn clear_pointers(object: &mut Alloc, offset: usize, size: usize) {
     }
 }
 
-fn sign_extend(value: u64, int: IntTy) -> i64 {
+pub(crate) fn sign_extend(value: u64, int: IntTy) -> i64 {
     let shift = 64 - int.bits();
     ((value << shift) as i64) >> shift
 }
 
+/// Unary `-` and `!` as the target does them (ADR 0007): `-` wraps.
+pub(crate) fn unary(op: UnOp, ty: Ty, value: u64) -> u64 {
+    match (op, ty) {
+        (UnOp::Neg, Ty::Int(int)) => value.wrapping_neg() & int.mask(),
+        (UnOp::Not, Ty::Int(int)) => !value & int.mask(),
+        (UnOp::Not, _) => u64::from(value == 0),
+        (op, ty) => unreachable!("{op:?} of `{ty}`"),
+    }
+}
+
+/// A comparison of two integers or `bool`s of type `ty`.
+pub(crate) fn compare_ints(op: BinOp, ty: Ty, a: u64, b: u64) -> bool {
+    answer(op, int_ordering(ty, a, b))
+}
+
+fn int_ordering(ty: Ty, a: u64, b: u64) -> std::cmp::Ordering {
+    match ty {
+        Ty::Int(int) if int.is_signed() => sign_extend(a, int).cmp(&sign_extend(b, int)),
+        _ => a.cmp(&b),
+    }
+}
+
+/// Whether `op` holds between two values that compare as `ordering`.
+fn answer(op: BinOp, ordering: std::cmp::Ordering) -> bool {
+    use std::cmp::Ordering;
+    match op {
+        BinOp::Eq => ordering == Ordering::Equal,
+        BinOp::Ne => ordering != Ordering::Equal,
+        BinOp::Lt => ordering == Ordering::Less,
+        BinOp::Le => ordering != Ordering::Greater,
+        BinOp::Gt => ordering == Ordering::Greater,
+        BinOp::Ge => ordering != Ordering::Less,
+        _ => unreachable!("`{}` is not a comparison", op.symbol()),
+    }
+}
+
+/// `value as to`, from an integer of type `from` (ADR 0019): sign- or
+/// zero-extended, then truncated.
+pub(crate) fn cast_int(value: u64, from: IntTy, to: IntTy) -> u64 {
+    let wide = if from.is_signed() {
+        sign_extend(value, from) as u64
+    } else {
+        value
+    };
+    wide & to.mask()
+}
+
 /// Arithmetic as the target does it (ADR 0007): wrapping, shifts masked to
-/// the width, division truncating. MIR rules out zero divisors and
-/// `MIN / -1` before a division is reached.
-fn arith(op: BinOp, ty: Ty, amount_ty: Ty, l: u64, r: u64) -> u64 {
+/// the width, division truncating. Its callers rule out zero divisors;
+/// `MIN / -1` wraps to `MIN`.
+pub(crate) fn arith(op: BinOp, ty: Ty, amount_ty: Ty, l: u64, r: u64) -> u64 {
     let int = match ty {
         Ty::Int(int) => int,
         // `&`, `|` and `^` on `bool`.

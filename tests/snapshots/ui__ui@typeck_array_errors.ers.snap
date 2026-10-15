@@ -25,144 +25,133 @@ ty::mismatched-types
  5 │     let c: [u8; 2] = [1, 2];
    ╰────
   help: integer types never convert implicitly; use `as u8` (ADR 0008)
-ty::index-out-of-bounds
-
-  × index out of bounds
-   ╭─[typeck_array_errors.ers:6:19]
- 5 │     let c: [u8; 2] = [1, 2];
- 6 │     let d: u8 = c[2];
-   ·                   ┬
-   ·                   ╰── the length is 2 but the index is 2
- 7 │     let e: u8 = c[n];
-   ╰────
-  help: at run time this would call the panic function (ADR 0021)
 ty::mismatched-types
 
   × mismatched types
-   ╭─[typeck_array_errors.ers:7:19]
- 6 │     let d: u8 = c[2];
- 7 │     let e: u8 = c[n];
+   ╭─[typeck_array_errors.ers:6:19]
+ 5 │     let c: [u8; 2] = [1, 2];
+ 6 │     let e: u8 = c[n];
    ·                   ┬
    ·                   ╰── expected `usize`, found `u32`
- 8 │     let f: bool = c == c;
+ 7 │     let f: bool = c == c;
    ╰────
   help: integer types never convert implicitly; use `as usize` (ADR 0008)
 ty::invalid-operand
 
   × `==` needs integers, pointers or `bool`, found `[u8; 2]`
-   ╭─[typeck_array_errors.ers:8:19]
- 7 │     let e: u8 = c[n];
- 8 │     let f: bool = c == c;
+   ╭─[typeck_array_errors.ers:7:19]
+ 6 │     let e: u8 = c[n];
+ 7 │     let f: bool = c == c;
    ·                   ───┬──
    ·                      ╰── has type `[u8; 2]`
- 9 │     let g: [u8; 2] = *vp;
+ 8 │     let g: [u8; 2] = *vp;
    ╰────
 ty::volatile-aggregate
 
   × a volatile `[u8; 2]` cannot be accessed as a whole
-    ╭─[typeck_array_errors.ers:9:22]
-  8 │     let f: bool = c == c;
-  9 │     let g: [u8; 2] = *vp;
-    ·                      ─┬─
-    ·                       ╰── access its elements or fields one at a time
- 10 │     *vp = c;
-    ╰────
+   ╭─[typeck_array_errors.ers:8:22]
+ 7 │     let f: bool = c == c;
+ 8 │     let g: [u8; 2] = *vp;
+   ·                      ─┬─
+   ·                       ╰── access its elements or fields one at a time
+ 9 │     *vp = c;
+   ╰────
   help: the width and number of the bus accesses would be up to the compiler (ADR 0023)
 ty::volatile-aggregate
 
   × a volatile `[u8; 2]` cannot be accessed as a whole
-    ╭─[typeck_array_errors.ers:10:5]
-  9 │     let g: [u8; 2] = *vp;
- 10 │     *vp = c;
+    ╭─[typeck_array_errors.ers:9:5]
+  8 │     let g: [u8; 2] = *vp;
+  9 │     *vp = c;
     ·     ─┬─
     ·      ╰── access its elements or fields one at a time
- 11 │     [b'a', 2][0] = 3;
+ 10 │     [b'a', 2][0] = 3;
     ╰────
   help: the width and number of the bus accesses would be up to the compiler (ADR 0023)
 ty::not-assignable
 
   × cannot assign to part of a temporary value
-    ╭─[typeck_array_errors.ers:11:5]
- 10 │     *vp = c;
- 11 │     [b'a', 2][0] = 3;
+    ╭─[typeck_array_errors.ers:10:5]
+  9 │     *vp = c;
+ 10 │     [b'a', 2][0] = 3;
     ·     ────┬────
     ·         ╰── this value lives in no variable
- 12 │     let h: u32 = x[0];
+ 11 │     let h: u32 = x[0];
     ╰────
   help: store it in a `let mut` first
 ty::cannot-index
 
   × cannot index a value of type `u32`
-    ╭─[typeck_array_errors.ers:12:18]
- 11 │     [b'a', 2][0] = 3;
- 12 │     let h: u32 = x[0];
+    ╭─[typeck_array_errors.ers:11:18]
+ 10 │     [b'a', 2][0] = 3;
+ 11 │     let h: u32 = x[0];
     ·                  ┬
     ·                  ╰── not an array or a pointer
- 13 │     let i: u32 = [1, 2] as u32;
+ 12 │     let i: u32 = [1, 2] as u32;
     ╰────
 ty::untyped-literal
 
   × cannot tell the type of this array's elements
-    ╭─[typeck_array_errors.ers:13:18]
- 12 │     let h: u32 = x[0];
- 13 │     let i: u32 = [1, 2] as u32;
+    ╭─[typeck_array_errors.ers:12:18]
+ 11 │     let h: u32 = x[0];
+ 12 │     let i: u32 = [1, 2] as u32;
     ·                  ───┬──
     ·                     ╰── no type is expected here
- 14 │     let huge: [u8; 3_000_000_000] = [0; 3_000_000_000];
+ 13 │     let huge: [u8; 3_000_000_000] = [0; 3_000_000_000];
     ╰────
   help: bind it first, e.g. `let a: [u8; 3] = ...` (ADR 0008)
 ty::too-large
 
   × `[u8; 3000000000]` is too large
-    ╭─[typeck_array_errors.ers:14:9]
- 13 │     let i: u32 = [1, 2] as u32;
- 14 │     let huge: [u8; 3_000_000_000] = [0; 3_000_000_000];
+    ╭─[typeck_array_errors.ers:13:9]
+ 12 │     let i: u32 = [1, 2] as u32;
+ 13 │     let huge: [u8; 3_000_000_000] = [0; 3_000_000_000];
     ·         ──┬─
     ·           ╰── does not fit in the address space
- 15 │     [1, 2];
+ 14 │     [1, 2];
     ╰────
   help: objects are limited to 2147483647 bytes on this target
 ty::too-large
 
   × `[u8; 3000000000]` is too large
-    ╭─[typeck_array_errors.ers:14:37]
- 13 │     let i: u32 = [1, 2] as u32;
- 14 │     let huge: [u8; 3_000_000_000] = [0; 3_000_000_000];
+    ╭─[typeck_array_errors.ers:13:37]
+ 12 │     let i: u32 = [1, 2] as u32;
+ 13 │     let huge: [u8; 3_000_000_000] = [0; 3_000_000_000];
     ·                                     ─────────┬────────
     ·                                              ╰── this value does not fit in the address space
- 15 │     [1, 2];
+ 14 │     [1, 2];
     ╰────
   help: objects are limited to 2147483647 bytes on this target
 ty::untyped-literal
 
   × cannot tell the type of this array's elements
-    ╭─[typeck_array_errors.ers:15:5]
- 14 │     let huge: [u8; 3_000_000_000] = [0; 3_000_000_000];
- 15 │     [1, 2];
+    ╭─[typeck_array_errors.ers:14:5]
+ 13 │     let huge: [u8; 3_000_000_000] = [0; 3_000_000_000];
+ 14 │     [1, 2];
     ·     ───┬──
     ·        ╰── no type is expected here
- 16 │ }
+ 15 │ }
     ╰────
   help: bind it first, e.g. `let a: [u8; 3] = ...` (ADR 0008)
 ty::too-large
 
   × `[u8; 3000000000]` is too large
-    ╭─[typeck_array_errors.ers:26:17]
- 25 │ fn huge_values(p: *const [u8; 5_000_000_000]) -> u8 {
- 26 │     let a: u8 = [b'a'; 3_000_000_000][0];
+    ╭─[typeck_array_errors.ers:25:17]
+ 24 │ fn huge_values(p: *const [u8; 5_000_000_000]) -> u8 {
+ 25 │     let a: u8 = [b'a'; 3_000_000_000][0];
     ·                 ──────────┬──────────
     ·                           ╰── this value does not fit in the address space
- 27 │     let b: u8 = (*p)[1];
+ 26 │     let b: u8 = (*p)[1];
     ╰────
   help: objects are limited to 2147483647 bytes on this target
 ty::too-large
 
   × `[u8; 5000000000]` is too large
-    ╭─[typeck_array_errors.ers:28:17]
- 27 │     let b: u8 = (*p)[1];
- 28 │     let c: u8 = p[1][0];
+    ╭─[typeck_array_errors.ers:27:17]
+ 26 │     let b: u8 = (*p)[1];
+ 27 │     let c: u8 = p[1][0];
     ·                 ┬
     ·                 ╰── the distance between elements does not fit in the address space
- 29 │     b
+ 28 │     b
     ╰────
   help: objects are limited to 2147483647 bytes on this target

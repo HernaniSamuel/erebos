@@ -1,13 +1,13 @@
 ---
 source: tests/ui.rs
 expression: output
-input_file: tests/ui/typeck_failed_length_users.ers
+input_file: tests/ui/mir_failed_length_users.ers
 ---
 --- errors ---
 ty::division-by-zero
 
   × division by zero
-   ╭─[typeck_failed_length_users.ers:7:27]
+   ╭─[mir_failed_length_users.ers:7:27]
  6 │ 
  7 │ fn offsets() -> [u32; 3 / 0] {
    ·                           ┬

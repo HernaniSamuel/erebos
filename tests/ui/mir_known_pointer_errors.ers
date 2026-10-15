@@ -1,0 +1,16 @@
+// emit: mir
+// A pointer made from an integer is known by its address (ADR 0032): an
+// index computed from one is checked, and so is code under a comparison of
+// pointers that may be true.
+const BASE: *const u32 = 0x8000_0000 as *const u32;
+
+fn index(t: [u8; 4]) -> u8 {
+    t[(4 as *const u8) as usize]
+}
+
+fn compared(x: u32) -> u32 {
+    if BASE == 0x8000_0000 as *const u32 { x >> 32 } else { x }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

@@ -1,0 +1,303 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/mir_known_check_errors.ers
+---
+--- errors ---
+ty::shift-out-of-range
+
+  × shift amount out of range for `u32`
+    ╭─[mir_known_check_errors.ers:20:23]
+ 19 │ fn constants(x: u32, t: [u8; 4]) {
+ 20 │     let a: u32 = x << BITS;
+    ·                       ──┬─
+    ·                         ╰── is 32, but must be between 0 and 31
+ 21 │     let b: u32 = x % ZERO;
+    ╰────
+  help: shifts mask their amount, so this would shift by 0 (ADR 0007)
+ty::division-by-zero
+
+  × division by zero
+    ╭─[mir_known_check_errors.ers:21:22]
+ 20 │     let a: u32 = x << BITS;
+ 21 │     let b: u32 = x % ZERO;
+    ·                      ──┬─
+    ·                        ╰── this divisor is zero
+ 22 │     let c: u8 = t[FOUR];
+    ╰────
+  help: at run time this would call the panic function (ADR 0007)
+ty::index-out-of-bounds
+
+  × index out of bounds
+    ╭─[mir_known_check_errors.ers:22:19]
+ 21 │     let b: u32 = x % ZERO;
+ 22 │     let c: u8 = t[FOUR];
+    ·                   ──┬─
+    ·                     ╰── the length is 4 but the index is 4
+ 23 │ }
+    ╰────
+  help: at run time this would call the panic function (ADR 0021)
+ty::shift-out-of-range
+
+  × shift amount out of range for `u32`
+    ╭─[mir_known_check_errors.ers:26:23]
+ 25 │ fn comptime_values(x: u32, t: [u8; 4]) {
+ 26 │     let a: u32 = x >> comptime bits();
+    ·                       ───────┬───────
+    ·                              ╰── is 33, but must be between 0 and 31
+ 27 │     let b: u32 = x / comptime zero();
+    ╰────
+  help: shifts mask their amount, so this would shift by 1 (ADR 0007)
+ty::division-by-zero
+
+  × division by zero
+    ╭─[mir_known_check_errors.ers:27:22]
+ 26 │     let a: u32 = x >> comptime bits();
+ 27 │     let b: u32 = x / comptime zero();
+    ·                      ───────┬───────
+    ·                             ╰── this divisor is zero
+ 28 │     let c: u8 = t[comptime four()];
+    ╰────
+  help: at run time this would call the panic function (ADR 0007)
+ty::index-out-of-bounds
+
+  × index out of bounds
+    ╭─[mir_known_check_errors.ers:28:19]
+ 27 │     let b: u32 = x / comptime zero();
+ 28 │     let c: u8 = t[comptime four()];
+    ·                   ───────┬───────
+    ·                          ╰── the length is 4 but the index is 4
+ 29 │ }
+    ╰────
+  help: at run time this would call the panic function (ADR 0021)
+ty::shift-out-of-range
+
+  × shift amount out of range for `u32`
+    ╭─[mir_known_check_errors.ers:32:23]
+ 31 │ fn expressions(x: u32, t: [u8; 4]) {
+ 32 │     let a: u32 = x << BITS - 1 + 1;
+    ·                       ──────┬─────
+    ·                             ╰── is 32, but must be between 0 and 31
+ 33 │     let b: u32 = x / (BITS - 1 + 1 - 32);
+    ╰────
+  help: shifts mask their amount, so this would shift by 0 (ADR 0007)
+ty::division-by-zero
+
+  × division by zero
+    ╭─[mir_known_check_errors.ers:33:22]
+ 32 │     let a: u32 = x << BITS - 1 + 1;
+ 33 │     let b: u32 = x / (BITS - 1 + 1 - 32);
+    ·                      ─────────┬─────────
+    ·                               ╰── this divisor is zero
+ 34 │     let c: u8 = t[FOUR - 1 + 1];
+    ╰────
+  help: at run time this would call the panic function (ADR 0007)
+ty::index-out-of-bounds
+
+  × index out of bounds
+    ╭─[mir_known_check_errors.ers:34:19]
+ 33 │     let b: u32 = x / (BITS - 1 + 1 - 32);
+ 34 │     let c: u8 = t[FOUR - 1 + 1];
+    ·                   ──────┬─────
+    ·                         ╰── the length is 4 but the index is 4
+ 35 │ }
+    ╰────
+  help: at run time this would call the panic function (ADR 0021)
+ty::shift-out-of-range
+
+  × shift amount out of range for `u32`
+    ╭─[mir_known_check_errors.ers:38:23]
+ 37 │ fn casts(x: u32, t: [u8; 4]) {
+ 38 │     let a: u32 = x << WIDE as u32;
+    ·                       ─────┬─────
+    ·                            ╰── is 32, but must be between 0 and 31
+ 39 │     let b: u32 = x / ZERO_U8 as u32;
+    ╰────
+  help: shifts mask their amount, so this would shift by 0 (ADR 0007)
+ty::division-by-zero
+
+  × division by zero
+    ╭─[mir_known_check_errors.ers:39:22]
+ 38 │     let a: u32 = x << WIDE as u32;
+ 39 │     let b: u32 = x / ZERO_U8 as u32;
+    ·                      ───────┬──────
+    ·                             ╰── this divisor is zero
+ 40 │     let c: u8 = t[IDX as usize];
+    ╰────
+  help: at run time this would call the panic function (ADR 0007)
+ty::index-out-of-bounds
+
+  × index out of bounds
+    ╭─[mir_known_check_errors.ers:40:19]
+ 39 │     let b: u32 = x / ZERO_U8 as u32;
+ 40 │     let c: u8 = t[IDX as usize];
+    ·                   ──────┬─────
+    ·                         ╰── the length is 4 but the index is 4
+ 41 │ }
+    ╰────
+  help: at run time this would call the panic function (ADR 0021)
+ty::shift-out-of-range
+
+  × shift amount out of range for `i32`
+    ╭─[mir_known_check_errors.ers:44:11]
+ 43 │ fn negative(y: i32) -> i32 {
+ 44 │     (y << NEG) + (y >> -1)
+    ·           ─┬─
+    ·            ╰── is -1, but must be between 0 and 31
+ 45 │ }
+    ╰────
+  help: shifts mask their amount, so this would shift by 31 (ADR 0007)
+ty::shift-out-of-range
+
+  × shift amount out of range for `i32`
+    ╭─[mir_known_check_errors.ers:44:24]
+ 43 │ fn negative(y: i32) -> i32 {
+ 44 │     (y << NEG) + (y >> -1)
+    ·                        ─┬
+    ·                         ╰── must be between 0 and 31
+ 45 │ }
+    ╰────
+  help: shifts mask their amount, so this would shift by 31 (ADR 0007)
+ty::shift-out-of-range
+
+  × shift amount out of range for `u32`
+    ╭─[mir_known_check_errors.ers:49:11]
+ 48 │     let mut v: u32 = x;
+ 49 │     v <<= BITS;
+    ·           ──┬─
+    ·             ╰── is 32, but must be between 0 and 31
+ 50 │     v >>= BITS + 1;
+    ╰────
+  help: shifts mask their amount, so this would shift by 0 (ADR 0007)
+ty::shift-out-of-range
+
+  × shift amount out of range for `u32`
+    ╭─[mir_known_check_errors.ers:50:11]
+ 49 │     v <<= BITS;
+ 50 │     v >>= BITS + 1;
+    ·           ────┬───
+    ·               ╰── is 33, but must be between 0 and 31
+ 51 │     v /= ZERO;
+    ╰────
+  help: shifts mask their amount, so this would shift by 1 (ADR 0007)
+ty::division-by-zero
+
+  × division by zero
+    ╭─[mir_known_check_errors.ers:51:10]
+ 50 │     v >>= BITS + 1;
+ 51 │     v /= ZERO;
+    ·          ──┬─
+    ·            ╰── this divisor is zero
+ 52 │     v %= ZERO;
+    ╰────
+  help: at run time this would call the panic function (ADR 0007)
+ty::division-by-zero
+
+  × division by zero
+    ╭─[mir_known_check_errors.ers:52:10]
+ 51 │     v /= ZERO;
+ 52 │     v %= ZERO;
+    ·          ──┬─
+    ·            ╰── this divisor is zero
+ 53 │ }
+    ╰────
+  help: at run time this would call the panic function (ADR 0007)
+ty::division-by-zero
+
+  × division by zero
+    ╭─[mir_known_check_errors.ers:56:14]
+ 55 │ fn once(x: u32) -> u32 {
+ 56 │     x / (A / ZERO)
+    ·              ──┬─
+    ·                ╰── this divisor is zero
+ 57 │ }
+    ╰────
+  help: at run time this would call the panic function (ADR 0007)
+ty::shift-out-of-range
+
+  × shift amount out of range for `u32`
+    ╭─[mir_known_check_errors.ers:61:33]
+ 60 │ fn unknown_conditions(x: u32, flag: bool) -> u32 {
+ 61 │     let a: u32 = if flag { x << BITS } else { 0 };
+    ·                                 ──┬─
+    ·                                   ╰── is 32, but must be between 0 and 31
+ 62 │     let b: bool = flag && (x >> BITS) == 0;
+    ╰────
+  help: shifts mask their amount, so this would shift by 0 (ADR 0007)
+ty::shift-out-of-range
+
+  × shift amount out of range for `u32`
+    ╭─[mir_known_check_errors.ers:62:33]
+ 61 │     let a: u32 = if flag { x << BITS } else { 0 };
+ 62 │     let b: bool = flag && (x >> BITS) == 0;
+    ·                                 ──┬─
+    ·                                   ╰── is 32, but must be between 0 and 31
+ 63 │     let c: bool = flag || (x >> BITS) == 0;
+    ╰────
+  help: shifts mask their amount, so this would shift by 0 (ADR 0007)
+ty::shift-out-of-range
+
+  × shift amount out of range for `u32`
+    ╭─[mir_known_check_errors.ers:63:33]
+ 62 │     let b: bool = flag && (x >> BITS) == 0;
+ 63 │     let c: bool = flag || (x >> BITS) == 0;
+    ·                                 ──┬─
+    ·                                   ╰── is 32, but must be between 0 and 31
+ 64 │     while flag {
+    ╰────
+  help: shifts mask their amount, so this would shift by 0 (ADR 0007)
+ty::division-by-zero
+
+  × division by zero
+    ╭─[mir_known_check_errors.ers:65:26]
+ 64 │     while flag {
+ 65 │         let d: u32 = x / ZERO;
+    ·                          ──┬─
+    ·                            ╰── this divisor is zero
+ 66 │     }
+    ╰────
+  help: at run time this would call the panic function (ADR 0007)
+ty::shift-out-of-range
+
+  × shift amount out of range for `u32`
+    ╭─[mir_known_check_errors.ers:73:11]
+ 72 │     let mut g: u32 = 0;
+ 73 │     g <<= 32;
+    ·           ─┬
+    ·            ╰── must be between 0 and 31
+ 74 │     let a: u32 = x / 0;
+    ╰────
+  help: shifts mask their amount, so this would shift by 0 (ADR 0007)
+ty::division-by-zero
+
+  × division by zero
+    ╭─[mir_known_check_errors.ers:74:22]
+ 73 │     g <<= 32;
+ 74 │     let a: u32 = x / 0;
+    ·                      ┬
+    ·                      ╰── this divisor is zero
+ 75 │     let mut b: u32 = x;
+    ╰────
+  help: at run time this would call the panic function (ADR 0007)
+ty::division-by-zero
+
+  × division by zero
+    ╭─[mir_known_check_errors.ers:76:10]
+ 75 │     let mut b: u32 = x;
+ 76 │     b %= 0;
+    ·          ┬
+    ·          ╰── this divisor is zero
+ 77 │     let c: [u8; 2] = [1, 2];
+    ╰────
+  help: at run time this would call the panic function (ADR 0007)
+ty::index-out-of-bounds
+
+  × index out of bounds
+    ╭─[mir_known_check_errors.ers:78:19]
+ 77 │     let c: [u8; 2] = [1, 2];
+ 78 │     let d: u8 = c[2];
+    ·                   ┬
+    ·                   ╰── the length is 2 but the index is 2
+ 79 │ }
+    ╰────
+  help: at run time this would call the panic function (ADR 0021)

@@ -1,0 +1,18 @@
+// emit: mir
+// A pointer made from an integer is known by its address (ADR 0032), so
+// casts of it to integers and comparisons of it are known too.
+const UART: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+const BASE: *const u32 = 0x8000_0000 as *const u32;
+
+// Not reported: the branch never runs.
+fn null_uart(x: u32) -> u32 {
+    if UART as usize == 0 { x / 0 } else { x }
+}
+
+// Not reported: `BASE` is above `UART as *const u32`.
+fn ordered(x: u32) -> u32 {
+    if BASE < UART as *const u32 { x >> 32 } else { x }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

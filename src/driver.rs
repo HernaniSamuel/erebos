@@ -203,7 +203,10 @@ fn front_end(
         return FrontEnd::Dump(dump);
     }
 
-    // Later phases rely on well-typed input.
+    // Every function that type checks is lowered and checked, whatever
+    // errors the others have (ADR 0032); code generation relies on a
+    // program without errors.
+    queries.lower_all();
     if diags.has_errors() || queries.diags.has_errors() {
         diags.append(queries.diags);
         return FrontEnd::Failed;

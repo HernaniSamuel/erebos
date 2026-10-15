@@ -110,16 +110,6 @@ fn element_of(expected: Option<Ty>) -> Option<Ty> {
     }
 }
 
-/// The value of a constant shift amount, if the amount is a literal.
-fn literal_value(expr: &Expr) -> Option<i128> {
-    match &expr.kind {
-        ExprKind::Int(value) => Some(*value as i128),
-        ExprKind::Byte(value) => Some(*value as i128),
-        ExprKind::Unary(UnOp::Neg, operand) => literal_value(operand).map(|v| -v),
-        _ => None,
-    }
-}
-
 struct Checker<'a, 'h> {
     q: &'a mut Queries<'h>,
     hir: &'h Hir,
@@ -508,7 +498,6 @@ impl Checker<'_, '_> {
                     Operands::Int
                 };
                 self.require(expr, ty, op.symbol(), allowed);
-                self.check_divisor(*op, rhs);
                 ty
             }
             ExprKind::Logical(_, lhs, rhs) => {
@@ -545,7 +534,6 @@ impl Checker<'_, '_> {
                     self.shift_amount(f, value, place_ty, op.symbol());
                 } else {
                     self.check(f, value, Some(place_ty));
-                    self.check_divisor(*op, value);
                 }
                 Ty::Unit
             }
@@ -674,23 +662,6 @@ impl Checker<'_, '_> {
         }
     }
 
-    /// A constant index must be in bounds; at run time any other index is
-    /// checked (ADR 0021).
-    fn constant_index(&mut self, index: &Expr, len: u64) {
-        if let Some(value) = literal_value(index)
-            && value >= i128::from(len)
-        {
-            self.q.diags.push(
-                Diagnostic::error("ty::index-out-of-bounds", "index out of bounds")
-                    .label(
-                        index.span,
-                        format!("the length is {len} but the index is {value}"),
-                    )
-                    .help("at run time this would call the panic function (ADR 0021)"),
-            );
-        }
-    }
-
     /// Each argument is checked against its parameter's type.
     fn call(&mut self, f: &Fn, expr: &Expr, callee: hir::FnId, args: &[Expr]) -> Ty {
         let target = self.hir.fn_(callee);
@@ -719,18 +690,6 @@ impl Checker<'_, '_> {
             self.check(f, arg, Some(expected));
         }
         self.norm(target.ret)
-    }
-
-    /// Division by zero panics at run time (ADR 0007); a literal zero
-    /// divisor is certainly a mistake, so it is rejected here.
-    fn check_divisor(&mut self, op: BinOp, divisor: &Expr) {
-        if matches!(op, BinOp::Div | BinOp::Rem) && literal_value(divisor) == Some(0) {
-            self.q.diags.push(
-                Diagnostic::error("ty::division-by-zero", "division by zero")
-                    .label(divisor.span, "this divisor is zero")
-                    .help("at run time this would call the panic function (ADR 0007)"),
-            );
-        }
     }
 
     fn in_loop(
@@ -877,32 +836,14 @@ impl Checker<'_, '_> {
     }
 
     /// Shift amounts may be any integer type and are masked to the operand
-    /// width (ADR 0007); a literal amount takes the shifted type, and a
-    /// constant amount must be smaller than the width.
+    /// width (ADR 0007); a literal amount takes the shifted type. Whether a
+    /// known amount is in range is checked with MIR (ADR 0032).
     fn shift_amount(&mut self, f: &Fn, amount: &Expr, shifted: Ty, op: &str) {
         if needs_expected_type(amount) {
             self.check(f, amount, Some(shifted));
         } else {
             let ty = self.check(f, amount, None);
             self.require(amount, ty, op, Operands::Int);
-        }
-        if let (Ty::Int(int), Some(value)) = (shifted, literal_value(amount))
-            && !(0..int.bits() as i128).contains(&value)
-        {
-            self.q.diags.push(
-                Diagnostic::error(
-                    "ty::shift-out-of-range",
-                    format!("shift amount out of range for `{int}`"),
-                )
-                .label(
-                    amount.span,
-                    format!("must be between 0 and {}", int.bits() - 1),
-                )
-                .help(format!(
-                    "shifts mask their amount, so this would shift by {} (ADR 0007)",
-                    value.rem_euclid(int.bits() as i128)
-                )),
-            );
         }
     }
 
@@ -1087,8 +1028,7 @@ impl Checker<'_, '_> {
                     None => self.check(f, base, None),
                 };
                 self.check(f, index, Some(Ty::Int(IntTy::Usize)));
-                if let Ty::Array(elem, len) = ty {
-                    self.constant_index(index, len.known());
+                if let Ty::Array(elem, _) = ty {
                     let base_place = base_place.unwrap_or_else(|| PlaceInfo::temporary(ty, base));
                     PlaceInfo {
                         ty: *elem,

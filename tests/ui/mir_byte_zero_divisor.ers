@@ -1,4 +1,4 @@
-// emit: typeck
+// emit: mir
 // Regression: a zero byte literal divisor used to reach LLVM as `udiv x, 0`.
 fn f(x: u8) -> u8 {
     x / b'\0'

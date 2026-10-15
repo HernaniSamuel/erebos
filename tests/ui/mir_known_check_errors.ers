@@ -1,0 +1,82 @@
+// emit: mir
+// Shift amounts, divisors and indices known at compile time are checked
+// (ADR 0032), whether they are literals, constants, `comptime` expressions,
+// expressions of those or casts; the value is shown when the operand is not
+// a literal. A failure is reported once, at the innermost operation.
+const BITS: u32 = 32;
+const ZERO: u32 = 0;
+const FOUR: usize = 4;
+const WIDE: u64 = 32;
+const ZERO_U8: u8 = 0;
+const IDX: u8 = 4;
+const NEG: i32 = -1;
+const A: u32 = 10;
+
+fn bits() -> u32 { 33 }
+fn zero() -> u32 { 0 }
+fn four() -> usize { 4 }
+
+fn constants(x: u32, t: [u8; 4]) {
+    let a: u32 = x << BITS;
+    let b: u32 = x % ZERO;
+    let c: u8 = t[FOUR];
+}
+
+fn comptime_values(x: u32, t: [u8; 4]) {
+    let a: u32 = x >> comptime bits();
+    let b: u32 = x / comptime zero();
+    let c: u8 = t[comptime four()];
+}
+
+fn expressions(x: u32, t: [u8; 4]) {
+    let a: u32 = x << BITS - 1 + 1;
+    let b: u32 = x / (BITS - 1 + 1 - 32);
+    let c: u8 = t[FOUR - 1 + 1];
+}
+
+fn casts(x: u32, t: [u8; 4]) {
+    let a: u32 = x << WIDE as u32;
+    let b: u32 = x / ZERO_U8 as u32;
+    let c: u8 = t[IDX as usize];
+}
+
+fn negative(y: i32) -> i32 {
+    (y << NEG) + (y >> -1)
+}
+
+fn compound(x: u32) {
+    let mut v: u32 = x;
+    v <<= BITS;
+    v >>= BITS + 1;
+    v /= ZERO;
+    v %= ZERO;
+}
+
+fn once(x: u32) -> u32 {
+    x / (A / ZERO)
+}
+
+// Under a condition that is not known, the code may run.
+fn unknown_conditions(x: u32, flag: bool) -> u32 {
+    let a: u32 = if flag { x << BITS } else { 0 };
+    let b: bool = flag && (x >> BITS) == 0;
+    let c: bool = flag || (x >> BITS) == 0;
+    while flag {
+        let d: u32 = x / ZERO;
+    }
+    a
+}
+
+// The literal cases, checked before ADR 0032 by the type checker.
+fn literals(x: u32) {
+    let mut g: u32 = 0;
+    g <<= 32;
+    let a: u32 = x / 0;
+    let mut b: u32 = x;
+    b %= 0;
+    let c: [u8; 2] = [1, 2];
+    let d: u8 = c[2];
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

@@ -1,13 +1,13 @@
 ---
 source: tests/ui.rs
 expression: output
-input_file: tests/ui/typeck_byte_zero_divisor.ers
+input_file: tests/ui/mir_byte_zero_divisor.ers
 ---
 --- errors ---
 ty::division-by-zero
 
   × division by zero
-   ╭─[typeck_byte_zero_divisor.ers:4:9]
+   ╭─[mir_byte_zero_divisor.ers:4:9]
  3 │ fn f(x: u8) -> u8 {
  4 │     x / b'\0'
    ·         ──┬──

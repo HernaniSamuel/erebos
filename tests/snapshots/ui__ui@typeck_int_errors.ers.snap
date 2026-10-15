@@ -82,42 +82,31 @@ ty::literal-out-of-range
   9 │     let big: u8 = 300 as u8;
     ·                   ─┬─
     ·                    ╰── `300` does not fit in `u8`
- 10 │     let mut g: u32 = 0;
+ 10 │     let h: () = 5;
     ╰────
-ty::shift-out-of-range
-
-  × shift amount out of range for `u32`
-    ╭─[typeck_int_errors.ers:11:11]
- 10 │     let mut g: u32 = 0;
- 11 │     g <<= 32;
-    ·           ─┬
-    ·            ╰── must be between 0 and 31
- 12 │     let h: () = 5;
-    ╰────
-  help: shifts mask their amount, so this would shift by 0 (ADR 0007)
 ty::mismatched-types
 
   × mismatched types
-    ╭─[typeck_int_errors.ers:12:17]
- 11 │     g <<= 32;
- 12 │     let h: () = 5;
+    ╭─[typeck_int_errors.ers:10:17]
+  9 │     let big: u8 = 300 as u8;
+ 10 │     let h: () = 5;
     ·                 ┬
     ·                 ╰── expected `()`, found an integer
- 13 │ }
+ 11 │ }
     ╰────
 ty::mismatched-types
 
   × mismatched types
-    ╭─[typeck_int_errors.ers:17:5]
- 14 │ 
- 15 │ fn semicolon() -> u32 {
+    ╭─[typeck_int_errors.ers:15:5]
+ 12 │ 
+ 13 │ fn semicolon() -> u32 {
     ·                   ─┬─
     ·                    ╰── expected because of this return type
- 16 │     let x: u32 = 1;
- 17 │     x + 1;
+ 14 │     let x: u32 = 1;
+ 15 │     x + 1;
     ·     ──┬──┬
     ·       │  ╰── remove this semicolon to return the value
     ·       ╰── expected `u32`, found `()`
- 18 │ }
+ 16 │ }
     ╰────
   help: a block's value is its last expression without `;`

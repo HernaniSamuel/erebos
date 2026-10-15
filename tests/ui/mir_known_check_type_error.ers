@@ -1,0 +1,16 @@
+// emit: mir
+// A failed check is reported whatever errors other functions have, and once
+// even when a compile-time call needs the function (ADR 0032).
+const ZERO: u32 = 0;
+const CALLED: u32 = divides(5);
+
+fn type_error() -> u32 {
+    true
+}
+
+fn divides(x: u32) -> u32 {
+    x / ZERO
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }
