@@ -1,0 +1,63 @@
+// Statics that point at each other, their pointers computed at compile
+// time and filled in by the linker, followed at run time (ADR 0030).
+// expect-output: 1 2 1 2
+// expect-output: 3 30
+// expect-output: 1
+// expect-exit: 0
+
+struct Node { next: *const Node, value: u32 }
+// Padding between `tag` and `node`.
+struct Entry { tag: u8, node: *const Node }
+
+static A: Node = Node { next: &raw const B, value: 1 };
+static B: Node = Node { next: &raw const A, value: 2 };
+static ENTRY: Entry = Entry { tag: 3, node: &raw const A };
+static TABLE: [u32; 4] = [10, 20, 30, 40];
+static THIRD: *const u32 = &raw const TABLE[2];
+static mut CURSOR: *const Node = &raw const B;
+
+fn putc(byte: u8) {
+    let thr: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+    *thr = byte;
+}
+
+fn print_u32(n: u32) {
+    if n >= 10 {
+        print_u32(n / 10);
+    }
+    putc(b'0' + (n % 10) as u8);
+}
+
+fn exit(code: u32) -> ! {
+    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+    *finisher = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    loop {}
+}
+
+entry fn main() -> ! {
+    let mut node: *const Node = ENTRY.node;
+    let mut i: u32 = 0;
+    while i < 4 {
+        if i > 0 {
+            putc(b' ');
+        }
+        print_u32((*node).value);
+        node = (*node).next;
+        i += 1;
+    }
+    putc(b'\n');
+
+    print_u32(ENTRY.tag as u32);
+    putc(b' ');
+    print_u32(*THIRD);
+    putc(b'\n');
+
+    CURSOR = (*CURSOR).next;
+    print_u32((*CURSOR).value);
+    putc(b'\n');
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(1)
+}

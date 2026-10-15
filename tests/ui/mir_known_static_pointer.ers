@@ -1,0 +1,14 @@
+// emit: mir
+// A constant pointing into a static is not known at compile time: its
+// address only exists after linking (ADR 0030, 0032). The condition below
+// is not known, so the branch is checked, and computing it never casts the
+// pointer to an integer at compile time.
+static TABLE: [u32; 2] = [1, 2];
+const P: *const u32 = &raw const TABLE[1];
+
+fn checked(x: u32) -> u32 {
+    if P as usize == 0 { x / 0 } else { x }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

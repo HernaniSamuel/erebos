@@ -13,8 +13,8 @@ use std::rc::Rc;
 use crate::diag::Diagnostic;
 use crate::int::IntTy;
 use crate::mir::{
-    BasicBlock, BinOp, Body, Const, Local, Operand, PanicCause, Place, PlaceElem, Rvalue,
-    Statement, StaticRef, Terminator, Ty, UnOp,
+    BasicBlock, BinOp, Body, Const, Local, Operand, PanicCause, Place, PlaceElem, Relocation,
+    Rvalue, Statement, StaticId, StaticRef, Terminator, Ty, UnOp,
 };
 use crate::query::Queries;
 use crate::span::Span;
@@ -26,14 +26,18 @@ pub const STEP_LIMIT: u64 = 10_000_000;
 pub const CALL_DEPTH: usize = 256;
 
 /// The value of an evaluation: its bytes as laid out on the target, with
-/// bytes never written, such as padding, set to zero (ADR 0027).
+/// bytes never written, such as padding, set to zero (ADR 0027), and the
+/// pointers to statics among them (ADR 0030).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ConstValue {
+    /// Zero where a relocation is.
     pub bytes: Vec<u8>,
+    pub relocations: Vec<Relocation>,
 }
 
 impl ConstValue {
-    /// The integer in the first `size` bytes, little-endian.
+    /// The integer in the first `size` bytes, little-endian. A pointer to
+    /// a static reads as zero: its address only exists after linking.
     pub fn int(&self, size: usize) -> u64 {
         let mut value = 0u64;
         for (i, byte) in self.bytes[..size].iter().enumerate() {
@@ -286,8 +290,11 @@ impl Interp<'_, '_> {
         for decl in &body.locals {
             let alloc = match decl.constant {
                 Some(data) => {
-                    let bytes = self.q.data(data).to_vec();
-                    self.new_alloc(bytes, true)
+                    let data = self.q.data(data);
+                    let (bytes, relocations) = (data.bytes.clone(), data.relocations.clone());
+                    let alloc = self.new_alloc(Vec::new(), true);
+                    self.fill(alloc, bytes, &relocations);
+                    alloc
                 }
                 None => self.new_alloc(vec![0; decl.ty.layout().size as usize], false),
             };
@@ -322,6 +329,28 @@ impl Interp<'_, '_> {
             static_: None,
         });
         AllocId(self.allocs.len() as u32 - 1)
+    }
+
+    /// Sets the bytes of an object to a value computed at compile time,
+    /// with its pointers to statics.
+    fn fill(&mut self, alloc: AllocId, mut bytes: Vec<u8>, relocations: &[Relocation]) {
+        let mut pointers = BTreeMap::new();
+        for relocation in relocations {
+            let at = relocation.offset as usize;
+            bytes[at..at + target::POINTER_BYTES as usize]
+                .copy_from_slice(&relocation.addend.to_le_bytes());
+            pointers.insert(relocation.offset, self.static_alloc_of(relocation.target));
+        }
+        let object = &mut self.allocs[alloc.0 as usize];
+        object.written = vec![true; bytes.len()];
+        object.bytes = bytes;
+        object.pointers = pointers;
+    }
+
+    /// The object of the static `id`.
+    fn static_alloc_of(&mut self, id: StaticId) -> AllocId {
+        let s = self.q.mir_static(crate::hir::StaticId(id.0));
+        self.static_alloc(s)
     }
 
     /// The object of a static, made when first used.
@@ -475,25 +504,58 @@ impl Interp<'_, '_> {
         Ok(None)
     }
 
-    /// The bytes of the result. A pointer into compiler memory cannot leave
-    /// the evaluation; bytes never written are zero.
+    /// The bytes of the result; bytes never written are zero. A pointer
+    /// into a static, into it or one past its end, becomes a relocation;
+    /// one into the evaluation's own memory cannot leave it (ADR 0030).
     fn result(&self, alloc: AllocId, span: Span) -> EvalResult<ConstValue> {
-        let alloc = &self.allocs[alloc.0 as usize];
-        if !alloc.pointers.is_empty() {
-            return Err(self.error(
-                "eval::pointer-escapes",
-                "the value holds a pointer into memory that exists only at compile time".to_owned(),
-                "this value",
-                span,
-            ));
-        }
-        let bytes = alloc
+        let object = &self.allocs[alloc.0 as usize];
+        let mut bytes: Vec<u8> = object
             .bytes
             .iter()
-            .zip(&alloc.written)
+            .zip(&object.written)
             .map(|(&byte, &written)| if written { byte } else { 0 })
             .collect();
-        Ok(ConstValue { bytes })
+        let mut relocations = Vec::new();
+        for (&offset, &target) in &object.pointers {
+            let target = &self.allocs[target.0 as usize];
+            let Some(s) = &target.static_ else {
+                return Err(self.error(
+                    "eval::pointer-escapes",
+                    "the value holds a pointer into memory that exists only at compile time"
+                        .to_owned(),
+                    "this value",
+                    span,
+                ));
+            };
+            let at = offset as usize..offset as usize + target::POINTER_BYTES as usize;
+            let addend = u32::from_le_bytes(
+                bytes
+                    .get(at.clone())
+                    .expect("accesses keep pointers whole and inside their object")
+                    .try_into()
+                    .expect("a pointer is four bytes"),
+            );
+            let size = target.bytes.len();
+            if addend as usize > size {
+                return Err(self.error(
+                    "eval::pointer-out-of-bounds",
+                    format!(
+                        "the value holds a pointer to offset {} of `{}`, which is {size} bytes long",
+                        addend as i32,
+                        s.def.def().name
+                    ),
+                    "this value",
+                    span,
+                ));
+            }
+            bytes[at].fill(0);
+            relocations.push(Relocation {
+                offset,
+                target: s.def.def().id,
+                addend,
+            });
+        }
+        Ok(ConstValue { bytes, relocations })
     }
 
     // ------------------------------------------------------------ places
@@ -648,10 +710,8 @@ impl Interp<'_, '_> {
         };
         let id = crate::hir::StaticId(def.def().id.0);
         let value = self.q.static_value(id).ok_or(Failure::Poisoned)?;
-        let object = &mut self.allocs[alloc.0 as usize];
-        object.written = vec![true; value.bytes.len()];
-        object.bytes = value.bytes;
-        object.static_ = Some(StaticObject { def, loaded: true });
+        self.fill(alloc, value.bytes, &value.relocations);
+        self.allocs[alloc.0 as usize].static_ = Some(StaticObject { def, loaded: true });
         Ok(())
     }
 
@@ -708,6 +768,7 @@ impl Interp<'_, '_> {
             return Ok(());
         };
         let size = size as usize;
+        self.whole_pointers(alloc, offset, size, true, span)?;
         let object = &mut self.allocs[alloc.0 as usize];
         clear_pointers(object, offset, size);
         let bits = match value {
@@ -734,7 +795,7 @@ impl Interp<'_, '_> {
     }
 
     /// Copies an aggregate: its bytes, which of them were written, and the
-    /// pointers among them.
+    /// pointers among them, which it copies whole.
     fn copy_at(&mut self, to: PlaceRef, from: PlaceRef, span: Span) -> EvalResult<()> {
         let size = to.ty.layout().size;
         let Some((source, at)) = self.access(from, size, span, false)? else {
@@ -744,6 +805,8 @@ impl Interp<'_, '_> {
             return Ok(());
         };
         let size = size as usize;
+        self.whole_pointers(source, at, size, false, span)?;
+        self.whole_pointers(dest, to_at, size, true, span)?;
         let object = &self.allocs[source.0 as usize];
         let bytes = object.bytes[at..at + size].to_vec();
         let written = object.written[at..at + size].to_vec();
@@ -760,6 +823,41 @@ impl Interp<'_, '_> {
             object.pointers.insert(to_at as u32 + offset, target);
         }
         Ok(())
+    }
+
+    /// Refuses an access to bytes `offset..offset + size` of an object that
+    /// takes only part of a pointer stored there: its bytes are never plain
+    /// data, since its address only exists after linking (ADR 0030).
+    fn whole_pointers(
+        &self,
+        alloc: AllocId,
+        offset: usize,
+        size: usize,
+        write: bool,
+        span: Span,
+    ) -> EvalResult<()> {
+        let width = target::POINTER_BYTES as usize;
+        let start = offset.saturating_sub(width - 1) as u32;
+        let end = (offset + size) as u32;
+        let partial = self.allocs[alloc.0 as usize]
+            .pointers
+            .range(start..end)
+            .any(|(&at, _)| (at as usize) < offset || at as usize + width > offset + size);
+        if !partial {
+            return Ok(());
+        }
+        let (message, label) = if write {
+            (
+                "this write overwrites part of a pointer, whose address only exists after linking",
+                "written here",
+            )
+        } else {
+            (
+                "these bytes hold part of a pointer, whose address only exists after linking",
+                "read here",
+            )
+        };
+        Err(self.error("eval::pointer-to-int", message.to_owned(), label, span))
     }
 
     // ------------------------------------------------------------ values

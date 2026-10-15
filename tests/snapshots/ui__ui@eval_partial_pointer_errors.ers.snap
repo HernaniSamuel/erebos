@@ -1,0 +1,133 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/eval_partial_pointer_errors.ers
+---
+--- errors ---
+eval::pointer-to-int
+
+  × this write overwrites part of a pointer, whose address only exists after linking
+    ╭─[eval_partial_pointer_errors.ers:12:5]
+ 11 │     let b: *mut u8 = &raw mut p as *mut u8;
+ 12 │     *b = 0;
+    ·     ───┬──
+    ·        ╰── written here
+ 13 │     *(&raw const p as *const [u8; 4])
+    ╰────
+    ╭─[eval_partial_pointer_errors.ers:47:7]
+ 46 │ 
+ 47 │ const OVERWRITE: [u8; 4] = overwrite();
+    ·       ────┬────            ─────┬─────
+    ·           │                     ╰── called here
+    ·           ╰── while evaluating the constant `OVERWRITE`
+ 48 │ const STRADDLE: [u8; 2] = straddle();
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::pointer-to-int
+
+  × these bytes hold part of a pointer, whose address only exists after linking
+    ╭─[eval_partial_pointer_errors.ers:20:5]
+ 19 │     let q: *const u8 = &raw const p as *const u8;
+ 20 │     *(&raw const q[1] as *const [u8; 2])
+    ·     ──────────────────┬─────────────────
+    ·                       ╰── read here
+ 21 │ }
+    ╰────
+    ╭─[eval_partial_pointer_errors.ers:48:7]
+ 47 │ const OVERWRITE: [u8; 4] = overwrite();
+ 48 │ const STRADDLE: [u8; 2] = straddle();
+    ·       ────┬───            ─────┬────
+    ·           │                    ╰── called here
+    ·           ╰── while evaluating the constant `STRADDLE`
+ 49 │ const HALF: [u8; 2] = half();
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::pointer-to-int
+
+  × these bytes hold part of a pointer, whose address only exists after linking
+    ╭─[eval_partial_pointer_errors.ers:26:5]
+ 25 │     let p: *const u32 = &raw const T;
+ 26 │     *(&raw const p as *const [u8; 2])
+    ·     ────────────────┬────────────────
+    ·                     ╰── read here
+ 27 │ }
+ 28 │ 
+ 29 │ // Copying half a pointer over the start of another.
+ 30 │ fn overlap() -> [u8; 6] {
+ 31 │     let p: *const u32 = &raw const T;
+ 32 │     let mut out: [u8; 6] = [0; 6];
+ 33 │     *(&raw mut out[2] as *mut *const u32) = p;
+ 34 │     *(&raw mut out[0] as *mut [u8; 2]) = *(&raw const p as *const [u8; 2]);
+ 35 │     out
+ 36 │ }
+ 37 │ 
+ 38 │ // Copying plain bytes over the start of a pointer.
+ 39 │ fn cover() -> [u8; 6] {
+ 40 │     let mut out: [u8; 6] = [0; 6];
+ 41 │     *(&raw mut out[2] as *mut *const u32) = &raw const T;
+ 42 │     let four: [u8; 4] = [9, 9, 9, 9];
+ 43 │     *(&raw mut out[0] as *mut [u8; 4]) = four;
+ 44 │     out
+ 45 │ }
+ 46 │ 
+ 47 │ const OVERWRITE: [u8; 4] = overwrite();
+ 48 │ const STRADDLE: [u8; 2] = straddle();
+ 49 │ const HALF: [u8; 2] = half();
+    ·       ──┬─            ───┬──
+    ·         │                ╰── called here
+    ·         ╰── while evaluating the constant `HALF`
+ 50 │ static OVERLAP: [u8; 6] = overlap();
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::pointer-to-int
+
+  × these bytes hold part of a pointer, whose address only exists after linking
+    ╭─[eval_partial_pointer_errors.ers:34:42]
+ 33 │     *(&raw mut out[2] as *mut *const u32) = p;
+ 34 │     *(&raw mut out[0] as *mut [u8; 2]) = *(&raw const p as *const [u8; 2]);
+    ·                                          ────────────────┬────────────────
+    ·                                                          ╰── read here
+ 35 │     out
+ 36 │ }
+ 37 │ 
+ 38 │ // Copying plain bytes over the start of a pointer.
+ 39 │ fn cover() -> [u8; 6] {
+ 40 │     let mut out: [u8; 6] = [0; 6];
+ 41 │     *(&raw mut out[2] as *mut *const u32) = &raw const T;
+ 42 │     let four: [u8; 4] = [9, 9, 9, 9];
+ 43 │     *(&raw mut out[0] as *mut [u8; 4]) = four;
+ 44 │     out
+ 45 │ }
+ 46 │ 
+ 47 │ const OVERWRITE: [u8; 4] = overwrite();
+ 48 │ const STRADDLE: [u8; 2] = straddle();
+ 49 │ const HALF: [u8; 2] = half();
+ 50 │ static OVERLAP: [u8; 6] = overlap();
+    ·        ───┬───            ────┬────
+    ·           │                   ╰── called here
+    ·           ╰── while evaluating the static `OVERLAP`
+ 51 │ const COVER: [u8; 6] = cover();
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::pointer-to-int
+
+  × this write overwrites part of a pointer, whose address only exists after linking
+    ╭─[eval_partial_pointer_errors.ers:43:5]
+ 42 │     let four: [u8; 4] = [9, 9, 9, 9];
+ 43 │     *(&raw mut out[0] as *mut [u8; 4]) = four;
+    ·     ────────────────────┬────────────────────
+    ·                         ╰── written here
+ 44 │     out
+ 45 │ }
+ 46 │ 
+ 47 │ const OVERWRITE: [u8; 4] = overwrite();
+ 48 │ const STRADDLE: [u8; 2] = straddle();
+ 49 │ const HALF: [u8; 2] = half();
+ 50 │ static OVERLAP: [u8; 6] = overlap();
+ 51 │ const COVER: [u8; 6] = cover();
+    ·       ──┬──            ───┬───
+    ·         │                 ╰── called here
+    ·         ╰── while evaluating the constant `COVER`
+ 52 │ 
+    ╰────
+  help: this code runs at compile time (ADR 0027)

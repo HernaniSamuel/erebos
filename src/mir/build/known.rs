@@ -258,10 +258,10 @@ fn scalar(ty: Ty, value: Option<eval::ConstValue>) -> Known {
     match ty {
         Ty::Int(int) => Known::Value(value.int(int.bytes() as usize)),
         Ty::Bool => Known::Value(u64::from(value.bytes[0] != 0)),
-        // Every pointer an evaluation gives is made from an integer, so its
-        // bytes are its address. Once a value can point into a static or a
-        // byte string (M2.3b step 4), such a pointer must be `Unknown`: its
-        // address only exists after linking.
+        // A pointer to a static is not known: its address only exists after
+        // linking (ADR 0030, 0032).
+        Ty::Ptr(_) if !value.relocations.is_empty() => Known::Unknown,
+        // Made from an integer, its bytes are its address.
         Ty::Ptr(_) => Known::Value(value.int(target::POINTER_BYTES as usize)),
         _ => Known::Unknown,
     }

@@ -1,0 +1,19 @@
+// emit: llvm-ir
+// Pointers to statics in values computed at compile time are filled in by
+// the linker: statics that point at each other, a pointer with an offset
+// into another static and one past its end, and a constant holding a
+// pointer to a static, which is read-only data (ADR 0030).
+struct Node { next: *const Node, value: u32 }
+static A: Node = Node { next: &raw const B, value: 1 };
+static B: Node = Node { next: &raw const A, value: 2 };
+static TABLE: [u32; 4] = [1, 2, 3, 4];
+static THIRD: *const u32 = &raw const TABLE[2];
+static END: *const u32 = &raw const (&raw const TABLE as *const u32)[4];
+const FIRST: *const Node = &raw const A;
+
+fn second() -> u32 {
+    (*(*FIRST).next).value
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

@@ -439,13 +439,14 @@ impl<'h> Queries<'h> {
         self.data.push(ConstData {
             bytes: value.bytes.clone(),
             align,
+            relocations: value.relocations.clone(),
         });
         self.data_ids.insert(source, id);
         id
     }
 
-    pub fn data(&self, id: DataId) -> &[u8] {
-        &self.data[id.0 as usize].bytes
+    pub fn data(&self, id: DataId) -> &ConstData {
+        &self.data[id.0 as usize]
     }
 
     /// The layout of `ty`, or `None` if it is larger than the target can
@@ -763,15 +764,16 @@ impl<'h> Queries<'h> {
         let statics = (0..self.hir.statics.len())
             .map(|id| {
                 let id = StaticId(id as u32);
+                let value = self
+                    .static_value(id)
+                    .expect("every static of a program without errors has a value");
                 mir::Static {
                     def: self.mir_static(id),
-                    bytes: self
-                        .static_value(id)
-                        .expect("every static of a program without errors has a value")
-                        .bytes,
+                    bytes: value.bytes,
                     align: self
                         .static_align(id)
                         .expect("every static of a program without errors has an alignment"),
+                    relocations: value.relocations,
                 }
             })
             .collect();

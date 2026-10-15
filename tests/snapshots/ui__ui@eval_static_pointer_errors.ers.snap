@@ -1,0 +1,53 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/eval_static_pointer_errors.ers
+---
+--- errors ---
+ty::cycle
+
+  × the static `SELF` depends on its own value
+   ╭─[eval_static_pointer_errors.ers:6:8]
+ 5 │ struct Node { next: *const Node, value: u32 }
+ 6 │ static SELF: Node = Node { next: &raw const SELF, value: (*(&raw const SELF)).value };
+   ·        ──┬─
+   ·          ╰── needed while computing itself
+ 7 │ static TABLE: [u32; 2] = [1, 2];
+   ╰────
+  help: break the cycle: a value cannot depend on itself (ADR 0028)
+eval::pointer-to-int
+
+  × this pointer's address only exists after linking
+    ╭─[eval_static_pointer_errors.ers:9:24]
+  8 │ 
+  9 │ const ADDRESS: usize = &raw const TABLE as usize;
+    ·       ───┬───          ────────────┬────────────
+    ·          │                         ╰── converted here
+    ·          ╰── while evaluating the constant `ADDRESS`
+ 10 │ const TWO_PAST: *const u32 = &raw const (&raw const TABLE as *const u32)[3];
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::pointer-out-of-bounds
+
+  × the value holds a pointer to offset 12 of `TABLE`, which is 8 bytes long
+    ╭─[eval_static_pointer_errors.ers:10:1]
+  9 │ const ADDRESS: usize = &raw const TABLE as usize;
+ 10 │ const TWO_PAST: *const u32 = &raw const (&raw const TABLE as *const u32)[3];
+    · ──────────────────────────────────────┬─────────────────────────────────────┬
+    ·                                       │                                     ╰── while evaluating the constant `TWO_PAST`
+    ·                                       ╰── this value
+ 11 │ const BEFORE: *const u32 = &raw const (&raw const TABLE as *const u32)[0xFFFF_FFFF];
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::pointer-out-of-bounds
+
+  × the value holds a pointer to offset -4 of `TABLE`, which is 8 bytes long
+    ╭─[eval_static_pointer_errors.ers:11:1]
+ 10 │ const TWO_PAST: *const u32 = &raw const (&raw const TABLE as *const u32)[3];
+ 11 │ const BEFORE: *const u32 = &raw const (&raw const TABLE as *const u32)[0xFFFF_FFFF];
+    · ──────────────────────────────────────────┬─────────────────────────────────────────┬
+    ·                                           │                                         ╰── while evaluating the constant `BEFORE`
+    ·                                           ╰── this value
+ 12 │ const ONE_PAST: *const u32 = &raw const (&raw const TABLE as *const u32)[2];
+    ╰────
+  help: this code runs at compile time (ADR 0027)

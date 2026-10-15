@@ -149,6 +149,33 @@ fn layout() -> u64 {
     mix(h, size_of([Pair; 3]) as u64)
 }
 
+// Statics read at compile time, and pointers between them followed
+// (ADR 0030).
+struct Link { next: *const Link, value: u32 }
+static RING_A: Link = Link { next: &raw const RING_B, value: 7 };
+static RING_B: Link = Link { next: &raw const RING_C, value: 11 };
+static RING_C: Link = Link { next: &raw const RING_A, value: 13 };
+static WEIGHTS: [u16; 4] = [3, 5, 8, 13];
+static HEAVIEST: *const u16 = &raw const WEIGHTS[3];
+
+fn ring(steps: u32) -> u64 {
+    let mut link: *const Link = &raw const RING_A;
+    let mut h: u64 = 0;
+    let mut i: u32 = 0;
+    while i < steps {
+        h = mix(h, (*link).value as u64);
+        link = (*link).next;
+        i += 1;
+    }
+    h
+}
+
+fn weights(k: usize) -> u64 {
+    let first: *const u16 = &raw const WEIGHTS as *const u16;
+    let h: u64 = mix(WEIGHTS[k % 4] as u64, *HEAVIEST as u64);
+    mix(h, first[(k + 1) % 4] as u64)
+}
+
 struct Uart { thr: u8 }
 
 fn putc(byte: u8) {
@@ -200,6 +227,8 @@ entry fn main() -> ! {
     failures += check(19, comptime bools(2), bools(opaque_u8(2)));
     failures += check(20, comptime bools(0), bools(opaque_u8(0)));
     failures += check(21, comptime layout(), layout());
+    failures += check(22, comptime ring(5), ring(opaque_u32(5)));
+    failures += check(23, comptime weights(6), weights(opaque_usize(6)));
     if failures == 0 {
         putc(b'd'); putc(b'i'); putc(b'f'); putc(b'f'); putc(b'e'); putc(b'r'); putc(b'e');
         putc(b'n'); putc(b't'); putc(b'i'); putc(b'a'); putc(b'l'); putc(b' '); putc(b'o');

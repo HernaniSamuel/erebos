@@ -155,6 +155,21 @@ pub struct ConstData {
     /// Laid out as on the target, padding zero (ADR 0027).
     pub bytes: Vec<u8>,
     pub align: u64,
+    /// The pointers to statics among the bytes, which hold zero there.
+    pub relocations: Vec<Relocation>,
+}
+
+/// A pointer into a static inside a value computed at compile time: its
+/// address only exists after linking, so the linker fills it in (ADR 0030).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Relocation {
+    /// Where the pointer is in the value, in bytes.
+    pub offset: u32,
+    /// The static it points into.
+    pub target: StaticId,
+    /// Its offset from the start of the static, in bytes: between 0 and
+    /// the static's size, inclusive.
+    pub addend: u32,
 }
 
 /// A static, indexing [`Mir::statics`].
@@ -227,6 +242,8 @@ pub struct Static {
     pub def: StaticRef,
     pub bytes: Vec<u8>,
     pub align: u64,
+    /// The pointers to statics among the bytes, which hold zero there.
+    pub relocations: Vec<Relocation>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

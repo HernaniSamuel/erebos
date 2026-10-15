@@ -1,0 +1,17 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/mir_known_static_pointer.ers
+---
+--- errors ---
+ty::division-by-zero
+
+  × division by zero
+    ╭─[mir_known_static_pointer.ers:10:30]
+  9 │ fn checked(x: u32) -> u32 {
+ 10 │     if P as usize == 0 { x / 0 } else { x }
+    ·                              ┬
+    ·                              ╰── this divisor is zero
+ 11 │ }
+    ╰────
+  help: at run time this would call the panic function (ADR 0007)

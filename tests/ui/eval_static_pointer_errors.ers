@@ -1,0 +1,15 @@
+// emit: mir
+// A static whose value reads itself through a pointer is a cycle; a pointer
+// to a static cannot become an integer; a pointer in a result must point
+// into its static or one past its end (ADR 0030).
+struct Node { next: *const Node, value: u32 }
+static SELF: Node = Node { next: &raw const SELF, value: (*(&raw const SELF)).value };
+static TABLE: [u32; 2] = [1, 2];
+
+const ADDRESS: usize = &raw const TABLE as usize;
+const TWO_PAST: *const u32 = &raw const (&raw const TABLE as *const u32)[3];
+const BEFORE: *const u32 = &raw const (&raw const TABLE as *const u32)[0xFFFF_FFFF];
+const ONE_PAST: *const u32 = &raw const (&raw const TABLE as *const u32)[2];
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

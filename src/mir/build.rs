@@ -258,7 +258,12 @@ impl Builder<'_, '_> {
             Ty::Int(int) => Operand::Const(Const::Int(value.int(int.bytes() as usize), int)),
             Ty::Bool => Operand::Const(Const::Bool(value.bytes[0] != 0)),
             Ty::Unit | Ty::Never => Operand::Const(Const::Unit),
-            // Made from an integer: an evaluation cannot give any other.
+            // A pointer to a static: its address only exists after linking,
+            // so it is data the linker completes (ADR 0030).
+            Ty::Ptr(_) if !value.relocations.is_empty() => {
+                Operand::Copy(Place::local(self.const_local(ty, source, &value)))
+            }
+            // Made from an integer.
             Ty::Ptr(_) => {
                 let usize_ty = hir::IntTy::Usize;
                 let address =

@@ -17,14 +17,14 @@ use inkwell::targets::{
 };
 use inkwell::types::{AnyType, BasicMetadataTypeEnum, BasicType, BasicTypeEnum, IntType};
 use inkwell::values::{
-    BasicMetadataValueEnum, BasicValue, BasicValueEnum, FunctionValue, IntValue, PointerValue,
-    ValueKind,
+    BasicMetadataValueEnum, BasicValue, BasicValueEnum, FunctionValue, GlobalValue, IntValue,
+    PointerValue, ValueKind,
 };
 use inkwell::{IntPredicate, OptimizationLevel};
 
 use crate::mir::{
-    BinOp, Body, Const, IntTy, Local, Mir, Operand, Place, PlaceElem, Ptr, Rvalue, Statement,
-    Terminator, Ty, UnOp,
+    BinOp, Body, Const, IntTy, Local, Mir, Operand, Place, PlaceElem, Ptr, Relocation, Rvalue,
+    Statement, Terminator, Ty, UnOp,
 };
 use crate::target::Target;
 use abi::{Cast, FnAbi, PassMode};
@@ -109,17 +109,22 @@ fn lower<'ctx>(
         .map(|((_, body), abi)| (!body.comptime).then(|| declare(context, &module, body, abi)))
         .collect();
     // Statics keep their names: declared before the private data, which
-    // LLVM renames instead if a name is taken (ADR 0030).
-    let statics: Vec<PointerValue> = mir
+    // LLVM renames instead if a name is taken (ADR 0030). Their initial
+    // values may point at each other, so they are set once all exist.
+    let globals: Vec<GlobalValue> = mir
         .statics
         .iter()
         .map(|s| static_global(context, &module, s))
         .collect();
+    let statics: Vec<PointerValue> = globals.iter().map(|g| g.as_pointer_value()).collect();
+    for (s, global) in mir.statics.iter().zip(&globals) {
+        global.set_initializer(&initial_value(context, &s.bytes, &s.relocations, &statics));
+    }
     let data: Vec<PointerValue> = mir
         .data
         .iter()
         .enumerate()
-        .map(|(i, data)| const_data(context, &module, i, data))
+        .map(|(i, data)| const_data(context, &module, i, data, &statics))
         .collect();
     let shared = Shared {
         fns: &fns,
@@ -194,22 +199,21 @@ fn element_type(context: &Context, ty: Ty) -> BasicTypeEnum<'_> {
     memory_type(context, ty).unwrap_or_else(|| context.i8_type().array_type(0).into())
 }
 
-/// A static (ADR 0030): a global named by it, visible to the linker, with
-/// its initial bytes; a `static` is constant, so that LLVM may use its
-/// value instead of reading it.
+/// A static (ADR 0030): a global named by it, visible to the linker, for
+/// its initial value, which is set later; a `static` is constant, so that
+/// LLVM may use its value instead of reading it.
 fn static_global<'ctx>(
     context: &'ctx Context,
     module: &Module<'ctx>,
     s: &crate::mir::Static,
-) -> PointerValue<'ctx> {
+) -> GlobalValue<'ctx> {
     let def = s.def.def();
-    let bytes = context.const_string(&s.bytes, false);
-    let global = module.add_global(bytes.get_type(), None, &def.name);
-    global.set_initializer(&bytes);
+    let ty = initial_type(context, &s.bytes, &s.relocations);
+    let global = module.add_global(ty, None, &def.name);
     global.set_constant(!def.mutable);
     global.set_linkage(Linkage::External);
     global.set_alignment(u32::try_from(s.align).expect("alignments are small"));
-    global.as_pointer_value()
+    global
 }
 
 /// Read-only data computed at compile time (ADR 0029), as a private
@@ -219,15 +223,97 @@ fn const_data<'ctx>(
     module: &Module<'ctx>,
     index: usize,
     data: &crate::mir::ConstData,
+    statics: &[PointerValue<'ctx>],
 ) -> PointerValue<'ctx> {
-    let bytes = context.const_string(&data.bytes, false);
-    let global = module.add_global(bytes.get_type(), None, &format!("data{index}"));
-    global.set_initializer(&bytes);
+    let initial = initial_value(context, &data.bytes, &data.relocations, statics);
+    let global = module.add_global(initial.get_type(), None, &format!("data{index}"));
+    global.set_initializer(&initial);
     global.set_constant(true);
     global.set_linkage(Linkage::Private);
     global.set_unnamed_addr(true);
     global.set_alignment(u32::try_from(data.align).expect("alignments are small"));
     global.as_pointer_value()
+}
+
+/// A run of bytes, or a pointer into a static, in an initial value.
+enum Piece<'a> {
+    Bytes(&'a [u8]),
+    Pointer(Relocation),
+}
+
+/// The pieces of an initial value, in order: the bytes between its
+/// pointers into statics, and the pointers (ADR 0030).
+fn pieces<'a>(bytes: &'a [u8], relocations: &[Relocation]) -> Vec<Piece<'a>> {
+    let mut pieces = Vec::new();
+    let mut at = 0;
+    for relocation in relocations {
+        let start = relocation.offset as usize;
+        assert!(
+            start >= at && start + crate::target::POINTER_BYTES as usize <= bytes.len(),
+            "relocations are sorted, apart and inside their value"
+        );
+        if start > at {
+            pieces.push(Piece::Bytes(&bytes[at..start]));
+        }
+        pieces.push(Piece::Pointer(*relocation));
+        at = start + crate::target::POINTER_BYTES as usize;
+    }
+    if at < bytes.len() || pieces.is_empty() {
+        pieces.push(Piece::Bytes(&bytes[at..]));
+    }
+    pieces
+}
+
+/// The LLVM type of an initial value: an array of bytes, or a packed
+/// struct of byte arrays and pointers when it holds pointers into statics.
+fn initial_type<'ctx>(
+    context: &'ctx Context,
+    bytes: &[u8],
+    relocations: &[Relocation],
+) -> BasicTypeEnum<'ctx> {
+    if relocations.is_empty() {
+        return context.i8_type().array_type(bytes.len() as u32).into();
+    }
+    let fields: Vec<BasicTypeEnum> = pieces(bytes, relocations)
+        .iter()
+        .map(|piece| match piece {
+            Piece::Bytes(run) => context.i8_type().array_type(run.len() as u32).into(),
+            Piece::Pointer(_) => context.ptr_type(AddressSpace::default()).into(),
+        })
+        .collect();
+    context.struct_type(&fields, true).into()
+}
+
+/// An initial value, of the type `initial_type` gives: its bytes, with the
+/// address of each static it points into, plus the offset, for the linker
+/// to fill in (ADR 0030).
+fn initial_value<'ctx>(
+    context: &'ctx Context,
+    bytes: &[u8],
+    relocations: &[Relocation],
+    statics: &[PointerValue<'ctx>],
+) -> BasicValueEnum<'ctx> {
+    if relocations.is_empty() {
+        return context.const_string(bytes, false).into();
+    }
+    let fields: Vec<BasicValueEnum> = pieces(bytes, relocations)
+        .iter()
+        .map(|piece| match piece {
+            Piece::Bytes(run) => context.const_string(run, false).into(),
+            Piece::Pointer(relocation) => {
+                let target = statics[relocation.target.0 as usize];
+                if relocation.addend == 0 {
+                    return target.into();
+                }
+                let offset = context
+                    .i32_type()
+                    .const_int(u64::from(relocation.addend), false);
+                // The linker adds the offset to the address.
+                unsafe { target.const_gep(context.i8_type(), &[offset]) }.into()
+            }
+        })
+        .collect();
+    context.const_struct(&fields, true).into()
 }
 
 /// The LLVM type of an aggregate held in registers (ADR 0025).

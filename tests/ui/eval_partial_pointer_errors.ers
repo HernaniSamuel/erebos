@@ -1,0 +1,54 @@
+// emit: mir
+// The bytes of a pointer are never plain data at compile time: copying or
+// overwriting only part of one is `eval::pointer-to-int`, so a value never
+// holds a cut pointer (ADR 0030).
+static A: [u8; 300] = [0; 300];
+static T: u32 = 1;
+
+// Overwriting one byte of a pointer.
+fn overwrite() -> [u8; 4] {
+    let mut p: *const u8 = &raw const A[257];
+    let b: *mut u8 = &raw mut p as *mut u8;
+    *b = 0;
+    *(&raw const p as *const [u8; 4])
+}
+
+// Copying bytes that start inside a pointer.
+fn straddle() -> [u8; 2] {
+    let p: *const u8 = &raw const A[257];
+    let q: *const u8 = &raw const p as *const u8;
+    *(&raw const q[1] as *const [u8; 2])
+}
+
+// Copying the first half of a pointer.
+fn half() -> [u8; 2] {
+    let p: *const u32 = &raw const T;
+    *(&raw const p as *const [u8; 2])
+}
+
+// Copying half a pointer over the start of another.
+fn overlap() -> [u8; 6] {
+    let p: *const u32 = &raw const T;
+    let mut out: [u8; 6] = [0; 6];
+    *(&raw mut out[2] as *mut *const u32) = p;
+    *(&raw mut out[0] as *mut [u8; 2]) = *(&raw const p as *const [u8; 2]);
+    out
+}
+
+// Copying plain bytes over the start of a pointer.
+fn cover() -> [u8; 6] {
+    let mut out: [u8; 6] = [0; 6];
+    *(&raw mut out[2] as *mut *const u32) = &raw const T;
+    let four: [u8; 4] = [9, 9, 9, 9];
+    *(&raw mut out[0] as *mut [u8; 4]) = four;
+    out
+}
+
+const OVERWRITE: [u8; 4] = overwrite();
+const STRADDLE: [u8; 2] = straddle();
+const HALF: [u8; 2] = half();
+static OVERLAP: [u8; 6] = overlap();
+const COVER: [u8; 6] = cover();
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }
