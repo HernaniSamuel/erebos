@@ -144,8 +144,8 @@ eval::pointer-to-int
   help: this code runs at compile time (ADR 0027)
 eval::pointer-compare
 
-  × these pointers cannot be compared at compile time, since their addresses only exist after
-  │ linking
+  × pointers into different objects have no order known at compile time, since their addresses
+  │ only exist after linking
     ╭─[eval_errors.ers:12:7]
  11 │ const TO_INT: usize = address_as_int();
  12 │ const COMPARE: bool = compare_objects();

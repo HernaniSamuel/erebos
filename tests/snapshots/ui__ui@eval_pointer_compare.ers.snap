@@ -1,0 +1,194 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/eval_pointer_compare.ers
+---
+--- mir ---
+fn ordered() -> [bool; 4] {
+    let _0: [bool; 4];
+    let _1: [u32; 4]; // t
+    let _2: *const u32; // p
+    let _3: *const u32; // end
+    let _4: [u32; 4];
+    let _5: *const [u32; 4];
+    let _6: *const u32;
+    let _7: usize;
+    let _8: *const u32;
+    let _9: [bool; 4];
+    let _10: *const u32;
+    let _11: *const u32;
+    let _12: *const u32;
+    let _13: bool;
+    let _14: *const u32;
+    let _15: *const u32;
+    let _16: bool;
+    let _17: *const u32;
+    let _18: usize;
+    let _19: *const u32;
+    let _20: bool;
+    let _21: *const u32;
+    let _22: bool;
+
+    bb0: {
+        _4[0] = const 1_u32;
+        _4[1] = const 2_u32;
+        _4[2] = const 3_u32;
+        _4[3] = const 4_u32;
+        _1 = copy _4;
+        _5 = &raw const _1;
+        _6 = copy _5 as *const u32;
+        _2 = copy _6;
+        _7 = const 4_usize;
+        _8 = &raw const (*(_2 + _7));
+        _3 = copy _8;
+        _10 = &raw const _1[0];
+        _11 = copy _10;
+        _12 = &raw const _1[3];
+        _13 = Lt(copy _11, copy _12);
+        _9[0] = copy _13;
+        _14 = copy _3;
+        _15 = &raw const _1[1];
+        _16 = Gt(copy _14, copy _15);
+        _9[1] = copy _16;
+        _17 = copy _3;
+        _18 = const 4_usize;
+        _19 = &raw const (*(_2 + _18));
+        _20 = Le(copy _17, copy _19);
+        _9[2] = copy _20;
+        _21 = &raw const _1[2];
+        _22 = Ge(copy _21, copy _3);
+        _9[3] = copy _22;
+        _0 = copy _9;
+        return;
+    }
+}
+
+fn distinct() -> [bool; 2] {
+    let _0: [bool; 2];
+    let _1: u32; // a
+    let _2: u32; // b
+    let _3: [bool; 2];
+    let _4: *const u32;
+    let _5: *const u32;
+    let _6: *const u32;
+    let _7: bool;
+    let _8: *const u32;
+    let _9: *const u32;
+    let _10: *const u32;
+    let _11: bool;
+
+    bb0: {
+        _1 = const 1_u32;
+        _2 = const 2_u32;
+        _4 = &raw const _1;
+        _5 = copy _4;
+        _6 = &raw const _2;
+        _7 = Eq(copy _5, copy _6);
+        _3[0] = copy _7;
+        _8 = &raw const _1;
+        _9 = copy _8;
+        _10 = &raw const _2;
+        _11 = Ne(copy _9, copy _10);
+        _3[1] = copy _11;
+        _0 = copy _3;
+        return;
+    }
+}
+
+fn addr(_1: u32) -> *const u32 {
+    let _0: *const u32;
+    let _1: u32; // x
+    let _2: u32; // v
+    let _3: *const u32;
+
+    bb0: {
+        _2 = copy _1;
+        _3 = &raw const _2;
+        _0 = copy _3;
+        return;
+    }
+}
+
+fn copy_dangling() -> u32 {
+    let _0: u32;
+    let _1: *const u32; // p
+    let _2: *const u32; // q
+    let _3: *const u32;
+
+    bb0: {
+        _3 = call addr(const 1_u32);
+        _1 = copy _3;
+        _2 = copy _1;
+        _0 = const 7_u32;
+        return;
+    }
+}
+
+fn table_element() -> *const u32 {
+    let _0: *const u32;
+    let _1: [u32; 2] = data0;
+    let _2: *const u32;
+
+    bb0: {
+        _2 = &raw const _1[1];
+        _0 = copy _2;
+        return;
+    }
+}
+
+fn answers() -> u32 {
+    let _0: u32;
+    let _1: [bool; 4]; // o
+    let _2: [bool; 2]; // d
+    let _3: [bool; 4];
+    let _4: [bool; 2];
+
+    bb0: {
+        _3[0] = const true;
+        _3[1] = const true;
+        _3[2] = const true;
+        _3[3] = const false;
+        _1 = copy _3;
+        _4[0] = const false;
+        _4[1] = const true;
+        _2 = copy _4;
+        _0 = const 13_u32;
+        return;
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+comptime fn TABLE() -> [u32; 2] {
+    let _0: [u32; 2];
+    let _1: [u32; 2];
+
+    bb0: {
+        _1[0] = const 5_u32;
+        _1[1] = const 6_u32;
+        _0 = copy _1;
+        return;
+    }
+}

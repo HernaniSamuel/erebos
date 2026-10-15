@@ -80,6 +80,9 @@ struct Alloc {
     written: Vec<bool>,
     /// Pointers into compiler memory stored here, by offset.
     pointers: BTreeMap<u32, AllocId>,
+    /// False once the call it belongs to has returned: its stack slot is
+    /// reused at run time, so pointers to it are dangling (ADR 0030).
+    live: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -302,6 +305,7 @@ impl Interp<'_, '_> {
             bytes,
             written: vec![written; len],
             pointers: BTreeMap::new(),
+            live: true,
         });
         AllocId(self.allocs.len() as u32 - 1)
     }
@@ -432,6 +436,13 @@ impl Interp<'_, '_> {
             let to = self.place(dest)?;
             self.copy_at(to, source, frame.call_span)?;
         }
+        // Constant data is a global at run time, not a variable of the
+        // call, so it outlives the call.
+        for (alloc, decl) in frame.locals.iter().zip(&frame.body.locals) {
+            if decl.constant.is_none() {
+                self.allocs[alloc.0 as usize].live = false;
+            }
+        }
         Ok(None)
     }
 
@@ -556,7 +567,11 @@ impl Interp<'_, '_> {
                 span,
             )),
             Pointer::Mem { alloc, offset } => {
-                let len = self.allocs[alloc.0 as usize].bytes.len() as u64;
+                let object = &self.allocs[alloc.0 as usize];
+                if !object.live {
+                    return Err(self.dangling("accessed here", span));
+                }
+                let len = object.bytes.len() as u64;
                 if u64::from(offset) + size > len {
                     return Err(self.error(
                         "eval::invalid-access",
@@ -728,6 +743,8 @@ impl Interp<'_, '_> {
         }
     }
 
+    /// Compares as the target would, or fails where the run-time answer
+    /// is not known (ADR 0030).
     fn compare(&self, op: BinOp, ty: Ty, l: Scalar, r: Scalar, span: Span) -> EvalResult<bool> {
         use std::cmp::Ordering;
         let ordering = match (l, r) {
@@ -735,36 +752,8 @@ impl Interp<'_, '_> {
                 Ty::Int(int) if int.is_signed() => sign_extend(a, int).cmp(&sign_extend(b, int)),
                 _ => a.cmp(&b),
             },
-            (Scalar::Ptr(Pointer::Addr(a)), Scalar::Ptr(Pointer::Addr(b))) => a.cmp(&b),
-            (
-                Scalar::Ptr(Pointer::Mem {
-                    alloc: a,
-                    offset: x,
-                }),
-                Scalar::Ptr(Pointer::Mem {
-                    alloc: b,
-                    offset: y,
-                }),
-            ) if a == b => x.cmp(&y),
-            // Distinct objects are distinct, unless one occupies no memory
-            // and may share its address (ADR 0022); their order is unknown.
-            (
-                Scalar::Ptr(Pointer::Mem { alloc: a, .. }),
-                Scalar::Ptr(Pointer::Mem { alloc: b, .. }),
-            ) if matches!(op, BinOp::Eq | BinOp::Ne)
-                && !self.allocs[a.0 as usize].bytes.is_empty()
-                && !self.allocs[b.0 as usize].bytes.is_empty() =>
-            {
-                return Ok(op == BinOp::Ne);
-            }
-            _ => {
-                return Err(self.error(
-                    "eval::pointer-compare",
-                    "these pointers cannot be compared at compile time, since their addresses only exist after linking".to_owned(),
-                    "compared here",
-                    span,
-                ));
-            }
+            (Scalar::Ptr(l), Scalar::Ptr(r)) => self.compare_pointers(op, l, r, span)?,
+            (l, r) => unreachable!("comparing {l:?} with {r:?}: operands of one type"),
         };
         Ok(match op {
             BinOp::Eq => ordering == Ordering::Equal,
@@ -775,6 +764,96 @@ impl Interp<'_, '_> {
             BinOp::Ge => ordering != Ordering::Less,
             _ => unreachable!("`{}` is not a comparison", op.symbol()),
         })
+    }
+
+    /// How two pointers compare at run time, or an error where that is not
+    /// known. An answer for `==` or `!=` between different objects is
+    /// returned as "not equal".
+    fn compare_pointers(
+        &self,
+        op: BinOp,
+        l: Pointer,
+        r: Pointer,
+        span: Span,
+    ) -> EvalResult<std::cmp::Ordering> {
+        let fail = |message: &str| {
+            Err(self.error(
+                "eval::pointer-compare",
+                message.to_owned(),
+                "compared here",
+                span,
+            ))
+        };
+        for pointer in [l, r] {
+            if let Pointer::Mem { alloc, .. } = pointer
+                && !self.allocs[alloc.0 as usize].live
+            {
+                return Err(self.dangling("compared here", span));
+            }
+        }
+        let ordered = !matches!(op, BinOp::Eq | BinOp::Ne);
+        match (l, r) {
+            (Pointer::Addr(a), Pointer::Addr(b)) => Ok(a.cmp(&b)),
+            (
+                Pointer::Mem {
+                    alloc: a,
+                    offset: x,
+                },
+                Pointer::Mem {
+                    alloc: b,
+                    offset: y,
+                },
+            ) if a == b => {
+                // Outside [0, size] the address may have wrapped around
+                // the address space, which reverses the order.
+                let size = self.allocs[a.0 as usize].bytes.len() as u64;
+                if ordered && (u64::from(x) > size || u64::from(y) > size) {
+                    return fail(
+                        "a pointer outside its object may have wrapped around the address space, so the order of these pointers is not known at compile time",
+                    );
+                }
+                Ok(x.cmp(&y))
+            }
+            (
+                Pointer::Mem {
+                    alloc: a,
+                    offset: x,
+                },
+                Pointer::Mem {
+                    alloc: b,
+                    offset: y,
+                },
+            ) => {
+                if ordered {
+                    return fail(
+                        "pointers into different objects have no order known at compile time, since their addresses only exist after linking",
+                    );
+                }
+                // One object may start where another ends, and one of
+                // size zero may share its address with another.
+                let inside = |alloc: AllocId, offset: u32| {
+                    (offset as usize) < self.allocs[alloc.0 as usize].bytes.len()
+                };
+                if !inside(a, x) || !inside(b, y) {
+                    return fail(
+                        "a pointer that is not strictly inside its object may equal a pointer into another object at run time",
+                    );
+                }
+                Ok(std::cmp::Ordering::Less)
+            }
+            _ => fail(
+                "these pointers cannot be compared at compile time, since their addresses only exist after linking",
+            ),
+        }
+    }
+
+    fn dangling(&self, label: &str, span: Span) -> Failure {
+        self.error(
+            "eval::dangling-pointer",
+            "this pointer points to a variable of a call that has returned".to_owned(),
+            label,
+            span,
+        )
     }
 
     /// Conversions with `as` (ADR 0019).

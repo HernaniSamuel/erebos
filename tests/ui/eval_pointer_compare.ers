@@ -1,0 +1,55 @@
+// emit: mir
+// Pointer comparisons answered at compile time, as at run time (ADR 0030):
+// orderings within one object with both offsets in [0, size], and `==` and
+// `!=` between pointers strictly inside two live objects. A pointer to a
+// variable of a returned call may still be copied. Constant data is a
+// global at run time, so a pointer into it outlives the call that took it.
+const TABLE: [u32; 2] = [5, 6];
+
+fn ordered() -> [bool; 4] {
+    let t: [u32; 4] = [1, 2, 3, 4];
+    let p: *const u32 = &raw const t as *const u32;
+    let end: *const u32 = &raw const p[4];
+    [
+        &raw const t[0] < &raw const t[3],
+        end > &raw const t[1],
+        end <= &raw const p[4],
+        &raw const t[2] >= end,
+    ]
+}
+
+fn distinct() -> [bool; 2] {
+    let a: u32 = 1;
+    let b: u32 = 2;
+    [&raw const a == &raw const b, &raw const a != &raw const b]
+}
+
+fn addr(x: u32) -> *const u32 {
+    let v: u32 = x;
+    &raw const v
+}
+
+fn copy_dangling() -> u32 {
+    let p: *const u32 = addr(1);
+    let q: *const u32 = p;
+    7
+}
+
+fn table_element() -> *const u32 {
+    &raw const TABLE[1]
+}
+
+// Expected: true, true, true, false; false, true; 6 + 7.
+fn answers() -> u32 {
+    let o: [bool; 4] = [
+        comptime ordered()[0],
+        comptime ordered()[1],
+        comptime ordered()[2],
+        comptime ordered()[3],
+    ];
+    let d: [bool; 2] = [comptime distinct()[0], comptime distinct()[1]];
+    comptime *table_element() + comptime copy_dangling()
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

@@ -1,0 +1,130 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/eval_pointer_compare_errors.ers
+---
+--- errors ---
+eval::dangling-pointer
+
+  × this pointer points to a variable of a call that has returned
+    ╭─[eval_pointer_compare_errors.ers:10:32]
+  9 │ const WITH_ADDRESS: bool = with_address();
+ 10 │ const DANGLING_COMPARE: bool = addr(1) == addr(2);
+    ·       ────────┬───────         ─────────┬────────
+    ·               │                         ╰── compared here
+    ·               ╰── while evaluating the constant `DANGLING_COMPARE`
+ 11 │ const DANGLING_READ: u32 = *addr(1);
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::dangling-pointer
+
+  × this pointer points to a variable of a call that has returned
+    ╭─[eval_pointer_compare_errors.ers:11:28]
+ 10 │ const DANGLING_COMPARE: bool = addr(1) == addr(2);
+ 11 │ const DANGLING_READ: u32 = *addr(1);
+    ·       ──────┬──────        ────┬───
+    ·             │                  ╰── accessed here
+    ·             ╰── while evaluating the constant `DANGLING_READ`
+ 12 │ 
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::pointer-compare
+
+  × a pointer that is not strictly inside its object may equal a pointer into another object at
+  │ run time
+   ╭─[eval_pointer_compare_errors.ers:5:7]
+ 4 │ // variable of a returned call is `eval::dangling-pointer` (ADR 0030).
+ 5 │ const PAST_END: bool = past_end();
+   ·       ────┬───         ─────┬────
+   ·           │                 ╰── called here
+   ·           ╰── while evaluating the constant `PAST_END`
+ 6 │ const ZERO_SIZED: bool = zero_sized();
+   ╰────
+    ╭─[eval_pointer_compare_errors.ers:17:5]
+ 16 │     let p: *const u32 = &raw const a;
+ 17 │     &raw const p[1] == &raw const b
+    ·     ───────────────┬───────────────
+    ·                    ╰── compared here
+ 18 │ }
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::pointer-compare
+
+  × a pointer that is not strictly inside its object may equal a pointer into another object at
+  │ run time
+   ╭─[eval_pointer_compare_errors.ers:6:7]
+ 5 │ const PAST_END: bool = past_end();
+ 6 │ const ZERO_SIZED: bool = zero_sized();
+   ·       ─────┬────         ──────┬─────
+   ·            │                   ╰── called here
+   ·            ╰── while evaluating the constant `ZERO_SIZED`
+ 7 │ const ACROSS: bool = across();
+   ╰────
+    ╭─[eval_pointer_compare_errors.ers:23:5]
+ 22 │     let e: [u32; 0] = [];
+ 23 │     &raw const a as *const u8 == &raw const e as *const u8
+    ·     ───────────────────────────┬──────────────────────────
+    ·                                ╰── compared here
+ 24 │ }
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::pointer-compare
+
+  × pointers into different objects have no order known at compile time, since their addresses
+  │ only exist after linking
+   ╭─[eval_pointer_compare_errors.ers:7:7]
+ 6 │ const ZERO_SIZED: bool = zero_sized();
+ 7 │ const ACROSS: bool = across();
+   ·       ───┬──         ────┬───
+   ·          │               ╰── called here
+   ·          ╰── while evaluating the constant `ACROSS`
+ 8 │ const WRAPPED: bool = wrapped();
+   ╰────
+    ╭─[eval_pointer_compare_errors.ers:29:5]
+ 28 │     let b: u32 = 2;
+ 29 │     &raw const a < &raw const b
+    ·     ─────────────┬─────────────
+    ·                  ╰── compared here
+ 30 │ }
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::pointer-compare
+
+  × a pointer outside its object may have wrapped around the address space, so the order of these
+  │ pointers is not known at compile time
+   ╭─[eval_pointer_compare_errors.ers:8:7]
+ 7 │ const ACROSS: bool = across();
+ 8 │ const WRAPPED: bool = wrapped();
+   ·       ───┬───         ────┬────
+   ·          │                ╰── called here
+   ·          ╰── while evaluating the constant `WRAPPED`
+ 9 │ const WITH_ADDRESS: bool = with_address();
+   ╰────
+    ╭─[eval_pointer_compare_errors.ers:35:5]
+ 34 │     let p: *const u8 = &raw const t as *const u8;
+ 35 │     &raw const p[0xFFFF_FFFF] < p
+    ·     ──────────────┬──────────────
+    ·                   ╰── compared here
+ 36 │ }
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::pointer-compare
+
+  × these pointers cannot be compared at compile time, since their addresses only exist after
+  │ linking
+    ╭─[eval_pointer_compare_errors.ers:9:7]
+  8 │ const WRAPPED: bool = wrapped();
+  9 │ const WITH_ADDRESS: bool = with_address();
+    ·       ──────┬─────         ───────┬──────
+    ·             │                     ╰── called here
+    ·             ╰── while evaluating the constant `WITH_ADDRESS`
+ 10 │ const DANGLING_COMPARE: bool = addr(1) == addr(2);
+    ╰────
+    ╭─[eval_pointer_compare_errors.ers:40:5]
+ 39 │     let a: u32 = 1;
+ 40 │     &raw const a == 0x1000 as *const u32
+    ·     ──────────────────┬─────────────────
+    ·                       ╰── compared here
+ 41 │ }
+    ╰────
+  help: this code runs at compile time (ADR 0027)
