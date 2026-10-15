@@ -1,0 +1,26 @@
+// emit: mir
+// A value that is not a place, used as the base of a place, is copied
+// where it is evaluated (ADR 0018) when it comes from a variable that later
+// code can write. A call's result needs no copy: nothing else writes it.
+fn address_of_block() -> u32 {
+    let mut x: [u32; 2] = [1, 2];
+    let p: *const u32 = &raw const ({ x })[0];
+    x[0] = 9;
+    *p
+}
+
+fn index_block() -> u32 {
+    let mut x: [u32; 2] = [1, 2];
+    ({ x })[{ x[0] = 9; 0 }]
+}
+
+fn pair() -> [u32; 2] {
+    [1, 2]
+}
+
+fn index_call(i: usize) -> u32 {
+    pair()[i]
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

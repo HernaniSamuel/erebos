@@ -903,14 +903,13 @@ impl Builder<'_, '_> {
                 }
                 base_place.project(PlaceElem::Field(self.q.tables.field(expr.id)))
             }
+            // A value, not a place: it is used where it is evaluated
+            // (ADR 0018), so it is copied unless nothing else can write
+            // where it is, as with a call's result.
             _ => {
                 let ty = self.ty_of(expr);
                 match self.expr(expr) {
-                    Operand::Copy(place)
-                        if !(address && self.locals[place.local.0 as usize].constant.is_some()) =>
-                    {
-                        place
-                    }
+                    Operand::Copy(place) if !self.must_copy(place, address) => place,
                     other => match self.temp(ty, Rvalue::Use(other)) {
                         Operand::Copy(place) => place,
                         Operand::Const(_) => unreachable!("temporaries are places"),
@@ -918,6 +917,15 @@ impl Builder<'_, '_> {
                 }
             }
         }
+    }
+
+    /// Whether a value held at `place` must be copied before it is used as
+    /// a place. A variable (only variables have names) can be written by
+    /// later code; data computed at compile time has no address
+    /// (ADR 0029), so it is copied only when its address is taken.
+    fn must_copy(&self, place: Place, address: bool) -> bool {
+        let decl = &self.locals[place.local.0 as usize];
+        decl.name.is_some() || (address && decl.constant.is_some())
     }
 
     /// Evaluates an index into a new local, so that a later write to its

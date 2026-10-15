@@ -1,0 +1,48 @@
+// A value that is not a place, indexed or under `&raw`, is the value read
+// where it is written (ADR 0018), not the variable it came from: later
+// writes to the variable do not show through. The same at compile time.
+// expect-output: 1 1 1 1
+// expect-exit: 0
+
+fn putc(byte: u8) {
+    let thr: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+    thr[0] = byte;
+}
+
+fn exit(code: u32) -> ! {
+    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+    *finisher = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    loop {}
+}
+
+fn address_of_block() -> u32 {
+    let mut x: [u32; 2] = [1, 2];
+    let p: *const u32 = &raw const ({ x })[0];
+    x[0] = 9;
+    *p
+}
+
+fn index_block() -> u32 {
+    let mut x: [u32; 2] = [1, 2];
+    ({ x })[{ x[0] = 9; 0 }]
+}
+
+fn digit(value: u32) {
+    putc(b'0' + value as u8);
+}
+
+entry fn main() -> ! {
+    digit(address_of_block());
+    putc(b' ');
+    digit(comptime address_of_block());
+    putc(b' ');
+    digit(index_block());
+    putc(b' ');
+    digit(comptime index_block());
+    putc(b'\n');
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(1)
+}
