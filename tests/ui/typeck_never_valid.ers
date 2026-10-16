@@ -1,0 +1,26 @@
+// emit: typeck
+// Where no memory is involved, `!` stays valid (ADR 0034): a return type,
+// also of an `extern fn`; a `let` whose initializer never finishes; places
+// formed from an expression of type `!`, read but never stored; and an
+// array expression with an element of type `!`, which has type `!`.
+extern fn halt() -> !;
+
+struct S { b: u8 }
+
+fn forever() -> ! {
+    let x: ! = loop {};
+}
+
+fn places() -> u8 {
+    let a: u8 = *(loop {});
+    let b: u8 = (loop {})[0];
+    on_panic().b
+}
+
+fn arrays() -> [u32; 3] {
+    let a: [u32; 3] = [loop {}; 3];
+    [1, halt(), 3]
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

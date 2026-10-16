@@ -344,6 +344,18 @@ impl Builder<'_, '_> {
             hir::ExprKind::SizeOf(_) | hir::ExprKind::AlignOf(_) | hir::ExprKind::OffsetOf(..) => {
                 usize_const(self.layout_query(expr))
             }
+            // An element does not finish, so there is no array: the
+            // elements run, and nothing is stored (ADR 0034).
+            hir::ExprKind::Array(elems) if ty == Ty::Never => {
+                for elem in elems {
+                    self.expr(elem);
+                }
+                Operand::Const(Const::Unit)
+            }
+            hir::ExprKind::Repeat(value, _) if ty == Ty::Never => {
+                self.expr(value);
+                Operand::Const(Const::Unit)
+            }
             hir::ExprKind::Array(elems) => {
                 let array = Place::local(self.new_local(ty, None));
                 // Each element is stored as soon as it is evaluated, so a

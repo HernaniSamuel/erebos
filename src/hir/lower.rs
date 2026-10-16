@@ -5,8 +5,8 @@ use std::collections::HashMap;
 use crate::diag::{Diagnostic, Diagnostics};
 use crate::hir::{
     ArrayLen, Block, Comptime, ConstDef, ConstId, Expr, ExprId, ExprKind, FieldDef, Fn, FnId,
-    FnKind, Hir, IntTy, Local, LocalId, StaticDef, StaticId, Stmt, StructDef, StructId, StructTy,
-    Ty,
+    FnKind, Hir, IntTy, Local, LocalId, NeverInMemory, NeverPosition, StaticDef, StaticId, Stmt,
+    StructDef, StructId, StructTy, Ty,
 };
 use crate::span::Span;
 use crate::syntax::ast;
@@ -168,6 +168,7 @@ pub fn lower(
         struct_ids,
         struct_tys,
         struct_decls: &struct_decls,
+        never_in_memory: Vec::new(),
         next_expr: 0,
         diags,
         locals: Vec::new(),
@@ -207,6 +208,7 @@ pub fn lower(
     debug_assert_eq!(fns.len() as u32, lowerer.value_base);
     fns.append(&mut lowerer.values);
     let expr_count = lowerer.next_expr;
+    let never_in_memory = lowerer.never_in_memory;
 
     check_duplicate_items(program, runtime, diags);
     check_start(&fns, &statics, diags);
@@ -219,6 +221,7 @@ pub fn lower(
         consts,
         statics,
         comptime_blocks,
+        never_in_memory,
         entry: entry?,
         panic: panic?,
         expr_count,
@@ -357,6 +360,8 @@ struct Lowerer<'a> {
     struct_ids: HashMap<String, StructId>,
     struct_tys: Vec<StructTy>,
     struct_decls: &'a [&'a ast::StructDecl],
+    /// Each `!` written where memory would have its type (ADR 0034).
+    never_in_memory: Vec<NeverInMemory>,
     next_expr: u32,
     diags: &'a mut Diagnostics,
     /// Locals of the function being lowered.
@@ -396,7 +401,7 @@ impl Lowerer<'_> {
                 .map(|field| FieldDef {
                     name: field.name.name.clone(),
                     span: field.name.span,
-                    ty: self.ty(&field.ty),
+                    ty: self.memory_ty(&field.ty, NeverPosition::Field),
                 })
                 .collect(),
         }
@@ -531,7 +536,7 @@ impl Lowerer<'_> {
         init: FnId,
     ) -> (StaticDef, Option<Fn>) {
         let align = self.static_attrs(&decl.attrs, decl.external);
-        let ty = self.ty(&decl.ty);
+        let ty = self.memory_ty(&decl.ty, NeverPosition::Static);
         let mut def = StaticDef {
             name: decl.name.name.clone(),
             name_span: decl.name.span,
@@ -569,7 +574,7 @@ impl Lowerer<'_> {
     /// A constant, and the body that computes its value (ADR 0029).
     fn const_decl(&mut self, decl: &ast::ConstDecl, id: ConstId, init: FnId) -> (ConstDef, Fn) {
         self.no_attrs(&decl.attrs, "a constant");
-        let ty = self.ty(&decl.ty);
+        let ty = self.memory_ty(&decl.ty, NeverPosition::Const);
         let value = self.comptime_body(|this| this.expr(&decl.value));
         let def = ConstDef {
             name: decl.name.name.clone(),
@@ -840,6 +845,20 @@ impl Lowerer<'_> {
         }
     }
 
+    /// A type that memory has: `!` there is `{error}`, recorded for the
+    /// type checker (ADR 0034).
+    fn memory_ty(&mut self, ty: &ast::Ty, position: NeverPosition) -> Ty {
+        if let ast::TyKind::Never = ty.kind {
+            self.never_in_memory.push(NeverInMemory {
+                span: ty.span,
+                position,
+            });
+            return Ty::Error;
+        }
+        self.ty(ty)
+    }
+
+    /// A written type. One containing `{error}` is `{error}` as a whole.
     fn ty(&mut self, ty: &ast::Ty) -> Ty {
         match &ty.kind {
             ast::TyKind::Never => Ty::Never,
@@ -848,14 +867,17 @@ impl Lowerer<'_> {
                 mutable,
                 volatile,
                 pointee,
-            } => {
-                let pointee = self.ty(pointee);
-                Ty::ptr(*mutable, *volatile, pointee)
-            }
+            } => match self.memory_ty(pointee, NeverPosition::Pointee) {
+                Ty::Error => Ty::Error,
+                pointee => Ty::ptr(*mutable, *volatile, pointee),
+            },
             ast::TyKind::Array { elem, len } => {
-                let elem = self.ty(elem);
+                let elem = self.memory_ty(elem, NeverPosition::Element);
                 let len = self.array_len(len);
-                Ty::array_of(elem, len)
+                match elem {
+                    Ty::Error => Ty::Error,
+                    elem => Ty::array_of(elem, len),
+                }
             }
             ast::TyKind::Named(name) if name.name == "bool" => Ty::Bool,
             ast::TyKind::Named(name) => match IntTy::from_name(&name.name) {
@@ -1067,10 +1089,15 @@ impl Lowerer<'_> {
             ast::ExprKind::Field(base, field) => {
                 ExprKind::Field(self.boxed(base), field.name.clone(), field.span)
             }
-            ast::ExprKind::SizeOf(ty) => ExprKind::SizeOf(self.ty(ty)),
-            ast::ExprKind::AlignOf(ty) => ExprKind::AlignOf(self.ty(ty)),
+            ast::ExprKind::SizeOf(ty) => {
+                ExprKind::SizeOf(self.memory_ty(ty, NeverPosition::LayoutQuery("size_of")))
+            }
+            ast::ExprKind::AlignOf(ty) => {
+                ExprKind::AlignOf(self.memory_ty(ty, NeverPosition::LayoutQuery("align_of")))
+            }
             ast::ExprKind::OffsetOf(ty, field) => {
-                ExprKind::OffsetOf(self.ty(ty), field.name.clone(), field.span)
+                let ty = self.memory_ty(ty, NeverPosition::LayoutQuery("offset_of"));
+                ExprKind::OffsetOf(ty, field.name.clone(), field.span)
             }
             ast::ExprKind::Index(base, index) => {
                 ExprKind::Index(self.boxed(base), self.boxed(index))

@@ -46,6 +46,9 @@ pub struct Hir {
     pub statics: Vec<StaticDef>,
     /// The bodies of `comptime { ... }` items.
     pub comptime_blocks: Vec<FnId>,
+    /// Each `!` written where it would be the type of memory, whose type
+    /// was lowered as `{error}`; the type checker reports them (ADR 0034).
+    pub never_in_memory: Vec<NeverInMemory>,
     pub entry: FnId,
     pub panic: FnId,
     /// Expression ids are `0..expr_count`.
@@ -101,6 +104,27 @@ pub struct StaticDef {
     pub init: Option<FnId>,
     /// `#[align(N)]`, with the span of `N` (ADR 0030).
     pub align: Option<(ArrayLen, Span)>,
+}
+
+/// A `!` written where memory would have its type (ADR 0034).
+#[derive(Clone, Copy, Debug)]
+pub struct NeverInMemory {
+    /// The span of the `!`.
+    pub span: Span,
+    pub position: NeverPosition,
+}
+
+/// Where a `!` would be the type of memory (ADR 0034).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NeverPosition {
+    Pointee,
+    Element,
+    Field,
+    /// The type of a `static` or `extern static`.
+    Static,
+    Const,
+    /// The operand of `size_of`, `align_of` or `offset_of`, named.
+    LayoutQuery(&'static str),
 }
 
 /// What a body that runs at compile time computes.

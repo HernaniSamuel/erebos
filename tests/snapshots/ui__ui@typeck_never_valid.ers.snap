@@ -1,0 +1,33 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_never_valid.ers
+---
+--- typeck ---
+struct S { b: u8 at 0 } size 1, align 1
+extern fn halt() -> !
+fn forever() -> !
+    let x: !
+    expr 0 loop 387..394: !
+fn places() -> u8
+    let a: u8
+    let b: u8
+    expr 1 deref 435..445: !
+    expr 2 loop 436..445: !
+    expr 3 index 463..475: !
+    expr 4 loop 463..472: !
+    expr 5 int 0 473..474: usize
+    expr 6 field b 481..493: !
+    expr 7 call 481..491: !
+fn arrays() -> [u32; 3]
+    let a: [u32; 3]
+    expr 8 repeat 545..557: !
+    expr 9 loop 546..553: !
+    expr 10 array 563..577: !
+    expr 11 int 1 564..565: u32
+    expr 12 call 567..573: !
+    expr 13 int 3 575..576: u32
+entry fn main() -> !
+    expr 14 loop 604..611: !
+panic fn on_panic() -> !
+    expr 15 loop 641..648: !

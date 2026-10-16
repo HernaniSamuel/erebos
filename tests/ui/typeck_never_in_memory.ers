@@ -1,0 +1,54 @@
+// emit: typeck
+// `!` is the type of expressions, never of memory (ADR 0034): each `!`
+// written where memory would have its type is reported once, also where
+// nothing uses it, and the type containing it then causes no further
+// error.
+struct Unused { a: u32, never: ! }
+struct Measured { never: ! }
+
+static NEVER_STATIC: ! = loop {};
+static mut NEVER_MUT: ! = loop {};
+extern static NEVER_EXTERN: !;
+const NEVER_CONST: ! = loop {};
+
+fn pointers(x: u32, p: *const !) {
+    let q: *const ! = &raw const x;
+    let r: *mut volatile ! = 0x1000 as *mut volatile !;
+    let s: *const *const ! = 0x1000 as *const *const !;
+}
+
+fn arrays() {
+    let empty: [!; 0] = [];
+}
+
+fn layouts() -> usize {
+    size_of(Measured) + size_of(!) + align_of(!) + offset_of(!, a)
+}
+
+fn values() -> u32 {
+    comptime loop {}
+}
+
+fn addresses() {
+    let p: *const u32 = &raw const *(loop {});
+    let x: ! = loop {};
+    let q: *const u32 = &raw const x;
+}
+
+// Panicked the compiler, reading `!` from memory at compile time.
+fn context() -> u32 {
+    let x: u32 = 1;
+    *(&raw const x as *const !)
+}
+const CONTEXT: u32 = context();
+
+// An array with an element of type `!` has type `!`; the other elements
+// are checked against the first element not of type `!`.
+fn one() -> u32 { 1 }
+fn array_elements() {
+    let a: u32 = [loop {}, one(), true][0];
+    let b: u32 = [loop {}, 1][0];
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

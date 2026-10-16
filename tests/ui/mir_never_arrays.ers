@@ -1,0 +1,29 @@
+// emit: mir
+// An array expression with an element of type `!` has type `!`: its
+// elements run, up to the one that does not finish, and nothing is stored
+// (ADR 0034). At compile time, `[return 5, one()][0]` returns 5.
+extern fn halt() -> !;
+
+fn one() -> u32 { 1 }
+
+fn repeat() -> [u32; 3] {
+    let a: [u32; 3] = [loop {}; 3];
+    a
+}
+
+fn literal() -> [u32; 3] {
+    [1, halt(), 3]
+}
+
+fn returns() -> u32 {
+    [return 5, one()][0]
+}
+
+const C: u32 = returns();
+
+comptime {
+    assert(C == 5);
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

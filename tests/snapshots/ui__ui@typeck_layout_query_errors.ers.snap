@@ -47,13 +47,15 @@ ty::mismatched-types
  9 │     let e: usize = offset_of(!, a);
    ╰────
   help: integer types never convert implicitly; use `as u32` (ADR 0008)
-ty::no-fields
+ty::never-in-memory
 
-  × `!` has no fields
-    ╭─[typeck_layout_query_errors.ers:9:33]
+  × `!` is not a type of memory
+    ╭─[typeck_layout_query_errors.ers:9:30]
   8 │     let d: u32 = size_of(S);
   9 │     let e: usize = offset_of(!, a);
-    ·                                 ┬
-    ·                                 ╰── no such field
+    ·                              ┬
+    ·                              ╰── `!` as the operand of `offset_of`
  10 │ }
     ╰────
+  help: `!` is the type of expressions that do not finish, so no memory holds one; for a type
+        without data, use `()` (ADR 0034)

@@ -376,9 +376,15 @@ impl Interp<'_, '_> {
         match statement {
             Statement::Assign(place, rvalue) => {
                 let ty = self.frame().body.place_ty(*place);
+                // No memory has type `!`, so a place of type `!` is only
+                // reached by code after an expression that does not finish,
+                // which is never built (ADR 0034).
+                if ty == Ty::Never {
+                    unreachable!("a place of type `!` is never reached (ADR 0034)")
+                }
                 // Nothing is stored, but the source and the destination
                 // are still accessed, and checked.
-                if matches!(ty, Ty::Unit | Ty::Never) {
+                if ty == Ty::Unit {
                     self.rvalue(rvalue, span)?;
                     let dest = self.place(*place)?;
                     return self.write_at(dest, Scalar::Int(0), span);
@@ -451,8 +457,10 @@ impl Interp<'_, '_> {
                 }
             }
             Terminator::Return => return self.return_(),
+            // It follows an expression of type `!`, which does not finish:
+            // no memory holds a `!` to read (ADR 0034).
             Terminator::Unreachable => {
-                unreachable!("control never reaches `unreachable` in well-typed MIR")
+                unreachable!("control never reaches `unreachable` in well-typed MIR (ADR 0034)")
             }
             Terminator::Panic(cause) => {
                 let (code, message) = match cause {

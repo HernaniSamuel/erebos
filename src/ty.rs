@@ -14,8 +14,8 @@ use std::fmt::Write;
 
 use crate::diag::Diagnostic;
 use crate::hir::{
-    self, BinOp, Block, Expr, ExprId, ExprKind, Fn, FnKind, Hir, IntTy, LocalId, Ptr, StaticId,
-    Stmt, Ty, UnOp,
+    self, BinOp, Block, Expr, ExprId, ExprKind, Fn, FnKind, Hir, IntTy, LocalId, NeverPosition,
+    Ptr, StaticId, Stmt, Ty, UnOp,
 };
 use crate::layout;
 use crate::query::Queries;
@@ -48,6 +48,47 @@ impl Tables {
     pub fn field(&self, id: ExprId) -> u32 {
         self.fields[&id]
     }
+}
+
+/// Reports each `!` written where memory would have its type, which HIR
+/// lowering made `{error}` (ADR 0034).
+pub fn report_never_in_memory(q: &mut Queries) {
+    let hir = q.hir;
+    for never in &hir.never_in_memory {
+        let (what, help) = match never.position {
+            NeverPosition::Pointee => ("the pointee of a pointer".to_owned(), NeverHelp::Unit),
+            NeverPosition::Element => ("an array element".to_owned(), NeverHelp::Unit),
+            NeverPosition::Field => ("the type of a field".to_owned(), NeverHelp::Unit),
+            NeverPosition::Static => ("the type of a static".to_owned(), NeverHelp::Static),
+            NeverPosition::Const => ("the type of a constant".to_owned(), NeverHelp::Unit),
+            NeverPosition::LayoutQuery(name) => {
+                (format!("the operand of `{name}`"), NeverHelp::Unit)
+            }
+        };
+        q.diags.push(never_in_memory(never.span, &what, help));
+    }
+}
+
+/// What `ty::never-in-memory` suggests instead.
+#[derive(Clone, Copy)]
+enum NeverHelp {
+    Unit,
+    /// A static's address must be a real one.
+    Static,
+}
+
+fn never_in_memory(span: Span, what: &str, help: NeverHelp) -> Diagnostic {
+    let instead = match help {
+        NeverHelp::Unit => "for a type without data, use `()` (ADR 0034)",
+        NeverHelp::Static => {
+            "use a type of non-zero size, such as `u8`, whose address is a real one (ADR 0022, 0034)"
+        }
+    };
+    Diagnostic::error("ty::never-in-memory", "`!` is not a type of memory")
+        .label(span, format!("`!` as {what}"))
+        .help(format!(
+            "`!` is the type of expressions that do not finish, so no memory holds one; {instead}"
+        ))
 }
 
 /// Checks one function; `query` decides when.
@@ -434,6 +475,8 @@ impl Checker<'_, '_> {
                 let ty = self.check(f, value, element_of(expected));
                 match (ty, self.q.array_len(*len)) {
                     (Ty::Error, _) | (_, None) => Ty::Error,
+                    // Like a block that does not finish (ADR 0034).
+                    (Ty::Never, _) => Ty::Never,
                     (ty, Some(len)) => Ty::array(ty, len),
                 }
             }
@@ -441,7 +484,18 @@ impl Checker<'_, '_> {
             ExprKind::Const(id) => self.norm(self.hir.const_(*id).ty),
             // The value is computed later; its type is checked here, with
             // the expected type passed through (ADR 0029).
-            ExprKind::Comptime(inner) => self.check(f, inner, expected),
+            ExprKind::Comptime(inner) => match self.check(f, inner, expected) {
+                // A value computed at compile time is data (ADR 0034).
+                Ty::Never => {
+                    self.q.diags.push(never_in_memory(
+                        expr.span,
+                        "the value of a `comptime` expression",
+                        NeverHelp::Unit,
+                    ));
+                    Ty::Error
+                }
+                ty => ty,
+            },
             ExprKind::SizeOf(ty) | ExprKind::AlignOf(ty) => {
                 self.queried_layout(*ty, expr.span);
                 Ty::Int(IntTy::Usize)
@@ -454,8 +508,6 @@ impl Checker<'_, '_> {
                         self.field(expr, *ty, PlaceInfo::ERROR, name, *name_span);
                     }
                     Ty::Error => {}
-                    // Even `!`: unlike an expression, a written type is
-                    // not unreachable code.
                     other => self.q.diags.push(
                         Diagnostic::error("ty::no-fields", format!("`{other}` has no fields"))
                             .label(*name_span, "no such field"),
@@ -626,26 +678,39 @@ impl Checker<'_, '_> {
     }
 
     /// `[a, b, c]`: the elements share one type, which the expected array
-    /// type gives or, without one, the first element typed on its own.
+    /// type gives or, without one, the first element of a type other than
+    /// `!` typed on its own. An element of type `!` makes the whole array
+    /// one, like a block that does not finish (ADR 0034).
     fn array(&mut self, f: &Fn, expr: &Expr, elems: &[Expr], expected: Option<Ty>) -> Ty {
+        let mut never = false;
         let elem_ty = match element_of(expected) {
             Some(want) => {
                 for elem in elems {
-                    self.check(f, elem, Some(want));
+                    never |= self.check(f, elem, Some(want)) == Ty::Never;
                 }
-                want
+                Some(want)
             }
-            None => match elems.iter().position(|e| !needs_expected_type(e)) {
-                Some(first) => {
-                    let ty = self.check(f, &elems[first], None);
-                    for (i, elem) in elems.iter().enumerate() {
-                        if i != first {
-                            self.check(f, elem, Some(ty));
-                        }
+            None => {
+                let mut elem_ty = None;
+                // Waiting for a type to check against.
+                let mut pending = Vec::new();
+                for elem in elems {
+                    match elem_ty {
+                        Some(ty) => never |= self.check(f, elem, Some(ty)) == Ty::Never,
+                        None if needs_expected_type(elem) => pending.push(elem),
+                        None => match self.check(f, elem, None) {
+                            Ty::Never => never = true,
+                            ty => {
+                                elem_ty = Some(ty);
+                                for elem in pending.drain(..) {
+                                    never |= self.check(f, elem, Some(ty)) == Ty::Never;
+                                }
+                            }
+                        },
                     }
-                    ty
                 }
-                None => {
+                // `[]` has no element to take a type from either.
+                if !pending.is_empty() || (elem_ty.is_none() && !never) {
                     self.q.diags.push(
                         Diagnostic::error(
                             "ty::untyped-literal",
@@ -654,16 +719,19 @@ impl Checker<'_, '_> {
                         .label(expr.span, "no type is expected here")
                         .help("bind it first, e.g. `let a: [u8; 3] = ...` (ADR 0008)"),
                     );
-                    for elem in elems {
+                    for elem in pending {
                         self.check(f, elem, Some(Ty::Error));
                     }
-                    Ty::Error
+                    return Ty::Error;
                 }
-            },
+                elem_ty
+            }
         };
         match elem_ty {
-            Ty::Error => Ty::Error,
-            ty => Ty::array(ty, elems.len() as u64),
+            _ if never => Ty::Never,
+            Some(Ty::Error) => Ty::Error,
+            Some(ty) => Ty::array(ty, elems.len() as u64),
+            None => unreachable!("an array without an element type was reported"),
         }
     }
 
@@ -859,6 +927,8 @@ impl Checker<'_, '_> {
         let literal_ty = match target {
             Ty::Int(_) => Some(target),
             Ty::Ptr(_) => Some(Ty::Int(IntTy::Usize)),
+            // Reported, such as `as *const !` (ADR 0034).
+            Ty::Error => Some(Ty::Error),
             _ => None,
         };
         let expected = if needs_expected_type(operand) {
@@ -1229,6 +1299,15 @@ impl Checker<'_, '_> {
             self.q.diags.push(not_a_place);
             return Ty::Error;
         };
+        // Its result would be a `*const !` (ADR 0034).
+        if info.ty == Ty::Never {
+            self.q.diags.push(never_in_memory(
+                place.span,
+                "the type of a place under `&raw`",
+                NeverHelp::Unit,
+            ));
+            return Ty::Error;
+        }
         // An element or field of a constant is read where the constant's
         // data is, but has no address of its own (ADR 0029).
         if info.constant {

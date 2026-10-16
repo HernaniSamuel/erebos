@@ -120,6 +120,7 @@ impl<'h> Queries<'h> {
     /// needed it.
     pub fn check_all(&mut self) {
         let hir = self.hir;
+        ty::report_never_in_memory(self);
         for id in 0..hir.structs.len() {
             self.struct_layout(StructId(id as u32));
         }
@@ -717,8 +718,9 @@ impl<'h> Queries<'h> {
     }
 
     /// Whether lowering function `id` needs the layout of a struct that has
-    /// none, which was reported at the struct. Like a body that does not
-    /// type check, it is then left out without a new diagnostic.
+    /// none, or of a type that failed, both reported where they failed.
+    /// Like a body that does not type check, it is then left out without a
+    /// new diagnostic.
     fn needs_missing_layout(&mut self, id: FnId) -> bool {
         let f = self.hir.fn_(id);
         let mut types = vec![f.ret];
@@ -737,8 +739,8 @@ impl<'h> Queries<'h> {
         types.into_iter().any(|ty| self.lacks_layout(ty, &mut seen))
     }
 
-    /// Whether the MIR type of `ty` needs a struct without a layout; the
-    /// structs in `seen` were looked at already.
+    /// Whether the MIR type of `ty` needs a struct without a layout or a
+    /// type that failed; the structs in `seen` were looked at already.
     fn lacks_layout(&mut self, ty: hir::Ty, seen: &mut Vec<StructId>) -> bool {
         match ty {
             hir::Ty::Ptr(ptr) => self.lacks_layout(*ptr.pointee, seen),
@@ -757,6 +759,8 @@ impl<'h> Queries<'h> {
                     .iter()
                     .any(|field| self.lacks_layout(field.ty, seen))
             }
+            // Reported, such as a field of type `!` (ADR 0034).
+            hir::Ty::Error => true,
             _ => false,
         }
     }

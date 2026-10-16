@@ -4,180 +4,69 @@ expression: output
 input_file: tests/ui/eval_zero_sized_access_errors.ers
 ---
 --- errors ---
-eval::panic
-
-  × the evaluation called the panic function
-    ╭─[eval_zero_sized_access_errors.ers:11:27]
- 10 │ // Evaluating a `!` calls the panic function, an error of its own.
- 11 │ static mut NEVER_MUT: ! = on_panic();
-    ·            ────┬────      ─────┬────
-    ·                │               ╰── called here
-    ·                ╰── while evaluating the static `NEVER_MUT`
- 12 │ 
-    ╰────
-  help: this code runs at compile time (ADR 0027)
 eval::extern-static
 
   × `UNIT` is an `extern static`, defined outside the program, so it cannot be read or written at
   │ compile time
-    ╭─[eval_zero_sized_access_errors.ers:13:30]
- 12 │ 
- 13 │ const READ_EXTERN_UNIT: () = UNIT;
+    ╭─[eval_zero_sized_access_errors.ers:9:30]
+  8 │ 
+  9 │ const READ_EXTERN_UNIT: () = UNIT;
     ·       ────────┬───────       ──┬─
     ·               │                ╰── read here
     ·               ╰── while evaluating the constant `READ_EXTERN_UNIT`
- 14 │ const READ_EXTERN_NEVER: u32 = read_extern_never();
+ 10 │ const WRITE_EXTERN_UNIT: () = write_extern_unit();
     ╰────
   help: this code runs at compile time (ADR 0027)
 eval::static-mut
 
   × `UNIT_MUT` is a `static mut`, whose value is only known when the program runs
-    ╭─[eval_zero_sized_access_errors.ers:16:27]
- 15 │ const WRITE_EXTERN_UNIT: () = write_extern_unit();
- 16 │ const READ_MUT_UNIT: () = UNIT_MUT;
+    ╭─[eval_zero_sized_access_errors.ers:11:27]
+ 10 │ const WRITE_EXTERN_UNIT: () = write_extern_unit();
+ 11 │ const READ_MUT_UNIT: () = UNIT_MUT;
     ·       ──────┬──────       ────┬───
     ·             │                 ╰── read here
     ·             ╰── while evaluating the constant `READ_MUT_UNIT`
- 17 │ const WRITE_MUT_UNIT: () = write_mut_unit();
-    ╰────
-  help: this code runs at compile time (ADR 0027)
-eval::extern-static
-
-  × `NEVER` is an `extern static`, defined outside the program, so it cannot be read or written at
-  │ compile time
-    ╭─[eval_zero_sized_access_errors.ers:22:5]
- 13 │ const READ_EXTERN_UNIT: () = UNIT;
- 14 │ const READ_EXTERN_NEVER: u32 = read_extern_never();
-    ·       ────────┬────────        ─────────┬─────────
-    ·               │                         ╰── called here
-    ·               ╰── while evaluating the constant `READ_EXTERN_NEVER`
- 15 │ const WRITE_EXTERN_UNIT: () = write_extern_unit();
- 16 │ const READ_MUT_UNIT: () = UNIT_MUT;
- 17 │ const WRITE_MUT_UNIT: () = write_mut_unit();
- 18 │ const READ_MUT_NEVER: u32 = read_mut_never();
- 19 │ const READ_ADDRESS_NEVER: u32 = read_address_never();
- 20 │ 
- 21 │ fn read_extern_never() -> u32 {
- 22 │     NEVER
-    ·     ──┬──
-    ·       ╰── read here
- 23 │ }
+ 12 │ const WRITE_MUT_UNIT: () = write_mut_unit();
     ╰────
   help: this code runs at compile time (ADR 0027)
 eval::extern-static
 
   × `UNIT_EXTERN_MUT` is an `extern static`, defined outside the program, so it cannot be read or
   │ written at compile time
-    ╭─[eval_zero_sized_access_errors.ers:26:5]
- 14 │ const READ_EXTERN_NEVER: u32 = read_extern_never();
- 15 │ const WRITE_EXTERN_UNIT: () = write_extern_unit();
+    ╭─[eval_zero_sized_access_errors.ers:15:5]
+  9 │ const READ_EXTERN_UNIT: () = UNIT;
+ 10 │ const WRITE_EXTERN_UNIT: () = write_extern_unit();
     ·       ────────┬────────       ─────────┬─────────
     ·               │                        ╰── called here
     ·               ╰── while evaluating the constant `WRITE_EXTERN_UNIT`
- 16 │ const READ_MUT_UNIT: () = UNIT_MUT;
- 17 │ const WRITE_MUT_UNIT: () = write_mut_unit();
- 18 │ const READ_MUT_NEVER: u32 = read_mut_never();
- 19 │ const READ_ADDRESS_NEVER: u32 = read_address_never();
- 20 │ 
- 21 │ fn read_extern_never() -> u32 {
- 22 │     NEVER
- 23 │ }
- 24 │ 
- 25 │ fn write_extern_unit() {
- 26 │     UNIT_EXTERN_MUT = ();
+ 11 │ const READ_MUT_UNIT: () = UNIT_MUT;
+ 12 │ const WRITE_MUT_UNIT: () = write_mut_unit();
+ 13 │ 
+ 14 │ fn write_extern_unit() {
+ 15 │     UNIT_EXTERN_MUT = ();
     ·     ──────────┬─────────
     ·               ╰── written here
- 27 │ }
+ 16 │ }
     ╰────
   help: this code runs at compile time (ADR 0027)
 eval::static-mut
 
   × `UNIT_MUT` is a `static mut`, whose value is only known when the program runs
-    ╭─[eval_zero_sized_access_errors.ers:30:5]
- 16 │ const READ_MUT_UNIT: () = UNIT_MUT;
- 17 │ const WRITE_MUT_UNIT: () = write_mut_unit();
+    ╭─[eval_zero_sized_access_errors.ers:19:5]
+ 11 │ const READ_MUT_UNIT: () = UNIT_MUT;
+ 12 │ const WRITE_MUT_UNIT: () = write_mut_unit();
     ·       ───────┬──────       ────────┬───────
     ·              │                     ╰── called here
     ·              ╰── while evaluating the constant `WRITE_MUT_UNIT`
- 18 │ const READ_MUT_NEVER: u32 = read_mut_never();
- 19 │ const READ_ADDRESS_NEVER: u32 = read_address_never();
- 20 │ 
- 21 │ fn read_extern_never() -> u32 {
- 22 │     NEVER
- 23 │ }
- 24 │ 
- 25 │ fn write_extern_unit() {
- 26 │     UNIT_EXTERN_MUT = ();
- 27 │ }
- 28 │ 
- 29 │ fn write_mut_unit() {
- 30 │     UNIT_MUT = ();
+ 13 │ 
+ 14 │ fn write_extern_unit() {
+ 15 │     UNIT_EXTERN_MUT = ();
+ 16 │ }
+ 17 │ 
+ 18 │ fn write_mut_unit() {
+ 19 │     UNIT_MUT = ();
     ·     ──────┬──────
     ·           ╰── written here
- 31 │ }
-    ╰────
-  help: this code runs at compile time (ADR 0027)
-eval::static-mut
-
-  × `NEVER_MUT` is a `static mut`, whose value is only known when the program runs
-    ╭─[eval_zero_sized_access_errors.ers:34:5]
- 17 │ const WRITE_MUT_UNIT: () = write_mut_unit();
- 18 │ const READ_MUT_NEVER: u32 = read_mut_never();
-    ·       ───────┬──────        ────────┬───────
-    ·              │                      ╰── called here
-    ·              ╰── while evaluating the constant `READ_MUT_NEVER`
- 19 │ const READ_ADDRESS_NEVER: u32 = read_address_never();
- 20 │ 
- 21 │ fn read_extern_never() -> u32 {
- 22 │     NEVER
- 23 │ }
- 24 │ 
- 25 │ fn write_extern_unit() {
- 26 │     UNIT_EXTERN_MUT = ();
- 27 │ }
- 28 │ 
- 29 │ fn write_mut_unit() {
- 30 │     UNIT_MUT = ();
- 31 │ }
- 32 │ 
- 33 │ fn read_mut_never() -> u32 {
- 34 │     NEVER_MUT
-    ·     ────┬────
-    ·         ╰── read here
- 35 │ }
-    ╰────
-  help: this code runs at compile time (ADR 0027)
-eval::invalid-access
-
-  × address 0x4 only exists when the program runs, so it cannot be read or written at compile time
-    ╭─[eval_zero_sized_access_errors.ers:39:5]
- 18 │ const READ_MUT_NEVER: u32 = read_mut_never();
- 19 │ const READ_ADDRESS_NEVER: u32 = read_address_never();
-    ·       ─────────┬────────        ──────────┬─────────
-    ·                │                          ╰── called here
-    ·                ╰── while evaluating the constant `READ_ADDRESS_NEVER`
- 20 │ 
- 21 │ fn read_extern_never() -> u32 {
- 22 │     NEVER
- 23 │ }
- 24 │ 
- 25 │ fn write_extern_unit() {
- 26 │     UNIT_EXTERN_MUT = ();
- 27 │ }
- 28 │ 
- 29 │ fn write_mut_unit() {
- 30 │     UNIT_MUT = ();
- 31 │ }
- 32 │ 
- 33 │ fn read_mut_never() -> u32 {
- 34 │     NEVER_MUT
- 35 │ }
- 36 │ 
- 37 │ fn read_address_never() -> u32 {
- 38 │     let p: *const ! = 4 as *const !;
- 39 │     *p
-    ·     ─┬
-    ·      ╰── accessed here
- 40 │ }
+ 20 │ }
     ╰────
   help: this code runs at compile time (ADR 0027)
