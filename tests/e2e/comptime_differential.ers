@@ -204,6 +204,27 @@ fn slices(k: usize) -> u64 {
     mix(h, len(&raw const local) as u64)
 }
 
+// Elements of slices, read and written through `(*s)[i]` (ADR 0031): the
+// bytes of a message summed, and a buffer filled through a slice of part
+// of it.
+fn message_sum(k: usize) -> u64 {
+    let message: *const [u8] = MESSAGES[k % 3];
+    let mut h: u64 = 0;
+    let mut i: usize = 0;
+    while i < len(message) {
+        h = mix(h, (*message)[i] as u64);
+        i += 1;
+    }
+    let mut buffer: [u8; 8] = [0; 8];
+    let part: *mut [u8] = slice(&raw mut buffer[k % 4], 4);
+    i = 0;
+    while i < len(part) {
+        (*part)[i] = (k + i * 3) as u8;
+        i += 1;
+    }
+    mix(h, bytes_sum(&raw const buffer))
+}
+
 struct Uart { thr: u8 }
 
 fn putc(byte: u8) {
@@ -259,6 +280,9 @@ entry fn main() -> ! {
     failures += check(23, comptime weights(6), weights(opaque_usize(6)));
     failures += check(24, comptime slices(1), slices(opaque_usize(1)));
     failures += check(25, comptime slices(5), slices(opaque_usize(5)));
+    failures += check(26, comptime message_sum(1), message_sum(opaque_usize(1)));
+    failures += check(27, comptime message_sum(6), message_sum(opaque_usize(6)));
+    failures += check(28, comptime message_sum(2), message_sum(opaque_usize(2)));
     if failures == 0 {
         putc(b'd'); putc(b'i'); putc(b'f'); putc(b'f'); putc(b'e'); putc(b'r'); putc(b'e');
         putc(b'n'); putc(b't'); putc(b'i'); putc(b'a'); putc(b'l'); putc(b' '); putc(b'o');

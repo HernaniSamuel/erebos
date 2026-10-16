@@ -1,0 +1,67 @@
+// emit: mir
+// Elements of slices at compile time work as at run time (ADR 0031): they
+// are read and written through `(*s)[i]`, checked against the length, and
+// follow the rules of the memory they are in (ADR 0030). The `comptime`
+// blocks whose assertions hold report nothing.
+static TABLE: [u16; 4] = [10, 20, 30, 40];
+static mut COUNTER: u32 = 0;
+
+fn sum(s: *const [u8]) -> u32 {
+    let mut total: u32 = 0;
+    let mut i: usize = 0;
+    while i < len(s) {
+        total += (*s)[i] as u32;
+        i += 1;
+    }
+    total
+}
+
+fn fill(s: *mut [u8], value: u8) {
+    let mut i: usize = 0;
+    while i < len(s) {
+        (*s)[i] = value + i as u8;
+        i += 1;
+    }
+}
+
+fn filled() -> u32 {
+    let mut buffer: [u8; 6] = [0; 6];
+    fill(slice(&raw mut buffer[2], 3), 7);
+    let element: *const u8 = &raw const (*(&raw const buffer as *const [u8]))[3];
+    sum(&raw const buffer) * 100 + *element as u32
+}
+
+comptime {
+    assert(sum(&raw const b"abc") == 294);
+    assert(sum(&raw const b"") == 0);
+    assert(filled() == 2408);
+    let tail: *const [u16] = slice(&raw const TABLE[1], 3);
+    assert((*tail)[2] == 40);
+}
+
+// One past the end calls the panic function, here an error.
+fn past_end() -> u8 {
+    let bytes: [u8; 3] = [1, 2, 3];
+    let s: *const [u8] = &raw const bytes;
+    (*s)[3]
+}
+const PAST_END: u8 = past_end();
+
+// A slice of a byte string or a `static` cannot be written through, nor
+// one of a `static mut` read; a volatile element is not accessed.
+const READ_ONLY: u8 = {
+    let s: *mut [u8] = &raw const b"abc" as *mut [u8];
+    (*s)[0] = 1;
+    0
+};
+const MUTABLE: u32 = {
+    let s: *const [u32] = &raw const COUNTER as *const [u32; 1];
+    (*s)[0]
+};
+const VOLATILE: u8 = {
+    let s: *const volatile [u8] = slice(0x1000 as *const volatile u8, 4);
+    (*s)[0]
+};
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

@@ -124,6 +124,14 @@ fn unsized_ty(ty: Ty) -> Diagnostic {
     )
 }
 
+/// `ty::unsized` for `place`, the `[T]` of type `ty` a slice points to,
+/// `accessed` whole: it can only be indexed or passed to `&raw` (ADR 0031).
+fn whole_slice(ty: Ty, place: Span, accessed: &str) -> Diagnostic {
+    unsized_ty(ty)
+        .label(place, format!("what a slice points to, {accessed} whole"))
+        .help("it can only be indexed, as in `(*s)[i]`, or passed to `&raw`; its length, known only at run time, is `len(s)` (ADR 0031)")
+}
+
 /// What `ty::never-in-memory` suggests instead.
 #[derive(Clone, Copy)]
 enum NeverHelp {
@@ -653,6 +661,10 @@ impl Checker<'_, '_> {
                 let info = self
                     .place_info(f, expr)
                     .expect("dereferences, indexing, fields, statics and byte strings are places");
+                if let Ty::Slice(_) = info.ty {
+                    self.q.diags.push(whole_slice(info.ty, expr.span, "read"));
+                    return Ty::Error;
+                }
                 self.access(&info, expr.span);
                 info.ty
             }
@@ -1222,28 +1234,11 @@ impl Checker<'_, '_> {
     }
 
     /// The place a pointer of type `ty` leads to, for `*` and `[]`. A
-    /// pointer of type `!` is never computed, so neither is the place. The
-    /// `[T]` a slice points to has no size, so it is no place to access
-    /// (ADR 0031); `place` is the expression of the place.
-    fn through_pointer(
-        &mut self,
-        ty: Ty,
-        pointer: &Expr,
-        place: &Expr,
-        error: Diagnostic,
-    ) -> PlaceInfo {
+    /// pointer of type `!` is never computed, so neither is the place.
+    /// What a slice points to is a place of type `[T]`, which can only be
+    /// indexed or passed to `&raw` (ADR 0031).
+    fn through_pointer(&mut self, ty: Ty, pointer: &Expr, error: Diagnostic) -> PlaceInfo {
         match ty {
-            Ty::Ptr(ptr) if matches!(*ptr.pointee, Ty::Slice(_)) => {
-                self.q.diags.push(
-                    unsized_ty(*ptr.pointee)
-                        .label(
-                            place.span,
-                            format!("what the slice `{ty}` points to has type `{}`", ptr.pointee),
-                        )
-                        .help("the length of a slice is known only at run time; `len(s)` gives it (ADR 0031)"),
-                );
-                PlaceInfo::ERROR
-            }
             Ty::Ptr(ptr) => PlaceInfo::through(ptr, pointer.span),
             Ty::Never => PlaceInfo {
                 ty: Ty::Never,
@@ -1347,7 +1342,7 @@ impl Checker<'_, '_> {
                     format!("cannot dereference `{ty}`"),
                 )
                 .label(pointer.span, "not a pointer");
-                self.through_pointer(ty, pointer, expr, error)
+                self.through_pointer(ty, pointer, error)
             }
             ExprKind::Field(base, name, name_span) => {
                 let (ty, base_place) = self.base(f, base);
@@ -1368,12 +1363,46 @@ impl Checker<'_, '_> {
                         ty: *elem,
                         ..base_place
                     }
+                } else if let (Ty::Slice(elem), Some(base_place)) = (ty, base_place) {
+                    // `(*s)[i]`, checked against the length (ADR 0031): the
+                    // element is reached through the slice, so it is
+                    // volatile if the slice is.
+                    if self.q.layout_of(*elem).is_none() {
+                        self.too_large(
+                            *elem,
+                            base.span,
+                            "the distance between elements does not fit in the address space",
+                        );
+                    }
+                    PlaceInfo {
+                        ty: *elem,
+                        ..base_place
+                    }
+                } else if let Ty::Ptr(ptr) = ty
+                    && let Ty::Slice(elem) = *ptr.pointee
+                {
+                    if let Some(info) = base_place {
+                        self.access(&info, base.span);
+                    }
+                    // Indexing a pointer steps over whole pointees, and `[T]`
+                    // has no size (ADR 0021, 0031).
+                    let first = Ty::ptr(ptr.mutable, ptr.volatile, *elem);
+                    self.q.diags.push(
+                        Diagnostic::error(
+                            "ty::slice-pointer-index",
+                            format!("cannot index the slice `{ty}` itself"),
+                        )
+                        .label(base.span, "a slice, not a pointer to its elements")
+                        .help(format!(
+                            "index what it points to, checked against its length: `(*s)[i]`; or, unchecked, a pointer to its first element: `(s as {first})[i]` (ADR 0031)"
+                        )),
+                    );
+                    PlaceInfo::ERROR
                 } else {
                     if let Some(info) = base_place {
                         self.access(&info, base.span);
                     }
                     if let Ty::Ptr(ptr) = ty
-                        && !matches!(*ptr.pointee, Ty::Slice(_))
                         && self.q.layout_of(*ptr.pointee).is_none()
                     {
                         self.too_large(
@@ -1388,7 +1417,7 @@ impl Checker<'_, '_> {
                     )
                     .label(base.span, "not an array or a pointer");
                     // Unchecked, as in C (ADR 0021).
-                    self.through_pointer(ty, base, expr, error)
+                    self.through_pointer(ty, base, error)
                 }
             }
             _ => return None,
@@ -1440,7 +1469,8 @@ impl Checker<'_, '_> {
                         "dereference the pointer first: `(*p).{name}` (ADR 0021)"
                     ));
                 }
-                if other.slice_elem().is_some() && name == "len" {
+                if (other.slice_elem().is_some() || matches!(other, Ty::Slice(_))) && name == "len"
+                {
                     diag = diag.help("the length of a slice `s` is `len(s)` (ADR 0031)");
                 }
                 self.q.diags.push(diag);
@@ -1481,6 +1511,12 @@ impl Checker<'_, '_> {
             );
             return Ty::Error;
         };
+        if let Ty::Slice(_) = info.ty {
+            self.q
+                .diags
+                .push(whole_slice(info.ty, place.span, "written"));
+            return Ty::Error;
+        }
         match info.immutable {
             Some(Immutable::Local(id)) => {
                 let local = f.local(id);

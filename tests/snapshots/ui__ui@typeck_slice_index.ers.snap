@@ -1,0 +1,74 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_slice_index.ers
+---
+--- typeck ---
+fn elements(s: *const [u8], m: *mut [u16], i: usize) -> u8
+    let element: *const u16
+    let writable: *mut u16
+    let all: *const [u16]
+    let same: *mut [u16]
+    let again: *const [u8]
+    expr 0 assign 375..386: ()
+    expr 1 index 375..382: u16
+    expr 2 deref 375..379: [u16]
+    expr 3 local m 377..378: *mut [u16]
+    expr 4 local i 380..381: usize
+    expr 5 int 1 385..386: u16
+    expr 6 assign += 392..417: ()
+    expr 7 index 392..399: u16
+    expr 8 deref 392..396: [u16]
+    expr 9 local m 394..395: *mut [u16]
+    expr 10 local i 397..398: usize
+    expr 11 as u16 403..417: u16
+    expr 12 index 403..410: u8
+    expr 13 deref 403..407: [u8]
+    expr 14 local s 405..406: *const [u8]
+    expr 15 local i 408..409: usize
+    expr 16 &raw const 449..467: *const u16
+    expr 17 index 460..467: u16
+    expr 18 deref 460..464: [u16]
+    expr 19 local m 462..463: *mut [u16]
+    expr 20 local i 465..466: usize
+    expr 21 &raw mut 498..514: *mut u16
+    expr 22 index 507..514: u16
+    expr 23 deref 507..511: [u16]
+    expr 24 local m 509..510: *mut [u16]
+    expr 25 int 0 512..513: usize
+    expr 26 &raw const 544..557: *const [u16]
+    expr 27 deref 555..557: [u16]
+    expr 28 local m 556..557: *mut [u16]
+    expr 29 &raw mut 586..597: *mut [u16]
+    expr 30 deref 595..597: [u16]
+    expr 31 local m 596..597: *mut [u16]
+    expr 32 &raw const 628..641: *const [u8]
+    expr 33 deref 639..641: [u8]
+    expr 34 local s 640..641: *const [u8]
+    expr 35 index 647..654: u8
+    expr 36 deref 647..651: [u8]
+    expr 37 local s 649..650: *const [u8]
+    expr 38 local i 652..653: usize
+fn registers(regs: *mut volatile [u32], rows: *const [[u8; 4]]) -> u32
+    expr 39 assign 735..762: ()
+    expr 40 index 735..745: u32
+    expr 41 deref 735..742: [u32]
+    expr 42 local regs 737..741: *mut volatile [u32]
+    expr 43 int 0 743..744: usize
+    expr 44 binary | 748..762: u32
+    expr 45 index 748..758: u32
+    expr 46 deref 748..755: [u32]
+    expr 47 local regs 750..754: *mut volatile [u32]
+    expr 48 int 1 756..757: usize
+    expr 49 int 1 761..762: u32
+    expr 50 as u32 768..788: u32
+    expr 51 index 768..781: u8
+    expr 52 index 768..778: [u8; 4]
+    expr 53 deref 768..775: [[u8; 4]]
+    expr 54 local rows 770..774: *const [[u8; 4]]
+    expr 55 int 2 776..777: usize
+    expr 56 int 3 779..780: usize
+entry fn main() -> !
+    expr 57 loop 815..822: !
+panic fn on_panic() -> !
+    expr 58 loop 852..859: !

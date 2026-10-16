@@ -1,0 +1,67 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/eval_slice_index.ers
+---
+--- errors ---
+eval::panic
+
+  × the evaluation called the panic function: index out of bounds
+    ╭─[eval_slice_index.ers:46:5]
+ 45 │     let s: *const [u8] = &raw const bytes;
+ 46 │     (*s)[3]
+    ·     ───┬───
+    ·        ╰── index out of bounds
+ 47 │ }
+ 48 │ const PAST_END: u8 = past_end();
+    ·       ────┬───       ─────┬────
+    ·           │               ╰── called here
+    ·           ╰── while evaluating the constant `PAST_END`
+ 49 │ 
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::read-only-write
+
+  × a byte string cannot be written
+    ╭─[eval_slice_index.ers:54:5]
+ 51 │ // one of a `static mut` read; a volatile element is not accessed.
+ 52 │ const READ_ONLY: u8 = {
+    ·       ────┬────
+    ·           ╰── while evaluating the constant `READ_ONLY`
+ 53 │     let s: *mut [u8] = &raw const b"abc" as *mut [u8];
+ 54 │     (*s)[0] = 1;
+    ·     ─────┬─────
+    ·          ╰── written here
+ 55 │     0
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::static-mut
+
+  × `COUNTER` is a `static mut`, whose value is only known when the program runs
+    ╭─[eval_slice_index.ers:59:5]
+ 56 │ };
+ 57 │ const MUTABLE: u32 = {
+    ·       ───┬───
+    ·          ╰── while evaluating the constant `MUTABLE`
+ 58 │     let s: *const [u32] = &raw const COUNTER as *const [u32; 1];
+ 59 │     (*s)[0]
+    ·     ───┬───
+    ·        ╰── read here
+ 60 │ };
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::volatile-access
+
+  × a volatile access cannot happen at compile time
+    ╭─[eval_slice_index.ers:63:5]
+ 60 │ };
+ 61 │ const VOLATILE: u8 = {
+    ·       ────┬───
+    ·           ╰── while evaluating the constant `VOLATILE`
+ 62 │     let s: *const volatile [u8] = slice(0x1000 as *const volatile u8, 4);
+ 63 │     (*s)[0]
+    ·     ───┬───
+    ·        ╰── accessed here
+ 64 │ };
+    ╰────
+  help: this code runs at compile time (ADR 0027)

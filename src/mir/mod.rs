@@ -467,7 +467,8 @@ pub enum PlaceElem {
     Deref,
     /// The element `i` places after the one the pointer held in the place
     /// points to, with `i` the `usize` in the local. The address arithmetic
-    /// wraps and is never checked (ADR 0021).
+    /// wraps and is never checked (ADR 0021); for an element of a slice,
+    /// MIR building has already checked `i` against its length (ADR 0031).
     Offset(Local),
     /// Element `i` of the array in the place, with `i` the `usize` in the
     /// local. MIR building has already checked the bounds.

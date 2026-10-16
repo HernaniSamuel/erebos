@@ -1,0 +1,37 @@
+// Indexing a slice at its length calls the panic function (ADR 0031): the
+// index is checked against the length of the slice, not of the array it
+// was made from.
+// expect-output: 2
+// expect-output: 3
+// expect-output: panic
+// expect-exit: 1
+
+fn putc(byte: u8) {
+    let thr: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+    *thr = byte;
+}
+
+fn exit(code: u32) -> ! {
+    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+    *finisher = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    loop {}
+}
+
+entry fn main() -> ! {
+    let a: [u8; 4] = [1, 2, 3, 4];
+    // Two elements of four: the third one is out of bounds.
+    let s: *const [u8] = slice(&raw const a[1], 2);
+    let mut i: usize = 0;
+    while i <= 2 {
+        putc(b'0' + (*s)[i]);
+        putc(b'\n');
+        i += 1;
+    }
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    putc(b'p'); putc(b'a'); putc(b'n'); putc(b'i'); putc(b'c');
+    putc(b'\n');
+    exit(1)
+}

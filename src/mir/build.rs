@@ -479,6 +479,21 @@ impl Builder<'_, '_> {
                     self.temp(ty, Rvalue::Binary(*op, lhs, rhs))
                 }
             }
+            // What a slice points to has no address of its own: `&raw` of
+            // it is the slice, with the mutability asked for (ADR 0031).
+            hir::ExprKind::AddrOf { place, .. }
+                if let hir::ExprKind::Deref(pointer) = &place.kind
+                    && self.ty_of(pointer).slice_elem().is_some() =>
+            {
+                let slice = self.expr(pointer);
+                if self.current.is_none() {
+                    // The slice did not finish, and nothing follows.
+                    return Operand::Const(Const::Unit);
+                }
+                // The slice may be `*mut` or volatile, and the result not:
+                // both types have one representation, so it is a copy.
+                self.temp(ty, Rvalue::Use(slice))
+            }
             hir::ExprKind::AddrOf { mutable, place } => {
                 let place = self.place_then(place, false, true);
                 self.temp(
@@ -1063,6 +1078,12 @@ impl Builder<'_, '_> {
                         let elem = self.array_index(index, len);
                         base.project(elem)
                     }
+                    Ty::Slice(_) => {
+                        let hir::ExprKind::Deref(pointer) = &base.kind else {
+                            unreachable!("only what a slice points to has type `[T]`")
+                        };
+                        self.slice_index(pointer, index, later_writes)
+                    }
                     _ => {
                         let base = self.pointer_place(base, later_writes);
                         let index = self.fixed_index(index);
@@ -1143,6 +1164,30 @@ impl Builder<'_, '_> {
         );
         self.panic_unless(in_bounds, PanicCause::IndexOutOfBounds);
         PlaceElem::Index(local)
+    }
+
+    /// `(*slice)[index]` (ADR 0031): the index is checked against the
+    /// length at run time, which is never known while building, and the
+    /// element is then reached through the address of the first one, a
+    /// thin pointer of the slice's volatility.
+    fn slice_index(&mut self, slice: &hir::Expr, index: &hir::Expr, later_writes: bool) -> Place {
+        let slice = self.pointer_place(slice, later_writes);
+        let index = self.fixed_index(index);
+        let slice_ty = self.place_ty(slice);
+        let len = self.temp(Ty::Int(hir::IntTy::Usize), Rvalue::SliceLen(slice));
+        let in_bounds = self.temp(
+            Ty::Bool,
+            Rvalue::Binary(BinOp::Lt, Operand::Copy(Place::local(index)), len),
+        );
+        self.panic_unless(in_bounds, PanicCause::IndexOutOfBounds);
+        let address_ty = slice_ty
+            .slice_address_ty()
+            .expect("only slices point to a `[T]`");
+        match self.temp(address_ty, Rvalue::SliceAddress(slice)) {
+            // `index < len`, so the element is inside the slice.
+            Operand::Copy(address) => address.project(PlaceElem::Offset(index)),
+            Operand::Const(_) => unreachable!("temporaries are places"),
+        }
     }
 }
 

@@ -1,0 +1,41 @@
+// Indexing a slice pointer itself is an error: it would step over whole
+// `[T]`s, which have no size (ADR 0031). The help names the checked access
+// through the slice and the unchecked one through its first element.
+// Elements reached through a `*const [T]` cannot be written.
+fn index(s: *const [u8], m: *mut [u16], v: *const volatile [u32]) {
+    let a: u8 = s[0];
+    m[1] = 2;
+    let b: u32 = v[2];
+    let c: *const u8 = &raw const s[3];
+}
+
+fn through_const(s: *const [u8]) {
+    (*s)[0] = 1;
+    (*s)[1] += 1;
+    let element: *mut u8 = &raw mut (*s)[2];
+    let all: *mut [u8] = &raw mut *s;
+}
+
+// A slice has no fields; its length is `len(s)`.
+fn fields(s: *const [u8]) -> usize {
+    (*s).len + s.len
+}
+
+// A volatile access through a slice is one access of the element
+// (ADR 0023): never one of a whole aggregate, nor a too wide one.
+struct Pair { a: u32, b: u32 }
+
+fn volatile_elements(pairs: *const volatile [Pair], wide: *mut volatile [u64]) {
+    let pair: Pair = (*pairs)[0];
+    (*wide)[1] = 0;
+}
+
+// Elements too large for their distance to fit in the address space, as
+// through a thin pointer (ADR 0022).
+fn too_large(s: *const [[u32; 0x4000_0000]], i: usize) -> *const [u32; 0x4000_0000] {
+    let first: u32 = (*s)[i][0];
+    &raw const (*s)[i]
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

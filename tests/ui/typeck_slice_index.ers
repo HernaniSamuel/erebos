@@ -1,0 +1,23 @@
+// emit: typeck
+// Elements of a slice (ADR 0031): `(*s)[i]` is a place of the element
+// type, read, written through a `*mut [T]`, compound-assigned, and passed
+// to `&raw`; `&raw` of `*s` is the slice, of the mutability asked for.
+// Through a volatile slice each element is one volatile access (ADR 0023).
+fn elements(s: *const [u8], m: *mut [u16], i: usize) -> u8 {
+    (*m)[i] = 1;
+    (*m)[i] += (*s)[i] as u16;
+    let element: *const u16 = &raw const (*m)[i];
+    let writable: *mut u16 = &raw mut (*m)[0];
+    let all: *const [u16] = &raw const *m;
+    let same: *mut [u16] = &raw mut *m;
+    let again: *const [u8] = &raw const *s;
+    (*s)[i]
+}
+
+fn registers(regs: *mut volatile [u32], rows: *const [[u8; 4]]) -> u32 {
+    (*regs)[0] = (*regs)[1] | 1;
+    (*rows)[2][3] as u32
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

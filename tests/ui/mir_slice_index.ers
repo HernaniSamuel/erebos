@@ -1,0 +1,35 @@
+// emit: mir
+// `(*s)[i]` (ADR 0031): the index is checked against the length of the
+// slice, at run time even when the index is a literal, and the element is
+// then reached through the address of the first one. `&raw` of `*s` is the
+// slice itself.
+fn read(s: *const [u8], i: usize) -> u8 {
+    (*s)[i]
+}
+
+fn write(m: *mut [u32], i: usize) {
+    (*m)[i] = 7;
+}
+
+fn literal(s: *const [u8]) -> u8 {
+    (*s)[0]
+}
+
+fn addresses(m: *mut [u16], i: usize) -> *const [u16] {
+    let element: *mut u16 = &raw mut (*m)[i];
+    &raw const *m
+}
+
+// The address part keeps the slice's volatility (ADR 0023).
+fn volatile_read(regs: *const volatile [u32], i: usize) -> u32 {
+    (*regs)[i]
+}
+
+// The slice is read before the index is evaluated (ADR 0018).
+fn order(s: *const [u8], t: *const [u8]) -> u8 {
+    let mut p: *const [u8] = s;
+    (*p)[{ p = t; 0 }]
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

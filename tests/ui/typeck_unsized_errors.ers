@@ -32,13 +32,14 @@ fn never() {
     let never: [!] = loop {};
 }
 
-// What a slice points to has no size: it cannot be read, written or
-// indexed as a place.
+// What a slice points to has no size: it can be indexed or passed to
+// `&raw`, but not read or written whole, nor passed on as a value.
 fn places(s: *const [u8], m: *mut [u8]) {
     let whole: u8 = *s;
-    let element: u8 = s[0];
     *m = 0;
-    let address: *const u8 = &raw const s[1];
+    *m += 1;
+    let length: usize = len(*s);
+    let block: u8 = { *s };
 }
 
 // A cast of a slice to `[u8]` reports the type once, and no cast error.

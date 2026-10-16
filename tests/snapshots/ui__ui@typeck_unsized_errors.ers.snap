@@ -191,52 +191,68 @@ ty::unsized
  37 │ fn places(s: *const [u8], m: *mut [u8]) {
  38 │     let whole: u8 = *s;
     ·                     ─┬
-    ·                      ╰── what the slice `*const [u8]` points to has type `[u8]`
- 39 │     let element: u8 = s[0];
+    ·                      ╰── what a slice points to, read whole
+ 39 │     *m = 0;
     ╰────
-  help: the length of a slice is known only at run time; `len(s)` gives it (ADR 0031)
+  help: it can only be indexed, as in `(*s)[i]`, or passed to `&raw`; its length, known only at
+        run time, is `len(s)` (ADR 0031)
 ty::unsized
 
   × `[u8]` has no size known at compile time
-    ╭─[typeck_unsized_errors.ers:39:23]
+    ╭─[typeck_unsized_errors.ers:39:5]
  38 │     let whole: u8 = *s;
- 39 │     let element: u8 = s[0];
-    ·                       ──┬─
-    ·                         ╰── what the slice `*const [u8]` points to has type `[u8]`
- 40 │     *m = 0;
+ 39 │     *m = 0;
+    ·     ─┬
+    ·      ╰── what a slice points to, written whole
+ 40 │     *m += 1;
     ╰────
-  help: the length of a slice is known only at run time; `len(s)` gives it (ADR 0031)
+  help: it can only be indexed, as in `(*s)[i]`, or passed to `&raw`; its length, known only at
+        run time, is `len(s)` (ADR 0031)
 ty::unsized
 
   × `[u8]` has no size known at compile time
     ╭─[typeck_unsized_errors.ers:40:5]
- 39 │     let element: u8 = s[0];
- 40 │     *m = 0;
+ 39 │     *m = 0;
+ 40 │     *m += 1;
     ·     ─┬
-    ·      ╰── what the slice `*mut [u8]` points to has type `[u8]`
- 41 │     let address: *const u8 = &raw const s[1];
+    ·      ╰── what a slice points to, written whole
+ 41 │     let length: usize = len(*s);
     ╰────
-  help: the length of a slice is known only at run time; `len(s)` gives it (ADR 0031)
+  help: it can only be indexed, as in `(*s)[i]`, or passed to `&raw`; its length, known only at
+        run time, is `len(s)` (ADR 0031)
 ty::unsized
 
   × `[u8]` has no size known at compile time
-    ╭─[typeck_unsized_errors.ers:41:41]
- 40 │     *m = 0;
- 41 │     let address: *const u8 = &raw const s[1];
-    ·                                         ──┬─
-    ·                                           ╰── what the slice `*const [u8]` points to has type `[u8]`
- 42 │ }
+    ╭─[typeck_unsized_errors.ers:41:29]
+ 40 │     *m += 1;
+ 41 │     let length: usize = len(*s);
+    ·                             ─┬
+    ·                              ╰── what a slice points to, read whole
+ 42 │     let block: u8 = { *s };
     ╰────
-  help: the length of a slice is known only at run time; `len(s)` gives it (ADR 0031)
+  help: it can only be indexed, as in `(*s)[i]`, or passed to `&raw`; its length, known only at
+        run time, is `len(s)` (ADR 0031)
 ty::unsized
 
   × `[u8]` has no size known at compile time
-    ╭─[typeck_unsized_errors.ers:46:26]
- 45 │ fn slice_cast(s: *const [u8]) {
- 46 │     let cast: u32 = s as [u8];
+    ╭─[typeck_unsized_errors.ers:42:23]
+ 41 │     let length: usize = len(*s);
+ 42 │     let block: u8 = { *s };
+    ·                       ─┬
+    ·                        ╰── what a slice points to, read whole
+ 43 │ }
+    ╰────
+  help: it can only be indexed, as in `(*s)[i]`, or passed to `&raw`; its length, known only at
+        run time, is `len(s)` (ADR 0031)
+ty::unsized
+
+  × `[u8]` has no size known at compile time
+    ╭─[typeck_unsized_errors.ers:47:26]
+ 46 │ fn slice_cast(s: *const [u8]) {
+ 47 │     let cast: u32 = s as [u8];
     ·                          ──┬─
     ·                            ╰── `[u8]` as the target of a cast
- 47 │ }
+ 48 │ }
     ╰────
   help: its length is known only at run time, so it exists only behind a pointer, as a slice:
         `*const [T]` or `*mut [T]` (ADR 0031)

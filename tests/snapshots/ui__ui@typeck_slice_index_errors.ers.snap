@@ -1,0 +1,164 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_slice_index_errors.ers
+---
+--- errors ---
+ty::slice-pointer-index
+
+  × cannot index the slice `*const [u8]` itself
+   ╭─[typeck_slice_index_errors.ers:6:17]
+ 5 │ fn index(s: *const [u8], m: *mut [u16], v: *const volatile [u32]) {
+ 6 │     let a: u8 = s[0];
+   ·                 ┬
+   ·                 ╰── a slice, not a pointer to its elements
+ 7 │     m[1] = 2;
+   ╰────
+  help: index what it points to, checked against its length: `(*s)[i]`; or, unchecked, a pointer
+        to its first element: `(s as *const u8)[i]` (ADR 0031)
+ty::slice-pointer-index
+
+  × cannot index the slice `*mut [u16]` itself
+   ╭─[typeck_slice_index_errors.ers:7:5]
+ 6 │     let a: u8 = s[0];
+ 7 │     m[1] = 2;
+   ·     ┬
+   ·     ╰── a slice, not a pointer to its elements
+ 8 │     let b: u32 = v[2];
+   ╰────
+  help: index what it points to, checked against its length: `(*s)[i]`; or, unchecked, a pointer
+        to its first element: `(s as *mut u16)[i]` (ADR 0031)
+ty::slice-pointer-index
+
+  × cannot index the slice `*const volatile [u32]` itself
+   ╭─[typeck_slice_index_errors.ers:8:18]
+ 7 │     m[1] = 2;
+ 8 │     let b: u32 = v[2];
+   ·                  ┬
+   ·                  ╰── a slice, not a pointer to its elements
+ 9 │     let c: *const u8 = &raw const s[3];
+   ╰────
+  help: index what it points to, checked against its length: `(*s)[i]`; or, unchecked, a pointer
+        to its first element: `(s as *const volatile u32)[i]` (ADR 0031)
+ty::slice-pointer-index
+
+  × cannot index the slice `*const [u8]` itself
+    ╭─[typeck_slice_index_errors.ers:9:35]
+  8 │     let b: u32 = v[2];
+  9 │     let c: *const u8 = &raw const s[3];
+    ·                                   ┬
+    ·                                   ╰── a slice, not a pointer to its elements
+ 10 │ }
+    ╰────
+  help: index what it points to, checked against its length: `(*s)[i]`; or, unchecked, a pointer
+        to its first element: `(s as *const u8)[i]` (ADR 0031)
+ty::write-through-const
+
+  × cannot write through a `*const` pointer
+    ╭─[typeck_slice_index_errors.ers:13:7]
+ 12 │ fn through_const(s: *const [u8]) {
+ 13 │     (*s)[0] = 1;
+    ·       ┬
+    ·       ╰── has type `*const [u8]`
+ 14 │     (*s)[1] += 1;
+    ╰────
+  help: only `*mut` pointers can be written through
+ty::write-through-const
+
+  × cannot write through a `*const` pointer
+    ╭─[typeck_slice_index_errors.ers:14:7]
+ 13 │     (*s)[0] = 1;
+ 14 │     (*s)[1] += 1;
+    ·       ┬
+    ·       ╰── has type `*const [u8]`
+ 15 │     let element: *mut u8 = &raw mut (*s)[2];
+    ╰────
+  help: only `*mut` pointers can be written through
+ty::address-of-immutable
+
+  × cannot take a `*mut` address through a `*const` pointer
+    ╭─[typeck_slice_index_errors.ers:15:39]
+ 14 │     (*s)[1] += 1;
+ 15 │     let element: *mut u8 = &raw mut (*s)[2];
+    ·                                       ┬
+    ·                                       ╰── has type `*const [u8]`
+ 16 │     let all: *mut [u8] = &raw mut *s;
+    ╰────
+  help: use `&raw const`, or a `*mut` pointer
+ty::address-of-immutable
+
+  × cannot take a `*mut` address through a `*const` pointer
+    ╭─[typeck_slice_index_errors.ers:16:36]
+ 15 │     let element: *mut u8 = &raw mut (*s)[2];
+ 16 │     let all: *mut [u8] = &raw mut *s;
+    ·                                    ┬
+    ·                                    ╰── has type `*const [u8]`
+ 17 │ }
+    ╰────
+  help: use `&raw const`, or a `*mut` pointer
+ty::no-fields
+
+  × `[u8]` has no fields
+    ╭─[typeck_slice_index_errors.ers:21:10]
+ 20 │ fn fields(s: *const [u8]) -> usize {
+ 21 │     (*s).len + s.len
+    ·          ─┬─
+    ·           ╰── no such field
+ 22 │ }
+    ╰────
+  help: the length of a slice `s` is `len(s)` (ADR 0031)
+ty::no-fields
+
+  × `*const [u8]` has no fields
+    ╭─[typeck_slice_index_errors.ers:21:18]
+ 20 │ fn fields(s: *const [u8]) -> usize {
+ 21 │     (*s).len + s.len
+    ·                  ─┬─
+    ·                   ╰── no such field
+ 22 │ }
+    ╰────
+  help: the length of a slice `s` is `len(s)` (ADR 0031)
+ty::volatile-aggregate
+
+  × a volatile `Pair` cannot be accessed as a whole
+    ╭─[typeck_slice_index_errors.ers:29:22]
+ 28 │ fn volatile_elements(pairs: *const volatile [Pair], wide: *mut volatile [u64]) {
+ 29 │     let pair: Pair = (*pairs)[0];
+    ·                      ─────┬─────
+    ·                           ╰── access its elements or fields one at a time
+ 30 │     (*wide)[1] = 0;
+    ╰────
+  help: the width and number of the bus accesses would be up to the compiler (ADR 0023)
+ty::volatile-too-wide
+
+  × a volatile `u64` cannot be accessed in one instruction
+    ╭─[typeck_slice_index_errors.ers:30:5]
+ 29 │     let pair: Pair = (*pairs)[0];
+ 30 │     (*wide)[1] = 0;
+    ·     ─────┬────
+    ·          ╰── the widest single access is 32 bits
+ 31 │ }
+    ╰────
+  help: access it as `u32` halves, in the order the device needs (ADR 0023)
+ty::too-large
+
+  × `[u32; 1073741824]` is too large
+    ╭─[typeck_slice_index_errors.ers:36:22]
+ 35 │ fn too_large(s: *const [[u32; 0x4000_0000]], i: usize) -> *const [u32; 0x4000_0000] {
+ 36 │     let first: u32 = (*s)[i][0];
+    ·                      ──┬─
+    ·                        ╰── the distance between elements does not fit in the address space
+ 37 │     &raw const (*s)[i]
+    ╰────
+  help: objects are limited to 2147483647 bytes on this target
+ty::too-large
+
+  × `[u32; 1073741824]` is too large
+    ╭─[typeck_slice_index_errors.ers:37:16]
+ 36 │     let first: u32 = (*s)[i][0];
+ 37 │     &raw const (*s)[i]
+    ·                ──┬─
+    ·                  ╰── the distance between elements does not fit in the address space
+ 38 │ }
+    ╰────
+  help: objects are limited to 2147483647 bytes on this target

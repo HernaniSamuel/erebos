@@ -1,0 +1,95 @@
+// Elements of slices (ADR 0031): `slice` over part of a buffer, written
+// and read through `(*s)[i]`; `&raw` of an element and of `*s`; and the
+// UART written through a volatile slice, one store per element
+// (ADR 0023).
+// expect-output: hello
+// expect-output: --abc--
+// expect-output: sum 294
+// expect-output: ok
+// expect-exit: 0
+
+fn uart() -> *mut volatile [u8] {
+    slice(0x1000_0000 as *mut volatile u8, 1)
+}
+
+fn putc(byte: u8) {
+    (*uart())[0] = byte;
+}
+
+fn print(s: *const [u8]) {
+    let mut i: usize = 0;
+    while i < len(s) {
+        putc((*s)[i]);
+        i += 1;
+    }
+}
+
+fn sum(s: *const [u8]) -> u32 {
+    let mut total: u32 = 0;
+    let mut i: usize = 0;
+    while i < len(s) {
+        total += (*s)[i] as u32;
+        i += 1;
+    }
+    total
+}
+
+fn print_u32(value: u32) {
+    let mut digits: [u8; 10] = [0; 10];
+    let mut n: usize = 0;
+    let mut rest: u32 = value;
+    loop {
+        (*(&raw mut digits as *mut [u8]))[9 - n] = b'0' + (rest % 10) as u8;
+        n += 1;
+        rest /= 10;
+        if rest == 0 {
+            break;
+        }
+    }
+    print(slice(&raw const digits[10 - n], n));
+}
+
+fn exit(code: u32) -> ! {
+    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+    *finisher = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    loop {}
+}
+
+entry fn main() -> ! {
+    print(&raw const b"hello\n");
+
+    // The middle of a buffer, written through a slice of it.
+    let mut line: [u8; 8] = b"-------\n";
+    let middle: *mut [u8] = slice(&raw mut line[2], 3);
+    let mut i: usize = 0;
+    while i < len(middle) {
+        (*middle)[i] = b'a' + i as u8;
+        i += 1;
+    }
+    print(&raw const line);
+
+    print(&raw const b"sum ");
+    print_u32(sum(&raw const b"abc"));
+    putc(b'\n');
+
+    // `&raw` of an element points into the buffer, and `&raw` of `*s` is
+    // the slice itself.
+    let element: *mut u8 = &raw mut (*middle)[1];
+    *element = b'X';
+    let same: *const [u8] = &raw const *middle;
+    let mut failures: u32 = 0;
+    if line[3] != b'X' || (*same)[1] != b'X' || len(same) != 3 {
+        failures += 1;
+    }
+    if (same as *const u8) != (&raw const line[2]) {
+        failures += 1;
+    }
+    if failures == 0 {
+        print(&raw const b"ok\n");
+    }
+    exit(failures)
+}
+
+panic fn on_panic() -> ! {
+    exit(99)
+}
