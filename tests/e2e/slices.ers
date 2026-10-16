@@ -1,0 +1,96 @@
+// Slices at run time (ADR 0031): the length of a byte string, slices made
+// from arrays and with `slice`, and slices passed to and returned from C
+// functions as the C struct `{ const T *ptr; size_t len; }`, in both
+// directions (ADR 0025).
+// link-c: slices.c
+// expect-output: len 5 0 3
+// expect-output: hello
+// expect-output: part ell
+// expect-output: sum 500
+// expect-output: tail ello
+// expect-output: late o
+// expect-output: from c 9
+// expect-exit: 0
+
+extern fn c_sum(s: *const [u8]) -> u32;
+extern fn c_tail(s: *const [u8]) -> *const [u8];
+extern fn c_late(a: u32, b: u32, c: u32, d: u32, e: u32, f: u32, g: u32, s: *const [u8]) -> *const [u8];
+extern fn c_calls_erebos() -> usize;
+
+// Called from C.
+fn erebos_skip(s: *const [u8], n: usize) -> *const [u8] {
+    slice(&raw const (s as *const u8)[n], len(s) - n)
+}
+
+fn putc(byte: u8) {
+    let thr: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+    *thr = byte;
+}
+
+fn print(s: *const [u8]) {
+    let bytes: *const u8 = s as *const u8;
+    let mut i: usize = 0;
+    while i < len(s) {
+        putc(bytes[i]);
+        i += 1;
+    }
+}
+
+fn print_u32(value: u32) {
+    let mut digits: [u8; 10] = [0; 10];
+    let mut n: usize = 0;
+    let mut rest: u32 = value;
+    loop {
+        digits[9 - n] = b'0' + (rest % 10) as u8;
+        n += 1;
+        rest /= 10;
+        if rest == 0 {
+            break;
+        }
+    }
+    print(slice(&raw const digits[10 - n], n));
+}
+
+fn exit(code: u32) -> ! {
+    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+    *finisher = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    loop {}
+}
+
+entry fn main() -> ! {
+    print(&raw const b"len ");
+    print_u32(len(&raw const b"hello") as u32);
+    putc(b' ');
+    print_u32(len(&raw const b"") as u32);
+    let three: [u16; 3] = [1, 2, 3];
+    putc(b' ');
+    print_u32(len(&raw const three) as u32);
+    putc(b'\n');
+
+    let mut word: [u8; 6] = b"hello\n";
+    let whole: *mut [u8] = &raw mut word;
+    print(whole);
+    print(&raw const b"part ");
+    print(slice(&raw const word[1], 3));
+    putc(b'\n');
+
+    let hundreds: [u8; 4] = [200, 100, 150, 50];
+    print(&raw const b"sum ");
+    print_u32(c_sum(&raw const hundreds));
+    putc(b'\n');
+
+    print(&raw const b"tail ");
+    print(c_tail(&raw const b"hello\n"));
+
+    print(&raw const b"late ");
+    print(c_late(1, 0, 0, 1, 0, 1, 1, &raw const b"hello\n"));
+
+    print(&raw const b"from c ");
+    print_u32(c_calls_erebos() as u32);
+    putc(b'\n');
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(1)
+}

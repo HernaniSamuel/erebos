@@ -1,0 +1,166 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/eval_slices.ers
+---
+--- llvm-ir ---
+; ModuleID = 'erebos'
+source_filename = "erebos"
+target datalayout = "e-m:e-p:32:32-i64:64-n32-S128"
+target triple = "riscv32-unknown-none-elf"
+
+module asm "\09.section .text.start, \22ax\22, @progbits"
+module asm "\09.globl _start"
+module asm "\09.type _start, @function"
+module asm "_start:"
+module asm "\09li sp, 0x88000000"
+module asm "\09la t0, __bss_start"
+module asm "\09la t1, __bss_end"
+module asm ".Lzero_bss:"
+module asm "\09bgeu t0, t1, .Lcopy_data"
+module asm "\09sw zero, 0(t0)"
+module asm "\09addi t0, t0, 4"
+module asm "\09j .Lzero_bss"
+module asm ".Lcopy_data:"
+module asm "\09la t0, __data_start"
+module asm "\09la t1, __data_end"
+module asm "\09la t2, __data_load"
+module asm ".Lcopy_word:"
+module asm "\09bgeu t0, t1, .Lenter"
+module asm "\09lw t3, 0(t2)"
+module asm "\09sw t3, 0(t0)"
+module asm "\09addi t0, t0, 4"
+module asm "\09addi t2, t2, 4"
+module asm "\09j .Lcopy_word"
+module asm ".Lenter:"
+module asm "\09j main"
+
+@TABLE = constant [8 x i8] c"\0A\00\14\00\1E\00(\00", align 2
+@t = external constant [1 x i8], align 1
+@ALL = constant <{ ptr, [4 x i8] }> <{ ptr @TABLE, [4 x i8] c"\04\00\00\00" }>, align 4
+@TAIL = constant <{ ptr, [4 x i8] }> <{ ptr getelementptr (i8, ptr @TABLE, i32 2), [4 x i8] c"\03\00\00\00" }>, align 4
+@EMPTY_END = constant <{ ptr, [4 x i8] }> <{ ptr getelementptr (i8, ptr @TABLE, i32 8), [4 x i8] zeroinitializer }>, align 4
+@GREETING = constant <{ ptr, [4 x i8] }> <{ ptr @bytes, [4 x i8] c"\05\00\00\00" }>, align 4
+@MESSAGES = constant <{ ptr, [4 x i8], ptr, [4 x i8] }> <{ ptr @bytes.1, [4 x i8] c"\03\00\00\00", ptr @bytes.2, [4 x i8] c"\05\00\00\00" }>, align 4
+@EXTERNAL = constant <{ ptr, [4 x i8] }> <{ ptr @t, [4 x i8] c"\10\00\00\00" }>, align 4
+@FROM_ADDRESS = constant [8 x i8] c"\00\10\00\00\08\00\00\00", align 4
+@LENGTH_POINTER = constant <{ [4 x i8], ptr }> <{ [4 x i8] c"\00\10\00\00", ptr @TABLE }>, align 4
+@RESULTS = global [20 x i8] zeroinitializer, align 4
+@bytes = private unnamed_addr constant [5 x i8] c"hello", align 1
+@bytes.1 = private unnamed_addr constant [3 x i8] c"one", align 1
+@bytes.2 = private unnamed_addr constant [5 x i8] c"three", align 1
+
+; Function Attrs: nounwind null_pointer_is_valid
+define [2 x i32] @pointer_in_length() #0 {
+bb0:
+  %0 = alloca [2 x i32], align 8
+  %_0 = alloca { ptr, i32 }, align 4
+  %_1 = alloca { ptr, i32 }, align 4
+  %_3 = alloca { ptr, i32 }, align 4
+  %1 = getelementptr inbounds nuw { ptr, i32 }, ptr %_3, i32 0, i32 0
+  store ptr inttoptr (i32 4096 to ptr), ptr %1, align 4
+  %2 = getelementptr inbounds nuw { ptr, i32 }, ptr %_3, i32 0, i32 1
+  store i32 0, ptr %2, align 4
+  call void @llvm.memmove.p0.p0.i32(ptr align 4 %_1, ptr align 4 %_3, i32 8, i1 false)
+  %3 = getelementptr ptr, ptr %_1, i32 1
+  store ptr @TABLE, ptr %3, align 4
+  call void @llvm.memmove.p0.p0.i32(ptr align 4 %_0, ptr align 4 %_1, i32 8, i1 false)
+  call void @llvm.memcpy.p0.p0.i32(ptr align 8 %0, ptr align 4 %_0, i32 8, i1 false)
+  %4 = load [2 x i32], ptr %0, align 4
+  ret [2 x i32] %4
+}
+
+; Function Attrs: nounwind null_pointer_is_valid
+define i32 @sum([2 x i32] %0) #0 {
+bb0:
+  %1 = alloca [2 x i32], align 8
+  %_1 = alloca { ptr, i32 }, align 4
+  store [2 x i32] %0, ptr %1, align 4
+  call void @llvm.memcpy.p0.p0.i32(ptr align 4 %_1, ptr align 8 %1, i32 8, i1 false)
+  %2 = getelementptr inbounds nuw { ptr, i32 }, ptr %_1, i32 0, i32 0
+  %3 = load ptr, ptr %2, align 4
+  br label %bb1
+
+bb1:                                              ; preds = %bb2, %bb0
+  %_3.0 = phi i32 [ 0, %bb0 ], [ %10, %bb2 ]
+  %_4.0 = phi i32 [ 0, %bb0 ], [ %11, %bb2 ]
+  %4 = getelementptr inbounds nuw { ptr, i32 }, ptr %_1, i32 0, i32 1
+  %5 = load i32, ptr %4, align 4
+  %6 = icmp ult i32 %_4.0, %5
+  br i1 %6, label %bb2, label %bb3
+
+bb2:                                              ; preds = %bb1
+  %7 = getelementptr i16, ptr %3, i32 %_4.0
+  %8 = load i16, ptr %7, align 2
+  %9 = zext i16 %8 to i32
+  %10 = add i32 %_3.0, %9
+  %11 = add i32 %_4.0, 1
+  br label %bb1
+
+bb3:                                              ; preds = %bb1
+  ret i32 %_3.0
+}
+
+; Function Attrs: nounwind null_pointer_is_valid
+define [2 x i32] @sub([2 x i32] %0, i32 %1) #0 {
+bb0:
+  %2 = alloca [2 x i32], align 8
+  %3 = alloca [2 x i32], align 8
+  %_0 = alloca { ptr, i32 }, align 4
+  %_1 = alloca { ptr, i32 }, align 4
+  %_9 = alloca { ptr, i32 }, align 4
+  store [2 x i32] %0, ptr %3, align 4
+  call void @llvm.memcpy.p0.p0.i32(ptr align 4 %_1, ptr align 8 %3, i32 8, i1 false)
+  %4 = getelementptr inbounds nuw { ptr, i32 }, ptr %_1, i32 0, i32 0
+  %5 = load ptr, ptr %4, align 4
+  %6 = getelementptr i16, ptr %5, i32 %1
+  %7 = getelementptr inbounds nuw { ptr, i32 }, ptr %_1, i32 0, i32 1
+  %8 = load i32, ptr %7, align 4
+  %9 = sub i32 %8, %1
+  %10 = getelementptr inbounds nuw { ptr, i32 }, ptr %_9, i32 0, i32 0
+  store ptr %6, ptr %10, align 4
+  %11 = getelementptr inbounds nuw { ptr, i32 }, ptr %_9, i32 0, i32 1
+  store i32 %9, ptr %11, align 4
+  call void @llvm.memcpy.p0.p0.i32(ptr align 4 %_0, ptr align 4 %_9, i32 8, i1 false)
+  call void @llvm.memcpy.p0.p0.i32(ptr align 8 %2, ptr align 4 %_0, i32 8, i1 false)
+  %12 = load [2 x i32], ptr %2, align 4
+  ret [2 x i32] %12
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @main() #1 {
+bb0:
+  %0 = getelementptr i32, ptr @RESULTS, i32 0
+  store i32 100, ptr %0, align 4
+  %1 = getelementptr i32, ptr @RESULTS, i32 1
+  store i32 90, ptr %1, align 4
+  %2 = getelementptr i32, ptr @RESULTS, i32 2
+  store i32 3, ptr %2, align 4
+  %3 = getelementptr i32, ptr @RESULTS, i32 3
+  store i32 5, ptr %3, align 4
+  %4 = getelementptr i32, ptr @RESULTS, i32 4
+  store i32 8, ptr %4, align 4
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @on_panic() #1 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: readwrite)
+declare void @llvm.memmove.p0.p0.i32(ptr writeonly captures(none), ptr readonly captures(none), i32, i1 immarg) #2
+
+; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: readwrite)
+declare void @llvm.memcpy.p0.p0.i32(ptr noalias writeonly captures(none), ptr noalias readonly captures(none), i32, i1 immarg) #2
+
+attributes #0 = { nounwind null_pointer_is_valid }
+attributes #1 = { noreturn nounwind null_pointer_is_valid }
+attributes #2 = { nocallback nofree nounwind willreturn memory(argmem: readwrite) }

@@ -1,0 +1,5 @@
+// emit: ast
+// `[T]`, the pointee of a slice (ADR 0031); `[T; N]` stays an array.
+fn slices(s: *const [u8], m: *mut volatile [[u16; 2]]) -> *mut [*const [u8]] {
+    loop {}
+}

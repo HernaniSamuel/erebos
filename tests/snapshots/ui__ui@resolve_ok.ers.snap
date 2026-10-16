@@ -129,6 +129,7 @@ Hir {
     statics: [],
     comptime_blocks: [],
     never_in_memory: [],
+    unsized_types: [],
     entry: FnId(
         0,
     ),

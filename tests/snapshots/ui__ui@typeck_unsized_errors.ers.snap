@@ -1,0 +1,242 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_unsized_errors.ers
+---
+--- errors ---
+ty::unsized
+
+  × `[u8]` has no size known at compile time
+   ╭─[typeck_unsized_errors.ers:5:31]
+ 4 │ // type containing it then causes no further error.
+ 5 │ struct Field { a: u32, bytes: [u8] }
+   ·                               ──┬─
+   ·                                 ╰── `[u8]` as the type of a field
+ 6 │ 
+   ╰────
+  help: its length is known only at run time, so it exists only behind a pointer, as a slice:
+        `*const [T]` or `*mut [T]` (ADR 0031)
+ty::unsized
+
+  × `[u8]` has no size known at compile time
+   ╭─[typeck_unsized_errors.ers:7:16]
+ 6 │ 
+ 7 │ static STATIC: [u8] = 0;
+   ·                ──┬─
+   ·                  ╰── `[u8]` as the type of a static
+ 8 │ extern static EXTERN: [u8];
+   ╰────
+  help: its length is known only at run time, so it exists only behind a pointer, as a slice:
+        `*const [T]` or `*mut [T]` (ADR 0031)
+ty::unsized
+
+  × `[u8]` has no size known at compile time
+   ╭─[typeck_unsized_errors.ers:8:23]
+ 7 │ static STATIC: [u8] = 0;
+ 8 │ extern static EXTERN: [u8];
+   ·                       ──┬─
+   ·                         ╰── `[u8]` as the type of a static
+ 9 │ const CONST: [u8] = 0;
+   ╰────
+  help: its length is known only at run time, so it exists only behind a pointer, as a slice:
+        `*const [T]` or `*mut [T]` (ADR 0031)
+ty::unsized
+
+  × `[u8]` has no size known at compile time
+    ╭─[typeck_unsized_errors.ers:9:14]
+  8 │ extern static EXTERN: [u8];
+  9 │ const CONST: [u8] = 0;
+    ·              ──┬─
+    ·                ╰── `[u8]` as the type of a constant
+ 10 │ 
+    ╰────
+  help: its length is known only at run time, so it exists only behind a pointer, as a slice:
+        `*const [T]` or `*mut [T]` (ADR 0031)
+ty::unsized
+
+  × `[u8]` has no size known at compile time
+    ╭─[typeck_unsized_errors.ers:11:21]
+ 10 │ 
+ 11 │ fn parameter(bytes: [u8]) {}
+    ·                     ──┬─
+    ·                       ╰── `[u8]` as the type of a parameter
+ 12 │ 
+    ╰────
+  help: its length is known only at run time, so it exists only behind a pointer, as a slice:
+        `*const [T]` or `*mut [T]` (ADR 0031)
+ty::unsized
+
+  × `[u8]` has no size known at compile time
+    ╭─[typeck_unsized_errors.ers:13:13]
+ 12 │ 
+ 13 │ fn ret() -> [u8] { loop {} }
+    ·             ──┬─
+    ·               ╰── `[u8]` as a return type
+ 14 │ 
+    ╰────
+  help: its length is known only at run time, so it exists only behind a pointer, as a slice:
+        `*const [T]` or `*mut [T]` (ADR 0031)
+ty::unsized
+
+  × `[u8]` has no size known at compile time
+    ╭─[typeck_unsized_errors.ers:16:19]
+ 15 │ fn values() {
+ 16 │     let variable: [u8] = loop {};
+    ·                   ──┬─
+    ·                     ╰── `[u8]` as the type of a variable
+ 17 │     let elements: [[u8]; 2] = loop {};
+    ╰────
+  help: its length is known only at run time, so it exists only behind a pointer, as a slice:
+        `*const [T]` or `*mut [T]` (ADR 0031)
+ty::unsized
+
+  × `[u8]` has no size known at compile time
+    ╭─[typeck_unsized_errors.ers:17:20]
+ 16 │     let variable: [u8] = loop {};
+ 17 │     let elements: [[u8]; 2] = loop {};
+    ·                    ──┬─
+    ·                      ╰── `[u8]` as an array element
+ 18 │     let cast: u32 = 0 as [u8];
+    ╰────
+  help: its length is known only at run time, so it exists only behind a pointer, as a slice:
+        `*const [T]` or `*mut [T]` (ADR 0031)
+ty::unsized
+
+  × `[u8]` has no size known at compile time
+    ╭─[typeck_unsized_errors.ers:18:26]
+ 17 │     let elements: [[u8]; 2] = loop {};
+ 18 │     let cast: u32 = 0 as [u8];
+    ·                          ──┬─
+    ·                            ╰── `[u8]` as the target of a cast
+ 19 │ }
+    ╰────
+  help: its length is known only at run time, so it exists only behind a pointer, as a slice:
+        `*const [T]` or `*mut [T]` (ADR 0031)
+ty::unsized
+
+  × `[u8]` has no size known at compile time
+    ╭─[typeck_unsized_errors.ers:22:13]
+ 21 │ fn layouts() -> usize {
+ 22 │     size_of([u8]) + align_of([u16]) + offset_of([u8], a) + size_of(Field)
+    ·             ──┬─
+    ·               ╰── `[u8]` as the operand of `size_of`
+ 23 │ }
+    ╰────
+  help: its length is known only at run time, so it exists only behind a pointer, as a slice:
+        `*const [T]` or `*mut [T]` (ADR 0031)
+ty::unsized
+
+  × `[u16]` has no size known at compile time
+    ╭─[typeck_unsized_errors.ers:22:30]
+ 21 │ fn layouts() -> usize {
+ 22 │     size_of([u8]) + align_of([u16]) + offset_of([u8], a) + size_of(Field)
+    ·                              ──┬──
+    ·                                ╰── `[u16]` as the operand of `align_of`
+ 23 │ }
+    ╰────
+  help: its length is known only at run time, so it exists only behind a pointer, as a slice:
+        `*const [T]` or `*mut [T]` (ADR 0031)
+ty::unsized
+
+  × `[u8]` has no size known at compile time
+    ╭─[typeck_unsized_errors.ers:22:49]
+ 21 │ fn layouts() -> usize {
+ 22 │     size_of([u8]) + align_of([u16]) + offset_of([u8], a) + size_of(Field)
+    ·                                                 ──┬─
+    ·                                                   ╰── `[u8]` as the operand of `offset_of`
+ 23 │ }
+    ╰────
+  help: its length is known only at run time, so it exists only behind a pointer, as a slice:
+        `*const [T]` or `*mut [T]` (ADR 0031)
+ty::unsized
+
+  × `[u8]` has no size known at compile time
+    ╭─[typeck_unsized_errors.ers:27:25]
+ 26 │ fn slice_elements(arrays: *const [[u8; 4]]) {
+ 27 │     let nested: *const [[u8]] = 0x1000 as *const [[u8]];
+    ·                         ──┬─
+    ·                           ╰── `[u8]` as the element type of a slice
+ 28 │ }
+    ╰────
+  help: its length is known only at run time, so it exists only behind a pointer, as a slice:
+        `*const [T]` or `*mut [T]` (ADR 0031)
+ty::unsized
+
+  × `[u8]` has no size known at compile time
+    ╭─[typeck_unsized_errors.ers:27:51]
+ 26 │ fn slice_elements(arrays: *const [[u8; 4]]) {
+ 27 │     let nested: *const [[u8]] = 0x1000 as *const [[u8]];
+    ·                                                   ──┬─
+    ·                                                     ╰── `[u8]` as the element type of a slice
+ 28 │ }
+    ╰────
+  help: its length is known only at run time, so it exists only behind a pointer, as a slice:
+        `*const [T]` or `*mut [T]` (ADR 0031)
+ty::never-in-memory
+
+  × `!` is not a type of memory
+    ╭─[typeck_unsized_errors.ers:32:17]
+ 31 │ fn never() {
+ 32 │     let never: [!] = loop {};
+    ·                 ┬
+    ·                 ╰── `!` as the element type of a slice
+ 33 │ }
+    ╰────
+  help: `!` is the type of expressions that do not finish, so no memory holds one; for a type
+        without data, use `()` (ADR 0034)
+ty::unsized
+
+  × `[u8]` has no size known at compile time
+    ╭─[typeck_unsized_errors.ers:38:21]
+ 37 │ fn places(s: *const [u8], m: *mut [u8]) {
+ 38 │     let whole: u8 = *s;
+    ·                     ─┬
+    ·                      ╰── what the slice `*const [u8]` points to has type `[u8]`
+ 39 │     let element: u8 = s[0];
+    ╰────
+  help: the length of a slice is known only at run time; `len(s)` gives it (ADR 0031)
+ty::unsized
+
+  × `[u8]` has no size known at compile time
+    ╭─[typeck_unsized_errors.ers:39:23]
+ 38 │     let whole: u8 = *s;
+ 39 │     let element: u8 = s[0];
+    ·                       ──┬─
+    ·                         ╰── what the slice `*const [u8]` points to has type `[u8]`
+ 40 │     *m = 0;
+    ╰────
+  help: the length of a slice is known only at run time; `len(s)` gives it (ADR 0031)
+ty::unsized
+
+  × `[u8]` has no size known at compile time
+    ╭─[typeck_unsized_errors.ers:40:5]
+ 39 │     let element: u8 = s[0];
+ 40 │     *m = 0;
+    ·     ─┬
+    ·      ╰── what the slice `*mut [u8]` points to has type `[u8]`
+ 41 │     let address: *const u8 = &raw const s[1];
+    ╰────
+  help: the length of a slice is known only at run time; `len(s)` gives it (ADR 0031)
+ty::unsized
+
+  × `[u8]` has no size known at compile time
+    ╭─[typeck_unsized_errors.ers:41:41]
+ 40 │     *m = 0;
+ 41 │     let address: *const u8 = &raw const s[1];
+    ·                                         ──┬─
+    ·                                           ╰── what the slice `*const [u8]` points to has type `[u8]`
+ 42 │ }
+    ╰────
+  help: the length of a slice is known only at run time; `len(s)` gives it (ADR 0031)
+ty::unsized
+
+  × `[u8]` has no size known at compile time
+    ╭─[typeck_unsized_errors.ers:46:26]
+ 45 │ fn slice_cast(s: *const [u8]) {
+ 46 │     let cast: u32 = s as [u8];
+    ·                          ──┬─
+    ·                            ╰── `[u8]` as the target of a cast
+ 47 │ }
+    ╰────
+  help: its length is known only at run time, so it exists only behind a pointer, as a slice:
+        `*const [T]` or `*mut [T]` (ADR 0031)

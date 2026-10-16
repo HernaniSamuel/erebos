@@ -1,0 +1,50 @@
+// emit: typeck
+// `[T]` has no size: it exists only behind a pointer, as a slice
+// (ADR 0031). Each position that needs a size reports it once, and the
+// type containing it then causes no further error.
+struct Field { a: u32, bytes: [u8] }
+
+static STATIC: [u8] = 0;
+extern static EXTERN: [u8];
+const CONST: [u8] = 0;
+
+fn parameter(bytes: [u8]) {}
+
+fn ret() -> [u8] { loop {} }
+
+fn values() {
+    let variable: [u8] = loop {};
+    let elements: [[u8]; 2] = loop {};
+    let cast: u32 = 0 as [u8];
+}
+
+fn layouts() -> usize {
+    size_of([u8]) + align_of([u16]) + offset_of([u8], a) + size_of(Field)
+}
+
+// A slice of slices; `[[u8; 4]]`, a slice of arrays, is fine.
+fn slice_elements(arrays: *const [[u8; 4]]) {
+    let nested: *const [[u8]] = 0x1000 as *const [[u8]];
+}
+
+// `!` is reported, and the slice of it then is not (ADR 0034).
+fn never() {
+    let never: [!] = loop {};
+}
+
+// What a slice points to has no size: it cannot be read, written or
+// indexed as a place.
+fn places(s: *const [u8], m: *mut [u8]) {
+    let whole: u8 = *s;
+    let element: u8 = s[0];
+    *m = 0;
+    let address: *const u8 = &raw const s[1];
+}
+
+// A cast of a slice to `[u8]` reports the type once, and no cast error.
+fn slice_cast(s: *const [u8]) {
+    let cast: u32 = s as [u8];
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

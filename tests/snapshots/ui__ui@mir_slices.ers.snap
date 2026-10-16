@@ -1,0 +1,105 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/mir_slices.ers
+---
+--- mir ---
+fn take(_1: *const [u8]) -> usize {
+    let _0: usize;
+    let _1: *const [u8]; // s
+    let _2: usize;
+
+    bb0: {
+        _2 = len(_1);
+        _0 = copy _2;
+        return;
+    }
+}
+
+fn convert(_1: *const [u8; 4]) -> usize {
+    let _0: usize;
+    let _1: *const [u8; 4]; // a
+    let _2: *const [u8]; // s
+    let _3: *const [u8];
+    let _4: *const [u8];
+    let _5: usize;
+    let _6: usize;
+    let _7: *const [u8; 2];
+    let _8: *const [u8; 2];
+    let _9: *const [u8];
+    let _10: usize;
+    let _11: usize;
+
+    bb0: {
+        _3 = slice(copy _1, const 4_usize);
+        _2 = copy _3;
+        _4 = slice(copy _1, const 4_usize);
+        _5 = call take(copy _4);
+        _6 = copy _5;
+        _7 = const b"hi";
+        _8 = &raw const (*_7);
+        _9 = slice(copy _8, const 2_usize);
+        _10 = len(_9);
+        _11 = Add(copy _6, copy _10);
+        _0 = copy _11;
+        return;
+    }
+}
+
+fn make(_1: *const u8, _2: usize) -> *const [u8] {
+    let _0: *const [u8];
+    let _1: *const u8; // p
+    let _2: usize; // n
+    let _3: *const [u8];
+
+    bb0: {
+        _3 = slice(copy _1, copy _2);
+        _0 = copy _3;
+        return;
+    }
+}
+
+fn casts(_1: *const [u8], _2: *const [u8; 4]) -> *const u8 {
+    let _0: *const u8;
+    let _1: *const [u8]; // s
+    let _2: *const [u8; 4]; // a
+    let _3: *mut [u8]; // writable
+    let _4: *const [u8]; // explicit
+    let _5: *mut [u8];
+    let _6: *const [u8];
+    let _7: *const u8;
+
+    bb0: {
+        _5 = copy _1;
+        _3 = copy _5;
+        _6 = slice(copy _2, const 4_usize);
+        _4 = copy _6;
+        _7 = address(_1);
+        _0 = copy _7;
+        return;
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}

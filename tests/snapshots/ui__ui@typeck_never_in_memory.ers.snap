@@ -132,7 +132,7 @@ ty::never-in-memory
  17 │     let s: *const *const ! = 0x1000 as *const *const !;
     ·                          ┬
     ·                          ╰── `!` as the pointee of a pointer
- 18 │ }
+ 18 │     let t: *const [!] = 0x1000 as *const [!];
     ╰────
   help: `!` is the type of expressions that do not finish, so no memory holds one; for a type
         without data, use `()` (ADR 0034)
@@ -144,124 +144,148 @@ ty::never-in-memory
  17 │     let s: *const *const ! = 0x1000 as *const *const !;
     ·                                                      ┬
     ·                                                      ╰── `!` as the pointee of a pointer
- 18 │ }
+ 18 │     let t: *const [!] = 0x1000 as *const [!];
     ╰────
   help: `!` is the type of expressions that do not finish, so no memory holds one; for a type
         without data, use `()` (ADR 0034)
 ty::never-in-memory
 
   × `!` is not a type of memory
-    ╭─[typeck_never_in_memory.ers:21:17]
- 20 │ fn arrays() {
- 21 │     let empty: [!; 0] = [];
+    ╭─[typeck_never_in_memory.ers:18:20]
+ 17 │     let s: *const *const ! = 0x1000 as *const *const !;
+ 18 │     let t: *const [!] = 0x1000 as *const [!];
+    ·                    ┬
+    ·                    ╰── `!` as the element type of a slice
+ 19 │ }
+    ╰────
+  help: `!` is the type of expressions that do not finish, so no memory holds one; for a type
+        without data, use `()` (ADR 0034)
+ty::never-in-memory
+
+  × `!` is not a type of memory
+    ╭─[typeck_never_in_memory.ers:18:43]
+ 17 │     let s: *const *const ! = 0x1000 as *const *const !;
+ 18 │     let t: *const [!] = 0x1000 as *const [!];
+    ·                                           ┬
+    ·                                           ╰── `!` as the element type of a slice
+ 19 │ }
+    ╰────
+  help: `!` is the type of expressions that do not finish, so no memory holds one; for a type
+        without data, use `()` (ADR 0034)
+ty::never-in-memory
+
+  × `!` is not a type of memory
+    ╭─[typeck_never_in_memory.ers:22:17]
+ 21 │ fn arrays() {
+ 22 │     let empty: [!; 0] = [];
     ·                 ┬
     ·                 ╰── `!` as an array element
- 22 │ }
+ 23 │ }
     ╰────
   help: `!` is the type of expressions that do not finish, so no memory holds one; for a type
         without data, use `()` (ADR 0034)
 ty::never-in-memory
 
   × `!` is not a type of memory
-    ╭─[typeck_never_in_memory.ers:25:33]
- 24 │ fn layouts() -> usize {
- 25 │     size_of(Measured) + size_of(!) + align_of(!) + offset_of(!, a)
+    ╭─[typeck_never_in_memory.ers:26:33]
+ 25 │ fn layouts() -> usize {
+ 26 │     size_of(Measured) + size_of(!) + align_of(!) + offset_of(!, a)
     ·                                 ┬
     ·                                 ╰── `!` as the operand of `size_of`
- 26 │ }
+ 27 │ }
     ╰────
   help: `!` is the type of expressions that do not finish, so no memory holds one; for a type
         without data, use `()` (ADR 0034)
 ty::never-in-memory
 
   × `!` is not a type of memory
-    ╭─[typeck_never_in_memory.ers:25:47]
- 24 │ fn layouts() -> usize {
- 25 │     size_of(Measured) + size_of(!) + align_of(!) + offset_of(!, a)
+    ╭─[typeck_never_in_memory.ers:26:47]
+ 25 │ fn layouts() -> usize {
+ 26 │     size_of(Measured) + size_of(!) + align_of(!) + offset_of(!, a)
     ·                                               ┬
     ·                                               ╰── `!` as the operand of `align_of`
- 26 │ }
+ 27 │ }
     ╰────
   help: `!` is the type of expressions that do not finish, so no memory holds one; for a type
         without data, use `()` (ADR 0034)
 ty::never-in-memory
 
   × `!` is not a type of memory
-    ╭─[typeck_never_in_memory.ers:25:62]
- 24 │ fn layouts() -> usize {
- 25 │     size_of(Measured) + size_of(!) + align_of(!) + offset_of(!, a)
+    ╭─[typeck_never_in_memory.ers:26:62]
+ 25 │ fn layouts() -> usize {
+ 26 │     size_of(Measured) + size_of(!) + align_of(!) + offset_of(!, a)
     ·                                                              ┬
     ·                                                              ╰── `!` as the operand of `offset_of`
- 26 │ }
+ 27 │ }
     ╰────
   help: `!` is the type of expressions that do not finish, so no memory holds one; for a type
         without data, use `()` (ADR 0034)
 ty::never-in-memory
 
   × `!` is not a type of memory
-    ╭─[typeck_never_in_memory.ers:29:5]
- 28 │ fn values() -> u32 {
- 29 │     comptime loop {}
+    ╭─[typeck_never_in_memory.ers:30:5]
+ 29 │ fn values() -> u32 {
+ 30 │     comptime loop {}
     ·     ────────┬───────
     ·             ╰── `!` as the value of a `comptime` expression
- 30 │ }
+ 31 │ }
     ╰────
   help: `!` is the type of expressions that do not finish, so no memory holds one; for a type
         without data, use `()` (ADR 0034)
 ty::never-in-memory
 
   × `!` is not a type of memory
-    ╭─[typeck_never_in_memory.ers:33:36]
- 32 │ fn addresses() {
- 33 │     let p: *const u32 = &raw const *(loop {});
+    ╭─[typeck_never_in_memory.ers:34:36]
+ 33 │ fn addresses() {
+ 34 │     let p: *const u32 = &raw const *(loop {});
     ·                                    ─────┬────
     ·                                         ╰── `!` as the type of a place under `&raw`
- 34 │     let x: ! = loop {};
+ 35 │     let x: ! = loop {};
     ╰────
   help: `!` is the type of expressions that do not finish, so no memory holds one; for a type
         without data, use `()` (ADR 0034)
 ty::never-in-memory
 
   × `!` is not a type of memory
-    ╭─[typeck_never_in_memory.ers:35:36]
- 34 │     let x: ! = loop {};
- 35 │     let q: *const u32 = &raw const x;
+    ╭─[typeck_never_in_memory.ers:36:36]
+ 35 │     let x: ! = loop {};
+ 36 │     let q: *const u32 = &raw const x;
     ·                                    ┬
     ·                                    ╰── `!` as the type of a place under `&raw`
- 36 │ }
+ 37 │ }
     ╰────
   help: `!` is the type of expressions that do not finish, so no memory holds one; for a type
         without data, use `()` (ADR 0034)
 ty::never-in-memory
 
   × `!` is not a type of memory
-    ╭─[typeck_never_in_memory.ers:41:30]
- 40 │     let x: u32 = 1;
- 41 │     *(&raw const x as *const !)
+    ╭─[typeck_never_in_memory.ers:42:30]
+ 41 │     let x: u32 = 1;
+ 42 │     *(&raw const x as *const !)
     ·                              ┬
     ·                              ╰── `!` as the pointee of a pointer
- 42 │ }
+ 43 │ }
     ╰────
   help: `!` is the type of expressions that do not finish, so no memory holds one; for a type
         without data, use `()` (ADR 0034)
 ty::mismatched-types
 
   × mismatched types
-    ╭─[typeck_never_in_memory.ers:49:35]
- 48 │ fn array_elements() {
- 49 │     let a: u32 = [loop {}, one(), true][0];
+    ╭─[typeck_never_in_memory.ers:50:35]
+ 49 │ fn array_elements() {
+ 50 │     let a: u32 = [loop {}, one(), true][0];
     ·                                   ──┬─
     ·                                     ╰── expected `u32`, found `bool`
- 50 │     let b: u32 = [loop {}, 1][0];
+ 51 │     let b: u32 = [loop {}, 1][0];
     ╰────
 ty::untyped-literal
 
   × cannot tell the type of this array's elements
-    ╭─[typeck_never_in_memory.ers:50:18]
- 49 │     let a: u32 = [loop {}, one(), true][0];
- 50 │     let b: u32 = [loop {}, 1][0];
+    ╭─[typeck_never_in_memory.ers:51:18]
+ 50 │     let a: u32 = [loop {}, one(), true][0];
+ 51 │     let b: u32 = [loop {}, 1][0];
     ·                  ──────┬─────
     ·                        ╰── no type is expected here
- 51 │ }
+ 52 │ }
     ╰────
   help: bind it first, e.g. `let a: [u8; 3] = ...` (ADR 0008)

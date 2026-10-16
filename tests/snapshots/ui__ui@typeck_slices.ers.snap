@@ -1,0 +1,144 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_slices.ers
+---
+--- typeck ---
+struct View { bytes: *const [u8] at 0 } size 8, align 4
+fn take(s: *const [u8]) -> usize
+    expr 0 len 334..340: usize
+    expr 1 local s 338..339: *const [u8]
+fn positions(a: *const [u8; 4], m: *mut [u8; 4], v: *mut volatile [u8; 2]) -> *const [u8]
+    let s: *const [u8]
+    let n: usize
+    let mut t: *const [u8]
+    let view: View
+    let list: [*const [u8]; 2]
+    let chosen: *const [u8]
+    let found: *const [u8]
+    let block: *const [u8]
+    let from_mut: *mut [u8]
+    let volatile_: *const volatile [u8]
+    let lengths: usize
+    expr 2 local a 461..462: *const [u8; 4] as *const [u8]
+    expr 3 call 483..490: usize
+    expr 4 local a 488..489: *const [u8; 4] as *const [u8]
+    expr 5 local m 521..522: *mut [u8; 4] as *const [u8]
+    expr 6 assign 528..533: ()
+    expr 7 local t 528..529: *const [u8]
+    expr 8 local a 532..533: *const [u8; 4] as *const [u8]
+    expr 9 struct View 556..573: View
+    expr 10 local a 570..571: *const [u8; 4] as *const [u8]
+    expr 11 array 608..614: [*const [u8]; 2]
+    expr 12 local a 609..610: *const [u8; 4] as *const [u8]
+    expr 13 local m 612..613: *mut [u8; 4] as *const [u8]
+    expr 14 if 646..672: *const [u8]
+    expr 15 binary == 649..655: bool
+    expr 16 local n 649..650: usize
+    expr 17 int 4 654..655: usize
+    expr 18 local a 658..659: *const [u8; 4] as *const [u8]
+    expr 19 block 667..672: *const [u8]
+    expr 20 local m 669..670: *mut [u8; 4] as *const [u8]
+    expr 21 loop 703..720: *const [u8]
+    expr 22 break 710..717: !
+    expr 23 local a 716..717: *const [u8; 4] as *const [u8]
+    expr 24 block 751..756: *const [u8]
+    expr 25 local a 753..754: *const [u8; 4] as *const [u8]
+    expr 26 local m 788..789: *mut [u8; 4] as *mut [u8]
+    expr 27 local v 833..834: *mut volatile [u8; 2] as *const volatile [u8]
+    expr 28 binary + 861..909: usize
+    expr 29 binary + 861..885: usize
+    expr 30 binary + 861..876: usize
+    expr 31 len 861..867: usize
+    expr 32 local a 865..866: *const [u8; 4] as *const [u8]
+    expr 33 len 870..876: usize
+    expr 34 local m 874..875: *mut [u8; 4] as *mut [u8]
+    expr 35 len 879..885: usize
+    expr 36 local v 883..884: *mut volatile [u8; 2] as *mut volatile [u8]
+    expr 37 len 888..909: usize
+    expr 38 &raw const 892..908: *const [u8; 2] as *const [u8]
+    expr 39 byte string b"hi" 903..908: [u8; 2]
+    expr 40 return 915..923: !
+    expr 41 local a 922..923: *const [u8; 4] as *const [u8]
+fn lengths(s: *const [u8], m: *mut [u16], v: *const volatile [u32], mv: *mut volatile [u8]) -> usize
+    expr 42 binary + 1098..1132: usize
+    expr 43 binary + 1098..1122: usize
+    expr 44 binary + 1098..1113: usize
+    expr 45 len 1098..1104: usize
+    expr 46 local s 1102..1103: *const [u8]
+    expr 47 len 1107..1113: usize
+    expr 48 local m 1111..1112: *mut [u16]
+    expr 49 len 1116..1122: usize
+    expr 50 local v 1120..1121: *const volatile [u32]
+    expr 51 len 1125..1132: usize
+    expr 52 local mv 1129..1131: *mut volatile [u8]
+fn made(p: *const u8, m: *mut u16, v: *mut volatile u32, a: *const [u8; 4]) -> ()
+    let s: *const [u8]
+    let t: *mut [u16]
+    let u: *mut volatile [u32]
+    let arrays: *const [[u8; 4]]
+    let sub: *const [u8]
+    expr 53 slice 1303..1314: *const [u8]
+    expr 54 local p 1309..1310: *const u8
+    expr 55 int 3 1312..1313: usize
+    expr 56 slice 1340..1351: *mut [u16]
+    expr 57 local m 1346..1347: *mut u16
+    expr 58 int 2 1349..1350: usize
+    expr 59 slice 1386..1397: *mut volatile [u32]
+    expr 60 local v 1392..1393: *mut volatile u32
+    expr 61 int 1 1395..1396: usize
+    expr 62 slice 1434..1445: *const [[u8; 4]]
+    expr 63 local a 1440..1441: *const [u8; 4]
+    expr 64 int 2 1443..1444: usize
+    expr 65 slice 1474..1514: *const [u8]
+    expr 66 &raw const 1480..1510: *const u8
+    expr 67 index 1491..1510: u8
+    expr 68 as *const u8 1491..1507: *const u8
+    expr 69 local a 1492..1493: *const [u8; 4]
+    expr 70 int 1 1508..1509: usize
+    expr 71 int 2 1512..1513: usize
+fn casts(s: *const [u8], a: *const [u8; 4]) -> ()
+    let first: *const u8
+    let other: *mut u16
+    let array: *const [u8; 4]
+    let writable: *mut [u8]
+    let volatile_: *const volatile [u8]
+    let explicit: *mut volatile [u8]
+    expr 72 as *const u8 1629..1643: *const u8
+    expr 73 local s 1629..1630: *const [u8]
+    expr 74 as *mut u16 1671..1684: *mut u16
+    expr 75 local s 1671..1672: *const [u8]
+    expr 76 as *const [u8; 4] 1718..1737: *const [u8; 4]
+    expr 77 local s 1718..1719: *const [u8]
+    expr 78 as *mut [u8] 1769..1783: *mut [u8]
+    expr 79 local s 1769..1770: *const [u8]
+    expr 80 as *const volatile [u8] 1827..1852: *const volatile [u8]
+    expr 81 local s 1827..1828: *const [u8]
+    expr 82 as *mut volatile [u8] 1893..1916: *mut volatile [u8]
+    expr 83 local a 1893..1894: *const [u8; 4]
+fn computed() -> *const [u8]
+    expr 84 comptime 2084..2109: *const [u8]
+    expr 85 &raw const 2093..2109: *const [u8; 3] as *const [u8]
+    expr 86 static BYTES 2104..2109: [u8; 3]
+fn names(s: *const [u8]) -> usize
+    let len: usize
+    let slice: *const [u8]
+    expr 87 len 2240..2246: usize
+    expr 88 local s 2244..2245: *const [u8]
+    expr 89 slice 2277..2303: *const [u8]
+    expr 90 as *const u8 2283..2297: *const u8
+    expr 91 local s 2283..2284: *const [u8]
+    expr 92 local len 2299..2302: usize
+    expr 93 local len 2309..2312: usize
+entry fn main() -> !
+    expr 94 loop 2339..2346: !
+panic fn on_panic() -> !
+    expr 95 loop 2376..2383: !
+comptime fn ALL() -> *const [u8]
+    expr 96 &raw const 2031..2047: *const [u8; 3] as *const [u8]
+    expr 97 static BYTES 2042..2047: [u8; 3]
+comptime fn BYTES() -> [u8; 3]
+    expr 98 array 1995..2004: [u8; 3]
+    expr 99 int 1 1996..1997: u8
+    expr 100 int 2 1999..2000: u8
+    expr 101 int 3 2002..2003: u8

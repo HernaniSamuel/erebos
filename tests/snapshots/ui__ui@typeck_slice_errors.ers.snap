@@ -1,0 +1,293 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_slice_errors.ers
+---
+--- errors ---
+ty::mismatched-types
+
+  × mismatched types
+   ╭─[typeck_slice_errors.ers:7:34]
+ 6 │ fn conversions(c: *const [u8; 4], m: *mut [u8; 4], v: *const volatile [u8; 4], s: *const [u8]) {
+ 7 │     let elements: *const [u16] = c;
+   ·                                  ┬
+   ·                                  ╰── expected `*const [u16]`, found `*const [u8; 4]`
+ 8 │     let volatility: *const [u8] = v;
+   ╰────
+ty::mismatched-types
+
+  × mismatched types
+   ╭─[typeck_slice_errors.ers:8:35]
+ 7 │     let elements: *const [u16] = c;
+ 8 │     let volatility: *const [u8] = v;
+   ·                                   ┬
+   ·                                   ╰── expected `*const [u8]`, found `*const volatile [u8; 4]`
+ 9 │     let added: *const volatile [u8] = m;
+   ╰────
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_slice_errors.ers:9:39]
+  8 │     let volatility: *const [u8] = v;
+  9 │     let added: *const volatile [u8] = m;
+    ·                                       ┬
+    ·                                       ╰── expected `*const volatile [u8]`, found `*mut [u8; 4]`
+ 10 │     let mutability: *mut [u8] = c;
+    ╰────
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_slice_errors.ers:10:33]
+  9 │     let added: *const volatile [u8] = m;
+ 10 │     let mutability: *mut [u8] = c;
+    ·                                 ┬
+    ·                                 ╰── expected `*mut [u8]`, found `*const [u8; 4]`
+ 11 │     let nested: *const *const [u8] = &raw const c;
+    ╰────
+  help: a `*const` pointer never becomes `*mut` implicitly; cast with `as` if writing through it
+        is allowed
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_slice_errors.ers:11:38]
+ 10 │     let mutability: *mut [u8] = c;
+ 11 │     let nested: *const *const [u8] = &raw const c;
+    ·                                      ──────┬─────
+    ·                                            ╰── expected `*const *const [u8]`, found `*const *const [u8; 4]`
+ 12 │     let back: *const [u8; 4] = s;
+    ╰────
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_slice_errors.ers:12:32]
+ 11 │     let nested: *const *const [u8] = &raw const c;
+ 12 │     let back: *const [u8; 4] = s;
+    ·                                ┬
+    ·                                ╰── expected `*const [u8; 4]`, found `*const [u8]`
+ 13 │ }
+    ╰────
+ty::invalid-operand
+
+  × `==` needs integers, pointers or `bool`, found `*const [u8]`
+    ╭─[typeck_slice_errors.ers:16:5]
+ 15 │ fn comparisons(s: *const [u8], t: *mut [u8]) -> bool {
+ 16 │     s == s || s != t || s < s
+    ·     ───┬──
+    ·        ╰── has type `*const [u8]`
+ 17 │ }
+    ╰────
+  help: a slice is an address and a length; compare those: `s as *const T` and `len(s)` (ADR 0031)
+ty::invalid-operand
+
+  × `!=` needs integers, pointers or `bool`, found `*const [u8]`
+    ╭─[typeck_slice_errors.ers:16:15]
+ 15 │ fn comparisons(s: *const [u8], t: *mut [u8]) -> bool {
+ 16 │     s == s || s != t || s < s
+    ·               ───┬──
+    ·                  ╰── has type `*const [u8]`
+ 17 │ }
+    ╰────
+  help: a slice is an address and a length; compare those: `s as *const T` and `len(s)` (ADR 0031)
+ty::invalid-operand
+
+  × `<` needs integers or pointers, found `*const [u8]`
+    ╭─[typeck_slice_errors.ers:16:25]
+ 15 │ fn comparisons(s: *const [u8], t: *mut [u8]) -> bool {
+ 16 │     s == s || s != t || s < s
+    ·                         ──┬──
+    ·                           ╰── has type `*const [u8]`
+ 17 │ }
+    ╰────
+  help: a slice is an address and a length; compare those: `s as *const T` and `len(s)` (ADR 0031)
+ty::invalid-cast
+
+  × cannot cast `*const [u8]` to `*const [u16]`
+    ╭─[typeck_slice_errors.ers:20:39]
+ 19 │ fn casts(s: *const [u8], p: *const u8, w: *const [u16; 4], x: u32) {
+ 20 │     let elements: *const [u16] = s as *const [u16];
+    ·                                       ──────┬─────
+    ·                                             ╰── a slice of other elements
+ 21 │     let address: usize = s as usize;
+    ╰────
+  help: its length counts elements, so this would reinterpret it; cast to a pointer to the first
+        element, and make a new slice with `slice(p, n)` (ADR 0031)
+ty::invalid-cast
+
+  × cannot cast `*const [u8]` to `usize`
+    ╭─[typeck_slice_errors.ers:21:31]
+ 20 │     let elements: *const [u16] = s as *const [u16];
+ 21 │     let address: usize = s as usize;
+    ·                               ──┬──
+    ·                                 ╰── a slice is an address and a length, not an integer
+ 22 │     let narrow: u32 = s as u32;
+    ╰────
+  help: cast its address instead, as in `s as *const u8 as usize` (ADR 0031)
+ty::invalid-cast
+
+  × cannot cast `*const [u8]` to `u32`
+    ╭─[typeck_slice_errors.ers:22:28]
+ 21 │     let address: usize = s as usize;
+ 22 │     let narrow: u32 = s as u32;
+    ·                            ─┬─
+    ·                             ╰── a slice is an address and a length, not an integer
+ 23 │     let from_int: *const [u8] = 0x1000 as *const [u8];
+    ╰────
+  help: cast its address instead, as in `s as *const u8 as usize` (ADR 0031)
+ty::invalid-cast
+
+  × cannot cast `usize` to `*const [u8]`
+    ╭─[typeck_slice_errors.ers:23:43]
+ 22 │     let narrow: u32 = s as u32;
+ 23 │     let from_int: *const [u8] = 0x1000 as *const [u8];
+    ·                                           ─────┬─────
+    ·                                                ╰── a slice needs a length, and an address that is a pointer
+ 24 │     let from_u32: *const [u8] = x as *const [u8];
+    ╰────
+  help: make one with `slice(p, n)`, from a pointer and a length (ADR 0031)
+ty::invalid-cast
+
+  × cannot cast `u32` to `*const [u8]`
+    ╭─[typeck_slice_errors.ers:24:38]
+ 23 │     let from_int: *const [u8] = 0x1000 as *const [u8];
+ 24 │     let from_u32: *const [u8] = x as *const [u8];
+    ·                                      ─────┬─────
+    ·                                           ╰── a slice needs a length, and an address that is a pointer
+ 25 │     let thin: *const [u8] = p as *const [u8];
+    ╰────
+  help: make one with `slice(p, n)`, from a pointer and a length (ADR 0031)
+ty::invalid-cast
+
+  × cannot cast `*const u8` to `*const [u8]`
+    ╭─[typeck_slice_errors.ers:25:34]
+ 24 │     let from_u32: *const [u8] = x as *const [u8];
+ 25 │     let thin: *const [u8] = p as *const [u8];
+    ·                                  ─────┬─────
+    ·                                       ╰── a slice needs a length, which this pointer does not have
+ 26 │     let other_array: *const [u8] = w as *const [u8];
+    ╰────
+  help: only a pointer to an array of its elements converts to a slice; make one with `slice(p,
+        n)` (ADR 0031)
+ty::invalid-cast
+
+  × cannot cast `*const [u16; 4]` to `*const [u8]`
+    ╭─[typeck_slice_errors.ers:26:41]
+ 25 │     let thin: *const [u8] = p as *const [u8];
+ 26 │     let other_array: *const [u8] = w as *const [u8];
+    ·                                         ─────┬─────
+    ·                                              ╰── a slice of other elements than the array's
+ 27 │ }
+    ╰────
+  help: a pointer to an array converts only to a slice of its elements; for others, make one with
+        `slice(p, n)` (ADR 0031)
+ty::division-by-zero
+
+  × division by zero
+    ╭─[typeck_slice_errors.ers:30:26]
+ 29 │ // A target whose length failed was reported, and the cast is not.
+ 30 │ const FAILS: usize = 1 / 0;
+    ·                          ┬
+    ·                          ╰── this divisor is zero
+ 31 │ fn failed_target(s: *const [u8]) {
+    ╰────
+  help: at run time this would call the panic function (ADR 0007)
+ty::volatile-aggregate
+
+  × a volatile `*const [u8]` cannot be accessed as a whole
+    ╭─[typeck_slice_errors.ers:38:29]
+ 37 │ fn volatile_slices(regs: *mut volatile Regs, table: *const volatile *const [u8]) {
+ 38 │     let read: *const [u8] = (*regs).data;
+    ·                             ──────┬─────
+    ·                                   ╰── a slice is an address and a length, two accesses
+ 39 │     (*regs).data = read;
+    ╰────
+  help: a slice is an aggregate, whose bus accesses would be up to the compiler (ADR 0023, 0031)
+ty::volatile-aggregate
+
+  × a volatile `*const [u8]` cannot be accessed as a whole
+    ╭─[typeck_slice_errors.ers:39:5]
+ 38 │     let read: *const [u8] = (*regs).data;
+ 39 │     (*regs).data = read;
+    ·     ──────┬─────
+    ·           ╰── a slice is an address and a length, two accesses
+ 40 │     let stored: *const [u8] = *table;
+    ╰────
+  help: a slice is an aggregate, whose bus accesses would be up to the compiler (ADR 0023, 0031)
+ty::volatile-aggregate
+
+  × a volatile `*const [u8]` cannot be accessed as a whole
+    ╭─[typeck_slice_errors.ers:40:31]
+ 39 │     (*regs).data = read;
+ 40 │     let stored: *const [u8] = *table;
+    ·                               ───┬──
+    ·                                  ╰── a slice is an address and a length, two accesses
+ 41 │     let status: u32 = (*regs).status;
+    ╰────
+  help: a slice is an aggregate, whose bus accesses would be up to the compiler (ADR 0023, 0031)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_slice_errors.ers:45:24]
+ 44 │ fn builtins(s: *const [u8], p: *const u8, x: u32) {
+ 45 │     let a: usize = len(x);
+    ·                        ┬
+    ·                        ╰── expected a slice, found `u32`
+ 46 │     let b: usize = len(p);
+    ╰────
+  help: `len(s)` takes a slice, such as a `*const [u8]`, or a pointer to an array (ADR 0031)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_slice_errors.ers:46:24]
+ 45 │     let a: usize = len(x);
+ 46 │     let b: usize = len(p);
+    ·                        ┬
+    ·                        ╰── expected a slice, found `*const u8`
+ 47 │     let d: *const [u8] = slice(s, 3);
+    ╰────
+  help: `len(s)` takes a slice, or a pointer to an array; a slice of what a plain pointer points
+        to is made with `slice(p, n)` (ADR 0031)
+ty::unsized
+
+  × `[u8]` has no size known at compile time
+    ╭─[typeck_slice_errors.ers:47:32]
+ 46 │     let b: usize = len(p);
+ 47 │     let d: *const [u8] = slice(s, 3);
+    ·                                ┬
+    ·                                ╰── a `*const [u8]`, so its elements would be `[u8]`
+ 48 │     let e: *const [u8] = slice(x, 3);
+    ╰────
+  help: `slice` takes a pointer to the first element, such as `s as *const T` for a slice `s` (ADR
+        0031)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_slice_errors.ers:48:32]
+ 47 │     let d: *const [u8] = slice(s, 3);
+ 48 │     let e: *const [u8] = slice(x, 3);
+    ·                                ┬
+    ·                                ╰── expected a pointer, found `u32`
+ 49 │     let g: *const [u8] = slice(p, 1 as u8);
+    ╰────
+  help: `slice(p, n)` makes a slice from a pointer to its first element and a length (ADR 0031)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_slice_errors.ers:49:35]
+ 48 │     let e: *const [u8] = slice(x, 3);
+ 49 │     let g: *const [u8] = slice(p, 1 as u8);
+    ·                                   ───┬───
+    ·                                      ╰── expected `usize`, found `u8`
+ 50 │     let h: usize = s.len;
+    ╰────
+  help: integer types never convert implicitly; use `as usize` (ADR 0008)
+ty::no-fields
+
+  × `*const [u8]` has no fields
+    ╭─[typeck_slice_errors.ers:50:22]
+ 49 │     let g: *const [u8] = slice(p, 1 as u8);
+ 50 │     let h: usize = s.len;
+    ·                      ─┬─
+    ·                       ╰── no such field
+ 51 │ }
+    ╰────
+  help: the length of a slice `s` is `len(s)` (ADR 0031)

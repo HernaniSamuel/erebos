@@ -1,0 +1,54 @@
+// emit: typeck
+// Slices (ADR 0031): conversions that would change the elements, the
+// volatility or the mutability, or that are not of the outermost pointer;
+// comparisons; the casts the table refuses; a volatile access to a slice
+// stored in memory; built-ins given the wrong types.
+fn conversions(c: *const [u8; 4], m: *mut [u8; 4], v: *const volatile [u8; 4], s: *const [u8]) {
+    let elements: *const [u16] = c;
+    let volatility: *const [u8] = v;
+    let added: *const volatile [u8] = m;
+    let mutability: *mut [u8] = c;
+    let nested: *const *const [u8] = &raw const c;
+    let back: *const [u8; 4] = s;
+}
+
+fn comparisons(s: *const [u8], t: *mut [u8]) -> bool {
+    s == s || s != t || s < s
+}
+
+fn casts(s: *const [u8], p: *const u8, w: *const [u16; 4], x: u32) {
+    let elements: *const [u16] = s as *const [u16];
+    let address: usize = s as usize;
+    let narrow: u32 = s as u32;
+    let from_int: *const [u8] = 0x1000 as *const [u8];
+    let from_u32: *const [u8] = x as *const [u8];
+    let thin: *const [u8] = p as *const [u8];
+    let other_array: *const [u8] = w as *const [u8];
+}
+
+// A target whose length failed was reported, and the cast is not.
+const FAILS: usize = 1 / 0;
+fn failed_target(s: *const [u8]) {
+    let failed: *const [u8; FAILS] = s as *const [u8; FAILS];
+}
+
+struct Regs { data: *const [u8], status: u32 }
+
+fn volatile_slices(regs: *mut volatile Regs, table: *const volatile *const [u8]) {
+    let read: *const [u8] = (*regs).data;
+    (*regs).data = read;
+    let stored: *const [u8] = *table;
+    let status: u32 = (*regs).status;
+}
+
+fn builtins(s: *const [u8], p: *const u8, x: u32) {
+    let a: usize = len(x);
+    let b: usize = len(p);
+    let d: *const [u8] = slice(s, 3);
+    let e: *const [u8] = slice(x, 3);
+    let g: *const [u8] = slice(p, 1 as u8);
+    let h: usize = s.len;
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

@@ -1,0 +1,65 @@
+// emit: typeck
+// Slices (ADR 0031). A pointer to an array converts to a slice of its
+// elements, shown as `as *const [T]`, in each position where `*mut T`
+// converts to `*const T` (ADR 0024) and in `len`, keeping volatility,
+// at the outermost pointer only.
+struct View { bytes: *const [u8] }
+
+fn take(s: *const [u8]) -> usize { len(s) }
+
+fn positions(a: *const [u8; 4], m: *mut [u8; 4], v: *mut volatile [u8; 2]) -> *const [u8] {
+    let s: *const [u8] = a;
+    let n: usize = take(a);
+    let mut t: *const [u8] = m;
+    t = a;
+    let view: View = View { bytes: a };
+    let list: [*const [u8]; 2] = [a, m];
+    let chosen: *const [u8] = if n == 4 { a } else { m };
+    let found: *const [u8] = loop { break a; };
+    let block: *const [u8] = { a };
+    let from_mut: *mut [u8] = m;
+    let volatile_: *const volatile [u8] = v;
+    let lengths: usize = len(a) + len(m) + len(v) + len(&raw const b"hi");
+    return a;
+}
+
+// `len` takes any slice, volatile or not; it reads no memory.
+fn lengths(s: *const [u8], m: *mut [u16], v: *const volatile [u32], mv: *mut volatile [u8]) -> usize {
+    len(s) + len(m) + len(v) + len(mv)
+}
+
+// `slice(p, n)` keeps the pointer's mutability and volatility.
+fn made(p: *const u8, m: *mut u16, v: *mut volatile u32, a: *const [u8; 4]) {
+    let s: *const [u8] = slice(p, 3);
+    let t: *mut [u16] = slice(m, 2);
+    let u: *mut volatile [u32] = slice(v, 1);
+    let arrays: *const [[u8; 4]] = slice(a, 2);
+    let sub: *const [u8] = slice(&raw const (a as *const u8)[1], 2);
+}
+
+// The valid rows of the cast table.
+fn casts(s: *const [u8], a: *const [u8; 4]) {
+    let first: *const u8 = s as *const u8;
+    let other: *mut u16 = s as *mut u16;
+    let array: *const [u8; 4] = s as *const [u8; 4];
+    let writable: *mut [u8] = s as *mut [u8];
+    let volatile_: *const volatile [u8] = s as *const volatile [u8];
+    let explicit: *mut volatile [u8] = a as *mut volatile [u8];
+}
+
+// A value computed at compile time converts too.
+static BYTES: [u8; 3] = [1, 2, 3];
+const ALL: *const [u8] = &raw const BYTES;
+fn computed() -> *const [u8] {
+    comptime &raw const BYTES
+}
+
+// Variables may be named like the built-ins, which calls still name.
+fn names(s: *const [u8]) -> usize {
+    let len: usize = len(s);
+    let slice: *const [u8] = slice(s as *const u8, len);
+    len
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

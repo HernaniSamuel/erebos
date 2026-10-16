@@ -1,0 +1,29 @@
+// emit: mir
+// A slice in a result follows the rules of pointers (ADR 0030, 0031): one
+// into the evaluation's own memory cannot leave it, and one of a static
+// or a byte string must lie inside it.
+static TABLE: [u16; 4] = [10, 20, 30, 40];
+
+fn local() -> *const [u8] {
+    let bytes: [u8; 2] = [1, 2];
+    &raw const bytes
+}
+const ESCAPES: *const [u8] = local();
+
+const TOO_LONG: *const [u16] = slice(&raw const TABLE as *const u16, 5);
+const PAST_END: *const [u16] = slice(&raw const TABLE[2], 3);
+const BYTES_TOO_LONG: *const [u8] = slice(&raw const b"abc" as *const u8, 4);
+static IN_ARRAY: [*const [u16]; 2] = [&raw const TABLE, slice(&raw const TABLE[3], 2)];
+
+// The bound needs the length as a number: a pointer stored there is not
+// one until linking.
+static DATA: [u8; 4] = [1, 2, 3, 4];
+fn pointer_in_length() -> *const [u8] {
+    let mut s: *const [u8] = &raw const DATA;
+    (&raw mut s as *mut *const u8)[1] = &raw const DATA as *const u8;
+    s
+}
+static LENGTH_POINTER: *const [u8] = pointer_in_length();
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

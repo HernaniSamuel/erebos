@@ -365,7 +365,16 @@ impl Parser<'_> {
             TokenKind::LBracket => {
                 self.bump();
                 let elem = Box::new(self.ty()?);
-                self.expect(TokenKind::Semi)?;
+                // `[T]`, unsized, only behind a pointer (ADR 0031).
+                if let Some(close) = self.eat(TokenKind::RBracket) {
+                    return Ok(Ty {
+                        kind: TyKind::Slice(elem),
+                        span: token.span.to(close.span),
+                    });
+                }
+                if self.eat(TokenKind::Semi).is_none() {
+                    return Err(self.error_expected("`;` or `]`"));
+                }
                 let len = self.array_len()?;
                 let close = self.expect(TokenKind::RBracket)?;
                 return Ok(Ty {

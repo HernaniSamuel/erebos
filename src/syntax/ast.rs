@@ -133,6 +133,9 @@ pub enum TyKind {
     },
     /// `[T; N]`, where `N` is computed at compile time (ADR 0029).
     Array { elem: Box<Ty>, len: Box<Expr> },
+    /// `[T]`, of a length known only at run time: it exists only behind a
+    /// pointer, a slice (ADR 0031).
+    Slice(Box<Ty>),
 }
 
 /// `{ stmts; tail }`. The tail is the block's value (ADR 0015).

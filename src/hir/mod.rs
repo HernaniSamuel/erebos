@@ -49,6 +49,9 @@ pub struct Hir {
     /// Each `!` written where it would be the type of memory, whose type
     /// was lowered as `{error}`; the type checker reports them (ADR 0034).
     pub never_in_memory: Vec<NeverInMemory>,
+    /// Each `[T]` written where a size is needed, whose type was lowered
+    /// as `{error}`; the type checker reports them (ADR 0031).
+    pub unsized_types: Vec<UnsizedType>,
     pub entry: FnId,
     pub panic: FnId,
     /// Expression ids are `0..expr_count`.
@@ -118,6 +121,8 @@ pub struct NeverInMemory {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NeverPosition {
     Pointee,
+    /// The element type of a slice, `[T]` (ADR 0031).
+    SliceElement,
     Element,
     Field,
     /// The type of a `static` or `extern static`.
@@ -125,6 +130,27 @@ pub enum NeverPosition {
     Const,
     /// The operand of `size_of`, `align_of` or `offset_of`, named.
     LayoutQuery(&'static str),
+}
+
+/// A `[T]` written where a size is needed (ADR 0031).
+#[derive(Clone, Copy, Debug)]
+pub struct UnsizedType {
+    /// The span of the `[T]`.
+    pub span: Span,
+    /// The type written, `[T]`.
+    pub ty: Ty,
+    pub position: UnsizedPosition,
+}
+
+/// Where a `[T]` would need a size (ADR 0031): any position of memory but
+/// the pointee of a pointer, or the type of a value.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum UnsizedPosition {
+    Memory(NeverPosition),
+    Variable,
+    Parameter,
+    Return,
+    Cast,
 }
 
 /// What a body that runs at compile time computes.
@@ -215,6 +241,9 @@ pub enum Ty {
     Ptr(Ptr),
     /// `[T; N]`; the element type is leaked like pointee types.
     Array(&'static Ty, ArrayLen),
+    /// `[T]`, of a length known only at run time; only the pointee of a
+    /// pointer, which is then a slice (ADR 0031). Leaked likewise.
+    Slice(&'static Ty),
     Struct(StructTy),
     /// Produced only by the type checker after reporting an error, so one
     /// mistake does not cascade into more. Compatible with every type.
@@ -284,18 +313,36 @@ impl Ty {
         Ty::Array(Box::leak(Box::new(elem)), len)
     }
 
+    /// `[elem]`, the pointee of a slice.
+    pub fn slice(elem: Ty) -> Ty {
+        Ty::Slice(Box::leak(Box::new(elem)))
+    }
+
+    /// The element type of a slice, `*const [T]` or `*mut [T]` (ADR 0031).
+    pub fn slice_elem(self) -> Option<Ty> {
+        match self {
+            Ty::Ptr(Ptr {
+                pointee: Ty::Slice(elem),
+                ..
+            }) => Some(**elem),
+            _ => None,
+        }
+    }
+
     /// Whether every array length in the type is known.
     pub fn is_normal(self) -> bool {
         match self {
             Ty::Array(elem, len) => matches!(len, ArrayLen::Known(_)) && elem.is_normal(),
+            Ty::Slice(elem) => elem.is_normal(),
             Ty::Ptr(ptr) => ptr.pointee.is_normal(),
             _ => true,
         }
     }
 
-    /// Arrays and structs: values made of other values.
+    /// Arrays, structs and slices: values made of other values. A slice
+    /// is an address and a length (ADR 0031).
     pub fn is_aggregate(self) -> bool {
-        matches!(self, Ty::Array(..) | Ty::Struct(_))
+        matches!(self, Ty::Array(..) | Ty::Struct(_)) || self.slice_elem().is_some()
     }
 }
 
@@ -316,6 +363,7 @@ impl fmt::Display for Ty {
             Ty::Int(int) => write!(f, "{int}"),
             Ty::Ptr(ptr) => write!(f, "{ptr}"),
             Ty::Array(elem, len) => write!(f, "[{elem}; {len}]"),
+            Ty::Slice(elem) => write!(f, "[{elem}]"),
             Ty::Struct(s) => f.write_str(s.name),
             Ty::Error => f.write_str("{error}"),
         }
@@ -379,6 +427,10 @@ pub enum ExprKind {
     Field(Box<Expr>, String, Span),
     /// `assert(cond)`, built in (ADR 0029).
     Assert(Box<Expr>),
+    /// `len(s)`, built in (ADR 0031): the length of a slice.
+    Len(Box<Expr>),
+    /// `slice(p, n)`, built in (ADR 0031): a slice of `n` elements from `p`.
+    Slice(Box<Expr>, Box<Expr>),
     /// `size_of(T)`, a `usize` constant.
     SizeOf(Ty),
     /// `align_of(T)`, a `usize` constant.
@@ -453,6 +505,7 @@ impl Expr {
             ExprKind::Repeat(e, _)
             | ExprKind::Field(e, _, _)
             | ExprKind::Assert(e)
+            | ExprKind::Len(e)
             | ExprKind::Comptime(e) => e.walk(f),
             ExprKind::StructLit(_, fields) => {
                 for (_, value) in fields {
@@ -465,6 +518,7 @@ impl Expr {
             | ExprKind::AddrOf { place: e, .. } => e.walk(f),
             ExprKind::Binary(_, a, b)
             | ExprKind::Index(a, b)
+            | ExprKind::Slice(a, b)
             | ExprKind::Logical(_, a, b)
             | ExprKind::Assign(a, b)
             | ExprKind::CompoundAssign(_, a, b) => {

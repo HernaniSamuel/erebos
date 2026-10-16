@@ -25,5 +25,8 @@ struct Small { x: u8 }
 struct Mixed { tag: u8, header: Header, tail: u16 }
 struct HoldsAligned { a: u8, d: Descriptor, b: u8 }
 
+// A slice is the C struct `{ const T *ptr; size_t len; }` (ADR 0031).
+struct Message { kind: u8, text: *const [u8], parts: [*mut [u16]; 2], end: u16 }
+
 entry fn main() -> ! { loop {} }
 panic fn on_panic() -> ! { loop {} }

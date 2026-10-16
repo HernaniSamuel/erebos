@@ -1,0 +1,32 @@
+// emit: llvm-ir
+// opt: both
+// A slice is the C struct `{ const T *ptr; size_t len; }` (ADR 0031): it
+// crosses calls in two registers, as `[2 x i32]` like clang's (ADR 0025),
+// and lives in memory as `{ ptr, i32 }`. `len` reads the slice, never the
+// memory it points to, even through a volatile slice.
+extern fn checksum(data: *const [u8]) -> u32;
+extern fn window() -> *mut volatile [u32];
+
+fn length(s: *const [u8]) -> usize {
+    len(s)
+}
+
+fn volatile_length(regs: *mut volatile [u32]) -> usize {
+    len(regs)
+}
+
+fn make(p: *mut u8, n: usize) -> *mut [u8] {
+    slice(p, n)
+}
+
+fn first(s: *const [u8]) -> *const u8 {
+    s as *const u8
+}
+
+fn calls(buffer: *const [u8; 16]) -> u32 {
+    let regs: *mut volatile [u32] = window();
+    checksum(buffer) + len(regs) as u32
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

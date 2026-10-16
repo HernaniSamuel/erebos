@@ -15,6 +15,7 @@ fn pointers(x: u32, p: *const !) {
     let q: *const ! = &raw const x;
     let r: *mut volatile ! = 0x1000 as *mut volatile !;
     let s: *const *const ! = 0x1000 as *const *const !;
+    let t: *const [!] = 0x1000 as *const [!];
 }
 
 fn arrays() {

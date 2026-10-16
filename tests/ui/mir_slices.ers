@@ -1,0 +1,24 @@
+// emit: mir
+// Slices are aggregates of an address and a length (ADR 0031): a pointer
+// to an array converts with its length, `slice` makes one, `len` and a
+// cast to a thin pointer read their parts, and a cast between slices
+// copies it.
+fn take(s: *const [u8]) -> usize { len(s) }
+
+fn convert(a: *const [u8; 4]) -> usize {
+    let s: *const [u8] = a;
+    take(a) + len(&raw const b"hi")
+}
+
+fn make(p: *const u8, n: usize) -> *const [u8] {
+    slice(p, n)
+}
+
+fn casts(s: *const [u8], a: *const [u8; 4]) -> *const u8 {
+    let writable: *mut [u8] = s as *mut [u8];
+    let explicit: *const [u8] = a as *const [u8];
+    s as *const u8
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

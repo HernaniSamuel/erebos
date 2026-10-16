@@ -1,0 +1,145 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/parse_slice_types.ers
+---
+--- ast ---
+File {
+    items: [
+        Fn(
+            FnDecl {
+                attrs: [],
+                kind: Plain,
+                name: Ident {
+                    name: "slices",
+                    span: 86..92,
+                },
+                params: [
+                    Param {
+                        mutable: false,
+                        name: Ident {
+                            name: "s",
+                            span: 93..94,
+                        },
+                        ty: Ty {
+                            kind: Ptr {
+                                mutable: false,
+                                volatile: false,
+                                pointee: Ty {
+                                    kind: Slice(
+                                        Ty {
+                                            kind: Named(
+                                                Ident {
+                                                    name: "u8",
+                                                    span: 104..106,
+                                                },
+                                            ),
+                                            span: 104..106,
+                                        },
+                                    ),
+                                    span: 103..107,
+                                },
+                            },
+                            span: 96..107,
+                        },
+                    },
+                    Param {
+                        mutable: false,
+                        name: Ident {
+                            name: "m",
+                            span: 109..110,
+                        },
+                        ty: Ty {
+                            kind: Ptr {
+                                mutable: true,
+                                volatile: true,
+                                pointee: Ty {
+                                    kind: Slice(
+                                        Ty {
+                                            kind: Array {
+                                                elem: Ty {
+                                                    kind: Named(
+                                                        Ident {
+                                                            name: "u16",
+                                                            span: 128..131,
+                                                        },
+                                                    ),
+                                                    span: 128..131,
+                                                },
+                                                len: Expr {
+                                                    kind: Int(
+                                                        Some(
+                                                            2,
+                                                        ),
+                                                    ),
+                                                    span: 133..134,
+                                                },
+                                            },
+                                            span: 127..135,
+                                        },
+                                    ),
+                                    span: 126..136,
+                                },
+                            },
+                            span: 112..136,
+                        },
+                    },
+                ],
+                ret: Some(
+                    Ty {
+                        kind: Ptr {
+                            mutable: true,
+                            volatile: false,
+                            pointee: Ty {
+                                kind: Slice(
+                                    Ty {
+                                        kind: Ptr {
+                                            mutable: false,
+                                            volatile: false,
+                                            pointee: Ty {
+                                                kind: Slice(
+                                                    Ty {
+                                                        kind: Named(
+                                                            Ident {
+                                                                name: "u8",
+                                                                span: 155..157,
+                                                            },
+                                                        ),
+                                                        span: 155..157,
+                                                    },
+                                                ),
+                                                span: 154..158,
+                                            },
+                                        },
+                                        span: 147..158,
+                                    },
+                                ),
+                                span: 146..159,
+                            },
+                        },
+                        span: 141..159,
+                    },
+                ),
+                body: Some(
+                    Block {
+                        stmts: [],
+                        tail: Some(
+                            Expr {
+                                kind: Loop(
+                                    Block {
+                                        stmts: [],
+                                        tail: None,
+                                        span: 171..173,
+                                    },
+                                ),
+                                span: 166..173,
+                            },
+                        ),
+                        span: 160..175,
+                    },
+                ),
+                span: 83..175,
+            },
+        ),
+    ],
+}

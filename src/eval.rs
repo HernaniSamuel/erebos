@@ -389,9 +389,16 @@ impl Interp<'_, '_> {
                     let dest = self.place(*place)?;
                     return self.write_at(dest, Scalar::Int(0), span);
                 }
+                if let Rvalue::Slice { ptr, len } = rvalue {
+                    let address = self.operand(ptr, span)?;
+                    let len = self.operand(len, span)?;
+                    let (address_part, len_part) = slice_parts(self.place(*place)?);
+                    self.write_at(address_part, address, span)?;
+                    return self.write_at(len_part, len, span);
+                }
                 if ty.is_aggregate() {
                     let Rvalue::Use(Operand::Copy(source)) = rvalue else {
-                        unreachable!("aggregates are only copied")
+                        unreachable!("aggregates are only copied, and slices made")
                     };
                     let to = self.place(*place)?;
                     let from = self.place(*source)?;
@@ -488,10 +495,10 @@ impl Interp<'_, '_> {
     fn return_(&mut self) -> EvalResult<Option<ConstValue>> {
         let frame = self.frames.pop().expect("a frame runs");
         let result = frame.locals[0];
-        if self.frames.is_empty() {
-            return self.result(result, frame.call_span).map(Some);
-        }
         let ret = frame.body.ret;
+        if self.frames.is_empty() {
+            return self.result(result, ret, frame.call_span).map(Some);
+        }
         if let Some(dest) = frame.dest
             && !matches!(ret, Ty::Unit | Ty::Never)
         {
@@ -516,10 +523,11 @@ impl Interp<'_, '_> {
         Ok(None)
     }
 
-    /// The bytes of the result; bytes never written are zero. A pointer
-    /// into a static, into it or one past its end, becomes a relocation;
-    /// one into the evaluation's own memory cannot leave it (ADR 0030).
-    fn result(&self, alloc: AllocId, span: Span) -> EvalResult<ConstValue> {
+    /// The bytes of the result, of type `ty`; bytes never written are
+    /// zero. A pointer into a static, into it or one past its end, becomes
+    /// a relocation, and a slice must lie inside its static; one into the
+    /// evaluation's own memory cannot leave it (ADR 0030, 0031).
+    fn result(&self, alloc: AllocId, ty: Ty, span: Span) -> EvalResult<ConstValue> {
         let object = &self.allocs[alloc.0 as usize];
         let mut bytes: Vec<u8> = object
             .bytes
@@ -562,6 +570,11 @@ impl Interp<'_, '_> {
                     span,
                 ));
             }
+            if let Some(elem) = slice_at(ty, u64::from(offset))
+                && !s.def.def().external
+            {
+                self.slice_in_bounds(object, &bytes, offset, elem, span)?;
+            }
             bytes[at].fill(0);
             relocations.push(Relocation {
                 offset,
@@ -570,6 +583,66 @@ impl Interp<'_, '_> {
             });
         }
         Ok(ConstValue { bytes, relocations })
+    }
+
+    /// Refuses a slice of elements `elem` at `offset` of a result `object`,
+    /// with bytes `bytes`, whose address points into a static, if its
+    /// elements do not all lie inside that static (ADR 0031).
+    fn slice_in_bounds(
+        &self,
+        object: &Alloc,
+        bytes: &[u8],
+        offset: u32,
+        elem: Ty,
+        span: Span,
+    ) -> EvalResult<()> {
+        let width = target::POINTER_BYTES as u32;
+        let target = &self.allocs[object.pointers[&offset].0 as usize];
+        let name = &target
+            .static_
+            .as_ref()
+            .expect("a slice of a static")
+            .def
+            .def()
+            .name;
+        let size = target.bytes.len();
+        let address = &bytes[offset as usize..(offset + width) as usize];
+        let addend = u32::from_le_bytes(address.try_into().expect("an address is four bytes"));
+        let len_at = offset + width;
+        // The bound needs the length as a number, which a pointer is not
+        // until linking. A pointer stored in the length of any other slice,
+        // such as one made from an integer address, is a relocation like
+        // any other: at run time the length holds that address.
+        if object
+            .pointers
+            .range(len_at.saturating_sub(width - 1)..len_at + width)
+            .next()
+            .is_some()
+        {
+            return Err(self.error(
+                "eval::pointer-to-int",
+                "the length of a slice in this value holds part of a pointer, whose address only exists after linking"
+                    .to_owned(),
+                "this value",
+                span,
+            ));
+        }
+        let len_bytes = &bytes[len_at as usize..(len_at + width) as usize];
+        let len = u32::from_le_bytes(len_bytes.try_into().expect("a length is four bytes"));
+        let end = checked_size(elem)
+            .and_then(|elem_size| elem_size.checked_mul(u64::from(len)))
+            .and_then(|bytes| bytes.checked_add(u64::from(addend)));
+        if end.is_some_and(|end| end <= size as u64) {
+            return Ok(());
+        }
+        Err(self.error(
+            "eval::pointer-out-of-bounds",
+            format!(
+                "the value holds a slice of {len} elements of `{elem}` from offset {addend} of `{name}`, which is {size} bytes long"
+            ),
+            "this value",
+            span,
+        ))
     }
 
     // ------------------------------------------------------------ places
@@ -939,6 +1012,15 @@ impl Interp<'_, '_> {
                 self.cast(value, from, *to, span)
             }
             Rvalue::AddressOf { place, .. } => Ok(Scalar::Ptr(self.place(*place)?.ptr)),
+            Rvalue::SliceAddress(place) => {
+                let (address, _) = slice_parts(self.place(*place)?);
+                self.read_at(address, span)
+            }
+            Rvalue::SliceLen(place) => {
+                let (_, len) = slice_parts(self.place(*place)?);
+                self.read_at(len, span)
+            }
+            Rvalue::Slice { .. } => unreachable!("a slice is written to its place whole"),
         }
     }
 
@@ -1096,6 +1178,53 @@ impl Interp<'_, '_> {
 enum Arg {
     Scalar(Scalar),
     Bytes(PlaceRef),
+}
+
+/// The two parts of the slice at `slice` (ADR 0031): its address, a thin
+/// pointer to its first element, then its length, a `usize`.
+fn slice_parts(slice: PlaceRef) -> (PlaceRef, PlaceRef) {
+    let address = PlaceRef {
+        ty: slice.ty.slice_address_ty().expect("a slice"),
+        ..slice
+    };
+    let len = PlaceRef {
+        ptr: slice.ptr.add(target::POINTER_BYTES),
+        ty: Ty::Int(IntTy::Usize),
+        ..slice
+    };
+    (address, len)
+}
+
+/// The element type of the slice at `offset` bytes into a value of type
+/// `ty`, if a slice starts there.
+fn slice_at(ty: Ty, offset: u64) -> Option<Ty> {
+    match ty {
+        Ty::Ptr(_) if offset == 0 => ty.slice_elem(),
+        Ty::Array(elem, len) => {
+            let size = elem.layout().size;
+            if size == 0 || offset / size >= len {
+                return None;
+            }
+            slice_at(*elem, offset % size)
+        }
+        Ty::Struct(s) => s.def().fields().iter().find_map(|field| {
+            let inside = offset.checked_sub(field.offset)?;
+            (inside < field.ty.layout().size)
+                .then(|| slice_at(field.ty, inside))
+                .flatten()
+        }),
+        _ => None,
+    }
+}
+
+/// The size of `ty`, or `None` if it has none, or one too large to
+/// compute: the elements of a slice are not laid out until accessed.
+fn checked_size(ty: Ty) -> Option<u64> {
+    match ty {
+        Ty::Array(elem, len) => checked_size(*elem)?.checked_mul(len),
+        Ty::Slice(_) => None,
+        ty => Some(ty.layout().size),
+    }
 }
 
 /// Forgets the pointers that bytes `offset..offset + size` overlap.

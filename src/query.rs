@@ -128,6 +128,7 @@ impl<'h> Queries<'h> {
     pub fn check_all(&mut self) {
         let hir = self.hir;
         ty::report_never_in_memory(self);
+        ty::report_unsized_types(self);
         for id in 0..hir.structs.len() {
             self.struct_layout(StructId(id as u32));
         }
@@ -436,6 +437,10 @@ impl<'h> Queries<'h> {
                 hir::Ty::Error => hir::Ty::Error,
                 pointee => hir::Ty::ptr(ptr.mutable, ptr.volatile, pointee),
             },
+            hir::Ty::Slice(elem) => match self.normalize(*elem) {
+                hir::Ty::Error => hir::Ty::Error,
+                elem => hir::Ty::slice(elem),
+            },
             ty => ty,
         }
     }
@@ -698,6 +703,7 @@ impl<'h> Queries<'h> {
                     .expect("MIR is only built for well-typed programs");
                 mir::Ty::Array(Box::leak(Box::new(self.mir_ty(*elem))), len)
             }
+            hir::Ty::Slice(elem) => mir::Ty::Slice(Box::leak(Box::new(self.mir_ty(*elem)))),
             hir::Ty::Struct(s) => mir::Ty::Struct(self.mir_struct(s.id)),
             hir::Ty::Error => unreachable!("MIR is only built for well-typed programs"),
         }
@@ -774,7 +780,7 @@ impl<'h> Queries<'h> {
     fn lacks_layout(&mut self, ty: hir::Ty, seen: &mut Vec<StructId>) -> bool {
         match ty {
             hir::Ty::Ptr(ptr) => self.lacks_layout(*ptr.pointee, seen),
-            hir::Ty::Array(elem, _) => self.lacks_layout(*elem, seen),
+            hir::Ty::Array(elem, _) | hir::Ty::Slice(elem) => self.lacks_layout(*elem, seen),
             hir::Ty::Struct(s) => {
                 if seen.contains(&s.id) {
                     return false;

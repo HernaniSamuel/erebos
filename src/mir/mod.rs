@@ -284,6 +284,9 @@ pub enum Ty {
     Ptr(Ptr),
     /// `[T; N]`; the element type is leaked like pointee types.
     Array(&'static Ty, u64),
+    /// `[T]`, unsized: only the pointee of a slice (ADR 0031). Leaked
+    /// likewise.
+    Slice(&'static Ty),
     Struct(StructRef),
 }
 
@@ -355,10 +358,39 @@ impl fmt::Debug for StructRef {
 }
 
 impl Ty {
-    /// Arrays and structs: values made of other values, which are copied
-    /// in memory rather than held in registers.
+    /// Arrays, structs and slices: values made of other values, which are
+    /// copied in memory rather than held in registers. A slice is an
+    /// address and a length (ADR 0031).
     pub fn is_aggregate(self) -> bool {
-        matches!(self, Ty::Array(..) | Ty::Struct(_))
+        matches!(self, Ty::Array(..) | Ty::Struct(_)) || self.slice_elem().is_some()
+    }
+
+    /// The element type of a slice, `*const [T]` or `*mut [T]`.
+    pub fn slice_elem(self) -> Option<Ty> {
+        match self {
+            Ty::Ptr(Ptr {
+                pointee: Ty::Slice(elem),
+                ..
+            }) => Some(**elem),
+            _ => None,
+        }
+    }
+
+    /// The thin pointer to the first element of a slice of this type, of
+    /// its mutability and volatility: the type of its address part.
+    pub fn slice_address_ty(self) -> Option<Ty> {
+        match self {
+            Ty::Ptr(
+                ptr @ Ptr {
+                    pointee: Ty::Slice(elem),
+                    ..
+                },
+            ) => Some(Ty::Ptr(Ptr {
+                pointee: elem,
+                ..ptr
+            })),
+            _ => None,
+        }
     }
 
     /// Size and alignment (ADR 0022), as computed for the type checker.
@@ -369,6 +401,10 @@ impl Ty {
             Ty::Int(int) => Layout {
                 size: int.bytes(),
                 align: int.bytes(),
+            },
+            Ty::Ptr(_) if self.slice_elem().is_some() => Layout {
+                size: 2 * target::POINTER_BYTES,
+                align: target::POINTER_BYTES,
             },
             Ty::Ptr(_) => Layout {
                 size: target::POINTER_BYTES,
@@ -381,6 +417,7 @@ impl Ty {
                     align: elem.align,
                 }
             }
+            Ty::Slice(_) => unreachable!("`[T]` is unsized, and no place has it (ADR 0031)"),
             Ty::Struct(s) => s.def().layout,
         }
     }
@@ -497,6 +534,19 @@ pub enum Rvalue {
         mutable: bool,
         place: Place,
     },
+    /// A slice of `len` elements, a `usize`, from where the thin pointer
+    /// `ptr` points (ADR 0031). Assigned to a slice place, it writes both
+    /// parts.
+    Slice {
+        ptr: Operand,
+        len: Operand,
+    },
+    /// The address part of the slice in the place: a thin pointer to its
+    /// first element.
+    SliceAddress(Place),
+    /// The length part of the slice in the place, a `usize`. It reads the
+    /// slice, never what it points to.
+    SliceLen(Place),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -550,6 +600,7 @@ impl fmt::Display for Ty {
                 write!(f, "*{mutability}{volatile} {}", ptr.pointee)
             }
             Ty::Array(elem, len) => write!(f, "[{elem}; {len}]"),
+            Ty::Slice(elem) => write!(f, "[{elem}]"),
             Ty::Struct(s) => f.write_str(&s.def().name),
         }
     }
@@ -611,6 +662,9 @@ impl fmt::Display for Rvalue {
                 let mutability = if *mutable { "mut" } else { "const" };
                 write!(f, "&raw {mutability} {place}")
             }
+            Rvalue::Slice { ptr, len } => write!(f, "slice({ptr}, {len})"),
+            Rvalue::SliceAddress(place) => write!(f, "address({place})"),
+            Rvalue::SliceLen(place) => write!(f, "len({place})"),
         }
     }
 }

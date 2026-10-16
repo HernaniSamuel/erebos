@@ -1,0 +1,79 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/eval_slice_errors.ers
+---
+--- errors ---
+eval::pointer-escapes
+
+  × the value holds a pointer into memory that exists only at compile time
+    ╭─[eval_slice_errors.ers:11:1]
+ 10 │ }
+ 11 │ const ESCAPES: *const [u8] = local();
+    · ──────────────────┬──────────────────┬
+    ·                   │                  ╰── while evaluating the constant `ESCAPES`
+    ·                   ╰── this value
+ 12 │ 
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::pointer-out-of-bounds
+
+  × the value holds a slice of 5 elements of `u16` from offset 0 of `TABLE`, which is 8 bytes long
+    ╭─[eval_slice_errors.ers:13:1]
+ 12 │ 
+ 13 │ const TOO_LONG: *const [u16] = slice(&raw const TABLE as *const u16, 5);
+    · ────────────────────────────────────┬───────────────────────────────────┬
+    ·                                     │                                   ╰── while evaluating the constant `TOO_LONG`
+    ·                                     ╰── this value
+ 14 │ const PAST_END: *const [u16] = slice(&raw const TABLE[2], 3);
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::pointer-out-of-bounds
+
+  × the value holds a slice of 3 elements of `u16` from offset 4 of `TABLE`, which is 8 bytes long
+    ╭─[eval_slice_errors.ers:14:1]
+ 13 │ const TOO_LONG: *const [u16] = slice(&raw const TABLE as *const u16, 5);
+ 14 │ const PAST_END: *const [u16] = slice(&raw const TABLE[2], 3);
+    · ──────────────────────────────┬──────────────────────────────┬
+    ·                               │                              ╰── while evaluating the constant `PAST_END`
+    ·                               ╰── this value
+ 15 │ const BYTES_TOO_LONG: *const [u8] = slice(&raw const b"abc" as *const u8, 4);
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::pointer-out-of-bounds
+
+  × the value holds a slice of 4 elements of `u8` from offset 0 of `b"abc"`, which is 3 bytes long
+    ╭─[eval_slice_errors.ers:15:1]
+ 14 │ const PAST_END: *const [u16] = slice(&raw const TABLE[2], 3);
+ 15 │ const BYTES_TOO_LONG: *const [u8] = slice(&raw const b"abc" as *const u8, 4);
+    · ──────────────────────────────────────┬──────────────────────────────────────┬
+    ·                                       │                                      ╰── while evaluating the constant `BYTES_TOO_LONG`
+    ·                                       ╰── this value
+ 16 │ static IN_ARRAY: [*const [u16]; 2] = [&raw const TABLE, slice(&raw const TABLE[3], 2)];
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::pointer-out-of-bounds
+
+  × the value holds a slice of 2 elements of `u16` from offset 6 of `TABLE`, which is 8 bytes long
+    ╭─[eval_slice_errors.ers:16:1]
+ 15 │ const BYTES_TOO_LONG: *const [u8] = slice(&raw const b"abc" as *const u8, 4);
+ 16 │ static IN_ARRAY: [*const [u16]; 2] = [&raw const TABLE, slice(&raw const TABLE[3], 2)];
+    · ───────────────────────────────────────────┬───────────────────────────────────────────┬
+    ·                                            │                                           ╰── while evaluating the static `IN_ARRAY`
+    ·                                            ╰── this value
+ 17 │ 
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::pointer-to-int
+
+  × the length of a slice in this value holds part of a pointer, whose address only exists after
+  │ linking
+    ╭─[eval_slice_errors.ers:26:1]
+ 25 │ }
+ 26 │ static LENGTH_POINTER: *const [u8] = pointer_in_length();
+    · ────────────────────────────┬────────────────────────────┬
+    ·                             │                            ╰── while evaluating the static `LENGTH_POINTER`
+    ·                             ╰── this value
+ 27 │ 
+    ╰────
+  help: this code runs at compile time (ADR 0027)

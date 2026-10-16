@@ -40,10 +40,17 @@ pub fn of(ty: Ty, struct_layout: &mut impl FnMut(StructId) -> Option<Layout>) ->
             size: int.bytes(),
             align: int.bytes(),
         },
+        // A slice is an address and a length (ADR 0031).
+        Ty::Ptr(_) if ty.slice_elem().is_some() => Layout {
+            size: 2 * target::POINTER_BYTES,
+            align: target::POINTER_BYTES,
+        },
         Ty::Ptr(_) => Layout {
             size: target::POINTER_BYTES,
             align: target::POINTER_BYTES,
         },
+        // Unsized: only the pointee of a slice, never laid out (ADR 0031).
+        Ty::Slice(_) => return None,
         Ty::Array(elem, len) => {
             let elem = of(*elem, struct_layout)?;
             Layout {
@@ -85,6 +92,14 @@ mod tests {
         );
         assert_eq!(scalar(Ty::array(Ty::Bool, MAX_SIZE + 1)), None);
         assert_eq!(scalar(Ty::array(Ty::array(u64_, u64::MAX), 2)), None);
+    }
+
+    #[test]
+    fn slices_are_an_address_and_a_length() {
+        let u8_ = Ty::Int(IntTy::U8);
+        let slice = Ty::ptr(false, false, Ty::slice(u8_));
+        assert_eq!(scalar(slice), Some(Layout { size: 8, align: 4 }));
+        assert_eq!(scalar(Ty::slice(u8_)), None);
     }
 
     #[test]

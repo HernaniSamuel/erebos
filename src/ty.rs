@@ -15,7 +15,7 @@ use std::fmt::Write;
 use crate::diag::Diagnostic;
 use crate::hir::{
     self, BinOp, Block, Expr, ExprId, ExprKind, Fn, FnKind, Hir, IntTy, LocalId, NeverPosition,
-    Ptr, StaticId, Stmt, Ty, UnOp,
+    Ptr, StaticId, Stmt, Ty, UnOp, UnsizedPosition,
 };
 use crate::layout;
 use crate::query::Queries;
@@ -28,6 +28,10 @@ pub struct Tables {
     expr_types: Vec<Ty>,
     /// The field index of each field access.
     fields: HashMap<ExprId, u32>,
+    /// The slice type each pointer to an array is converted to, where it
+    /// is (ADR 0031): unlike the other conversion (ADR 0024), it changes
+    /// the representation.
+    coercions: HashMap<ExprId, Ty>,
 }
 
 impl Tables {
@@ -37,6 +41,7 @@ impl Tables {
             // never read.
             expr_types: vec![Ty::Error; expr_count as usize],
             fields: HashMap::new(),
+            coercions: HashMap::new(),
         }
     }
 
@@ -48,6 +53,12 @@ impl Tables {
     pub fn field(&self, id: ExprId) -> u32 {
         self.fields[&id]
     }
+
+    /// The slice type that the value of `id`, a pointer to an array, is
+    /// converted to, if it is (ADR 0031).
+    pub fn coercion(&self, id: ExprId) -> Option<Ty> {
+        self.coercions.get(&id).copied()
+    }
 }
 
 /// Reports each `!` written where memory would have its type, which HIR
@@ -55,18 +66,62 @@ impl Tables {
 pub fn report_never_in_memory(q: &mut Queries) {
     let hir = q.hir;
     for never in &hir.never_in_memory {
-        let (what, help) = match never.position {
-            NeverPosition::Pointee => ("the pointee of a pointer".to_owned(), NeverHelp::Unit),
-            NeverPosition::Element => ("an array element".to_owned(), NeverHelp::Unit),
-            NeverPosition::Field => ("the type of a field".to_owned(), NeverHelp::Unit),
-            NeverPosition::Static => ("the type of a static".to_owned(), NeverHelp::Static),
-            NeverPosition::Const => ("the type of a constant".to_owned(), NeverHelp::Unit),
-            NeverPosition::LayoutQuery(name) => {
-                (format!("the operand of `{name}`"), NeverHelp::Unit)
-            }
+        let help = match never.position {
+            NeverPosition::Static => NeverHelp::Static,
+            _ => NeverHelp::Unit,
         };
-        q.diags.push(never_in_memory(never.span, &what, help));
+        q.diags.push(never_in_memory(
+            never.span,
+            &memory_position(never.position),
+            help,
+        ));
     }
+}
+
+/// Reports each `[T]` written where a size is needed, which HIR lowering
+/// made `{error}` (ADR 0031).
+pub fn report_unsized_types(q: &mut Queries) {
+    let hir = q.hir;
+    for found in &hir.unsized_types {
+        let what = match found.position {
+            UnsizedPosition::Memory(position) => memory_position(position),
+            UnsizedPosition::Variable => "the type of a variable".to_owned(),
+            UnsizedPosition::Parameter => "the type of a parameter".to_owned(),
+            UnsizedPosition::Return => "a return type".to_owned(),
+            UnsizedPosition::Cast => "the target of a cast".to_owned(),
+        };
+        // A length that failed was reported; the type shows it as `_`.
+        let ty = match q.normalize(found.ty) {
+            Ty::Error => found.ty,
+            ty => ty,
+        };
+        q.diags.push(
+            unsized_ty(ty)
+                .label(found.span, format!("`{ty}` as {what}"))
+                .help("its length is known only at run time, so it exists only behind a pointer, as a slice: `*const [T]` or `*mut [T]` (ADR 0031)"),
+        );
+    }
+}
+
+/// How diagnostics name a position of memory.
+fn memory_position(position: NeverPosition) -> String {
+    match position {
+        NeverPosition::Pointee => "the pointee of a pointer".to_owned(),
+        NeverPosition::SliceElement => "the element type of a slice".to_owned(),
+        NeverPosition::Element => "an array element".to_owned(),
+        NeverPosition::Field => "the type of a field".to_owned(),
+        NeverPosition::Static => "the type of a static".to_owned(),
+        NeverPosition::Const => "the type of a constant".to_owned(),
+        NeverPosition::LayoutQuery(name) => format!("the operand of `{name}`"),
+    }
+}
+
+/// `ty::unsized` for `ty`, a `[T]` (ADR 0031), without labels.
+fn unsized_ty(ty: Ty) -> Diagnostic {
+    Diagnostic::error(
+        "ty::unsized",
+        format!("`{ty}` has no size known at compile time"),
+    )
 }
 
 /// What `ty::never-in-memory` suggests instead.
@@ -105,15 +160,30 @@ pub fn check_fn(q: &mut Queries, f: &Fn) {
 
 /// Whether a value of type `from` may be used where `to` is expected.
 /// `!` has no values, so it fits anywhere; `{error}` was already reported.
-/// The one conversion is from `*mut T` to `*const T` (ADR 0024).
+/// The conversions are from `*mut T` to `*const T` (ADR 0024), and from a
+/// pointer to an array to a slice of its elements (ADR 0031), both of the
+/// outermost pointer only and keeping volatility.
 fn coerces(from: Ty, to: Ty) -> bool {
     from == to
         || matches!(from, Ty::Never | Ty::Error)
         || to == Ty::Error
-        || matches!((from, to), (Ty::Ptr(from), Ty::Ptr(to))
-            if from.mutable && !to.mutable
-                && from.volatile == to.volatile
-                && from.pointee == to.pointee)
+        || matches!((from, to), (Ty::Ptr(from_ptr), Ty::Ptr(to_ptr))
+            if (from_ptr.mutable || !to_ptr.mutable)
+                && from_ptr.volatile == to_ptr.volatile
+                && from_ptr.pointee == to_ptr.pointee)
+        || unsizes(from, to)
+}
+
+/// Whether `from` is a pointer to an array that converts to the slice `to`
+/// (ADR 0031): of the same elements, mutability and volatility, or from
+/// `*mut` to `*const`.
+fn unsizes(from: Ty, to: Ty) -> bool {
+    let (Ty::Ptr(from), Ty::Ptr(to)) = (from, to) else {
+        return false;
+    };
+    matches!((*from.pointee, *to.pointee), (Ty::Array(elem, _), Ty::Slice(want)) if elem == want)
+        && (from.mutable || !to.mutable)
+        && from.volatile == to.volatile
 }
 
 /// The type that accepts `ty` and, if it is a pointer, the pointer with the
@@ -410,7 +480,21 @@ impl Checker<'_, '_> {
     /// Types `expr`, records the type, and reports a mismatch with
     /// `expected` if there is one. Returns the expression's own type.
     fn check(&mut self, f: &Fn, expr: &Expr, expected: Option<Ty>) -> Ty {
-        let ty = self.expr_kind(f, expr, expected);
+        let mut ty = self.expr_kind(f, expr, expected);
+        // A block passes the expected type to its tail, and `comptime` to
+        // its operand, which report any mismatch themselves.
+        let reported_inside = matches!(&expr.kind, ExprKind::Block(b) if b.tail.is_some())
+            || matches!(expr.kind, ExprKind::Comptime(_));
+        if let Some(expected) = expected
+            && unsizes(ty, expected)
+        {
+            if reported_inside {
+                // Converted inside, so this value is the slice.
+                ty = expected;
+            } else {
+                self.q.tables.coercions.insert(expr.id, expected);
+            }
+        }
         self.q.tables.expr_types[expr.id.0 as usize] = ty;
         // Variables were checked where they are declared; any other
         // aggregate value needs a temporary of its size.
@@ -424,10 +508,6 @@ impl Checker<'_, '_> {
                 "this value does not fit in the address space",
             );
         }
-        // A block passes the expected type to its tail, which reports any
-        // mismatch itself.
-        let reported_inside = matches!(&expr.kind, ExprKind::Block(b) if b.tail.is_some())
-            || matches!(expr.kind, ExprKind::Comptime(_));
         if let Some(expected) = expected
             && !coerces(ty, expected)
             && !reported_inside
@@ -601,6 +681,11 @@ impl Checker<'_, '_> {
                 self.check(f, cond, Some(Ty::Bool));
                 Ty::Unit
             }
+            ExprKind::Len(slice) => {
+                self.len(f, slice);
+                Ty::Int(IntTy::Usize)
+            }
+            ExprKind::Slice(pointer, len) => self.make_slice(f, pointer, len),
             ExprKind::Block(block) => self.block(f, block, expected),
             ExprKind::If { cond, then, else_ } => {
                 self.check(f, cond, Some(Ty::Bool));
@@ -766,6 +851,67 @@ impl Checker<'_, '_> {
             self.check(f, arg, Some(expected));
         }
         self.norm(target.ret)
+    }
+
+    /// `len(s)` takes any slice, or a pointer to an array, which converts
+    /// to one with its mutability and volatility (ADR 0031).
+    fn len(&mut self, f: &Fn, slice: &Expr) {
+        let ty = self.check(f, slice, None);
+        let Ty::Ptr(ptr) = ty else {
+            if !matches!(ty, Ty::Never | Ty::Error) {
+                self.q.diags.push(
+                    Diagnostic::error("ty::mismatched-types", "mismatched types")
+                        .label(slice.span, format!("expected a slice, found `{ty}`"))
+                        .help("`len(s)` takes a slice, such as a `*const [u8]`, or a pointer to an array (ADR 0031)"),
+                );
+            }
+            return;
+        };
+        match *ptr.pointee {
+            Ty::Slice(_) => {}
+            Ty::Array(elem, _) => {
+                let slice_ty = Ty::ptr(ptr.mutable, ptr.volatile, Ty::slice(*elem));
+                self.q.tables.coercions.insert(slice.id, slice_ty);
+            }
+            _ => self.q.diags.push(
+                Diagnostic::error("ty::mismatched-types", "mismatched types")
+                    .label(slice.span, format!("expected a slice, found `{ty}`"))
+                    .help("`len(s)` takes a slice, or a pointer to an array; a slice of what a plain pointer points to is made with `slice(p, n)` (ADR 0031)"),
+            ),
+        }
+    }
+
+    /// `slice(p, n)`: `n` elements from where `p` points, of its
+    /// mutability and volatility, unchecked (ADR 0031).
+    fn make_slice(&mut self, f: &Fn, pointer: &Expr, len: &Expr) -> Ty {
+        let ty = self.check(f, pointer, None);
+        self.check(f, len, Some(Ty::Int(IntTy::Usize)));
+        match ty {
+            Ty::Ptr(ptr) => match *ptr.pointee {
+                Ty::Slice(_) => {
+                    self.q.diags.push(
+                        unsized_ty(*ptr.pointee)
+                            .label(
+                                pointer.span,
+                                format!("a `{ty}`, so its elements would be `{}`", ptr.pointee),
+                            )
+                            .help("`slice` takes a pointer to the first element, such as `s as *const T` for a slice `s` (ADR 0031)"),
+                    );
+                    Ty::Error
+                }
+                pointee => Ty::ptr(ptr.mutable, ptr.volatile, Ty::slice(pointee)),
+            },
+            Ty::Never => Ty::Never,
+            Ty::Error => Ty::Error,
+            other => {
+                self.q.diags.push(
+                    Diagnostic::error("ty::mismatched-types", "mismatched types")
+                        .label(pointer.span, format!("expected a pointer, found `{other}`"))
+                        .help("`slice(p, n)` makes a slice from a pointer to its first element and a length (ADR 0031)"),
+                );
+                Ty::Error
+            }
+        }
     }
 
     fn in_loop(
@@ -978,6 +1124,10 @@ impl Checker<'_, '_> {
             );
             return Ty::Error;
         }
+        if from.slice_elem().is_some() || target.slice_elem().is_some() {
+            self.slice_cast(from, target, target_span);
+            return target;
+        }
         // Pointers convert only to and from `usize`, so any widening or
         // narrowing is a visible integer conversion (ADR 0019).
         let usize_ty = Ty::Int(IntTy::Usize);
@@ -1011,10 +1161,79 @@ impl Checker<'_, '_> {
         target
     }
 
+    /// A cast from or to a slice, which never invents a length or
+    /// reinterprets one (ADR 0031): a slice converts to any thin pointer, to
+    /// the address of its first element, and to slices of its elements; a
+    /// pointer to an array of `T` converts to a slice of `T`.
+    fn slice_cast(&mut self, from: Ty, target: Ty, target_span: Span) {
+        // An erroneous target, such as `[u8]` or an array whose length
+        // failed, was reported.
+        if target == Ty::Error {
+            return;
+        }
+        let (label, help) = match (from, from.slice_elem(), target.slice_elem()) {
+            (_, Some(from_elem), Some(to_elem)) if from_elem == to_elem => return,
+            (_, Some(_), Some(_)) => (
+                "a slice of other elements",
+                "its length counts elements, so this would reinterpret it; cast to a pointer to the first element, and make a new slice with `slice(p, n)` (ADR 0031)",
+            ),
+            (_, Some(_), None) if matches!(target, Ty::Ptr(_)) => return,
+            (_, Some(_), None) => (
+                "a slice is an address and a length, not an integer",
+                "cast its address instead, as in `s as *const u8 as usize` (ADR 0031)",
+            ),
+            (Ty::Ptr(ptr), None, Some(elem)) if matches!(*ptr.pointee, Ty::Array(array_elem, _) if *array_elem == elem) =>
+            {
+                return;
+            }
+            (Ty::Never | Ty::Error, None, Some(_)) => return,
+            (Ty::Ptr(ptr), None, Some(_)) if matches!(*ptr.pointee, Ty::Array(..)) => (
+                "a slice of other elements than the array's",
+                "a pointer to an array converts only to a slice of its elements; for others, make one with `slice(p, n)` (ADR 0031)",
+            ),
+            (Ty::Ptr(_), None, Some(_)) => (
+                "a slice needs a length, which this pointer does not have",
+                "only a pointer to an array of its elements converts to a slice; make one with `slice(p, n)` (ADR 0031)",
+            ),
+            (_, None, Some(_)) => (
+                "a slice needs a length, and an address that is a pointer",
+                "make one with `slice(p, n)`, from a pointer and a length (ADR 0031)",
+            ),
+            (_, None, None) => unreachable!("one of the types is a slice"),
+        };
+        self.q.diags.push(
+            Diagnostic::error(
+                "ty::invalid-cast",
+                format!("cannot cast `{from}` to `{target}`"),
+            )
+            .label(target_span, label)
+            .help(help),
+        );
+    }
+
     /// The place a pointer of type `ty` leads to, for `*` and `[]`. A
-    /// pointer of type `!` is never computed, so neither is the place.
-    fn through_pointer(&mut self, ty: Ty, pointer: &Expr, error: Diagnostic) -> PlaceInfo {
+    /// pointer of type `!` is never computed, so neither is the place. The
+    /// `[T]` a slice points to has no size, so it is no place to access
+    /// (ADR 0031); `place` is the expression of the place.
+    fn through_pointer(
+        &mut self,
+        ty: Ty,
+        pointer: &Expr,
+        place: &Expr,
+        error: Diagnostic,
+    ) -> PlaceInfo {
         match ty {
+            Ty::Ptr(ptr) if matches!(*ptr.pointee, Ty::Slice(_)) => {
+                self.q.diags.push(
+                    unsized_ty(*ptr.pointee)
+                        .label(
+                            place.span,
+                            format!("what the slice `{ty}` points to has type `{}`", ptr.pointee),
+                        )
+                        .help("the length of a slice is known only at run time; `len(s)` gives it (ADR 0031)"),
+                );
+                PlaceInfo::ERROR
+            }
             Ty::Ptr(ptr) => PlaceInfo::through(ptr, pointer.span),
             Ty::Never => PlaceInfo {
                 ty: Ty::Never,
@@ -1043,7 +1262,16 @@ impl Checker<'_, '_> {
                 .help("it would be split into several accesses; register blocks use the default layout, with explicit padding fields (ADR 0022, 0023)"),
             );
         }
-        if volatile && place.ty.is_aggregate() {
+        if volatile && place.ty.slice_elem().is_some() {
+            self.q.diags.push(
+                Diagnostic::error(
+                    "ty::volatile-aggregate",
+                    format!("a volatile `{}` cannot be accessed as a whole", place.ty),
+                )
+                .label(span, "a slice is an address and a length, two accesses")
+                .help("a slice is an aggregate, whose bus accesses would be up to the compiler (ADR 0023, 0031)"),
+            );
+        } else if volatile && place.ty.is_aggregate() {
             self.q.diags.push(
                 Diagnostic::error(
                     "ty::volatile-aggregate",
@@ -1109,7 +1337,7 @@ impl Checker<'_, '_> {
                     format!("cannot dereference `{ty}`"),
                 )
                 .label(pointer.span, "not a pointer");
-                self.through_pointer(ty, pointer, error)
+                self.through_pointer(ty, pointer, expr, error)
             }
             ExprKind::Field(base, name, name_span) => {
                 let (ty, base_place) = self.base(f, base);
@@ -1135,6 +1363,7 @@ impl Checker<'_, '_> {
                         self.access(&info, base.span);
                     }
                     if let Ty::Ptr(ptr) = ty
+                        && !matches!(*ptr.pointee, Ty::Slice(_))
                         && self.q.layout_of(*ptr.pointee).is_none()
                     {
                         self.too_large(
@@ -1149,7 +1378,7 @@ impl Checker<'_, '_> {
                     )
                     .label(base.span, "not an array or a pointer");
                     // Unchecked, as in C (ADR 0021).
-                    self.through_pointer(ty, base, error)
+                    self.through_pointer(ty, base, expr, error)
                 }
             }
             _ => return None,
@@ -1200,6 +1429,9 @@ impl Checker<'_, '_> {
                     diag = diag.help(format!(
                         "dereference the pointer first: `(*p).{name}` (ADR 0021)"
                     ));
+                }
+                if other.slice_elem().is_some() && name == "len" {
+                    diag = diag.help("the length of a slice `s` is `len(s)` (ADR 0031)");
                 }
                 self.q.diags.push(diag);
                 return PlaceInfo::ERROR;
@@ -1425,9 +1657,11 @@ impl Checker<'_, '_> {
             Ty::Error | Ty::Never => true,
             Ty::Int(_) => true,
             Ty::Bool => matches!(allowed, Operands::IntOrBool | Operands::Equatable),
+            // A slice is an address and a length (ADR 0031).
+            Ty::Ptr(_) if ty.slice_elem().is_some() => false,
             Ty::Ptr(_) => matches!(allowed, Operands::Equatable | Operands::Ordered),
             // Aggregates compare part by part (ADR 0021).
-            Ty::Unit | Ty::Array(..) | Ty::Struct(_) => false,
+            Ty::Unit | Ty::Array(..) | Ty::Slice(_) | Ty::Struct(_) => false,
         };
         if !ok {
             let what = match allowed {
@@ -1436,13 +1670,17 @@ impl Checker<'_, '_> {
                 Operands::Equatable => "integers, pointers or `bool`",
                 Operands::Ordered => "integers or pointers",
             };
-            self.q.diags.push(
-                Diagnostic::error(
-                    "ty::invalid-operand",
-                    format!("`{op}` needs {what}, found `{ty}`"),
-                )
-                .label(expr.span, format!("has type `{ty}`")),
-            );
+            let mut diag = Diagnostic::error(
+                "ty::invalid-operand",
+                format!("`{op}` needs {what}, found `{ty}`"),
+            )
+            .label(expr.span, format!("has type `{ty}`"));
+            if ty.slice_elem().is_some() {
+                diag = diag.help(
+                    "a slice is an address and a length; compare those: `s as *const T` and `len(s)` (ADR 0031)",
+                );
+            }
+            self.q.diags.push(diag);
         }
     }
 }
@@ -1520,9 +1758,13 @@ pub fn dump(q: &mut Queries) -> String {
         };
         body.walk(&mut |e| {
             let ty = q.tables.expr_ty(e.id);
+            let converted = match q.tables.coercion(e.id) {
+                Some(to) => format!(" as {to}"),
+                None => String::new(),
+            };
             writeln!(
                 out,
-                "    expr {} {} {:?}: {ty}",
+                "    expr {} {} {:?}: {ty}{converted}",
                 e.id.0,
                 expr_label(hir, f, e),
                 e.span
@@ -1587,6 +1829,8 @@ fn expr_label(hir: &Hir, f: &Fn, expr: &Expr) -> String {
         ExprKind::CompoundAssign(op, _, _) => format!("assign {}=", op.symbol()),
         ExprKind::Block(_) => "block".to_owned(),
         ExprKind::Assert(_) => "assert".to_owned(),
+        ExprKind::Len(_) => "len".to_owned(),
+        ExprKind::Slice(..) => "slice".to_owned(),
         ExprKind::Loop(_) => "loop".to_owned(),
     }
 }
@@ -1623,5 +1867,33 @@ mod tests {
             Ty::ptr(true, false, mut_),
             Ty::ptr(true, false, const_)
         ));
+    }
+
+    #[test]
+    fn array_pointers_coerce_to_slices() {
+        let u8_ = Ty::Int(IntTy::U8);
+        let array = Ty::array(u8_, 4);
+        let slice = Ty::slice(u8_);
+        let ptr = |mutable, volatile, pointee| Ty::ptr(mutable, volatile, pointee);
+        assert!(coerces(ptr(false, false, array), ptr(false, false, slice)));
+        assert!(coerces(ptr(true, false, array), ptr(true, false, slice)));
+        assert!(coerces(ptr(true, false, array), ptr(false, false, slice)));
+        assert!(coerces(ptr(true, true, array), ptr(false, true, slice)));
+        assert!(coerces(ptr(true, false, slice), ptr(false, false, slice)));
+        // Never to `*mut`, nor changing volatility or the elements.
+        assert!(!coerces(ptr(false, false, array), ptr(true, false, slice)));
+        assert!(!coerces(ptr(false, true, array), ptr(false, false, slice)));
+        assert!(!coerces(ptr(false, false, array), ptr(false, true, slice)));
+        let u16_slice = Ty::slice(Ty::Int(IntTy::U16));
+        assert!(!coerces(
+            ptr(false, false, array),
+            ptr(false, false, u16_slice)
+        ));
+        // Only the outermost pointer converts, and never back.
+        assert!(!coerces(
+            ptr(false, false, ptr(false, false, array)),
+            ptr(false, false, ptr(false, false, slice))
+        ));
+        assert!(!coerces(ptr(false, false, slice), ptr(false, false, array)));
     }
 }

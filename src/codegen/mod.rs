@@ -15,7 +15,9 @@ use inkwell::targets::{
     CodeModel, FileType, InitializationConfig, RelocMode, Target as LlvmTarget, TargetMachine,
     TargetTriple,
 };
-use inkwell::types::{AnyType, BasicMetadataTypeEnum, BasicType, BasicTypeEnum, IntType};
+use inkwell::types::{
+    AnyType, BasicMetadataTypeEnum, BasicType, BasicTypeEnum, IntType, StructType,
+};
 use inkwell::values::{
     BasicMetadataValueEnum, BasicValue, BasicValueEnum, FunctionValue, GlobalValue, IntValue,
     PointerValue, ValueKind,
@@ -175,9 +177,19 @@ fn basic_type(context: &Context, ty: Ty) -> Option<BasicTypeEnum<'_>> {
     match ty {
         Ty::Bool => Some(context.bool_type().into()),
         Ty::Int(int) => Some(int_type(context, int).into()),
+        // A slice is an aggregate (ADR 0031).
+        Ty::Ptr(_) if ty.slice_elem().is_some() => None,
         Ty::Ptr(_) => Some(context.ptr_type(AddressSpace::default()).into()),
-        Ty::Unit | Ty::Never | Ty::Array(..) | Ty::Struct(_) => None,
+        Ty::Unit | Ty::Never | Ty::Array(..) | Ty::Slice(_) | Ty::Struct(_) => None,
     }
+}
+
+/// The LLVM type of a slice: its address and its length, as the C struct
+/// `struct { const T *ptr; size_t len; }` (ADR 0031).
+fn slice_type(context: &Context) -> StructType<'_> {
+    let ptr = context.ptr_type(AddressSpace::default()).into();
+    let len = int_type(context, IntTy::Usize).into();
+    context.struct_type(&[ptr, len], false)
 }
 
 /// The LLVM type of a MIR value in memory. A `bool` occupies a byte
@@ -189,6 +201,7 @@ fn memory_type(context: &Context, ty: Ty) -> Option<BasicTypeEnum<'_>> {
             let len = u32::try_from(len).expect("the type checker limits sizes");
             Some(element_type(context, *elem).array_type(len).into())
         }
+        Ty::Ptr(_) if ty.slice_elem().is_some() => Some(slice_type(context).into()),
         // Bytes laid out by MIR (ADR 0022); fields are reached by offset.
         Ty::Struct(s) => {
             let size = u32::try_from(s.def().layout.size).expect("the type checker limits sizes");
@@ -768,10 +781,14 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                     return;
                 }
                 if self.body.place_ty(*place).is_aggregate() {
-                    let Rvalue::Use(Operand::Copy(source)) = rvalue else {
-                        unreachable!("aggregates are only copied")
-                    };
-                    self.copy(*place, *source);
+                    match rvalue {
+                        Rvalue::Use(Operand::Copy(source)) => self.copy(*place, *source),
+                        Rvalue::Slice { ptr, len } => {
+                            self.write_slice_part(*place, 0, self.operand(ptr));
+                            self.write_slice_part(*place, 1, self.operand(len));
+                        }
+                        _ => unreachable!("aggregates are only copied, and slices made"),
+                    }
                     return;
                 }
                 let value = self.rvalue(rvalue);
@@ -880,6 +897,53 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
         instruction
             .set_alignment(address.align(ty))
             .expect("loads and stores have an alignment");
+    }
+
+    /// The address of part `index` of the slice in `place`: 0 for its
+    /// address, 1 for its length (ADR 0031).
+    fn slice_part(&self, place: Place, index: u32) -> Address<'ctx> {
+        let slice = self.address(place);
+        let ptr = self
+            .builder
+            .build_struct_gep(slice_type(self.context), slice.ptr, index, "")
+            .expect("a slice has two parts");
+        Address { ptr, ..slice }
+    }
+
+    /// The type of part `index` of a slice of type `ty`.
+    fn slice_part_ty(ty: Ty, index: u32) -> Ty {
+        match index {
+            0 => ty.slice_address_ty().expect("a slice"),
+            _ => Ty::Int(IntTy::Usize),
+        }
+    }
+
+    fn write_slice_part(&self, place: Place, index: u32, value: BasicValueEnum<'ctx>) {
+        let part = self.slice_part(place, index);
+        let ty = Self::slice_part_ty(self.body.place_ty(place), index);
+        let store = self
+            .builder
+            .build_store(part.ptr, value)
+            .expect("builder is positioned");
+        if part.volatile {
+            store.set_volatile(true).expect("stores can be volatile");
+        }
+        store
+            .set_alignment(part.align(ty))
+            .expect("stores have an alignment");
+    }
+
+    /// Reads part `index` of the slice in `place`.
+    fn read_slice_part(&self, place: Place, index: u32) -> BasicValueEnum<'ctx> {
+        let part = self.slice_part(place, index);
+        let ty = Self::slice_part_ty(self.body.place_ty(place), index);
+        let memory = basic_type(self.context, ty).expect("the parts of a slice are scalars");
+        let value = self
+            .builder
+            .build_load(memory, part.ptr, "")
+            .expect("builder is positioned");
+        self.set_access(value, part, ty);
+        value
     }
 
     /// Copies an aggregate. Places that may overlap (reached through
@@ -1016,6 +1080,9 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
             }
             Rvalue::Cast(operand, to) => return self.cast(operand, *to),
             Rvalue::AddressOf { place, .. } => return self.address(*place).ptr.into(),
+            Rvalue::SliceAddress(place) => return self.read_slice_part(*place, 0),
+            Rvalue::SliceLen(place) => return self.read_slice_part(*place, 1),
+            Rvalue::Slice { .. } => unreachable!("a slice is written to its place whole"),
         };
         built.expect("builder is positioned").into()
     }

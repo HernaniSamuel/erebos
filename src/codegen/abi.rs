@@ -114,4 +114,17 @@ mod tests {
         assert_eq!(classify(bytes(9)), PassMode::Indirect);
         assert_eq!(classify(words(IntTy::U64, 2)), PassMode::Indirect);
     }
+
+    /// As the C struct `{ const T *ptr; size_t len; }` (ADR 0031).
+    #[test]
+    fn slices_cross_calls_in_two_registers() {
+        let slice = Ty::Ptr(crate::mir::Ptr {
+            mutable: false,
+            volatile: false,
+            pointee: Box::leak(Box::new(Ty::Slice(Box::leak(Box::new(Ty::Int(
+                IntTy::U64,
+            )))))),
+        });
+        assert_eq!(classify(slice), PassMode::Cast(Cast::Pair));
+    }
 }

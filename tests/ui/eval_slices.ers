@@ -1,0 +1,52 @@
+// emit: llvm-ir
+// Slices at compile time work as at run time (ADR 0031): their parts are
+// read and written, and a slice of a static or a byte string can be a
+// result if it lies inside it, as relocations with lengths. A slice of an
+// `extern static`, whose size is its definition's, is not checked.
+static TABLE: [u16; 4] = [10, 20, 30, 40];
+extern static t: u8;
+
+static ALL: *const [u16] = &raw const TABLE;
+static TAIL: *const [u16] = slice(&raw const TABLE[1], 3);
+static EMPTY_END: *const [u16] = slice(&raw const (&raw const TABLE as *const u16)[4], 0);
+static GREETING: *const [u8] = &raw const b"hello";
+static MESSAGES: [*const [u8]; 2] = [&raw const b"one", &raw const b"three"];
+static EXTERNAL: *const [u8] = slice(&raw const t, 16);
+static FROM_ADDRESS: *const [u32] = slice(0x1000 as *const u32, 8);
+
+// A slice of an address has no bound to check: a pointer stored in its
+// length is a relocation, as at run time the length holds that address.
+fn pointer_in_length() -> *const [u8] {
+    let mut s: *const [u8] = slice(0x1000 as *const u8, 0);
+    (&raw mut s as *mut *const u8)[1] = &raw const TABLE as *const u8;
+    s
+}
+static LENGTH_POINTER: *const [u8] = pointer_in_length();
+
+fn sum(s: *const [u16]) -> u32 {
+    let first: *const u16 = s as *const u16;
+    let mut total: u32 = 0;
+    let mut i: usize = 0;
+    while i < len(s) {
+        total += first[i] as u32;
+        i += 1;
+    }
+    total
+}
+
+fn sub(s: *const [u16], from: usize) -> *const [u16] {
+    slice(&raw const (s as *const u16)[from], len(s) - from)
+}
+
+static mut RESULTS: [u32; 5] = [0; 5];
+
+// Stores 100, 90, 3, 5 and 8.
+entry fn main() -> ! {
+    RESULTS[0] = comptime sum(ALL);
+    RESULTS[1] = comptime sum(sub(ALL, 1));
+    RESULTS[2] = comptime len(TAIL) as u32;
+    RESULTS[3] = comptime len(MESSAGES[1]) as u32;
+    RESULTS[4] = comptime len(FROM_ADDRESS) as u32;
+    loop {}
+}
+panic fn on_panic() -> ! { loop {} }

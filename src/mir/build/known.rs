@@ -46,6 +46,8 @@ impl Builder<'_, '_> {
         let mask = match ty {
             Ty::Int(int) => int.mask(),
             Ty::Bool => 1,
+            // A slice is an aggregate (ADR 0031).
+            Ty::Ptr(_) if ty.slice_elem().is_some() => return Known::Unknown,
             Ty::Ptr(_) => ADDRESS_MASK,
             // Aggregates, `()` and `!` are never checked.
             _ => return Known::Unknown,

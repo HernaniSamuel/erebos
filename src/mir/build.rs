@@ -46,7 +46,11 @@ pub fn build_body(q: &mut Queries, id: hir::FnId) -> Option<Body> {
 /// A body that computes `expr`, part of function `id`, alone: the MIR that
 /// `comptime expr` runs (ADR 0029).
 pub fn build_expr_body(q: &mut Queries, id: hir::FnId, expr: &hir::Expr) -> Option<Body> {
-    let ty = q.tables.expr_ty(expr.id);
+    // Its value is converted where it is, if it is (ADR 0031).
+    let ty = q
+        .tables
+        .coercion(expr.id)
+        .unwrap_or_else(|| q.tables.expr_ty(expr.id));
     let ret = q.mir_ty(ty);
     let mut builder = Builder::new(q, id, ret);
     builder.span = expr.span;
@@ -259,8 +263,9 @@ impl Builder<'_, '_> {
             Ty::Bool => Operand::Const(Const::Bool(value.bytes[0] != 0)),
             Ty::Unit | Ty::Never => Operand::Const(Const::Unit),
             // A pointer to a static: its address only exists after linking,
-            // so it is data the linker completes (ADR 0030).
-            Ty::Ptr(_) if !value.relocations.is_empty() => {
+            // so it is data the linker completes (ADR 0030). A slice is an
+            // aggregate, read from its data likewise (ADR 0031).
+            Ty::Ptr(_) if !value.relocations.is_empty() || ty.is_aggregate() => {
                 Operand::Copy(Place::local(self.const_local(ty, source, &value)))
             }
             // Made from an integer.
@@ -273,6 +278,7 @@ impl Builder<'_, '_> {
             Ty::Array(..) | Ty::Struct(_) => {
                 Operand::Copy(Place::local(self.const_local(ty, source, &value)))
             }
+            Ty::Slice(_) => unreachable!("`[T]` is unsized, and no value has it (ADR 0031)"),
         }
     }
 
@@ -316,9 +322,34 @@ impl Builder<'_, '_> {
             return Operand::Const(Const::Unit);
         }
         let outer = std::mem::replace(&mut self.span, expr.span);
-        let value = self.expr_kind(expr);
+        let mut value = self.expr_kind(expr);
+        // A pointer to an array converted to a slice, with its length
+        // (ADR 0031).
+        if let Some(slice_ty) = self.q.tables.coercion(expr.id)
+            && self.current.is_some()
+        {
+            let slice_ty = self.q.mir_ty(slice_ty);
+            value = self.array_slice(value, slice_ty);
+        }
         self.span = outer;
         value
+    }
+
+    /// The slice of type `slice_ty` of the whole array `pointer` points to.
+    fn array_slice(&mut self, pointer: Operand, slice_ty: Ty) -> Operand {
+        let Ty::Ptr(ptr) = self.operand_ty(pointer) else {
+            unreachable!("only pointers to arrays convert to slices")
+        };
+        let Ty::Array(_, len) = *ptr.pointee else {
+            unreachable!("only pointers to arrays convert to slices")
+        };
+        self.temp(
+            slice_ty,
+            Rvalue::Slice {
+                ptr: pointer,
+                len: usize_const(len),
+            },
+        )
     }
 
     fn expr_kind(&mut self, expr: &hir::Expr) -> Operand {
@@ -460,7 +491,28 @@ impl Builder<'_, '_> {
             }
             hir::ExprKind::Cast(operand, _, _) => {
                 let operand = self.expr(operand);
-                self.temp(ty, Rvalue::Cast(operand, ty))
+                self.cast(operand, ty)
+            }
+            // Reads the slice, never what it points to (ADR 0031).
+            hir::ExprKind::Len(slice) => match self.expr(slice) {
+                Operand::Copy(place) if self.current.is_some() => {
+                    self.temp(ty, Rvalue::SliceLen(place))
+                }
+                // The slice did not finish, and nothing follows.
+                _ => usize_const(0),
+            },
+            hir::ExprKind::Slice(pointer, len) => {
+                let mut ptr = self.expr(pointer);
+                // Read now if evaluating the length could assign it.
+                if matches!(ptr, Operand::Copy(_)) && !is_simple(len) {
+                    ptr = self.temp(self.operand_ty(ptr), Rvalue::Use(ptr));
+                }
+                let len = self.expr(len);
+                if ty == Ty::Never {
+                    Operand::Const(Const::Unit)
+                } else {
+                    self.temp(ty, Rvalue::Slice { ptr, len })
+                }
             }
             hir::ExprKind::Assign(place, value) => {
                 // The value is evaluated before the place, as in Rust.
@@ -682,6 +734,23 @@ impl Builder<'_, '_> {
                 self.join(&[m1_end, div_end]);
                 Operand::Copy(result)
             }
+        }
+    }
+
+    /// `operand as ty` (ADR 0019, 0031): a slice converts to the address of
+    /// its first element, or to a slice of other mutability or volatility;
+    /// a pointer to an array to a slice of its elements.
+    fn cast(&mut self, operand: Operand, ty: Ty) -> Operand {
+        // The operand did not finish, and nothing follows.
+        if self.current.is_none() {
+            return Operand::Const(Const::Unit);
+        }
+        let from = self.operand_ty(operand);
+        match (operand, from.slice_elem(), ty.slice_elem()) {
+            (Operand::Copy(place), Some(_), None) => self.temp(ty, Rvalue::SliceAddress(place)),
+            (_, Some(_), Some(_)) => self.temp(ty, Rvalue::Use(operand)),
+            (_, None, Some(_)) => self.array_slice(operand, ty),
+            _ => self.temp(ty, Rvalue::Cast(operand, ty)),
         }
     }
 

@@ -1,0 +1,61 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/resolve_slice_builtins.ers
+---
+--- errors ---
+resolve::reserved-name
+
+  × `len` is a reserved name
+   ╭─[resolve_slice_builtins.ers:5:4]
+ 4 │ // take one and two arguments.
+ 5 │ fn len(s: *const [u8]) -> usize { 0 }
+   ·    ─┬─
+   ·     ╰── a built-in function has this name
+ 6 │ static slice: u32 = 0;
+   ╰────
+  help: `len(s)` is built in (ADR 0031)
+resolve::reserved-name
+
+  × `slice` is a reserved name
+   ╭─[resolve_slice_builtins.ers:6:8]
+ 5 │ fn len(s: *const [u8]) -> usize { 0 }
+ 6 │ static slice: u32 = 0;
+   ·        ──┬──
+   ·          ╰── a built-in function has this name
+ 7 │ 
+   ╰────
+  help: `slice(p, n)` is built in (ADR 0031)
+ty::wrong-arg-count
+
+  × `len` takes 1 argument, but 2 were given
+    ╭─[resolve_slice_builtins.ers:9:20]
+  8 │ fn calls(s: *const [u8], p: *const u8) {
+  9 │     let n: usize = len(s, 1);
+    ·                    ────┬────
+    ·                        ╰── in this call
+ 10 │     let t: *const [u8] = slice(p);
+    ╰────
+  help: `len(s)` gives the length of one slice (ADR 0031)
+ty::wrong-arg-count
+
+  × `slice` takes 2 arguments, but 1 was given
+    ╭─[resolve_slice_builtins.ers:10:26]
+  9 │     let n: usize = len(s, 1);
+ 10 │     let t: *const [u8] = slice(p);
+    ·                          ────┬───
+    ·                              ╰── in this call
+ 11 │     let u: *const [u8] = slice();
+    ╰────
+  help: `slice(p, n)` takes a pointer and a length (ADR 0031)
+ty::wrong-arg-count
+
+  × `slice` takes 2 arguments, but 0 were given
+    ╭─[resolve_slice_builtins.ers:11:26]
+ 10 │     let t: *const [u8] = slice(p);
+ 11 │     let u: *const [u8] = slice();
+    ·                          ───┬───
+    ·                             ╰── in this call
+ 12 │ }
+    ╰────
+  help: `slice(p, n)` takes a pointer and a length (ADR 0031)

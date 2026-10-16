@@ -6,7 +6,7 @@ use crate::diag::{Diagnostic, Diagnostics};
 use crate::hir::{
     ArrayLen, Block, Comptime, ConstDef, ConstId, Expr, ExprId, ExprKind, FieldDef, Fn, FnId,
     FnKind, Hir, IntTy, Local, LocalId, NeverInMemory, NeverPosition, StaticDef, StaticId, Stmt,
-    StructDef, StructId, StructTy, Ty,
+    StructDef, StructId, StructTy, Ty, UnsizedPosition, UnsizedType,
 };
 use crate::span::Span;
 use crate::syntax::ast;
@@ -75,10 +75,10 @@ pub fn lower(
             continue;
         };
         let name = ident.name.as_str();
-        let (label, help) = if name == "assert" {
+        let (label, help) = if let Some((call, adr)) = builtin_fn(name) {
             (
                 "a built-in function has this name".to_owned(),
-                "`assert(cond)` is built in (ADR 0029)".to_owned(),
+                format!("`{call}` is built in (ADR {adr})"),
             )
         } else if name.starts_with("__") {
             (
@@ -169,6 +169,7 @@ pub fn lower(
         struct_tys,
         struct_decls: &struct_decls,
         never_in_memory: Vec::new(),
+        unsized_types: Vec::new(),
         next_expr: 0,
         diags,
         locals: Vec::new(),
@@ -209,6 +210,7 @@ pub fn lower(
     fns.append(&mut lowerer.values);
     let expr_count = lowerer.next_expr;
     let never_in_memory = lowerer.never_in_memory;
+    let unsized_types = lowerer.unsized_types;
 
     check_duplicate_items(program, runtime, diags);
     check_start(&fns, &statics, diags);
@@ -222,10 +224,23 @@ pub fn lower(
         statics,
         comptime_blocks,
         never_in_memory,
+        unsized_types,
         entry: entry?,
         panic: panic?,
         expr_count,
     })
+}
+
+/// The built-in function named `name`: how it is called, and the ADR that
+/// defines it. A call by that name is always the built-in, so no item can
+/// have it.
+fn builtin_fn(name: &str) -> Option<(&'static str, &'static str)> {
+    match name {
+        "assert" => Some(("assert(cond)", "0029")),
+        "len" => Some(("len(s)", "0031")),
+        "slice" => Some(("slice(p, n)", "0031")),
+        _ => None,
+    }
 }
 
 fn item_name(item: &ast::Item) -> Option<&ast::Ident> {
@@ -362,6 +377,8 @@ struct Lowerer<'a> {
     struct_decls: &'a [&'a ast::StructDecl],
     /// Each `!` written where memory would have its type (ADR 0034).
     never_in_memory: Vec<NeverInMemory>,
+    /// Each `[T]` written where a size is needed (ADR 0031).
+    unsized_types: Vec<UnsizedType>,
     next_expr: u32,
     diags: &'a mut Diagnostics,
     /// Locals of the function being lowered.
@@ -793,7 +810,10 @@ impl Lowerer<'_> {
         self.locals.clear();
         self.scopes.clear();
         self.loops.clear();
-        let ret = decl.ret.as_ref().map_or(Ty::Unit, |ty| self.ty(ty));
+        let ret = decl
+            .ret
+            .as_ref()
+            .map_or(Ty::Unit, |ty| self.ty(ty, UnsizedPosition::Return));
         self.scopes.push(HashMap::new());
         let mut param_names: HashMap<&str, Span> = HashMap::new();
         for param in &decl.params {
@@ -821,7 +841,7 @@ impl Lowerer<'_> {
                     .help("remove `mut` (ADR 0026)"),
                 );
             }
-            let ty = self.ty(&param.ty);
+            let ty = self.ty(&param.ty, UnsizedPosition::Parameter);
             self.declare(&param.name, ty, param.mutable);
         }
         let body = decl.body.as_ref().map(|body| self.block(body));
@@ -855,22 +875,51 @@ impl Lowerer<'_> {
             });
             return Ty::Error;
         }
-        self.ty(ty)
+        self.ty(ty, UnsizedPosition::Memory(position))
     }
 
-    /// A written type. One containing `{error}` is `{error}` as a whole.
-    fn ty(&mut self, ty: &ast::Ty) -> Ty {
+    /// `[elem]` written where a size is needed, at `position`: `{error}`,
+    /// recorded for the type checker unless its element type failed
+    /// already, which was reported (ADR 0031, 0034).
+    fn unsized_ty(&mut self, span: Span, elem: &ast::Ty, position: UnsizedPosition) -> Ty {
+        let elem = self.memory_ty(elem, NeverPosition::SliceElement);
+        if elem != Ty::Error {
+            self.unsized_types.push(UnsizedType {
+                span,
+                ty: Ty::slice(elem),
+                position,
+            });
+        }
+        Ty::Error
+    }
+
+    /// A written type, at `position`, where `[T]` has no size. One
+    /// containing `{error}` is `{error}` as a whole.
+    fn ty(&mut self, ty: &ast::Ty, position: UnsizedPosition) -> Ty {
         match &ty.kind {
             ast::TyKind::Never => Ty::Never,
             ast::TyKind::Unit => Ty::Unit,
+            ast::TyKind::Slice(elem) => self.unsized_ty(ty.span, elem, position),
+            // Behind a pointer, `[T]` is the pointee of a slice (ADR 0031).
             ast::TyKind::Ptr {
                 mutable,
                 volatile,
                 pointee,
-            } => match self.memory_ty(pointee, NeverPosition::Pointee) {
-                Ty::Error => Ty::Error,
-                pointee => Ty::ptr(*mutable, *volatile, pointee),
-            },
+            } => {
+                let pointee = match &pointee.kind {
+                    ast::TyKind::Slice(elem) => {
+                        match self.memory_ty(elem, NeverPosition::SliceElement) {
+                            Ty::Error => Ty::Error,
+                            elem => Ty::slice(elem),
+                        }
+                    }
+                    _ => self.memory_ty(pointee, NeverPosition::Pointee),
+                };
+                match pointee {
+                    Ty::Error => Ty::Error,
+                    pointee => Ty::ptr(*mutable, *volatile, pointee),
+                }
+            }
             ast::TyKind::Array { elem, len } => {
                 let elem = self.memory_ty(elem, NeverPosition::Element);
                 let len = self.array_len(len);
@@ -917,7 +966,7 @@ impl Lowerer<'_> {
                 // The initializer is resolved before the new name exists, so
                 // `let x: u32 = x;` refers to an outer `x`.
                 let init = self.expr(&let_.init);
-                let ty = self.ty(&let_.ty);
+                let ty = self.ty(&let_.ty, UnsizedPosition::Variable);
                 let local = self.declare(&let_.name, ty, let_.mutable);
                 Stmt::Let { local, init }
             }
@@ -1078,6 +1127,41 @@ impl Lowerer<'_> {
                 }
                 ExprKind::Assert(Box::new(args.remove(0)))
             }
+            // Built in, whatever else has the name (ADR 0031).
+            ast::ExprKind::Call(name, args) if matches!(name.name.as_str(), "len" | "slice") => {
+                let mut args: Vec<Expr> = args.iter().map(|arg| self.expr(arg)).collect();
+                let (params, help) = if name.name == "len" {
+                    (1, "`len(s)` gives the length of one slice (ADR 0031)")
+                } else {
+                    (2, "`slice(p, n)` takes a pointer and a length (ADR 0031)")
+                };
+                if args.len() != params {
+                    let plural = if params == 1 { "" } else { "s" };
+                    let given = if args.len() == 1 { "was" } else { "were" };
+                    self.diags.push(
+                        Diagnostic::error(
+                            "ty::wrong-arg-count",
+                            format!(
+                                "`{}` takes {params} argument{plural}, but {} {given} given",
+                                name.name,
+                                args.len()
+                            ),
+                        )
+                        .label(expr.span, "in this call")
+                        .help(help),
+                    );
+                    return Expr {
+                        id,
+                        kind: ExprKind::Unit,
+                        span: expr.span,
+                    };
+                }
+                let first = Box::new(args.remove(0));
+                match args.pop() {
+                    Some(len) => ExprKind::Slice(first, Box::new(len)),
+                    None => ExprKind::Len(first),
+                }
+            }
             ast::ExprKind::Call(name, args) => {
                 let callee = self.resolve_fn(name);
                 let args = args.iter().map(|arg| self.expr(arg)).collect();
@@ -1117,7 +1201,8 @@ impl Lowerer<'_> {
                 ExprKind::Logical(*op, self.boxed(lhs), self.boxed(rhs))
             }
             ast::ExprKind::Cast(operand, ty) => {
-                ExprKind::Cast(self.boxed(operand), self.ty(ty), ty.span)
+                let operand = self.boxed(operand);
+                ExprKind::Cast(operand, self.ty(ty, UnsizedPosition::Cast), ty.span)
             }
             ast::ExprKind::Assign(place, value) => {
                 ExprKind::Assign(self.boxed(place), self.boxed(value))

@@ -1,0 +1,3 @@
+// emit: ast
+// After the element type of `[`, either `;` and a length, or `]`.
+fn missing(s: *const [u8 4]) {}

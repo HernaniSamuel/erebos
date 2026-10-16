@@ -1,0 +1,15 @@
+// emit: hir
+// `len` and `slice` are built-in functions, so items cannot have those
+// names (ADR 0031); variables can, see `typeck_slices.ers`. Calls to them
+// take one and two arguments.
+fn len(s: *const [u8]) -> usize { 0 }
+static slice: u32 = 0;
+
+fn calls(s: *const [u8], p: *const u8) {
+    let n: usize = len(s, 1);
+    let t: *const [u8] = slice(p);
+    let u: *const [u8] = slice();
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

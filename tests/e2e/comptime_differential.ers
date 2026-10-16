@@ -176,6 +176,34 @@ fn weights(k: usize) -> u64 {
     mix(h, first[(k + 1) % 4] as u64)
 }
 
+// Slices made from arrays, statics and byte strings, and with `slice`;
+// their lengths and the bytes they cover (ADR 0031).
+static MESSAGES: [*const [u8]; 3] = [&raw const b"one", &raw const b"three", &raw const b""];
+
+fn bytes_sum(s: *const [u8]) -> u64 {
+    let first: *const u8 = s as *const u8;
+    let mut h: u64 = len(s) as u64;
+    let mut i: usize = 0;
+    while i < len(s) {
+        h = mix(h, first[i] as u64);
+        i += 1;
+    }
+    h
+}
+
+fn slices(k: usize) -> u64 {
+    let local: [u8; 5] = [k as u8, 2, 3, 4, 5];
+    let all: *const [u8] = &raw const local;
+    let middle: *const [u8] = slice(&raw const local[1], k % 4);
+    let weights: *const [u16] = &raw const WEIGHTS;
+    let mut h: u64 = bytes_sum(all);
+    h = mix(h, bytes_sum(middle));
+    h = mix(h, bytes_sum(MESSAGES[k % 3]));
+    h = mix(h, bytes_sum(&raw const b"slices"));
+    h = mix(h, len(weights) as u64);
+    mix(h, len(&raw const local) as u64)
+}
+
 struct Uart { thr: u8 }
 
 fn putc(byte: u8) {
@@ -229,6 +257,8 @@ entry fn main() -> ! {
     failures += check(21, comptime layout(), layout());
     failures += check(22, comptime ring(5), ring(opaque_u32(5)));
     failures += check(23, comptime weights(6), weights(opaque_usize(6)));
+    failures += check(24, comptime slices(1), slices(opaque_usize(1)));
+    failures += check(25, comptime slices(5), slices(opaque_usize(5)));
     if failures == 0 {
         putc(b'd'); putc(b'i'); putc(b'f'); putc(b'f'); putc(b'e'); putc(b'r'); putc(b'e');
         putc(b'n'); putc(b't'); putc(b'i'); putc(b'a'); putc(b'l'); putc(b' '); putc(b'o');

@@ -1,6 +1,7 @@
 /* The C twins of the structs in `structs.ers`, for `tests/c_layout.rs`. */
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 struct S { uint8_t a; uint32_t b; uint16_t c; };
@@ -21,3 +22,10 @@ struct __attribute__((aligned(16))) Small { uint8_t x; };
 
 struct Mixed { uint8_t tag; struct Header header; uint16_t tail; };
 struct HoldsAligned { uint8_t a; struct Descriptor d; uint8_t b; };
+
+struct Message {
+    uint8_t kind;
+    struct { const uint8_t *ptr; size_t len; } text;
+    struct { uint16_t *ptr; size_t len; } parts[2];
+    uint16_t end;
+};
