@@ -1,0 +1,13 @@
+// emit: typeck
+// No value of type `!` exists (ADR 0034), so nothing casts to it: not an
+// integer, a `bool`, a thin pointer or a slice.
+fn casts(x: u32, b: bool, p: *const u8, s: *const [u8]) {
+    let int: u32 = x as !;
+    let literal: u32 = 0 as !;
+    let flag: u32 = b as !;
+    let pointer: u32 = p as !;
+    let slice: u32 = s as !;
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

@@ -1076,8 +1076,8 @@ impl Checker<'_, '_> {
         let literal_ty = match target {
             Ty::Int(_) => Some(target),
             Ty::Ptr(_) => Some(Ty::Int(IntTy::Usize)),
-            // Reported, such as `as *const !` (ADR 0034).
-            Ty::Error => Some(Ty::Error),
+            // Reported, such as `as *const !` (ADR 0034), or below, `as !`.
+            Ty::Error | Ty::Never => Some(Ty::Error),
             _ => None,
         };
         let expected = if needs_expected_type(operand) {
@@ -1087,6 +1087,16 @@ impl Checker<'_, '_> {
         };
         let from = self.check(f, operand, expected);
         let castable = |ty: Ty| matches!(ty, Ty::Int(_) | Ty::Ptr(_) | Ty::Error | Ty::Never);
+        // Its result would be a value of type `!`, which never exists
+        // (ADR 0034), whatever is cast.
+        if target == Ty::Never {
+            self.q.diags.push(
+                Diagnostic::error("ty::invalid-cast", "cannot cast to `!`")
+                    .label(target_span, "no value of type `!` exists")
+                    .help("`!` is the type of expressions that do not finish (ADR 0034)"),
+            );
+            return Ty::Error;
+        }
         if from == Ty::Bool {
             // `true as u8 == 1`; a bool converts to integers only.
             if !matches!(target, Ty::Int(_) | Ty::Error) {

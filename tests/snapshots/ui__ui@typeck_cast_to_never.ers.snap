@@ -1,0 +1,61 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_cast_to_never.ers
+---
+--- errors ---
+ty::invalid-cast
+
+  × cannot cast to `!`
+   ╭─[typeck_cast_to_never.ers:5:25]
+ 4 │ fn casts(x: u32, b: bool, p: *const u8, s: *const [u8]) {
+ 5 │     let int: u32 = x as !;
+   ·                         ┬
+   ·                         ╰── no value of type `!` exists
+ 6 │     let literal: u32 = 0 as !;
+   ╰────
+  help: `!` is the type of expressions that do not finish (ADR 0034)
+ty::invalid-cast
+
+  × cannot cast to `!`
+   ╭─[typeck_cast_to_never.ers:6:29]
+ 5 │     let int: u32 = x as !;
+ 6 │     let literal: u32 = 0 as !;
+   ·                             ┬
+   ·                             ╰── no value of type `!` exists
+ 7 │     let flag: u32 = b as !;
+   ╰────
+  help: `!` is the type of expressions that do not finish (ADR 0034)
+ty::invalid-cast
+
+  × cannot cast to `!`
+   ╭─[typeck_cast_to_never.ers:7:26]
+ 6 │     let literal: u32 = 0 as !;
+ 7 │     let flag: u32 = b as !;
+   ·                          ┬
+   ·                          ╰── no value of type `!` exists
+ 8 │     let pointer: u32 = p as !;
+   ╰────
+  help: `!` is the type of expressions that do not finish (ADR 0034)
+ty::invalid-cast
+
+  × cannot cast to `!`
+   ╭─[typeck_cast_to_never.ers:8:29]
+ 7 │     let flag: u32 = b as !;
+ 8 │     let pointer: u32 = p as !;
+   ·                             ┬
+   ·                             ╰── no value of type `!` exists
+ 9 │     let slice: u32 = s as !;
+   ╰────
+  help: `!` is the type of expressions that do not finish (ADR 0034)
+ty::invalid-cast
+
+  × cannot cast to `!`
+    ╭─[typeck_cast_to_never.ers:9:27]
+  8 │     let pointer: u32 = p as !;
+  9 │     let slice: u32 = s as !;
+    ·                           ┬
+    ·                           ╰── no value of type `!` exists
+ 10 │ }
+    ╰────
+  help: `!` is the type of expressions that do not finish (ADR 0034)
