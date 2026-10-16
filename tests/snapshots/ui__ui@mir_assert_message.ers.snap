@@ -1,0 +1,105 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/mir_assert_message.ers
+---
+--- mir ---
+fn reason() -> *const [u8] {
+    let _0: *const [u8];
+    let _1: *const [u8; 14];
+    let _2: *const [u8; 14];
+    let _3: *const [u8];
+
+    bb0: {
+        _1 = const b"x is too large";
+        _2 = &raw const (*_1);
+        _3 = slice(copy _2, const 14_usize);
+        _0 = copy _3;
+        return;
+    }
+}
+
+fn checked(_1: u32, _2: *const [u8], _3: *mut [u8; 3]) -> () {
+    let _0: ();
+    let _1: u32; // x
+    let _2: *const [u8]; // s
+    let _3: *mut [u8; 3]; // m
+    let _4: bool;
+    let _5: *const [u8; 6];
+    let _6: *const [u8; 6];
+    let _7: *const [u8];
+    let _8: bool;
+    let _9: *const [u8];
+    let _10: bool;
+    let _11: bool;
+    let _12: *const [u8];
+
+    bb0: {
+        _4 = Lt(copy _1, const 10_u32);
+        if copy _4 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _8 = Lt(copy _1, const 20_u32);
+        if copy _8 -> [true: bb3, false: bb4];
+    }
+
+    bb2: {
+        _5 = const b"x < 10";
+        _6 = &raw const (*_5);
+        _7 = slice(copy _6, const 6_usize);
+        panic(assertion failed, copy _7);
+    }
+
+    bb3: {
+        _10 = Lt(copy _1, const 30_u32);
+        if copy _10 -> [true: bb5, false: bb6];
+    }
+
+    bb4: {
+        _9 = call reason();
+        panic(assertion failed, copy _9);
+    }
+
+    bb5: {
+        _11 = Lt(copy _1, const 40_u32);
+        if copy _11 -> [true: bb7, false: bb8];
+    }
+
+    bb6: {
+        panic(assertion failed, copy _2);
+    }
+
+    bb7: {
+        return;
+    }
+
+    bb8: {
+        _12 = slice(copy _3, const 3_usize);
+        panic(assertion failed, copy _12);
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}

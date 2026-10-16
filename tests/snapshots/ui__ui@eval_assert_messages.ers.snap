@@ -1,0 +1,105 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/eval_assert_messages.ers
+---
+--- errors ---
+eval::assertion-failed
+
+  × assertion failed: Header must match the wire format
+    ╭─[eval_assert_messages.ers:11:5]
+  9 │ 
+ 10 │ comptime {
+    · ────┬───
+    ·     ╰── while evaluating this `comptime` block
+ 11 │     assert(size_of(Header) == 5, &raw const b"Header must match the wire format");
+    ·     ──────────────────────────────────────┬──────────────────────────────────────
+    ·                                           ╰── assertion failed
+ 12 │ }
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::assertion-failed
+
+  × assertion failed: tab\x09, nul \x00, del \x7f, high \xff, "quote" and \
+    ╭─[eval_assert_messages.ers:15:5]
+ 13 │ 
+ 14 │ comptime {
+    · ────┬───
+    ·     ╰── while evaluating this `comptime` block
+ 15 │     assert(false, BYTES);
+    ·     ──────────┬─────────
+    ·               ╰── assertion failed
+ 16 │ }
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::assertion-failed
+
+  × assertion failed:
+    ╭─[eval_assert_messages.ers:19:5]
+ 17 │ 
+ 18 │ comptime {
+    · ────┬───
+    ·     ╰── while evaluating this `comptime` block
+ 19 │     assert(false, &raw const b"");
+    ·     ──────────────┬──────────────
+    ·                   ╰── assertion failed
+ 20 │ }
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::static-mut
+
+  × `SCRATCH` is a `static mut`, whose value is only known when the program runs
+    ╭─[eval_assert_messages.ers:23:19]
+ 21 │ 
+ 22 │ comptime {
+    · ────┬───
+    ·     ╰── while evaluating this `comptime` block
+ 23 │     assert(false, &raw const SCRATCH);
+    ·                   ─────────┬────────
+    ·                            ╰── read here
+ 24 │ }
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::dangling-pointer
+
+  × this pointer points to a variable of a call that has returned
+    ╭─[eval_assert_messages.ers:27:19]
+ 25 │ 
+ 26 │ comptime {
+    · ────┬───
+    ·     ╰── while evaluating this `comptime` block
+ 27 │     assert(false, gone());
+    ·                   ───┬──
+    ·                      ╰── accessed here
+ 28 │ }
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::invalid-access
+
+  × this access reaches outside the object it points into
+    ╭─[eval_assert_messages.ers:31:19]
+ 29 │ 
+ 30 │ comptime {
+    · ────┬───
+    ·     ╰── while evaluating this `comptime` block
+ 31 │     assert(false, slice((&raw const b"ab") as *const u8, 3));
+    ·                   ────────────────────┬────────────────────
+    ·                                       ╰── accessed here
+ 32 │ }
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::invalid-access
+
+  × address 0x1000 only exists when the program runs, so it cannot be read or written at compile
+  │ time
+    ╭─[eval_assert_messages.ers:35:19]
+ 33 │ 
+ 34 │ comptime {
+    · ────┬───
+    ·     ╰── while evaluating this `comptime` block
+ 35 │     assert(false, slice(0x1000 as *const u8, 1));
+    ·                   ──────────────┬──────────────
+    ·                                 ╰── accessed here
+ 36 │ }
+    ╰────
+  help: this code runs at compile time (ADR 0027)

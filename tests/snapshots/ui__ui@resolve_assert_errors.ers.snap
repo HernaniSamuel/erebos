@@ -14,15 +14,28 @@ resolve::reserved-name
    ·       ╰── a built-in function has this name
  3 │ 
    ╰────
-  help: `assert(cond)` is built in (ADR 0029)
+  help: `assert(cond)` and `assert(cond, msg)` are built in (ADR 0029, 0031)
 ty::wrong-arg-count
 
-  × `assert` takes 1 argument, but 2 were given
+  × `assert` takes 1 or 2 arguments, but 0 were given
    ╭─[resolve_assert_errors.ers:5:5]
  4 │ fn errors(x: u32) {
- 5 │     assert(true, false);
-   ·     ─────────┬─────────
-   ·              ╰── in this call
- 6 │ }
+ 5 │     assert();
+   ·     ────┬───
+   ·         ╰── in this call
+ 6 │     assert(true, &raw const b"a", false);
    ╰────
-  help: `assert(cond)` checks one `bool` (ADR 0029)
+  help: `assert(cond)` checks one `bool`, and `assert(cond, msg)` adds a message, a `*const [u8]`
+        (ADR 0029, 0031)
+ty::wrong-arg-count
+
+  × `assert` takes 1 or 2 arguments, but 3 were given
+   ╭─[resolve_assert_errors.ers:6:5]
+ 5 │     assert();
+ 6 │     assert(true, &raw const b"a", false);
+   ·     ──────────────────┬─────────────────
+   ·                       ╰── in this call
+ 7 │ }
+   ╰────
+  help: `assert(cond)` checks one `bool`, and `assert(cond, msg)` adds a message, a `*const [u8]`
+        (ADR 0029, 0031)

@@ -689,8 +689,13 @@ impl Checker<'_, '_> {
                 }
                 Ty::Unit
             }
-            ExprKind::Assert(cond) => {
+            ExprKind::Assert(cond, message) => {
                 self.check(f, cond, Some(Ty::Bool));
+                // Any `*const [u8]`, or what converts to one (ADR 0031).
+                if let Some(message) = message {
+                    let bytes = Ty::ptr(false, false, Ty::slice(Ty::Int(IntTy::U8)));
+                    self.check(f, message, Some(bytes));
+                }
                 Ty::Unit
             }
             ExprKind::Len(slice) => {
@@ -1874,7 +1879,7 @@ fn expr_label(hir: &Hir, f: &Fn, expr: &Expr) -> String {
         ExprKind::Assign(..) => "assign".to_owned(),
         ExprKind::CompoundAssign(op, _, _) => format!("assign {}=", op.symbol()),
         ExprKind::Block(_) => "block".to_owned(),
-        ExprKind::Assert(_) => "assert".to_owned(),
+        ExprKind::Assert(..) => "assert".to_owned(),
         ExprKind::Len(_) => "len".to_owned(),
         ExprKind::Slice(..) => "slice".to_owned(),
         ExprKind::Loop(_) => "loop".to_owned(),

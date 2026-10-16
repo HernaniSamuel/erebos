@@ -553,9 +553,31 @@ impl Builder<'_, '_> {
                 }
                 Operand::Const(Const::Unit)
             }
-            hir::ExprKind::Assert(cond) => {
+            hir::ExprKind::Assert(cond, None) => {
                 let cond = self.expr(cond);
-                self.panic_unless(cond, PanicCause::AssertionFailed);
+                self.panic_unless(cond, PanicCause::AssertionFailed(None));
+                Operand::Const(Const::Unit)
+            }
+            hir::ExprKind::Assert(cond_expr, Some(message)) => {
+                let cond = self.expr(cond_expr);
+                // Like the right operand of `||`: the message is evaluated
+                // only if the assertion fails (ADR 0031), so it cannot run
+                // when the condition is known to hold (ADR 0032).
+                let holds = self.known_condition(cond_expr) == Some(true);
+                if self.current.is_some() {
+                    let ok_bb = self.new_block();
+                    let fail_bb = self.new_block();
+                    self.terminate(Terminator::If {
+                        cond,
+                        then: ok_bb,
+                        else_: fail_bb,
+                    });
+                    self.current = Some(fail_bb);
+                    let value = self.checked_if(!holds, |this| this.expr(message));
+                    let cause = PanicCause::AssertionFailed(Some((value, message.span)));
+                    self.terminate(Terminator::Panic(cause));
+                    self.current = Some(ok_bb);
+                }
                 Operand::Const(Const::Unit)
             }
             hir::ExprKind::Block(block) => self.block(block),

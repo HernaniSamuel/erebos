@@ -1,0 +1,48 @@
+// emit: mir
+// A failing `assert` at compile time shows its message, with bytes outside
+// printable ASCII as `\xNN`; a message that cannot be read reports that
+// error instead; a passing one never reads its message (ADR 0031).
+static mut SCRATCH: [u8; 2] = [b'o', b'k'];
+const BYTES: *const [u8] = &raw const b"tab\t, nul \x00, del \x7f, high \xff, \"quote\" and \\";
+
+struct Header { kind: u8, len: u32 }
+
+comptime {
+    assert(size_of(Header) == 5, &raw const b"Header must match the wire format");
+}
+
+comptime {
+    assert(false, BYTES);
+}
+
+comptime {
+    assert(false, &raw const b"");
+}
+
+comptime {
+    assert(false, &raw const SCRATCH);
+}
+
+comptime {
+    assert(false, gone());
+}
+
+comptime {
+    assert(false, slice((&raw const b"ab") as *const u8, 3));
+}
+
+comptime {
+    assert(false, slice(0x1000 as *const u8, 1));
+}
+
+comptime {
+    assert(true, &raw const SCRATCH);
+}
+
+fn gone() -> *const [u8] {
+    let local: [u8; 2] = [b'h', b'i'];
+    &raw const local
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

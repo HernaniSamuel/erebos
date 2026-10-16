@@ -1,0 +1,47 @@
+// The message of `assert` is evaluated only if the assertion fails
+// (ADR 0031): a passing one never runs it, and a failing one runs it
+// before calling the panic function, which drops it until M2.6.
+// expect-output: passed
+// expect-output: x is too large
+// expect-output: panic
+// expect-exit: 1
+
+fn putc(byte: u8) {
+    let thr: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+    *thr = byte;
+}
+
+fn print(s: *const [u8]) {
+    let mut i: usize = 0;
+    while i < len(s) {
+        putc((*s)[i]);
+        i += 1;
+    }
+}
+
+fn exit(code: u32) -> ! {
+    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+    *finisher = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    loop {}
+}
+
+fn reason() -> *const [u8] {
+    print(&raw const b"x is too large\n");
+    &raw const b"x is too large"
+}
+
+fn checked(x: u32) {
+    assert(x < 10, reason());
+}
+
+entry fn main() -> ! {
+    checked(3);
+    print(&raw const b"passed\n");
+    checked(12);
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    print(&raw const b"panic\n");
+    exit(1)
+}

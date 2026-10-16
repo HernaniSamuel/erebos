@@ -1,0 +1,17 @@
+// emit: mir
+// The message of `assert` is built on the failing branch only, before the
+// panic, which drops it until M2.6 (ADR 0031). A `*mut [u8; N]` converts to
+// the message's `*const [u8]`.
+fn reason() -> *const [u8] {
+    &raw const b"x is too large"
+}
+
+fn checked(x: u32, s: *const [u8], m: *mut [u8; 3]) {
+    assert(x < 10, &raw const b"x < 10");
+    assert(x < 20, reason());
+    assert(x < 30, s);
+    assert(x < 40, m);
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

@@ -1,6 +1,11 @@
 // emit: typeck
-fn errors(x: u32) {
+// `assert` takes a `bool`, and a message of type `*const [u8]`, or what
+// converts to one (ADR 0029, 0031).
+fn errors(x: u32, w: *const [u16; 2], v: *mut volatile [u8; 2]) {
     assert(x);
+    assert(x == 1, false);
+    assert(x == 2, w);
+    assert(x == 3, v);
 }
 
 entry fn main() -> ! { loop {} }

@@ -471,8 +471,15 @@ impl Interp<'_, '_> {
             }
             Terminator::Panic(cause) => {
                 let (code, message) = match cause {
-                    PanicCause::AssertionFailed => {
+                    PanicCause::AssertionFailed(None) => {
                         ("eval::assertion-failed", "assertion failed".to_owned())
+                    }
+                    PanicCause::AssertionFailed(Some((message, message_span))) => {
+                        let text = self.message(message, message_span)?;
+                        (
+                            "eval::assertion-failed",
+                            format!("assertion failed: {text}"),
+                        )
                     }
                     cause => (
                         "eval::panic",
@@ -489,6 +496,33 @@ impl Interp<'_, '_> {
         frame.block = target;
         frame.statement = 0;
         Ok(None)
+    }
+
+    /// The bytes of the slice `message`, an `assert` message, as text:
+    /// printable ASCII as it is, any other byte as `\xNN` (ADR 0031). A
+    /// byte that cannot be read fails at `span`, the message's.
+    fn message(&mut self, message: Operand, span: Span) -> EvalResult<String> {
+        let Operand::Copy(place) = message else {
+            unreachable!("a slice is an aggregate, read from its place")
+        };
+        let (address, len) = slice_parts(self.place(place)?);
+        let Scalar::Ptr(start) = self.read_at(address, span)? else {
+            unreachable!("a pointer holds a pointer")
+        };
+        let len = self.read_at(len, span)?.int();
+        let mut text = String::new();
+        for i in 0..len {
+            let byte = PlaceRef {
+                ptr: start.add(i),
+                volatile: false,
+                ty: Ty::Int(IntTy::U8),
+            };
+            match self.read_at(byte, span)?.int() as u8 {
+                byte @ b' '..=b'~' => text.push(char::from(byte)),
+                byte => text.push_str(&format!("\\x{byte:02x}")),
+            }
+        }
+        Ok(text)
     }
 
     /// Leaves the innermost frame; the last one gives the result.

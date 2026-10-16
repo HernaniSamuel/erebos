@@ -75,10 +75,10 @@ pub fn lower(
             continue;
         };
         let name = ident.name.as_str();
-        let (label, help) = if let Some((call, adr)) = builtin_fn(name) {
+        let (label, help) = if let Some(help) = builtin_fn(name) {
             (
                 "a built-in function has this name".to_owned(),
-                format!("`{call}` is built in (ADR {adr})"),
+                help.to_owned(),
             )
         } else if name.starts_with("__") {
             (
@@ -231,14 +231,14 @@ pub fn lower(
     })
 }
 
-/// The built-in function named `name`: how it is called, and the ADR that
-/// defines it. A call by that name is always the built-in, so no item can
-/// have it.
-fn builtin_fn(name: &str) -> Option<(&'static str, &'static str)> {
+/// The built-in function named `name`, as a help saying how it is called
+/// and which ADRs define it. A call by that name is always the built-in,
+/// so no item can have it.
+fn builtin_fn(name: &str) -> Option<&'static str> {
     match name {
-        "assert" => Some(("assert(cond)", "0029")),
-        "len" => Some(("len(s)", "0031")),
-        "slice" => Some(("slice(p, n)", "0031")),
+        "assert" => Some("`assert(cond)` and `assert(cond, msg)` are built in (ADR 0029, 0031)"),
+        "len" => Some("`len(s)` is built in (ADR 0031)"),
+        "slice" => Some("`slice(p, n)` is built in (ADR 0031)"),
         _ => None,
     }
 }
@@ -1110,14 +1110,20 @@ impl Lowerer<'_> {
             },
             ast::ExprKind::Call(name, args) if name.name == "assert" => {
                 let mut args: Vec<Expr> = args.iter().map(|arg| self.expr(arg)).collect();
-                if args.len() != 1 {
+                if !matches!(args.len(), 1 | 2) {
+                    let given = if args.len() == 1 { "was" } else { "were" };
                     self.diags.push(
                         Diagnostic::error(
                             "ty::wrong-arg-count",
-                            format!("`assert` takes 1 argument, but {} were given", args.len()),
+                            format!(
+                                "`assert` takes 1 or 2 arguments, but {} {given} given",
+                                args.len()
+                            ),
                         )
                         .label(expr.span, "in this call")
-                        .help("`assert(cond)` checks one `bool` (ADR 0029)"),
+                        .help(
+                            "`assert(cond)` checks one `bool`, and `assert(cond, msg)` adds a message, a `*const [u8]` (ADR 0029, 0031)",
+                        ),
                     );
                     return Expr {
                         id,
@@ -1125,7 +1131,8 @@ impl Lowerer<'_> {
                         span: expr.span,
                     };
                 }
-                ExprKind::Assert(Box::new(args.remove(0)))
+                let message = (args.len() == 2).then(|| Box::new(args.remove(1)));
+                ExprKind::Assert(Box::new(args.remove(0)), message)
             }
             // Built in, whatever else has the name (ADR 0031).
             ast::ExprKind::Call(name, args) if matches!(name.name.as_str(), "len" | "slice") => {

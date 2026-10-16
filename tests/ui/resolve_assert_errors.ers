@@ -2,7 +2,8 @@
 fn assert() {}
 
 fn errors(x: u32) {
-    assert(true, false);
+    assert();
+    assert(true, &raw const b"a", false);
 }
 
 entry fn main() -> ! { loop {} }

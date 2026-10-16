@@ -425,8 +425,8 @@ pub enum ExprKind {
     StructLit(StructTy, Vec<(u32, Expr)>),
     /// `base.field`; the type checker resolves the field.
     Field(Box<Expr>, String, Span),
-    /// `assert(cond)`, built in (ADR 0029).
-    Assert(Box<Expr>),
+    /// `assert(cond)` or `assert(cond, msg)`, built in (ADR 0029, 0031).
+    Assert(Box<Expr>, Option<Box<Expr>>),
     /// `len(s)`, built in (ADR 0031): the length of a slice.
     Len(Box<Expr>),
     /// `slice(p, n)`, built in (ADR 0031): a slice of `n` elements from `p`.
@@ -504,7 +504,7 @@ impl Expr {
             }
             ExprKind::Repeat(e, _)
             | ExprKind::Field(e, _, _)
-            | ExprKind::Assert(e)
+            | ExprKind::Assert(e, None)
             | ExprKind::Len(e)
             | ExprKind::Comptime(e) => e.walk(f),
             ExprKind::StructLit(_, fields) => {
@@ -519,6 +519,7 @@ impl Expr {
             ExprKind::Binary(_, a, b)
             | ExprKind::Index(a, b)
             | ExprKind::Slice(a, b)
+            | ExprKind::Assert(a, Some(b))
             | ExprKind::Logical(_, a, b)
             | ExprKind::Assign(a, b)
             | ExprKind::CompoundAssign(_, a, b) => {

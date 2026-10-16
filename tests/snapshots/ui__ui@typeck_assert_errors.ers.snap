@@ -7,10 +7,40 @@ input_file: tests/ui/typeck_assert_errors.ers
 ty::mismatched-types
 
   × mismatched types
-   ╭─[typeck_assert_errors.ers:3:12]
- 2 │ fn errors(x: u32) {
- 3 │     assert(x);
+   ╭─[typeck_assert_errors.ers:5:12]
+ 4 │ fn errors(x: u32, w: *const [u16; 2], v: *mut volatile [u8; 2]) {
+ 5 │     assert(x);
    ·            ┬
    ·            ╰── expected `bool`, found `u32`
- 4 │ }
+ 6 │     assert(x == 1, false);
+   ╰────
+ty::mismatched-types
+
+  × mismatched types
+   ╭─[typeck_assert_errors.ers:6:20]
+ 5 │     assert(x);
+ 6 │     assert(x == 1, false);
+   ·                    ──┬──
+   ·                      ╰── expected `*const [u8]`, found `bool`
+ 7 │     assert(x == 2, w);
+   ╰────
+ty::mismatched-types
+
+  × mismatched types
+   ╭─[typeck_assert_errors.ers:7:20]
+ 6 │     assert(x == 1, false);
+ 7 │     assert(x == 2, w);
+   ·                    ┬
+   ·                    ╰── expected `*const [u8]`, found `*const [u16; 2]`
+ 8 │     assert(x == 3, v);
+   ╰────
+ty::mismatched-types
+
+  × mismatched types
+   ╭─[typeck_assert_errors.ers:8:20]
+ 7 │     assert(x == 2, w);
+ 8 │     assert(x == 3, v);
+   ·                    ┬
+   ·                    ╰── expected `*const [u8]`, found `*mut volatile [u8; 2]`
+ 9 │ }
    ╰────

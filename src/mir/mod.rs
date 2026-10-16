@@ -574,8 +574,10 @@ pub enum PanicCause {
     DivisionByZero,
     /// An array index not below the length (ADR 0021).
     IndexOutOfBounds,
-    /// `assert` with a false condition (ADR 0029).
-    AssertionFailed,
+    /// `assert` with a false condition (ADR 0029), with its message if it
+    /// has one: a `*const [u8]` computed on the failing path only, and the
+    /// span of the expression that gave it (ADR 0031).
+    AssertionFailed(Option<(Operand, Span)>),
 }
 
 impl PanicCause {
@@ -583,7 +585,7 @@ impl PanicCause {
         match self {
             PanicCause::DivisionByZero => "division by zero",
             PanicCause::IndexOutOfBounds => "index out of bounds",
-            PanicCause::AssertionFailed => "assertion failed",
+            PanicCause::AssertionFailed(_) => "assertion failed",
         }
     }
 }
@@ -700,6 +702,9 @@ impl fmt::Display for Terminator {
             }
             Terminator::Return => f.write_str("return"),
             Terminator::Unreachable => f.write_str("unreachable"),
+            Terminator::Panic(PanicCause::AssertionFailed(Some((message, _)))) => {
+                write!(f, "panic(assertion failed, {message})")
+            }
             Terminator::Panic(cause) => write!(f, "panic({})", cause.describe()),
         }
     }
