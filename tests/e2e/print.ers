@@ -1,0 +1,129 @@
+// The M2.3b milestone program: a real `print` writes byte strings and
+// numbers to the UART through slices (ADR 0031). The messages are slices of
+// byte strings held in a `static` table, computed at compile time, and a
+// `static mut` counts the bytes written (ADR 0030).
+// expect-output: hello from erebos
+// expect-output: statics 7
+// expect-output: byte strings 12
+// expect-output: slices 6
+// expect-output: widest 12
+// expect-output: 42 0x0000002a
+// expect-output: 4294967295 0xffffffff
+// expect-output: 0 0x00000000
+// expect-output: written 112 0x00000070
+// expect-exit: 0
+
+const UART: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+const FINISHER: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+
+const HEX_DIGITS: *const [u8] = &raw const b"0123456789abcdef";
+const TOPICS: *const [u8] = &raw const b"statics, byte strings, slices";
+
+// `n` bytes of `s` from `start`; called at compile time for the table
+// below, so the slices it makes point into the byte strings of the image.
+fn part(s: *const [u8], start: usize, n: usize) -> *const [u8] {
+    slice(&raw const (*s)[start], n)
+}
+
+static GREETING: *const [u8] = &raw const b"hello from erebos";
+static MESSAGES: [*const [u8]; 3] = [part(TOPICS, 0, 7), part(TOPICS, 9, 12), part(TOPICS, 23, 6)];
+
+// The length of the longest message, computed from the static table.
+fn widest(table: *const [*const [u8]]) -> usize {
+    let mut most: usize = 0;
+    let mut i: usize = 0;
+    while i < len(table) {
+        if len((*table)[i]) > most {
+            most = len((*table)[i]);
+        }
+        i += 1;
+    }
+    most
+}
+
+const WIDEST: usize = widest(&raw const MESSAGES);
+
+comptime {
+    assert(WIDEST == 12, &raw const b"the widest message is `byte strings`");
+    assert(len(GREETING) == 17);
+}
+
+static mut WRITTEN: u32 = 0;
+
+fn print(s: *const [u8]) {
+    let mut i: usize = 0;
+    while i < len(s) {
+        *UART = (*s)[i];
+        i += 1;
+    }
+    WRITTEN += len(s) as u32;
+}
+
+fn print_u32(value: u32) {
+    let mut digits: [u8; 10] = [0; 10];
+    let mut n: usize = 0;
+    let mut rest: u32 = value;
+    loop {
+        digits[9 - n] = b'0' + (rest % 10) as u8;
+        n += 1;
+        rest /= 10;
+        if rest == 0 {
+            break;
+        }
+    }
+    print(slice(&raw const digits[10 - n], n));
+}
+
+fn print_hex(value: u32) {
+    let mut digits: [u8; 10] = b"0x00000000";
+    let mut i: usize = 0;
+    while i < 8 {
+        digits[9 - i] = (*HEX_DIGITS)[((value >> (4 * i as u32)) & 0xF) as usize];
+        i += 1;
+    }
+    print(&raw const digits);
+}
+
+fn print_number(value: u32) {
+    print_u32(value);
+    print(&raw const b" ");
+    print_hex(value);
+    print(&raw const b"\n");
+}
+
+fn exit(code: u32) -> ! {
+    *FINISHER = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    loop {}
+}
+
+entry fn main() -> ! {
+    print(GREETING);
+    print(&raw const b"\n");
+
+    let mut i: usize = 0;
+    while i < len(&raw const MESSAGES) {
+        print(MESSAGES[i]);
+        print(&raw const b" ");
+        print_u32(len(MESSAGES[i]) as u32);
+        print(&raw const b"\n");
+        i += 1;
+    }
+
+    print(&raw const b"widest ");
+    print_u32(WIDEST as u32);
+    print(&raw const b"\n");
+
+    print_number(42);
+    print_number(0xFFFF_FFFF);
+    print_number(0);
+
+    // Read before the line below adds to it.
+    let written: u32 = WRITTEN;
+    print(&raw const b"written ");
+    print_number(written);
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(1)
+}
