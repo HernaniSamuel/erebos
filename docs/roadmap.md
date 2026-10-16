@@ -24,7 +24,8 @@ updated, and a program on QEMU.
 | **M2.2** ✅ Aggregates across calls | passing and returning structs and arrays by value with the riscv32 C ABI (small ones in registers, large ones through a hidden pointer) | calls a C function built with clang, to prove the ABI is the real one |
 | **M2.3a** ✅ Compile-time execution | the MIR interpreter and on-demand checking (ADR 0027, 0028); `const` items; `comptime` expressions and blocks; array lengths and attribute arguments computed at compile time | a lookup table computed by the compiler, and `comptime` checks of struct layouts |
 | **M2.3b** ✅ Statics and byte strings | `static`/`static mut` with compile-time initializers, `#[align(N)]` on statics; `_start` initializes `.data` and `.bss`; `b"..."`; slices `*const [T]` | prints with a real `print` function |
-| **M2.4** Enums and `match` | enums with explicit discriminants (`enum Mode: u8 { Off = 0, Run = 3 }`), `match` on integers, `bool` and enums; then payloads, nested patterns and exhaustiveness | a state machine |
+| **M2.4a** Enums and `match` | enums with explicit discriminants (`enum Mode: u8 { Off = 0, Run = 3 }`), `match` on integers, `bool` and enums, with exhaustiveness and dead arms checked | a state machine |
+| **M2.4b** Enum payloads | variants carrying data, their layout and ABI, patterns nested in payloads | a command decoder: messages with payloads, decoded from bytes and dispatched with `match` |
 | **M2.5** `Option` and `Result` | built into the compiler until generics exist; the `?` operator | a number parser returning `Result` |
 | **M2.6** Modules and panic information | `mod`, `use`, `pub`, `core`; `panic fn on_panic(info: *const PanicInfo) -> !` with file, line and a `PanicReason` enum (ADR 0014) | a panic prints `division by zero at main.ers:12` |
 
@@ -36,8 +37,8 @@ Decisions already agreed for the later steps (their ADRs come with the step):
   It is a place in read-only memory, so `&raw const b"abc"` points at it
   without a copy, while `let s: [u8; 3] = b"abc";` copies it. This revisits
   ADR 0016 (no strings).
-- **M2.4:** every `match` is exhaustive; on integers that means an explicit
-  `_` arm.
+- **M2.4:** every `match` is exhaustive; on integers that means a
+  catch-all arm (`_` or a `let` binding, ADR 0037).
 - **M2.5:** `Option(T)` and `Result(T, E)` are compiler-known types, as
   `[T; N]` is; in M6 they become ordinary comptime functions in `core`
   returning enums (ADR 0027), with the same syntax, so programs do not
@@ -74,13 +75,14 @@ Agreed as useful, not yet scheduled:
 Questions accepted ADRs leave to a later step, to settle in that step's
 ADRs:
 
-- **M2.4:**
-  - In a `match`, whether a name is a constant to compare with or a new
-    variable (ADR 0029).
-  - What an enum read from memory or a register holds when its value is
-    no variant, at run time and at compile time; ADR 0022 answered the same
-    question for `bool`.
+- **M2.4a:** settled by ADR 0036 and 0037: whether a name in
+  a pattern is a constant or a new variable (ADR 0029), and what an enum
+  holds when its value is no variant.
+- **M2.4b:**
   - Enum payloads of type `!` (ADR 0034: `!` is not a type of memory).
+  - The shape of payloads (one value per variant or several) and the
+    layout and ABI of enums with payloads (ADR 0035 covers enums without).
+  - `let` bindings inside or-patterns (ADR 0037).
 - **M2.5:**
   - `!` as a type argument of `Option(T)` and `Result(T, E)`, such as
     the infallible `Result(u32, !)` (ADR 0034).
@@ -158,4 +160,4 @@ Documentation owed:
   QEMU through a `print` function taking a slice, with its messages in a
   static table; an ELF test checks where statics go and the symbols
   `_start` relies on.
-- **Next: M2.4** (enums and `match`).
+- **Next: M2.4a** (enums and `match`).

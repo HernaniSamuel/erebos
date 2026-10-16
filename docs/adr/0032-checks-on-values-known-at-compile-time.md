@@ -1,6 +1,6 @@
 # 0032. Checks on values known at compile time
 
-- Status: Accepted
+- Status: Accepted; amended by 0035 (enum variants are known), 0037 (arms a `match` never takes)
 - Date: 2026-10-15
 - Amends: 0007 (shift amounts and divisors), 0021 (array indices)
 
