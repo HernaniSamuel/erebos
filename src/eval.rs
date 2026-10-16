@@ -1,5 +1,6 @@
 //! The compile-time evaluator (ADR 0027, 0029): runs MIR the way the
-//! target would, and is the "const evaluation" layer of ADR 0003.
+//! target would, and is the evaluation layer of ADR 0033, which gives
+//! values back to type checking and MIR building.
 //!
 //! Memory is bytes laid out as on the target (ADR 0022), each byte known to
 //! be written or not. A pointer is an object and an offset, never a host

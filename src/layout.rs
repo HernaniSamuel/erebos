@@ -1,6 +1,7 @@
-//! Sizes, alignments and field offsets of types (ADR 0022): the rules of the
-//! layout part of the "const evaluation" layer of ADR 0003. Structs are laid
-//! out on demand by `query`, which applies them.
+//! Sizes, alignments and field offsets of types (ADR 0022). Layouts are a
+//! function of types, not a pipeline stage (ADR 0033): these are the rules,
+//! and `query` applies them on demand, laying out structs for type
+//! checking, MIR building and the evaluator.
 
 use crate::hir::{StructId, Ty};
 use crate::target;

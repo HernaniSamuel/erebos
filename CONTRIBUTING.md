@@ -23,9 +23,9 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/):
 
 **Types:** `feat`, `fix`, `refactor`, `perf`, `test`, `docs`, `build`, `ci`, `chore`.
 
-**Scopes** follow the compiler layers (ADR 0003):
-`span`, `diag`, `lexer`, `parser`, `ast`, `resolve`, `hir`, `ty`, `const`,
-`mir`, `codegen`, `link`, `driver`, `adr`, `spec`.
+**Scopes** follow the compiler layers (ADR 0003, 0033):
+`span`, `diag`, `lexer`, `parser`, `ast`, `resolve`, `hir`, `typeck`,
+`layout`, `mir`, `eval`, `codegen`, `link`, `driver`, `adr`, `spec`.
 
 Examples:
 
@@ -69,7 +69,10 @@ cargo test
   `expect-exit` must run forever. Any CPU exception fails the test.
   `// link-c: file.c` (repeatable) compiles a C file next to the program
   with clang for the target, at the matching optimization level, and links
-  it in; the program declares its functions with `extern fn`.
+  it in; the program declares its functions with `extern fn` and its
+  globals with `extern static`. `// c-flags: <flags>` (repeatable) passes
+  extra flags to clang for those C files, such as
+  `-msmall-data-limit=8` or `-g`.
   Every program runs both unoptimized and with `-O`: the optimizer exploits
   undefined behavior, so a difference means the generated IR is wrong.
 - `erebos build <file> [-O] --emit=<stage>` prints any stage (`tokens`, `ast`,
@@ -80,6 +83,12 @@ cargo test
   (ADR 0022). It needs clang: `EREBOS_CLANG`, or the one in the LLVM
   archive (`C:\llvm-22\bin\clang.exe`). A struct added to one file needs
   its twin in the other.
+- **ELF checks** (`tests/elf.rs`) build a program and read its sections,
+  symbols and program headers with `llvm-readelf`: where each kind of
+  static goes, and the symbols `_start` uses to initialize `.data` and
+  `.bss` (ADR 0030). It needs `llvm-readelf`, found like clang:
+  `EREBOS_READELF`, or the one in the LLVM archive
+  (`C:\llvm-22\bin\llvm-readelf.exe`).
 - **Reproducible builds** (`tests/reproducible.rs`) compile a program twice
   at each level and require identical executables (ADR 0027).
 - **Fuzzing** (`tests/fuzz.rs`) mutates the test programs and requires the
