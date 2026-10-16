@@ -1,0 +1,43 @@
+// emit: mir
+// At compile time a byte string is read-only memory with an address
+// (ADR 0031): it can be read and indexed, and a pointer into it, up to one
+// past its end, can be a result. An occurrence is the same object in every
+// evaluation, and pointers into one byte string compare by offset
+// (ADR 0030).
+const HELLO: [u8; 5] = b"hello";
+const SECOND: u8 = b"hello"[1];
+const OK: *const [u8; 2] = &raw const b"ok";
+const END: *const u8 = &raw const (&raw const b"ok" as *const u8)[2];
+static MESSAGES: [*const [u8; 2]; 2] = [&raw const b"hi", &raw const b"yo"];
+const X: *const [u8; 1] = x();
+const SAME_OCCURRENCE: bool = X == x();
+const OFFSETS: [bool; 3] = offsets();
+
+fn x() -> *const [u8; 1] {
+    &raw const b"x"
+}
+
+fn offsets() -> [bool; 3] {
+    let p: *const u8 = &raw const b"abc" as *const u8;
+    [&raw const p[1] == &raw const p[1], &raw const p[1] < &raw const p[3], p != &raw const p[2]]
+}
+
+// Expected: b'h', b'o', from `HELLO`; b'e'; b'k', read through `OK`; b'i',
+// through `MESSAGES`; true; true, true, true.
+fn answers() -> u32 {
+    let h: u8 = comptime HELLO[0];
+    let o: u8 = comptime HELLO[4];
+    let second: u8 = SECOND;
+    let k: u8 = comptime (*OK)[1];
+    let i: u8 = comptime (*MESSAGES[0])[1];
+    let same: bool = SAME_OCCURRENCE;
+    let equal: bool = comptime OFFSETS[0];
+    let ordered: bool = comptime OFFSETS[1];
+    let different: bool = comptime OFFSETS[2];
+    let ok: *const [u8; 2] = OK;
+    let end: *const u8 = END;
+    0
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

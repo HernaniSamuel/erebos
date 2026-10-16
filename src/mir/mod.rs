@@ -47,7 +47,8 @@ pub struct Mir {
     /// Read-only data computed at compile time, which constant locals are
     /// bound to (ADR 0029).
     pub data: Vec<ConstData>,
-    /// Every static, in source order (ADR 0030).
+    /// Every static, in source order (ADR 0030), then every byte string
+    /// (ADR 0031).
     pub statics: Vec<Static>,
     pub bodies: Vec<Body>,
     pub entry: BodyId,
@@ -179,13 +180,17 @@ pub struct StaticId(pub u32);
 /// What MIR knows of a static (ADR 0030); its memory is a [`Static`].
 pub struct StaticDef {
     pub id: StaticId,
-    /// Its symbol name (ADR 0030).
+    /// Its symbol name (ADR 0030); for a byte string, which has none, its
+    /// bytes as written.
     pub name: String,
     pub ty: Ty,
     /// `static mut`: written by the program.
     pub mutable: bool,
     /// An `extern static`, defined outside the program: it has no bytes.
     pub external: bool,
+    /// For a byte string (ADR 0031), an unnamed read-only static of
+    /// alignment 1: its bytes.
+    pub byte_string: Option<Vec<u8>>,
     /// `*mut T` for a `static mut`, else `*const T`.
     address_ty: Ty,
 }
@@ -215,6 +220,27 @@ impl StaticRef {
             ty,
             mutable,
             external,
+            byte_string: None,
+            address_ty,
+        })))
+    }
+
+    /// A byte string (ADR 0031): read-only, of type `[u8; N]`.
+    pub fn byte_string(id: StaticId, bytes: Vec<u8>) -> StaticRef {
+        let ty = Ty::Array(Box::leak(Box::new(Ty::Int(IntTy::U8))), bytes.len() as u64);
+        let address_ty = Ty::Ptr(Ptr {
+            mutable: false,
+            volatile: false,
+            pointee: Box::leak(Box::new(ty)),
+        });
+        StaticRef(Box::leak(Box::new(StaticDef {
+            id,
+            // As written, with escapes for bytes not printable (ADR 0016).
+            name: format!("b\"{}\"", bytes.escape_ascii()),
+            ty,
+            mutable: false,
+            external: false,
+            byte_string: Some(bytes),
             address_ty,
         })))
     }
@@ -566,6 +592,9 @@ impl fmt::Display for Operand {
             }
             Operand::Const(Const::Bool(value)) => write!(f, "const {value}"),
             Operand::Const(Const::Unit) => f.write_str("const ()"),
+            Operand::Const(Const::Static(s)) if s.def().byte_string.is_some() => {
+                write!(f, "const {}", s.def().name)
+            }
             Operand::Const(Const::Static(s)) => write!(f, "const static {}", s.def().name),
         }
     }
@@ -646,7 +675,14 @@ impl fmt::Display for Mir {
         if !self.structs.is_empty() {
             writeln!(f)?;
         }
-        for s in &self.statics {
+        // Byte strings show where they are used.
+        let named = self
+            .statics
+            .iter()
+            .filter(|s| s.def.def().byte_string.is_none());
+        let mut any = false;
+        for s in named {
+            any = true;
             let def = s.def.def();
             let external = if def.external { "extern " } else { "" };
             let mutability = if def.mutable { "mut " } else { "" };
@@ -656,7 +692,7 @@ impl fmt::Display for Mir {
                 def.name, def.ty, s.align
             )?;
         }
-        if !self.statics.is_empty() {
+        if any {
             writeln!(f)?;
         }
         for (i, (id, body)) in self.bodies().enumerate() {

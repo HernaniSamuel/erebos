@@ -9,6 +9,8 @@ pub enum TokenKind {
     Int,
     /// Byte literal `b'x'`.
     Byte,
+    /// Byte string `b"..."` (ADR 0031).
+    ByteString,
 
     // Keywords
     AlignOf,
@@ -124,6 +126,7 @@ impl TokenKind {
             TokenKind::Ident => "identifier",
             TokenKind::Int => "integer literal",
             TokenKind::Byte => "byte literal",
+            TokenKind::ByteString => "byte string",
             TokenKind::AlignOf => "`align_of`",
             TokenKind::As => "`as`",
             TokenKind::Break => "`break`",

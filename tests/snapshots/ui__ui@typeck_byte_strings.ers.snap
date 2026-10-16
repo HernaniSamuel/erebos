@@ -1,0 +1,24 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_byte_strings.ers
+---
+--- typeck ---
+fn lengths() -> ()
+    let empty: [u8; 0]
+    let three: [u8; 3]
+    let hello: [u8; 6]
+    let p: *const [u8; 2]
+    let c: u8
+    expr 0 byte string b"" 180..183: [u8; 0]
+    expr 1 byte string b"a\x00b" 210..219: [u8; 3]
+    expr 2 byte string b"hello\n" 246..256: [u8; 6]
+    expr 3 &raw const 286..302: *const [u8; 2]
+    expr 4 byte string b"ok" 297..302: [u8; 2]
+    expr 5 index 320..329: u8
+    expr 6 byte string b"abc" 320..326: [u8; 3]
+    expr 7 int 1 327..328: usize
+entry fn main() -> !
+    expr 8 loop 357..364: !
+panic fn on_panic() -> !
+    expr 9 loop 394..401: !

@@ -1,0 +1,5 @@
+// emit: tokens
+// Byte strings (ADR 0031): printable ASCII written directly, and the escapes
+// of ADR 0016, a quote among them.
+b"" b"hello" b"a\x00b" b"\n\r\t\\'\"\0" b"it's" b"caf\xC3\xA9" b"\x7f"
+b"" b'x' b"}" b"//not a comment"

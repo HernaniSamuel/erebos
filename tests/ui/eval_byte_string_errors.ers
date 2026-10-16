@@ -1,0 +1,29 @@
+// emit: mir
+// Writing a byte string at compile time is `eval::read-only-write`.
+// Identical byte strings may share memory, with each other and with other
+// read-only data, so a pointer into one compares with a pointer into
+// another object only as an `eval::pointer-compare` (ADR 0030, 0031). A
+// result pointing beyond one past its end is `eval::pointer-out-of-bounds`.
+static LIMIT: u32 = 10;
+const WRITE: u8 = write();
+const TWO_STRINGS: bool = &raw const b"ab" == &raw const b"cd";
+const SAME_BYTES: bool = &raw const b"ab" != &raw const b"ab";
+const WITH_STATIC: bool = &raw const b"abcd" as *const u32 == &raw const LIMIT;
+const WITH_LOCAL: bool = with_local();
+const WITH_ADDRESS: bool = &raw const b"ab" as *const u8 == 0x1000 as *const u8;
+const ORDERED: bool = (&raw const b"ab" as *const u8) < (&raw const b"cd" as *const u8);
+const PAST_END: *const u8 = &raw const (&raw const b"ok" as *const u8)[3];
+
+fn write() -> u8 {
+    let p: *mut u8 = &raw const b"abc" as *mut u8;
+    p[1] = b'x';
+    p[1]
+}
+
+fn with_local() -> bool {
+    let a: [u8; 2] = [1, 2];
+    &raw const b"ab" == &raw const a
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

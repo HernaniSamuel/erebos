@@ -176,6 +176,8 @@ pub enum ExprKind {
     Int(Option<u64>),
     /// Byte literal `b'x'`; `None` if the lexer rejected it.
     Byte(Option<u8>),
+    /// Byte string `b"..."` (ADR 0031); `None` if the lexer rejected it.
+    ByteString(Option<Vec<u8>>),
     /// `true` or `false`
     Bool(bool),
     /// `()`

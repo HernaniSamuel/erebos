@@ -1,0 +1,130 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/eval_byte_string_errors.ers
+---
+--- errors ---
+eval::pointer-compare
+
+  × a byte string may share memory with other read-only data, so these pointers may be equal at
+  │ run time
+    ╭─[eval_byte_string_errors.ers:9:27]
+  8 │ const WRITE: u8 = write();
+  9 │ const TWO_STRINGS: bool = &raw const b"ab" == &raw const b"cd";
+    ·       ─────┬─────         ──────────────────┬─────────────────
+    ·            │                                ╰── compared here
+    ·            ╰── while evaluating the constant `TWO_STRINGS`
+ 10 │ const SAME_BYTES: bool = &raw const b"ab" != &raw const b"ab";
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::pointer-compare
+
+  × a byte string may share memory with other read-only data, so these pointers may be equal at
+  │ run time
+    ╭─[eval_byte_string_errors.ers:10:26]
+  9 │ const TWO_STRINGS: bool = &raw const b"ab" == &raw const b"cd";
+ 10 │ const SAME_BYTES: bool = &raw const b"ab" != &raw const b"ab";
+    ·       ─────┬────         ──────────────────┬─────────────────
+    ·            │                               ╰── compared here
+    ·            ╰── while evaluating the constant `SAME_BYTES`
+ 11 │ const WITH_STATIC: bool = &raw const b"abcd" as *const u32 == &raw const LIMIT;
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::pointer-compare
+
+  × a byte string may share memory with other read-only data, so these pointers may be equal at
+  │ run time
+    ╭─[eval_byte_string_errors.ers:11:27]
+ 10 │ const SAME_BYTES: bool = &raw const b"ab" != &raw const b"ab";
+ 11 │ const WITH_STATIC: bool = &raw const b"abcd" as *const u32 == &raw const LIMIT;
+    ·       ─────┬─────         ──────────────────────────┬─────────────────────────
+    ·            │                                        ╰── compared here
+    ·            ╰── while evaluating the constant `WITH_STATIC`
+ 12 │ const WITH_LOCAL: bool = with_local();
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::pointer-compare
+
+  × these pointers cannot be compared at compile time, since their addresses only exist after
+  │ linking
+    ╭─[eval_byte_string_errors.ers:13:28]
+ 12 │ const WITH_LOCAL: bool = with_local();
+ 13 │ const WITH_ADDRESS: bool = &raw const b"ab" as *const u8 == 0x1000 as *const u8;
+    ·       ──────┬─────         ──────────────────────────┬─────────────────────────
+    ·             │                                        ╰── compared here
+    ·             ╰── while evaluating the constant `WITH_ADDRESS`
+ 14 │ const ORDERED: bool = (&raw const b"ab" as *const u8) < (&raw const b"cd" as *const u8);
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::pointer-compare
+
+  × pointers into different objects have no order known at compile time, since their addresses
+  │ only exist after linking
+    ╭─[eval_byte_string_errors.ers:14:23]
+ 13 │ const WITH_ADDRESS: bool = &raw const b"ab" as *const u8 == 0x1000 as *const u8;
+ 14 │ const ORDERED: bool = (&raw const b"ab" as *const u8) < (&raw const b"cd" as *const u8);
+    ·       ───┬───         ────────────────────────────────┬────────────────────────────────
+    ·          │                                            ╰── compared here
+    ·          ╰── while evaluating the constant `ORDERED`
+ 15 │ const PAST_END: *const u8 = &raw const (&raw const b"ok" as *const u8)[3];
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::pointer-out-of-bounds
+
+  × the value holds a pointer to offset 3 of `b"ok"`, which is 2 bytes long
+    ╭─[eval_byte_string_errors.ers:15:1]
+ 14 │ const ORDERED: bool = (&raw const b"ab" as *const u8) < (&raw const b"cd" as *const u8);
+ 15 │ const PAST_END: *const u8 = &raw const (&raw const b"ok" as *const u8)[3];
+    · ─────────────────────────────────────┬────────────────────────────────────┬
+    ·                                      │                                    ╰── while evaluating the constant `PAST_END`
+    ·                                      ╰── this value
+ 16 │ 
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::read-only-write
+
+  × a byte string cannot be written
+   ╭─[eval_byte_string_errors.ers:8:7]
+ 7 │ static LIMIT: u32 = 10;
+ 8 │ const WRITE: u8 = write();
+   ·       ──┬──       ───┬───
+   ·         │            ╰── called here
+   ·         ╰── while evaluating the constant `WRITE`
+ 9 │ const TWO_STRINGS: bool = &raw const b"ab" == &raw const b"cd";
+   ╰────
+    ╭─[eval_byte_string_errors.ers:19:5]
+ 18 │     let p: *mut u8 = &raw const b"abc" as *mut u8;
+ 19 │     p[1] = b'x';
+    ·     ─────┬─────
+    ·          ╰── written here
+ 20 │     p[1]
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::pointer-compare
+
+  × a byte string may share memory with other read-only data, so these pointers may be equal at
+  │ run time
+    ╭─[eval_byte_string_errors.ers:25:5]
+ 11 │ const WITH_STATIC: bool = &raw const b"abcd" as *const u32 == &raw const LIMIT;
+ 12 │ const WITH_LOCAL: bool = with_local();
+    ·       ─────┬────         ──────┬─────
+    ·            │                   ╰── called here
+    ·            ╰── while evaluating the constant `WITH_LOCAL`
+ 13 │ const WITH_ADDRESS: bool = &raw const b"ab" as *const u8 == 0x1000 as *const u8;
+ 14 │ const ORDERED: bool = (&raw const b"ab" as *const u8) < (&raw const b"cd" as *const u8);
+ 15 │ const PAST_END: *const u8 = &raw const (&raw const b"ok" as *const u8)[3];
+ 16 │ 
+ 17 │ fn write() -> u8 {
+ 18 │     let p: *mut u8 = &raw const b"abc" as *mut u8;
+ 19 │     p[1] = b'x';
+ 20 │     p[1]
+ 21 │ }
+ 22 │ 
+ 23 │ fn with_local() -> bool {
+ 24 │     let a: [u8; 2] = [1, 2];
+ 25 │     &raw const b"ab" == &raw const a
+    ·     ────────────────┬───────────────
+    ·                     ╰── compared here
+ 26 │ }
+    ╰────
+  help: this code runs at compile time (ADR 0027)

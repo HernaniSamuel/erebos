@@ -1,0 +1,24 @@
+// emit: mir
+// A byte string is reached through its address, like a static, one object
+// per occurrence (ADR 0031): used as a value it is copied from there,
+// indexing it reads one byte, and `&raw const` takes its address without a
+// copy.
+fn copied() -> [u8; 6] {
+    let greeting: [u8; 6] = b"hello\n";
+    greeting
+}
+
+fn index(i: usize) -> u8 {
+    b"a\x00b"[i]
+}
+
+fn address() -> *const [u8; 2] {
+    &raw const b"ok"
+}
+
+fn two_occurrences() -> bool {
+    &raw const b"x" == &raw const b"x"
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

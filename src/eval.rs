@@ -349,7 +349,7 @@ impl Interp<'_, '_> {
 
     /// The object of the static `id`.
     fn static_alloc_of(&mut self, id: StaticId) -> AllocId {
-        let s = self.q.mir_static(crate::hir::StaticId(id.0));
+        let s = self.q.mir_static_by_id(id);
         self.static_alloc(s)
     }
 
@@ -702,9 +702,13 @@ impl Interp<'_, '_> {
                         ));
                     }
                     if write {
+                        let what = match def.byte_string {
+                            Some(_) => "a byte string".to_owned(),
+                            None => format!("`{}` is a `static`, which", def.name),
+                        };
                         return Err(self.error(
                             "eval::read-only-write",
-                            format!("`{}` is a `static`, which cannot be written", def.name),
+                            format!("{what} cannot be written"),
                             label,
                             span,
                         ));
@@ -734,6 +738,11 @@ impl Interp<'_, '_> {
         let Some(StaticObject { def, loaded: false }) = object.static_ else {
             return Ok(());
         };
+        if let Some(bytes) = &def.def().byte_string {
+            self.fill(alloc, bytes.clone(), &[]);
+            self.allocs[alloc.0 as usize].static_ = Some(StaticObject { def, loaded: true });
+            return Ok(());
+        }
         let id = crate::hir::StaticId(def.def().id.0);
         let value = self.q.static_value(id).ok_or(Failure::Poisoned)?;
         self.fill(alloc, value.bytes, &value.relocations);
@@ -1018,6 +1027,19 @@ impl Interp<'_, '_> {
                 if external(a) || external(b) {
                     return fail(
                         "an `extern static` may be the same memory as another object, so these pointers may be equal at run time",
+                    );
+                }
+                // Byte strings may share memory with each other and with
+                // other read-only data holding the same bytes (ADR 0031).
+                let byte_string = |alloc: AllocId| {
+                    self.allocs[alloc.0 as usize]
+                        .static_
+                        .as_ref()
+                        .is_some_and(|s| s.def.def().byte_string.is_some())
+                };
+                if byte_string(a) || byte_string(b) {
+                    return fail(
+                        "a byte string may share memory with other read-only data, so these pointers may be equal at run time",
                     );
                 }
                 // One object may start where another ends, and one of

@@ -106,6 +106,11 @@ const SNIPPETS: &[&str] = &[
     "[u8; size_of(S)]",
     "#[align(K)]",
     "K as usize",
+    "b\"ab\"",
+    "b\"",
+    "b\"\\x\"",
+    "&raw const b\"x\"",
+    "b\"abc\"[i]",
 ];
 
 /// xorshift64: small, deterministic, good enough to pick mutations.

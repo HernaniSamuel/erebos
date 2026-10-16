@@ -1,0 +1,39 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/mir_byte_string_index_errors.ers
+---
+--- errors ---
+ty::index-out-of-bounds
+
+  × index out of bounds
+   ╭─[mir_byte_string_index_errors.ers:7:12]
+ 6 │ fn literal() -> u8 {
+ 7 │     b"abc"[3]
+   ·            ┬
+   ·            ╰── the length is 3 but the index is 3
+ 8 │ }
+   ╰────
+  help: at run time this would call the panic function (ADR 0021)
+ty::index-out-of-bounds
+
+  × index out of bounds
+    ╭─[mir_byte_string_index_errors.ers:11:12]
+ 10 │ fn constant() -> u8 {
+ 11 │     b"abc"[LAST]
+    ·            ──┬─
+    ·              ╰── the length is 3 but the index is 3
+ 12 │ }
+    ╰────
+  help: at run time this would call the panic function (ADR 0021)
+ty::index-out-of-bounds
+
+  × index out of bounds
+    ╭─[mir_byte_string_index_errors.ers:15:9]
+ 14 │ fn empty() -> u8 {
+ 15 │     b""[0]
+    ·         ┬
+    ·         ╰── the length is 0 but the index is 0
+ 16 │ }
+    ╰────
+  help: at run time this would call the panic function (ADR 0021)

@@ -1,0 +1,104 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/lex_byte_string_errors.ers
+---
+--- errors ---
+lexer::invalid-byte
+
+  × unknown escape sequence
+   ╭─[lex_byte_string_errors.ers:4:3]
+ 3 │ // in byte literals; a byte string ends on its line (ADR 0031).
+ 4 │ b"\q" b"é" b"tab    here" b"\x4" b"two \q bad \z"
+   ·   ─┬
+   ·    ╰── invalid in a byte string
+ 5 │ b"no closing quote
+   ╰────
+  help: escapes: \n \r \t \\ \' \" \0 and \xNN for any byte (ADR 0016)
+lexer::invalid-byte
+
+  × only printable ASCII can be written directly
+   ╭─[lex_byte_string_errors.ers:4:9]
+ 3 │ // in byte literals; a byte string ends on its line (ADR 0031).
+ 4 │ b"\q" b"é" b"tab    here" b"\x4" b"two \q bad \z"
+   ·         ┬
+   ·         ╰── invalid in a byte string
+ 5 │ b"no closing quote
+   ╰────
+  help: escapes: \n \r \t \\ \' \" \0 and \xNN for any byte (ADR 0016)
+lexer::invalid-byte
+
+  × only printable ASCII can be written directly
+   ╭─[lex_byte_string_errors.ers:4:18]
+ 3 │ // in byte literals; a byte string ends on its line (ADR 0031).
+ 4 │ b"\q" b"é" b"tab    here" b"\x4" b"two \q bad \z"
+   ·                 ──┬─
+   ·                   ╰── invalid in a byte string
+ 5 │ b"no closing quote
+   ╰────
+  help: escapes: \n \r \t \\ \' \" \0 and \xNN for any byte (ADR 0016)
+lexer::invalid-byte
+
+  × unknown escape sequence
+   ╭─[lex_byte_string_errors.ers:4:27]
+ 3 │ // in byte literals; a byte string ends on its line (ADR 0031).
+ 4 │ b"\q" b"é" b"tab    here" b"\x4" b"two \q bad \z"
+   ·                             ─┬─
+   ·                              ╰── invalid in a byte string
+ 5 │ b"no closing quote
+   ╰────
+  help: escapes: \n \r \t \\ \' \" \0 and \xNN for any byte (ADR 0016)
+lexer::invalid-byte
+
+  × unknown escape sequence
+   ╭─[lex_byte_string_errors.ers:4:38]
+ 3 │ // in byte literals; a byte string ends on its line (ADR 0031).
+ 4 │ b"\q" b"é" b"tab    here" b"\x4" b"two \q bad \z"
+   ·                                        ─┬
+   ·                                         ╰── invalid in a byte string
+ 5 │ b"no closing quote
+   ╰────
+  help: escapes: \n \r \t \\ \' \" \0 and \xNN for any byte (ADR 0016)
+lexer::invalid-byte
+
+  × unknown escape sequence
+   ╭─[lex_byte_string_errors.ers:4:45]
+ 3 │ // in byte literals; a byte string ends on its line (ADR 0031).
+ 4 │ b"\q" b"é" b"tab    here" b"\x4" b"two \q bad \z"
+   ·                                               ─┬
+   ·                                                ╰── invalid in a byte string
+ 5 │ b"no closing quote
+   ╰────
+  help: escapes: \n \r \t \\ \' \" \0 and \xNN for any byte (ADR 0016)
+lexer::unterminated-byte-string
+
+  × unterminated byte string
+   ╭─[lex_byte_string_errors.ers:5:1]
+ 4 │ b"\q" b"é" b"tab    here" b"\x4" b"two \q bad \z"
+ 5 │ b"no closing quote
+   · ─────────┬────────
+   ·          ╰── missing closing `"`
+ 6 │ b"escaped line break\
+   ╰────
+  help: a byte string ends on its line; write a line break as `\n` (ADR 0031)
+lexer::unterminated-byte-string
+
+  × unterminated byte string
+   ╭─[lex_byte_string_errors.ers:6:1]
+ 5 │ b"no closing quote
+ 6 │ b"escaped line break\
+   · ──────────┬──────────
+   ·           ╰── missing closing `"`
+ 7 │ b"still lexed after the errors"
+   ╰────
+  help: a byte string ends on its line; write a line break as `\n` (ADR 0031)
+lexer::unterminated-byte-string
+
+  × unterminated byte string
+   ╭─[lex_byte_string_errors.ers:8:1]
+ 7 │ b"still lexed after the errors"
+ 8 │ b"end of file
+   · ──────┬──────
+   ·       ╰── missing closing `"`
+   ╰────
+  help: a byte string ends on its line; write a line break as `\n` (ADR 0031)

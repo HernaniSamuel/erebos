@@ -1,0 +1,18 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/lex_byte_strings.ers
+---
+--- tokens ---
+ByteString 130..133 "b\"\""
+ByteString 134..142 "b\"hello\""
+ByteString 143..152 "b\"a\\x00b\""
+ByteString 153..169 "b\"\\n\\r\\t\\\\'\\\"\\0\""
+ByteString 170..177 "b\"it's\""
+ByteString 178..192 "b\"caf\\xC3\\xA9\""
+ByteString 193..200 "b\"\\x7f\""
+ByteString 201..204 "b\"\""
+Byte 205..209 "b'x'"
+ByteString 210..214 "b\"}\""
+ByteString 215..233 "b\"//not a comment\""
+Eof 234..234 ""

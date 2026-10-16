@@ -1,0 +1,193 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/codegen_byte_strings.ers
+---
+--- llvm-ir ---
+; ModuleID = 'erebos'
+source_filename = "erebos"
+target datalayout = "e-m:e-p:32:32-i64:64-n32-S128"
+target triple = "riscv32-unknown-none-elf"
+
+module asm "\09.section .text.start, \22ax\22, @progbits"
+module asm "\09.globl _start"
+module asm "\09.type _start, @function"
+module asm "_start:"
+module asm "\09li sp, 0x88000000"
+module asm "\09la t0, __bss_start"
+module asm "\09la t1, __bss_end"
+module asm ".Lzero_bss:"
+module asm "\09bgeu t0, t1, .Lcopy_data"
+module asm "\09sw zero, 0(t0)"
+module asm "\09addi t0, t0, 4"
+module asm "\09j .Lzero_bss"
+module asm ".Lcopy_data:"
+module asm "\09la t0, __data_start"
+module asm "\09la t1, __data_end"
+module asm "\09la t2, __data_load"
+module asm ".Lcopy_word:"
+module asm "\09bgeu t0, t1, .Lenter"
+module asm "\09lw t3, 0(t2)"
+module asm "\09sw t3, 0(t0)"
+module asm "\09addi t0, t0, 4"
+module asm "\09addi t2, t2, 4"
+module asm "\09j .Lcopy_word"
+module asm ".Lenter:"
+module asm "\09j main"
+
+@bytes = constant [1 x i8] c"\01", align 1
+@TABLE = constant <{ ptr, ptr }> <{ ptr @bytes.1, ptr @bytes.2 }>, align 4
+@bytes.1 = private unnamed_addr constant [2 x i8] c"hi", align 1
+@bytes.2 = private unnamed_addr constant [2 x i8] c"hi", align 1
+@bytes.3 = private unnamed_addr constant [6 x i8] c"hello\0A", align 1
+@bytes.4 = private unnamed_addr constant [2 x i8] c"ok", align 1
+@bytes.5 = private unnamed_addr constant [2 x i8] c"ok", align 1
+@bytes.6 = private unnamed_addr constant [3 x i8] c"a\00b", align 1
+
+; Function Attrs: nounwind null_pointer_is_valid
+define ptr @hello() #0 {
+bb0:
+  ret ptr @bytes.3
+}
+
+; Function Attrs: nounwind null_pointer_is_valid
+define ptr @first() #0 {
+bb0:
+  ret ptr @bytes.4
+}
+
+; Function Attrs: nounwind null_pointer_is_valid
+define ptr @second() #0 {
+bb0:
+  ret ptr @bytes.5
+}
+
+; Function Attrs: nounwind null_pointer_is_valid
+define zeroext i8 @index(i32 %0) #0 {
+bb0:
+  %1 = icmp ult i32 %0, 3
+  br i1 %1, label %bb1, label %bb2
+
+bb1:                                              ; preds = %bb0
+  %2 = getelementptr i8, ptr @bytes.6, i32 %0
+  %3 = load i8, ptr %2, align 1
+  ret i8 %3
+
+bb2:                                              ; preds = %bb0
+  call void @on_panic()
+  unreachable
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @main() #1 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @on_panic() #1 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+attributes #0 = { nounwind null_pointer_is_valid }
+attributes #1 = { noreturn nounwind null_pointer_is_valid }
+--- llvm-ir -O ---
+; ModuleID = 'erebos'
+source_filename = "erebos"
+target datalayout = "e-m:e-p:32:32-i64:64-n32-S128"
+target triple = "riscv32-unknown-none-elf"
+
+module asm "\09.section .text.start, \22ax\22, @progbits"
+module asm "\09.globl _start"
+module asm "\09.type _start, @function"
+module asm "_start:"
+module asm "\09li sp, 0x88000000"
+module asm "\09la t0, __bss_start"
+module asm "\09la t1, __bss_end"
+module asm ".Lzero_bss:"
+module asm "\09bgeu t0, t1, .Lcopy_data"
+module asm "\09sw zero, 0(t0)"
+module asm "\09addi t0, t0, 4"
+module asm "\09j .Lzero_bss"
+module asm ".Lcopy_data:"
+module asm "\09la t0, __data_start"
+module asm "\09la t1, __data_end"
+module asm "\09la t2, __data_load"
+module asm ".Lcopy_word:"
+module asm "\09bgeu t0, t1, .Lenter"
+module asm "\09lw t3, 0(t2)"
+module asm "\09sw t3, 0(t0)"
+module asm "\09addi t0, t0, 4"
+module asm "\09addi t2, t2, 4"
+module asm "\09j .Lcopy_word"
+module asm ".Lenter:"
+module asm "\09j main"
+
+@bytes = local_unnamed_addr constant [1 x i8] c"\01", align 1
+@TABLE = local_unnamed_addr constant <{ ptr, ptr }> <{ ptr @bytes.2, ptr @bytes.2 }>, align 4
+@bytes.2 = private unnamed_addr constant [2 x i8] c"hi", align 1
+@bytes.3 = private unnamed_addr constant [6 x i8] c"hello\0A", align 1
+@bytes.5 = private unnamed_addr constant [2 x i8] c"ok", align 1
+@bytes.6 = private unnamed_addr constant [3 x i8] c"a\00b", align 1
+
+; Function Attrs: mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(none)
+define noundef nonnull ptr @hello() local_unnamed_addr #0 {
+bb0:
+  ret ptr @bytes.3
+}
+
+; Function Attrs: mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(none)
+define noundef nonnull ptr @first() local_unnamed_addr #0 {
+bb0:
+  ret ptr @bytes.5
+}
+
+; Function Attrs: mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(none)
+define noundef nonnull ptr @second() local_unnamed_addr #0 {
+bb0:
+  ret ptr @bytes.5
+}
+
+; Function Attrs: nofree norecurse nosync nounwind null_pointer_is_valid memory(none)
+define zeroext i8 @index(i32 %0) local_unnamed_addr #1 {
+bb0:
+  %1 = icmp ult i32 %0, 3
+  br i1 %1, label %bb1, label %bb1.i
+
+bb1:                                              ; preds = %bb0
+  %2 = getelementptr i8, ptr @bytes.6, i32 %0
+  %3 = load i8, ptr %2, align 1
+  ret i8 %3
+
+bb1.i:                                            ; preds = %bb0, %bb1.i
+  br label %bb1.i
+}
+
+; Function Attrs: nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none)
+define void @main() local_unnamed_addr #2 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none)
+define void @on_panic() local_unnamed_addr #2 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+attributes #0 = { mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(none) }
+attributes #1 = { nofree norecurse nosync nounwind null_pointer_is_valid memory(none) }
+attributes #2 = { nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none) }

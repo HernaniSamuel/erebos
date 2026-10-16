@@ -1040,6 +1040,10 @@ impl Lowerer<'_> {
             // stops before HIR when there are syntax errors.
             ast::ExprKind::Int(value) => ExprKind::Int(value.unwrap_or(0)),
             ast::ExprKind::Byte(value) => ExprKind::Byte(value.unwrap_or(0)),
+            // A rejected one was reported by the lexer.
+            ast::ExprKind::ByteString(bytes) => {
+                ExprKind::ByteString(bytes.clone().unwrap_or_default())
+            }
             ast::ExprKind::Bool(value) => ExprKind::Bool(*value),
             ast::ExprKind::Unit => ExprKind::Unit,
             ast::ExprKind::Array(elems) => {

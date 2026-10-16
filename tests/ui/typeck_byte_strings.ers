@@ -1,0 +1,13 @@
+// emit: typeck
+// A byte string is a place of type `[u8; N]`, with N the number of bytes
+// after escapes; nothing is appended (ADR 0031).
+fn lengths() {
+    let empty: [u8; 0] = b"";
+    let three: [u8; 3] = b"a\x00b";
+    let hello: [u8; 6] = b"hello\n";
+    let p: *const [u8; 2] = &raw const b"ok";
+    let c: u8 = b"abc"[1];
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

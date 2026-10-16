@@ -10,11 +10,12 @@ use std::process::Command;
 
 use erebos::driver::{self, OptLevel};
 
-/// Read-only data of odd length right before `.data`, and `.data` holding
-/// only data of alignment 1 and odd size: without the padding the script
-/// puts inside the sections, the symbols would not be multiples of 4.
+/// Read-only data of odd length right before `.data`, a byte string after
+/// the static pointing to it, and `.data` holding only data of alignment 1
+/// and odd size: without the padding the script puts inside the sections,
+/// the symbols would not be multiples of 4.
 const PROGRAM: &str = "\
-static ODD: [u8; 3] = [1, 2, 3];
+static ODD: *const [u8; 3] = &raw const b\"odd\";
 static mut BYTES: [u8; 3] = [4, 5, 6];
 static mut ZEROS: [u8; 5] = [0; 5];
 

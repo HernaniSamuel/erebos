@@ -222,6 +222,8 @@ enum Immutable {
     Temporary(Span),
     /// A `static`, which never changes (ADR 0030).
     Static(StaticId),
+    /// A byte string, in read-only memory (ADR 0031), written at the span.
+    ByteString(Span),
 }
 
 struct LoopCtx {
@@ -566,10 +568,11 @@ impl Checker<'_, '_> {
             ExprKind::Deref(_)
             | ExprKind::Index(..)
             | ExprKind::Field(..)
-            | ExprKind::Static(_) => {
+            | ExprKind::Static(_)
+            | ExprKind::ByteString(_) => {
                 let info = self
                     .place_info(f, expr)
-                    .expect("dereferences, indexing, fields and statics are places");
+                    .expect("dereferences, indexing, fields, statics and byte strings are places");
                 self.access(&info, expr.span);
                 info.ty
             }
@@ -1067,7 +1070,8 @@ impl Checker<'_, '_> {
         }
     }
 
-    /// Types a place expression: a local, `*pointer` or `pointer[index]`.
+    /// Types a place expression: a local, a static, a byte string,
+    /// `*pointer`, `base[index]` or `base.field`.
     /// Returns `None`, having typed nothing, if `expr` is not a place.
     fn place_info(&mut self, f: &Fn, expr: &Expr) -> Option<PlaceInfo> {
         let info = match &expr.kind {
@@ -1081,6 +1085,13 @@ impl Checker<'_, '_> {
                     constant: false,
                 }
             }
+            ExprKind::ByteString(bytes) => PlaceInfo {
+                ty: Ty::array(Ty::Int(IntTy::U8), bytes.len() as u64),
+                immutable: Some(Immutable::ByteString(expr.span)),
+                via: None,
+                misaligned: false,
+                constant: false,
+            },
             ExprKind::Static(id) => {
                 let def = self.hir.static_(*id);
                 PlaceInfo {
@@ -1277,6 +1288,13 @@ impl Checker<'_, '_> {
                     ),
                 );
             }
+            Some(Immutable::ByteString(span)) => {
+                self.q.diags.push(
+                    Diagnostic::error("ty::assign-immutable", "cannot assign to a byte string")
+                        .label(span, "in read-only memory")
+                        .help("copy it into a `let mut` to change it (ADR 0031)"),
+                );
+            }
             None => {}
         }
         self.access(&info, place.span);
@@ -1368,6 +1386,16 @@ impl Checker<'_, '_> {
                             def.name_span,
                             format!("help: declare it `{}`", mutable_static(def)),
                         ),
+                    );
+                }
+                Some(Immutable::ByteString(span)) => {
+                    self.q.diags.push(
+                        Diagnostic::error(
+                            "ty::address-of-immutable",
+                            "cannot take a `*mut` address of a byte string",
+                        )
+                        .label(span, "in read-only memory")
+                        .help("use `&raw const`, or copy it into a `let mut` (ADR 0031)"),
                     );
                 }
                 None => {}
@@ -1534,6 +1562,7 @@ fn expr_label(hir: &Hir, f: &Fn, expr: &Expr) -> String {
         ExprKind::Return(_) => "return".to_owned(),
         ExprKind::Int(value) => format!("int {value}"),
         ExprKind::Byte(value) => format!("byte {value}"),
+        ExprKind::ByteString(bytes) => format!("byte string b\"{}\"", bytes.escape_ascii()),
         ExprKind::Unit => "unit".to_owned(),
         ExprKind::Const(id) => format!("const {}", hir.const_(*id).name),
         ExprKind::Static(id) => format!("static {}", hir.static_(*id).name),

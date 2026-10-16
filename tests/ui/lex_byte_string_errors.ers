@@ -1,0 +1,8 @@
+// emit: tokens
+// Malformed characters and escapes in a byte string are each reported, as
+// in byte literals; a byte string ends on its line (ADR 0031).
+b"\q" b"é" b"tab	here" b"\x4" b"two \q bad \z"
+b"no closing quote
+b"escaped line break\
+b"still lexed after the errors"
+b"end of file

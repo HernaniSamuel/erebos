@@ -1,0 +1,14 @@
+// emit: typeck
+// A byte string is in read-only memory: it cannot be assigned, nor have a
+// `*mut` address taken (ADR 0031). Its length is part of its type.
+fn writes() {
+    b"abc" = [1, 2, 3];
+    b"abc"[0] = b'x';
+    b"abc"[1] += 1;
+    let p: *mut [u8; 3] = &raw mut b"abc";
+    let q: *mut u8 = &raw mut b"abc"[2];
+    let r: [u8; 4] = b"abc";
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

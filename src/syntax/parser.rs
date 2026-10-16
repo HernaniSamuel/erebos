@@ -690,6 +690,10 @@ impl Parser<'_> {
                 self.bump();
                 ExprKind::Byte(lexer::byte_value(text).ok())
             }
+            TokenKind::ByteString => {
+                self.bump();
+                ExprKind::ByteString(lexer::byte_string_value(text).ok())
+            }
             TokenKind::True | TokenKind::False => {
                 self.bump();
                 ExprKind::Bool(token.kind == TokenKind::True)

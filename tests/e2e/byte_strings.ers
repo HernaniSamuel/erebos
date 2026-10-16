@@ -1,0 +1,68 @@
+// Byte strings at run time (ADR 0031): indexed, copied into a variable
+// that can then change without changing the byte string, and read through
+// their address. An occurrence is one object: a pointer to it computed at
+// compile time is the pointer the program computes.
+// expect-output: hello
+// expect-output: Copy
+// expect-output: copy
+// expect-output: a"b\c
+// expect-output: same
+// expect-exit: 0
+
+const X: *const [u8; 1] = x();
+static IN_STATIC: *const [u8; 1] = x();
+
+fn x() -> *const [u8; 1] {
+    &raw const b"x"
+}
+
+fn putc(byte: u8) {
+    let thr: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+    *thr = byte;
+}
+
+fn print(bytes: *const u8, len: usize) {
+    let mut i: usize = 0;
+    while i < len {
+        putc(bytes[i]);
+        i += 1;
+    }
+}
+
+fn copied() -> [u8; 5] {
+    b"copy\n"
+}
+
+fn exit(code: u32) -> ! {
+    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+    *finisher = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    loop {}
+}
+
+entry fn main() -> ! {
+    let mut i: usize = 0;
+    while i < 6 {
+        putc(b"hello\n"[i]);
+        i += 1;
+    }
+
+    let mut first: [u8; 5] = copied();
+    first[0] = b'C';
+    print(&raw const first as *const u8, 5);
+    let second: [u8; 5] = copied();
+    print(&raw const second as *const u8, 5);
+
+    let escaped: *const [u8; 6] = &raw const b"a\"b\\c\x0A";
+    print(escaped as *const u8, 6);
+
+    let at_compile_time: *const [u8; 1] = comptime x();
+    let at_run_time: *const [u8; 1] = x();
+    if X == at_run_time && IN_STATIC == at_run_time && at_compile_time == at_run_time {
+        print(&raw const b"same\n" as *const u8, 5);
+    }
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(1)
+}

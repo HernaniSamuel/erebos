@@ -6,7 +6,7 @@ use crate::eval::ConstValue;
 use crate::hir;
 use crate::mir::{
     BasicBlock, BasicBlockData, BinOp, Body, BodyId, Const, DataId, Local, LocalDecl, Operand,
-    PanicCause, Place, PlaceElem, Rvalue, Statement, Terminator, Ty, UnOp,
+    PanicCause, Place, PlaceElem, Rvalue, Statement, StaticRef, Terminator, Ty, UnOp,
 };
 use crate::query::{DataSource, Queries};
 use crate::span::Span;
@@ -399,7 +399,8 @@ impl Builder<'_, '_> {
             hir::ExprKind::Deref(_)
             | hir::ExprKind::Index(..)
             | hir::ExprKind::Field(..)
-            | hir::ExprKind::Static(_) => {
+            | hir::ExprKind::Static(_)
+            | hir::ExprKind::ByteString(_) => {
                 let place = self.place(expr);
                 if matches!(ty, Ty::Unit | Ty::Never) {
                     // Read all the same, to check it at compile time: it
@@ -957,9 +958,9 @@ impl Builder<'_, '_> {
         }
     }
 
-    /// Lowers a place expression: a local, a static, `*pointer` or
-    /// `base[index]`. Any other expression is evaluated into a temporary,
-    /// whose place is returned.
+    /// Lowers a place expression: a local, a static, a byte string,
+    /// `*pointer`, `base[index]` or `base.field`. Any other expression is
+    /// evaluated into a temporary, whose place is returned.
     fn place(&mut self, expr: &hir::Expr) -> Place {
         self.place_then(expr, false, false)
     }
@@ -975,11 +976,12 @@ impl Builder<'_, '_> {
             // where it is written (ADR 0030).
             hir::ExprKind::Static(id) => {
                 let s = self.q.mir_static(*id);
-                let address = Rvalue::Use(Operand::Const(Const::Static(s)));
-                match self.temp(s.def().address_ty(), address) {
-                    Operand::Copy(place) => place.project(PlaceElem::Deref),
-                    Operand::Const(_) => unreachable!("temporaries are places"),
-                }
+                self.static_place(s)
+            }
+            // Like an unnamed `static`, one per occurrence (ADR 0031).
+            hir::ExprKind::ByteString(bytes) => {
+                let s = self.q.mir_byte_string(expr.id, bytes);
+                self.static_place(s)
             }
             hir::ExprKind::Deref(pointer) => self
                 .pointer_place(pointer, later_writes)
@@ -1030,6 +1032,15 @@ impl Builder<'_, '_> {
     fn must_copy(&self, place: Place, address: bool) -> bool {
         let decl = &self.locals[place.local.0 as usize];
         decl.name.is_some() || (address && decl.constant.is_some())
+    }
+
+    /// The place of a static, reached through its address.
+    fn static_place(&mut self, s: StaticRef) -> Place {
+        let address = Rvalue::Use(Operand::Const(Const::Static(s)));
+        match self.temp(s.def().address_ty(), address) {
+            Operand::Copy(place) => place.project(PlaceElem::Deref),
+            Operand::Const(_) => unreachable!("temporaries are places"),
+        }
     }
 
     /// Evaluates an index into a new local, so that a later write to its

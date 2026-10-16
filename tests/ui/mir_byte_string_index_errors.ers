@@ -1,0 +1,23 @@
+// emit: mir
+// An index known at compile time is checked against the length of a byte
+// string, as for any array (ADR 0032).
+const LAST: usize = 3;
+
+fn literal() -> u8 {
+    b"abc"[3]
+}
+
+fn constant() -> u8 {
+    b"abc"[LAST]
+}
+
+fn empty() -> u8 {
+    b""[0]
+}
+
+fn fine() -> u8 {
+    b"abc"[LAST - 1]
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

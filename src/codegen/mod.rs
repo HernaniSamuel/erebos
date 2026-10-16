@@ -108,9 +108,10 @@ fn lower<'ctx>(
         .zip(&abis)
         .map(|((_, body), abi)| (!body.comptime).then(|| declare(context, &module, body, abi)))
         .collect();
-    // Statics keep their names: declared before the private data, which
-    // LLVM renames instead if a name is taken (ADR 0030). Their initial
-    // values may point at each other, so they are set once all exist.
+    // Statics keep their names: they are declared before the private data,
+    // and come before the byte strings in `mir.statics`; LLVM renames
+    // those instead if a name is taken (ADR 0030). Initial values may
+    // point at each other, so they are set once all exist.
     let globals: Vec<GlobalValue> = mir
         .statics
         .iter()
@@ -205,13 +206,25 @@ fn element_type(context: &Context, ty: Ty) -> BasicTypeEnum<'_> {
 
 /// A static (ADR 0030): a global named by it, visible to the linker, for
 /// its initial value, which is set later; a `static` is constant, so that
-/// LLVM may use its value instead of reading it.
+/// LLVM may use its value instead of reading it. A byte string (ADR 0031)
+/// is a private constant instead.
 fn static_global<'ctx>(
     context: &'ctx Context,
     module: &Module<'ctx>,
     s: &crate::mir::Static,
 ) -> GlobalValue<'ctx> {
     let def = s.def.def();
+    // Private and of no address that matters, so that identical byte
+    // strings may be merged (ADR 0031).
+    if def.byte_string.is_some() {
+        let ty = initial_type(context, &s.bytes, &s.relocations);
+        let global = module.add_global(ty, None, "bytes");
+        global.set_constant(true);
+        global.set_linkage(Linkage::Private);
+        global.set_unnamed_addr(true);
+        global.set_alignment(1);
+        return global;
+    }
     let ty = if def.external {
         let size = u32::try_from(def.ty.layout().size).expect("the type checker limits sizes");
         context.i8_type().array_type(size).into()

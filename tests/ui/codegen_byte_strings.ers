@@ -1,0 +1,27 @@
+// emit: llvm-ir
+// opt: both
+// A byte string is private read-only data of alignment 1, one per
+// occurrence, of no address that matters (`unnamed_addr`), so that with
+// `-O` identical ones are merged (ADR 0031). A static named `bytes` keeps
+// its name.
+static bytes: u8 = 1;
+static TABLE: [*const [u8; 2]; 2] = [&raw const b"hi", &raw const b"hi"];
+
+fn hello() -> *const [u8; 6] {
+    &raw const b"hello\n"
+}
+
+fn first() -> *const [u8; 2] {
+    &raw const b"ok"
+}
+
+fn second() -> *const [u8; 2] {
+    &raw const b"ok"
+}
+
+fn index(i: usize) -> u8 {
+    b"a\x00b"[i]
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

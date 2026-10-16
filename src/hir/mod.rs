@@ -353,6 +353,8 @@ pub struct Expr {
 pub enum ExprKind {
     Int(u64),
     Byte(u8),
+    /// `b"..."` (ADR 0031): a place in read-only memory, holding its bytes.
+    ByteString(Vec<u8>),
     Bool(bool),
     Unit,
     /// A constant (ADR 0029): a value, not a place.
@@ -430,6 +432,7 @@ impl Expr {
         match &self.kind {
             ExprKind::Int(_)
             | ExprKind::Byte(_)
+            | ExprKind::ByteString(_)
             | ExprKind::Bool(_)
             | ExprKind::Unit
             | ExprKind::SizeOf(_)

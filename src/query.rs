@@ -81,6 +81,11 @@ pub struct Queries<'h> {
     static_aligns: Vec<Option<Option<u64>>>,
     /// The MIR view of each static.
     mir_statics: Vec<Option<StaticRef>>,
+    /// Each byte string used, as a static numbered after the statics, in
+    /// the order MIR building meets them (ADR 0031).
+    byte_strings: Vec<StaticRef>,
+    /// The index in `byte_strings` of the byte string at each expression.
+    byte_string_ids: HashMap<ExprId, usize>,
     /// The value of each `comptime` expression.
     comptime: HashMap<ExprId, State<Option<ConstValue>>>,
     /// The value of each array length, repeat count and `#[align]`
@@ -108,6 +113,8 @@ impl<'h> Queries<'h> {
             statics: hir.statics.iter().map(|_| State::NotStarted).collect(),
             static_aligns: vec![None; hir.statics.len()],
             mir_statics: vec![None; hir.statics.len()],
+            byte_strings: Vec::new(),
+            byte_string_ids: HashMap::new(),
             comptime: HashMap::new(),
             values: HashMap::new(),
             data: Vec::new(),
@@ -650,6 +657,29 @@ impl<'h> Queries<'h> {
         s
     }
 
+    /// The byte string at `expr`, holding `bytes`: one object per
+    /// occurrence (ADR 0031).
+    pub fn mir_byte_string(&mut self, expr: ExprId, bytes: &[u8]) -> StaticRef {
+        if let Some(&index) = self.byte_string_ids.get(&expr) {
+            return self.byte_strings[index];
+        }
+        let index = self.byte_strings.len();
+        let id = mir::StaticId((self.hir.statics.len() + index) as u32);
+        let s = StaticRef::byte_string(id, bytes.to_vec());
+        self.byte_strings.push(s);
+        self.byte_string_ids.insert(expr, index);
+        s
+    }
+
+    /// The static numbered `id` in MIR: a static, or a byte string.
+    pub fn mir_static_by_id(&mut self, id: mir::StaticId) -> StaticRef {
+        let statics = self.hir.statics.len();
+        match (id.0 as usize).checked_sub(statics) {
+            Some(index) => self.byte_strings[index],
+            None => self.mir_static(StaticId(id.0)),
+        }
+    }
+
     pub fn mir_ty(&mut self, ty: hir::Ty) -> mir::Ty {
         match ty {
             hir::Ty::Unit => mir::Ty::Unit,
@@ -774,7 +804,7 @@ impl<'h> Queries<'h> {
         for id in 0..self.hir.fns.len() {
             self.mir_body(FnId(id as u32));
         }
-        let statics = (0..self.hir.statics.len())
+        let mut statics: Vec<mir::Static> = (0..self.hir.statics.len())
             .map(|id| {
                 let id = StaticId(id as u32);
                 // An `extern static` is only declared.
@@ -797,6 +827,13 @@ impl<'h> Queries<'h> {
                 }
             })
             .collect();
+        // Numbered after the statics, so each is at the index of its id.
+        statics.extend(self.byte_strings.iter().map(|&def| mir::Static {
+            def,
+            bytes: def.def().byte_string.clone().expect("a byte string"),
+            align: 1,
+            relocations: Vec::new(),
+        }));
         Mir {
             structs,
             data: self.data,

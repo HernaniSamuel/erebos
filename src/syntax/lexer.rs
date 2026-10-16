@@ -1,6 +1,9 @@
 //! Hand-written lexer (ADR 0004). Produces tokens with spans; invalid input
 //! is reported and skipped so lexing always reaches the end of the file.
 
+use std::ops::Range;
+use std::str::Chars;
+
 use crate::diag::{Diagnostic, Diagnostics};
 use crate::span::{FileId, Span};
 use crate::syntax::token::{Token, TokenKind};
@@ -94,6 +97,10 @@ impl Lexer<'_> {
                 'b' if self.peek() == Some('\'') => {
                     self.byte(start);
                     TokenKind::Byte
+                }
+                'b' if self.peek() == Some('"') => {
+                    self.byte_string(start);
+                    TokenKind::ByteString
                 }
                 c if is_ident_start(c) => {
                     while self.peek().is_some_and(is_ident_continue) {
@@ -221,6 +228,61 @@ impl Lexer<'_> {
         }
     }
 
+    /// Consumes a byte string `b"..."` (the `b` is already consumed), which
+    /// ends on its line (ADR 0031).
+    fn byte_string(&mut self, start: usize) {
+        self.bump(); // opening quote
+        loop {
+            match self.peek() {
+                Some('"') => {
+                    self.bump();
+                    break;
+                }
+                Some('\\') => {
+                    self.bump();
+                    if !matches!(self.peek(), Some('\n') | None) {
+                        self.bump();
+                    }
+                }
+                Some('\n') | None => {
+                    self.diags.push(
+                        Diagnostic::error(
+                            "lexer::unterminated-byte-string",
+                            "unterminated byte string",
+                        )
+                        .label(self.span_from(start), "missing closing `\"`")
+                        .help(r"a byte string ends on its line; write a line break as `\n` (ADR 0031)"),
+                    );
+                    return;
+                }
+                Some(_) => {
+                    self.bump();
+                }
+            }
+        }
+        let Err(errors) = byte_string_value(&self.text[start..self.pos]) else {
+            return;
+        };
+        // Each bad character or escape, so that one pass finds them all.
+        for (e, at) in errors {
+            let message = match e {
+                ByteError::NotAscii => "only printable ASCII can be written directly",
+                ByteError::BadEscape => "unknown escape sequence",
+                ByteError::Unterminated | ByteError::Empty | ByteError::TooMany => {
+                    unreachable!("a terminated byte string holds any number of bytes")
+                }
+            };
+            self.diags.push(
+                Diagnostic::error("lexer::invalid-byte", message)
+                    .label(
+                        Span::new(self.file, start + at.start, start + at.end),
+                        "invalid in a byte string",
+                    )
+                    .help(r#"escapes: \n \r \t \\ \' \" \0 and \xNN for any byte (ADR 0016)"#),
+            );
+        }
+    }
+
     /// Skips whitespace and comments.
     fn skip_trivia(&mut self) {
         loop {
@@ -324,7 +386,47 @@ pub fn byte_value(text: &str) -> Result<u8, ByteError> {
     let mut chars = inner.chars();
     let value = match chars.next() {
         None => return Err(ByteError::Empty),
-        Some('\\') => match chars.next() {
+        Some(c) => one_byte(c, &mut chars)?,
+    };
+    if chars.next().is_some() {
+        return Err(ByteError::TooMany);
+    }
+    Ok(value)
+}
+
+/// The bytes of a byte string's source text, including `b"` and `"`
+/// (ADR 0031); or every error, each with the range of the text at fault.
+pub fn byte_string_value(text: &str) -> Result<Vec<u8>, Vec<(ByteError, Range<usize>)>> {
+    let Some(inner) = text
+        .strip_prefix("b\"")
+        .and_then(|rest| rest.strip_suffix('"'))
+    else {
+        return Err(vec![(ByteError::Unterminated, 0..text.len())]);
+    };
+    let mut bytes = Vec::new();
+    let mut errors = Vec::new();
+    let mut chars = inner.chars();
+    // Offsets in `text`, past `b"`.
+    let offset = |rest: &str| 2 + inner.len() - rest.len();
+    while let Some(c) = chars.next() {
+        let start = offset(chars.as_str()) - c.len_utf8();
+        match one_byte(c, &mut chars) {
+            Ok(byte) => bytes.push(byte),
+            Err(e) => errors.push((e, start..offset(chars.as_str()))),
+        }
+    }
+    if errors.is_empty() {
+        Ok(bytes)
+    } else {
+        Err(errors)
+    }
+}
+
+/// One byte of a literal (ADR 0016), starting with `c`, followed by
+/// `rest`: printable ASCII, or an escape.
+fn one_byte(c: char, rest: &mut Chars) -> Result<u8, ByteError> {
+    Ok(match c {
+        '\\' => match rest.next() {
             Some('n') => b'\n',
             Some('r') => b'\r',
             Some('t') => b'\t',
@@ -333,7 +435,7 @@ pub fn byte_value(text: &str) -> Result<u8, ByteError> {
             Some('\'') => b'\'',
             Some('"') => b'"',
             Some('x') => {
-                let hex: String = chars.by_ref().take(2).collect();
+                let hex: String = rest.by_ref().take(2).collect();
                 // Checked here because `from_str_radix` accepts a sign (`+F`).
                 if hex.len() != 2 || !hex.chars().all(|c| c.is_ascii_hexdigit()) {
                     return Err(ByteError::BadEscape);
@@ -342,13 +444,9 @@ pub fn byte_value(text: &str) -> Result<u8, ByteError> {
             }
             _ => return Err(ByteError::BadEscape),
         },
-        Some(c) if c == ' ' || c.is_ascii_graphic() => c as u8,
-        Some(_) => return Err(ByteError::NotAscii),
-    };
-    if chars.next().is_some() {
-        return Err(ByteError::TooMany);
-    }
-    Ok(value)
+        c if c == ' ' || c.is_ascii_graphic() => c as u8,
+        _ => return Err(ByteError::NotAscii),
+    })
 }
 
 fn is_ident_start(c: char) -> bool {
@@ -445,5 +543,45 @@ mod tests {
         // Tokens of unterminated literals, as the parser sees them.
         assert_eq!(byte_value("b'"), Err(ByteError::Unterminated));
         assert_eq!(byte_value("b'a"), Err(ByteError::Unterminated));
+    }
+
+    #[test]
+    fn byte_string_values() {
+        assert_eq!(byte_string_value(r#"b"""#), Ok(vec![]));
+        assert_eq!(byte_string_value(r#"b"a\x00b""#), Ok(vec![b'a', 0, b'b']));
+        assert_eq!(
+            byte_string_value(r#"b"\n\r\t\\\'\"\0 '""#),
+            Ok(b"\n\r\t\\'\"\0 '".to_vec())
+        );
+        assert_eq!(
+            byte_string_value(r#"b"\xff\xC3\xA9""#),
+            Ok(vec![0xFF, 0xC3, 0xA9])
+        );
+        assert_eq!(
+            byte_string_value(r#"b"ab\qc""#),
+            Err(vec![(ByteError::BadEscape, 4..6)])
+        );
+        assert_eq!(
+            byte_string_value("b\"aé\""),
+            Err(vec![(ByteError::NotAscii, 3..5)])
+        );
+        assert_eq!(
+            byte_string_value(r#"b"\x4g""#),
+            Err(vec![(ByteError::BadEscape, 2..6)])
+        );
+        // Every error, each at its own text.
+        assert_eq!(
+            byte_string_value("b\"\\qa\tb\\x+F\""),
+            Err(vec![
+                (ByteError::BadEscape, 2..4),
+                (ByteError::NotAscii, 5..6),
+                (ByteError::BadEscape, 7..11),
+            ])
+        );
+        // The token of an unterminated byte string, as the parser sees it.
+        assert_eq!(
+            byte_string_value(r#"b"ab"#),
+            Err(vec![(ByteError::Unterminated, 0..4)])
+        );
     }
 }
