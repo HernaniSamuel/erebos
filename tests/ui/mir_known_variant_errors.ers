@@ -1,0 +1,15 @@
+// emit: mir
+// A variant is known at compile time (ADR 0032, 0035), and so is one
+// converted with `as`: a shift by it is checked like any known amount.
+enum Shift: u8 { Small = 3, Big = 40 }
+
+fn small(x: u32) -> u32 {
+    x >> (Shift::Small as u32)
+}
+
+fn big(x: u32) -> u32 {
+    x >> (Shift::Big as u32)
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

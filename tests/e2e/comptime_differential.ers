@@ -15,6 +15,10 @@ extern fn opaque_i16(x: i16) -> i16;
 extern fn opaque_i32(x: i32) -> i32;
 extern fn opaque_i64(x: i64) -> i64;
 extern fn opaque_usize(x: usize) -> usize;
+extern fn opaque_mode(m: Mode) -> Mode;
+extern fn opaque_level(l: Level) -> Level;
+extern fn opaque_port(p: Port) -> Port;
+extern fn opaque_code(c: Code) -> Code;
 
 fn mix(hash: u64, value: u64) -> u64 {
     hash * 1_000_003 + value
@@ -106,6 +110,33 @@ fn conversions(x: i32, y: u32) -> u64 {
     h = mix(h, y as usize as u64);
     h = mix(h, (x < 0) as u8 as u64);
     mix(h, y as isize as i64 as u64)
+}
+
+// Enums convert as their integer types do, and compare by them (ADR 0035).
+enum Mode: u8 { Off = 0, Run = 3, Max = 255 }
+enum Level: i8 { Low = -128, Minus = -1, High = 127 }
+enum Port: u16 { Data = 0x3F8, Top = 0xFFFF }
+enum Code: i32 { Fault = -2_147_483_648, Neg = -70_000, Fine = 70_000 }
+
+fn enums(m: Mode, l: Level, p: Port, c: Code) -> u64 {
+    let mut h: u64 = 0;
+    h = mix(h, m as u64);
+    h = mix(h, m as i8 as u64);
+    h = mix(h, m as i64 as u64);
+    h = mix(h, l as u8 as u64);
+    h = mix(h, l as u32 as u64);
+    h = mix(h, l as i64 as u64);
+    h = mix(h, p as u8 as u64);
+    h = mix(h, p as i16 as u64);
+    h = mix(h, p as u64);
+    h = mix(h, c as u16 as u64);
+    h = mix(h, c as i8 as u64);
+    h = mix(h, c as u64);
+    h = mix(h, c as usize as u64);
+    h = mix(h, (m == Mode::Run) as u64);
+    h = mix(h, (l != Level::Minus) as u64);
+    h = mix(h, (p == Port::Top) as u64);
+    mix(h, (c == Code::Neg) as u64)
 }
 
 struct Pair { a: u32, b: u32 }
@@ -298,6 +329,9 @@ entry fn main() -> ! {
     failures += check(28, comptime message_sum(2), message_sum(opaque_usize(2)));
     failures += check(29, comptime repeated(1), repeated(opaque_usize(1)));
     failures += check(30, comptime repeated(4), repeated(opaque_usize(4)));
+    failures += check(31, comptime enums(Mode::Run, Level::Minus, Port::Top, Code::Neg), enums(opaque_mode(Mode::Run), opaque_level(Level::Minus), opaque_port(Port::Top), opaque_code(Code::Neg)));
+    failures += check(32, comptime enums(Mode::Max, Level::Low, Port::Data, Code::Fault), enums(opaque_mode(Mode::Max), opaque_level(Level::Low), opaque_port(Port::Data), opaque_code(Code::Fault)));
+    failures += check(33, comptime enums(Mode::Off, Level::High, Port::Data, Code::Fine), enums(opaque_mode(Mode::Off), opaque_level(Level::High), opaque_port(Port::Data), opaque_code(Code::Fine)));
     if failures == 0 {
         putc(b'd'); putc(b'i'); putc(b'f'); putc(b'f'); putc(b'e'); putc(b'r'); putc(b'e');
         putc(b'n'); putc(b't'); putc(b'i'); putc(b'a'); putc(b'l'); putc(b' '); putc(b'o');

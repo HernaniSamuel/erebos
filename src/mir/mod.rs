@@ -44,6 +44,8 @@ impl Local {
 pub struct Mir {
     /// Every struct type, for dumps; types refer to them directly.
     pub structs: Vec<StructRef>,
+    /// Every enum, for dumps: MIR sees only its integer type (ADR 0035).
+    pub enums: Vec<Enum>,
     /// Read-only data computed at compile time, which constant locals are
     /// bound to (ADR 0029).
     pub data: Vec<ConstData>,
@@ -288,6 +290,15 @@ pub enum Ty {
     /// likewise.
     Slice(&'static Ty),
     Struct(StructRef),
+}
+
+/// An enum, listed in dumps (ADR 0035): its integer type, and the value of
+/// each variant as the bits of that type.
+#[derive(Clone, Debug)]
+pub struct Enum {
+    pub name: String,
+    pub int: IntTy,
+    pub variants: Vec<(String, u64)>,
 }
 
 /// A struct type with its layout (ADR 0022), shared by every type naming
@@ -732,7 +743,21 @@ impl fmt::Display for Mir {
                 def.name, def.layout.size, def.layout.align
             )?;
         }
-        if !self.structs.is_empty() {
+        for e in &self.enums {
+            let variants: Vec<String> = e
+                .variants
+                .iter()
+                .map(|(name, value)| format!("{name} = {}", e.int.display_bits(*value)))
+                .collect();
+            writeln!(
+                f,
+                "enum {}: {} {{ {} }}",
+                e.name,
+                e.int,
+                variants.join(", ")
+            )?;
+        }
+        if !self.structs.is_empty() || !self.enums.is_empty() {
             writeln!(f)?;
         }
         // Byte strings show where they are used.

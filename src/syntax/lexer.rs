@@ -66,6 +66,7 @@ impl Lexer<'_> {
                 '}' => TokenKind::RBrace,
                 '[' => TokenKind::LBracket,
                 ']' => TokenKind::RBracket,
+                ':' if self.eat(':') => TokenKind::ColonColon,
                 ':' => TokenKind::Colon,
                 ',' => TokenKind::Comma,
                 ';' => TokenKind::Semi,
@@ -480,6 +481,20 @@ mod tests {
             [
                 Entry, Fn, Ident, LParen, RParen, Arrow, Bang, LBrace, Loop, LBrace, RBrace,
                 RBrace, Panic, Eof
+            ]
+        );
+    }
+
+    #[test]
+    fn paths_and_enums() {
+        use TokenKind::*;
+        let (kinds, diags) = kinds("enum E: u8 { A = 0 } E::A :::");
+        assert!(!diags.has_errors());
+        assert_eq!(
+            kinds,
+            [
+                Enum, Ident, Colon, Ident, LBrace, Ident, Eq, Int, RBrace, Ident, ColonColon,
+                Ident, ColonColon, Colon, Eof
             ]
         );
     }

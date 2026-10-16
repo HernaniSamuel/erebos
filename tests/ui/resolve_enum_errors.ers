@@ -1,0 +1,23 @@
+// emit: hir
+enum Mode: u8 { Off = 0, Run = 1, Off = 2 }
+enum Empty: u8 {}
+enum Flag: bool { No = 0 }
+enum Named: Other { A = 0 }
+#[packed]
+#[align(4)]
+enum Laid: u8 { A = 0 }
+enum Twice: u8 { A = 0 }
+const Twice: u8 = 3;
+struct Point { x: u8 }
+
+fn f() {
+    let a: Mode = Mode::Walk;
+    let b: u8 = Point::Origin;
+    let c: u8 = Nowhere::Thing;
+    // An enum's name alone is no value, as a struct's is not.
+    let d: Mode = Mode;
+    let e: Point = Point;
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

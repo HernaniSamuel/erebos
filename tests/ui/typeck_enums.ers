@@ -1,0 +1,55 @@
+// emit: typeck
+// Enums accepted (ADR 0035): compared with `==` and `!=`, converted to
+// every integer type, a variant known in an array length, and an enum as
+// the type of fields, elements, parameters, return values, constants and
+// statics, stored as its integer type. A value can use other variants.
+// The dump lists each enum with the values of its variants.
+enum Mode: u8 { Off = 0, Idle = 1, Run = Mode::Idle as u8 + 2 }
+enum Level: i8 { Low = -1, High = 1 }
+enum Wide: u64 { Big = 0x1_0000_0000 }
+enum Port: u16 { Data = 0x3F8 }
+
+struct Device { mode: Mode, level: Level, port: Port }
+
+const DEFAULT: Mode = Mode::Idle;
+const ORDER: [Mode; 3] = [Mode::Off, Mode::Idle, Mode::Run];
+static mut CURRENT: Mode = Mode::Off;
+static LEVELS: [Level; 2] = [Level::Low, Level::High];
+
+fn next(m: Mode) -> Mode {
+    if m == Mode::Off { Mode::Idle } else if m != Mode::Run { Mode::Run } else { m }
+}
+
+fn conversions(l: Level) -> u64 {
+    let a: u8 = l as u8;
+    let b: u16 = l as u16;
+    let c: u32 = l as u32;
+    let d: u64 = l as u64;
+    let e: usize = l as usize;
+    let f: i8 = l as i8;
+    let g: i16 = l as i16;
+    let h: i32 = l as i32;
+    let i: i64 = l as i64;
+    let j: isize = l as isize;
+    d + Wide::Big as u64
+}
+
+fn lengths() -> usize {
+    let buffer: [u8; Mode::Run as usize] = [0; Mode::Run as usize];
+    size_of(Mode) + align_of(Port) + size_of(Device) + size_of(Wide)
+}
+
+fn shadowed() -> Mode {
+    // `Mode::` names the enum, whatever the locals are called.
+    let Mode: u8 = 7;
+    Mode::Run
+}
+
+fn device(p: *mut volatile Device, wide: *const Wide) -> u64 {
+    (*p).port = Port::Data;
+    CURRENT = (*p).mode;
+    *wide as u64
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

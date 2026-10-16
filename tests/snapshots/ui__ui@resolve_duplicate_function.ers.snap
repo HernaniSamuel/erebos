@@ -17,4 +17,5 @@ resolve::duplicate-item
    ·       ╰── redefined here
  5 │ 
    ╰────
-  help: functions, structs, constants and statics share one namespace (ADR 0029, 0030)
+  help: functions, structs, enums, constants and statics share one namespace (ADR 0029, 0030,
+        0035)

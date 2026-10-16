@@ -17,7 +17,8 @@ resolve::duplicate-item
    ·       ╰── redefined here
  7 │ 
    ╰────
-  help: functions, structs, constants and statics share one namespace (ADR 0029, 0030)
+  help: functions, structs, enums, constants and statics share one namespace (ADR 0029, 0030,
+        0035)
 resolve::misplaced-attribute
 
   × `#[packed]` applies only to structs
@@ -77,7 +78,8 @@ resolve::duplicate-item
     ·                  ╰── redefined here
  21 │ 
     ╰────
-  help: functions, structs, constants and statics share one namespace (ADR 0029, 0030)
+  help: functions, structs, enums, constants and statics share one namespace (ADR 0029, 0030,
+        0035)
 resolve::reserved-name
 
   × `_start` is a reserved name

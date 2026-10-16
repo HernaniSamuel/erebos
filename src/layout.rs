@@ -3,7 +3,7 @@
 //! and `query` applies them on demand, laying out structs for type
 //! checking, MIR building and the evaluator.
 
-use crate::hir::{StructId, Ty};
+use crate::hir::{EnumTy, StructId, Ty};
 use crate::target;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -37,7 +37,8 @@ pub fn of(ty: Ty, struct_layout: &mut impl FnMut(StructId) -> Option<Layout>) ->
         // `!` has no values; `{error}` was reported.
         Ty::Unit | Ty::Never | Ty::Error => Layout { size: 0, align: 1 },
         Ty::Bool => Layout { size: 1, align: 1 },
-        Ty::Int(int) => Layout {
+        // An enum is stored as its integer type (ADR 0035).
+        Ty::Int(int) | Ty::Enum(EnumTy { int, .. }) => Layout {
             size: int.bytes(),
             align: int.bytes(),
         },

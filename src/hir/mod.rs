@@ -30,6 +30,10 @@ pub struct StaticId(pub u32);
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct StructId(pub u32);
 
+/// An enum, indexing [`Hir::enums`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct EnumId(pub u32);
+
 /// A local variable, indexing [`Fn::locals`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct LocalId(pub u32);
@@ -37,10 +41,12 @@ pub struct LocalId(pub u32);
 #[derive(Debug)]
 pub struct Hir {
     pub structs: Vec<StructDef>,
+    pub enums: Vec<EnumDef>,
     /// Functions, then the bodies that run at compile time: one for each
     /// constant, each static with an initializer (not an `extern static`)
-    /// and each `comptime` block, in source order, then one for each value
-    /// computed at compile time.
+    /// and each `comptime` block, in source order, then one for each
+    /// variant of each enum, then one for each value computed at compile
+    /// time.
     pub fns: Vec<Fn>,
     pub consts: Vec<ConstDef>,
     pub statics: Vec<StaticDef>,
@@ -72,6 +78,10 @@ impl Hir {
 
     pub fn struct_(&self, id: StructId) -> &StructDef {
         &self.structs[id.0 as usize]
+    }
+
+    pub fn enum_(&self, id: EnumId) -> &EnumDef {
+        &self.enums[id.0 as usize]
     }
 
     pub fn const_(&self, id: ConstId) -> &ConstDef {
@@ -162,6 +172,9 @@ pub enum Comptime {
     Static(StaticId),
     /// A `comptime { ... }` item.
     Block,
+    /// The value of a variant, by index, of the enum's integer type
+    /// (ADR 0035).
+    Discriminant(EnumId, u32),
     /// A `usize` the program needs at compile time: an array length, a
     /// repeat count, the argument of `#[align]`.
     Value,
@@ -177,6 +190,24 @@ pub struct StructDef {
     pub packed: bool,
     /// `#[align(N)]`, with the span of `N` (ADR 0022).
     pub align: Option<(ArrayLen, Span)>,
+}
+
+/// `enum Name: Type { Variant = value, ... }` (ADR 0035): named values of
+/// an integer type, which the enum is stored as.
+#[derive(Debug)]
+pub struct EnumDef {
+    pub name: String,
+    pub name_span: Span,
+    pub ty: EnumTy,
+    pub variants: Vec<VariantDef>,
+}
+
+#[derive(Debug)]
+pub struct VariantDef {
+    pub name: String,
+    pub span: Span,
+    /// The body computing its value (ADR 0035).
+    pub value: FnId,
 }
 
 #[derive(Debug)]
@@ -245,6 +276,7 @@ pub enum Ty {
     /// pointer, which is then a slice (ADR 0031). Leaked likewise.
     Slice(&'static Ty),
     Struct(StructTy),
+    Enum(EnumTy),
     /// Produced only by the type checker after reporting an error, so one
     /// mistake does not cascade into more. Compatible with every type.
     Error,
@@ -284,6 +316,15 @@ impl fmt::Display for ArrayLen {
 pub struct StructTy {
     pub id: StructId,
     pub name: &'static str,
+}
+
+/// An enum type (ADR 0035), with its integer type, which it is stored as.
+/// The name is carried along like a struct's.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct EnumTy {
+    pub id: EnumId,
+    pub name: &'static str,
+    pub int: IntTy,
 }
 
 /// A raw pointer type (ADR 0013).
@@ -365,6 +406,7 @@ impl fmt::Display for Ty {
             Ty::Array(elem, len) => write!(f, "[{elem}; {len}]"),
             Ty::Slice(elem) => write!(f, "[{elem}]"),
             Ty::Struct(s) => f.write_str(s.name),
+            Ty::Enum(e) => f.write_str(e.name),
             Ty::Error => f.write_str("{error}"),
         }
     }
@@ -409,6 +451,9 @@ pub enum ExprKind {
     Const(ConstId),
     /// A static (ADR 0030): a place.
     Static(StaticId),
+    /// `Enum::Variant`, by index (ADR 0035): a value, not a place, like a
+    /// constant.
+    Variant(EnumId, u32),
     /// `comptime expr`, evaluated at compile time (ADR 0029).
     Comptime(Box<Expr>),
     /// `[a, b, c]`
@@ -492,6 +537,7 @@ impl Expr {
             | ExprKind::OffsetOf(..)
             | ExprKind::Const(_)
             | ExprKind::Static(_)
+            | ExprKind::Variant(..)
             | ExprKind::Local(_)
             | ExprKind::Continue { .. }
             | ExprKind::Break { value: None, .. }

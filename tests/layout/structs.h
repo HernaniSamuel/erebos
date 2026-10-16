@@ -23,6 +23,11 @@ struct __attribute__((aligned(16))) Small { uint8_t x; };
 struct Mixed { uint8_t tag; struct Header header; uint16_t tail; };
 struct HoldsAligned { uint8_t a; struct Descriptor d; uint8_t b; };
 
+enum Mode : uint8_t { Mode_Off = 0, Mode_Run = 3 };
+enum Port : uint16_t { Port_Data = 0x3F8 };
+enum Level : int32_t { Level_Low = -1, Level_High = 1 };
+struct WithEnums { enum Mode mode; enum Port port; uint8_t tag; enum Level level; enum Mode last; };
+
 struct Message {
     uint8_t kind;
     struct { const uint8_t *ptr; size_t len; } text;

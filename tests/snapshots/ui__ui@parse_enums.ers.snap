@@ -1,0 +1,233 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/parse_enums.ers
+---
+--- ast ---
+File {
+    items: [
+        Enum(
+            EnumDecl {
+                attrs: [],
+                name: Ident {
+                    name: "Mode",
+                    span: 224..228,
+                },
+                ty: Ty {
+                    kind: Named(
+                        Ident {
+                            name: "u8",
+                            span: 230..232,
+                        },
+                    ),
+                    span: 230..232,
+                },
+                variants: [
+                    VariantDecl {
+                        name: Ident {
+                            name: "Off",
+                            span: 239..242,
+                        },
+                        value: Expr {
+                            kind: Int(
+                                Some(
+                                    0,
+                                ),
+                            ),
+                            span: 245..246,
+                        },
+                    },
+                    VariantDecl {
+                        name: Ident {
+                            name: "Idle",
+                            span: 252..256,
+                        },
+                        value: Expr {
+                            kind: Int(
+                                Some(
+                                    1,
+                                ),
+                            ),
+                            span: 259..260,
+                        },
+                    },
+                    VariantDecl {
+                        name: Ident {
+                            name: "Run",
+                            span: 266..269,
+                        },
+                        value: Expr {
+                            kind: Binary(
+                                Add,
+                                Expr {
+                                    kind: Cast(
+                                        Expr {
+                                            kind: Path(
+                                                Ident {
+                                                    name: "Mode",
+                                                    span: 272..276,
+                                                },
+                                                Ident {
+                                                    name: "Idle",
+                                                    span: 278..282,
+                                                },
+                                            ),
+                                            span: 272..282,
+                                        },
+                                        Ty {
+                                            kind: Named(
+                                                Ident {
+                                                    name: "u8",
+                                                    span: 286..288,
+                                                },
+                                            ),
+                                            span: 286..288,
+                                        },
+                                    ),
+                                    span: 272..288,
+                                },
+                                Expr {
+                                    kind: Int(
+                                        Some(
+                                            2,
+                                        ),
+                                    ),
+                                    span: 291..292,
+                                },
+                            ),
+                            span: 272..292,
+                        },
+                    },
+                ],
+                span: 219..295,
+            },
+        ),
+        Enum(
+            EnumDecl {
+                attrs: [
+                    Attr {
+                        name: Ident {
+                            name: "packed",
+                            span: 299..305,
+                        },
+                        arg: None,
+                        span: 297..306,
+                    },
+                ],
+                name: Ident {
+                    name: "Level",
+                    span: 312..317,
+                },
+                ty: Ty {
+                    kind: Named(
+                        Ident {
+                            name: "i8",
+                            span: 319..321,
+                        },
+                    ),
+                    span: 319..321,
+                },
+                variants: [
+                    VariantDecl {
+                        name: Ident {
+                            name: "Low",
+                            span: 324..327,
+                        },
+                        value: Expr {
+                            kind: Unary(
+                                Neg,
+                                Expr {
+                                    kind: Int(
+                                        Some(
+                                            1,
+                                        ),
+                                    ),
+                                    span: 331..332,
+                                },
+                            ),
+                            span: 330..332,
+                        },
+                    },
+                    VariantDecl {
+                        name: Ident {
+                            name: "High",
+                            span: 334..338,
+                        },
+                        value: Expr {
+                            kind: Int(
+                                Some(
+                                    1,
+                                ),
+                            ),
+                            span: 341..342,
+                        },
+                    },
+                ],
+                span: 307..344,
+            },
+        ),
+        Fn(
+            FnDecl {
+                attrs: [],
+                kind: Plain,
+                name: Ident {
+                    name: "f",
+                    span: 349..350,
+                },
+                params: [],
+                ret: Some(
+                    Ty {
+                        kind: Named(
+                            Ident {
+                                name: "bool",
+                                span: 356..360,
+                            },
+                        ),
+                        span: 356..360,
+                    },
+                ),
+                body: Some(
+                    Block {
+                        stmts: [],
+                        tail: Some(
+                            Expr {
+                                kind: Binary(
+                                    Eq,
+                                    Expr {
+                                        kind: Path(
+                                            Ident {
+                                                name: "Mode",
+                                                span: 367..371,
+                                            },
+                                            Ident {
+                                                name: "Run",
+                                                span: 373..376,
+                                            },
+                                        ),
+                                        span: 367..376,
+                                    },
+                                    Expr {
+                                        kind: Path(
+                                            Ident {
+                                                name: "Mode",
+                                                span: 380..384,
+                                            },
+                                            Ident {
+                                                name: "Off",
+                                                span: 386..389,
+                                            },
+                                        ),
+                                        span: 380..389,
+                                    },
+                                ),
+                                span: 367..389,
+                            },
+                        ),
+                        span: 361..391,
+                    },
+                ),
+                span: 346..391,
+            },
+        ),
+    ],
+}

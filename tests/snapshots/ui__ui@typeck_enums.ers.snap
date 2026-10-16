@@ -1,0 +1,129 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_enums.ers
+---
+--- typeck ---
+struct Device { mode: Mode at 0, level: Level at 1, port: Port at 2 } size 4, align 2
+enum Mode: u8 { Off = 0, Idle = 1, Run = 3 }
+enum Level: i8 { Low = -1, High = 1 }
+enum Wide: u64 { Big = 4294967296 }
+enum Port: u16 { Data = 1016 }
+fn next(m: Mode) -> Mode
+    expr 0 if 819..899: Mode
+    expr 1 binary == 822..836: bool
+    expr 2 local m 822..823: Mode
+    expr 3 variant Mode::Off 827..836: Mode
+    expr 4 variant Mode::Idle 839..849: Mode
+    expr 5 if 857..899: Mode
+    expr 6 binary != 860..874: bool
+    expr 7 local m 860..861: Mode
+    expr 8 variant Mode::Run 865..874: Mode
+    expr 9 variant Mode::Run 877..886: Mode
+    expr 10 block 894..899: Mode
+    expr 11 local m 896..897: Mode
+fn conversions(l: Level) -> u64
+    let a: u8
+    let b: u16
+    let c: u32
+    let d: u64
+    let e: usize
+    let f: i8
+    let g: i16
+    let h: i32
+    let i: i64
+    let j: isize
+    expr 12 as u8 953..960: u8
+    expr 13 local l 953..954: Level
+    expr 14 as u16 979..987: u16
+    expr 15 local l 979..980: Level
+    expr 16 as u32 1006..1014: u32
+    expr 17 local l 1006..1007: Level
+    expr 18 as u64 1033..1041: u64
+    expr 19 local l 1033..1034: Level
+    expr 20 as usize 1062..1072: usize
+    expr 21 local l 1062..1063: Level
+    expr 22 as i8 1090..1097: i8
+    expr 23 local l 1090..1091: Level
+    expr 24 as i16 1116..1124: i16
+    expr 25 local l 1116..1117: Level
+    expr 26 as i32 1143..1151: i32
+    expr 27 local l 1143..1144: Level
+    expr 28 as i64 1170..1178: i64
+    expr 29 local l 1170..1171: Level
+    expr 30 as isize 1199..1209: isize
+    expr 31 local l 1199..1200: Level
+    expr 32 binary + 1215..1235: u64
+    expr 33 local d 1215..1216: u64
+    expr 34 as u64 1219..1235: u64
+    expr 35 variant Wide::Big 1219..1228: Wide
+fn lengths() -> usize
+    let buffer: [u8; 3]
+    expr 36 repeat 1306..1329: [u8; 3]
+    expr 37 int 0 1307..1308: u8
+    expr 42 binary + 1335..1399: usize
+    expr 43 binary + 1335..1383: usize
+    expr 44 binary + 1335..1365: usize
+    expr 45 size_of(Mode) 1335..1348: usize
+    expr 46 align_of(Port) 1351..1365: usize
+    expr 47 size_of(Device) 1368..1383: usize
+    expr 48 size_of(Wide) 1386..1399: usize
+fn shadowed() -> Mode
+    let Mode: u8
+    expr 49 int 7 1510..1511: u8
+    expr 50 variant Mode::Run 1517..1526: Mode
+fn device(p: *mut volatile Device, wide: *const Wide) -> u64
+    expr 51 assign 1597..1619: ()
+    expr 52 field port 1597..1606: Port
+    expr 53 deref 1597..1601: Device
+    expr 54 local p 1599..1600: *mut volatile Device
+    expr 55 variant Port::Data 1609..1619: Port
+    expr 56 assign 1625..1644: ()
+    expr 57 static CURRENT 1625..1632: Mode
+    expr 58 field mode 1635..1644: Mode
+    expr 59 deref 1635..1639: Device
+    expr 60 local p 1637..1638: *mut volatile Device
+    expr 61 as u64 1650..1662: u64
+    expr 62 deref 1650..1655: Wide
+    expr 63 local wide 1651..1655: *const Wide
+entry fn main() -> !
+    expr 64 loop 1689..1696: !
+panic fn on_panic() -> !
+    expr 65 loop 1726..1733: !
+comptime fn DEFAULT() -> Mode
+    expr 66 variant Mode::Idle 621..631: Mode
+comptime fn ORDER() -> [Mode; 3]
+    expr 67 array 658..692: [Mode; 3]
+    expr 68 variant Mode::Off 659..668: Mode
+    expr 69 variant Mode::Idle 670..680: Mode
+    expr 70 variant Mode::Run 682..691: Mode
+comptime fn CURRENT() -> Mode
+    expr 71 variant Mode::Off 721..730: Mode
+comptime fn LEVELS() -> [Level; 2]
+    expr 72 array 760..785: [Level; 2]
+    expr 73 variant Level::Low 761..771: Level
+    expr 74 variant Level::High 773..784: Level
+comptime fn Mode::Off() -> u8
+    expr 75 int 0 391..392: u8
+comptime fn Mode::Idle() -> u8
+    expr 76 int 1 401..402: u8
+comptime fn Mode::Run() -> u8
+    expr 77 binary + 410..430: u8
+    expr 78 as u8 410..426: u8
+    expr 79 variant Mode::Idle 410..420: Mode
+    expr 80 int 2 429..430: u8
+comptime fn Level::Low() -> i8
+    expr 81 neg 456..458: i8
+    expr 82 int 1 457..458: i8
+comptime fn Level::High() -> i8
+    expr 83 int 1 467..468: i8
+comptime fn Wide::Big() -> u64
+    expr 84 int 4294967296 494..507: u64
+comptime fn Port::Data() -> u16
+    expr 85 int 1016 534..539: u16
+comptime fn length() -> usize
+    expr 38 as usize 1310..1328: usize
+    expr 39 variant Mode::Run 1310..1319: Mode
+comptime fn length() -> usize
+    expr 40 as usize 1284..1302: usize
+    expr 41 variant Mode::Run 1284..1293: Mode

@@ -1,0 +1,145 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/resolve_enum_errors.ers
+---
+--- errors ---
+resolve::duplicate-variant
+
+  × the variant `Off` is declared more than once
+   ╭─[resolve_enum_errors.ers:2:35]
+ 1 │ // emit: hir
+ 2 │ enum Mode: u8 { Off = 0, Run = 1, Off = 2 }
+   ·                 ─┬─               ─┬─
+   ·                  │                 ╰── declared again here
+   ·                  ╰── first declared here
+ 3 │ enum Empty: u8 {}
+   ╰────
+resolve::empty-enum
+
+  × `Empty` has no variants
+   ╭─[resolve_enum_errors.ers:3:6]
+ 2 │ enum Mode: u8 { Off = 0, Run = 1, Off = 2 }
+ 3 │ enum Empty: u8 {}
+   ·      ──┬──
+   ·        ╰── an enum needs at least one variant
+ 4 │ enum Flag: bool { No = 0 }
+   ╰────
+  help: an enum names values of its integer type; without variants, use the integer type itself
+        (ADR 0035)
+resolve::enum-type
+
+  × the type of an enum must be an integer type
+   ╭─[resolve_enum_errors.ers:4:12]
+ 3 │ enum Empty: u8 {}
+ 4 │ enum Flag: bool { No = 0 }
+   ·            ──┬─
+   ·              ╰── not an integer type
+ 5 │ enum Named: Other { A = 0 }
+   ╰────
+  help: an enum is stored as one of `u8 u16 u32 u64 usize i8 i16 i32 i64 isize` (ADR 0035)
+resolve::enum-type
+
+  × the type of an enum must be an integer type
+   ╭─[resolve_enum_errors.ers:5:13]
+ 4 │ enum Flag: bool { No = 0 }
+ 5 │ enum Named: Other { A = 0 }
+   ·             ──┬──
+   ·               ╰── not an integer type
+ 6 │ #[packed]
+   ╰────
+  help: an enum is stored as one of `u8 u16 u32 u64 usize i8 i16 i32 i64 isize` (ADR 0035)
+resolve::misplaced-attribute
+
+  × `#[packed]` applies only to structs
+   ╭─[resolve_enum_errors.ers:6:1]
+ 5 │ enum Named: Other { A = 0 }
+ 6 │ #[packed]
+   · ────┬────
+   ·     ╰── not allowed on an enum
+ 7 │ #[align(4)]
+   ╰────
+resolve::misplaced-attribute
+
+  × `#[align]` applies only to structs and statics
+   ╭─[resolve_enum_errors.ers:7:1]
+ 6 │ #[packed]
+ 7 │ #[align(4)]
+   · ─────┬─────
+   ·      ╰── not allowed on an enum
+ 8 │ enum Laid: u8 { A = 0 }
+   ╰────
+resolve::duplicate-item
+
+  × `Twice` is defined more than once
+    ╭─[resolve_enum_errors.ers:10:7]
+  8 │ enum Laid: u8 { A = 0 }
+  9 │ enum Twice: u8 { A = 0 }
+    ·      ──┬──
+    ·        ╰── first defined here
+ 10 │ const Twice: u8 = 3;
+    ·       ──┬──
+    ·         ╰── redefined here
+ 11 │ struct Point { x: u8 }
+    ╰────
+  help: functions, structs, enums, constants and statics share one namespace (ADR 0029, 0030,
+        0035)
+resolve::unknown-variant
+
+  × `Mode` has no variant `Walk`
+   ╭─[resolve_enum_errors.ers:2:6]
+ 1 │ // emit: hir
+ 2 │ enum Mode: u8 { Off = 0, Run = 1, Off = 2 }
+   ·      ──┬─
+   ·        ╰── `Mode` is declared here
+ 3 │ enum Empty: u8 {}
+   ╰────
+    ╭─[resolve_enum_errors.ers:14:25]
+ 13 │ fn f() {
+ 14 │     let a: Mode = Mode::Walk;
+    ·                         ──┬─
+    ·                           ╰── unknown variant
+ 15 │     let b: u8 = Point::Origin;
+    ╰────
+  help: its variants are `Off`, `Run`
+resolve::not-an-enum
+
+  × `Point` is not an enum
+    ╭─[resolve_enum_errors.ers:15:17]
+ 14 │     let a: Mode = Mode::Walk;
+ 15 │     let b: u8 = Point::Origin;
+    ·                 ──┬──
+    ·                   ╰── a struct, not an enum
+ 16 │     let c: u8 = Nowhere::Thing;
+    ╰────
+  help: `::` names a variant of an enum, as in `Mode::Run` (ADR 0035)
+resolve::unknown-type
+
+  × unknown enum `Nowhere`
+    ╭─[resolve_enum_errors.ers:16:17]
+ 15 │     let b: u8 = Point::Origin;
+ 16 │     let c: u8 = Nowhere::Thing;
+    ·                 ───┬───
+    ·                    ╰── not an enum
+ 17 │     // An enum's name alone is no value, as a struct's is not.
+    ╰────
+resolve::unknown-name
+
+  × cannot find `Mode` in this scope
+    ╭─[resolve_enum_errors.ers:18:19]
+ 17 │     // An enum's name alone is no value, as a struct's is not.
+ 18 │     let d: Mode = Mode;
+    ·                   ──┬─
+    ·                     ╰── not found
+ 19 │     let e: Point = Point;
+    ╰────
+resolve::unknown-name
+
+  × cannot find `Point` in this scope
+    ╭─[resolve_enum_errors.ers:19:20]
+ 18 │     let d: Mode = Mode;
+ 19 │     let e: Point = Point;
+    ·                    ──┬──
+    ·                      ╰── not found
+ 20 │ }
+    ╰────

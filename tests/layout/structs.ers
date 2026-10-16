@@ -28,5 +28,12 @@ struct HoldsAligned { a: u8, d: Descriptor, b: u8 }
 // A slice is the C struct `{ const T *ptr; size_t len; }` (ADR 0031).
 struct Message { kind: u8, text: *const [u8], parts: [*mut [u16]; 2], end: u16 }
 
+// An enum is stored as its integer type (ADR 0035), as a C23 enum with
+// that underlying type is.
+enum Mode: u8 { Off = 0, Run = 3 }
+enum Port: u16 { Data = 0x3F8 }
+enum Level: i32 { Low = -1, High = 1 }
+struct WithEnums { mode: Mode, port: Port, tag: u8, level: Level, last: Mode }
+
 entry fn main() -> ! { loop {} }
 panic fn on_panic() -> ! { loop {} }

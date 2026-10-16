@@ -111,6 +111,9 @@ const SNIPPETS: &[&str] = &[
     "b\"\\x\"",
     "&raw const b\"x\"",
     "b\"abc\"[i]",
+    "enum E: u8 { A = 0 }",
+    "E::A",
+    "::",
 ];
 
 /// xorshift64: small, deterministic, good enough to pick mutations.

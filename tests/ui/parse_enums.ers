@@ -1,0 +1,16 @@
+// emit: ast
+// Enums state their integer type and every value (ADR 0035); a trailing
+// comma is allowed, and attributes parse before them, to be checked by
+// name resolution. `Enum::Variant` is a primary expression.
+enum Mode: u8 {
+    Off = 0,
+    Idle = 1,
+    Run = Mode::Idle as u8 + 2,
+}
+
+#[packed]
+enum Level: i8 { Low = -1, High = 1 }
+
+fn f() -> bool {
+    Mode::Run == Mode::Off
+}

@@ -87,7 +87,7 @@ ty::no-fields
   help: dereference the pointer first: `(*p).x` (ADR 0021)
 ty::invalid-operand
 
-  × `==` needs integers, pointers or `bool`, found `Point`
+  × `==` needs integers, pointers, `bool` or enums, found `Point`
     ╭─[typeck_struct_errors.ers:15:22]
  14 │     let x: i32 = p.x;
  15 │     let same: bool = q == q;

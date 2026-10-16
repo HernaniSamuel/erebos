@@ -38,7 +38,7 @@ ty::mismatched-types
   help: integer types never convert implicitly; use `as usize` (ADR 0008)
 ty::invalid-operand
 
-  × `==` needs integers, pointers or `bool`, found `[u8; 2]`
+  × `==` needs integers, pointers, `bool` or enums, found `[u8; 2]`
    ╭─[typeck_array_errors.ers:7:19]
  6 │     let e: u8 = c[n];
  7 │     let f: bool = c == c;

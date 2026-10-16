@@ -1,0 +1,22 @@
+// emit: mir
+// A variant's value is computed at compile time, of the enum's integer
+// type (ADR 0035). Each failure is reported once, and so is each value
+// given twice; uses of a variant whose value failed report nothing more.
+const BASE: u8 = 4;
+enum Twice: u8 { A = 1, B = 2, C = 1 }
+enum Computed: u8 { X = BASE, Y = BASE + 1, Z = 5 }
+enum Fails: u8 { Bad = 1 / 0, Good = 2 }
+enum Range: u8 { Big = 300, Negative = -1 }
+enum Cycle: u8 { P = Cycle::Q as u8, Q = Cycle::P as u8 + 1 }
+
+fn uses() -> u8 {
+    Fails::Bad as u8 + Range::Big as u8 + Cycle::P as u8
+}
+
+fn in_a_length() -> usize {
+    let a: [u8; Fails::Bad as usize] = [0; Fails::Bad as usize];
+    size_of([u8; Fails::Bad as usize])
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

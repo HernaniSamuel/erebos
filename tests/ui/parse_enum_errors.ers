@@ -1,0 +1,6 @@
+// emit: ast
+// No integer type and no value is ever implied (ADR 0035). Each error
+// skips to the next item.
+enum Untyped { A = 0 }
+enum Unvalued: u8 { A = 0, B }
+enum Fine: u8 { A = 0 }

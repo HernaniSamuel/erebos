@@ -1,0 +1,17 @@
+// emit: mir
+// MIR sees only an enum's integer type (ADR 0035): a variant is a constant
+// of it, `==` compares integers, and `as` is an integer cast. The dump
+// lists each enum with its values.
+enum Mode: u8 { Off = 0, Run = 3 }
+enum Level: i8 { Low = -1, High = 1 }
+
+fn is_running(m: Mode) -> bool {
+    m == Mode::Run
+}
+
+fn widen(l: Level) -> u32 {
+    l as u32 + Level::Low as u32
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

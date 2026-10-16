@@ -1,0 +1,30 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/parse_enum_errors.ers
+---
+--- errors ---
+parser::enum-without-type
+
+  × expected `:`, found `{`
+   ╭─[parse_enum_errors.ers:4:14]
+ 3 │ // skips to the next item.
+ 4 │ enum Untyped { A = 0 }
+   ·              ┬
+   ·              ╰── expected `: Type`
+ 5 │ enum Unvalued: u8 { A = 0, B }
+   ╰────
+  help: every enum states the integer type it is stored as, e.g. `enum Untyped: u8 { ... }` (ADR
+        0035)
+parser::variant-without-value
+
+  × expected `=`, found `}`
+   ╭─[parse_enum_errors.ers:5:30]
+ 4 │ enum Untyped { A = 0 }
+ 5 │ enum Unvalued: u8 { A = 0, B }
+   ·                              ┬
+   ·                              ╰── expected `= value`
+ 6 │ enum Fine: u8 { A = 0 }
+   ╰────
+  help: every variant states its value, e.g. `B = 0`, so that adding one never renumbers the
+        others (ADR 0035)

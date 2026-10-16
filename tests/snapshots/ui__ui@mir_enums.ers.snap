@@ -1,0 +1,98 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/mir_enums.ers
+---
+--- mir ---
+enum Mode: u8 { Off = 0, Run = 3 }
+enum Level: i8 { Low = -1, High = 1 }
+
+fn is_running(_1: u8) -> bool {
+    let _0: bool;
+    let _1: u8; // m
+    let _2: bool;
+
+    bb0: {
+        _2 = Eq(copy _1, const 3_u8);
+        _0 = copy _2;
+        return;
+    }
+}
+
+fn widen(_1: i8) -> u32 {
+    let _0: u32;
+    let _1: i8; // l
+    let _2: u32;
+    let _3: u32;
+    let _4: u32;
+    let _5: u32;
+
+    bb0: {
+        _2 = copy _1 as u32;
+        _3 = copy _2;
+        _4 = const -1_i8 as u32;
+        _5 = Add(copy _3, copy _4);
+        _0 = copy _5;
+        return;
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+comptime fn Mode::Off() -> u8 {
+    let _0: u8;
+
+    bb0: {
+        _0 = const 0_u8;
+        return;
+    }
+}
+
+comptime fn Mode::Run() -> u8 {
+    let _0: u8;
+
+    bb0: {
+        _0 = const 3_u8;
+        return;
+    }
+}
+
+comptime fn Level::Low() -> i8 {
+    let _0: i8;
+
+    bb0: {
+        _0 = const -1_i8;
+        return;
+    }
+}
+
+comptime fn Level::High() -> i8 {
+    let _0: i8;
+
+    bb0: {
+        _0 = const 1_i8;
+        return;
+    }
+}

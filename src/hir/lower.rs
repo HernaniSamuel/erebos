@@ -4,9 +4,10 @@ use std::collections::HashMap;
 
 use crate::diag::{Diagnostic, Diagnostics};
 use crate::hir::{
-    ArrayLen, Block, Comptime, ConstDef, ConstId, Expr, ExprId, ExprKind, FieldDef, Fn, FnId,
-    FnKind, Hir, IntTy, Local, LocalId, NeverInMemory, NeverPosition, StaticDef, StaticId, Stmt,
-    StructDef, StructId, StructTy, Ty, UnsizedPosition, UnsizedType,
+    ArrayLen, Block, Comptime, ConstDef, ConstId, EnumDef, EnumId, EnumTy, Expr, ExprId, ExprKind,
+    FieldDef, Fn, FnId, FnKind, Hir, IntTy, Local, LocalId, NeverInMemory, NeverPosition,
+    StaticDef, StaticId, Stmt, StructDef, StructId, StructTy, Ty, UnsizedPosition, UnsizedType,
+    VariantDef,
 };
 use crate::span::Span;
 use crate::syntax::ast;
@@ -35,6 +36,12 @@ pub fn lower(
     let struct_decls: Vec<&ast::StructDecl> = items()
         .filter_map(|item| match item {
             ast::Item::Struct(decl) => Some(decl),
+            _ => None,
+        })
+        .collect();
+    let enum_decls: Vec<&ast::EnumDecl> = items()
+        .filter_map(|item| match item {
+            ast::Item::Enum(decl) => Some(decl),
             _ => None,
         })
         .collect();
@@ -128,6 +135,45 @@ pub fn lower(
         });
     }
 
+    // Enums too, each with the integer type it is stored as (ADR 0035).
+    let mut enum_ids: HashMap<String, EnumId> = HashMap::new();
+    let mut enum_tys = Vec::new();
+    for (i, decl) in enum_decls.iter().enumerate() {
+        let name = &decl.name.name;
+        if name == "bool" || IntTy::from_name(name).is_some() {
+            diags.push(
+                Diagnostic::error(
+                    "resolve::duplicate-type",
+                    format!("`{name}` is a built-in type"),
+                )
+                .label(decl.name.span, "cannot be redefined"),
+            );
+        } else {
+            enum_ids.entry(name.clone()).or_insert(EnumId(i as u32));
+        }
+        let int = match &decl.ty.kind {
+            ast::TyKind::Named(ty) if let Some(int) = IntTy::from_name(&ty.name) => int,
+            _ => {
+                diags.push(
+                    Diagnostic::error(
+                        "resolve::enum-type",
+                        "the type of an enum must be an integer type",
+                    )
+                    .label(decl.ty.span, "not an integer type")
+                    .help("an enum is stored as one of `u8 u16 u32 u64 usize i8 i16 i32 i64 isize` (ADR 0035)"),
+                );
+                // Reported; any placeholder works since lowering errors
+                // stop the pipeline.
+                IntTy::U8
+            }
+        };
+        enum_tys.push(EnumTy {
+            id: EnumId(i as u32),
+            name: Box::leak(name.clone().into_boxed_str()),
+            int,
+        });
+    }
+
     // Functions are global: any body may call any function, declared before
     // or after it. A repeated name keeps its first definition.
     let mut fn_ids = HashMap::new();
@@ -161,13 +207,20 @@ pub fn lower(
         value_base: (decls.len()
             + const_decls.len()
             + static_decls.iter().filter(|decl| !decl.external).count()
-            + comptime_decls.len()) as u32,
+            + comptime_decls.len()
+            + enum_decls
+                .iter()
+                .map(|decl| decl.variants.len())
+                .sum::<usize>()) as u32,
         values: Vec::new(),
         comptime_floor: None,
         in_comptime: false,
         struct_ids,
         struct_tys,
         struct_decls: &struct_decls,
+        enum_ids,
+        enum_tys,
+        enum_decls: &enum_decls,
         never_in_memory: Vec::new(),
         unsized_types: Vec::new(),
         next_expr: 0,
@@ -206,6 +259,12 @@ pub fn lower(
         comptime_blocks.push(FnId(fns.len() as u32));
         fns.push(lowerer.comptime_decl(decl));
     }
+    let mut enums = Vec::new();
+    for (i, decl) in enum_decls.iter().enumerate() {
+        let (def, bodies) = lowerer.enum_decl(decl, EnumId(i as u32), fns.len() as u32);
+        enums.push(def);
+        fns.extend(bodies);
+    }
     debug_assert_eq!(fns.len() as u32, lowerer.value_base);
     fns.append(&mut lowerer.values);
     let expr_count = lowerer.next_expr;
@@ -219,6 +278,7 @@ pub fn lower(
 
     Some(Hir {
         structs,
+        enums,
         fns,
         consts,
         statics,
@@ -247,14 +307,15 @@ fn item_name(item: &ast::Item) -> Option<&ast::Ident> {
     match item {
         ast::Item::Fn(decl) => Some(&decl.name),
         ast::Item::Struct(decl) => Some(&decl.name),
+        ast::Item::Enum(decl) => Some(&decl.name),
         ast::Item::Const(decl) => Some(&decl.name),
         ast::Item::Static(decl) => Some(&decl.name),
         ast::Item::Comptime(_) => None,
     }
 }
 
-/// Functions, structs, constants and statics share one namespace
-/// (ADR 0029, 0030).
+/// Functions, structs, enums, constants and statics share one namespace
+/// (ADR 0029, 0030, 0035).
 fn check_duplicate_items(
     program: &ast::File,
     runtime: Option<&ast::File>,
@@ -282,7 +343,7 @@ fn check_duplicate_items(
                 )
                 .label(name.span, "redefined here")
                 .label(first, "first defined here")
-                .help("functions, structs, constants and statics share one namespace (ADR 0029, 0030)"),
+                .help("functions, structs, enums, constants and statics share one namespace (ADR 0029, 0030, 0035)"),
             ),
             None => {
                 seen.insert(&name.name, (name.span, in_runtime));
@@ -375,6 +436,10 @@ struct Lowerer<'a> {
     struct_ids: HashMap<String, StructId>,
     struct_tys: Vec<StructTy>,
     struct_decls: &'a [&'a ast::StructDecl],
+    /// Every enum's id, by name.
+    enum_ids: HashMap<String, EnumId>,
+    enum_tys: Vec<EnumTy>,
+    enum_decls: &'a [&'a ast::EnumDecl],
     /// Each `!` written where memory would have its type (ADR 0034).
     never_in_memory: Vec<NeverInMemory>,
     /// Each `[T]` written where a size is needed (ADR 0031).
@@ -617,6 +682,145 @@ impl Lowerer<'_> {
             comptime: Some(Comptime::Const(id)),
         };
         (def, body)
+    }
+
+    /// An enum, and the bodies computing the values of its variants, the
+    /// first of which is `first_body` (ADR 0035).
+    fn enum_decl(
+        &mut self,
+        decl: &ast::EnumDecl,
+        id: EnumId,
+        first_body: u32,
+    ) -> (EnumDef, Vec<Fn>) {
+        self.no_attrs(&decl.attrs, "an enum");
+        let mut seen: HashMap<&str, Span> = HashMap::new();
+        for variant in &decl.variants {
+            if let Some(&first) = seen.get(variant.name.name.as_str()) {
+                self.diags.push(
+                    Diagnostic::error(
+                        "resolve::duplicate-variant",
+                        format!(
+                            "the variant `{}` is declared more than once",
+                            variant.name.name
+                        ),
+                    )
+                    .label(variant.name.span, "declared again here")
+                    .label(first, "first declared here"),
+                );
+            }
+            seen.entry(&variant.name.name).or_insert(variant.name.span);
+        }
+        if decl.variants.is_empty() {
+            self.diags.push(
+                Diagnostic::error(
+                    "resolve::empty-enum",
+                    format!("`{}` has no variants", decl.name.name),
+                )
+                .label(decl.name.span, "an enum needs at least one variant")
+                .help("an enum names values of its integer type; without variants, use the integer type itself (ADR 0035)"),
+            );
+        }
+        let ty = self.enum_tys[id.0 as usize];
+        let mut variants = Vec::new();
+        let mut bodies = Vec::new();
+        for (i, variant) in decl.variants.iter().enumerate() {
+            let value = self.comptime_body(|this| this.expr(&variant.value));
+            let span = variant.name.span.to(value.span);
+            variants.push(VariantDef {
+                name: variant.name.name.clone(),
+                span: variant.name.span,
+                value: FnId(first_body + i as u32),
+            });
+            bodies.push(Fn {
+                name: format!("{}::{}", decl.name.name, variant.name.name),
+                name_span: variant.name.span,
+                kind: FnKind::Plain,
+                ret: Ty::Int(ty.int),
+                ret_span: Some(decl.ty.span),
+                param_count: 0,
+                locals: std::mem::take(&mut self.locals),
+                body: Some(Block {
+                    stmts: Vec::new(),
+                    span: value.span,
+                    tail: Some(Box::new(value)),
+                }),
+                span,
+                runtime: false,
+                comptime: Some(Comptime::Discriminant(id, i as u32)),
+            });
+        }
+        let def = EnumDef {
+            name: decl.name.name.clone(),
+            name_span: decl.name.span,
+            ty,
+            variants,
+        };
+        (def, bodies)
+    }
+
+    /// `Enum::Variant` (ADR 0035). The name before `::` is looked up among
+    /// items only, as a struct literal's is, so a local of that name does
+    /// not hide the enum.
+    fn variant(&mut self, enum_name: &ast::Ident, variant: &ast::Ident) -> Option<ExprKind> {
+        let Some(&id) = self.enum_ids.get(&enum_name.name) else {
+            let what = if self.struct_ids.contains_key(&enum_name.name) {
+                Some("a struct")
+            } else if self.const_ids.contains_key(&enum_name.name) {
+                Some("a constant")
+            } else if self.static_ids.contains_key(&enum_name.name) {
+                Some("a static")
+            } else if self.fn_ids.contains_key(&enum_name.name) {
+                Some("a function")
+            } else {
+                None
+            };
+            let diag = match what {
+                Some(what) => Diagnostic::error(
+                    "resolve::not-an-enum",
+                    format!("`{}` is not an enum", enum_name.name),
+                )
+                .label(enum_name.span, format!("{what}, not an enum"))
+                .help("`::` names a variant of an enum, as in `Mode::Run` (ADR 0035)"),
+                None => Diagnostic::error(
+                    "resolve::unknown-type",
+                    format!("unknown enum `{}`", enum_name.name),
+                )
+                .label(enum_name.span, "not an enum"),
+            };
+            self.diags.push(diag);
+            return None;
+        };
+        let decl = self.enum_decls[id.0 as usize];
+        // A variant declared twice was reported; its first counts.
+        if let Some(index) = decl
+            .variants
+            .iter()
+            .position(|v| v.name.name == variant.name)
+        {
+            return Some(ExprKind::Variant(id, index as u32));
+        }
+        // A variant declared twice is listed once.
+        let mut names: Vec<String> = Vec::new();
+        for v in &decl.variants {
+            let name = format!("`{}`", v.name.name);
+            if !names.contains(&name) {
+                names.push(name);
+            }
+        }
+        let mut diag = Diagnostic::error(
+            "resolve::unknown-variant",
+            format!("`{}` has no variant `{}`", decl.name.name, variant.name),
+        )
+        .label(variant.span, "unknown variant")
+        .label(
+            decl.name.span,
+            format!("`{}` is declared here", decl.name.name),
+        );
+        if !names.is_empty() {
+            diag = diag.help(format!("its variants are {}", names.join(", ")));
+        }
+        self.diags.push(diag);
+        None
     }
 
     /// A `comptime { ... }` item, as a body returning `()`.
@@ -934,6 +1138,9 @@ impl Lowerer<'_> {
                 None if self.struct_ids.contains_key(&name.name) => {
                     Ty::Struct(self.struct_tys[self.struct_ids[&name.name].0 as usize])
                 }
+                None if let Some(&id) = self.enum_ids.get(&name.name) => {
+                    Ty::Enum(self.enum_tys[id.0 as usize])
+                }
                 None => {
                     self.diags.push(
                         Diagnostic::error(
@@ -1106,6 +1313,11 @@ impl Lowerer<'_> {
                 Some(kind) => kind,
                 // Reported; any placeholder works since lowering errors stop
                 // the pipeline.
+                None => ExprKind::Unit,
+            },
+            ast::ExprKind::Path(enum_name, variant) => match self.variant(enum_name, variant) {
+                Some(kind) => kind,
+                // Reported; lowering errors stop the pipeline.
                 None => ExprKind::Unit,
             },
             ast::ExprKind::Call(name, args) if name.name == "assert" => {

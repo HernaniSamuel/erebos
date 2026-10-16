@@ -78,7 +78,8 @@ fn struct_layouts_match_c() {
     let clang = common::clang_path();
     let output = Command::new(&clang)
         .args(common::CLANG_TARGET)
-        .args(["-std=c11", "-fsyntax-only", "-I"])
+        // C23, for enums with a fixed underlying type (ADR 0035).
+        .args(["-std=c23", "-fsyntax-only", "-I"])
         .arg(&dir)
         .arg(&c_file)
         .output()

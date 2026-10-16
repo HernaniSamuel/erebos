@@ -13,6 +13,7 @@ pub struct File {
 pub enum Item {
     Fn(FnDecl),
     Struct(StructDecl),
+    Enum(EnumDecl),
     Const(ConstDecl),
     Static(StaticDecl),
     Comptime(ComptimeDecl),
@@ -58,6 +59,24 @@ pub struct StructDecl {
     pub name: Ident,
     pub fields: Vec<FieldDecl>,
     pub span: Span,
+}
+
+/// `enum Name: Type { Variant = value, ... }` (ADR 0035)
+#[derive(Debug)]
+pub struct EnumDecl {
+    pub attrs: Vec<Attr>,
+    pub name: Ident,
+    /// The integer type written after `:`.
+    pub ty: Ty,
+    pub variants: Vec<VariantDecl>,
+    pub span: Span,
+}
+
+/// `Name = value`, the value computed at compile time (ADR 0035).
+#[derive(Debug)]
+pub struct VariantDecl {
+    pub name: Ident,
+    pub value: Expr,
 }
 
 #[derive(Debug)]
@@ -191,6 +210,8 @@ pub enum ExprKind {
     Repeat(Box<Expr>, Box<Expr>),
     /// A name, such as a local variable.
     Name(Ident),
+    /// `Enum::Variant` (ADR 0035).
+    Path(Ident, Ident),
     /// `name(args)`: a call to a function.
     Call(Ident, Vec<Expr>),
     /// `Name { field: value, ... }`, fields in the order written.

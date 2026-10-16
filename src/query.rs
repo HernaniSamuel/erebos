@@ -9,7 +9,7 @@ use std::rc::Rc;
 use crate::diag::{Diagnostic, Diagnostics};
 use crate::eval::{self, ConstValue, Origin};
 use crate::hir::{
-    self, ArrayLen, Comptime, ConstId, ExprId, ExprKind, FnId, Hir, StaticId, StructId,
+    self, ArrayLen, Comptime, ConstId, EnumId, ExprId, ExprKind, FnId, Hir, StaticId, StructId,
 };
 use crate::layout::{self, Layout, MAX_ALIGN, MAX_SIZE, StructLayout};
 use crate::mir::{self, BodyId, ConstData, DataId, Field, Mir, Ptr, StaticRef, StructRef};
@@ -36,6 +36,8 @@ enum Item {
     Comptime(ExprId),
     /// A `usize` computed at compile time, such as an array length.
     Value(FnId),
+    /// The value of a variant (ADR 0035).
+    Discriminant(EnumId, u32),
     Layout(StructId),
 }
 
@@ -46,8 +48,18 @@ fn describe(hir: &Hir, f: &hir::Fn) -> String {
         Some(Comptime::Static(id)) => format!("the static `{}`", hir.static_(id).name),
         Some(Comptime::Block) => "this `comptime` block".to_owned(),
         Some(Comptime::Value) => "this value".to_owned(),
+        Some(Comptime::Discriminant(id, index)) => variant_name(hir, id, index),
         None => format!("the function `{}`", f.name),
     }
+}
+
+/// How diagnostics name a variant: "the variant `Mode::Run`".
+fn variant_name(hir: &Hir, id: EnumId, index: u32) -> String {
+    let def = hir.enum_(id);
+    format!(
+        "the variant `{}::{}`",
+        def.name, def.variants[index as usize].name
+    )
 }
 
 /// The progress of one item through a query.
@@ -76,6 +88,12 @@ pub struct Queries<'h> {
     consts: Vec<State<Option<ConstValue>>>,
     /// The initial value of each static; `None` if it failed (reported).
     statics: Vec<State<Option<ConstValue>>>,
+    /// The value of each variant of each enum, as the bits of its integer
+    /// type; `None` if it failed (reported).
+    discriminants: Vec<Vec<State<Option<u64>>>>,
+    /// Whether each enum, once checked, has every value computed and no
+    /// two alike (ADR 0035).
+    enums_ok: Vec<Option<bool>>,
     /// The alignment of each static; `None` if its type has no layout or
     /// its `#[align]` is invalid (reported).
     static_aligns: Vec<Option<Option<u64>>>,
@@ -111,6 +129,12 @@ impl<'h> Queries<'h> {
             bodies: hir.fns.iter().map(|_| State::NotStarted).collect(),
             consts: hir.consts.iter().map(|_| State::NotStarted).collect(),
             statics: hir.statics.iter().map(|_| State::NotStarted).collect(),
+            discriminants: hir
+                .enums
+                .iter()
+                .map(|e| e.variants.iter().map(|_| State::NotStarted).collect())
+                .collect(),
+            enums_ok: vec![None; hir.enums.len()],
             static_aligns: vec![None; hir.statics.len()],
             mir_statics: vec![None; hir.statics.len()],
             byte_strings: Vec::new(),
@@ -138,6 +162,10 @@ impl<'h> Queries<'h> {
         // Every constant and check is evaluated, used or not (ADR 0029).
         for id in 0..hir.consts.len() {
             self.const_value(ConstId(id as u32));
+        }
+        // So is every variant's value (ADR 0035).
+        for id in 0..hir.enums.len() {
+            self.enum_ok(EnumId(id as u32));
         }
         // So is every static (ADR 0030).
         for id in 0..hir.statics.len() {
@@ -265,6 +293,76 @@ impl<'h> Queries<'h> {
         self.finish(Item::Const(id));
         self.consts[id.0 as usize] = State::Done(value.clone());
         value
+    }
+
+    /// The value of a variant (ADR 0035), computed once, as the bits of the
+    /// enum's integer type.
+    pub fn discriminant(&mut self, id: EnumId, index: u32) -> Option<u64> {
+        let slot = (id.0 as usize, index as usize);
+        if let State::Done(value) = self.discriminants[slot.0][slot.1] {
+            return value;
+        }
+        let hir = self.hir;
+        let def = hir.enum_(id);
+        let variant = &def.variants[slot.1];
+        let what = variant_name(hir, id, index);
+        if !self.start(Item::Discriminant(id, index), variant.span, what.clone()) {
+            return None;
+        }
+        self.discriminants[slot.0][slot.1] = State::InProgress;
+        let value = self.mir_body(variant.value).and_then(|body| {
+            let origin = Origin {
+                what,
+                span: variant.span,
+            };
+            eval::evaluate(self, body, origin)
+        });
+        self.finish(Item::Discriminant(id, index));
+        let value = value.map(|value| value.int(def.ty.int.bytes() as usize));
+        self.discriminants[slot.0][slot.1] = State::Done(value);
+        value
+    }
+
+    /// Computes the value of every variant of an enum, once, and reports
+    /// two variants with one value (ADR 0035). Returns whether every value
+    /// was computed and none repeats: an enum with a value that failed or
+    /// repeats was reported, and uses of it report nothing more.
+    pub fn enum_ok(&mut self, id: EnumId) -> bool {
+        if let Some(ok) = self.enums_ok[id.0 as usize] {
+            return ok;
+        }
+        let hir = self.hir;
+        let def = hir.enum_(id);
+        let mut ok = true;
+        let mut seen: Vec<(u64, usize)> = Vec::new();
+        for (index, variant) in def.variants.iter().enumerate() {
+            let Some(value) = self.discriminant(id, index as u32) else {
+                ok = false;
+                continue;
+            };
+            match seen.iter().find(|(seen, _)| *seen == value) {
+                Some(&(_, first)) => {
+                    ok = false;
+                    let first = &def.variants[first];
+                    let shown = def.ty.int.display_bits(value);
+                    self.diags.push(
+                        Diagnostic::error(
+                            "ty::duplicate-discriminant",
+                            format!(
+                                "`{0}::{1}` has the same value as `{0}::{2}`",
+                                def.name, variant.name, first.name
+                            ),
+                        )
+                        .label(variant.span, format!("is {shown}"))
+                        .label(first.span, format!("is {shown} too"))
+                        .help("each variant names a value of its own, so that a `match` can tell them apart (ADR 0035)"),
+                    );
+                }
+                None => seen.push((value, index)),
+            }
+        }
+        self.enums_ok[id.0 as usize] = Some(ok);
+        ok
     }
 
     /// The initial value of a static (ADR 0030), computed once. An `extern
@@ -705,6 +803,8 @@ impl<'h> Queries<'h> {
             }
             hir::Ty::Slice(elem) => mir::Ty::Slice(Box::leak(Box::new(self.mir_ty(*elem)))),
             hir::Ty::Struct(s) => mir::Ty::Struct(self.mir_struct(s.id)),
+            // Stored as its integer type, which is all MIR sees (ADR 0035).
+            hir::Ty::Enum(e) => mir::Ty::Int(e.int),
             hir::Ty::Error => unreachable!("MIR is only built for well-typed programs"),
         }
     }
@@ -810,6 +910,27 @@ impl<'h> Queries<'h> {
         for id in 0..self.hir.fns.len() {
             self.mir_body(FnId(id as u32));
         }
+        let hir = self.hir;
+        let enums = hir
+            .enums
+            .iter()
+            .enumerate()
+            .map(|(id, def)| mir::Enum {
+                name: def.name.clone(),
+                int: def.ty.int,
+                variants: def
+                    .variants
+                    .iter()
+                    .enumerate()
+                    .map(|(index, variant)| {
+                        let value = self
+                            .discriminant(EnumId(id as u32), index as u32)
+                            .expect("every variant of a program without errors has a value");
+                        (variant.name.clone(), value)
+                    })
+                    .collect(),
+            })
+            .collect();
         let mut statics: Vec<mir::Static> = (0..self.hir.statics.len())
             .map(|id| {
                 let id = StaticId(id as u32);
@@ -842,6 +963,7 @@ impl<'h> Queries<'h> {
         }));
         Mir {
             structs,
+            enums,
             data: self.data,
             statics,
             bodies: self

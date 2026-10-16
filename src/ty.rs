@@ -14,8 +14,8 @@ use std::fmt::Write;
 
 use crate::diag::Diagnostic;
 use crate::hir::{
-    self, BinOp, Block, Expr, ExprId, ExprKind, Fn, FnKind, Hir, IntTy, LocalId, NeverPosition,
-    Ptr, StaticId, Stmt, Ty, UnOp, UnsizedPosition,
+    self, BinOp, Block, EnumId, EnumTy, Expr, ExprId, ExprKind, Fn, FnKind, Hir, IntTy, LocalId,
+    NeverPosition, Ptr, StaticId, Stmt, Ty, UnOp, UnsizedPosition,
 };
 use crate::layout;
 use crate::query::Queries;
@@ -162,6 +162,7 @@ pub fn check_fn(q: &mut Queries, f: &Fn) {
         hir,
         ret: Ty::Error,
         loops: Vec::new(),
+        equality: None,
     };
     checker.fn_(f);
 }
@@ -236,6 +237,10 @@ struct Checker<'a, 'h> {
     ret: Ty,
     /// Enclosing `loop`/`while` expressions, innermost last.
     loops: Vec<LoopCtx>,
+    /// The `==` or `!=` whose operands are being checked, with their ids:
+    /// a literal there compared with an enum gets a help converting the
+    /// enum (ADR 0035).
+    equality: Option<(BinOp, ExprId, ExprId)>,
 }
 
 /// What the type checker knows about a place expression.
@@ -580,6 +585,7 @@ impl Checker<'_, '_> {
             }
             ExprKind::Local(local) => self.local_ty(f, *local),
             ExprKind::Const(id) => self.norm(self.hir.const_(*id).ty),
+            ExprKind::Variant(id, _) => Ty::Enum(self.hir.enum_(*id).ty),
             // The value is computed later; its type is checked here, with
             // the expected type passed through (ADR 0029).
             ExprKind::Comptime(inner) => match self.check(f, inner, expected) {
@@ -633,7 +639,10 @@ impl Checker<'_, '_> {
             ExprKind::Binary(op, lhs, rhs) if op.is_comparison() => {
                 // Both sides have one type, never converted (ADR 0008),
                 // except that pointers may differ in mutability (ADR 0024).
+                let equality = matches!(op, BinOp::Eq | BinOp::Ne).then_some((*op, lhs.id, rhs.id));
+                let outer = std::mem::replace(&mut self.equality, equality);
                 let ty = self.same_type_operands(f, lhs, rhs, None, comparable);
+                self.equality = outer;
                 let allowed = if matches!(op, BinOp::Eq | BinOp::Ne) {
                     Operands::Equatable
                 } else {
@@ -1007,10 +1016,36 @@ impl Checker<'_, '_> {
             }
             Some(Ty::Error) => Ty::Error,
             Some(other) => {
-                self.q.diags.push(
-                    Diagnostic::error("ty::mismatched-types", "mismatched types")
-                        .label(expr.span, format!("expected `{other}`, found an integer")),
-                );
+                let mut diag = Diagnostic::error("ty::mismatched-types", "mismatched types")
+                    .label(expr.span, format!("expected `{other}`, found an integer"));
+                // An enum is not its integer (ADR 0035).
+                if let Ty::Enum(e) = other {
+                    let variant = match self.hir.enum_(e.id).variants.first() {
+                        Some(variant) => format!(", such as `{}::{}`", e.name, variant.name),
+                        None => String::new(),
+                    };
+                    // Compared with `==` or `!=`, the integer can be
+                    // compared instead, unless the literal is negative
+                    // and the integer type unsigned.
+                    let convert = match self.equality {
+                        Some((op, lhs, rhs))
+                            if (expr.id == lhs || expr.id == rhs)
+                                && (!negated || e.int.is_signed()) =>
+                        {
+                            let sign = if negated { "-" } else { "" };
+                            format!(
+                                ", or compare its integer instead, as in `m as {} {} {sign}{value}`",
+                                e.int,
+                                op.symbol()
+                            )
+                        }
+                        _ => String::new(),
+                    };
+                    diag = diag.help(format!(
+                        "write a variant of `{other}`{variant}{convert} (ADR 0035)"
+                    ));
+                }
+                self.q.diags.push(diag);
                 Ty::Error
             }
             None => {
@@ -1094,15 +1129,16 @@ impl Checker<'_, '_> {
         }
     }
 
-    /// Integers and pointers convert to each other with `as` (ADR 0013). A
-    /// literal operand takes the target type, or `usize` for a pointer
-    /// target (ADR 0017).
+    /// Integers and pointers convert to each other with `as` (ADR 0013),
+    /// and enums to integers (ADR 0035). A literal operand takes the target
+    /// type, or `usize` for a pointer target (ADR 0017).
     fn cast(&mut self, f: &Fn, operand: &Expr, target: Ty, target_span: Span) -> Ty {
         let literal_ty = match target {
             Ty::Int(_) => Some(target),
             Ty::Ptr(_) => Some(Ty::Int(IntTy::Usize)),
-            // Reported, such as `as *const !` (ADR 0034), or below, `as !`.
-            Ty::Error | Ty::Never => Some(Ty::Error),
+            // Reported, such as `as *const !` (ADR 0034), or below, `as !`
+            // and `as Mode`, which a literal has no type to take for.
+            Ty::Error | Ty::Never | Ty::Enum(_) => Some(Ty::Error),
             _ => None,
         };
         let expected = if needs_expected_type(operand) {
@@ -1122,6 +1158,22 @@ impl Checker<'_, '_> {
             );
             return Ty::Error;
         }
+        // Nothing converts to an enum, so a program that only writes
+        // variants never holds a value that is no variant (ADR 0035, 0036).
+        if let Ty::Enum(e) = target {
+            let variant = match self.hir.enum_(e.id).variants.first() {
+                Some(variant) => format!("`N => {}::{}`", e.name, variant.name),
+                None => "`N => ...`".to_owned(),
+            };
+            self.q.diags.push(
+                Diagnostic::error("ty::invalid-cast", format!("cannot cast to `{target}`"))
+                    .label(target_span, "nothing converts to an enum")
+                    .help(format!(
+                        "decode the integer with a `match`, with an arm such as {variant} for each value (ADR 0035)"
+                    )),
+            );
+            return Ty::Error;
+        }
         if from == Ty::Bool {
             // `true as u8 == 1`; a bool converts to integers only.
             if !matches!(target, Ty::Int(_) | Ty::Error) {
@@ -1131,6 +1183,20 @@ impl Checker<'_, '_> {
                         format!("cannot cast `bool` to `{target}`"),
                     )
                     .label(target_span, "a `bool` converts only to integer types"),
+                );
+                return Ty::Error;
+            }
+            return target;
+        }
+        // As its integer type would convert, to integers only (ADR 0035).
+        if let Ty::Enum(_) = from {
+            if !matches!(target, Ty::Int(_) | Ty::Error) {
+                self.q.diags.push(
+                    Diagnostic::error(
+                        "ty::invalid-cast",
+                        format!("cannot cast `{from}` to `{target}`"),
+                    )
+                    .label(target_span, "an enum converts only to integer types"),
                 );
                 return Ty::Error;
             }
@@ -1299,14 +1365,18 @@ impl Checker<'_, '_> {
                 .help("the width and number of the bus accesses would be up to the compiler (ADR 0023)"),
             );
         }
-        if let (true, Ty::Int(int)) = (volatile, place.ty)
+        // An enum is accessed as its integer type (ADR 0023, 0035).
+        if let (true, Ty::Int(int) | Ty::Enum(EnumTy { int, .. })) = (volatile, place.ty)
             && int.bits() > target::WIDEST_ACCESS_BITS
         {
             let half = target::WIDEST_ACCESS_BITS;
             self.q.diags.push(
                 Diagnostic::error(
                     "ty::volatile-too-wide",
-                    format!("a volatile `{int}` cannot be accessed in one instruction"),
+                    format!(
+                        "a volatile `{}` cannot be accessed in one instruction",
+                        place.ty
+                    ),
                 )
                 .label(span, format!("the widest single access is {half} bits"))
                 .help(format!(
@@ -1719,6 +1789,8 @@ impl Checker<'_, '_> {
             // A slice is an address and a length (ADR 0031).
             Ty::Ptr(_) if ty.slice_elem().is_some() => false,
             Ty::Ptr(_) => matches!(allowed, Operands::Equatable | Operands::Ordered),
+            // Only told apart, never ordered or computed with (ADR 0035).
+            Ty::Enum(_) => matches!(allowed, Operands::Equatable),
             // Aggregates compare part by part (ADR 0021).
             Ty::Unit | Ty::Array(..) | Ty::Slice(_) | Ty::Struct(_) => false,
         };
@@ -1726,7 +1798,7 @@ impl Checker<'_, '_> {
             let what = match allowed {
                 Operands::Int => "an integer",
                 Operands::IntOrBool => "an integer or `bool`",
-                Operands::Equatable => "integers, pointers or `bool`",
+                Operands::Equatable => "integers, pointers, `bool` or enums",
                 Operands::Ordered => "integers or pointers",
             };
             let mut diag = Diagnostic::error(
@@ -1739,13 +1811,19 @@ impl Checker<'_, '_> {
                     "a slice is an address and a length; compare those: `s as *const T` and `len(s)` (ADR 0031)",
                 );
             }
+            if let Ty::Enum(e) = ty {
+                diag = diag.help(format!(
+                    "an enum only compares with `==` and `!=`; for anything else, convert it to its integer first, as in `x as {}` (ADR 0035)",
+                    e.int
+                ));
+            }
             self.q.diags.push(diag);
         }
     }
 }
 
-/// Lists struct layouts, then every function's locals and expression types,
-/// for `--emit=typeck`.
+/// Lists struct layouts, enums with their values, then every function's
+/// locals and expression types, for `--emit=typeck`.
 pub fn dump(q: &mut Queries) -> String {
     let hir = q.hir;
     let mut out = String::new();
@@ -1779,6 +1857,27 @@ pub fn dump(q: &mut Queries) -> String {
             out,
             "{attrs}struct {} {fields} size {}, align {}",
             def.name, layout.layout.size, layout.layout.align
+        )
+        .unwrap();
+    }
+    for (i, def) in hir.enums.iter().enumerate() {
+        let variants: Vec<String> = def
+            .variants
+            .iter()
+            .enumerate()
+            .map(
+                |(index, variant)| match q.discriminant(EnumId(i as u32), index as u32) {
+                    Some(value) => format!("{} = {}", variant.name, def.ty.int.display_bits(value)),
+                    None => format!("{} = ?", variant.name),
+                },
+            )
+            .collect();
+        writeln!(
+            out,
+            "enum {}: {} {{ {} }}",
+            def.name,
+            def.ty.int,
+            variants.join(", ")
         )
         .unwrap();
     }
@@ -1867,6 +1966,13 @@ fn expr_label(hir: &Hir, f: &Fn, expr: &Expr) -> String {
         ExprKind::Unit => "unit".to_owned(),
         ExprKind::Const(id) => format!("const {}", hir.const_(*id).name),
         ExprKind::Static(id) => format!("static {}", hir.static_(*id).name),
+        ExprKind::Variant(id, index) => {
+            let def = hir.enum_(*id);
+            format!(
+                "variant {}::{}",
+                def.name, def.variants[*index as usize].name
+            )
+        }
         ExprKind::Comptime(_) => "comptime".to_owned(),
         ExprKind::Array(_) => "array".to_owned(),
         ExprKind::StructLit(s, _) => format!("struct {}", s.name),

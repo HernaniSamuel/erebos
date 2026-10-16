@@ -6,6 +6,7 @@ input_file: tests/ui/resolve_ok.ers
 --- hir ---
 Hir {
     structs: [],
+    enums: [],
     fns: [
         Fn {
             name: "main",

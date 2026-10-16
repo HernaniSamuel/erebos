@@ -1,0 +1,49 @@
+// emit: typeck
+// What enums do not do (ADR 0035): nothing converts to one, an enum
+// converts only to integers, compares only with `==` and `!=`, is not its
+// integer, is a value and not a place, has no fields, and is accessed
+// through a volatile pointer as its integer type.
+enum Mode: u8 { Off = 0, Idle = 1, Run = 3 }
+enum Other: u8 { A = 0 }
+enum Wide: u64 { Big = 0x1_0000_0000 }
+enum Level: i8 { Low = -1, High = 1 }
+
+fn casts(x: u8) {
+    let a: Mode = x as Mode;
+    let b: Mode = 3 as Mode;
+    let c: bool = Mode::Run as bool;
+    let d: Other = Mode::Run as Other;
+    let e: Mode = Mode::Run as Mode;
+    let f: *const u8 = Mode::Run as *const u8;
+}
+
+fn operators(m: Mode) {
+    let a: bool = m == 3;
+    let b: bool = Mode::Run < Mode::Off;
+    let c: Mode = Mode::Run + Mode::Off;
+    let d: Mode = !m;
+    let e: bool = m == Other::A;
+    let f: Mode = 1;
+    let g: bool = m != 2;
+    take(2);
+    let h: bool = m == -1;
+    let i: bool = Level::Low == -1;
+    let j: bool = m == same(3);
+}
+
+fn take(m: Mode) {}
+
+fn same(m: Mode) -> Mode {
+    m
+}
+
+fn places(mut m: Mode, p: *const volatile Wide) {
+    let a: *const Mode = &raw const Mode::Run;
+    Mode::Run = m;
+    let b: u8 = m.f;
+    let c: usize = offset_of(Mode, f);
+    let d: Wide = *p;
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

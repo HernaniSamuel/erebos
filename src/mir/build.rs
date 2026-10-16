@@ -90,6 +90,8 @@ struct Builder<'a, 'h> {
     /// again.
     const_values: HashMap<hir::ConstId, Option<ConstValue>>,
     comptime_values: HashMap<hir::ExprId, Option<ConstValue>>,
+    /// The values of the variants used, likewise (ADR 0035).
+    discriminants: HashMap<(hir::EnumId, u32), Option<u64>>,
     /// The local bound to each piece of constant data used.
     const_locals: HashMap<DataId, Local>,
     locals: Vec<LocalDecl>,
@@ -127,6 +129,7 @@ impl<'a, 'h> Builder<'a, 'h> {
             known: HashMap::new(),
             const_values: HashMap::new(),
             comptime_values: HashMap::new(),
+            discriminants: HashMap::new(),
             const_locals: HashMap::new(),
             locals: vec![LocalDecl {
                 ty: ret,
@@ -371,6 +374,20 @@ impl Builder<'_, '_> {
             hir::ExprKind::Comptime(inner) => {
                 let value = self.comptime_value(inner);
                 self.const_operand(ty, DataSource::Comptime(inner.id), value)
+            }
+            // Its integer, which is all MIR sees of an enum (ADR 0035).
+            hir::ExprKind::Variant(id, index) => {
+                let Ty::Int(int) = ty else {
+                    unreachable!("an enum is stored as its integer type")
+                };
+                match self.discriminant(*id, *index) {
+                    Some(value) => Operand::Const(Const::Int(value, int)),
+                    None => {
+                        // Reported where it failed; the body is not used.
+                        self.failed = true;
+                        Operand::Const(Const::Int(0, int))
+                    }
+                }
             }
             hir::ExprKind::SizeOf(_) | hir::ExprKind::AlignOf(_) | hir::ExprKind::OffsetOf(..) => {
                 usize_const(self.layout_query(expr))
@@ -988,6 +1005,16 @@ impl Builder<'_, '_> {
         value
     }
 
+    /// The value of a variant, asked once per body.
+    fn discriminant(&mut self, id: hir::EnumId, index: u32) -> Option<u64> {
+        if let Some(&value) = self.discriminants.get(&(id, index)) {
+            return value;
+        }
+        let value = self.q.discriminant(id, index);
+        self.discriminants.insert((id, index), value);
+        value
+    }
+
     /// `size_of`, `align_of` or `offset_of`, which are constants
     /// (ADR 0022).
     fn layout_query(&mut self, expr: &hir::Expr) -> u64 {
@@ -1224,6 +1251,7 @@ fn is_simple(expr: &hir::Expr) -> bool {
         | hir::ExprKind::Byte(_)
         | hir::ExprKind::Bool(_)
         | hir::ExprKind::Unit
+        | hir::ExprKind::Variant(..)
         | hir::ExprKind::Local(_) => true,
         hir::ExprKind::Unary(UnOp::Neg, operand) => matches!(operand.kind, hir::ExprKind::Int(_)),
         _ => false,

@@ -1,0 +1,92 @@
+// Enums between Erebos and C compiled by clang (ADR 0035): an enum is
+// passed and returned as its integer type, extended by that type's
+// signedness, so a C23 enum with the same underlying type is its twin, in
+// both directions.
+// link-c: enums_c.c
+// expect-output: mode 3
+// expect-output: level -1
+// expect-output: c sees -1
+// expect-output: from c 13
+// expect-output: c gets -1
+// expect-exit: 0
+
+enum Mode: u8 { Off = 0, Idle = 1, Run = 3 }
+enum Level: i8 { Low = -1, Mid = 0, High = 1 }
+
+extern fn c_next_mode(m: Mode) -> Mode;
+extern fn c_same_level(l: Level) -> Level;
+extern fn c_level_as_int(l: Level) -> i32;
+extern fn c_calls_erebos() -> u32;
+extern fn c_level_from_erebos() -> i32;
+
+// Called from C.
+fn erebos_next(m: Mode) -> Mode {
+    if m == Mode::Off { Mode::Idle } else { Mode::Run }
+}
+
+fn erebos_level(high: bool) -> Level {
+    if high { Level::High } else { Level::Low }
+}
+
+fn putc(byte: u8) {
+    let thr: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+    *thr = byte;
+}
+
+fn puts(s: *const [u8]) {
+    let mut i: usize = 0;
+    while i < len(s) {
+        putc((*s)[i]);
+        i += 1;
+    }
+}
+
+fn print_i64(n: i64) {
+    if n < 0 {
+        putc(b'-');
+        print_u64((0 - n) as u64);
+    } else {
+        print_u64(n as u64);
+    }
+}
+
+fn print_u64(n: u64) {
+    if n >= 10 {
+        print_u64(n / 10);
+    }
+    putc(b'0' + (n % 10) as u8);
+}
+
+fn exit(code: u32) -> ! {
+    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+    *finisher = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    loop {}
+}
+
+entry fn main() -> ! {
+    let mode: Mode = c_next_mode(Mode::Idle);
+    puts(&raw const b"mode ");
+    print_u64(mode as u64);
+    putc(b'\n');
+    let level: Level = c_same_level(Level::Low);
+    if level != Level::Low {
+        exit(2);
+    }
+    puts(&raw const b"level ");
+    print_i64(level as i64);
+    putc(b'\n');
+    puts(&raw const b"c sees ");
+    print_i64(c_level_as_int(Level::Low) as i64);
+    putc(b'\n');
+    puts(&raw const b"from c ");
+    print_u64(c_calls_erebos() as u64);
+    putc(b'\n');
+    puts(&raw const b"c gets ");
+    print_i64(c_level_from_erebos() as i64);
+    putc(b'\n');
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(1)
+}

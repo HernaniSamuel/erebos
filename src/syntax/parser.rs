@@ -4,9 +4,9 @@
 use crate::diag::{Diagnostic, Diagnostics};
 use crate::span::Span;
 use crate::syntax::ast::{
-    Attr, BinOp, Block, ComptimeDecl, ConstDecl, Expr, ExprKind, FieldDecl, FieldInit, File,
-    FnDecl, FnKind, Ident, Item, Let, LogicalOp, Param, StaticDecl, Stmt, StructDecl, Ty, TyKind,
-    UnOp,
+    Attr, BinOp, Block, ComptimeDecl, ConstDecl, EnumDecl, Expr, ExprKind, FieldDecl, FieldInit,
+    File, FnDecl, FnKind, Ident, Item, Let, LogicalOp, Param, StaticDecl, Stmt, StructDecl, Ty,
+    TyKind, UnOp, VariantDecl,
 };
 use crate::syntax::lexer;
 use crate::syntax::token::{Token, TokenKind};
@@ -133,6 +133,7 @@ impl Parser<'_> {
                 | TokenKind::Fn
                 | TokenKind::Extern
                 | TokenKind::Struct
+                | TokenKind::Enum
                 | TokenKind::Const
                 | TokenKind::Static
                 | TokenKind::Comptime
@@ -156,6 +157,7 @@ impl Parser<'_> {
                 Ok(Item::Fn(self.fn_decl(attrs)?))
             }
             TokenKind::Struct => Ok(Item::Struct(self.struct_decl(attrs)?)),
+            TokenKind::Enum => Ok(Item::Enum(self.enum_decl(attrs)?)),
             TokenKind::Const => Ok(Item::Const(self.const_decl(attrs)?)),
             TokenKind::Comptime => {
                 let start = self.bump().span;
@@ -298,6 +300,57 @@ impl Parser<'_> {
             attrs,
             name,
             fields,
+            span: start.to(self.tokens[self.pos - 1].span),
+        })
+    }
+
+    /// `enum Name: Type { Variant = value, ... }`. The integer type and every
+    /// value are written, never implied (ADR 0035).
+    fn enum_decl(&mut self, attrs: Vec<Attr>) -> PResult<EnumDecl> {
+        let start = self.bump().span;
+        let name = self.ident()?;
+        if self.eat(TokenKind::Colon).is_none() {
+            let found = self.peek();
+            self.diags.push(
+                Diagnostic::error(
+                    "parser::enum-without-type",
+                    format!("expected `:`, found {}", found.kind.describe()),
+                )
+                .label(self.missing_token_span(), "expected `: Type`")
+                .help(format!(
+                    "every enum states the integer type it is stored as, e.g. `enum {}: u8 {{ ... }}` (ADR 0035)",
+                    name.name
+                )),
+            );
+            return Err(Reported);
+        }
+        let ty = self.ty()?;
+        self.expect(TokenKind::LBrace)?;
+        let variants = self.brace_list(|p| {
+            let name = p.ident()?;
+            if p.eat(TokenKind::Eq).is_none() {
+                let found = p.peek();
+                p.diags.push(
+                    Diagnostic::error(
+                        "parser::variant-without-value",
+                        format!("expected `=`, found {}", found.kind.describe()),
+                    )
+                    .label(p.missing_token_span(), "expected `= value`")
+                    .help(format!(
+                        "every variant states its value, e.g. `{} = 0`, so that adding one never renumbers the others (ADR 0035)",
+                        name.name
+                    )),
+                );
+                return Err(Reported);
+            }
+            let value = p.nested_expr()?;
+            Ok(VariantDecl { name, value })
+        })?;
+        Ok(EnumDecl {
+            attrs,
+            name,
+            ty,
+            variants,
             span: start.to(self.tokens[self.pos - 1].span),
         })
     }
@@ -748,6 +801,13 @@ impl Parser<'_> {
             }
             TokenKind::Ident => {
                 let name = self.ident()?;
+                if self.eat(TokenKind::ColonColon).is_some() {
+                    let variant = self.ident()?;
+                    return Ok(Expr {
+                        span: token.span.to(variant.span),
+                        kind: ExprKind::Path(name, variant),
+                    });
+                }
                 if self.eat(TokenKind::LParen).is_some() {
                     let args = self.comma_list(Self::nested_expr)?;
                     let end = self.tokens[self.pos - 1].span;

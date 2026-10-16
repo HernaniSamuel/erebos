@@ -28,7 +28,8 @@ resolve::duplicate-item
    ·          ╰── redefined here
  4 │ struct u8 { a: bool }
    ╰────
-  help: functions, structs, constants and statics share one namespace (ADR 0029, 0030)
+  help: functions, structs, enums, constants and statics share one namespace (ADR 0029, 0030,
+        0035)
 resolve::duplicate-type
 
   × `u8` is a built-in type

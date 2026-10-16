@@ -1,0 +1,17 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/mir_known_variant_errors.ers
+---
+--- errors ---
+ty::shift-out-of-range
+
+  × shift amount out of range for `u32`
+    ╭─[mir_known_variant_errors.ers:11:10]
+ 10 │ fn big(x: u32) -> u32 {
+ 11 │     x >> (Shift::Big as u32)
+    ·          ─────────┬─────────
+    ·                   ╰── is 40, but must be between 0 and 31
+ 12 │ }
+    ╰────
+  help: shifts mask their amount, so this would shift by 8 (ADR 0007)

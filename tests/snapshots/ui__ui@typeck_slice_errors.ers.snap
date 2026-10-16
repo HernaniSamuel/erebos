@@ -68,7 +68,7 @@ ty::mismatched-types
     ╰────
 ty::invalid-operand
 
-  × `==` needs integers, pointers or `bool`, found `*const [u8]`
+  × `==` needs integers, pointers, `bool` or enums, found `*const [u8]`
     ╭─[typeck_slice_errors.ers:16:5]
  15 │ fn comparisons(s: *const [u8], t: *mut [u8]) -> bool {
  16 │     s == s || s != t || s < s
@@ -79,7 +79,7 @@ ty::invalid-operand
   help: a slice is an address and a length; compare those: `s as *const T` and `len(s)` (ADR 0031)
 ty::invalid-operand
 
-  × `!=` needs integers, pointers or `bool`, found `*const [u8]`
+  × `!=` needs integers, pointers, `bool` or enums, found `*const [u8]`
     ╭─[typeck_slice_errors.ers:16:15]
  15 │ fn comparisons(s: *const [u8], t: *mut [u8]) -> bool {
  16 │     s == s || s != t || s < s
