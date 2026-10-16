@@ -1,6 +1,7 @@
 // emit: hir
 // Statics share the namespace of items, take `#[align(N)]` and no other
-// attribute, and cannot be named `_start` (ADR 0030).
+// attribute, and cannot be named `_start`; an `extern static` takes none:
+// its definition decides its alignment (ADR 0030).
 static counter: u32 = 0;
 fn counter() {}
 
@@ -15,6 +16,11 @@ static TWICE: u32 = 0;
 const ALIGNED: u32 = 0;
 
 static _start: u32 = 0;
+// Also defined above, which is reported too.
+extern static _start: u8;
+
+#[align(8)]
+extern static EXTERNAL: u32;
 
 entry fn main() -> ! { loop {} }
 panic fn on_panic() -> ! { loop {} }

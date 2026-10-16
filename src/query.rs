@@ -258,7 +258,9 @@ impl<'h> Queries<'h> {
         value
     }
 
-    /// The initial value of a static (ADR 0030), computed once.
+    /// The initial value of a static (ADR 0030), computed once. An `extern
+    /// static` has none, and evaluation never asks for it: it refuses to
+    /// read one first.
     pub fn static_value(&mut self, id: StaticId) -> Option<ConstValue> {
         match &self.statics[id.0 as usize] {
             State::Done(value) => return value.clone(),
@@ -266,12 +268,13 @@ impl<'h> Queries<'h> {
         }
         let hir = self.hir;
         let def = hir.static_(id);
+        let init = def.init?;
         let what = format!("the static `{}`", def.name);
         if !self.start(Item::Static(id), def.name_span, what.clone()) {
             return None;
         }
         self.statics[id.0 as usize] = State::InProgress;
-        let value = self.mir_body(def.init).and_then(|body| {
+        let value = self.mir_body(init).and_then(|body| {
             let origin = Origin {
                 what,
                 span: def.name_span,
@@ -635,7 +638,13 @@ impl<'h> Queries<'h> {
         let hir = self.hir;
         let def = hir.static_(id);
         let ty = self.mir_ty(def.ty);
-        let s = StaticRef::new(mir::StaticId(id.0), def.name.clone(), ty, def.mutable);
+        let s = StaticRef::new(
+            mir::StaticId(id.0),
+            def.name.clone(),
+            ty,
+            def.mutable,
+            def.init.is_none(),
+        );
         self.mir_statics[id.0 as usize] = Some(s);
         s
     }
@@ -764,9 +773,16 @@ impl<'h> Queries<'h> {
         let statics = (0..self.hir.statics.len())
             .map(|id| {
                 let id = StaticId(id as u32);
-                let value = self
-                    .static_value(id)
-                    .expect("every static of a program without errors has a value");
+                // An `extern static` is only declared.
+                let value = match self.hir.static_(id).init {
+                    Some(_) => self
+                        .static_value(id)
+                        .expect("every static of a program without errors has a value"),
+                    None => ConstValue {
+                        bytes: Vec::new(),
+                        relocations: Vec::new(),
+                    },
+                };
                 mir::Static {
                     def: self.mir_static(id),
                     bytes: value.bytes,

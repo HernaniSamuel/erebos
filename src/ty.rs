@@ -1203,7 +1203,7 @@ impl Checker<'_, '_> {
                     .label(place.span, "assigned here")
                     .label(
                         def.name_span,
-                        format!("help: declare it `static mut {}`", def.name),
+                        format!("help: declare it `{}`", mutable_static(def)),
                     ),
                 );
             }
@@ -1287,7 +1287,7 @@ impl Checker<'_, '_> {
                         .label(place.span, "address taken here")
                         .label(
                             def.name_span,
-                            format!("help: declare it `static mut {}`", def.name),
+                            format!("help: declare it `{}`", mutable_static(def)),
                         ),
                     );
                 }
@@ -1435,6 +1435,13 @@ enum Operands {
     Equatable,
     /// `<`, `<=`, `>`, `>=`
     Ordered,
+}
+
+/// How a static would be declared to be written: `static mut NAME`, or
+/// `extern static mut NAME`.
+fn mutable_static(def: &hir::StaticDef) -> String {
+    let external = if def.init.is_none() { "extern " } else { "" };
+    format!("{external}static mut {}", def.name)
 }
 
 fn expr_label(hir: &Hir, f: &Fn, expr: &Expr) -> String {

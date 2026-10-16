@@ -184,6 +184,8 @@ pub struct StaticDef {
     pub ty: Ty,
     /// `static mut`: written by the program.
     pub mutable: bool,
+    /// An `extern static`, defined outside the program: it has no bytes.
+    pub external: bool,
     /// `*mut T` for a `static mut`, else `*const T`.
     address_ty: Ty,
 }
@@ -201,7 +203,7 @@ impl StaticDef {
 pub struct StaticRef(&'static StaticDef);
 
 impl StaticRef {
-    pub fn new(id: StaticId, name: String, ty: Ty, mutable: bool) -> StaticRef {
+    pub fn new(id: StaticId, name: String, ty: Ty, mutable: bool, external: bool) -> StaticRef {
         let address_ty = Ty::Ptr(Ptr {
             mutable,
             volatile: false,
@@ -212,6 +214,7 @@ impl StaticRef {
             name,
             ty,
             mutable,
+            external,
             address_ty,
         })))
     }
@@ -645,10 +648,11 @@ impl fmt::Display for Mir {
         }
         for s in &self.statics {
             let def = s.def.def();
+            let external = if def.external { "extern " } else { "" };
             let mutability = if def.mutable { "mut " } else { "" };
             writeln!(
                 f,
-                "static {mutability}{}: {}; // align {}",
+                "{external}static {mutability}{}: {}; // align {}",
                 def.name, def.ty, s.align
             )?;
         }

@@ -118,6 +118,10 @@ fn lower<'ctx>(
         .collect();
     let statics: Vec<PointerValue> = globals.iter().map(|g| g.as_pointer_value()).collect();
     for (s, global) in mir.statics.iter().zip(&globals) {
+        // An `extern static` stays a declaration for the linker to resolve.
+        if s.def.def().external {
+            continue;
+        }
         global.set_initializer(&initial_value(context, &s.bytes, &s.relocations, &statics));
     }
     let data: Vec<PointerValue> = mir
@@ -208,7 +212,12 @@ fn static_global<'ctx>(
     s: &crate::mir::Static,
 ) -> GlobalValue<'ctx> {
     let def = s.def.def();
-    let ty = initial_type(context, &s.bytes, &s.relocations);
+    let ty = if def.external {
+        let size = u32::try_from(def.ty.layout().size).expect("the type checker limits sizes");
+        context.i8_type().array_type(size).into()
+    } else {
+        initial_type(context, &s.bytes, &s.relocations)
+    };
     let global = module.add_global(ty, None, &def.name);
     global.set_constant(!def.mutable);
     global.set_linkage(Linkage::External);

@@ -47,6 +47,19 @@ impl Parser<'_> {
         self.peek().kind == kind
     }
 
+    /// The kind of the token after the next one.
+    fn peek_second(&self) -> TokenKind {
+        self.tokens
+            .get(self.pos + 1)
+            .map_or(TokenKind::Eof, |token| token.kind)
+    }
+
+    /// At `static` or `extern static`.
+    fn at_static(&self) -> bool {
+        self.at(TokenKind::Static)
+            || (self.at(TokenKind::Extern) && self.peek_second() == TokenKind::Static)
+    }
+
     fn bump(&mut self) -> Token {
         let token = self.peek();
         if token.kind != TokenKind::Eof {
@@ -135,13 +148,15 @@ impl Parser<'_> {
         while self.at(TokenKind::Pound) {
             attrs.push(self.attr()?);
         }
+        if self.at_static() {
+            return Ok(Item::Static(self.static_decl(attrs)?));
+        }
         match self.peek().kind {
             TokenKind::Entry | TokenKind::Panic | TokenKind::Fn | TokenKind::Extern => {
                 Ok(Item::Fn(self.fn_decl(attrs)?))
             }
             TokenKind::Struct => Ok(Item::Struct(self.struct_decl(attrs)?)),
             TokenKind::Const => Ok(Item::Const(self.const_decl(attrs)?)),
-            TokenKind::Static => Ok(Item::Static(self.static_decl(attrs)?)),
             TokenKind::Comptime => {
                 let start = self.bump().span;
                 let block = self.block()?;
@@ -242,17 +257,25 @@ impl Parser<'_> {
         })
     }
 
+    /// A static, or an `extern static`, which has no initializer.
     fn static_decl(&mut self, attrs: Vec<Attr>) -> PResult<StaticDecl> {
-        let start = self.bump().span;
+        let start = self.peek().span;
+        let external = self.eat(TokenKind::Extern).is_some();
+        self.expect(TokenKind::Static)?;
         let mutable = self.eat(TokenKind::Mut).is_some();
         let name = self.ident()?;
         self.expect(TokenKind::Colon)?;
         let ty = self.ty()?;
-        self.expect(TokenKind::Eq)?;
-        let value = self.expr()?;
+        let value = if external {
+            None
+        } else {
+            self.expect(TokenKind::Eq)?;
+            Some(self.expr()?)
+        };
         let semi = self.expect(TokenKind::Semi)?;
         Ok(StaticDecl {
             attrs,
+            external,
             mutable,
             name,
             ty,
@@ -417,7 +440,7 @@ impl Parser<'_> {
                     // Consumed, so that the rest of the block parses.
                     self.const_decl(Vec::new())?;
                 }
-                TokenKind::Static => {
+                _ if self.at_static() => {
                     let token = self.peek();
                     self.diags.push(
                         Diagnostic::error(

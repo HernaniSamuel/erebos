@@ -1,0 +1,65 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/eval_extern_static_errors.ers
+---
+--- errors ---
+eval::extern-static
+
+  × `CRC_TABLE` is an `extern static`, defined outside the program, so it cannot be read or
+  │ written at compile time
+    ╭─[eval_extern_static_errors.ers:15:19]
+ 14 │ 
+ 15 │ const READ: u32 = CRC_TABLE[0];
+    ·       ──┬─        ──────┬─────
+    ·         │               ╰── read here
+    ·         ╰── while evaluating the constant `READ`
+ 16 │ const WRITE: u32 = write();
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::pointer-compare
+
+  × an `extern static` may be the same memory as another object, so these pointers may be equal at
+  │ run time
+    ╭─[eval_extern_static_errors.ers:17:27]
+ 16 │ const WRITE: u32 = write();
+ 17 │ const TWO_EXTERNS: bool = &raw const CRC_TABLE as *const u8 == &raw const LINKER_END;
+    ·       ─────┬─────         ─────────────────────────────┬────────────────────────────
+    ·            │                                           ╰── compared here
+    ·            ╰── while evaluating the constant `TWO_EXTERNS`
+ 18 │ const WITH_STATIC: bool = &raw mut RX_COUNT == &raw mut LOCAL;
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::pointer-compare
+
+  × an `extern static` may be the same memory as another object, so these pointers may be equal at
+  │ run time
+    ╭─[eval_extern_static_errors.ers:18:27]
+ 17 │ const TWO_EXTERNS: bool = &raw const CRC_TABLE as *const u8 == &raw const LINKER_END;
+ 18 │ const WITH_STATIC: bool = &raw mut RX_COUNT == &raw mut LOCAL;
+    ·       ─────┬─────         ─────────────────┬─────────────────
+    ·            │                               ╰── compared here
+    ·            ╰── while evaluating the constant `WITH_STATIC`
+ 19 │ 
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::extern-static
+
+  × `RX_COUNT` is an `extern static`, defined outside the program, so it cannot be read or written
+  │ at compile time
+    ╭─[eval_extern_static_errors.ers:21:5]
+ 15 │ const READ: u32 = CRC_TABLE[0];
+ 16 │ const WRITE: u32 = write();
+    ·       ──┬──        ───┬───
+    ·         │             ╰── called here
+    ·         ╰── while evaluating the constant `WRITE`
+ 17 │ const TWO_EXTERNS: bool = &raw const CRC_TABLE as *const u8 == &raw const LINKER_END;
+ 18 │ const WITH_STATIC: bool = &raw mut RX_COUNT == &raw mut LOCAL;
+ 19 │ 
+ 20 │ fn write() -> u32 {
+ 21 │     RX_COUNT = 1;
+    ·     ──────┬─────
+    ·           ╰── written here
+ 22 │     0
+    ╰────
+  help: this code runs at compile time (ADR 0027)

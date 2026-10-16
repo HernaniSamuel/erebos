@@ -9,10 +9,11 @@ File {
         Static(
             StaticDecl {
                 attrs: [],
+                external: false,
                 mutable: false,
                 name: Ident {
                     name: "TABLE",
-                    span: 114..119,
+                    span: 160..165,
                 },
                 ty: Ty {
                     kind: Array {
@@ -20,10 +21,10 @@ File {
                             kind: Named(
                                 Ident {
                                     name: "u8",
-                                    span: 122..124,
+                                    span: 168..170,
                                 },
                             ),
-                            span: 122..124,
+                            span: 168..170,
                         },
                         len: Expr {
                             kind: Int(
@@ -31,35 +32,37 @@ File {
                                     2,
                                 ),
                             ),
-                            span: 126..127,
+                            span: 172..173,
                         },
                     },
-                    span: 121..128,
+                    span: 167..174,
                 },
-                value: Expr {
-                    kind: Array(
-                        [
-                            Expr {
-                                kind: Int(
-                                    Some(
-                                        1,
+                value: Some(
+                    Expr {
+                        kind: Array(
+                            [
+                                Expr {
+                                    kind: Int(
+                                        Some(
+                                            1,
+                                        ),
                                     ),
-                                ),
-                                span: 132..133,
-                            },
-                            Expr {
-                                kind: Int(
-                                    Some(
-                                        2,
+                                    span: 178..179,
+                                },
+                                Expr {
+                                    kind: Int(
+                                        Some(
+                                            2,
+                                        ),
                                     ),
-                                ),
-                                span: 135..136,
-                            },
-                        ],
-                    ),
-                    span: 131..137,
-                },
-                span: 107..138,
+                                    span: 181..182,
+                                },
+                            ],
+                        ),
+                        span: 177..183,
+                    },
+                ),
+                span: 153..184,
             },
         ),
         Static(
@@ -68,7 +71,7 @@ File {
                     Attr {
                         name: Ident {
                             name: "align",
-                            span: 141..146,
+                            span: 187..192,
                         },
                         arg: Some(
                             Expr {
@@ -77,16 +80,17 @@ File {
                                         64,
                                     ),
                                 ),
-                                span: 147..149,
+                                span: 193..195,
                             },
                         ),
-                        span: 139..151,
+                        span: 185..197,
                     },
                 ],
+                external: false,
                 mutable: true,
                 name: Ident {
                     name: "BUF",
-                    span: 163..166,
+                    span: 209..212,
                 },
                 ty: Ty {
                     kind: Array {
@@ -94,10 +98,10 @@ File {
                             kind: Named(
                                 Ident {
                                     name: "u8",
-                                    span: 169..171,
+                                    span: 215..217,
                                 },
                             ),
-                            span: 169..171,
+                            span: 215..217,
                         },
                         len: Expr {
                             kind: Int(
@@ -105,33 +109,57 @@ File {
                                     4,
                                 ),
                             ),
-                            span: 173..174,
+                            span: 219..220,
                         },
                     },
-                    span: 168..175,
+                    span: 214..221,
                 },
-                value: Expr {
-                    kind: Repeat(
-                        Expr {
-                            kind: Int(
-                                Some(
-                                    0,
+                value: Some(
+                    Expr {
+                        kind: Repeat(
+                            Expr {
+                                kind: Int(
+                                    Some(
+                                        0,
+                                    ),
                                 ),
-                            ),
-                            span: 179..180,
-                        },
-                        Expr {
-                            kind: Int(
-                                Some(
-                                    4,
+                                span: 225..226,
+                            },
+                            Expr {
+                                kind: Int(
+                                    Some(
+                                        4,
+                                    ),
                                 ),
-                            ),
-                            span: 182..183,
+                                span: 228..229,
+                            },
+                        ),
+                        span: 224..230,
+                    },
+                ),
+                span: 198..231,
+            },
+        ),
+        Static(
+            StaticDecl {
+                attrs: [],
+                external: true,
+                mutable: true,
+                name: Ident {
+                    name: "RX_COUNT",
+                    span: 250..258,
+                },
+                ty: Ty {
+                    kind: Named(
+                        Ident {
+                            name: "u32",
+                            span: 260..263,
                         },
                     ),
-                    span: 178..184,
+                    span: 260..263,
                 },
-                span: 152..185,
+                value: None,
+                span: 232..264,
             },
         ),
         Fn(
@@ -140,13 +168,13 @@ File {
                 kind: Entry,
                 name: Ident {
                     name: "main",
-                    span: 196..200,
+                    span: 275..279,
                 },
                 params: [],
                 ret: Some(
                     Ty {
                         kind: Never,
-                        span: 206..207,
+                        span: 285..286,
                     },
                 ),
                 body: Some(
@@ -158,16 +186,16 @@ File {
                                     Block {
                                         stmts: [],
                                         tail: None,
-                                        span: 215..217,
+                                        span: 294..296,
                                     },
                                 ),
-                                span: 210..217,
+                                span: 289..296,
                             },
                         ),
-                        span: 208..219,
+                        span: 287..298,
                     },
                 ),
-                span: 187..219,
+                span: 266..298,
             },
         ),
         Fn(
@@ -176,13 +204,13 @@ File {
                 kind: Panic,
                 name: Ident {
                     name: "on_panic",
-                    span: 229..237,
+                    span: 308..316,
                 },
                 params: [],
                 ret: Some(
                     Ty {
                         kind: Never,
-                        span: 243..244,
+                        span: 322..323,
                     },
                 ),
                 body: Some(
@@ -194,16 +222,16 @@ File {
                                     Block {
                                         stmts: [],
                                         tail: None,
-                                        span: 252..254,
+                                        span: 331..333,
                                     },
                                 ),
-                                span: 247..254,
+                                span: 326..333,
                             },
                         ),
-                        span: 245..256,
+                        span: 324..335,
                     },
                 ),
-                span: 220..256,
+                span: 299..335,
             },
         ),
     ],

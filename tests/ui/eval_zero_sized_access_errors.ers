@@ -1,0 +1,43 @@
+// emit: mir
+// Accesses of no bytes are checked like any other at compile time: reading
+// or writing an `extern static` or a `static mut` of type `()` or `!` is an
+// error, and so is reading `!` through a pointer made from an integer
+// (ADR 0029, 0030).
+extern static UNIT: ();
+extern static NEVER: !;
+extern static mut UNIT_EXTERN_MUT: ();
+static mut UNIT_MUT: () = ();
+// Evaluating a `!` calls the panic function, an error of its own.
+static mut NEVER_MUT: ! = on_panic();
+
+const READ_EXTERN_UNIT: () = UNIT;
+const READ_EXTERN_NEVER: u32 = read_extern_never();
+const WRITE_EXTERN_UNIT: () = write_extern_unit();
+const READ_MUT_UNIT: () = UNIT_MUT;
+const WRITE_MUT_UNIT: () = write_mut_unit();
+const READ_MUT_NEVER: u32 = read_mut_never();
+const READ_ADDRESS_NEVER: u32 = read_address_never();
+
+fn read_extern_never() -> u32 {
+    NEVER
+}
+
+fn write_extern_unit() {
+    UNIT_EXTERN_MUT = ();
+}
+
+fn write_mut_unit() {
+    UNIT_MUT = ();
+}
+
+fn read_mut_never() -> u32 {
+    NEVER_MUT
+}
+
+fn read_address_never() -> u32 {
+    let p: *const ! = 4 as *const !;
+    *p
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

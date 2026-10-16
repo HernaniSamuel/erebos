@@ -1,10 +1,12 @@
 // emit: ast
-// A static needs an initializer, and is an item: one inside a function is
-// `parser::local-static` (ADR 0030).
+// A static needs an initializer and an `extern static` has none; both are
+// items: one inside a function is `parser::local-static` (ADR 0030).
 static NO_VALUE: u32;
+extern static WITH_VALUE: u32 = 1;
 
 fn f() -> u32 {
     static mut LOCAL: u32 = 1;
+    extern static OUTSIDE: u32;
     2
 }
 

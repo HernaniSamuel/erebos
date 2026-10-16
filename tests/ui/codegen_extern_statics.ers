@@ -1,0 +1,15 @@
+// emit: llvm-ir
+// An `extern static` is a global declaration for the linker to resolve,
+// constant without `mut`; a static may point into one with any offset
+// (ADR 0030).
+extern static CRC_TABLE: [u32; 4];
+extern static mut RX_COUNT: u32;
+static ENTRY: *const u32 = &raw const CRC_TABLE[2];
+
+fn count() -> u32 {
+    RX_COUNT += 1;
+    RX_COUNT + CRC_TABLE[1] + *ENTRY
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

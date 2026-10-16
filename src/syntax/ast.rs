@@ -28,15 +28,17 @@ pub struct ConstDecl {
     pub span: Span,
 }
 
-/// `static NAME: Type = value;` or `static mut NAME: Type = value;`
-/// (ADR 0030)
+/// `static NAME: Type = value;` or `static mut NAME: Type = value;`, or
+/// `extern static NAME: Type;`, defined outside the program (ADR 0030).
 #[derive(Debug)]
 pub struct StaticDecl {
     pub attrs: Vec<Attr>,
+    pub external: bool,
     pub mutable: bool,
     pub name: Ident,
     pub ty: Ty,
-    pub value: Expr,
+    /// `None` exactly for an `extern static`.
+    pub value: Option<Expr>,
     pub span: Span,
 }
 

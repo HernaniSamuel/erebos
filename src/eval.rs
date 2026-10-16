@@ -376,8 +376,12 @@ impl Interp<'_, '_> {
         match statement {
             Statement::Assign(place, rvalue) => {
                 let ty = self.frame().body.place_ty(*place);
+                // Nothing is stored, but the source and the destination
+                // are still accessed, and checked.
                 if matches!(ty, Ty::Unit | Ty::Never) {
-                    return Ok(());
+                    self.rvalue(rvalue, span)?;
+                    let dest = self.place(*place)?;
+                    return self.write_at(dest, Scalar::Int(0), span);
                 }
                 if ty.is_aggregate() {
                     let Rvalue::Use(Operand::Copy(source)) = rvalue else {
@@ -535,8 +539,10 @@ impl Interp<'_, '_> {
                     .try_into()
                     .expect("a pointer is four bytes"),
             );
+            // The size of an `extern static` is its declaration's, which
+            // need not be its definition's: the linker adds any offset.
             let size = target.bytes.len();
-            if addend as usize > size {
+            if addend as usize > size && !s.def.def().external {
                 return Err(self.error(
                     "eval::pointer-out-of-bounds",
                     format!(
@@ -630,7 +636,8 @@ impl Interp<'_, '_> {
     }
 
     /// The object and offset an access of `size` bytes reaches, a write if
-    /// `write`. Only reads and writes are refused here; computing a place
+    /// `write`; `None` for an access of no bytes, which is checked all the
+    /// same. Only reads and writes are refused here; computing a place
     /// never is (ADR 0029).
     fn access(
         &mut self,
@@ -639,9 +646,6 @@ impl Interp<'_, '_> {
         span: Span,
         write: bool,
     ) -> EvalResult<Option<(AllocId, usize)>> {
-        if size == 0 {
-            return Ok(None);
-        }
         if place.volatile {
             return Err(self.error(
                 "eval::volatile-access",
@@ -667,6 +671,17 @@ impl Interp<'_, '_> {
                 if let Some(s) = &object.static_ {
                     let def = s.def.def();
                     let label = if write { "written here" } else { "read here" };
+                    if def.external {
+                        return Err(self.error(
+                            "eval::extern-static",
+                            format!(
+                                "`{}` is an `extern static`, defined outside the program, so it cannot be read or written at compile time",
+                                def.name
+                            ),
+                            label,
+                            span,
+                        ));
+                    }
                     if def.mutable {
                         return Err(self.error(
                             "eval::static-mut",
@@ -686,6 +701,9 @@ impl Interp<'_, '_> {
                             span,
                         ));
                     }
+                }
+                if size == 0 {
+                    return Ok(None);
                 }
                 let len = object.bytes.len() as u64;
                 if u64::from(offset) + size > len {
@@ -866,9 +884,6 @@ impl Interp<'_, '_> {
         match operand {
             Operand::Copy(place) => {
                 let place = self.place(*place)?;
-                if matches!(place.ty, Ty::Unit | Ty::Never) {
-                    return Ok(Scalar::Int(0));
-                }
                 self.read_at(place, span)
             }
             Operand::Const(Const::Int(value, int)) => Ok(Scalar::Int(value & int.mask())),
@@ -982,6 +997,19 @@ impl Interp<'_, '_> {
                 if ordered {
                     return fail(
                         "pointers into different objects have no order known at compile time, since their addresses only exist after linking",
+                    );
+                }
+                // An `extern static` is any memory the linker finds: it may
+                // be the other object (ADR 0030).
+                let external = |alloc: AllocId| {
+                    self.allocs[alloc.0 as usize]
+                        .static_
+                        .as_ref()
+                        .is_some_and(|s| s.def.def().external)
+                };
+                if external(a) || external(b) {
+                    return fail(
+                        "an `extern static` may be the same memory as another object, so these pointers may be equal at run time",
                     );
                 }
                 // One object may start where another ends, and one of

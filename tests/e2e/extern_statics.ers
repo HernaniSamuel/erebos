@@ -1,0 +1,54 @@
+// `extern static`s defined in C: a variable Erebos reads and writes, and a
+// table it reads, also through a pointer computed at compile time
+// (ADR 0030).
+// link-c: extern_statics.c
+// expect-output: 40 42 42
+// expect-output: 4129 16516 12387
+// expect-exit: 0
+
+extern static mut rx_count: u32;
+extern static crc_lookup: [u16; 4];
+extern fn c_rx_count() -> u32;
+
+static THIRD: *const u16 = &raw const crc_lookup[2];
+
+fn putc(byte: u8) {
+    let thr: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+    *thr = byte;
+}
+
+fn print_u32(n: u32) {
+    if n >= 10 {
+        print_u32(n / 10);
+    }
+    putc(b'0' + (n % 10) as u8);
+}
+
+fn exit(code: u32) -> ! {
+    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+    *finisher = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    loop {}
+}
+
+entry fn main() -> ! {
+    let before: u32 = rx_count;
+    rx_count += 2;
+    print_u32(before);
+    putc(b' ');
+    print_u32(rx_count);
+    putc(b' ');
+    print_u32(c_rx_count());
+    putc(b'\n');
+
+    print_u32(crc_lookup[0] as u32);
+    putc(b' ');
+    print_u32(crc_lookup[3] as u32);
+    putc(b' ');
+    print_u32(*THIRD as u32);
+    putc(b'\n');
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(1)
+}

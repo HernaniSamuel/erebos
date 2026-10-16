@@ -1,8 +1,10 @@
 // emit: typeck
-// A `static` is never written: assigning it or taking a `*mut` address is
-// an error. `#[align(N)]` on a static follows the struct rules (ADR 0030).
+// A `static` or `extern static` is never written: assigning it or taking a
+// `*mut` address is an error. `#[align(N)]` on a static follows the struct
+// rules (ADR 0030).
 static LIMIT: u32 = 10;
 static mut COUNT: u32 = 0;
+extern static EXTERNAL: u32;
 
 #[align(3)]
 static ODD: u32 = 0;
@@ -20,6 +22,8 @@ fn writes() {
     COUNT = 5;
     let q: *mut u32 = &raw mut COUNT;
     let r: *const u32 = &raw const LIMIT;
+    EXTERNAL = 1;
+    let e: *mut u32 = &raw mut EXTERNAL;
 }
 
 entry fn main() -> ! { loop {} }

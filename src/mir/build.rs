@@ -390,6 +390,9 @@ impl Builder<'_, '_> {
             | hir::ExprKind::Static(_) => {
                 let place = self.place(expr);
                 if matches!(ty, Ty::Unit | Ty::Never) {
+                    // Read all the same, to check it at compile time: it
+                    // may be a static that cannot be read (ADR 0030).
+                    self.temp(ty, Rvalue::Use(Operand::Copy(place)));
                     Operand::Const(Const::Unit)
                 } else {
                     // Read now: a volatile read must happen exactly here, and

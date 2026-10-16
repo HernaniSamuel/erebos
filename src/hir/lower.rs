@@ -158,8 +158,10 @@ pub fn lower(
         const_ids,
         static_ids,
         // Values computed at compile time get bodies after every other.
-        value_base: (decls.len() + const_decls.len() + static_decls.len() + comptime_decls.len())
-            as u32,
+        value_base: (decls.len()
+            + const_decls.len()
+            + static_decls.iter().filter(|decl| !decl.external).count()
+            + comptime_decls.len()) as u32,
         values: Vec::new(),
         comptime_floor: None,
         in_comptime: false,
@@ -195,7 +197,7 @@ pub fn lower(
         let init = FnId(fns.len() as u32);
         let (def, body) = lowerer.static_decl(decl, StaticId(i as u32), init);
         statics.push(def);
-        fns.push(body);
+        fns.extend(body);
     }
     let mut comptime_blocks = Vec::new();
     for decl in &comptime_decls {
@@ -207,7 +209,7 @@ pub fn lower(
     let expr_count = lowerer.next_expr;
 
     check_duplicate_items(program, runtime, diags);
-    check_start(&fns, diags);
+    check_start(&fns, &statics, diags);
     let entry = find_unique(&fns, FnKind::Entry, diags);
     let panic = find_unique(&fns, FnKind::Panic, diags);
 
@@ -273,11 +275,17 @@ fn check_duplicate_items(
 
 /// The compiler defines `_start` itself (ADR 0012). The bodies include
 /// those computing constants and statics, named after them.
-fn check_start(fns: &[Fn], diags: &mut Diagnostics) {
-    for f in fns.iter().filter(|f| f.name == "_start") {
+fn check_start(fns: &[Fn], statics: &[StaticDef], diags: &mut Diagnostics) {
+    let bodies = fns.iter().map(|f| (f.name.as_str(), f.name_span));
+    // An `extern static` has no body.
+    let externs = statics
+        .iter()
+        .filter(|s| s.init.is_none())
+        .map(|s| (s.name.as_str(), s.name_span));
+    for (_, span) in bodies.chain(externs).filter(|(name, _)| *name == "_start") {
         diags.push(
             Diagnostic::error("resolve::reserved-name", "`_start` is a reserved name")
-                .label(f.name_span, "reserved for the startup code")
+                .label(span, "reserved for the startup code")
                 .help("the compiler generates `_start`, which sets up the stack and jumps to the entry function (ADR 0012)"),
         );
     }
@@ -475,9 +483,14 @@ impl Lowerer<'_> {
         );
     }
 
-    /// `#[align(N)]`, at most once, is the only attribute of a static
-    /// (ADR 0030). Returns it.
-    fn static_attrs(&mut self, attrs: &[ast::Attr]) -> Option<(ArrayLen, Span)> {
+    /// `#[align(N)]`, at most once, is the only attribute of a static; an
+    /// `extern static` takes none, since its definition decides its
+    /// alignment (ADR 0030). Returns it.
+    fn static_attrs(&mut self, attrs: &[ast::Attr], external: bool) -> Option<(ArrayLen, Span)> {
+        if external {
+            self.no_attrs(attrs, "an `extern static`");
+            return None;
+        }
         let mut align: Option<(ArrayLen, Span)> = None;
         let mut align_attr: Option<Span> = None;
         for attr in attrs {
@@ -509,20 +522,30 @@ impl Lowerer<'_> {
         align
     }
 
-    /// A static, and the body that computes its initial value (ADR 0030).
-    fn static_decl(&mut self, decl: &ast::StaticDecl, id: StaticId, init: FnId) -> (StaticDef, Fn) {
-        let align = self.static_attrs(&decl.attrs);
+    /// A static, and the body that computes its initial value, `init`; an
+    /// `extern static` has none (ADR 0030).
+    fn static_decl(
+        &mut self,
+        decl: &ast::StaticDecl,
+        id: StaticId,
+        init: FnId,
+    ) -> (StaticDef, Option<Fn>) {
+        let align = self.static_attrs(&decl.attrs, decl.external);
         let ty = self.ty(&decl.ty);
-        let value = self.comptime_body(|this| this.expr(&decl.value));
-        let def = StaticDef {
+        let mut def = StaticDef {
             name: decl.name.name.clone(),
             name_span: decl.name.span,
             mutable: decl.mutable,
             ty,
             ty_span: decl.ty.span,
-            init,
+            init: None,
             align,
         };
+        let Some(value) = &decl.value else {
+            return (def, None);
+        };
+        def.init = Some(init);
+        let value = self.comptime_body(|this| this.expr(value));
         let body = Fn {
             name: decl.name.name.clone(),
             name_span: decl.name.span,
@@ -540,7 +563,7 @@ impl Lowerer<'_> {
             runtime: false,
             comptime: Some(Comptime::Static(id)),
         };
-        (def, body)
+        (def, Some(body))
     }
 
     /// A constant, and the body that computes its value (ADR 0029).

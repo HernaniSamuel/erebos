@@ -38,7 +38,9 @@ pub struct LocalId(pub u32);
 pub struct Hir {
     pub structs: Vec<StructDef>,
     /// Functions, then the bodies that run at compile time: one for each
-    /// constant, each static and each `comptime` block, in source order.
+    /// constant, each static with an initializer (not an `extern static`)
+    /// and each `comptime` block, in source order, then one for each value
+    /// computed at compile time.
     pub fns: Vec<Fn>,
     pub consts: Vec<ConstDef>,
     pub statics: Vec<StaticDef>,
@@ -86,7 +88,8 @@ pub struct ConstDef {
 }
 
 /// `static NAME: Type = value;` or `static mut` (ADR 0030): one object in
-/// memory, whose initial value is computed by running `init`.
+/// memory, whose initial value is computed by running `init`. An `extern
+/// static` is defined outside the program, and has no `init`.
 #[derive(Debug)]
 pub struct StaticDef {
     pub name: String,
@@ -94,7 +97,8 @@ pub struct StaticDef {
     pub mutable: bool,
     pub ty: Ty,
     pub ty_span: Span,
-    pub init: FnId,
+    /// `None` exactly for an `extern static`.
+    pub init: Option<FnId>,
     /// `#[align(N)]`, with the span of `N` (ADR 0030).
     pub align: Option<(ArrayLen, Span)>,
 }

@@ -1,0 +1,26 @@
+// emit: mir
+// An `extern static` is defined outside the program: at compile time its
+// address can be taken, also into a static's value with any offset, but it
+// cannot be read or written, and it may be the same memory as any other
+// object (ADR 0030).
+extern static CRC_TABLE: [u32; 4];
+extern static mut RX_COUNT: u32;
+extern static LINKER_END: u8;
+static mut LOCAL: u32 = 0;
+
+// Accepted: the linker adds the offset, past the declared size too.
+static AFTER_END: *const u8 = &raw const (&raw const LINKER_END as *const u8)[16];
+static ENTRY: *const u32 = &raw const CRC_TABLE[2];
+
+const READ: u32 = CRC_TABLE[0];
+const WRITE: u32 = write();
+const TWO_EXTERNS: bool = &raw const CRC_TABLE as *const u8 == &raw const LINKER_END;
+const WITH_STATIC: bool = &raw mut RX_COUNT == &raw mut LOCAL;
+
+fn write() -> u32 {
+    RX_COUNT = 1;
+    0
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }
