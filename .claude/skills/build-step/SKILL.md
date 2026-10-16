@@ -32,9 +32,12 @@ its review approves it. Commit nothing else, and never push.
 ## Each step
 
 1. **Implement.** Give the implementer the plan path and the step number.
-   Use one implementer for the whole run: spawn it for the first step and
-   continue it with SendMessage for the next steps and for fixes, so it
-   keeps what it learned about the code.
+   Spawn a fresh implementer for each step, and continue it with
+   SendMessage only for that step's fixes. One implementer kept across
+   steps rereads its whole history on every call, which grows with each
+   step; the plan and the code carry what the next step needs. If the
+   tree holds an unfinished diff of the step (an interrupted run), tell
+   the new implementer so, and that it is responsible for the whole diff.
 2. **Read its report.** If it stopped on a question, or deviated from the
    plan in a way that touches a decision, bring it to the user. You do not
    settle design questions.
