@@ -1,0 +1,52 @@
+// `_start` fills `.bss` with zeros (ADR 0030). The first run dirties a
+// zero-initialized static and runs `_start` again; the second run, told
+// apart by a marker in `IMAGE` well above the program, checks that the
+// static reads zero again, and that `.data` was copied again.
+// link-c: startup_bss.c
+// expect-output: first run
+// expect-output: zeroed
+// expect-exit: 0
+
+extern fn c_restart();
+
+static mut COUNTER: u32 = 0;
+static mut TABLE: [u8; 5] = [0; 5];
+static mut INITIAL: u32 = 17;
+
+/// 16 MiB into `IMAGE`, far above the program; QEMU's RAM starts zero.
+const MARKER: *mut u32 = 0x8100_0000 as *mut u32;
+const MAGIC: u32 = 0x5EC0_4D00;
+
+fn putc(byte: u8) {
+    let thr: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+    *thr = byte;
+}
+
+fn exit(code: u32) -> ! {
+    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+    *finisher = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    loop {}
+}
+
+entry fn main() -> ! {
+    let marker: *mut volatile u32 = MARKER as *mut volatile u32;
+    if *marker != MAGIC {
+        *marker = MAGIC;
+        COUNTER = 0xFFFF_FFFF;
+        TABLE[4] = 9;
+        INITIAL = 3;
+        putc(b'f'); putc(b'i'); putc(b'r'); putc(b's'); putc(b't'); putc(b' ');
+        putc(b'r'); putc(b'u'); putc(b'n'); putc(b'\n');
+        c_restart();
+        exit(2)
+    }
+    if COUNTER != 0 || TABLE[4] != 0 || INITIAL != 17 {
+        exit(1)
+    }
+    putc(b'z'); putc(b'e'); putc(b'r'); putc(b'o'); putc(b'e'); putc(b'd'); putc(b'\n');
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(99)
+}

@@ -22,10 +22,35 @@ pub struct Target {
     pub ram_size: u64,
 }
 
+/// A range of memory the linker script places sections in.
+pub struct Region {
+    pub origin: u64,
+    pub size: u64,
+}
+
 impl Target {
     /// The stack grows down from the end of RAM.
     pub fn stack_top(&self) -> u64 {
         self.ram_origin + self.ram_size
+    }
+
+    /// Until M3, the first half of RAM plays the part of flash: it holds
+    /// the code, the read-only data and the initial values of `.data`
+    /// (ADR 0030).
+    pub fn image(&self) -> Region {
+        Region {
+            origin: self.ram_origin,
+            size: self.ram_size / 2,
+        }
+    }
+
+    /// The second half of RAM holds `.data`, `.bss` and the stack
+    /// (ADR 0030).
+    pub fn ram(&self) -> Region {
+        Region {
+            origin: self.ram_origin + self.ram_size / 2,
+            size: self.ram_size / 2,
+        }
     }
 }
 

@@ -8,6 +8,7 @@
 //! // expect-exit: 0           (exit code written to the test finisher)
 //! // link-c: helpers.c        (a C file, next to the program, compiled
 //! //                           with clang and linked in; may repeat)
+//! // c-flags: -O1 -DX         (extra clang flags for those C files)
 //! ```
 //!
 //! With `expect-exit`, the program must stop QEMU through the test finisher
@@ -60,15 +61,20 @@ struct Expectation {
     output: String,
     exit: Option<i32>,
     link_c: Vec<String>,
+    c_flags: Vec<String>,
 }
 
 fn expectation(source: &str) -> Expectation {
     let mut output = String::new();
     let mut exit = None;
     let mut link_c = Vec::new();
+    let mut c_flags = Vec::new();
     for line in source.lines() {
         if let Some(file) = line.strip_prefix("// link-c:") {
             link_c.push(file.trim().to_owned());
+        }
+        if let Some(flags) = line.strip_prefix("// c-flags:") {
+            c_flags.extend(flags.split_whitespace().map(str::to_owned));
         }
         if let Some(text) = line.strip_prefix("// expect-output:") {
             output.push_str(text.strip_prefix(' ').unwrap_or(text));
@@ -81,6 +87,7 @@ fn expectation(source: &str) -> Expectation {
         output,
         exit,
         link_c,
+        c_flags,
     }
 }
 
@@ -104,7 +111,7 @@ fn run(program: &Path, opt: OptLevel) -> Result<(), String> {
     let objects = expected
         .link_c
         .iter()
-        .map(|file| compile_c(&program.with_file_name(file), &work, opt))
+        .map(|file| compile_c(&program.with_file_name(file), &expected.c_flags, &work, opt))
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| format!("{name}: {e}"))?;
     erebos::driver::build(program, &elf, &objects, opt, false)
@@ -189,8 +196,14 @@ fn run(program: &Path, opt: OptLevel) -> Result<(), String> {
     Ok(())
 }
 
-/// Compiles a C file for the target with clang, optimized like the program.
-fn compile_c(source: &Path, work: &Path, opt: OptLevel) -> Result<PathBuf, String> {
+/// Compiles a C file for the target with clang, optimized like the program,
+/// with the program's extra `flags`.
+fn compile_c(
+    source: &Path,
+    flags: &[String],
+    work: &Path,
+    opt: OptLevel,
+) -> Result<PathBuf, String> {
     let stem = source.file_stem().unwrap().to_string_lossy();
     let (level, suffix) = match opt {
         OptLevel::None => ("-O0", ""),
@@ -201,6 +214,7 @@ fn compile_c(source: &Path, work: &Path, opt: OptLevel) -> Result<PathBuf, Strin
     let output = Command::new(&clang)
         .args(common::CLANG_TARGET)
         .args(["-std=c11", "-Wall", "-Werror", "-c", level])
+        .args(flags)
         .arg(source)
         .arg("-o")
         .arg(&object)

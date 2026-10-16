@@ -1,0 +1,44 @@
+// `_start` copies the initial values of `.data` from their load address
+// before the entry function runs (ADR 0030): statics of several sizes and
+// alignments hold their values on entry.
+// expect-output: data ok
+// expect-exit: 0
+
+struct Mixed { tag: u8, value: u32, wide: u64 }
+
+static mut WORD: u32 = 0xDEAD_BEEF;
+static mut BYTES: [u8; 3] = [b'a', b'b', b'c'];
+static mut HALF: u16 = 0x1234;
+static mut WIDE: u64 = 0x0123_4567_89AB_CDEF;
+static mut MIXED: Mixed = Mixed { tag: 7, value: 99, wide: 5_000_000_000 };
+static mut FLAG: bool = true;
+
+fn putc(byte: u8) {
+    let thr: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+    *thr = byte;
+}
+
+fn exit(code: u32) -> ! {
+    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+    *finisher = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    loop {}
+}
+
+entry fn main() -> ! {
+    let mut failures: u32 = 0;
+    if WORD != 0xDEAD_BEEF { failures += 1; }
+    if BYTES[0] != b'a' || BYTES[1] != b'b' || BYTES[2] != b'c' { failures += 1; }
+    if HALF != 0x1234 { failures += 1; }
+    if WIDE != 0x0123_4567_89AB_CDEF { failures += 1; }
+    if MIXED.tag != 7 || MIXED.value != 99 || MIXED.wide != 5_000_000_000 { failures += 1; }
+    if !FLAG { failures += 1; }
+    if failures == 0 {
+        putc(b'd'); putc(b'a'); putc(b't'); putc(b'a'); putc(b' ');
+        putc(b'o'); putc(b'k'); putc(b'\n');
+    }
+    exit(failures)
+}
+
+panic fn on_panic() -> ! {
+    exit(99)
+}
