@@ -1,6 +1,6 @@
 # 0030. Statics and startup initialization
 
-- Status: Accepted
+- Status: Accepted; amended by 0034 (no statics of type `!`)
 - Date: 2026-10-15
 - Amends: 0012 (`_start` initializes `.data` and `.bss`), 0022 (the
   alignment of `.data` and `.bss`), 0027 (comparing pointers at compile

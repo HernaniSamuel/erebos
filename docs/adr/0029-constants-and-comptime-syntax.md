@@ -1,6 +1,6 @@
 # 0029. Constants and comptime expressions
 
-- Status: Accepted; amended by 0030 (results may hold pointers to statics), 0031 (`assert` takes a message)
+- Status: Accepted; amended by 0030 (results may hold pointers to statics), 0031 (`assert` takes a message), 0034 (no constants or `comptime` values of type `!`)
 - Date: 2026-10-14
 
 ## Context

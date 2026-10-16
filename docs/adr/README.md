@@ -50,16 +50,17 @@ Do not write one for local implementation details that the code already explains
 | 0018 | [Evaluation order](0018-evaluation-order.md)                   | Accepted, amended by 0031 |
 | 0019 | [Conversions, pointer representation and pointer validity](0019-integer-pointer-conversions-and-operator-details.md) | Accepted, amended by 0031 |
 | 0020 | [Runtime support functions written in Erebos](0020-runtime-support-functions-in-erebos.md) | Accepted |
-| 0021 | [Structs and arrays](0021-structs-and-arrays.md)               | Accepted, amended by 0031, 0032 |
-| 0022 | [Data layout and alignment control](0022-data-layout-and-alignment.md) | Accepted, amended by 0030, 0031 |
+| 0021 | [Structs and arrays](0021-structs-and-arrays.md)               | Accepted, amended by 0031, 0032, 0034 |
+| 0022 | [Data layout and alignment control](0022-data-layout-and-alignment.md) | Accepted, amended by 0030, 0031, 0034 |
 | 0023 | [Volatile access guarantees](0023-volatile-access-guarantees.md) | Accepted, amended by 0031 |
 | 0024 | [Implicit conversion from `*mut T` to `*const T`](0024-mut-to-const-pointer-conversion.md) | Accepted |
 | 0025 | [Aggregates across calls on riscv32](0025-aggregates-across-calls.md) | Accepted, amended by 0031 |
 | 0026 | [External functions](0026-external-functions.md) | Accepted |
 | 0027 | [Compile-time execution (comptime)](0027-compile-time-execution.md) | Accepted, amended by 0030 |
 | 0028 | [On-demand type checking and evaluation](0028-on-demand-compilation.md) | Accepted, amended by 0033 |
-| 0029 | [Constants and comptime expressions](0029-constants-and-comptime-syntax.md) | Accepted, amended by 0030, 0031 |
-| 0030 | [Statics and startup initialization](0030-statics-and-startup-initialization.md) | Accepted |
+| 0029 | [Constants and comptime expressions](0029-constants-and-comptime-syntax.md) | Accepted, amended by 0030, 0031, 0034 |
+| 0030 | [Statics and startup initialization](0030-statics-and-startup-initialization.md) | Accepted, amended by 0034 |
 | 0031 | [Byte strings and slices](0031-byte-strings-and-slices.md) | Accepted |
 | 0032 | [Checks on values known at compile time](0032-checks-on-values-known-at-compile-time.md) | Accepted |
 | 0033 | [The compiler pipeline with compile-time evaluation](0033-compiler-pipeline-with-evaluation.md) | Accepted |
+| 0034 | [`!` is not a type of memory](0034-never-is-not-a-type-of-memory.md) | Accepted |

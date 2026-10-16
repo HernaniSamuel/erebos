@@ -80,6 +80,10 @@ ADRs:
   - What an enum read from memory or a register holds when its value is
     no variant, at run time and at compile time; ADR 0022 answered the same
     question for `bool`.
+  - Enum payloads of type `!` (ADR 0034: `!` is not a type of memory).
+- **M2.5:**
+  - `!` as a type argument of `Option(T)` and `Result(T, E)`, such as
+    the infallible `Result(u32, !)` (ADR 0034).
 - **M2.6:**
   - Symbol names with modules: functions and statics are emitted under
     their own names (ADR 0006, 0026, 0030). With modules, names must be
