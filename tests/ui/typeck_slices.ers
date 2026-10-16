@@ -47,6 +47,13 @@ fn casts(s: *const [u8], a: *const [u8; 4]) {
     let explicit: *mut volatile [u8] = a as *mut volatile [u8];
 }
 
+// A repeat's operand converts to the element type, once, like each element
+// of an array literal.
+fn repeated(p: *mut u8) {
+    let messages: [*const [u8]; 3] = [&raw const b"dddd"; 3];
+    let pointers: [*const u8; 3] = [p; 3];
+}
+
 // A value computed at compile time converts too.
 static BYTES: [u8; 3] = [1, 2, 3];
 const ALL: *const [u8] = &raw const BYTES;

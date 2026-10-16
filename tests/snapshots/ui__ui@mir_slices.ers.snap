@@ -80,6 +80,41 @@ fn casts(_1: *const [u8], _2: *const [u8; 4]) -> *const u8 {
     }
 }
 
+fn repeated(_1: *const [u8; 4]) -> *const [u8] {
+    let _0: *const [u8];
+    let _1: *const [u8; 4]; // a
+    let _2: [*const [u8]; 3]; // all
+    let _3: *const [u8];
+    let _4: [*const [u8]; 3];
+    let _5: usize;
+    let _6: bool;
+    let _7: *const [u8];
+
+    bb0: {
+        _3 = slice(copy _1, const 4_usize);
+        _5 = const 0_usize;
+        goto -> bb1;
+    }
+
+    bb1: {
+        _6 = Lt(copy _5, const 3_usize);
+        if copy _6 -> [true: bb2, false: bb3];
+    }
+
+    bb2: {
+        _4[_5] = copy _3;
+        _5 = Add(copy _5, const 1_usize);
+        goto -> bb1;
+    }
+
+    bb3: {
+        _2 = copy _4;
+        _7 = copy _2[2];
+        _0 = copy _7;
+        return;
+    }
+}
+
 entry fn main() -> ! {
     let _0: !;
 

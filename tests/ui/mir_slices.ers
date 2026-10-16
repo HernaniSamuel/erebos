@@ -20,5 +20,11 @@ fn casts(s: *const [u8], a: *const [u8; 4]) -> *const u8 {
     s as *const u8
 }
 
+// A repeated pointer to an array converts once, before it is copied.
+fn repeated(a: *const [u8; 4]) -> *const [u8] {
+    let all: [*const [u8]; 3] = [a; 3];
+    all[2]
+}
+
 entry fn main() -> ! { loop {} }
 panic fn on_panic() -> ! { loop {} }

@@ -116,29 +116,37 @@ fn casts(s: *const [u8], a: *const [u8; 4]) -> ()
     expr 81 local s 1827..1828: *const [u8]
     expr 82 as *mut volatile [u8] 1893..1916: *mut volatile [u8]
     expr 83 local a 1893..1894: *const [u8; 4]
+fn repeated(p: *mut u8) -> ()
+    let messages: [*const [u8]; 3]
+    let pointers: [*const u8; 3]
+    expr 84 repeat 2084..2107: [*const [u8]; 3]
+    expr 85 &raw const 2085..2103: *const [u8; 4] as *const [u8]
+    expr 86 byte string b"dddd" 2096..2103: [u8; 4]
+    expr 87 repeat 2144..2150: [*const u8; 3]
+    expr 88 local p 2145..2146: *mut u8
 fn computed() -> *const [u8]
-    expr 84 comptime 2084..2109: *const [u8]
-    expr 85 &raw const 2093..2109: *const [u8; 3] as *const [u8]
-    expr 86 static BYTES 2104..2109: [u8; 3]
+    expr 89 comptime 2318..2343: *const [u8]
+    expr 90 &raw const 2327..2343: *const [u8; 3] as *const [u8]
+    expr 91 static BYTES 2338..2343: [u8; 3]
 fn names(s: *const [u8]) -> usize
     let len: usize
     let slice: *const [u8]
-    expr 87 len 2240..2246: usize
-    expr 88 local s 2244..2245: *const [u8]
-    expr 89 slice 2277..2303: *const [u8]
-    expr 90 as *const u8 2283..2297: *const u8
-    expr 91 local s 2283..2284: *const [u8]
-    expr 92 local len 2299..2302: usize
-    expr 93 local len 2309..2312: usize
+    expr 92 len 2474..2480: usize
+    expr 93 local s 2478..2479: *const [u8]
+    expr 94 slice 2511..2537: *const [u8]
+    expr 95 as *const u8 2517..2531: *const u8
+    expr 96 local s 2517..2518: *const [u8]
+    expr 97 local len 2533..2536: usize
+    expr 98 local len 2543..2546: usize
 entry fn main() -> !
-    expr 94 loop 2339..2346: !
+    expr 99 loop 2573..2580: !
 panic fn on_panic() -> !
-    expr 95 loop 2376..2383: !
+    expr 100 loop 2610..2617: !
 comptime fn ALL() -> *const [u8]
-    expr 96 &raw const 2031..2047: *const [u8; 3] as *const [u8]
-    expr 97 static BYTES 2042..2047: [u8; 3]
+    expr 101 &raw const 2265..2281: *const [u8; 3] as *const [u8]
+    expr 102 static BYTES 2276..2281: [u8; 3]
 comptime fn BYTES() -> [u8; 3]
-    expr 98 array 1995..2004: [u8; 3]
-    expr 99 int 1 1996..1997: u8
-    expr 100 int 2 1999..2000: u8
-    expr 101 int 3 2002..2003: u8
+    expr 103 array 2229..2238: [u8; 3]
+    expr 104 int 1 2230..2231: u8
+    expr 105 int 2 2233..2234: u8
+    expr 106 int 3 2236..2237: u8

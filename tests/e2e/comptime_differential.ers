@@ -225,6 +225,19 @@ fn message_sum(k: usize) -> u64 {
     mix(h, bytes_sum(&raw const buffer))
 }
 
+// Repeats whose operand converts to the element type: a pointer to an
+// array to a slice, and `*mut` to `*const` (ADR 0024, 0031).
+fn repeated(k: usize) -> u64 {
+    let local: [u8; 3] = [k as u8, 7, 9];
+    let views: [*const [u8]; 2] = [&raw const local; 2];
+    let messages: [*const [u8]; 3] = [&raw const b"dddd"; 3];
+    let mut byte: u8 = (k * 5) as u8;
+    let pointers: [*const u8; 2] = [&raw mut byte; 2];
+    let mut h: u64 = bytes_sum(views[k % 2]);
+    h = mix(h, bytes_sum(messages[k % 3]));
+    mix(h, (*pointers[1]) as u64)
+}
+
 struct Uart { thr: u8 }
 
 fn putc(byte: u8) {
@@ -283,6 +296,8 @@ entry fn main() -> ! {
     failures += check(26, comptime message_sum(1), message_sum(opaque_usize(1)));
     failures += check(27, comptime message_sum(6), message_sum(opaque_usize(6)));
     failures += check(28, comptime message_sum(2), message_sum(opaque_usize(2)));
+    failures += check(29, comptime repeated(1), repeated(opaque_usize(1)));
+    failures += check(30, comptime repeated(4), repeated(opaque_usize(4)));
     if failures == 0 {
         putc(b'd'); putc(b'i'); putc(b'f'); putc(b'f'); putc(b'e'); putc(b'r'); putc(b'e');
         putc(b'n'); putc(b't'); putc(b'i'); putc(b'a'); putc(b'l'); putc(b' '); putc(b'o');

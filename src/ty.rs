@@ -562,12 +562,20 @@ impl Checker<'_, '_> {
             ExprKind::Unit => Ty::Unit,
             ExprKind::Array(elems) => self.array(f, expr, elems, expected),
             ExprKind::Repeat(value, len) => {
-                let ty = self.check(f, value, element_of(expected));
+                let want = element_of(expected);
+                let ty = self.check(f, value, want);
                 match (ty, self.q.array_len(*len)) {
                     (Ty::Error, _) | (_, None) => Ty::Error,
                     // Like a block that does not finish (ADR 0034).
                     (Ty::Never, _) => Ty::Never,
-                    (ty, Some(len)) => Ty::array(ty, len),
+                    // The operand converts once, before it is copied, like
+                    // each element of an array literal (ADR 0024, 0031).
+                    (ty, Some(len)) => match want {
+                        Some(want) if want != Ty::Error && coerces(ty, want) => {
+                            Ty::array(want, len)
+                        }
+                        _ => Ty::array(ty, len),
+                    },
                 }
             }
             ExprKind::Local(local) => self.local_ty(f, *local),
