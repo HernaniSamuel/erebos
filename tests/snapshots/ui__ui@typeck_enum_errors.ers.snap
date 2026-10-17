@@ -185,8 +185,8 @@ ty::mismatched-types
     ·                                  ╰── expected `Level`, found an integer
  31 │     let j: bool = m == same(3);
     ╰────
-  help: write a variant of `Level`, such as `Level::Low`, or compare its integer instead, as in `m
-        as i8 == -1` (ADR 0035)
+  help: write a variant of `Level`, such as `Level::Low`, or compare its integer instead, as in
+        `Level::Low as i8 == -1` (ADR 0035)
 ty::mismatched-types
 
   × mismatched types
@@ -195,59 +195,156 @@ ty::mismatched-types
  31 │     let j: bool = m == same(3);
     ·                             ┬
     ·                             ╰── expected `Mode`, found an integer
- 32 │ }
+ 32 │     let k: bool = same(m) == 3;
     ╰────
   help: write a variant of `Mode`, such as `Mode::Off` (ADR 0035)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_enum_errors.ers:32:30]
+ 31 │     let j: bool = m == same(3);
+ 32 │     let k: bool = same(m) == 3;
+    ·                              ┬
+    ·                              ╰── expected `Mode`, found an integer
+ 33 │ }
+    ╰────
+  help: write a variant of `Mode`, such as `Mode::Off`, or compare its integer instead, as in `...
+        as u8 == 3` (ADR 0035)
 ty::not-a-place
 
   × `&raw` needs a place in memory
-    ╭─[typeck_enum_errors.ers:41:37]
- 40 │ fn places(mut m: Mode, p: *const volatile Wide) {
- 41 │     let a: *const Mode = &raw const Mode::Run;
+    ╭─[typeck_enum_errors.ers:42:37]
+ 41 │ fn places(mut m: Mode, p: *const volatile Wide) {
+ 42 │     let a: *const Mode = &raw const Mode::Run;
     ·                                     ────┬────
     ·                                         ╰── a value, not a place
- 42 │     Mode::Run = m;
+ 43 │     Mode::Run = m;
     ╰────
   help: take the address of a variable, `*pointer` or `a[index]`; to point at a value, store it in
         a `let` first
 ty::not-assignable
 
   × cannot assign to this expression
-    ╭─[typeck_enum_errors.ers:42:5]
- 41 │     let a: *const Mode = &raw const Mode::Run;
- 42 │     Mode::Run = m;
+    ╭─[typeck_enum_errors.ers:43:5]
+ 42 │     let a: *const Mode = &raw const Mode::Run;
+ 43 │     Mode::Run = m;
     ·     ────┬────
     ·         ╰── not a variable, `*pointer` or `a[index]`
- 43 │     let b: u8 = m.f;
+ 44 │     let b: u8 = m.f;
     ╰────
 ty::no-fields
 
   × `Mode` has no fields
-    ╭─[typeck_enum_errors.ers:43:19]
- 42 │     Mode::Run = m;
- 43 │     let b: u8 = m.f;
+    ╭─[typeck_enum_errors.ers:44:19]
+ 43 │     Mode::Run = m;
+ 44 │     let b: u8 = m.f;
     ·                   ┬
     ·                   ╰── no such field
- 44 │     let c: usize = offset_of(Mode, f);
+ 45 │     let c: usize = offset_of(Mode, f);
     ╰────
 ty::no-fields
 
   × `Mode` has no fields
-    ╭─[typeck_enum_errors.ers:44:36]
- 43 │     let b: u8 = m.f;
- 44 │     let c: usize = offset_of(Mode, f);
+    ╭─[typeck_enum_errors.ers:45:36]
+ 44 │     let b: u8 = m.f;
+ 45 │     let c: usize = offset_of(Mode, f);
     ·                                    ┬
     ·                                    ╰── no such field
- 45 │     let d: Wide = *p;
+ 46 │     let d: Wide = *p;
     ╰────
 ty::volatile-too-wide
 
   × a volatile `Wide` cannot be accessed in one instruction
-    ╭─[typeck_enum_errors.ers:45:19]
- 44 │     let c: usize = offset_of(Mode, f);
- 45 │     let d: Wide = *p;
+    ╭─[typeck_enum_errors.ers:46:19]
+ 45 │     let c: usize = offset_of(Mode, f);
+ 46 │     let d: Wide = *p;
     ·                   ─┬
     ·                    ╰── the widest single access is 32 bits
- 46 │ }
+ 47 │ }
     ╰────
-  help: access it as `u32` halves, in the order the device needs (ADR 0023)
+  help: an enum is accessed as its integer type, `u64`; declare it on an integer type of at most
+        32 bits if its values fit (ADR 0023, 0035)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_enum_errors.ers:56:27]
+ 55 │ fn quoted(mode: Mode, s: Regs, regs: *const Regs, p: *const Mode) {
+ 56 │     let a: bool = mode == 1;
+    ·                           ┬
+    ·                           ╰── expected `Mode`, found an integer
+ 57 │     let b: bool = IDLE == 1;
+    ╰────
+  help: write a variant of `Mode`, such as `Mode::Off`, or compare its integer instead, as in
+        `mode as u8 == 1` (ADR 0035)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_enum_errors.ers:57:27]
+ 56 │     let a: bool = mode == 1;
+ 57 │     let b: bool = IDLE == 1;
+    ·                           ┬
+    ·                           ╰── expected `Mode`, found an integer
+ 58 │     let c: bool = CURRENT != 1;
+    ╰────
+  help: write a variant of `Mode`, such as `Mode::Off`, or compare its integer instead, as in
+        `IDLE as u8 == 1` (ADR 0035)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_enum_errors.ers:58:30]
+ 57 │     let b: bool = IDLE == 1;
+ 58 │     let c: bool = CURRENT != 1;
+    ·                              ┬
+    ·                              ╰── expected `Mode`, found an integer
+ 59 │     let d: bool = s.mode == 1;
+    ╰────
+  help: write a variant of `Mode`, such as `Mode::Off`, or compare its integer instead, as in
+        `CURRENT as u8 != 1` (ADR 0035)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_enum_errors.ers:59:29]
+ 58 │     let c: bool = CURRENT != 1;
+ 59 │     let d: bool = s.mode == 1;
+    ·                             ┬
+    ·                             ╰── expected `Mode`, found an integer
+ 60 │     let e: bool = (*regs).mode == 1;
+    ╰────
+  help: write a variant of `Mode`, such as `Mode::Off`, or compare its integer instead, as in
+        `s.mode as u8 == 1` (ADR 0035)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_enum_errors.ers:60:35]
+ 59 │     let d: bool = s.mode == 1;
+ 60 │     let e: bool = (*regs).mode == 1;
+    ·                                   ┬
+    ·                                   ╰── expected `Mode`, found an integer
+ 61 │     let f: bool = *p == 1;
+    ╰────
+  help: write a variant of `Mode`, such as `Mode::Off`, or compare its integer instead, as in
+        `(*regs).mode as u8 == 1` (ADR 0035)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_enum_errors.ers:61:25]
+ 60 │     let e: bool = (*regs).mode == 1;
+ 61 │     let f: bool = *p == 1;
+    ·                         ┬
+    ·                         ╰── expected `Mode`, found an integer
+ 62 │     let g: bool = 3 == mode;
+    ╰────
+  help: write a variant of `Mode`, such as `Mode::Off`, or compare its integer instead, as in `*p
+        as u8 == 1` (ADR 0035)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_enum_errors.ers:62:19]
+ 61 │     let f: bool = *p == 1;
+ 62 │     let g: bool = 3 == mode;
+    ·                   ┬
+    ·                   ╰── expected `Mode`, found an integer
+ 63 │ }
+    ╰────
+  help: write a variant of `Mode`, such as `Mode::Off`, or compare its integer instead, as in `3
+        == mode as u8` (ADR 0035)

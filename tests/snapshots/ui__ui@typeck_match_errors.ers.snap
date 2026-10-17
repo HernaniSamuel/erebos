@@ -1,6 +1,5 @@
 ---
 source: tests/ui.rs
-assertion_line: 40
 expression: output
 input_file: tests/ui/typeck_match_errors.ers
 ---
@@ -125,6 +124,7 @@ ty::mismatched-types
     ·           ╰── expected `u8`, found `bool`
  27 │         _ => {}
     ╰────
+  help: a `u8` is matched with integer and byte literals, or with constants of its type (ADR 0037)
 ty::mismatched-types
 
   × mismatched types
@@ -144,51 +144,73 @@ ty::mismatched-types
  33 │         b'q' => {}
     ·         ──┬─
     ·           ╰── expected `u32`, found `u8`
- 34 │         _ => {}
+ 34 │         false => {}
     ╰────
   help: a byte literal is a `u8` (ADR 0016); write this value as an integer literal, `113`
 ty::mismatched-types
 
   × mismatched types
-    ╭─[typeck_match_errors.ers:37:9]
- 36 │     match b {
- 37 │         0 => {}
+    ╭─[typeck_match_errors.ers:34:9]
+ 33 │         b'q' => {}
+ 34 │         false => {}
+    ·         ──┬──
+    ·           ╰── expected `u32`, found `bool`
+ 35 │         _ => {}
+    ╰────
+  help: a `u32` is matched with integer literals, or with constants of its type (ADR 0037)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_match_errors.ers:38:9]
+ 37 │     match b {
+ 38 │         0 => {}
     ·         ┬
     ·         ╰── expected `bool`, found an integer
- 38 │         _ => {}
+ 39 │         b'a' => {}
+    ╰────
+  help: a `bool` is matched with `true` and `false` (ADR 0037)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_match_errors.ers:39:9]
+ 38 │         0 => {}
+ 39 │         b'a' => {}
+    ·         ──┬─
+    ·           ╰── expected `bool`, found `u8`
+ 40 │         _ => {}
     ╰────
   help: a `bool` is matched with `true` and `false` (ADR 0037)
 ty::non-exhaustive-match
 
   × non-exhaustive `match`: `false` not covered
-    ╭─[typeck_match_errors.ers:43:24]
- 42 │ fn non_exhaustive(x: u8, b: bool) -> u32 {
- 43 │     let c: u32 = match b {
+    ╭─[typeck_match_errors.ers:45:24]
+ 44 │ fn non_exhaustive(x: u8, b: bool) -> u32 {
+ 45 │     let c: u32 = match b {
     ·                        ┬
     ·                        ╰── missing: `false`
- 44 │         true => 1,
+ 46 │         true => 1,
     ╰────
   help: add `false => ...`, or a `_` arm (ADR 0037)
 ty::non-exhaustive-match
 
   × non-exhaustive `match`: `true` and `false` not covered
-    ╭─[typeck_match_errors.ers:46:24]
- 45 │     };
- 46 │     let d: u32 = match b {};
+    ╭─[typeck_match_errors.ers:48:24]
+ 47 │     };
+ 48 │     let d: u32 = match b {};
     ·                        ┬
     ·                        ╰── missing: `true` and `false`
- 47 │     match x {
+ 49 │     match x {
     ╰────
   help: add `true => ...` and `false => ...`, or a `_` arm (ADR 0037)
 ty::non-exhaustive-match
 
   × non-exhaustive `match`: not every `u8` is covered
-    ╭─[typeck_match_errors.ers:47:11]
- 46 │     let d: u32 = match b {};
- 47 │     match x {
+    ╭─[typeck_match_errors.ers:49:11]
+ 48 │     let d: u32 = match b {};
+ 49 │     match x {
     ·           ┬
     ·           ╰── missing: a `_` or `let` arm
- 48 │         0 => c,
+ 50 │         0 => c,
     ╰────
   help: a `match` on an integer needs an arm for every value, such as `_ => ...` or `let n: u8
         => ...` (ADR 0037)

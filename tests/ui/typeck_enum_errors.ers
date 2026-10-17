@@ -29,6 +29,7 @@ fn operators(m: Mode) {
     let h: bool = m == -1;
     let i: bool = Level::Low == -1;
     let j: bool = m == same(3);
+    let k: bool = same(m) == 3;
 }
 
 fn take(m: Mode) {}
@@ -43,6 +44,22 @@ fn places(mut m: Mode, p: *const volatile Wide) {
     let b: u8 = m.f;
     let c: usize = offset_of(Mode, f);
     let d: Wide = *p;
+}
+
+struct Regs { mode: Mode }
+const IDLE: Mode = Mode::Idle;
+static CURRENT: Mode = Mode::Off;
+
+// The help quotes the enum operand as written when it is a name, a path
+// or fields and derefs of those, and keeps the operands in order.
+fn quoted(mode: Mode, s: Regs, regs: *const Regs, p: *const Mode) {
+    let a: bool = mode == 1;
+    let b: bool = IDLE == 1;
+    let c: bool = CURRENT != 1;
+    let d: bool = s.mode == 1;
+    let e: bool = (*regs).mode == 1;
+    let f: bool = *p == 1;
+    let g: bool = 3 == mode;
 }
 
 entry fn main() -> ! { loop {} }

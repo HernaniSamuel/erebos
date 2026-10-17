@@ -31,10 +31,12 @@ fn patterns(x: u8, w: u32, b: bool) {
     }
     match w {
         b'q' => {}
+        false => {}
         _ => {}
     }
     match b {
         0 => {}
+        b'a' => {}
         _ => {}
     }
 }

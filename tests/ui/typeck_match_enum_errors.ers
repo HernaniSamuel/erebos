@@ -1,9 +1,9 @@
 // emit: typeck
 // What a `match` on an enum rejects (ADR 0037): missing variants, listed
 // in declaration order; a variant of another enum, a variant against an
-// integer and an integer literal against an enum; dead arms: a variant
-// twice, a variant after a constant holding it, and an or-pattern whose
-// every alternative is covered already.
+// integer, and integer, byte and `bool` literals against an enum; dead
+// arms: a variant twice, a variant after a constant holding it, and an
+// or-pattern whose every alternative is covered already.
 enum Mode: u8 { Off = 0, Run = 1, Wait = 2, Sleep = 3 }
 enum Level: u8 { Low = 0 }
 
@@ -26,6 +26,8 @@ fn other_types(m: Mode, x: u8) {
     match m {
         Level::Low => {}
         0 => {}
+        b'a' => {}
+        true => {}
         _ => {}
     }
     match x {

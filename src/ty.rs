@@ -242,13 +242,20 @@ struct Checker<'a, 'h> {
     ret: Ty,
     /// Enclosing `loop`/`while` expressions, innermost last.
     loops: Vec<LoopCtx>,
-    /// The `==` or `!=` whose operands are being checked, with their ids:
-    /// a literal there compared with an enum gets a help converting the
-    /// enum (ADR 0035).
-    equality: Option<(BinOp, ExprId, ExprId)>,
+    /// The `==` or `!=` whose operands are being checked: a literal there
+    /// compared with an enum gets a help converting the enum (ADR 0035).
+    equality: Option<Equality>,
     /// The diagnostics pushed while evaluating the constants of patterns,
     /// which belong to those constants.
     elsewhere: usize,
+}
+
+/// A `==` or `!=`: its operator and the ids of its operands, in order.
+#[derive(Clone, Copy)]
+struct Equality {
+    op: BinOp,
+    lhs: ExprId,
+    rhs: ExprId,
 }
 
 /// What the type checker knows about a place expression.
@@ -569,7 +576,7 @@ impl Checker<'_, '_> {
 
     fn expr_kind(&mut self, f: &Fn, expr: &Expr, expected: Option<Ty>) -> Ty {
         match &expr.kind {
-            ExprKind::Int(value) => self.int_literal(expr, *value, false, expected),
+            ExprKind::Int(value) => self.int_literal(f, expr, *value, false, expected),
             ExprKind::Byte(_) => Ty::Int(IntTy::U8),
             ExprKind::Bool(_) => Ty::Bool,
             ExprKind::Unit => Ty::Unit,
@@ -647,7 +654,11 @@ impl Checker<'_, '_> {
             ExprKind::Binary(op, lhs, rhs) if op.is_comparison() => {
                 // Both sides have one type, never converted (ADR 0008),
                 // except that pointers may differ in mutability (ADR 0024).
-                let equality = matches!(op, BinOp::Eq | BinOp::Ne).then_some((*op, lhs.id, rhs.id));
+                let equality = matches!(op, BinOp::Eq | BinOp::Ne).then_some(Equality {
+                    op: *op,
+                    lhs: lhs.id,
+                    rhs: rhs.id,
+                });
                 let outer = std::mem::replace(&mut self.equality, equality);
                 let ty = self.same_type_operands(f, lhs, rhs, None, comparable);
                 self.equality = outer;
@@ -830,13 +841,13 @@ impl Checker<'_, '_> {
             }
         };
         // The checks need every value of a matched enum only when a pattern
-        // names one of its values, or when no arm matches at all and the
-        // missing variants are listed; arms that are only `_` and `let`
-        // need none, so such a `match` may run while the enum's values are
-        // computed. An enum with a value that failed or repeats was
-        // reported, and its `match`es that need the values are not checked
-        // for exhaustiveness or dead arms (ADR 0037). Its failures are the
-        // enum's, not the function's.
+        // names one of its values, or when a `match` with no arms lists the
+        // missing variants; arms that are only `_` and `let` need none, so
+        // such a `match` may run while the enum's values are computed. An
+        // enum with a value that failed or repeats was reported, and its
+        // `match`es that need the values are not checked for exhaustiveness
+        // or dead arms (ADR 0037, 0038). Its failures are the enum's, not
+        // the function's.
         let needs_values = arms.is_empty()
             || arms.iter().any(|arm| {
                 arm.pattern.alternatives().iter().any(|alternative| {
@@ -903,6 +914,17 @@ impl Checker<'_, '_> {
             Diagnostic::error("ty::mismatched-types", "mismatched types")
                 .label(pattern.span, format!("expected `{ty}`, found {found}"))
         };
+        // A literal against an enum: an enum is not its integer (ADR 0035).
+        let enum_help = |e: EnumTy| {
+            let variant = match self.hir.enum_(e.id).variants.first() {
+                Some(variant) => format!(", such as `{}::{}`", e.name, variant.name),
+                None => String::new(),
+            };
+            format!(
+                "an enum is matched with its variants{variant}, or with constants of its type (ADR 0037)"
+            )
+        };
+        let bool_help = "a `bool` is matched with `true` and `false` (ADR 0037)";
         match &pattern.kind {
             PatternKind::Wildcard => Some(Covers::Every),
             PatternKind::Binding { local, ty_span } => {
@@ -927,21 +949,12 @@ impl Checker<'_, '_> {
                     Ty::Int(int) => int,
                     Ty::Error => return None,
                     Ty::Enum(e) => {
-                        // An enum is not its integer (ADR 0035).
-                        let variant = match self.hir.enum_(e.id).variants.first() {
-                            Some(variant) => format!(", such as `{}::{}`", e.name, variant.name),
-                            None => String::new(),
-                        };
-                        self.q.diags.push(mismatch("an integer").help(format!(
-                            "an enum is matched with its variants{variant}, or with constants of its type (ADR 0037)"
-                        )));
+                        let help = enum_help(e);
+                        self.q.diags.push(mismatch("an integer").help(help));
                         return None;
                     }
                     _ => {
-                        self.q.diags.push(
-                            mismatch("an integer")
-                                .help("a `bool` is matched with `true` and `false` (ADR 0037)"),
-                        );
+                        self.q.diags.push(mismatch("an integer").help(bool_help));
                         return None;
                     }
                 };
@@ -987,14 +1000,35 @@ impl Checker<'_, '_> {
                     )));
                     None
                 }
+                Ty::Enum(e) => {
+                    let help = enum_help(e);
+                    self.q.diags.push(mismatch("`u8`").help(help));
+                    None
+                }
                 _ => {
-                    self.q.diags.push(mismatch("`u8`"));
+                    self.q.diags.push(mismatch("`u8`").help(bool_help));
                     None
                 }
             },
             PatternKind::Bool(value) => match ty {
                 Ty::Bool => Some(Covers::Value(u64::from(*value))),
                 Ty::Error => None,
+                Ty::Enum(e) => {
+                    let help = enum_help(e);
+                    self.q.diags.push(mismatch("`bool`").help(help));
+                    None
+                }
+                Ty::Int(int) => {
+                    let literals = if int == IntTy::U8 {
+                        "integer and byte literals"
+                    } else {
+                        "integer literals"
+                    };
+                    self.q.diags.push(mismatch("`bool`").help(format!(
+                        "a `{int}` is matched with {literals}, or with constants of its type (ADR 0037)"
+                    )));
+                    None
+                }
                 _ => {
                     self.q.diags.push(mismatch("`bool`"));
                     None
@@ -1049,12 +1083,12 @@ impl Checker<'_, '_> {
     }
 
     /// Exhaustiveness and dead arms (ADR 0037) of a `match` on `ty`, an
-    /// integer, `bool` or enum whose every value was computed, none twice,
-    /// unless its arms, at least one, are only `_` and `let`, and whose arms
-    /// have alternatives matching `values`. The values of
-    /// an enum are all those of its integer type (ADR 0036): for dead arms,
-    /// those that are no variant remain after every variant, but a `match`
-    /// is exhaustive with every variant.
+    /// integer, `bool` or enum, whose arms have alternatives matching
+    /// `values`. For an enum, every value was computed, none twice, unless
+    /// the `match` has arms and they are only `_` and `let` (ADR 0038).
+    /// The values of an enum are all those of its integer type (ADR 0036):
+    /// for dead arms, those that are no variant remain after every variant,
+    /// but a `match` is exhaustive with every variant.
     fn coverage(&mut self, scrutinee: &Expr, ty: Ty, arms: &[Arm], values: &[Vec<Covers>]) {
         let count = match ty {
             Ty::Bool => 2,
@@ -1367,8 +1401,54 @@ impl Checker<'_, '_> {
         }
     }
 
+    /// The text of the expression `id` of `f` as written, if it is a name,
+    /// a path `Enum::Variant`, or fields and derefs of those, as in
+    /// `(*regs).mode`: what a help may quote of it. Looked up only for a
+    /// help.
+    fn simple_text(&self, f: &Fn, id: ExprId) -> Option<String> {
+        let mut found = None;
+        if let Some(body) = &f.body {
+            body.walk(&mut |e| {
+                if e.id == id {
+                    found = Some(e);
+                }
+            });
+        }
+        self.path_text(f, found?)
+    }
+
+    fn path_text(&self, f: &Fn, expr: &Expr) -> Option<String> {
+        match &expr.kind {
+            ExprKind::Local(id) => Some(f.local(*id).name.clone()),
+            ExprKind::Const(id) => Some(self.hir.const_(*id).name.clone()),
+            ExprKind::Static(id) => Some(self.hir.static_(*id).name.clone()),
+            ExprKind::Variant(id, index) => {
+                let def = self.hir.enum_(*id);
+                Some(format!(
+                    "{}::{}",
+                    def.name, def.variants[*index as usize].name
+                ))
+            }
+            // `*p.f` is `*(p.f)`, so a deref under a field is in
+            // parentheses.
+            ExprKind::Field(base, name, _) => match &base.kind {
+                ExprKind::Deref(_) => Some(format!("({}).{name}", self.path_text(f, base)?)),
+                _ => Some(format!("{}.{name}", self.path_text(f, base)?)),
+            },
+            ExprKind::Deref(pointer) => Some(format!("*{}", self.path_text(f, pointer)?)),
+            _ => None,
+        }
+    }
+
     /// `negated` covers `-128` for `i8`, whose magnitude is one past the max.
-    fn int_literal(&mut self, expr: &Expr, value: u64, negated: bool, expected: Option<Ty>) -> Ty {
+    fn int_literal(
+        &mut self,
+        f: &Fn,
+        expr: &Expr,
+        value: u64,
+        negated: bool,
+        expected: Option<Ty>,
+    ) -> Ty {
         match expected {
             Some(Ty::Int(int)) => {
                 let limit = if negated && int.is_signed() {
@@ -1404,15 +1484,27 @@ impl Checker<'_, '_> {
                     // Compared with `==` or `!=`, the integer can be
                     // compared instead, unless the literal is negative
                     // and the integer type unsigned.
+                    // The operands keep their order.
                     let convert = match self.equality {
-                        Some((op, lhs, rhs))
+                        Some(Equality { op, lhs, rhs })
                             if (expr.id == lhs || expr.id == rhs)
                                 && (!negated || e.int.is_signed()) =>
                         {
+                            // The enum is the other operand.
+                            let enum_id = if expr.id == lhs { rhs } else { lhs };
+                            let operand = self
+                                .simple_text(f, enum_id)
+                                .unwrap_or_else(|| "...".to_owned());
                             let sign = if negated { "-" } else { "" };
+                            let converted = format!("{operand} as {}", e.int);
+                            let literal = format!("{sign}{value}");
+                            let (left, right) = if expr.id == lhs {
+                                (literal, converted)
+                            } else {
+                                (converted, literal)
+                            };
                             format!(
-                                ", or compare its integer instead, as in `m as {} {} {sign}{value}`",
-                                e.int,
+                                ", or compare its integer instead, as in `{left} {} {right}`",
                                 op.symbol()
                             )
                         }
@@ -1442,7 +1534,7 @@ impl Checker<'_, '_> {
     fn unary(&mut self, f: &Fn, expr: &Expr, op: UnOp, operand: &Expr, expected: Option<Ty>) -> Ty {
         let ty = match (op, &operand.kind) {
             (UnOp::Neg, ExprKind::Int(value)) => {
-                let ty = self.int_literal(expr, *value, true, expected);
+                let ty = self.int_literal(f, expr, *value, true, expected);
                 self.q.tables.expr_types[operand.id.0 as usize] = ty;
                 ty
             }
@@ -1747,6 +1839,16 @@ impl Checker<'_, '_> {
             && int.bits() > target::WIDEST_ACCESS_BITS
         {
             let half = target::WIDEST_ACCESS_BITS;
+            // Nothing converts to an enum (ADR 0035), so its halves would
+            // not make one.
+            let help = match place.ty {
+                Ty::Enum(_) => format!(
+                    "an enum is accessed as its integer type, `{int}`; declare it on an integer type of at most {half} bits if its values fit (ADR 0023, 0035)"
+                ),
+                _ => format!(
+                    "access it as `u{half}` halves, in the order the device needs (ADR 0023)"
+                ),
+            };
             self.q.diags.push(
                 Diagnostic::error(
                     "ty::volatile-too-wide",
@@ -1756,9 +1858,7 @@ impl Checker<'_, '_> {
                     ),
                 )
                 .label(span, format!("the widest single access is {half} bits"))
-                .help(format!(
-                    "access it as `u{half}` halves, in the order the device needs (ADR 0023)"
-                )),
+                .help(help),
             );
         }
     }

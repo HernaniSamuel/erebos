@@ -1,6 +1,5 @@
 ---
 source: tests/ui.rs
-assertion_line: 40
 expression: output
 input_file: tests/ui/typeck_match_enum_errors.ers
 ---
@@ -48,58 +47,82 @@ ty::mismatched-types
  28 │         0 => {}
     ·         ┬
     ·         ╰── expected `Mode`, found an integer
- 29 │         _ => {}
+ 29 │         b'a' => {}
     ╰────
   help: an enum is matched with its variants, such as `Mode::Off`, or with constants of its type
         (ADR 0037)
 ty::mismatched-types
 
   × mismatched types
-    ╭─[typeck_match_enum_errors.ers:32:9]
- 31 │     match x {
- 32 │         Mode::Off => {}
+    ╭─[typeck_match_enum_errors.ers:29:9]
+ 28 │         0 => {}
+ 29 │         b'a' => {}
+    ·         ──┬─
+    ·           ╰── expected `Mode`, found `u8`
+ 30 │         true => {}
+    ╰────
+  help: an enum is matched with its variants, such as `Mode::Off`, or with constants of its type
+        (ADR 0037)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_match_enum_errors.ers:30:9]
+ 29 │         b'a' => {}
+ 30 │         true => {}
+    ·         ──┬─
+    ·           ╰── expected `Mode`, found `bool`
+ 31 │         _ => {}
+    ╰────
+  help: an enum is matched with its variants, such as `Mode::Off`, or with constants of its type
+        (ADR 0037)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_match_enum_errors.ers:34:9]
+ 33 │     match x {
+ 34 │         Mode::Off => {}
     ·         ────┬────
     ·             ╰── expected `u8`, found `Mode`
- 33 │         _ => {}
+ 35 │         _ => {}
     ╰────
   help: a variant in a pattern has the type of the value matched, which a pattern never converts
         (ADR 0037)
 ty::unreachable-pattern
 
   × unreachable arm
-    ╭─[typeck_match_enum_errors.ers:40:9]
- 38 │     match m {
- 39 │         Mode::Off => 0,
+    ╭─[typeck_match_enum_errors.ers:42:9]
+ 40 │     match m {
+ 41 │         Mode::Off => 0,
     ·         ────┬────
     ·             ╰── every value it matches is matched here
- 40 │         Mode::Off => 1,
+ 42 │         Mode::Off => 1,
     ·         ────┬────
     ·             ╰── matches no value that the arms before it leave
- 41 │         RUNNING => 2,
-    ╰────
-  help: a `match` takes the first arm that matches, so this one never runs; remove it (ADR 0037)
-ty::unreachable-pattern
-
-  × unreachable arm
-    ╭─[typeck_match_enum_errors.ers:42:9]
- 40 │         Mode::Off => 1,
- 41 │         RUNNING => 2,
-    ·         ───┬───
-    ·            ╰── every value it matches is matched here
- 42 │         Mode::Run => 3,
-    ·         ────┬────
-    ·             ╰── matches no value that the arms before it leave
- 43 │         Mode::Wait | Mode::Sleep => 4,
+ 43 │         RUNNING => 2,
     ╰────
   help: a `match` takes the first arm that matches, so this one never runs; remove it (ADR 0037)
 ty::unreachable-pattern
 
   × unreachable arm
     ╭─[typeck_match_enum_errors.ers:44:9]
- 43 │         Mode::Wait | Mode::Sleep => 4,
- 44 │         Mode::Sleep | Mode::Off => 5,
+ 42 │         Mode::Off => 1,
+ 43 │         RUNNING => 2,
+    ·         ───┬───
+    ·            ╰── every value it matches is matched here
+ 44 │         Mode::Run => 3,
+    ·         ────┬────
+    ·             ╰── matches no value that the arms before it leave
+ 45 │         Mode::Wait | Mode::Sleep => 4,
+    ╰────
+  help: a `match` takes the first arm that matches, so this one never runs; remove it (ADR 0037)
+ty::unreachable-pattern
+
+  × unreachable arm
+    ╭─[typeck_match_enum_errors.ers:46:9]
+ 45 │         Mode::Wait | Mode::Sleep => 4,
+ 46 │         Mode::Sleep | Mode::Off => 5,
     ·         ───────────┬───────────
     ·                    ╰── matches no value that the arms before it leave
- 45 │         _ => 6,
+ 47 │         _ => 6,
     ╰────
   help: a `match` takes the first arm that matches, so this one never runs; remove it (ADR 0037)
