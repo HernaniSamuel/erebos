@@ -1,0 +1,153 @@
+// The M2.4a milestone program: a state machine over an enum (ADR 0035),
+// driven by a byte string of events. Each byte is decoded into an `Event`
+// by a `match` with a constant pattern, an or-pattern and a `_` arm for
+// unknown bytes (ADR 0037); the transition is a pure function, a `match` on
+// the state nested with a `match` on the event. A `comptime` block runs the
+// machine over the same events and asserts the final state; at run time the
+// state lives in a `static mut` that starts at `State::Idle`, whose value 0
+// puts it in `.bss`, and every transition is printed over the UART.
+// expect-output: state idle
+// expect-output: p pause: idle -> idle
+// expect-output: s start: idle -> running
+// expect-output: p pause: running -> paused
+// expect-output: q unknown: paused -> paused
+// expect-output: r resume: paused -> running
+// expect-output: P pause: running -> paused
+// expect-output: x stop: paused -> done
+// expect-output: s start: done -> done
+// expect-output: ! reset: done -> idle
+// expect-output: s start: idle -> running
+// expect-output: state running
+// expect-exit: 0
+
+const UART: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+const FINISHER: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+
+enum State: u8 { Idle = 0, Running = 1, Paused = 2, Done = 3 }
+
+enum Event: u8 { Unknown = 0, Start = 1, Pause = 2, Resume = 3, Stop = 4, Reset = 5 }
+
+// The command codes that are not letters.
+const CMD_STOP: u8 = b'x';
+const CMD_RESET: u8 = b'!';
+
+const EVENTS: *const [u8] = &raw const b"pspqrPxs!s";
+
+fn decode(byte: u8) -> Event {
+    match byte {
+        b's' => Event::Start,
+        b'p' | b'P' => Event::Pause,
+        b'r' => Event::Resume,
+        CMD_STOP => Event::Stop,
+        CMD_RESET => Event::Reset,
+        _ => Event::Unknown,
+    }
+}
+
+fn step(state: State, event: Event) -> State {
+    match state {
+        State::Idle => match event {
+            Event::Start => State::Running,
+            _ => State::Idle,
+        },
+        State::Running => match event {
+            Event::Pause => State::Paused,
+            Event::Stop => State::Done,
+            _ => State::Running,
+        },
+        State::Paused => match event {
+            Event::Start | Event::Resume => State::Running,
+            Event::Stop => State::Done,
+            _ => State::Paused,
+        },
+        State::Done => match event {
+            Event::Reset => State::Idle,
+            _ => State::Done,
+        },
+    }
+}
+
+// The state after all of `events`, from `State::Idle`.
+fn run(events: *const [u8]) -> State {
+    let mut state: State = State::Idle;
+    let mut i: usize = 0;
+    while i < len(events) {
+        state = step(state, decode((*events)[i]));
+        i += 1;
+    }
+    state
+}
+
+comptime {
+    assert(run(EVENTS) == State::Running, &raw const b"the events end in `running`");
+    assert(run(&raw const b"sx") == State::Done);
+    assert(run(&raw const b"") == State::Idle);
+}
+
+static mut STATE: State = State::Idle;
+
+fn print(s: *const [u8]) {
+    let mut i: usize = 0;
+    while i < len(s) {
+        *UART = (*s)[i];
+        i += 1;
+    }
+}
+
+fn state_name(state: State) -> *const [u8] {
+    match state {
+        State::Idle => &raw const b"idle",
+        State::Running => &raw const b"running",
+        State::Paused => &raw const b"paused",
+        State::Done => &raw const b"done",
+    }
+}
+
+fn event_name(event: Event) -> *const [u8] {
+    match event {
+        Event::Unknown => &raw const b"unknown",
+        Event::Start => &raw const b"start",
+        Event::Pause => &raw const b"pause",
+        Event::Resume => &raw const b"resume",
+        Event::Stop => &raw const b"stop",
+        Event::Reset => &raw const b"reset",
+    }
+}
+
+fn exit(code: u32) -> ! {
+    *FINISHER = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    loop {}
+}
+
+entry fn main() -> ! {
+    // Read before any write: `.bss` was zeroed by `_start`.
+    print(&raw const b"state ");
+    print(state_name(STATE));
+    print(&raw const b"\n");
+
+    let mut i: usize = 0;
+    while i < len(EVENTS) {
+        let byte: u8 = (*EVENTS)[i];
+        let event: Event = decode(byte);
+        let from: State = STATE;
+        STATE = step(from, event);
+        *UART = byte;
+        print(&raw const b" ");
+        print(event_name(event));
+        print(&raw const b": ");
+        print(state_name(from));
+        print(&raw const b" -> ");
+        print(state_name(STATE));
+        print(&raw const b"\n");
+        i += 1;
+    }
+
+    print(&raw const b"state ");
+    print(state_name(STATE));
+    print(&raw const b"\n");
+    exit(if STATE == run(EVENTS) { 0 } else { 2 })
+}
+
+panic fn on_panic() -> ! {
+    exit(1)
+}
