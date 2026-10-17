@@ -163,9 +163,9 @@ Documentation owed:
   `match` on integers, `bool` and enums (ADR 0037), with literal, constant,
   variant, `let` and or-patterns, compiled to a switch; a differential
   test checks that it runs alike at compile time and on the target. Every
-  `match` is exhaustive, and dead arms are errors. An enum value that is no variant is defined, and a `match`
-  without a catch-all arm calls the panic function on one (ADR 0036). The
-  milestone program runs a state machine over a byte string of events on
-  QEMU, printing each transition, and checks the same machine in a
-  `comptime` block.
+  `match` is exhaustive, and dead arms are errors. An enum value that is
+  no variant is defined, and a `match` without a catch-all arm calls the
+  panic function on one (ADR 0036). The milestone program runs a state
+  machine over a byte string of events on QEMU, printing each transition,
+  and checks the same machine in a `comptime` block.
 - **Next: M2.4b** (enum payloads).

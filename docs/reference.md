@@ -558,8 +558,8 @@ and `!`. The scrutinee has no expected type, so `match 3 { ... }` is
   be the scrutinee's, with no conversion (`ty::mismatched-types`); without
   the type, the pattern is `parser::let-without-type`. The variable holds
   a copy of the value and, with `let mut`, may be assigned. It exists in
-  its arm's expression only, where it shadows any item or variable of the
-  same name.
+  its arm's expression only, where it shadows, as a value, any item or
+  variable of the same name.
 - **Or-patterns** list alternatives of any pattern except `let`
   (`resolve::binding-in-or-pattern`).
 - A **catch-all arm** is one whose pattern is `_`, a `let`, or an
@@ -854,9 +854,9 @@ and `a < b < c` is an error.
   These apply wherever an expected type is known, such as a `let`, an
   argument (including an `assert` message), an assignment, `return`,
   `break` values, struct fields, array elements, `if` branches, `match`
-  arms, the tail of a block and the operand of `comptime`. Only the outermost pointer converts, volatility never
-  changes, and comparisons accept a `*mut T` and a `*const T` in either
-  order.
+  arms, the tail of a block and the operand of `comptime`. Only the
+  outermost pointer converts, volatility never changes, and comparisons
+  accept a `*mut T` and a `*const T` in either order.
 - A literal takes the type expected where it appears; with no expected type
   it is an error. In `x + 1` the `1` takes the type of `x`. A literal
   operand of `as` takes the target type, or `usize` for a pointer target
@@ -966,17 +966,18 @@ more.
 
 Through a volatile pointer, every access is to a scalar (an integer,
 `bool`, enum or thin pointer; an enum is accessed as its integer type,
-ADR 0035) and is **exactly one load or store of the scalar's width**, never split, merged, removed or
-reordered relative to other volatile accesses. Volatility carries through
-fields and indexing: `(*regs).chan[i].status` is one access of `status`'s
-width. `x += 1` is one load and one store, not atomic. Otherwise the
-program is rejected:
+ADR 0035) and is **exactly one load or store of the scalar's width**,
+never split, merged, removed or reordered relative to other volatile
+accesses. Volatility carries through fields and indexing:
+`(*regs).chan[i].status` is one access of `status`'s width. `x += 1` is
+one load and one store, not atomic. Otherwise the program is rejected:
 
 - a whole struct or array, or a slice stored in memory, cannot be
   accessed through a volatile pointer; through a volatile slice,
   `(*s)[i]` is one access of the element;
 - `u64` and `i64`, and enums on them, cannot, since riscv32 has no 64-bit
-  access: use two `u32` halves in the order the device needs;
+  access: use two `u32` halves in the order the device needs; an enum,
+  which nothing converts to, needs an integer type of at most 32 bits;
 - a field reached through a packed struct cannot be, if its type needs
   alignment.
 
