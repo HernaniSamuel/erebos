@@ -707,23 +707,35 @@ impl Mir {
         terminator: &Terminator,
         f: &mut fmt::Formatter<'_>,
     ) -> fmt::Result {
-        let Terminator::Switch {
-            discr,
-            cases,
-            otherwise,
-        } = terminator
-        else {
-            return write!(f, "{terminator}");
-        };
-        let ty = body.operand_ty(discr);
-        write!(f, "switch {discr} -> [")?;
-        for (value, target) in cases.iter() {
-            match ty {
-                Ty::Int(int) => write!(f, "{}_{int}: {target}, ", int.display_bits(*value))?,
-                _ => write!(f, "{}: {target}, ", *value != 0)?,
+        match terminator {
+            Terminator::Goto(target) => write!(f, "goto -> {target}"),
+            Terminator::If { cond, then, else_ } => {
+                write!(f, "if {cond} -> [true: {then}, false: {else_}]")
             }
+            Terminator::Switch {
+                discr,
+                cases,
+                otherwise,
+            } => {
+                let ty = body.operand_ty(discr);
+                write!(f, "switch {discr} -> [")?;
+                for (value, target) in cases.iter() {
+                    match ty {
+                        Ty::Int(int) => {
+                            write!(f, "{}_{int}: {target}, ", int.display_bits(*value))?
+                        }
+                        _ => write!(f, "{}: {target}, ", *value != 0)?,
+                    }
+                }
+                write!(f, "otherwise: {otherwise}]")
+            }
+            Terminator::Return => f.write_str("return"),
+            Terminator::Unreachable => f.write_str("unreachable"),
+            Terminator::Panic(PanicCause::AssertionFailed(Some((message, _)))) => {
+                write!(f, "panic(assertion failed, {message})")
+            }
+            Terminator::Panic(cause) => write!(f, "panic({})", cause.describe()),
         }
-        write!(f, "otherwise: {otherwise}]")
     }
 
     fn fmt_statement(&self, statement: &Statement, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -742,35 +754,6 @@ impl Mir {
                 }
                 f.write_str(")")
             }
-        }
-    }
-}
-
-impl fmt::Display for Terminator {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Terminator::Goto(target) => write!(f, "goto -> {target}"),
-            Terminator::If { cond, then, else_ } => {
-                write!(f, "if {cond} -> [true: {then}, false: {else_}]")
-            }
-            // The dump of a body shows the values in their type.
-            Terminator::Switch {
-                discr,
-                cases,
-                otherwise,
-            } => {
-                write!(f, "switch {discr} -> [")?;
-                for (value, target) in cases.iter() {
-                    write!(f, "{value}: {target}, ")?;
-                }
-                write!(f, "otherwise: {otherwise}]")
-            }
-            Terminator::Return => f.write_str("return"),
-            Terminator::Unreachable => f.write_str("unreachable"),
-            Terminator::Panic(PanicCause::AssertionFailed(Some((message, _)))) => {
-                write!(f, "panic(assertion failed, {message})")
-            }
-            Terminator::Panic(cause) => write!(f, "panic({})", cause.describe()),
         }
     }
 }
