@@ -27,7 +27,7 @@ enum State: u8 { Idle = 0, Running = 1, Paused = 2, Done = 3 }
 
 enum Event: u8 { Unknown = 0, Start = 1, Pause = 2, Resume = 3, Stop = 4, Reset = 5 }
 
-// The command codes that are not letters.
+// The command codes matched as constants.
 const CMD_STOP: u8 = b'x';
 const CMD_RESET: u8 = b'!';
 

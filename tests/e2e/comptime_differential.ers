@@ -187,7 +187,7 @@ fn matches(a: u8, b: i8, c: i32, d: u64, e: i64, f: bool) -> u64 {
 }
 
 // `match` on enums (ADR 0036, 0037): variants, an `i8` enum with negative
-// variants, or-patterns, a constant, and a `_` arm that a value that is
+// variants, or-patterns, a constant, and a `let` arm that a value that is
 // no variant, read from a byte through a cast pointer, reaches.
 const TOP: Port = Port::Top;
 
