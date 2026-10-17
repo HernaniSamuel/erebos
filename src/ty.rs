@@ -816,24 +816,30 @@ impl Checker<'_, '_> {
     fn match_(&mut self, f: &Fn, scrutinee: &Expr, arms: &[Arm], expected: Option<Ty>) -> Ty {
         let ty = self.check(f, scrutinee, None);
         let matched = match ty {
-            Ty::Int(_) | Ty::Bool | Ty::Error => ty,
+            Ty::Int(_) | Ty::Bool | Ty::Enum(_) | Ty::Error => ty,
             other => {
-                let help = match other {
-                    Ty::Enum(_) => {
-                        "a `match` on an enum is not implemented yet; compare it with `==` (ADR 0035)"
-                    }
-                    _ => "a `match` takes an integer, a `bool` or an enum (ADR 0037)",
-                };
                 self.q.diags.push(
                     Diagnostic::error(
                         "ty::match-type",
                         format!("cannot `match` on a value of type `{other}`"),
                     )
                     .label(scrutinee.span, format!("has type `{other}`"))
-                    .help(help),
+                    .help("a `match` takes an integer, a `bool` or an enum (ADR 0037)"),
                 );
                 Ty::Error
             }
+        };
+        // An enum with a value that failed or repeats was reported, and its
+        // `match`es are not checked for exhaustiveness or dead arms
+        // (ADR 0037). Its failures are the enum's, not the function's.
+        let enum_ok = match matched {
+            Ty::Enum(e) => {
+                let before = self.q.diags.len();
+                let ok = self.q.enum_ok(e.id);
+                self.elsewhere += self.q.diags.len() - before;
+                ok
+            }
+            _ => true,
         };
         // What the alternatives of each arm match; `None` once one cannot
         // be known, which stops the checks of the whole `match`.
@@ -861,6 +867,7 @@ impl Checker<'_, '_> {
         }
         if let Some(values) = values
             && matched != Ty::Error
+            && enum_ok
         {
             self.coverage(scrutinee, matched, arms, &values);
         }
@@ -905,6 +912,17 @@ impl Checker<'_, '_> {
                 let int = match ty {
                     Ty::Int(int) => int,
                     Ty::Error => return None,
+                    Ty::Enum(e) => {
+                        // An enum is not its integer (ADR 0035).
+                        let variant = match self.hir.enum_(e.id).variants.first() {
+                            Some(variant) => format!(", such as `{}::{}`", e.name, variant.name),
+                            None => String::new(),
+                        };
+                        self.q.diags.push(mismatch("an integer").help(format!(
+                            "an enum is matched with its variants{variant}, or with constants of its type (ADR 0037)"
+                        )));
+                        return None;
+                    }
                     _ => {
                         self.q.diags.push(
                             mismatch("an integer")
@@ -990,20 +1008,43 @@ impl Checker<'_, '_> {
                 let value = value?;
                 Some(Covers::Value(match ty {
                     Ty::Int(int) => value.int(int.bytes() as usize),
+                    // A variant or not (ADR 0036).
+                    Ty::Enum(e) => value.int(e.int.bytes() as usize),
                     _ => u64::from(value.bytes[0] != 0),
                 }))
+            }
+            PatternKind::Variant(id, index) => {
+                let variant_ty = Ty::Enum(self.hir.enum_(*id).ty);
+                if ty == Ty::Error {
+                    return None;
+                }
+                if variant_ty != ty {
+                    self.q.diags.push(mismatch(&format!("`{variant_ty}`")).help(
+                        "a variant in a pattern has the type of the value matched, which a pattern never converts (ADR 0037)",
+                    ));
+                    return None;
+                }
+                // A failure is the enum's, reported once (ADR 0035).
+                let before = self.q.diags.len();
+                let value = self.q.discriminant(*id, *index);
+                self.elsewhere += self.q.diags.len() - before;
+                Some(Covers::Value(value?))
             }
             PatternKind::Or(_) => unreachable!("an alternative is not an or-pattern"),
         }
     }
 
     /// Exhaustiveness and dead arms (ADR 0037) of a `match` on `ty`, an
-    /// integer or `bool`, whose arms have alternatives matching `values`.
+    /// integer, `bool` or enum whose every value was computed, none twice,
+    /// and whose arms have alternatives matching `values`. The values of
+    /// an enum are all those of its integer type (ADR 0036): for dead arms,
+    /// those that are no variant remain after every variant, but a `match`
+    /// is exhaustive with every variant.
     fn coverage(&mut self, scrutinee: &Expr, ty: Ty, arms: &[Arm], values: &[Vec<Covers>]) {
         let count = match ty {
             Ty::Bool => 2,
-            Ty::Int(int) => u128::from(int.mask()) + 1,
-            _ => unreachable!("only integers and `bool` are matched"),
+            Ty::Int(int) | Ty::Enum(EnumTy { int, .. }) => u128::from(int.mask()) + 1,
+            _ => unreachable!("only integers, `bool` and enums are matched"),
         };
         // What one arm, or one alternative, covers alone.
         let alone = |covers: &[Covers]| {
@@ -1067,13 +1108,35 @@ impl Checker<'_, '_> {
         if covered.complete() {
             return;
         }
+        // The values with names that a `match` must cover, in order.
+        let named: Vec<(u64, String)> = match ty {
+            Ty::Bool => vec![(1, "true".to_owned()), (0, "false".to_owned())],
+            Ty::Enum(e) => {
+                let def = self.hir.enum_(e.id);
+                (0..def.variants.len())
+                    .map(|index| {
+                        let value = self
+                            .q
+                            .discriminant(e.id, index as u32)
+                            .expect("an enum checked for coverage has every value");
+                        let name = format!("{}::{}", def.name, def.variants[index].name);
+                        (value, name)
+                    })
+                    .collect()
+            }
+            _ => Vec::new(),
+        };
         let diag = match ty {
-            Ty::Bool => {
-                let missing: Vec<&str> = [(1, "true"), (0, "false")]
-                    .into_iter()
-                    .filter(|&(value, _)| !covered.contains(Covers::Value(value)))
-                    .map(|(_, name)| name)
+            Ty::Bool | Ty::Enum(_) => {
+                let missing: Vec<&str> = named
+                    .iter()
+                    .filter(|&&(value, _)| !covered.contains(Covers::Value(value)))
+                    .map(|(_, name)| name.as_str())
                     .collect();
+                // Values that are no variant need no arm (ADR 0036).
+                if missing.is_empty() {
+                    return;
+                }
                 let listed: Vec<String> = missing.iter().map(|name| format!("`{name}`")).collect();
                 let arms: Vec<String> = missing
                     .iter()
@@ -1081,13 +1144,10 @@ impl Checker<'_, '_> {
                     .collect();
                 Diagnostic::error(
                     "ty::non-exhaustive-match",
-                    format!("non-exhaustive `match`: {} not covered", listed.join(" and ")),
+                    format!("non-exhaustive `match`: {} not covered", and_list(&listed)),
                 )
-                .label(scrutinee.span, format!("missing: {}", listed.join(" and ")))
-                .help(format!(
-                    "add {}, or a `_` arm (ADR 0037)",
-                    arms.join(" and ")
-                ))
+                .label(scrutinee.span, format!("missing: {}", and_list(&listed)))
+                .help(format!("add {}, or a `_` arm (ADR 0037)", and_list(&arms)))
             }
             _ => Diagnostic::error(
                 "ty::non-exhaustive-match",
@@ -2233,6 +2293,15 @@ pub fn dump(q: &mut Queries) -> String {
         });
     }
     out
+}
+
+/// `a`, `a and b`, or `a, b and c`.
+fn and_list(items: &[String]) -> String {
+    match items {
+        [] => String::new(),
+        [only] => only.clone(),
+        [init @ .., last] => format!("{} and {last}", init.join(", ")),
+    }
 }
 
 /// The values a pattern matches, among those of the type matched.

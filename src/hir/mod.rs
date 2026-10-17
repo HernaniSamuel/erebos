@@ -562,6 +562,8 @@ pub enum PatternKind {
     Bool(bool),
     /// A constant, matching its value.
     Const(ConstId),
+    /// `Enum::Variant`, by index, matching its value (ADR 0035, 0037).
+    Variant(EnumId, u32),
     /// `p | q | ...`; no alternative is a `Binding` or an `Or`.
     Or(Vec<Pattern>),
 }

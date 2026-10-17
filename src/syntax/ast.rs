@@ -305,6 +305,8 @@ pub enum PatternKind {
     Bool(bool),
     /// A bare name, which is always a constant.
     Name(Ident),
+    /// `Enum::Variant` (ADR 0035, 0037).
+    Path(Ident, Ident),
     /// `p | q | ...`, at least two alternatives.
     Or(Vec<Pattern>),
 }

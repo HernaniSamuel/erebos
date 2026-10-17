@@ -2,7 +2,8 @@
 // A bare name in a pattern is always a constant (ADR 0037): anything else
 // is `resolve::not-a-constant`, including a local variable that shadows a
 // constant, and a name that names nothing is `resolve::unknown-name`. A
-// `let` cannot be an alternative of an or-pattern.
+// `let` cannot be an alternative of an or-pattern. `Enum::Variant` is
+// resolved as in an expression.
 const LIMIT: u8 = 10;
 static LEVEL: u8 = 3;
 struct Point { x: u8 }
@@ -27,6 +28,15 @@ fn names(x: u8, limit: u8) -> u8 {
 fn alternatives(x: u8) -> u8 {
     match x {
         1 | let n: u8 => n,
+    }
+}
+
+fn paths(m: Mode) -> u8 {
+    match m {
+        Mode::Nope => 1,
+        Moder::Off => 2,
+        Point::A => 3,
+        _ => 4,
     }
 }
 

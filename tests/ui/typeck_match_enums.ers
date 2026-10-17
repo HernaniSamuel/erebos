@@ -1,0 +1,64 @@
+// emit: typeck
+// What a `match` on an enum accepts (ADR 0036, 0037): every variant
+// without `_`; every variant and then `_`, which values that are no
+// variant reach; a constant of the enum's type as a pattern, whose value
+// may be no variant, next to every variant; a `let` of the enum's type;
+// an `i8` enum with a negative variant.
+enum Mode: u8 { Off = 0, Run = 1, Sleep = 3 }
+enum Level: i8 { Low = -1, Mid = 0, High = 1 }
+
+// The byte 7, which is no variant of `Mode`.
+static BYTES: [u8; 1] = [7];
+const ODD: Mode = *(&raw const BYTES as *const Mode);
+const RUNNING: Mode = Mode::Run;
+
+fn every_variant(m: Mode) -> u8 {
+    match m {
+        Mode::Sleep => 3,
+        Mode::Off | Mode::Run => 1,
+    }
+}
+
+fn then_wildcard(m: Mode) -> u8 {
+    match m {
+        Mode::Off => 0,
+        Mode::Run => 1,
+        Mode::Sleep => 3,
+        _ => 255,
+    }
+}
+
+fn odd_constant(m: Mode) -> u8 {
+    match m {
+        Mode::Off => 0,
+        Mode::Run => 1,
+        Mode::Sleep => 3,
+        ODD => 7,
+        _ => 255,
+    }
+}
+
+fn constant_for_variant(m: Mode) -> u8 {
+    match m {
+        RUNNING => 1,
+        Mode::Off | Mode::Sleep => 0,
+    }
+}
+
+fn binding(m: Mode) -> u8 {
+    match m {
+        Mode::Off => 0,
+        let other: Mode => other as u8,
+    }
+}
+
+fn signed(l: Level) -> i8 {
+    match l {
+        Level::Low => -1,
+        Level::Mid => 0,
+        Level::High => 1,
+    }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

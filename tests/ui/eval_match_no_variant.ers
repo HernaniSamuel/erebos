@@ -1,0 +1,36 @@
+// emit: mir
+// At compile time, a `match` on an enum without a catch-all arm, on a
+// value that is no variant, fails the evaluation as the panic function
+// would at run time (ADR 0036); with a `_` arm, the same value goes there.
+enum Mode: u8 { Off = 0, Run = 1 }
+
+// The byte 7, which is no variant of `Mode`.
+static BYTES: [u8; 1] = [7];
+
+fn odd() -> Mode {
+    *(&raw const BYTES as *const Mode)
+}
+
+fn every_variant(m: Mode) -> u8 {
+    match m {
+        Mode::Off => 0,
+        Mode::Run => 1,
+    }
+}
+
+fn with_wildcard(m: Mode) -> u8 {
+    match m {
+        Mode::Off => 0,
+        Mode::Run => 1,
+        _ => 7,
+    }
+}
+
+const PANICS: u8 = every_variant(odd());
+
+comptime {
+    assert(with_wildcard(odd()) == 7);
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

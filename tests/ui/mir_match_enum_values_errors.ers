@@ -1,0 +1,58 @@
+// emit: mir
+// A `match` on an enum one of whose values repeats another or fails is
+// not checked for exhaustiveness or dead arms (ADR 0037): only the enum's
+// errors are reported. The function still type checks, so a `comptime`
+// block can call it. With a catch-all arm, the value both variants share
+// goes to the first arm that lists it. Without one, a variant may have no
+// arm, so the function cannot be evaluated, and fails without a
+// diagnostic of its own rather than panicking on `Twice::C` as if it were
+// no variant. The build stops at the enum's error.
+enum Twice: u8 { A = 0, B = 0, C = 1 }
+
+fn twice(t: Twice) -> u8 {
+    match t {
+        Twice::A => 1,
+        Twice::B => 2,
+    }
+}
+
+fn twice_or(t: Twice) -> u8 {
+    match t {
+        Twice::A => 1,
+        Twice::B => 2,
+        _ => 3,
+    }
+}
+
+comptime {
+    assert(twice_or(Twice::B) == 1);
+    assert(twice_or(Twice::A) == 1);
+    assert(twice_or(Twice::C) == 3);
+}
+
+comptime {
+    assert(twice(Twice::C) == 1);
+}
+
+enum Broken: u8 { A = 1 / 0, B = 1 }
+
+fn broken(b: Broken) -> u8 {
+    match b {
+        Broken::B => 1,
+        Broken::B => 2,
+    }
+}
+
+// A value that needs a function matching on its own enum is a cycle,
+// reported once.
+enum Cycle: u8 { A = cycles(Cycle::B), B = 1 }
+
+fn cycles(c: Cycle) -> u8 {
+    match c {
+        Cycle::A => 0,
+        Cycle::B => 2,
+    }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

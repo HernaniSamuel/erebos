@@ -1,0 +1,34 @@
+---
+source: tests/ui.rs
+assertion_line: 40
+expression: output
+input_file: tests/ui/eval_match_no_variant.ers
+---
+--- errors ---
+eval::panic
+
+  × the evaluation called the panic function: enum value is no variant
+    ╭─[eval_match_no_variant.ers:15:5]
+ 14 │     fn every_variant(m: Mode) -> u8 {
+ 15 │ ╭─▶     match m {
+ 16 │ │           Mode::Off => 0,
+ 17 │ │           Mode::Run => 1,
+ 18 │ ├─▶     }
+    · ╰──── enum value is no variant
+ 19 │     }
+ 20 │     
+ 21 │     fn with_wildcard(m: Mode) -> u8 {
+ 22 │         match m {
+ 23 │             Mode::Off => 0,
+ 24 │             Mode::Run => 1,
+ 25 │             _ => 7,
+ 26 │         }
+ 27 │     }
+ 28 │     
+ 29 │     const PANICS: u8 = every_variant(odd());
+    ·           ───┬──       ──────────┬─────────
+    ·              │                   ╰── called here
+    ·              ╰── while evaluating the constant `PANICS`
+ 30 │     
+    ╰────
+  help: this code runs at compile time (ADR 0027)

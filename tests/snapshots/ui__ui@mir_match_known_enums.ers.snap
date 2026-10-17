@@ -1,0 +1,18 @@
+---
+source: tests/ui.rs
+assertion_line: 40
+expression: output
+input_file: tests/ui/mir_match_known_enums.ers
+---
+--- errors ---
+ty::division-by-zero
+
+  × division by zero
+    ╭─[mir_match_known_enums.ers:29:26]
+ 28 │     match Mode::Off {
+ 29 │         Mode::Off => x / 0,
+    ·                          ┬
+    ·                          ╰── this divisor is zero
+ 30 │         Mode::Run => x,
+    ╰────
+  help: at run time this would call the panic function (ADR 0007)

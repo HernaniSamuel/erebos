@@ -760,8 +760,8 @@ impl Lowerer<'_> {
 
     /// `Enum::Variant` (ADR 0035). The name before `::` is looked up among
     /// items only, as a struct literal's is, so a local of that name does
-    /// not hide the enum.
-    fn variant(&mut self, enum_name: &ast::Ident, variant: &ast::Ident) -> Option<ExprKind> {
+    /// not hide the enum. Returns the enum and the variant's index.
+    fn variant(&mut self, enum_name: &ast::Ident, variant: &ast::Ident) -> Option<(EnumId, u32)> {
         let Some(&id) = self.enum_ids.get(&enum_name.name) else {
             let what = if self.struct_ids.contains_key(&enum_name.name) {
                 Some("a struct")
@@ -797,7 +797,7 @@ impl Lowerer<'_> {
             .iter()
             .position(|v| v.name.name == variant.name)
         {
-            return Some(ExprKind::Variant(id, index as u32));
+            return Some((id, index as u32));
         }
         // A variant declared twice is listed once.
         let mut names: Vec<String> = Vec::new();
@@ -1316,7 +1316,7 @@ impl Lowerer<'_> {
                 None => ExprKind::Unit,
             },
             ast::ExprKind::Path(enum_name, variant) => match self.variant(enum_name, variant) {
-                Some(kind) => kind,
+                Some((id, index)) => ExprKind::Variant(id, index),
                 // Reported; lowering errors stop the pipeline.
                 None => ExprKind::Unit,
             },
@@ -1560,6 +1560,12 @@ impl Lowerer<'_> {
                 // Reported; lowering errors stop the pipeline.
                 None => PatternKind::Wildcard,
             },
+            // Resolved as in an expression (ADR 0037).
+            ast::PatternKind::Path(enum_name, variant) => match self.variant(enum_name, variant) {
+                Some((id, index)) => PatternKind::Variant(id, index),
+                // Reported; lowering errors stop the pipeline.
+                None => PatternKind::Wildcard,
+            },
             ast::PatternKind::Or(alternatives) => PatternKind::Or(
                 alternatives
                     .iter()
@@ -1613,9 +1619,16 @@ impl Lowerer<'_> {
         } else if self.struct_ids.contains_key(&name.name) {
             not_a_constant("a struct")
                 .help("a pattern matches a value: a literal, a constant or `_` (ADR 0037)")
-        } else if self.enum_ids.contains_key(&name.name) {
-            not_a_constant("an enum")
-                .help("a pattern matches a value: a literal, a constant or `_` (ADR 0037)")
+        } else if let Some(&id) = self.enum_ids.get(&name.name) {
+            // An empty enum was reported; any name shows the form.
+            let variant = self.enum_decls[id.0 as usize]
+                .variants
+                .first()
+                .map_or("Variant", |v| v.name.name.as_str());
+            not_a_constant("an enum").help(format!(
+                "a variant is matched with its enum's name, as in `{}::{variant}` (ADR 0035, 0037)",
+                name.name
+            ))
         } else {
             Diagnostic::error(
                 "resolve::unknown-name",

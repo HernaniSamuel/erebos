@@ -718,11 +718,17 @@ impl Builder<'_, '_> {
 
     /// `match` (ADR 0037), of type `ty`: the scrutinee is read once, before
     /// any arm, and a switch on it jumps to the first arm whose pattern
-    /// matches. The catch-all arm is the default; without one, every value
-    /// is listed, so the default cannot be reached. With a known scrutinee,
+    /// matches. The catch-all arm is the default. Without one, every value
+    /// of an integer or `bool` is listed, so the default cannot be reached,
+    /// while an enum may hold a value that is no variant, for which the
+    /// default calls the panic function (ADR 0036). With a known scrutinee,
     /// only the arm it takes is checked (ADR 0032).
     fn match_(&mut self, ty: Ty, scrutinee: &hir::Expr, arms: &[hir::Arm]) -> Operand {
         let scrutinee_ty = self.ty_of(scrutinee);
+        let enum_id = match self.q.tables.expr_ty(scrutinee.id) {
+            hir::Ty::Enum(e) => Some(e.id),
+            _ => None,
+        };
         let value = self.expr(scrutinee);
         if self.current.is_none() {
             // The scrutinee did not finish, and nothing follows.
@@ -742,7 +748,11 @@ impl Builder<'_, '_> {
         let blocks: Vec<BasicBlock> = arms.iter().map(|_| self.new_block()).collect();
         // For each arm, the values its alternatives match, `None` for every
         // value. Type checking rejects an arm after a catch-all, and a value
-        // listed twice.
+        // listed twice, except on an enum two of whose variants have one
+        // value, which was reported (ADR 0035, 0037). The arms keep their
+        // order all the same: a value goes to the first arm that lists it,
+        // and nothing after a catch-all is a case, so that the switch never
+        // holds a value twice.
         let mut values = Vec::with_capacity(arms.len());
         let mut cases = Vec::new();
         let mut otherwise = None;
@@ -756,9 +766,23 @@ impl Builder<'_, '_> {
             if arm_values.contains(&None) {
                 otherwise = otherwise.or(Some(block));
             } else if otherwise.is_none() {
-                cases.extend(arm_values.iter().flatten().map(|&value| (value, block)));
+                for &value in arm_values.iter().flatten() {
+                    if !cases.iter().any(|&(case, _)| case == value) {
+                        cases.push((value, block));
+                    }
+                }
             }
             values.push(arm_values);
+        }
+        // On an enum with a value that failed or repeats, which was
+        // reported, exhaustiveness was not checked, so a variant may have no
+        // arm, and the default would panic on it as if it were no variant.
+        // The body is not used, so nothing more is reported (ADR 0037).
+        if let Some(id) = enum_id
+            && otherwise.is_none()
+            && !self.q.enum_ok(id)
+        {
+            self.failed = true;
         }
         let taken = self.known_arm(scrutinee, &values);
         let unlisted = otherwise.is_none().then(|| self.new_block());
@@ -769,7 +793,12 @@ impl Builder<'_, '_> {
         });
         if let Some(block) = unlisted {
             self.current = Some(block);
-            self.terminate(Terminator::Unreachable);
+            // Never assumed to hold a variant (ADR 0036).
+            self.terminate(if enum_id.is_some() {
+                Terminator::Panic(PanicCause::NoVariant)
+            } else {
+                Terminator::Unreachable
+            });
         }
 
         let result = self.result_place(ty);
@@ -813,6 +842,15 @@ impl Builder<'_, '_> {
                 (Some(value), Some(int)) => value.int(int.bytes() as usize),
                 (Some(value), None) => u64::from(value.bytes[0] != 0),
                 (None, _) => {
+                    // Reported where it failed; the body is not used.
+                    self.failed = true;
+                    0
+                }
+            },
+            // Its value, masked already as `Const::Int` holds it.
+            hir::PatternKind::Variant(id, index) => match self.discriminant(*id, *index) {
+                Some(value) => value,
+                None => {
                     // Reported where it failed; the body is not used.
                     self.failed = true;
                     0

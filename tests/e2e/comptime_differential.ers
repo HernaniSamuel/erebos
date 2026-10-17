@@ -186,6 +186,41 @@ fn matches(a: u8, b: i8, c: i32, d: u64, e: i64, f: bool) -> u64 {
     })
 }
 
+// `match` on enums (ADR 0036, 0037): variants, an `i8` enum with negative
+// variants, or-patterns, a constant, and a `_` arm that a value that is
+// no variant, read from a byte through a cast pointer, reaches.
+const TOP: Port = Port::Top;
+
+fn enum_matches(m: Mode, l: Level, p: Port, c: Code, raw: u8) -> u64 {
+    let mut h: u64 = 0;
+    h = mix(h, match m {
+        Mode::Off => 1,
+        Mode::Run | Mode::Max => 2,
+    });
+    h = mix(h, match l {
+        Level::Low => 1,
+        Level::Minus => 2,
+        Level::High => 3,
+    });
+    h = mix(h, match p {
+        TOP => 1,
+        Port::Data => 2,
+        _ => 3,
+    });
+    h = mix(h, match c {
+        Code::Fault | Code::Neg => 1,
+        let other: Code => other as u64,
+    });
+    let byte: u8 = raw;
+    let odd: Mode = *(&raw const byte as *const Mode);
+    mix(h, match odd {
+        Mode::Off => 1,
+        Mode::Run => 2,
+        Mode::Max => 3,
+        let other: Mode => other as u64 + 10,
+    })
+}
+
 struct Pair { a: u32, b: u32 }
 struct Mixed { flag: bool, value: u16, pair: Pair }
 
@@ -384,6 +419,9 @@ entry fn main() -> ! {
     failures += check(36, comptime matches(77, 1, 0, 0xFFFF_FFFF, 4_294_967_296, true), matches(opaque_u8(77), opaque_i8(1), opaque_i32(0), opaque_u64(0xFFFF_FFFF), opaque_i64(4_294_967_296), opaque_u8(1) == 1));
     failures += check(37, comptime matches(200, -77, 5, 12_345, 5, false), matches(opaque_u8(200), opaque_i8(-77), opaque_i32(5), opaque_u64(12_345), opaque_i64(5), opaque_u8(2) == 1));
     failures += check(38, comptime matches(0, 127, 2_147_483_647, 0, 0, true), matches(opaque_u8(0), opaque_i8(127), opaque_i32(2_147_483_647), opaque_u64(0), opaque_i64(0), opaque_u8(1) == 1));
+    failures += check(39, comptime enum_matches(Mode::Off, Level::Low, Port::Top, Code::Fault, 7), enum_matches(opaque_mode(Mode::Off), opaque_level(Level::Low), opaque_port(Port::Top), opaque_code(Code::Fault), opaque_u8(7)));
+    failures += check(40, comptime enum_matches(Mode::Max, Level::Minus, Port::Data, Code::Fine, 3), enum_matches(opaque_mode(Mode::Max), opaque_level(Level::Minus), opaque_port(Port::Data), opaque_code(Code::Fine), opaque_u8(3)));
+    failures += check(41, comptime enum_matches(Mode::Run, Level::High, Port::Data, Code::Neg, 200), enum_matches(opaque_mode(Mode::Run), opaque_level(Level::High), opaque_port(Port::Data), opaque_code(Code::Neg), opaque_u8(200)));
     if failures == 0 {
         putc(b'd'); putc(b'i'); putc(b'f'); putc(b'f'); putc(b'e'); putc(b'r'); putc(b'e');
         putc(b'n'); putc(b't'); putc(b'i'); putc(b'a'); putc(b'l'); putc(b' '); putc(b'o');

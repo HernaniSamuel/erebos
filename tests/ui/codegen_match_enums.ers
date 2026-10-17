@@ -1,0 +1,29 @@
+// emit: llvm-ir
+// Code generation never assumes an enum holds a variant (ADR 0036): a load
+// of an enum has no range metadata, and the `switch` of a `match` on an
+// enum without a catch-all arm has a default that calls the panic
+// function, not `unreachable`. With a `_` arm, the default is that arm.
+enum Mode: u8 { Off = 0, Run = 1, Sleep = 3 }
+
+fn load(p: *const Mode) -> Mode {
+    *p
+}
+
+fn every_variant(p: *const Mode) -> u32 {
+    match *p {
+        Mode::Off => 10,
+        Mode::Run => 20,
+        Mode::Sleep => 30,
+    }
+}
+
+fn with_wildcard(m: Mode) -> u32 {
+    match m {
+        Mode::Off => 10,
+        Mode::Run => 20,
+        _ => 0,
+    }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

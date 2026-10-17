@@ -1,0 +1,97 @@
+// An enum may hold any value of its integer type (ADR 0036): the bytes 0,
+// 1 and 3 are variants of `Mode`, 2 and 7 are not. Read through a
+// `*const Mode` and a `*const volatile Mode`, a `match` with a `_` arm
+// sends 2 and 7 there, and `==` and `as` give their integers.
+// expect-output: plain: off run sleep other other
+// expect-output: volatile: off run sleep other other
+// expect-output: as: 0 1 3 2 7
+// expect-output: eq: FFTFF TFTTT
+// expect-exit: 0
+
+enum Mode: u8 { Off = 0, Run = 1, Sleep = 3 }
+
+static mut BYTES: [u8; 5] = [0, 0, 0, 0, 0];
+
+fn putc(byte: u8) {
+    let thr: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+    *thr = byte;
+}
+
+fn print(s: *const [u8]) {
+    let mut i: usize = 0;
+    while i < len(s) {
+        putc((*s)[i]);
+        i += 1;
+    }
+}
+
+fn name(m: Mode) -> *const [u8] {
+    match m {
+        Mode::Off => &raw const b"off",
+        Mode::Run => &raw const b"run",
+        Mode::Sleep => &raw const b"sleep",
+        _ => &raw const b"other",
+    }
+}
+
+fn flag(b: bool) {
+    putc(if b { b'T' } else { b'F' });
+}
+
+entry fn main() -> ! {
+    // Written as bytes at run time, by other means than the enum.
+    BYTES = [0, 1, 3, 2, 7];
+    let modes: *const Mode = &raw const BYTES as *const Mode;
+    let device: *const volatile Mode = &raw const BYTES as *const volatile Mode;
+
+    print(&raw const b"plain:");
+    let mut i: usize = 0;
+    while i < 5 {
+        putc(b' ');
+        print(name(modes[i]));
+        i += 1;
+    }
+    putc(b'\n');
+
+    print(&raw const b"volatile:");
+    i = 0;
+    while i < 5 {
+        putc(b' ');
+        print(name(device[i]));
+        i += 1;
+    }
+    putc(b'\n');
+
+    print(&raw const b"as:");
+    i = 0;
+    while i < 5 {
+        putc(b' ');
+        putc(b'0' + modes[i] as u8);
+        i += 1;
+    }
+    putc(b'\n');
+
+    print(&raw const b"eq: ");
+    i = 0;
+    while i < 5 {
+        flag(modes[i] == Mode::Sleep);
+        i += 1;
+    }
+    putc(b' ');
+    i = 0;
+    while i < 5 {
+        flag(modes[i] != Mode::Run);
+        i += 1;
+    }
+    putc(b'\n');
+
+    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+    *finisher = 0x5555;
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+    *finisher = (1 << 16) | 0x3333;
+    loop {}
+}

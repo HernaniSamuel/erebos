@@ -1,0 +1,105 @@
+---
+source: tests/ui.rs
+assertion_line: 40
+expression: output
+input_file: tests/ui/typeck_match_enum_errors.ers
+---
+--- errors ---
+ty::non-exhaustive-match
+
+  × non-exhaustive `match`: `Mode::Off` and `Mode::Sleep` not covered
+    ╭─[typeck_match_enum_errors.ers:13:11]
+ 12 │ fn missing_two(m: Mode) -> u8 {
+ 13 │     match m {
+    ·           ┬
+    ·           ╰── missing: `Mode::Off` and `Mode::Sleep`
+ 14 │         Mode::Wait => 2,
+    ╰────
+  help: add `Mode::Off => ...` and `Mode::Sleep => ...`, or a `_` arm (ADR 0037)
+ty::non-exhaustive-match
+
+  × non-exhaustive `match`: `Mode::Off`, `Mode::Wait` and `Mode::Sleep` not covered
+    ╭─[typeck_match_enum_errors.ers:20:11]
+ 19 │ fn missing_three(m: Mode) -> u8 {
+ 20 │     match m {
+    ·           ┬
+    ·           ╰── missing: `Mode::Off`, `Mode::Wait` and `Mode::Sleep`
+ 21 │         Mode::Run => 1,
+    ╰────
+  help: add `Mode::Off => ...`, `Mode::Wait => ...` and `Mode::Sleep => ...`, or a `_` arm (ADR
+        0037)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_match_enum_errors.ers:27:9]
+ 26 │     match m {
+ 27 │         Level::Low => {}
+    ·         ─────┬────
+    ·              ╰── expected `Mode`, found `Level`
+ 28 │         0 => {}
+    ╰────
+  help: a variant in a pattern has the type of the value matched, which a pattern never converts
+        (ADR 0037)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_match_enum_errors.ers:28:9]
+ 27 │         Level::Low => {}
+ 28 │         0 => {}
+    ·         ┬
+    ·         ╰── expected `Mode`, found an integer
+ 29 │         _ => {}
+    ╰────
+  help: an enum is matched with its variants, such as `Mode::Off`, or with constants of its type
+        (ADR 0037)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_match_enum_errors.ers:32:9]
+ 31 │     match x {
+ 32 │         Mode::Off => {}
+    ·         ────┬────
+    ·             ╰── expected `u8`, found `Mode`
+ 33 │         _ => {}
+    ╰────
+  help: a variant in a pattern has the type of the value matched, which a pattern never converts
+        (ADR 0037)
+ty::unreachable-pattern
+
+  × unreachable arm
+    ╭─[typeck_match_enum_errors.ers:40:9]
+ 38 │     match m {
+ 39 │         Mode::Off => 0,
+    ·         ────┬────
+    ·             ╰── every value it matches is matched here
+ 40 │         Mode::Off => 1,
+    ·         ────┬────
+    ·             ╰── matches no value that the arms before it leave
+ 41 │         RUNNING => 2,
+    ╰────
+  help: a `match` takes the first arm that matches, so this one never runs; remove it (ADR 0037)
+ty::unreachable-pattern
+
+  × unreachable arm
+    ╭─[typeck_match_enum_errors.ers:42:9]
+ 40 │         Mode::Off => 1,
+ 41 │         RUNNING => 2,
+    ·         ───┬───
+    ·            ╰── every value it matches is matched here
+ 42 │         Mode::Run => 3,
+    ·         ────┬────
+    ·             ╰── matches no value that the arms before it leave
+ 43 │         Mode::Wait | Mode::Sleep => 4,
+    ╰────
+  help: a `match` takes the first arm that matches, so this one never runs; remove it (ADR 0037)
+ty::unreachable-pattern
+
+  × unreachable arm
+    ╭─[typeck_match_enum_errors.ers:44:9]
+ 43 │         Mode::Wait | Mode::Sleep => 4,
+ 44 │         Mode::Sleep | Mode::Off => 5,
+    ·         ───────────┬───────────
+    ·                    ╰── matches no value that the arms before it leave
+ 45 │         _ => 6,
+    ╰────
+  help: a `match` takes the first arm that matches, so this one never runs; remove it (ADR 0037)

@@ -1,0 +1,35 @@
+// emit: mir
+// A `match` on an enum value known at compile time runs at most one arm
+// (ADR 0037): a variant takes its arm, and the others are code that
+// cannot run, not checked by ADR 0032's rules; a constant holding a value
+// that is no variant takes no arm, so none is checked, and the `match`
+// panics where it runs (ADR 0036). The arm a variant takes is checked.
+enum Mode: u8 { Off = 0, Run = 1 }
+
+// The byte 7, which is no variant of `Mode`.
+static BYTES: [u8; 1] = [7];
+const ODD: Mode = *(&raw const BYTES as *const Mode);
+
+fn variant(x: u32) -> u32 {
+    match Mode::Run {
+        Mode::Off => x / 0,
+        Mode::Run => x,
+    }
+}
+
+fn no_variant(x: u32) -> u32 {
+    match ODD {
+        Mode::Off => x / 0,
+        Mode::Run => x >> 40,
+    }
+}
+
+fn taken(x: u32) -> u32 {
+    match Mode::Off {
+        Mode::Off => x / 0,
+        Mode::Run => x,
+    }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

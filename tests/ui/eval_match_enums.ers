@@ -1,0 +1,47 @@
+// emit: mir
+// `match` on enums at compile time works as at run time (ADR 0027, 0036,
+// 0037): variants, an `i8` enum with a negative variant, constants and
+// or-patterns; a value that is no variant, read from a `static` of bytes
+// through a cast pointer, goes to the `_` arm.
+enum Mode: u8 { Off = 0, Run = 1, Sleep = 3 }
+enum Level: i8 { Low = -128, Mid = -1, High = 1 }
+
+static BYTES: [u8; 4] = [0, 1, 2, 7];
+const SLEEPING: Mode = Mode::Sleep;
+
+fn mode(i: usize) -> Mode {
+    let modes: *const [Mode; 4] = &raw const BYTES as *const [Mode; 4];
+    (*modes)[i]
+}
+
+fn describe(m: Mode) -> u8 {
+    match m {
+        Mode::Off => 10,
+        Mode::Run => 11,
+        SLEEPING => 13,
+        _ => 255,
+    }
+}
+
+fn level(l: Level) -> i32 {
+    match l {
+        Level::Low | Level::Mid => -1,
+        Level::High => 1,
+    }
+}
+
+// Expected: 10, 11, 13, 255, 255; -1, -1, 1.
+fn answers() -> u8 {
+    let d: [u8; 5] = [
+        comptime describe(mode(0)),
+        comptime describe(mode(1)),
+        comptime describe(Mode::Sleep),
+        comptime describe(mode(2)),
+        comptime describe(mode(3)),
+    ];
+    let l: [i32; 3] = [comptime level(Level::Low), comptime level(Level::Mid), comptime level(Level::High)];
+    0
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

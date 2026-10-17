@@ -1,0 +1,51 @@
+// A `match` listing every variant of an enum, without a catch-all arm,
+// calls the panic function on a value that is no variant (ADR 0036): the
+// byte 7 read through a `*const Mode`.
+// expect-output: run
+// expect-output: panic
+// expect-exit: 1
+
+enum Mode: u8 { Off = 0, Run = 1, Sleep = 3 }
+
+static mut BYTES: [u8; 2] = [0, 0];
+
+fn putc(byte: u8) {
+    let thr: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+    *thr = byte;
+}
+
+fn print(s: *const [u8]) {
+    let mut i: usize = 0;
+    while i < len(s) {
+        putc((*s)[i]);
+        i += 1;
+    }
+    putc(b'\n');
+}
+
+fn exit(code: u32) -> ! {
+    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+    *finisher = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    loop {}
+}
+
+fn name(m: Mode) -> *const [u8] {
+    match m {
+        Mode::Off => &raw const b"off",
+        Mode::Run => &raw const b"run",
+        Mode::Sleep => &raw const b"sleep",
+    }
+}
+
+entry fn main() -> ! {
+    BYTES = [1, 7];
+    let modes: *const Mode = &raw const BYTES as *const Mode;
+    print(name(modes[0]));
+    print(name(modes[1]));
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    print(&raw const b"panic");
+    exit(1)
+}

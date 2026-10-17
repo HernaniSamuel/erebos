@@ -1,0 +1,75 @@
+---
+source: tests/ui.rs
+assertion_line: 40
+expression: output
+input_file: tests/ui/typeck_match_enums.ers
+---
+--- typeck ---
+enum Mode: u8 { Off = 0, Run = 1, Sleep = 3 }
+enum Level: i8 { Low = -1, Mid = 0, High = 1 }
+fn every_variant(m: Mode) -> u8
+    expr 0 match 637..714: u8
+    expr 1 local m 643..644: Mode
+    expr 2 int 3 670..671: u8
+    expr 3 int 1 706..707: u8
+fn then_wildcard(m: Mode) -> u8
+    expr 4 match 756..863: u8
+    expr 5 local m 762..763: Mode
+    expr 6 int 0 787..788: u8
+    expr 7 int 1 811..812: u8
+    expr 8 int 3 837..838: u8
+    expr 9 int 255 853..856: u8
+fn odd_constant(m: Mode) -> u8
+    expr 10 match 904..1029: u8
+    expr 11 local m 910..911: Mode
+    expr 12 int 0 935..936: u8
+    expr 13 int 1 959..960: u8
+    expr 14 int 3 985..986: u8
+    expr 15 int 7 1003..1004: u8
+    expr 16 int 255 1019..1022: u8
+fn constant_for_variant(m: Mode) -> u8
+    expr 17 match 1078..1153: u8
+    expr 18 local m 1084..1085: Mode
+    expr 19 int 1 1107..1108: u8
+    expr 20 int 0 1145..1146: u8
+fn binding(m: Mode) -> u8
+    let other: Mode
+    expr 21 match 1189..1268: u8
+    expr 22 local m 1195..1196: Mode
+    expr 23 int 0 1220..1221: u8
+    expr 24 as u8 1250..1261: u8
+    expr 25 local other 1250..1255: Mode
+fn signed(l: Level) -> i8
+    expr 26 match 1304..1396: i8
+    expr 27 local l 1310..1311: Level
+    expr 28 neg 1336..1338: i8
+    expr 29 int 1 1337..1338: i8
+    expr 30 int 0 1362..1363: i8
+    expr 31 int 1 1388..1389: i8
+entry fn main() -> !
+    expr 32 loop 1423..1430: !
+panic fn on_panic() -> !
+    expr 33 loop 1460..1467: !
+comptime fn ODD() -> Mode
+    expr 34 deref 529..563: Mode
+    expr 35 as *const Mode 530..563: *const Mode
+    expr 36 &raw const 531..547: *const [u8; 1]
+    expr 37 static BYTES 542..547: [u8; 1]
+comptime fn RUNNING() -> Mode
+    expr 38 variant Mode::Run 587..596: Mode
+comptime fn BYTES() -> [u8; 1]
+    expr 39 array 506..509: [u8; 1]
+    expr 40 int 7 507..508: u8
+comptime fn Mode::Off() -> u8
+    expr 41 int 0 364..365: u8
+comptime fn Mode::Run() -> u8
+    expr 42 int 1 373..374: u8
+comptime fn Mode::Sleep() -> u8
+    expr 43 int 3 384..385: u8
+comptime fn Level::Low() -> i8
+    expr 44 neg 411..413: i8
+    expr 45 int 1 412..413: i8
+comptime fn Level::Mid() -> i8
+    expr 46 int 0 421..422: i8
+comptime fn Level::High() -> i8
+    expr 47 int 1 431..432: i8

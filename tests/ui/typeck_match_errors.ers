@@ -1,22 +1,20 @@
 // emit: typeck
 // What a `match` rejects (ADR 0037): scrutinees other than integers,
-// `bool` and enums (and, until enum patterns exist, enums too), a literal
-// scrutinee, which has no type, patterns of another type than the
-// scrutinee's, with no conversion, and arms that leave values unmatched.
+// `bool` and enums, a literal scrutinee, which has no type, patterns of
+// another type than the scrutinee's, with no conversion, and arms that
+// leave values unmatched.
 struct Pair { a: u8, b: u8 }
-enum Mode: u8 { Off = 0, Run = 1 }
 const WIDE: u16 = 1;
 
 fn halt() -> ! { loop {} }
 
-fn scrutinees(p: *const u8, s: *const [u8], pair: Pair, a: [u8; 2], m: Mode) {
+fn scrutinees(p: *const u8, s: *const [u8], pair: Pair, a: [u8; 2]) {
     match p { _ => {} }
     match s { _ => {} }
     match pair { _ => {} }
     match a { _ => {} }
     match () { _ => {} }
     match halt() { _ => {} }
-    match m { _ => {} }
     match 3 { _ => {} }
 }
 

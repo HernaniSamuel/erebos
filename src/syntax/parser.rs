@@ -1066,7 +1066,7 @@ impl Parser<'_> {
     }
 
     /// One pattern of ADR 0037: `_`, `let [mut] name: Type`, a literal, `-`
-    /// and an integer literal, or a name.
+    /// and an integer literal, a name, or `Enum::Variant`.
     fn single_pattern(&mut self) -> PResult<Pattern> {
         let token = self.peek();
         let text = &self.text[token.span.range()];
@@ -1080,6 +1080,13 @@ impl Parser<'_> {
             TokenKind::True | TokenKind::False => PatternKind::Bool(token.kind == TokenKind::True),
             TokenKind::Ident => {
                 let name = self.ident()?;
+                if self.eat(TokenKind::ColonColon).is_some() {
+                    let variant = self.ident()?;
+                    return Ok(Pattern {
+                        span: name.span.to(variant.span),
+                        kind: PatternKind::Path(name, variant),
+                    });
+                }
                 return Ok(Pattern {
                     span: name.span,
                     kind: PatternKind::Name(name),

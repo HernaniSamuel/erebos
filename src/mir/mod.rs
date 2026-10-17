@@ -571,7 +571,8 @@ pub enum Terminator {
         else_: BasicBlock,
     },
     /// Jumps to the block of the case whose value equals `discr`, an
-    /// integer or `bool`, or else to `otherwise`: a `match` (ADR 0037).
+    /// integer or `bool` (an enum is its integer), or else to `otherwise`:
+    /// a `match` (ADR 0037).
     /// Each value is the bits of `discr`'s type, masked to its width as
     /// `Const::Int` holds them (`bool` is 0 or 1), and appears once. Leaked
     /// like projections, so that terminators stay `Copy`.
@@ -599,6 +600,9 @@ pub enum PanicCause {
     /// has one: a `*const [u8]` computed on the failing path only, and the
     /// span of the expression that gave it (ADR 0031).
     AssertionFailed(Option<(Operand, Span)>),
+    /// A `match` on an enum without a catch-all arm, on a value that is
+    /// no variant (ADR 0036).
+    NoVariant,
 }
 
 impl PanicCause {
@@ -607,6 +611,7 @@ impl PanicCause {
             PanicCause::DivisionByZero => "division by zero",
             PanicCause::IndexOutOfBounds => "index out of bounds",
             PanicCause::AssertionFailed(_) => "assertion failed",
+            PanicCause::NoVariant => "enum value is no variant",
         }
     }
 }

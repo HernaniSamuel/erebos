@@ -8,111 +8,150 @@ input_file: tests/ui/resolve_match_errors.ers
 resolve::not-a-constant
 
   × `LEVEL` is a static, not a constant
-    ╭─[resolve_match_errors.ers:16:9]
- 15 │     match x {
- 16 │         LEVEL => 1,
+    ╭─[resolve_match_errors.ers:17:9]
+ 16 │     match x {
+ 17 │         LEVEL => 1,
     ·         ──┬──
     ·           ╰── a name in a pattern is a constant
- 17 │         helper => 2,
+ 18 │         helper => 2,
     ╰────
   help: a static is memory, read at run time (ADR 0030); to compare with it, bind the value and
         test it: `let x: T => if x == LEVEL { ... }` (ADR 0037)
 resolve::not-a-constant
 
   × `helper` is a function, not a constant
-    ╭─[resolve_match_errors.ers:17:9]
- 16 │         LEVEL => 1,
- 17 │         helper => 2,
+    ╭─[resolve_match_errors.ers:18:9]
+ 17 │         LEVEL => 1,
+ 18 │         helper => 2,
     ·         ───┬──
     ·            ╰── a name in a pattern is a constant
- 18 │         Point => 3,
+ 19 │         Point => 3,
     ╰────
   help: a pattern matches a value: a literal, a constant or `_` (ADR 0037)
 resolve::not-a-constant
 
   × `Point` is a struct, not a constant
-    ╭─[resolve_match_errors.ers:18:9]
- 17 │         helper => 2,
- 18 │         Point => 3,
+    ╭─[resolve_match_errors.ers:19:9]
+ 18 │         helper => 2,
+ 19 │         Point => 3,
     ·         ──┬──
     ·           ╰── a name in a pattern is a constant
- 19 │         Mode => 4,
+ 20 │         Mode => 4,
     ╰────
   help: a pattern matches a value: a literal, a constant or `_` (ADR 0037)
 resolve::not-a-constant
 
   × `Mode` is an enum, not a constant
-    ╭─[resolve_match_errors.ers:19:9]
- 18 │         Point => 3,
- 19 │         Mode => 4,
+    ╭─[resolve_match_errors.ers:20:9]
+ 19 │         Point => 3,
+ 20 │         Mode => 4,
     ·         ──┬─
     ·           ╰── a name in a pattern is a constant
- 20 │         LIMIT => 5,
+ 21 │         LIMIT => 5,
     ╰────
-  help: a pattern matches a value: a literal, a constant or `_` (ADR 0037)
+  help: a variant is matched with its enum's name, as in `Mode::Off` (ADR 0035, 0037)
 resolve::not-a-constant
 
   × `LIMIT` is a variable, not a constant
-    ╭─[resolve_match_errors.ers:20:9]
- 13 │ fn names(x: u8, limit: u8) -> u8 {
- 14 │     let LIMIT: u8 = 4;
+    ╭─[resolve_match_errors.ers:21:9]
+ 14 │ fn names(x: u8, limit: u8) -> u8 {
+ 15 │     let LIMIT: u8 = 4;
     ·         ──┬──
     ·           ╰── the variable is declared here
- 15 │     match x {
- 16 │         LEVEL => 1,
- 17 │         helper => 2,
- 18 │         Point => 3,
- 19 │         Mode => 4,
- 20 │         LIMIT => 5,
+ 16 │     match x {
+ 17 │         LEVEL => 1,
+ 18 │         helper => 2,
+ 19 │         Point => 3,
+ 20 │         Mode => 4,
+ 21 │         LIMIT => 5,
     ·         ──┬──
     ·           ╰── a name in a pattern is a constant
- 21 │         limit => 6,
+ 22 │         limit => 6,
     ╰────
   help: the variable shadows the constant `LIMIT` here (ADR 0029); to compare with it, bind the
         value and test it: `let x: T => if x == LIMIT { ... }` (ADR 0037)
 resolve::not-a-constant
 
   × `limit` is a variable, not a constant
-    ╭─[resolve_match_errors.ers:21:9]
- 12 │ 
- 13 │ fn names(x: u8, limit: u8) -> u8 {
+    ╭─[resolve_match_errors.ers:22:9]
+ 13 │ 
+ 14 │ fn names(x: u8, limit: u8) -> u8 {
     ·                 ──┬──
     ·                   ╰── the variable is declared here
- 14 │     let LIMIT: u8 = 4;
- 15 │     match x {
- 16 │         LEVEL => 1,
- 17 │         helper => 2,
- 18 │         Point => 3,
- 19 │         Mode => 4,
- 20 │         LIMIT => 5,
- 21 │         limit => 6,
+ 15 │     let LIMIT: u8 = 4;
+ 16 │     match x {
+ 17 │         LEVEL => 1,
+ 18 │         helper => 2,
+ 19 │         Point => 3,
+ 20 │         Mode => 4,
+ 21 │         LIMIT => 5,
+ 22 │         limit => 6,
     ·         ──┬──
     ·           ╰── a name in a pattern is a constant
- 22 │         LIMTI => 7,
+ 23 │         LIMTI => 7,
     ╰────
   help: to compare with it, bind the value and test it: `let x: T => if x == limit { ... }` (ADR
         0037)
 resolve::unknown-name
 
   × cannot find `LIMTI` in this scope
-    ╭─[resolve_match_errors.ers:22:9]
- 21 │         limit => 6,
- 22 │         LIMTI => 7,
+    ╭─[resolve_match_errors.ers:23:9]
+ 22 │         limit => 6,
+ 23 │         LIMTI => 7,
     ·         ──┬──
     ·           ╰── not found
- 23 │         _ => 8,
+ 24 │         _ => 8,
     ╰────
   help: a name in a pattern is always a constant; to bind the value to a new variable, write `let
         LIMTI: T` (ADR 0037)
 resolve::binding-in-or-pattern
 
   × a `let` cannot be an alternative of an or-pattern
-    ╭─[resolve_match_errors.ers:29:13]
- 28 │     match x {
- 29 │         1 | let n: u8 => n,
+    ╭─[resolve_match_errors.ers:30:13]
+ 29 │     match x {
+ 30 │         1 | let n: u8 => n,
     ·             ────┬────
     ·                 ╰── binds a variable
- 30 │     }
+ 31 │     }
     ╰────
   help: a `let` matches every value on its own; give it an arm of its own, such as `let n: u8
         => ...` (ADR 0037)
+resolve::unknown-variant
+
+  × `Mode` has no variant `Nope`
+    ╭─[resolve_match_errors.ers:10:6]
+  9 │ struct Point { x: u8 }
+ 10 │ enum Mode: u8 { Off = 0 }
+    ·      ──┬─
+    ·        ╰── `Mode` is declared here
+ 11 │ 
+    ╰────
+    ╭─[resolve_match_errors.ers:36:15]
+ 35 │     match m {
+ 36 │         Mode::Nope => 1,
+    ·               ──┬─
+    ·                 ╰── unknown variant
+ 37 │         Moder::Off => 2,
+    ╰────
+  help: its variants are `Off`
+resolve::unknown-type
+
+  × unknown enum `Moder`
+    ╭─[resolve_match_errors.ers:37:9]
+ 36 │         Mode::Nope => 1,
+ 37 │         Moder::Off => 2,
+    ·         ──┬──
+    ·           ╰── not an enum
+ 38 │         Point::A => 3,
+    ╰────
+resolve::not-an-enum
+
+  × `Point` is not an enum
+    ╭─[resolve_match_errors.ers:38:9]
+ 37 │         Moder::Off => 2,
+ 38 │         Point::A => 3,
+    ·         ──┬──
+    ·           ╰── a struct, not an enum
+ 39 │         _ => 4,
+    ╰────
+  help: `::` names a variant of an enum, as in `Mode::Run` (ADR 0035)
