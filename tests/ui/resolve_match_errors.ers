@@ -36,7 +36,10 @@ fn paths(m: Mode) -> u8 {
         Mode::Nope => 1,
         Moder::Off => 2,
         Point::A => 3,
-        _ => 4,
+        LIMIT::A => 4,
+        LEVEL::A => 5,
+        helper::A => 6,
+        _ => 7,
     }
 }
 

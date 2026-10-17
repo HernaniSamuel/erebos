@@ -1,6 +1,5 @@
 ---
 source: tests/ui.rs
-assertion_line: 40
 expression: output
 input_file: tests/ui/resolve_match_errors.ers
 ---
@@ -152,6 +151,39 @@ resolve::not-an-enum
  38 │         Point::A => 3,
     ·         ──┬──
     ·           ╰── a struct, not an enum
- 39 │         _ => 4,
+ 39 │         LIMIT::A => 4,
+    ╰────
+  help: `::` names a variant of an enum, as in `Mode::Run` (ADR 0035)
+resolve::not-an-enum
+
+  × `LIMIT` is not an enum
+    ╭─[resolve_match_errors.ers:39:9]
+ 38 │         Point::A => 3,
+ 39 │         LIMIT::A => 4,
+    ·         ──┬──
+    ·           ╰── a constant, not an enum
+ 40 │         LEVEL::A => 5,
+    ╰────
+  help: `::` names a variant of an enum, as in `Mode::Run` (ADR 0035)
+resolve::not-an-enum
+
+  × `LEVEL` is not an enum
+    ╭─[resolve_match_errors.ers:40:9]
+ 39 │         LIMIT::A => 4,
+ 40 │         LEVEL::A => 5,
+    ·         ──┬──
+    ·           ╰── a static, not an enum
+ 41 │         helper::A => 6,
+    ╰────
+  help: `::` names a variant of an enum, as in `Mode::Run` (ADR 0035)
+resolve::not-an-enum
+
+  × `helper` is not an enum
+    ╭─[resolve_match_errors.ers:41:9]
+ 40 │         LEVEL::A => 5,
+ 41 │         helper::A => 6,
+    ·         ───┬──
+    ·            ╰── a function, not an enum
+ 42 │         _ => 7,
     ╰────
   help: `::` names a variant of an enum, as in `Mode::Run` (ADR 0035)
