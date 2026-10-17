@@ -1,6 +1,6 @@
 # 0038. The enum values a `match` needs
 
-- Status: Accepted
+- Status: Accepted; amended by 0040 (the enums a `match` needs, per position, and when MIR building does not use a body)
 - Date: 2026-10-17
 - Amends: 0035 and 0037 (which `match`es on an enum with a value that
   failed or repeats skip the exhaustiveness and dead-arm checks)

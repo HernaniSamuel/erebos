@@ -1,6 +1,6 @@
 # 0037. `match` and patterns
 
-- Status: Accepted; amended by 0038 (which `match`es on an enum need its values)
+- Status: Accepted; amended by 0038 (which `match`es on an enum need its values), 0040 (payloads and nested patterns, at most three missing values listed), 0041 (bindings in or-patterns)
 - Date: 2026-10-16
 - Amends: 0032 (the arms a `match` never takes)
 

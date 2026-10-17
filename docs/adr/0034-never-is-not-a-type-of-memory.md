@@ -1,6 +1,6 @@
 # 0034. `!` is not a type of memory
 
-- Status: Accepted
+- Status: Accepted; amended by 0039 (payload values are memory)
 - Date: 2026-10-16
 - Amends: 0021 (field and element types, and the type of array
   expressions), 0022 (`!` has no layout a program can ask for), 0029 and

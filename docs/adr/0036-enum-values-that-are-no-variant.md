@@ -1,6 +1,6 @@
 # 0036. Enum values that are no variant
 
-- Status: Accepted
+- Status: Accepted; amended by 0039 (a value of an enum with payloads is any bytes), 0040 (values no arm matches, at any position)
 - Date: 2026-10-16
 
 ## Context

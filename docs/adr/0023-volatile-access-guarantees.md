@@ -1,6 +1,6 @@
 # 0023. Volatile access guarantees
 
-- Status: Accepted; amended by 0031 (slices are aggregates for volatile accesses), 0035 (an enum is a scalar)
+- Status: Accepted; amended by 0031 (slices are aggregates for volatile accesses), 0035 (an enum is a scalar), 0039 (an enum with payloads is an aggregate)
 - Date: 2026-10-14
 
 ## Context
