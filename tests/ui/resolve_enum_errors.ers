@@ -8,6 +8,8 @@ enum Named: Other { A = 0 }
 enum Laid: u8 { A = 0 }
 enum Twice: u8 { A = 0 }
 const Twice: u8 = 3;
+enum u8: u16 { A = 0 }
+enum bool: u8 { B = 0 }
 struct Point { x: u8 }
 
 fn f() {

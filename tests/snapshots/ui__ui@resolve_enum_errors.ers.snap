@@ -80,10 +80,30 @@ resolve::duplicate-item
  10 │ const Twice: u8 = 3;
     ·       ──┬──
     ·         ╰── redefined here
- 11 │ struct Point { x: u8 }
+ 11 │ enum u8: u16 { A = 0 }
     ╰────
   help: functions, structs, enums, constants and statics share one namespace (ADR 0029, 0030,
         0035)
+resolve::duplicate-type
+
+  × `u8` is a built-in type
+    ╭─[resolve_enum_errors.ers:11:6]
+ 10 │ const Twice: u8 = 3;
+ 11 │ enum u8: u16 { A = 0 }
+    ·      ─┬
+    ·       ╰── cannot be redefined
+ 12 │ enum bool: u8 { B = 0 }
+    ╰────
+resolve::duplicate-type
+
+  × `bool` is a built-in type
+    ╭─[resolve_enum_errors.ers:12:6]
+ 11 │ enum u8: u16 { A = 0 }
+ 12 │ enum bool: u8 { B = 0 }
+    ·      ──┬─
+    ·        ╰── cannot be redefined
+ 13 │ struct Point { x: u8 }
+    ╰────
 resolve::unknown-variant
 
   × `Mode` has no variant `Walk`
@@ -94,52 +114,52 @@ resolve::unknown-variant
    ·        ╰── `Mode` is declared here
  3 │ enum Empty: u8 {}
    ╰────
-    ╭─[resolve_enum_errors.ers:14:25]
- 13 │ fn f() {
- 14 │     let a: Mode = Mode::Walk;
+    ╭─[resolve_enum_errors.ers:16:25]
+ 15 │ fn f() {
+ 16 │     let a: Mode = Mode::Walk;
     ·                         ──┬─
     ·                           ╰── unknown variant
- 15 │     let b: u8 = Point::Origin;
+ 17 │     let b: u8 = Point::Origin;
     ╰────
   help: its variants are `Off`, `Run`
 resolve::not-an-enum
 
   × `Point` is not an enum
-    ╭─[resolve_enum_errors.ers:15:17]
- 14 │     let a: Mode = Mode::Walk;
- 15 │     let b: u8 = Point::Origin;
+    ╭─[resolve_enum_errors.ers:17:17]
+ 16 │     let a: Mode = Mode::Walk;
+ 17 │     let b: u8 = Point::Origin;
     ·                 ──┬──
     ·                   ╰── a struct, not an enum
- 16 │     let c: u8 = Nowhere::Thing;
+ 18 │     let c: u8 = Nowhere::Thing;
     ╰────
   help: `::` names a variant of an enum, as in `Mode::Run` (ADR 0035)
 resolve::unknown-type
 
   × unknown enum `Nowhere`
-    ╭─[resolve_enum_errors.ers:16:17]
- 15 │     let b: u8 = Point::Origin;
- 16 │     let c: u8 = Nowhere::Thing;
+    ╭─[resolve_enum_errors.ers:18:17]
+ 17 │     let b: u8 = Point::Origin;
+ 18 │     let c: u8 = Nowhere::Thing;
     ·                 ───┬───
     ·                    ╰── not an enum
- 17 │     // An enum's name alone is no value, as a struct's is not.
+ 19 │     // An enum's name alone is no value, as a struct's is not.
     ╰────
 resolve::unknown-name
 
   × cannot find `Mode` in this scope
-    ╭─[resolve_enum_errors.ers:18:19]
- 17 │     // An enum's name alone is no value, as a struct's is not.
- 18 │     let d: Mode = Mode;
+    ╭─[resolve_enum_errors.ers:20:19]
+ 19 │     // An enum's name alone is no value, as a struct's is not.
+ 20 │     let d: Mode = Mode;
     ·                   ──┬─
     ·                     ╰── not found
- 19 │     let e: Point = Point;
+ 21 │     let e: Point = Point;
     ╰────
 resolve::unknown-name
 
   × cannot find `Point` in this scope
-    ╭─[resolve_enum_errors.ers:19:20]
- 18 │     let d: Mode = Mode;
- 19 │     let e: Point = Point;
+    ╭─[resolve_enum_errors.ers:21:20]
+ 20 │     let d: Mode = Mode;
+ 21 │     let e: Point = Point;
     ·                    ──┬──
     ·                      ╰── not found
- 20 │ }
+ 22 │ }
     ╰────
