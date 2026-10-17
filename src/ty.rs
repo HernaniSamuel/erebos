@@ -829,11 +829,25 @@ impl Checker<'_, '_> {
                 Ty::Error
             }
         };
-        // An enum with a value that failed or repeats was reported, and its
-        // `match`es are not checked for exhaustiveness or dead arms
-        // (ADR 0037). Its failures are the enum's, not the function's.
+        // The checks need every value of a matched enum only when a pattern
+        // names one of its values, or when no arm matches at all and the
+        // missing variants are listed; arms that are only `_` and `let`
+        // need none, so such a `match` may run while the enum's values are
+        // computed. An enum with a value that failed or repeats was
+        // reported, and its `match`es that need the values are not checked
+        // for exhaustiveness or dead arms (ADR 0037). Its failures are the
+        // enum's, not the function's.
+        let needs_values = arms.is_empty()
+            || arms.iter().any(|arm| {
+                arm.pattern.alternatives().iter().any(|alternative| {
+                    matches!(
+                        alternative.kind,
+                        PatternKind::Variant(..) | PatternKind::Const(_)
+                    )
+                })
+            });
         let enum_ok = match matched {
-            Ty::Enum(e) => {
+            Ty::Enum(e) if needs_values => {
                 let before = self.q.diags.len();
                 let ok = self.q.enum_ok(e.id);
                 self.elsewhere += self.q.diags.len() - before;
@@ -1036,7 +1050,8 @@ impl Checker<'_, '_> {
 
     /// Exhaustiveness and dead arms (ADR 0037) of a `match` on `ty`, an
     /// integer, `bool` or enum whose every value was computed, none twice,
-    /// and whose arms have alternatives matching `values`. The values of
+    /// unless its arms, at least one, are only `_` and `let`, and whose arms
+    /// have alternatives matching `values`. The values of
     /// an enum are all those of its integer type (ADR 0036): for dead arms,
     /// those that are no variant remain after every variant, but a `match`
     /// is exhaustive with every variant.

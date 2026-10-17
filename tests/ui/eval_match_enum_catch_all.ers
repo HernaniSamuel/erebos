@@ -1,0 +1,32 @@
+// emit: mir
+// A `match` whose arms are only `_` and `let` needs no value of the enum it
+// matches (ADR 0037), so a function with one may run while one of the
+// enum's values is computed. A `match` whose patterns name a variant needs
+// them all, and is a cycle there (see mir_match_enum_values_errors).
+enum G: u8 { A = h(1), B = 1 }
+
+fn h(x: u8) -> u8 {
+    if x == 0 { match G::B { _ => 0 } } else { 5 }
+}
+
+enum L: u8 { A = k(1), B = 2 }
+
+fn k(x: u8) -> u8 {
+    match L::B {
+        let l: L => l as u8 + x,
+    }
+}
+
+comptime {
+    assert(G::A as u8 == 5);
+    assert(L::A as u8 == 3);
+}
+
+// Expected: 5, 0, 3.
+fn answers() -> u8 {
+    let a: [u8; 3] = [comptime G::A as u8, comptime h(0), comptime L::A as u8];
+    0
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

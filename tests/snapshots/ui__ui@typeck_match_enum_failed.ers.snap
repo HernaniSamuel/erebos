@@ -1,0 +1,46 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_match_enum_failed.ers
+---
+--- errors ---
+ty::duplicate-discriminant
+
+  × `T::B` has the same value as `T::A`
+   ╭─[typeck_match_enum_failed.ers:7:21]
+ 6 │ // while the third `_` after a variant is not reported.
+ 7 │ enum T: u8 { A = 0, B = 0 }
+   ·              ┬      ┬
+   ·              │      ╰── is 0
+   ·              ╰── is 0 too
+ 8 │ const TA: T = T::A;
+   ╰────
+  help: each variant names a value of its own, so that a `match` can tell them apart (ADR 0035)
+ty::unreachable-pattern
+
+  × unreachable arm
+    ╭─[typeck_match_enum_failed.ers:13:9]
+ 11 │     match t {
+ 12 │         _ => 1,
+    ·         ┬
+    ·         ╰── every value it matches is matched here
+ 13 │         _ => 2,
+    ·         ┬
+    ·         ╰── matches no value that the arms before it leave
+ 14 │     }
+    ╰────
+  help: a `match` takes the first arm that matches, so this one never runs; remove it (ADR 0037)
+ty::unreachable-pattern
+
+  × unreachable arm
+    ╭─[typeck_match_enum_failed.ers:20:9]
+ 18 │     match t {
+ 19 │         let u: T => 1,
+    ·         ────┬───
+    ·             ╰── every value it matches is matched here
+ 20 │         _ => 2,
+    ·         ┬
+    ·         ╰── matches no value that the arms before it leave
+ 21 │     }
+    ╰────
+  help: a `match` takes the first arm that matches, so this one never runs; remove it (ADR 0037)

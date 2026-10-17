@@ -34,6 +34,16 @@ comptime {
     assert(twice(Twice::C) == 1);
 }
 
+// A `match` without arms needs the values too (ADR 0038), so it is not
+// checked either, and its evaluation fails without a diagnostic of its own.
+fn no_arms(t: Twice) -> u8 {
+    match t {}
+}
+
+comptime {
+    assert(no_arms(Twice::C) == 1);
+}
+
 enum Broken: u8 { A = 1 / 0, B = 1 }
 
 fn broken(b: Broken) -> u8 {
@@ -52,6 +62,46 @@ fn cycles(c: Cycle) -> u8 {
         Cycle::A => 0,
         Cycle::B => 2,
     }
+}
+
+// So is one with a catch-all arm, as its patterns name a variant; with only
+// `_` and `let` arms, no value is needed (see eval_match_enum_catch_all).
+enum CycleOr: u8 { A = cycles_or(1), B = 1 }
+
+fn cycles_or(x: u8) -> u8 {
+    if x == 0 { match CycleOr::B { CycleOr::B => 0, _ => 1 } } else { 5 }
+}
+
+// So is one with a constant pattern (ADR 0038).
+enum CycleConst: u8 { A = cycles_const(1), B = 1 }
+const CONST_B: CycleConst = CycleConst::B;
+
+fn cycles_const(x: u8) -> u8 {
+    if x == 0 { match CycleConst::B { CONST_B => 0, _ => 1 } } else { 5 }
+}
+
+// So is one without arms.
+enum CycleNone: u8 { A = cycles_none(1), B = 1 }
+
+fn cycles_none(x: u8) -> u8 {
+    if x == 0 { match CycleNone::B {} } else { 5 }
+}
+
+// So is one with a variant of another enum, whatever its type: the pattern
+// is a variant, and is a mismatch too.
+enum CycleOther: u8 { A = cycles_other(1), B = 1 }
+enum Other: u8 { X = 0 }
+
+fn cycles_other(x: u8) -> u8 {
+    if x == 0 { match CycleOther::B { Other::X => 0, _ => 1 } } else { 5 }
+}
+
+// One that needs no value adds no dependence, but its scrutinee is a use
+// like any other: here it reads the value being computed.
+enum CycleScrutinee: u8 { A = cycles_scrutinee(1), B = 1 }
+
+fn cycles_scrutinee(x: u8) -> u8 {
+    match CycleScrutinee::A { _ => x }
 }
 
 entry fn main() -> ! { loop {} }

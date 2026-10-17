@@ -778,6 +778,8 @@ impl Builder<'_, '_> {
         // reported, exhaustiveness was not checked, so a variant may have no
         // arm, and the default would panic on it as if it were no variant.
         // The body is not used, so nothing more is reported (ADR 0037).
+        // Without a catch-all, type checking asked for the values too; with
+        // one, as when the arms are only `_` and `let`, neither does.
         if let Some(id) = enum_id
             && otherwise.is_none()
             && !self.q.enum_ok(id)

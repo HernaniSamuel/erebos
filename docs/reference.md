@@ -611,27 +611,36 @@ is not dead while values that are no variant remain.
 checking: their errors appear with `--emit=typeck`, and a function with
 one of them does not type check, so it is not lowered to MIR and the
 checks of "Checks on values known at compile time" do not run on it. They
-use the values of the constants and variants in the patterns, and of every
-variant of a matched enum, computed at compile time:
+use the values of the constants and variants in the patterns, computed at
+compile time. A `match` on an enum with a variant or constant pattern,
+whatever its type, or with no arm, also uses the value of every variant
+of the enum: it **needs the values of the enum** (ADR 0038). Every other
+`match`, such as one whose arms are only `_` and `let`, needs no value.
 
 - A constant that fails to evaluate is reported once, and a `match` using
   it as a pattern is not checked for exhaustiveness or dead arms, so
   nothing more is reported. A constant whose evaluation needs the function
   whose `match` uses it as a pattern is a `ty::cycle`.
-- A `match` on an enum one of whose values failed to evaluate or repeats
-  another is not checked for exhaustiveness or dead arms either: only the
-  enum's errors are reported, and the build stops at them. The function
-  still type checks. With a catch-all arm, it can run at compile time, and
-  a value shared by two variants goes to the first arm that lists it.
-  Without one, a variant may have no arm, so the function is not lowered
-  to MIR, rather than panicking on such a variant as if it were no
-  variant: an evaluation that needs it fails without a diagnostic of its
-  own, as for a body whose checks failed. So does a function with a
-  pattern naming a variant whose value failed.
-- A `match` on an enum, whatever its arms, is always a `ty::cycle` in a
-  function that runs while one of that enum's values is computed, as `f`
-  in `enum E: u8 { A = f(E::B), B = 1 }` when `f` matches on an `E`: the
-  checks need every value of the enum.
+- A `match` that needs the values of an enum one of whose values failed to
+  evaluate or repeats another is not checked for exhaustiveness or dead
+  arms either: only the enum's errors are reported, and the build stops at
+  them. The function still type checks. With a catch-all arm, it can run
+  at compile time, and a value shared by two variants goes to the first
+  arm that lists it. Without one, a variant may have no arm, so the
+  function is not lowered to MIR, rather than panicking on such a variant
+  as if it were no variant: an evaluation that needs it fails without a
+  diagnostic of its own, as for a body whose checks failed. So does a
+  function with a pattern naming a variant whose value failed. A `match`
+  that needs no value is checked as usual: with
+  `enum T: u8 { A = 0, B = 0 }`, the second `_` of
+  `match t { _ => 1, _ => 2 }` is `ty::unreachable-pattern`.
+- A `match` that needs the values of an enum is a `ty::cycle` in a
+  function that runs while one of them is computed, as `f` in
+  `enum E: u8 { A = f(E::B), B = 1 }` when `f` matches an `E` against
+  `E::B`, even with a `_` arm. One that needs no value adds no such
+  dependence: with `fn f(e: E) -> u8 { match e { _ => 5 } }`, `E::A` is
+  5. Its scrutinee and arms are uses like any other, so
+  `match E::A { _ => 5 }` there is still a `ty::cycle`.
 
 ## Layout (ADR 0022)
 
@@ -1146,7 +1155,7 @@ Every error has a stable code, shown with the message.
 | `ty::invalid-align` | `#[align(N)]` on a struct or static with `N` not a power of two, too large or below the natural alignment |
 | `ty::aligned-in-packed` | a packed struct containing a type with `#[align(N)]` |
 | `ty::not-comptime` | a run-time variable where a compile-time value is required |
-| `ty::cycle` | an item or variant whose value or layout needs itself, including a `match` on an enum in a function that runs while one of the enum's values is computed |
+| `ty::cycle` | an item or variant whose value or layout needs itself, including a `match` that needs the values of an enum (one with a variant or constant pattern, or no arm) in a function that runs while one of them is computed |
 | `ty::duplicate-discriminant` | two variants of an enum with one value |
 | `ty::match-type` | a `match` on a type other than an integer, `bool` or enum |
 | `ty::non-exhaustive-match` | a `match` whose arms leave values unmatched |

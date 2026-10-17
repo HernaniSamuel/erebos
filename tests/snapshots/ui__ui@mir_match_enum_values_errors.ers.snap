@@ -1,6 +1,5 @@
 ---
 source: tests/ui.rs
-assertion_line: 40
 expression: output
 input_file: tests/ui/mir_match_enum_values_errors.ers
 ---
@@ -20,26 +19,115 @@ ty::duplicate-discriminant
 ty::division-by-zero
 
   × division by zero
-    ╭─[mir_match_enum_values_errors.ers:37:27]
- 36 │ 
- 37 │ enum Broken: u8 { A = 1 / 0, B = 1 }
+    ╭─[mir_match_enum_values_errors.ers:47:27]
+ 46 │ 
+ 47 │ enum Broken: u8 { A = 1 / 0, B = 1 }
     ·                           ┬
     ·                           ╰── this divisor is zero
- 38 │ 
+ 48 │ 
     ╰────
   help: at run time this would call the panic function (ADR 0007)
 ty::cycle
 
   × the function `cycles` depends on its own value
-    ╭─[mir_match_enum_values_errors.ers:50:4]
- 47 │ // reported once.
- 48 │ enum Cycle: u8 { A = cycles(Cycle::B), B = 1 }
+    ╭─[mir_match_enum_values_errors.ers:60:4]
+ 57 │ // reported once.
+ 58 │ enum Cycle: u8 { A = cycles(Cycle::B), B = 1 }
     ·                  ┬
     ·                  ╰── through the variant `Cycle::A`
- 49 │ 
- 50 │ fn cycles(c: Cycle) -> u8 {
+ 59 │ 
+ 60 │ fn cycles(c: Cycle) -> u8 {
     ·    ───┬──
     ·       ╰── needed while computing itself
- 51 │     match c {
+ 61 │     match c {
     ╰────
+  help: break the cycle: a value cannot depend on itself (ADR 0028)
+ty::cycle
+
+  × the function `cycles_or` depends on its own value
+    ╭─[mir_match_enum_values_errors.ers:71:4]
+ 68 │ // `_` and `let` arms, no value is needed (see eval_match_enum_catch_all).
+ 69 │ enum CycleOr: u8 { A = cycles_or(1), B = 1 }
+    ·                    ┬
+    ·                    ╰── through the variant `CycleOr::A`
+ 70 │ 
+ 71 │ fn cycles_or(x: u8) -> u8 {
+    ·    ────┬────
+    ·        ╰── needed while computing itself
+ 72 │     if x == 0 { match CycleOr::B { CycleOr::B => 0, _ => 1 } } else { 5 }
+    ╰────
+  help: break the cycle: a value cannot depend on itself (ADR 0028)
+ty::cycle
+
+  × the function `cycles_const` depends on its own value
+    ╭─[mir_match_enum_values_errors.ers:79:4]
+ 75 │ // So is one with a constant pattern (ADR 0038).
+ 76 │ enum CycleConst: u8 { A = cycles_const(1), B = 1 }
+    ·                       ┬
+    ·                       ╰── through the variant `CycleConst::A`
+ 77 │ const CONST_B: CycleConst = CycleConst::B;
+ 78 │ 
+ 79 │ fn cycles_const(x: u8) -> u8 {
+    ·    ──────┬─────
+    ·          ╰── needed while computing itself
+ 80 │     if x == 0 { match CycleConst::B { CONST_B => 0, _ => 1 } } else { 5 }
+    ╰────
+  help: break the cycle: a value cannot depend on itself (ADR 0028)
+ty::cycle
+
+  × the function `cycles_none` depends on its own value
+    ╭─[mir_match_enum_values_errors.ers:86:4]
+ 83 │ // So is one without arms.
+ 84 │ enum CycleNone: u8 { A = cycles_none(1), B = 1 }
+    ·                      ┬
+    ·                      ╰── through the variant `CycleNone::A`
+ 85 │ 
+ 86 │ fn cycles_none(x: u8) -> u8 {
+    ·    ─────┬─────
+    ·         ╰── needed while computing itself
+ 87 │     if x == 0 { match CycleNone::B {} } else { 5 }
+    ╰────
+  help: break the cycle: a value cannot depend on itself (ADR 0028)
+ty::cycle
+
+  × the function `cycles_other` depends on its own value
+    ╭─[mir_match_enum_values_errors.ers:95:4]
+ 91 │ // is a variant, and is a mismatch too.
+ 92 │ enum CycleOther: u8 { A = cycles_other(1), B = 1 }
+    ·                       ┬
+    ·                       ╰── through the variant `CycleOther::A`
+ 93 │ enum Other: u8 { X = 0 }
+ 94 │ 
+ 95 │ fn cycles_other(x: u8) -> u8 {
+    ·    ──────┬─────
+    ·          ╰── needed while computing itself
+ 96 │     if x == 0 { match CycleOther::B { Other::X => 0, _ => 1 } } else { 5 }
+    ╰────
+  help: break the cycle: a value cannot depend on itself (ADR 0028)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[mir_match_enum_values_errors.ers:96:39]
+ 95 │ fn cycles_other(x: u8) -> u8 {
+ 96 │     if x == 0 { match CycleOther::B { Other::X => 0, _ => 1 } } else { 5 }
+    ·                                       ────┬───
+    ·                                           ╰── expected `CycleOther`, found `Other`
+ 97 │ }
+    ╰────
+  help: a variant in a pattern has the type of the value matched, which a pattern never converts
+        (ADR 0037)
+ty::cycle
+
+  × the variant `CycleScrutinee::A` depends on its own value
+     ╭─[mir_match_enum_values_errors.ers:101:27]
+ 100 │ // like any other: here it reads the value being computed.
+ 101 │ enum CycleScrutinee: u8 { A = cycles_scrutinee(1), B = 1 }
+     ·                           ┬
+     ·                           ╰── needed while computing itself
+ 102 │ 
+ 103 │ fn cycles_scrutinee(x: u8) -> u8 {
+     ·    ────────┬───────
+     ·            ╰── through the function `cycles_scrutinee`
+ 104 │     match CycleScrutinee::A { _ => x }
+     ╰────
   help: break the cycle: a value cannot depend on itself (ADR 0028)

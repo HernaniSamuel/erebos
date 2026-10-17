@@ -1,0 +1,45 @@
+// emit: typeck
+// On an enum with two variants of one value (ADR 0035), only the `match`es
+// that need the enum's values skip exhaustiveness and dead arms (ADR 0038):
+// those with a variant or constant pattern, or without arms. One whose arms
+// are only `_` and `let` is checked as usual, so its second `_` is dead,
+// while the third `_` after a variant is not reported.
+enum T: u8 { A = 0, B = 0 }
+const TA: T = T::A;
+
+fn only_catch_alls(t: T) -> u8 {
+    match t {
+        _ => 1,
+        _ => 2,
+    }
+}
+
+fn with_let(t: T) -> u8 {
+    match t {
+        let u: T => 1,
+        _ => 2,
+    }
+}
+
+fn with_variant(t: T) -> u8 {
+    match t {
+        T::A => 1,
+        _ => 2,
+        _ => 3,
+    }
+}
+
+fn with_const(t: T) -> u8 {
+    match t {
+        TA => 1,
+        _ => 2,
+        _ => 3,
+    }
+}
+
+fn no_arms(t: T) -> u8 {
+    match t {}
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }
