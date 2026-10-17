@@ -1,0 +1,72 @@
+---
+source: tests/ui.rs
+assertion_line: 40
+expression: output
+input_file: tests/ui/typeck_match.ers
+---
+--- typeck ---
+fn every_value(x: u8) -> u8
+    expr 0 match 545..2154: u8
+    expr 1 local x 551..552: u8
+    expr 2 int 1 1286..1287: u8
+    expr 3 int 2 2146..2147: u8
+fn mutable(x: u8) -> u8
+    let mut n: u8
+    expr 4 match 2188..2274: u8
+    expr 5 local x 2194..2195: u8
+    expr 6 block 2223..2268: u8
+    expr 7 assign += 2237..2243: ()
+    expr 8 local n 2237..2238: u8
+    expr 9 int 1 2242..2243: u8
+    expr 10 local n 2257..2258: u8
+fn halt() -> !
+    expr 11 loop 2295..2302: !
+fn diverging(x: u8) -> u32
+    expr 12 match 2339..2416: u32
+    expr 13 local x 2345..2346: u8
+    expr 14 call 2362..2368: !
+    expr 15 int 7 2385..2386: u32
+    expr 16 return 2401..2409: !
+    expr 17 int 8 2408..2409: u32
+fn never(b: bool) -> !
+    expr 18 match 2449..2514: !
+    expr 19 local b 2455..2456: bool
+    expr 20 call 2475..2481: !
+    expr 21 loop 2500..2507: !
+fn statement(x: u8) -> u8
+    let y: u8
+    expr 22 match 2550..2633: ()
+    expr 23 local x 2556..2557: u8
+    expr 24 block 2573..2575: ()
+    expr 25 block 2589..2627: ()
+    expr 26 local x 2615..2616: u8
+    expr 27 local x 2638..2639: u8
+fn conversions(p: *mut u32, q: *const u32, a: *const [u8; 4], s: *const [u8], b: bool) -> ()
+    let r: *const u32
+    let t: *const [u8]
+    expr 28 match 2756..2810: *const u32
+    expr 29 local b 2762..2763: bool
+    expr 30 local p 2782..2783: *mut u32
+    expr 31 local q 2802..2803: *const u32
+    expr 32 match 2837..2891: *const [u8]
+    expr 33 local b 2843..2844: bool
+    expr 34 local a 2863..2864: *const [u8; 4] as *const [u8]
+    expr 35 local s 2883..2884: *const [u8]
+fn signed(x: i8) -> i8
+    expr 36 match 2925..3010: i8
+    expr 37 local x 2931..2932: i8
+    expr 38 int 1 2949..2950: i8
+    expr 39 int 2 2968..2969: i8
+    expr 40 int 3 2986..2987: i8
+    expr 41 int 4 3002..3003: i8
+fn bytes(c: u8) -> u8
+    expr 42 match 3042..3100: u8
+    expr 43 local c 3048..3049: u8
+    expr 44 int 1 3076..3077: u8
+    expr 45 int 0 3092..3093: u8
+entry fn main() -> !
+    expr 46 loop 3127..3134: !
+panic fn on_panic() -> !
+    expr 47 loop 3164..3171: !
+comptime fn ONE() -> u8
+    expr 48 int 1 507..508: u8

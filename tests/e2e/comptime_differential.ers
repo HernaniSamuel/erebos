@@ -139,6 +139,53 @@ fn enums(m: Mode, l: Level, p: Port, c: Code) -> u64 {
     mix(h, (c == Code::Neg) as u64)
 }
 
+// `match` on integers of every width and on `bool` (ADR 0037), with
+// literals, negative ones, constants, or-patterns and `let`.
+const ESCAPE: u8 = 0x1B;
+const NEG_LIMIT: i32 = -70_000;
+const BIG: u64 = 0x1_0000_0000;
+
+fn matches(a: u8, b: i8, c: i32, d: u64, e: i64, f: bool) -> u64 {
+    let mut h: u64 = 0;
+    h = mix(h, match a {
+        0 => 1,
+        ESCAPE | 0x7F => 2,
+        200 | 255 => 3,
+        let other: u8 => other as u64 + 10,
+    });
+    h = mix(h, match b {
+        -128 => 1,
+        -1 | 1 => 2,
+        127 => 3,
+        let other: i8 => other as u64,
+    });
+    h = mix(h, match c {
+        NEG_LIMIT => 1,
+        -2_147_483_648 => 2,
+        0 | 2_147_483_647 => 3,
+        _ => 4,
+    });
+    h = mix(h, match d {
+        BIG => 1,
+        0xFFFF_FFFF_FFFF_FFFF => 2,
+        0xFFFF_FFFF => 3,
+        let mut other: u64 => {
+            other ^= 0xFF;
+            other
+        }
+    });
+    h = mix(h, match e {
+        -9_000_000_000_000_000_000 => 1,
+        -1 => 2,
+        4_294_967_296 => 3,
+        _ => 4,
+    });
+    mix(h, match f {
+        true => 5,
+        false => 6,
+    })
+}
+
 struct Pair { a: u32, b: u32 }
 struct Mixed { flag: bool, value: u16, pair: Pair }
 
@@ -332,6 +379,11 @@ entry fn main() -> ! {
     failures += check(31, comptime enums(Mode::Run, Level::Minus, Port::Top, Code::Neg), enums(opaque_mode(Mode::Run), opaque_level(Level::Minus), opaque_port(Port::Top), opaque_code(Code::Neg)));
     failures += check(32, comptime enums(Mode::Max, Level::Low, Port::Data, Code::Fault), enums(opaque_mode(Mode::Max), opaque_level(Level::Low), opaque_port(Port::Data), opaque_code(Code::Fault)));
     failures += check(33, comptime enums(Mode::Off, Level::High, Port::Data, Code::Fine), enums(opaque_mode(Mode::Off), opaque_level(Level::High), opaque_port(Port::Data), opaque_code(Code::Fine)));
+    failures += check(34, comptime matches(0x1B, -128, -70_000, 0x1_0000_0000, -9_000_000_000_000_000_000, true), matches(opaque_u8(0x1B), opaque_i8(-128), opaque_i32(-70_000), opaque_u64(0x1_0000_0000), opaque_i64(-9_000_000_000_000_000_000), opaque_u8(1) == 1));
+    failures += check(35, comptime matches(255, -1, -2_147_483_648, 0xFFFF_FFFF_FFFF_FFFF, -1, false), matches(opaque_u8(255), opaque_i8(-1), opaque_i32(-2_147_483_648), opaque_u64(0xFFFF_FFFF_FFFF_FFFF), opaque_i64(-1), opaque_u8(0) == 1));
+    failures += check(36, comptime matches(77, 1, 0, 0xFFFF_FFFF, 4_294_967_296, true), matches(opaque_u8(77), opaque_i8(1), opaque_i32(0), opaque_u64(0xFFFF_FFFF), opaque_i64(4_294_967_296), opaque_u8(1) == 1));
+    failures += check(37, comptime matches(200, -77, 5, 12_345, 5, false), matches(opaque_u8(200), opaque_i8(-77), opaque_i32(5), opaque_u64(12_345), opaque_i64(5), opaque_u8(2) == 1));
+    failures += check(38, comptime matches(0, 127, 2_147_483_647, 0, 0, true), matches(opaque_u8(0), opaque_i8(127), opaque_i32(2_147_483_647), opaque_u64(0), opaque_i64(0), opaque_u8(1) == 1));
     if failures == 0 {
         putc(b'd'); putc(b'i'); putc(b'f'); putc(b'f'); putc(b'e'); putc(b'r'); putc(b'e');
         putc(b'n'); putc(b't'); putc(b'i'); putc(b'a'); putc(b'l'); putc(b' '); putc(b'o');

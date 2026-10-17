@@ -9,13 +9,13 @@
 //! is the "typed HIR" that MIR building consumes. Functions are checked one
 //! at a time, on demand (ADR 0028).
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::fmt::Write;
 
 use crate::diag::Diagnostic;
 use crate::hir::{
-    self, BinOp, Block, EnumId, EnumTy, Expr, ExprId, ExprKind, Fn, FnKind, Hir, IntTy, LocalId,
-    NeverPosition, Ptr, StaticId, Stmt, Ty, UnOp, UnsizedPosition,
+    self, Arm, BinOp, Block, EnumId, EnumTy, Expr, ExprId, ExprKind, Fn, FnKind, Hir, IntTy,
+    LocalId, NeverPosition, Pattern, PatternKind, Ptr, StaticId, Stmt, Ty, UnOp, UnsizedPosition,
 };
 use crate::layout;
 use crate::query::Queries;
@@ -154,8 +154,11 @@ fn never_in_memory(span: Span, what: &str, help: NeverHelp) -> Diagnostic {
         ))
 }
 
-/// Checks one function; `query` decides when.
-pub fn check_fn(q: &mut Queries, f: &Fn) {
+/// Checks one function; `query` decides when. Returns how many of the
+/// diagnostics pushed meanwhile come from evaluating the constants its
+/// patterns use: they are errors of those constants, not of the function
+/// (ADR 0032, 0037).
+pub fn check_fn(q: &mut Queries, f: &Fn) -> usize {
     let hir = q.hir;
     let mut checker = Checker {
         q,
@@ -163,8 +166,10 @@ pub fn check_fn(q: &mut Queries, f: &Fn) {
         ret: Ty::Error,
         loops: Vec::new(),
         equality: None,
+        elsewhere: 0,
     };
     checker.fn_(f);
+    checker.elsewhere
 }
 
 /// Whether a value of type `from` may be used where `to` is expected.
@@ -241,6 +246,9 @@ struct Checker<'a, 'h> {
     /// a literal there compared with an enum gets a help converting the
     /// enum (ADR 0035).
     equality: Option<(BinOp, ExprId, ExprId)>,
+    /// The diagnostics pushed while evaluating the constants of patterns,
+    /// which belong to those constants.
+    elsewhere: usize,
 }
 
 /// What the type checker knows about a place expression.
@@ -781,6 +789,7 @@ impl Checker<'_, '_> {
                 // Without a `break`, a loop never finishes.
                 ctx.break_ty.unwrap_or(Ty::Never)
             }
+            ExprKind::Match { scrutinee, arms } => self.match_(f, scrutinee, arms, expected),
             ExprKind::Break { target, value } => {
                 self.break_(f, expr, *target, value.as_deref());
                 Ty::Never
@@ -797,6 +806,299 @@ impl Checker<'_, '_> {
                 Ty::Never
             }
         }
+    }
+
+    /// `match scrutinee { arms }` (ADR 0037). The scrutinee is typed on its
+    /// own; each pattern against its type; each arm's expression as a
+    /// branch of `if` is, the first arm whose type is not `!` giving the
+    /// type without an expected one. Then the arms must cover every value,
+    /// and each must match some value the arms before it leave.
+    fn match_(&mut self, f: &Fn, scrutinee: &Expr, arms: &[Arm], expected: Option<Ty>) -> Ty {
+        let ty = self.check(f, scrutinee, None);
+        let matched = match ty {
+            Ty::Int(_) | Ty::Bool | Ty::Error => ty,
+            other => {
+                let help = match other {
+                    Ty::Enum(_) => {
+                        "a `match` on an enum is not implemented yet; compare it with `==` (ADR 0035)"
+                    }
+                    _ => "a `match` takes an integer, a `bool` or an enum (ADR 0037)",
+                };
+                self.q.diags.push(
+                    Diagnostic::error(
+                        "ty::match-type",
+                        format!("cannot `match` on a value of type `{other}`"),
+                    )
+                    .label(scrutinee.span, format!("has type `{other}`"))
+                    .help(help),
+                );
+                Ty::Error
+            }
+        };
+        // What the alternatives of each arm match; `None` once one cannot
+        // be known, which stops the checks of the whole `match`.
+        let mut values: Option<Vec<Vec<Covers>>> = Some(Vec::new());
+        let mut first = None;
+        let mut never = true;
+        for arm in arms {
+            let mut alternatives = Some(Vec::new());
+            for alternative in arm.pattern.alternatives() {
+                let covers = self.pattern(f, alternative, matched);
+                match (&mut alternatives, covers) {
+                    (Some(list), Some(covers)) => list.push(covers),
+                    _ => alternatives = None,
+                }
+            }
+            match (&mut values, alternatives) {
+                (Some(list), Some(alternatives)) => list.push(alternatives),
+                _ => values = None,
+            }
+            let arm_ty = self.check(f, &arm.body, expected.or(first));
+            if arm_ty != Ty::Never {
+                never = false;
+                first = first.or(Some(arm_ty));
+            }
+        }
+        if let Some(values) = values
+            && matched != Ty::Error
+        {
+            self.coverage(scrutinee, matched, arms, &values);
+        }
+        match expected.or(first) {
+            // Without an arm that finishes, neither does the `match`.
+            _ if never => Ty::Never,
+            Some(ty) => ty,
+            None => unreachable!("an arm that finishes gives a type"),
+        }
+    }
+
+    /// Checks a pattern, not an or-pattern, against `ty`, the type of the
+    /// value matched (`{error}` if it has none to match), and returns the
+    /// values it matches; `None` if they cannot be known: after an error,
+    /// reported, or for a constant that failed to evaluate, reported where
+    /// it failed (ADR 0037).
+    fn pattern(&mut self, f: &Fn, pattern: &Pattern, ty: Ty) -> Option<Covers> {
+        let mismatch = |found: &str| {
+            Diagnostic::error("ty::mismatched-types", "mismatched types")
+                .label(pattern.span, format!("expected `{ty}`, found {found}"))
+        };
+        match &pattern.kind {
+            PatternKind::Wildcard => Some(Covers::Every),
+            PatternKind::Binding { local, ty_span } => {
+                let local_ty = self.local_ty(f, *local);
+                if local_ty == Ty::Error || ty == Ty::Error {
+                    return None;
+                }
+                if local_ty != ty {
+                    self.q.diags.push(
+                        Diagnostic::error("ty::mismatched-types", "mismatched types")
+                            .label(*ty_span, format!("expected `{ty}`, found `{local_ty}`"))
+                            .help(format!(
+                                "the variable holds the value matched, a `{ty}`, which a pattern never converts (ADR 0037)"
+                            )),
+                    );
+                    return None;
+                }
+                Some(Covers::Every)
+            }
+            PatternKind::Int { value, negated } => {
+                let int = match ty {
+                    Ty::Int(int) => int,
+                    Ty::Error => return None,
+                    _ => {
+                        self.q.diags.push(
+                            mismatch("an integer")
+                                .help("a `bool` is matched with `true` and `false` (ADR 0037)"),
+                        );
+                        return None;
+                    }
+                };
+                if *negated && !int.is_signed() {
+                    self.q.diags.push(
+                        Diagnostic::error(
+                            "ty::negate-unsigned",
+                            format!("cannot negate a value of unsigned type `{int}`"),
+                        )
+                        .label(pattern.span, format!("`{int}` has no negative values")),
+                    );
+                    return None;
+                }
+                // `-128` for `i8`, whose magnitude is one past the max.
+                let limit = if *negated { int.max() + 1 } else { int.max() };
+                if *value > limit {
+                    let sign = if *negated { "-" } else { "" };
+                    self.q.diags.push(
+                        Diagnostic::error(
+                            "ty::literal-out-of-range",
+                            format!("literal out of range for `{int}`"),
+                        )
+                        .label(
+                            pattern.span,
+                            format!("`{sign}{value}` does not fit in `{int}`"),
+                        ),
+                    );
+                    return None;
+                }
+                let bits = if *negated {
+                    value.wrapping_neg()
+                } else {
+                    *value
+                };
+                Some(Covers::Value(bits & int.mask()))
+            }
+            PatternKind::Byte(value) => match ty {
+                Ty::Int(IntTy::U8) => Some(Covers::Value(u64::from(*value))),
+                Ty::Error => None,
+                Ty::Int(_) => {
+                    self.q.diags.push(mismatch("`u8`").help(format!(
+                        "a byte literal is a `u8` (ADR 0016); write this value as an integer literal, `{value}`"
+                    )));
+                    None
+                }
+                _ => {
+                    self.q.diags.push(mismatch("`u8`"));
+                    None
+                }
+            },
+            PatternKind::Bool(value) => match ty {
+                Ty::Bool => Some(Covers::Value(u64::from(*value))),
+                Ty::Error => None,
+                _ => {
+                    self.q.diags.push(mismatch("`bool`"));
+                    None
+                }
+            },
+            PatternKind::Const(id) => {
+                let def = self.hir.const_(*id);
+                let const_ty = self.norm(def.ty);
+                if const_ty == Ty::Error || ty == Ty::Error {
+                    return None;
+                }
+                if const_ty != ty {
+                    self.q.diags.push(mismatch(&format!("`{const_ty}`")).help(
+                        "a constant in a pattern has the type of the value matched, which a pattern never converts (ADR 0037)",
+                    ));
+                    return None;
+                }
+                // Whatever its value is (ADR 0037). A failure is the
+                // constant's, reported once wherever it is first needed, so
+                // the function still type checks, and gets the checks of
+                // ADR 0032, as when the constant is used in an expression.
+                let before = self.q.diags.len();
+                let value = self.q.const_value(*id);
+                self.elsewhere += self.q.diags.len() - before;
+                let value = value?;
+                Some(Covers::Value(match ty {
+                    Ty::Int(int) => value.int(int.bytes() as usize),
+                    _ => u64::from(value.bytes[0] != 0),
+                }))
+            }
+            PatternKind::Or(_) => unreachable!("an alternative is not an or-pattern"),
+        }
+    }
+
+    /// Exhaustiveness and dead arms (ADR 0037) of a `match` on `ty`, an
+    /// integer or `bool`, whose arms have alternatives matching `values`.
+    fn coverage(&mut self, scrutinee: &Expr, ty: Ty, arms: &[Arm], values: &[Vec<Covers>]) {
+        let count = match ty {
+            Ty::Bool => 2,
+            Ty::Int(int) => u128::from(int.mask()) + 1,
+            _ => unreachable!("only integers and `bool` are matched"),
+        };
+        // What one arm, or one alternative, covers alone.
+        let alone = |covers: &[Covers]| {
+            let mut coverage = Coverage::new(count);
+            for &c in covers {
+                coverage.add(c);
+            }
+            coverage
+        };
+        let mut covered = Coverage::new(count);
+        for (i, arm) in arms.iter().enumerate() {
+            let alternatives = arm.pattern.alternatives();
+            // Earlier alternatives of the arm count as earlier patterns.
+            let mut dead = Vec::new();
+            for (j, &covers) in values[i].iter().enumerate() {
+                if covered.contains(covers) {
+                    dead.push(j);
+                }
+                covered.add(covers);
+            }
+            if dead.len() == alternatives.len() {
+                let mut diag = Diagnostic::error("ty::unreachable-pattern", "unreachable arm")
+                    .label(
+                        arm.pattern.span,
+                        "matches no value that the arms before it leave",
+                    );
+                if let Some(k) =
+                    (0..i).find(|&k| values[i].iter().all(|&c| alone(&values[k]).contains(c)))
+                {
+                    diag = diag.label(
+                        arms[k].pattern.span,
+                        "every value it matches is matched here",
+                    );
+                }
+                self.q.diags.push(diag.help(
+                    "a `match` takes the first arm that matches, so this one never runs; remove it (ADR 0037)",
+                ));
+                continue;
+            }
+            for j in dead {
+                let covers = values[i][j];
+                let earlier_arm = (0..i)
+                    .find(|&k| alone(&values[k]).contains(covers))
+                    .map(|k| arms[k].pattern.span);
+                let earlier_alternative = (0..j)
+                    .find(|&m| alone(&values[i][m..=m]).contains(covers))
+                    .map(|m| alternatives[m].span);
+                let mut diag = Diagnostic::error("ty::unreachable-pattern", "unreachable pattern")
+                    .label(
+                        alternatives[j].span,
+                        "matches no value that the patterns before it leave",
+                    );
+                if let Some(span) = earlier_arm.or(earlier_alternative) {
+                    diag = diag.label(span, "every value it matches is matched here");
+                }
+                self.q
+                    .diags
+                    .push(diag.help("remove this alternative (ADR 0037)"));
+            }
+        }
+        if covered.complete() {
+            return;
+        }
+        let diag = match ty {
+            Ty::Bool => {
+                let missing: Vec<&str> = [(1, "true"), (0, "false")]
+                    .into_iter()
+                    .filter(|&(value, _)| !covered.contains(Covers::Value(value)))
+                    .map(|(_, name)| name)
+                    .collect();
+                let listed: Vec<String> = missing.iter().map(|name| format!("`{name}`")).collect();
+                let arms: Vec<String> = missing
+                    .iter()
+                    .map(|name| format!("`{name} => ...`"))
+                    .collect();
+                Diagnostic::error(
+                    "ty::non-exhaustive-match",
+                    format!("non-exhaustive `match`: {} not covered", listed.join(" and ")),
+                )
+                .label(scrutinee.span, format!("missing: {}", listed.join(" and ")))
+                .help(format!(
+                    "add {}, or a `_` arm (ADR 0037)",
+                    arms.join(" and ")
+                ))
+            }
+            _ => Diagnostic::error(
+                "ty::non-exhaustive-match",
+                format!("non-exhaustive `match`: not every `{ty}` is covered"),
+            )
+            .label(scrutinee.span, "missing: a `_` or `let` arm")
+            .help(format!(
+                "a `match` on an integer needs an arm for every value, such as `_ => ...` or `let n: {ty} => ...` (ADR 0037)"
+            )),
+        };
+        self.q.diags.push(diag);
     }
 
     /// `[a, b, c]`: the elements share one type, which the expected array
@@ -1933,6 +2235,55 @@ pub fn dump(q: &mut Queries) -> String {
     out
 }
 
+/// The values a pattern matches, among those of the type matched.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Covers {
+    Every,
+    /// The value's bits, masked to the type's width; `bool` is 0 or 1.
+    Value(u64),
+}
+
+/// The values some patterns match together, out of the `count` values of
+/// the type matched.
+struct Coverage {
+    every: bool,
+    values: BTreeSet<u64>,
+    count: u128,
+}
+
+impl Coverage {
+    fn new(count: u128) -> Coverage {
+        Coverage {
+            every: false,
+            values: BTreeSet::new(),
+            count,
+        }
+    }
+
+    fn add(&mut self, covers: Covers) {
+        match covers {
+            Covers::Every => self.every = true,
+            Covers::Value(value) => {
+                self.values.insert(value);
+            }
+        }
+    }
+
+    /// Whether every value `covers` matches is covered already.
+    fn contains(&self, covers: Covers) -> bool {
+        match covers {
+            Covers::Every => self.complete(),
+            Covers::Value(value) => self.every || self.values.contains(&value),
+        }
+    }
+
+    /// Whether every value of the type is covered: listing all 256 values
+    /// of a `u8` counts (ADR 0037).
+    fn complete(&self) -> bool {
+        self.every || self.values.len() as u128 == self.count
+    }
+}
+
 /// The types an operator accepts.
 #[derive(Clone, Copy)]
 enum Operands {
@@ -1997,6 +2348,7 @@ fn expr_label(hir: &Hir, f: &Fn, expr: &Expr) -> String {
         ExprKind::Len(_) => "len".to_owned(),
         ExprKind::Slice(..) => "slice".to_owned(),
         ExprKind::Loop(_) => "loop".to_owned(),
+        ExprKind::Match { .. } => "match".to_owned(),
     }
 }
 

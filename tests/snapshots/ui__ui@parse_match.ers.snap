@@ -1,0 +1,633 @@
+---
+source: tests/ui.rs
+assertion_line: 40
+expression: output
+input_file: tests/ui/parse_match.ers
+---
+--- ast ---
+File {
+    items: [
+        Struct(
+            StructDecl {
+                attrs: [],
+                name: Ident {
+                    name: "S",
+                    span: 461..462,
+                },
+                fields: [
+                    FieldDecl {
+                        name: Ident {
+                            name: "a",
+                            span: 465..466,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Ident {
+                                    name: "u8",
+                                    span: 468..470,
+                                },
+                            ),
+                            span: 468..470,
+                        },
+                    },
+                ],
+                span: 454..472,
+            },
+        ),
+        Fn(
+            FnDecl {
+                attrs: [],
+                kind: Plain,
+                name: Ident {
+                    name: "arms",
+                    span: 477..481,
+                },
+                params: [
+                    Param {
+                        mutable: false,
+                        name: Ident {
+                            name: "x",
+                            span: 482..483,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Ident {
+                                    name: "i8",
+                                    span: 485..487,
+                                },
+                            ),
+                            span: 485..487,
+                        },
+                    },
+                ],
+                ret: Some(
+                    Ty {
+                        kind: Named(
+                            Ident {
+                                name: "u8",
+                                span: 492..494,
+                            },
+                        ),
+                        span: 492..494,
+                    },
+                ),
+                body: Some(
+                    Block {
+                        stmts: [],
+                        tail: Some(
+                            Expr {
+                                kind: Match {
+                                    scrutinee: Expr {
+                                        kind: Name(
+                                            Ident {
+                                                name: "x",
+                                                span: 507..508,
+                                            },
+                                        ),
+                                        span: 507..508,
+                                    },
+                                    arms: [
+                                        Arm {
+                                            pattern: Pattern {
+                                                kind: Int {
+                                                    value: Some(
+                                                        0,
+                                                    ),
+                                                    negated: false,
+                                                },
+                                                span: 519..520,
+                                            },
+                                            body: Expr {
+                                                kind: Block(
+                                                    Block {
+                                                        stmts: [],
+                                                        tail: None,
+                                                        span: 524..526,
+                                                    },
+                                                ),
+                                                span: 524..526,
+                                            },
+                                        },
+                                        Arm {
+                                            pattern: Pattern {
+                                                kind: Int {
+                                                    value: Some(
+                                                        1,
+                                                    ),
+                                                    negated: true,
+                                                },
+                                                span: 535..537,
+                                            },
+                                            body: Expr {
+                                                kind: Block(
+                                                    Block {
+                                                        stmts: [],
+                                                        tail: None,
+                                                        span: 541..543,
+                                                    },
+                                                ),
+                                                span: 541..543,
+                                            },
+                                        },
+                                        Arm {
+                                            pattern: Pattern {
+                                                kind: Int {
+                                                    value: Some(
+                                                        1,
+                                                    ),
+                                                    negated: false,
+                                                },
+                                                span: 553..554,
+                                            },
+                                            body: Expr {
+                                                kind: If {
+                                                    cond: Expr {
+                                                        kind: Bool(
+                                                            true,
+                                                        ),
+                                                        span: 561..565,
+                                                    },
+                                                    then: Block {
+                                                        stmts: [],
+                                                        tail: Some(
+                                                            Expr {
+                                                                kind: Int(
+                                                                    Some(
+                                                                        2,
+                                                                    ),
+                                                                ),
+                                                                span: 568..569,
+                                                            },
+                                                        ),
+                                                        span: 566..571,
+                                                    },
+                                                    else_: Some(
+                                                        Expr {
+                                                            kind: Block(
+                                                                Block {
+                                                                    stmts: [],
+                                                                    tail: Some(
+                                                                        Expr {
+                                                                            kind: Int(
+                                                                                Some(
+                                                                                    3,
+                                                                                ),
+                                                                            ),
+                                                                            span: 579..580,
+                                                                        },
+                                                                    ),
+                                                                    span: 577..582,
+                                                                },
+                                                            ),
+                                                            span: 577..582,
+                                                        },
+                                                    ),
+                                                },
+                                                span: 558..582,
+                                            },
+                                        },
+                                        Arm {
+                                            pattern: Pattern {
+                                                kind: Or(
+                                                    [
+                                                        Pattern {
+                                                            kind: Int {
+                                                                value: Some(
+                                                                    2,
+                                                                ),
+                                                                negated: false,
+                                                            },
+                                                            span: 591..592,
+                                                        },
+                                                        Pattern {
+                                                            kind: Int {
+                                                                value: Some(
+                                                                    3,
+                                                                ),
+                                                                negated: false,
+                                                            },
+                                                            span: 595..596,
+                                                        },
+                                                        Pattern {
+                                                            kind: Int {
+                                                                value: Some(
+                                                                    4,
+                                                                ),
+                                                                negated: false,
+                                                            },
+                                                            span: 599..600,
+                                                        },
+                                                    ],
+                                                ),
+                                                span: 591..600,
+                                            },
+                                            body: Expr {
+                                                kind: Int(
+                                                    Some(
+                                                        5,
+                                                    ),
+                                                ),
+                                                span: 604..605,
+                                            },
+                                        },
+                                        Arm {
+                                            pattern: Pattern {
+                                                kind: Byte(
+                                                    Some(
+                                                        113,
+                                                    ),
+                                                ),
+                                                span: 615..619,
+                                            },
+                                            body: Expr {
+                                                kind: Int(
+                                                    Some(
+                                                        6,
+                                                    ),
+                                                ),
+                                                span: 623..624,
+                                            },
+                                        },
+                                        Arm {
+                                            pattern: Pattern {
+                                                kind: Name(
+                                                    Ident {
+                                                        name: "LIMIT",
+                                                        span: 634..639,
+                                                    },
+                                                ),
+                                                span: 634..639,
+                                            },
+                                            body: Expr {
+                                                kind: Field(
+                                                    Expr {
+                                                        kind: StructLit(
+                                                            Ident {
+                                                                name: "S",
+                                                                span: 643..644,
+                                                            },
+                                                            [
+                                                                FieldInit {
+                                                                    name: Ident {
+                                                                        name: "a",
+                                                                        span: 647..648,
+                                                                    },
+                                                                    value: Expr {
+                                                                        kind: Int(
+                                                                            Some(
+                                                                                7,
+                                                                            ),
+                                                                        ),
+                                                                        span: 650..651,
+                                                                    },
+                                                                },
+                                                            ],
+                                                        ),
+                                                        span: 643..653,
+                                                    },
+                                                    Ident {
+                                                        name: "a",
+                                                        span: 654..655,
+                                                    },
+                                                ),
+                                                span: 643..655,
+                                            },
+                                        },
+                                        Arm {
+                                            pattern: Pattern {
+                                                kind: Binding {
+                                                    mutable: false,
+                                                    name: Ident {
+                                                        name: "n",
+                                                        span: 669..670,
+                                                    },
+                                                    ty: Ty {
+                                                        kind: Named(
+                                                            Ident {
+                                                                name: "i8",
+                                                                span: 672..674,
+                                                            },
+                                                        ),
+                                                        span: 672..674,
+                                                    },
+                                                },
+                                                span: 665..674,
+                                            },
+                                            body: Expr {
+                                                kind: Int(
+                                                    Some(
+                                                        8,
+                                                    ),
+                                                ),
+                                                span: 678..679,
+                                            },
+                                        },
+                                        Arm {
+                                            pattern: Pattern {
+                                                kind: Binding {
+                                                    mutable: true,
+                                                    name: Ident {
+                                                        name: "m",
+                                                        span: 697..698,
+                                                    },
+                                                    ty: Ty {
+                                                        kind: Named(
+                                                            Ident {
+                                                                name: "i8",
+                                                                span: 700..702,
+                                                            },
+                                                        ),
+                                                        span: 700..702,
+                                                    },
+                                                },
+                                                span: 689..702,
+                                            },
+                                            body: Expr {
+                                                kind: Match {
+                                                    scrutinee: Expr {
+                                                        kind: Name(
+                                                            Ident {
+                                                                name: "m",
+                                                                span: 712..713,
+                                                            },
+                                                        ),
+                                                        span: 712..713,
+                                                    },
+                                                    arms: [
+                                                        Arm {
+                                                            pattern: Pattern {
+                                                                kind: Wildcard,
+                                                                span: 716..717,
+                                                            },
+                                                            body: Expr {
+                                                                kind: Int(
+                                                                    Some(
+                                                                        9,
+                                                                    ),
+                                                                ),
+                                                                span: 721..722,
+                                                            },
+                                                        },
+                                                    ],
+                                                },
+                                                span: 706..724,
+                                            },
+                                        },
+                                        Arm {
+                                            pattern: Pattern {
+                                                kind: Wildcard,
+                                                span: 734..735,
+                                            },
+                                            body: Expr {
+                                                kind: Int(
+                                                    Some(
+                                                        10,
+                                                    ),
+                                                ),
+                                                span: 739..741,
+                                            },
+                                        },
+                                    ],
+                                },
+                                span: 501..748,
+                            },
+                        ),
+                        span: 495..750,
+                    },
+                ),
+                span: 474..750,
+            },
+        ),
+        Fn(
+            FnDecl {
+                attrs: [],
+                kind: Plain,
+                name: Ident {
+                    name: "statement",
+                    span: 755..764,
+                },
+                params: [
+                    Param {
+                        mutable: false,
+                        name: Ident {
+                            name: "flag",
+                            span: 765..769,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Ident {
+                                    name: "bool",
+                                    span: 771..775,
+                                },
+                            ),
+                            span: 771..775,
+                        },
+                    },
+                ],
+                ret: Some(
+                    Ty {
+                        kind: Named(
+                            Ident {
+                                name: "u8",
+                                span: 780..782,
+                            },
+                        ),
+                        span: 780..782,
+                    },
+                ),
+                body: Some(
+                    Block {
+                        stmts: [
+                            Expr {
+                                expr: Expr {
+                                    kind: Match {
+                                        scrutinee: Expr {
+                                            kind: Name(
+                                                Ident {
+                                                    name: "flag",
+                                                    span: 795..799,
+                                                },
+                                            ),
+                                            span: 795..799,
+                                        },
+                                        arms: [
+                                            Arm {
+                                                pattern: Pattern {
+                                                    kind: Bool(
+                                                        true,
+                                                    ),
+                                                    span: 810..814,
+                                                },
+                                                body: Expr {
+                                                    kind: Block(
+                                                        Block {
+                                                            stmts: [],
+                                                            tail: None,
+                                                            span: 818..820,
+                                                        },
+                                                    ),
+                                                    span: 818..820,
+                                                },
+                                            },
+                                            Arm {
+                                                pattern: Pattern {
+                                                    kind: Bool(
+                                                        false,
+                                                    ),
+                                                    span: 829..834,
+                                                },
+                                                body: Expr {
+                                                    kind: Block(
+                                                        Block {
+                                                            stmts: [],
+                                                            tail: None,
+                                                            span: 838..840,
+                                                        },
+                                                    ),
+                                                    span: 838..840,
+                                                },
+                                            },
+                                        ],
+                                    },
+                                    span: 789..846,
+                                },
+                                semi: None,
+                            },
+                        ],
+                        tail: Some(
+                            Expr {
+                                kind: Match {
+                                    scrutinee: Expr {
+                                        kind: Field(
+                                            Expr {
+                                                kind: StructLit(
+                                                    Ident {
+                                                        name: "S",
+                                                        span: 858..859,
+                                                    },
+                                                    [
+                                                        FieldInit {
+                                                            name: Ident {
+                                                                name: "a",
+                                                                span: 862..863,
+                                                            },
+                                                            value: Expr {
+                                                                kind: Int(
+                                                                    Some(
+                                                                        1,
+                                                                    ),
+                                                                ),
+                                                                span: 865..866,
+                                                            },
+                                                        },
+                                                    ],
+                                                ),
+                                                span: 857..869,
+                                            },
+                                            Ident {
+                                                name: "a",
+                                                span: 870..871,
+                                            },
+                                        ),
+                                        span: 857..871,
+                                    },
+                                    arms: [
+                                        Arm {
+                                            pattern: Pattern {
+                                                kind: Wildcard,
+                                                span: 874..875,
+                                            },
+                                            body: Expr {
+                                                kind: Int(
+                                                    Some(
+                                                        2,
+                                                    ),
+                                                ),
+                                                span: 879..880,
+                                            },
+                                        },
+                                    ],
+                                },
+                                span: 851..882,
+                            },
+                        ),
+                        span: 783..884,
+                    },
+                ),
+                span: 752..884,
+            },
+        ),
+        Fn(
+            FnDecl {
+                attrs: [],
+                kind: Entry,
+                name: Ident {
+                    name: "main",
+                    span: 895..899,
+                },
+                params: [],
+                ret: Some(
+                    Ty {
+                        kind: Never,
+                        span: 905..906,
+                    },
+                ),
+                body: Some(
+                    Block {
+                        stmts: [],
+                        tail: Some(
+                            Expr {
+                                kind: Loop(
+                                    Block {
+                                        stmts: [],
+                                        tail: None,
+                                        span: 914..916,
+                                    },
+                                ),
+                                span: 909..916,
+                            },
+                        ),
+                        span: 907..918,
+                    },
+                ),
+                span: 886..918,
+            },
+        ),
+        Fn(
+            FnDecl {
+                attrs: [],
+                kind: Panic,
+                name: Ident {
+                    name: "on_panic",
+                    span: 928..936,
+                },
+                params: [],
+                ret: Some(
+                    Ty {
+                        kind: Never,
+                        span: 942..943,
+                    },
+                ),
+                body: Some(
+                    Block {
+                        stmts: [],
+                        tail: Some(
+                            Expr {
+                                kind: Loop(
+                                    Block {
+                                        stmts: [],
+                                        tail: None,
+                                        span: 951..953,
+                                    },
+                                ),
+                                span: 946..953,
+                            },
+                        ),
+                        span: 944..955,
+                    },
+                ),
+                span: 919..955,
+            },
+        ),
+    ],
+}

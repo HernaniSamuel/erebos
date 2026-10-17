@@ -1,0 +1,26 @@
+---
+source: tests/ui.rs
+assertion_line: 40
+expression: output
+input_file: tests/ui/resolve_match_scopes.ers
+---
+--- typeck ---
+fn arms(x: u8, flag: bool) -> u8
+    let LIMIT: u8
+    expr 0 match 274..401: u8
+    expr 1 local flag 280..284: bool
+    expr 2 match 303..341: u8
+    expr 3 local x 309..310: u8
+    expr 4 binary + 330..339: u8
+    expr 5 local LIMIT 330..335: u8
+    expr 6 int 1 338..339: u8
+    expr 7 match 360..394: u8
+    expr 8 local x 366..367: u8
+    expr 9 const LIMIT 379..384: u8
+    expr 10 int 0 391..392: u8
+entry fn main() -> !
+    expr 11 loop 428..435: !
+panic fn on_panic() -> !
+    expr 12 loop 465..472: !
+comptime fn LIMIT() -> u8
+    expr 13 int 10 230..232: u8

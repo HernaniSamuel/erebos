@@ -1,0 +1,128 @@
+---
+source: tests/ui.rs
+assertion_line: 40
+expression: output
+input_file: tests/ui/mir_match_const_users.ers
+---
+--- errors ---
+eval::panic
+
+  × the evaluation called the panic function: division by zero
+    ╭─[mir_match_const_users.ers:11:5]
+  6 │ // (ADR 0032, 0037). Each `x / 0` here is reported.
+  7 │ const BAD: u8 = fails();
+    ·       ─┬─       ───┬───
+    ·        │           ╰── called here
+    ·        ╰── while evaluating the constant `BAD`
+  8 │ 
+  9 │ fn fails() -> u8 {
+ 10 │     let zero: u8 = 0;
+ 11 │     1 / zero
+    ·     ────┬───
+    ·         ╰── division by zero
+ 12 │ }
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+ty::division-by-zero
+
+  × division by zero
+    ╭─[mir_match_const_users.ers:17:18]
+ 16 │         BAD => 1,
+ 17 │         _ => x / 0,
+    ·                  ┬
+    ·                  ╰── this divisor is zero
+ 18 │     }
+    ╰────
+  help: at run time this would call the panic function (ADR 0007)
+ty::division-by-zero
+
+  × division by zero
+    ╭─[mir_match_const_users.ers:24:18]
+ 23 │         BAD => 1,
+ 24 │         _ => x / 0,
+    ·                  ┬
+    ·                  ╰── this divisor is zero
+ 25 │     }
+    ╰────
+  help: at run time this would call the panic function (ADR 0007)
+ty::cycle
+
+  × the function `cycles_a` depends on its own value
+    ╭─[mir_match_const_users.ers:31:4]
+ 28 │ // The function in the cycle comes before the other user of the constant.
+ 29 │ const CYCLE_A: u8 = cycles_a(0);
+    ·       ───┬───
+    ·          ╰── through the constant `CYCLE_A`
+ 30 │ 
+ 31 │ fn cycles_a(x: u8) -> u8 {
+    ·    ────┬───
+    ·        ╰── needed while computing itself
+ 32 │     match x {
+    ╰────
+  help: break the cycle: a value cannot depend on itself (ADR 0028)
+ty::division-by-zero
+
+  × division by zero
+    ╭─[mir_match_const_users.ers:34:19]
+ 33 │         CYCLE_A => 1,
+ 34 │         _ => 10 / 0,
+    ·                   ┬
+    ·                   ╰── this divisor is zero
+ 35 │     }
+    ╰────
+  help: at run time this would call the panic function (ADR 0007)
+ty::division-by-zero
+
+  × division by zero
+    ╭─[mir_match_const_users.ers:41:18]
+ 40 │         CYCLE_A => 1,
+ 41 │         _ => x / 0,
+    ·                  ┬
+    ·                  ╰── this divisor is zero
+ 42 │     }
+    ╰────
+  help: at run time this would call the panic function (ADR 0007)
+ty::cycle
+
+  × the constant `CYCLE_B` depends on its own value
+    ╭─[mir_match_const_users.ers:46:7]
+ 45 │ // The other user comes first.
+ 46 │ const CYCLE_B: u8 = cycles_b(0);
+    ·       ───┬───
+    ·          ╰── needed while computing itself
+ 47 │ 
+ 48 │ fn uses_b(x: u32, y: u8) -> u32 {
+ 49 │     match y {
+ 50 │         CYCLE_B => 1,
+ 51 │         _ => x / 0,
+ 52 │     }
+ 53 │ }
+ 54 │ 
+ 55 │ fn cycles_b(x: u8) -> u8 {
+    ·    ────┬───
+    ·        ╰── through the function `cycles_b`
+ 56 │     match x {
+    ╰────
+  help: break the cycle: a value cannot depend on itself (ADR 0028)
+ty::division-by-zero
+
+  × division by zero
+    ╭─[mir_match_const_users.ers:51:18]
+ 50 │         CYCLE_B => 1,
+ 51 │         _ => x / 0,
+    ·                  ┬
+    ·                  ╰── this divisor is zero
+ 52 │     }
+    ╰────
+  help: at run time this would call the panic function (ADR 0007)
+ty::division-by-zero
+
+  × division by zero
+    ╭─[mir_match_const_users.ers:58:19]
+ 57 │         CYCLE_B => 1,
+ 58 │         _ => 10 / 0,
+    ·                   ┬
+    ·                   ╰── this divisor is zero
+ 59 │     }
+    ╰────
+  help: at run time this would call the panic function (ADR 0007)

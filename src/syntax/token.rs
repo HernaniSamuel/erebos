@@ -28,6 +28,7 @@ pub enum TokenKind {
     If,
     Let,
     Loop,
+    Match,
     Mut,
     OffsetOf,
     Panic,
@@ -50,6 +51,10 @@ pub enum TokenKind {
     Colon,
     /// `::`, between an enum and its variant (ADR 0035).
     ColonColon,
+    /// `=>`, between a pattern and its arm's expression (ADR 0037).
+    FatArrow,
+    /// `_`, the wildcard pattern, and never a name (ADR 0037).
+    Underscore,
     Comma,
     Semi,
     Dot,
@@ -110,6 +115,7 @@ impl TokenKind {
             "if" => TokenKind::If,
             "let" => TokenKind::Let,
             "loop" => TokenKind::Loop,
+            "match" => TokenKind::Match,
             "mut" => TokenKind::Mut,
             "offset_of" => TokenKind::OffsetOf,
             "panic" => TokenKind::Panic,
@@ -120,6 +126,7 @@ impl TokenKind {
             "true" => TokenKind::True,
             "volatile" => TokenKind::Volatile,
             "while" => TokenKind::While,
+            "_" => TokenKind::Underscore,
             _ => return None,
         })
     }
@@ -146,6 +153,7 @@ impl TokenKind {
             TokenKind::If => "`if`",
             TokenKind::Let => "`let`",
             TokenKind::Loop => "`loop`",
+            TokenKind::Match => "`match`",
             TokenKind::Mut => "`mut`",
             TokenKind::OffsetOf => "`offset_of`",
             TokenKind::Panic => "`panic`",
@@ -165,6 +173,8 @@ impl TokenKind {
             TokenKind::Arrow => "`->`",
             TokenKind::Colon => "`:`",
             TokenKind::ColonColon => "`::`",
+            TokenKind::FatArrow => "`=>`",
+            TokenKind::Underscore => "`_`",
             TokenKind::Comma => "`,`",
             TokenKind::Semi => "`;`",
             TokenKind::Dot => "`.`",

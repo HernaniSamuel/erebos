@@ -1,0 +1,112 @@
+---
+source: tests/ui.rs
+assertion_line: 40
+expression: output
+input_file: tests/ui/typeck_match_dead_arms.ers
+---
+--- errors ---
+ty::unreachable-pattern
+
+  × unreachable arm
+    ╭─[typeck_match_dead_arms.ers:11:9]
+  9 │     match x {
+ 10 │         0 => 1,
+    ·         ┬
+    ·         ╰── every value it matches is matched here
+ 11 │         0 => 2,
+    ·         ┬
+    ·         ╰── matches no value that the arms before it leave
+ 12 │         ZERO => 3,
+    ╰────
+  help: a `match` takes the first arm that matches, so this one never runs; remove it (ADR 0037)
+ty::unreachable-pattern
+
+  × unreachable arm
+    ╭─[typeck_match_dead_arms.ers:12:9]
+  9 │     match x {
+ 10 │         0 => 1,
+    ·         ┬
+    ·         ╰── every value it matches is matched here
+ 11 │         0 => 2,
+ 12 │         ZERO => 3,
+    ·         ──┬─
+    ·           ╰── matches no value that the arms before it leave
+ 13 │         let n: u8 => n,
+    ╰────
+  help: a `match` takes the first arm that matches, so this one never runs; remove it (ADR 0037)
+ty::unreachable-pattern
+
+  × unreachable arm
+    ╭─[typeck_match_dead_arms.ers:14:9]
+ 12 │         ZERO => 3,
+ 13 │         let n: u8 => n,
+    ·         ────┬────
+    ·             ╰── every value it matches is matched here
+ 14 │         5 => 4,
+    ·         ┬
+    ·         ╰── matches no value that the arms before it leave
+ 15 │     }
+    ╰────
+  help: a `match` takes the first arm that matches, so this one never runs; remove it (ADR 0037)
+ty::unreachable-pattern
+
+  × unreachable pattern
+    ╭─[typeck_match_dead_arms.ers:20:13]
+ 19 │     match x {
+ 20 │         1 | 1 => 1,
+    ·         ┬   ┬
+    ·         │   ╰── matches no value that the patterns before it leave
+    ·         ╰── every value it matches is matched here
+ 21 │         2 => 2,
+    ╰────
+  help: remove this alternative (ADR 0037)
+ty::unreachable-pattern
+
+  × unreachable arm
+    ╭─[typeck_match_dead_arms.ers:22:9]
+ 21 │         2 => 2,
+ 22 │         1 | 2 => 3,
+    ·         ──┬──
+    ·           ╰── matches no value that the arms before it leave
+ 23 │         3 | 1 | 4 => 4,
+    ╰────
+  help: a `match` takes the first arm that matches, so this one never runs; remove it (ADR 0037)
+ty::unreachable-pattern
+
+  × unreachable pattern
+    ╭─[typeck_match_dead_arms.ers:23:13]
+ 19 │     match x {
+ 20 │         1 | 1 => 1,
+    ·         ──┬──
+    ·           ╰── every value it matches is matched here
+ 21 │         2 => 2,
+ 22 │         1 | 2 => 3,
+ 23 │         3 | 1 | 4 => 4,
+    ·             ┬
+    ·             ╰── matches no value that the patterns before it leave
+ 24 │         _ | 7 => 5,
+    ╰────
+  help: remove this alternative (ADR 0037)
+ty::unreachable-pattern
+
+  × unreachable pattern
+    ╭─[typeck_match_dead_arms.ers:24:13]
+ 23 │         3 | 1 | 4 => 4,
+ 24 │         _ | 7 => 5,
+    ·         ┬   ┬
+    ·         │   ╰── matches no value that the patterns before it leave
+    ·         ╰── every value it matches is matched here
+ 25 │     }
+    ╰────
+  help: remove this alternative (ADR 0037)
+ty::unreachable-pattern
+
+  × unreachable arm
+    ╭─[typeck_match_dead_arms.ers:32:9]
+ 31 │         false => 2,
+ 32 │         _ => 3,
+    ·         ┬
+    ·         ╰── matches no value that the arms before it leave
+ 33 │     }
+    ╰────
+  help: a `match` takes the first arm that matches, so this one never runs; remove it (ADR 0037)

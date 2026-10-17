@@ -114,6 +114,10 @@ const SNIPPETS: &[&str] = &[
     "enum E: u8 { A = 0 }",
     "E::A",
     "::",
+    "match x { _ => {} }",
+    "=>",
+    "let n: u8 =>",
+    "_",
 ];
 
 /// xorshift64: small, deterministic, good enough to pick mutations.

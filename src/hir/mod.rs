@@ -510,6 +510,11 @@ pub enum ExprKind {
         body: Block,
     },
     Loop(Block),
+    /// `match scrutinee { arms }` (ADR 0037).
+    Match {
+        scrutinee: Box<Expr>,
+        arms: Vec<Arm>,
+    },
     /// Leaves the loop expression `target` (a `loop` or `while`).
     Break {
         target: ExprId,
@@ -519,6 +524,64 @@ pub enum ExprKind {
         target: ExprId,
     },
     Return(Option<Box<Expr>>),
+}
+
+/// `pattern => body`, an arm of a `match` (ADR 0037). A variable the
+/// pattern binds exists in `body` only.
+#[derive(Debug)]
+pub struct Arm {
+    pub pattern: Pattern,
+    pub body: Expr,
+}
+
+#[derive(Debug)]
+pub struct Pattern {
+    pub kind: PatternKind,
+    pub span: Span,
+}
+
+/// What a pattern matches (ADR 0037). Patterns run no code: a constant is
+/// a value computed at compile time.
+#[derive(Debug)]
+pub enum PatternKind {
+    /// `_`: every value.
+    Wildcard,
+    /// `let [mut] name: T`: every value, copied into `local`, whose type
+    /// is written at `ty_span`.
+    Binding {
+        local: LocalId,
+        ty_span: Span,
+    },
+    /// An integer literal, or `-` and one: its magnitude.
+    Int {
+        value: u64,
+        negated: bool,
+    },
+    /// `b'x'`, a `u8`.
+    Byte(u8),
+    Bool(bool),
+    /// A constant, matching its value.
+    Const(ConstId),
+    /// `p | q | ...`; no alternative is a `Binding` or an `Or`.
+    Or(Vec<Pattern>),
+}
+
+impl Pattern {
+    /// The alternatives of an or-pattern, or the pattern itself.
+    pub fn alternatives(&self) -> &[Pattern] {
+        match &self.kind {
+            PatternKind::Or(alternatives) => alternatives,
+            _ => std::slice::from_ref(self),
+        }
+    }
+
+    /// The variable the pattern binds, if it binds one.
+    pub fn binding(&self) -> Option<LocalId> {
+        match self.kind {
+            PatternKind::Binding { local, .. } => Some(local),
+            _ => None,
+        }
+    }
 }
 
 impl Expr {
@@ -583,6 +646,12 @@ impl Expr {
             ExprKind::While { cond, body } => {
                 cond.walk(f);
                 body.walk(f);
+            }
+            ExprKind::Match { scrutinee, arms } => {
+                scrutinee.walk(f);
+                for arm in arms {
+                    arm.body.walk(f);
+                }
             }
         }
     }

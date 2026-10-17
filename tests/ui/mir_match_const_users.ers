@@ -1,0 +1,63 @@
+// emit: mir
+// A constant used as a pattern that fails to evaluate, or that needs the
+// function using it, is reported once, wherever it is first needed; every
+// function using it still type checks and gets the checks of ADR 0032, in
+// whatever order the functions come, as when it is used in an expression
+// (ADR 0032, 0037). Each `x / 0` here is reported.
+const BAD: u8 = fails();
+
+fn fails() -> u8 {
+    let zero: u8 = 0;
+    1 / zero
+}
+
+fn first(x: u32, y: u8) -> u32 {
+    match y {
+        BAD => 1,
+        _ => x / 0,
+    }
+}
+
+fn second(x: u32, y: u8) -> u32 {
+    match y {
+        BAD => 1,
+        _ => x / 0,
+    }
+}
+
+// The function in the cycle comes before the other user of the constant.
+const CYCLE_A: u8 = cycles_a(0);
+
+fn cycles_a(x: u8) -> u8 {
+    match x {
+        CYCLE_A => 1,
+        _ => 10 / 0,
+    }
+}
+
+fn uses_a(x: u32, y: u8) -> u32 {
+    match y {
+        CYCLE_A => 1,
+        _ => x / 0,
+    }
+}
+
+// The other user comes first.
+const CYCLE_B: u8 = cycles_b(0);
+
+fn uses_b(x: u32, y: u8) -> u32 {
+    match y {
+        CYCLE_B => 1,
+        _ => x / 0,
+    }
+}
+
+fn cycles_b(x: u8) -> u8 {
+    match x {
+        CYCLE_B => 1,
+        _ => 10 / 0,
+    }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

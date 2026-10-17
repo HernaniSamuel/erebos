@@ -1,0 +1,33 @@
+// emit: ast
+// `match` (ADR 0037): arms separated by commas, with a trailing comma; an
+// arm whose expression starts with a block-like expression ends with it
+// and needs no comma, so `0 => {}` followed by `-1 => {}` is two arms. As
+// a statement, a `match` needs no `;`. A struct literal as scrutinee needs
+// parentheses, since a `{` after the scrutinee opens the arms; inside the
+// arms, struct literals are allowed again. Every kind of pattern.
+struct S { a: u8 }
+
+fn arms(x: i8) -> u8 {
+    match x {
+        0 => {}
+        -1 => {},
+        1 => if true { 2 } else { 3 }
+        2 | 3 | 4 => 5,
+        b'q' => 6,
+        LIMIT => S { a: 7 }.a,
+        let n: i8 => 8,
+        let mut m: i8 => match m { _ => 9 },
+        _ => 10,
+    }
+}
+
+fn statement(flag: bool) -> u8 {
+    match flag {
+        true => {}
+        false => {}
+    }
+    match (S { a: 1 }).a { _ => 2 }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

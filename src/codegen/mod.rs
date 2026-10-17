@@ -1201,6 +1201,24 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                 self.blocks[then.0 as usize],
                 self.blocks[else_.0 as usize],
             ),
+            // The values are masked to the width of what is switched on.
+            Terminator::Switch {
+                discr,
+                cases,
+                otherwise,
+            } => {
+                let value = self.operand(&discr).into_int_value();
+                let cases: Vec<_> = cases
+                    .iter()
+                    .map(|&(bits, target)| {
+                        (
+                            value.get_type().const_int(bits, false),
+                            self.blocks[target.0 as usize],
+                        )
+                    })
+                    .collect();
+                b.build_switch(value, self.blocks[otherwise.0 as usize], &cases)
+            }
             Terminator::Return => match self.abi.ret_mode {
                 PassMode::Direct => {
                     let value = self.read(Place::local(Local::RETURN));

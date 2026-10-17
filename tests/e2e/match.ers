@@ -1,0 +1,150 @@
+// `match` on the emulated CPU (ADR 0037): on integers of several widths,
+// signed and not, and on `bool`; the scrutinee runs once, before any arm,
+// even with a side effect; the arms are tried in order and the first that
+// matches runs, a `let` arm binding the value.
+// expect-output: classify: zero one small small big 7f last
+// expect-output: signed: min minus-one other max
+// expect-output: wide: high all low
+// expect-output: bool: yes no
+// expect-output: once: 1 call, arm one
+// expect-output: once: 2 calls, bound 2
+// expect-exit: 0
+
+struct Uart { thr: u8 }
+
+fn putc(byte: u8) {
+    let uart: *mut volatile Uart = 0x1000_0000 as *mut volatile Uart;
+    (*uart).thr = byte;
+}
+
+fn print(s: *const [u8]) {
+    let mut i: usize = 0;
+    while i < len(s) {
+        putc((*s)[i]);
+        i += 1;
+    }
+}
+
+fn hex_digit(d: u8) -> u8 {
+    match d {
+        let small: u8 => if small < 10 { b'0' + small } else { b'a' + small - 10 },
+    }
+}
+
+const LAST: u8 = 255;
+
+fn classify(x: u8) {
+    match x {
+        0 => print(&raw const b"zero"),
+        1 => print(&raw const b"one"),
+        2 | 3 | 4 => print(&raw const b"small"),
+        LAST => print(&raw const b"last"),
+        let other: u8 => {
+            if other < 100 {
+                print(&raw const b"big");
+            } else {
+                putc(hex_digit(other >> 4));
+                putc(hex_digit(other & 15));
+            }
+        }
+    }
+}
+
+fn signed(x: i8) -> *const [u8] {
+    match x {
+        -128 => &raw const b"min",
+        -1 => &raw const b"minus-one",
+        127 => &raw const b"max",
+        _ => &raw const b"other",
+    }
+}
+
+fn wide(x: u64) -> *const [u8] {
+    match x {
+        0xFFFF_FFFF_0000_0000 => &raw const b"high",
+        0xFFFF_FFFF_FFFF_FFFF => &raw const b"all",
+        _ => &raw const b"low",
+    }
+}
+
+fn answer(b: bool) -> *const [u8] {
+    match b {
+        true => &raw const b"yes",
+        false => &raw const b"no",
+    }
+}
+
+static mut CALLS: u8 = 0;
+
+fn next() -> u8 {
+    CALLS += 1;
+    CALLS
+}
+
+entry fn main() -> ! {
+    print(&raw const b"classify:");
+    let inputs: [u8; 7] = [0, 1, 2, 4, 50, 0x7F, 255];
+    let mut i: usize = 0;
+    while i < 7 {
+        putc(b' ');
+        classify(inputs[i]);
+        i += 1;
+    }
+    putc(b'\n');
+
+    print(&raw const b"signed: ");
+    print(signed(-128));
+    putc(b' ');
+    print(signed(-1));
+    putc(b' ');
+    print(signed(5));
+    putc(b' ');
+    print(signed(127));
+    putc(b'\n');
+
+    print(&raw const b"wide: ");
+    print(wide(0xFFFF_FFFF_0000_0000));
+    putc(b' ');
+    print(wide(0xFFFF_FFFF_FFFF_FFFF));
+    putc(b' ');
+    print(wide(0xFFFF_FFFF));
+    putc(b'\n');
+
+    print(&raw const b"bool: ");
+    print(answer(CALLS == 0));
+    putc(b' ');
+    print(answer(CALLS != 0));
+    putc(b'\n');
+
+    // A call as scrutinee runs once, whichever arm is taken, and the
+    // first arm that matches wins over a later catch-all.
+    let arm: *const [u8] = match next() {
+        0 => &raw const b"zero",
+        1 => &raw const b"one",
+        let n: u8 => &raw const b"later",
+    };
+    print(&raw const b"once: ");
+    putc(b'0' + CALLS);
+    print(&raw const b" call, arm ");
+    print(arm);
+    putc(b'\n');
+    let bound: u8 = match next() {
+        1 => 10,
+        let n: u8 => n,
+    };
+    print(&raw const b"once: ");
+    putc(b'0' + CALLS);
+    print(&raw const b" calls, bound ");
+    putc(b'0' + bound);
+    putc(b'\n');
+
+    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+    *finisher = 0x5555;
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+    *finisher = (1 << 16) | 0x3333;
+    loop {}
+}

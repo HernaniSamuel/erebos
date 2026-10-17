@@ -1,0 +1,15 @@
+// emit: typeck
+// A variable bound by `let` in a pattern exists in its arm only, where it
+// shadows a constant of the same name (ADR 0037): the next arm sees the
+// constant again, as a pattern and as a value.
+const LIMIT: u8 = 10;
+
+fn arms(x: u8, flag: bool) -> u8 {
+    match flag {
+        true => match x { let LIMIT: u8 => LIMIT + 1 },
+        false => match x { LIMIT => LIMIT, _ => 0 },
+    }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

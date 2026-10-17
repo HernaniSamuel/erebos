@@ -1,0 +1,32 @@
+// emit: mir
+// A `match` is a switch on the scrutinee (ADR 0037), read once into a
+// temporary before any arm. A catch-all arm is the default; a `let` arm
+// copies the scrutinee into its variable; with every value listed, as
+// both of a `bool`, the default is unreachable. Negative values show in
+// the scrutinee's type.
+const LIMIT: u8 = 9;
+
+fn catch_all(x: u8) -> u8 {
+    match x {
+        0 => 10,
+        1 | LIMIT => 20,
+        _ => 30,
+    }
+}
+
+fn binding(x: i8) -> i8 {
+    match x {
+        -1 | -128 => 0,
+        let n: i8 => n + 1,
+    }
+}
+
+fn every_bool(b: bool) -> u32 {
+    match b {
+        true => 1,
+        false => 2,
+    }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

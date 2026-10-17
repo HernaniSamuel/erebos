@@ -1,0 +1,45 @@
+// emit: ast
+// Malformed `match` expressions and the uses of `_` it rules out
+// (ADR 0037). Each error stops its item, so each is in an item of its own.
+struct S { a: u8 }
+
+fn struct_scrutinee() -> u8 {
+    match S { a: 1 }.a { _ => 0 }
+}
+
+fn let_without_name(x: u8) -> u8 {
+    match x { let => 0 }
+}
+
+fn let_without_type(x: u8) -> u8 {
+    match x { let n => n }
+}
+
+fn missing_arrow(x: u8) -> u8 {
+    match x { 0 1 }
+}
+
+fn missing_comma(x: u8) -> u8 {
+    match x { 0 => 1 _ => 2 }
+}
+
+fn minus_without_literal(x: i8) -> i8 {
+    match x { -n => 0, _ => 1 }
+}
+
+fn underscore_variable() {
+    let _: u32 = 0;
+}
+
+const _: u32 = 0;
+
+struct Field { _: u8 }
+
+fn underscore_value() -> u32 {
+    _
+}
+
+fn underscore_parameter(_: u32) {}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

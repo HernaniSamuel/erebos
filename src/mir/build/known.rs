@@ -1,6 +1,7 @@
 //! Values known at compile time, and the checks on them (ADR 0032): shift
 //! amounts, divisors and array indices that are known are checked while
-//! MIR is built, except in code that cannot run.
+//! MIR is built, except in code that cannot run, such as the arms a
+//! `match` on a known value never takes (ADR 0037).
 //!
 //! Computing a known value never reads memory, and reports nothing: a
 //! failing operation is reported where it is built, once.
@@ -155,6 +156,29 @@ impl Builder<'_, '_> {
             Known::Value(value) => Some(value != 0),
             _ => None,
         }
+    }
+
+    /// The arm a `match` takes when its scrutinee is known and checks are
+    /// on (ADR 0032, 0037): `Some(Some(i))`, or `Some(None)` if no arm
+    /// matches, so that none can run; `None` if any arm may run. `values`
+    /// gives, for each arm, what its alternatives match: the bits of a
+    /// value, or `None` for every value.
+    pub(super) fn known_arm(
+        &mut self,
+        scrutinee: &hir::Expr,
+        values: &[Vec<Option<u64>>],
+    ) -> Option<Option<usize>> {
+        if !self.checks {
+            return None;
+        }
+        let Known::Value(value) = self.known(scrutinee) else {
+            return None;
+        };
+        Some(values.iter().position(|alternatives| {
+            alternatives
+                .iter()
+                .any(|matched| matched.is_none_or(|matched| matched == value))
+        }))
     }
 
     /// Runs `build` with the checks off unless `can_run`.

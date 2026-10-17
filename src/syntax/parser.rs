@@ -4,9 +4,9 @@
 use crate::diag::{Diagnostic, Diagnostics};
 use crate::span::Span;
 use crate::syntax::ast::{
-    Attr, BinOp, Block, ComptimeDecl, ConstDecl, EnumDecl, Expr, ExprKind, FieldDecl, FieldInit,
-    File, FnDecl, FnKind, Ident, Item, Let, LogicalOp, Param, StaticDecl, Stmt, StructDecl, Ty,
-    TyKind, UnOp, VariantDecl,
+    Arm, Attr, BinOp, Block, ComptimeDecl, ConstDecl, EnumDecl, Expr, ExprKind, FieldDecl,
+    FieldInit, File, FnDecl, FnKind, Ident, Item, Let, LogicalOp, Param, Pattern, PatternKind,
+    StaticDecl, Stmt, StructDecl, Ty, TyKind, UnOp, VariantDecl,
 };
 use crate::syntax::lexer;
 use crate::syntax::token::{Token, TokenKind};
@@ -392,6 +392,9 @@ impl Parser<'_> {
     }
 
     fn ident(&mut self) -> PResult<Ident> {
+        if self.at(TokenKind::Underscore) {
+            return Err(self.underscore("identifier"));
+        }
         let token = self.expect(TokenKind::Ident)?;
         Ok(Ident {
             name: self.text[token.span.range()].to_owned(),
@@ -549,8 +552,44 @@ impl Parser<'_> {
     fn at_block_like(&self) -> bool {
         matches!(
             self.peek().kind,
-            TokenKind::LBrace | TokenKind::If | TokenKind::While | TokenKind::Loop
+            TokenKind::LBrace
+                | TokenKind::If
+                | TokenKind::While
+                | TokenKind::Loop
+                | TokenKind::Match
         )
+    }
+
+    /// Reports a `let` whose name is not followed by `: Type`; `example`
+    /// shows one that is, and `adrs` the ADRs requiring it.
+    fn let_without_type(&mut self, example: &str, adrs: &str) -> Reported {
+        let found = self.peek();
+        self.diags.push(
+            Diagnostic::error(
+                "parser::let-without-type",
+                format!("expected `:`, found {}", found.kind.describe()),
+            )
+            .label(self.missing_token_span(), "expected `: Type`")
+            .help(format!(
+                "every `let` states its type, e.g. `{example}` ({adrs})"
+            )),
+        );
+        Reported
+    }
+
+    /// Reports `_` where `what` is expected: it is a token of its own, the
+    /// wildcard pattern, and never a name or a value (ADR 0037).
+    fn underscore(&mut self, what: &str) -> Reported {
+        let token = self.peek();
+        self.diags.push(
+            Diagnostic::error(
+                "parser::unexpected-token",
+                format!("expected {what}, found `_`"),
+            )
+            .label(token.span, format!("expected {what}"))
+            .help("`_` is the wildcard pattern of `match`, and cannot be a name or a value (ADR 0037)"),
+        );
+        Reported
     }
 
     fn let_stmt(&mut self) -> PResult<Let> {
@@ -558,19 +597,8 @@ impl Parser<'_> {
         let mutable = self.eat(TokenKind::Mut).is_some();
         let name = self.ident()?;
         if !self.at(TokenKind::Colon) {
-            let found = self.peek();
-            self.diags.push(
-                Diagnostic::error(
-                    "parser::let-without-type",
-                    format!("expected `:`, found {}", found.kind.describe()),
-                )
-                .label(self.missing_token_span(), "expected `: Type`")
-                .help(format!(
-                    "every `let` states its type, e.g. `let {}: u32 = ...` (ADR 0008)",
-                    name.name
-                )),
-            );
-            return Err(Reported);
+            let example = format!("let {}: u32 = ...", name.name);
+            return Err(self.let_without_type(&example, "ADR 0008"));
         }
         self.bump();
         let ty = self.ty()?;
@@ -790,6 +818,8 @@ impl Parser<'_> {
                 return Ok(Expr { kind, span });
             }
             TokenKind::If => return self.if_expr(),
+            TokenKind::Match => return self.match_expr(),
+            TokenKind::Underscore => return Err(self.underscore("an expression")),
             TokenKind::While => {
                 self.bump();
                 let cond = Box::new(self.condition()?);
@@ -966,6 +996,135 @@ impl Parser<'_> {
         Ok(Expr {
             kind: ExprKind::If { cond, then, else_ },
             span,
+        })
+    }
+}
+
+impl Parser<'_> {
+    /// `match scrutinee { arms }` (ADR 0037). As in the condition of `if`,
+    /// a `{` after the scrutinee opens the arms.
+    fn match_expr(&mut self) -> PResult<Expr> {
+        let start = self.bump().span;
+        let scrutinee = Box::new(self.condition()?);
+        self.expect(TokenKind::LBrace)?;
+        // The arms are delimited, so struct literals are allowed again.
+        let saved = std::mem::replace(&mut self.no_struct, false);
+        let arms = self.arms();
+        self.no_struct = saved;
+        let arms = arms?;
+        let close = self.tokens[self.pos - 1].span;
+        Ok(Expr {
+            kind: ExprKind::Match { scrutinee, arms },
+            span: start.to(close),
+        })
+    }
+
+    /// `pattern => expr, ...}`, allowing a trailing comma, and consumes the
+    /// `}`. As a statement does, an arm whose expression starts with a
+    /// block-like expression ends with it and needs no comma: in `0 => {}`
+    /// followed by `-1 => {}`, the `-1` starts the next arm.
+    fn arms(&mut self) -> PResult<Vec<Arm>> {
+        let mut arms = Vec::new();
+        while !self.at(TokenKind::RBrace) {
+            let pattern = self.pattern()?;
+            self.expect(TokenKind::FatArrow)?;
+            let block_like = self.at_block_like();
+            let body = if block_like {
+                self.primary()?
+            } else {
+                self.expr()?
+            };
+            arms.push(Arm { pattern, body });
+            if self.eat(TokenKind::Comma).is_none() && !block_like {
+                if self.at(TokenKind::RBrace) {
+                    break;
+                }
+                return Err(self.error_expected("`,` or `}`"));
+            }
+        }
+        self.expect(TokenKind::RBrace)?;
+        Ok(arms)
+    }
+
+    /// A pattern, or alternatives separated by `|`.
+    fn pattern(&mut self) -> PResult<Pattern> {
+        let first = self.single_pattern()?;
+        if !self.at(TokenKind::Pipe) {
+            return Ok(first);
+        }
+        let mut alternatives = vec![first];
+        while self.eat(TokenKind::Pipe).is_some() {
+            alternatives.push(self.single_pattern()?);
+        }
+        let span = alternatives[0]
+            .span
+            .to(alternatives[alternatives.len() - 1].span);
+        Ok(Pattern {
+            kind: PatternKind::Or(alternatives),
+            span,
+        })
+    }
+
+    /// One pattern of ADR 0037: `_`, `let [mut] name: Type`, a literal, `-`
+    /// and an integer literal, or a name.
+    fn single_pattern(&mut self) -> PResult<Pattern> {
+        let token = self.peek();
+        let text = &self.text[token.span.range()];
+        let kind = match token.kind {
+            TokenKind::Underscore => PatternKind::Wildcard,
+            TokenKind::Int => PatternKind::Int {
+                value: lexer::int_value(text).ok(),
+                negated: false,
+            },
+            TokenKind::Byte => PatternKind::Byte(lexer::byte_value(text).ok()),
+            TokenKind::True | TokenKind::False => PatternKind::Bool(token.kind == TokenKind::True),
+            TokenKind::Ident => {
+                let name = self.ident()?;
+                return Ok(Pattern {
+                    span: name.span,
+                    kind: PatternKind::Name(name),
+                });
+            }
+            TokenKind::Minus => {
+                self.bump();
+                let literal = self.peek();
+                if literal.kind != TokenKind::Int {
+                    return Err(self.error_expected("an integer literal"));
+                }
+                self.bump();
+                return Ok(Pattern {
+                    kind: PatternKind::Int {
+                        value: lexer::int_value(&self.text[literal.span.range()]).ok(),
+                        negated: true,
+                    },
+                    span: token.span.to(literal.span),
+                });
+            }
+            TokenKind::Let => return self.binding_pattern(),
+            _ => return Err(self.error_expected("a pattern")),
+        };
+        self.bump();
+        Ok(Pattern {
+            kind,
+            span: token.span,
+        })
+    }
+
+    /// `let [mut] name: Type`, a new variable, always with its type
+    /// (ADR 0008, 0037).
+    fn binding_pattern(&mut self) -> PResult<Pattern> {
+        let start = self.bump().span;
+        let mutable = self.eat(TokenKind::Mut).is_some();
+        let name = self.ident()?;
+        if !self.at(TokenKind::Colon) {
+            let example = format!("let {}: u8 => ...", name.name);
+            return Err(self.let_without_type(&example, "ADR 0008, 0037"));
+        }
+        self.bump();
+        let ty = self.ty()?;
+        Ok(Pattern {
+            span: start.to(ty.span),
+            kind: PatternKind::Binding { mutable, name, ty },
         })
     }
 }

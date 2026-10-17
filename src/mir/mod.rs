@@ -570,6 +570,16 @@ pub enum Terminator {
         then: BasicBlock,
         else_: BasicBlock,
     },
+    /// Jumps to the block of the case whose value equals `discr`, an
+    /// integer or `bool`, or else to `otherwise`: a `match` (ADR 0037).
+    /// Each value is the bits of `discr`'s type, masked to its width as
+    /// `Const::Int` holds them (`bool` is 0 or 1), and appears once. Leaked
+    /// like projections, so that terminators stay `Copy`.
+    Switch {
+        discr: Operand,
+        cases: &'static [(u64, BasicBlock)],
+        otherwise: BasicBlock,
+    },
     Return,
     /// Control never reaches the end of this block.
     Unreachable,
@@ -684,6 +694,33 @@ impl fmt::Display for Rvalue {
 }
 
 impl Mir {
+    /// A terminator of `body`; a switch shows its values in the type of
+    /// what it switches on.
+    fn fmt_terminator(
+        &self,
+        body: &Body,
+        terminator: &Terminator,
+        f: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
+        let Terminator::Switch {
+            discr,
+            cases,
+            otherwise,
+        } = terminator
+        else {
+            return write!(f, "{terminator}");
+        };
+        let ty = body.operand_ty(discr);
+        write!(f, "switch {discr} -> [")?;
+        for (value, target) in cases.iter() {
+            match ty {
+                Ty::Int(int) => write!(f, "{}_{int}: {target}, ", int.display_bits(*value))?,
+                _ => write!(f, "{}: {target}, ", *value != 0)?,
+            }
+        }
+        write!(f, "otherwise: {otherwise}]")
+    }
+
     fn fmt_statement(&self, statement: &Statement, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match statement {
             Statement::Assign(place, rvalue) => write!(f, "{place} = {rvalue}"),
@@ -710,6 +747,18 @@ impl fmt::Display for Terminator {
             Terminator::Goto(target) => write!(f, "goto -> {target}"),
             Terminator::If { cond, then, else_ } => {
                 write!(f, "if {cond} -> [true: {then}, false: {else_}]")
+            }
+            // The dump of a body shows the values in their type.
+            Terminator::Switch {
+                discr,
+                cases,
+                otherwise,
+            } => {
+                write!(f, "switch {discr} -> [")?;
+                for (value, target) in cases.iter() {
+                    write!(f, "{value}: {target}, ")?;
+                }
+                write!(f, "otherwise: {otherwise}]")
             }
             Terminator::Return => f.write_str("return"),
             Terminator::Unreachable => f.write_str("unreachable"),
@@ -824,7 +873,9 @@ impl fmt::Display for Mir {
                     self.fmt_statement(statement, f)?;
                     writeln!(f, ";")?;
                 }
-                writeln!(f, "        {};", data.terminator)?;
+                f.write_str("        ")?;
+                self.fmt_terminator(body, &data.terminator, f)?;
+                writeln!(f, ";")?;
                 writeln!(f, "    }}")?;
             }
             writeln!(f, "}}")?;

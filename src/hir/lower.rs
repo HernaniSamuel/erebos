@@ -4,10 +4,10 @@ use std::collections::HashMap;
 
 use crate::diag::{Diagnostic, Diagnostics};
 use crate::hir::{
-    ArrayLen, Block, Comptime, ConstDef, ConstId, EnumDef, EnumId, EnumTy, Expr, ExprId, ExprKind,
-    FieldDef, Fn, FnId, FnKind, Hir, IntTy, Local, LocalId, NeverInMemory, NeverPosition,
-    StaticDef, StaticId, Stmt, StructDef, StructId, StructTy, Ty, UnsizedPosition, UnsizedType,
-    VariantDef,
+    Arm, ArrayLen, Block, Comptime, ConstDef, ConstId, EnumDef, EnumId, EnumTy, Expr, ExprId,
+    ExprKind, FieldDef, Fn, FnId, FnKind, Hir, IntTy, Local, LocalId, NeverInMemory, NeverPosition,
+    Pattern, PatternKind, StaticDef, StaticId, Stmt, StructDef, StructId, StructTy, Ty,
+    UnsizedPosition, UnsizedType, VariantDef,
 };
 use crate::span::Span;
 use crate::syntax::ast;
@@ -1448,6 +1448,11 @@ impl Lowerer<'_> {
                 self.loops.pop();
                 ExprKind::Loop(body)
             }
+            ast::ExprKind::Match { scrutinee, arms } => {
+                let scrutinee = self.boxed(scrutinee);
+                let arms = arms.iter().map(|arm| self.arm(arm)).collect();
+                ExprKind::Match { scrutinee, arms }
+            }
             ast::ExprKind::Break(value) => {
                 let target = self.loop_target(expr.span, "break");
                 if let (Some((_, true)), Some(value)) = (self.loops.last(), value) {
@@ -1503,6 +1508,127 @@ impl Lowerer<'_> {
             kind,
             span: expr.span,
         }
+    }
+
+    /// An arm of a `match`, in a scope of its own: the variable its pattern
+    /// binds, if any, exists only in its expression (ADR 0037).
+    fn arm(&mut self, arm: &ast::Arm) -> Arm {
+        self.scopes.push(HashMap::new());
+        let pattern = self.pattern(&arm.pattern, false);
+        let body = self.expr(&arm.body);
+        self.scopes.pop();
+        Arm { pattern, body }
+    }
+
+    /// A pattern; `alternative` if it is one of an or-pattern, where `let`
+    /// is not allowed (ADR 0037).
+    fn pattern(&mut self, pattern: &ast::Pattern, alternative: bool) -> Pattern {
+        let kind = match &pattern.kind {
+            ast::PatternKind::Wildcard => PatternKind::Wildcard,
+            ast::PatternKind::Binding { mutable, name, ty } if alternative => {
+                self.diags.push(
+                    Diagnostic::error(
+                        "resolve::binding-in-or-pattern",
+                        "a `let` cannot be an alternative of an or-pattern",
+                    )
+                    .label(pattern.span, "binds a variable")
+                    .help("a `let` matches every value on its own; give it an arm of its own, such as `let n: u8 => ...` (ADR 0037)"),
+                );
+                // Declared all the same, so that its uses report nothing
+                // more. Reported; lowering errors stop the pipeline.
+                let local_ty = self.ty(ty, UnsizedPosition::Variable);
+                self.declare(name, local_ty, *mutable);
+                PatternKind::Wildcard
+            }
+            ast::PatternKind::Binding { mutable, name, ty } => {
+                let local_ty = self.ty(ty, UnsizedPosition::Variable);
+                PatternKind::Binding {
+                    local: self.declare(name, local_ty, *mutable),
+                    ty_span: ty.span,
+                }
+            }
+            // Rejected literals were reported by the lexer, and the pipeline
+            // stops before HIR when there are syntax errors.
+            ast::PatternKind::Int { value, negated } => PatternKind::Int {
+                value: value.unwrap_or(0),
+                negated: *negated,
+            },
+            ast::PatternKind::Byte(value) => PatternKind::Byte(value.unwrap_or(0)),
+            ast::PatternKind::Bool(value) => PatternKind::Bool(*value),
+            ast::PatternKind::Name(name) => match self.pattern_const(name) {
+                Some(id) => PatternKind::Const(id),
+                // Reported; lowering errors stop the pipeline.
+                None => PatternKind::Wildcard,
+            },
+            ast::PatternKind::Or(alternatives) => PatternKind::Or(
+                alternatives
+                    .iter()
+                    .map(|alternative| self.pattern(alternative, true))
+                    .collect(),
+            ),
+        };
+        Pattern {
+            kind,
+            span: pattern.span,
+        }
+    }
+
+    /// A bare name in a pattern, which is always a constant (ADR 0037). It
+    /// is looked up as in an expression, so a local variable shadows a
+    /// constant of the same name.
+    fn pattern_const(&mut self, name: &ast::Ident) -> Option<ConstId> {
+        let not_a_constant = |what: &str| {
+            Diagnostic::error(
+                "resolve::not-a-constant",
+                format!("`{}` is {what}, not a constant", name.name),
+            )
+            .label(name.span, "a name in a pattern is a constant")
+        };
+        // To compare with anything else, the value is bound and tested.
+        let compare = format!(
+            "to compare with it, bind the value and test it: `let x: T => if x == {} {{ ... }}` (ADR 0037)",
+            name.name
+        );
+        let diag = if let Some(local) = self.find_local(&name.name) {
+            let declared = self.locals[local.0 as usize].span;
+            let diag =
+                not_a_constant("a variable").label(declared, "the variable is declared here");
+            if self.const_ids.contains_key(&name.name) {
+                diag.help(format!(
+                    "the variable shadows the constant `{}` here (ADR 0029); {compare}",
+                    name.name
+                ))
+            } else {
+                diag.help(compare)
+            }
+        } else if let Some(&id) = self.const_ids.get(&name.name) {
+            return Some(id);
+        } else if self.static_ids.contains_key(&name.name) {
+            not_a_constant("a static").help(format!(
+                "a static is memory, read at run time (ADR 0030); {compare}"
+            ))
+        } else if self.fn_ids.contains_key(&name.name) {
+            not_a_constant("a function")
+                .help("a pattern matches a value: a literal, a constant or `_` (ADR 0037)")
+        } else if self.struct_ids.contains_key(&name.name) {
+            not_a_constant("a struct")
+                .help("a pattern matches a value: a literal, a constant or `_` (ADR 0037)")
+        } else if self.enum_ids.contains_key(&name.name) {
+            not_a_constant("an enum")
+                .help("a pattern matches a value: a literal, a constant or `_` (ADR 0037)")
+        } else {
+            Diagnostic::error(
+                "resolve::unknown-name",
+                format!("cannot find `{}` in this scope", name.name),
+            )
+            .label(name.span, "not found")
+            .help(format!(
+                "a name in a pattern is always a constant; to bind the value to a new variable, write `let {}: T` (ADR 0037)",
+                name.name
+            ))
+        };
+        self.diags.push(diag);
+        None
     }
 
     /// The innermost enclosing loop. Outside a loop this reports an error and

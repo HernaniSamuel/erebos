@@ -668,6 +668,7 @@ impl Builder<'_, '_> {
                 self.current = scope.break_to;
                 self.read_result(result)
             }
+            hir::ExprKind::Match { scrutinee, arms } => self.match_(ty, scrutinee, arms),
             hir::ExprKind::Break { target, value } => {
                 let value = value.as_ref().map(|v| self.expr(v));
                 let index = self.loop_index(*target);
@@ -713,6 +714,112 @@ impl Builder<'_, '_> {
             self.terminate(Terminator::Unreachable);
         }
         value
+    }
+
+    /// `match` (ADR 0037), of type `ty`: the scrutinee is read once, before
+    /// any arm, and a switch on it jumps to the first arm whose pattern
+    /// matches. The catch-all arm is the default; without one, every value
+    /// is listed, so the default cannot be reached. With a known scrutinee,
+    /// only the arm it takes is checked (ADR 0032).
+    fn match_(&mut self, ty: Ty, scrutinee: &hir::Expr, arms: &[hir::Arm]) -> Operand {
+        let scrutinee_ty = self.ty_of(scrutinee);
+        let value = self.expr(scrutinee);
+        if self.current.is_none() {
+            // The scrutinee did not finish, and nothing follows.
+            return Operand::Const(Const::Unit);
+        }
+        // Read where it is written (ADR 0018), into a temporary that the
+        // switch and the variables the arms bind share, unless it is one.
+        let discr = match value {
+            Operand::Copy(place)
+                if !place.projection.is_empty()
+                    || self.locals[place.local.0 as usize].name.is_some() =>
+            {
+                self.temp(scrutinee_ty, Rvalue::Use(value))
+            }
+            _ => value,
+        };
+        let blocks: Vec<BasicBlock> = arms.iter().map(|_| self.new_block()).collect();
+        // For each arm, the values its alternatives match, `None` for every
+        // value. Type checking rejects an arm after a catch-all, and a value
+        // listed twice.
+        let mut values = Vec::with_capacity(arms.len());
+        let mut cases = Vec::new();
+        let mut otherwise = None;
+        for (arm, &block) in arms.iter().zip(&blocks) {
+            let arm_values: Vec<Option<u64>> = arm
+                .pattern
+                .alternatives()
+                .iter()
+                .map(|alternative| self.pattern_value(alternative, scrutinee_ty))
+                .collect();
+            if arm_values.contains(&None) {
+                otherwise = otherwise.or(Some(block));
+            } else if otherwise.is_none() {
+                cases.extend(arm_values.iter().flatten().map(|&value| (value, block)));
+            }
+            values.push(arm_values);
+        }
+        let taken = self.known_arm(scrutinee, &values);
+        let unlisted = otherwise.is_none().then(|| self.new_block());
+        self.terminate(Terminator::Switch {
+            discr,
+            cases: cases.leak(),
+            otherwise: otherwise.or(unlisted).expect("a default block exists"),
+        });
+        if let Some(block) = unlisted {
+            self.current = Some(block);
+            self.terminate(Terminator::Unreachable);
+        }
+
+        let result = self.result_place(ty);
+        let mut ends = Vec::with_capacity(arms.len());
+        for (i, (arm, &block)) in arms.iter().zip(&blocks).enumerate() {
+            self.current = Some(block);
+            if let Some(local) = arm.pattern.binding() {
+                let local = self.hir_locals[local.0 as usize];
+                self.assign(Place::local(local), Rvalue::Use(discr));
+            }
+            let can_run = taken.is_none_or(|taken| taken == Some(i));
+            let value = self.checked_if(can_run, |this| this.expr(&arm.body));
+            self.store_result(result, value);
+            ends.push(self.current.take());
+        }
+        self.join(&ends);
+        self.read_result(result)
+    }
+
+    /// The bits a pattern matches, masked to the width of `ty`, the type
+    /// matched (`bool` is 0 or 1); `None` for every value.
+    fn pattern_value(&mut self, pattern: &hir::Pattern, ty: Ty) -> Option<u64> {
+        let int = match ty {
+            Ty::Int(int) => Some(int),
+            _ => None,
+        };
+        let mask = int.map_or(1, |int| int.mask());
+        Some(match &pattern.kind {
+            hir::PatternKind::Wildcard | hir::PatternKind::Binding { .. } => return None,
+            hir::PatternKind::Int { value, negated } => {
+                let bits = if *negated {
+                    value.wrapping_neg()
+                } else {
+                    *value
+                };
+                bits & mask
+            }
+            hir::PatternKind::Byte(value) => u64::from(*value),
+            hir::PatternKind::Bool(value) => u64::from(*value),
+            hir::PatternKind::Const(id) => match (self.const_value(*id), int) {
+                (Some(value), Some(int)) => value.int(int.bytes() as usize),
+                (Some(value), None) => u64::from(value.bytes[0] != 0),
+                (None, _) => {
+                    // Reported where it failed; the body is not used.
+                    self.failed = true;
+                    0
+                }
+            },
+            hir::PatternKind::Or(_) => unreachable!("an alternative is not an or-pattern"),
+        })
     }
 
     /// Division and remainder with the checks of ADR 0007, so that the

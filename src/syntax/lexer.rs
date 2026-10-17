@@ -86,6 +86,7 @@ impl Lexer<'_> {
                 '|' if self.eat('|') => TokenKind::OrOr,
                 '|' => self.with_eq(TokenKind::Pipe, TokenKind::PipeEq),
                 '^' => self.with_eq(TokenKind::Caret, TokenKind::CaretEq),
+                '=' if self.eat('>') => TokenKind::FatArrow,
                 '=' => self.with_eq(TokenKind::Eq, TokenKind::EqEq),
                 '<' if self.eat('<') => self.with_eq(TokenKind::Shl, TokenKind::ShlEq),
                 '<' => self.with_eq(TokenKind::Lt, TokenKind::Le),
@@ -495,6 +496,20 @@ mod tests {
             [
                 Enum, Ident, Colon, Ident, LBrace, Ident, Eq, Int, RBrace, Ident, ColonColon,
                 Ident, ColonColon, Colon, Eof
+            ]
+        );
+    }
+
+    #[test]
+    fn match_arms_and_wildcards() {
+        use TokenKind::*;
+        let (kinds, diags) = kinds("match x { _ => 0, _x => 1 } a == b = c");
+        assert!(!diags.has_errors());
+        assert_eq!(
+            kinds,
+            [
+                Match, Ident, LBrace, Underscore, FatArrow, Int, Comma, Ident, FatArrow, Int,
+                RBrace, Ident, EqEq, Ident, Eq, Ident, Eof
             ]
         );
     }

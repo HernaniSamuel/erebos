@@ -62,6 +62,17 @@ fn variant_name(hir: &Hir, id: EnumId, index: u32) -> String {
     )
 }
 
+/// An item being computed, as cycles report it.
+struct InProgress {
+    item: Item,
+    span: Span,
+    what: String,
+    /// A cycle through it was reported already: while it is computed, it
+    /// may be asked for again, by the body of a constant a pattern uses
+    /// and by that body's MIR, and the cycle is one failure (ADR 0032).
+    cycle_reported: bool,
+}
+
 /// The progress of one item through a query.
 enum State<T> {
     NotStarted,
@@ -113,7 +124,7 @@ pub struct Queries<'h> {
     data: Vec<ConstData>,
     data_ids: HashMap<DataSource, DataId>,
     /// Items being computed, outermost first.
-    in_progress: Vec<(Item, Span, String)>,
+    in_progress: Vec<InProgress>,
 }
 
 impl<'h> Queries<'h> {
@@ -211,7 +222,7 @@ impl<'h> Queries<'h> {
         }
         self.checked[id.0 as usize] = State::InProgress;
         let before = self.diags.len();
-        ty::check_fn(self, f);
+        let elsewhere = ty::check_fn(self, f);
         // An error found elsewhere, such as a length that failed to
         // evaluate, leaves `{error}` types here without a new diagnostic.
         let mut poisoned = [f.ret]
@@ -221,7 +232,7 @@ impl<'h> Queries<'h> {
         if let Some(body) = &f.body {
             body.walk(&mut |e| poisoned |= self.tables.expr_ty(e.id) == hir::Ty::Error);
         }
-        let ok = self.diags.len() == before && !poisoned;
+        let ok = self.diags.len() - before == elsewhere && !poisoned;
         self.finish(Item::Check(id));
         self.checked[id.0 as usize] = State::Done(ok);
         ok
@@ -229,16 +240,21 @@ impl<'h> Queries<'h> {
 
     /// Marks `item` in progress, or reports a cycle if it already is.
     fn start(&mut self, item: Item, span: Span, what: String) -> bool {
-        let Some(at) = self.in_progress.iter().position(|(i, _, _)| *i == item) else {
-            self.in_progress.push((item, span, what));
+        let Some(at) = self.in_progress.iter().position(|p| p.item == item) else {
+            self.in_progress.push(InProgress {
+                item,
+                span,
+                what,
+                cycle_reported: false,
+            });
             return true;
         };
         // Structs laid out inside each other, with no evaluation between:
         // containment by value (ADR 0021).
         let structs: Option<Vec<StructId>> = self.in_progress[at..]
             .iter()
-            .map(|(item, _, _)| match item {
-                Item::Layout(id) => Some(*id),
+            .map(|p| match p.item {
+                Item::Layout(id) => Some(id),
                 _ => None,
             })
             .collect();
@@ -246,7 +262,15 @@ impl<'h> Queries<'h> {
             self.report_containment_cycle(&structs);
             return false;
         }
-        let (_, first, first_what) = &self.in_progress[at];
+        // Asked for again within the cycle reported already.
+        if std::mem::replace(&mut self.in_progress[at].cycle_reported, true) {
+            return false;
+        }
+        let InProgress {
+            span: first,
+            what: first_what,
+            ..
+        } = &self.in_progress[at];
         let mut diag = Diagnostic::error(
             "ty::cycle",
             format!("{first_what} depends on its own value"),
@@ -254,7 +278,7 @@ impl<'h> Queries<'h> {
         .label(*first, "needed while computing itself");
         // Checking a body and computing its value share a span.
         let mut seen = vec![*first];
-        for (_, span, what) in &self.in_progress[at + 1..] {
+        for InProgress { span, what, .. } in &self.in_progress[at + 1..] {
             if span.file == first.file && !seen.contains(span) {
                 seen.push(*span);
                 diag = diag.label(*span, format!("through {what}"));
@@ -266,8 +290,8 @@ impl<'h> Queries<'h> {
     }
 
     fn finish(&mut self, item: Item) {
-        let (done, _, _) = self.in_progress.pop().expect("started");
-        debug_assert_eq!(done, item);
+        let done = self.in_progress.pop().expect("started");
+        debug_assert_eq!(done.item, item);
     }
 
     /// The value of a constant (ADR 0029), computed once.
@@ -817,7 +841,17 @@ impl<'h> Queries<'h> {
             State::Done(body) => return body.clone(),
             State::InProgress | State::NotStarted => {}
         }
-        if !self.typeck_fn(id) || self.needs_missing_layout(id) {
+        if !self.typeck_fn(id) {
+            // Asked for while its own type checking is in progress, which
+            // needed a constant that calls it: a cycle, reported. Once
+            // checked, it is built like any other (ADR 0032).
+            if let State::InProgress = self.checked[id.0 as usize] {
+                return None;
+            }
+            self.bodies[id.0 as usize] = State::Done(None);
+            return None;
+        }
+        if self.needs_missing_layout(id) {
             self.bodies[id.0 as usize] = State::Done(None);
             return None;
         }

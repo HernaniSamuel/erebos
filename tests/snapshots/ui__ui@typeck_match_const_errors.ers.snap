@@ -1,0 +1,40 @@
+---
+source: tests/ui.rs
+assertion_line: 40
+expression: output
+input_file: tests/ui/typeck_match_const_errors.ers
+---
+--- errors ---
+eval::panic
+
+  × the evaluation called the panic function: division by zero
+    ╭─[typeck_match_const_errors.ers:11:5]
+  6 │ // function whose `match` uses it is a cycle.
+  7 │ const BAD: u8 = fails();
+    ·       ─┬─       ───┬───
+    ·        │           ╰── called here
+    ·        ╰── while evaluating the constant `BAD`
+  8 │ 
+  9 │ fn fails() -> u8 {
+ 10 │     let zero: u8 = 0;
+ 11 │     1 / zero
+    ·     ────┬───
+    ·         ╰── division by zero
+ 12 │ }
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+ty::cycle
+
+  × the function `cycles` depends on its own value
+    ╭─[typeck_match_const_errors.ers:23:4]
+ 20 │ 
+ 21 │ const CYCLE: u8 = cycles(0);
+    ·       ──┬──
+    ·         ╰── through the constant `CYCLE`
+ 22 │ 
+ 23 │ fn cycles(x: u8) -> u8 {
+    ·    ───┬──
+    ·       ╰── needed while computing itself
+ 24 │     match x {
+    ╰────
+  help: break the cycle: a value cannot depend on itself (ADR 0028)

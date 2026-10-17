@@ -1,0 +1,41 @@
+// emit: llvm-ir
+// A `match` is an LLVM `switch` on the scrutinee's integer (ADR 0037), its
+// cases at the scrutinee's width: negative ones on an `i8`, ones above
+// `u32::MAX` on a `u64`. A scrutinee read through a volatile pointer is
+// read once, by one volatile load.
+struct Uart { data: u8, status: u8 }
+
+fn byte(x: u8) -> u32 {
+    match x {
+        0 => 1,
+        255 => 2,
+        _ => 3,
+    }
+}
+
+fn signed(x: i8) -> u32 {
+    match x {
+        -1 => 1,
+        -128 => 2,
+        let n: i8 => n as u32,
+    }
+}
+
+fn wide(x: u64) -> u32 {
+    match x {
+        0x1_0000_0000 => 1,
+        0xFFFF_FFFF_FFFF_FFFF | 7 => 2,
+        _ => 3,
+    }
+}
+
+fn status(p: *const volatile Uart) -> u32 {
+    match (*p).status {
+        0 => 0,
+        1 | 2 => 1,
+        _ => 2,
+    }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

@@ -1,0 +1,123 @@
+---
+source: tests/ui.rs
+assertion_line: 40
+expression: output
+input_file: tests/ui/parse_match_errors.ers
+---
+--- errors ---
+parser::unexpected-token
+
+  × expected `=>`, found `:`
+   ╭─[parse_match_errors.ers:7:16]
+ 6 │ fn struct_scrutinee() -> u8 {
+ 7 │     match S { a: 1 }.a { _ => 0 }
+   ·                ┬
+   ·                ╰── expected `=>`
+ 8 │ }
+   ╰────
+parser::unexpected-token
+
+  × expected identifier, found `=>`
+    ╭─[parse_match_errors.ers:11:19]
+ 10 │ fn let_without_name(x: u8) -> u8 {
+ 11 │     match x { let => 0 }
+    ·                   ─┬
+    ·                    ╰── expected identifier
+ 12 │ }
+    ╰────
+parser::let-without-type
+
+  × expected `:`, found `=>`
+    ╭─[parse_match_errors.ers:15:21]
+ 14 │ fn let_without_type(x: u8) -> u8 {
+ 15 │     match x { let n => n }
+    ·                     ─┬
+    ·                      ╰── expected `: Type`
+ 16 │ }
+    ╰────
+  help: every `let` states its type, e.g. `let n: u8 => ...` (ADR 0008, 0037)
+parser::unexpected-token
+
+  × expected `=>`, found integer literal
+    ╭─[parse_match_errors.ers:19:17]
+ 18 │ fn missing_arrow(x: u8) -> u8 {
+ 19 │     match x { 0 1 }
+    ·                 ┬
+    ·                 ╰── expected `=>`
+ 20 │ }
+    ╰────
+parser::unexpected-token
+
+  × expected `,` or `}`, found `_`
+    ╭─[parse_match_errors.ers:23:22]
+ 22 │ fn missing_comma(x: u8) -> u8 {
+ 23 │     match x { 0 => 1 _ => 2 }
+    ·                      ┬
+    ·                      ╰── expected `,` or `}`
+ 24 │ }
+    ╰────
+parser::unexpected-token
+
+  × expected an integer literal, found identifier
+    ╭─[parse_match_errors.ers:27:16]
+ 26 │ fn minus_without_literal(x: i8) -> i8 {
+ 27 │     match x { -n => 0, _ => 1 }
+    ·                ┬
+    ·                ╰── expected an integer literal
+ 28 │ }
+    ╰────
+parser::unexpected-token
+
+  × expected identifier, found `_`
+    ╭─[parse_match_errors.ers:31:9]
+ 30 │ fn underscore_variable() {
+ 31 │     let _: u32 = 0;
+    ·         ┬
+    ·         ╰── expected identifier
+ 32 │ }
+    ╰────
+  help: `_` is the wildcard pattern of `match`, and cannot be a name or a value (ADR 0037)
+parser::unexpected-token
+
+  × expected identifier, found `_`
+    ╭─[parse_match_errors.ers:34:7]
+ 33 │ 
+ 34 │ const _: u32 = 0;
+    ·       ┬
+    ·       ╰── expected identifier
+ 35 │ 
+    ╰────
+  help: `_` is the wildcard pattern of `match`, and cannot be a name or a value (ADR 0037)
+parser::unexpected-token
+
+  × expected identifier, found `_`
+    ╭─[parse_match_errors.ers:36:16]
+ 35 │ 
+ 36 │ struct Field { _: u8 }
+    ·                ┬
+    ·                ╰── expected identifier
+ 37 │ 
+    ╰────
+  help: `_` is the wildcard pattern of `match`, and cannot be a name or a value (ADR 0037)
+parser::unexpected-token
+
+  × expected an expression, found `_`
+    ╭─[parse_match_errors.ers:39:5]
+ 38 │ fn underscore_value() -> u32 {
+ 39 │     _
+    ·     ┬
+    ·     ╰── expected an expression
+ 40 │ }
+    ╰────
+  help: `_` is the wildcard pattern of `match`, and cannot be a name or a value (ADR 0037)
+parser::unexpected-token
+
+  × expected identifier, found `_`
+    ╭─[parse_match_errors.ers:42:25]
+ 41 │ 
+ 42 │ fn underscore_parameter(_: u32) {}
+    ·                         ┬
+    ·                         ╰── expected identifier
+ 43 │ 
+    ╰────
+  help: `_` is the wildcard pattern of `match`, and cannot be a name or a value (ADR 0037)

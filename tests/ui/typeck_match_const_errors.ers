@@ -1,0 +1,31 @@
+// emit: typeck
+// The values of constants in patterns come from evaluating them
+// (ADR 0037). One that fails is reported once, where it fails, and the
+// `match` that uses it is not checked further: neither its dead arm nor
+// its missing `_` is reported. One that needs, to be evaluated, the
+// function whose `match` uses it is a cycle.
+const BAD: u8 = fails();
+
+fn fails() -> u8 {
+    let zero: u8 = 0;
+    1 / zero
+}
+
+fn uses_bad(x: u8) -> u8 {
+    match x {
+        BAD => 1,
+        BAD => 2,
+    }
+}
+
+const CYCLE: u8 = cycles(0);
+
+fn cycles(x: u8) -> u8 {
+    match x {
+        CYCLE => 1,
+        _ => 0,
+    }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

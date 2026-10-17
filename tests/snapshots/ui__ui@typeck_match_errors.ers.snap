@@ -1,0 +1,205 @@
+---
+source: tests/ui.rs
+assertion_line: 40
+expression: output
+input_file: tests/ui/typeck_match_errors.ers
+---
+--- errors ---
+ty::match-type
+
+  × cannot `match` on a value of type `*const u8`
+    ╭─[typeck_match_errors.ers:13:11]
+ 12 │ fn scrutinees(p: *const u8, s: *const [u8], pair: Pair, a: [u8; 2], m: Mode) {
+ 13 │     match p { _ => {} }
+    ·           ┬
+    ·           ╰── has type `*const u8`
+ 14 │     match s { _ => {} }
+    ╰────
+  help: a `match` takes an integer, a `bool` or an enum (ADR 0037)
+ty::match-type
+
+  × cannot `match` on a value of type `*const [u8]`
+    ╭─[typeck_match_errors.ers:14:11]
+ 13 │     match p { _ => {} }
+ 14 │     match s { _ => {} }
+    ·           ┬
+    ·           ╰── has type `*const [u8]`
+ 15 │     match pair { _ => {} }
+    ╰────
+  help: a `match` takes an integer, a `bool` or an enum (ADR 0037)
+ty::match-type
+
+  × cannot `match` on a value of type `Pair`
+    ╭─[typeck_match_errors.ers:15:11]
+ 14 │     match s { _ => {} }
+ 15 │     match pair { _ => {} }
+    ·           ──┬─
+    ·             ╰── has type `Pair`
+ 16 │     match a { _ => {} }
+    ╰────
+  help: a `match` takes an integer, a `bool` or an enum (ADR 0037)
+ty::match-type
+
+  × cannot `match` on a value of type `[u8; 2]`
+    ╭─[typeck_match_errors.ers:16:11]
+ 15 │     match pair { _ => {} }
+ 16 │     match a { _ => {} }
+    ·           ┬
+    ·           ╰── has type `[u8; 2]`
+ 17 │     match () { _ => {} }
+    ╰────
+  help: a `match` takes an integer, a `bool` or an enum (ADR 0037)
+ty::match-type
+
+  × cannot `match` on a value of type `()`
+    ╭─[typeck_match_errors.ers:17:11]
+ 16 │     match a { _ => {} }
+ 17 │     match () { _ => {} }
+    ·           ─┬
+    ·            ╰── has type `()`
+ 18 │     match halt() { _ => {} }
+    ╰────
+  help: a `match` takes an integer, a `bool` or an enum (ADR 0037)
+ty::match-type
+
+  × cannot `match` on a value of type `!`
+    ╭─[typeck_match_errors.ers:18:11]
+ 17 │     match () { _ => {} }
+ 18 │     match halt() { _ => {} }
+    ·           ───┬──
+    ·              ╰── has type `!`
+ 19 │     match m { _ => {} }
+    ╰────
+  help: a `match` takes an integer, a `bool` or an enum (ADR 0037)
+ty::match-type
+
+  × cannot `match` on a value of type `Mode`
+    ╭─[typeck_match_errors.ers:19:11]
+ 18 │     match halt() { _ => {} }
+ 19 │     match m { _ => {} }
+    ·           ┬
+    ·           ╰── has type `Mode`
+ 20 │     match 3 { _ => {} }
+    ╰────
+  help: a `match` on an enum is not implemented yet; compare it with `==` (ADR 0035)
+ty::untyped-literal
+
+  × cannot tell the type of this literal
+    ╭─[typeck_match_errors.ers:20:11]
+ 19 │     match m { _ => {} }
+ 20 │     match 3 { _ => {} }
+    ·           ┬
+    ·           ╰── no type is expected here
+ 21 │ }
+    ╰────
+  help: literals take the type expected where they appear; bind it first, e.g. `let x: u32 = ...`
+        (ADR 0008)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_match_errors.ers:25:9]
+ 24 │     match x {
+ 25 │         WIDE => {}
+    ·         ──┬─
+    ·           ╰── expected `u8`, found `u16`
+ 26 │         300 => {}
+    ╰────
+  help: a constant in a pattern has the type of the value matched, which a pattern never converts
+        (ADR 0037)
+ty::literal-out-of-range
+
+  × literal out of range for `u8`
+    ╭─[typeck_match_errors.ers:26:9]
+ 25 │         WIDE => {}
+ 26 │         300 => {}
+    ·         ─┬─
+    ·          ╰── `300` does not fit in `u8`
+ 27 │         -1 => {}
+    ╰────
+ty::negate-unsigned
+
+  × cannot negate a value of unsigned type `u8`
+    ╭─[typeck_match_errors.ers:27:9]
+ 26 │         300 => {}
+ 27 │         -1 => {}
+    ·         ─┬
+    ·          ╰── `u8` has no negative values
+ 28 │         true => {}
+    ╰────
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_match_errors.ers:28:9]
+ 27 │         -1 => {}
+ 28 │         true => {}
+    ·         ──┬─
+    ·           ╰── expected `u8`, found `bool`
+ 29 │         _ => {}
+    ╰────
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_match_errors.ers:32:16]
+ 31 │     match x {
+ 32 │         let n: u16 => {}
+    ·                ─┬─
+    ·                 ╰── expected `u8`, found `u16`
+ 33 │     }
+    ╰────
+  help: the variable holds the value matched, a `u8`, which a pattern never converts (ADR 0037)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_match_errors.ers:35:9]
+ 34 │     match w {
+ 35 │         b'q' => {}
+    ·         ──┬─
+    ·           ╰── expected `u32`, found `u8`
+ 36 │         _ => {}
+    ╰────
+  help: a byte literal is a `u8` (ADR 0016); write this value as an integer literal, `113`
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_match_errors.ers:39:9]
+ 38 │     match b {
+ 39 │         0 => {}
+    ·         ┬
+    ·         ╰── expected `bool`, found an integer
+ 40 │         _ => {}
+    ╰────
+  help: a `bool` is matched with `true` and `false` (ADR 0037)
+ty::non-exhaustive-match
+
+  × non-exhaustive `match`: `false` not covered
+    ╭─[typeck_match_errors.ers:45:24]
+ 44 │ fn non_exhaustive(x: u8, b: bool) -> u32 {
+ 45 │     let c: u32 = match b {
+    ·                        ┬
+    ·                        ╰── missing: `false`
+ 46 │         true => 1,
+    ╰────
+  help: add `false => ...`, or a `_` arm (ADR 0037)
+ty::non-exhaustive-match
+
+  × non-exhaustive `match`: `true` and `false` not covered
+    ╭─[typeck_match_errors.ers:48:24]
+ 47 │     };
+ 48 │     let d: u32 = match b {};
+    ·                        ┬
+    ·                        ╰── missing: `true` and `false`
+ 49 │     match x {
+    ╰────
+  help: add `true => ...` and `false => ...`, or a `_` arm (ADR 0037)
+ty::non-exhaustive-match
+
+  × non-exhaustive `match`: not every `u8` is covered
+    ╭─[typeck_match_errors.ers:49:11]
+ 48 │     let d: u32 = match b {};
+ 49 │     match x {
+    ·           ┬
+    ·           ╰── missing: a `_` or `let` arm
+ 50 │         0 => c,
+    ╰────
+  help: a `match` on an integer needs an arm for every value, such as `_ => ...` or `let n: u8
+        => ...` (ADR 0037)

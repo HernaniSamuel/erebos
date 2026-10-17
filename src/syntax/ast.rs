@@ -257,6 +257,11 @@ pub enum ExprKind {
         body: Block,
     },
     Loop(Block),
+    /// `match scrutinee { pattern => expr, ... }` (ADR 0037)
+    Match {
+        scrutinee: Box<Expr>,
+        arms: Vec<Arm>,
+    },
     /// `break` or `break value`
     Break(Option<Box<Expr>>),
     Continue,
@@ -271,12 +276,49 @@ pub struct FieldInit {
     pub value: Expr,
 }
 
+/// `pattern => body`, an arm of a `match` (ADR 0037).
+#[derive(Debug)]
+pub struct Arm {
+    pub pattern: Pattern,
+    pub body: Expr,
+}
+
+#[derive(Debug)]
+pub struct Pattern {
+    pub kind: PatternKind,
+    pub span: Span,
+}
+
+/// What an arm of a `match` matches (ADR 0037).
+#[derive(Debug)]
+pub enum PatternKind {
+    /// `_`: every value.
+    Wildcard,
+    /// `let [mut] name: Type`: every value, bound to a new variable.
+    Binding { mutable: bool, name: Ident, ty: Ty },
+    /// An integer literal, or `-` and one; `value` is `None` if the lexer
+    /// rejected it.
+    Int { value: Option<u64>, negated: bool },
+    /// `b'x'`; `None` if the lexer rejected it.
+    Byte(Option<u8>),
+    /// `true` or `false`
+    Bool(bool),
+    /// A bare name, which is always a constant.
+    Name(Ident),
+    /// `p | q | ...`, at least two alternatives.
+    Or(Vec<Pattern>),
+}
+
 impl ExprKind {
     /// Block-like expressions may stand as statements without `;`.
     pub fn is_block_like(&self) -> bool {
         matches!(
             self,
-            ExprKind::Block(_) | ExprKind::If { .. } | ExprKind::While { .. } | ExprKind::Loop(_)
+            ExprKind::Block(_)
+                | ExprKind::If { .. }
+                | ExprKind::While { .. }
+                | ExprKind::Loop(_)
+                | ExprKind::Match { .. }
         )
     }
 }

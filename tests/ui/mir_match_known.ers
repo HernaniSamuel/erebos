@@ -1,0 +1,47 @@
+// emit: mir
+// A `match` on a value known at compile time runs one arm; the arms it
+// never takes are code that cannot run, not checked by ADR 0032's rules
+// (ADR 0037). The arm it takes is, and so is every arm of a `match` on a
+// value only known at run time. A function with a non-exhaustive `match`
+// does not type check, so its known division by zero is not reported.
+const MODE: u8 = 2;
+const DEBUG: bool = false;
+
+fn never_taken(x: u32) -> u32 {
+    match MODE {
+        1 => x / 0,
+        2 => x,
+        let m: u8 => x >> 40,
+    }
+}
+
+fn taken(x: u32) -> u32 {
+    match MODE {
+        2 => x / 0,
+        _ => x,
+    }
+}
+
+fn debug(x: u32) -> u32 {
+    match DEBUG {
+        true => x / 0,
+        false => x,
+    }
+}
+
+fn unknown(x: u32, y: u8) -> u32 {
+    match y {
+        0 => x % 0,
+        _ => x,
+    }
+}
+
+fn non_exhaustive(x: u32) -> u32 {
+    let y: u32 = x / 0;
+    match x {
+        0 => y,
+    }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

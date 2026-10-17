@@ -464,6 +464,17 @@ impl Interp<'_, '_> {
                     else_
                 }
             }
+            Terminator::Switch {
+                discr,
+                cases,
+                otherwise,
+            } => {
+                let value = self.operand(&discr, span)?.int();
+                cases
+                    .iter()
+                    .find(|(case, _)| *case == value)
+                    .map_or(otherwise, |&(_, target)| target)
+            }
             Terminator::Return => return self.return_(),
             // It follows an expression of type `!`, which does not finish:
             // no memory holds a `!` to read (ADR 0034).
