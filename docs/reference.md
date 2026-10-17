@@ -1,4 +1,4 @@
-# Erebos language reference (M2.3b)
+# Erebos language reference (M2.4a)
 
 This describes the language as the compiler implements it today. The
 reasoning behind each rule lives in the ADRs (`docs/adr/`), cited as
@@ -9,8 +9,8 @@ one of them.
 
 A program is one source file (`.ers`) plus the runtime support functions
 (`rt/builtins.ers`, ADR 0020). It is a list of items, in any order:
-functions, external functions, structs, constants, statics, external
-statics and `comptime` blocks.
+functions, external functions, structs, enums, constants, statics,
+external statics and `comptime` blocks.
 Items share one namespace, and may refer to each other whatever their
 order (ADR 0028). It must contain exactly one **entry function** and
 one **panic function**:
@@ -29,20 +29,29 @@ panic fn on_panic() -> ! {
   stack, `.bss` and `.data` (see "Startup and memory" below). It takes no
   parameters, must return `!`, and cannot be called.
 - `panic fn` runs when an operation cannot produce a result, such as
-  division by zero or an index out of bounds (ADR 0014). It takes no
-  parameters, must return `!`, and may be called explicitly.
+  division by zero, an index out of bounds, or a `match` without a
+  catch-all arm on an enum value that is no variant (ADR 0014, 0036). It
+  takes no parameters, must return `!`, and may be called explicitly.
 
 The target is RV32IMAC on QEMU `virt` (ADR 0010).
 
 ## Lexical structure
 
 - **Comments:** `// to end of line` and `/* block */`; block comments nest.
-- **Identifiers:** `[A-Za-z_][A-Za-z0-9_]*`. Names starting with `__` are
-  reserved for the runtime, and so are the C names it defines (`memcpy`,
-  `memmove`, `memset`) and `_start`.
-- **Keywords:** `align_of as break comptime const continue else entry
-  extern false fn if let loop mut offset_of panic return size_of static
-  struct true volatile while`. `raw` is a keyword only right after `&`.
+- **Identifiers:** `[A-Za-z_][A-Za-z0-9_]*`, except `_` alone. Names
+  starting with `__` are reserved for the runtime, and so are the C names
+  it defines (`memcpy`, `memmove`, `memset`) and `_start`.
+- **Keywords:** `align_of as break comptime const continue else entry enum
+  extern false fn if let loop match mut offset_of panic return size_of
+  static struct true volatile while`. `raw` is a keyword only right after
+  `&`.
+- **`_`** is a token of its own, the wildcard pattern of `match`, and
+  nothing else (ADR 0037): no variable, parameter, item, field or variant
+  can be named `_` (`let _: u32` and `const _: u32` are
+  `parser::unexpected-token`), and `_` is not an expression. Names that
+  only start with `_`, such as `_x`, are identifiers.
+- **`::`** separates an enum from its variant (`Mode::Run`), and **`=>`**
+  a pattern from its arm's expression.
 - **Built-in functions:** `assert`, `len` and `slice` are reserved names:
   no item may have one of them. A call to one of these names is always the
   built-in; variables may still be named so (ADR 0031).
@@ -72,6 +81,7 @@ The target is RV32IMAC on QEMU `virt` (ADR 0010).
 | `[T; N]` | an array of `N` values of type `T`; `N` is a `usize` computed at compile time (ADR 0021, 0029) |
 | `*const [T]`, `*mut [T]` | slices: the address of `T` values and how many there are (ADR 0031); `volatile` as for any pointer |
 | `Name` | a struct declared with `struct Name { ... }` (ADR 0021) |
+| `Name` | an enum declared with `enum Name: u8 { ... }`, stored as its integer type (ADR 0035) |
 
 Every `let`, parameter and return type is written explicitly; there is no
 inference (ADR 0008). `-> ()` may be omitted (ADR 0015). Arrays and structs
@@ -157,8 +167,10 @@ x + y;                   // expression statement
 
 A block `{ ... }` is an expression (ADR 0015). Its value is its final
 expression without `;`; with no such expression it has type `()`, or `!` if
-it cannot reach its end. A block-like expression (`if`, `while`, `loop`,
-`{ }`) may stand as a statement without `;`, but must then have type `()`.
+it cannot reach its end. A block-like expression (`if`, `match`, `while`,
+`loop`, `{ }`) may stand as a statement without `;`, but must then have
+type `()`. A statement that starts with one ends with it: `if c { } - 1`
+is not a subtraction.
 
 Names are scoped to their block; a `let` may shadow an earlier name.
 
@@ -368,6 +380,259 @@ a slice is an aggregate of two scalars wherever a rule depends on it:
 | thin pointer, other than to an array of `T` | slice of `T` | `ty::invalid-cast`; use `slice(p, n)` |
 | slice, or integer | integer, or slice | `ty::invalid-cast` |
 
+## Enums (ADR 0035, 0036)
+
+```
+enum Mode: u8 {
+    Off = 0,
+    Idle = 1,
+    Run = 3,
+}
+
+let m: Mode = Mode::Run;
+let code: u8 = m as u8; // 3
+```
+
+**Declaration.**
+
+- An enum is an item, in the one namespace of items. Its name is followed
+  by `:` and its **integer type**, any of `u8 u16 u32 u64 usize i8 i16 i32
+  i64 isize` (`resolve::enum-type` for any other type), and then its
+  variants, separated by commas, with an optional trailing comma.
+- **Both are required**: without the integer type, the declaration is
+  `parser::enum-without-type`, and a variant without `= value` is
+  `parser::variant-without-value`. No value is ever implied, so inserting
+  a variant never renumbers the others.
+- A variant's value is an expression of the enum's integer type, computed
+  at compile time like an array length: `= 1 << 3`, `= BASE + 1`,
+  `= Mode::Idle as u8 + 2`. A literal takes the integer type, so `= 300`
+  in a `u8` enum is `ty::literal-out-of-range`, and `= -1` needs a signed
+  type. A value that needs itself, directly or through other variants or
+  constants, is a `ty::cycle`.
+- Two variants with one name are `resolve::duplicate-variant`; two with
+  one value are `ty::duplicate-discriminant`, naming both. An enum needs at
+  least one variant (`resolve::empty-enum`).
+- A value that fails to evaluate is reported once, like a constant, and so
+  is a value given twice; uses of the enum report nothing more because of
+  it (see "`match`" for what a `match` on it does).
+- No attribute applies to an enum: `#[packed]` and `#[align(N)]` are
+  `resolve::misplaced-attribute`.
+
+**Naming a variant.**
+
+- `Mode::Run` is the variant `Run` of `Mode`, an expression of type `Mode`.
+  It is a value, not a place, like a constant: `&raw const Mode::Run` is
+  `ty::not-a-place`, and `Mode::Run = m` is `ty::not-assignable`.
+- A variant is known at compile time, and so is a variant converted with
+  `as` (see "Checks on values known at compile time"):
+  `[u8; Mode::Run as usize]` is fine.
+- The name before `::` is looked up among items only, as the name of a
+  struct literal is, so a local variable named `Mode` does not hide the
+  enum. A name that is no item there is `resolve::unknown-type`, an item
+  that is not an enum is `resolve::not-an-enum`, and `Mode::Walk`, with no
+  such variant, is `resolve::unknown-variant`.
+- `Mode` alone is not an expression; like a struct's name alone, it is
+  `resolve::unknown-name`.
+
+**Operations.**
+
+- `==` and `!=` compare two values of one enum type by their integers.
+  Ordering (`<`, `<=`, `>`, `>=`), arithmetic, bitwise and shift operators,
+  unary `-` and `!`, and the compound assignments are
+  `ty::invalid-operand`: they go through the integer, as in
+  `m as u8 < 3`. `&&` and `||` need `bool` operands
+  (`ty::mismatched-types`), as for any other type that is not `bool`.
+- A literal where an enum is expected, as in `m == 3` or `take(2)`, is
+  `ty::mismatched-types`: write a variant, or compare the integer,
+  `m as u8 == 3`.
+- **`as` converts an enum to any integer type**, as its integer type would
+  convert: with `enum Level: i8 { Low = -1 }`, `Level::Low as u32` is
+  `0xFFFF_FFFF`. An enum converts neither to `bool` nor to a pointer.
+- **Nothing converts to an enum** (`ty::invalid-cast`): not an integer,
+  not another enum, not the enum itself. `3 as Mode` reports only this
+  error. An integer becomes an enum through a `match`, with arms such as
+  `3 => Mode::Run`.
+- An enum has no fields: `m.f` and `offset_of(Mode, f)` are
+  `ty::no-fields`.
+- Enums are valid types of constants, statics, fields, array elements,
+  parameters and return values.
+
+**Layout and calls.** An enum is stored as its integer type: it has that
+type's size and alignment, and its value is that integer (`size_of(Mode)`
+is 1). Its C twin is that integer type, or C23's
+`enum Mode : uint8_t { ... }`, as a field, a parameter or a return value.
+Across calls it is a scalar, not an aggregate: passed and returned as its
+integer type, extended by that type's signedness (ADR 0006). Through a
+volatile pointer it is a scalar too (see "Volatile accesses"). In
+constants and statics its value is emitted as its integer, so a
+`static mut` holding a variant whose value is 0 goes to `.bss`.
+
+**Values that are no variant (ADR 0036).** A value of an enum type is any
+value of its integer type; the variants name some of them. Since nothing
+converts to an enum, a program that only writes variants never holds
+another value, but memory written by other means can: a pointer cast, a
+volatile read of a device register, an `extern static`, the result of an
+`extern fn`, code outside the program.
+
+- Reading, writing and copying such a value, comparing it with `==` and
+  `!=`, and converting it with `as` are defined and behave as for its
+  integer, at run time and at compile time. Nothing is checked there.
+- Only `match` tells the values apart: a variant pattern never matches a
+  value that is no variant, a catch-all arm does, and a `match` without a
+  catch-all arm calls the panic function on one (see "`match`").
+- The compiler never assumes that an enum holds a variant: as LLVM sees
+  it, an enum ranges over its integer type's values (no range metadata on
+  loads, no `assume`).
+
+## `match` (ADR 0037)
+
+```
+match state {
+    State::Idle => start(),
+    State::Run | State::Wait => {
+        step();
+    }
+    State::Done => return,
+}
+
+let reply: u8 = match cmd {
+    CMD_RESET => reset(),
+    0x10 | 0x11 => read(cmd),
+    b'q' => 0,
+    let other: u8 => unknown(other),
+};
+```
+
+**Syntax.**
+
+- `match scrutinee { arms }`, where an arm is `pattern => expression`. Arms
+  are separated by commas, with an optional trailing comma.
+- **An arm whose expression starts with a block-like expression** (`{ }`,
+  `if`, `match`, `while`, `loop`) **ends with it**, as a statement does,
+  and needs no comma. So after `0 => {}`, `-1 => {}` is the next arm, not
+  a subtraction. To continue such an expression, put it in parentheses.
+- As in the condition of `if`, a `{` after the scrutinee opens the arms,
+  so a struct literal there needs parentheses.
+- `match` is an expression and block-like: as a statement without `;` it
+  must have type `()`.
+
+**What can be matched.** The scrutinee is an integer, a `bool` or an enum.
+Any other type is `ty::match-type`: pointers, slices, structs, arrays, `()`
+and `!`. The scrutinee has no expected type, so `match 3 { ... }` is
+`ty::untyped-literal`.
+
+**Patterns.**
+
+| Pattern | Matches |
+|---------|---------|
+| `_` | every value |
+| `let name: T`, `let mut name: T` | every value, copied into a new variable |
+| an integer literal, `-` and an integer literal | that value |
+| a byte literal (`b'q'`) | that byte, against a `u8` scrutinee |
+| `true`, `false` | that value |
+| `Mode::Run` | that variant |
+| `NAME` | the value of the constant `NAME` |
+| `p \| q \| ...` | any of the alternatives |
+
+- **Literals** take the scrutinee's type, as against any expected type:
+  `300` against a `u8` is `ty::literal-out-of-range`, and `-1` against an
+  unsigned type is `ty::negate-unsigned`. A byte literal is a `u8`. A
+  literal against a type it does not have, such as `b'q'` against a `u32`,
+  `0` against a `bool` or an enum, or `true` against an integer, is
+  `ty::mismatched-types`.
+- **A variant** must be of the scrutinee's enum (`ty::mismatched-types`
+  otherwise), and is resolved as in an expression
+  (`resolve::unknown-variant`, `resolve::not-an-enum`).
+- **A bare name is always a constant.** It must name a `const` item of the
+  scrutinee's type (`ty::mismatched-types` otherwise), and matches its
+  value, computed at compile time, whatever that value is: a constant of
+  an enum type may hold a value that is no variant, and then matches
+  exactly that value. A name that names nothing is
+  `resolve::unknown-name`; one that names a local variable, a parameter or
+  an item that is not a constant (a static, function, struct or enum) is
+  `resolve::not-a-constant`. A local variable shadows a constant of the
+  same name here as anywhere, so it is then `resolve::not-a-constant`
+  too; to compare with the constant, write
+  `let x: T => if x == NAME { ... }`.
+- **A new variable is always written with `let` and its type**, which must
+  be the scrutinee's, with no conversion (`ty::mismatched-types`); without
+  the type, the pattern is `parser::let-without-type`. The variable holds
+  a copy of the value and, with `let mut`, may be assigned. It exists in
+  its arm's expression only, where it shadows any item or variable of the
+  same name.
+- **Or-patterns** list alternatives of any pattern except `let`
+  (`resolve::binding-in-or-pattern`).
+- A **catch-all arm** is one whose pattern is `_`, a `let`, or an
+  or-pattern with a `_` alternative.
+- There are no range patterns (`b'0'..=b'9'`), guards (`pat if cond`) or
+  nested patterns; a range is written as a `let` arm with an `if`.
+
+**Choosing an arm.** The scrutinee runs **once, before any arm**, and is
+read where it is written: through a volatile pointer,
+`match (*uart).status` is exactly one volatile read. The arms are tried in
+order; the first whose pattern matches runs, and its value is the value of
+the `match`. Patterns run no code: constants are already values. A
+`match` on an enum without a catch-all arm calls the panic function when no
+arm matches, which only a value that is no variant can cause (ADR 0036);
+at compile time, that is an `eval::panic` whose cause is "enum value is no
+variant".
+
+A `match` compiles to a switch on the scrutinee's integer (an LLVM
+`switch`), as a C `switch` does. Its default is the catch-all arm, the
+call to the panic function on an enum without one, and unreachable on a
+`bool` or an integer whose every value is listed.
+
+**Typing.** As for `if`: with an expected type, each arm's expression is
+checked against it, with the implicit conversions of "Typing"; without
+one, the first arm whose type is not `!` gives the type and the others are
+checked against it. Arms of type `!` fit any type, and a `match` whose arms
+all have type `!` has type `!`.
+
+**Exhaustiveness.** Every `match` is exhaustive: its arms together match
+every value of the scrutinee's type, or the `match` is
+`ty::non-exhaustive-match`, which lists what is missing.
+
+- A `bool` needs `true` and `false`, or a catch-all.
+- An enum needs every variant, or a catch-all. Values that are no variant
+  are not required. Missing variants are listed in declaration order.
+- An integer needs every value of its type, which in practice means a
+  catch-all arm; listing all 256 values of a `u8` or `i8` counts too.
+
+**Dead arms.** An arm that matches no value the arms before it leave is
+`ty::unreachable-pattern`, reported once for the arm, pointing at the first
+earlier arm that covers it alone, if there is one. When only some
+alternatives of an arm are dead, each of those is reported. Examples: `0`
+twice; `Mode::Run` after a constant whose value is `Mode::Run`; anything
+after a catch-all; `_ | 3`; a `_` after `true` and `false`. For an enum,
+the values are all those of its integer type, so a `_` after every variant
+is not dead while values that are no variant remain.
+
+**When the checks run.** Exhaustiveness and dead arms are part of type
+checking: their errors appear with `--emit=typeck`, and a function with
+one of them does not type check, so it is not lowered to MIR and the
+checks of "Checks on values known at compile time" do not run on it. They
+use the values of the constants and variants in the patterns, and of every
+variant of a matched enum, computed at compile time:
+
+- A constant that fails to evaluate is reported once, and a `match` using
+  it as a pattern is not checked for exhaustiveness or dead arms, so
+  nothing more is reported. A constant whose evaluation needs the function
+  whose `match` uses it as a pattern is a `ty::cycle`.
+- A `match` on an enum one of whose values failed to evaluate or repeats
+  another is not checked for exhaustiveness or dead arms either: only the
+  enum's errors are reported, and the build stops at them. The function
+  still type checks. With a catch-all arm, it can run at compile time, and
+  a value shared by two variants goes to the first arm that lists it.
+  Without one, a variant may have no arm, so the function is not lowered
+  to MIR, rather than panicking on such a variant as if it were no
+  variant: an evaluation that needs it fails without a diagnostic of its
+  own, as for a body whose checks failed. So does a function with a
+  pattern naming a variant whose value failed.
+- A `match` on an enum, whatever its arms, is always a `ty::cycle` in a
+  function that runs while one of that enum's values is computed, as `f`
+  in `enum E: u8 { A = f(E::B), B = 1 }` when `f` matches on an `E`: the
+  checks need every value of the enum.
+
 ## Layout (ADR 0022)
 
 | Type | Size | Alignment |
@@ -378,6 +643,7 @@ a slice is an aggregate of two scalars wherever a rule depends on it:
 | `u64 i64` | 8 | 8 |
 | slices (`*const [T]`, `*mut [T]`) | 8 | 4 |
 | `[T; N]` | `N * size(T)` | `align(T)` |
+| an enum on the integer type `T` (ADR 0035) | `size(T)` | `align(T)` |
 | `()` | 0 | 1 |
 
 `[T]` and `!` have no layout a program can ask for (see "Types").
@@ -578,8 +844,8 @@ and `a < b < c` is an error.
   elements is accepted, with the array's length (ADR 0031, see "Slices").
   These apply wherever an expected type is known, such as a `let`, an
   argument (including an `assert` message), an assignment, `return`,
-  `break` values, struct fields, array elements, `if` branches, the tail
-  of a block and the operand of `comptime`. Only the outermost pointer converts, volatility never
+  `break` values, struct fields, array elements, `if` branches, `match`
+  arms, the tail of a block and the operand of `comptime`. Only the outermost pointer converts, volatility never
   changes, and comparisons accept a `*mut T` and a `*const T` in either
   order.
 - A literal takes the type expected where it appears; with no expected type
@@ -591,8 +857,10 @@ and `a < b < c` is an error.
 - `& | ^ !` work on integers (bitwise) and `bool` (logical, without
   short-circuit).
 - `&& ||` work on `bool` and short-circuit.
-- `== !=` work on integers, thin pointers and `bool`; `< <= > >=` on
-  integers and thin pointers. Slices cannot be compared.
+- `== !=` work on integers, thin pointers, `bool` and enums (two values of
+  one enum type); `< <= > >=` on integers and thin pointers. Slices cannot
+  be compared, and enums only with `== !=` (ADR 0035).
+- A literal is never an enum: `m == 3` is `ty::mismatched-types`.
 - A value may be at most 2147483647 bytes, half the address space.
 
 ### Integer semantics (ADR 0007)
@@ -610,8 +878,10 @@ and `a < b < c` is an error.
 ### Checks on values known at compile time (ADR 0032)
 
 An expression is **known at compile time** when it is built only from
-literals, `const` items, `comptime` expressions, `size_of`, `align_of`,
-`offset_of`, unary `-` and `!`, binary operators, `as` and parentheses.
+literals, `const` items, enum variants (ADR 0035), `comptime`
+expressions, `size_of`, `align_of`, `offset_of`, unary `-` and `!`, binary
+operators, `as` and parentheses. So `Mode::Run as u32` is known; an `if`
+or a `match` is not.
 Nothing that reads memory is known: not `*p`, even through a constant
 pointer (it may be a device register), not a read of a static, not
 `&raw`. A pointer made from an integer is known by its address; a constant
@@ -639,7 +909,12 @@ checked by these rules (type checking still covers it):
 - the right operand of `&&` when the left one is known `false`, and of
   `||` when it is known `true`;
 - the body of a `while` whose condition is known `false`;
-- the message of an `assert` whose condition is known `true`.
+- the message of an `assert` whose condition is known `true`;
+- the arms a `match` whose scrutinee is known never takes (ADR 0037): it
+  runs at most one arm, and only that one is checked. When no arm matches,
+  which only an enum value that is no variant can cause, such as a
+  constant of the enum's type holding one, no arm is checked, and the
+  `match` panics where it runs.
 
 ```
 const BITS: u32 = 32;
@@ -659,6 +934,10 @@ more.
   an unsigned one; narrowing keeps the low bits; same width reinterprets.
 - `bool` converts to integers (`true` is 1); nothing converts to `bool`
   (write `x != 0`).
+- An enum converts to any integer type, as its integer type would
+  (ADR 0035). Nothing converts to an enum, not even the enum itself:
+  decode an integer with a `match`. An enum converts neither to `bool` nor
+  to a pointer.
 - Thin pointers convert only to and from `usize`; pointer-to-pointer casts
   may change mutability, volatility and pointee. Casts involving slices
   follow the table in "Slices".
@@ -676,8 +955,9 @@ more.
 
 ### Volatile accesses (ADR 0013, 0023)
 
-Through a volatile pointer, every access is to a scalar and is **exactly
-one load or store of the scalar's width**, never split, merged, removed or
+Through a volatile pointer, every access is to a scalar (an integer,
+`bool`, enum or thin pointer; an enum is accessed as its integer type,
+ADR 0035) and is **exactly one load or store of the scalar's width**, never split, merged, removed or
 reordered relative to other volatile accesses. Volatility carries through
 fields and indexing: `(*regs).chan[i].status` is one access of `status`'s
 width. `x += 1` is one load and one store, not atomic. Otherwise the
@@ -686,8 +966,8 @@ program is rejected:
 - a whole struct or array, or a slice stored in memory, cannot be
   accessed through a volatile pointer; through a volatile slice,
   `(*s)[i]` is one access of the element;
-- `u64` and `i64` cannot, since riscv32 has no 64-bit access: use two
-  `u32` halves in the order the device needs;
+- `u64` and `i64`, and enums on them, cannot, since riscv32 has no 64-bit
+  access: use two `u32` halves in the order the device needs;
 - a field reached through a packed struct cannot be, if its type needs
   alignment.
 
@@ -699,6 +979,8 @@ a guarantee.
 
 - `if cond { ... } else { ... }` is an expression; `cond` must be `bool`.
   Both branches have the same type; without `else`, the `if` has type `()`.
+- `match value { pattern => expr, ... }` runs the first arm whose pattern
+  matches; see "`match`".
 - `while cond { ... }` has type `()`, even with a constant `true`.
 - `loop { ... }` runs until `break`. Its type is that of its `break` values,
   or `!` if it has no `break`. `break value` is only allowed in `loop`.
@@ -713,7 +995,8 @@ Operands, arguments, array elements and struct literal fields run left to
 right, in the order written; `&&`/`||` may skip their right side, and
 `assert` runs its message only when the condition is false (ADR 0031). In
 an assignment the value runs before the place. In `base[index]`, the base
-runs before the index, and the bounds check before the access. A read
+runs before the index, and the bounds check before the access. A `match`
+runs its scrutinee once, before any arm (ADR 0037). A read
 through a pointer, and a read of a static (ADR 0030), happens exactly where
 it is written. A value that is not a place, used as the base of indexing
 or a field, is read where it is written too: in `({ x })[{ x[0] = 9; 0 }]`
@@ -774,7 +1057,9 @@ erebos build program.ers [-o program.elf] [-O] [--link file.o]... [--emit=<stage
 `extern fn`s and `extern static`s; it may be repeated. `--emit` prints a
 compiler stage instead: `tokens`, `ast`, `hir`, `typeck`, `mir` or
 `llvm-ir` (dumps leave out the runtime; `typeck` and `mir` start with every
-struct's layout, and list the bodies run at compile time as `comptime fn`).
+struct's layout and every enum with its integer type and the values of its
+variants, and list the bodies run at compile time as `comptime fn`, a
+variant's value as `comptime fn Mode::Run`).
 See `CONTRIBUTING.md` for setup and running on QEMU.
 
 ## Diagnostics
@@ -792,24 +1077,33 @@ Every error has a stable code, shown with the message.
 | `lexer::invalid-byte` | malformed byte literal, or a character or escape not allowed in a byte literal or byte string |
 | `lexer::unterminated-byte` | byte literal without closing `'` |
 | `lexer::unterminated-byte-string` | `b"` without its closing `"` on the same line |
-| `parser::unexpected-token` | a token where it cannot appear |
+| `parser::unexpected-token` | a token where it cannot appear, such as `_` as a name or a value |
 | `parser::unclosed-block` | `{` without its `}` |
-| `parser::let-without-type` | `let` without `: Type` |
+| `parser::let-without-type` | `let` without `: Type`, also in a pattern |
 | `parser::chained-comparison` | `a < b < c` |
 | `parser::local-const` | `const` inside a function body |
 | `parser::local-static` | `static` or `extern static` inside a function body |
-| `resolve::unknown-name` | name not in scope |
-| `resolve::unknown-type` | type or struct name that does not exist |
+| `parser::enum-without-type` | an enum without `: Type` |
+| `parser::variant-without-value` | a variant without `= value` |
+| `resolve::unknown-name` | name not in scope, also in a pattern; an enum's or struct's name alone |
+| `resolve::unknown-type` | type, struct or enum name that does not exist, also before `::` |
 | `resolve::unknown-function` | call to a function that does not exist |
 | `resolve::not-a-function` | call to a variable |
 | `resolve::call-entry` | call to the entry function |
-| `resolve::duplicate-item` | two items (functions, structs, constants, statics) with one name |
-| `resolve::duplicate-type` | a struct named like a built-in type |
+| `resolve::duplicate-item` | two items (functions, structs, enums, constants, statics) with one name |
+| `resolve::duplicate-type` | a struct or enum named like a built-in type |
 | `resolve::duplicate-param` | two parameters with one name |
 | `resolve::mut-extern-param` | a `mut` parameter in an `extern fn` |
 | `resolve::duplicate-field` | a field declared, or given in a literal, twice |
 | `resolve::unknown-field` | a struct literal names a field the struct does not have |
 | `resolve::missing-fields` | a struct literal leaves fields out |
+| `resolve::enum-type` | an enum whose type after `:` is not an integer type |
+| `resolve::duplicate-variant` | two variants with one name |
+| `resolve::empty-enum` | an enum without variants |
+| `resolve::unknown-variant` | `E::V` where `E` has no variant `V` |
+| `resolve::not-an-enum` | `X::V` where `X` is an item that is not an enum |
+| `resolve::not-a-constant` | a bare name in a pattern that is not a constant: a local variable, parameter, static, function, struct or enum |
+| `resolve::binding-in-or-pattern` | `let` as an alternative of an or-pattern |
 | `resolve::reserved-name` | `_start`, a name starting with `__`, a runtime function's name, or a built-in function's (`assert`, `len`, `slice`) |
 | `resolve::unknown-attribute` | an attribute that does not exist |
 | `resolve::misplaced-attribute` | an attribute on an item it does not apply to |
@@ -828,7 +1122,7 @@ Every error has a stable code, shown with the message.
 | `ty::negate-unsigned` | unary `-` on an unsigned value |
 | `ty::shift-out-of-range` | shift amount known at compile time outside 0 to the width minus 1 |
 | `ty::division-by-zero` | divisor known at compile time to be zero |
-| `ty::invalid-cast` | `as` between types that do not convert, a slice cast the table refuses, or any cast to `!` |
+| `ty::invalid-cast` | `as` between types that do not convert, a slice cast the table refuses, or any cast to `!` or to an enum |
 | `ty::pointer-cast-width` | thin pointer cast to or from an integer type other than `usize` |
 | `ty::deref-non-pointer` | `*` on a value that is not a pointer |
 | `ty::cannot-index` | indexing a value that is not an array or a pointer |
@@ -852,13 +1146,17 @@ Every error has a stable code, shown with the message.
 | `ty::invalid-align` | `#[align(N)]` on a struct or static with `N` not a power of two, too large or below the natural alignment |
 | `ty::aligned-in-packed` | a packed struct containing a type with `#[align(N)]` |
 | `ty::not-comptime` | a run-time variable where a compile-time value is required |
-| `ty::cycle` | an item whose value or layout needs itself |
+| `ty::cycle` | an item or variant whose value or layout needs itself, including a `match` on an enum in a function that runs while one of the enum's values is computed |
+| `ty::duplicate-discriminant` | two variants of an enum with one value |
+| `ty::match-type` | a `match` on a type other than an integer, `bool` or enum |
+| `ty::non-exhaustive-match` | a `match` whose arms leave values unmatched |
+| `ty::unreachable-pattern` | an arm, or an alternative, that matches no value the patterns before it leave |
 | `ty::if-without-else` | `if` without `else` where a value is expected |
 | `ty::wrong-arg-count` | call with the wrong number of arguments |
 | `ty::param-type` | parameter of type `()` or `!` |
 | `ty::special-fn-params` | entry or panic function with parameters |
 | `ty::entry-returns`, `ty::panic-returns` | entry or panic function that can return |
-| `eval::panic` | compile-time code reached the panic function: a zero divisor, an index out of bounds, an explicit call |
+| `eval::panic` | compile-time code reached the panic function: a zero divisor, an index out of bounds, an enum value that is no variant in a `match` without a catch-all arm, an explicit call |
 | `eval::assertion-failed` | `assert` with a false condition at compile time, with its message if it has one |
 | `eval::step-limit` | compile-time code ran more than 10,000,000 steps |
 | `eval::call-depth` | compile-time code nested more than 256 calls |
