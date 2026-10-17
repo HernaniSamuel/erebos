@@ -1,6 +1,6 @@
 # 0037. `match` and patterns
 
-- Status: Accepted
+- Status: Accepted; amended by 0038 (which `match`es on an enum need its values)
 - Date: 2026-10-16
 - Amends: 0032 (the arms a `match` never takes)
 

@@ -64,6 +64,7 @@ Do not write one for local implementation details that the code already explains
 | 0032 | [Checks on values known at compile time](0032-checks-on-values-known-at-compile-time.md) | Accepted, amended by 0035, 0037 |
 | 0033 | [The compiler pipeline with compile-time evaluation](0033-compiler-pipeline-with-evaluation.md) | Accepted |
 | 0034 | [`!` is not a type of memory](0034-never-is-not-a-type-of-memory.md) | Accepted |
-| 0035 | [Enums with explicit discriminants](0035-enums-with-explicit-discriminants.md) | Accepted |
+| 0035 | [Enums with explicit discriminants](0035-enums-with-explicit-discriminants.md) | Accepted, amended by 0038 |
 | 0036 | [Enum values that are no variant](0036-enum-values-that-are-no-variant.md) | Accepted |
-| 0037 | [`match` and patterns](0037-match-and-patterns.md) | Accepted |
+| 0037 | [`match` and patterns](0037-match-and-patterns.md) | Accepted, amended by 0038 |
+| 0038 | [The enum values a `match` needs](0038-enum-values-a-match-needs.md) | Accepted |
