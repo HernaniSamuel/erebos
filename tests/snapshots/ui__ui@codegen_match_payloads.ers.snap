@@ -1,0 +1,187 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/codegen_match_payloads.ers
+---
+--- llvm-ir ---
+; ModuleID = 'erebos'
+source_filename = "erebos"
+target datalayout = "e-m:e-p:32:32-i64:64-n32-S128"
+target triple = "riscv32-unknown-none-elf"
+
+module asm "\09.section .text.start, \22ax\22, @progbits"
+module asm "\09.globl _start"
+module asm "\09.type _start, @function"
+module asm "_start:"
+module asm "\09li sp, 0x88000000"
+module asm "\09la t0, __bss_start"
+module asm "\09la t1, __bss_end"
+module asm ".Lzero_bss:"
+module asm "\09bgeu t0, t1, .Lcopy_data"
+module asm "\09sw zero, 0(t0)"
+module asm "\09addi t0, t0, 4"
+module asm "\09j .Lzero_bss"
+module asm ".Lcopy_data:"
+module asm "\09la t0, __data_start"
+module asm "\09la t1, __data_end"
+module asm "\09la t2, __data_load"
+module asm ".Lcopy_word:"
+module asm "\09bgeu t0, t1, .Lenter"
+module asm "\09lw t3, 0(t2)"
+module asm "\09sw t3, 0(t0)"
+module asm "\09addi t0, t0, 4"
+module asm "\09addi t2, t2, 4"
+module asm "\09j .Lcopy_word"
+module asm ".Lenter:"
+module asm "\09j main"
+
+; Function Attrs: nounwind null_pointer_is_valid
+define zeroext i16 @decode(i32 %0) #0 {
+bb0:
+  %1 = alloca i32, align 8
+  %_1 = alloca [4 x i8], align 2
+  %_3 = alloca [4 x i8], align 2
+  store i32 %0, ptr %1, align 4
+  call void @llvm.memcpy.p0.p0.i32(ptr align 2 %_1, ptr align 8 %1, i32 4, i1 false)
+  call void @llvm.memcpy.p0.p0.i32(ptr align 2 %_3, ptr align 2 %_1, i32 4, i1 false)
+  %2 = load i8, ptr %_3, align 1
+  switch i8 %2, label %bb12 [
+    i8 0, label %bb1
+    i8 1, label %bb9
+    i8 2, label %bb10
+    i8 3, label %bb11
+  ]
+
+bb1:                                              ; preds = %bb0
+  br label %bb16
+
+bb2:                                              ; preds = %bb13
+  br label %bb16
+
+bb3:                                              ; preds = %bb13, %bb9
+  %3 = getelementptr i8, ptr %_3, i32 2
+  %4 = load i16, ptr %3, align 2
+  br label %bb16
+
+bb4:                                              ; preds = %bb9
+  br label %bb16
+
+bb5:                                              ; preds = %bb10
+  br label %bb16
+
+bb6:                                              ; preds = %bb10
+  br label %bb16
+
+bb7:                                              ; preds = %bb11
+  br label %bb16
+
+bb8:                                              ; preds = %bb11
+  br label %bb16
+
+bb9:                                              ; preds = %bb0
+  %5 = getelementptr i8, ptr %_3, i32 1
+  %6 = load i8, ptr %5, align 1
+  switch i8 %6, label %bb4 [
+    i8 16, label %bb13
+    i8 17, label %bb3
+  ]
+
+bb10:                                             ; preds = %bb0
+  %7 = getelementptr i8, ptr %_3, i32 1
+  %8 = load i8, ptr %7, align 1
+  switch i8 %8, label %bb14 [
+    i8 0, label %bb5
+    i8 1, label %bb6
+  ]
+
+bb11:                                             ; preds = %bb0
+  %9 = getelementptr i8, ptr %_3, i32 1
+  %10 = load i8, ptr %9, align 1
+  %11 = icmp ne i8 %10, 0
+  switch i1 %11, label %bb15 [
+    i1 true, label %bb7
+    i1 false, label %bb8
+  ]
+
+bb12:                                             ; preds = %bb0
+  call void @on_panic()
+  unreachable
+
+bb13:                                             ; preds = %bb9
+  %12 = getelementptr i8, ptr %_3, i32 2
+  %13 = load i16, ptr %12, align 2
+  switch i16 %13, label %bb3 [
+    i16 7, label %bb2
+  ]
+
+bb14:                                             ; preds = %bb10
+  call void @on_panic()
+  unreachable
+
+bb15:                                             ; preds = %bb11
+  unreachable
+
+bb16:                                             ; preds = %bb8, %bb7, %bb6, %bb5, %bb4, %bb3, %bb2, %bb1
+  %_4.0 = phi i16 [ 0, %bb1 ], [ 2, %bb4 ], [ %4, %bb3 ], [ 1, %bb2 ], [ 3, %bb5 ], [ 4, %bb6 ], [ 5, %bb7 ], [ 6, %bb8 ]
+  ret i16 %_4.0
+}
+
+; Function Attrs: nounwind null_pointer_is_valid
+define zeroext i16 @wildcard(i32 %0) #0 {
+bb0:
+  %1 = alloca i32, align 8
+  %_1 = alloca [4 x i8], align 2
+  %_2 = alloca [4 x i8], align 2
+  store i32 %0, ptr %1, align 4
+  call void @llvm.memcpy.p0.p0.i32(ptr align 2 %_1, ptr align 8 %1, i32 4, i1 false)
+  call void @llvm.memcpy.p0.p0.i32(ptr align 2 %_2, ptr align 2 %_1, i32 4, i1 false)
+  %2 = load i8, ptr %_2, align 1
+  switch i8 %2, label %bb3 [
+    i8 2, label %bb4
+  ]
+
+bb1:                                              ; preds = %bb4
+  br label %bb5
+
+bb2:                                              ; preds = %bb4
+  br label %bb5
+
+bb3:                                              ; preds = %bb0
+  br label %bb5
+
+bb4:                                              ; preds = %bb0
+  %3 = getelementptr i8, ptr %_2, i32 1
+  %4 = load i8, ptr %3, align 1
+  switch i8 %4, label %bb2 [
+    i8 1, label %bb1
+  ]
+
+bb5:                                              ; preds = %bb3, %bb2, %bb1
+  %_3.0 = phi i16 [ 0, %bb3 ], [ 2, %bb2 ], [ 1, %bb1 ]
+  ret i16 %_3.0
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @main() #1 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @on_panic() #1 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: readwrite)
+declare void @llvm.memcpy.p0.p0.i32(ptr noalias writeonly captures(none), ptr noalias readonly captures(none), i32, i1 immarg) #2
+
+attributes #0 = { nounwind null_pointer_is_valid }
+attributes #1 = { noreturn nounwind null_pointer_is_valid }
+attributes #2 = { nocallback nofree nounwind willreturn memory(argmem: readwrite) }

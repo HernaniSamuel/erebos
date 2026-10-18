@@ -586,10 +586,28 @@ pub enum PatternKind {
     Bool(bool),
     /// A constant, matching its value.
     Const(ConstId),
-    /// `Enum::Variant`, by index, matching its value (ADR 0035, 0037).
-    Variant(EnumId, u32),
-    /// `p | q | ...`; no alternative is a `Binding` or an `Or`.
+    /// `Enum::Variant`, by index, matching its value (ADR 0035, 0037), and
+    /// the patterns of its payload values if written with parentheses,
+    /// whatever their number (ADR 0040).
+    Variant(EnumId, u32, Option<Vec<Pattern>>),
+    /// `p | q | ...`, at any position; no alternative is an `Or`, nor
+    /// holds a `Binding` at any depth.
     Or(Vec<Pattern>),
+}
+
+/// A variable a pattern binds, and the position it copies (ADR 0040).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Binding {
+    pub local: LocalId,
+    pub position: Vec<PayloadStep>,
+}
+
+/// From a position holding a value of an enum with payloads, to one of the
+/// payload values of its variant `variant` (ADR 0040).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PayloadStep {
+    pub variant: u32,
+    pub index: u32,
 }
 
 impl Pattern {
@@ -601,12 +619,78 @@ impl Pattern {
         }
     }
 
-    /// The variable the pattern binds, if it binds one.
-    pub fn binding(&self) -> Option<LocalId> {
-        match self.kind {
-            PatternKind::Binding { local, .. } => Some(local),
-            _ => None,
+    /// The variables the pattern binds, in the order written, each with
+    /// the position it copies, as steps from the value matched.
+    pub fn bindings(&self) -> Vec<Binding> {
+        fn walk(pattern: &Pattern, position: &mut Vec<PayloadStep>, out: &mut Vec<Binding>) {
+            match &pattern.kind {
+                PatternKind::Binding { local, .. } => out.push(Binding {
+                    local: *local,
+                    position: position.clone(),
+                }),
+                PatternKind::Variant(_, variant, Some(subs)) => {
+                    for (index, sub) in subs.iter().enumerate() {
+                        position.push(PayloadStep {
+                            variant: *variant,
+                            index: index as u32,
+                        });
+                        walk(sub, position, out);
+                        position.pop();
+                    }
+                }
+                // No alternative binds a variable (ADR 0037).
+                _ => {}
+            }
         }
+        let mut out = Vec::new();
+        walk(self, &mut Vec::new(), &mut out);
+        out
+    }
+}
+
+impl Hir {
+    /// The enums whose values a `match` on a value of type `scrutinee`
+    /// with these arms needs, each once, in the order first needed
+    /// (ADR 0038, 0040): the type of each position at which some
+    /// alternative is a variant or a constant, whatever its own type, and
+    /// the scrutinee's for a `match` without arms. The positions inside a
+    /// variant pattern have the types its declaration gives.
+    pub fn enums_needed(&self, scrutinee: Ty, arms: &[Arm]) -> Vec<EnumId> {
+        fn walk(hir: &Hir, pattern: &Pattern, ty: Option<Ty>, out: &mut Vec<EnumId>) {
+            let need = |out: &mut Vec<EnumId>| {
+                if let Some(Ty::Enum(e)) = ty
+                    && !out.contains(&e.id)
+                {
+                    out.push(e.id);
+                }
+            };
+            match &pattern.kind {
+                PatternKind::Or(alternatives) => {
+                    for alternative in alternatives {
+                        walk(hir, alternative, ty, out);
+                    }
+                }
+                PatternKind::Const(_) => need(out),
+                PatternKind::Variant(id, index, subs) => {
+                    need(out);
+                    let payload = &hir.enum_(*id).variants[*index as usize].payload;
+                    for (i, sub) in subs.iter().flatten().enumerate() {
+                        walk(hir, sub, payload.get(i).map(|value| value.ty), out);
+                    }
+                }
+                _ => {}
+            }
+        }
+        let mut out = Vec::new();
+        if arms.is_empty()
+            && let Ty::Enum(e) = scrutinee
+        {
+            out.push(e.id);
+        }
+        for arm in arms {
+            walk(self, &arm.pattern, Some(scrutinee), &mut out);
+        }
+        out
     }
 }
 

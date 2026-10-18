@@ -1,0 +1,51 @@
+// emit: mir
+// At compile time, a `match` whose nested `Mode` is no variant, examined
+// with variant patterns only, fails the evaluation as the panic function
+// would at run time (ADR 0040); with `Msg::SetMode(_)`, that position is
+// not examined and the value matches. A tag that is no variant fails the
+// first likewise, and goes to the `_` arm of the second. The values are read through a cast pointer from a
+// static byte array aligned as `Msg` is.
+enum Mode: u8 { Off = 0, Run = 1 }
+enum Msg: u8 { Nop = 0, Wide(u32) = 1, SetMode(Mode) = 2 }
+
+// `Msg::SetMode` holding the byte 7, then the tag 9.
+#[align(4)]
+static BYTES: [u8; 16] = [2, 7, 0, 0, 0, 0, 0, 0, 9, 0, 0, 0, 0, 0, 0, 0];
+
+fn odd_mode() -> Msg {
+    (&raw const BYTES as *const Msg)[0]
+}
+
+fn odd_tag() -> Msg {
+    (&raw const BYTES as *const Msg)[1]
+}
+
+fn every_mode(m: Msg) -> u8 {
+    match m {
+        Msg::Nop => 0,
+        Msg::Wide(_) => 1,
+        Msg::SetMode(Mode::Off) => 2,
+        Msg::SetMode(Mode::Run) => 3,
+    }
+}
+
+fn any_mode(m: Msg) -> u8 {
+    match m {
+        Msg::Nop => 0,
+        Msg::Wide(_) => 1,
+        Msg::SetMode(Mode::Run) => 3,
+        Msg::SetMode(_) => 4,
+        _ => 5,
+    }
+}
+
+const PANICS: u8 = every_mode(odd_mode());
+const PANICS_TOO: u8 = every_mode(odd_tag());
+
+comptime {
+    assert(any_mode(odd_mode()) == 4);
+    assert(any_mode(odd_tag()) == 5);
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

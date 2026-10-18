@@ -1,0 +1,295 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_match_payload_errors.ers
+---
+--- errors ---
+ty::match-type
+
+  × cannot `match` on a value of type `Pair`
+    ╭─[typeck_match_payload_errors.ers:31:11]
+ 30 │ fn scrutinee(p: Pair) -> u8 {
+ 31 │     match p {
+    ·           ┬
+    ·           ╰── has type `Pair`
+ 32 │         _ => 0,
+    ╰────
+  help: a `match` takes an integer, a `bool` or an enum (ADR 0037)
+ty::wrong-payload-count
+
+  × `Msg::Write` carries 2 values, but 1 was given
+    ╭─[typeck_match_payload_errors.ers:17:5]
+ 16 │     Led(bool) = 1,
+ 17 │     Write(u8, u16) = 2,
+    ·     ──┬──
+    ·       ╰── declared here
+ 18 │     Wide(u32) = 3,
+    ╰────
+    ╭─[typeck_match_payload_errors.ers:38:9]
+ 37 │     match m {
+ 38 │         Msg::Write(_) => 1,
+    ·         ──────┬──────
+    ·               ╰── in this pattern
+ 39 │         Msg::Nop(_) => 2,
+    ╰────
+  help: a pattern is written for each value, `_` for one not tested, as in `Msg::Write(_, _)`;
+        there is no `..` (ADR 0040)
+ty::wrong-payload-count
+
+  × `Msg::Nop` carries no values, but 1 was given
+    ╭─[typeck_match_payload_errors.ers:15:5]
+ 14 │ enum Msg: u8 {
+ 15 │     Nop = 0,
+    ·     ─┬─
+    ·      ╰── declared here
+ 16 │     Led(bool) = 1,
+    ╰────
+    ╭─[typeck_match_payload_errors.ers:39:9]
+ 38 │         Msg::Write(_) => 1,
+ 39 │         Msg::Nop(_) => 2,
+    ·         ─────┬─────
+    ·              ╰── in this pattern
+ 40 │         Msg::Write() => 3,
+    ╰────
+  help: a variant without payload is matched without parentheses: `Msg::Nop` (ADR 0040)
+ty::wrong-payload-count
+
+  × `Msg::Write` carries 2 values, but none were given
+    ╭─[typeck_match_payload_errors.ers:17:5]
+ 16 │     Led(bool) = 1,
+ 17 │     Write(u8, u16) = 2,
+    ·     ──┬──
+    ·       ╰── declared here
+ 18 │     Wide(u32) = 3,
+    ╰────
+    ╭─[typeck_match_payload_errors.ers:40:9]
+ 39 │         Msg::Nop(_) => 2,
+ 40 │         Msg::Write() => 3,
+    ·         ──────┬─────
+    ·               ╰── in this pattern
+ 41 │         Msg::Nop() => 4,
+    ╰────
+  help: a pattern is written for each value, `_` for one not tested, as in `Msg::Write(_, _)`;
+        there is no `..` (ADR 0040)
+ty::wrong-payload-count
+
+  × `Msg::Nop` carries no values, but is written with parentheses
+    ╭─[typeck_match_payload_errors.ers:15:5]
+ 14 │ enum Msg: u8 {
+ 15 │     Nop = 0,
+    ·     ─┬─
+    ·      ╰── declared here
+ 16 │     Led(bool) = 1,
+    ╰────
+    ╭─[typeck_match_payload_errors.ers:41:9]
+ 40 │         Msg::Write() => 3,
+ 41 │         Msg::Nop() => 4,
+    ·         ─────┬────
+    ·              ╰── in this pattern
+ 42 │         Msg::SetMode(Mode::Off()) => 5,
+    ╰────
+  help: a variant without payload is matched without parentheses: `Msg::Nop` (ADR 0040)
+ty::wrong-payload-count
+
+  × `Mode::Off` carries no values, but is written with parentheses
+    ╭─[typeck_match_payload_errors.ers:11:17]
+ 10 │ // patterns are checked against its declaration.
+ 11 │ enum Mode: u8 { Off = 0, Run = 1 }
+    ·                 ─┬─
+    ·                  ╰── declared here
+ 12 │ struct Pair { a: u8, b: u8 }
+    ╰────
+    ╭─[typeck_match_payload_errors.ers:42:22]
+ 41 │         Msg::Nop() => 4,
+ 42 │         Msg::SetMode(Mode::Off()) => 5,
+    ·                      ─────┬─────
+    ·                           ╰── in this pattern
+ 43 │         Msg::Write => 6,
+    ╰────
+  help: a variant without payload is matched without parentheses: `Mode::Off` (ADR 0040)
+ty::wrong-payload-count
+
+  × `Msg::Write` carries 2 values, but no patterns are given for them
+    ╭─[typeck_match_payload_errors.ers:17:5]
+ 16 │     Led(bool) = 1,
+ 17 │     Write(u8, u16) = 2,
+    ·     ──┬──
+    ·       ╰── declared here
+ 18 │     Wide(u32) = 3,
+    ╰────
+    ╭─[typeck_match_payload_errors.ers:43:9]
+ 42 │         Msg::SetMode(Mode::Off()) => 5,
+ 43 │         Msg::Write => 6,
+    ·         ─────┬────
+    ·              ╰── matched without its values
+ 44 │         Msg::Led(true, false) => 7,
+    ╰────
+  help: a variant with a payload is matched with a pattern for each value, as in `Msg::Write(_,
+        _)` (ADR 0040)
+ty::wrong-payload-count
+
+  × `Msg::Led` carries 1 value, but 2 were given
+    ╭─[typeck_match_payload_errors.ers:16:5]
+ 15 │     Nop = 0,
+ 16 │     Led(bool) = 1,
+    ·     ─┬─
+    ·      ╰── declared here
+ 17 │     Write(u8, u16) = 2,
+    ╰────
+    ╭─[typeck_match_payload_errors.ers:44:9]
+ 43 │         Msg::Write => 6,
+ 44 │         Msg::Led(true, false) => 7,
+    ·         ──────────┬──────────
+    ·                   ╰── in this pattern
+ 45 │         _ => 8,
+    ╰────
+  help: a pattern is written for each value, `_` for one not tested, as in `Msg::Led(_)`; there is
+        no `..` (ADR 0040)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_match_payload_errors.ers:51:19]
+ 50 │     match m {
+ 51 │         Msg::Both(0, _) => 1,
+    ·                   ┬
+    ·                   ╰── expected `Pair`, found an integer
+ 52 │         Msg::Both(_, true) => 2,
+    ╰────
+  help: a `Pair` is matched only with `_` or a `let` (ADR 0040)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_match_payload_errors.ers:52:22]
+ 51 │         Msg::Both(0, _) => 1,
+ 52 │         Msg::Both(_, true) => 2,
+    ·                      ──┬─
+    ·                        ╰── expected `*const u8`, found `bool`
+ 53 │         Msg::Write(let r: u16, _) => 3,
+    ╰────
+  help: a `*const u8` is matched only with `_` or a `let` (ADR 0040)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_match_payload_errors.ers:53:27]
+ 52 │         Msg::Both(_, true) => 2,
+ 53 │         Msg::Write(let r: u16, _) => 3,
+    ·                           ─┬─
+    ·                            ╰── expected `u8`, found `u16`
+ 54 │         Msg::Led(b'q') => 4,
+    ╰────
+  help: the variable holds the value matched, a `u8`, which a pattern never converts (ADR 0037)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_match_payload_errors.ers:54:18]
+ 53 │         Msg::Write(let r: u16, _) => 3,
+ 54 │         Msg::Led(b'q') => 4,
+    ·                  ──┬─
+    ·                    ╰── expected `bool`, found `u8`
+ 55 │         _ => 5,
+    ╰────
+  help: a `bool` is matched with `true` and `false` (ADR 0037)
+ty::constant-pattern-type
+
+  × a constant of type `Msg` cannot be a pattern
+    ╭─[typeck_match_payload_errors.ers:61:9]
+ 60 │     match m {
+ 61 │         LED => 1,
+    ·         ─┬─
+    ·          ╰── `LED` has type `Msg`
+ 62 │         Msg::Both(PAIR, NOWHERE) => 2,
+    ╰────
+  help: match a `Msg` with its variant patterns instead, such as `Msg::Nop` (ADR 0040)
+ty::constant-pattern-type
+
+  × a constant of type `Pair` cannot be a pattern
+    ╭─[typeck_match_payload_errors.ers:62:19]
+ 61 │         LED => 1,
+ 62 │         Msg::Both(PAIR, NOWHERE) => 2,
+    ·                   ──┬─
+    ·                     ╰── `PAIR` has type `Pair`
+ 63 │         Msg::Write(LED, _) => 3,
+    ╰────
+  help: patterns compare only integers, `bool` and enums without payloads; bind the value with a
+        `let` and test it instead (ADR 0040)
+ty::constant-pattern-type
+
+  × a constant of type `*const u8` cannot be a pattern
+    ╭─[typeck_match_payload_errors.ers:62:25]
+ 61 │         LED => 1,
+ 62 │         Msg::Both(PAIR, NOWHERE) => 2,
+    ·                         ───┬───
+    ·                            ╰── `NOWHERE` has type `*const u8`
+ 63 │         Msg::Write(LED, _) => 3,
+    ╰────
+  help: patterns compare only integers, `bool` and enums without payloads; bind the value with a
+        `let` and test it instead (ADR 0040)
+ty::constant-pattern-type
+
+  × a constant of type `Msg` cannot be a pattern
+    ╭─[typeck_match_payload_errors.ers:63:20]
+ 62 │         Msg::Both(PAIR, NOWHERE) => 2,
+ 63 │         Msg::Write(LED, _) => 3,
+    ·                    ─┬─
+    ·                     ╰── `LED` has type `Msg`
+ 64 │         _ => 4,
+    ╰────
+  help: match a `Msg` with its variant patterns instead, such as `Msg::Nop` (ADR 0040)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_match_payload_errors.ers:70:9]
+ 69 │     match g {
+ 70 │         H::X(Mode::Run) => 1,
+    ·         ───────┬───────
+    ·                ╰── expected `G`, found `H`
+ 71 │         H::X(3) => 2,
+    ╰────
+  help: a variant in a pattern has the type of the value matched, which a pattern never converts
+        (ADR 0037)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_match_payload_errors.ers:71:9]
+ 70 │         H::X(Mode::Run) => 1,
+ 71 │         H::X(3) => 2,
+    ·         ───┬───
+    ·            ╰── expected `G`, found `H`
+ 72 │         _ => 3,
+    ╰────
+  help: a variant in a pattern has the type of the value matched, which a pattern never converts
+        (ADR 0037)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_match_payload_errors.ers:71:14]
+ 70 │         H::X(Mode::Run) => 1,
+ 71 │         H::X(3) => 2,
+    ·              ┬
+    ·              ╰── expected `Mode`, found an integer
+ 72 │         _ => 3,
+    ╰────
+  help: an enum is matched with its variants, such as `Mode::Off`, or with constants of its type
+        (ADR 0037)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_match_payload_errors.ers:82:9]
+ 81 │     let a: u8 = match m {
+ 82 │         3 => 1,
+    ·         ┬
+    ·         ╰── expected `Msg`, found an integer
+ 83 │         _ => 0,
+    ╰────
+  help: an enum with payloads is matched with its variant patterns, such as `Msg::Nop` (ADR 0040)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_match_payload_errors.ers:86:19]
+ 85 │     match h {
+ 86 │         Holder::H(true) => a,
+    ·                   ──┬─
+    ·                     ╰── expected `Msg`, found `bool`
+ 87 │         _ => 0,
+    ╰────
+  help: an enum with payloads is matched with its variant patterns, such as `Msg::Nop` (ADR 0040)

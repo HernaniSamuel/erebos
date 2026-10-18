@@ -1,0 +1,193 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_match_payload_coverage.ers
+---
+--- errors ---
+ty::non-exhaustive-match
+
+  × non-exhaustive `match`: `Msg::Led(false)`, `Msg::Write(0, 0)`, `Msg::Write(1, _)` and 2 more
+  │ not covered
+    ╭─[typeck_match_payload_coverage.ers:27:11]
+ 26 │ fn example(m: Msg) -> u8 {
+ 27 │     match m {
+    ·           ┬
+    ·           ╰── missing: `Msg::Led(false)`, `Msg::Write(0, 0)`, `Msg::Write(1, _)` and 2 more
+ 28 │         Msg::Nop => 0,
+    ╰────
+  help: add `Msg::Led(false) => ...`, `Msg::Write(0, 0) => ...` and `Msg::Write(1, _) => ...`, or
+        a `_` arm (ADR 0037)
+ty::non-exhaustive-match
+
+  × non-exhaustive `match`: `Msg::Write(0, 0)` and `Msg::Write(1, _)` not covered
+    ╭─[typeck_match_payload_coverage.ers:35:11]
+ 34 │ fn only_write(m: Msg) -> u8 {
+ 35 │     match m {
+    ·           ┬
+    ·           ╰── missing: `Msg::Write(0, 0)` and `Msg::Write(1, _)`
+ 36 │         Msg::Nop => 0,
+    ╰────
+  help: add `Msg::Write(0, 0) => ...` and `Msg::Write(1, _) => ...`, or a `_` arm (ADR 0037)
+ty::non-exhaustive-match
+
+  × non-exhaustive `match`: `P::Pair(Mode::Run, true)` not covered
+    ╭─[typeck_match_payload_coverage.ers:45:11]
+ 44 │ fn pair(p: P) -> u8 {
+ 45 │     match p {
+    ·           ┬
+    ·           ╰── missing: `P::Pair(Mode::Run, true)`
+ 46 │         P::Pair(Mode::Off, true) => 0,
+    ╰────
+  help: add `P::Pair(Mode::Run, true) => ...`, or a `_` arm (ADR 0037)
+ty::non-exhaustive-match
+
+  × non-exhaustive `match`: `true` and `false` not covered
+    ╭─[typeck_match_payload_coverage.ers:52:11]
+ 51 │ fn no_arms_bool(b: bool) -> u8 {
+ 52 │     match b {}
+    ·           ┬
+    ·           ╰── missing: `true` and `false`
+ 53 │ }
+    ╰────
+  help: add `true => ...` and `false => ...`, or a `_` arm (ADR 0037)
+ty::non-exhaustive-match
+
+  × non-exhaustive `match`: `Five::A`, `Five::B`, `Five::C` and 2 more not covered
+    ╭─[typeck_match_payload_coverage.ers:56:11]
+ 55 │ fn no_arms_five(f: Five) -> u8 {
+ 56 │     match f {}
+    ·           ┬
+    ·           ╰── missing: `Five::A`, `Five::B`, `Five::C` and 2 more
+ 57 │ }
+    ╰────
+  help: add `Five::A => ...`, `Five::B => ...` and `Five::C => ...`, or a `_` arm (ADR 0037)
+ty::non-exhaustive-match
+
+  × non-exhaustive `match`: `Msg::Nop`, `Msg::Led(_)`, `Msg::Write(_, _)` and 2 more not covered
+    ╭─[typeck_match_payload_coverage.ers:60:11]
+ 59 │ fn no_arms_msg(m: Msg) -> u8 {
+ 60 │     match m {}
+    ·           ┬
+    ·           ╰── missing: `Msg::Nop`, `Msg::Led(_)`, `Msg::Write(_, _)` and 2 more
+ 61 │ }
+    ╰────
+  help: add `Msg::Nop => ...`, `Msg::Led(_) => ...` and `Msg::Write(_, _) => ...`, or a `_` arm
+        (ADR 0037)
+ty::non-exhaustive-match
+
+  × non-exhaustive `match`: `Signed::V(1)` not covered
+    ╭─[typeck_match_payload_coverage.ers:64:11]
+ 63 │ fn signed(s: Signed) -> u8 {
+ 64 │     match s {
+    ·           ┬
+    ·           ╰── missing: `Signed::V(1)`
+ 65 │         Signed::V(0) => 0,
+    ╰────
+  help: add `Signed::V(1) => ...`, or a `_` arm (ADR 0037)
+ty::non-exhaustive-match
+
+  × non-exhaustive `match`: `Outer::O(Mid::M(Inner::B))` not covered
+    ╭─[typeck_match_payload_coverage.ers:72:11]
+ 71 │ fn two_deep(o: Outer) -> u8 {
+ 72 │     match o {
+    ·           ┬
+    ·           ╰── missing: `Outer::O(Mid::M(Inner::B))`
+ 73 │         Outer::O(Mid::M(Inner::A)) => 0,
+    ╰────
+  help: add `Outer::O(Mid::M(Inner::B)) => ...`, or a `_` arm (ADR 0037)
+ty::unreachable-pattern
+
+  × unreachable arm
+    ╭─[typeck_match_payload_coverage.ers:81:9]
+ 79 │     match m {
+ 80 │         Msg::Write(1, _) => 0,
+    ·         ────────┬───────
+    ·                 ╰── every value it matches is matched here
+ 81 │         Msg::Write(1, 7) => 1,
+    ·         ────────┬───────
+    ·                 ╰── matches no value that the arms before it leave
+ 82 │         Msg::Led(true | true) => 2,
+    ╰────
+  help: a `match` takes the first arm that matches, so this one never runs; remove it (ADR 0037)
+ty::unreachable-pattern
+
+  × unreachable pattern
+    ╭─[typeck_match_payload_coverage.ers:82:25]
+ 81 │         Msg::Write(1, 7) => 1,
+ 82 │         Msg::Led(true | true) => 2,
+    ·                  ──┬─   ──┬─
+    ·                    │      ╰── matches no value that the patterns before it leave
+    ·                    ╰── every value it matches is matched here
+ 83 │         Msg::Led(true) => 3,
+    ╰────
+  help: remove this alternative (ADR 0037)
+ty::unreachable-pattern
+
+  × unreachable arm
+    ╭─[typeck_match_payload_coverage.ers:83:9]
+ 81 │         Msg::Write(1, 7) => 1,
+ 82 │         Msg::Led(true | true) => 2,
+    ·         ──────────┬──────────
+    ·                   ╰── every value it matches is matched here
+ 83 │         Msg::Led(true) => 3,
+    ·         ───────┬──────
+    ·                ╰── matches no value that the arms before it leave
+ 84 │         Msg::Led(false) => 4,
+    ╰────
+  help: a `match` takes the first arm that matches, so this one never runs; remove it (ADR 0037)
+ty::unreachable-pattern
+
+  × unreachable arm
+    ╭─[typeck_match_payload_coverage.ers:85:9]
+ 84 │         Msg::Led(false) => 4,
+ 85 │         Msg::Led(_) => 5,
+    ·         ─────┬─────
+    ·              ╰── matches no value that the arms before it leave
+ 86 │         Msg::Write(2 | 1 | 3, _) => 6,
+    ╰────
+  help: a `match` takes the first arm that matches, so this one never runs; remove it (ADR 0037)
+ty::unreachable-pattern
+
+  × unreachable pattern
+    ╭─[typeck_match_payload_coverage.ers:86:24]
+ 79 │     match m {
+ 80 │         Msg::Write(1, _) => 0,
+    ·         ────────┬───────
+    ·                 ╰── every value it matches is matched here
+ 81 │         Msg::Write(1, 7) => 1,
+ 82 │         Msg::Led(true | true) => 2,
+ 83 │         Msg::Led(true) => 3,
+ 84 │         Msg::Led(false) => 4,
+ 85 │         Msg::Led(_) => 5,
+ 86 │         Msg::Write(2 | 1 | 3, _) => 6,
+    ·                        ┬
+    ·                        ╰── matches no value that the patterns before it leave
+ 87 │         _ => 7,
+    ╰────
+  help: remove this alternative (ADR 0037)
+ty::duplicate-discriminant
+
+  × `Rep::B` has the same value as `Rep::A`
+     ╭─[typeck_match_payload_coverage.ers:104:23]
+ 103 │ 
+ 104 │ enum Rep: u8 { A = 0, B = 0 }
+     ·                ┬      ┬
+     ·                │      ╰── is 0
+     ·                ╰── is 0 too
+ 105 │ enum Holder: u8 { R(Rep) = 0 }
+     ╰────
+  help: each variant names a value of its own, so that a `match` can tell them apart (ADR 0035)
+ty::unreachable-pattern
+
+  × unreachable arm
+     ╭─[typeck_match_payload_coverage.ers:117:9]
+ 115 │     match h {
+ 116 │         Holder::R(_) => 0,
+     ·         ──────┬─────
+     ·               ╰── every value it matches is matched here
+ 117 │         Holder::R(_) => 1,
+     ·         ──────┬─────
+     ·               ╰── matches no value that the arms before it leave
+ 118 │     }
+     ╰────
+  help: a `match` takes the first arm that matches, so this one never runs; remove it (ADR 0037)

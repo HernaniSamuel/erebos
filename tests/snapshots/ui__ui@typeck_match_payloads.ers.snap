@@ -1,0 +1,110 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_match_payloads.ers
+---
+--- typeck ---
+struct Pair { a: u8 at 0, b: u8 at 1 } size 2, align 1
+enum Mode: u8 { Off = 0, Run = 1 }
+enum Msg: u8 { Nop = 0, Led(bool at 1) = 1, Write(u8 at 1, u16 at 2) = 2, Wide(u32 at 4) = 3, SetMode(Mode at 1) = 4 } size 8, align 4
+enum Bag: u8 { Things(Pair at 1, [u8; 2] at 3, *const u8 at 8, *const [u8] at 12, () at 20) = 0, Count(u8 at 1, u8 at 2) = 1 } size 20, align 4
+fn special(v: u16) -> u8
+    expr 0 as u8 943..950: u8
+    expr 1 local v 943..944: u16
+fn write(r: u8, v: u16) -> u8
+    expr 2 binary + 985..996: u8
+    expr 3 local r 985..986: u8
+    expr 4 as u8 989..996: u8
+    expr 5 local v 989..990: u16
+fn decode(m: Msg) -> u8
+    let v: u16
+    let r: u8
+    let v: u16
+    expr 6 match 1030..1339: u8
+    expr 7 local m 1036..1037: Msg
+    expr 8 int 0 1060..1061: u8
+    expr 9 int 1 1089..1090: u8
+    expr 10 int 2 1119..1120: u8
+    expr 11 call 1169..1179: u8
+    expr 12 local v 1177..1178: u16
+    expr 13 call 1226..1237: u8
+    expr 14 local r 1232..1233: u8
+    expr 15 local v 1235..1236: u16
+    expr 16 int 3 1263..1264: u8
+    expr 17 int 4 1301..1302: u8
+    expr 18 int 5 1331..1332: u8
+fn constants(m: Msg) -> u8
+    expr 19 match 1376..1569: u8
+    expr 20 local m 1382..1383: Msg
+    expr 21 int 1 1410..1411: u8
+    expr 22 int 2 1445..1446: u8
+    expr 23 int 3 1477..1478: u8
+    expr 24 int 4 1515..1516: u8
+    expr 25 int 5 1545..1546: u8
+    expr 26 int 6 1561..1562: u8
+fn after_every_variant(m: Msg) -> u8
+    let w: u32
+    expr 27 match 1616..1875: u8
+    expr 28 local m 1622..1623: Msg
+    expr 29 int 0 1646..1647: u8
+    expr 30 int 1 1672..1673: u8
+    expr 31 int 2 1703..1704: u8
+    expr 32 as u8 1739..1746: u8
+    expr 33 local w 1739..1740: u32
+    expr 34 int 4 1783..1784: u8
+    expr 35 int 5 1821..1822: u8
+    expr 36 int 6 1851..1852: u8
+    expr 37 int 7 1867..1868: u8
+fn opaque_positions(b: Bag) -> u8
+    let p: Pair
+    let a: [u8; 2]
+    let ptr: *const u8
+    let s: *const [u8]
+    let LIMIT: u8
+    expr 38 match 1919..2163: u8
+    expr 39 local b 1925..1926: Bag
+    expr 40 block 2024..2075: u8
+    expr 41 binary + 2038..2065: u8
+    expr 42 binary + 2038..2055: u8
+    expr 43 binary + 2038..2048: u8
+    expr 44 field a 2038..2041: u8
+    expr 45 local p 2038..2039: Pair
+    expr 46 index 2044..2048: u8
+    expr 47 local a 2044..2045: [u8; 2]
+    expr 48 int 1 2046..2047: usize
+    expr 49 deref 2051..2055: u8
+    expr 50 local ptr 2052..2055: *const u8
+    expr 51 index 2058..2065: u8
+    expr 52 deref 2058..2062: [u8]
+    expr 53 local s 2060..2061: *const [u8]
+    expr 54 int 0 2063..2064: usize
+    expr 55 local LIMIT 2120..2125: u8
+    expr 56 int 0 2155..2156: u8
+entry fn main() -> !
+    expr 57 loop 2190..2197: !
+panic fn on_panic() -> !
+    expr 58 loop 2227..2234: !
+comptime fn LIMIT() -> u8
+    expr 59 int 9 860..861: u8
+comptime fn RUN() -> Mode
+    expr 60 variant Mode::Run 881..890: Mode
+comptime fn ON() -> bool
+    expr 61 bool true 909..913: bool
+comptime fn Mode::Off() -> u8
+    expr 62 int 0 583..584: u8
+comptime fn Mode::Run() -> u8
+    expr 63 int 1 592..593: u8
+comptime fn Msg::Nop() -> u8
+    expr 64 int 0 651..652: u8
+comptime fn Msg::Led() -> u8
+    expr 65 int 1 670..671: u8
+comptime fn Msg::Write() -> u8
+    expr 66 int 2 694..695: u8
+comptime fn Msg::Wide() -> u8
+    expr 67 int 3 713..714: u8
+comptime fn Msg::SetMode() -> u8
+    expr 68 int 4 736..737: u8
+comptime fn Bag::Things() -> u8
+    expr 69 int 0 813..814: u8
+comptime fn Bag::Count() -> u8
+    expr 70 int 1 836..837: u8

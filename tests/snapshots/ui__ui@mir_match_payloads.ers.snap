@@ -1,0 +1,209 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/mir_match_payloads.ers
+---
+--- mir ---
+enum Mode: u8 { Off = 0, Run = 1 }
+enum Msg: u8 { 0 Nop = 0, 1 Write(0 u8 at 1, 1 u16 at 2) = 1, 2 SetMode(0 u8 at 1) = 2, 3 Led(0 bool at 1) = 3 } // size 4, align 2
+
+fn decode(_1: Msg) -> u16 {
+    let _0: u16;
+    let _1: Msg; // m
+    let _2: u16; // v
+    let _3: Msg;
+    let _4: u16;
+
+    bb0: {
+        _3 = copy _1;
+        switch copy _3.tag -> [0_u8: bb1, 1_u8: bb9, 2_u8: bb10, 3_u8: bb11, otherwise: bb12];
+    }
+
+    bb1: {
+        _4 = const 0_u16;
+        goto -> bb16;
+    }
+
+    bb2: {
+        _4 = const 1_u16;
+        goto -> bb16;
+    }
+
+    bb3: {
+        _2 = copy (_3 as 1).1;
+        _4 = copy _2;
+        goto -> bb16;
+    }
+
+    bb4: {
+        _4 = const 2_u16;
+        goto -> bb16;
+    }
+
+    bb5: {
+        _4 = const 3_u16;
+        goto -> bb16;
+    }
+
+    bb6: {
+        _4 = const 4_u16;
+        goto -> bb16;
+    }
+
+    bb7: {
+        _4 = const 5_u16;
+        goto -> bb16;
+    }
+
+    bb8: {
+        _4 = const 6_u16;
+        goto -> bb16;
+    }
+
+    bb9: {
+        switch copy (_3 as 1).0 -> [16_u8: bb13, 17_u8: bb3, otherwise: bb4];
+    }
+
+    bb10: {
+        switch copy (_3 as 2).0 -> [0_u8: bb5, 1_u8: bb6, otherwise: bb14];
+    }
+
+    bb11: {
+        switch copy (_3 as 3).0 -> [true: bb7, false: bb8, otherwise: bb15];
+    }
+
+    bb12: {
+        panic(enum value is no variant);
+    }
+
+    bb13: {
+        switch copy (_3 as 1).1 -> [7_u16: bb2, otherwise: bb3];
+    }
+
+    bb14: {
+        panic(enum value is no variant);
+    }
+
+    bb15: {
+        unreachable;
+    }
+
+    bb16: {
+        _0 = copy _4;
+        return;
+    }
+}
+
+fn wildcard(_1: Msg) -> u16 {
+    let _0: u16;
+    let _1: Msg; // m
+    let _2: Msg;
+    let _3: u16;
+
+    bb0: {
+        _2 = copy _1;
+        switch copy _2.tag -> [2_u8: bb4, otherwise: bb3];
+    }
+
+    bb1: {
+        _3 = const 1_u16;
+        goto -> bb5;
+    }
+
+    bb2: {
+        _3 = const 2_u16;
+        goto -> bb5;
+    }
+
+    bb3: {
+        _3 = const 0_u16;
+        goto -> bb5;
+    }
+
+    bb4: {
+        switch copy (_2 as 2).0 -> [1_u8: bb1, otherwise: bb2];
+    }
+
+    bb5: {
+        _0 = copy _3;
+        return;
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+comptime fn Mode::Off() -> u8 {
+    let _0: u8;
+
+    bb0: {
+        _0 = const 0_u8;
+        return;
+    }
+}
+
+comptime fn Mode::Run() -> u8 {
+    let _0: u8;
+
+    bb0: {
+        _0 = const 1_u8;
+        return;
+    }
+}
+
+comptime fn Msg::Nop() -> u8 {
+    let _0: u8;
+
+    bb0: {
+        _0 = const 0_u8;
+        return;
+    }
+}
+
+comptime fn Msg::Write() -> u8 {
+    let _0: u8;
+
+    bb0: {
+        _0 = const 1_u8;
+        return;
+    }
+}
+
+comptime fn Msg::SetMode() -> u8 {
+    let _0: u8;
+
+    bb0: {
+        _0 = const 2_u8;
+        return;
+    }
+}
+
+comptime fn Msg::Led() -> u8 {
+    let _0: u8;
+
+    bb0: {
+        _0 = const 3_u8;
+        return;
+    }
+}

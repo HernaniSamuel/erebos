@@ -1,0 +1,372 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/parse_match_payloads.ers
+---
+--- ast ---
+File {
+    items: [
+        Fn(
+            FnDecl {
+                attrs: [],
+                kind: Plain,
+                name: Ident {
+                    name: "patterns",
+                    span: 247..255,
+                },
+                params: [
+                    Param {
+                        mutable: false,
+                        name: Ident {
+                            name: "m",
+                            span: 256..257,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Ident {
+                                    name: "Msg",
+                                    span: 259..262,
+                                },
+                            ),
+                            span: 259..262,
+                        },
+                    },
+                ],
+                ret: Some(
+                    Ty {
+                        kind: Named(
+                            Ident {
+                                name: "u8",
+                                span: 267..269,
+                            },
+                        ),
+                        span: 267..269,
+                    },
+                ),
+                body: Some(
+                    Block {
+                        stmts: [],
+                        tail: Some(
+                            Expr {
+                                kind: Match {
+                                    scrutinee: Expr {
+                                        kind: Name(
+                                            Ident {
+                                                name: "m",
+                                                span: 282..283,
+                                            },
+                                        ),
+                                        span: 282..283,
+                                    },
+                                    arms: [
+                                        Arm {
+                                            pattern: Pattern {
+                                                kind: PathArgs(
+                                                    Ident {
+                                                        name: "Msg",
+                                                        span: 294..297,
+                                                    },
+                                                    Ident {
+                                                        name: "Write",
+                                                        span: 299..304,
+                                                    },
+                                                    [
+                                                        Pattern {
+                                                            kind: Or(
+                                                                [
+                                                                    Pattern {
+                                                                        kind: Int {
+                                                                            value: Some(
+                                                                                16,
+                                                                            ),
+                                                                            negated: false,
+                                                                        },
+                                                                        span: 305..309,
+                                                                    },
+                                                                    Pattern {
+                                                                        kind: Int {
+                                                                            value: Some(
+                                                                                17,
+                                                                            ),
+                                                                            negated: false,
+                                                                        },
+                                                                        span: 312..316,
+                                                                    },
+                                                                ],
+                                                            ),
+                                                            span: 305..316,
+                                                        },
+                                                        Pattern {
+                                                            kind: Binding {
+                                                                mutable: false,
+                                                                name: Ident {
+                                                                    name: "v",
+                                                                    span: 322..323,
+                                                                },
+                                                                ty: Ty {
+                                                                    kind: Named(
+                                                                        Ident {
+                                                                            name: "u16",
+                                                                            span: 325..328,
+                                                                        },
+                                                                    ),
+                                                                    span: 325..328,
+                                                                },
+                                                            },
+                                                            span: 318..328,
+                                                        },
+                                                    ],
+                                                ),
+                                                span: 294..329,
+                                            },
+                                            body: Expr {
+                                                kind: Int(
+                                                    Some(
+                                                        1,
+                                                    ),
+                                                ),
+                                                span: 333..334,
+                                            },
+                                        },
+                                        Arm {
+                                            pattern: Pattern {
+                                                kind: PathArgs(
+                                                    Ident {
+                                                        name: "Msg",
+                                                        span: 344..347,
+                                                    },
+                                                    Ident {
+                                                        name: "SetMode",
+                                                        span: 349..356,
+                                                    },
+                                                    [
+                                                        Pattern {
+                                                            kind: Path(
+                                                                Ident {
+                                                                    name: "Mode",
+                                                                    span: 357..361,
+                                                                },
+                                                                Ident {
+                                                                    name: "Run",
+                                                                    span: 363..366,
+                                                                },
+                                                            ),
+                                                            span: 357..366,
+                                                        },
+                                                    ],
+                                                ),
+                                                span: 344..367,
+                                            },
+                                            body: Expr {
+                                                kind: Int(
+                                                    Some(
+                                                        2,
+                                                    ),
+                                                ),
+                                                span: 371..372,
+                                            },
+                                        },
+                                        Arm {
+                                            pattern: Pattern {
+                                                kind: PathArgs(
+                                                    Ident {
+                                                        name: "Msg",
+                                                        span: 382..385,
+                                                    },
+                                                    Ident {
+                                                        name: "Nested",
+                                                        span: 387..393,
+                                                    },
+                                                    [
+                                                        Pattern {
+                                                            kind: PathArgs(
+                                                                Ident {
+                                                                    name: "Outer",
+                                                                    span: 394..399,
+                                                                },
+                                                                Ident {
+                                                                    name: "In",
+                                                                    span: 401..403,
+                                                                },
+                                                                [
+                                                                    Pattern {
+                                                                        kind: PathArgs(
+                                                                            Ident {
+                                                                                name: "Inner",
+                                                                                span: 404..409,
+                                                                            },
+                                                                            Ident {
+                                                                                name: "A",
+                                                                                span: 411..412,
+                                                                            },
+                                                                            [
+                                                                                Pattern {
+                                                                                    kind: Wildcard,
+                                                                                    span: 413..414,
+                                                                                },
+                                                                                Pattern {
+                                                                                    kind: Bool(
+                                                                                        true,
+                                                                                    ),
+                                                                                    span: 416..420,
+                                                                                },
+                                                                            ],
+                                                                        ),
+                                                                        span: 404..421,
+                                                                    },
+                                                                ],
+                                                            ),
+                                                            span: 394..423,
+                                                        },
+                                                        Pattern {
+                                                            kind: Byte(
+                                                                Some(
+                                                                    113,
+                                                                ),
+                                                            ),
+                                                            span: 425..429,
+                                                        },
+                                                    ],
+                                                ),
+                                                span: 382..430,
+                                            },
+                                            body: Expr {
+                                                kind: Int(
+                                                    Some(
+                                                        3,
+                                                    ),
+                                                ),
+                                                span: 434..435,
+                                            },
+                                        },
+                                        Arm {
+                                            pattern: Pattern {
+                                                kind: PathArgs(
+                                                    Ident {
+                                                        name: "Msg",
+                                                        span: 445..448,
+                                                    },
+                                                    Ident {
+                                                        name: "Led",
+                                                        span: 450..453,
+                                                    },
+                                                    [
+                                                        Pattern {
+                                                            kind: Bool(
+                                                                true,
+                                                            ),
+                                                            span: 454..458,
+                                                        },
+                                                    ],
+                                                ),
+                                                span: 445..460,
+                                            },
+                                            body: Expr {
+                                                kind: Int(
+                                                    Some(
+                                                        4,
+                                                    ),
+                                                ),
+                                                span: 464..465,
+                                            },
+                                        },
+                                        Arm {
+                                            pattern: Pattern {
+                                                kind: PathArgs(
+                                                    Ident {
+                                                        name: "Msg",
+                                                        span: 475..478,
+                                                    },
+                                                    Ident {
+                                                        name: "Nop",
+                                                        span: 480..483,
+                                                    },
+                                                    [],
+                                                ),
+                                                span: 475..485,
+                                            },
+                                            body: Expr {
+                                                kind: Int(
+                                                    Some(
+                                                        5,
+                                                    ),
+                                                ),
+                                                span: 489..490,
+                                            },
+                                        },
+                                        Arm {
+                                            pattern: Pattern {
+                                                kind: Or(
+                                                    [
+                                                        Pattern {
+                                                            kind: PathArgs(
+                                                                Ident {
+                                                                    name: "Msg",
+                                                                    span: 500..503,
+                                                                },
+                                                                Ident {
+                                                                    name: "Wide",
+                                                                    span: 505..509,
+                                                                },
+                                                                [
+                                                                    Pattern {
+                                                                        kind: Wildcard,
+                                                                        span: 510..511,
+                                                                    },
+                                                                ],
+                                                            ),
+                                                            span: 500..512,
+                                                        },
+                                                        Pattern {
+                                                            kind: Path(
+                                                                Ident {
+                                                                    name: "Msg",
+                                                                    span: 515..518,
+                                                                },
+                                                                Ident {
+                                                                    name: "Nop",
+                                                                    span: 520..523,
+                                                                },
+                                                            ),
+                                                            span: 515..523,
+                                                        },
+                                                    ],
+                                                ),
+                                                span: 500..523,
+                                            },
+                                            body: Expr {
+                                                kind: Int(
+                                                    Some(
+                                                        6,
+                                                    ),
+                                                ),
+                                                span: 527..528,
+                                            },
+                                        },
+                                        Arm {
+                                            pattern: Pattern {
+                                                kind: Wildcard,
+                                                span: 538..539,
+                                            },
+                                            body: Expr {
+                                                kind: Int(
+                                                    Some(
+                                                        7,
+                                                    ),
+                                                ),
+                                                span: 543..544,
+                                            },
+                                        },
+                                    ],
+                                },
+                                span: 276..551,
+                            },
+                        ),
+                        span: 270..553,
+                    },
+                ),
+                span: 244..553,
+            },
+        ),
+    ],
+}

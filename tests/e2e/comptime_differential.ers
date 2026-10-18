@@ -417,6 +417,56 @@ fn packet_hash(packet: Packet) -> u64 {
     }
 }
 
+// `match` on enums with payloads (ADR 0040): nested patterns on integers
+// of every width, `bool`, enums with and without payloads, or-patterns
+// inside payloads, and `let`s, including arms reached after a nested test
+// of an earlier arm fails.
+fn packet_match(p: Packet) -> u64 {
+    match p {
+        Packet::Empty => 1,
+        Packet::Byte(0 | 200) => 2,
+        Packet::Byte(let b: u8) => mix(3, b as u64),
+        Packet::Two(3, 70_000) => 4,
+        Packet::Two(let a: u8, 70_000 | 0xFFFF_FFFF) => mix(5, a as u64),
+        Packet::Two(_, let b: u32) => mix(6, b as u64),
+        Packet::Flags(true, Mode::Max) => 7,
+        Packet::Flags(false, Mode::Off | Mode::Run) => 8,
+        Packet::Flags(let f: bool, let m: Mode) => mix(mix(9, if f { 1 } else { 0 }), m as u64),
+        Packet::Data(let d: [u8; 3], -2) => mix(10, d[0] as u64 + d[2] as u64),
+        Packet::Data(_, let x: i16) => mix(11, x as u64),
+        Packet::Nested(let pair: Pair) => mix(12, pair.a as u64 + pair.b as u64),
+        Packet::Inner(Small::On(9)) => 13,
+        Packet::Inner(Small::On(let x: u8)) => mix(14, x as u64),
+        Packet::Inner(Small::Off) => 15,
+        Packet::Zero(_, let z: u8) => mix(16, z as u64),
+    }
+}
+
+enum Widths: u8 {
+    U(u16, u64) = 0,
+    S(i8, i32, i64) = 1,
+    E(Level, Code, Port) = 2,
+}
+
+extern fn opaque_widths(w: Widths) -> Widths;
+
+fn widths_match(w: Widths) -> u64 {
+    match w {
+        Widths::U(0xFFFF, 0xFFFF_FFFF_FFFF_FFFF) => 1,
+        Widths::U(1 | 2, let x: u64) => mix(2, x),
+        Widths::U(let a: u16, 0x1_0000_0000) => mix(3, a as u64),
+        Widths::U(_, _) => 4,
+        Widths::S(-128, -2_147_483_648, -9_000_000_000_000_000_000) => 5,
+        Widths::S(-1, let b: i32, -1 | 1) => mix(6, b as u64),
+        Widths::S(let a: i8, _, let c: i64) => mix(mix(7, a as u64), c as u64),
+        Widths::E(Level::Low, Code::Fault, Port::Top) => 8,
+        Widths::E(Level::Minus | Level::High, Code::Neg, _) => 9,
+        Widths::E(let l: Level, let c: Code, let p: Port) => {
+            mix(mix(mix(10, l as u64), c as u64), p as u64)
+        }
+    }
+}
+
 struct Uart { thr: u8 }
 
 fn putc(byte: u8) {
@@ -501,6 +551,32 @@ entry fn main() -> ! {
     // were never written; and constant data read at run time.
     failures += check(51, comptime packet_hash(Packet::Two(3, 70_000)), packet_hash(opaque_packet(TWO)));
     failures += check(52, comptime packet_hash(Packet::Nested(Pair { a: 7, b: 0xFFFF_FFFF })), packet_hash(opaque_packet(NESTED)));
+    failures += check(53, comptime packet_match(EMPTY), packet_match(opaque_packet(Packet::Empty)));
+    failures += check(54, comptime packet_match(BYTE), packet_match(opaque_packet(Packet::Byte(opaque_u8(200)))));
+    failures += check(55, comptime packet_match(Packet::Byte(7)), packet_match(opaque_packet(Packet::Byte(opaque_u8(7)))));
+    failures += check(56, comptime packet_match(TWO), packet_match(opaque_packet(Packet::Two(opaque_u8(3), opaque_u32(70_000)))));
+    failures += check(57, comptime packet_match(Packet::Two(9, 0xFFFF_FFFF)), packet_match(opaque_packet(Packet::Two(opaque_u8(9), opaque_u32(0xFFFF_FFFF)))));
+    failures += check(58, comptime packet_match(Packet::Two(3, 5)), packet_match(opaque_packet(Packet::Two(opaque_u8(3), opaque_u32(5)))));
+    failures += check(59, comptime packet_match(FLAGS), packet_match(opaque_packet(Packet::Flags(opaque_u8(1) == 1, opaque_mode(Mode::Max)))));
+    failures += check(60, comptime packet_match(Packet::Flags(false, Mode::Run)), packet_match(opaque_packet(Packet::Flags(opaque_u8(0) == 1, opaque_mode(Mode::Run)))));
+    failures += check(61, comptime packet_match(Packet::Flags(true, Mode::Off)), packet_match(opaque_packet(Packet::Flags(opaque_u8(1) == 1, opaque_mode(Mode::Off)))));
+    failures += check(62, comptime packet_match(DATA), packet_match(opaque_packet(Packet::Data([opaque_u8(1), 2, 255], opaque_i16(-2)))));
+    failures += check(63, comptime packet_match(Packet::Data([4, 5, 6], 300)), packet_match(opaque_packet(Packet::Data([opaque_u8(4), 5, 6], opaque_i16(300)))));
+    failures += check(64, comptime packet_match(NESTED), packet_match(opaque_packet(Packet::Nested(Pair { a: opaque_u32(7), b: 0xFFFF_FFFF }))));
+    failures += check(65, comptime packet_match(INNER_ON), packet_match(opaque_packet(Packet::Inner(Small::On(opaque_u8(9))))));
+    failures += check(66, comptime packet_match(Packet::Inner(Small::On(4))), packet_match(opaque_packet(Packet::Inner(Small::On(opaque_u8(4))))));
+    failures += check(67, comptime packet_match(INNER_OFF), packet_match(opaque_packet(Packet::Inner(Small::Off))));
+    failures += check(68, comptime packet_match(ZERO), packet_match(opaque_packet(Packet::Zero((), opaque_u8(5)))));
+    failures += check(69, comptime widths_match(Widths::U(0xFFFF, 0xFFFF_FFFF_FFFF_FFFF)), widths_match(opaque_widths(Widths::U(opaque_u16(0xFFFF), opaque_u64(0xFFFF_FFFF_FFFF_FFFF)))));
+    failures += check(70, comptime widths_match(Widths::U(2, 77)), widths_match(opaque_widths(Widths::U(opaque_u16(2), opaque_u64(77)))));
+    failures += check(71, comptime widths_match(Widths::U(0xFFFF, 0x1_0000_0000)), widths_match(opaque_widths(Widths::U(opaque_u16(0xFFFF), opaque_u64(0x1_0000_0000)))));
+    failures += check(72, comptime widths_match(Widths::U(5, 6)), widths_match(opaque_widths(Widths::U(opaque_u16(5), opaque_u64(6)))));
+    failures += check(73, comptime widths_match(Widths::S(-128, -2_147_483_648, -9_000_000_000_000_000_000)), widths_match(opaque_widths(Widths::S(opaque_i8(-128), opaque_i32(-2_147_483_648), opaque_i64(-9_000_000_000_000_000_000)))));
+    failures += check(74, comptime widths_match(Widths::S(-1, 70_000, 1)), widths_match(opaque_widths(Widths::S(opaque_i8(-1), opaque_i32(70_000), opaque_i64(1)))));
+    failures += check(75, comptime widths_match(Widths::S(-1, 3, 7)), widths_match(opaque_widths(Widths::S(opaque_i8(-1), opaque_i32(3), opaque_i64(7)))));
+    failures += check(76, comptime widths_match(Widths::E(Level::Low, Code::Fault, Port::Top)), widths_match(opaque_widths(Widths::E(opaque_level(Level::Low), opaque_code(Code::Fault), opaque_port(Port::Top)))));
+    failures += check(77, comptime widths_match(Widths::E(Level::High, Code::Neg, Port::Data)), widths_match(opaque_widths(Widths::E(opaque_level(Level::High), opaque_code(Code::Neg), opaque_port(Port::Data)))));
+    failures += check(78, comptime widths_match(Widths::E(Level::Low, Code::Neg, Port::Data)), widths_match(opaque_widths(Widths::E(opaque_level(Level::Low), opaque_code(Code::Neg), opaque_port(Port::Data)))));
     if failures == 0 {
         putc(b'd'); putc(b'i'); putc(b'f'); putc(b'f'); putc(b'e'); putc(b'r'); putc(b'e');
         putc(b'n'); putc(b't'); putc(b'i'); putc(b'a'); putc(b'l'); putc(b' '); putc(b'o');

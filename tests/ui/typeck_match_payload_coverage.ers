@@ -1,0 +1,122 @@
+// emit: typeck
+// Exhaustiveness and dead arms over nested patterns (ADR 0040). The
+// missing values are found position by position, in the order written,
+// and at most three are shown, then how many more. An alternative is dead
+// at any depth. Values that are no variant remain at every position, so
+// `_` after every variant and `Msg::SetMode(_)` after every variant of
+// `Mode` are not dead. A `match` that needs a nested enum with a repeated
+// value is not checked; one that examines it only with `_` is.
+enum Mode: u8 { Off = 0, Run = 1 }
+
+enum Msg: u8 {
+    Nop = 0,
+    Led(bool) = 1,
+    Write(u8, u16) = 2,
+    Wide(u32) = 3,
+    SetMode(Mode) = 4,
+}
+
+enum P: u8 { Pair(Mode, bool) = 0 }
+enum Five: u8 { A = 0, B = 1, C = 2, D = 3, E = 4 }
+enum Signed: u8 { V(i8) = 0 }
+enum Inner: u8 { A = 0, B = 1 }
+enum Mid: u8 { M(Inner) = 0 }
+enum Outer: u8 { O(Mid) = 0, Other = 1 }
+
+fn example(m: Msg) -> u8 {
+    match m {
+        Msg::Nop => 0,
+        Msg::Led(true) => 1,
+        Msg::Write(0, 5) => 2,
+    }
+}
+
+fn only_write(m: Msg) -> u8 {
+    match m {
+        Msg::Nop => 0,
+        Msg::Led(_) => 1,
+        Msg::Write(0, 5) => 2,
+        Msg::Wide(_) => 3,
+        Msg::SetMode(_) => 4,
+    }
+}
+
+fn pair(p: P) -> u8 {
+    match p {
+        P::Pair(Mode::Off, true) => 0,
+        P::Pair(_, false) => 1,
+    }
+}
+
+fn no_arms_bool(b: bool) -> u8 {
+    match b {}
+}
+
+fn no_arms_five(f: Five) -> u8 {
+    match f {}
+}
+
+fn no_arms_msg(m: Msg) -> u8 {
+    match m {}
+}
+
+fn signed(s: Signed) -> u8 {
+    match s {
+        Signed::V(0) => 0,
+        Signed::V(2) => 2,
+        Signed::V(-2) => 3,
+    }
+}
+
+fn two_deep(o: Outer) -> u8 {
+    match o {
+        Outer::O(Mid::M(Inner::A)) => 0,
+        Outer::Other => 1,
+    }
+}
+
+fn dead(m: Msg) -> u8 {
+    match m {
+        Msg::Write(1, _) => 0,
+        Msg::Write(1, 7) => 1,
+        Msg::Led(true | true) => 2,
+        Msg::Led(true) => 3,
+        Msg::Led(false) => 4,
+        Msg::Led(_) => 5,
+        Msg::Write(2 | 1 | 3, _) => 6,
+        _ => 7,
+    }
+}
+
+fn not_dead(m: Msg) -> u8 {
+    match m {
+        Msg::Nop => 0,
+        Msg::Led(_) => 1,
+        Msg::Write(_, _) => 2,
+        Msg::Wide(_) => 3,
+        Msg::SetMode(Mode::Off) => 4,
+        Msg::SetMode(Mode::Run) => 5,
+        Msg::SetMode(_) => 6,
+        _ => 7,
+    }
+}
+
+enum Rep: u8 { A = 0, B = 0 }
+enum Holder: u8 { R(Rep) = 0 }
+
+fn skipped(h: Holder) -> u8 {
+    match h {
+        Holder::R(Rep::A) => 0,
+        Holder::R(Rep::A) => 1,
+    }
+}
+
+fn checked(h: Holder) -> u8 {
+    match h {
+        Holder::R(_) => 0,
+        Holder::R(_) => 1,
+    }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

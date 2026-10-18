@@ -43,3 +43,13 @@ union Packet {
 };
 
 union Packet opaque_packet(union Packet p) { return p; }
+
+/* The twin of the program's enum `Widths`. */
+union Widths {
+    uint8_t tag;
+    struct { uint8_t tag; uint16_t p0; uint64_t p1; } U;
+    struct { uint8_t tag; int8_t p0; int32_t p1; int64_t p2; } S;
+    struct { uint8_t tag; enum Level p0; enum Code p1; enum Port p2; } E;
+};
+
+union Widths opaque_widths(union Widths w) { return w; }

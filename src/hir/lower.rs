@@ -417,6 +417,15 @@ fn find_unique(fns: &[Fn], kind: FnKind, diags: &mut Diagnostics) -> Option<FnId
     Some(id)
 }
 
+/// Where a pattern is: in an arm's pattern, outside any or-pattern; an
+/// alternative of an or-pattern; or deeper inside one (ADR 0037).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Within {
+    Arm,
+    Alternative,
+    OrPattern,
+}
+
 struct Lowerer<'a> {
     /// Every function's id and kind, by name.
     fn_ids: HashMap<String, (FnId, ast::FnKind)>,
@@ -1198,6 +1207,16 @@ impl Lowerer<'_> {
 
     /// Adds a local to the innermost scope, shadowing earlier ones.
     fn declare(&mut self, name: &ast::Ident, ty: Ty, mutable: bool) -> LocalId {
+        let local = self.new_local(name, ty, mutable);
+        self.scopes
+            .last_mut()
+            .expect("locals are declared inside a scope")
+            .insert(name.name.clone(), local);
+        local
+    }
+
+    /// A local, not yet visible in any scope.
+    fn new_local(&mut self, name: &ast::Ident, ty: Ty, mutable: bool) -> LocalId {
         let local = LocalId(self.locals.len() as u32);
         self.locals.push(Local {
             name: name.name.clone(),
@@ -1205,10 +1224,6 @@ impl Lowerer<'_> {
             mutable,
             span: name.span,
         });
-        self.scopes
-            .last_mut()
-            .expect("locals are declared inside a scope")
-            .insert(name.name.clone(), local);
         local
     }
 
@@ -1533,40 +1548,83 @@ impl Lowerer<'_> {
         }
     }
 
-    /// An arm of a `match`, in a scope of its own: the variable its pattern
-    /// binds, if any, exists only in its expression (ADR 0037).
+    /// An arm of a `match`, in a scope of its own: the variables its
+    /// pattern binds exist only in its expression (ADR 0037, 0040).
     fn arm(&mut self, arm: &ast::Arm) -> Arm {
         self.scopes.push(HashMap::new());
-        let pattern = self.pattern(&arm.pattern, false);
+        let mut bound = Vec::new();
+        let pattern = self.pattern(&arm.pattern, Within::Arm, &mut bound);
+        // The variables exist in the arm's expression, not in the rest of
+        // the pattern, whose names resolve as outside it.
+        let scope = self
+            .scopes
+            .last_mut()
+            .expect("an arm has a scope of its own");
+        for (name, local, _) in bound {
+            scope.insert(name, local);
+        }
         let body = self.expr(&arm.body);
         self.scopes.pop();
         Arm { pattern, body }
     }
 
-    /// A pattern; `alternative` if it is one of an or-pattern, where `let`
-    /// is not allowed (ADR 0037).
-    fn pattern(&mut self, pattern: &ast::Pattern, alternative: bool) -> Pattern {
+    /// A pattern, `within` the arm's pattern or an or-pattern, where `let`
+    /// is not allowed at any depth (ADR 0037). Each variable it declares
+    /// goes in `bound`, to be visible in the arm's expression, with the
+    /// span of its name unless it is inside an or-pattern, which was
+    /// reported: one name bound twice is reported among the others
+    /// (ADR 0040).
+    fn pattern(
+        &mut self,
+        pattern: &ast::Pattern,
+        within: Within,
+        bound: &mut Vec<(String, LocalId, Option<Span>)>,
+    ) -> Pattern {
         let kind = match &pattern.kind {
             ast::PatternKind::Wildcard => PatternKind::Wildcard,
-            ast::PatternKind::Binding { mutable, name, ty } if alternative => {
-                self.diags.push(
-                    Diagnostic::error(
-                        "resolve::binding-in-or-pattern",
+            ast::PatternKind::Binding { mutable, name, ty } if within != Within::Arm => {
+                let (message, help) = match within {
+                    Within::Alternative => (
                         "a `let` cannot be an alternative of an or-pattern",
-                    )
-                    .label(pattern.span, "binds a variable")
-                    .help("a `let` matches every value on its own; give it an arm of its own, such as `let n: u8 => ...` (ADR 0037)"),
+                        "a `let` matches every value on its own; give it an arm of its own, such as `let n: u8 => ...` (ADR 0037)",
+                    ),
+                    _ => (
+                        "a `let` cannot be inside an or-pattern",
+                        "an or-pattern binds no variable; give each alternative an arm of its own (ADR 0037)",
+                    ),
+                };
+                self.diags.push(
+                    Diagnostic::error("resolve::binding-in-or-pattern", message)
+                        .label(pattern.span, "binds a variable")
+                        .help(help),
                 );
                 // Declared all the same, so that its uses report nothing
                 // more. Reported; lowering errors stop the pipeline.
                 let local_ty = self.ty(ty, UnsizedPosition::Variable);
-                self.declare(name, local_ty, *mutable);
+                let local = self.new_local(name, local_ty, *mutable);
+                bound.push((name.name.clone(), local, None));
                 PatternKind::Wildcard
             }
             ast::PatternKind::Binding { mutable, name, ty } => {
+                if let Some(&(_, _, Some(first))) = bound
+                    .iter()
+                    .find(|(bound_name, _, span)| *bound_name == name.name && span.is_some())
+                {
+                    self.diags.push(
+                        Diagnostic::error(
+                            "resolve::duplicate-binding",
+                            format!("`{}` is bound twice in this pattern", name.name),
+                        )
+                        .label(first, "first bound here")
+                        .label(name.span, "bound again here")
+                        .help("each variable of a pattern has a name of its own (ADR 0040)"),
+                    );
+                }
                 let local_ty = self.ty(ty, UnsizedPosition::Variable);
+                let local = self.new_local(name, local_ty, *mutable);
+                bound.push((name.name.clone(), local, Some(name.span)));
                 PatternKind::Binding {
-                    local: self.declare(name, local_ty, *mutable),
+                    local,
                     ty_span: ty.span,
                 }
             }
@@ -1585,14 +1643,30 @@ impl Lowerer<'_> {
             },
             // Resolved as in an expression (ADR 0037).
             ast::PatternKind::Path(enum_name, variant) => match self.variant(enum_name, variant) {
-                Some((id, index)) => PatternKind::Variant(id, index),
+                Some((id, index)) => PatternKind::Variant(id, index, None),
                 // Reported; lowering errors stop the pipeline.
                 None => PatternKind::Wildcard,
             },
+            ast::PatternKind::PathArgs(enum_name, variant, patterns) => {
+                let found = self.variant(enum_name, variant);
+                let inner = match within {
+                    Within::Arm => Within::Arm,
+                    _ => Within::OrPattern,
+                };
+                let patterns = patterns
+                    .iter()
+                    .map(|sub| self.pattern(sub, inner, bound))
+                    .collect();
+                match found {
+                    Some((id, index)) => PatternKind::Variant(id, index, Some(patterns)),
+                    // Reported; lowering errors stop the pipeline.
+                    None => PatternKind::Wildcard,
+                }
+            }
             ast::PatternKind::Or(alternatives) => PatternKind::Or(
                 alternatives
                     .iter()
-                    .map(|alternative| self.pattern(alternative, true))
+                    .map(|alternative| self.pattern(alternative, Within::Alternative, bound))
                     .collect(),
             ),
         };

@@ -1,0 +1,81 @@
+// emit: typeck
+// What a `match` on an enum with payloads accepts (ADR 0040): variant
+// patterns with a pattern for each payload value, nested, with
+// or-patterns and `let`s inside; `_` and `let` alone at struct, array,
+// pointer, slice and `()` positions; constants of integers, `bool` and
+// enums without payloads at payload positions; `_` after every variant,
+// and `Msg::SetMode(_)` after every variant of `Mode`, since values that
+// are no variant remain. A binding is not visible in the rest of its
+// pattern, where `LIMIT` is still the constant.
+enum Mode: u8 { Off = 0, Run = 1 }
+struct Pair { a: u8, b: u8 }
+
+enum Msg: u8 {
+    Nop = 0,
+    Led(bool) = 1,
+    Write(u8, u16) = 2,
+    Wide(u32) = 3,
+    SetMode(Mode) = 4,
+}
+
+enum Bag: u8 {
+    Things(Pair, [u8; 2], *const u8, *const [u8], ()) = 0,
+    Count(u8, u8) = 1,
+}
+
+const LIMIT: u8 = 9;
+const RUN: Mode = Mode::Run;
+const ON: bool = true;
+
+fn special(v: u16) -> u8 { v as u8 }
+fn write(r: u8, v: u16) -> u8 { r + v as u8 }
+
+fn decode(m: Msg) -> u8 {
+    match m {
+        Msg::Nop => 0,
+        Msg::Led(true) => 1,
+        Msg::Led(false) => 2,
+        Msg::Write(0x10 | 0x11, let v: u16) => special(v),
+        Msg::Write(let r: u8, let v: u16) => write(r, v),
+        Msg::Wide(_) => 3,
+        Msg::SetMode(Mode::Run) => 4,
+        Msg::SetMode(_) => 5,
+    }
+}
+
+fn constants(m: Msg) -> u8 {
+    match m {
+        Msg::Led(ON) => 1,
+        Msg::Write(LIMIT, _) => 2,
+        Msg::SetMode(RUN) => 3,
+        Msg::SetMode(Mode::Off) => 4,
+        Msg::SetMode(_) => 5,
+        _ => 6,
+    }
+}
+
+fn after_every_variant(m: Msg) -> u8 {
+    match m {
+        Msg::Nop => 0,
+        Msg::Led(_) => 1,
+        Msg::Write(_, _) => 2,
+        Msg::Wide(let w: u32) => w as u8,
+        Msg::SetMode(Mode::Off) => 4,
+        Msg::SetMode(Mode::Run) => 5,
+        Msg::SetMode(_) => 6,
+        _ => 7,
+    }
+}
+
+fn opaque_positions(b: Bag) -> u8 {
+    match b {
+        Bag::Things(let p: Pair, let a: [u8; 2], let ptr: *const u8, let s: *const [u8], _) => {
+            p.a + a[1] + *ptr + (*s)[0]
+        }
+        Bag::Count(let LIMIT: u8, LIMIT) => LIMIT,
+        Bag::Count(_, _) => 0,
+    }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

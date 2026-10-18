@@ -1,0 +1,95 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/resolve_match_payload_errors.ers
+---
+--- errors ---
+resolve::unknown-variant
+
+  × `Mode` has no variant `Sleep`
+   ╭─[resolve_match_payload_errors.ers:8:6]
+ 7 │ // depth (ADR 0037, until ADR 0041).
+ 8 │ enum Mode: u8 { Off = 0, Run = 1 }
+   ·      ──┬─
+   ·        ╰── `Mode` is declared here
+ 9 │ enum Inner: u8 { Pair(u8, u8) = 0 }
+   ╰────
+    ╭─[resolve_match_payload_errors.ers:20:28]
+ 19 │     match m {
+ 20 │         Msg::SetMode(Mode::Sleep) => 1,
+    ·                            ──┬──
+    ·                              ╰── unknown variant
+ 21 │         Msg::Write(LEVEL, _) => 2,
+    ╰────
+  help: its variants are `Off`, `Run`
+resolve::not-a-constant
+
+  × `LEVEL` is a static, not a constant
+    ╭─[resolve_match_payload_errors.ers:21:20]
+ 20 │         Msg::SetMode(Mode::Sleep) => 1,
+ 21 │         Msg::Write(LEVEL, _) => 2,
+    ·                    ──┬──
+    ·                      ╰── a name in a pattern is a constant
+ 22 │         Msg::Write(LIMTI, _) => 3,
+    ╰────
+  help: a static is memory, read at run time (ADR 0030); to compare with it, bind the value and
+        test it: `let x: T => if x == LEVEL { ... }` (ADR 0037)
+resolve::unknown-name
+
+  × cannot find `LIMTI` in this scope
+    ╭─[resolve_match_payload_errors.ers:22:20]
+ 21 │         Msg::Write(LEVEL, _) => 2,
+ 22 │         Msg::Write(LIMTI, _) => 3,
+    ·                    ──┬──
+    ·                      ╰── not found
+ 23 │         _ => 4,
+    ╰────
+  help: a name in a pattern is always a constant; to bind the value to a new variable, write `let
+        LIMTI: T` (ADR 0037)
+resolve::duplicate-binding
+
+  × `a` is bound twice in this pattern
+    ╭─[resolve_match_payload_errors.ers:29:24]
+ 28 │     match m {
+ 29 │         Msg::Write(let a: u8, let a: u16) => 1,
+    ·                        ┬          ┬
+    ·                        │          ╰── bound again here
+    ·                        ╰── first bound here
+ 30 │         Msg::Nested(let b: u8, Inner::Pair(_, let b: u8)) => b,
+    ╰────
+  help: each variable of a pattern has a name of its own (ADR 0040)
+resolve::duplicate-binding
+
+  × `b` is bound twice in this pattern
+    ╭─[resolve_match_payload_errors.ers:30:25]
+ 29 │         Msg::Write(let a: u8, let a: u16) => 1,
+ 30 │         Msg::Nested(let b: u8, Inner::Pair(_, let b: u8)) => b,
+    ·                         ┬                         ┬
+    ·                         │                         ╰── bound again here
+    ·                         ╰── first bound here
+ 31 │         _ => 2,
+    ╰────
+  help: each variable of a pattern has a name of its own (ADR 0040)
+resolve::binding-in-or-pattern
+
+  × a `let` cannot be inside an or-pattern
+    ╭─[resolve_match_payload_errors.ers:37:20]
+ 36 │     match m {
+ 37 │         Msg::Write(let r: u8, _) | Msg::Nop => r,
+    ·                    ────┬────
+    ·                        ╰── binds a variable
+ 38 │         Msg::Nested(1 | let n: u8, _) => n,
+    ╰────
+  help: an or-pattern binds no variable; give each alternative an arm of its own (ADR 0037)
+resolve::binding-in-or-pattern
+
+  × a `let` cannot be an alternative of an or-pattern
+    ╭─[resolve_match_payload_errors.ers:38:25]
+ 37 │         Msg::Write(let r: u8, _) | Msg::Nop => r,
+ 38 │         Msg::Nested(1 | let n: u8, _) => n,
+    ·                         ────┬────
+    ·                             ╰── binds a variable
+ 39 │         _ => 3,
+    ╰────
+  help: a `let` matches every value on its own; give it an arm of its own, such as `let n: u8
+        => ...` (ADR 0037)

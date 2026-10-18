@@ -24,6 +24,9 @@ pub enum Column {
     Bool,
     Int(IntTy),
     Enum(EnumTy),
+    /// A struct, an array, a pointer, a slice or `()`, whose values no
+    /// pattern tells apart: only `_` and `let` match there (ADR 0040).
+    Other,
 }
 
 /// A variant of an enum: its value, and the types of its payload values.
@@ -52,11 +55,19 @@ pub enum Pat {
 }
 
 impl Pat {
-    /// The alternatives of an or-pattern, or the pattern alone.
-    pub fn alternatives(&self) -> &[Pat] {
+    /// This pattern with `with` in place of the pattern at `path`, each
+    /// step the index of a payload pattern of a variant.
+    pub fn replaced(&self, path: &[usize], with: &Pat) -> Pat {
+        let Some((&index, rest)) = path.split_first() else {
+            return with.clone();
+        };
         match self {
-            Pat::Or(alternatives) => alternatives,
-            _ => std::slice::from_ref(self),
+            Pat::Value(value, subs) => {
+                let mut subs = subs.clone();
+                subs[index] = subs[index].replaced(rest, with);
+                Pat::Value(*value, subs)
+            }
+            _ => unreachable!("a path leads through payload patterns"),
         }
     }
 }
@@ -76,6 +87,11 @@ pub fn useful<'p>(
     rows: &[Row<'p>],
     pattern: &[&'p Pat],
 ) -> bool {
+    // A row of `_` alone leaves nothing; stopping here keeps the search
+    // from examining the values of every later column.
+    if rows.iter().any(|row| all_wild(row)) {
+        return false;
+    }
     let Some((&head, tail)) = pattern.split_first() else {
         return rows.is_empty();
     };
@@ -131,7 +147,13 @@ pub fn missing<'p>(
         };
     };
     let rows = expand(rows);
-    let listed = examine && rows.is_empty() && !matches!(column, Column::Int(_));
+    // A row of `_` alone matches every value left: no witness remains, and
+    // stopping here keeps the search from examining the values of every
+    // later column.
+    if rows.iter().any(|row| all_wild(row)) {
+        return Vec::new();
+    }
+    let listed = examine && rows.is_empty() && matches!(column, Column::Bool | Column::Enum(_));
     if rows.iter().all(|row| matches!(row[0], Pat::Wild)) && !listed {
         return missing(enums, rest, &default(&rows), false)
             .into_iter()
@@ -146,6 +168,7 @@ pub fn missing<'p>(
             values.extend(unnamed(int, &values));
             values
         }
+        Column::Other => unreachable!("only `_` and `let` match where no pattern compares"),
     };
     let mut witnesses = Vec::new();
     for value in values {
@@ -179,12 +202,19 @@ fn payload(enums: &Enums, column: Column, value: u64) -> &[Column] {
 }
 
 /// How many values a position of type `column` has, an enum's being all
-/// those of its integer type.
+/// those of its integer type. No pattern names a value where patterns do
+/// not compare, so that `_` there is never compared value by value.
 fn count(column: Column) -> u128 {
     match column {
         Column::Bool => 2,
         Column::Int(int) | Column::Enum(EnumTy { int, .. }) => u128::from(int.mask()) + 1,
+        Column::Other => u128::MAX,
     }
+}
+
+/// Whether every pattern of `row` is `_`.
+fn all_wild(row: &[&Pat]) -> bool {
+    row.iter().all(|pattern| matches!(pattern, Pat::Wild))
 }
 
 /// The rows, with each one whose first pattern is an or-pattern replaced by
@@ -487,5 +517,184 @@ mod tests {
         let all = [a(value(1)), a(value(0)), value(1)];
         assert!(missing1(&enums, column, &all).is_empty());
         assert!(!useful1(&enums, column, &all, &a(Pat::Wild)));
+    }
+
+    /// `enum Mode: u8 { Off = 0, Run = 1 }` as `EnumId(1)`, and
+    /// `enum Msg: u8 { Nop = 0, Led(bool) = 1, Write(u8, u16) = 2,
+    /// Wide(u32) = 3, SetMode(Mode) = 4 }` as `EnumId(0)` (ADR 0040).
+    fn msg() -> (Column, Column, Enums) {
+        let mode = EnumTy {
+            id: EnumId(1),
+            name: "Mode",
+            ..enum_ty(IntTy::U8)
+        };
+        let msg = EnumTy {
+            payloads: true,
+            ..enum_ty(IntTy::U8)
+        };
+        let variant = |value: u64, payload: Vec<Column>| Variant { value, payload };
+        let enums = Enums::from([
+            (
+                EnumId(0),
+                vec![
+                    variant(0, Vec::new()),
+                    variant(1, vec![Column::Bool]),
+                    variant(2, vec![Column::Int(IntTy::U8), Column::Int(IntTy::U16)]),
+                    variant(3, vec![Column::Int(IntTy::U32)]),
+                    variant(4, vec![Column::Enum(mode)]),
+                ],
+            ),
+            (
+                EnumId(1),
+                vec![variant(0, Vec::new()), variant(1, Vec::new())],
+            ),
+        ]);
+        (Column::Enum(msg), Column::Enum(mode), enums)
+    }
+
+    #[test]
+    fn nested_witnesses_in_written_order() {
+        let (msg, _, enums) = msg();
+        let v = |value: u64, subs: Vec<Pat>| Pat::Value(value, subs);
+        // `Msg::Nop`, `Msg::Led(true)`, `Msg::Write(0, 5)`.
+        let arms = [
+            v(0, vec![]),
+            v(1, vec![value(1)]),
+            v(2, vec![value(0), value(5)]),
+        ];
+        assert_eq!(
+            missing1(&enums, msg, &arms),
+            vec![
+                vec![v(1, vec![value(0)])],
+                vec![v(2, vec![value(0), value(0)])],
+                vec![v(2, vec![value(1), Pat::Wild])],
+                vec![v(3, vec![Pat::Wild])],
+                vec![v(4, vec![Pat::Wild])],
+            ]
+        );
+        // Without arms, every variant, with `_` for each payload value.
+        assert_eq!(missing1(&enums, msg, &[]).len(), 5);
+        assert_eq!(
+            missing1(&enums, msg, &[])[2],
+            vec![v(2, vec![Pat::Wild, Pat::Wild])]
+        );
+    }
+
+    #[test]
+    fn nested_values_that_are_no_variant() {
+        let (msg, _, enums) = msg();
+        let v = |value: u64, subs: Vec<Pat>| Pat::Value(value, subs);
+        let set_mode = |mode: Pat| v(4, vec![mode]);
+        let earlier = [
+            v(0, vec![]),
+            v(1, vec![Pat::Wild]),
+            v(2, vec![Pat::Wild, Pat::Wild]),
+            v(3, vec![Pat::Wild]),
+            set_mode(value(0)),
+            set_mode(value(1)),
+        ];
+        // Exhaustive, yet `Msg::SetMode(_)` and `_` are not dead.
+        assert!(missing1(&enums, msg, &earlier).is_empty());
+        assert!(useful1(&enums, msg, &earlier, &set_mode(Pat::Wild)));
+        assert!(useful1(&enums, msg, &earlier, &Pat::Wild));
+        // A dead alternative inside a payload: `Msg::Led(true | true)`.
+        let led = |b: u64| v(1, vec![value(b)]);
+        assert!(!useful1(&enums, msg, &[led(1)], &led(1)));
+        assert!(useful1(
+            &enums,
+            msg,
+            &[led(1)],
+            &v(1, vec![Pat::Or(vec![value(1), value(0)])])
+        ));
+        // A whole arm covered by two earlier ones.
+        assert!(!useful1(
+            &enums,
+            msg,
+            &[led(1), led(0)],
+            &v(1, vec![Pat::Wild])
+        ));
+    }
+
+    #[test]
+    fn positions_no_pattern_compares() {
+        // `enum B: u8 { S(Pair, u8) = 0 }`, where only `_` and `let` match
+        // a `Pair`.
+        let b = EnumTy {
+            payloads: true,
+            ..enum_ty(IntTy::U8)
+        };
+        let enums = Enums::from([(
+            EnumId(0),
+            vec![Variant {
+                value: 0,
+                payload: vec![Column::Other, Column::Int(IntTy::U8)],
+            }],
+        )]);
+        let s = |sub: Pat| Pat::Value(0, vec![Pat::Wild, sub]);
+        let column = Column::Enum(b);
+        assert_eq!(
+            missing1(&enums, column, &[s(value(3))]),
+            vec![vec![Pat::Value(0, vec![Pat::Wild, value(0)])]]
+        );
+        assert!(missing1(&enums, column, &[s(value(3)), s(Pat::Wild)]).is_empty());
+        assert!(!useful1(&enums, column, &[s(Pat::Wild)], &s(value(1))));
+    }
+
+    #[test]
+    fn replaced_takes_a_path_through_payloads() {
+        let or = Pat::Or(vec![value(1), value(2)]);
+        let whole = Pat::Value(0, vec![Pat::Wild, Pat::Value(5, vec![or])]);
+        assert_eq!(
+            whole.replaced(&[1, 0], &value(2)),
+            Pat::Value(0, vec![Pat::Wild, Pat::Value(5, vec![value(2)])])
+        );
+        assert_eq!(whole.replaced(&[], &Pat::Wild), Pat::Wild);
+    }
+
+    #[test]
+    fn a_row_of_wildcards_stops_the_search() {
+        // `enum P: u8 { A(bool, ..., bool) = 0 }` with 64 `bool`s, and one
+        // arm per position with `true` there and `_` elsewhere: without
+        // stopping at a row of `_`, both searches would examine 2^64
+        // combinations.
+        const N: usize = 64;
+        let p = EnumTy {
+            payloads: true,
+            ..enum_ty(IntTy::U8)
+        };
+        let enums = Enums::from([(
+            EnumId(0),
+            vec![Variant {
+                value: 0,
+                payload: vec![Column::Bool; N],
+            }],
+        )]);
+        let column = Column::Enum(p);
+        let arms: Vec<Pat> = (0..N)
+            .map(|i| {
+                let subs = (0..N)
+                    .map(|j| if i == j { value(1) } else { Pat::Wild })
+                    .collect();
+                Pat::Value(0, subs)
+            })
+            .collect();
+        // Only `P::A(false, ..., false)` is missing.
+        assert_eq!(
+            missing1(&enums, column, &arms),
+            vec![vec![Pat::Value(0, vec![value(0); N])]]
+        );
+        assert!(useful1(&enums, column, &arms, &Pat::Wild));
+        let mut all = arms.clone();
+        all.push(Pat::Value(0, vec![value(0); N]));
+        assert!(missing1(&enums, column, &all).is_empty());
+        // `P::A(_, ..., _)` after them is dead; `_` is not, for the tags
+        // that are no variant.
+        assert!(!useful1(
+            &enums,
+            column,
+            &all,
+            &Pat::Value(0, vec![Pat::Wild; N])
+        ));
+        assert!(useful1(&enums, column, &all, &Pat::Wild));
     }
 }

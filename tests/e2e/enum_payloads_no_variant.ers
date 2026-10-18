@@ -1,0 +1,75 @@
+// Values of an enum with payloads that are no variant (ADR 0036, 0040):
+// a tag that is no variant, and a nested `Mode` that is no variant, read
+// through a cast pointer from a static byte array aligned as `Msg` is.
+// Arms with `_` handle them; a `match` that examines the nested `Mode`
+// with variant patterns only calls the panic function.
+// expect-output: tag?
+// expect-output: mode?
+// expect-output: run
+// expect-output: panic
+// expect-exit: 1
+
+enum Mode: u8 { Off = 0, Run = 1 }
+enum Msg: u8 { Nop = 0, Wide(u32) = 1, SetMode(Mode) = 2 }
+
+// The tag 9, `Msg::SetMode` holding the byte 7, then `Msg::SetMode(Mode::Run)`.
+#[align(4)]
+static BYTES: [u8; 24] = [
+    9, 0, 0, 0, 0, 0, 0, 0,
+    2, 7, 0, 0, 0, 0, 0, 0,
+    2, 1, 0, 0, 0, 0, 0, 0,
+];
+
+fn putc(byte: u8) {
+    let thr: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+    *thr = byte;
+}
+
+fn print(s: *const [u8]) {
+    let mut i: usize = 0;
+    while i < len(s) {
+        putc((*s)[i]);
+        i += 1;
+    }
+    putc(b'\n');
+}
+
+fn exit(code: u32) -> ! {
+    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+    *finisher = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    loop {}
+}
+
+fn handled(m: Msg) -> *const [u8] {
+    match m {
+        Msg::Nop => &raw const b"nop",
+        Msg::Wide(_) => &raw const b"wide",
+        Msg::SetMode(Mode::Off) => &raw const b"off",
+        Msg::SetMode(Mode::Run) => &raw const b"run",
+        Msg::SetMode(_) => &raw const b"mode?",
+        _ => &raw const b"tag?",
+    }
+}
+
+fn strict(m: Msg) -> *const [u8] {
+    match m {
+        Msg::Nop => &raw const b"nop",
+        Msg::Wide(_) => &raw const b"wide",
+        Msg::SetMode(Mode::Off) => &raw const b"off",
+        Msg::SetMode(Mode::Run) => &raw const b"run",
+    }
+}
+
+entry fn main() -> ! {
+    let msgs: *const Msg = &raw const BYTES as *const Msg;
+    print(handled(msgs[0]));
+    print(handled(msgs[1]));
+    print(strict(msgs[2]));
+    print(strict(msgs[1]));
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    print(&raw const b"panic");
+    exit(1)
+}

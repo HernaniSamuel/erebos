@@ -1,0 +1,92 @@
+// emit: typeck
+// What a `match` on an enum with payloads rejects (ADR 0040): a struct
+// scrutinee is still `ty::match-type`; a variant pattern needs a pattern
+// for each payload value, and one without payload no parentheses
+// (`ty::wrong-payload-count`); at a struct position only `_` and `let`
+// match, so a literal there is a mismatch; a `let` has its position's
+// type; a constant of a type other than an integer, `bool` or an enum
+// without payloads is `ty::constant-pattern-type` alone, whatever its
+// position; a variant of another enum is a mismatch, and its own payload
+// patterns are checked against its declaration.
+enum Mode: u8 { Off = 0, Run = 1 }
+struct Pair { a: u8, b: u8 }
+
+enum Msg: u8 {
+    Nop = 0,
+    Led(bool) = 1,
+    Write(u8, u16) = 2,
+    Wide(u32) = 3,
+    SetMode(Mode) = 4,
+    Both(Pair, *const u8) = 5,
+}
+
+enum G: u8 { A = 0, B(u8) = 1 }
+enum H: u8 { X(Mode) = 0 }
+
+const LED: Msg = Msg::Led(true);
+const PAIR: Pair = Pair { a: 1, b: 2 };
+const NOWHERE: *const u8 = 0 as *const u8;
+
+fn scrutinee(p: Pair) -> u8 {
+    match p {
+        _ => 0,
+    }
+}
+
+fn counts(m: Msg) -> u8 {
+    match m {
+        Msg::Write(_) => 1,
+        Msg::Nop(_) => 2,
+        Msg::Write() => 3,
+        Msg::Nop() => 4,
+        Msg::SetMode(Mode::Off()) => 5,
+        Msg::Write => 6,
+        Msg::Led(true, false) => 7,
+        _ => 8,
+    }
+}
+
+fn positions(m: Msg) -> u8 {
+    match m {
+        Msg::Both(0, _) => 1,
+        Msg::Both(_, true) => 2,
+        Msg::Write(let r: u16, _) => 3,
+        Msg::Led(b'q') => 4,
+        _ => 5,
+    }
+}
+
+fn constants(m: Msg) -> u8 {
+    match m {
+        LED => 1,
+        Msg::Both(PAIR, NOWHERE) => 2,
+        Msg::Write(LED, _) => 3,
+        _ => 4,
+    }
+}
+
+fn other_enum(g: G) -> u8 {
+    match g {
+        H::X(Mode::Run) => 1,
+        H::X(3) => 2,
+        _ => 3,
+    }
+}
+
+// A literal at the position of an enum with payloads: its help suggests
+// variant patterns only, since no constant of it is a pattern.
+enum Holder: u8 { H(Msg) = 0 }
+
+fn literals(m: Msg, h: Holder) -> u8 {
+    let a: u8 = match m {
+        3 => 1,
+        _ => 0,
+    };
+    match h {
+        Holder::H(true) => a,
+        _ => 0,
+    }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

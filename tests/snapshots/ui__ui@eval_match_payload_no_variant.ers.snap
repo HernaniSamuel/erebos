@@ -1,0 +1,69 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/eval_match_payload_no_variant.ers
+---
+--- errors ---
+eval::panic
+
+  × the evaluation called the panic function: enum value is no variant
+    ╭─[eval_match_payload_no_variant.ers:24:5]
+ 23 │     fn every_mode(m: Msg) -> u8 {
+ 24 │ ╭─▶     match m {
+ 25 │ │           Msg::Nop => 0,
+ 26 │ │           Msg::Wide(_) => 1,
+ 27 │ │           Msg::SetMode(Mode::Off) => 2,
+ 28 │ │           Msg::SetMode(Mode::Run) => 3,
+ 29 │ ├─▶     }
+    · ╰──── enum value is no variant
+ 30 │     }
+ 31 │     
+ 32 │     fn any_mode(m: Msg) -> u8 {
+ 33 │         match m {
+ 34 │             Msg::Nop => 0,
+ 35 │             Msg::Wide(_) => 1,
+ 36 │             Msg::SetMode(Mode::Run) => 3,
+ 37 │             Msg::SetMode(_) => 4,
+ 38 │             _ => 5,
+ 39 │         }
+ 40 │     }
+ 41 │     
+ 42 │     const PANICS: u8 = every_mode(odd_mode());
+    ·           ───┬──       ───────────┬──────────
+    ·              │                    ╰── called here
+    ·              ╰── while evaluating the constant `PANICS`
+ 43 │     const PANICS_TOO: u8 = every_mode(odd_tag());
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::panic
+
+  × the evaluation called the panic function: enum value is no variant
+    ╭─[eval_match_payload_no_variant.ers:24:5]
+ 23 │     fn every_mode(m: Msg) -> u8 {
+ 24 │ ╭─▶     match m {
+ 25 │ │           Msg::Nop => 0,
+ 26 │ │           Msg::Wide(_) => 1,
+ 27 │ │           Msg::SetMode(Mode::Off) => 2,
+ 28 │ │           Msg::SetMode(Mode::Run) => 3,
+ 29 │ ├─▶     }
+    · ╰──── enum value is no variant
+ 30 │     }
+ 31 │     
+ 32 │     fn any_mode(m: Msg) -> u8 {
+ 33 │         match m {
+ 34 │             Msg::Nop => 0,
+ 35 │             Msg::Wide(_) => 1,
+ 36 │             Msg::SetMode(Mode::Run) => 3,
+ 37 │             Msg::SetMode(_) => 4,
+ 38 │             _ => 5,
+ 39 │         }
+ 40 │     }
+ 41 │     
+ 42 │     const PANICS: u8 = every_mode(odd_mode());
+ 43 │     const PANICS_TOO: u8 = every_mode(odd_tag());
+    ·           ─────┬────       ──────────┬──────────
+    ·                │                     ╰── called here
+    ·                ╰── while evaluating the constant `PANICS_TOO`
+ 44 │     
+    ╰────
+  help: this code runs at compile time (ADR 0027)

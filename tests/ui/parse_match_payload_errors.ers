@@ -1,0 +1,14 @@
+// emit: ast
+// A payload pattern is a list of patterns in parentheses: an expression
+// is no pattern, and the list needs its closing parenthesis.
+fn unclosed(m: Msg) -> u8 {
+    match m {
+        Msg::Write(1, 2 => 1,
+    }
+}
+
+fn expression(m: Msg) -> u8 {
+    match m {
+        Msg::Wide(1 + 2) => 1,
+    }
+}

@@ -1,0 +1,16 @@
+// emit: ast
+// Variant patterns with payloads (ADR 0040): a pattern for each payload
+// value, each a pattern with alternatives, nested to any depth, with an
+// optional trailing comma; `Enum::Variant()` parses, and is a count error
+// later.
+fn patterns(m: Msg) -> u8 {
+    match m {
+        Msg::Write(0x10 | 0x11, let v: u16) => 1,
+        Msg::SetMode(Mode::Run) => 2,
+        Msg::Nested(Outer::In(Inner::A(_, true),), b'q') => 3,
+        Msg::Led(true,) => 4,
+        Msg::Nop() => 5,
+        Msg::Wide(_) | Msg::Nop => 6,
+        _ => 7,
+    }
+}

@@ -1,0 +1,44 @@
+// emit: hir
+// Inside a payload pattern (ADR 0040), names resolve as at the top: an
+// unknown variant is `resolve::unknown-variant`, and a bare name that is
+// no constant `resolve::not-a-constant`. One name bound twice in one
+// pattern is `resolve::duplicate-binding`, also at two depths, and a
+// `let` inside an or-pattern is `resolve::binding-in-or-pattern` at any
+// depth (ADR 0037, until ADR 0041).
+enum Mode: u8 { Off = 0, Run = 1 }
+enum Inner: u8 { Pair(u8, u8) = 0 }
+enum Msg: u8 {
+    Nop = 0,
+    Write(u8, u16) = 1,
+    SetMode(Mode) = 2,
+    Nested(u8, Inner) = 3,
+}
+static LEVEL: u8 = 3;
+
+fn names(m: Msg) -> u8 {
+    match m {
+        Msg::SetMode(Mode::Sleep) => 1,
+        Msg::Write(LEVEL, _) => 2,
+        Msg::Write(LIMTI, _) => 3,
+        _ => 4,
+    }
+}
+
+fn duplicates(m: Msg) -> u8 {
+    match m {
+        Msg::Write(let a: u8, let a: u16) => 1,
+        Msg::Nested(let b: u8, Inner::Pair(_, let b: u8)) => b,
+        _ => 2,
+    }
+}
+
+fn or_patterns(m: Msg) -> u8 {
+    match m {
+        Msg::Write(let r: u8, _) | Msg::Nop => r,
+        Msg::Nested(1 | let n: u8, _) => n,
+        _ => 3,
+    }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

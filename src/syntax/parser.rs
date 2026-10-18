@@ -1124,7 +1124,9 @@ impl Parser<'_> {
     }
 
     /// One pattern of ADR 0037: `_`, `let [mut] name: Type`, a literal, `-`
-    /// and an integer literal, a name, or `Enum::Variant`.
+    /// and an integer literal, a name, `Enum::Variant`, or
+    /// `Enum::Variant(p, ...)`, each `p` a pattern with alternatives, with
+    /// an optional trailing comma (ADR 0040).
     fn single_pattern(&mut self) -> PResult<Pattern> {
         let token = self.peek();
         let text = &self.text[token.span.range()];
@@ -1140,6 +1142,16 @@ impl Parser<'_> {
                 let name = self.ident()?;
                 if self.eat(TokenKind::ColonColon).is_some() {
                     let variant = self.ident()?;
+                    // `Enum::Variant()` parses, and is a count error
+                    // (ADR 0040).
+                    if self.eat(TokenKind::LParen).is_some() {
+                        let patterns = self.comma_list(Self::pattern)?;
+                        let end = self.tokens[self.pos - 1].span;
+                        return Ok(Pattern {
+                            span: name.span.to(end),
+                            kind: PatternKind::PathArgs(name, variant, patterns),
+                        });
+                    }
                     return Ok(Pattern {
                         span: name.span.to(variant.span),
                         kind: PatternKind::Path(name, variant),

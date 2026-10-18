@@ -1,0 +1,26 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/parse_match_payload_errors.ers
+---
+--- errors ---
+parser::unexpected-token
+
+  × expected `)`, found `=>`
+   ╭─[parse_match_payload_errors.ers:6:25]
+ 5 │     match m {
+ 6 │         Msg::Write(1, 2 => 1,
+   ·                         ─┬
+   ·                          ╰── expected `)`
+ 7 │     }
+   ╰────
+parser::unexpected-token
+
+  × expected `)`, found `+`
+    ╭─[parse_match_payload_errors.ers:12:21]
+ 11 │     match m {
+ 12 │         Msg::Wide(1 + 2) => 1,
+    ·                     ┬
+    ·                     ╰── expected `)`
+ 13 │     }
+    ╰────
