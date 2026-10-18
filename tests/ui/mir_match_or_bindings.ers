@@ -1,12 +1,12 @@
 // emit: mir
-// Alternatives of an or-pattern binding one variable (ADR 0041): where the
-// decision tree finds that an alternative matches, it copies the position
-// that alternative binds into the variable's one local, from different
-// variants (`Msg::Write`'s first value, `Msg::Clear`'s) or from different
-// positions of one variant (`Msg::Pair`'s first and second values), and
-// jumps to the arm's expression, which is built once. A value both
-// alternatives match, `Msg::Pair(5, 7)`, takes the first: the second
-// position is tested first, and 7 binds the first value.
+// Alternatives of an or-pattern binding one variable (ADR 0041, 0042):
+// each alternative copies the position it binds into the variable's one
+// local where it reaches it, from different variants (`Msg::Write`'s first
+// value, `Msg::Clear`'s) or from different positions of one variant
+// (`Msg::Pair`'s first and second values), before the tests after it, and
+// jumps to the arm's expression, which is built once. `Msg::Write(5, 1)`
+// copies 5 before the `0` fails. A value both alternatives match,
+// `Msg::Pair(5, 7)`, takes the first, tested first, which binds 5.
 enum Msg: u8 { Nop = 0, Write(u8, u16) = 1, Clear(u8) = 2, Pair(u8, u8) = 3 }
 
 fn variants(m: Msg) -> u8 {

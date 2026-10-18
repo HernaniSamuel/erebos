@@ -103,132 +103,33 @@ struct Builder<'a, 'h> {
     current: Option<BasicBlock>,
     /// Enclosing loops, innermost last.
     loops: Vec<LoopScope>,
+    /// The call to the panic function ending the chain of a `match` being
+    /// built, once a test goes to it (ADR 0042). Patterns hold no `match`,
+    /// so one chain is built at a time.
+    chain_panic: Option<BasicBlock>,
 }
 
-/// A test a row of a decision tree has left: the pattern, which is not
-/// `_` or a `let`, at a position of the scrutinee, of type `ty`
-/// (ADR 0040).
-#[derive(Clone)]
-struct Test<'p> {
-    position: Vec<hir::PayloadStep>,
-    ty: hir::Ty,
-    pattern: &'p hir::Pattern,
+/// Where a test of a `match` on an enum with payloads goes when it fails
+/// (ADR 0042): a block, or the call to the panic function that ends a
+/// chain without a catch-all arm, made where a test first goes to it.
+#[derive(Clone, Copy)]
+enum Failure {
+    To(BasicBlock),
+    Panic,
 }
 
-impl<'p> Test<'p> {
-    /// The test `pattern` makes at `position`; none for `_` and `let`,
-    /// which match every value.
-    fn new(
-        position: Vec<hir::PayloadStep>,
-        ty: hir::Ty,
-        pattern: &'p hir::Pattern,
-    ) -> Option<Test<'p>> {
-        match pattern.kind {
-            hir::PatternKind::Wildcard | hir::PatternKind::Binding { .. } => None,
-            _ => Some(Test {
-                position,
-                ty,
-                pattern,
-            }),
-        }
-    }
-}
-
-/// A variable an arm binds, and the position of the scrutinee it copies
-/// (ADR 0040, 0041).
-#[derive(Clone)]
-struct Bind {
-    local: hir::LocalId,
-    position: Vec<hir::PayloadStep>,
-}
-
-impl Bind {
-    /// The variable `pattern` binds at `position`, if it is a `let`.
-    fn new(position: &[hir::PayloadStep], pattern: &hir::Pattern) -> Option<Bind> {
-        match pattern.kind {
-            hir::PatternKind::Binding { local, .. } => Some(Bind {
-                local,
-                position: position.to_vec(),
-            }),
-            _ => None,
-        }
-    }
-}
-
-/// An arm that can still match, with the tests it has left, in the order
-/// its pattern writes their positions, and the variables bound by the
-/// `let`s its tests have passed, in the alternatives they took
-/// (ADR 0041).
-#[derive(Clone)]
-struct Row<'p> {
-    arm: usize,
-    tests: Vec<Test<'p>>,
-    binds: Vec<Bind>,
-}
-
-impl<'p> Row<'p> {
-    /// The row of `arm`, whose pattern is at the scrutinee, of type `ty`.
-    fn new(arm: usize, ty: hir::Ty, pattern: &'p hir::Pattern) -> Row<'p> {
-        Row {
-            arm,
-            tests: Test::new(Vec::new(), ty, pattern).into_iter().collect(),
-            binds: Bind::new(&[], pattern).into_iter().collect(),
-        }
-    }
-
-    /// The row once its test `i` passed: a variant's payload patterns take
-    /// its place, at the positions of its payload values.
-    fn specialized(&self, i: usize, hir: &hir::Hir) -> Row<'p> {
-        let test = &self.tests[i];
-        let mut subs = Vec::new();
-        let mut binds = self.binds.clone();
-        if let hir::PatternKind::Variant(id, variant, Some(patterns)) = &test.pattern.kind {
-            let payload = &hir.enum_(*id).variants[*variant as usize].payload;
-            for (index, (pattern, value)) in patterns.iter().zip(payload).enumerate() {
-                let mut position = test.position.clone();
-                position.push(hir::PayloadStep {
-                    variant: *variant,
-                    index: index as u32,
-                });
-                binds.extend(Bind::new(&position, pattern));
-                subs.extend(Test::new(position, value.ty, pattern));
-            }
-        }
-        let mut tests = self.tests[..i].to_vec();
-        tests.extend(subs);
-        tests.extend_from_slice(&self.tests[i + 1..]);
-        Row {
-            arm: self.arm,
-            tests,
-            binds,
-        }
-    }
-
-    /// The row for `alternative` of the or-pattern of its test `i`, at
-    /// `position`, of type `ty`: the alternative's test takes its place,
-    /// or, for `_` and `let`, none does.
-    fn alternative(
-        &self,
-        i: usize,
-        position: &[hir::PayloadStep],
-        ty: hir::Ty,
-        alternative: &'p hir::Pattern,
-    ) -> Row<'p> {
-        let mut tests = self.tests.clone();
-        match Test::new(position.to_vec(), ty, alternative) {
-            Some(test) => tests[i] = test,
-            None => {
-                tests.remove(i);
-            }
-        }
-        let mut binds = self.binds.clone();
-        binds.extend(Bind::new(position, alternative));
-        Row {
-            arm: self.arm,
-            tests,
-            binds,
-        }
-    }
+/// Whether `pattern` names one value of its position, as a literal, a
+/// constant or a variant written without a payload: consecutive
+/// alternatives of this kind are one switch (ADR 0042).
+fn is_value(pattern: &hir::Pattern) -> bool {
+    matches!(
+        pattern.kind,
+        hir::PatternKind::Int { .. }
+            | hir::PatternKind::Byte(_)
+            | hir::PatternKind::Bool(_)
+            | hir::PatternKind::Const(_)
+            | hir::PatternKind::Variant(_, _, None)
+    )
 }
 
 /// The place of the value at `position` in `scrutinee`.
@@ -239,6 +140,20 @@ fn position_place(scrutinee: Place, position: &[hir::PayloadStep]) -> Place {
             index: step.index,
         })
     })
+}
+
+/// The place a test reads at `position` in `scrutinee`, whose type is
+/// `ty`, and the type of what it reads: an integer, a `bool`, the integer
+/// of an enum without payloads, or the tag of one with payloads.
+fn test_place(scrutinee: Place, position: &[hir::PayloadStep], ty: hir::Ty) -> (Place, Ty) {
+    let place = position_place(scrutinee, position);
+    match ty {
+        hir::Ty::Enum(e) if e.payloads => (place.project(PlaceElem::Tag), Ty::Int(e.int)),
+        hir::Ty::Enum(e) => (place, Ty::Int(e.int)),
+        hir::Ty::Int(int) => (place, Ty::Int(int)),
+        hir::Ty::Bool => (place, Ty::Bool),
+        _ => unreachable!("only integers, `bool` and enums are tested"),
+    }
 }
 
 struct LoopScope {
@@ -276,6 +191,7 @@ impl<'a, 'h> Builder<'a, 'h> {
             blocks: Vec::new(),
             current: None,
             loops: Vec::new(),
+            chain_panic: None,
         };
         // HIR locals become MIR locals `_1..`, in declaration order.
         for local in &f.locals {
@@ -847,7 +763,9 @@ impl Builder<'_, '_> {
     /// while an enum may hold a value that is no variant, for which the
     /// default calls the panic function (ADR 0036). With a known scrutinee,
     /// only the arm it takes is checked (ADR 0032). On an enum with
-    /// payloads, a decision tree tests the positions its arms examine.
+    /// payloads, a switch on the tag starts, for each variant the arms
+    /// name, the chain of the alternatives naming it, tested in arm order
+    /// (ADR 0042). Either way, each arm's expression is built once.
     fn match_(&mut self, ty: Ty, scrutinee: &hir::Expr, arms: &[hir::Arm]) -> Operand {
         let scrutinee_ty = self.ty_of(scrutinee);
         let hir_ty = self.q.tables.expr_ty(scrutinee.id);
@@ -879,34 +797,28 @@ impl Builder<'_, '_> {
             _ => value,
         };
         let blocks: Vec<BasicBlock> = arms.iter().map(|_| self.new_block()).collect();
-        let taken = match hir_ty {
-            hir::Ty::Enum(e) if e.payloads => {
-                let Operand::Copy(place) = discr else {
-                    unreachable!("an enum with payloads is an aggregate, read from a place")
-                };
-                let rows = arms
-                    .iter()
-                    .enumerate()
-                    .map(|(arm, a)| Row::new(arm, hir_ty, &a.pattern))
-                    .collect();
-                self.decide(place, rows, &blocks);
-                // No value of an enum with payloads is known (ADR 0039).
-                None
-            }
-            _ => self.switch(scrutinee, scrutinee_ty, discr, arms, &blocks),
+        let chains = matches!(hir_ty, hir::Ty::Enum(e) if e.payloads);
+        let taken = if chains {
+            let Operand::Copy(place) = discr else {
+                unreachable!("an enum with payloads is an aggregate, read from a place")
+            };
+            self.chains(place, hir_ty, arms, &blocks);
+            // No value of an enum with payloads is known (ADR 0039).
+            None
+        } else {
+            self.switch(scrutinee, scrutinee_ty, discr, arms, &blocks)
         };
-        let tree = matches!(hir_ty, hir::Ty::Enum(e) if e.payloads);
 
         let result = self.result_place(ty);
         let mut ends = Vec::with_capacity(arms.len());
         for (i, (arm, &block)) in arms.iter().zip(&blocks).enumerate() {
             self.current = Some(block);
-            // The leaves of a decision tree copied what the alternative
-            // that matched binds (ADR 0041). After a switch, a `let` arm
-            // copies the scrutinee; no alternative of an or-pattern binds
-            // a variable there, since a `let` alternative is dead or binds
-            // a name the others do not.
-            if !tree && let hir::PatternKind::Binding { local, .. } = arm.pattern.kind {
+            // After a switch, a `let` arm copies the scrutinee; no
+            // alternative of an or-pattern binds a variable there, since a
+            // `let` alternative is dead or binds a name the others do not.
+            // The chains copied what their alternatives bind on their way
+            // (ADR 0042).
+            if !chains && let hir::PatternKind::Binding { local, .. } = arm.pattern.kind {
                 let local = self.hir_locals[local.0 as usize];
                 self.assign(Place::local(local), Rvalue::Use(discr));
             }
@@ -978,148 +890,282 @@ impl Builder<'_, '_> {
         taken
     }
 
-    /// The decision tree of a `match` on an enum with payloads, held in
-    /// `scrutinee`, from the current block (ADR 0040): `rows` are the arms
-    /// that can still match, in order, with the tests each has left. The
-    /// first row's first test picks a position, and a switch on it sends
-    /// each value some row names to the rows that match it there, with
-    /// the payload positions of its variant to test next, and every other
-    /// value to the rows that match it with `_` or `let`. A position no
-    /// such row is left for calls the panic function, as for a value
-    /// that is no variant, unless it is an integer or `bool` whose every
-    /// value is listed. Where the first row has no test left, its arm
-    /// matches: what the alternatives it took bind is copied, and the
-    /// arm's expression runs (ADR 0041).
-    fn decide(&mut self, scrutinee: Place, rows: Vec<Row<'_>>, blocks: &[BasicBlock]) {
-        let Some(first) = rows.first() else {
-            // A `match` without arms, which type checking accepts only on
-            // an enum with a value that failed or repeats; the body is not
-            // used (ADR 0040).
-            self.terminate(Terminator::Panic(PanicCause::NoVariant));
-            return;
+    /// The tests of a `match` on an enum with payloads, held in
+    /// `scrutinee`, of type `ty`, from the current block to the `blocks`
+    /// of its arms (ADR 0042). A switch on the tag has a case for each
+    /// variant that an alternative at the top names, in the order first
+    /// named, leading to the variant's chain: each alternative naming it,
+    /// in arm order, tested in turn, a failed test going to the next, and
+    /// then the first catch-all arm, or else the call to the panic
+    /// function. The default goes to the catch-all arm, or calls the panic
+    /// function, for the variants no arm names and the tags that are no
+    /// variant. A `let` catch-all arm is entered at one block, which copies
+    /// the scrutinee into its variable.
+    fn chains(&mut self, scrutinee: Place, ty: hir::Ty, arms: &[hir::Arm], blocks: &[BasicBlock]) {
+        let hir::Ty::Enum(e) = ty else {
+            unreachable!("chains test enums with payloads")
         };
-        let Some(test) = first.tests.first() else {
-            // The arm matches, through the alternatives the row took: what
-            // they bind is copied before its expression, which every leaf
-            // of the arm shares (ADR 0041).
-            for bind in &first.binds {
-                let local = self.hir_locals[bind.local.0 as usize];
-                let value = Operand::Copy(position_place(scrutinee, &bind.position));
+        let head = self.current;
+        // The alternatives naming each variant, with their arms, up to the
+        // first `_` or `let` alternative, which makes its arm the
+        // catch-all one: an arm after it is dead, which is an error
+        // (ADR 0037).
+        let mut chains: Vec<(u32, Vec<(usize, &hir::Pattern)>)> = Vec::new();
+        let mut catch_all = None;
+        'arms: for (arm, a) in arms.iter().enumerate() {
+            for alternative in a.pattern.alternatives() {
+                let hir::PatternKind::Variant(_, variant, _) = alternative.kind else {
+                    catch_all = Some((arm, alternative));
+                    break 'arms;
+                };
+                match chains.iter_mut().find(|(named, _)| *named == variant) {
+                    Some((_, chain)) => chain.push((arm, alternative)),
+                    None => chains.push((variant, vec![(arm, alternative)])),
+                }
+            }
+        }
+        let entry = catch_all.map(|(arm, alternative)| match alternative.kind {
+            hir::PatternKind::Binding { local, .. } => {
+                let block = self.new_block();
+                self.current = Some(block);
+                let local = self.hir_locals[local.0 as usize];
+                self.assign(Place::local(local), Rvalue::Use(Operand::Copy(scrutinee)));
+                self.terminate(Terminator::Goto(blocks[arm]));
+                block
+            }
+            _ => blocks[arm],
+        });
+        let otherwise = entry.unwrap_or_else(|| self.panic_block());
+        let end = entry.map_or(Failure::Panic, Failure::To);
+        let mut cases = Vec::with_capacity(chains.len());
+        for (_, chain) in chains {
+            let value = self
+                .pattern_value(chain[0].1, Ty::Int(e.int))
+                .expect("a variant names a value");
+            self.chain_panic = None;
+            let start = self.chain(scrutinee, &chain, blocks, end);
+            // Two variants with one value were reported; the body is not
+            // used, and the switch holds each value once all the same.
+            if !cases.iter().any(|&(case, _)| case == value) {
+                cases.push((value, start));
+            }
+        }
+        self.current = head;
+        self.terminate(Terminator::Switch {
+            discr: Operand::Copy(scrutinee.project(PlaceElem::Tag)),
+            cases: cases.leak(),
+            otherwise,
+        });
+    }
+
+    /// The chain of a variant: its alternatives at the top, with their
+    /// arms, each tested in turn, one that fails going to the next, the
+    /// last to `end`. Returns the block where it starts. An alternative
+    /// that tests and binds nothing, such as `Msg::Nop` or
+    /// `Msg::Wide(_)`, is its arm's block itself.
+    fn chain(
+        &mut self,
+        scrutinee: Place,
+        chain: &[(usize, &hir::Pattern)],
+        blocks: &[BasicBlock],
+        end: Failure,
+    ) -> BasicBlock {
+        let start = |this: &mut Self, (arm, alternative): (usize, &hir::Pattern)| {
+            let hir::PatternKind::Variant(_, _, patterns) = &alternative.kind else {
+                unreachable!("a chain holds variants")
+            };
+            let wildcards = patterns
+                .iter()
+                .flatten()
+                .all(|pattern| matches!(pattern.kind, hir::PatternKind::Wildcard));
+            if wildcards {
+                blocks[arm]
+            } else {
+                this.new_block()
+            }
+        };
+        let first = start(self, chain[0]);
+        let mut block = first;
+        for (k, &(arm, alternative)) in chain.iter().enumerate() {
+            let next = chain.get(k + 1).map(|&next| start(self, next));
+            if block != blocks[arm] {
+                let hir::PatternKind::Variant(id, variant, Some(patterns)) = &alternative.kind
+                else {
+                    unreachable!("an alternative that tests something has a payload")
+                };
+                self.current = Some(block);
+                let fail = next.map_or(end, Failure::To);
+                // The tag was switched on already.
+                self.payload(scrutinee, *id, *variant, patterns, &[], fail);
+                self.terminate(Terminator::Goto(blocks[arm]));
+            }
+            if let Some(next) = next {
+                block = next;
+            }
+        }
+        first
+    }
+
+    /// Tests the payload values of `variant` of enum `id`, held at
+    /// `position` of `scrutinee`, against `patterns`, in order, from the
+    /// current block, which continues where they all passed.
+    fn payload(
+        &mut self,
+        scrutinee: Place,
+        id: hir::EnumId,
+        variant: u32,
+        patterns: &[hir::Pattern],
+        position: &[hir::PayloadStep],
+        fail: Failure,
+    ) {
+        let hir = self.q.hir;
+        let values = &hir.enum_(id).variants[variant as usize].payload;
+        for (index, (pattern, value)) in patterns.iter().zip(values).enumerate() {
+            let mut at = position.to_vec();
+            at.push(hir::PayloadStep {
+                variant,
+                index: index as u32,
+            });
+            self.test(scrutinee, pattern, &at, value.ty, fail);
+        }
+    }
+
+    /// Tests `pattern` at `position` of `scrutinee`, whose type is `ty`,
+    /// from the current block, which continues where it passed; where it
+    /// fails, it goes to `fail` (ADR 0042). `_` tests nothing; a `let`
+    /// copies its position where it is reached, before the tests after it.
+    fn test(
+        &mut self,
+        scrutinee: Place,
+        pattern: &hir::Pattern,
+        position: &[hir::PayloadStep],
+        ty: hir::Ty,
+        fail: Failure,
+    ) {
+        match &pattern.kind {
+            hir::PatternKind::Wildcard => {}
+            hir::PatternKind::Binding { local, .. } => {
+                let local = self.hir_locals[local.0 as usize];
+                let value = Operand::Copy(position_place(scrutinee, position));
                 self.assign(Place::local(local), Rvalue::Use(value));
             }
-            self.terminate(Terminator::Goto(blocks[first.arm]));
-            return;
-        };
-        let at = test.position.clone();
-        let ty = test.ty;
-        // Each alternative of an or-pattern there as a row of its own.
-        let mut expanded = Vec::with_capacity(rows.len());
-        for row in rows {
-            let found = row.tests.iter().position(|test| test.position == at);
-            match found.map(|i| (i, &row.tests[i].pattern.kind)) {
-                Some((i, hir::PatternKind::Or(alternatives))) => {
-                    for alternative in alternatives {
-                        expanded.push(row.alternative(i, &at, ty, alternative));
-                    }
+            hir::PatternKind::Or(alternatives) => {
+                self.or_pattern(scrutinee, alternatives, position, ty, fail)
+            }
+            kind => {
+                // A value, or a variant's tag, then its payload.
+                let pass = self.new_block();
+                let otherwise = self.failure(fail);
+                let one = std::slice::from_ref(pattern);
+                self.switch_values(scrutinee, one, position, ty, pass, otherwise);
+                self.current = Some(pass);
+                if let hir::PatternKind::Variant(id, variant, Some(patterns)) = kind {
+                    self.payload(scrutinee, *id, *variant, patterns, position, fail);
                 }
-                _ => expanded.push(row),
             }
         }
-        let (place, value_ty) = match ty {
-            hir::Ty::Enum(e) if e.payloads => (
-                position_place(scrutinee, &at).project(PlaceElem::Tag),
-                Ty::Int(e.int),
-            ),
-            hir::Ty::Enum(e) => (position_place(scrutinee, &at), Ty::Int(e.int)),
-            hir::Ty::Int(int) => (position_place(scrutinee, &at), Ty::Int(int)),
-            hir::Ty::Bool => (position_place(scrutinee, &at), Ty::Bool),
-            _ => unreachable!("only integers, `bool` and enums are tested"),
-        };
-        // Each row's test there, by index, and the value it names.
-        let mut keyed = Vec::with_capacity(expanded.len());
-        let mut values: Vec<u64> = Vec::new();
-        for row in expanded {
-            let key = match row.tests.iter().position(|test| test.position == at) {
-                Some(i) => {
-                    let value = self
-                        .pattern_value(row.tests[i].pattern, value_ty)
-                        .expect("a test names a value");
-                    if !values.contains(&value) {
-                        values.push(value);
-                    }
-                    Some((i, value))
-                }
-                None => None,
+    }
+
+    /// An or-pattern at `position`: each alternative is tested in turn,
+    /// one that fails going to the next, the last to `fail`, and every one
+    /// that passes to one block, which continues, so that the positions
+    /// after the or-pattern are tested once. Consecutive alternatives that
+    /// each name one value are one switch.
+    fn or_pattern(
+        &mut self,
+        scrutinee: Place,
+        alternatives: &[hir::Pattern],
+        position: &[hir::PayloadStep],
+        ty: hir::Ty,
+        fail: Failure,
+    ) {
+        let join = self.new_block();
+        let mut rest = alternatives;
+        while let Some(first) = rest.first() {
+            let count = if is_value(first) {
+                rest.iter()
+                    .take_while(|alternative| is_value(alternative))
+                    .count()
+            } else {
+                1
             };
-            keyed.push((row, key));
+            let (group, after) = rest.split_at(count);
+            let next = if after.is_empty() {
+                fail
+            } else {
+                Failure::To(self.new_block())
+            };
+            if is_value(first) {
+                let otherwise = self.failure(next);
+                self.switch_values(scrutinee, group, position, ty, join, otherwise);
+            } else {
+                self.test(scrutinee, first, position, ty, next);
+                self.terminate(Terminator::Goto(join));
+            }
+            if !after.is_empty()
+                && let Failure::To(block) = next
+            {
+                self.current = Some(block);
+            }
+            rest = after;
         }
-        let hir = self.q.hir;
-        let mut cases = Vec::with_capacity(values.len());
-        // The blocks still to fill, with the rows to decide among, or
-        // `None` for a default no row is left for.
-        let mut decisions = Vec::with_capacity(values.len() + 1);
-        for &value in &values {
-            let rows: Vec<Row> = keyed
-                .iter()
-                .filter_map(|(row, key)| match *key {
-                    None => Some(row.clone()),
-                    Some((i, named)) if named == value => Some(row.specialized(i, hir)),
-                    Some(_) => None,
-                })
-                .collect();
-            let block = self.decision(rows, blocks, &mut decisions);
-            cases.push((value, block));
+        self.current = Some(join);
+    }
+
+    /// A switch on `position` of `scrutinee`, whose type is `ty`, ending
+    /// the current block: the values `patterns` name go to `to`, every
+    /// other value to `otherwise`.
+    fn switch_values(
+        &mut self,
+        scrutinee: Place,
+        patterns: &[hir::Pattern],
+        position: &[hir::PayloadStep],
+        ty: hir::Ty,
+        to: BasicBlock,
+        otherwise: BasicBlock,
+    ) {
+        let (place, value_ty) = test_place(scrutinee, position, ty);
+        let mut cases = Vec::with_capacity(patterns.len());
+        for pattern in patterns {
+            let value = self
+                .pattern_value(pattern, value_ty)
+                .expect("a test names a value");
+            // A value named twice was reported as dead; the switch holds
+            // it once all the same.
+            if !cases.iter().any(|&(case, _)| case == value) {
+                cases.push((value, to));
+            }
         }
-        let rest: Vec<Row> = keyed
-            .into_iter()
-            .filter_map(|(row, key)| key.is_none().then_some(row))
-            .collect();
-        // Whether the default is reached by no value.
-        let every = match ty {
-            hir::Ty::Bool => values.len() == 2,
-            hir::Ty::Int(int) => values.len() as u128 == u128::from(int.mask()) + 1,
-            // Never assumed to hold a variant (ADR 0036).
-            _ => false,
-        };
-        let otherwise = if rest.is_empty() {
-            let block = self.new_block();
-            decisions.push((block, None));
-            block
-        } else {
-            self.decision(rest, blocks, &mut decisions)
-        };
         self.terminate(Terminator::Switch {
             discr: Operand::Copy(place),
             cases: cases.leak(),
             otherwise,
         });
-        for (block, rows) in decisions {
-            self.current = Some(block);
-            match rows {
-                Some(rows) => self.decide(scrutinee, rows, blocks),
-                None if every => self.terminate(Terminator::Unreachable),
-                None => self.terminate(Terminator::Panic(PanicCause::NoVariant)),
-            }
+    }
+
+    /// The block a test that fails at `fail` goes to: the call to the
+    /// panic function ending a chain is made the first time.
+    fn failure(&mut self, fail: Failure) -> BasicBlock {
+        match fail {
+            Failure::To(block) => block,
+            Failure::Panic => match self.chain_panic {
+                Some(block) => block,
+                None => {
+                    let block = self.panic_block();
+                    self.chain_panic = Some(block);
+                    block
+                }
+            },
         }
     }
 
-    /// Where a switch sends the values that `rows` are left for: the arm
-    /// of the first, if it has no test left and binds nothing, or a new
-    /// block, which `decisions` gets with the rows to decide among.
-    fn decision<'p>(
-        &mut self,
-        rows: Vec<Row<'p>>,
-        blocks: &[BasicBlock],
-        decisions: &mut Vec<(BasicBlock, Option<Vec<Row<'p>>>)>,
-    ) -> BasicBlock {
-        match rows.first() {
-            Some(first) if first.tests.is_empty() && first.binds.is_empty() => blocks[first.arm],
-            _ => {
-                let block = self.new_block();
-                decisions.push((block, Some(rows)));
-                block
-            }
-        }
+    /// A new block that calls the panic function for a value that is no
+    /// variant (ADR 0036), leaving the current block as it is.
+    fn panic_block(&mut self) -> BasicBlock {
+        let block = self.new_block();
+        self.blocks[block.0 as usize].terminator =
+            Some((Terminator::Panic(PanicCause::NoVariant), self.span));
+        block
     }
 
     /// `Enum::Variant` or `Enum::Variant(args)`, of type `ty`. Without

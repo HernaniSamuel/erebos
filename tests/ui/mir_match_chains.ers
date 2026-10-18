@@ -1,0 +1,89 @@
+// emit: mir
+// The chains of a `match` on an enum with payloads (ADR 0042). The tag
+// switch has a case per variant the arms name; its default goes to the
+// first catch-all arm (`wildcard`) or calls the panic function (`bools`).
+// The or-pattern `1 | 2 | 3` is one switch with three cases (`values`).
+// The or-pattern of variants with payloads in `nested` tests each
+// alternative in turn, and both jump to one block that tests the `7`
+// after it, once. In `mixed`, `Msg::Nop`, a value, fails to a block
+// testing `Msg::SetMode(Mode::Run)`, and both jump to the block testing
+// the `7`. The chain of `Msg::Led` in `bools`, whose arms test only
+// its `bool`, ends in the panic call all the same. The `let` arm of
+// `let_arm` is entered at one block, which copies the scrutinee, from the
+// tag default and the ends of the chains of `Msg::Write` and `Msg::Led`.
+// The arm `Msg::Led(true) | _` of `led_or_any` ends the chain of
+// `Msg::Write` and takes the tag default. In `copied`, `Msg::Write(5, 1)`
+// copies 5 into `r` before the `0` after it fails.
+enum Mode: u8 { Off = 0, Run = 1 }
+enum Msg: u8 {
+    Nop = 0,
+    Led(bool) = 1,
+    Write(u8, u16) = 2,
+    SetMode(Mode) = 3,
+    Pair(Mode, bool) = 4,
+}
+enum Frame: u8 { Of(Msg, u8) = 0, Empty = 1 }
+
+fn wildcard(m: Msg) -> u8 {
+    match m {
+        Msg::Write(0, _) => 1,
+        _ => 0,
+    }
+}
+
+fn bools(m: Msg) -> u8 {
+    match m {
+        Msg::Nop => 0,
+        Msg::Led(true) => 1,
+        Msg::Led(false) => 2,
+        Msg::Write(_, _) => 3,
+        Msg::SetMode(_) => 4,
+        Msg::Pair(_, _) => 5,
+    }
+}
+
+fn values(m: Msg) -> u8 {
+    match m {
+        Msg::Write(1 | 2 | 3, _) => 1,
+        _ => 0,
+    }
+}
+
+fn nested(f: Frame) -> u8 {
+    match f {
+        Frame::Of(Msg::SetMode(Mode::Run) | Msg::Pair(Mode::Run, _), 7) => 1,
+        _ => 0,
+    }
+}
+
+fn mixed(f: Frame) -> u8 {
+    match f {
+        Frame::Of(Msg::Nop | Msg::SetMode(Mode::Run), 7) => 1,
+        _ => 0,
+    }
+}
+
+fn let_arm(m: Msg) -> u8 {
+    match m {
+        Msg::Write(0, _) => 1,
+        Msg::Led(true) => 2,
+        let other: Msg => 3,
+    }
+}
+
+fn led_or_any(m: Msg) -> u8 {
+    match m {
+        Msg::Write(1, _) => 0,
+        Msg::Led(true) | _ => 1,
+    }
+}
+
+fn copied(m: Msg) -> u8 {
+    match m {
+        Msg::Write(let r: u8, 0) => r,
+        _ => 0,
+    }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

@@ -1,13 +1,15 @@
 // emit: mir
-// A `match` on an enum with payloads (ADR 0040) is a switch on the tag of
-// the scrutinee's copy, then, under each variant, switches on the payload
-// positions its arms examine, in arm order: a nested test that fails goes
-// to the next arm that can still match (`Msg::Write(0x10, 8)` reaches
-// `Msg::Write(0x10 | 0x11, let v: u16)`); a `let` copies its position
-// where the arm is found to match, before the arm's expression. The
-// default of a switch on an enum position, the tag or a nested `Mode`, is
-// the arm matching it with `_`, or calls the panic function; that of a
-// `bool` whose both values are listed is unreachable.
+// A `match` on an enum with payloads (ADR 0040, 0042) is a switch on the
+// tag of the scrutinee's copy, with a case per variant the arms name, then,
+// under each variant, its chain: the alternatives naming it, in arm order,
+// each testing its payload positions in turn, one switch with one case per
+// test. A test that fails goes to the next alternative of the chain
+// (`Msg::Write(0x10, 8)` reaches `Msg::Write(0x10 | 0x11, let v: u16)`),
+// the or-pattern `0x10 | 0x11` is one switch, and a `let` copies its
+// position where it is reached. An alternative testing nothing, as
+// `Msg::Write(_, _)`, is its arm. The tag default, and the end of a chain,
+// go to the `_` arm, or call the panic function: also at `Msg::Led`, whose
+// arms list both values of a `bool`.
 enum Mode: u8 { Off = 0, Run = 1 }
 enum Msg: u8 { Nop = 0, Write(u8, u16) = 1, SetMode(Mode) = 2, Led(bool) = 3 }
 

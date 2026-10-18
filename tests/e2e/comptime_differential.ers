@@ -498,6 +498,170 @@ fn duo_match(d: Duo) -> u64 {
     }
 }
 
+// Chains tested arm by arm (ADR 0042): pairs(4) and ors(4), the shapes
+// whose code grew exponentially, on every input; an or-pattern of variants
+// nested three deep that binds a value in each alternative, followed by a
+// test that fails once the value was copied; and an arm
+// `Lamp::Led(true) | _`, which ends the chains of the other variants and
+// takes the tag default, which a tag that is no variant reaches; and
+// or-patterns mixing values and variants with payloads in `Holder`. The
+// inputs reach every arm and fail each arm at each of its positions.
+// Overlapping alternatives binding one variable are in `duo_match`.
+enum Pairs: u8 { A(bool, bool, bool, bool, bool, bool, bool, bool) = 0 }
+
+fn pairs_match(bits: u8) -> u64 {
+    let p: Pairs = Pairs::A(
+        (bits & 1) != 0, (bits & 2) != 0, (bits & 4) != 0, (bits & 8) != 0,
+        (bits & 16) != 0, (bits & 32) != 0, (bits & 64) != 0, (bits & 128) != 0
+    );
+    match p {
+        Pairs::A(true, _, _, _, true, _, _, _) => 1,
+        Pairs::A(_, true, _, _, _, true, _, _) => 2,
+        Pairs::A(_, _, true, _, _, _, true, _) => 3,
+        Pairs::A(_, _, _, true, _, _, _, true) => 4,
+        _ => 5,
+    }
+}
+
+// Every byte from `from` on.
+fn pairs_hash(from: u16) -> u64 {
+    let mut h: u64 = 0;
+    let mut bits: u16 = from;
+    while bits < 256 {
+        h = mix(h, pairs_match(bits as u8));
+        bits += 1;
+    }
+    h
+}
+
+enum Ors: u8 { A(u8, u8, u8, u8) = 0 }
+
+fn ors_match(o: Ors) -> u64 {
+    match o {
+        Ors::A(1 | 2 | 3, 1 | 2 | 3, 1 | 2 | 3, 1 | 2 | 3) => 1,
+        Ors::A(1 | 2 | 3, 1 | 2 | 3, 1 | 2 | 3, 4) => 2,
+        _ => 3,
+    }
+}
+
+// Every position from 0 to 4, from the code `from` on.
+fn ors_hash(from: u16) -> u64 {
+    let mut h: u64 = 0;
+    let mut code: u16 = from;
+    while code < 625 {
+        let o: Ors = Ors::A((code % 5) as u8, (code / 5 % 5) as u8, (code / 25 % 5) as u8, (code / 125) as u8);
+        h = mix(h, ors_match(o));
+        code += 1;
+    }
+    h
+}
+
+enum Leaf: u8 { A(u8) = 0, B(u8) = 1 }
+enum Branch: u8 { A(Leaf) = 0, B(Leaf) = 1 }
+enum Tree: u8 { A(Branch, u8) = 0, B(Branch) = 1 }
+
+fn tree_match(t: Tree) -> u64 {
+    match t {
+        Tree::A(Branch::A(Leaf::A(let x: u8) | Leaf::B(let x: u8)) | Branch::B(Leaf::A(let x: u8)), 7)
+        | Tree::B(Branch::B(Leaf::B(let x: u8))) => mix(1, x as u64),
+        Tree::A(_, let y: u8) => mix(2, y as u64),
+        Tree::B(Branch::A(Leaf::A(1 | 2) | Leaf::B(3))) => 3,
+        Tree::B(Branch::A(_)) => 4,
+        Tree::B(Branch::B(Leaf::A(let z: u8))) => mix(5, z as u64),
+    }
+}
+
+// Each of the 12 shapes, below `Tree::A` with 7 and 8 and below
+// `Tree::B`, holding `x`.
+fn tree_value(k: u8, x: u8) -> Tree {
+    let leaf: Leaf = if k % 2 == 0 { Leaf::A(x) } else { Leaf::B(x) };
+    let branch: Branch = if k / 2 % 2 == 0 { Branch::A(leaf) } else { Branch::B(leaf) };
+    if k / 4 == 0 {
+        Tree::A(branch, 7)
+    } else if k / 4 == 1 {
+        Tree::A(branch, 8)
+    } else {
+        Tree::B(branch)
+    }
+}
+
+fn tree_hash(from: u8) -> u64 {
+    let mut h: u64 = 0;
+    let mut k: u8 = from;
+    while k < 12 {
+        let mut x: u8 = 0;
+        while x < 5 {
+            h = mix(h, tree_match(tree_value(k, x)));
+            x += 1;
+        }
+        k += 1;
+    }
+    h
+}
+
+enum Lamp: u8 { Off = 0, Led(bool) = 1, Write(u8, u8) = 2 }
+
+// A `Lamp` whose tag, 9, is no variant.
+static LAMP_BYTES: [u8; 3] = [9, 0, 0];
+
+fn lamp_match(l: Lamp) -> u64 {
+    match l {
+        Lamp::Write(1, _) => 1,
+        Lamp::Led(false) => 2,
+        Lamp::Write(let a: u8, 9) => mix(3, a as u64),
+        Lamp::Led(true) | _ => 4,
+    }
+}
+
+fn lamp_value(k: u8) -> Lamp {
+    if k == 0 {
+        Lamp::Off
+    } else if k == 1 {
+        Lamp::Led(true)
+    } else if k == 2 {
+        Lamp::Led(false)
+    } else if k == 3 {
+        Lamp::Write(1, 5)
+    } else if k == 4 {
+        Lamp::Write(2, 9)
+    } else if k == 5 {
+        Lamp::Write(2, 8)
+    } else {
+        (&raw const LAMP_BYTES as *const Lamp)[0]
+    }
+}
+
+fn lamp_hash(from: u8) -> u64 {
+    let mut h: u64 = 0;
+    let mut k: u8 = from;
+    while k < 7 {
+        h = mix(h, lamp_match(lamp_value(k)));
+        k += 1;
+    }
+    h
+}
+
+enum Holder: u8 { Of(Lamp, u8) = 0, Empty = 1 }
+
+fn holder_match(h: Holder) -> u64 {
+    match h {
+        Holder::Of(Lamp::Off | Lamp::Led(true), 7) => 1,
+        Holder::Of(Lamp::Write(1, _) | Lamp::Off | Lamp::Led(false), let b: u8) => mix(2, b as u64),
+        _ => 3,
+    }
+}
+
+// Each `Lamp` of `lamp_value`, with 7 and 8 after it.
+fn holder_hash(from: u8) -> u64 {
+    let mut h: u64 = 0;
+    let mut k: u8 = from;
+    while k < 14 {
+        h = mix(h, holder_match(Holder::Of(lamp_value(k / 2), 7 + k % 2)));
+        k += 1;
+    }
+    h
+}
+
 struct Uart { thr: u8 }
 
 fn putc(byte: u8) {
@@ -627,6 +791,20 @@ entry fn main() -> ! {
     // Both sides against the value the first alternative gives.
     failures += check(95, comptime duo_match(Duo::Pair(5, 7)), mix(7, 5));
     failures += check(96, duo_match(opaque_duo(Duo::Pair(opaque_u8(5), opaque_u8(7)))), mix(7, 5));
+    failures += check(97, comptime pairs_hash(0), pairs_hash(opaque_u16(0)));
+    failures += check(98, comptime ors_hash(0), ors_hash(opaque_u16(0)));
+    failures += check(99, comptime tree_hash(0), tree_hash(opaque_u8(0)));
+    failures += check(100, comptime lamp_hash(0), lamp_hash(opaque_u8(0)));
+    // Both sides against the arms ADR 0042 says are taken: `x` copied
+    // before the `7` fails, and the tag that is no variant.
+    failures += check(101, comptime tree_match(tree_value(4, 5)), mix(2, 8));
+    failures += check(102, tree_match(tree_value(opaque_u8(4), opaque_u8(5))), mix(2, 8));
+    failures += check(103, comptime lamp_match(lamp_value(6)), 4);
+    failures += check(104, lamp_match(lamp_value(opaque_u8(6))), 4);
+    failures += check(105, comptime holder_hash(0), holder_hash(opaque_u8(0)));
+    // `Lamp::Off` with 8 fails the `7` and is taken by the second arm.
+    failures += check(106, comptime holder_match(Holder::Of(Lamp::Off, 8)), mix(2, 8));
+    failures += check(107, holder_match(Holder::Of(lamp_value(opaque_u8(0)), opaque_u8(8))), mix(2, 8));
     if failures == 0 {
         putc(b'd'); putc(b'i'); putc(b'f'); putc(b'f'); putc(b'e'); putc(b'r'); putc(b'e');
         putc(b'n'); putc(b't'); putc(b'i'); putc(b'a'); putc(b'l'); putc(b' '); putc(b'o');

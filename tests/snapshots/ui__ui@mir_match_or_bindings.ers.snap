@@ -16,7 +16,7 @@ fn variants(_1: Msg) -> u8 {
 
     bb0: {
         _3 = copy _1;
-        switch copy _3.tag -> [1_u8: bb3, 2_u8: bb4, otherwise: bb2];
+        switch copy _3.tag -> [1_u8: bb3, 2_u8: bb5, otherwise: bb2];
     }
 
     bb1: {
@@ -31,16 +31,16 @@ fn variants(_1: Msg) -> u8 {
     }
 
     bb3: {
-        switch copy (_3 as 1).1 -> [0_u16: bb5, otherwise: bb2];
+        _2 = copy (_3 as 1).0;
+        switch copy (_3 as 1).1 -> [0_u16: bb4, otherwise: bb2];
     }
 
     bb4: {
-        _2 = copy (_3 as 2).0;
         goto -> bb1;
     }
 
     bb5: {
-        _2 = copy (_3 as 1).0;
+        _2 = copy (_3 as 2).0;
         goto -> bb1;
     }
 
@@ -75,16 +75,16 @@ fn positions(_1: Msg) -> u8 {
     }
 
     bb3: {
-        switch copy (_3 as 3).1 -> [7_u8: bb4, otherwise: bb5];
+        _2 = copy (_3 as 3).0;
+        switch copy (_3 as 3).1 -> [7_u8: bb5, otherwise: bb4];
     }
 
     bb4: {
-        _2 = copy (_3 as 3).0;
-        goto -> bb1;
+        switch copy (_3 as 3).0 -> [5_u8: bb6, otherwise: bb2];
     }
 
     bb5: {
-        switch copy (_3 as 3).0 -> [5_u8: bb6, otherwise: bb2];
+        goto -> bb1;
     }
 
     bb6: {
