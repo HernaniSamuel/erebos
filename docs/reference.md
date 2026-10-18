@@ -620,7 +620,7 @@ can: a pointer cast, a volatile read of a device register, an
   it, an enum, or a tag, ranges over its integer type's values (no range
   metadata on loads, no `assume`).
 
-## `match` (ADR 0037, 0040, 0041)
+## `match` (ADR 0037, 0040 to 0043)
 
 The examples of this section use these enums, not those of "Enums":
 
@@ -808,17 +808,65 @@ On an integer, a `bool` or an enum without payloads, a `match` compiles to
 a switch on the scrutinee's integer (an LLVM `switch`), as a C `switch`
 does. Its default is the catch-all arm, the call to the panic function on
 an enum without one, and unreachable on a `bool` or an integer whose every
-value is listed. On an enum with payloads, it compiles to a switch on the
-tag of the scrutinee's copy, then, for each variant, switches on the
-payload positions its arms examine, in arm order, a failed test going to
-the next arm that can still match, as nested C `switch`es would. The
-default of a switch on an enum position, at any depth, goes to the arms
-that match there with `_` or `let`, or else to the call to the panic
-function, even when every value of the integer type is a variant; it is
-unreachable only at a `bool` or integer position whose every value is
-listed. Where an alternative that binds variables matches, the values it
-binds are copied into them, and the arm's expression, generated once,
-runs.
+value is listed.
+
+On an enum with payloads, a `match` tests its arms in order (ADR 0042).
+It compiles to a switch on the tag of the scrutinee's copy, with a case
+for each variant that an arm names at the top, as its pattern or as an
+alternative of its or-pattern. Under each case is the **chain** of that
+variant: in arm order, each top-level alternative that is the variant,
+and then the first catch-all arm, or, without one, the call to the panic
+function. The default of the tag switch goes to the first catch-all arm,
+or else to the call to the panic function: the variants no arm names and
+the tags that are no variant reach it. With `Msg::Write(1, _) => 0,
+Msg::Led(true) | _ => 1`, the chain of `Msg::Write` is `Msg::Write(1, _)`
+and then the second arm, that of `Msg::Led` is `Msg::Led(true)` and then
+the second arm, and the default is the second arm.
+
+Each alternative of a chain is tested in turn; the first that passes runs
+its arm, and one that fails goes to the next alternative of the chain. An
+alternative is tested by its payload positions, in the order they are
+written, depth first:
+
+- `_` and `let` test nothing;
+- a literal or a constant is a switch on its position with one case, and
+  a variant a switch with one case on its position's integer or tag,
+  followed by the tests of its own payload positions;
+- an or-pattern tests its alternatives in order: the first that passes
+  goes on to the positions after the or-pattern, and one that fails goes
+  to the next alternative; when the last fails, the pattern that contains
+  the or-pattern fails. Alternatives written next to each other that are
+  literals, constants or variants written without a payload are one switch
+  with one case per value, as in `0x10 | 0x11` or `Mode::Off | Mode::Run`.
+
+A test that fails never goes back into an earlier or-pattern: patterns
+read no memory, so which of its alternatives passed does not change
+whether a later position matches. A test at an enum position fails on a
+value that is no variant, as on any variant it does not name. A chain
+without a catch-all arm ends in the call to the panic function, even at a
+variant whose arms test only `bool` and integer positions, which no value
+reaches; nothing tells LLVM that a tag or a payload value holds a variant.
+
+Each pattern written is tested in one place: the positions after an
+or-pattern are generated once, every alternative that passes jumping to
+them, and the arm's expression is generated once. The code of a `match`
+is thus linear in its patterns, plus one jump per variant to its first
+catch-all arm or to a panic call. An arm may test again a position that
+an earlier arm of its chain tested, as
+`Msg::Write(0x10 | 0x11, let v: u16)` after `Msg::Write(0x10, 7)`: at
+`-O0`, a `match` costs what a chain of C `if`s costs, and `-O` merges
+much of it.
+
+A `let` copies its position into its variable where its position is
+reached, before the tests after it, and a catch-all `let` arm copies the
+scrutinee's copy into its variable where the arm is entered, at one place
+for every chain and the tag default. A copy made for an alternative that
+then fails is never read: in
+`Msg::Write(let r: u8, 0) | Msg::Clear(let r: u8)`, `Msg::Write(5, 1)`
+copies 5 into `r` before the `0` fails, and the arm's expression runs
+only when a whole alternative passed, which copied every variable it
+binds on its way. So when several alternatives match, the first one, left
+to right, binds, since it is tested first.
 
 **Typing.** As for `if`: with an expected type, each arm's expression is
 checked against it, with the implicit conversions of "Typing"; without
@@ -854,12 +902,16 @@ what the witness has so far:
   first name it, and then one value they do not name, if one exists: the
   one closest to zero, the non-negative one first.
 
-A complete witness that some arm still matches is dropped. At most three
-witnesses are shown, in the order found, followed by "and N more": with
-the arms `Msg::Nop`, `Msg::Led(true)` and `Msg::Write(0, 5)`, the missing
-values are `Msg::Led(false)`, `Msg::Write(0, 0)`, `Msg::Write(1, _)` and 4
-more (`Msg::Wide(_)`, `Msg::SetMode(_)`, `Msg::Clear(_)` and
-`Msg::Pair(_, _)`).
+A complete witness that some arm still matches is dropped. The search
+stops at the fourth witness (ADR 0043): the first three are shown, in the
+order found, followed by "and more" when a fourth exists; three or fewer
+are all listed, joined with "and". With the arms `Msg::Nop`,
+`Msg::Led(true)` and `Msg::Write(0, 5)`, the missing values are
+`Msg::Led(false)`, `Msg::Write(0, 0)`, `Msg::Write(1, _)` and more, and a
+`match` without arms on `Msg` lists `Msg::Nop`, `Msg::Led(_)`,
+`Msg::Write(_, _)` and more. The message does not say how many more:
+counting them would mean finding them all, and their number can grow
+exponentially with the patterns.
 
 **Dead arms.** An arm that matches no value the arms before it leave is
 `ty::unreachable-pattern`, reported once for the arm, pointing at the first
