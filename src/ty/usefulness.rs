@@ -13,7 +13,17 @@
 //! An integer position is examined through the values its patterns name
 //! and one value they do not, never value by value, so a `u64` position
 //! costs what its arms name.
+//!
+//! Values the rows do not tell apart are examined once: two values, or two
+//! alternatives of an or-pattern, at one position are alike when the rows
+//! that match each, and in `useful` the pattern left after each, are the
+//! same patterns of the same arms, and then they get the same answer. An
+//! or-pattern of values without payload, such as `1 | 2 | 3`, so costs
+//! one alternative where the rows treat its values alike, instead of
+//! multiplying the cost of the positions after it. Only values at the same
+//! position are compared, so the worst case stays exponential (ADR 0043).
 
+use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 
 use crate::hir::{EnumId, EnumTy, IntTy};
@@ -39,6 +49,33 @@ pub struct Variant {
 /// The variants of the enums whose values a `match` needs, in declaration
 /// order (ADR 0038). Only those are ever examined value by value.
 pub type Enums = HashMap<EnumId, Vec<Variant>>;
+
+/// The state of the searches of one `match`: the variants of its enums,
+/// and how many times `useful` and `missing` were called, which the tests
+/// bound.
+pub struct Search<'e> {
+    enums: &'e Enums,
+    calls: Cell<u64>,
+}
+
+impl<'e> Search<'e> {
+    pub fn new(enums: &'e Enums) -> Self {
+        Search {
+            enums,
+            calls: Cell::new(0),
+        }
+    }
+
+    fn call(&self) {
+        self.calls.set(self.calls.get() + 1);
+    }
+
+    /// How many times `useful` and `missing` were called so far.
+    #[cfg(test)]
+    fn calls(&self) -> u64 {
+        self.calls.get()
+    }
+}
 
 /// A pattern, as the checks see it: what it matches, not how it is
 /// written.
@@ -82,11 +119,12 @@ pub type Row<'p> = Vec<&'p Pat>;
 /// that no row matches. The values of an enum include those that are no
 /// variant, as dead arms count them (ADR 0036, 0037).
 pub fn useful<'p>(
-    enums: &Enums,
+    search: &Search,
     columns: &[Column],
     rows: &[Row<'p>],
     pattern: &[&'p Pat],
 ) -> bool {
+    search.call();
     // A row of `_` alone leaves nothing; stopping here keeps the search
     // from examining the values of every later column.
     if rows.iter().any(|row| all_wild(row)) {
@@ -97,32 +135,62 @@ pub fn useful<'p>(
     };
     let column = columns[0];
     match head {
-        Pat::Or(alternatives) => alternatives
-            .iter()
-            .any(|alternative| useful(enums, columns, rows, &prepend(alternative, tail))),
+        Pat::Or(alternatives) => {
+            let rows = expand(rows);
+            // The searches of the alternatives examined, none useful: an
+            // alternative alike to one of them is not useful either.
+            let mut examined: Vec<Next> = Vec::new();
+            for alternative in alternatives {
+                let Pat::Value(value, subs) = alternative else {
+                    if useful(search, columns, &rows, &prepend(alternative, tail)) {
+                        return true;
+                    }
+                    continue;
+                };
+                let next = Next::new(search, column, &columns[1..], &rows, *value, subs, tail);
+                if examined.iter().any(|earlier| earlier.alike(&next)) {
+                    continue;
+                }
+                if useful(search, &next.columns, &next.rows, &next.pattern) {
+                    return true;
+                }
+                examined.push(next);
+            }
+            false
+        }
         Pat::Value(value, subs) => {
-            let payload = payload(enums, column, *value);
-            let rows = specialize(&expand(rows), *value, payload.len());
-            let pattern: Row = subs.iter().chain(tail.iter().copied()).collect();
-            useful(enums, &concat(payload, &columns[1..]), &rows, &pattern)
+            let next = Next::new(
+                search,
+                column,
+                &columns[1..],
+                &expand(rows),
+                *value,
+                subs,
+                tail,
+            );
+            useful(search, &next.columns, &next.rows, &next.pattern)
         }
         Pat::Wild => {
             let rows = expand(rows);
             let named = named(&rows);
             if named.len() as u128 == count(column) {
                 // Every value is named: `_` is useful if it is for one of
-                // them.
-                named.iter().any(|&value| {
-                    let payload = payload(enums, column, value);
-                    let rows = specialize(&rows, value, payload.len());
-                    let pattern: Row = std::iter::repeat_n(&WILD, payload.len())
-                        .chain(tail.iter().copied())
-                        .collect();
-                    useful(enums, &concat(payload, &columns[1..]), &rows, &pattern)
-                })
+                // them, and a value alike to one already examined is not.
+                let mut examined: Vec<Next> = Vec::new();
+                for value in named {
+                    let next = Next::wild(search, column, &columns[1..], &rows, value, tail);
+                    if examined.iter().any(|earlier| earlier.alike(&next)) {
+                        continue;
+                    }
+                    if useful(search, &next.columns, &next.rows, &next.pattern) {
+                        return true;
+                    }
+                    examined.push(next);
+                }
+                false
             } else {
                 // A value no row names is matched only by rows with `_`.
-                useful(enums, &columns[1..], &default(&rows), tail)
+                useful(search, &columns[1..], &default(&rows), tail)
             }
         }
     }
@@ -136,12 +204,13 @@ pub fn useful<'p>(
 /// `bool` or enum lists its values even when no row remains, as for a
 /// `match` without arms (ADR 0037).
 pub fn missing<'p>(
-    enums: &Enums,
+    search: &Search,
     columns: &[Column],
     rows: &[Row<'p>],
     examine: bool,
     limit: usize,
 ) -> Vec<Vec<Pat>> {
+    search.call();
     if limit == 0 {
         return Vec::new();
     }
@@ -161,14 +230,14 @@ pub fn missing<'p>(
     }
     let listed = examine && rows.is_empty() && matches!(column, Column::Bool | Column::Enum(_));
     if rows.iter().all(|row| matches!(row[0], Pat::Wild)) && !listed {
-        return missing(enums, rest, &default(&rows), false, limit)
+        return missing(search, rest, &default(&rows), false, limit)
             .into_iter()
             .map(|witness| prepend(Pat::Wild, &witness))
             .collect();
     }
     let values: Vec<u64> = match column {
         Column::Bool => vec![1, 0],
-        Column::Enum(e) => variants(enums, e).iter().map(|v| v.value).collect(),
+        Column::Enum(e) => variants(search.enums, e).iter().map(|v| v.value).collect(),
         Column::Int(int) => {
             let mut values = named(&rows);
             values.extend(unnamed(int, &values));
@@ -177,19 +246,105 @@ pub fn missing<'p>(
         Column::Other => unreachable!("only `_` and `let` match where no pattern compares"),
     };
     let mut witnesses = Vec::new();
+    // The searches of the values examined, each with the witnesses it found
+    // after its value: a value alike to one of them has the same ones.
+    let mut examined: Vec<(Next, Vec<Vec<Pat>>)> = Vec::new();
     for value in values {
         let wanted = limit - witnesses.len();
         if wanted == 0 {
             break;
         }
-        let payload = payload(enums, column, value);
-        let rows = specialize(&rows, value, payload.len());
-        for mut subs in missing(enums, &concat(payload, rest), &rows, false, wanted) {
-            let after = subs.split_off(payload.len());
+        // No pattern is searched for: the one left is `_` at each payload
+        // position, the same for values of the same payload.
+        let next = Next::wild(search, column, rest, &rows, value, &[]);
+        let arity = next.columns.len() - rest.len();
+        let index = match examined
+            .iter()
+            .position(|(earlier, _)| earlier.alike(&next))
+        {
+            Some(index) => index,
+            None => {
+                let found = missing(search, &next.columns, &next.rows, false, wanted);
+                examined.push((next, found));
+                examined.len() - 1
+            }
+        };
+        // The earlier value was given at least as many to find: the first
+        // `wanted` of its witnesses are those this value would find.
+        for subs in examined[index].1.iter().take(wanted) {
+            let mut subs = subs.clone();
+            let after = subs.split_off(arity);
             witnesses.push(prepend(Pat::Value(value, subs), &after));
         }
     }
     witnesses
+}
+
+/// The search one position further, once a value is taken at the first
+/// column: the columns that follow, the rows that match the value with its
+/// payload positions in place of the first column, and, in `useful`, the
+/// pattern left.
+struct Next<'p> {
+    columns: Vec<Column>,
+    rows: Vec<Row<'p>>,
+    pattern: Row<'p>,
+}
+
+impl<'p> Next<'p> {
+    /// After `value`, with the payload patterns `subs`, at a column of type
+    /// `column` followed by the columns `rest`: `rows` are expanded, and the
+    /// pattern is that value followed by `tail`.
+    fn new(
+        search: &Search,
+        column: Column,
+        rest: &[Column],
+        rows: &[Row<'p>],
+        value: u64,
+        subs: &'p [Pat],
+        tail: &[&'p Pat],
+    ) -> Self {
+        let payload = payload(search.enums, column, value);
+        Next {
+            columns: concat(payload, rest),
+            rows: specialize(rows, value, payload.len()),
+            pattern: subs.iter().chain(tail.iter().copied()).collect(),
+        }
+    }
+
+    /// As `new`, for `value` taken by a `_`, which leaves `_` at each of
+    /// its payload positions.
+    fn wild(
+        search: &Search,
+        column: Column,
+        rest: &[Column],
+        rows: &[Row<'p>],
+        value: u64,
+        tail: &[&'p Pat],
+    ) -> Self {
+        let payload = payload(search.enums, column, value);
+        Next {
+            columns: concat(payload, rest),
+            rows: specialize(rows, value, payload.len()),
+            pattern: std::iter::repeat_n(&WILD, payload.len())
+                .chain(tail.iter().copied())
+                .collect(),
+        }
+    }
+
+    /// Whether the search goes on alike after both values: the same
+    /// columns, and the same rows and pattern left, pattern by pattern, as
+    /// the same patterns of the same arms.
+    fn alike(&self, other: &Next) -> bool {
+        self.rows.len() == other.rows.len()
+            && self.rows.iter().zip(&other.rows).all(|(a, b)| same(a, b))
+            && same(&self.pattern, &other.pattern)
+            && self.columns == other.columns
+    }
+}
+
+/// Whether two rows hold the same patterns, by address.
+fn same(a: &[&Pat], b: &[&Pat]) -> bool {
+    a.len() == b.len() && a.iter().zip(b).all(|(x, y)| std::ptr::eq(*x, *y))
 }
 
 fn variants(enums: &Enums, e: EnumTy) -> &[Variant] {
@@ -348,12 +503,18 @@ mod tests {
     }
 
     fn useful1(enums: &Enums, column: Column, earlier: &[Pat], pattern: &Pat) -> bool {
-        useful(enums, &[column], &rows(earlier), &[pattern])
+        useful(&Search::new(enums), &[column], &rows(earlier), &[pattern])
     }
 
     /// The witnesses of `arms` at one column, up to `limit`.
     fn missing_up_to(enums: &Enums, column: Column, arms: &[Pat], limit: usize) -> Vec<Vec<Pat>> {
-        missing(enums, &[column], &rows(arms), arms.is_empty(), limit)
+        missing(
+            &Search::new(enums),
+            &[column],
+            &rows(arms),
+            arms.is_empty(),
+            limit,
+        )
     }
 
     /// Every witness of `arms` at one column: no test here has as many as
@@ -782,5 +943,155 @@ mod tests {
             &Pat::Value(0, vec![Pat::Wild; N])
         ));
         assert!(useful1(&enums, column, &all, &Pat::Wild));
+    }
+
+    /// ors(k) (ADR 0042), with the positions of `last` after its `k` `u8`
+    /// positions: `enum Q: u8 { A(u8, ..., u8, last...) = 0 }`.
+    fn ors(k: usize, last: &[Column]) -> (Column, Enums) {
+        let q = EnumTy {
+            payloads: true,
+            ..enum_ty(IntTy::U8)
+        };
+        let payload = std::iter::repeat_n(Column::Int(IntTy::U8), k)
+            .chain(last.iter().copied())
+            .collect();
+        let enums = Enums::from([(EnumId(0), vec![Variant { value: 0, payload }])]);
+        (Column::Enum(q), enums)
+    }
+
+    /// `1 | 2 | 3`.
+    fn one_two_three() -> Pat {
+        Pat::Or(vec![value(1), value(2), value(3)])
+    }
+
+    #[test]
+    fn alike_alternatives_are_examined_once() {
+        // ors(40), with `1 | 2 | 3` at each position: examining every
+        // alternative of each, as M2.4b did, takes 3^40 calls.
+        const K: usize = 40;
+        let (column, enums) = ors(K, &[]);
+        let arm = Pat::Value(0, vec![one_two_three(); K]);
+        let useful_within = |earlier: &[Pat], pattern: &Pat| {
+            let search = Search::new(&enums);
+            let useful = useful(&search, &[column], &rows(earlier), &[pattern]);
+            assert!(search.calls() <= 10 * K as u64, "{} calls", search.calls());
+            useful
+        };
+        // The same arm written again, as another pattern, is not useful.
+        let again = arm.clone();
+        assert!(!useful_within(std::slice::from_ref(&arm), &again));
+        // With `4` in place of one position's or-pattern, it is.
+        let mut four = vec![one_two_three(); K];
+        four[K / 2] = value(4);
+        assert!(useful_within(
+            std::slice::from_ref(&arm),
+            &Pat::Value(0, four)
+        ));
+        // The alternative `3` at the last position, in place of its
+        // or-pattern, as dead alternatives are tried.
+        let mut three = vec![one_two_three(); K];
+        three[K - 1] = value(3);
+        assert!(!useful_within(
+            std::slice::from_ref(&arm),
+            &Pat::Value(0, three)
+        ));
+    }
+
+    #[test]
+    fn alike_named_values_are_examined_once_for_a_wildcard() {
+        // `enum B: u8 { A(bool, ..., bool) = 0 }` with 40 positions, and
+        // `B::A(_, ..., _)` after `B::A(true | false, ..., true | false)`:
+        // at each position `true` and `false` are both named and alike.
+        // Examining both, as M2.4b did, takes 2^40 calls.
+        const K: usize = 40;
+        let b = EnumTy {
+            payloads: true,
+            ..enum_ty(IntTy::U8)
+        };
+        let enums = Enums::from([(
+            EnumId(0),
+            vec![Variant {
+                value: 0,
+                payload: vec![Column::Bool; K],
+            }],
+        )]);
+        let column = Column::Enum(b);
+        let either = Pat::Or(vec![value(1), value(0)]);
+        let arm = Pat::Value(0, vec![either; K]);
+        let search = Search::new(&enums);
+        let wild = Pat::Value(0, vec![Pat::Wild; K]);
+        assert!(!useful(
+            &search,
+            &[column],
+            &rows(std::slice::from_ref(&arm)),
+            &[&wild]
+        ));
+        assert!(search.calls() <= 10 * K as u64, "{} calls", search.calls());
+    }
+
+    #[test]
+    fn alike_values_are_examined_once() {
+        // ors(40) with a last `bool` position, and the arms
+        // `A(1 | 2 | 3, ..., 1 | 2 | 3, true)`, `A(_, ..., _, false)` and
+        // `A(_, ..., _, true)`: no row of `_` alone stops the search early.
+        // At each depth the values `1`, `2` and `3` are alike, and the value
+        // no arm names walks the positions left, about K^2 / 2 calls in all;
+        // M2.4b examined 3^40 combinations.
+        const K: usize = 40;
+        let bound = 2 * (K * K) as u64;
+        let (column, enums) = ors(K, &[Column::Bool]);
+        let arm = |each: Pat, last: u64| {
+            let subs = std::iter::repeat_n(each, K)
+                .chain(std::iter::once(value(last)))
+                .collect();
+            Pat::Value(0, subs)
+        };
+        let arms = [
+            arm(one_two_three(), 1),
+            arm(Pat::Wild, 0),
+            arm(Pat::Wild, 1),
+        ];
+        let search = Search::new(&enums);
+        assert!(missing(&search, &[column], &rows(&arms), false, 4).is_empty());
+        assert!(search.calls() <= bound, "{} calls", search.calls());
+        // None of them is dead.
+        for (i, pattern) in arms.iter().enumerate() {
+            let search = Search::new(&enums);
+            assert!(useful(&search, &[column], &rows(&arms[..i]), &[pattern]));
+            assert!(search.calls() <= bound, "{} calls", search.calls());
+        }
+    }
+
+    #[test]
+    fn alike_values_share_their_witnesses_in_order() {
+        // `enum Q: u8 { A(u8, u8) = 0 }`.
+        let (column, enums) = ors(2, &[]);
+        let a = |x: Pat, y: Pat| Pat::Value(0, vec![x, y]);
+        // After `1` only the first arm remains, after `2` both: `1` and `2`
+        // are not alike, and each is examined.
+        let arms = [
+            a(Pat::Or(vec![value(1), value(2)]), value(5)),
+            a(value(2), value(6)),
+        ];
+        assert_eq!(
+            missing1(&enums, column, &arms),
+            vec![
+                vec![a(value(1), value(0))],
+                vec![a(value(2), value(0))],
+                vec![a(value(0), Pat::Wild)],
+            ]
+        );
+        // `1`, `2` and `3` are alike: the witnesses of `1` are written for
+        // each, in place, before the value no arm names, and the limit
+        // counts them.
+        let arms = [a(one_two_three(), value(5))];
+        let all = vec![
+            vec![a(value(1), value(0))],
+            vec![a(value(2), value(0))],
+            vec![a(value(3), value(0))],
+            vec![a(value(0), Pat::Wild)],
+        ];
+        assert_eq!(missing1(&enums, column, &arms), all);
+        assert_eq!(missing_up_to(&enums, column, &arms, 2), all[..2]);
     }
 }

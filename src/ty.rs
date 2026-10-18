@@ -22,7 +22,7 @@ use crate::query::Queries;
 use crate::span::Span;
 use crate::target;
 
-use usefulness::{Column, Enums, Pat, Variant};
+use usefulness::{Column, Enums, Pat, Search, Variant};
 
 mod usefulness;
 
@@ -1230,11 +1230,12 @@ impl Checker<'_, '_> {
     fn coverage(&mut self, scrutinee: &Expr, ty: Ty, arms: &[Arm], values: &[Pat], enums: &Enums) {
         let column = column(ty);
         let columns = [column];
+        let search = Search::new(enums);
         // Whether `rows`, one pattern each, leave no value that `pattern`
         // matches.
         let covered = |rows: &[Pat], pattern: &Pat| {
             let rows: Vec<Vec<&Pat>> = rows.iter().map(|row| vec![row]).collect();
-            !usefulness::useful(enums, &columns, &rows, &[pattern])
+            !usefulness::useful(&search, &columns, &rows, &[pattern])
         };
         for (i, arm) in arms.iter().enumerate() {
             let earlier = &values[..i];
@@ -1274,7 +1275,7 @@ impl Checker<'_, '_> {
         // Three are shown, and a fourth tells whether there are more: the
         // search stops there, since the witnesses can be exponentially many
         // (ADR 0043).
-        let missing = usefulness::missing(enums, &columns, &rows, arms.is_empty(), 4);
+        let missing = usefulness::missing(&search, &columns, &rows, arms.is_empty(), 4);
         if missing.is_empty() {
             return;
         }
