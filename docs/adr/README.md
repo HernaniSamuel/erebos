@@ -69,5 +69,7 @@ Do not write one for local implementation details that the code already explains
 | 0037 | [`match` and patterns](0037-match-and-patterns.md) | Accepted, amended by 0038, 0040, 0041 |
 | 0038 | [The enum values a `match` needs](0038-enum-values-a-match-needs.md) | Accepted, amended by 0040 |
 | 0039 | [Enum variants with payloads](0039-enum-variants-with-payloads.md) | Accepted |
-| 0040 | [Patterns in payloads](0040-patterns-in-payloads.md) | Accepted |
-| 0041 | [Bindings in or-patterns](0041-bindings-in-or-patterns.md) | Accepted |
+| 0040 | [Patterns in payloads](0040-patterns-in-payloads.md) | Accepted, amended by 0042, 0043 |
+| 0041 | [Bindings in or-patterns](0041-bindings-in-or-patterns.md) | Accepted, amended by 0042 |
+| 0042 | [`match` code tested arm by arm](0042-match-code-tested-arm-by-arm.md) | Accepted |
+| 0043 | [At most four witnesses searched](0043-at-most-four-witnesses.md) | Accepted |

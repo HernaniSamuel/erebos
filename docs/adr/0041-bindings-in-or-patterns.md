@@ -1,6 +1,6 @@
 # 0041. Bindings in or-patterns
 
-- Status: Accepted
+- Status: Accepted; amended by 0042 (where a `let` is copied, and the first matching alternative binds)
 - Date: 2026-10-17
 - Amends: 0037 (`let` may be an alternative of an or-pattern, or appear
   inside one)
