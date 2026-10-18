@@ -1,0 +1,256 @@
+// The M2.4b milestone program: a command decoder over enums with payloads
+// (ADR 0039 to 0041). A static byte string holds a stream of messages, each
+// a command byte and then its arguments. `decode` reads one message from a
+// slice into a `Decoded`, which carries the command and the bytes it took;
+// the mode byte of `SetMode` is decoded by a `match` with a `_` arm for
+// unknown bytes. `dispatch` matches the commands with nested patterns and an
+// or-pattern that binds the register in both alternatives, and prints each
+// action over the UART with the `print` of M2.3b. A `comptime` block decodes
+// fixed messages and asserts their results with `match`. A `static mut`
+// holds the last command; it starts at `Cmd::Nop`, all zero bytes, so it is
+// in `.bss`, and it is read before any write.
+// expect-output: last nop
+// expect-output: 0: nop
+// expect-output: 1: led on
+// expect-output: 3: control <- 0x1234
+// expect-output: 7: clear 0x20
+// expect-output: 11: clear 0x05
+// expect-output: 13: bad 0x09, skipped 1
+// expect-output: 14: start
+// expect-output: 16: write 0x30 <- 0xabcd
+// expect-output: 20: mode sleep
+// expect-output: 22: mode off
+// expect-output: 24: led off
+// expect-output: 26: bad 0x02, skipped 2
+// expect-output: 28: done
+// expect-output: last led off
+// expect-exit: 0
+
+const UART: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+const FINISHER: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+
+const HEX_DIGITS: *const [u8] = &raw const b"0123456789abcdef";
+
+enum Mode: u8 { Off = 0, Run = 1, Sleep = 2 }
+
+enum Cmd: u8 {
+    Nop = 0,
+    Led(bool) = 1,
+    // A register and the value written to it.
+    Write(u8, u16) = 2,
+    SetMode(Mode) = 3,
+    // A register set to zero.
+    Clear(u8) = 4,
+}
+
+// The command and the bytes its message took; or a command byte that is
+// unknown, or whose message the end of the bytes cuts short, and the bytes
+// skipped.
+enum Decoded: u8 { Done = 0, Cmd(Cmd, usize) = 1, Bad(u8, usize) = 2 }
+
+// The command bytes.
+const NOP: u8 = 0x00;
+const LED: u8 = 0x01;
+const WRITE: u8 = 0x02;
+const SET_MODE: u8 = 0x03;
+const CLEAR: u8 = 0x04;
+
+// The messages, in order: `Nop`; `Led(true)`; `Write(0x10, 0x1234)` and
+// `Write(0x20, 0)`, values little-endian; `Clear(0x05)`; the unknown
+// command 0x09; `SetMode` with the mode 1 (`Run`); `Write(0x30, 0xabcd)`;
+// `SetMode` with the modes 2 (`Sleep`) and 7 (unknown); `Led(false)`; a
+// `Write` cut short.
+static STREAM: [u8; 28] = b"\x00\x01\x01\x02\x10\x34\x12\x02\x20\x00\x00\x04\x05\x09\x03\x01\x02\x30\xcd\xab\x03\x02\x03\x07\x01\x00\x02\x40";
+
+fn decode_mode(byte: u8) -> Mode {
+    match byte {
+        0 => Mode::Off,
+        1 => Mode::Run,
+        2 => Mode::Sleep,
+        // An unknown mode is the safe one.
+        _ => Mode::Off,
+    }
+}
+
+// The message at the start of `bytes`.
+fn decode(bytes: *const [u8]) -> Decoded {
+    if len(bytes) == 0 {
+        return Decoded::Done;
+    }
+    let code: u8 = (*bytes)[0];
+    // The bytes the message takes, its command byte included.
+    let size: usize = match code {
+        NOP => 1,
+        LED | SET_MODE | CLEAR => 2,
+        WRITE => 4,
+        _ => return Decoded::Bad(code, 1),
+    };
+    if len(bytes) < size {
+        return Decoded::Bad(code, len(bytes));
+    }
+    let cmd: Cmd = match code {
+        LED => Cmd::Led((*bytes)[1] != 0),
+        WRITE => Cmd::Write((*bytes)[1], (*bytes)[2] as u16 | ((*bytes)[3] as u16) << 8),
+        SET_MODE => Cmd::SetMode(decode_mode((*bytes)[1])),
+        CLEAR => Cmd::Clear((*bytes)[1]),
+        _ => Cmd::Nop,
+    };
+    Decoded::Cmd(cmd, size)
+}
+
+// The bytes of `s` from `start` on, where `start` may be `len(s)`.
+fn rest(s: *const [u8], start: usize) -> *const [u8] {
+    slice(&raw const (s as *const u8)[start], len(s) - start)
+}
+
+comptime {
+    assert(
+        match decode(&raw const b"\x02\x10\x34\x12\xff") {
+            Decoded::Cmd(Cmd::Write(0x10, 0x1234), 4) => true,
+            _ => false,
+        },
+        &raw const b"a write of 0x1234 to 0x10 takes four bytes",
+    );
+    assert(
+        match decode(&raw const b"\x03\x07") {
+            Decoded::Cmd(Cmd::SetMode(Mode::Off), 2) => true,
+            _ => false,
+        },
+        &raw const b"an unknown mode is `off`",
+    );
+    assert(
+        match decode(rest(&raw const b"\x00\x09", 1)) {
+            Decoded::Bad(0x09, 1) => true,
+            _ => false,
+        },
+        &raw const b"0x09 is no command",
+    );
+    assert(
+        match decode(rest(&raw const b"\x01", 1)) {
+            Decoded::Done => true,
+            _ => false,
+        },
+        &raw const b"no bytes, no message",
+    );
+}
+
+static mut LAST: Cmd = Cmd::Nop;
+
+fn print(s: *const [u8]) {
+    let mut i: usize = 0;
+    while i < len(s) {
+        *UART = (*s)[i];
+        i += 1;
+    }
+}
+
+fn print_u32(value: u32) {
+    let mut digits: [u8; 10] = [0; 10];
+    let mut n: usize = 0;
+    let mut rest: u32 = value;
+    loop {
+        digits[9 - n] = b'0' + (rest % 10) as u8;
+        n += 1;
+        rest /= 10;
+        if rest == 0 {
+            break;
+        }
+    }
+    print(slice(&raw const digits[10 - n], n));
+}
+
+// `value` in `digits` hexadecimal digits, after `0x`.
+fn print_hex(value: u32, digits: u32) {
+    print(&raw const b"0x");
+    let mut i: u32 = digits;
+    while i > 0 {
+        i -= 1;
+        *UART = (*HEX_DIGITS)[((value >> (4 * i)) & 0xF) as usize];
+    }
+}
+
+fn mode_name(mode: Mode) -> *const [u8] {
+    match mode {
+        Mode::Off => &raw const b"off",
+        Mode::Run => &raw const b"run",
+        Mode::Sleep => &raw const b"sleep",
+    }
+}
+
+// Prints the action `cmd` stands for, on one line.
+fn dispatch(cmd: Cmd) {
+    match cmd {
+        Cmd::Nop => print(&raw const b"nop"),
+        Cmd::Led(true) => print(&raw const b"led on"),
+        Cmd::Led(false) => print(&raw const b"led off"),
+        // The control register.
+        Cmd::Write(0x10, let v: u16) => {
+            print(&raw const b"control <- ");
+            print_hex(v as u32, 4);
+        }
+        Cmd::Write(let r: u8, 0) | Cmd::Clear(let r: u8) => {
+            print(&raw const b"clear ");
+            print_hex(r as u32, 2);
+        }
+        Cmd::Write(let r: u8, let v: u16) => {
+            print(&raw const b"write ");
+            print_hex(r as u32, 2);
+            print(&raw const b" <- ");
+            print_hex(v as u32, 4);
+        }
+        Cmd::SetMode(Mode::Run) => print(&raw const b"start"),
+        Cmd::SetMode(let mode: Mode) => {
+            print(&raw const b"mode ");
+            print(mode_name(mode));
+        }
+    }
+    print(&raw const b"\n");
+}
+
+fn exit(code: u32) -> ! {
+    *FINISHER = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    loop {}
+}
+
+entry fn main() -> ! {
+    // Read before any write: `.bss` was zeroed by `_start`.
+    print(&raw const b"last ");
+    dispatch(LAST);
+
+    let mut at: usize = 0;
+    loop {
+        print_u32(at as u32);
+        print(&raw const b": ");
+        match decode(rest(&raw const STREAM, at)) {
+            Decoded::Done => {
+                print(&raw const b"done\n");
+                break;
+            }
+            Decoded::Cmd(let cmd: Cmd, let size: usize) => {
+                dispatch(cmd);
+                LAST = cmd;
+                at += size;
+            }
+            Decoded::Bad(let code: u8, let size: usize) => {
+                print(&raw const b"bad ");
+                print_hex(code as u32, 2);
+                print(&raw const b", skipped ");
+                print_u32(size as u32);
+                print(&raw const b"\n");
+                at += size;
+            }
+        }
+    }
+
+    print(&raw const b"last ");
+    dispatch(LAST);
+    let last_ok: bool = match LAST {
+        Cmd::Led(false) => true,
+        _ => false,
+    };
+    exit(if at == len(&raw const STREAM) && last_ok { 0 } else { 2 })
+}
+
+panic fn on_panic() -> ! {
+    exit(1)
+}
