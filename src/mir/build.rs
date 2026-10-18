@@ -134,20 +134,54 @@ impl<'p> Test<'p> {
     }
 }
 
+/// A variable an arm binds, and the position of the scrutinee it copies
+/// (ADR 0040, 0041).
+#[derive(Clone)]
+struct Bind {
+    local: hir::LocalId,
+    position: Vec<hir::PayloadStep>,
+}
+
+impl Bind {
+    /// The variable `pattern` binds at `position`, if it is a `let`.
+    fn new(position: &[hir::PayloadStep], pattern: &hir::Pattern) -> Option<Bind> {
+        match pattern.kind {
+            hir::PatternKind::Binding { local, .. } => Some(Bind {
+                local,
+                position: position.to_vec(),
+            }),
+            _ => None,
+        }
+    }
+}
+
 /// An arm that can still match, with the tests it has left, in the order
-/// its pattern writes their positions.
+/// its pattern writes their positions, and the variables bound by the
+/// `let`s its tests have passed, in the alternatives they took
+/// (ADR 0041).
 #[derive(Clone)]
 struct Row<'p> {
     arm: usize,
     tests: Vec<Test<'p>>,
+    binds: Vec<Bind>,
 }
 
 impl<'p> Row<'p> {
+    /// The row of `arm`, whose pattern is at the scrutinee, of type `ty`.
+    fn new(arm: usize, ty: hir::Ty, pattern: &'p hir::Pattern) -> Row<'p> {
+        Row {
+            arm,
+            tests: Test::new(Vec::new(), ty, pattern).into_iter().collect(),
+            binds: Bind::new(&[], pattern).into_iter().collect(),
+        }
+    }
+
     /// The row once its test `i` passed: a variant's payload patterns take
     /// its place, at the positions of its payload values.
     fn specialized(&self, i: usize, hir: &hir::Hir) -> Row<'p> {
         let test = &self.tests[i];
         let mut subs = Vec::new();
+        let mut binds = self.binds.clone();
         if let hir::PatternKind::Variant(id, variant, Some(patterns)) = &test.pattern.kind {
             let payload = &hir.enum_(*id).variants[*variant as usize].payload;
             for (index, (pattern, value)) in patterns.iter().zip(payload).enumerate() {
@@ -156,6 +190,7 @@ impl<'p> Row<'p> {
                     variant: *variant,
                     index: index as u32,
                 });
+                binds.extend(Bind::new(&position, pattern));
                 subs.extend(Test::new(position, value.ty, pattern));
             }
         }
@@ -165,6 +200,33 @@ impl<'p> Row<'p> {
         Row {
             arm: self.arm,
             tests,
+            binds,
+        }
+    }
+
+    /// The row for `alternative` of the or-pattern of its test `i`, at
+    /// `position`, of type `ty`: the alternative's test takes its place,
+    /// or, for `_` and `let`, none does.
+    fn alternative(
+        &self,
+        i: usize,
+        position: &[hir::PayloadStep],
+        ty: hir::Ty,
+        alternative: &'p hir::Pattern,
+    ) -> Row<'p> {
+        let mut tests = self.tests.clone();
+        match Test::new(position.to_vec(), ty, alternative) {
+            Some(test) => tests[i] = test,
+            None => {
+                tests.remove(i);
+            }
+        }
+        let mut binds = self.binds.clone();
+        binds.extend(Bind::new(position, alternative));
+        Row {
+            arm: self.arm,
+            tests,
+            binds,
         }
     }
 }
@@ -177,15 +239,6 @@ fn position_place(scrutinee: Place, position: &[hir::PayloadStep]) -> Place {
             index: step.index,
         })
     })
-}
-
-/// A read of the value at `position` in the scrutinee, read as `discr`.
-fn position(discr: Operand, position: &[hir::PayloadStep]) -> Operand {
-    match discr {
-        _ if position.is_empty() => discr,
-        Operand::Copy(place) => Operand::Copy(position_place(place, position)),
-        _ => unreachable!("a payload is read from a place"),
-    }
 }
 
 struct LoopScope {
@@ -834,12 +887,7 @@ impl Builder<'_, '_> {
                 let rows = arms
                     .iter()
                     .enumerate()
-                    .map(|(arm, a)| Row {
-                        arm,
-                        tests: Test::new(Vec::new(), hir_ty, &a.pattern)
-                            .into_iter()
-                            .collect(),
-                    })
+                    .map(|(arm, a)| Row::new(arm, hir_ty, &a.pattern))
                     .collect();
                 self.decide(place, rows, &blocks);
                 // No value of an enum with payloads is known (ADR 0039).
@@ -847,15 +895,20 @@ impl Builder<'_, '_> {
             }
             _ => self.switch(scrutinee, scrutinee_ty, discr, arms, &blocks),
         };
+        let tree = matches!(hir_ty, hir::Ty::Enum(e) if e.payloads);
 
         let result = self.result_place(ty);
         let mut ends = Vec::with_capacity(arms.len());
         for (i, (arm, &block)) in arms.iter().zip(&blocks).enumerate() {
             self.current = Some(block);
-            for binding in arm.pattern.bindings() {
-                let local = self.hir_locals[binding.local.0 as usize];
-                let value = position(discr, &binding.position);
-                self.assign(Place::local(local), Rvalue::Use(value));
+            // The leaves of a decision tree copied what the alternative
+            // that matched binds (ADR 0041). After a switch, a `let` arm
+            // copies the scrutinee; no alternative of an or-pattern binds
+            // a variable there, since a `let` alternative is dead or binds
+            // a name the others do not.
+            if !tree && let hir::PatternKind::Binding { local, .. } = arm.pattern.kind {
+                let local = self.hir_locals[local.0 as usize];
+                self.assign(Place::local(local), Rvalue::Use(discr));
             }
             let can_run = taken.is_none_or(|taken| taken == Some(i));
             let value = self.checked_if(can_run, |this| this.expr(&arm.body));
@@ -934,7 +987,9 @@ impl Builder<'_, '_> {
     /// value to the rows that match it with `_` or `let`. A position no
     /// such row is left for calls the panic function, as for a value
     /// that is no variant, unless it is an integer or `bool` whose every
-    /// value is listed.
+    /// value is listed. Where the first row has no test left, its arm
+    /// matches: what the alternatives it took bind is copied, and the
+    /// arm's expression runs (ADR 0041).
     fn decide(&mut self, scrutinee: Place, rows: Vec<Row<'_>>, blocks: &[BasicBlock]) {
         let Some(first) = rows.first() else {
             // A `match` without arms, which type checking accepts only on
@@ -944,6 +999,14 @@ impl Builder<'_, '_> {
             return;
         };
         let Some(test) = first.tests.first() else {
+            // The arm matches, through the alternatives the row took: what
+            // they bind is copied before its expression, which every leaf
+            // of the arm shares (ADR 0041).
+            for bind in &first.binds {
+                let local = self.hir_locals[bind.local.0 as usize];
+                let value = Operand::Copy(position_place(scrutinee, &bind.position));
+                self.assign(Place::local(local), Rvalue::Use(value));
+            }
             self.terminate(Terminator::Goto(blocks[first.arm]));
             return;
         };
@@ -956,17 +1019,7 @@ impl Builder<'_, '_> {
             match found.map(|i| (i, &row.tests[i].pattern.kind)) {
                 Some((i, hir::PatternKind::Or(alternatives))) => {
                     for alternative in alternatives {
-                        let mut tests = row.tests.clone();
-                        match Test::new(at.clone(), ty, alternative) {
-                            Some(test) => tests[i] = test,
-                            None => {
-                                tests.remove(i);
-                            }
-                        }
-                        expanded.push(Row {
-                            arm: row.arm,
-                            tests,
-                        });
+                        expanded.push(row.alternative(i, &at, ty, alternative));
                     }
                 }
                 _ => expanded.push(row),
@@ -1051,8 +1104,8 @@ impl Builder<'_, '_> {
     }
 
     /// Where a switch sends the values that `rows` are left for: the arm
-    /// of the first, if it has no test left, or a new block, which
-    /// `decisions` gets with the rows to decide among.
+    /// of the first, if it has no test left and binds nothing, or a new
+    /// block, which `decisions` gets with the rows to decide among.
     fn decision<'p>(
         &mut self,
         rows: Vec<Row<'p>>,
@@ -1060,7 +1113,7 @@ impl Builder<'_, '_> {
         decisions: &mut Vec<(BasicBlock, Option<Vec<Row<'p>>>)>,
     ) -> BasicBlock {
         match rows.first() {
-            Some(first) if first.tests.is_empty() => blocks[first.arm],
+            Some(first) if first.tests.is_empty() && first.binds.is_empty() => blocks[first.arm],
             _ => {
                 let block = self.new_block();
                 decisions.push((block, Some(rows)));

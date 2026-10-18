@@ -53,3 +53,19 @@ union Widths {
 };
 
 union Widths opaque_widths(union Widths w) { return w; }
+
+/* The twins of the program's enums `Side` and `Duo`. */
+union Side {
+    uint8_t tag;
+    struct { uint8_t tag; uint8_t p0; } Left;
+    struct { uint8_t tag; uint8_t p0; } Right;
+    struct { uint8_t tag; uint16_t p0; } Wide;
+};
+union Duo {
+    uint16_t tag;
+    struct { uint16_t tag; uint8_t p0; uint8_t p1; } Pair;
+    struct { uint16_t tag; uint8_t p0; } One;
+    struct { uint16_t tag; union Side p0; uint8_t p1; } Wrap;
+};
+
+union Duo opaque_duo(union Duo d) { return d; }

@@ -3,8 +3,8 @@
 // unknown variant is `resolve::unknown-variant`, and a bare name that is
 // no constant `resolve::not-a-constant`. One name bound twice in one
 // pattern is `resolve::duplicate-binding`, also at two depths, and a
-// `let` inside an or-pattern is `resolve::binding-in-or-pattern` at any
-// depth (ADR 0037, until ADR 0041).
+// name bound by only some alternatives of an or-pattern is
+// `resolve::inconsistent-binding` at any depth (ADR 0041).
 enum Mode: u8 { Off = 0, Run = 1 }
 enum Inner: u8 { Pair(u8, u8) = 0 }
 enum Msg: u8 {

@@ -1,0 +1,159 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/mir_match_or_bindings.ers
+---
+--- mir ---
+enum Msg: u8 { 0 Nop = 0, 1 Write(0 u8 at 1, 1 u16 at 2) = 1, 2 Clear(0 u8 at 1) = 2, 3 Pair(0 u8 at 1, 1 u8 at 2) = 3 } // size 4, align 2
+
+fn variants(_1: Msg) -> u8 {
+    let _0: u8;
+    let _1: Msg; // m
+    let _2: u8; // r
+    let _3: Msg;
+    let _4: u8;
+    let _5: u8;
+
+    bb0: {
+        _3 = copy _1;
+        switch copy _3.tag -> [1_u8: bb3, 2_u8: bb4, otherwise: bb2];
+    }
+
+    bb1: {
+        _5 = Add(copy _2, const 1_u8);
+        _4 = copy _5;
+        goto -> bb6;
+    }
+
+    bb2: {
+        _4 = const 0_u8;
+        goto -> bb6;
+    }
+
+    bb3: {
+        switch copy (_3 as 1).1 -> [0_u16: bb5, otherwise: bb2];
+    }
+
+    bb4: {
+        _2 = copy (_3 as 2).0;
+        goto -> bb1;
+    }
+
+    bb5: {
+        _2 = copy (_3 as 1).0;
+        goto -> bb1;
+    }
+
+    bb6: {
+        _0 = copy _4;
+        return;
+    }
+}
+
+fn positions(_1: Msg) -> u8 {
+    let _0: u8;
+    let _1: Msg; // m
+    let _2: u8; // a
+    let _3: Msg;
+    let _4: u8;
+    let _5: u8;
+
+    bb0: {
+        _3 = copy _1;
+        switch copy _3.tag -> [3_u8: bb3, otherwise: bb2];
+    }
+
+    bb1: {
+        _5 = Add(copy _2, const 1_u8);
+        _4 = copy _5;
+        goto -> bb7;
+    }
+
+    bb2: {
+        _4 = const 0_u8;
+        goto -> bb7;
+    }
+
+    bb3: {
+        switch copy (_3 as 3).1 -> [7_u8: bb4, otherwise: bb5];
+    }
+
+    bb4: {
+        _2 = copy (_3 as 3).0;
+        goto -> bb1;
+    }
+
+    bb5: {
+        switch copy (_3 as 3).0 -> [5_u8: bb6, otherwise: bb2];
+    }
+
+    bb6: {
+        _2 = copy (_3 as 3).1;
+        goto -> bb1;
+    }
+
+    bb7: {
+        _0 = copy _4;
+        return;
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+comptime fn Msg::Nop() -> u8 {
+    let _0: u8;
+
+    bb0: {
+        _0 = const 0_u8;
+        return;
+    }
+}
+
+comptime fn Msg::Write() -> u8 {
+    let _0: u8;
+
+    bb0: {
+        _0 = const 1_u8;
+        return;
+    }
+}
+
+comptime fn Msg::Clear() -> u8 {
+    let _0: u8;
+
+    bb0: {
+        _0 = const 2_u8;
+        return;
+    }
+}
+
+comptime fn Msg::Pair() -> u8 {
+    let _0: u8;
+
+    bb0: {
+        _0 = const 3_u8;
+        return;
+    }
+}

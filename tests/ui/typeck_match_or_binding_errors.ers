@@ -1,0 +1,33 @@
+// emit: typeck
+// Each name the alternatives of an or-pattern bind is one variable, whose
+// type the first `let` writes (ADR 0041): a later `let` of another type is
+// `ty::mismatched-types` at its type, each of them. A `let` alternative
+// matches every value, so another one after it is dead.
+enum Msg: u8 {
+    Clear(u8) = 0,
+    Level(u16) = 1,
+    Write(u8, u16) = 2,
+}
+
+fn two_types(m: Msg) -> u8 {
+    match m {
+        Msg::Clear(let x: u8) | Msg::Level(let x: u16) => 1,
+        _ => 0,
+    }
+}
+
+fn both_later(m: Msg) -> u8 {
+    match m {
+        Msg::Clear(let x: u8) | Msg::Level(let x: u16) | Msg::Write(_, let x: u16) => 1,
+        _ => 0,
+    }
+}
+
+fn twice(x: u8) -> u8 {
+    match x {
+        let x: u8 | let x: u8 => x,
+    }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

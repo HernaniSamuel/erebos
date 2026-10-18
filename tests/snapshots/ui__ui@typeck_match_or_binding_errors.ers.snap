@@ -1,0 +1,54 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_match_or_binding_errors.ers
+---
+--- errors ---
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_match_or_binding_errors.ers:14:51]
+ 13 │     match m {
+ 14 │         Msg::Clear(let x: u8) | Msg::Level(let x: u16) => 1,
+    ·                                                   ─┬─
+    ·                                                    ╰── expected `u8`, found `u16`
+ 15 │         _ => 0,
+    ╰────
+  help: the alternatives bind one variable `x`, which has one type, the one its first `let`
+        writes, `u8` (ADR 0041)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_match_or_binding_errors.ers:21:51]
+ 20 │     match m {
+ 21 │         Msg::Clear(let x: u8) | Msg::Level(let x: u16) | Msg::Write(_, let x: u16) => 1,
+    ·                                                   ─┬─
+    ·                                                    ╰── expected `u8`, found `u16`
+ 22 │         _ => 0,
+    ╰────
+  help: the alternatives bind one variable `x`, which has one type, the one its first `let`
+        writes, `u8` (ADR 0041)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_match_or_binding_errors.ers:21:79]
+ 20 │     match m {
+ 21 │         Msg::Clear(let x: u8) | Msg::Level(let x: u16) | Msg::Write(_, let x: u16) => 1,
+    ·                                                                               ─┬─
+    ·                                                                                ╰── expected `u8`, found `u16`
+ 22 │         _ => 0,
+    ╰────
+  help: the alternatives bind one variable `x`, which has one type, the one its first `let`
+        writes, `u8` (ADR 0041)
+ty::unreachable-pattern
+
+  × unreachable pattern
+    ╭─[typeck_match_or_binding_errors.ers:28:21]
+ 27 │     match x {
+ 28 │         let x: u8 | let x: u8 => x,
+    ·         ────┬────   ────┬────
+    ·             │           ╰── matches no value that the patterns before it leave
+    ·             ╰── every value it matches is matched here
+ 29 │     }
+    ╰────
+  help: remove this alternative (ADR 0037)

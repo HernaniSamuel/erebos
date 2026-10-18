@@ -941,9 +941,30 @@ impl Checker<'_, '_> {
         let other_help = format!("a `{ty}` is matched only with `_` or a `let` (ADR 0040)");
         match &pattern.kind {
             PatternKind::Wildcard => Some(Pat::Wild),
-            PatternKind::Binding { local, ty_span } => {
+            PatternKind::Binding {
+                local,
+                ty: written,
+                ty_span,
+            } => {
                 let local_ty = self.local_ty(f, *local);
-                if local_ty == Ty::Error || ty == Ty::Error {
+                let written = self.norm(*written);
+                if local_ty == Ty::Error || written == Ty::Error {
+                    return None;
+                }
+                // A later alternative's `let` of a variable that the first
+                // alternative declared, with its type (ADR 0041).
+                if written != local_ty {
+                    let name = &f.local(*local).name;
+                    self.q.diags.push(
+                        Diagnostic::error("ty::mismatched-types", "mismatched types")
+                            .label(*ty_span, format!("expected `{local_ty}`, found `{written}`"))
+                            .help(format!(
+                                "the alternatives bind one variable `{name}`, which has one type, the one its first `let` writes, `{local_ty}` (ADR 0041)"
+                            )),
+                    );
+                    return None;
+                }
+                if ty == Ty::Error {
                     return None;
                 }
                 if local_ty != ty {

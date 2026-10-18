@@ -1,0 +1,78 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_match_or_bindings.ers
+---
+--- typeck ---
+enum Mode: u8 { Off = 0, Run = 1 }
+enum Side: u8 { Left(u8 at 1) = 0, Right(u8 at 1) = 1, Mid = 2 } size 2, align 1
+enum Msg: u8 { Nop = 0, Led(bool at 1) = 1, Buzz(bool at 1) = 2, Write(u8 at 1, u16 at 2) = 3, Clear(u8 at 1) = 4, Wrap(Side at 1, Mode at 3) = 5 } size 4, align 2
+fn set(on: bool) -> u8
+    expr 0 if 632..654: u8
+    expr 1 local on 635..637: bool
+    expr 2 int 1 640..641: u8
+    expr 3 block 649..654: u8
+    expr 4 int 0 651..652: u8
+fn clear(r: u8) -> u8
+    expr 5 local r 681..682: u8
+fn examples(m: Msg) -> u8
+    let on: bool
+    let r: u8
+    let r: u8
+    expr 6 match 718..931: u8
+    expr 7 local m 724..725: Msg
+    expr 8 call 788..795: u8
+    expr 9 local on 792..794: bool
+    expr 10 call 857..865: u8
+    expr 11 local r 863..864: u8
+    expr 12 local r 907..908: u8
+    expr 13 int 0 923..924: u8
+fn nested(m: Msg) -> u8
+    let a: u8
+    let a: u8
+    let mode: Mode
+    expr 14 match 965..1235: u8
+    expr 15 local m 971..972: Msg
+    expr 16 local a 1087..1088: u8
+    expr 17 block 1175..1213: u8
+    expr 18 binary + 1189..1203: u8
+    expr 19 local a 1189..1190: u8
+    expr 20 as u8 1193..1203: u8
+    expr 21 local mode 1193..1197: Mode
+    expr 22 int 0 1227..1228: u8
+fn mutable(m: Msg) -> u8
+    let mut r: u8
+    expr 23 match 1270..1415: u8
+    expr 24 local m 1276..1277: Msg
+    expr 25 block 1348..1393: u8
+    expr 26 assign += 1362..1368: ()
+    expr 27 local r 1362..1363: u8
+    expr 28 int 1 1367..1368: u8
+    expr 29 local r 1382..1383: u8
+    expr 30 int 0 1407..1408: u8
+entry fn main() -> !
+    expr 31 loop 1442..1449: !
+panic fn on_panic() -> !
+    expr 32 loop 1479..1486: !
+comptime fn Mode::Off() -> u8
+    expr 33 int 0 399..400: u8
+comptime fn Mode::Run() -> u8
+    expr 34 int 1 408..409: u8
+comptime fn Side::Left() -> u8
+    expr 35 int 0 439..440: u8
+comptime fn Side::Right() -> u8
+    expr 36 int 1 454..455: u8
+comptime fn Side::Mid() -> u8
+    expr 37 int 2 463..464: u8
+comptime fn Msg::Nop() -> u8
+    expr 38 int 0 493..494: u8
+comptime fn Msg::Led() -> u8
+    expr 39 int 1 512..513: u8
+comptime fn Msg::Buzz() -> u8
+    expr 40 int 2 532..533: u8
+comptime fn Msg::Write() -> u8
+    expr 41 int 3 556..557: u8
+comptime fn Msg::Clear() -> u8
+    expr 42 int 4 575..576: u8
+comptime fn Msg::Wrap() -> u8
+    expr 43 int 5 601..602: u8

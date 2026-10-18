@@ -1,0 +1,27 @@
+// emit: mir
+// Alternatives of an or-pattern binding one variable (ADR 0041): where the
+// decision tree finds that an alternative matches, it copies the position
+// that alternative binds into the variable's one local, from different
+// variants (`Msg::Write`'s first value, `Msg::Clear`'s) or from different
+// positions of one variant (`Msg::Pair`'s first and second values), and
+// jumps to the arm's expression, which is built once. A value both
+// alternatives match, `Msg::Pair(5, 7)`, takes the first: the second
+// position is tested first, and 7 binds the first value.
+enum Msg: u8 { Nop = 0, Write(u8, u16) = 1, Clear(u8) = 2, Pair(u8, u8) = 3 }
+
+fn variants(m: Msg) -> u8 {
+    match m {
+        Msg::Write(let r: u8, 0) | Msg::Clear(let r: u8) => r + 1,
+        _ => 0,
+    }
+}
+
+fn positions(m: Msg) -> u8 {
+    match m {
+        Msg::Pair(let a: u8, 7) | Msg::Pair(5, let a: u8) => a + 1,
+        _ => 0,
+    }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

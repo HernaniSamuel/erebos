@@ -1,13 +1,25 @@
 // emit: typeck
 // A variable bound by `let` in a pattern exists in its arm only, where it
 // shadows a constant of the same name (ADR 0037): the next arm sees the
-// constant again, as a pattern and as a value.
+// constant again, as a pattern and as a value. The alternatives of an
+// or-pattern bind one variable per name, which the arm's expression sees,
+// shadowing the constant (ADR 0041): the dump lists one `LIMIT`.
 const LIMIT: u8 = 10;
 
 fn arms(x: u8, flag: bool) -> u8 {
     match flag {
         true => match x { let LIMIT: u8 => LIMIT + 1 },
         false => match x { LIMIT => LIMIT, _ => 0 },
+    }
+}
+
+enum Msg: u8 { Write(u8, u16) = 0, Clear(u8) = 1 }
+
+fn alternatives(m: Msg) -> u8 {
+    match m {
+        Msg::Write(let LIMIT: u8, 0) | Msg::Clear(let LIMIT: u8) => LIMIT + 1,
+        Msg::Write(LIMIT, _) => LIMIT,
+        Msg::Write(_, _) => 0,
     }
 }
 

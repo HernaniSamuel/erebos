@@ -8,7 +8,7 @@ resolve::unknown-variant
 
   × `Mode` has no variant `Sleep`
    ╭─[resolve_match_payload_errors.ers:8:6]
- 7 │ // depth (ADR 0037, until ADR 0041).
+ 7 │ // `resolve::inconsistent-binding` at any depth (ADR 0041).
  8 │ enum Mode: u8 { Off = 0, Run = 1 }
    ·      ──┬─
    ·        ╰── `Mode` is declared here
@@ -70,26 +70,29 @@ resolve::duplicate-binding
  31 │         _ => 2,
     ╰────
   help: each variable of a pattern has a name of its own (ADR 0040)
-resolve::binding-in-or-pattern
+resolve::inconsistent-binding
 
-  × a `let` cannot be inside an or-pattern
-    ╭─[resolve_match_payload_errors.ers:37:20]
+  × `r` is not bound by every alternative
+    ╭─[resolve_match_payload_errors.ers:37:9]
  36 │     match m {
  37 │         Msg::Write(let r: u8, _) | Msg::Nop => r,
-    ·                    ────┬────
-    ·                        ╰── binds a variable
+    ·         ────────────┬───────────   ────┬───
+    ·                     │                  ╰── does not bind `r`
+    ·                     ╰── binds `r`
  38 │         Msg::Nested(1 | let n: u8, _) => n,
     ╰────
-  help: an or-pattern binds no variable; give each alternative an arm of its own (ADR 0037)
-resolve::binding-in-or-pattern
+  help: the arm's expression has `r` whichever alternative matched, so every alternative binds it,
+        with the same type (ADR 0041)
+resolve::inconsistent-binding
 
-  × a `let` cannot be an alternative of an or-pattern
+  × `n` is not bound by every alternative
     ╭─[resolve_match_payload_errors.ers:38:25]
  37 │         Msg::Write(let r: u8, _) | Msg::Nop => r,
  38 │         Msg::Nested(1 | let n: u8, _) => n,
-    ·                         ────┬────
-    ·                             ╰── binds a variable
+    ·                     ┬   ────┬────
+    ·                     │       ╰── binds `n`
+    ·                     ╰── does not bind `n`
  39 │         _ => 3,
     ╰────
-  help: a `let` matches every value on its own; give it an arm of its own, such as `let n: u8
-        => ...` (ADR 0037)
+  help: the arm's expression has `n` whichever alternative matched, so every alternative binds it,
+        with the same type (ADR 0041)

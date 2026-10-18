@@ -1,0 +1,84 @@
+// emit: hir
+// The alternatives of an or-pattern bind the same names, with `let` or
+// `let mut` alike (ADR 0041): a name some alternative does not bind, in
+// either order, at the top or at any depth, or bound `mut` by only some, is
+// `resolve::inconsistent-binding`, once per name and or-pattern, at the
+// first alternative binding it and the first not binding it, or at the
+// first `let` and the first whose mutability differs. A name an inner
+// or-pattern binds inconsistently counts as bound by the alternative
+// holding it, so the outer one reports nothing more about it, whether the
+// other alternatives bind it, bind it `mut`, or not. One name bound twice
+// within one alternative is still `resolve::duplicate-binding`, once,
+// whichever alternative of an or-pattern holds the second `let`.
+enum Msg: u8 {
+    Nop = 0,
+    Led(bool) = 1,
+    Buzz(bool) = 2,
+    Write(u8, u16) = 3,
+    Clear(u8) = 4,
+    Pair(u8, u8) = 5,
+}
+
+fn first_only(m: Msg) -> u8 {
+    match m {
+        Msg::Led(let on: bool) | Msg::Nop => 1,
+        _ => 0,
+    }
+}
+
+fn second_only(m: Msg) -> u8 {
+    match m {
+        Msg::Nop | Msg::Buzz(let on: bool) | Msg::Led(let on: bool) => 1,
+        _ => 0,
+    }
+}
+
+fn mutability(m: Msg) -> u8 {
+    match m {
+        Msg::Led(let on: bool) | Msg::Buzz(let on: bool) | Msg::Led(let mut on: bool) => 1,
+        _ => 0,
+    }
+}
+
+fn let_or_literal(x: u8) -> u8 {
+    match x {
+        let x: u8 | 3 => x,
+    }
+}
+
+fn nested(m: Msg) -> u8 {
+    match m {
+        Msg::Write(let r: u8 | 3, _) => r,
+        _ => 0,
+    }
+}
+
+fn reported_inside(m: Msg) -> u8 {
+    match m {
+        Msg::Clear(let x: u8 | 3) | Msg::Pair(let x: u8, _) => x,
+        Msg::Write(let y: u8 | let mut y: u8, 0) | Msg::Pair(let mut y: u8, _) => y,
+        Msg::Write(let z: u8 | 3, 1) | Msg::Nop => z,
+        _ => 0,
+    }
+}
+
+fn duplicates(m: Msg) -> u8 {
+    match m {
+        Msg::Clear(let a: u8) | Msg::Pair(let a: u8, let a: u8) => a,
+        Msg::Pair(let b: u8, let b: u8 | let b: u8) => b,
+        _ => 0,
+    }
+}
+
+fn later_duplicates(m: Msg) -> u8 {
+    match m {
+        Msg::Pair(let c: u8, 3 | let c: u8) => c,
+        Msg::Pair(let d: u8, let d: u8 | 3) => d,
+        Msg::Pair(3 | let e: u8, let e: u8) => e,
+        Msg::Clear(let f: u8) | Msg::Pair(let f: u8, 3 | let f: u8) => f,
+        _ => 0,
+    }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

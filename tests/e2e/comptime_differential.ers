@@ -467,6 +467,37 @@ fn widths_match(w: Widths) -> u64 {
     }
 }
 
+// Bindings in or-patterns (ADR 0041): one variable bound by alternatives
+// from different variants and from different positions of one variant, at
+// the top and in an or-pattern nested in a payload, and `let mut` in every
+// alternative, assigned in the arm. A value two alternatives match binds
+// what the first of them binds: `Duo::Pair(5, 7)` binds 5.
+enum Side: u8 { Left(u8) = 0, Right(u8) = 1, Wide(u16) = 2, Mid = 3 }
+enum Duo: u16 {
+    Pair(u8, u8) = 0,
+    One(u8) = 1,
+    Wrap(Side, u8) = 2,
+    Empty = 3,
+}
+
+extern fn opaque_duo(d: Duo) -> Duo;
+
+fn duo_match(d: Duo) -> u64 {
+    match d {
+        Duo::Pair(let a: u8, 0) | Duo::Pair(0, let a: u8) | Duo::One(let a: u8) => mix(1, a as u64),
+        Duo::Pair(let a: u8, 7) | Duo::Pair(5, let a: u8) => mix(7, a as u64),
+        Duo::Wrap(Side::Left(let a: u8) | Side::Right(let a: u8), 7) => mix(2, a as u64),
+        Duo::Wrap(Side::Mid, let mut b: u8) | Duo::Pair(1, let mut b: u8) => {
+            b += 100;
+            mix(3, b as u64)
+        }
+        Duo::Wrap(Side::Left(let a: u8) | Side::Right(let a: u8), let b: u8)
+        | Duo::Pair(let a: u8, let b: u8) => mix(mix(4, a as u64), b as u64),
+        Duo::Wrap(Side::Wide(let w: u16), _) => mix(5, w as u64),
+        Duo::Empty => 6,
+    }
+}
+
 struct Uart { thr: u8 }
 
 fn putc(byte: u8) {
@@ -577,6 +608,25 @@ entry fn main() -> ! {
     failures += check(76, comptime widths_match(Widths::E(Level::Low, Code::Fault, Port::Top)), widths_match(opaque_widths(Widths::E(opaque_level(Level::Low), opaque_code(Code::Fault), opaque_port(Port::Top)))));
     failures += check(77, comptime widths_match(Widths::E(Level::High, Code::Neg, Port::Data)), widths_match(opaque_widths(Widths::E(opaque_level(Level::High), opaque_code(Code::Neg), opaque_port(Port::Data)))));
     failures += check(78, comptime widths_match(Widths::E(Level::Low, Code::Neg, Port::Data)), widths_match(opaque_widths(Widths::E(opaque_level(Level::Low), opaque_code(Code::Neg), opaque_port(Port::Data)))));
+    failures += check(79, comptime duo_match(Duo::Pair(5, 0)), duo_match(opaque_duo(Duo::Pair(opaque_u8(5), opaque_u8(0)))));
+    failures += check(80, comptime duo_match(Duo::Pair(0, 9)), duo_match(opaque_duo(Duo::Pair(opaque_u8(0), opaque_u8(9)))));
+    failures += check(81, comptime duo_match(Duo::Pair(0, 0)), duo_match(opaque_duo(Duo::Pair(opaque_u8(0), opaque_u8(0)))));
+    failures += check(82, comptime duo_match(Duo::One(42)), duo_match(opaque_duo(Duo::One(opaque_u8(42)))));
+    failures += check(83, comptime duo_match(Duo::Wrap(Side::Left(3), 7)), duo_match(opaque_duo(Duo::Wrap(Side::Left(opaque_u8(3)), opaque_u8(7)))));
+    failures += check(84, comptime duo_match(Duo::Wrap(Side::Right(4), 7)), duo_match(opaque_duo(Duo::Wrap(Side::Right(opaque_u8(4)), opaque_u8(7)))));
+    failures += check(85, comptime duo_match(Duo::Wrap(Side::Mid, 11)), duo_match(opaque_duo(Duo::Wrap(Side::Mid, opaque_u8(11)))));
+    failures += check(86, comptime duo_match(Duo::Pair(1, 6)), duo_match(opaque_duo(Duo::Pair(opaque_u8(1), opaque_u8(6)))));
+    failures += check(87, comptime duo_match(Duo::Wrap(Side::Left(8), 9)), duo_match(opaque_duo(Duo::Wrap(Side::Left(opaque_u8(8)), opaque_u8(9)))));
+    failures += check(88, comptime duo_match(Duo::Wrap(Side::Right(250), 1)), duo_match(opaque_duo(Duo::Wrap(Side::Right(opaque_u8(250)), opaque_u8(1)))));
+    failures += check(89, comptime duo_match(Duo::Pair(2, 200)), duo_match(opaque_duo(Duo::Pair(opaque_u8(2), opaque_u8(200)))));
+    failures += check(90, comptime duo_match(Duo::Wrap(Side::Wide(0xBEEF), 0)), duo_match(opaque_duo(Duo::Wrap(Side::Wide(opaque_u16(0xBEEF)), opaque_u8(0)))));
+    failures += check(91, comptime duo_match(Duo::Empty), duo_match(opaque_duo(Duo::Empty)));
+    failures += check(92, comptime duo_match(Duo::Pair(5, 7)), duo_match(opaque_duo(Duo::Pair(opaque_u8(5), opaque_u8(7)))));
+    failures += check(93, comptime duo_match(Duo::Pair(9, 7)), duo_match(opaque_duo(Duo::Pair(opaque_u8(9), opaque_u8(7)))));
+    failures += check(94, comptime duo_match(Duo::Pair(5, 3)), duo_match(opaque_duo(Duo::Pair(opaque_u8(5), opaque_u8(3)))));
+    // Both sides against the value the first alternative gives.
+    failures += check(95, comptime duo_match(Duo::Pair(5, 7)), mix(7, 5));
+    failures += check(96, duo_match(opaque_duo(Duo::Pair(opaque_u8(5), opaque_u8(7)))), mix(7, 5));
     if failures == 0 {
         putc(b'd'); putc(b'i'); putc(b'f'); putc(b'f'); putc(b'e'); putc(b'r'); putc(b'e');
         putc(b'n'); putc(b't'); putc(b'i'); putc(b'a'); putc(b'l'); putc(b' '); putc(b'o');

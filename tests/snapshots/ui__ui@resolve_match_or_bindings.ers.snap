@@ -1,0 +1,234 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/resolve_match_or_bindings.ers
+---
+--- errors ---
+resolve::inconsistent-binding
+
+  × `on` is not bound by every alternative
+    ╭─[resolve_match_or_bindings.ers:24:9]
+ 23 │     match m {
+ 24 │         Msg::Led(let on: bool) | Msg::Nop => 1,
+    ·         ───────────┬──────────   ────┬───
+    ·                    │                 ╰── does not bind `on`
+    ·                    ╰── binds `on`
+ 25 │         _ => 0,
+    ╰────
+  help: the arm's expression has `on` whichever alternative matched, so every alternative binds
+        it, with the same type (ADR 0041)
+resolve::inconsistent-binding
+
+  × `on` is not bound by every alternative
+    ╭─[resolve_match_or_bindings.ers:31:20]
+ 30 │     match m {
+ 31 │         Msg::Nop | Msg::Buzz(let on: bool) | Msg::Led(let on: bool) => 1,
+    ·         ────┬───   ───────────┬───────────
+    ·             │                 ╰── binds `on`
+    ·             ╰── does not bind `on`
+ 32 │         _ => 0,
+    ╰────
+  help: the arm's expression has `on` whichever alternative matched, so every alternative binds
+        it, with the same type (ADR 0041)
+resolve::inconsistent-binding
+
+  × `on` is bound with `let mut` by only some alternatives
+    ╭─[resolve_match_or_bindings.ers:38:18]
+ 37 │     match m {
+ 38 │         Msg::Led(let on: bool) | Msg::Buzz(let on: bool) | Msg::Led(let mut on: bool) => 1,
+    ·                  ──────┬─────                                       ────────┬───────
+    ·                        │                                                    ╰── bound with `let mut` here
+    ·                        ╰── bound with `let` here
+ 39 │         _ => 0,
+    ╰────
+  help: the alternatives bind one variable `on`, which is mutable or not; write `let mut` in every
+        alternative or in none (ADR 0041)
+resolve::inconsistent-binding
+
+  × `x` is not bound by every alternative
+    ╭─[resolve_match_or_bindings.ers:45:9]
+ 44 │     match x {
+ 45 │         let x: u8 | 3 => x,
+    ·         ────┬────   ┬
+    ·             │       ╰── does not bind `x`
+    ·             ╰── binds `x`
+ 46 │     }
+    ╰────
+  help: the arm's expression has `x` whichever alternative matched, so every alternative binds it,
+        with the same type (ADR 0041)
+resolve::inconsistent-binding
+
+  × `r` is not bound by every alternative
+    ╭─[resolve_match_or_bindings.ers:51:20]
+ 50 │     match m {
+ 51 │         Msg::Write(let r: u8 | 3, _) => r,
+    ·                    ────┬────   ┬
+    ·                        │       ╰── does not bind `r`
+    ·                        ╰── binds `r`
+ 52 │         _ => 0,
+    ╰────
+  help: the arm's expression has `r` whichever alternative matched, so every alternative binds it,
+        with the same type (ADR 0041)
+resolve::inconsistent-binding
+
+  × `x` is not bound by every alternative
+    ╭─[resolve_match_or_bindings.ers:58:20]
+ 57 │     match m {
+ 58 │         Msg::Clear(let x: u8 | 3) | Msg::Pair(let x: u8, _) => x,
+    ·                    ────┬────   ┬
+    ·                        │       ╰── does not bind `x`
+    ·                        ╰── binds `x`
+ 59 │         Msg::Write(let y: u8 | let mut y: u8, 0) | Msg::Pair(let mut y: u8, _) => y,
+    ╰────
+  help: the arm's expression has `x` whichever alternative matched, so every alternative binds it,
+        with the same type (ADR 0041)
+resolve::inconsistent-binding
+
+  × `y` is bound with `let mut` by only some alternatives
+    ╭─[resolve_match_or_bindings.ers:59:20]
+ 58 │         Msg::Clear(let x: u8 | 3) | Msg::Pair(let x: u8, _) => x,
+ 59 │         Msg::Write(let y: u8 | let mut y: u8, 0) | Msg::Pair(let mut y: u8, _) => y,
+    ·                    ────┬────   ──────┬──────
+    ·                        │             ╰── bound with `let mut` here
+    ·                        ╰── bound with `let` here
+ 60 │         Msg::Write(let z: u8 | 3, 1) | Msg::Nop => z,
+    ╰────
+  help: the alternatives bind one variable `y`, which is mutable or not; write `let mut` in every
+        alternative or in none (ADR 0041)
+resolve::inconsistent-binding
+
+  × `z` is not bound by every alternative
+    ╭─[resolve_match_or_bindings.ers:60:20]
+ 59 │         Msg::Write(let y: u8 | let mut y: u8, 0) | Msg::Pair(let mut y: u8, _) => y,
+ 60 │         Msg::Write(let z: u8 | 3, 1) | Msg::Nop => z,
+    ·                    ────┬────   ┬
+    ·                        │       ╰── does not bind `z`
+    ·                        ╰── binds `z`
+ 61 │         _ => 0,
+    ╰────
+  help: the arm's expression has `z` whichever alternative matched, so every alternative binds it,
+        with the same type (ADR 0041)
+resolve::duplicate-binding
+
+  × `a` is bound twice in this pattern
+    ╭─[resolve_match_or_bindings.ers:67:47]
+ 66 │     match m {
+ 67 │         Msg::Clear(let a: u8) | Msg::Pair(let a: u8, let a: u8) => a,
+    ·                                               ┬          ┬
+    ·                                               │          ╰── bound again here
+    ·                                               ╰── first bound here
+ 68 │         Msg::Pair(let b: u8, let b: u8 | let b: u8) => b,
+    ╰────
+  help: each variable of a pattern has a name of its own (ADR 0040)
+resolve::duplicate-binding
+
+  × `b` is bound twice in this pattern
+    ╭─[resolve_match_or_bindings.ers:68:23]
+ 67 │         Msg::Clear(let a: u8) | Msg::Pair(let a: u8, let a: u8) => a,
+ 68 │         Msg::Pair(let b: u8, let b: u8 | let b: u8) => b,
+    ·                       ┬          ┬
+    ·                       │          ╰── bound again here
+    ·                       ╰── first bound here
+ 69 │         _ => 0,
+    ╰────
+  help: each variable of a pattern has a name of its own (ADR 0040)
+resolve::duplicate-binding
+
+  × `c` is bound twice in this pattern
+    ╭─[resolve_match_or_bindings.ers:75:23]
+ 74 │     match m {
+ 75 │         Msg::Pair(let c: u8, 3 | let c: u8) => c,
+    ·                       ┬              ┬
+    ·                       │              ╰── bound again here
+    ·                       ╰── first bound here
+ 76 │         Msg::Pair(let d: u8, let d: u8 | 3) => d,
+    ╰────
+  help: each variable of a pattern has a name of its own (ADR 0040)
+resolve::inconsistent-binding
+
+  × `c` is not bound by every alternative
+    ╭─[resolve_match_or_bindings.ers:75:34]
+ 74 │     match m {
+ 75 │         Msg::Pair(let c: u8, 3 | let c: u8) => c,
+    ·                              ┬   ────┬────
+    ·                              │       ╰── binds `c`
+    ·                              ╰── does not bind `c`
+ 76 │         Msg::Pair(let d: u8, let d: u8 | 3) => d,
+    ╰────
+  help: the arm's expression has `c` whichever alternative matched, so every alternative binds it,
+        with the same type (ADR 0041)
+resolve::duplicate-binding
+
+  × `d` is bound twice in this pattern
+    ╭─[resolve_match_or_bindings.ers:76:23]
+ 75 │         Msg::Pair(let c: u8, 3 | let c: u8) => c,
+ 76 │         Msg::Pair(let d: u8, let d: u8 | 3) => d,
+    ·                       ┬          ┬
+    ·                       │          ╰── bound again here
+    ·                       ╰── first bound here
+ 77 │         Msg::Pair(3 | let e: u8, let e: u8) => e,
+    ╰────
+  help: each variable of a pattern has a name of its own (ADR 0040)
+resolve::inconsistent-binding
+
+  × `d` is not bound by every alternative
+    ╭─[resolve_match_or_bindings.ers:76:30]
+ 75 │         Msg::Pair(let c: u8, 3 | let c: u8) => c,
+ 76 │         Msg::Pair(let d: u8, let d: u8 | 3) => d,
+    ·                              ────┬────   ┬
+    ·                                  │       ╰── does not bind `d`
+    ·                                  ╰── binds `d`
+ 77 │         Msg::Pair(3 | let e: u8, let e: u8) => e,
+    ╰────
+  help: the arm's expression has `d` whichever alternative matched, so every alternative binds it,
+        with the same type (ADR 0041)
+resolve::inconsistent-binding
+
+  × `e` is not bound by every alternative
+    ╭─[resolve_match_or_bindings.ers:77:23]
+ 76 │         Msg::Pair(let d: u8, let d: u8 | 3) => d,
+ 77 │         Msg::Pair(3 | let e: u8, let e: u8) => e,
+    ·                   ┬   ────┬────
+    ·                   │       ╰── binds `e`
+    ·                   ╰── does not bind `e`
+ 78 │         Msg::Clear(let f: u8) | Msg::Pair(let f: u8, 3 | let f: u8) => f,
+    ╰────
+  help: the arm's expression has `e` whichever alternative matched, so every alternative binds it,
+        with the same type (ADR 0041)
+resolve::duplicate-binding
+
+  × `e` is bound twice in this pattern
+    ╭─[resolve_match_or_bindings.ers:77:27]
+ 76 │         Msg::Pair(let d: u8, let d: u8 | 3) => d,
+ 77 │         Msg::Pair(3 | let e: u8, let e: u8) => e,
+    ·                           ┬          ┬
+    ·                           │          ╰── bound again here
+    ·                           ╰── first bound here
+ 78 │         Msg::Clear(let f: u8) | Msg::Pair(let f: u8, 3 | let f: u8) => f,
+    ╰────
+  help: each variable of a pattern has a name of its own (ADR 0040)
+resolve::duplicate-binding
+
+  × `f` is bound twice in this pattern
+    ╭─[resolve_match_or_bindings.ers:78:47]
+ 77 │         Msg::Pair(3 | let e: u8, let e: u8) => e,
+ 78 │         Msg::Clear(let f: u8) | Msg::Pair(let f: u8, 3 | let f: u8) => f,
+    ·                                               ┬              ┬
+    ·                                               │              ╰── bound again here
+    ·                                               ╰── first bound here
+ 79 │         _ => 0,
+    ╰────
+  help: each variable of a pattern has a name of its own (ADR 0040)
+resolve::inconsistent-binding
+
+  × `f` is not bound by every alternative
+    ╭─[resolve_match_or_bindings.ers:78:58]
+ 77 │         Msg::Pair(3 | let e: u8, let e: u8) => e,
+ 78 │         Msg::Clear(let f: u8) | Msg::Pair(let f: u8, 3 | let f: u8) => f,
+    ·                                                      ┬   ────┬────
+    ·                                                      │       ╰── binds `f`
+    ·                                                      ╰── does not bind `f`
+ 79 │         _ => 0,
+    ╰────
+  help: the arm's expression has `f` whichever alternative matched, so every alternative binds it,
+        with the same type (ADR 0041)

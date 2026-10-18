@@ -53,52 +53,51 @@ bb0:
   ]
 
 bb1:                                              ; preds = %bb0
-  br label %bb16
+  br label %bb18
 
 bb2:                                              ; preds = %bb13
-  br label %bb16
+  br label %bb18
 
-bb3:                                              ; preds = %bb13, %bb9
-  %3 = getelementptr i8, ptr %_3, i32 2
-  %4 = load i16, ptr %3, align 2
-  br label %bb16
+bb3:                                              ; preds = %bb15, %bb14
+  %_2.0 = phi i16 [ %15, %bb15 ], [ %13, %bb14 ]
+  br label %bb18
 
 bb4:                                              ; preds = %bb9
-  br label %bb16
+  br label %bb18
 
 bb5:                                              ; preds = %bb10
-  br label %bb16
+  br label %bb18
 
 bb6:                                              ; preds = %bb10
-  br label %bb16
+  br label %bb18
 
 bb7:                                              ; preds = %bb11
-  br label %bb16
+  br label %bb18
 
 bb8:                                              ; preds = %bb11
-  br label %bb16
+  br label %bb18
 
 bb9:                                              ; preds = %bb0
-  %5 = getelementptr i8, ptr %_3, i32 1
-  %6 = load i8, ptr %5, align 1
-  switch i8 %6, label %bb4 [
+  %3 = getelementptr i8, ptr %_3, i32 1
+  %4 = load i8, ptr %3, align 1
+  switch i8 %4, label %bb4 [
     i8 16, label %bb13
-    i8 17, label %bb3
+    i8 17, label %bb14
   ]
 
 bb10:                                             ; preds = %bb0
-  %7 = getelementptr i8, ptr %_3, i32 1
-  %8 = load i8, ptr %7, align 1
-  switch i8 %8, label %bb14 [
+  %5 = getelementptr i8, ptr %_3, i32 1
+  %6 = load i8, ptr %5, align 1
+  switch i8 %6, label %bb16 [
     i8 0, label %bb5
     i8 1, label %bb6
   ]
 
 bb11:                                             ; preds = %bb0
-  %9 = getelementptr i8, ptr %_3, i32 1
-  %10 = load i8, ptr %9, align 1
-  %11 = icmp ne i8 %10, 0
-  switch i1 %11, label %bb15 [
+  %7 = getelementptr i8, ptr %_3, i32 1
+  %8 = load i8, ptr %7, align 1
+  %9 = icmp ne i8 %8, 0
+  switch i1 %9, label %bb17 [
     i1 true, label %bb7
     i1 false, label %bb8
   ]
@@ -108,21 +107,31 @@ bb12:                                             ; preds = %bb0
   unreachable
 
 bb13:                                             ; preds = %bb9
-  %12 = getelementptr i8, ptr %_3, i32 2
-  %13 = load i16, ptr %12, align 2
-  switch i16 %13, label %bb3 [
+  %10 = getelementptr i8, ptr %_3, i32 2
+  %11 = load i16, ptr %10, align 2
+  switch i16 %11, label %bb15 [
     i16 7, label %bb2
   ]
 
-bb14:                                             ; preds = %bb10
+bb14:                                             ; preds = %bb9
+  %12 = getelementptr i8, ptr %_3, i32 2
+  %13 = load i16, ptr %12, align 2
+  br label %bb3
+
+bb15:                                             ; preds = %bb13
+  %14 = getelementptr i8, ptr %_3, i32 2
+  %15 = load i16, ptr %14, align 2
+  br label %bb3
+
+bb16:                                             ; preds = %bb10
   call void @on_panic()
   unreachable
 
-bb15:                                             ; preds = %bb11
+bb17:                                             ; preds = %bb11
   unreachable
 
-bb16:                                             ; preds = %bb8, %bb7, %bb6, %bb5, %bb4, %bb3, %bb2, %bb1
-  %_4.0 = phi i16 [ 0, %bb1 ], [ 2, %bb4 ], [ %4, %bb3 ], [ 1, %bb2 ], [ 3, %bb5 ], [ 4, %bb6 ], [ 5, %bb7 ], [ 6, %bb8 ]
+bb18:                                             ; preds = %bb8, %bb7, %bb6, %bb5, %bb4, %bb3, %bb2, %bb1
+  %_4.0 = phi i16 [ 0, %bb1 ], [ 2, %bb4 ], [ %_2.0, %bb3 ], [ 1, %bb2 ], [ 3, %bb5 ], [ 4, %bb6 ], [ 5, %bb7 ], [ 6, %bb8 ]
   ret i16 %_4.0
 }
 

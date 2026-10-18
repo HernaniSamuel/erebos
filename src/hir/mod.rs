@@ -570,10 +570,12 @@ pub struct Pattern {
 pub enum PatternKind {
     /// `_`: every value.
     Wildcard,
-    /// `let [mut] name: T`: every value, copied into `local`, whose type
-    /// is written at `ty_span`.
+    /// `let [mut] name: T`: every value, copied into `local`. `ty` is the
+    /// type written at `ty_span`, the local's own unless an earlier
+    /// alternative of an or-pattern declared it (ADR 0041).
     Binding {
         local: LocalId,
+        ty: Ty,
         ty_span: Span,
     },
     /// An integer literal, or `-` and one: its magnitude.
@@ -590,16 +592,9 @@ pub enum PatternKind {
     /// the patterns of its payload values if written with parentheses,
     /// whatever their number (ADR 0040).
     Variant(EnumId, u32, Option<Vec<Pattern>>),
-    /// `p | q | ...`, at any position; no alternative is an `Or`, nor
-    /// holds a `Binding` at any depth.
+    /// `p | q | ...`, at any position; no alternative is an `Or`. Every
+    /// alternative binds the same variables (ADR 0041).
     Or(Vec<Pattern>),
-}
-
-/// A variable a pattern binds, and the position it copies (ADR 0040).
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Binding {
-    pub local: LocalId,
-    pub position: Vec<PayloadStep>,
 }
 
 /// From a position holding a value of an enum with payloads, to one of the
@@ -617,34 +612,6 @@ impl Pattern {
             PatternKind::Or(alternatives) => alternatives,
             _ => std::slice::from_ref(self),
         }
-    }
-
-    /// The variables the pattern binds, in the order written, each with
-    /// the position it copies, as steps from the value matched.
-    pub fn bindings(&self) -> Vec<Binding> {
-        fn walk(pattern: &Pattern, position: &mut Vec<PayloadStep>, out: &mut Vec<Binding>) {
-            match &pattern.kind {
-                PatternKind::Binding { local, .. } => out.push(Binding {
-                    local: *local,
-                    position: position.clone(),
-                }),
-                PatternKind::Variant(_, variant, Some(subs)) => {
-                    for (index, sub) in subs.iter().enumerate() {
-                        position.push(PayloadStep {
-                            variant: *variant,
-                            index: index as u32,
-                        });
-                        walk(sub, position, out);
-                        position.pop();
-                    }
-                }
-                // No alternative binds a variable (ADR 0037).
-                _ => {}
-            }
-        }
-        let mut out = Vec::new();
-        walk(self, &mut Vec::new(), &mut out);
-        out
     }
 }
 

@@ -1,0 +1,53 @@
+// emit: typeck
+// What or-patterns binding variables accept (ADR 0041): alternatives that
+// bind the same names with the same types, at the top and nested at any
+// depth, from different variants and positions; inner alternatives that
+// bind nothing next to a `let`; `let mut` in every alternative, assigned in
+// the arm. Each name is one variable of the arm, listed once.
+enum Mode: u8 { Off = 0, Run = 1 }
+enum Side: u8 { Left(u8) = 0, Right(u8) = 1, Mid = 2 }
+
+enum Msg: u8 {
+    Nop = 0,
+    Led(bool) = 1,
+    Buzz(bool) = 2,
+    Write(u8, u16) = 3,
+    Clear(u8) = 4,
+    Wrap(Side, Mode) = 5,
+}
+
+fn set(on: bool) -> u8 { if on { 1 } else { 0 } }
+fn clear(r: u8) -> u8 { r }
+
+fn examples(m: Msg) -> u8 {
+    match m {
+        Msg::Led(let on: bool) | Msg::Buzz(let on: bool) => set(on),
+        Msg::Write(let r: u8, 0) | Msg::Clear(let r: u8) => clear(r),
+        Msg::Write(let r: u8, 1 | 2) => r,
+        _ => 0,
+    }
+}
+
+fn nested(m: Msg) -> u8 {
+    match m {
+        Msg::Wrap(Side::Left(let a: u8) | Side::Right(let a: u8), Mode::Run)
+        | Msg::Clear(let a: u8) => a,
+        Msg::Wrap(Side::Left(let a: u8) | Side::Right(let a: u8), let mode: Mode) => {
+            a + mode as u8
+        }
+        _ => 0,
+    }
+}
+
+fn mutable(m: Msg) -> u8 {
+    match m {
+        Msg::Write(let mut r: u8, 0) | Msg::Clear(let mut r: u8) => {
+            r += 1;
+            r
+        }
+        _ => 0,
+    }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

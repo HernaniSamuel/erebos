@@ -417,13 +417,33 @@ fn find_unique(fns: &[Fn], kind: FnKind, diags: &mut Diagnostics) -> Option<FnId
     Some(id)
 }
 
-/// Where a pattern is: in an arm's pattern, outside any or-pattern; an
-/// alternative of an or-pattern; or deeper inside one (ADR 0037).
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Within {
-    Arm,
-    Alternative,
-    OrPattern,
+/// A variable a pattern binds, as lowering collects them (ADR 0040, 0041).
+#[derive(Clone)]
+struct Bound {
+    name: String,
+    local: LocalId,
+    mutable: bool,
+    /// Its name, for `resolve::duplicate-binding`.
+    name_span: Span,
+    /// Its whole `let`, for `resolve::inconsistent-binding`.
+    let_span: Span,
+    /// Whether an or-pattern reported it as `resolve::inconsistent-binding`:
+    /// the or-patterns around it report nothing more about it.
+    reported: bool,
+}
+
+/// An or-pattern around a pattern that is in one of its alternatives
+/// after the first (ADR 0041).
+#[derive(Clone, Copy)]
+struct Later<'b> {
+    /// How many variables the arm's pattern binds before the or-pattern.
+    before: usize,
+    /// The variables its first alternative binds. A later alternative's
+    /// `let` of one of these names is that variable. The first alternative
+    /// was compared with the variables bound before the or-pattern, so a
+    /// `let` of such a name repeating one of those was reported there as
+    /// `resolve::duplicate-binding`, and is not reported again.
+    first: &'b [Bound],
 }
 
 struct Lowerer<'a> {
@@ -1553,78 +1573,82 @@ impl Lowerer<'_> {
     fn arm(&mut self, arm: &ast::Arm) -> Arm {
         self.scopes.push(HashMap::new());
         let mut bound = Vec::new();
-        let pattern = self.pattern(&arm.pattern, Within::Arm, &mut bound);
+        let pattern = self.pattern(&arm.pattern, &[], &mut bound);
         // The variables exist in the arm's expression, not in the rest of
         // the pattern, whose names resolve as outside it.
         let scope = self
             .scopes
             .last_mut()
             .expect("an arm has a scope of its own");
-        for (name, local, _) in bound {
-            scope.insert(name, local);
+        for bound in bound {
+            scope.insert(bound.name, bound.local);
         }
         let body = self.expr(&arm.body);
         self.scopes.pop();
         Arm { pattern, body }
     }
 
-    /// A pattern, `within` the arm's pattern or an or-pattern, where `let`
-    /// is not allowed at any depth (ADR 0037). Each variable it declares
-    /// goes in `bound`, to be visible in the arm's expression, with the
-    /// span of its name unless it is inside an or-pattern, which was
-    /// reported: one name bound twice is reported among the others
-    /// (ADR 0040).
+    /// A pattern. Each variable it binds goes in `bound`, after those
+    /// bound before it in the arm's pattern, to be visible in the arm's
+    /// expression; one name bound twice is reported against the others
+    /// (ADR 0040). The alternatives of an or-pattern bind one variable
+    /// per name, which the first declares (ADR 0041); `later` are the
+    /// or-patterns around the pattern that it is in a later alternative
+    /// of, innermost last.
     fn pattern(
         &mut self,
         pattern: &ast::Pattern,
-        within: Within,
-        bound: &mut Vec<(String, LocalId, Option<Span>)>,
+        later: &[Later],
+        bound: &mut Vec<Bound>,
     ) -> Pattern {
         let kind = match &pattern.kind {
             ast::PatternKind::Wildcard => PatternKind::Wildcard,
-            ast::PatternKind::Binding { mutable, name, ty } if within != Within::Arm => {
-                let (message, help) = match within {
-                    Within::Alternative => (
-                        "a `let` cannot be an alternative of an or-pattern",
-                        "a `let` matches every value on its own; give it an arm of its own, such as `let n: u8 => ...` (ADR 0037)",
-                    ),
-                    _ => (
-                        "a `let` cannot be inside an or-pattern",
-                        "an or-pattern binds no variable; give each alternative an arm of its own (ADR 0037)",
-                    ),
-                };
-                self.diags.push(
-                    Diagnostic::error("resolve::binding-in-or-pattern", message)
-                        .label(pattern.span, "binds a variable")
-                        .help(help),
-                );
-                // Declared all the same, so that its uses report nothing
-                // more. Reported; lowering errors stop the pipeline.
-                let local_ty = self.ty(ty, UnsizedPosition::Variable);
-                let local = self.new_local(name, local_ty, *mutable);
-                bound.push((name.name.clone(), local, None));
-                PatternKind::Wildcard
-            }
             ast::PatternKind::Binding { mutable, name, ty } => {
-                if let Some(&(_, _, Some(first))) = bound
+                // A `let` the first alternative of an or-pattern around it
+                // compared with the same variable was reported there.
+                let reported = |index: usize| {
+                    later
+                        .iter()
+                        .any(|or| index < or.before && or.first.iter().any(|v| v.name == name.name))
+                };
+                if let Some((_, first)) = bound
                     .iter()
-                    .find(|(bound_name, _, span)| *bound_name == name.name && span.is_some())
+                    .enumerate()
+                    .find(|&(index, bound)| bound.name == name.name && !reported(index))
                 {
                     self.diags.push(
                         Diagnostic::error(
                             "resolve::duplicate-binding",
                             format!("`{}` is bound twice in this pattern", name.name),
                         )
-                        .label(first, "first bound here")
+                        .label(first.name_span, "first bound here")
                         .label(name.span, "bound again here")
                         .help("each variable of a pattern has a name of its own (ADR 0040)"),
                     );
                 }
                 let local_ty = self.ty(ty, UnsizedPosition::Variable);
-                let local = self.new_local(name, local_ty, *mutable);
-                bound.push((name.name.clone(), local, Some(name.span)));
+                // A later alternative's `let` is the variable the first
+                // alternative declared, whose type type checking compares
+                // with the one written here (ADR 0041).
+                let shared = later
+                    .iter()
+                    .rev()
+                    .find_map(|or| or.first.iter().find(|v| v.name == name.name));
+                let local = match shared {
+                    Some(shared) => shared.local,
+                    None => self.new_local(name, local_ty, *mutable),
+                };
+                bound.push(Bound {
+                    name: name.name.clone(),
+                    local,
+                    mutable: *mutable,
+                    name_span: name.span,
+                    let_span: pattern.span,
+                    reported: false,
+                });
                 PatternKind::Binding {
                     local,
+                    ty: local_ty,
                     ty_span: ty.span,
                 }
             }
@@ -1649,13 +1673,9 @@ impl Lowerer<'_> {
             },
             ast::PatternKind::PathArgs(enum_name, variant, patterns) => {
                 let found = self.variant(enum_name, variant);
-                let inner = match within {
-                    Within::Arm => Within::Arm,
-                    _ => Within::OrPattern,
-                };
                 let patterns = patterns
                     .iter()
-                    .map(|sub| self.pattern(sub, inner, bound))
+                    .map(|sub| self.pattern(sub, later, bound))
                     .collect();
                 match found {
                     Some((id, index)) => PatternKind::Variant(id, index, Some(patterns)),
@@ -1663,17 +1683,116 @@ impl Lowerer<'_> {
                     None => PatternKind::Wildcard,
                 }
             }
-            ast::PatternKind::Or(alternatives) => PatternKind::Or(
-                alternatives
-                    .iter()
-                    .map(|alternative| self.pattern(alternative, Within::Alternative, bound))
-                    .collect(),
-            ),
+            ast::PatternKind::Or(alternatives) => {
+                PatternKind::Or(self.or_pattern(alternatives, later, bound))
+            }
         };
         Pattern {
             kind,
             span: pattern.span,
         }
+    }
+
+    /// The alternatives of an or-pattern (ADR 0041). Each starts from the
+    /// variables bound before the or-pattern; the first declares one
+    /// variable per name it binds, and the others' `let`s of those names
+    /// are those variables. A name that some alternatives do not bind, or
+    /// bind with `let mut` while others bind it with `let`, is
+    /// `resolve::inconsistent-binding`, once per name, unless an inner
+    /// or-pattern reported it; either way it counts as bound by the
+    /// or-pattern, which adds to `bound` each name that some alternative
+    /// binds, as the first one binding it does.
+    fn or_pattern(
+        &mut self,
+        alternatives: &[ast::Pattern],
+        later: &[Later],
+        bound: &mut Vec<Bound>,
+    ) -> Vec<Pattern> {
+        let before = bound.len();
+        let mut lowered = Vec::with_capacity(alternatives.len());
+        // The variables each alternative binds, in the order written.
+        let mut per_alternative: Vec<Vec<Bound>> = Vec::with_capacity(alternatives.len());
+        let mut first = Vec::new();
+        for (i, alternative) in alternatives.iter().enumerate() {
+            let mut alternative_bound = bound.clone();
+            let pattern = if i == 0 {
+                self.pattern(alternative, later, &mut alternative_bound)
+            } else {
+                let mut inner = later.to_vec();
+                inner.push(Later {
+                    before,
+                    first: &first,
+                });
+                self.pattern(alternative, &inner, &mut alternative_bound)
+            };
+            lowered.push(pattern);
+            let variables = alternative_bound.split_off(before);
+            if i == 0 {
+                first = variables.clone();
+            }
+            per_alternative.push(variables);
+        }
+        // Each name once, as the first alternative binding it binds it.
+        let mut names: Vec<Bound> = Vec::new();
+        for variable in per_alternative.iter().flatten() {
+            if !names.iter().any(|named| named.name == variable.name) {
+                names.push(variable.clone());
+            }
+        }
+        for named in &mut names {
+            let found: Vec<Option<&Bound>> = per_alternative
+                .iter()
+                .map(|variables| variables.iter().find(|v| v.name == named.name))
+                .collect();
+            if found.iter().flatten().any(|v| v.reported) {
+                named.reported = true;
+                continue;
+            }
+            let name = &named.name;
+            if let Some(missing) = found.iter().position(Option::is_none) {
+                let binding = found
+                    .iter()
+                    .position(Option::is_some)
+                    .expect("some alternative binds each name");
+                self.diags.push(
+                    Diagnostic::error(
+                        "resolve::inconsistent-binding",
+                        format!("`{name}` is not bound by every alternative"),
+                    )
+                    .label(alternatives[binding].span, format!("binds `{name}`"))
+                    .label(alternatives[missing].span, format!("does not bind `{name}`"))
+                    .help(format!(
+                        "the arm's expression has `{name}` whichever alternative matched, so every alternative binds it, with the same type (ADR 0041)"
+                    )),
+                );
+                named.reported = true;
+                continue;
+            }
+            let first = found[0].expect("every alternative binds the name");
+            if let Some(other) = found.iter().flatten().find(|v| v.mutable != first.mutable) {
+                let how = |v: &Bound| {
+                    if v.mutable {
+                        "bound with `let mut` here"
+                    } else {
+                        "bound with `let` here"
+                    }
+                };
+                self.diags.push(
+                    Diagnostic::error(
+                        "resolve::inconsistent-binding",
+                        format!("`{name}` is bound with `let mut` by only some alternatives"),
+                    )
+                    .label(first.let_span, how(first))
+                    .label(other.let_span, how(other))
+                    .help(format!(
+                        "the alternatives bind one variable `{name}`, which is mutable or not; write `let mut` in every alternative or in none (ADR 0041)"
+                    )),
+                );
+                named.reported = true;
+            }
+        }
+        bound.extend(names);
+        lowered
     }
 
     /// A bare name in a pattern, which is always a constant (ADR 0037). It

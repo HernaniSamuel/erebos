@@ -4,22 +4,36 @@ expression: output
 input_file: tests/ui/resolve_match_scopes.ers
 ---
 --- typeck ---
+enum Msg: u8 { Write(u8 at 1, u16 at 2) = 0, Clear(u8 at 1) = 1 } size 4, align 2
 fn arms(x: u8, flag: bool) -> u8
     let LIMIT: u8
-    expr 0 match 274..401: u8
-    expr 1 local flag 280..284: bool
-    expr 2 match 303..341: u8
-    expr 3 local x 309..310: u8
-    expr 4 binary + 330..339: u8
-    expr 5 local LIMIT 330..335: u8
-    expr 6 int 1 338..339: u8
-    expr 7 match 360..394: u8
-    expr 8 local x 366..367: u8
-    expr 9 const LIMIT 379..384: u8
-    expr 10 int 0 391..392: u8
+    expr 0 match 438..565: u8
+    expr 1 local flag 444..448: bool
+    expr 2 match 467..505: u8
+    expr 3 local x 473..474: u8
+    expr 4 binary + 494..503: u8
+    expr 5 local LIMIT 494..499: u8
+    expr 6 int 1 502..503: u8
+    expr 7 match 524..558: u8
+    expr 8 local x 530..531: u8
+    expr 9 const LIMIT 543..548: u8
+    expr 10 int 0 555..556: u8
+fn alternatives(m: Msg) -> u8
+    let LIMIT: u8
+    expr 11 match 657..821: u8
+    expr 12 local m 663..664: Msg
+    expr 13 binary + 735..744: u8
+    expr 14 local LIMIT 735..740: u8
+    expr 15 int 1 743..744: u8
+    expr 16 const LIMIT 778..783: u8
+    expr 17 int 0 813..814: u8
 entry fn main() -> !
-    expr 11 loop 428..435: !
+    expr 18 loop 848..855: !
 panic fn on_panic() -> !
-    expr 12 loop 465..472: !
+    expr 19 loop 885..892: !
 comptime fn LIMIT() -> u8
-    expr 13 int 10 230..232: u8
+    expr 20 int 10 394..396: u8
+comptime fn Msg::Write() -> u8
+    expr 21 int 0 601..602: u8
+comptime fn Msg::Clear() -> u8
+    expr 22 int 1 616..617: u8
