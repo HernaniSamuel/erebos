@@ -9,7 +9,7 @@
 //! is the "typed HIR" that MIR building consumes. Functions are checked one
 //! at a time, on demand (ADR 0028).
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::HashMap;
 use std::fmt::Write;
 
 use crate::diag::Diagnostic;
@@ -21,6 +21,10 @@ use crate::layout;
 use crate::query::Queries;
 use crate::span::Span;
 use crate::target;
+
+use usefulness::{Column, Enums, Pat, Variant};
+
+mod usefulness;
 
 /// What type checking found out about expressions, for every function
 /// checked so far.
@@ -872,31 +876,38 @@ impl Checker<'_, '_> {
                     )
                 })
             });
-        let enum_ok = match matched {
+        // The variants of the enum whose values the checks need; `None` if
+        // one of them failed or repeats.
+        let enums = match matched {
             Ty::Enum(e) if needs_values => {
                 let before = self.q.diags.len();
                 let ok = self.q.enum_ok(e.id);
                 self.elsewhere += self.q.diags.len() - before;
-                ok
+                ok.then(|| Enums::from([(e.id, self.variants(e))]))
             }
-            _ => true,
+            _ => Some(Enums::new()),
         };
         // What the alternatives of each arm match; `None` once one cannot
         // be known, which stops the checks of the whole `match`.
-        let mut values: Option<Vec<Vec<Covers>>> = Some(Vec::new());
+        let mut values: Option<Vec<Pat>> = Some(Vec::new());
         let mut first = None;
         let mut never = true;
         for arm in arms {
             let mut alternatives = Some(Vec::new());
             for alternative in arm.pattern.alternatives() {
-                let covers = self.pattern(f, alternative, matched);
-                match (&mut alternatives, covers) {
-                    (Some(list), Some(covers)) => list.push(covers),
+                let pattern = self.pattern(f, alternative, matched);
+                match (&mut alternatives, pattern) {
+                    (Some(list), Some(pattern)) => list.push(pattern),
                     _ => alternatives = None,
                 }
             }
             match (&mut values, alternatives) {
-                (Some(list), Some(alternatives)) => list.push(alternatives),
+                (Some(list), Some(mut alternatives)) => list.push(match arm.pattern.kind {
+                    PatternKind::Or(_) => Pat::Or(alternatives),
+                    _ => alternatives
+                        .pop()
+                        .expect("a pattern that is not an or-pattern is its one alternative"),
+                }),
                 _ => values = None,
             }
             let arm_ty = self.check(f, &arm.body, expected.or(first));
@@ -906,10 +917,10 @@ impl Checker<'_, '_> {
             }
         }
         if let Some(values) = values
+            && let Some(enums) = enums
             && matched != Ty::Error
-            && enum_ok
         {
-            self.coverage(scrutinee, matched, arms, &values);
+            self.coverage(scrutinee, matched, arms, &values, &enums);
         }
         match expected.or(first) {
             // Without an arm that finishes, neither does the `match`.
@@ -924,7 +935,7 @@ impl Checker<'_, '_> {
     /// values it matches; `None` if they cannot be known: after an error,
     /// reported, or for a constant that failed to evaluate, reported where
     /// it failed (ADR 0037).
-    fn pattern(&mut self, f: &Fn, pattern: &Pattern, ty: Ty) -> Option<Covers> {
+    fn pattern(&mut self, f: &Fn, pattern: &Pattern, ty: Ty) -> Option<Pat> {
         let mismatch = |found: &str| {
             Diagnostic::error("ty::mismatched-types", "mismatched types")
                 .label(pattern.span, format!("expected `{ty}`, found {found}"))
@@ -938,7 +949,7 @@ impl Checker<'_, '_> {
         };
         let bool_help = "a `bool` is matched with `true` and `false` (ADR 0037)";
         match &pattern.kind {
-            PatternKind::Wildcard => Some(Covers::Every),
+            PatternKind::Wildcard => Some(Pat::Wild),
             PatternKind::Binding { local, ty_span } => {
                 let local_ty = self.local_ty(f, *local);
                 if local_ty == Ty::Error || ty == Ty::Error {
@@ -954,7 +965,7 @@ impl Checker<'_, '_> {
                     );
                     return None;
                 }
-                Some(Covers::Every)
+                Some(Pat::Wild)
             }
             PatternKind::Int { value, negated } => {
                 let int = match ty {
@@ -1001,10 +1012,10 @@ impl Checker<'_, '_> {
                 } else {
                     *value
                 };
-                Some(Covers::Value(bits & int.mask()))
+                Some(Pat::Value(bits & int.mask(), Vec::new()))
             }
             PatternKind::Byte(value) => match ty {
-                Ty::Int(IntTy::U8) => Some(Covers::Value(u64::from(*value))),
+                Ty::Int(IntTy::U8) => Some(Pat::Value(u64::from(*value), Vec::new())),
                 Ty::Error => None,
                 Ty::Int(_) => {
                     self.q.diags.push(mismatch("`u8`").help(format!(
@@ -1023,7 +1034,7 @@ impl Checker<'_, '_> {
                 }
             },
             PatternKind::Bool(value) => match ty {
-                Ty::Bool => Some(Covers::Value(u64::from(*value))),
+                Ty::Bool => Some(Pat::Value(u64::from(*value), Vec::new())),
                 Ty::Error => None,
                 Ty::Enum(e) => {
                     let help = enum_help(e);
@@ -1066,12 +1077,13 @@ impl Checker<'_, '_> {
                 let value = self.q.const_value(*id);
                 self.elsewhere += self.q.diags.len() - before;
                 let value = value?;
-                Some(Covers::Value(match ty {
+                let bits = match ty {
                     Ty::Int(int) => value.int(int.bytes() as usize),
                     // A variant or not (ADR 0036).
                     Ty::Enum(e) => value.int(e.int.bytes() as usize),
                     _ => u64::from(value.bytes[0] != 0),
-                }))
+                };
+                Some(Pat::Value(bits, Vec::new()))
             }
             PatternKind::Variant(id, index) => {
                 let variant_ty = Ty::Enum(self.hir.enum_(*id).ty);
@@ -1088,53 +1100,58 @@ impl Checker<'_, '_> {
                 let before = self.q.diags.len();
                 let value = self.q.discriminant(*id, *index);
                 self.elsewhere += self.q.diags.len() - before;
-                Some(Covers::Value(value?))
+                Some(Pat::Value(value?, Vec::new()))
             }
             PatternKind::Or(_) => unreachable!("an alternative is not an or-pattern"),
         }
     }
 
     /// Exhaustiveness and dead arms (ADR 0037) of a `match` on `ty`, an
-    /// integer, `bool` or enum, whose arms have alternatives matching
-    /// `values`. For an enum, every value was computed, none twice, unless
-    /// the `match` has arms and they are only `_` and `let` (ADR 0038).
-    /// The values of an enum are all those of its integer type (ADR 0036):
-    /// for dead arms, those that are no variant remain after every variant,
-    /// but a `match` is exhaustive with every variant.
-    fn coverage(&mut self, scrutinee: &Expr, ty: Ty, arms: &[Arm], values: &[Vec<Covers>]) {
-        let count = match ty {
-            Ty::Bool => 2,
-            Ty::Int(int) | Ty::Enum(EnumTy { int, .. }) => u128::from(int.mask()) + 1,
+    /// integer, `bool` or enum, whose arms match `values`, one per arm.
+    /// `enums` has the variants of the enum matched if a pattern names one
+    /// of its values or the `match` has no arms; none of them failed or
+    /// repeats (ADR 0038). The values of an enum are all those of its
+    /// integer type (ADR 0036): for dead arms, those that are no variant
+    /// remain after every variant, but a `match` is exhaustive with every
+    /// variant.
+    fn coverage(&mut self, scrutinee: &Expr, ty: Ty, arms: &[Arm], values: &[Pat], enums: &Enums) {
+        let column = match ty {
+            Ty::Bool => Column::Bool,
+            Ty::Int(int) => Column::Int(int),
+            Ty::Enum(e) => Column::Enum(e),
             _ => unreachable!("only integers, `bool` and enums are matched"),
         };
-        // What one arm, or one alternative, covers alone.
-        let alone = |covers: &[Covers]| {
-            let mut coverage = Coverage::new(count);
-            for &c in covers {
-                coverage.add(c);
-            }
-            coverage
+        let columns = [column];
+        // Whether `rows` leave no value that `pattern` matches.
+        let covered = |rows: &[Vec<&Pat>], pattern: &Pat| {
+            !usefulness::useful(enums, &columns, rows, &[pattern])
         };
-        let mut covered = Coverage::new(count);
+        // One row per arm.
+        let mut rows: Vec<Vec<&Pat>> = Vec::new();
         for (i, arm) in arms.iter().enumerate() {
             let alternatives = arm.pattern.alternatives();
+            let patterns = values[i].alternatives();
             // Earlier alternatives of the arm count as earlier patterns.
             let mut dead = Vec::new();
-            for (j, &covers) in values[i].iter().enumerate() {
-                if covered.contains(covers) {
+            for (j, pattern) in patterns.iter().enumerate() {
+                if covered(&rows, pattern) {
                     dead.push(j);
                 }
-                covered.add(covers);
+                rows.push(vec![pattern]);
             }
+            rows.truncate(i);
+            rows.push(vec![&values[i]]);
             if dead.len() == alternatives.len() {
                 let mut diag = Diagnostic::error("ty::unreachable-pattern", "unreachable arm")
                     .label(
                         arm.pattern.span,
                         "matches no value that the arms before it leave",
                     );
-                if let Some(k) =
-                    (0..i).find(|&k| values[i].iter().all(|&c| alone(&values[k]).contains(c)))
-                {
+                if let Some(k) = (0..i).find(|&k| {
+                    patterns
+                        .iter()
+                        .all(|pattern| covered(&rows[k..=k], pattern))
+                }) {
                     diag = diag.label(
                         arms[k].pattern.span,
                         "every value it matches is matched here",
@@ -1146,12 +1163,12 @@ impl Checker<'_, '_> {
                 continue;
             }
             for j in dead {
-                let covers = values[i][j];
+                let pattern = &patterns[j];
                 let earlier_arm = (0..i)
-                    .find(|&k| alone(&values[k]).contains(covers))
+                    .find(|&k| covered(&rows[k..=k], pattern))
                     .map(|k| arms[k].pattern.span);
                 let earlier_alternative = (0..j)
-                    .find(|&m| alone(&values[i][m..=m]).contains(covers))
+                    .find(|&m| covered(&[vec![&patterns[m]]], pattern))
                     .map(|m| alternatives[m].span);
                 let mut diag = Diagnostic::error("ty::unreachable-pattern", "unreachable pattern")
                     .label(
@@ -1166,38 +1183,16 @@ impl Checker<'_, '_> {
                     .push(diag.help("remove this alternative (ADR 0037)"));
             }
         }
-        if covered.complete() {
+        let missing = usefulness::missing(enums, &columns, &rows, arms.is_empty());
+        if missing.is_empty() {
             return;
         }
-        // The values with names that a `match` must cover, in order.
-        let named: Vec<(u64, String)> = match ty {
-            Ty::Bool => vec![(1, "true".to_owned()), (0, "false".to_owned())],
-            Ty::Enum(e) => {
-                let def = self.hir.enum_(e.id);
-                (0..def.variants.len())
-                    .map(|index| {
-                        let value = self
-                            .q
-                            .discriminant(e.id, index as u32)
-                            .expect("an enum checked for coverage has every value");
-                        let name = format!("{}::{}", def.name, def.variants[index].name);
-                        (value, name)
-                    })
-                    .collect()
-            }
-            _ => Vec::new(),
-        };
         let diag = match ty {
             Ty::Bool | Ty::Enum(_) => {
-                let missing: Vec<&str> = named
+                let missing: Vec<String> = missing
                     .iter()
-                    .filter(|&&(value, _)| !covered.contains(Covers::Value(value)))
-                    .map(|(_, name)| name.as_str())
+                    .map(|witness| self.witness(enums, column, &witness[0]))
                     .collect();
-                // Values that are no variant need no arm (ADR 0036).
-                if missing.is_empty() {
-                    return;
-                }
                 let listed: Vec<String> = missing.iter().map(|name| format!("`{name}`")).collect();
                 let arms: Vec<String> = missing
                     .iter()
@@ -1220,6 +1215,53 @@ impl Checker<'_, '_> {
             )),
         };
         self.q.diags.push(diag);
+    }
+
+    /// The variants of `e`, an enum whose every value was computed, none
+    /// twice, for the checks of a `match` (ADR 0038).
+    fn variants(&mut self, e: EnumTy) -> Vec<Variant> {
+        let def = self.hir.enum_(e.id);
+        (0..def.variants.len() as u32)
+            .map(|index| Variant {
+                value: self
+                    .q
+                    .discriminant(e.id, index)
+                    .expect("an enum checked for coverage has every value"),
+                // A `match` takes only enums without payloads (ADR 0037).
+                payload: Vec::new(),
+            })
+            .collect()
+    }
+
+    /// A value a `match` misses, at a position of type `column`, as a
+    /// pattern would write it.
+    fn witness(&self, enums: &Enums, column: Column, witness: &Pat) -> String {
+        let Pat::Value(value, subs) = witness else {
+            return "_".to_owned();
+        };
+        match column {
+            Column::Bool => (*value != 0).to_string(),
+            Column::Int(int) => int.display_bits(*value),
+            Column::Enum(e) => {
+                let def = self.hir.enum_(e.id);
+                let variants = &enums[&e.id];
+                let index = variants
+                    .iter()
+                    .position(|variant| variant.value == *value)
+                    .expect("a value a `match` misses at an enum position is a variant");
+                let name = format!("{}::{}", def.name, def.variants[index].name);
+                if subs.is_empty() {
+                    return name;
+                }
+                let subs: Vec<String> = variants[index]
+                    .payload
+                    .iter()
+                    .zip(subs)
+                    .map(|(&column, sub)| self.witness(enums, column, sub))
+                    .collect();
+                format!("{name}({})", subs.join(", "))
+            }
+        }
     }
 
     /// `[a, b, c]`: the elements share one type, which the expected array
@@ -2618,55 +2660,6 @@ fn and_list(items: &[String]) -> String {
         [] => String::new(),
         [only] => only.clone(),
         [init @ .., last] => format!("{} and {last}", init.join(", ")),
-    }
-}
-
-/// The values a pattern matches, among those of the type matched.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Covers {
-    Every,
-    /// The value's bits, masked to the type's width; `bool` is 0 or 1.
-    Value(u64),
-}
-
-/// The values some patterns match together, out of the `count` values of
-/// the type matched.
-struct Coverage {
-    every: bool,
-    values: BTreeSet<u64>,
-    count: u128,
-}
-
-impl Coverage {
-    fn new(count: u128) -> Coverage {
-        Coverage {
-            every: false,
-            values: BTreeSet::new(),
-            count,
-        }
-    }
-
-    fn add(&mut self, covers: Covers) {
-        match covers {
-            Covers::Every => self.every = true,
-            Covers::Value(value) => {
-                self.values.insert(value);
-            }
-        }
-    }
-
-    /// Whether every value `covers` matches is covered already.
-    fn contains(&self, covers: Covers) -> bool {
-        match covers {
-            Covers::Every => self.complete(),
-            Covers::Value(value) => self.every || self.values.contains(&value),
-        }
-    }
-
-    /// Whether every value of the type is covered: listing all 256 values
-    /// of a `u8` counts (ADR 0037).
-    fn complete(&self) -> bool {
-        self.every || self.values.len() as u128 == self.count
     }
 }
 

@@ -1,0 +1,491 @@
+//! Exhaustiveness and dead arms of a `match` (ADR 0037, 0040), by the
+//! usefulness of patterns, after Maranget, "Warnings for pattern matching"
+//! (Journal of Functional Programming, 2007).
+//!
+//! The patterns of a `match` are rows, one per arm, an or-pattern standing
+//! for one row per alternative; each column is a position, the scrutinee
+//! first, and a variant's payload positions take its place when it is
+//! examined. A pattern is useful after some rows when it matches a value
+//! that none of them matches: an alternative that is not useful after the
+//! arms and alternatives before it is dead, and the values `_` matches
+//! that no row matches are what a `match` misses.
+//!
+//! An integer position is examined through the values its patterns name
+//! and one value they do not, never value by value, so a `u64` position
+//! costs what its arms name.
+
+use std::collections::{HashMap, HashSet};
+
+use crate::hir::{EnumId, EnumTy, IntTy};
+
+/// The type of a position, as far as patterns tell its values apart.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Column {
+    Bool,
+    Int(IntTy),
+    Enum(EnumTy),
+}
+
+/// A variant of an enum: its value, and the types of its payload values.
+#[derive(Debug)]
+pub struct Variant {
+    pub value: u64,
+    pub payload: Vec<Column>,
+}
+
+/// The variants of the enums whose values a `match` needs, in declaration
+/// order (ADR 0038). Only those are ever examined value by value.
+pub type Enums = HashMap<EnumId, Vec<Variant>>;
+
+/// A pattern, as the checks see it: what it matches, not how it is
+/// written.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Pat {
+    /// `_` or a `let`: every value.
+    Wild,
+    /// An integer, `bool` or enum value, as the bits of its type (`bool` is
+    /// 0 or 1), with the patterns of its payload values if it is a variant
+    /// that has a payload.
+    Value(u64, Vec<Pat>),
+    /// Any of the alternatives.
+    Or(Vec<Pat>),
+}
+
+impl Pat {
+    /// The alternatives of an or-pattern, or the pattern alone.
+    pub fn alternatives(&self) -> &[Pat] {
+        match self {
+            Pat::Or(alternatives) => alternatives,
+            _ => std::slice::from_ref(self),
+        }
+    }
+}
+
+/// Fills the payload positions of a variant that a `_` matches.
+static WILD: Pat = Pat::Wild;
+
+/// One pattern per column.
+pub type Row<'p> = Vec<&'p Pat>;
+
+/// Whether `pattern`, one pattern per column of `columns`, matches a value
+/// that no row matches. The values of an enum include those that are no
+/// variant, as dead arms count them (ADR 0036, 0037).
+pub fn useful<'p>(
+    enums: &Enums,
+    columns: &[Column],
+    rows: &[Row<'p>],
+    pattern: &[&'p Pat],
+) -> bool {
+    let Some((&head, tail)) = pattern.split_first() else {
+        return rows.is_empty();
+    };
+    let column = columns[0];
+    match head {
+        Pat::Or(alternatives) => alternatives
+            .iter()
+            .any(|alternative| useful(enums, columns, rows, &prepend(alternative, tail))),
+        Pat::Value(value, subs) => {
+            let payload = payload(enums, column, *value);
+            let rows = specialize(&expand(rows), *value, payload.len());
+            let pattern: Row = subs.iter().chain(tail.iter().copied()).collect();
+            useful(enums, &concat(payload, &columns[1..]), &rows, &pattern)
+        }
+        Pat::Wild => {
+            let rows = expand(rows);
+            let named = named(&rows);
+            if named.len() as u128 == count(column) {
+                // Every value is named: `_` is useful if it is for one of
+                // them.
+                named.iter().any(|&value| {
+                    let payload = payload(enums, column, value);
+                    let rows = specialize(&rows, value, payload.len());
+                    let pattern: Row = std::iter::repeat_n(&WILD, payload.len())
+                        .chain(tail.iter().copied())
+                        .collect();
+                    useful(enums, &concat(payload, &columns[1..]), &rows, &pattern)
+                })
+            } else {
+                // A value no row names is matched only by rows with `_`.
+                useful(enums, &columns[1..], &default(&rows), tail)
+            }
+        }
+    }
+}
+
+/// The values that no row matches, the values of an enum being only its
+/// variants (ADR 0036): each as a pattern per column, without
+/// or-patterns, in the order ADR 0040 finds them. With `examine`, a first
+/// column of type `bool` or enum lists its values even when no row remains,
+/// as for a `match` without arms (ADR 0037).
+pub fn missing<'p>(
+    enums: &Enums,
+    columns: &[Column],
+    rows: &[Row<'p>],
+    examine: bool,
+) -> Vec<Vec<Pat>> {
+    let Some((&column, rest)) = columns.split_first() else {
+        return if rows.is_empty() {
+            vec![Vec::new()]
+        } else {
+            Vec::new()
+        };
+    };
+    let rows = expand(rows);
+    let listed = examine && rows.is_empty() && !matches!(column, Column::Int(_));
+    if rows.iter().all(|row| matches!(row[0], Pat::Wild)) && !listed {
+        return missing(enums, rest, &default(&rows), false)
+            .into_iter()
+            .map(|witness| prepend(Pat::Wild, &witness))
+            .collect();
+    }
+    let values: Vec<u64> = match column {
+        Column::Bool => vec![1, 0],
+        Column::Enum(e) => variants(enums, e).iter().map(|v| v.value).collect(),
+        Column::Int(int) => {
+            let mut values = named(&rows);
+            values.extend(unnamed(int, &values));
+            values
+        }
+    };
+    let mut witnesses = Vec::new();
+    for value in values {
+        let payload = payload(enums, column, value);
+        let rows = specialize(&rows, value, payload.len());
+        for mut subs in missing(enums, &concat(payload, rest), &rows, false) {
+            let after = subs.split_off(payload.len());
+            witnesses.push(prepend(Pat::Value(value, subs), &after));
+        }
+    }
+    witnesses
+}
+
+fn variants(enums: &Enums, e: EnumTy) -> &[Variant] {
+    enums
+        .get(&e.id)
+        .expect("an enum examined value by value is one whose values the `match` needs")
+}
+
+/// The types of the payload of `value` at a position of type `column`:
+/// none, except for a variant that has a payload. A value that is no
+/// variant has none.
+fn payload(enums: &Enums, column: Column, value: u64) -> &[Column] {
+    match column {
+        Column::Enum(e) if e.payloads => variants(enums, e)
+            .iter()
+            .find(|variant| variant.value == value)
+            .map_or(&[], |variant| &variant.payload),
+        _ => &[],
+    }
+}
+
+/// How many values a position of type `column` has, an enum's being all
+/// those of its integer type.
+fn count(column: Column) -> u128 {
+    match column {
+        Column::Bool => 2,
+        Column::Int(int) | Column::Enum(EnumTy { int, .. }) => u128::from(int.mask()) + 1,
+    }
+}
+
+/// The rows, with each one whose first pattern is an or-pattern replaced by
+/// one row per alternative, in order.
+fn expand<'p>(rows: &[Row<'p>]) -> Vec<Row<'p>> {
+    fn push<'p>(out: &mut Vec<Row<'p>>, head: &'p Pat, tail: &[&'p Pat]) {
+        match head {
+            Pat::Or(alternatives) => {
+                for alternative in alternatives {
+                    push(out, alternative, tail);
+                }
+            }
+            _ => out.push(prepend(head, tail)),
+        }
+    }
+    let mut out = Vec::new();
+    for row in rows {
+        push(&mut out, row[0], &row[1..]);
+    }
+    out
+}
+
+/// The values the first patterns of `rows`, expanded, name, each once, in
+/// the order they first name it.
+fn named(rows: &[Row]) -> Vec<u64> {
+    let mut seen = HashSet::new();
+    rows.iter()
+        .filter_map(|row| match row[0] {
+            Pat::Value(value, _) => seen.insert(*value).then_some(*value),
+            _ => None,
+        })
+        .collect()
+}
+
+/// The value of `int` closest to zero that `named` does not hold, the
+/// non-negative one first; none if `named` holds every value.
+fn unnamed(int: IntTy, named: &[u64]) -> Option<u64> {
+    if named.len() as u128 > u128::from(int.mask()) {
+        return None;
+    }
+    let named: HashSet<u64> = named.iter().copied().collect();
+    let signed = int.is_signed();
+    let mask = int.mask();
+    // 0, 1, -1, 2, -2, ..., max, -max, and -(max + 1) for signed types.
+    let negative = move |k: u64| (signed && k > 0).then(|| k.wrapping_neg() & mask);
+    (0..=int.max())
+        .flat_map(move |k| std::iter::once(k).chain(negative(k)))
+        .chain(signed.then(|| (int.max() + 1).wrapping_neg() & mask))
+        .find(|value| !named.contains(value))
+}
+
+/// The rows that match `value` at the first column, expanded, with its
+/// `arity` payload positions in place of the first column.
+fn specialize<'p>(rows: &[Row<'p>], value: u64, arity: usize) -> Vec<Row<'p>> {
+    rows.iter()
+        .filter_map(|row| {
+            let tail = row[1..].iter().copied();
+            match row[0] {
+                Pat::Value(named, subs) if *named == value => {
+                    Some(subs.iter().chain(tail).collect())
+                }
+                Pat::Value(..) => None,
+                Pat::Wild => Some(std::iter::repeat_n(&WILD, arity).chain(tail).collect()),
+                Pat::Or(_) => unreachable!("the rows are expanded"),
+            }
+        })
+        .collect()
+}
+
+/// The rows, expanded, whose first pattern is `_`, without it.
+fn default<'p>(rows: &[Row<'p>]) -> Vec<Row<'p>> {
+    rows.iter()
+        .filter(|row| matches!(row[0], Pat::Wild))
+        .map(|row| row[1..].to_vec())
+        .collect()
+}
+
+fn prepend<T: Clone>(head: T, tail: &[T]) -> Vec<T> {
+    let mut out = Vec::with_capacity(tail.len() + 1);
+    out.push(head);
+    out.extend_from_slice(tail);
+    out
+}
+
+fn concat(a: &[Column], b: &[Column]) -> Vec<Column> {
+    [a, b].concat()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn value(value: u64) -> Pat {
+        Pat::Value(value, Vec::new())
+    }
+
+    fn enum_ty(int: IntTy) -> EnumTy {
+        EnumTy {
+            id: EnumId(0),
+            name: "E",
+            int,
+            payloads: false,
+        }
+    }
+
+    /// The variants of `E`, without payloads, of these values.
+    fn enums(values: &[u64]) -> Enums {
+        let variants = values
+            .iter()
+            .map(|&value| Variant {
+                value,
+                payload: Vec::new(),
+            })
+            .collect();
+        Enums::from([(EnumId(0), variants)])
+    }
+
+    /// One row per pattern, at one column.
+    fn rows(patterns: &[Pat]) -> Vec<Row<'_>> {
+        patterns.iter().map(|pattern| vec![pattern]).collect()
+    }
+
+    fn useful1(enums: &Enums, column: Column, earlier: &[Pat], pattern: &Pat) -> bool {
+        useful(enums, &[column], &rows(earlier), &[pattern])
+    }
+
+    fn missing1(enums: &Enums, column: Column, arms: &[Pat]) -> Vec<Vec<Pat>> {
+        missing(enums, &[column], &rows(arms), arms.is_empty())
+    }
+
+    #[test]
+    fn integer_values_and_wildcards() {
+        let none = Enums::new();
+        let u8_ = Column::Int(IntTy::U8);
+        assert!(useful1(&none, u8_, &[], &value(3)));
+        assert!(!useful1(&none, u8_, &[value(3)], &value(3)));
+        assert!(useful1(&none, u8_, &[value(3)], &value(4)));
+        assert!(useful1(&none, u8_, &[value(3)], &Pat::Wild));
+        assert!(!useful1(&none, u8_, &[Pat::Wild], &value(3)));
+        assert!(!useful1(&none, u8_, &[Pat::Wild], &Pat::Wild));
+        // An or-pattern is useful if one of its alternatives is.
+        let or = Pat::Or(vec![value(3), value(4)]);
+        assert!(useful1(&none, u8_, &[value(3)], &or));
+        assert!(!useful1(&none, u8_, &[value(4), value(3)], &or));
+        // An earlier or-pattern covers each of its alternatives.
+        assert!(!useful1(&none, u8_, std::slice::from_ref(&or), &value(4)));
+        assert!(!missing1(&none, u8_, &[value(3)]).is_empty());
+        assert!(missing1(&none, u8_, &[value(3), Pat::Wild]).is_empty());
+    }
+
+    #[test]
+    fn every_u8_value_is_exhaustive() {
+        let none = Enums::new();
+        let u8_ = Column::Int(IntTy::U8);
+        let all: Vec<Pat> = (0..=255).map(value).collect();
+        assert!(missing1(&none, u8_, &all).is_empty());
+        // A `_` after them is dead.
+        assert!(!useful1(&none, u8_, &all, &Pat::Wild));
+        // One value fewer leaves exactly that one.
+        let most: Vec<Pat> = (0..=255).filter(|&v| v != 200).map(value).collect();
+        assert_eq!(missing1(&none, u8_, &most), vec![vec![value(200)]]);
+        assert!(useful1(&none, u8_, &most, &Pat::Wild));
+        assert!(!useful1(&none, u8_, &most, &value(7)));
+    }
+
+    #[test]
+    fn u64_values_near_the_max_are_not_enumerated() {
+        let none = Enums::new();
+        let u64_ = Column::Int(IntTy::U64);
+        let near: Vec<Pat> = (0..4).map(|k| value(u64::MAX - k)).collect();
+        assert!(!useful1(&none, u64_, &near, &value(u64::MAX)));
+        assert!(useful1(&none, u64_, &near, &value(u64::MAX - 4)));
+        assert!(useful1(&none, u64_, &near, &Pat::Wild));
+        // The missing values are those named, all covered, then the one
+        // closest to zero.
+        assert_eq!(missing1(&none, u64_, &near), vec![vec![value(0)]]);
+        let zero = [value(0), value(1), value(u64::MAX)];
+        assert_eq!(missing1(&none, u64_, &zero), vec![vec![value(2)]]);
+        let mut with_wild = near.clone();
+        with_wild.push(Pat::Wild);
+        assert!(missing1(&none, u64_, &with_wild).is_empty());
+    }
+
+    #[test]
+    fn signed_values_closest_to_zero() {
+        let none = Enums::new();
+        let i8_ = Column::Int(IntTy::I8);
+        let minus = |k: u64| k.wrapping_neg() & IntTy::I8.mask();
+        assert_eq!(missing1(&none, i8_, &[value(0)]), vec![vec![value(1)]]);
+        assert_eq!(
+            missing1(&none, i8_, &[value(0), value(1)]),
+            vec![vec![value(minus(1))]]
+        );
+        // Every value but -128.
+        let most: Vec<Pat> = (0..=127).chain((1..=127).map(minus)).map(value).collect();
+        assert_eq!(missing1(&none, i8_, &most), vec![vec![value(minus(128))]]);
+        let i64_ = Column::Int(IntTy::I64);
+        assert_eq!(
+            missing1(&none, i64_, &[value(0), value(1), value(u64::MAX)]),
+            vec![vec![value(2)]]
+        );
+    }
+
+    #[test]
+    fn bool_values() {
+        let none = Enums::new();
+        let (t, f) = (value(1), value(0));
+        assert_eq!(
+            missing1(&none, Column::Bool, &[]),
+            vec![vec![t.clone()], vec![f.clone()]]
+        );
+        assert_eq!(
+            missing1(&none, Column::Bool, std::slice::from_ref(&t)),
+            vec![vec![f.clone()]]
+        );
+        assert!(missing1(&none, Column::Bool, &[f.clone(), t.clone()]).is_empty());
+        // `_` after `true` and `false` is dead.
+        assert!(!useful1(
+            &none,
+            Column::Bool,
+            &[t.clone(), f.clone()],
+            &Pat::Wild
+        ));
+        assert!(useful1(
+            &none,
+            Column::Bool,
+            std::slice::from_ref(&t),
+            &Pat::Wild
+        ));
+        // With arms, only `_` remains for a `bool` they do not examine.
+        assert!(missing1(&none, Column::Bool, &[Pat::Wild]).is_empty());
+    }
+
+    #[test]
+    fn enum_values_that_are_no_variant() {
+        // Variants 0, 1 and 5 of a `u8`.
+        let e = Column::Enum(enum_ty(IntTy::U8));
+        let enums = enums(&[0, 1, 5]);
+        let variants = [value(0), value(1), value(5)];
+        // Every variant is exhaustive, yet `_` after them is not dead.
+        assert!(missing1(&enums, e, &variants).is_empty());
+        assert!(useful1(&enums, e, &variants, &Pat::Wild));
+        // Missing variants in declaration order, whatever the arms' order.
+        assert_eq!(
+            missing1(&enums, e, &[value(1)]),
+            vec![vec![value(0)], vec![value(5)]]
+        );
+        assert_eq!(
+            missing1(&enums, e, &[]),
+            vec![vec![value(0)], vec![value(1)], vec![value(5)]]
+        );
+        // A constant holding a value that is no variant covers nothing
+        // required, and is not dead.
+        assert!(useful1(&enums, e, &variants, &value(9)));
+        assert_eq!(
+            missing1(&enums, e, &[value(9), value(5)]),
+            vec![vec![value(0)], vec![value(1)]]
+        );
+        // `_` alone needs no variant.
+        assert!(missing1(&Enums::new(), e, &[Pat::Wild]).is_empty());
+    }
+
+    #[test]
+    fn enum_with_every_value_a_variant() {
+        // 256 variants on a `u8`: no value is left for `_`.
+        let e = Column::Enum(enum_ty(IntTy::U8));
+        let values: Vec<u64> = (0..=255).collect();
+        let enums = enums(&values);
+        let all: Vec<Pat> = values.iter().map(|&v| value(v)).collect();
+        assert!(missing1(&enums, e, &all).is_empty());
+        assert!(!useful1(&enums, e, &all, &Pat::Wild));
+    }
+
+    #[test]
+    fn variant_payloads_take_the_variants_place() {
+        // `enum P: u8 { A(bool) = 0, B = 1 }`.
+        let p = EnumTy {
+            payloads: true,
+            ..enum_ty(IntTy::U8)
+        };
+        let enums = Enums::from([(
+            EnumId(0),
+            vec![
+                Variant {
+                    value: 0,
+                    payload: vec![Column::Bool],
+                },
+                Variant {
+                    value: 1,
+                    payload: Vec::new(),
+                },
+            ],
+        )]);
+        let column = Column::Enum(p);
+        let a = |b: Pat| Pat::Value(0, vec![b]);
+        let arms = [a(value(1)), value(1)];
+        assert_eq!(missing1(&enums, column, &arms), vec![vec![a(value(0))]]);
+        assert!(useful1(&enums, column, &arms, &a(Pat::Wild)));
+        assert!(!useful1(&enums, column, &arms, &a(value(1))));
+        let all = [a(value(1)), a(value(0)), value(1)];
+        assert!(missing1(&enums, column, &all).is_empty());
+        assert!(!useful1(&enums, column, &all, &a(Pat::Wild)));
+    }
+}
