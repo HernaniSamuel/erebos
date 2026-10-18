@@ -1,0 +1,369 @@
+// The M2.4c milestone program: `match`es whose code and checks grew
+// exponentially in M2.4b, now tested arm by arm (ADR 0042, 0043).
+//
+// - `pairs_arm` is pairs(16): 32 `bool` positions, an arm per pair of
+//   positions `i` and `i + 16` with `true` at both, and a `_` arm, arm 16.
+//   Its inputs reach every arm; set one `true` of each pair only, which
+//   reaches `_`; set several pairs, of which the first arm wins; and set the
+//   first `true` of every pair but only the last pair whole, which fails
+//   every earlier arm at its second position.
+// - `ors_arm` is ors(12): 12 `u8` positions, an arm `1 | 2 | 3` at each,
+//   an arm with `4` at the last position instead, and a `_` arm, arm 2. Its
+//   inputs fail both arms at the first, a middle and the last position.
+// - `nested_arm` matches an or-pattern of variants with payloads nested
+//   three deep, over `N`, `N1` and `N2`, which binds `x` in each
+//   alternative and tests a position after the or-pattern; its inputs take
+//   each alternative, and fail after `x` was copied.
+//
+// The inputs are `static` tables built with the variants. `main` prints,
+// for each input, its index and the arm taken (and for `nested_arm` the
+// value bound), then exits through the finisher; a `comptime` block
+// asserts the same arms for the same inputs.
+// expect-output: pairs 0: arm 0
+// expect-output: pairs 1: arm 1
+// expect-output: pairs 2: arm 2
+// expect-output: pairs 3: arm 3
+// expect-output: pairs 4: arm 4
+// expect-output: pairs 5: arm 5
+// expect-output: pairs 6: arm 6
+// expect-output: pairs 7: arm 7
+// expect-output: pairs 8: arm 8
+// expect-output: pairs 9: arm 9
+// expect-output: pairs 10: arm 10
+// expect-output: pairs 11: arm 11
+// expect-output: pairs 12: arm 12
+// expect-output: pairs 13: arm 13
+// expect-output: pairs 14: arm 14
+// expect-output: pairs 15: arm 15
+// expect-output: pairs 16: arm 16
+// expect-output: pairs 17: arm 16
+// expect-output: pairs 18: arm 16
+// expect-output: pairs 19: arm 16
+// expect-output: pairs 20: arm 0
+// expect-output: pairs 21: arm 7
+// expect-output: pairs 22: arm 15
+// expect-output: ors 0: arm 0
+// expect-output: ors 1: arm 0
+// expect-output: ors 2: arm 0
+// expect-output: ors 3: arm 1
+// expect-output: ors 4: arm 1
+// expect-output: ors 5: arm 2
+// expect-output: ors 6: arm 2
+// expect-output: ors 7: arm 2
+// expect-output: ors 8: arm 2
+// expect-output: ors 9: arm 2
+// expect-output: ors 10: arm 2
+// expect-output: nested 0: arm 0, x 1
+// expect-output: nested 1: arm 0, x 2
+// expect-output: nested 2: arm 0, x 3
+// expect-output: nested 3: arm 0, x 4
+// expect-output: nested 4: arm 2, x 8
+// expect-output: nested 5: arm 1, x 6
+// expect-output: nested 6: arm 1, x 9
+// expect-output: nested 7: arm 2, x 8
+// expect-output: nested 8: arm 3, x 0
+// expect-output: nested 9: arm 3, x 0
+// expect-output: nested 10: arm 4, x 0
+// expect-output: nested 11: arm 4, x 0
+// expect-output: nested 12: arm 4, x 0
+// expect-exit: 0
+
+const UART: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+const FINISHER: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+
+enum P: u8 {
+    A(
+        bool, bool, bool, bool, bool, bool, bool, bool,
+        bool, bool, bool, bool, bool, bool, bool, bool,
+        bool, bool, bool, bool, bool, bool, bool, bool,
+        bool, bool, bool, bool, bool, bool, bool, bool
+    ) = 0,
+}
+
+fn pairs_arm(p: P) -> u8 {
+    match p {
+        P::A(true, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _,
+             true, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) => 0,
+        P::A(_, true, _, _, _, _, _, _, _, _, _, _, _, _, _, _,
+             _, true, _, _, _, _, _, _, _, _, _, _, _, _, _, _) => 1,
+        P::A(_, _, true, _, _, _, _, _, _, _, _, _, _, _, _, _,
+             _, _, true, _, _, _, _, _, _, _, _, _, _, _, _, _) => 2,
+        P::A(_, _, _, true, _, _, _, _, _, _, _, _, _, _, _, _,
+             _, _, _, true, _, _, _, _, _, _, _, _, _, _, _, _) => 3,
+        P::A(_, _, _, _, true, _, _, _, _, _, _, _, _, _, _, _,
+             _, _, _, _, true, _, _, _, _, _, _, _, _, _, _, _) => 4,
+        P::A(_, _, _, _, _, true, _, _, _, _, _, _, _, _, _, _,
+             _, _, _, _, _, true, _, _, _, _, _, _, _, _, _, _) => 5,
+        P::A(_, _, _, _, _, _, true, _, _, _, _, _, _, _, _, _,
+             _, _, _, _, _, _, true, _, _, _, _, _, _, _, _, _) => 6,
+        P::A(_, _, _, _, _, _, _, true, _, _, _, _, _, _, _, _,
+             _, _, _, _, _, _, _, true, _, _, _, _, _, _, _, _) => 7,
+        P::A(_, _, _, _, _, _, _, _, true, _, _, _, _, _, _, _,
+             _, _, _, _, _, _, _, _, true, _, _, _, _, _, _, _) => 8,
+        P::A(_, _, _, _, _, _, _, _, _, true, _, _, _, _, _, _,
+             _, _, _, _, _, _, _, _, _, true, _, _, _, _, _, _) => 9,
+        P::A(_, _, _, _, _, _, _, _, _, _, true, _, _, _, _, _,
+             _, _, _, _, _, _, _, _, _, _, true, _, _, _, _, _) => 10,
+        P::A(_, _, _, _, _, _, _, _, _, _, _, true, _, _, _, _,
+             _, _, _, _, _, _, _, _, _, _, _, true, _, _, _, _) => 11,
+        P::A(_, _, _, _, _, _, _, _, _, _, _, _, true, _, _, _,
+             _, _, _, _, _, _, _, _, _, _, _, _, true, _, _, _) => 12,
+        P::A(_, _, _, _, _, _, _, _, _, _, _, _, _, true, _, _,
+             _, _, _, _, _, _, _, _, _, _, _, _, _, true, _, _) => 13,
+        P::A(_, _, _, _, _, _, _, _, _, _, _, _, _, _, true, _,
+             _, _, _, _, _, _, _, _, _, _, _, _, _, _, true, _) => 14,
+        P::A(_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, true,
+             _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, true) => 15,
+        _ => 16,
+    }
+}
+
+fn bit(mask: u32, i: u32) -> bool {
+    (mask >> i) & 1 != 0
+}
+
+// The value whose position `i` is bit `i` of `mask`: pair `i` is bit `i`
+// of the low and of the high half.
+fn pairs_input(mask: u32) -> P {
+    P::A(
+        bit(mask, 0), bit(mask, 1), bit(mask, 2), bit(mask, 3),
+        bit(mask, 4), bit(mask, 5), bit(mask, 6), bit(mask, 7),
+        bit(mask, 8), bit(mask, 9), bit(mask, 10), bit(mask, 11),
+        bit(mask, 12), bit(mask, 13), bit(mask, 14), bit(mask, 15),
+        bit(mask, 16), bit(mask, 17), bit(mask, 18), bit(mask, 19),
+        bit(mask, 20), bit(mask, 21), bit(mask, 22), bit(mask, 23),
+        bit(mask, 24), bit(mask, 25), bit(mask, 26), bit(mask, 27),
+        bit(mask, 28), bit(mask, 29), bit(mask, 30), bit(mask, 31)
+    )
+}
+
+static PAIRS: [P; 23] = [
+    // Each pair alone.
+    pairs_input(0x0001_0001), pairs_input(0x0002_0002), pairs_input(0x0004_0004),
+    pairs_input(0x0008_0008), pairs_input(0x0010_0010), pairs_input(0x0020_0020),
+    pairs_input(0x0040_0040), pairs_input(0x0080_0080), pairs_input(0x0100_0100),
+    pairs_input(0x0200_0200), pairs_input(0x0400_0400), pairs_input(0x0800_0800),
+    pairs_input(0x1000_1000), pairs_input(0x2000_2000), pairs_input(0x4000_4000),
+    pairs_input(0x8000_8000),
+    // No `true`; then one `true` of each pair only: the first, the second,
+    // and the first of the even pairs with the second of the odd ones.
+    pairs_input(0x0000_0000), pairs_input(0x0000_FFFF), pairs_input(0xFFFF_0000),
+    pairs_input(0xAAAA_5555),
+    // Every pair; the pairs 7 and 11; the first of every pair and the
+    // last pair whole.
+    pairs_input(0xFFFF_FFFF), pairs_input(0x0880_0880), pairs_input(0x8000_FFFF),
+];
+
+const PAIRS_ARMS: [u8; 23] = [
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+    16, 16, 16, 16,
+    0, 7, 15,
+];
+
+enum Q: u8 { A(u8, u8, u8, u8, u8, u8, u8, u8, u8, u8, u8, u8) = 0 }
+
+fn ors_arm(q: Q) -> u8 {
+    match q {
+        Q::A(
+            1 | 2 | 3, 1 | 2 | 3, 1 | 2 | 3, 1 | 2 | 3, 1 | 2 | 3, 1 | 2 | 3,
+            1 | 2 | 3, 1 | 2 | 3, 1 | 2 | 3, 1 | 2 | 3, 1 | 2 | 3, 1 | 2 | 3
+        ) => 0,
+        Q::A(
+            1 | 2 | 3, 1 | 2 | 3, 1 | 2 | 3, 1 | 2 | 3, 1 | 2 | 3, 1 | 2 | 3,
+            1 | 2 | 3, 1 | 2 | 3, 1 | 2 | 3, 1 | 2 | 3, 1 | 2 | 3, 4
+        ) => 1,
+        _ => 2,
+    }
+}
+
+fn digit(digits: *const [u8; 12], i: usize) -> u8 {
+    (*digits)[i] - b'0'
+}
+
+// The value whose positions are the decimal digits of `digits`.
+fn ors_input(digits: *const [u8; 12]) -> Q {
+    Q::A(
+        digit(digits, 0), digit(digits, 1), digit(digits, 2), digit(digits, 3),
+        digit(digits, 4), digit(digits, 5), digit(digits, 6), digit(digits, 7),
+        digit(digits, 8), digit(digits, 9), digit(digits, 10), digit(digits, 11)
+    )
+}
+
+static ORS: [Q; 11] = [
+    // The first arm.
+    ors_input(&raw const b"111111111111"),
+    ors_input(&raw const b"123123123123"),
+    ors_input(&raw const b"333333333333"),
+    // The second arm.
+    ors_input(&raw const b"321321321324"),
+    ors_input(&raw const b"111111111114"),
+    // Neither: at the first position, a middle one, the last one, and at
+    // the last position but one, where both arms want `1 | 2 | 3`.
+    ors_input(&raw const b"011111111111"),
+    ors_input(&raw const b"411111111111"),
+    ors_input(&raw const b"111110111111"),
+    ors_input(&raw const b"111111111110"),
+    ors_input(&raw const b"111111111115"),
+    ors_input(&raw const b"222222222244"),
+];
+
+const ORS_ARMS: [u8; 11] = [0, 0, 0, 1, 1, 2, 2, 2, 2, 2, 2];
+
+enum N2: u8 { A(u8) = 0, B(u8) = 1 }
+enum N1: u8 { A(N2) = 0, B(N2) = 1 }
+enum N: u8 { A(N1, u8) = 0, B(N1) = 1 }
+
+// The arm taken, and the value it bound, 0 for none.
+struct Taken { arm: u8, x: u8 }
+
+fn nested_arm(n: N) -> Taken {
+    match n {
+        N::A(N1::A(N2::A(let x: u8) | N2::B(let x: u8)) | N1::B(N2::A(let x: u8)), 7)
+        | N::B(N1::B(N2::B(let x: u8))) => Taken { arm: 0, x: x },
+        N::A(N1::B(N2::B(let x: u8)), _) => Taken { arm: 1, x: x },
+        N::A(_, let x: u8) => Taken { arm: 2, x: x },
+        N::B(N1::A(N2::A(1 | 2) | N2::B(3))) => Taken { arm: 3, x: 0 },
+        _ => Taken { arm: 4, x: 0 },
+    }
+}
+
+static NESTED: [N; 13] = [
+    // Each alternative of the first arm.
+    N::A(N1::A(N2::A(1)), 7),
+    N::A(N1::A(N2::B(2)), 7),
+    N::A(N1::B(N2::A(3)), 7),
+    N::B(N1::B(N2::B(4))),
+    // The first arm fails at `7` after copying `x`.
+    N::A(N1::A(N2::A(5)), 8),
+    // The first arm fails at the tag of `N2`, with `7` after it and
+    // without; the second binds.
+    N::A(N1::B(N2::B(6)), 7),
+    N::A(N1::B(N2::B(9)), 8),
+    // The first arm fails at `7`, the second at the tag of `N2`.
+    N::A(N1::B(N2::A(10)), 8),
+    // The fourth arm; then `_`, failing it at `3`, at `1 | 2` and at the
+    // tag of `N1`, where the first arm fails at the tag of `N2`.
+    N::B(N1::A(N2::A(2))),
+    N::B(N1::A(N2::B(3))),
+    N::B(N1::A(N2::B(1))),
+    N::B(N1::A(N2::A(4))),
+    N::B(N1::B(N2::A(5))),
+];
+
+const NESTED_TAKEN: [Taken; 13] = [
+    Taken { arm: 0, x: 1 }, Taken { arm: 0, x: 2 }, Taken { arm: 0, x: 3 },
+    Taken { arm: 0, x: 4 },
+    Taken { arm: 2, x: 8 },
+    Taken { arm: 1, x: 6 }, Taken { arm: 1, x: 9 },
+    Taken { arm: 2, x: 8 },
+    Taken { arm: 3, x: 0 }, Taken { arm: 3, x: 0 },
+    Taken { arm: 4, x: 0 }, Taken { arm: 4, x: 0 }, Taken { arm: 4, x: 0 },
+];
+
+fn pairs_agree() -> bool {
+    let mut i: usize = 0;
+    while i < len(&raw const PAIRS) {
+        if pairs_arm(PAIRS[i]) != PAIRS_ARMS[i] {
+            return false;
+        }
+        i += 1;
+    }
+    true
+}
+
+fn ors_agree() -> bool {
+    let mut i: usize = 0;
+    while i < len(&raw const ORS) {
+        if ors_arm(ORS[i]) != ORS_ARMS[i] {
+            return false;
+        }
+        i += 1;
+    }
+    true
+}
+
+fn nested_agree() -> bool {
+    let mut i: usize = 0;
+    while i < len(&raw const NESTED) {
+        let taken: Taken = nested_arm(NESTED[i]);
+        if taken.arm != NESTED_TAKEN[i].arm || taken.x != NESTED_TAKEN[i].x {
+            return false;
+        }
+        i += 1;
+    }
+    true
+}
+
+comptime {
+    assert(pairs_agree(), &raw const b"pairs(16) takes the arms expected");
+    assert(ors_agree(), &raw const b"ors(12) takes the arms expected");
+    assert(nested_agree(), &raw const b"the nested or-pattern takes the arms and binds the values expected");
+}
+
+fn print(s: *const [u8]) {
+    let mut i: usize = 0;
+    while i < len(s) {
+        *UART = (*s)[i];
+        i += 1;
+    }
+}
+
+fn print_u32(value: u32) {
+    let mut digits: [u8; 10] = [0; 10];
+    let mut n: usize = 0;
+    let mut rest: u32 = value;
+    loop {
+        digits[9 - n] = b'0' + (rest % 10) as u8;
+        n += 1;
+        rest /= 10;
+        if rest == 0 {
+            break;
+        }
+    }
+    print(slice(&raw const digits[10 - n], n));
+}
+
+// `<name> <index>: arm <arm>`, without the end of the line.
+fn print_taken(name: *const [u8], index: usize, arm: u8) {
+    print(name);
+    print(&raw const b" ");
+    print_u32(index as u32);
+    print(&raw const b": arm ");
+    print_u32(arm as u32);
+}
+
+fn exit(code: u32) -> ! {
+    *FINISHER = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    loop {}
+}
+
+entry fn main() -> ! {
+    let mut i: usize = 0;
+    while i < len(&raw const PAIRS) {
+        print_taken(&raw const b"pairs", i, pairs_arm(PAIRS[i]));
+        print(&raw const b"\n");
+        i += 1;
+    }
+
+    i = 0;
+    while i < len(&raw const ORS) {
+        print_taken(&raw const b"ors", i, ors_arm(ORS[i]));
+        print(&raw const b"\n");
+        i += 1;
+    }
+
+    i = 0;
+    while i < len(&raw const NESTED) {
+        let taken: Taken = nested_arm(NESTED[i]);
+        print_taken(&raw const b"nested", i, taken.arm);
+        print(&raw const b", x ");
+        print_u32(taken.x as u32);
+        print(&raw const b"\n");
+        i += 1;
+    }
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(1)
+}
