@@ -1,4 +1,4 @@
-# Erebos language reference (M2.4a)
+# Erebos language reference (M2.4b)
 
 This describes the language as the compiler implements it today. The
 reasoning behind each rule lives in the ADRs (`docs/adr/`), cited as
@@ -29,8 +29,8 @@ panic fn on_panic() -> ! {
   stack, `.bss` and `.data` (see "Startup and memory" below). It takes no
   parameters, must return `!`, and cannot be called.
 - `panic fn` runs when an operation cannot produce a result, such as
-  division by zero, an index out of bounds, or a `match` without a
-  catch-all arm on an enum value that is no variant (ADR 0014, 0036). It
+  division by zero, an index out of bounds, or a `match` that no arm
+  matches, on an enum value that is no variant (ADR 0014, 0036, 0040). It
   takes no parameters, must return `!`, and may be called explicitly.
 
 The target is RV32IMAC on QEMU `virt` (ADR 0010).
@@ -81,33 +81,33 @@ The target is RV32IMAC on QEMU `virt` (ADR 0010).
 | `[T; N]` | an array of `N` values of type `T`; `N` is a `usize` computed at compile time (ADR 0021, 0029) |
 | `*const [T]`, `*mut [T]` | slices: the address of `T` values and how many there are (ADR 0031); `volatile` as for any pointer |
 | `Name` | a struct declared with `struct Name { ... }` (ADR 0021) |
-| `Name` | an enum declared with `enum Name: u8 { ... }`, stored as its integer type (ADR 0035) |
+| `Name` | an enum declared with `enum Name: u8 { ... }`: without payloads, stored as its integer type (ADR 0035); with payloads, a tag and the payload values of its variant (ADR 0039) |
 
 Every `let`, parameter and return type is written explicitly; there is no
-inference (ADR 0008). `-> ()` may be omitted (ADR 0015). Arrays and structs
-are **aggregates**, and so are slices where a rule depends on it.
+inference (ADR 0008). `-> ()` may be omitted (ADR 0015). Arrays, structs
+and enums with payloads are **aggregates**, and so are slices where a rule
+depends on it.
 
 A pointer to a sized type is a **thin pointer**: a plain address. `[T]` on
 its own is **unsized**: it exists only behind a pointer, and a variable,
-parameter, return value, field or array element of type `[T]`, a `static`,
-`extern static` or `const` of that type, a layout query (`size_of`,
-`align_of`, `offset_of`) of it, and a slice of `[T]` are errors
-(`ty::unsized`). `[[u8; 4]]` is a slice of
-arrays, and fine.
+parameter, return value, field, array element or payload value of type
+`[T]`, a `static`, `extern static` or `const` of that type, a layout
+query (`size_of`, `align_of`, `offset_of`) of it, and a slice of `[T]`
+are errors (`ty::unsized`). `[[u8; 4]]` is a slice of arrays, and fine.
 
-**`!` is not a type of memory** (ADR 0034). No value of type `!` exists,
-so it is an error (`ty::never-in-memory`) as the pointee of a pointer
-(`*const !`), the element of an array or slice type (`[!; 0]`,
-`*const [!]`), a field type, the type of a `static`, `extern static`,
-`const` or `comptime` value, an operand of `size_of`, `align_of` or
-`offset_of`, and under `&raw` (`&raw const x` with `x: !`). Each `!`
-written there is reported once, also where nothing uses it, and the type
-containing it causes no further error. `!` stays valid as the type of an
-expression, as a return type (`-> !`) and in a `let` whose initializer
-never finishes (`let x: ! = loop {};`). An array literal or repeat with an
-element of type `!` (`[loop {}; 3]`) has type `!`; its other elements are
-checked against the expected element type, or the first element whose type
-is not `!`. Use `()` for a type without data.
+**`!` is not a type of memory** (ADR 0034, 0039). No value of type `!`
+exists, so it is an error (`ty::never-in-memory`) as the pointee of a
+pointer (`*const !`), the element of an array or slice type (`[!; 0]`,
+`*const [!]`), a field type, a payload type, the type of a `static`,
+`extern static`, `const` or `comptime` value, an operand of `size_of`,
+`align_of` or `offset_of`, and under `&raw` (`&raw const x` with
+`x: !`). Each `!` written there is reported once, also where nothing uses
+it, and the type containing it causes no further error. `!` stays valid
+as the type of an expression, as a return type (`-> !`) and in a `let`
+whose initializer never finishes (`let x: ! = loop {};`). An array literal
+or repeat with an element of type `!` (`[loop {}; 3]`) has type `!`; its
+other elements are checked against the expected element type, or the
+first element whose type is not `!`. Use `()` for a type without data.
 
 ## Functions
 
@@ -127,10 +127,10 @@ fn add(a: u32, mut b: u32) -> u32 {
 - All functions use the C ABI of the target (ADR 0006); symbol names are not
   mangled, so C code can call any Erebos function by its name.
 
-### Aggregates by value (ADR 0025)
+### Aggregates by value (ADR 0025, 0039)
 
-Structs and arrays are parameters and return values like any other type,
-passed as the riscv32 C ABI says:
+Structs, arrays and enums with payloads are parameters and return values
+like any other type, passed as the riscv32 C ABI says:
 
 | Aggregate | Argument | Return value |
 |-----------|----------|--------------|
@@ -143,7 +143,10 @@ A parameter is always the callee's own copy: changing it never changes the
 caller's value. Arrays pass like a struct of the same layout; C, which has
 no arrays by value, wraps them in a struct. A slice passes like the C
 struct `struct { const T *ptr; size_t len; }`: in a register pair, and
-returned in `a0`, `a1` (ADR 0031).
+returned in `a0`, `a1` (ADR 0031). An enum with payloads passes by its
+size and alignment, as its C twin, a union, does (see "Enums"); it is
+never of size 0, since its tag has a size. Enums without payloads are not
+aggregates: they pass as their integer type.
 
 ### External functions (ADR 0026)
 
@@ -266,7 +269,9 @@ extern static crc_lookup: [u32; 256];
   its symbol: C code can declare `extern uint32_t TICKS;`.
 - **Where they live.** A `static` goes to `.rodata`. A `static mut` goes to
   `.data`, or to `.bss` when its initial value is all zero bytes. Padding
-  in initial values is zero.
+  in initial values is zero, and so are the bytes of an enum with payloads
+  outside its variant's tag and payload (ADR 0039): a `static mut` holding
+  a variant without payload whose value is 0 goes to `.bss`.
 - **Read-only memory.** The compiler assumes a `static` never changes and
   may use its value instead of reading it. Writing to one through a pointer
   made by a cast is not defined; at compile time it is an
@@ -380,7 +385,7 @@ a slice is an aggregate of two scalars wherever a rule depends on it:
 | thin pointer, other than to an array of `T` | slice of `T` | `ty::invalid-cast`; use `slice(p, n)` |
 | slice, or integer | integer, or slice | `ty::invalid-cast` |
 
-## Enums (ADR 0035, 0036)
+## Enums (ADR 0035, 0036, 0039)
 
 ```
 enum Mode: u8 {
@@ -389,8 +394,16 @@ enum Mode: u8 {
     Run = 3,
 }
 
+enum Msg: u8 {
+    Nop = 0,
+    Led(bool) = 1,
+    Write(u8, u16) = 2,
+    Wide(u32) = 3,
+}
+
 let m: Mode = Mode::Run;
 let code: u8 = m as u8; // 3
+let w: Msg = Msg::Write(3, 0x1234);
 ```
 
 **Declaration.**
@@ -418,14 +431,59 @@ let code: u8 = m as u8; // 3
 - No attribute applies to an enum: `#[packed]` and `#[align(N)]` are
   `resolve::misplaced-attribute`.
 
-**Naming a variant.**
+**Payloads (ADR 0039).**
+
+- A variant may carry a **payload**: one or more types in parentheses
+  after its name, separated by commas, with an optional trailing comma,
+  before its `= value`: `Write(u8, u16) = 2`. A payload after the value
+  (`Write = 2(u8, u16)`) is `parser::unexpected-token`. The payload's
+  values are **positional**: they have no names, and are told apart by
+  their order.
+- `Led() = 1`, parentheses without a type, is `parser::empty-payload`: a
+  variant without payload is written without parentheses.
+- An **enum with payloads** is one with at least one variant that has a
+  payload; the others are **enums without payloads**. The two kinds differ
+  in their operations, layout and calls, as below.
+- A payload type is any type a field may have: integers, `bool`,
+  pointers, slices, arrays, structs and enums of either kind, zero-sized
+  types included. `!` is not (`ty::never-in-memory`), nor is `[T]`
+  (`ty::unsized`). A payload type in error, such as these or an unknown
+  name, is reported once, at that type, also in an enum nothing uses, and
+  the enum then counts as erroneous: its uses, in `size_of`, in building a
+  variant, in a `match` or as a parameter, report nothing more because of
+  it.
+- An enum that contains itself by value, directly or through structs,
+  arrays and other enums, is `ty::infinite-size`, which names every type
+  of the cycle: `Cons(u8, List)` in `enum List` has no size, and
+  `Cons(u8, *const List)` is the way to write it. An enum larger than half
+  the address space is `ty::too-large`, as a struct is.
+- `as` does not apply to an enum with payloads (below), so a variant's
+  value cannot be computed from another variant of it:
+  `= Msg::Nop as u8 + 1` is `ty::invalid-cast`. A constant holding the
+  number serves both.
+
+**Naming and building a variant.**
 
 - `Mode::Run` is the variant `Run` of `Mode`, an expression of type `Mode`.
   It is a value, not a place, like a constant: `&raw const Mode::Run` is
   `ty::not-a-place`, and `Mode::Run = m` is `ty::not-assignable`.
-- A variant is known at compile time, and so is a variant converted with
-  `as` (see "Checks on values known at compile time"):
-  `[u8; Mode::Run as usize]` is fine.
+- **`Msg::Write(a, b)`** builds the variant `Write` with the payload values
+  `a` and `b`, in order. Each is checked against its payload type as an
+  argument is against its parameter: a literal takes that type, and the
+  implicit conversions of "Typing" apply. They run left to right. A
+  variant without payload is named without parentheses, `Msg::Nop`, also
+  in an enum with payloads. The result is a value, not a place, as above:
+  `&raw const Msg::Write(3, 4)` is `ty::not-a-place`.
+- The number of values must be the payload's: `Msg::Write(3)`,
+  `Msg::Write(1, 2, 3)`, `Msg::Write` and `Msg::Nop(1)` are
+  `ty::wrong-payload-count`, which says how many values the variant
+  carries. So are `Msg::Nop()` and `Mode::Off()`: a variant without
+  payload is named without parentheses. `Msg::Write` alone is no function
+  either; there are no function values.
+- A variant of an enum without payloads is known at compile time, and so
+  is such a variant converted with `as` (see "Checks on values known at
+  compile time"): `[u8; Mode::Run as usize]` is fine. No value of an enum
+  with payloads is known, not even `Msg::Nop`.
 - The name before `::` is looked up among items only, as the name of a
   struct literal is, so a local variable named `Mode` does not hide the
   enum. A name that is no item there is `resolve::unknown-type`, an item
@@ -434,7 +492,7 @@ let code: u8 = m as u8; // 3
 - `Mode` alone is not an expression; like a struct's name alone, it is
   `resolve::unknown-name`.
 
-**Operations.**
+**Operations on an enum without payloads.**
 
 - `==` and `!=` compare two values of one enum type by their integers.
   Ordering (`<`, `<=`, `>`, `>=`), arithmetic, bitwise and shift operators,
@@ -454,37 +512,131 @@ let code: u8 = m as u8; // 3
   `3 => Mode::Run`.
 - An enum has no fields: `m.f` and `offset_of(Mode, f)` are
   `ty::no-fields`.
-- Enums are valid types of constants, statics, fields, array elements,
-  parameters and return values.
 
-**Layout and calls.** An enum is stored as its integer type: it has that
-type's size and alignment, and its value is that integer (`size_of(Mode)`
-is 1). Its C twin is that integer type, or C23's
-`enum Mode : uint8_t { ... }`, as a field, a parameter or a return value.
-Across calls it is a scalar, not an aggregate: passed and returned as its
-integer type, extended by that type's signedness (ADR 0006). Through a
-volatile pointer it is a scalar too (see "Volatile accesses"). In
-constants and statics its value is emitted as its integer, so a
-`static mut` holding a variant whose value is 0 goes to `.bss`.
+**Operations on an enum with payloads.** It is an aggregate, as a struct
+is:
 
-**Values that are no variant (ADR 0036).** A value of an enum type is any
-value of its integer type; the variants name some of them. Since nothing
-converts to an enum, a program that only writes variants never holds
-another value, but memory written by other means can: a pointer cast, a
-volatile read of a device register, an `extern static`, the result of an
-`extern fn`, code outside the program.
+- `let`, assignment and reading a place copy the whole value.
+- `==`, `!=`, ordering, arithmetic, bitwise and shift operators, unary
+  `-` and `!`, and the compound assignments are `ty::invalid-operand`;
+  tell its variants apart with a `match`. `&&` and `||` need `bool`
+  operands (`ty::mismatched-types`).
+- `as` converts it to nothing, and nothing to it (`ty::invalid-cast`): it
+  is not an integer, and its variant is read with a `match`.
+- It has no fields: `m.f` and `offset_of(Msg, f)` are `ty::no-fields`.
+  Payload values are reached only by patterns (see "`match`").
 
-- Reading, writing and copying such a value, comparing it with `==` and
-  `!=`, and converting it with `as` are defined and behave as for its
-  integer, at run time and at compile time. Nothing is checked there.
+Enums of both kinds are valid types of constants, statics, fields, array
+elements, payload values, parameters and return values.
+
+**Layout and calls of an enum without payloads.** An enum without
+payloads is stored as its integer type: it has that type's size and
+alignment, and its value is that integer (`size_of(Mode)` is 1). Its C
+twin is that integer type, or C23's `enum Mode : uint8_t { ... }`, as a
+field, a parameter or a return value. Across calls it is a scalar, not an
+aggregate: passed and returned as its integer type, extended by that
+type's signedness (ADR 0006). Through a volatile pointer it is a scalar
+too (see "Volatile accesses"). In constants and statics its value is
+emitted as its integer, so a `static mut` holding a variant whose value is
+0 goes to `.bss`.
+
+**Layout of an enum with payloads.** Each variant is laid out as a struct
+whose first field is the **tag**, of the enum's integer type, holding the
+variant's value, followed by the payload values in order; a variant
+without payload is a struct holding only the tag. The enum's alignment is
+the largest alignment of these structs, and its size the largest of their
+sizes, rounded up to a multiple of that alignment:
+
+```
+enum Msg: u8 { Nop = 0, Led(bool) = 1, Write(u8, u16) = 2, Wide(u32) = 3 }
+// Nop:   tag at 0                       size 1, alignment 1
+// Led:   tag at 0, bool at 1            size 2, alignment 1
+// Write: tag at 0, u8 at 1, u16 at 2    size 4, alignment 2
+// Wide:  tag at 0, u32 at 4             size 8, alignment 4
+// Msg:   size 8, alignment 4
+```
+
+- The tag is at offset 0 in every variant. A payload value never shares
+  bytes with it, and starts as close after it as its alignment allows.
+- The bytes outside the tag and the payload of the variant held,
+  including padding, are unspecified, as padding is: building or writing
+  a variant may leave anything there. In constants and statics they are
+  zero, so a `static mut` holding a variant without payload whose value is
+  0 goes to `.bss`.
+- There are no niches: the tag is always stored, whatever the payload
+  types.
+- A payload type with `#[align(N)]` raises the enum's alignment, as it
+  raises a struct's, and such an enum cannot be a field of a packed struct
+  (`ty::aligned-in-packed`).
+- `size_of` and `align_of` give the size and alignment above.
+
+Its C twin is a union of structs that each start with the tag, which
+`tests/c_layout.rs` checks against clang (Rust's `#[repr(u8)]` on an enum
+with fields gives the same layout):
+
+```c
+union Msg {
+    uint8_t tag;
+    struct { uint8_t tag; bool on; } led;
+    struct { uint8_t tag; uint8_t reg; uint16_t value; } write;
+    struct { uint8_t tag; uint32_t value; } wide;
+};
+```
+
+Zero-sized payload types have no C equivalent; a C twin leaves out those
+of alignment 1, which change no offset. A zero-sized payload of larger
+alignment, as in `B(u8, [u32; 0])`, raises the variant's alignment and
+size, and such an enum has no exact C twin.
+
+**Calls and volatile accesses of an enum with payloads.** Across calls it
+is an aggregate of its size and alignment (see "Aggregates by value"), as
+its C union is: `Msg` goes in a register pair. So giving one variant a
+payload changes the layout and the calling convention of the whole enum,
+and its C twin from an integer type to a union. Through a volatile pointer
+it is an aggregate too: reading or writing one whole is
+`ty::volatile-aggregate`, and since it has no fields, a volatile pointer to
+one reaches nothing (see "Volatile accesses").
+
+**Values that are no variant (ADR 0036, 0039).** A value of an enum
+without payloads is any value of its integer type; the variants name some
+of them. A value of an enum with payloads is any bytes of its size: its
+tag is any value of the integer type, and when the tag is a variant's
+value, its payload values are read from their places as that variant lays
+them out, each as a value of its type. When the tag is no variant's value,
+the whole value is **no variant**, and nothing but its tag is ever read.
+Since nothing converts to an enum, a program that only writes variants
+never holds a value that is no variant, but memory written by other means
+can: a pointer cast, a volatile read of a device register, an
+`extern static`, the result of an `extern fn`, code outside the program.
+
+- Reading, writing and copying such a value are defined, at run time and
+  at compile time. For an enum without payloads, so are comparing it with
+  `==` and `!=` and converting it with `as`, which behave as for its
+  integer. Nothing is checked there.
 - Only `match` tells the values apart: a variant pattern never matches a
-  value that is no variant, a catch-all arm does, and a `match` without a
-  catch-all arm calls the panic function on one (see "`match`").
+  value that is no variant, at any position, and a `match` that no arm
+  matches calls the panic function (see "`match`").
 - The compiler never assumes that an enum holds a variant: as LLVM sees
-  it, an enum ranges over its integer type's values (no range metadata on
-  loads, no `assume`).
+  it, an enum, or a tag, ranges over its integer type's values (no range
+  metadata on loads, no `assume`).
 
-## `match` (ADR 0037)
+## `match` (ADR 0037, 0040, 0041)
+
+The examples of this section use these enums, not those of "Enums":
+
+```
+enum Mode: u8 { Off = 0, Run = 1 }
+
+enum Msg: u8 {
+    Nop = 0,
+    Led(bool) = 1,
+    Write(u8, u16) = 2,
+    Wide(u32) = 3,
+    SetMode(Mode) = 4,
+    Clear(u8) = 5,
+    Pair(u8, u8) = 6,
+}
+```
 
 ```
 match state {
@@ -501,6 +653,17 @@ let reply: u8 = match cmd {
     b'q' => 0,
     let other: u8 => unknown(other),
 };
+
+match msg {
+    Msg::Nop => 0,
+    Msg::Led(true) => 1,
+    Msg::Led(false) => 2,
+    Msg::Write(0x10 | 0x11, let v: u16) => special(v),
+    Msg::Write(let r: u8, 0) | Msg::Clear(let r: u8) => clear(r),
+    Msg::Write(let r: u8, let v: u16) => write(r, v),
+    Msg::SetMode(Mode::Run) => 4,
+    _ => 5,
+}
 ```
 
 **Syntax.**
@@ -516,71 +679,146 @@ let reply: u8 = match cmd {
 - `match` is an expression and block-like: as a statement without `;` it
   must have type `()`.
 
-**What can be matched.** The scrutinee is an integer, a `bool` or an enum.
-Any other type is `ty::match-type`: pointers, slices, structs, arrays, `()`
-and `!`. The scrutinee has no expected type, so `match 3 { ... }` is
-`ty::untyped-literal`.
+**What can be matched.** The scrutinee is an integer, a `bool` or an enum,
+with or without payloads. Any other type is `ty::match-type`: pointers,
+slices, structs, arrays, `()` and `!`. The scrutinee has no expected type,
+so `match 3 { ... }` is `ty::untyped-literal`.
 
-**Patterns.**
+**Patterns.** A pattern is checked against the type of its **position**:
+the scrutinee, or a payload value of a variant that the pattern names at
+an enclosing position, whose type that variant's declaration gives.
 
 | Pattern | Matches |
 |---------|---------|
 | `_` | every value |
 | `let name: T`, `let mut name: T` | every value, copied into a new variable |
 | an integer literal, `-` and an integer literal | that value |
-| a byte literal (`b'q'`) | that byte, against a `u8` scrutinee |
+| a byte literal (`b'q'`) | that byte, at a `u8` position |
 | `true`, `false` | that value |
-| `Mode::Run` | that variant |
+| `Mode::Run` | that variant, without payload |
+| `Msg::Write(p, q)` | that variant, with payload values that match `p` and `q` |
 | `NAME` | the value of the constant `NAME` |
 | `p \| q \| ...` | any of the alternatives |
 
-- **Literals** take the scrutinee's type, as against any expected type:
-  `300` against a `u8` is `ty::literal-out-of-range`, and `-1` against an
-  unsigned type is `ty::negate-unsigned`. A byte literal is a `u8`. A
-  literal against a type it does not have, such as `b'q'` against a `u32`,
-  `0` against a `bool` or an enum, or `true` against an integer, is
+- **Literals** take their position's type, as against any expected type:
+  `300` at a `u8` is `ty::literal-out-of-range`, and `-1` at an unsigned
+  type is `ty::negate-unsigned`. A byte literal is a `u8`. A literal
+  against a type it does not have, such as `b'q'` against a `u32`, `0`
+  against a `bool`, an enum or a struct, or `true` against an integer, is
   `ty::mismatched-types`.
-- **A variant** must be of the scrutinee's enum (`ty::mismatched-types`
+- **A variant** must be of its position's enum (`ty::mismatched-types`
   otherwise), and is resolved as in an expression
-  (`resolve::unknown-variant`, `resolve::not-an-enum`).
-- **A bare name is always a constant.** It must name a `const` item of the
-  scrutinee's type (`ty::mismatched-types` otherwise), and matches its
-  value, computed at compile time, whatever that value is: a constant of
-  an enum type may hold a value that is no variant, and then matches
-  exactly that value. A name that names nothing is
-  `resolve::unknown-name`; one that names a local variable, a parameter or
-  an item that is not a constant (a static, function, struct or enum) is
-  `resolve::not-a-constant`. A local variable shadows a constant of the
-  same name here as anywhere, so it is then `resolve::not-a-constant`
-  too; to compare with the constant, write
+  (`resolve::unknown-variant`, `resolve::not-an-enum`). Its payload
+  patterns are checked against the types its own declaration gives, even
+  when it does not fit its position.
+- **A variant with a payload** (ADR 0040), `Msg::Write(p, q)`, matches a
+  value whose tag is the value of `Msg::Write` and whose payload values
+  match `p` and `q`, in order. Each is any pattern, including a variant
+  of another enum with its own payload, or an or-pattern: patterns nest to
+  any depth. A trailing comma is allowed. There must be a pattern for each
+  value: `Msg::Write(_)`, `Msg::Write()` and a bare `Msg::Write` are
+  `ty::wrong-payload-count`, and so are `Msg::Nop(_)`, `Msg::Nop()` and
+  `Mode::Off()`, since a variant without payload is matched without
+  parentheses. There is no `..`: `Msg::Write(_, _)` writes every
+  position, so adding a value to a variant makes every pattern naming it
+  an error.
+- **At a position whose type is a struct, an array, a pointer, a slice or
+  `()`**, only `_` and `let` match. A literal or a variant there is
+  `ty::mismatched-types`; a constant is one of the errors below.
+- **A bare name is always a constant.** It must name a `const` item; a
+  name that names nothing is `resolve::unknown-name`, and one that names a
+  local variable, a parameter or an item that is not a constant (a
+  static, function, struct or enum) is `resolve::not-a-constant`. A local
+  variable shadows a constant of the same name here as anywhere, so it is
+  then `resolve::not-a-constant` too; to compare with the constant, write
   `let x: T => if x == NAME { ... }`.
+- **Only constants of an integer type, `bool` or an enum without payloads
+  are patterns.** A constant of any other type, such as an enum with
+  payloads, a struct or a pointer, is `ty::constant-pattern-type`,
+  wherever it stands, and nothing else is reported about it; match an
+  enum with payloads with its variant patterns. A constant of one of the
+  allowed types must have its position's type (`ty::mismatched-types`
+  otherwise), also at a struct, array, pointer, slice or `()` position: a
+  `u8` constant where a struct is matched is `ty::mismatched-types`, not
+  `ty::constant-pattern-type`. It matches its value, computed at compile
+  time, whatever that value is: a constant of an enum type may hold a
+  value that is no variant, and then matches exactly that value.
 - **A new variable is always written with `let` and its type**, which must
-  be the scrutinee's, with no conversion (`ty::mismatched-types`); without
-  the type, the pattern is `parser::let-without-type`. The variable holds
-  a copy of the value and, with `let mut`, may be assigned. It exists in
-  its arm's expression only, where it shadows, as a value, any item or
-  variable of the same name.
-- **Or-patterns** list alternatives of any pattern except `let`
-  (`resolve::binding-in-or-pattern`).
+  be its position's type, with no conversion (`ty::mismatched-types`);
+  without the type, the pattern is `parser::let-without-type`. The
+  variable holds a copy of the value at its position and, with `let mut`,
+  may be assigned. It exists in its arm's expression only, where it
+  shadows, as a value, any item or variable of the same name; it is not
+  visible in the rest of the pattern: in `Msg::Pair(let X: u8, X)`, the
+  second `X` is a constant named `X`. One name bound twice in one pattern, or in one
+  alternative of an or-pattern, as in `Msg::Write(let a: u8, let a: u16)`,
+  is `resolve::duplicate-binding`.
+- **Or-patterns** list alternatives of any pattern, at any position:
+  `Msg::Write(0x10 | 0x11, _)`. There are no parentheses around patterns.
 - A **catch-all arm** is one whose pattern is `_`, a `let`, or an
   or-pattern with a `_` alternative.
-- There are no range patterns (`b'0'..=b'9'`), guards (`pat if cond`) or
-  nested patterns; a range is written as a `let` arm with an `if`.
+- There are no range patterns (`b'0'..=b'9'`), guards (`pat if cond`),
+  struct or array patterns, nor `..` in a payload; a range is written as a
+  `let` arm with an `if`.
+
+**Bindings in or-patterns (ADR 0041).** An or-pattern may bind variables,
+in an alternative or inside one at any depth, when every alternative binds
+the same names, each with the same type and mutability:
+
+- Each alternative writes its own `let` with its type. Together they
+  declare one variable per name, in the arm's expression, which holds a
+  copy of the value at the position where the alternative that matched
+  binds it. When several alternatives match, the first one, left to right,
+  binds it: with `Msg::Pair(let a: u8, 7) | Msg::Pair(5, let a: u8)`,
+  `Msg::Pair(5, 7)` gives `a` the value 5.
+- A name that some alternatives bind and others do not, or that some bind
+  with `let mut` and others with `let`, is `resolve::inconsistent-binding`,
+  reported once per name and or-pattern, at the first alternative that
+  binds it and the first that does not, or at the first `let` and the
+  first whose mutability differs. So `let x: u8 | 3` is this error, and in
+  `let x: u8 | let x: u8` the second alternative is dead
+  (`ty::unreachable-pattern`).
+- The first alternative's `let` gives the variable its type. Each later
+  `let` of that name with another type is `ty::mismatched-types` at its
+  type, and only that is reported about it, even when its type differs
+  from its position's type too.
+- The rule holds at every or-pattern: `Msg::Write(let r: u8, 0 | 1)` is
+  fine, since the inner alternatives bind nothing, and
+  `Msg::Write(let r: u8 | 3, _)` is `resolve::inconsistent-binding`. A
+  name that an inner or-pattern binds inconsistently is reported there,
+  and counts as bound by the alternative that contains it, so the outer
+  or-pattern reports nothing more about it.
 
 **Choosing an arm.** The scrutinee runs **once, before any arm**, and is
 read where it is written: through a volatile pointer,
 `match (*uart).status` is exactly one volatile read. The arms are tried in
 order; the first whose pattern matches runs, and its value is the value of
-the `match`. Patterns run no code: constants are already values. A
-`match` on an enum without a catch-all arm calls the panic function when no
-arm matches, which only a value that is no variant can cause (ADR 0036);
-at compile time, that is an `eval::panic` whose cause is "enum value is no
-variant".
+the `match`. Patterns run no code: constants are already values, and every
+pattern, at any depth, tests the one value the scrutinee gave, so the
+order in which it tests its positions cannot be observed. A `match` that
+no arm matches calls the panic function. Since every `match` is
+exhaustive, only a value that is no variant can cause it, at a position
+that an arm examines with a variant pattern: a tag, or a payload value of
+an enum type (ADR 0036, 0040). A position matched only by `_` and `let`
+is never examined: `Msg::SetMode(_)` matches a `Mode` that is no variant.
+At compile time, a `match` that no arm matches is an `eval::panic` whose
+cause is "enum value is no variant".
 
-A `match` compiles to a switch on the scrutinee's integer (an LLVM
-`switch`), as a C `switch` does. Its default is the catch-all arm, the
-call to the panic function on an enum without one, and unreachable on a
-`bool` or an integer whose every value is listed.
+On an integer, a `bool` or an enum without payloads, a `match` compiles to
+a switch on the scrutinee's integer (an LLVM `switch`), as a C `switch`
+does. Its default is the catch-all arm, the call to the panic function on
+an enum without one, and unreachable on a `bool` or an integer whose every
+value is listed. On an enum with payloads, it compiles to a switch on the
+tag of the scrutinee's copy, then, for each variant, switches on the
+payload positions its arms examine, in arm order, a failed test going to
+the next arm that can still match, as nested C `switch`es would. The
+default of a switch on an enum position, at any depth, goes to the arms
+that match there with `_` or `let`, or else to the call to the panic
+function, even when every value of the integer type is a variant; it is
+unreachable only at a `bool` or integer position whose every value is
+listed. Where an alternative that binds variables matches, the values it
+binds are copied into them, and the arm's expression, generated once,
+runs.
 
 **Typing.** As for `if`: with an expected type, each arm's expression is
 checked against it, with the implicit conversions of "Typing"; without
@@ -590,32 +828,66 @@ all have type `!` has type `!`.
 
 **Exhaustiveness.** Every `match` is exhaustive: its arms together match
 every value of the scrutinee's type, or the `match` is
-`ty::non-exhaustive-match`, which lists what is missing.
+`ty::non-exhaustive-match`, which lists what is missing. At every
+position, the values of an enum are its variants, each with every value
+of its payload, and not the values that are no variant; a `bool` needs
+`true` and `false`, an integer every value of its type. At the top, an
+integer in practice needs a catch-all arm, though listing all 256 values
+of a `u8` or `i8` counts too, and its message asks for a `_` or `let` arm.
 
-- A `bool` needs `true` and `false`, or a catch-all.
-- An enum needs every variant, or a catch-all. Values that are no variant
-  are not required. Missing variants are listed in declaration order.
-- An integer needs every value of its type, which in practice means a
-  catch-all arm; listing all 256 values of a `u8` or `i8` counts too.
+Otherwise the missing values are listed as patterns, **witnesses**. They
+are found by examining positions in the order they are written: the
+scrutinee first, and a variant's payload positions, left to right, in its
+place. At each position, the arms still considered are those that match
+what the witness has so far:
+
+- if every one of them has `_` or `let` there, or none remains, the
+  witness has `_` there; but a `match` without arms lists every variant of
+  an enum scrutinee, and `true` and `false` for a `bool` one;
+- at an enum position, each variant is examined in turn, in declaration
+  order, the arms considered for it being those whose pattern there is
+  that variant, a constant holding its value, `_` or `let`; a variant no
+  arm is left for is written with `_` at each of its payload positions
+  (`Msg::Wide(_)`);
+- at a `bool` position, `true` and then `false`;
+- at an integer position, each value the arms name, in the order they
+  first name it, and then one value they do not name, if one exists: the
+  one closest to zero, the non-negative one first.
+
+A complete witness that some arm still matches is dropped. At most three
+witnesses are shown, in the order found, followed by "and N more": with
+the arms `Msg::Nop`, `Msg::Led(true)` and `Msg::Write(0, 5)`, the missing
+values are `Msg::Led(false)`, `Msg::Write(0, 0)`, `Msg::Write(1, _)` and 4
+more (`Msg::Wide(_)`, `Msg::SetMode(_)`, `Msg::Clear(_)` and
+`Msg::Pair(_, _)`).
 
 **Dead arms.** An arm that matches no value the arms before it leave is
 `ty::unreachable-pattern`, reported once for the arm, pointing at the first
 earlier arm that covers it alone, if there is one. When only some
-alternatives of an arm are dead, each of those is reported. Examples: `0`
-twice; `Mode::Run` after a constant whose value is `Mode::Run`; anything
-after a catch-all; `_ | 3`; a `_` after `true` and `false`. For an enum,
-the values are all those of its integer type, so a `_` after every variant
-is not dead while values that are no variant remain.
+alternatives of an arm are dead, at any depth, each of those is reported:
+in `Msg::Led(true | true)`, the second `true`. Examples: `0` twice;
+`Mode::Run` after a constant whose value is `Mode::Run`; anything after a
+catch-all; `_ | 3`; a `_` after `true` and `false`. For an enum, at every
+position, the values are all those of its integer type, so a `_` after
+every variant is not dead while values that are no variant remain, and
+neither is `Msg::SetMode(_)` after `Msg::SetMode(Mode::Off)` and
+`Msg::SetMode(Mode::Run)`.
 
 **When the checks run.** Exhaustiveness and dead arms are part of type
 checking: their errors appear with `--emit=typeck`, and a function with
 one of them does not type check, so it is not lowered to MIR and the
 checks of "Checks on values known at compile time" do not run on it. They
 use the values of the constants and variants in the patterns, computed at
-compile time. A `match` on an enum with a variant or constant pattern,
-whatever its type, or with no arm, also uses the value of every variant
-of the enum: it **needs the values of the enum** (ADR 0038). Every other
-`match`, such as one whose arms are only `_` and `let`, needs no value.
+compile time. A `match` **needs the values of an enum** `E` (ADR 0040)
+when some alternative, at a position whose type is `E`, is a variant or a
+constant pattern, whatever its own type, or when it has no arms and its
+scrutinee is of type `E`; it then uses the value of every variant of `E`.
+The kind of a pattern counts, not whether it fits: a constant that is
+`ty::constant-pattern-type` counts, and the payload positions of a variant
+pattern have the types its own declaration gives, so `H::X(Mode::Run)`
+where a `G` is matched needs the values of `G` and of `Mode`, and is
+`ty::mismatched-types`. Positions matched only by `_` and `let` need no
+value.
 
 - A constant that fails to evaluate is reported once, and a `match` using
   it as a pattern is not checked for exhaustiveness or dead arms, so
@@ -624,25 +896,25 @@ of the enum: it **needs the values of the enum** (ADR 0038). Every other
 - A `match` that needs the values of an enum one of whose values failed to
   evaluate or repeats another is not checked for exhaustiveness or dead
   arms either: only the enum's errors are reported, and the build stops at
-  them. The function still type checks. With a catch-all arm, it can run
-  at compile time, and a value shared by two variants goes to the first
-  arm that lists it. Without one, a variant may have no arm, so the
-  function is not lowered to MIR, rather than panicking on such a variant
-  as if it were no variant: an evaluation that needs it fails without a
-  diagnostic of its own, as for a body whose checks failed. So does a
-  function with a pattern naming a variant whose value failed. A `match`
-  that needs no value is checked as usual: with
-  `enum T: u8 { A = 0, B = 0 }`, the second `_` of
-  `match t { _ => 1, _ => 2 }` is `ty::unreachable-pattern`.
+  them. The function still type checks, but is not lowered to MIR, with or
+  without a catch-all arm: a variant may lack an arm at some position, and
+  the `match` would panic on it as if it were no variant. An evaluation
+  that needs the function fails without a diagnostic of its own, as for a
+  body whose checks failed. A `match` that needs no value of such an enum
+  is checked as usual: with `enum T: u8 { A = 0, B = 0 }`, the second `_`
+  of `match t { _ => 1, _ => 2 }` is `ty::unreachable-pattern`, and so is
+  the second `H::R(_)` of `match h { H::R(_) => 1, H::R(_) => 2 }` with
+  `enum H: u8 { R(T) = 0 }`.
 - A `match` that needs the values of an enum is a `ty::cycle` in a
   function that runs while one of them is computed, as `f` in
   `enum E: u8 { A = f(E::B), B = 1 }` when `f` matches an `E` against
-  `E::B`, even with a `_` arm. One that needs no value adds no such
-  dependence: with `fn f(e: E) -> u8 { match e { _ => 5 } }`, `E::A` is
-  5. Its scrutinee and arms are uses like any other, so
-  `match E::A { _ => 5 }` there is still a `ty::cycle`.
+  `E::B`, even with a `_` arm, or a value holding an `E` against
+  `Holder::Of(E::B)`. One that needs no value adds no such dependence:
+  with `fn f(e: E) -> u8 { match e { _ => 5 } }`, `E::A` is 5. Its
+  scrutinee and arms are uses like any other, so `match E::A { _ => 5 }`
+  there is still a `ty::cycle`.
 
-## Layout (ADR 0022)
+## Layout (ADR 0022, 0039)
 
 | Type | Size | Alignment |
 |------|------|-----------|
@@ -652,10 +924,13 @@ of the enum: it **needs the values of the enum** (ADR 0038). Every other
 | `u64 i64` | 8 | 8 |
 | slices (`*const [T]`, `*mut [T]`) | 8 | 4 |
 | `[T; N]` | `N * size(T)` | `align(T)` |
-| an enum on the integer type `T` (ADR 0035) | `size(T)` | `align(T)` |
+| an enum without payloads on the integer type `T` (ADR 0035) | `size(T)` | `align(T)` |
+| an enum with payloads (ADR 0039) | the largest variant's size, rounded up to the alignment | the largest variant's alignment |
 | `()` | 0 | 1 |
 
-`[T]` and `!` have no layout a program can ask for (see "Types").
+`[T]` and `!` have no layout a program can ask for (see "Types"). Each
+variant of an enum with payloads is laid out as a struct of its tag and its
+payload values (see "Enums").
 
 A struct's fields are laid out **in declaration order**, never reordered:
 each at the next offset that is a multiple of its alignment. The struct's
@@ -672,7 +947,8 @@ unspecified values.
   static, it raises the static's alignment by the same rules, without
   changing its size.
 - `#[packed]` and `#[align(N)]` cannot be combined, and a packed struct
-  cannot contain a type with `#[align(N)]`.
+  cannot contain a type with `#[align(N)]`, at any depth: through fields,
+  array elements or payload values.
 - Every object is placed at an address aligned for its type, including
   over-aligned locals, except inside a packed struct.
 - A place reached through a field of a packed struct, at any depth, may be
@@ -747,8 +1023,10 @@ wrapping arithmetic, the layouts above), and cannot:
   pointers" below);
 - compare, or access memory through, a pointer to a variable of a call
   that has returned (`eval::dangling-pointer`); copying it is fine;
-- read bytes never written, such as the padding of a variable (the padding
-  of a `static` reads as zero, as in the object file);
+- read bytes never written, such as the padding of a variable, or the
+  bytes of an enum with payloads outside its variant's tag and payload
+  (in a `static` or a constant those read as zero, as in the object
+  file);
 - call the panic function, explicitly or through a failed check; the panic
   function's body never runs at compile time;
 - run more than 10,000,000 steps (MIR statements and terminators) or nest
@@ -853,8 +1131,9 @@ and `a < b < c` is an error.
   elements is accepted, with the array's length (ADR 0031, see "Slices").
   These apply wherever an expected type is known, such as a `let`, an
   argument (including an `assert` message), an assignment, `return`,
-  `break` values, struct fields, array elements, `if` branches, `match`
-  arms, the tail of a block and the operand of `comptime`. Only the
+  `break` values, struct fields, payload values, array elements, `if`
+  branches, `match` arms, the tail of a block and the operand of
+  `comptime`. Only the
   outermost pointer converts, volatility never changes, and comparisons
   accept a `*mut T` and a `*const T` in either order.
 - A literal takes the type expected where it appears; with no expected type
@@ -866,9 +1145,10 @@ and `a < b < c` is an error.
 - `& | ^ !` work on integers (bitwise) and `bool` (logical, without
   short-circuit).
 - `&& ||` work on `bool` and short-circuit.
-- `== !=` work on integers, thin pointers, `bool` and enums (two values of
-  one enum type); `< <= > >=` on integers and thin pointers. Slices cannot
-  be compared, and enums only with `== !=` (ADR 0035).
+- `== !=` work on integers, thin pointers, `bool` and enums without
+  payloads (two values of one enum type); `< <= > >=` on integers and thin
+  pointers. Slices and enums with payloads cannot be compared, and enums
+  without payloads only with `== !=` (ADR 0035, 0039).
 - A literal is never an enum: `m == 3` is `ty::mismatched-types`.
 - A value may be at most 2147483647 bytes, half the address space.
 
@@ -884,13 +1164,16 @@ and `a < b < c` is an error.
   compile time to be zero is a compile-time error). For signed types,
   `MIN / -1` is `MIN` and `MIN % -1` is `0`.
 
-### Checks on values known at compile time (ADR 0032)
+### Checks on values known at compile time (ADR 0032, 0039)
 
 An expression is **known at compile time** when it is built only from
-literals, `const` items, enum variants (ADR 0035), `comptime`
-expressions, `size_of`, `align_of`, `offset_of`, unary `-` and `!`, binary
-operators, `as` and parentheses. So `Mode::Run as u32` is known; an `if`
-or a `match` is not.
+literals, `const` items, variants of enums without payloads (ADR 0035),
+`comptime` expressions, `size_of`, `align_of`, `offset_of`, unary `-` and
+`!`, binary operators, `as` and parentheses. So `Mode::Run as u32` is
+known; an `if` or a `match` is not. Aggregates are never known, and
+neither is any value of an enum with payloads, not even a variant without
+payload such as `Msg::Nop`, nor a constant or `comptime` value of its type
+(ADR 0039): so every arm of a `match` on one is checked.
 Nothing that reads memory is known: not `*p`, even through a constant
 pointer (it may be a device register), not a read of a static, not
 `&raw`. A pointer made from an integer is known by its address; a constant
@@ -923,7 +1206,8 @@ checked by these rules (type checking still covers it):
   runs at most one arm, and only that one is checked. When no arm matches,
   which only an enum value that is no variant can cause, such as a
   constant of the enum's type holding one, no arm is checked, and the
-  `match` panics where it runs.
+  `match` panics where it runs. The scrutinee of an enum with payloads is
+  never known, so this never applies to it.
 
 ```
 const BITS: u32 = 32;
@@ -943,10 +1227,12 @@ more.
   an unsigned one; narrowing keeps the low bits; same width reinterprets.
 - `bool` converts to integers (`true` is 1); nothing converts to `bool`
   (write `x != 0`).
-- An enum converts to any integer type, as its integer type would
-  (ADR 0035). Nothing converts to an enum, not even the enum itself:
-  decode an integer with a `match`. An enum converts neither to `bool` nor
-  to a pointer.
+- An enum without payloads converts to any integer type, as its integer
+  type would (ADR 0035). Nothing converts to an enum, not even the enum
+  itself: decode an integer with a `match`. An enum converts neither to
+  `bool` nor to a pointer.
+- An enum with payloads converts to nothing (ADR 0039): its variant is
+  read with a `match`.
 - Thin pointers convert only to and from `usize`; pointer-to-pointer casts
   may change mutability, volatility and pointee. Casts involving slices
   follow the table in "Slices".
@@ -962,22 +1248,26 @@ more.
   make it valid to dereference; alignment, existence and permissions are
   not checked (ADR 0019). Address 0 is an ordinary address.
 
-### Volatile accesses (ADR 0013, 0023)
+### Volatile accesses (ADR 0013, 0023, 0039)
 
 Through a volatile pointer, every access is to a scalar (an integer,
-`bool`, enum or thin pointer; an enum is accessed as its integer type,
-ADR 0035) and is **exactly one load or store of the scalar's width**,
-never split, merged, removed or reordered relative to other volatile
-accesses. Volatility carries through fields and indexing:
+`bool`, enum without payloads or thin pointer; such an enum is accessed as
+its integer type, ADR 0035) and is **exactly one load or store of the
+scalar's width**, never split, merged, removed or reordered relative to
+other volatile accesses. Volatility carries through fields and indexing:
 `(*regs).chan[i].status` is one access of `status`'s width. `x += 1` is
 one load and one store, not atomic. Otherwise the program is rejected:
 
-- a whole struct or array, or a slice stored in memory, cannot be
-  accessed through a volatile pointer; through a volatile slice,
-  `(*s)[i]` is one access of the element;
-- `u64` and `i64`, and enums on them, cannot, since riscv32 has no 64-bit
-  access: use two `u32` halves in the order the device needs; an enum,
-  which nothing converts to, needs an integer type of at most 32 bits;
+- a whole struct, array or enum with payloads, or a slice stored in
+  memory, cannot be accessed through a volatile pointer; through a
+  volatile slice, `(*s)[i]` is one access of the element. An enum with
+  payloads has no fields, so a volatile pointer to one reaches nothing;
+  device registers are described with structs, integers and enums without
+  payloads;
+- `u64` and `i64`, and enums without payloads on them, cannot, since
+  riscv32 has no 64-bit access: use two `u32` halves in the order the
+  device needs; an enum, which nothing converts to, needs an integer type
+  of at most 32 bits;
 - a field reached through a packed struct cannot be, if its type needs
   alignment.
 
@@ -1001,12 +1291,13 @@ a guarantee.
 
 ### Evaluation order (ADR 0018)
 
-Operands, arguments, array elements and struct literal fields run left to
-right, in the order written; `&&`/`||` may skip their right side, and
-`assert` runs its message only when the condition is false (ADR 0031). In
-an assignment the value runs before the place. In `base[index]`, the base
-runs before the index, and the bounds check before the access. A `match`
-runs its scrutinee once, before any arm (ADR 0037). A read
+Operands, arguments, payload values, array elements and struct literal
+fields run left to right, in the order written; `&&`/`||` may skip their
+right side, and `assert` runs its message only when the condition is false
+(ADR 0031). In an assignment the value runs before the place. In
+`base[index]`, the base runs before the index, and the bounds check before
+the access. A `match` runs its scrutinee once, before any arm, and its
+patterns run no code (ADR 0037, 0040). A read
 through a pointer, and a read of a static (ADR 0030), happens exactly where
 it is written. A value that is not a place, used as the base of indexing
 or a field, is read where it is written too: in `({ x })[{ x[0] = 9; 0 }]`
@@ -1068,8 +1359,9 @@ erebos build program.ers [-o program.elf] [-O] [--link file.o]... [--emit=<stage
 compiler stage instead: `tokens`, `ast`, `hir`, `typeck`, `mir` or
 `llvm-ir` (dumps leave out the runtime; `typeck` and `mir` start with every
 struct's layout and every enum with its integer type and the values of its
-variants, and list the bodies run at compile time as `comptime fn`, a
-variant's value as `comptime fn Mode::Run`).
+variants, an enum with payloads also with the offset of each payload value,
+its size and its alignment, and list the bodies run at compile time as
+`comptime fn`, a variant's value as `comptime fn Mode::Run`).
 See `CONTRIBUTING.md` for setup and running on QEMU.
 
 ## Diagnostics
@@ -1095,6 +1387,7 @@ Every error has a stable code, shown with the message.
 | `parser::local-static` | `static` or `extern static` inside a function body |
 | `parser::enum-without-type` | an enum without `: Type` |
 | `parser::variant-without-value` | a variant without `= value` |
+| `parser::empty-payload` | a variant written `V()`, a payload without types |
 | `resolve::unknown-name` | name not in scope, also in a pattern; an enum's or struct's name alone |
 | `resolve::unknown-type` | type, struct or enum name that does not exist, also before `::` |
 | `resolve::unknown-function` | call to a function that does not exist |
@@ -1113,7 +1406,8 @@ Every error has a stable code, shown with the message.
 | `resolve::unknown-variant` | `E::V` where `E` has no variant `V` |
 | `resolve::not-an-enum` | `X::V` where `X` is an item that is not an enum |
 | `resolve::not-a-constant` | a bare name in a pattern that is not a constant: a local variable, parameter, static, function, struct or enum |
-| `resolve::binding-in-or-pattern` | `let` as an alternative of an or-pattern |
+| `resolve::duplicate-binding` | one name bound twice in one pattern, or in one alternative of an or-pattern |
+| `resolve::inconsistent-binding` | a name not bound by every alternative of an or-pattern, or bound with `let mut` by only some |
 | `resolve::reserved-name` | `_start`, a name starting with `__`, a runtime function's name, or a built-in function's (`assert`, `len`, `slice`) |
 | `resolve::unknown-attribute` | an attribute that does not exist |
 | `resolve::misplaced-attribute` | an attribute on an item it does not apply to |
@@ -1128,11 +1422,11 @@ Every error has a stable code, shown with the message.
 | `ty::mismatched-types` | a value of the wrong type |
 | `ty::untyped-literal` | a literal or array literal with no expected type |
 | `ty::literal-out-of-range` | literal does not fit its type |
-| `ty::invalid-operand` | operator applied to a type it does not accept, such as a comparison of slices |
+| `ty::invalid-operand` | operator applied to a type it does not accept, such as a comparison of slices or of enums with payloads |
 | `ty::negate-unsigned` | unary `-` on an unsigned value |
 | `ty::shift-out-of-range` | shift amount known at compile time outside 0 to the width minus 1 |
 | `ty::division-by-zero` | divisor known at compile time to be zero |
-| `ty::invalid-cast` | `as` between types that do not convert, a slice cast the table refuses, or any cast to `!` or to an enum |
+| `ty::invalid-cast` | `as` between types that do not convert, a slice cast the table refuses, any cast to `!` or to an enum, or from an enum with payloads |
 | `ty::pointer-cast-width` | thin pointer cast to or from an integer type other than `usize` |
 | `ty::deref-non-pointer` | `*` on a value that is not a pointer |
 | `ty::cannot-index` | indexing a value that is not an array or a pointer |
@@ -1147,18 +1441,20 @@ Every error has a stable code, shown with the message.
 | `ty::address-of-immutable` | `&raw mut` of a place that cannot be written |
 | `ty::packed-field-address` | `&raw` of a possibly misaligned place inside a packed struct |
 | `ty::volatile-too-wide` | volatile access wider than the target's widest access |
-| `ty::volatile-aggregate` | volatile access to a whole struct or array, or to a slice stored in memory |
+| `ty::volatile-aggregate` | volatile access to a whole struct, array or enum with payloads, or to a slice stored in memory |
 | `ty::volatile-packed-field` | volatile access to a possibly misaligned place inside a packed struct |
 | `ty::too-large` | a value larger than half the address space |
-| `ty::infinite-size` | structs that contain themselves, directly or through each other |
+| `ty::infinite-size` | structs and enums that contain themselves, directly or through each other |
 | `ty::unsized` | `[T]` where a size is needed, or `*s` read or written whole |
-| `ty::never-in-memory` | `!` as a pointee, slice element, field, array element, the type of a static, `extern static`, `const` or `comptime` value, a layout query operand, or under `&raw` |
+| `ty::never-in-memory` | `!` as a pointee, slice element, field, payload type, array element, the type of a static, `extern static`, `const` or `comptime` value, a layout query operand, or under `&raw` |
 | `ty::invalid-align` | `#[align(N)]` on a struct or static with `N` not a power of two, too large or below the natural alignment |
-| `ty::aligned-in-packed` | a packed struct containing a type with `#[align(N)]` |
+| `ty::aligned-in-packed` | a packed struct containing a type with `#[align(N)]`, at any depth, such as an enum with such a payload |
 | `ty::not-comptime` | a run-time variable where a compile-time value is required |
-| `ty::cycle` | an item or variant whose value or layout needs itself, including a `match` that needs the values of an enum (one with a variant or constant pattern, or no arm) in a function that runs while one of them is computed |
+| `ty::cycle` | an item or variant whose value or layout needs itself, including a `match` that needs the values of an enum (a variant or constant pattern at a position of its type, or no arm on it) in a function that runs while one of them is computed |
 | `ty::duplicate-discriminant` | two variants of an enum with one value |
 | `ty::match-type` | a `match` on a type other than an integer, `bool` or enum |
+| `ty::constant-pattern-type` | a constant pattern of a type other than an integer, `bool` or an enum without payloads |
+| `ty::wrong-payload-count` | a variant built or matched with a number of values other than its payload's, or one without payload written with parentheses |
 | `ty::non-exhaustive-match` | a `match` whose arms leave values unmatched |
 | `ty::unreachable-pattern` | an arm, or an alternative, that matches no value the patterns before it leave |
 | `ty::if-without-else` | `if` without `else` where a value is expected |
@@ -1166,7 +1462,7 @@ Every error has a stable code, shown with the message.
 | `ty::param-type` | parameter of type `()` or `!` |
 | `ty::special-fn-params` | entry or panic function with parameters |
 | `ty::entry-returns`, `ty::panic-returns` | entry or panic function that can return |
-| `eval::panic` | compile-time code reached the panic function: a zero divisor, an index out of bounds, an enum value that is no variant in a `match` without a catch-all arm, an explicit call |
+| `eval::panic` | compile-time code reached the panic function: a zero divisor, an index out of bounds, an enum value that is no variant in a `match` that no arm matches, an explicit call |
 | `eval::assertion-failed` | `assert` with a false condition at compile time, with its message if it has one |
 | `eval::step-limit` | compile-time code ran more than 10,000,000 steps |
 | `eval::call-depth` | compile-time code nested more than 256 calls |

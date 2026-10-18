@@ -25,7 +25,7 @@ updated, and a program on QEMU.
 | **M2.3a** ✅ Compile-time execution | the MIR interpreter and on-demand checking (ADR 0027, 0028); `const` items; `comptime` expressions and blocks; array lengths and attribute arguments computed at compile time | a lookup table computed by the compiler, and `comptime` checks of struct layouts |
 | **M2.3b** ✅ Statics and byte strings | `static`/`static mut` with compile-time initializers, `#[align(N)]` on statics; `_start` initializes `.data` and `.bss`; `b"..."`; slices `*const [T]` | prints with a real `print` function |
 | **M2.4a** ✅ Enums and `match` | enums with explicit discriminants (`enum Mode: u8 { Off = 0, Run = 3 }`), `match` on integers, `bool` and enums, with exhaustiveness and dead arms checked | a state machine |
-| **M2.4b** Enum payloads | variants carrying data, their layout and ABI, patterns nested in payloads | a command decoder: messages with payloads, decoded from bytes and dispatched with `match` |
+| **M2.4b** ✅ Enum payloads | variants carrying data, their layout and ABI, patterns nested in payloads | a command decoder: messages with payloads, decoded from bytes and dispatched with `match` |
 | **M2.5** `Option` and `Result` | built into the compiler until generics exist; the `?` operator | a number parser returning `Result` |
 | **M2.6** Modules and panic information | `mod`, `use`, `pub`, `core`; `panic fn on_panic(info: *const PanicInfo) -> !` with file, line and a `PanicReason` enum (ADR 0014) | a panic prints `division by zero at main.ers:12` |
 
@@ -75,11 +75,6 @@ Agreed as useful, not yet scheduled:
 Questions accepted ADRs leave to a later step, to settle in that step's
 ADRs:
 
-- **M2.4b:**
-  - Enum payloads of type `!` (ADR 0034: `!` is not a type of memory).
-  - The shape of payloads (one value per variant or several) and the
-    layout and ABI of enums with payloads (ADR 0035 covers enums without).
-  - `let` bindings inside or-patterns (ADR 0037).
 - **M2.5:**
   - `!` as a type argument of `Option(T)` and `Result(T, E)`, such as
     the infallible `Result(u32, !)` (ADR 0034).
@@ -168,4 +163,17 @@ Documentation owed:
   panic function on one (ADR 0036). The milestone program runs a state
   machine over a byte string of events on QEMU, printing each transition,
   and checks the same machine in a `comptime` block.
-- **Next: M2.4b** (enum payloads).
+- **M2.4b done.** Enum variants carry payloads of one or more positional
+  values (ADR 0039), laid out as a C union of structs that each start with
+  the tag, checked against clang in layout and across calls, where they
+  pass as aggregates; `!` is no payload type. `match` reaches payloads
+  through nested variant patterns (ADR 0040), with exhaustiveness and dead
+  arms checked over every position by the usefulness of patterns, at most
+  three missing values listed, and compiles to a decision tree of
+  switches; or-patterns may bind variables when every alternative binds
+  the same ones (ADR 0041). A differential test runs nested matches alike
+  at compile time and on the target. The milestone program decodes a
+  stream of command bytes into messages with payloads on QEMU, dispatches
+  them with nested and or-patterns, printing each action, and checks the
+  decoder in a `comptime` block.
+- **Next: M2.5** (`Option` and `Result`).
