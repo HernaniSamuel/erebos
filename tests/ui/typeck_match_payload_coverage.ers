@@ -1,7 +1,7 @@
 // emit: typeck
 // Exhaustiveness and dead arms over nested patterns (ADR 0040). The
 // missing values are found position by position, in the order written,
-// and at most three are shown, then how many more. An alternative is dead
+// and at most three are shown, then "and more". An alternative is dead
 // at any depth. Values that are no variant remain at every position, so
 // `_` after every variant and `Msg::SetMode(_)` after every variant of
 // `Mode` are not dead. A `match` that needs a nested enum with a repeated
@@ -115,6 +115,24 @@ fn checked(h: Holder) -> u8 {
     match h {
         Holder::R(_) => 0,
         Holder::R(_) => 1,
+    }
+}
+
+// Exactly three missing: all listed. Exactly four: three, and more.
+fn three_missing(m: Msg) -> u8 {
+    match m {
+        Msg::Led(true) => 0,
+        Msg::Write(0, _) => 1,
+        Msg::Wide(_) => 2,
+        Msg::SetMode(_) => 3,
+    }
+}
+
+fn four_missing(m: Msg) -> u8 {
+    match m {
+        Msg::Led(true) => 0,
+        Msg::Write(0, _) => 1,
+        Msg::Wide(_) => 2,
     }
 }
 

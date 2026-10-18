@@ -128,17 +128,23 @@ pub fn useful<'p>(
     }
 }
 
-/// The values that no row matches, the values of an enum being only its
-/// variants (ADR 0036): each as a pattern per column, without
-/// or-patterns, in the order ADR 0040 finds them. With `examine`, a first
-/// column of type `bool` or enum lists its values even when no row remains,
-/// as for a `match` without arms (ADR 0037).
+/// The first `limit` values that no row matches, the values of an enum
+/// being only its variants (ADR 0036): each as a pattern per column,
+/// without or-patterns, in the order ADR 0040 finds them. The search stops
+/// once it has found `limit` (ADR 0043), since their number can grow
+/// exponentially with the patterns. With `examine`, a first column of type
+/// `bool` or enum lists its values even when no row remains, as for a
+/// `match` without arms (ADR 0037).
 pub fn missing<'p>(
     enums: &Enums,
     columns: &[Column],
     rows: &[Row<'p>],
     examine: bool,
+    limit: usize,
 ) -> Vec<Vec<Pat>> {
+    if limit == 0 {
+        return Vec::new();
+    }
     let Some((&column, rest)) = columns.split_first() else {
         return if rows.is_empty() {
             vec![Vec::new()]
@@ -155,7 +161,7 @@ pub fn missing<'p>(
     }
     let listed = examine && rows.is_empty() && matches!(column, Column::Bool | Column::Enum(_));
     if rows.iter().all(|row| matches!(row[0], Pat::Wild)) && !listed {
-        return missing(enums, rest, &default(&rows), false)
+        return missing(enums, rest, &default(&rows), false, limit)
             .into_iter()
             .map(|witness| prepend(Pat::Wild, &witness))
             .collect();
@@ -172,9 +178,13 @@ pub fn missing<'p>(
     };
     let mut witnesses = Vec::new();
     for value in values {
+        let wanted = limit - witnesses.len();
+        if wanted == 0 {
+            break;
+        }
         let payload = payload(enums, column, value);
         let rows = specialize(&rows, value, payload.len());
-        for mut subs in missing(enums, &concat(payload, rest), &rows, false) {
+        for mut subs in missing(enums, &concat(payload, rest), &rows, false, wanted) {
             let after = subs.split_off(payload.len());
             witnesses.push(prepend(Pat::Value(value, subs), &after));
         }
@@ -341,8 +351,15 @@ mod tests {
         useful(enums, &[column], &rows(earlier), &[pattern])
     }
 
+    /// The witnesses of `arms` at one column, up to `limit`.
+    fn missing_up_to(enums: &Enums, column: Column, arms: &[Pat], limit: usize) -> Vec<Vec<Pat>> {
+        missing(enums, &[column], &rows(arms), arms.is_empty(), limit)
+    }
+
+    /// Every witness of `arms` at one column: no test here has as many as
+    /// 100.
     fn missing1(enums: &Enums, column: Column, arms: &[Pat]) -> Vec<Vec<Pat>> {
-        missing(enums, &[column], &rows(arms), arms.is_empty())
+        missing_up_to(enums, column, arms, 100)
     }
 
     #[test]
@@ -578,6 +595,75 @@ mod tests {
             missing1(&enums, msg, &[])[2],
             vec![v(2, vec![Pat::Wild, Pat::Wild])]
         );
+    }
+
+    #[test]
+    fn the_search_stops_at_the_limit() {
+        let (msg, _, enums) = msg();
+        let v = |value: u64, subs: Vec<Pat>| Pat::Value(value, subs);
+        // The five witnesses of `nested_witnesses_in_written_order`.
+        let arms = [
+            v(0, vec![]),
+            v(1, vec![value(1)]),
+            v(2, vec![value(0), value(5)]),
+        ];
+        let all = missing_up_to(&enums, msg, &arms, 100);
+        assert_eq!(all.len(), 5);
+        // A limit keeps the order: the witnesses are the first ones.
+        assert_eq!(missing_up_to(&enums, msg, &arms, 4), all[..4]);
+        assert_eq!(missing_up_to(&enums, msg, &arms, 1), all[..1]);
+        assert_eq!(missing_up_to(&enums, msg, &arms, 5), all);
+        assert!(missing_up_to(&enums, msg, &arms, 0).is_empty());
+        // Without arms, the variants listed are the first ones too.
+        assert_eq!(
+            missing_up_to(&enums, msg, &[], 4),
+            missing_up_to(&enums, msg, &[], 100)[..4]
+        );
+    }
+
+    #[test]
+    fn exponentially_many_witnesses_are_not_enumerated() {
+        // pairs(40) (ADR 0042): `enum P: u8 { A(bool, ..., bool) = 0 }` with
+        // 80 `bool`s, and one arm per `i < 40` with `true` at `i` and
+        // `i + 40` and `_` elsewhere. It has 2^40 witnesses, one per choice
+        // of the first 40 positions: without the limit, the search would
+        // write every one.
+        const N: usize = 40;
+        let p = EnumTy {
+            payloads: true,
+            ..enum_ty(IntTy::U8)
+        };
+        let enums = Enums::from([(
+            EnumId(0),
+            vec![Variant {
+                value: 0,
+                payload: vec![Column::Bool; 2 * N],
+            }],
+        )]);
+        let column = Column::Enum(p);
+        let arms: Vec<Pat> = (0..N)
+            .map(|i| {
+                let subs = (0..2 * N)
+                    .map(|j| {
+                        if j == i || j == i + N {
+                            value(1)
+                        } else {
+                            Pat::Wild
+                        }
+                    })
+                    .collect();
+                Pat::Value(0, subs)
+            })
+            .collect();
+        let witnesses = missing_up_to(&enums, column, &arms, 4);
+        assert_eq!(witnesses.len(), 4);
+        // `true` is examined before `false` (ADR 0040), and leaves every arm
+        // until position `N`, where each `false` leaves one fewer:
+        // `P::A(true, ..., true, false, ..., false)`.
+        let first: Vec<Pat> = std::iter::repeat_n(value(1), N)
+            .chain(std::iter::repeat_n(value(0), N))
+            .collect();
+        assert_eq!(witnesses[0], vec![Pat::Value(0, first)]);
     }
 
     #[test]

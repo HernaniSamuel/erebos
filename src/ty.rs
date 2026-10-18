@@ -1271,22 +1271,25 @@ impl Checker<'_, '_> {
             );
         }
         let rows: Vec<Vec<&Pat>> = values.iter().map(|value| vec![value]).collect();
-        let missing = usefulness::missing(enums, &columns, &rows, arms.is_empty());
+        // Three are shown, and a fourth tells whether there are more: the
+        // search stops there, since the witnesses can be exponentially many
+        // (ADR 0043).
+        let missing = usefulness::missing(enums, &columns, &rows, arms.is_empty(), 4);
         if missing.is_empty() {
             return;
         }
         let diag = match ty {
             Ty::Bool | Ty::Enum(_) => {
-                // At most three, then how many more (ADR 0040).
                 let shown: Vec<String> = missing
                     .iter()
                     .take(3)
                     .map(|witness| self.witness(enums, column, &witness[0]))
                     .collect();
                 let listed: Vec<String> = shown.iter().map(|name| format!("`{name}`")).collect();
-                let listed = match missing.len() - shown.len() {
-                    0 => and_list(&listed),
-                    more => format!("{} and {more} more", listed.join(", ")),
+                let listed = if missing.len() > shown.len() {
+                    format!("{} and more", listed.join(", "))
+                } else {
+                    and_list(&listed)
                 };
                 let arms: Vec<String> = shown
                     .iter()
