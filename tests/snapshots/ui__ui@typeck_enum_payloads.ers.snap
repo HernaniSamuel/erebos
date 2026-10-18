@@ -1,0 +1,125 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_enum_payloads.ers
+---
+--- typeck ---
+struct Point { x: i32 at 0, y: i32 at 4 } size 8, align 4
+#[align(8)] struct Aligned { x: u8 at 0 } size 8, align 8
+struct Holder { tag: u8 at 0, msg: Msg at 4 } size 12, align 4
+enum Mode: u8 { Off = 0, Run = 3 }
+enum Msg: u8 { Nop = 0, Led(bool at 1) = 1, Write(u8 at 1, u16 at 2) = 2, Wide(u32 at 4) = 3 } size 8, align 4
+enum Every: u16 { Ints(u8 at 2, i64 at 8, usize at 16) = 0, Flag(bool at 2) = 1, Pointers(*const u8 at 4, *mut volatile Point at 8) = 2, Bytes(*const [u8] at 4) = 3, Array([u16; 3] at 2) = 4, Struct(Point at 4) = 5, Enums(Mode at 2, Msg at 4) = 6, Empty(() at 2, [u32; 0] at 4) = 7, Nothing = 8 } size 24, align 8
+enum Raised: u8 { A(Aligned at 8) = 0, B = 1 } size 16, align 8
+fn conversions(p: *mut u8, q: *mut volatile Point, bytes: *const [u8; 4]) -> Every
+    let a: Every
+    expr 0 variant Every::Pointers 1380..1401: Every
+    expr 1 local p 1396..1397: *mut u8
+    expr 2 local q 1399..1400: *mut volatile Point
+    expr 3 variant Every::Bytes 1407..1426: Every
+    expr 4 local bytes 1420..1425: *const [u8; 4] as *const [u8]
+fn every(point: Point, m: Msg) -> Every
+    let a: Every
+    let b: Every
+    let c: Every
+    let d: Every
+    let e: Every
+    expr 5 variant Every::Ints 1491..1512: Every
+    expr 6 int 1 1503..1504: u8
+    expr 7 neg 1506..1508: i64
+    expr 8 int 2 1507..1508: i64
+    expr 9 int 3 1510..1511: usize
+    expr 10 variant Every::Array 1533..1556: Every
+    expr 11 array 1546..1555: [u16; 3]
+    expr 12 int 1 1547..1548: u16
+    expr 13 int 2 1550..1551: u16
+    expr 14 int 3 1553..1554: u16
+    expr 15 variant Every::Struct 1577..1597: Every
+    expr 16 local point 1591..1596: Point
+    expr 17 variant Every::Enums 1618..1644: Every
+    expr 18 variant Mode::Run 1631..1640: Mode
+    expr 19 local m 1642..1643: Msg
+    expr 20 variant Every::Empty 1665..1685: Every
+    expr 21 unit 1678..1680: ()
+    expr 22 array 1682..1684: [u32; 0]
+    expr 23 variant Every::Nothing 1691..1705: Every
+fn take(m: Msg) -> Msg
+    let h: Holder
+    let mut copy: Msg
+    expr 24 struct Holder 1754..1779: Holder
+    expr 25 int 1 1768..1769: u8
+    expr 26 local m 1776..1777: Msg
+    expr 27 field msg 1805..1810: Msg
+    expr 28 local h 1805..1806: Holder
+    expr 29 assign 1816..1835: ()
+    expr 30 local copy 1816..1820: Msg
+    expr 31 variant Msg::Wide 1823..1835: Msg
+    expr 32 int 7 1833..1834: u32
+    expr 33 assign 1841..1852: ()
+    expr 34 static LAST 1841..1845: Msg
+    expr 35 local copy 1848..1852: Msg
+    expr 36 local copy 1858..1862: Msg
+fn sizes() -> usize
+    expr 37 binary + 1892..1974: usize
+    expr 38 binary + 1892..1956: usize
+    expr 39 binary + 1892..1937: usize
+    expr 40 binary + 1892..1920: usize
+    expr 41 size_of(Msg) 1892..1904: usize
+    expr 42 align_of(Msg) 1907..1920: usize
+    expr 43 size_of(Every) 1923..1937: usize
+    expr 44 align_of(Raised) 1940..1956: usize
+    expr 45 size_of(Holder) 1959..1974: usize
+entry fn main() -> !
+    expr 46 loop 2001..2008: !
+panic fn on_panic() -> !
+    expr 47 loop 2038..2045: !
+comptime fn DEFAULT() -> Msg
+    expr 48 variant Msg::Write 1104..1125: Msg
+    expr 49 int 3 1115..1116: u8
+    expr 50 int 4660 1118..1124: u16
+comptime fn ALL() -> [Msg; 2]
+    expr 51 array 1149..1175: [Msg; 2]
+    expr 52 variant Msg::Nop 1150..1158: Msg
+    expr 53 variant Msg::Led 1160..1174: Msg
+    expr 54 bool true 1169..1173: bool
+comptime fn LAST() -> Msg
+    expr 55 variant Msg::Nop 1200..1208: Msg
+comptime fn TABLE() -> [Every; 2]
+    expr 56 array 1237..1273: [Every; 2]
+    expr 57 variant Every::Flag 1238..1256: Every
+    expr 58 bool false 1250..1255: bool
+    expr 59 variant Every::Nothing 1258..1272: Every
+comptime fn Mode::Off() -> u8
+    expr 60 int 0 608..609: u8
+comptime fn Mode::Run() -> u8
+    expr 61 int 3 617..618: u8
+comptime fn Msg::Nop() -> u8
+    expr 62 int 0 642..643: u8
+comptime fn Msg::Led() -> u8
+    expr 63 int 1 657..658: u8
+comptime fn Msg::Write() -> u8
+    expr 64 int 2 677..678: u8
+comptime fn Msg::Wide() -> u8
+    expr 65 int 3 692..693: u8
+comptime fn Every::Ints() -> u16
+    expr 66 int 0 742..743: u16
+comptime fn Every::Flag() -> u16
+    expr 67 int 1 762..763: u16
+comptime fn Every::Pointers() -> u16
+    expr 68 int 2 812..813: u16
+comptime fn Every::Bytes() -> u16
+    expr 69 int 3 840..841: u16
+comptime fn Every::Array() -> u16
+    expr 70 int 4 865..866: u16
+comptime fn Every::Struct() -> u16
+    expr 71 int 5 888..889: u16
+comptime fn Every::Enums() -> u16
+    expr 72 int 6 914..915: u16
+comptime fn Every::Empty() -> u16
+    expr 73 int 7 943..944: u16
+comptime fn Every::Nothing() -> u16
+    expr 74 int 8 960..961: u16
+comptime fn Raised::A() -> u8
+    expr 75 int 0 1034..1035: u8
+comptime fn Raised::B() -> u8
+    expr 76 int 1 1041..1042: u8

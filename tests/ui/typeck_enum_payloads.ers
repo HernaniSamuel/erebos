@@ -1,0 +1,64 @@
+// emit: typeck
+// Enums with payloads accepted (ADR 0039): payload values of every kind of
+// type, zero-sized ones included; a `*mut T` given where a payload value
+// is a `*const T`, and a `*const [u8; 4]` where it is a `*const [u8]`; and
+// the enum as the type of fields, elements, parameters, return values,
+// constants and statics, and in `size_of` and `align_of`. The dump gives
+// each enum with payloads its layout: the offset of each payload value,
+// its size and alignment. A payload type with `#[align(N)]` raises the
+// enum's alignment.
+struct Point { x: i32, y: i32 }
+enum Mode: u8 { Off = 0, Run = 3 }
+enum Msg: u8 { Nop = 0, Led(bool) = 1, Write(u8, u16) = 2, Wide(u32) = 3 }
+
+enum Every: u16 {
+    Ints(u8, i64, usize) = 0,
+    Flag(bool) = 1,
+    Pointers(*const u8, *mut volatile Point) = 2,
+    Bytes(*const [u8]) = 3,
+    Array([u16; 3]) = 4,
+    Struct(Point) = 5,
+    Enums(Mode, Msg) = 6,
+    Empty((), [u32; 0]) = 7,
+    Nothing = 8,
+}
+
+#[align(8)]
+struct Aligned { x: u8 }
+enum Raised: u8 { A(Aligned) = 0, B = 1 }
+
+struct Holder { tag: u8, msg: Msg }
+
+const DEFAULT: Msg = Msg::Write(3, 0x1234);
+const ALL: [Msg; 2] = [Msg::Nop, Msg::Led(true)];
+static mut LAST: Msg = Msg::Nop;
+static TABLE: [Every; 2] = [Every::Flag(false), Every::Nothing];
+
+fn conversions(p: *mut u8, q: *mut volatile Point, bytes: *const [u8; 4]) -> Every {
+    let a: Every = Every::Pointers(p, q);
+    Every::Bytes(bytes)
+}
+
+fn every(point: Point, m: Msg) -> Every {
+    let a: Every = Every::Ints(1, -2, 3);
+    let b: Every = Every::Array([1, 2, 3]);
+    let c: Every = Every::Struct(point);
+    let d: Every = Every::Enums(Mode::Run, m);
+    let e: Every = Every::Empty((), []);
+    Every::Nothing
+}
+
+fn take(m: Msg) -> Msg {
+    let h: Holder = Holder { tag: 1, msg: m };
+    let mut copy: Msg = h.msg;
+    copy = Msg::Wide(7);
+    LAST = copy;
+    copy
+}
+
+fn sizes() -> usize {
+    size_of(Msg) + align_of(Msg) + size_of(Every) + align_of(Raised) + size_of(Holder)
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

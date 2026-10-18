@@ -1,0 +1,388 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_enum_payload_errors.ers
+---
+--- errors ---
+ty::invalid-cast
+
+  × cannot cast `Msg`
+    ╭─[typeck_enum_payload_errors.ers:10:37]
+  9 │ enum Mode: u8 { Off = 0, On = 1 }
+ 10 │ enum Next: u8 { First = 0, Second = Msg::Nop as u8 + 1 }
+    ·                                     ────┬───
+    ·                                         ╰── an enum with payloads converts to nothing
+ 11 │ 
+    ╰────
+  help: it is an aggregate, not an integer; its variant is read with a `match` (ADR 0039)
+ty::wrong-payload-count
+
+  × `Msg::Write` carries 2 values, but 1 was given
+    ╭─[typeck_enum_payload_errors.ers:13:18]
+  7 │ // an alignment through `#[align(N)]` cannot be a field of a packed struct.
+  8 │ enum Msg: u8 { Nop = 0, Led(bool) = 1, Write(u8, u16) = 2, Wide(u32) = 3 }
+    ·                                        ──┬──
+    ·                                          ╰── declared here
+  9 │ enum Mode: u8 { Off = 0, On = 1 }
+ 10 │ enum Next: u8 { First = 0, Second = Msg::Nop as u8 + 1 }
+ 11 │ 
+ 12 │ fn counts() {
+ 13 │     let a: Msg = Msg::Write(3);
+    ·                  ──────┬──────
+    ·                        ╰── in this variant
+ 14 │     let b: Msg = Msg::Write;
+    ╰────
+ty::wrong-payload-count
+
+  × `Msg::Write` carries 2 values, but none are given
+    ╭─[typeck_enum_payload_errors.ers:14:18]
+  7 │ // an alignment through `#[align(N)]` cannot be a field of a packed struct.
+  8 │ enum Msg: u8 { Nop = 0, Led(bool) = 1, Write(u8, u16) = 2, Wide(u32) = 3 }
+    ·                                        ──┬──
+    ·                                          ╰── declared here
+  9 │ enum Mode: u8 { Off = 0, On = 1 }
+ 10 │ enum Next: u8 { First = 0, Second = Msg::Nop as u8 + 1 }
+ 11 │ 
+ 12 │ fn counts() {
+ 13 │     let a: Msg = Msg::Write(3);
+ 14 │     let b: Msg = Msg::Write;
+    ·                  ─────┬────
+    ·                       ╰── built without its values
+ 15 │     let c: Msg = Msg::Nop(1);
+    ╰────
+  help: a variant with a payload is built with its values, as in `Msg::Write(..., ...)`; it is not
+        a function (ADR 0039)
+ty::wrong-payload-count
+
+  × `Msg::Nop` carries no values, but 1 was given
+    ╭─[typeck_enum_payload_errors.ers:15:18]
+  7 │ // an alignment through `#[align(N)]` cannot be a field of a packed struct.
+  8 │ enum Msg: u8 { Nop = 0, Led(bool) = 1, Write(u8, u16) = 2, Wide(u32) = 3 }
+    ·                ─┬─
+    ·                 ╰── declared here
+  9 │ enum Mode: u8 { Off = 0, On = 1 }
+ 10 │ enum Next: u8 { First = 0, Second = Msg::Nop as u8 + 1 }
+ 11 │ 
+ 12 │ fn counts() {
+ 13 │     let a: Msg = Msg::Write(3);
+ 14 │     let b: Msg = Msg::Write;
+ 15 │     let c: Msg = Msg::Nop(1);
+    ·                  ─────┬─────
+    ·                       ╰── in this variant
+ 16 │     let d: Msg = Msg::Nop();
+    ╰────
+  help: a variant without payload is named without parentheses: `Msg::Nop` (ADR 0039)
+ty::wrong-payload-count
+
+  × `Msg::Nop` carries no values, but is written with parentheses
+    ╭─[typeck_enum_payload_errors.ers:16:18]
+  7 │ // an alignment through `#[align(N)]` cannot be a field of a packed struct.
+  8 │ enum Msg: u8 { Nop = 0, Led(bool) = 1, Write(u8, u16) = 2, Wide(u32) = 3 }
+    ·                ─┬─
+    ·                 ╰── declared here
+  9 │ enum Mode: u8 { Off = 0, On = 1 }
+ 10 │ enum Next: u8 { First = 0, Second = Msg::Nop as u8 + 1 }
+ 11 │ 
+ 12 │ fn counts() {
+ 13 │     let a: Msg = Msg::Write(3);
+ 14 │     let b: Msg = Msg::Write;
+ 15 │     let c: Msg = Msg::Nop(1);
+ 16 │     let d: Msg = Msg::Nop();
+    ·                  ─────┬────
+    ·                       ╰── in this variant
+ 17 │     let e: Mode = Mode::Off();
+    ╰────
+  help: a variant without payload is named without parentheses: `Msg::Nop` (ADR 0039)
+ty::wrong-payload-count
+
+  × `Mode::Off` carries no values, but is written with parentheses
+    ╭─[typeck_enum_payload_errors.ers:17:19]
+  8 │ enum Msg: u8 { Nop = 0, Led(bool) = 1, Write(u8, u16) = 2, Wide(u32) = 3 }
+  9 │ enum Mode: u8 { Off = 0, On = 1 }
+    ·                 ─┬─
+    ·                  ╰── declared here
+ 10 │ enum Next: u8 { First = 0, Second = Msg::Nop as u8 + 1 }
+ 11 │ 
+ 12 │ fn counts() {
+ 13 │     let a: Msg = Msg::Write(3);
+ 14 │     let b: Msg = Msg::Write;
+ 15 │     let c: Msg = Msg::Nop(1);
+ 16 │     let d: Msg = Msg::Nop();
+ 17 │     let e: Mode = Mode::Off();
+    ·                   ─────┬─────
+    ·                        ╰── in this variant
+ 18 │     let f: Msg = Msg::Write(1, 2, 3);
+    ╰────
+  help: a variant without payload is named without parentheses: `Mode::Off` (ADR 0039)
+ty::wrong-payload-count
+
+  × `Msg::Write` carries 2 values, but 3 were given
+   ╭─[typeck_enum_payload_errors.ers:8:40]
+ 7 │ // an alignment through `#[align(N)]` cannot be a field of a packed struct.
+ 8 │ enum Msg: u8 { Nop = 0, Led(bool) = 1, Write(u8, u16) = 2, Wide(u32) = 3 }
+   ·                                        ──┬──
+   ·                                          ╰── declared here
+ 9 │ enum Mode: u8 { Off = 0, On = 1 }
+   ╰────
+    ╭─[typeck_enum_payload_errors.ers:18:18]
+ 17 │     let e: Mode = Mode::Off();
+ 18 │     let f: Msg = Msg::Write(1, 2, 3);
+    ·                  ─────────┬─────────
+    ·                           ╰── in this variant
+ 19 │     let g: Msg = Msg::Led();
+    ╰────
+ty::wrong-payload-count
+
+  × `Msg::Led` carries 1 value, but none were given
+   ╭─[typeck_enum_payload_errors.ers:8:25]
+ 7 │ // an alignment through `#[align(N)]` cannot be a field of a packed struct.
+ 8 │ enum Msg: u8 { Nop = 0, Led(bool) = 1, Write(u8, u16) = 2, Wide(u32) = 3 }
+   ·                         ─┬─
+   ·                          ╰── declared here
+ 9 │ enum Mode: u8 { Off = 0, On = 1 }
+   ╰────
+    ╭─[typeck_enum_payload_errors.ers:19:18]
+ 18 │     let f: Msg = Msg::Write(1, 2, 3);
+ 19 │     let g: Msg = Msg::Led();
+    ·                  ─────┬────
+    ·                       ╰── in this variant
+ 20 │ }
+    ╰────
+ty::literal-out-of-range
+
+  × literal out of range for `u8`
+    ╭─[typeck_enum_payload_errors.ers:23:29]
+ 22 │ fn values() {
+ 23 │     let a: Msg = Msg::Write(256, 0x1_0000);
+    ·                             ─┬─
+    ·                              ╰── `256` does not fit in `u8`
+ 24 │     let b: Msg = Msg::Led(1);
+    ╰────
+ty::literal-out-of-range
+
+  × literal out of range for `u16`
+    ╭─[typeck_enum_payload_errors.ers:23:34]
+ 22 │ fn values() {
+ 23 │     let a: Msg = Msg::Write(256, 0x1_0000);
+    ·                                  ────┬───
+    ·                                      ╰── `65536` does not fit in `u16`
+ 24 │     let b: Msg = Msg::Led(1);
+    ╰────
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_enum_payload_errors.ers:24:27]
+ 23 │     let a: Msg = Msg::Write(256, 0x1_0000);
+ 24 │     let b: Msg = Msg::Led(1);
+    ·                           ┬
+    ·                           ╰── expected `bool`, found an integer
+ 25 │     let c: Msg = Msg::Wide(Mode::On);
+    ╰────
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_enum_payload_errors.ers:25:28]
+ 24 │     let b: Msg = Msg::Led(1);
+ 25 │     let c: Msg = Msg::Wide(Mode::On);
+    ·                            ────┬───
+    ·                                ╰── expected `u32`, found `Mode`
+ 26 │ }
+    ╰────
+ty::not-a-place
+
+  × `&raw` needs a place in memory
+    ╭─[typeck_enum_payload_errors.ers:29:36]
+ 28 │ fn operations(m: Msg, n: Msg) {
+ 29 │     let a: *const Msg = &raw const Msg::Write(3, 4);
+    ·                                    ────────┬───────
+    ·                                            ╰── a value, not a place
+ 30 │     Msg::Wide(1) = m;
+    ╰────
+  help: take the address of a variable, `*pointer` or `a[index]`; to point at a value, store it in
+        a `let` first
+ty::not-assignable
+
+  × cannot assign to this expression
+    ╭─[typeck_enum_payload_errors.ers:30:5]
+ 29 │     let a: *const Msg = &raw const Msg::Write(3, 4);
+ 30 │     Msg::Wide(1) = m;
+    ·     ──────┬─────
+    ·           ╰── not a variable, `*pointer` or `a[index]`
+ 31 │     let b: bool = m == n;
+    ╰────
+ty::invalid-operand
+
+  × `==` needs integers, pointers, `bool` or enums without payloads, found `Msg`
+    ╭─[typeck_enum_payload_errors.ers:31:19]
+ 30 │     Msg::Wide(1) = m;
+ 31 │     let b: bool = m == n;
+    ·                   ───┬──
+    ·                      ╰── has type `Msg`
+ 32 │     let c: bool = m != Msg::Nop;
+    ╰────
+  help: an enum with payloads is an aggregate, which operators do not apply to; tell its variants
+        apart with a `match` (ADR 0039)
+ty::invalid-operand
+
+  × `!=` needs integers, pointers, `bool` or enums without payloads, found `Msg`
+    ╭─[typeck_enum_payload_errors.ers:32:19]
+ 31 │     let b: bool = m == n;
+ 32 │     let c: bool = m != Msg::Nop;
+    ·                   ──────┬──────
+    ·                         ╰── has type `Msg`
+ 33 │     let d: bool = m < n;
+    ╰────
+  help: an enum with payloads is an aggregate, which operators do not apply to; tell its variants
+        apart with a `match` (ADR 0039)
+ty::invalid-operand
+
+  × `<` needs integers or pointers, found `Msg`
+    ╭─[typeck_enum_payload_errors.ers:33:19]
+ 32 │     let c: bool = m != Msg::Nop;
+ 33 │     let d: bool = m < n;
+    ·                   ──┬──
+    ·                     ╰── has type `Msg`
+ 34 │     let e: u8 = m as u8;
+    ╰────
+  help: an enum with payloads is an aggregate, which operators do not apply to; tell its variants
+        apart with a `match` (ADR 0039)
+ty::invalid-cast
+
+  × cannot cast `Msg`
+    ╭─[typeck_enum_payload_errors.ers:34:17]
+ 33 │     let d: bool = m < n;
+ 34 │     let e: u8 = m as u8;
+    ·                 ┬
+    ·                 ╰── an enum with payloads converts to nothing
+ 35 │     let f: Msg = 3 as Msg;
+    ╰────
+  help: it is an aggregate, not an integer; its variant is read with a `match` (ADR 0039)
+ty::invalid-cast
+
+  × cannot cast to `Msg`
+    ╭─[typeck_enum_payload_errors.ers:35:23]
+ 34 │     let e: u8 = m as u8;
+ 35 │     let f: Msg = 3 as Msg;
+    ·                       ─┬─
+    ·                        ╰── nothing converts to an enum
+ 36 │     let g: Msg = Mode::On as Msg;
+    ╰────
+  help: a value of an enum with payloads is built from one of its variants, such as `Msg::Nop`
+        (ADR 0039)
+ty::invalid-cast
+
+  × cannot cast to `Msg`
+    ╭─[typeck_enum_payload_errors.ers:36:30]
+ 35 │     let f: Msg = 3 as Msg;
+ 36 │     let g: Msg = Mode::On as Msg;
+    ·                              ─┬─
+    ·                               ╰── nothing converts to an enum
+ 37 │     let h: u8 = m.tag;
+    ╰────
+  help: a value of an enum with payloads is built from one of its variants, such as `Msg::Nop`
+        (ADR 0039)
+ty::no-fields
+
+  × `Msg` has no fields
+    ╭─[typeck_enum_payload_errors.ers:37:19]
+ 36 │     let g: Msg = Mode::On as Msg;
+ 37 │     let h: u8 = m.tag;
+    ·                   ─┬─
+    ·                    ╰── no such field
+ 38 │     let i: usize = offset_of(Msg, tag);
+    ╰────
+  help: the values of an enum's payload have no names, and are reached only by patterns (ADR 0039,
+        0040)
+ty::no-fields
+
+  × `Msg` has no fields
+    ╭─[typeck_enum_payload_errors.ers:38:35]
+ 37 │     let h: u8 = m.tag;
+ 38 │     let i: usize = offset_of(Msg, tag);
+    ·                                   ─┬─
+    ·                                    ╰── no such field
+ 39 │     let j: bool = m == 2;
+    ╰────
+  help: the values of an enum's payload have no names, and are reached only by patterns (ADR 0039,
+        0040)
+ty::invalid-operand
+
+  × `==` needs integers, pointers, `bool` or enums without payloads, found `Msg`
+    ╭─[typeck_enum_payload_errors.ers:39:19]
+ 38 │     let i: usize = offset_of(Msg, tag);
+ 39 │     let j: bool = m == 2;
+    ·                   ───┬──
+    ·                      ╰── has type `Msg`
+ 40 │ }
+    ╰────
+  help: an enum with payloads is an aggregate, which operators do not apply to; tell its variants
+        apart with a `match` (ADR 0039)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_enum_payload_errors.ers:39:24]
+ 38 │     let i: usize = offset_of(Msg, tag);
+ 39 │     let j: bool = m == 2;
+    ·                        ┬
+    ·                        ╰── expected `Msg`, found an integer
+ 40 │ }
+    ╰────
+  help: write a variant of `Msg`, such as `Msg::Nop` (ADR 0035)
+ty::volatile-aggregate
+
+  × a volatile `Msg` cannot be accessed as a whole
+    ╭─[typeck_enum_payload_errors.ers:43:18]
+ 42 │ fn through(p: *mut volatile Msg, m: Msg) {
+ 43 │     let a: Msg = *p;
+    ·                  ─┬
+    ·                   ╰── an enum with payloads is an aggregate, without fields to access one at a time
+ 44 │     *p = m;
+    ╰────
+  help: the width and number of the bus accesses would be up to the compiler; device registers are
+        described with structs, integers and enums without payloads (ADR 0023, 0039)
+ty::volatile-aggregate
+
+  × a volatile `Msg` cannot be accessed as a whole
+    ╭─[typeck_enum_payload_errors.ers:44:5]
+ 43 │     let a: Msg = *p;
+ 44 │     *p = m;
+    ·     ─┬
+    ·      ╰── an enum with payloads is an aggregate, without fields to access one at a time
+ 45 │ }
+    ╰────
+  help: the width and number of the bus accesses would be up to the compiler; device registers are
+        described with structs, integers and enums without payloads (ADR 0023, 0039)
+ty::match-type
+
+  × cannot `match` on a value of type `Msg`
+    ╭─[typeck_enum_payload_errors.ers:52:23]
+ 51 │ fn matches(m: Msg) -> u8 {
+ 52 │     let a: u8 = match m {
+    ·                       ┬
+    ·                       ╰── has type `Msg`
+ 53 │         Msg::Nop => 1,
+    ╰────
+  help: a `match` takes an integer, a `bool` or an enum without payloads (ADR 0037)
+ty::match-type
+
+  × cannot `match` on a value of type `Msg`
+    ╭─[typeck_enum_payload_errors.ers:56:11]
+ 55 │     };
+ 56 │     match LED {
+    ·           ─┬─
+    ·            ╰── has type `Msg`
+ 57 │         _ => a,
+    ╰────
+  help: a `match` takes an integer, a `bool` or an enum without payloads (ADR 0037)
+ty::aligned-in-packed
+
+  × a packed struct cannot contain `Raised`
+    ╭─[typeck_enum_payload_errors.ers:65:26]
+ 64 │ #[packed]
+ 65 │ struct Packed { tag: u8, raised: Raised }
+    ·        ───┬──            ───┬──
+    ·           │                 ╰── asks for an alignment through `#[align]`
+    ·           ╰── packed: alignment 1
+ 66 │ 
+    ╰────
+  help: the alignment it asks for could not be kept (ADR 0022)

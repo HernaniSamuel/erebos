@@ -304,8 +304,10 @@ impl Parser<'_> {
         })
     }
 
-    /// `enum Name: Type { Variant = value, ... }`. The integer type and every
-    /// value are written, never implied (ADR 0035).
+    /// `enum Name: Type { Variant = value, Variant(T, ...) = value, ... }`.
+    /// The integer type and every value are written, never implied
+    /// (ADR 0035); a payload goes between a variant's name and its value
+    /// (ADR 0039).
     fn enum_decl(&mut self, attrs: Vec<Attr>) -> PResult<EnumDecl> {
         let start = self.bump().span;
         let name = self.ident()?;
@@ -328,6 +330,10 @@ impl Parser<'_> {
         self.expect(TokenKind::LBrace)?;
         let variants = self.brace_list(|p| {
             let name = p.ident()?;
+            let payload = match p.eat(TokenKind::LParen) {
+                Some(open) => p.payload(&name, open)?,
+                None => Vec::new(),
+            };
             if p.eat(TokenKind::Eq).is_none() {
                 let found = p.peek();
                 p.diags.push(
@@ -344,7 +350,27 @@ impl Parser<'_> {
                 return Err(Reported);
             }
             let value = p.nested_expr()?;
-            Ok(VariantDecl { name, value })
+            // `Name = 0(u8)`: the payload comes before the value.
+            if p.at(TokenKind::LParen) {
+                let found = p.peek();
+                p.diags.push(
+                    Diagnostic::error(
+                        "parser::unexpected-token",
+                        format!("expected `,` or `}}`, found {}", found.kind.describe()),
+                    )
+                    .label(found.span, "expected `,` or `}`")
+                    .help(format!(
+                        "a payload is written after the variant's name, before its value, as in `{}(u8) = 0` (ADR 0039)",
+                        name.name
+                    )),
+                );
+                return Err(Reported);
+            }
+            Ok(VariantDecl {
+                name,
+                payload,
+                value,
+            })
         })?;
         Ok(EnumDecl {
             attrs,
@@ -353,6 +379,28 @@ impl Parser<'_> {
             variants,
             span: start.to(self.tokens[self.pos - 1].span),
         })
+    }
+
+    /// The payload of the variant `name`, `T, ...)` after its `(`, with an
+    /// optional trailing comma (ADR 0039). `()` alone is reported, and
+    /// gives no types: a variant without payload has no parentheses.
+    fn payload(&mut self, name: &Ident, open: Token) -> PResult<Vec<Ty>> {
+        let types = self.comma_list(Self::ty)?;
+        if types.is_empty() {
+            let close = self.tokens[self.pos - 1].span;
+            self.diags.push(
+                Diagnostic::error(
+                    "parser::empty-payload",
+                    format!("the variant `{}` has a payload without types", name.name),
+                )
+                .label(open.span.to(close), "no types")
+                .help(format!(
+                    "a variant without payload is written without parentheses, `{}`, and one with a payload lists its types, as in `{}(u8)` (ADR 0039)",
+                    name.name, name.name
+                )),
+            );
+        }
+        Ok(types)
     }
 
     /// Parses `item, item, ...}` after an opening `{`, allowing a trailing
@@ -833,6 +881,16 @@ impl Parser<'_> {
                 let name = self.ident()?;
                 if self.eat(TokenKind::ColonColon).is_some() {
                     let variant = self.ident()?;
+                    // Arguments as a call's, whatever the path names
+                    // (ADR 0039).
+                    if self.eat(TokenKind::LParen).is_some() {
+                        let args = self.comma_list(Self::nested_expr)?;
+                        let end = self.tokens[self.pos - 1].span;
+                        return Ok(Expr {
+                            span: token.span.to(end),
+                            kind: ExprKind::PathCall(name, variant, args),
+                        });
+                    }
                     return Ok(Expr {
                         span: token.span.to(variant.span),
                         kind: ExprKind::Path(name, variant),

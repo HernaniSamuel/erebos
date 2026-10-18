@@ -351,6 +351,72 @@ fn repeated(k: usize) -> u64 {
     mix(h, (*pointers[1]) as u64)
 }
 
+// Enums with payloads (ADR 0039): variants of every kind, built in
+// constants and in `comptime` at compile time, and at run time from values
+// C hides, then passed through C on the C union, compared through their
+// tag and the bytes of their variant's payload, read through a
+// `*const u8`: the other bytes are unspecified.
+enum Small: u8 { Off = 0, On(u8) = 1 }
+enum Packet: u16 {
+    Empty = 0,
+    Byte(u8) = 1,
+    Two(u8, u32) = 2,
+    Flags(bool, Mode) = 3,
+    Data([u8; 3], i16) = 4,
+    Nested(Pair) = 5,
+    Inner(Small) = 6,
+    Zero((), u8) = 7,
+}
+
+extern fn opaque_packet(p: Packet) -> Packet;
+
+const EMPTY: Packet = Packet::Empty;
+const BYTE: Packet = Packet::Byte(200);
+const TWO: Packet = Packet::Two(3, 70_000);
+const FLAGS: Packet = Packet::Flags(true, Mode::Max);
+const DATA: Packet = Packet::Data([1, 2, 255], -2);
+const NESTED: Packet = Packet::Nested(Pair { a: 7, b: 0xFFFF_FFFF });
+const INNER_ON: Packet = Packet::Inner(Small::On(9));
+const INNER_OFF: Packet = Packet::Inner(Small::Off);
+const ZERO: Packet = Packet::Zero((), 5);
+
+fn packet_bytes(h: u64, p: *const u8, from: usize, to: usize) -> u64 {
+    let mut h: u64 = h;
+    let mut i: usize = from;
+    while i < to {
+        h = mix(h, p[i] as u64);
+        i += 1;
+    }
+    h
+}
+
+// Reads only the tag and the payload of the variant it names, at the
+// offsets of `Packet`'s layout: tag at 0, then each payload value as a
+// struct field after it.
+fn packet_hash(packet: Packet) -> u64 {
+    let copy: Packet = packet;
+    let p: *const u8 = &raw const copy as *const u8;
+    let tag: u64 = p[0] as u64 | (p[1] as u64) << 8;
+    let h: u64 = mix(0, tag);
+    if tag == 1 || tag == 7 {
+        packet_bytes(h, p, 2, 3)
+    } else if tag == 2 {
+        packet_bytes(packet_bytes(h, p, 2, 3), p, 4, 8)
+    } else if tag == 3 {
+        packet_bytes(h, p, 2, 4)
+    } else if tag == 4 {
+        packet_bytes(packet_bytes(h, p, 2, 5), p, 6, 8)
+    } else if tag == 5 {
+        packet_bytes(h, p, 4, 12)
+    } else if tag == 6 && p[2] == 1 {
+        packet_bytes(h, p, 2, 4)
+    } else if tag == 6 {
+        packet_bytes(h, p, 2, 3)
+    } else {
+        h
+    }
+}
+
 struct Uart { thr: u8 }
 
 fn putc(byte: u8) {
@@ -422,6 +488,19 @@ entry fn main() -> ! {
     failures += check(39, comptime enum_matches(Mode::Off, Level::Low, Port::Top, Code::Fault, 7), enum_matches(opaque_mode(Mode::Off), opaque_level(Level::Low), opaque_port(Port::Top), opaque_code(Code::Fault), opaque_u8(7)));
     failures += check(40, comptime enum_matches(Mode::Max, Level::Minus, Port::Data, Code::Fine, 3), enum_matches(opaque_mode(Mode::Max), opaque_level(Level::Minus), opaque_port(Port::Data), opaque_code(Code::Fine), opaque_u8(3)));
     failures += check(41, comptime enum_matches(Mode::Run, Level::High, Port::Data, Code::Neg, 200), enum_matches(opaque_mode(Mode::Run), opaque_level(Level::High), opaque_port(Port::Data), opaque_code(Code::Neg), opaque_u8(200)));
+    failures += check(42, comptime packet_hash(EMPTY), packet_hash(opaque_packet(Packet::Empty)));
+    failures += check(43, comptime packet_hash(BYTE), packet_hash(opaque_packet(Packet::Byte(opaque_u8(200)))));
+    failures += check(44, comptime packet_hash(TWO), packet_hash(opaque_packet(Packet::Two(opaque_u8(3), opaque_u32(70_000)))));
+    failures += check(45, comptime packet_hash(FLAGS), packet_hash(opaque_packet(Packet::Flags(opaque_u8(1) == 1, opaque_mode(Mode::Max)))));
+    failures += check(46, comptime packet_hash(DATA), packet_hash(opaque_packet(Packet::Data([opaque_u8(1), 2, 255], opaque_i16(-2)))));
+    failures += check(47, comptime packet_hash(NESTED), packet_hash(opaque_packet(Packet::Nested(Pair { a: opaque_u32(7), b: 0xFFFF_FFFF }))));
+    failures += check(48, comptime packet_hash(INNER_ON), packet_hash(opaque_packet(Packet::Inner(Small::On(opaque_u8(9))))));
+    failures += check(49, comptime packet_hash(INNER_OFF), packet_hash(opaque_packet(Packet::Inner(Small::Off))));
+    failures += check(50, comptime packet_hash(ZERO), packet_hash(opaque_packet(Packet::Zero((), opaque_u8(5)))));
+    // Built in a `comptime` expression, whose bytes outside the variant
+    // were never written; and constant data read at run time.
+    failures += check(51, comptime packet_hash(Packet::Two(3, 70_000)), packet_hash(opaque_packet(TWO)));
+    failures += check(52, comptime packet_hash(Packet::Nested(Pair { a: 7, b: 0xFFFF_FFFF })), packet_hash(opaque_packet(NESTED)));
     if failures == 0 {
         putc(b'd'); putc(b'i'); putc(b'f'); putc(b'f'); putc(b'e'); putc(b'r'); putc(b'e');
         putc(b'n'); putc(b't'); putc(b'i'); putc(b'a'); putc(b'l'); putc(b' '); putc(b'o');

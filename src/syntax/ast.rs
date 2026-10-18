@@ -61,7 +61,8 @@ pub struct StructDecl {
     pub span: Span,
 }
 
-/// `enum Name: Type { Variant = value, ... }` (ADR 0035)
+/// `enum Name: Type { Variant = value, ... }` (ADR 0035), whose variants
+/// may carry payloads (ADR 0039).
 #[derive(Debug)]
 pub struct EnumDecl {
     pub attrs: Vec<Attr>,
@@ -72,10 +73,14 @@ pub struct EnumDecl {
     pub span: Span,
 }
 
-/// `Name = value`, the value computed at compile time (ADR 0035).
+/// `Name = value` or `Name(T, ...) = value`, the value computed at compile
+/// time (ADR 0035, 0039).
 #[derive(Debug)]
 pub struct VariantDecl {
     pub name: Ident,
+    /// The payload's types, in order; empty for a variant without payload,
+    /// which is written without parentheses (ADR 0039).
+    pub payload: Vec<Ty>,
     pub value: Expr,
 }
 
@@ -212,6 +217,9 @@ pub enum ExprKind {
     Name(Ident),
     /// `Enum::Variant` (ADR 0035).
     Path(Ident, Ident),
+    /// A path followed by arguments, `Enum::Variant(args)` (ADR 0039):
+    /// what the path names is resolved later.
+    PathCall(Ident, Ident, Vec<Expr>),
     /// `name(args)`: a call to a function.
     Call(Ident, Vec<Expr>),
     /// `Name { field: value, ... }`, fields in the order written.

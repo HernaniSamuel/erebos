@@ -28,6 +28,31 @@ enum Port : uint16_t { Port_Data = 0x3F8 };
 enum Level : int32_t { Level_Low = -1, Level_High = 1 };
 struct WithEnums { enum Mode mode; enum Port port; uint8_t tag; enum Level level; enum Mode last; };
 
+/* An enum with payloads: a union of structs that each start with the tag
+ * (ADR 0039). `tests/c_layout.rs` reads the member of each variant by the
+ * variant's name, and its payload values as `p0`, `p1`, ... */
+union Pay8 {
+    uint8_t tag;
+    struct { uint8_t tag; uint8_t p0; } Byte;
+    struct { uint8_t tag; uint8_t p0; uint16_t p1; } Half;
+    struct { uint8_t tag; uint32_t p0; } Word;
+    struct { uint8_t tag; uint64_t p0; } Long;
+};
+union Pay16 {
+    uint16_t tag;
+    struct { uint16_t tag; uint8_t p0; } A;
+    struct { uint16_t tag; uint64_t p0; uint8_t p1; } B;
+    struct { uint16_t tag; struct S p0; } C;
+};
+union Pay32 {
+    uint32_t tag;
+    struct { uint32_t tag; uint8_t p0; uint8_t p1; } A;
+    struct { uint32_t tag; uint16_t p0; } B;
+    struct { uint32_t tag; struct Wide p0; } C;
+    struct { uint32_t tag; int8_t p0; struct Pointers p1; } D;
+};
+struct WithPayloads { uint8_t a; union Pay8 p; uint16_t b; union Pay16 q; uint8_t c; union Pay32 r; };
+
 struct Message {
     uint8_t kind;
     struct { const uint8_t *ptr; size_t len; } text;

@@ -28,6 +28,7 @@ File {
                             name: "Off",
                             span: 239..242,
                         },
+                        payload: [],
                         value: Expr {
                             kind: Int(
                                 Some(
@@ -42,6 +43,7 @@ File {
                             name: "Idle",
                             span: 252..256,
                         },
+                        payload: [],
                         value: Expr {
                             kind: Int(
                                 Some(
@@ -56,6 +58,7 @@ File {
                             name: "Run",
                             span: 266..269,
                         },
+                        payload: [],
                         value: Expr {
                             kind: Binary(
                                 Add,
@@ -133,6 +136,7 @@ File {
                             name: "Low",
                             span: 324..327,
                         },
+                        payload: [],
                         value: Expr {
                             kind: Unary(
                                 Neg,
@@ -153,6 +157,7 @@ File {
                             name: "High",
                             span: 334..338,
                         },
+                        payload: [],
                         value: Expr {
                             kind: Int(
                                 Some(

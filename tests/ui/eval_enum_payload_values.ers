@@ -1,0 +1,15 @@
+// emit: typeck
+// The MIR type of an enum with payloads does not hold the values of its
+// variants (ADR 0038, 0039): a variant's value may be computed by a
+// function that builds another variant of the enum, whose MIR needs the
+// type while the values are computed.
+enum E: u8 { A(u8) = first(), B = 1 }
+
+fn first() -> u8 {
+    let e: E = E::B;
+    let p: *const u8 = &raw const e as *const u8;
+    p[0] + 1
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

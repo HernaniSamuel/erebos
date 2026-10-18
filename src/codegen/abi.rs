@@ -32,7 +32,8 @@ pub enum Cast {
     Pair,
 }
 
-/// The table of ADR 0025.
+/// The table of ADR 0025, which covers enums with payloads as aggregates
+/// (ADR 0039).
 pub fn classify(ty: Ty) -> PassMode {
     if !ty.is_aggregate() {
         return match ty {

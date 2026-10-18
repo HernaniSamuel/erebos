@@ -6,7 +6,7 @@ use crate::diag::{Diagnostic, Diagnostics};
 use crate::hir::{
     Arm, ArrayLen, Block, Comptime, ConstDef, ConstId, EnumDef, EnumId, EnumTy, Expr, ExprId,
     ExprKind, FieldDef, Fn, FnId, FnKind, Hir, IntTy, Local, LocalId, NeverInMemory, NeverPosition,
-    Pattern, PatternKind, StaticDef, StaticId, Stmt, StructDef, StructId, StructTy, Ty,
+    Pattern, PatternKind, PayloadDef, StaticDef, StaticId, Stmt, StructDef, StructId, StructTy, Ty,
     UnsizedPosition, UnsizedType, VariantDef,
 };
 use crate::span::Span;
@@ -135,7 +135,8 @@ pub fn lower(
         });
     }
 
-    // Enums too, each with the integer type it is stored as (ADR 0035).
+    // Enums too, each with the integer type it is stored as (ADR 0035), or
+    // its tag's, and whether a variant carries a payload (ADR 0039).
     let mut enum_ids: HashMap<String, EnumId> = HashMap::new();
     let mut enum_tys = Vec::new();
     for (i, decl) in enum_decls.iter().enumerate() {
@@ -171,6 +172,7 @@ pub fn lower(
             id: EnumId(i as u32),
             name: Box::leak(name.clone().into_boxed_str()),
             int,
+            payloads: decl.variants.iter().any(|v| !v.payload.is_empty()),
         });
     }
 
@@ -685,7 +687,8 @@ impl Lowerer<'_> {
     }
 
     /// An enum, and the bodies computing the values of its variants, the
-    /// first of which is `first_body` (ADR 0035).
+    /// first of which is `first_body` (ADR 0035). A payload type is a type
+    /// of memory (ADR 0039).
     fn enum_decl(
         &mut self,
         decl: &ast::EnumDecl,
@@ -724,11 +727,20 @@ impl Lowerer<'_> {
         let mut variants = Vec::new();
         let mut bodies = Vec::new();
         for (i, variant) in decl.variants.iter().enumerate() {
+            let payload = variant
+                .payload
+                .iter()
+                .map(|ty| PayloadDef {
+                    span: ty.span,
+                    ty: self.memory_ty(ty, NeverPosition::Payload),
+                })
+                .collect();
             let value = self.comptime_body(|this| this.expr(&variant.value));
             let span = variant.name.span.to(value.span);
             variants.push(VariantDef {
                 name: variant.name.name.clone(),
                 span: variant.name.span,
+                payload,
                 value: FnId(first_body + i as u32),
             });
             bodies.push(Fn {
@@ -1316,10 +1328,21 @@ impl Lowerer<'_> {
                 None => ExprKind::Unit,
             },
             ast::ExprKind::Path(enum_name, variant) => match self.variant(enum_name, variant) {
-                Some((id, index)) => ExprKind::Variant(id, index),
+                Some((id, index)) => ExprKind::Variant(id, index, None),
                 // Reported; lowering errors stop the pipeline.
                 None => ExprKind::Unit,
             },
+            // The values of a variant's payload (ADR 0039); type checking
+            // counts them.
+            ast::ExprKind::PathCall(enum_name, variant, args) => {
+                let found = self.variant(enum_name, variant);
+                let args = args.iter().map(|arg| self.expr(arg)).collect();
+                match found {
+                    Some((id, index)) => ExprKind::Variant(id, index, Some(args)),
+                    // Reported; lowering errors stop the pipeline.
+                    None => ExprKind::Unit,
+                }
+            }
             ast::ExprKind::Call(name, args) if name.name == "assert" => {
                 let mut args: Vec<Expr> = args.iter().map(|arg| self.expr(arg)).collect();
                 if !matches!(args.len(), 1 | 2) {

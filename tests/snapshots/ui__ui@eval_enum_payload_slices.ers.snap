@@ -1,0 +1,30 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/eval_enum_payload_slices.ers
+---
+--- errors ---
+eval::pointer-out-of-bounds
+
+  × the value holds a slice of 4 elements of `u8` from offset 1 of `BYTES`, which is 4 bytes long
+    ╭─[eval_enum_payload_slices.ers:11:1]
+ 10 │ const WHOLE: View = View::Bytes(&raw const BYTES);
+ 11 │ const PAST_END: View = View::Bytes(slice(&raw const BYTES[1], 4));
+    · ─────────────────────────────────┬────────────────────────────────┬
+    ·                                  │                                ╰── while evaluating the constant `PAST_END`
+    ·                                  ╰── this value
+ 12 │ const RAW: View = View::Raw(&raw const BYTES[1], 4);
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::pointer-out-of-bounds
+
+  × the value holds a slice of 2 elements of `u8` from offset 3 of `BYTES`, which is 4 bytes long
+    ╭─[eval_enum_payload_slices.ers:13:1]
+ 12 │ const RAW: View = View::Raw(&raw const BYTES[1], 4);
+ 13 │ static VIEWS: [View; 2] = [View::Raw(&raw const BYTES[3], 9), View::Bytes(slice(&raw const BYTES[3], 2))];
+    · ─────────────────────────────────────────────────────┬────────────────────────────────────────────────────┬
+    ·                                                      │                                                    ╰── while evaluating the static `VIEWS`
+    ·                                                      ╰── this value
+ 14 │ 
+    ╰────
+  help: this code runs at compile time (ADR 0027)

@@ -1,0 +1,66 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_enum_payload_layout_errors.ers
+---
+--- errors ---
+ty::infinite-size
+
+  × `List` contains itself
+   ╭─[typeck_enum_payload_layout_errors.ers:7:6]
+ 6 │ // the rounding; and a payload value may be too large alone.
+ 7 │ enum List: u8 { Nil = 0, Cons(u8, List) = 1 }
+   ·      ──┬─
+   ·        ╰── would have infinite size
+ 8 │ struct Node { value: u8, rest: Chain }
+   ╰────
+  help: contain a pointer instead, such as `*mut List` (ADR 0021, 0039)
+ty::infinite-size
+
+  × these types contain each other: Node -> Chain -> Node
+    ╭─[typeck_enum_payload_layout_errors.ers:8:8]
+  7 │ enum List: u8 { Nil = 0, Cons(u8, List) = 1 }
+  8 │ struct Node { value: u8, rest: Chain }
+    ·        ──┬─
+    ·          ╰── would have infinite size
+  9 │ enum Chain: u8 { End = 0, Link(Node) = 1 }
+    ·      ──┬──
+    ·        ╰── part of the cycle
+ 10 │ enum Linked: u8 { Nil = 0, Cons(u8, *const Linked) = 1 }
+    ╰────
+  help: contain a pointer instead, such as `*mut Node` (ADR 0021, 0039)
+ty::too-large
+
+  × `Tagged` is too large
+    ╭─[typeck_enum_payload_layout_errors.ers:12:6]
+ 11 │ 
+ 12 │ enum Tagged: u8 { B([u8; 0x7FFF_FFFF]) = 0 }
+    ·      ───┬──
+    ·         ╰── does not fit in the address space
+ 13 │ enum Rounded: u8 { A([u8; 0x7FFF_FFFE]) = 0, B(u32) = 1 }
+    ╰────
+  help: objects are limited to 2147483647 bytes on this target; an enum is as large as its largest
+        variant, with its tag, rounded up to its alignment (ADR 0039)
+ty::too-large
+
+  × `Rounded` is too large
+    ╭─[typeck_enum_payload_layout_errors.ers:13:6]
+ 12 │ enum Tagged: u8 { B([u8; 0x7FFF_FFFF]) = 0 }
+ 13 │ enum Rounded: u8 { A([u8; 0x7FFF_FFFE]) = 0, B(u32) = 1 }
+    ·      ───┬───
+    ·         ╰── does not fit in the address space
+ 14 │ enum Huge: u8 { A([u8; 0x8000_0000]) = 0 }
+    ╰────
+  help: objects are limited to 2147483647 bytes on this target; an enum is as large as its largest
+        variant, with its tag, rounded up to its alignment (ADR 0039)
+ty::too-large
+
+  × `[u8; 2147483648]` is too large
+    ╭─[typeck_enum_payload_layout_errors.ers:14:19]
+ 13 │ enum Rounded: u8 { A([u8; 0x7FFF_FFFE]) = 0, B(u32) = 1 }
+ 14 │ enum Huge: u8 { A([u8; 0x8000_0000]) = 0 }
+    ·                   ────────┬────────
+    ·                           ╰── this payload value does not fit in the address space
+ 15 │ 
+    ╰────
+  help: objects are limited to 2147483647 bytes on this target

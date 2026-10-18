@@ -135,6 +135,8 @@ pub enum NeverPosition {
     SliceElement,
     Element,
     Field,
+    /// A type of a variant's payload (ADR 0039).
+    Payload,
     /// The type of a `static` or `extern static`.
     Static,
     Const,
@@ -193,7 +195,9 @@ pub struct StructDef {
 }
 
 /// `enum Name: Type { Variant = value, ... }` (ADR 0035): named values of
-/// an integer type, which the enum is stored as.
+/// an integer type, which the enum is stored as; or, if a variant carries a
+/// payload, an aggregate of a tag of that type and the values of the
+/// variant it holds (ADR 0039).
 #[derive(Debug)]
 pub struct EnumDef {
     pub name: String,
@@ -206,8 +210,19 @@ pub struct EnumDef {
 pub struct VariantDef {
     pub name: String,
     pub span: Span,
+    /// The types of its payload values, in order; empty without payload
+    /// (ADR 0039).
+    pub payload: Vec<PayloadDef>,
     /// The body computing its value (ADR 0035).
     pub value: FnId,
+}
+
+/// One value of a variant's payload (ADR 0039).
+#[derive(Debug)]
+pub struct PayloadDef {
+    /// The span of its written type.
+    pub span: Span,
+    pub ty: Ty,
 }
 
 #[derive(Debug)]
@@ -318,13 +333,17 @@ pub struct StructTy {
     pub name: &'static str,
 }
 
-/// An enum type (ADR 0035), with its integer type, which it is stored as.
-/// The name is carried along like a struct's.
+/// An enum type (ADR 0035), with its integer type, which it is stored as,
+/// or which is its tag's when it has payloads (ADR 0039). The name is
+/// carried along like a struct's.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct EnumTy {
     pub id: EnumId,
     pub name: &'static str,
     pub int: IntTy,
+    /// A variant carries a payload: the enum is an aggregate, not its
+    /// integer type (ADR 0039).
+    pub payloads: bool,
 }
 
 /// A raw pointer type (ADR 0013).
@@ -380,10 +399,14 @@ impl Ty {
         }
     }
 
-    /// Arrays, structs and slices: values made of other values. A slice
-    /// is an address and a length (ADR 0031).
+    /// Arrays, structs, slices and enums with payloads: values made of
+    /// other values. A slice is an address and a length (ADR 0031); an
+    /// enum with payloads, a tag and the values of a variant (ADR 0039).
     pub fn is_aggregate(self) -> bool {
-        matches!(self, Ty::Array(..) | Ty::Struct(_)) || self.slice_elem().is_some()
+        matches!(
+            self,
+            Ty::Array(..) | Ty::Struct(_) | Ty::Enum(EnumTy { payloads: true, .. })
+        ) || self.slice_elem().is_some()
     }
 }
 
@@ -452,8 +475,9 @@ pub enum ExprKind {
     /// A static (ADR 0030): a place.
     Static(StaticId),
     /// `Enum::Variant`, by index (ADR 0035): a value, not a place, like a
-    /// constant.
-    Variant(EnumId, u32),
+    /// constant. With its arguments, `Enum::Variant(args)`, if written with
+    /// parentheses: the values of its payload, in order (ADR 0039).
+    Variant(EnumId, u32, Option<Vec<Expr>>),
     /// `comptime expr`, evaluated at compile time (ADR 0029).
     Comptime(Box<Expr>),
     /// `[a, b, c]`
@@ -602,13 +626,15 @@ impl Expr {
             | ExprKind::OffsetOf(..)
             | ExprKind::Const(_)
             | ExprKind::Static(_)
-            | ExprKind::Variant(..)
+            | ExprKind::Variant(_, _, None)
             | ExprKind::Local(_)
             | ExprKind::Continue { .. }
             | ExprKind::Break { value: None, .. }
             | ExprKind::Return(None) => {}
             ExprKind::Break { value: Some(e), .. } | ExprKind::Return(Some(e)) => e.walk(f),
-            ExprKind::Call { args, .. } | ExprKind::Array(args) => {
+            ExprKind::Call { args, .. }
+            | ExprKind::Array(args)
+            | ExprKind::Variant(_, _, Some(args)) => {
                 for arg in args {
                     arg.walk(f);
                 }

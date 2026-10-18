@@ -50,7 +50,8 @@ impl Builder<'_, '_> {
             // A slice is an aggregate (ADR 0031).
             Ty::Ptr(_) if ty.slice_elem().is_some() => return Known::Unknown,
             Ty::Ptr(_) => ADDRESS_MASK,
-            // Aggregates, `()` and `!` are never checked.
+            // Aggregates, enums with payloads among them (ADR 0039), `()`
+            // and `!` are never checked.
             _ => return Known::Unknown,
         };
         match &expr.kind {
@@ -65,7 +66,10 @@ impl Builder<'_, '_> {
                 let value = self.comptime_value(inner);
                 scalar(ty, value)
             }
-            hir::ExprKind::Variant(id, index) => match self.discriminant(*id, *index) {
+            // Only a variant of an enum without payloads, an integer; no
+            // value of an enum with payloads is known (ADR 0039), and its
+            // type is not one checked here.
+            hir::ExprKind::Variant(id, index, _) => match self.discriminant(*id, *index) {
                 Some(value) => Known::Value(value & mask),
                 None => Known::Failed,
             },

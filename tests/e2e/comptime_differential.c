@@ -23,3 +23,23 @@ enum Mode opaque_mode(enum Mode m) { return m; }
 enum Level opaque_level(enum Level l) { return l; }
 enum Port opaque_port(enum Port p) { return p; }
 enum Code opaque_code(enum Code c) { return c; }
+
+/* The twins of the program's struct `Pair` and its enums with payloads,
+ * as unions of structs that each start with the tag (ADR 0039). */
+struct Pair { uint32_t a; uint32_t b; };
+union Small {
+    uint8_t tag;
+    struct { uint8_t tag; uint8_t p0; } On;
+};
+union Packet {
+    uint16_t tag;
+    struct { uint16_t tag; uint8_t p0; } Byte;
+    struct { uint16_t tag; uint8_t p0; uint32_t p1; } Two;
+    struct { uint16_t tag; _Bool p0; enum Mode p1; } Flags;
+    struct { uint16_t tag; uint8_t p0[3]; int16_t p1; } Data;
+    struct { uint16_t tag; struct Pair p0; } Nested;
+    struct { uint16_t tag; union Small p0; } Inner;
+    struct { uint16_t tag; uint8_t p0; } Zero;
+};
+
+union Packet opaque_packet(union Packet p) { return p; }

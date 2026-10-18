@@ -44,7 +44,9 @@ impl Local {
 pub struct Mir {
     /// Every struct type, for dumps; types refer to them directly.
     pub structs: Vec<StructRef>,
-    /// Every enum, for dumps: MIR sees only its integer type (ADR 0035).
+    /// Every enum, for dumps: MIR sees only the integer type of an enum
+    /// without payloads (ADR 0035), and an enum with payloads is a type of
+    /// its own (ADR 0039).
     pub enums: Vec<Enum>,
     /// Read-only data computed at compile time, which constant locals are
     /// bound to (ADR 0029).
@@ -124,6 +126,10 @@ impl Body {
                 (PlaceElem::Deref | PlaceElem::Offset(_), Ty::Ptr(ptr)) => *ptr.pointee,
                 (PlaceElem::Index(_) | PlaceElem::ConstIndex(_), Ty::Array(elem, _)) => *elem,
                 (PlaceElem::Field(index), Ty::Struct(s)) => s.def().fields()[*index as usize].ty,
+                (PlaceElem::Tag, Ty::Enum(e)) => Ty::Int(e.def().int),
+                (PlaceElem::Payload { variant, index }, Ty::Enum(e)) => {
+                    e.def().payload(*variant, *index).ty
+                }
                 (elem, ty) => unreachable!("projection {elem:?} of `{ty}`"),
             })
     }
@@ -290,15 +296,20 @@ pub enum Ty {
     /// likewise.
     Slice(&'static Ty),
     Struct(StructRef),
+    /// An enum with payloads (ADR 0039).
+    Enum(EnumRef),
 }
 
 /// An enum, listed in dumps (ADR 0035): its integer type, and the value of
-/// each variant as the bits of that type.
+/// each variant as the bits of that type; with payloads, also its type
+/// (ADR 0039).
 #[derive(Clone, Debug)]
 pub struct Enum {
     pub name: String,
     pub int: IntTy,
     pub variants: Vec<(String, u64)>,
+    /// The MIR type of an enum with payloads.
+    pub def: Option<EnumRef>,
 }
 
 /// A struct type with its layout (ADR 0022), shared by every type naming
@@ -368,12 +379,96 @@ impl fmt::Debug for StructRef {
     }
 }
 
+/// An enum with payloads, indexing [`Mir::enums`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct EnumId(pub u32);
+
+/// An enum with payloads (ADR 0039): a tag of its integer type at offset
+/// 0, and the payload values of the variant the tag names, each variant
+/// laid out as a struct. Leaked like struct definitions. The values of its
+/// variants are not part of the type; building a variant writes its value
+/// as a constant.
+pub struct EnumDef {
+    pub id: EnumId,
+    pub name: String,
+    /// The type of the tag.
+    pub int: IntTy,
+    pub layout: Layout,
+    /// Set once the type exists, since a payload may point back to the
+    /// enum that contains it.
+    variants: OnceLock<Vec<Variant>>,
+}
+
+/// A variant of an enum with payloads: its payload values, each at its
+/// offset from the start of the enum, named by index.
+#[derive(Debug)]
+pub struct Variant {
+    pub name: String,
+    pub payload: Vec<Field>,
+}
+
+impl EnumDef {
+    pub fn variants(&self) -> &[Variant] {
+        self.variants
+            .get()
+            .expect("variants are set when MIR is built")
+    }
+
+    pub fn set_variants(&self, variants: Vec<Variant>) {
+        self.variants
+            .set(variants)
+            .expect("the variants of an enum are set once");
+    }
+
+    /// Payload value `index` of variant `variant`.
+    pub fn payload(&self, variant: u32, index: u32) -> &Field {
+        &self.variants()[variant as usize].payload[index as usize]
+    }
+}
+
+/// An enum with payloads as a type; the same type exactly when the same
+/// definition, as structs are.
+#[derive(Clone, Copy)]
+pub struct EnumRef(&'static EnumDef);
+
+impl EnumRef {
+    /// Defines an enum; its variants are set later, with `set_variants`.
+    pub fn new(id: EnumId, name: String, int: IntTy, layout: Layout) -> EnumRef {
+        EnumRef(Box::leak(Box::new(EnumDef {
+            id,
+            name,
+            int,
+            layout,
+            variants: OnceLock::new(),
+        })))
+    }
+
+    pub fn def(self) -> &'static EnumDef {
+        self.0
+    }
+}
+
+impl PartialEq for EnumRef {
+    fn eq(&self, other: &Self) -> bool {
+        ptr::eq(self.0, other.0)
+    }
+}
+
+impl Eq for EnumRef {}
+
+impl fmt::Debug for EnumRef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0.name)
+    }
+}
+
 impl Ty {
-    /// Arrays, structs and slices: values made of other values, which are
-    /// copied in memory rather than held in registers. A slice is an
-    /// address and a length (ADR 0031).
+    /// Arrays, structs, slices and enums with payloads: values made of
+    /// other values, which are copied in memory rather than held in
+    /// registers. A slice is an address and a length (ADR 0031); an enum
+    /// with payloads, a tag and the values of a variant (ADR 0039).
     pub fn is_aggregate(self) -> bool {
-        matches!(self, Ty::Array(..) | Ty::Struct(_)) || self.slice_elem().is_some()
+        matches!(self, Ty::Array(..) | Ty::Struct(_) | Ty::Enum(_)) || self.slice_elem().is_some()
     }
 
     /// The element type of a slice, `*const [T]` or `*mut [T]`.
@@ -430,6 +525,7 @@ impl Ty {
             }
             Ty::Slice(_) => unreachable!("`[T]` is unsized, and no place has it (ADR 0031)"),
             Ty::Struct(s) => s.def().layout,
+            Ty::Enum(e) => e.def().layout,
         }
     }
 }
@@ -488,6 +584,12 @@ pub enum PlaceElem {
     ConstIndex(u64),
     /// Field `i` of the struct in the place, in declaration order.
     Field(u32),
+    /// The tag of the enum with payloads in the place, an integer at
+    /// offset 0 (ADR 0039).
+    Tag,
+    /// Payload value `index` of variant `variant` of the enum with payloads
+    /// in the place, by index, where that variant lays it out (ADR 0039).
+    Payload { variant: u32, index: u32 },
 }
 
 impl Place {
@@ -631,6 +733,7 @@ impl fmt::Display for Ty {
             Ty::Array(elem, len) => write!(f, "[{elem}; {len}]"),
             Ty::Slice(elem) => write!(f, "[{elem}]"),
             Ty::Struct(s) => f.write_str(&s.def().name),
+            Ty::Enum(e) => f.write_str(&e.def().name),
         }
     }
 }
@@ -657,6 +760,8 @@ impl fmt::Display for Place {
                 PlaceElem::Index(index) => format!("{text}[{index}]"),
                 PlaceElem::ConstIndex(index) => format!("{text}[{index}]"),
                 PlaceElem::Field(index) => format!("{text}.{index}"),
+                PlaceElem::Tag => format!("{text}.tag"),
+                PlaceElem::Payload { variant, index } => format!("({text} as {variant}).{index}"),
             };
         }
         f.write_str(&text)
@@ -781,17 +886,52 @@ impl fmt::Display for Mir {
             )?;
         }
         for e in &self.enums {
+            // With payloads, its variants are numbered as projections name
+            // them, with each payload value's type and offset (ADR 0039).
+            let Some(def) = e.def else {
+                let variants: Vec<String> = e
+                    .variants
+                    .iter()
+                    .map(|(name, value)| format!("{name} = {}", e.int.display_bits(*value)))
+                    .collect();
+                writeln!(
+                    f,
+                    "enum {}: {} {{ {} }}",
+                    e.name,
+                    e.int,
+                    variants.join(", ")
+                )?;
+                continue;
+            };
+            let def = def.def();
             let variants: Vec<String> = e
                 .variants
                 .iter()
-                .map(|(name, value)| format!("{name} = {}", e.int.display_bits(*value)))
+                .zip(def.variants())
+                .enumerate()
+                .map(|(i, ((name, value), variant))| {
+                    let payload: Vec<String> = variant
+                        .payload
+                        .iter()
+                        .enumerate()
+                        .map(|(j, value)| format!("{j} {} at {}", value.ty, value.offset))
+                        .collect();
+                    let payload = if payload.is_empty() {
+                        String::new()
+                    } else {
+                        format!("({})", payload.join(", "))
+                    };
+                    format!("{i} {name}{payload} = {}", e.int.display_bits(*value))
+                })
                 .collect();
             writeln!(
                 f,
-                "enum {}: {} {{ {} }}",
+                "enum {}: {} {{ {} }} // size {}, align {}",
                 e.name,
                 e.int,
-                variants.join(", ")
+                variants.join(", "),
+                def.layout.size,
+                def.layout.align
             )?;
         }
         if !self.structs.is_empty() || !self.enums.is_empty() {

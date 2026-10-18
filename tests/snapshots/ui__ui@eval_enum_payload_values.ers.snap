@@ -1,0 +1,27 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/eval_enum_payload_values.ers
+---
+--- typeck ---
+enum E: u8 { A(u8 at 1) = 2, B = 1 } size 2, align 1
+fn first() -> u8
+    let e: E
+    let p: *const u8
+    expr 0 variant E::B 343..347: E
+    expr 1 as *const u8 372..397: *const u8
+    expr 2 &raw const 372..384: *const E
+    expr 3 local e 383..384: E
+    expr 4 binary + 403..411: u8
+    expr 5 index 403..407: u8
+    expr 6 local p 403..404: *const u8
+    expr 7 int 0 405..406: usize
+    expr 8 int 1 410..411: u8
+entry fn main() -> !
+    expr 9 loop 438..445: !
+panic fn on_panic() -> !
+    expr 10 loop 475..482: !
+comptime fn E::A() -> u8
+    expr 11 call 291..298: u8
+comptime fn E::B() -> u8
+    expr 12 int 1 304..305: u8

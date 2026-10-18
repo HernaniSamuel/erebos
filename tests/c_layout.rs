@@ -1,6 +1,7 @@
 //! Struct layouts against C (ADR 0022): the layouts the compiler computes
 //! for `tests/layout/structs.ers` must be the ones clang gives the C twins
-//! in `tests/layout/structs.h` on the same target.
+//! in `tests/layout/structs.h` on the same target. The twin of an enum with
+//! payloads is a union of structs that each start with the tag (ADR 0039).
 //!
 //! The compiler's layouts come from `--emit=typeck`; each becomes a
 //! `_Static_assert` on `sizeof`, `_Alignof` and `offsetof`, and clang checks
@@ -70,6 +71,65 @@ fn struct_layouts_match_c() {
     }
     assert!(structs >= 10, "found only {structs} structs in:\n{dump}");
 
+    let mut enums = 0;
+    for line in dump.lines() {
+        // `enum Name: u8 { A = 0, B(u8 at 1, u16 at 2) = 1 } size 4, align 2`;
+        // enums without payloads have no size, being their integer type.
+        let Some(rest) = line
+            .strip_prefix("enum ")
+            .filter(|_| line.contains("} size "))
+        else {
+            continue;
+        };
+        let (name, rest) = rest.split_once(':').unwrap();
+        let (variants, sizes) = rest.rsplit_once("} ").unwrap();
+        let (size, align) = sizes
+            .strip_prefix("size ")
+            .and_then(|s| s.split_once(", align "))
+            .unwrap();
+        let what = |what: &str| format!("\"{name}: {what} differs from C\"");
+        writeln!(
+            checks,
+            "_Static_assert(sizeof(union {name}) == {size}, {});",
+            what("size")
+        )
+        .unwrap();
+        writeln!(
+            checks,
+            "_Static_assert(_Alignof(union {name}) == {align}, {});",
+            what("alignment")
+        )
+        .unwrap();
+        let variants = variants.split_once("{ ").unwrap().1;
+        for variant in split_top_level(variants) {
+            // `B(u8 at 1, u16 at 2) = 1`, or `A = 0` without payload.
+            let Some((variant_name, payload)) = variant.split_once('(') else {
+                continue;
+            };
+            let payload = payload.rsplit_once(')').unwrap().0;
+            writeln!(
+                checks,
+                "_Static_assert(offsetof(union {name}, {variant_name}.tag) == 0, {});",
+                what(&format!("offset of the tag of `{variant_name}`"))
+            )
+            .unwrap();
+            for (i, value) in split_top_level(payload).iter().enumerate() {
+                let offset = value.rsplit_once(" at ").unwrap().1;
+                writeln!(
+                    checks,
+                    "_Static_assert(offsetof(union {name}, {variant_name}.p{i}) == {offset}, {});",
+                    what(&format!("offset of payload value {i} of `{variant_name}`"))
+                )
+                .unwrap();
+            }
+        }
+        enums += 1;
+    }
+    assert!(
+        enums >= 3,
+        "found only {enums} enums with payloads in:\n{dump}"
+    );
+
     let work = Path::new(env!("CARGO_TARGET_TMPDIR")).join("c_layout");
     fs::create_dir_all(&work).unwrap();
     let c_file = work.join("checks.c");
@@ -94,4 +154,25 @@ fn struct_layouts_match_c() {
         "clang disagrees with the compiler's layouts:\n{}\n--- checks ---\n{checks}",
         String::from_utf8_lossy(&output.stderr)
     );
+}
+
+/// `text` split at the `, ` outside parentheses: the variants of an enum,
+/// or the values of a payload, whose types may hold `()`.
+fn split_top_level(text: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut depth = 0;
+    let mut start = 0;
+    for (i, c) in text.char_indices() {
+        match c {
+            '(' => depth += 1,
+            ')' => depth -= 1,
+            ',' if depth == 0 => {
+                parts.push(text[start..i].trim());
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+    parts.push(text[start..].trim());
+    parts
 }

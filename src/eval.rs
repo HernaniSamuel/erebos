@@ -14,8 +14,8 @@ use std::rc::Rc;
 use crate::diag::Diagnostic;
 use crate::int::IntTy;
 use crate::mir::{
-    BasicBlock, BinOp, Body, Const, Local, Operand, PanicCause, Place, PlaceElem, Relocation,
-    Rvalue, Statement, StaticId, StaticRef, Terminator, Ty, UnOp,
+    BasicBlock, BinOp, Body, Const, EnumDef, Local, Operand, PanicCause, Place, PlaceElem,
+    Relocation, Rvalue, Statement, StaticId, StaticRef, Terminator, Ty, UnOp,
 };
 use crate::query::Queries;
 use crate::span::Span;
@@ -570,10 +570,11 @@ impl Interp<'_, '_> {
     }
 
     /// The bytes of the result, of type `ty`; bytes never written are
-    /// zero. A pointer into a static, into it or one past its end, becomes
-    /// a relocation, and a slice must lie inside its static; one into the
-    /// evaluation's own memory cannot leave it (ADR 0030, 0031).
-    fn result(&self, alloc: AllocId, ty: Ty, span: Span) -> EvalResult<ConstValue> {
+    /// zero, those of an enum with payloads outside its variant among them
+    /// (ADR 0039). A pointer into a static, into it or one past its end,
+    /// becomes a relocation, and a slice must lie inside its static; one
+    /// into the evaluation's own memory cannot leave it (ADR 0030, 0031).
+    fn result(&mut self, alloc: AllocId, ty: Ty, span: Span) -> EvalResult<ConstValue> {
         let object = &self.allocs[alloc.0 as usize];
         let mut bytes: Vec<u8> = object
             .bytes
@@ -581,8 +582,9 @@ impl Interp<'_, '_> {
             .zip(&object.written)
             .map(|(&byte, &written)| if written { byte } else { 0 })
             .collect();
+        let pointers = object.pointers.clone();
         let mut relocations = Vec::new();
-        for (&offset, &target) in &object.pointers {
+        for (&offset, &target) in &pointers {
             let target = &self.allocs[target.0 as usize];
             let Some(s) = &target.static_ else {
                 return Err(self.error(
@@ -616,34 +618,103 @@ impl Interp<'_, '_> {
                     span,
                 ));
             }
-            if let Some(elem) = slice_at(ty, u64::from(offset))
-                && !s.def.def().external
+            let def = s.def.def();
+            if !def.external
+                && let Some(elem) = self.slice_at(ty, u64::from(offset), &bytes)?
             {
-                self.slice_in_bounds(object, &bytes, offset, elem, span)?;
+                self.slice_in_bounds(&pointers, &bytes, offset, elem, span)?;
             }
             bytes[at].fill(0);
             relocations.push(Relocation {
                 offset,
-                target: s.def.def().id,
+                target: def.id,
                 addend,
             });
         }
         Ok(ConstValue { bytes, relocations })
     }
 
-    /// Refuses a slice of elements `elem` at `offset` of a result `object`,
-    /// with bytes `bytes`, whose address points into a static, if its
-    /// elements do not all lie inside that static (ADR 0031).
+    /// The element type of the slice at `offset` bytes into a value of type
+    /// `ty` whose bytes, unwritten ones zero, are `bytes`, if a slice
+    /// starts there. Of an enum with payloads, only the payload of the
+    /// variant its tag names is a value (ADR 0039).
+    fn slice_at(&mut self, ty: Ty, offset: u64, bytes: &[u8]) -> EvalResult<Option<Ty>> {
+        // Where `offset` is in a part at `at` of type `part`, if it is.
+        let inside = |at: u64, part: Ty| {
+            offset
+                .checked_sub(at)
+                .filter(|&within| within < part.layout().size)
+        };
+        match ty {
+            Ty::Ptr(_) if offset == 0 => Ok(ty.slice_elem()),
+            Ty::Array(elem, len) => {
+                let size = elem.layout().size;
+                if size == 0 || offset / size >= len {
+                    return Ok(None);
+                }
+                let at = offset / size * size;
+                self.slice_at(*elem, offset - at, &bytes[at as usize..])
+            }
+            Ty::Struct(s) => {
+                for field in s.def().fields() {
+                    if let Some(within) = inside(field.offset, field.ty) {
+                        let part = &bytes[field.offset as usize..];
+                        return self.slice_at(field.ty, within, part);
+                    }
+                }
+                Ok(None)
+            }
+            // Its variants' values are asked for only if a slice may be
+            // there, so that a value that holds none never needs them.
+            Ty::Enum(e) if contains_slice(ty) => {
+                let def = e.def();
+                let tag = bytes[..def.int.bytes() as usize]
+                    .iter()
+                    .rev()
+                    .fold(0u64, |value, &byte| value << 8 | u64::from(byte));
+                let Some(variant) = self.variant_of(def, tag)? else {
+                    return Ok(None);
+                };
+                for field in &def.variants()[variant].payload {
+                    if let Some(within) = inside(field.offset, field.ty) {
+                        let part = &bytes[field.offset as usize..];
+                        return self.slice_at(field.ty, within, part);
+                    }
+                }
+                Ok(None)
+            }
+            _ => Ok(None),
+        }
+    }
+
+    /// The index of the variant of `def` whose value is `tag`, if one is.
+    fn variant_of(&mut self, def: &EnumDef, tag: u64) -> EvalResult<Option<usize>> {
+        let id = crate::hir::EnumId(def.id.0);
+        for index in 0..def.variants().len() {
+            let value = self
+                .q
+                .discriminant(id, index as u32)
+                .ok_or(Failure::Poisoned)?;
+            if value == tag {
+                return Ok(Some(index));
+            }
+        }
+        Ok(None)
+    }
+
+    /// Refuses a slice of elements `elem` at `offset` of a result with
+    /// bytes `bytes` and pointers `pointers`, whose address points into a
+    /// static, if its elements do not all lie inside that static (ADR 0031).
     fn slice_in_bounds(
         &self,
-        object: &Alloc,
+        pointers: &BTreeMap<u32, AllocId>,
         bytes: &[u8],
         offset: u32,
         elem: Ty,
         span: Span,
     ) -> EvalResult<()> {
         let width = target::POINTER_BYTES as u32;
-        let target = &self.allocs[object.pointers[&offset].0 as usize];
+        let target = &self.allocs[pointers[&offset].0 as usize];
         let name = &target
             .static_
             .as_ref()
@@ -659,8 +730,7 @@ impl Interp<'_, '_> {
         // until linking. A pointer stored in the length of any other slice,
         // such as one made from an integer address, is a relocation like
         // any other: at run time the length holds that address.
-        if object
-            .pointers
+        if pointers
             .range(len_at.saturating_sub(width - 1)..len_at + width)
             .next()
             .is_some()
@@ -748,6 +818,19 @@ impl Interp<'_, '_> {
                     PlaceRef {
                         ptr: current.ptr.add(field.offset),
                         ty: field.ty,
+                        ..current
+                    }
+                }
+                // Reached by offset, as fields are (ADR 0039).
+                (PlaceElem::Tag, Ty::Enum(e)) => PlaceRef {
+                    ty: Ty::Int(e.def().int),
+                    ..current
+                },
+                (PlaceElem::Payload { variant, index }, Ty::Enum(e)) => {
+                    let value = e.def().payload(variant, index);
+                    PlaceRef {
+                        ptr: current.ptr.add(value.offset),
+                        ty: value.ty,
                         ..current
                     }
                 }
@@ -1241,25 +1324,24 @@ fn slice_parts(slice: PlaceRef) -> (PlaceRef, PlaceRef) {
     (address, len)
 }
 
-/// The element type of the slice at `offset` bytes into a value of type
-/// `ty`, if a slice starts there.
-fn slice_at(ty: Ty, offset: u64) -> Option<Ty> {
+/// Whether a value of type `ty` holds a slice, not behind a pointer. No
+/// type contains itself by value, so this ends.
+fn contains_slice(ty: Ty) -> bool {
     match ty {
-        Ty::Ptr(_) if offset == 0 => ty.slice_elem(),
-        Ty::Array(elem, len) => {
-            let size = elem.layout().size;
-            if size == 0 || offset / size >= len {
-                return None;
-            }
-            slice_at(*elem, offset % size)
-        }
-        Ty::Struct(s) => s.def().fields().iter().find_map(|field| {
-            let inside = offset.checked_sub(field.offset)?;
-            (inside < field.ty.layout().size)
-                .then(|| slice_at(field.ty, inside))
-                .flatten()
-        }),
-        _ => None,
+        Ty::Ptr(_) => ty.slice_elem().is_some(),
+        Ty::Array(elem, _) => contains_slice(*elem),
+        Ty::Struct(s) => s
+            .def()
+            .fields()
+            .iter()
+            .any(|field| contains_slice(field.ty)),
+        Ty::Enum(e) => e
+            .def()
+            .variants()
+            .iter()
+            .flat_map(|variant| &variant.payload)
+            .any(|value| contains_slice(value.ty)),
+        _ => false,
     }
 }
 

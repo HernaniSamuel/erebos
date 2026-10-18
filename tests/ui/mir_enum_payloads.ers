@@ -1,0 +1,22 @@
+// emit: mir
+// An enum with payloads is a MIR type of its own, listed with its layout,
+// and reached through two projections: its tag and a payload value of a
+// variant (ADR 0039). Building a variant evaluates its values left to
+// right, then writes each and the tag; a variant without payload writes
+// only its tag.
+enum Msg: u8 { Nop = 0, Led(bool) = 1, Write(u8, u16) = 2, Wide(u32) = 3 }
+
+fn next(x: u8) -> u8 {
+    x + 1
+}
+
+fn write(r: u8, v: u16) -> Msg {
+    Msg::Write(next(r), v)
+}
+
+fn nop() -> Msg {
+    Msg::Nop
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

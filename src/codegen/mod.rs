@@ -180,7 +180,7 @@ fn basic_type(context: &Context, ty: Ty) -> Option<BasicTypeEnum<'_>> {
         // A slice is an aggregate (ADR 0031).
         Ty::Ptr(_) if ty.slice_elem().is_some() => None,
         Ty::Ptr(_) => Some(context.ptr_type(AddressSpace::default()).into()),
-        Ty::Unit | Ty::Never | Ty::Array(..) | Ty::Slice(_) | Ty::Struct(_) => None,
+        Ty::Unit | Ty::Never | Ty::Array(..) | Ty::Slice(_) | Ty::Struct(_) | Ty::Enum(_) => None,
     }
 }
 
@@ -202,9 +202,10 @@ fn memory_type(context: &Context, ty: Ty) -> Option<BasicTypeEnum<'_>> {
             Some(element_type(context, *elem).array_type(len).into())
         }
         Ty::Ptr(_) if ty.slice_elem().is_some() => Some(slice_type(context).into()),
-        // Bytes laid out by MIR (ADR 0022); fields are reached by offset.
-        Ty::Struct(s) => {
-            let size = u32::try_from(s.def().layout.size).expect("the type checker limits sizes");
+        // Bytes laid out by MIR (ADR 0022, 0039); fields, tags and payload
+        // values are reached by offset.
+        Ty::Struct(_) | Ty::Enum(_) => {
+            let size = u32::try_from(ty.layout().size).expect("the type checker limits sizes");
             Some(context.i8_type().array_type(size).into())
         }
         _ => basic_type(context, ty),
@@ -851,6 +852,16 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                     ty = field.ty;
                     address.misaligned |= s.def().packed;
                     (byte_type, usize_type.const_int(field.offset, false))
+                }
+                // At offset 0 of the enum (ADR 0039).
+                (PlaceElem::Tag, Ty::Enum(e)) => {
+                    ty = Ty::Int(e.def().int);
+                    continue;
+                }
+                (PlaceElem::Payload { variant, index }, Ty::Enum(e)) => {
+                    let value = e.def().payload(*variant, *index);
+                    ty = value.ty;
+                    (byte_type, usize_type.const_int(value.offset, false))
                 }
                 (elem, ty) => unreachable!("projection {elem:?} of `{ty}`"),
             };

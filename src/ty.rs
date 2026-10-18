@@ -110,6 +110,7 @@ fn memory_position(position: NeverPosition) -> String {
         NeverPosition::SliceElement => "the element type of a slice".to_owned(),
         NeverPosition::Element => "an array element".to_owned(),
         NeverPosition::Field => "the type of a field".to_owned(),
+        NeverPosition::Payload => "a payload type".to_owned(),
         NeverPosition::Static => "the type of a static".to_owned(),
         NeverPosition::Const => "the type of a constant".to_owned(),
         NeverPosition::LayoutQuery(name) => format!("the operand of `{name}`"),
@@ -600,7 +601,9 @@ impl Checker<'_, '_> {
             }
             ExprKind::Local(local) => self.local_ty(f, *local),
             ExprKind::Const(id) => self.norm(self.hir.const_(*id).ty),
-            ExprKind::Variant(id, _) => Ty::Enum(self.hir.enum_(*id).ty),
+            ExprKind::Variant(id, index, args) => {
+                self.variant(f, expr, *id, *index, args.as_deref())
+            }
             // The value is computed later; its type is checked here, with
             // the expected type passed through (ADR 0029).
             ExprKind::Comptime(inner) => match self.check(f, inner, expected) {
@@ -627,10 +630,12 @@ impl Checker<'_, '_> {
                         self.field(expr, *ty, PlaceInfo::ERROR, name, *name_span);
                     }
                     Ty::Error => {}
-                    other => self.q.diags.push(
-                        Diagnostic::error("ty::no-fields", format!("`{other}` has no fields"))
-                            .label(*name_span, "no such field"),
-                    ),
+                    other => {
+                        let diag =
+                            Diagnostic::error("ty::no-fields", format!("`{other}` has no fields"))
+                                .label(*name_span, "no such field");
+                        self.q.diags.push(payload_values_help(diag, *other));
+                    }
                 }
                 Ty::Int(IntTy::Usize)
             }
@@ -827,15 +832,25 @@ impl Checker<'_, '_> {
     fn match_(&mut self, f: &Fn, scrutinee: &Expr, arms: &[Arm], expected: Option<Ty>) -> Ty {
         let ty = self.check(f, scrutinee, None);
         let matched = match ty {
-            Ty::Int(_) | Ty::Bool | Ty::Enum(_) | Ty::Error => ty,
+            Ty::Int(_) | Ty::Bool | Ty::Error => ty,
+            Ty::Enum(e) if !e.payloads => ty,
+            // An enum with a payload type in error was reported, once
+            // (ADR 0039).
+            Ty::Enum(_) if self.q.is_erroneous(ty) => Ty::Error,
             other => {
+                let takes = match other {
+                    Ty::Enum(_) => "an enum without payloads",
+                    _ => "an enum",
+                };
                 self.q.diags.push(
                     Diagnostic::error(
                         "ty::match-type",
                         format!("cannot `match` on a value of type `{other}`"),
                     )
                     .label(scrutinee.span, format!("has type `{other}`"))
-                    .help("a `match` takes an integer, a `bool` or an enum (ADR 0037)"),
+                    .help(format!(
+                        "a `match` takes an integer, a `bool` or {takes} (ADR 0037)"
+                    )),
                 );
                 Ty::Error
             }
@@ -916,10 +931,7 @@ impl Checker<'_, '_> {
         };
         // A literal against an enum: an enum is not its integer (ADR 0035).
         let enum_help = |e: EnumTy| {
-            let variant = match self.hir.enum_(e.id).variants.first() {
-                Some(variant) => format!(", such as `{}::{}`", e.name, variant.name),
-                None => String::new(),
-            };
+            let variant = such_as_variant(self.hir, e);
             format!(
                 "an enum is matched with its variants{variant}, or with constants of its type (ADR 0037)"
             )
@@ -1268,6 +1280,80 @@ impl Checker<'_, '_> {
         }
     }
 
+    /// `Enum::Variant`, or `Enum::Variant(args)` when `args` are written:
+    /// as many values as the variant's payload has, each checked against
+    /// its type as an argument is against its parameter's (ADR 0039).
+    fn variant(
+        &mut self,
+        f: &Fn,
+        expr: &Expr,
+        id: hir::EnumId,
+        index: u32,
+        args: Option<&[Expr]>,
+    ) -> Ty {
+        let hir = self.hir;
+        let def = hir.enum_(id);
+        let variant = &def.variants[index as usize];
+        let carried = variant.payload.len();
+        let name = format!("{}::{}", def.name, variant.name);
+        let counted = match args {
+            None => carried == 0,
+            Some(args) => carried > 0 && args.len() == carried,
+        };
+        if !counted {
+            let carries = match carried {
+                0 => "no values".to_owned(),
+                1 => "1 value".to_owned(),
+                n => format!("{n} values"),
+            };
+            let given = |n: usize| match n {
+                0 => "none were given".to_owned(),
+                1 => "1 was given".to_owned(),
+                n => format!("{n} were given"),
+            };
+            let mut diag = match args {
+                // There are no function values (ADR 0039).
+                None => {
+                    let values = vec!["..."; carried].join(", ");
+                    Diagnostic::error(
+                        "ty::wrong-payload-count",
+                        format!("`{name}` carries {carries}, but none are given"),
+                    )
+                    .label(expr.span, "built without its values")
+                    .help(format!(
+                        "a variant with a payload is built with its values, as in `{name}({values})`; it is not a function (ADR 0039)"
+                    ))
+                }
+                Some(args) if carried == 0 => {
+                    let message = if args.is_empty() {
+                        format!("`{name}` carries no values, but is written with parentheses")
+                    } else {
+                        format!("`{name}` carries no values, but {}", given(args.len()))
+                    };
+                    Diagnostic::error("ty::wrong-payload-count", message)
+                        .label(expr.span, "in this variant")
+                        .help(format!(
+                            "a variant without payload is named without parentheses: `{name}` (ADR 0039)"
+                        ))
+                }
+                Some(args) => Diagnostic::error(
+                    "ty::wrong-payload-count",
+                    format!("`{name}` carries {carries}, but {}", given(args.len())),
+                )
+                .label(expr.span, "in this variant"),
+            };
+            diag = diag.label(variant.span, "declared here");
+            self.q.diags.push(diag);
+        }
+        for (i, arg) in args.unwrap_or_default().iter().enumerate() {
+            // Extra values were reported above; `{error}` keeps them quiet.
+            let expected = variant.payload.get(i).map_or(Ty::Error, |value| value.ty);
+            let expected = self.norm(expected);
+            self.check(f, arg, Some(expected));
+        }
+        Ty::Enum(def.ty)
+    }
+
     /// Each argument is checked against its parameter's type.
     fn call(&mut self, f: &Fn, expr: &Expr, callee: hir::FnId, args: &[Expr]) -> Ty {
         let target = self.hir.fn_(callee);
@@ -1422,7 +1508,7 @@ impl Checker<'_, '_> {
             ExprKind::Local(id) => Some(f.local(*id).name.clone()),
             ExprKind::Const(id) => Some(self.hir.const_(*id).name.clone()),
             ExprKind::Static(id) => Some(self.hir.static_(*id).name.clone()),
-            ExprKind::Variant(id, index) => {
+            ExprKind::Variant(id, index, None) => {
                 let def = self.hir.enum_(*id);
                 Some(format!(
                     "{}::{}",
@@ -1477,18 +1563,17 @@ impl Checker<'_, '_> {
                     .label(expr.span, format!("expected `{other}`, found an integer"));
                 // An enum is not its integer (ADR 0035).
                 if let Ty::Enum(e) = other {
-                    let variant = match self.hir.enum_(e.id).variants.first() {
-                        Some(variant) => format!(", such as `{}::{}`", e.name, variant.name),
-                        None => String::new(),
-                    };
+                    let variant = such_as_variant(self.hir, e);
                     // Compared with `==` or `!=`, the integer can be
                     // compared instead, unless the literal is negative
-                    // and the integer type unsigned.
+                    // and the integer type unsigned, or the enum has
+                    // payloads, which converts to nothing (ADR 0039).
                     // The operands keep their order.
                     let convert = match self.equality {
                         Some(Equality { op, lhs, rhs })
                             if (expr.id == lhs || expr.id == rhs)
-                                && (!negated || e.int.is_signed()) =>
+                                && (!negated || e.int.is_signed())
+                                && !e.payloads =>
                         {
                             // The enum is the other operand.
                             let enum_id = if expr.id == lhs { rhs } else { lhs };
@@ -1627,6 +1712,20 @@ impl Checker<'_, '_> {
             );
             return Ty::Error;
         }
+        // Nor to an enum with payloads, an aggregate (ADR 0039).
+        if let Ty::Enum(e) = target
+            && e.payloads
+        {
+            self.q.diags.push(
+                Diagnostic::error("ty::invalid-cast", format!("cannot cast to `{target}`"))
+                    .label(target_span, "nothing converts to an enum")
+                    .help(format!(
+                        "a value of an enum with payloads is built from one of its variants{} (ADR 0039)",
+                        such_as_variant(self.hir, e)
+                    )),
+            );
+            return Ty::Error;
+        }
         // Nothing converts to an enum, so a program that only writes
         // variants never holds a value that is no variant (ADR 0035, 0036).
         if let Ty::Enum(e) = target {
@@ -1656,6 +1755,15 @@ impl Checker<'_, '_> {
                 return Ty::Error;
             }
             return target;
+        }
+        // An aggregate, which converts to nothing (ADR 0039).
+        if let Ty::Enum(EnumTy { payloads: true, .. }) = from {
+            self.q.diags.push(
+                Diagnostic::error("ty::invalid-cast", format!("cannot cast `{from}`"))
+                    .label(operand.span, "an enum with payloads converts to nothing")
+                    .help("it is an aggregate, not an integer; its variant is read with a `match` (ADR 0039)"),
+            );
+            return Ty::Error;
         }
         // As its integer type would convert, to integers only (ADR 0035).
         if let Ty::Enum(_) = from {
@@ -1825,17 +1933,37 @@ impl Checker<'_, '_> {
                 .help("a slice is an aggregate, whose bus accesses would be up to the compiler (ADR 0023, 0031)"),
             );
         } else if volatile && place.ty.is_aggregate() {
+            // An enum with payloads has no fields to access (ADR 0039).
+            let (label, help) = match place.ty {
+                Ty::Enum(_) => (
+                    "an enum with payloads is an aggregate, without fields to access one at a time",
+                    "the width and number of the bus accesses would be up to the compiler; device registers are described with structs, integers and enums without payloads (ADR 0023, 0039)",
+                ),
+                _ => (
+                    "access its elements or fields one at a time",
+                    "the width and number of the bus accesses would be up to the compiler (ADR 0023)",
+                ),
+            };
             self.q.diags.push(
                 Diagnostic::error(
                     "ty::volatile-aggregate",
                     format!("a volatile `{}` cannot be accessed as a whole", place.ty),
                 )
-                .label(span, "access its elements or fields one at a time")
-                .help("the width and number of the bus accesses would be up to the compiler (ADR 0023)"),
+                .label(span, label)
+                .help(help),
             );
         }
-        // An enum is accessed as its integer type (ADR 0023, 0035).
-        if let (true, Ty::Int(int) | Ty::Enum(EnumTy { int, .. })) = (volatile, place.ty)
+        // An enum without payloads is accessed as its integer type
+        // (ADR 0023, 0035).
+        if let (
+            true,
+            Ty::Int(int)
+            | Ty::Enum(EnumTy {
+                int,
+                payloads: false,
+                ..
+            }),
+        ) = (volatile, place.ty)
             && int.bits() > target::WIDEST_ACCESS_BITS
         {
             let half = target::WIDEST_ACCESS_BITS;
@@ -2033,7 +2161,7 @@ impl Checker<'_, '_> {
                 {
                     diag = diag.help("the length of a slice `s` is `len(s)` (ADR 0031)");
                 }
-                self.q.diags.push(diag);
+                self.q.diags.push(payload_values_help(diag, other));
                 return PlaceInfo::ERROR;
             }
         };
@@ -2266,15 +2394,21 @@ impl Checker<'_, '_> {
             // A slice is an address and a length (ADR 0031).
             Ty::Ptr(_) if ty.slice_elem().is_some() => false,
             Ty::Ptr(_) => matches!(allowed, Operands::Equatable | Operands::Ordered),
+            // An aggregate, compared with a `match` (ADR 0039).
+            Ty::Enum(EnumTy { payloads: true, .. }) => false,
             // Only told apart, never ordered or computed with (ADR 0035).
             Ty::Enum(_) => matches!(allowed, Operands::Equatable),
             // Aggregates compare part by part (ADR 0021).
             Ty::Unit | Ty::Array(..) | Ty::Slice(_) | Ty::Struct(_) => false,
         };
         if !ok {
+            let payloads = matches!(ty, Ty::Enum(EnumTy { payloads: true, .. }));
             let what = match allowed {
                 Operands::Int => "an integer",
                 Operands::IntOrBool => "an integer or `bool`",
+                Operands::Equatable if payloads => {
+                    "integers, pointers, `bool` or enums without payloads"
+                }
                 Operands::Equatable => "integers, pointers, `bool` or enums",
                 Operands::Ordered => "integers or pointers",
             };
@@ -2288,19 +2422,28 @@ impl Checker<'_, '_> {
                     "a slice is an address and a length; compare those: `s as *const T` and `len(s)` (ADR 0031)",
                 );
             }
-            if let Ty::Enum(e) = ty {
-                diag = diag.help(format!(
-                    "an enum only compares with `==` and `!=`; for anything else, convert it to its integer first, as in `x as {}` (ADR 0035)",
-                    e.int
-                ));
+            match ty {
+                Ty::Enum(EnumTy { payloads: true, .. }) => {
+                    diag = diag.help(
+                        "an enum with payloads is an aggregate, which operators do not apply to; tell its variants apart with a `match` (ADR 0039)",
+                    );
+                }
+                Ty::Enum(e) => {
+                    diag = diag.help(format!(
+                        "an enum only compares with `==` and `!=`; for anything else, convert it to its integer first, as in `x as {}` (ADR 0035)",
+                        e.int
+                    ));
+                }
+                _ => {}
             }
             self.q.diags.push(diag);
         }
     }
 }
 
-/// Lists struct layouts, enums with their values, then every function's
-/// locals and expression types, for `--emit=typeck`.
+/// Lists struct layouts, enums with their values and, with payloads, their
+/// layouts, then every function's locals and expression types, for
+/// `--emit=typeck`.
 pub fn dump(q: &mut Queries) -> String {
     let hir = q.hir;
     let mut out = String::new();
@@ -2338,20 +2481,56 @@ pub fn dump(q: &mut Queries) -> String {
         .unwrap();
     }
     for (i, def) in hir.enums.iter().enumerate() {
+        let id = EnumId(i as u32);
+        // Each payload value with its offset, and the enum's size, if it
+        // has a layout (ADR 0039).
+        let layout = if def.ty.payloads {
+            q.enum_layout(id)
+        } else {
+            None
+        };
         let variants: Vec<String> = def
             .variants
             .iter()
             .enumerate()
-            .map(
-                |(index, variant)| match q.discriminant(EnumId(i as u32), index as u32) {
-                    Some(value) => format!("{} = {}", variant.name, def.ty.int.display_bits(value)),
-                    None => format!("{} = ?", variant.name),
-                },
-            )
+            .map(|(index, variant)| {
+                let payload: Vec<String> = variant
+                    .payload
+                    .iter()
+                    .enumerate()
+                    .map(|(j, value)| {
+                        let ty = q.normalize(value.ty);
+                        match &layout {
+                            Some(layout) => format!("{ty} at {}", layout.offsets[index][j]),
+                            None => ty.to_string(),
+                        }
+                    })
+                    .collect();
+                let payload = if payload.is_empty() {
+                    String::new()
+                } else {
+                    format!("({})", payload.join(", "))
+                };
+                match q.discriminant(id, index as u32) {
+                    Some(value) => format!(
+                        "{}{payload} = {}",
+                        variant.name,
+                        def.ty.int.display_bits(value)
+                    ),
+                    None => format!("{}{payload} = ?", variant.name),
+                }
+            })
             .collect();
+        let size = match &layout {
+            Some(layout) => format!(
+                " size {}, align {}",
+                layout.layout.size, layout.layout.align
+            ),
+            None => String::new(),
+        };
         writeln!(
             out,
-            "enum {}: {} {{ {} }}",
+            "enum {}: {} {{ {} }}{size}",
             def.name,
             def.ty.int,
             variants.join(", ")
@@ -2408,6 +2587,29 @@ pub fn dump(q: &mut Queries) -> String {
         });
     }
     out
+}
+
+/// `, such as `E::V``, naming the first variant of `e` as it is written,
+/// with `(...)` if it has a payload; empty without variants.
+fn such_as_variant(hir: &Hir, e: EnumTy) -> String {
+    match hir.enum_(e.id).variants.first() {
+        Some(variant) if variant.payload.is_empty() => {
+            format!(", such as `{}::{}`", e.name, variant.name)
+        }
+        Some(variant) => format!(", such as `{}::{}(...)`", e.name, variant.name),
+        None => String::new(),
+    }
+}
+
+/// `diag`, a `ty::no-fields` for a value of type `ty`, with a help on
+/// payload values if `ty` is an enum with payloads (ADR 0039).
+fn payload_values_help(diag: Diagnostic, ty: Ty) -> Diagnostic {
+    match ty {
+        Ty::Enum(EnumTy { payloads: true, .. }) => diag.help(
+            "the values of an enum's payload have no names, and are reached only by patterns (ADR 0039, 0040)",
+        ),
+        _ => diag,
+    }
 }
 
 /// `a`, `a and b`, or `a, b and c`.
@@ -2501,7 +2703,7 @@ fn expr_label(hir: &Hir, f: &Fn, expr: &Expr) -> String {
         ExprKind::Unit => "unit".to_owned(),
         ExprKind::Const(id) => format!("const {}", hir.const_(*id).name),
         ExprKind::Static(id) => format!("static {}", hir.static_(*id).name),
-        ExprKind::Variant(id, index) => {
+        ExprKind::Variant(id, index, _) => {
             let def = hir.enum_(*id);
             format!(
                 "variant {}::{}",

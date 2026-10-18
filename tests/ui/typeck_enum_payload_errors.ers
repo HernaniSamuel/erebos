@@ -1,0 +1,68 @@
+// emit: typeck
+// What enums with payloads do not do (ADR 0039): a variant takes exactly
+// the values its payload declares, each checked against its type; the
+// result is a value, not a place; `==`, `!=` and `as` do not apply, also
+// in a variant's value; it has no fields; through a volatile pointer it
+// is an aggregate; it is not matched yet; and one whose payload asks for
+// an alignment through `#[align(N)]` cannot be a field of a packed struct.
+enum Msg: u8 { Nop = 0, Led(bool) = 1, Write(u8, u16) = 2, Wide(u32) = 3 }
+enum Mode: u8 { Off = 0, On = 1 }
+enum Next: u8 { First = 0, Second = Msg::Nop as u8 + 1 }
+
+fn counts() {
+    let a: Msg = Msg::Write(3);
+    let b: Msg = Msg::Write;
+    let c: Msg = Msg::Nop(1);
+    let d: Msg = Msg::Nop();
+    let e: Mode = Mode::Off();
+    let f: Msg = Msg::Write(1, 2, 3);
+    let g: Msg = Msg::Led();
+}
+
+fn values() {
+    let a: Msg = Msg::Write(256, 0x1_0000);
+    let b: Msg = Msg::Led(1);
+    let c: Msg = Msg::Wide(Mode::On);
+}
+
+fn operations(m: Msg, n: Msg) {
+    let a: *const Msg = &raw const Msg::Write(3, 4);
+    Msg::Wide(1) = m;
+    let b: bool = m == n;
+    let c: bool = m != Msg::Nop;
+    let d: bool = m < n;
+    let e: u8 = m as u8;
+    let f: Msg = 3 as Msg;
+    let g: Msg = Mode::On as Msg;
+    let h: u8 = m.tag;
+    let i: usize = offset_of(Msg, tag);
+    let j: bool = m == 2;
+}
+
+fn through(p: *mut volatile Msg, m: Msg) {
+    let a: Msg = *p;
+    *p = m;
+}
+
+// Matching an enum with payloads comes with ADR 0040: for now a `match`
+// on one, also on a constant, is rejected.
+const LED: Msg = Msg::Led(true);
+
+fn matches(m: Msg) -> u8 {
+    let a: u8 = match m {
+        Msg::Nop => 1,
+        _ => 0,
+    };
+    match LED {
+        _ => a,
+    }
+}
+
+#[align(8)]
+struct Aligned { x: u8 }
+enum Raised: u8 { A(Aligned) = 0, B = 1 }
+#[packed]
+struct Packed { tag: u8, raised: Raised }
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

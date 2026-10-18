@@ -1,0 +1,21 @@
+// emit: typeck
+// An enum that contains itself by value, directly or through a struct, has
+// no size; behind a pointer it is accepted (ADR 0039). An enum is too
+// large when its largest variant, with its tag, rounded up to its
+// alignment, does not fit: here only through the tag, and only through
+// the rounding; and a payload value may be too large alone.
+enum List: u8 { Nil = 0, Cons(u8, List) = 1 }
+struct Node { value: u8, rest: Chain }
+enum Chain: u8 { End = 0, Link(Node) = 1 }
+enum Linked: u8 { Nil = 0, Cons(u8, *const Linked) = 1 }
+
+enum Tagged: u8 { B([u8; 0x7FFF_FFFF]) = 0 }
+enum Rounded: u8 { A([u8; 0x7FFF_FFFE]) = 0, B(u32) = 1 }
+enum Huge: u8 { A([u8; 0x8000_0000]) = 0 }
+
+fn uses(l: List, c: Chain, t: Tagged) -> usize {
+    size_of(List) + size_of(Rounded)
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

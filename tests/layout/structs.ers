@@ -1,6 +1,7 @@
 // Structs whose layout `tests/c_layout.rs` checks against clang, compiling
 // the C declarations in `structs.h` for the same target (ADR 0022). Every
-// struct here must have a C twin of the same name there.
+// struct and enum with payloads here must have a C twin of the same name
+// there.
 
 struct S { a: u8, b: u32, c: u16 }
 struct Wide { flag: bool, big: u64, small: i8 }
@@ -34,6 +35,14 @@ enum Mode: u8 { Off = 0, Run = 3 }
 enum Port: u16 { Data = 0x3F8 }
 enum Level: i32 { Low = -1, High = 1 }
 struct WithEnums { mode: Mode, port: Port, tag: u8, level: Level, last: Mode }
+
+// An enum with payloads is a C union of structs that each start with the
+// tag (ADR 0039), with payload values of alignment 1, 2, 4 and 8, and of
+// struct types.
+enum Pay8: u8 { Empty = 0, Byte(u8) = 1, Half(u8, u16) = 2, Word(u32) = 3, Long(u64) = 4 }
+enum Pay16: u16 { A(u8) = 0, B(u64, u8) = 1, C(S) = 2, D = 3 }
+enum Pay32: u32 { A(u8, u8) = 0, B(u16) = 1, C(Wide) = 2, D(i8, Pointers) = 3 }
+struct WithPayloads { a: u8, p: Pay8, b: u16, q: Pay16, c: u8, r: Pay32 }
 
 entry fn main() -> ! { loop {} }
 panic fn on_panic() -> ! { loop {} }

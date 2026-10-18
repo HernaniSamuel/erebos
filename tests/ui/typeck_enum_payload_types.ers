@@ -1,0 +1,20 @@
+// emit: typeck
+// `!` and `[T]` are not payload types (ADR 0031, 0034, 0039): each is
+// reported once, also in an enum nothing uses, and the enum then counts as
+// erroneous, so that its uses in `size_of`, in building a variant, in a
+// `match` and as a parameter report nothing more.
+enum Unused: u8 { A(!) = 0 }
+enum Broken: u8 { A(u32, !) = 0, B = 1 }
+enum Unsized: u8 { A([u8]) = 0 }
+
+fn uses(b: Broken) -> usize {
+    let built: Broken = Broken::A(1, 2);
+    let other: Broken = Broken::B;
+    match b {
+        _ => {}
+    }
+    size_of(Broken)
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

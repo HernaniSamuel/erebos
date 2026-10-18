@@ -1,0 +1,38 @@
+// emit: llvm-ir
+// An enum with payloads is bytes in LLVM IR, laid out by MIR (ADR 0039):
+// building a variant stores its tag and payload values at their offsets,
+// and one without payload only its tag. A constant holds zero bytes
+// outside its variant, a `static mut` whose bytes are all zero has a zero
+// initializer, so it goes to `.bss`, and the enum crosses calls as an
+// aggregate of its size and alignment (ADR 0025): one register, a pair
+// of alignment 4, a pair of alignment 8, and memory.
+enum Msg: u8 { Nop = 0, Led(bool) = 1, Write(u8, u16) = 2, Wide(u32) = 3 }
+enum Small: u8 { A = 0, B(u8, u16) = 1 }
+enum Long: u64 { A = 0, B(()) = 1 }
+enum Big: u16 { A(u32, u32) = 0, B = 1 }
+
+const WRITE: Msg = Msg::Write(3, 0x1234);
+static mut LAST: Msg = Msg::Nop;
+
+fn write(r: u8, v: u16) -> Msg {
+    Msg::Write(r, v)
+}
+
+fn nop() -> Msg {
+    Msg::Nop
+}
+
+fn constant() -> Msg {
+    WRITE
+}
+
+fn remember(m: Msg) {
+    LAST = m;
+}
+
+fn small(s: Small) -> Small { s }
+fn long(l: Long) -> Long { l }
+fn big(b: Big) -> Big { b }
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

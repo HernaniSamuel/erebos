@@ -278,7 +278,7 @@ impl Builder<'_, '_> {
                     Operand::Const(Const::Int(value.int(usize_ty.bytes() as usize), usize_ty));
                 self.temp(ty, Rvalue::Cast(address, ty))
             }
-            Ty::Array(..) | Ty::Struct(_) => {
+            Ty::Array(..) | Ty::Struct(_) | Ty::Enum(_) => {
                 Operand::Copy(Place::local(self.const_local(ty, source, &value)))
             }
             Ty::Slice(_) => unreachable!("`[T]` is unsized, and no value has it (ADR 0031)"),
@@ -375,20 +375,7 @@ impl Builder<'_, '_> {
                 let value = self.comptime_value(inner);
                 self.const_operand(ty, DataSource::Comptime(inner.id), value)
             }
-            // Its integer, which is all MIR sees of an enum (ADR 0035).
-            hir::ExprKind::Variant(id, index) => {
-                let Ty::Int(int) = ty else {
-                    unreachable!("an enum is stored as its integer type")
-                };
-                match self.discriminant(*id, *index) {
-                    Some(value) => Operand::Const(Const::Int(value, int)),
-                    None => {
-                        // Reported where it failed; the body is not used.
-                        self.failed = true;
-                        Operand::Const(Const::Int(0, int))
-                    }
-                }
-            }
+            hir::ExprKind::Variant(id, index, args) => self.variant(ty, *id, *index, args),
             hir::ExprKind::SizeOf(_) | hir::ExprKind::AlignOf(_) | hir::ExprKind::OffsetOf(..) => {
                 usize_const(self.layout_query(expr))
             }
@@ -820,6 +807,50 @@ impl Builder<'_, '_> {
         self.read_result(result)
     }
 
+    /// `Enum::Variant` or `Enum::Variant(args)`, of type `ty`. Without
+    /// payloads, its integer, which is all MIR sees of the enum (ADR 0035).
+    /// With payloads, a new value: the arguments are evaluated left to
+    /// right, then each payload value and the tag are written; the other
+    /// bytes are left as they are (ADR 0039).
+    fn variant(
+        &mut self,
+        ty: Ty,
+        id: hir::EnumId,
+        index: u32,
+        args: &Option<Vec<hir::Expr>>,
+    ) -> Operand {
+        let int = match ty {
+            Ty::Int(int) => int,
+            Ty::Enum(e) => e.def().int,
+            _ => unreachable!("an enum is its integer type, or an enum with payloads"),
+        };
+        let tag = match self.discriminant(id, index) {
+            Some(value) => Operand::Const(Const::Int(value, int)),
+            None => {
+                // Reported where it failed; the body is not used.
+                self.failed = true;
+                Operand::Const(Const::Int(0, int))
+            }
+        };
+        let Ty::Enum(_) = ty else {
+            return tag;
+        };
+        let values = match args {
+            Some(args) => self.operands(args),
+            None => Vec::new(),
+        };
+        let value = Place::local(self.new_local(ty, None));
+        for (i, payload) in values.into_iter().enumerate() {
+            let place = value.project(PlaceElem::Payload {
+                variant: index,
+                index: i as u32,
+            });
+            self.assign(place, Rvalue::Use(payload));
+        }
+        self.assign(value.project(PlaceElem::Tag), Rvalue::Use(tag));
+        Operand::Copy(value)
+    }
+
     /// The bits a pattern matches, masked to the width of `ty`, the type
     /// matched (`bool` is 0 or 1); `None` for every value.
     fn pattern_value(&mut self, pattern: &hir::Pattern, ty: Ty) -> Option<u64> {
@@ -1219,6 +1250,10 @@ impl Builder<'_, '_> {
                     (PlaceElem::Field(index), Ty::Struct(s)) => {
                         s.def().fields()[*index as usize].ty
                     }
+                    (PlaceElem::Tag, Ty::Enum(e)) => Ty::Int(e.def().int),
+                    (PlaceElem::Payload { variant, index }, Ty::Enum(e)) => {
+                        e.def().payload(*variant, *index).ty
+                    }
                     (elem, ty) => unreachable!("projection {elem:?} of `{ty}`"),
                 }
             })
@@ -1398,8 +1433,9 @@ fn is_simple(expr: &hir::Expr) -> bool {
         | hir::ExprKind::Byte(_)
         | hir::ExprKind::Bool(_)
         | hir::ExprKind::Unit
-        | hir::ExprKind::Variant(..)
+        | hir::ExprKind::Variant(_, _, None)
         | hir::ExprKind::Local(_) => true,
+        hir::ExprKind::Variant(_, _, Some(args)) => args.iter().all(is_simple),
         hir::ExprKind::Unary(UnOp::Neg, operand) => matches!(operand.kind, hir::ExprKind::Int(_)),
         _ => false,
     }

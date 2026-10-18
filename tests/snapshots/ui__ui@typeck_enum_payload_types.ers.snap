@@ -1,0 +1,42 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_enum_payload_types.ers
+---
+--- errors ---
+ty::never-in-memory
+
+  × `!` is not a type of memory
+   ╭─[typeck_enum_payload_types.ers:6:21]
+ 5 │ // `match` and as a parameter report nothing more.
+ 6 │ enum Unused: u8 { A(!) = 0 }
+   ·                     ┬
+   ·                     ╰── `!` as a payload type
+ 7 │ enum Broken: u8 { A(u32, !) = 0, B = 1 }
+   ╰────
+  help: `!` is the type of expressions that do not finish, so no memory holds one; for a type
+        without data, use `()` (ADR 0034)
+ty::never-in-memory
+
+  × `!` is not a type of memory
+   ╭─[typeck_enum_payload_types.ers:7:26]
+ 6 │ enum Unused: u8 { A(!) = 0 }
+ 7 │ enum Broken: u8 { A(u32, !) = 0, B = 1 }
+   ·                          ┬
+   ·                          ╰── `!` as a payload type
+ 8 │ enum Unsized: u8 { A([u8]) = 0 }
+   ╰────
+  help: `!` is the type of expressions that do not finish, so no memory holds one; for a type
+        without data, use `()` (ADR 0034)
+ty::unsized
+
+  × `[u8]` has no size known at compile time
+   ╭─[typeck_enum_payload_types.ers:8:22]
+ 7 │ enum Broken: u8 { A(u32, !) = 0, B = 1 }
+ 8 │ enum Unsized: u8 { A([u8]) = 0 }
+   ·                      ──┬─
+   ·                        ╰── `[u8]` as a payload type
+ 9 │ 
+   ╰────
+  help: its length is known only at run time, so it exists only behind a pointer, as a slice:
+        `*const [T]` or `*mut [T]` (ADR 0031)

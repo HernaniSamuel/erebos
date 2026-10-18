@@ -1,0 +1,7 @@
+// emit: ast
+// A payload lists at least one type, and goes before the variant's value
+// (ADR 0039). An empty payload is reported and the enum parsed on; a
+// payload after the value skips to the next item.
+enum Empty: u8 { A() = 0, B = 1 }
+enum Late: u8 { A = 0(u8), B = 1 }
+enum Fine: u8 { A(u8) = 0 }

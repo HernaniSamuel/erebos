@@ -11,8 +11,8 @@ use crate::eval::{self, ConstValue, Origin};
 use crate::hir::{
     self, ArrayLen, Comptime, ConstId, EnumId, ExprId, ExprKind, FnId, Hir, StaticId, StructId,
 };
-use crate::layout::{self, Layout, MAX_ALIGN, MAX_SIZE, StructLayout};
-use crate::mir::{self, BodyId, ConstData, DataId, Field, Mir, Ptr, StaticRef, StructRef};
+use crate::layout::{self, Composite, EnumLayout, Layout, MAX_ALIGN, MAX_SIZE, StructLayout};
+use crate::mir::{self, BodyId, ConstData, DataId, EnumRef, Field, Mir, Ptr, StaticRef, StructRef};
 use crate::span::Span;
 use crate::ty::{self, Tables};
 
@@ -39,6 +39,8 @@ enum Item {
     /// The value of a variant (ADR 0035).
     Discriminant(EnumId, u32),
     Layout(StructId),
+    /// The layout of an enum with payloads (ADR 0039).
+    EnumLayout(EnumId),
 }
 
 /// How diagnostics name a body.
@@ -90,9 +92,13 @@ pub struct Queries<'h> {
     /// The layout of each struct; `None` when it contains itself or is too
     /// large, both reported.
     layouts: Vec<State<Option<StructLayout>>>,
+    /// The layout of each enum with payloads, likewise (ADR 0039).
+    enum_layouts: Vec<State<Option<EnumLayout>>>,
 
     /// The MIR type of each struct.
     mir_structs: Vec<Option<StructRef>>,
+    /// The MIR type of each enum with payloads.
+    mir_enums: Vec<Option<EnumRef>>,
     /// The MIR of each function; `None` if it cannot be built.
     bodies: Vec<State<Option<Rc<mir::Body>>>>,
     /// The value of each constant; `None` if it failed, which was reported.
@@ -135,8 +141,10 @@ impl<'h> Queries<'h> {
             tables: Tables::new(hir.expr_count),
             checked: hir.fns.iter().map(|_| State::NotStarted).collect(),
             layouts: hir.structs.iter().map(|_| State::NotStarted).collect(),
+            enum_layouts: hir.enums.iter().map(|_| State::NotStarted).collect(),
 
             mir_structs: vec![None; hir.structs.len()],
+            mir_enums: vec![None; hir.enums.len()],
             bodies: hir.fns.iter().map(|_| State::NotStarted).collect(),
             consts: hir.consts.iter().map(|_| State::NotStarted).collect(),
             statics: hir.statics.iter().map(|_| State::NotStarted).collect(),
@@ -166,6 +174,11 @@ impl<'h> Queries<'h> {
         ty::report_unsized_types(self);
         for id in 0..hir.structs.len() {
             self.struct_layout(StructId(id as u32));
+        }
+        for (id, def) in hir.enums.iter().enumerate() {
+            if def.ty.payloads {
+                self.enum_layout(EnumId(id as u32));
+            }
         }
         for id in 0..hir.fns.len() {
             self.typeck_fn(FnId(id as u32));
@@ -249,17 +262,18 @@ impl<'h> Queries<'h> {
             });
             return true;
         };
-        // Structs laid out inside each other, with no evaluation between:
-        // containment by value (ADR 0021).
-        let structs: Option<Vec<StructId>> = self.in_progress[at..]
+        // Structs and enums with payloads laid out inside each other, with
+        // no evaluation between: containment by value (ADR 0021, 0039).
+        let types: Option<Vec<Composite>> = self.in_progress[at..]
             .iter()
             .map(|p| match p.item {
-                Item::Layout(id) => Some(id),
+                Item::Layout(id) => Some(Composite::Struct(id)),
+                Item::EnumLayout(id) => Some(Composite::Enum(id)),
                 _ => None,
             })
             .collect();
-        if let Some(structs) = structs {
-            self.report_containment_cycle(&structs);
+        if let Some(types) = types {
+            self.report_containment_cycle(&types);
             return false;
         }
         // Asked for again within the cycle reported already.
@@ -588,13 +602,23 @@ impl<'h> Queries<'h> {
     }
 
     /// The layout of `ty`, or `None` if it is larger than the target can
-    /// hold. A struct without a layout, already reported, counts as empty.
+    /// hold. A struct or an enum with payloads without a layout, already
+    /// reported, counts as empty.
     pub fn layout_of(&mut self, ty: hir::Ty) -> Option<Layout> {
         let ty = self.normalize(ty);
         let empty = Layout { size: 0, align: 1 };
-        layout::of(ty, &mut |id| {
-            Some(self.struct_layout(id).map_or(empty, |s| s.layout))
+        layout::of(ty, &mut |composite| {
+            Some(self.composite_layout(composite).unwrap_or(empty))
         })
+    }
+
+    /// The layout of a struct or an enum with payloads; `None` if it has
+    /// none, reported.
+    fn composite_layout(&mut self, composite: Composite) -> Option<Layout> {
+        match composite {
+            Composite::Struct(id) => self.struct_layout(id).map(|s| s.layout),
+            Composite::Enum(id) => self.enum_layout(id).map(|e| e.layout),
+        }
     }
 
     /// Lays out a struct with C rules (ADR 0022), reporting structs that
@@ -622,14 +646,14 @@ impl<'h> Queries<'h> {
         for field in &def.fields {
             let field_ty = self.normalize(field.ty);
             let mut inner_failed = false;
-            let field_layout = layout::of(field_ty, &mut |id| {
-                let inner = self.struct_layout(id).map(|s| s.layout);
+            let field_layout = layout::of(field_ty, &mut |composite| {
+                let inner = self.composite_layout(composite);
                 inner_failed |= inner.is_none();
                 inner
             });
             let Some(field_layout) = field_layout else {
-                // A struct inside without a layout was reported; otherwise
-                // the field alone is too large.
+                // A type inside without a layout was reported; otherwise the
+                // field alone is too large.
                 if !inner_failed {
                     self.diags.push(
                         Diagnostic::error("ty::too-large", format!("`{field_ty}` is too large"))
@@ -698,12 +722,98 @@ impl<'h> Queries<'h> {
         layout
     }
 
+    /// Lays out an enum with payloads (ADR 0039), each variant as a struct
+    /// of its tag and payload values, reporting payload types too large and
+    /// enums that contain themselves or are too large.
+    pub fn enum_layout(&mut self, id: EnumId) -> Option<EnumLayout> {
+        if let State::Done(layout) = &self.enum_layouts[id.0 as usize] {
+            return layout.clone();
+        }
+        let hir = self.hir;
+        let def = hir.enum_(id);
+        let what = format!("the layout of `{}`", def.name);
+        if !self.start(Item::EnumLayout(id), def.name_span, what) {
+            return None;
+        }
+        self.enum_layouts[id.0 as usize] = State::InProgress;
+
+        let mut variants = Vec::with_capacity(def.variants.len());
+        let mut complete = true;
+        let mut over_aligned = false;
+        for variant in &def.variants {
+            let mut payload = Vec::with_capacity(variant.payload.len());
+            for value in &variant.payload {
+                let ty = self.normalize(value.ty);
+                let mut inner_failed = false;
+                let value_layout = layout::of(ty, &mut |composite| {
+                    let inner = self.composite_layout(composite);
+                    inner_failed |= inner.is_none();
+                    inner
+                });
+                let Some(value_layout) = value_layout else {
+                    // A type inside without a layout was reported; otherwise
+                    // the payload value alone is too large.
+                    if !inner_failed {
+                        self.diags.push(
+                            Diagnostic::error("ty::too-large", format!("`{ty}` is too large"))
+                                .label(
+                                    value.span,
+                                    "this payload value does not fit in the address space",
+                                )
+                                .help(format!(
+                                    "objects are limited to {MAX_SIZE} bytes on this target"
+                                )),
+                        );
+                    }
+                    complete = false;
+                    continue;
+                };
+                over_aligned |= self.over_aligned(ty);
+                payload.push(value_layout);
+            }
+            variants.push(payload);
+        }
+        let tag = Layout {
+            size: def.ty.int.bytes(),
+            align: def.ty.int.bytes(),
+        };
+        let laid_out = layout::enum_layout(tag, &variants);
+
+        self.finish(Item::EnumLayout(id));
+        let layout = match (complete, laid_out) {
+            (true, Some((layout, offsets))) => Some(EnumLayout {
+                layout,
+                offsets,
+                over_aligned,
+            }),
+            (true, None) => {
+                self.diags.push(
+                    Diagnostic::error("ty::too-large", format!("`{}` is too large", def.name))
+                        .label(def.name_span, "does not fit in the address space")
+                        .help(format!(
+                            "objects are limited to {MAX_SIZE} bytes on this target; an enum is as large as its largest variant, with its tag, rounded up to its alignment (ADR 0039)"
+                        )),
+                );
+                None
+            }
+            // A payload value without a layout was reported where it was
+            // found.
+            (false, _) => None,
+        };
+        self.enum_layouts[id.0 as usize] = State::Done(layout.clone());
+        layout
+    }
+
     /// Whether `ty` contains a struct with `#[align(N)]`, among the structs
-    /// already laid out.
+    /// and enums with payloads already laid out.
     fn over_aligned(&self, ty: hir::Ty) -> bool {
         match ty {
             hir::Ty::Struct(s) => matches!(
                 &self.layouts[s.id.0 as usize],
+                State::Done(Some(layout)) if layout.over_aligned
+            ),
+            hir::Ty::Enum(e) if e.payloads => matches!(
+                &self.enum_layouts[e.id.0 as usize],
                 State::Done(Some(layout)) if layout.over_aligned
             ),
             hir::Ty::Array(elem, _) => self.over_aligned(*elem),
@@ -711,29 +821,39 @@ impl<'h> Queries<'h> {
         }
     }
 
-    /// Structs found while laying themselves out contain each other by
-    /// value; the first is the one found again.
-    fn report_containment_cycle(&mut self, cycle: &[StructId]) {
+    /// Structs and enums with payloads found while laying themselves out
+    /// contain each other by value; the first is the one found again.
+    fn report_containment_cycle(&mut self, cycle: &[Composite]) {
         let hir = self.hir;
-        let first = hir.struct_(cycle[0]);
+        let name = |composite: &Composite| match *composite {
+            Composite::Struct(id) => (hir.struct_(id).name.as_str(), hir.struct_(id).name_span),
+            Composite::Enum(id) => (hir.enum_(id).name.as_str(), hir.enum_(id).name_span),
+        };
+        let (first, first_span) = name(&cycle[0]);
         let message = if cycle.len() == 1 {
-            format!("`{}` contains itself", first.name)
+            format!("`{first}` contains itself")
         } else {
-            let mut path: Vec<&str> = cycle
-                .iter()
-                .map(|s| hir.struct_(*s).name.as_str())
-                .collect();
-            path.push(&first.name);
-            format!("these structs contain each other: {}", path.join(" -> "))
+            let mut path: Vec<&str> = cycle.iter().map(|c| name(c).0).collect();
+            path.push(first);
+            let what = if cycle.iter().all(|c| matches!(c, Composite::Struct(_))) {
+                "structs"
+            } else {
+                "types"
+            };
+            format!("these {what} contain each other: {}", path.join(" -> "))
+        };
+        let adrs = if cycle.iter().any(|c| matches!(c, Composite::Enum(_))) {
+            "ADR 0021, 0039"
+        } else {
+            "ADR 0021"
         };
         let mut diag = Diagnostic::error("ty::infinite-size", message)
-            .label(first.name_span, "would have infinite size")
+            .label(first_span, "would have infinite size")
             .help(format!(
-                "contain a pointer instead, such as `*mut {}` (ADR 0021)",
-                first.name
+                "contain a pointer instead, such as `*mut {first}` ({adrs})"
             ));
         for other in &cycle[1..] {
-            diag = diag.label(hir.struct_(*other).name_span, "part of the cycle");
+            diag = diag.label(name(other).1, "part of the cycle");
         }
         self.diags.push(diag);
     }
@@ -763,6 +883,50 @@ impl<'h> Queries<'h> {
             .collect();
         s.def().set_fields(fields);
         s
+    }
+
+    /// The MIR type of an enum with payloads, with its layout (ADR 0039).
+    /// The payload values of its variants are set after it exists, since
+    /// they may point back to it. The values of its variants are not part
+    /// of it: they are asked for where they are needed, so that the type
+    /// never waits for them (ADR 0038).
+    pub fn mir_enum(&mut self, id: EnumId) -> EnumRef {
+        if let Some(e) = self.mir_enums[id.0 as usize] {
+            return e;
+        }
+        let hir = self.hir;
+        let def = hir.enum_(id);
+        let layout = self
+            .enum_layout(id)
+            .expect("MIR is only built for well-typed programs");
+        let e = EnumRef::new(
+            mir::EnumId(id.0),
+            def.name.clone(),
+            def.ty.int,
+            layout.layout,
+        );
+        self.mir_enums[id.0 as usize] = Some(e);
+        let variants = def
+            .variants
+            .iter()
+            .zip(&layout.offsets)
+            .map(|(variant, offsets)| mir::Variant {
+                name: variant.name.clone(),
+                payload: variant
+                    .payload
+                    .iter()
+                    .zip(offsets)
+                    .enumerate()
+                    .map(|(index, (value, &offset))| Field {
+                        name: index.to_string(),
+                        ty: self.mir_ty(value.ty),
+                        offset,
+                    })
+                    .collect(),
+            })
+            .collect();
+        e.def().set_variants(variants);
+        e
     }
 
     /// The MIR view of a static.
@@ -827,6 +991,7 @@ impl<'h> Queries<'h> {
             }
             hir::Ty::Slice(elem) => mir::Ty::Slice(Box::leak(Box::new(self.mir_ty(*elem)))),
             hir::Ty::Struct(s) => mir::Ty::Struct(self.mir_struct(s.id)),
+            hir::Ty::Enum(e) if e.payloads => mir::Ty::Enum(self.mir_enum(e.id)),
             // Stored as its integer type, which is all MIR sees (ADR 0035).
             hir::Ty::Enum(e) => mir::Ty::Int(e.int),
             hir::Ty::Error => unreachable!("MIR is only built for well-typed programs"),
@@ -909,17 +1074,25 @@ impl<'h> Queries<'h> {
         types.into_iter().any(|ty| self.lacks_layout(ty, &mut seen))
     }
 
-    /// Whether the MIR type of `ty` needs a struct without a layout or a
-    /// type that failed; the structs in `seen` were looked at already.
-    fn lacks_layout(&mut self, ty: hir::Ty, seen: &mut Vec<StructId>) -> bool {
+    /// Whether `ty` needs a struct or an enum with payloads without a
+    /// layout, or a type that failed, as a payload of type `!` is
+    /// (ADR 0034, 0039): all reported, so its uses report nothing more.
+    pub fn is_erroneous(&mut self, ty: hir::Ty) -> bool {
+        self.lacks_layout(ty, &mut Vec::new())
+    }
+
+    /// Whether the MIR type of `ty` needs a struct or an enum with payloads
+    /// without a layout, or a type that failed; the types in `seen` were
+    /// looked at already.
+    fn lacks_layout(&mut self, ty: hir::Ty, seen: &mut Vec<Composite>) -> bool {
         match ty {
             hir::Ty::Ptr(ptr) => self.lacks_layout(*ptr.pointee, seen),
             hir::Ty::Array(elem, _) | hir::Ty::Slice(elem) => self.lacks_layout(*elem, seen),
             hir::Ty::Struct(s) => {
-                if seen.contains(&s.id) {
+                if seen.contains(&Composite::Struct(s.id)) {
                     return false;
                 }
-                seen.push(s.id);
+                seen.push(Composite::Struct(s.id));
                 if self.struct_layout(s.id).is_none() {
                     return true;
                 }
@@ -928,6 +1101,21 @@ impl<'h> Queries<'h> {
                     .fields
                     .iter()
                     .any(|field| self.lacks_layout(field.ty, seen))
+            }
+            hir::Ty::Enum(e) if e.payloads => {
+                if seen.contains(&Composite::Enum(e.id)) {
+                    return false;
+                }
+                seen.push(Composite::Enum(e.id));
+                if self.enum_layout(e.id).is_none() {
+                    return true;
+                }
+                let hir = self.hir;
+                hir.enum_(e.id)
+                    .variants
+                    .iter()
+                    .flat_map(|variant| &variant.payload)
+                    .any(|value| self.lacks_layout(value.ty, seen))
             }
             // Reported, such as a field of type `!` (ADR 0034).
             hir::Ty::Error => true,
@@ -952,6 +1140,7 @@ impl<'h> Queries<'h> {
             .map(|(id, def)| mir::Enum {
                 name: def.name.clone(),
                 int: def.ty.int,
+                def: def.ty.payloads.then(|| self.mir_enum(EnumId(id as u32))),
                 variants: def
                     .variants
                     .iter()

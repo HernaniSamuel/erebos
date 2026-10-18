@@ -1,0 +1,179 @@
+// Enums with payloads between Erebos and C compiled by clang (ADR 0025,
+// 0039): an enum with payloads crosses calls as an aggregate of its size
+// and alignment, as its C twin, a union of structs that each start with
+// the tag, does: in one register, in a register pair of alignment 4 or 8,
+// or in memory; to and from C, in both directions. Without `match`, the
+// tag and payload bytes are read through a `*const u8`.
+// link-c: enum_payloads_c.c
+// expect-output: one 1 4 10
+// expect-output: one 1 7 7
+// expect-output: pair 2 120 4660
+// expect-output: pair 1 65538
+// expect-output: long 1
+// expect-output: long 0
+// expect-output: big 1 9 8
+// expect-output: big 2 6
+// expect-output: from c 559
+// expect-exit: 0
+
+// Size 4: one register.
+enum One: u8 { A = 0, B(u8, u16) = 1 }
+// Size 8, alignment 4: a register pair.
+enum Pair: u8 { A = 0, B(u32) = 1, C(u8, u16) = 2 }
+// Size 8, alignment 8: a register pair, aligned.
+enum Long: u64 { A = 0, B(()) = 1 }
+// Size 12: memory.
+enum Big: u16 { A = 0, B(u32, u32) = 1, C(u8) = 2 }
+
+extern fn c_one(x: One) -> One;
+extern fn c_pair(x: Pair) -> Pair;
+extern fn c_long(x: Long) -> Long;
+extern fn c_big(x: Big) -> Big;
+extern fn c_calls_erebos() -> u32;
+
+fn byte(p: *const u8, at: usize) -> u64 {
+    p[at] as u64
+}
+
+fn half(p: *const u8, at: usize) -> u64 {
+    byte(p, at) | byte(p, at + 1) << 8
+}
+
+fn word(p: *const u8, at: usize) -> u64 {
+    half(p, at) | half(p, at + 2) << 16
+}
+
+// Called from C: B(a, b) becomes B(a * 2, b + 1), and A stays A.
+fn erebos_one(x: One) -> One {
+    let p: *const u8 = &raw const x as *const u8;
+    if p[0] == 1 {
+        One::B(p[1] * 2, half(p, 2) as u16 + 1)
+    } else {
+        One::A
+    }
+}
+
+// Called from C: B(v) becomes B(v + 1), C(a, b) becomes C(a + 1, b + 1).
+fn erebos_pair(x: Pair) -> Pair {
+    let p: *const u8 = &raw const x as *const u8;
+    if p[0] == 1 {
+        Pair::B(word(p, 4) as u32 + 1)
+    } else if p[0] == 2 {
+        Pair::C(p[1] + 1, half(p, 2) as u16 + 1)
+    } else {
+        Pair::A
+    }
+}
+
+// Called from C: A becomes B, and B becomes A.
+fn erebos_long(x: Long) -> Long {
+    let p: *const u8 = &raw const x as *const u8;
+    if p[0] == 0 { Long::B(()) } else { Long::A }
+}
+
+// Called from C: B(a, b) becomes B(a + b, a - b), C(c) becomes C(c * 3).
+fn erebos_big(x: Big) -> Big {
+    let p: *const u8 = &raw const x as *const u8;
+    let tag: u64 = half(p, 0);
+    if tag == 1 {
+        let a: u32 = word(p, 4) as u32;
+        let b: u32 = word(p, 8) as u32;
+        Big::B(a + b, a - b)
+    } else if tag == 2 {
+        Big::C(p[2] * 3)
+    } else {
+        Big::A
+    }
+}
+
+fn putc(byte: u8) {
+    let thr: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+    *thr = byte;
+}
+
+fn puts(s: *const [u8]) {
+    let mut i: usize = 0;
+    while i < len(s) {
+        putc((*s)[i]);
+        i += 1;
+    }
+}
+
+fn print_u64(n: u64) {
+    if n >= 10 {
+        print_u64(n / 10);
+    }
+    putc(b'0' + (n % 10) as u8);
+}
+
+fn field(n: u64) {
+    putc(b' ');
+    print_u64(n);
+}
+
+fn show_one(x: One) {
+    let p: *const u8 = &raw const x as *const u8;
+    puts(&raw const b"one");
+    field(byte(p, 0));
+    field(byte(p, 1));
+    field(half(p, 2));
+    putc(b'\n');
+}
+
+fn show_pair(x: Pair) {
+    let p: *const u8 = &raw const x as *const u8;
+    puts(&raw const b"pair");
+    field(byte(p, 0));
+    if p[0] == 1 {
+        field(word(p, 4));
+    } else {
+        field(byte(p, 1));
+        field(half(p, 2));
+    }
+    putc(b'\n');
+}
+
+fn show_long(x: Long) {
+    let p: *const u8 = &raw const x as *const u8;
+    puts(&raw const b"long");
+    field(word(p, 0) | word(p, 4) << 32);
+    putc(b'\n');
+}
+
+fn show_big(x: Big) {
+    let p: *const u8 = &raw const x as *const u8;
+    puts(&raw const b"big");
+    field(half(p, 0));
+    if half(p, 0) == 1 {
+        field(word(p, 4));
+        field(word(p, 8));
+    } else {
+        field(byte(p, 2));
+    }
+    putc(b'\n');
+}
+
+fn exit(code: u32) -> ! {
+    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+    *finisher = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    loop {}
+}
+
+entry fn main() -> ! {
+    show_one(c_one(One::B(3, 5)));
+    show_one(c_one(One::A));
+    show_pair(c_pair(Pair::B(0x1234_0078)));
+    show_pair(c_pair(Pair::C(1, 2)));
+    show_long(c_long(Long::A));
+    show_long(c_long(Long::B(())));
+    show_big(c_big(Big::B(8, 9)));
+    show_big(c_big(Big::C(5)));
+    puts(&raw const b"from c");
+    field(c_calls_erebos() as u64);
+    putc(b'\n');
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(1)
+}

@@ -1,0 +1,15 @@
+// emit: ast
+// A variant may carry a payload: one or more types in parentheses, with an
+// optional trailing comma, between its name and its value (ADR 0039). A
+// path followed by arguments is one expression, parsed as a call's
+// arguments are, also with none.
+enum Msg: u8 {
+    Nop = 0,
+    Led(bool) = 1,
+    Write(u8, u16,) = 2,
+}
+
+fn build() {
+    let w: Msg = Msg::Write(1, 2);
+    let n: Msg = Msg::Nop();
+}

@@ -1,0 +1,102 @@
+// The payload values of a variant are evaluated left to right (ADR 0018,
+// 0039), observed through a counter each of them advances. Without
+// `match`, the tag and payload bytes are read through a `*const u8`.
+// expect-output: write 2 1 2
+// expect-output: three 5 3 4 5
+// expect-output: nop 0
+// expect-exit: 0
+
+enum Msg: u8 { Nop = 0, Write(u8, u16) = 2, Three(u16, u8, u32) = 5 }
+
+static mut COUNTER: u8 = 0;
+
+fn tick() -> u8 {
+    COUNTER += 1;
+    COUNTER
+}
+
+fn f() -> u8 {
+    tick()
+}
+
+fn g() -> u16 {
+    tick() as u16
+}
+
+fn h() -> u32 {
+    tick() as u32
+}
+
+fn byte(m: *const Msg, at: usize) -> u64 {
+    (m as *const u8)[at] as u64
+}
+
+fn half(m: *const Msg, at: usize) -> u64 {
+    byte(m, at) | byte(m, at + 1) << 8
+}
+
+fn word(m: *const Msg, at: usize) -> u64 {
+    half(m, at) | half(m, at + 2) << 16
+}
+
+fn putc(byte: u8) {
+    let thr: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+    *thr = byte;
+}
+
+fn puts(s: *const [u8]) {
+    let mut i: usize = 0;
+    while i < len(s) {
+        putc((*s)[i]);
+        i += 1;
+    }
+}
+
+fn print_u64(n: u64) {
+    if n >= 10 {
+        print_u64(n / 10);
+    }
+    putc(b'0' + (n % 10) as u8);
+}
+
+fn field(n: u64) {
+    putc(b' ');
+    print_u64(n);
+}
+
+fn exit(code: u32) -> ! {
+    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+    *finisher = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    loop {}
+}
+
+entry fn main() -> ! {
+    // Write(u8 at 1, u16 at 2): `f` runs first, then `g`.
+    let write: Msg = Msg::Write(f(), g());
+    let w: *const Msg = &raw const write;
+    puts(&raw const b"write");
+    field(byte(w, 0));
+    field(byte(w, 1));
+    field(half(w, 2));
+    putc(b'\n');
+
+    // Three(u16 at 2, u8 at 4, u32 at 8): `g`, `f`, then `h`.
+    let three: Msg = Msg::Three(g(), f(), h());
+    let t: *const Msg = &raw const three;
+    puts(&raw const b"three");
+    field(byte(t, 0));
+    field(half(t, 2));
+    field(byte(t, 4));
+    field(word(t, 8));
+    putc(b'\n');
+
+    let nop: Msg = Msg::Nop;
+    puts(&raw const b"nop");
+    field(byte(&raw const nop, 0));
+    putc(b'\n');
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(1)
+}

@@ -1,0 +1,30 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/parse_enum_payload_errors.ers
+---
+--- errors ---
+parser::empty-payload
+
+  × the variant `A` has a payload without types
+   ╭─[parse_enum_payload_errors.ers:5:19]
+ 4 │ // payload after the value skips to the next item.
+ 5 │ enum Empty: u8 { A() = 0, B = 1 }
+   ·                   ─┬
+   ·                    ╰── no types
+ 6 │ enum Late: u8 { A = 0(u8), B = 1 }
+   ╰────
+  help: a variant without payload is written without parentheses, `A`, and one with a payload
+        lists its types, as in `A(u8)` (ADR 0039)
+parser::unexpected-token
+
+  × expected `,` or `}`, found `(`
+   ╭─[parse_enum_payload_errors.ers:6:22]
+ 5 │ enum Empty: u8 { A() = 0, B = 1 }
+ 6 │ enum Late: u8 { A = 0(u8), B = 1 }
+   ·                      ┬
+   ·                      ╰── expected `,` or `}`
+ 7 │ enum Fine: u8 { A(u8) = 0 }
+   ╰────
+  help: a payload is written after the variant's name, before its value, as in `A(u8) = 0` (ADR
+        0039)

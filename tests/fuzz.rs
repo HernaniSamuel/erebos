@@ -113,6 +113,8 @@ const SNIPPETS: &[&str] = &[
     "b\"abc\"[i]",
     "enum E: u8 { A = 0 }",
     "E::A",
+    "A(u8) = 0",
+    "E::A(1)",
     "::",
     "match x { _ => {} }",
     "=>",

@@ -1,0 +1,209 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/parse_enum_payloads.ers
+---
+--- ast ---
+File {
+    items: [
+        Enum(
+            EnumDecl {
+                attrs: [],
+                name: Ident {
+                    name: "Msg",
+                    span: 269..272,
+                },
+                ty: Ty {
+                    kind: Named(
+                        Ident {
+                            name: "u8",
+                            span: 274..276,
+                        },
+                    ),
+                    span: 274..276,
+                },
+                variants: [
+                    VariantDecl {
+                        name: Ident {
+                            name: "Nop",
+                            span: 283..286,
+                        },
+                        payload: [],
+                        value: Expr {
+                            kind: Int(
+                                Some(
+                                    0,
+                                ),
+                            ),
+                            span: 289..290,
+                        },
+                    },
+                    VariantDecl {
+                        name: Ident {
+                            name: "Led",
+                            span: 296..299,
+                        },
+                        payload: [
+                            Ty {
+                                kind: Named(
+                                    Ident {
+                                        name: "bool",
+                                        span: 300..304,
+                                    },
+                                ),
+                                span: 300..304,
+                            },
+                        ],
+                        value: Expr {
+                            kind: Int(
+                                Some(
+                                    1,
+                                ),
+                            ),
+                            span: 308..309,
+                        },
+                    },
+                    VariantDecl {
+                        name: Ident {
+                            name: "Write",
+                            span: 315..320,
+                        },
+                        payload: [
+                            Ty {
+                                kind: Named(
+                                    Ident {
+                                        name: "u8",
+                                        span: 321..323,
+                                    },
+                                ),
+                                span: 321..323,
+                            },
+                            Ty {
+                                kind: Named(
+                                    Ident {
+                                        name: "u16",
+                                        span: 325..328,
+                                    },
+                                ),
+                                span: 325..328,
+                            },
+                        ],
+                        value: Expr {
+                            kind: Int(
+                                Some(
+                                    2,
+                                ),
+                            ),
+                            span: 333..334,
+                        },
+                    },
+                ],
+                span: 264..337,
+            },
+        ),
+        Fn(
+            FnDecl {
+                attrs: [],
+                kind: Plain,
+                name: Ident {
+                    name: "build",
+                    span: 342..347,
+                },
+                params: [],
+                ret: None,
+                body: Some(
+                    Block {
+                        stmts: [
+                            Let(
+                                Let {
+                                    mutable: false,
+                                    name: Ident {
+                                        name: "w",
+                                        span: 360..361,
+                                    },
+                                    ty: Ty {
+                                        kind: Named(
+                                            Ident {
+                                                name: "Msg",
+                                                span: 363..366,
+                                            },
+                                        ),
+                                        span: 363..366,
+                                    },
+                                    init: Expr {
+                                        kind: PathCall(
+                                            Ident {
+                                                name: "Msg",
+                                                span: 369..372,
+                                            },
+                                            Ident {
+                                                name: "Write",
+                                                span: 374..379,
+                                            },
+                                            [
+                                                Expr {
+                                                    kind: Int(
+                                                        Some(
+                                                            1,
+                                                        ),
+                                                    ),
+                                                    span: 380..381,
+                                                },
+                                                Expr {
+                                                    kind: Int(
+                                                        Some(
+                                                            2,
+                                                        ),
+                                                    ),
+                                                    span: 383..384,
+                                                },
+                                            ],
+                                        ),
+                                        span: 369..385,
+                                    },
+                                    span: 356..386,
+                                },
+                            ),
+                            Let(
+                                Let {
+                                    mutable: false,
+                                    name: Ident {
+                                        name: "n",
+                                        span: 395..396,
+                                    },
+                                    ty: Ty {
+                                        kind: Named(
+                                            Ident {
+                                                name: "Msg",
+                                                span: 398..401,
+                                            },
+                                        ),
+                                        span: 398..401,
+                                    },
+                                    init: Expr {
+                                        kind: PathCall(
+                                            Ident {
+                                                name: "Msg",
+                                                span: 404..407,
+                                            },
+                                            Ident {
+                                                name: "Nop",
+                                                span: 409..412,
+                                            },
+                                            [],
+                                        ),
+                                        span: 404..414,
+                                    },
+                                    span: 391..415,
+                                },
+                            ),
+                        ],
+                        tail: None,
+                        span: 350..417,
+                    },
+                ),
+                span: 339..417,
+            },
+        ),
+    ],
+}
