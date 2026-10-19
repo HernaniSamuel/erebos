@@ -27,7 +27,7 @@ updated, and a program on QEMU.
 | **M2.4a** ✅ Enums and `match` | enums with explicit discriminants (`enum Mode: u8 { Off = 0, Run = 3 }`), `match` on integers, `bool` and enums, with exhaustiveness and dead arms checked | a state machine |
 | **M2.4b** ✅ Enum payloads | variants carrying data, their layout and ABI, patterns nested in payloads | a command decoder: messages with payloads, decoded from bytes and dispatched with `match` |
 | **M2.4c** ✅ Cost of `match` | code of a `match` on an enum with payloads tested arm by arm, linear in its patterns (ADR 0042); checks of exhaustiveness and dead arms that examine once the values the arms do not tell apart; at most four witnesses searched (ADR 0043) | matches whose code and checks grew exponentially, built and run |
-| **M2.5** `Option` and `Result` | built into the compiler until generics exist; the `?` operator | a number parser returning `Result` |
+| **M2.5** ✅ `Option` and `Result` | built into the compiler until generics exist; the `?` operator | a number parser returning `Result` |
 | **M2.6** Modules and panic information | `mod`, `use`, `pub`, `core`; `panic fn on_panic(info: *const PanicInfo) -> !` with file, line and a `PanicReason` enum (ADR 0014) | a panic prints `division by zero at main.ers:12` |
 
 Decisions already agreed for the later steps (their ADRs come with the step):
@@ -97,9 +97,6 @@ Agreed as useful, not yet scheduled:
 Questions accepted ADRs leave to a later step, to settle in that step's
 ADRs:
 
-- **M2.5:**
-  - `!` as a type argument of `Option(T)` and `Result(T, E)`, such as
-    the infallible `Result(u32, !)` (ADR 0034).
 - **M2.6:**
   - Symbol names with modules: functions and statics are emitted under
     their own names (ADR 0006, 0026, 0030). With modules, names must be
@@ -121,6 +118,8 @@ ADRs:
     today runs MIR they have not checked (ADR 0033).
 - **M6:**
   - `compile_error` (ADR 0031).
+  - `!` as a type argument, such as `Result(T, !)` for generic code
+    (ADR 0045).
   - Requirements on type arguments (ADR 0027). The direction discussed:
     a requirement is a `comptime` function returning `bool`, named in the
     signature (as `where is_bus(B)`) and checked at each instantiation,
@@ -219,4 +218,18 @@ Documentation owed:
   smaller ones alike at compile time and on the target. The milestone
   program runs such matches on QEMU, at both optimization levels, printing
   the arm each input takes, and checks the same arms in a `comptime` block.
-- **Next: M2.5** (`Option` and `Result`).
+- **M2.5 done.** A variant may be named by the expected type, `.Run` or
+  `.Write(3, 4)`, in expressions and patterns, wherever a literal takes
+  its type (ADR 0044). `Option(T)` and `Result(T, E)` are built-in enums
+  with payloads, one per set of type arguments, with a `u8` tag and no
+  niches, checked against clang in layout and across calls (ADR 0045);
+  `!` is not a type argument until M6. The `?` operator returns a
+  `.None` or an `.Err(x)` from the function, with the same error type and
+  no conversion, and calls the panic function on a tag that is no
+  variant (ADR 0046). A differential test runs options, results and `?`
+  alike at compile time and on the target. The milestone program parses
+  decimal numbers from a static table of byte strings into
+  `Result(u32, ParseError)`, combining checked operations with `?` and
+  reporting overflow, empty input and the bad digit, on QEMU at both
+  optimization levels, and checks the same results in a `comptime` block.
+- **Next: M2.6** (modules and panic information).
