@@ -120,6 +120,12 @@ ADRs:
   - `compile_error` (ADR 0031).
   - `!` as a type argument, such as `Result(T, !)` for generic code
     (ADR 0045).
+  - Whether a pointer to a type that reaches a failed length or
+    alignment stays usable where its pointee is not reached (ADR 0048).
+    Today it makes the code that mentions it erroneous, so a length of
+    `S` computed by a `comptime` function that only takes a `*const S`
+    is a false `ty::cycle`; `comptime` functions over self-referential
+    types make this common.
   - Requirements on type arguments (ADR 0027). The direction discussed:
     a requirement is a `comptime` function returning `bool`, named in the
     signature (as `where is_bus(B)`) and checked at each instantiation,

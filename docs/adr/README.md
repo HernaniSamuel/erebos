@@ -74,5 +74,7 @@ Do not write one for local implementation details that the code already explains
 | 0042 | [`match` code tested arm by arm](0042-match-code-tested-arm-by-arm.md) | Accepted |
 | 0043 | [At most four witnesses searched](0043-at-most-four-witnesses.md) | Accepted |
 | 0044 | [Variants named by the expected type](0044-variants-named-by-the-expected-type.md) | Accepted |
-| 0045 | [`Option(T)` and `Result(T, E)`](0045-option-and-result.md) | Accepted |
+| 0045 | [`Option(T)` and `Result(T, E)`](0045-option-and-result.md) | Accepted, amended by 0047 |
 | 0046 | [The `?` operator](0046-the-question-mark-operator.md) | Accepted |
+| 0047 | [Zero-sized payloads have an offset](0047-zero-sized-payloads-have-an-offset.md) | Accepted |
+| 0048 | [Types with a failed length or alignment are erroneous](0048-types-with-a-failed-length-or-alignment-are-erroneous.md) | Accepted |

@@ -1,6 +1,6 @@
 # 0045. `Option(T)` and `Result(T, E)`
 
-- Status: Accepted
+- Status: Accepted; amended by 0047 (the payload offset of `Option(())`)
 - Date: 2026-10-19
 
 ## Context
