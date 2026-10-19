@@ -322,6 +322,10 @@ pub enum PatternKind {
     /// A path followed by patterns, `Enum::Variant(p, ...)`, one per
     /// payload value (ADR 0040); none for `Enum::Variant()`.
     PathArgs(Ident, Ident, Vec<Pattern>),
+    /// `.Variant` or `.Variant(p, ...)`, a variant of the enum that is the
+    /// type of its position (ADR 0044); the patterns if written with
+    /// parentheses.
+    ContextVariant(Ident, Option<Vec<Pattern>>),
     /// `p | q | ...`, at least two alternatives.
     Or(Vec<Pattern>),
 }

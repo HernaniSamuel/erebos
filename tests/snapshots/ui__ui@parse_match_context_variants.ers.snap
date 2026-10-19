@@ -1,0 +1,386 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/parse_match_context_variants.ers
+---
+--- ast ---
+File {
+    items: [
+        Fn(
+            FnDecl {
+                attrs: [],
+                kind: Plain,
+                name: Ident {
+                    name: "patterns",
+                    span: 348..356,
+                },
+                params: [
+                    Param {
+                        mutable: false,
+                        name: Ident {
+                            name: "m",
+                            span: 357..358,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Ident {
+                                    name: "Msg",
+                                    span: 360..363,
+                                },
+                            ),
+                            span: 360..363,
+                        },
+                    },
+                ],
+                ret: Some(
+                    Ty {
+                        kind: Named(
+                            Ident {
+                                name: "u8",
+                                span: 368..370,
+                            },
+                        ),
+                        span: 368..370,
+                    },
+                ),
+                body: Some(
+                    Block {
+                        stmts: [],
+                        tail: Some(
+                            Expr {
+                                kind: Match {
+                                    scrutinee: Expr {
+                                        kind: Name(
+                                            Ident {
+                                                name: "m",
+                                                span: 383..384,
+                                            },
+                                        ),
+                                        span: 383..384,
+                                    },
+                                    arms: [
+                                        Arm {
+                                            pattern: Pattern {
+                                                kind: ContextVariant(
+                                                    Ident {
+                                                        name: "Nop",
+                                                        span: 396..399,
+                                                    },
+                                                    None,
+                                                ),
+                                                span: 395..399,
+                                            },
+                                            body: Expr {
+                                                kind: Int(
+                                                    Some(
+                                                        0,
+                                                    ),
+                                                ),
+                                                span: 403..404,
+                                            },
+                                        },
+                                        Arm {
+                                            pattern: Pattern {
+                                                kind: ContextVariant(
+                                                    Ident {
+                                                        name: "Write",
+                                                        span: 415..420,
+                                                    },
+                                                    Some(
+                                                        [
+                                                            Pattern {
+                                                                kind: Or(
+                                                                    [
+                                                                        Pattern {
+                                                                            kind: Int {
+                                                                                value: Some(
+                                                                                    16,
+                                                                                ),
+                                                                                negated: false,
+                                                                            },
+                                                                            span: 421..425,
+                                                                        },
+                                                                        Pattern {
+                                                                            kind: Int {
+                                                                                value: Some(
+                                                                                    17,
+                                                                                ),
+                                                                                negated: false,
+                                                                            },
+                                                                            span: 428..432,
+                                                                        },
+                                                                    ],
+                                                                ),
+                                                                span: 421..432,
+                                                            },
+                                                            Pattern {
+                                                                kind: Binding {
+                                                                    mutable: false,
+                                                                    name: Ident {
+                                                                        name: "v",
+                                                                        span: 438..439,
+                                                                    },
+                                                                    ty: Ty {
+                                                                        kind: Named(
+                                                                            Ident {
+                                                                                name: "u16",
+                                                                                span: 441..444,
+                                                                            },
+                                                                        ),
+                                                                        span: 441..444,
+                                                                    },
+                                                                },
+                                                                span: 434..444,
+                                                            },
+                                                        ],
+                                                    ),
+                                                ),
+                                                span: 414..446,
+                                            },
+                                            body: Expr {
+                                                kind: Int(
+                                                    Some(
+                                                        1,
+                                                    ),
+                                                ),
+                                                span: 450..451,
+                                            },
+                                        },
+                                        Arm {
+                                            pattern: Pattern {
+                                                kind: ContextVariant(
+                                                    Ident {
+                                                        name: "SetMode",
+                                                        span: 462..469,
+                                                    },
+                                                    Some(
+                                                        [
+                                                            Pattern {
+                                                                kind: ContextVariant(
+                                                                    Ident {
+                                                                        name: "Run",
+                                                                        span: 471..474,
+                                                                    },
+                                                                    None,
+                                                                ),
+                                                                span: 470..474,
+                                                            },
+                                                        ],
+                                                    ),
+                                                ),
+                                                span: 461..475,
+                                            },
+                                            body: Expr {
+                                                kind: Int(
+                                                    Some(
+                                                        2,
+                                                    ),
+                                                ),
+                                                span: 479..480,
+                                            },
+                                        },
+                                        Arm {
+                                            pattern: Pattern {
+                                                kind: PathArgs(
+                                                    Ident {
+                                                        name: "Msg",
+                                                        span: 490..493,
+                                                    },
+                                                    Ident {
+                                                        name: "Nested",
+                                                        span: 495..501,
+                                                    },
+                                                    [
+                                                        Pattern {
+                                                            kind: ContextVariant(
+                                                                Ident {
+                                                                    name: "In",
+                                                                    span: 503..505,
+                                                                },
+                                                                Some(
+                                                                    [
+                                                                        Pattern {
+                                                                            kind: PathArgs(
+                                                                                Ident {
+                                                                                    name: "Inner",
+                                                                                    span: 506..511,
+                                                                                },
+                                                                                Ident {
+                                                                                    name: "A",
+                                                                                    span: 513..514,
+                                                                                },
+                                                                                [
+                                                                                    Pattern {
+                                                                                        kind: Wildcard,
+                                                                                        span: 515..516,
+                                                                                    },
+                                                                                    Pattern {
+                                                                                        kind: Bool(
+                                                                                            true,
+                                                                                        ),
+                                                                                        span: 518..522,
+                                                                                    },
+                                                                                ],
+                                                                            ),
+                                                                            span: 506..523,
+                                                                        },
+                                                                    ],
+                                                                ),
+                                                            ),
+                                                            span: 502..524,
+                                                        },
+                                                        Pattern {
+                                                            kind: Or(
+                                                                [
+                                                                    Pattern {
+                                                                        kind: ContextVariant(
+                                                                            Ident {
+                                                                                name: "X",
+                                                                                span: 527..528,
+                                                                            },
+                                                                            None,
+                                                                        ),
+                                                                        span: 526..528,
+                                                                    },
+                                                                    Pattern {
+                                                                        kind: ContextVariant(
+                                                                            Ident {
+                                                                                name: "Y",
+                                                                                span: 532..533,
+                                                                            },
+                                                                            None,
+                                                                        ),
+                                                                        span: 531..533,
+                                                                    },
+                                                                ],
+                                                            ),
+                                                            span: 526..533,
+                                                        },
+                                                    ],
+                                                ),
+                                                span: 490..534,
+                                            },
+                                            body: Expr {
+                                                kind: Int(
+                                                    Some(
+                                                        3,
+                                                    ),
+                                                ),
+                                                span: 538..539,
+                                            },
+                                        },
+                                        Arm {
+                                            pattern: Pattern {
+                                                kind: ContextVariant(
+                                                    Ident {
+                                                        name: "Led",
+                                                        span: 550..553,
+                                                    },
+                                                    Some(
+                                                        [],
+                                                    ),
+                                                ),
+                                                span: 549..555,
+                                            },
+                                            body: Expr {
+                                                kind: Int(
+                                                    Some(
+                                                        4,
+                                                    ),
+                                                ),
+                                                span: 559..560,
+                                            },
+                                        },
+                                        Arm {
+                                            pattern: Pattern {
+                                                kind: Or(
+                                                    [
+                                                        Pattern {
+                                                            kind: ContextVariant(
+                                                                Ident {
+                                                                    name: "Wide",
+                                                                    span: 571..575,
+                                                                },
+                                                                Some(
+                                                                    [
+                                                                        Pattern {
+                                                                            kind: Wildcard,
+                                                                            span: 576..577,
+                                                                        },
+                                                                    ],
+                                                                ),
+                                                            ),
+                                                            span: 570..578,
+                                                        },
+                                                        Pattern {
+                                                            kind: Path(
+                                                                Ident {
+                                                                    name: "Msg",
+                                                                    span: 581..584,
+                                                                },
+                                                                Ident {
+                                                                    name: "Nop",
+                                                                    span: 586..589,
+                                                                },
+                                                            ),
+                                                            span: 581..589,
+                                                        },
+                                                        Pattern {
+                                                            kind: ContextVariant(
+                                                                Ident {
+                                                                    name: "Led",
+                                                                    span: 593..596,
+                                                                },
+                                                                Some(
+                                                                    [
+                                                                        Pattern {
+                                                                            kind: Bool(
+                                                                                true,
+                                                                            ),
+                                                                            span: 597..601,
+                                                                        },
+                                                                    ],
+                                                                ),
+                                                            ),
+                                                            span: 592..602,
+                                                        },
+                                                    ],
+                                                ),
+                                                span: 570..602,
+                                            },
+                                            body: Expr {
+                                                kind: Int(
+                                                    Some(
+                                                        5,
+                                                    ),
+                                                ),
+                                                span: 606..607,
+                                            },
+                                        },
+                                        Arm {
+                                            pattern: Pattern {
+                                                kind: Wildcard,
+                                                span: 617..618,
+                                            },
+                                            body: Expr {
+                                                kind: Int(
+                                                    Some(
+                                                        6,
+                                                    ),
+                                                ),
+                                                span: 622..623,
+                                            },
+                                        },
+                                    ],
+                                },
+                                span: 377..630,
+                            },
+                        ),
+                        span: 371..632,
+                    },
+                ),
+                span: 345..632,
+            },
+        ),
+    ],
+}

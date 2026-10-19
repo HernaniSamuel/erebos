@@ -1,0 +1,17 @@
+// emit: ast
+// Variant patterns named by the type of their position (ADR 0044): `.V`,
+// and `.V(p, ...)` with a pattern for each payload value, each a pattern
+// with alternatives, nested to any depth, with an optional trailing comma;
+// `.V()` parses, and is a count error later. They mix with `E::V`, inside
+// payloads and as alternatives.
+fn patterns(m: Msg) -> u8 {
+    match m {
+        .Nop => 0,
+        .Write(0x10 | 0x11, let v: u16,) => 1,
+        .SetMode(.Run) => 2,
+        Msg::Nested(.In(Inner::A(_, true)), .X | .Y) => 3,
+        .Led() => 4,
+        .Wide(_) | Msg::Nop | .Led(true) => 5,
+        _ => 6,
+    }
+}

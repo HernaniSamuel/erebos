@@ -18,6 +18,12 @@ pub struct FnId(pub u32);
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ExprId(pub u32);
 
+/// A pattern that type checking resolves, `.Variant` (ADR 0044): one per
+/// such pattern in the program, under which the variant it names is
+/// recorded.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct PatternId(pub u32);
+
 /// A constant, indexing [`Hir::consts`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ConstId(pub u32);
@@ -596,6 +602,10 @@ pub enum PatternKind {
     /// the patterns of its payload values if written with parentheses,
     /// whatever their number (ADR 0040).
     Variant(EnumId, u32, Option<Vec<Pattern>>),
+    /// `.Variant`, with the span of its name, or `.Variant(p, ...)`: a
+    /// variant of the enum that is the type of its position, which the
+    /// type checker resolves (ADR 0044). Otherwise as `Variant`.
+    ContextVariant(PatternId, String, Span, Option<Vec<Pattern>>),
     /// `p | q | ...`, at any position; no alternative is an `Or`. Every
     /// alternative binds the same variables (ADR 0041).
     Or(Vec<Pattern>),
@@ -625,7 +635,8 @@ impl Hir {
     /// (ADR 0038, 0040): the type of each position at which some
     /// alternative is a variant or a constant, whatever its own type, and
     /// the scrutinee's for a `match` without arms. The positions inside a
-    /// variant pattern have the types its declaration gives.
+    /// variant pattern have the types its declaration gives, those inside
+    /// a `.V` pattern the types its position's enum gives them (ADR 0044).
     pub fn enums_needed(&self, scrutinee: Ty, arms: &[Arm]) -> Vec<EnumId> {
         fn walk(hir: &Hir, pattern: &Pattern, ty: Option<Ty>, out: &mut Vec<EnumId>) {
             let need = |out: &mut Vec<EnumId>| {
@@ -647,6 +658,25 @@ impl Hir {
                     let payload = &hir.enum_(*id).variants[*index as usize].payload;
                     for (i, sub) in subs.iter().flatten().enumerate() {
                         walk(hir, sub, payload.get(i).map(|value| value.ty), out);
+                    }
+                }
+                // The enum of its position, whose variant `name`, if it
+                // has one, gives its payload positions their types; without
+                // it they have none, and need nothing (ADR 0044).
+                PatternKind::ContextVariant(_, name, _, subs) => {
+                    need(out);
+                    let payload = match ty {
+                        Some(Ty::Enum(e)) => hir
+                            .enum_(e.id)
+                            .variants
+                            .iter()
+                            .find(|variant| variant.name == *name)
+                            .map(|variant| variant.payload.as_slice()),
+                        _ => None,
+                    };
+                    for (i, sub) in subs.iter().flatten().enumerate() {
+                        let sub_ty = payload.and_then(|payload| payload.get(i));
+                        walk(hir, sub, sub_ty.map(|value| value.ty), out);
                     }
                 }
                 _ => {}

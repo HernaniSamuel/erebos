@@ -1,0 +1,42 @@
+// emit: mir
+// Which enums a `match` with `.V` patterns needs (ADR 0044): a `.V`
+// pattern needs the values of its position's enum, and its payload
+// positions have the types that enum's variant gives them. In a function
+// computing a value of an enum, a `.V` pattern of that enum, at the top or
+// at a payload position, is a cycle, as `E::V` is, reported once. Only
+// `_` and `let` at its positions need none.
+enum G: u8 { A = top(1), B = 1 }
+
+fn top(x: u8) -> u8 {
+    if x == 0 { match G::B { .B => 0, _ => 1 } } else { 5 }
+}
+
+enum GN: u8 { A = nested(1), B = 1 }
+enum Holder: u8 { Of(GN) = 0, Empty = 1 }
+
+fn nested(x: u8) -> u8 {
+    if x == 0 { match Holder::Empty { .Of(.B) => 0, _ => 1 } } else { 5 }
+}
+
+// No cycle: the positions of `GW` hold only `_` and `let`.
+enum GW: u8 { A = wildcards(1), B = 1 }
+enum HolderW: u8 { Of(GW, u8) = 0, Empty = 1 }
+
+fn wildcards(x: u8) -> u8 {
+    if x == 0 {
+        match HolderW::Empty {
+            .Of(_, 3) => 0,
+            .Of(let g: GW, _) => 1,
+            .Empty => 2,
+        }
+    } else {
+        5
+    }
+}
+
+comptime {
+    assert(GW::A as u8 == 5);
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

@@ -6,8 +6,8 @@ use crate::diag::{Diagnostic, Diagnostics};
 use crate::hir::{
     Arm, ArrayLen, Block, Comptime, ConstDef, ConstId, EnumDef, EnumId, EnumTy, Expr, ExprId,
     ExprKind, FieldDef, Fn, FnId, FnKind, Hir, IntTy, Local, LocalId, NeverInMemory, NeverPosition,
-    Pattern, PatternKind, PayloadDef, StaticDef, StaticId, Stmt, StructDef, StructId, StructTy, Ty,
-    UnsizedPosition, UnsizedType, VariantDef,
+    Pattern, PatternId, PatternKind, PayloadDef, StaticDef, StaticId, Stmt, StructDef, StructId,
+    StructTy, Ty, UnsizedPosition, UnsizedType, VariantDef,
 };
 use crate::span::Span;
 use crate::syntax::ast;
@@ -226,6 +226,7 @@ pub fn lower(
         never_in_memory: Vec::new(),
         unsized_types: Vec::new(),
         next_expr: 0,
+        next_pattern: 0,
         diags,
         locals: Vec::new(),
         scopes: Vec::new(),
@@ -476,6 +477,8 @@ struct Lowerer<'a> {
     /// Each `[T]` written where a size is needed (ADR 0031).
     unsized_types: Vec<UnsizedType>,
     next_expr: u32,
+    /// The next `.V` pattern's id (ADR 0044).
+    next_pattern: u32,
     diags: &'a mut Diagnostics,
     /// Locals of the function being lowered.
     locals: Vec<Local>,
@@ -1690,6 +1693,19 @@ impl Lowerer<'_> {
                     // Reported; lowering errors stop the pipeline.
                     None => PatternKind::Wildcard,
                 }
+            }
+            // Its enum is the type of its position, known to type checking
+            // (ADR 0044); what it binds, it binds as a variant pattern.
+            ast::PatternKind::ContextVariant(variant, patterns) => {
+                let id = PatternId(self.next_pattern);
+                self.next_pattern += 1;
+                let patterns = patterns.as_ref().map(|patterns| {
+                    patterns
+                        .iter()
+                        .map(|sub| self.pattern(sub, later, bound))
+                        .collect()
+                });
+                PatternKind::ContextVariant(id, variant.name.clone(), variant.span, patterns)
             }
             ast::PatternKind::Or(alternatives) => {
                 PatternKind::Or(self.or_pattern(alternatives, later, bound))

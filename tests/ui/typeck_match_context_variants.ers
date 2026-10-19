@@ -1,0 +1,134 @@
+// emit: typeck
+// Variant patterns named by the type of their position (ADR 0044) mean
+// what `E::V` means there, for exhaustiveness and dead arms: each `_dots`
+// function below is the `_paths` one written with `.V`, the `_mixed` one
+// with both, and all three report the same, the missing values written
+// `E::V`. `decode` and `modes` are exhaustive. A `.V` at a position that
+// is not an enum is a mismatch, one the enum lacks is
+// `ty::unknown-variant`, and its patterns must be as many as its payload
+// has, each of its type. A `.V` in error checks its patterns against an
+// erroneous type, so a `let` there binds its written type and reports
+// nothing; at a position of erroneous type, a `.V` reports nothing.
+enum Mode: u8 { Off = 0, Run = 1 }
+enum Msg: u8 { Nop = 0, Led(bool) = 1, Write(u8, u16) = 2, SetMode(Mode) = 3 }
+enum Broken: u8 { A(u32, !) = 0, B = 1 }
+
+fn decode(m: Msg) -> u16 {
+    match m {
+        .Nop => 0,
+        .Led(true) | Msg::Led(false) => 1,
+        .Write(0x10 | 0x11, let v: u16) => v,
+        Msg::Write(let r: u8, _) => r as u16,
+        .SetMode(.Run) => 2,
+        Msg::SetMode(Mode::Off) => 3,
+        .SetMode(_) => 4,
+    }
+}
+
+fn modes(m: Mode) -> u8 {
+    match m {
+        .Off => 0,
+        .Run => 1,
+    }
+}
+
+fn missing_dots(m: Msg) -> u8 {
+    match m {
+        .Nop => 0,
+        .Led(true) => 1,
+        .SetMode(.Off) => 2,
+    }
+}
+
+fn missing_paths(m: Msg) -> u8 {
+    match m {
+        Msg::Nop => 0,
+        Msg::Led(true) => 1,
+        Msg::SetMode(Mode::Off) => 2,
+    }
+}
+
+fn missing_mixed(m: Msg) -> u8 {
+    match m {
+        Msg::Nop => 0,
+        .Led(true) => 1,
+        Msg::SetMode(.Off) => 2,
+    }
+}
+
+fn missing_mode_dots(m: Mode) -> u8 {
+    match m {
+        .Off => 0,
+    }
+}
+
+fn missing_mode_paths(m: Mode) -> u8 {
+    match m {
+        Mode::Off => 0,
+    }
+}
+
+fn dead_dots(m: Msg) -> u8 {
+    match m {
+        .Write(1, _) => 0,
+        .Write(1, 7) => 1,
+        .Led(true | true) => 2,
+        .SetMode(.Run) | .SetMode(.Run) => 3,
+        .SetMode(.Run) => 4,
+        _ => 5,
+    }
+}
+
+fn dead_paths(m: Msg) -> u8 {
+    match m {
+        Msg::Write(1, _) => 0,
+        Msg::Write(1, 7) => 1,
+        Msg::Led(true | true) => 2,
+        Msg::SetMode(Mode::Run) | Msg::SetMode(Mode::Run) => 3,
+        Msg::SetMode(Mode::Run) => 4,
+        _ => 5,
+    }
+}
+
+fn dead_mixed(m: Msg) -> u8 {
+    match m {
+        .Write(1, _) => 0,
+        Msg::Write(1, 7) => 1,
+        .Led(true | true) => 2,
+        Msg::SetMode(.Run) | .SetMode(Mode::Run) => 3,
+        .SetMode(Mode::Run) => 4,
+        _ => 5,
+    }
+}
+
+fn not_an_enum(x: u8) -> u8 {
+    match x {
+        .Run => 0,
+        _ => 1,
+    }
+}
+
+fn errors(m: Msg) -> u8 {
+    match m {
+        .Walk => 0,
+        .Write(_) => 1,
+        .Nop() => 2,
+        .Write => 3,
+        .Led(let b: u8) => b,
+        .Led(.On) => 4,
+        .Bad(let v: u32) => v as u8,
+        .Write(_, _, .X(3)) => 5,
+        _ => 6,
+    }
+}
+
+fn erroneous(b: Broken) -> u8 {
+    match b {
+        .A(_, .X) => 0,
+        .C(300) => 1,
+        _ => 2,
+    }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

@@ -1,0 +1,37 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/mir_match_context_variant_errors.ers
+---
+--- errors ---
+ty::cycle
+
+  × the function `top` depends on its own value
+    ╭─[mir_match_context_variant_errors.ers:10:4]
+  7 │ // `_` and `let` at its positions need none.
+  8 │ enum G: u8 { A = top(1), B = 1 }
+    ·              ┬
+    ·              ╰── through the variant `G::A`
+  9 │ 
+ 10 │ fn top(x: u8) -> u8 {
+    ·    ─┬─
+    ·     ╰── needed while computing itself
+ 11 │     if x == 0 { match G::B { .B => 0, _ => 1 } } else { 5 }
+    ╰────
+  help: break the cycle: a value cannot depend on itself (ADR 0028)
+ty::cycle
+
+  × the function `nested` depends on its own value
+    ╭─[mir_match_context_variant_errors.ers:17:4]
+ 13 │ 
+ 14 │ enum GN: u8 { A = nested(1), B = 1 }
+    ·               ┬
+    ·               ╰── through the variant `GN::A`
+ 15 │ enum Holder: u8 { Of(GN) = 0, Empty = 1 }
+ 16 │ 
+ 17 │ fn nested(x: u8) -> u8 {
+    ·    ───┬──
+    ·       ╰── needed while computing itself
+ 18 │     if x == 0 { match Holder::Empty { .Of(.B) => 0, _ => 1 } } else { 5 }
+    ╰────
+  help: break the cycle: a value cannot depend on itself (ADR 0028)

@@ -1,0 +1,249 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/mir_match_context_variants.ers
+---
+--- mir ---
+enum Mode: u8 { Off = 0, Run = 3 }
+enum Msg: u8 { 0 Nop = 0, 1 Set(0 u8 at 1) = 1, 2 Write(0 u8 at 1, 1 u16 at 2) = 2 } // size 4, align 2
+
+fn with_dots(_1: Msg) -> u16 {
+    let _0: u16;
+    let _1: Msg; // m
+    let _2: u8; // mode
+    let _3: u16; // v
+    let _4: Msg;
+    let _5: u16;
+    let _6: u8;
+    let _7: u16;
+
+    bb0: {
+        _4 = copy _1;
+        switch copy _4.tag -> [0_u8: bb1, 1_u8: bb6, 2_u8: bb9, otherwise: bb5];
+    }
+
+    bb1: {
+        _5 = const 0_u16;
+        goto -> bb15;
+    }
+
+    bb2: {
+        _5 = const 1_u16;
+        goto -> bb15;
+    }
+
+    bb3: {
+        _6 = copy _2;
+        switch copy _6 -> [0_u8: bb12, otherwise: bb13];
+    }
+
+    bb4: {
+        _5 = copy _3;
+        goto -> bb15;
+    }
+
+    bb5: {
+        panic(enum value is no variant);
+    }
+
+    bb6: {
+        switch copy (_4 as 1).0 -> [3_u8: bb8, otherwise: bb7];
+    }
+
+    bb7: {
+        _2 = copy (_4 as 1).0;
+        goto -> bb3;
+    }
+
+    bb8: {
+        goto -> bb2;
+    }
+
+    bb9: {
+        switch copy (_4 as 2).0 -> [16_u8: bb11, otherwise: bb10];
+    }
+
+    bb10: {
+        _3 = copy (_4 as 2).1;
+        goto -> bb4;
+    }
+
+    bb11: {
+        goto -> bb2;
+    }
+
+    bb12: {
+        _7 = const 2_u16;
+        goto -> bb14;
+    }
+
+    bb13: {
+        _7 = const 3_u16;
+        goto -> bb14;
+    }
+
+    bb14: {
+        _5 = copy _7;
+        goto -> bb15;
+    }
+
+    bb15: {
+        _0 = copy _5;
+        return;
+    }
+}
+
+fn with_paths(_1: Msg) -> u16 {
+    let _0: u16;
+    let _1: Msg; // m
+    let _2: u8; // mode
+    let _3: u16; // v
+    let _4: Msg;
+    let _5: u16;
+    let _6: u8;
+    let _7: u16;
+
+    bb0: {
+        _4 = copy _1;
+        switch copy _4.tag -> [0_u8: bb1, 1_u8: bb6, 2_u8: bb9, otherwise: bb5];
+    }
+
+    bb1: {
+        _5 = const 0_u16;
+        goto -> bb15;
+    }
+
+    bb2: {
+        _5 = const 1_u16;
+        goto -> bb15;
+    }
+
+    bb3: {
+        _6 = copy _2;
+        switch copy _6 -> [0_u8: bb12, otherwise: bb13];
+    }
+
+    bb4: {
+        _5 = copy _3;
+        goto -> bb15;
+    }
+
+    bb5: {
+        panic(enum value is no variant);
+    }
+
+    bb6: {
+        switch copy (_4 as 1).0 -> [3_u8: bb8, otherwise: bb7];
+    }
+
+    bb7: {
+        _2 = copy (_4 as 1).0;
+        goto -> bb3;
+    }
+
+    bb8: {
+        goto -> bb2;
+    }
+
+    bb9: {
+        switch copy (_4 as 2).0 -> [16_u8: bb11, otherwise: bb10];
+    }
+
+    bb10: {
+        _3 = copy (_4 as 2).1;
+        goto -> bb4;
+    }
+
+    bb11: {
+        goto -> bb2;
+    }
+
+    bb12: {
+        _7 = const 2_u16;
+        goto -> bb14;
+    }
+
+    bb13: {
+        _7 = const 3_u16;
+        goto -> bb14;
+    }
+
+    bb14: {
+        _5 = copy _7;
+        goto -> bb15;
+    }
+
+    bb15: {
+        _0 = copy _5;
+        return;
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+comptime fn Mode::Off() -> u8 {
+    let _0: u8;
+
+    bb0: {
+        _0 = const 0_u8;
+        return;
+    }
+}
+
+comptime fn Mode::Run() -> u8 {
+    let _0: u8;
+
+    bb0: {
+        _0 = const 3_u8;
+        return;
+    }
+}
+
+comptime fn Msg::Nop() -> u8 {
+    let _0: u8;
+
+    bb0: {
+        _0 = const 0_u8;
+        return;
+    }
+}
+
+comptime fn Msg::Set() -> u8 {
+    let _0: u8;
+
+    bb0: {
+        _0 = const 1_u8;
+        return;
+    }
+}
+
+comptime fn Msg::Write() -> u8 {
+    let _0: u8;
+
+    bb0: {
+        _0 = const 2_u8;
+        return;
+    }
+}

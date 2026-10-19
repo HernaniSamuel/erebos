@@ -1,0 +1,381 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_match_context_variants.ers
+---
+--- errors ---
+ty::never-in-memory
+
+  × `!` is not a type of memory
+    ╭─[typeck_match_context_variants.ers:14:26]
+ 13 │ enum Msg: u8 { Nop = 0, Led(bool) = 1, Write(u8, u16) = 2, SetMode(Mode) = 3 }
+ 14 │ enum Broken: u8 { A(u32, !) = 0, B = 1 }
+    ·                          ┬
+    ·                          ╰── `!` as a payload type
+ 15 │ 
+    ╰────
+  help: `!` is the type of expressions that do not finish, so no memory holds one; for a type
+        without data, use `()` (ADR 0034)
+ty::non-exhaustive-match
+
+  × non-exhaustive `match`: `Msg::Led(false)`, `Msg::Write(_, _)` and `Msg::SetMode(Mode::Run)`
+  │ not covered
+    ╭─[typeck_match_context_variants.ers:36:11]
+ 35 │ fn missing_dots(m: Msg) -> u8 {
+ 36 │     match m {
+    ·           ┬
+    ·           ╰── missing: `Msg::Led(false)`, `Msg::Write(_, _)` and `Msg::SetMode(Mode::Run)`
+ 37 │         .Nop => 0,
+    ╰────
+  help: add `Msg::Led(false) => ...`, `Msg::Write(_, _) => ...` and `Msg::SetMode(Mode::Run)
+        => ...`, or a `_` arm (ADR 0037)
+ty::non-exhaustive-match
+
+  × non-exhaustive `match`: `Msg::Led(false)`, `Msg::Write(_, _)` and `Msg::SetMode(Mode::Run)`
+  │ not covered
+    ╭─[typeck_match_context_variants.ers:44:11]
+ 43 │ fn missing_paths(m: Msg) -> u8 {
+ 44 │     match m {
+    ·           ┬
+    ·           ╰── missing: `Msg::Led(false)`, `Msg::Write(_, _)` and `Msg::SetMode(Mode::Run)`
+ 45 │         Msg::Nop => 0,
+    ╰────
+  help: add `Msg::Led(false) => ...`, `Msg::Write(_, _) => ...` and `Msg::SetMode(Mode::Run)
+        => ...`, or a `_` arm (ADR 0037)
+ty::non-exhaustive-match
+
+  × non-exhaustive `match`: `Msg::Led(false)`, `Msg::Write(_, _)` and `Msg::SetMode(Mode::Run)`
+  │ not covered
+    ╭─[typeck_match_context_variants.ers:52:11]
+ 51 │ fn missing_mixed(m: Msg) -> u8 {
+ 52 │     match m {
+    ·           ┬
+    ·           ╰── missing: `Msg::Led(false)`, `Msg::Write(_, _)` and `Msg::SetMode(Mode::Run)`
+ 53 │         Msg::Nop => 0,
+    ╰────
+  help: add `Msg::Led(false) => ...`, `Msg::Write(_, _) => ...` and `Msg::SetMode(Mode::Run)
+        => ...`, or a `_` arm (ADR 0037)
+ty::non-exhaustive-match
+
+  × non-exhaustive `match`: `Mode::Run` not covered
+    ╭─[typeck_match_context_variants.ers:60:11]
+ 59 │ fn missing_mode_dots(m: Mode) -> u8 {
+ 60 │     match m {
+    ·           ┬
+    ·           ╰── missing: `Mode::Run`
+ 61 │         .Off => 0,
+    ╰────
+  help: add `Mode::Run => ...`, or a `_` arm (ADR 0037)
+ty::non-exhaustive-match
+
+  × non-exhaustive `match`: `Mode::Run` not covered
+    ╭─[typeck_match_context_variants.ers:66:11]
+ 65 │ fn missing_mode_paths(m: Mode) -> u8 {
+ 66 │     match m {
+    ·           ┬
+    ·           ╰── missing: `Mode::Run`
+ 67 │         Mode::Off => 0,
+    ╰────
+  help: add `Mode::Run => ...`, or a `_` arm (ADR 0037)
+ty::unreachable-pattern
+
+  × unreachable arm
+    ╭─[typeck_match_context_variants.ers:74:9]
+ 72 │     match m {
+ 73 │         .Write(1, _) => 0,
+    ·         ──────┬─────
+    ·               ╰── every value it matches is matched here
+ 74 │         .Write(1, 7) => 1,
+    ·         ──────┬─────
+    ·               ╰── matches no value that the arms before it leave
+ 75 │         .Led(true | true) => 2,
+    ╰────
+  help: a `match` takes the first arm that matches, so this one never runs; remove it (ADR 0037)
+ty::unreachable-pattern
+
+  × unreachable pattern
+    ╭─[typeck_match_context_variants.ers:75:21]
+ 74 │         .Write(1, 7) => 1,
+ 75 │         .Led(true | true) => 2,
+    ·              ──┬─   ──┬─
+    ·                │      ╰── matches no value that the patterns before it leave
+    ·                ╰── every value it matches is matched here
+ 76 │         .SetMode(.Run) | .SetMode(.Run) => 3,
+    ╰────
+  help: remove this alternative (ADR 0037)
+ty::unreachable-pattern
+
+  × unreachable pattern
+    ╭─[typeck_match_context_variants.ers:76:26]
+ 75 │         .Led(true | true) => 2,
+ 76 │         .SetMode(.Run) | .SetMode(.Run) => 3,
+    ·         ───────┬──────   ───────┬──────
+    ·                │                ╰── matches no value that the patterns before it leave
+    ·                ╰── every value it matches is matched here
+ 77 │         .SetMode(.Run) => 4,
+    ╰────
+  help: remove this alternative (ADR 0037)
+ty::unreachable-pattern
+
+  × unreachable arm
+    ╭─[typeck_match_context_variants.ers:77:9]
+ 75 │         .Led(true | true) => 2,
+ 76 │         .SetMode(.Run) | .SetMode(.Run) => 3,
+    ·         ───────────────┬───────────────
+    ·                        ╰── every value it matches is matched here
+ 77 │         .SetMode(.Run) => 4,
+    ·         ───────┬──────
+    ·                ╰── matches no value that the arms before it leave
+ 78 │         _ => 5,
+    ╰────
+  help: a `match` takes the first arm that matches, so this one never runs; remove it (ADR 0037)
+ty::unreachable-pattern
+
+  × unreachable arm
+    ╭─[typeck_match_context_variants.ers:85:9]
+ 83 │     match m {
+ 84 │         Msg::Write(1, _) => 0,
+    ·         ────────┬───────
+    ·                 ╰── every value it matches is matched here
+ 85 │         Msg::Write(1, 7) => 1,
+    ·         ────────┬───────
+    ·                 ╰── matches no value that the arms before it leave
+ 86 │         Msg::Led(true | true) => 2,
+    ╰────
+  help: a `match` takes the first arm that matches, so this one never runs; remove it (ADR 0037)
+ty::unreachable-pattern
+
+  × unreachable pattern
+    ╭─[typeck_match_context_variants.ers:86:25]
+ 85 │         Msg::Write(1, 7) => 1,
+ 86 │         Msg::Led(true | true) => 2,
+    ·                  ──┬─   ──┬─
+    ·                    │      ╰── matches no value that the patterns before it leave
+    ·                    ╰── every value it matches is matched here
+ 87 │         Msg::SetMode(Mode::Run) | Msg::SetMode(Mode::Run) => 3,
+    ╰────
+  help: remove this alternative (ADR 0037)
+ty::unreachable-pattern
+
+  × unreachable pattern
+    ╭─[typeck_match_context_variants.ers:87:35]
+ 86 │         Msg::Led(true | true) => 2,
+ 87 │         Msg::SetMode(Mode::Run) | Msg::SetMode(Mode::Run) => 3,
+    ·         ───────────┬───────────   ───────────┬───────────
+    ·                    │                         ╰── matches no value that the patterns before it leave
+    ·                    ╰── every value it matches is matched here
+ 88 │         Msg::SetMode(Mode::Run) => 4,
+    ╰────
+  help: remove this alternative (ADR 0037)
+ty::unreachable-pattern
+
+  × unreachable arm
+    ╭─[typeck_match_context_variants.ers:88:9]
+ 86 │         Msg::Led(true | true) => 2,
+ 87 │         Msg::SetMode(Mode::Run) | Msg::SetMode(Mode::Run) => 3,
+    ·         ────────────────────────┬────────────────────────
+    ·                                 ╰── every value it matches is matched here
+ 88 │         Msg::SetMode(Mode::Run) => 4,
+    ·         ───────────┬───────────
+    ·                    ╰── matches no value that the arms before it leave
+ 89 │         _ => 5,
+    ╰────
+  help: a `match` takes the first arm that matches, so this one never runs; remove it (ADR 0037)
+ty::unreachable-pattern
+
+  × unreachable arm
+    ╭─[typeck_match_context_variants.ers:96:9]
+ 94 │     match m {
+ 95 │         .Write(1, _) => 0,
+    ·         ──────┬─────
+    ·               ╰── every value it matches is matched here
+ 96 │         Msg::Write(1, 7) => 1,
+    ·         ────────┬───────
+    ·                 ╰── matches no value that the arms before it leave
+ 97 │         .Led(true | true) => 2,
+    ╰────
+  help: a `match` takes the first arm that matches, so this one never runs; remove it (ADR 0037)
+ty::unreachable-pattern
+
+  × unreachable pattern
+    ╭─[typeck_match_context_variants.ers:97:21]
+ 96 │         Msg::Write(1, 7) => 1,
+ 97 │         .Led(true | true) => 2,
+    ·              ──┬─   ──┬─
+    ·                │      ╰── matches no value that the patterns before it leave
+    ·                ╰── every value it matches is matched here
+ 98 │         Msg::SetMode(.Run) | .SetMode(Mode::Run) => 3,
+    ╰────
+  help: remove this alternative (ADR 0037)
+ty::unreachable-pattern
+
+  × unreachable pattern
+    ╭─[typeck_match_context_variants.ers:98:30]
+ 97 │         .Led(true | true) => 2,
+ 98 │         Msg::SetMode(.Run) | .SetMode(Mode::Run) => 3,
+    ·         ─────────┬────────   ─────────┬─────────
+    ·                  │                    ╰── matches no value that the patterns before it leave
+    ·                  ╰── every value it matches is matched here
+ 99 │         .SetMode(Mode::Run) => 4,
+    ╰────
+  help: remove this alternative (ADR 0037)
+ty::unreachable-pattern
+
+  × unreachable arm
+     ╭─[typeck_match_context_variants.ers:99:9]
+  97 │         .Led(true | true) => 2,
+  98 │         Msg::SetMode(.Run) | .SetMode(Mode::Run) => 3,
+     ·         ────────────────────┬───────────────────
+     ·                             ╰── every value it matches is matched here
+  99 │         .SetMode(Mode::Run) => 4,
+     ·         ─────────┬─────────
+     ·                  ╰── matches no value that the arms before it leave
+ 100 │         _ => 5,
+     ╰────
+  help: a `match` takes the first arm that matches, so this one never runs; remove it (ADR 0037)
+ty::mismatched-types
+
+  × mismatched types
+     ╭─[typeck_match_context_variants.ers:106:9]
+ 105 │     match x {
+ 106 │         .Run => 0,
+     ·         ──┬─
+     ·           ╰── expected `u8`, found variant `.Run`
+ 107 │         _ => 1,
+     ╰────
+  help: `.Run` names a variant of the enum matched where it appears, and `u8` is not an enum (ADR
+        0044)
+ty::unknown-variant
+
+  × `Msg` has no variant `Walk`
+    ╭─[typeck_match_context_variants.ers:13:6]
+ 12 │ enum Mode: u8 { Off = 0, Run = 1 }
+ 13 │ enum Msg: u8 { Nop = 0, Led(bool) = 1, Write(u8, u16) = 2, SetMode(Mode) = 3 }
+    ·      ─┬─
+    ·       ╰── `Msg` is declared here
+ 14 │ enum Broken: u8 { A(u32, !) = 0, B = 1 }
+    ╰────
+     ╭─[typeck_match_context_variants.ers:113:10]
+ 112 │     match m {
+ 113 │         .Walk => 0,
+     ·          ──┬─
+     ·            ╰── unknown variant
+ 114 │         .Write(_) => 1,
+     ╰────
+  help: its variants are `Nop`, `Led`, `Write`, `SetMode`
+ty::wrong-payload-count
+
+  × `Msg::Write` carries 2 values, but 1 was given
+    ╭─[typeck_match_context_variants.ers:13:40]
+ 12 │ enum Mode: u8 { Off = 0, Run = 1 }
+ 13 │ enum Msg: u8 { Nop = 0, Led(bool) = 1, Write(u8, u16) = 2, SetMode(Mode) = 3 }
+    ·                                        ──┬──
+    ·                                          ╰── declared here
+ 14 │ enum Broken: u8 { A(u32, !) = 0, B = 1 }
+    ╰────
+     ╭─[typeck_match_context_variants.ers:114:9]
+ 113 │         .Walk => 0,
+ 114 │         .Write(_) => 1,
+     ·         ────┬────
+     ·             ╰── in this pattern
+ 115 │         .Nop() => 2,
+     ╰────
+  help: a pattern is written for each value, `_` for one not tested, as in `Msg::Write(_, _)`;
+        there is no `..` (ADR 0040)
+ty::wrong-payload-count
+
+  × `Msg::Nop` carries no values, but is written with parentheses
+    ╭─[typeck_match_context_variants.ers:13:16]
+ 12 │ enum Mode: u8 { Off = 0, Run = 1 }
+ 13 │ enum Msg: u8 { Nop = 0, Led(bool) = 1, Write(u8, u16) = 2, SetMode(Mode) = 3 }
+    ·                ─┬─
+    ·                 ╰── declared here
+ 14 │ enum Broken: u8 { A(u32, !) = 0, B = 1 }
+    ╰────
+     ╭─[typeck_match_context_variants.ers:115:9]
+ 114 │         .Write(_) => 1,
+ 115 │         .Nop() => 2,
+     ·         ───┬──
+     ·            ╰── in this pattern
+ 116 │         .Write => 3,
+     ╰────
+  help: a variant without payload is matched without parentheses: `Msg::Nop` (ADR 0040)
+ty::wrong-payload-count
+
+  × `Msg::Write` carries 2 values, but no patterns are given for them
+    ╭─[typeck_match_context_variants.ers:13:40]
+ 12 │ enum Mode: u8 { Off = 0, Run = 1 }
+ 13 │ enum Msg: u8 { Nop = 0, Led(bool) = 1, Write(u8, u16) = 2, SetMode(Mode) = 3 }
+    ·                                        ──┬──
+    ·                                          ╰── declared here
+ 14 │ enum Broken: u8 { A(u32, !) = 0, B = 1 }
+    ╰────
+     ╭─[typeck_match_context_variants.ers:116:9]
+ 115 │         .Nop() => 2,
+ 116 │         .Write => 3,
+     ·         ───┬──
+     ·            ╰── matched without its values
+ 117 │         .Led(let b: u8) => b,
+     ╰────
+  help: a variant with a payload is matched with a pattern for each value, as in `Msg::Write(_,
+        _)` (ADR 0040)
+ty::mismatched-types
+
+  × mismatched types
+     ╭─[typeck_match_context_variants.ers:117:21]
+ 116 │         .Write => 3,
+ 117 │         .Led(let b: u8) => b,
+     ·                     ─┬
+     ·                      ╰── expected `bool`, found `u8`
+ 118 │         .Led(.On) => 4,
+     ╰────
+  help: the variable holds the value matched, a `bool`, which a pattern never converts (ADR 0037)
+ty::mismatched-types
+
+  × mismatched types
+     ╭─[typeck_match_context_variants.ers:118:14]
+ 117 │         .Led(let b: u8) => b,
+ 118 │         .Led(.On) => 4,
+     ·              ─┬─
+     ·               ╰── expected `bool`, found variant `.On`
+ 119 │         .Bad(let v: u32) => v as u8,
+     ╰────
+  help: `.On` names a variant of the enum matched where it appears, and `bool` is not an enum (ADR
+        0044)
+ty::unknown-variant
+
+  × `Msg` has no variant `Bad`
+    ╭─[typeck_match_context_variants.ers:13:6]
+ 12 │ enum Mode: u8 { Off = 0, Run = 1 }
+ 13 │ enum Msg: u8 { Nop = 0, Led(bool) = 1, Write(u8, u16) = 2, SetMode(Mode) = 3 }
+    ·      ─┬─
+    ·       ╰── `Msg` is declared here
+ 14 │ enum Broken: u8 { A(u32, !) = 0, B = 1 }
+    ╰────
+     ╭─[typeck_match_context_variants.ers:119:10]
+ 118 │         .Led(.On) => 4,
+ 119 │         .Bad(let v: u32) => v as u8,
+     ·          ─┬─
+     ·           ╰── unknown variant
+ 120 │         .Write(_, _, .X(3)) => 5,
+     ╰────
+  help: its variants are `Nop`, `Led`, `Write`, `SetMode`
+ty::wrong-payload-count
+
+  × `Msg::Write` carries 2 values, but 3 were given
+    ╭─[typeck_match_context_variants.ers:13:40]
+ 12 │ enum Mode: u8 { Off = 0, Run = 1 }
+ 13 │ enum Msg: u8 { Nop = 0, Led(bool) = 1, Write(u8, u16) = 2, SetMode(Mode) = 3 }
+    ·                                        ──┬──
+    ·                                          ╰── declared here
+ 14 │ enum Broken: u8 { A(u32, !) = 0, B = 1 }
+    ╰────
+     ╭─[typeck_match_context_variants.ers:120:9]
+ 119 │         .Bad(let v: u32) => v as u8,
+ 120 │         .Write(_, _, .X(3)) => 5,
+     ·         ─────────┬─────────
+     ·                  ╰── in this pattern
+ 121 │         _ => 6,
+     ╰────
+  help: a pattern is written for each value, `_` for one not tested, as in `Msg::Write(_, _)`;
+        there is no `..` (ADR 0040)

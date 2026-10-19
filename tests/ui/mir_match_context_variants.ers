@@ -1,0 +1,35 @@
+// emit: mir
+// A variant pattern named by the type of its position is the variant its
+// `E::V` names (ADR 0044): `with_dots` and `with_paths` are the same
+// function, written both ways, and their MIR is the same: a switch on the
+// tag, the chains of the alternatives under it, and, on an enum without
+// payloads, a switch on its value.
+enum Mode: u8 { Off = 0, Run = 3 }
+enum Msg: u8 { Nop = 0, Set(Mode) = 1, Write(u8, u16) = 2 }
+
+fn with_dots(m: Msg) -> u16 {
+    match m {
+        .Nop => 0,
+        .Set(.Run) | .Write(0x10, _) => 1,
+        .Set(let mode: Mode) => match mode {
+            .Off => 2,
+            _ => 3,
+        },
+        .Write(_, let v: u16) => v,
+    }
+}
+
+fn with_paths(m: Msg) -> u16 {
+    match m {
+        Msg::Nop => 0,
+        Msg::Set(Mode::Run) | Msg::Write(0x10, _) => 1,
+        Msg::Set(let mode: Mode) => match mode {
+            Mode::Off => 2,
+            _ => 3,
+        },
+        Msg::Write(_, let v: u16) => v,
+    }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

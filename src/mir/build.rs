@@ -116,6 +116,7 @@ fn is_value(pattern: &hir::Pattern) -> bool {
             | hir::PatternKind::Bool(_)
             | hir::PatternKind::Const(_)
             | hir::PatternKind::Variant(_, _, None)
+            | hir::PatternKind::ContextVariant(_, _, _, None)
     )
 }
 
@@ -906,7 +907,7 @@ impl Builder<'_, '_> {
         let mut catch_all = None;
         'arms: for (arm, a) in arms.iter().enumerate() {
             for alternative in a.pattern.alternatives() {
-                let hir::PatternKind::Variant(_, variant, _) = alternative.kind else {
+                let Some((_, variant, _)) = self.variant_pattern(alternative) else {
                     catch_all = Some((arm, alternative));
                     break 'arms;
                 };
@@ -966,12 +967,12 @@ impl Builder<'_, '_> {
         // binds anything there: one that does neither starts at its arm's
         // block.
         let start = |this: &mut Self, (arm, alternative): (usize, &hir::Pattern)| {
-            let hir::PatternKind::Variant(_, _, patterns) = &alternative.kind else {
+            let Some((_, _, patterns)) = this.variant_pattern(alternative) else {
                 unreachable!("a chain holds variants")
             };
             let wildcards = patterns
+                .unwrap_or_default()
                 .iter()
-                .flatten()
                 .all(|pattern| matches!(pattern.kind, hir::PatternKind::Wildcard));
             if wildcards {
                 (blocks[arm], false)
@@ -984,14 +985,13 @@ impl Builder<'_, '_> {
         for (k, &(arm, alternative)) in chain.iter().enumerate() {
             let next = chain.get(k + 1).map(|&next| start(self, next));
             if tests {
-                let hir::PatternKind::Variant(id, variant, Some(patterns)) = &alternative.kind
-                else {
+                let Some((id, variant, Some(patterns))) = self.variant_pattern(alternative) else {
                     unreachable!("an alternative that tests something has a payload")
                 };
                 self.current = Some(block);
                 let fail = next.map_or(end, |(next, _)| next);
                 // The tag was switched on already.
-                self.payload(scrutinee, *id, *variant, patterns, &[], fail);
+                self.payload(scrutinee, id, variant, patterns, &[], fail);
                 self.terminate(Terminator::Goto(blocks[arm]));
             }
             if let Some(next) = next {
@@ -1047,14 +1047,14 @@ impl Builder<'_, '_> {
             hir::PatternKind::Or(alternatives) => {
                 self.or_pattern(scrutinee, alternatives, position, ty, fail)
             }
-            kind => {
+            _ => {
                 // A value, or a variant's tag, then its payload.
                 let pass = self.new_block();
                 let one = std::slice::from_ref(pattern);
                 self.switch_values(scrutinee, one, position, ty, pass, fail);
                 self.current = Some(pass);
-                if let hir::PatternKind::Variant(id, variant, Some(patterns)) = kind {
-                    self.payload(scrutinee, *id, *variant, patterns, position, fail);
+                if let Some((id, variant, Some(patterns))) = self.variant_pattern(pattern) {
+                    self.payload(scrutinee, id, variant, patterns, position, fail);
                 }
             }
         }
@@ -1187,6 +1187,25 @@ impl Builder<'_, '_> {
         Operand::Copy(value)
     }
 
+    /// The enum and the variant a variant pattern names, by its path or,
+    /// for `.V`, as type checking resolved it (ADR 0044), and its payload
+    /// patterns if written with parentheses; `None` for any other pattern.
+    fn variant_pattern<'p>(
+        &self,
+        pattern: &'p hir::Pattern,
+    ) -> Option<(hir::EnumId, u32, Option<&'p [hir::Pattern]>)> {
+        match &pattern.kind {
+            hir::PatternKind::Variant(id, index, patterns) => {
+                Some((*id, *index, patterns.as_deref()))
+            }
+            hir::PatternKind::ContextVariant(id, _, _, patterns) => {
+                let (enum_id, index) = self.q.tables.pattern_variant(*id);
+                Some((enum_id, index, patterns.as_deref()))
+            }
+            _ => None,
+        }
+    }
+
     /// The bits a pattern matches, masked to the width of `ty`, the type
     /// matched (`bool` is 0 or 1); `None` for every value.
     fn pattern_value(&mut self, pattern: &hir::Pattern, ty: Ty) -> Option<u64> {
@@ -1217,14 +1236,19 @@ impl Builder<'_, '_> {
                 }
             },
             // Its value, masked already as `Const::Int` holds it.
-            hir::PatternKind::Variant(id, index, _) => match self.discriminant(*id, *index) {
-                Some(value) => value,
-                None => {
-                    // Reported where it failed; the body is not used.
-                    self.failed = true;
-                    0
+            hir::PatternKind::Variant(..) | hir::PatternKind::ContextVariant(..) => {
+                let (id, index, _) = self
+                    .variant_pattern(pattern)
+                    .expect("a variant pattern names a variant");
+                match self.discriminant(id, index) {
+                    Some(value) => value,
+                    None => {
+                        // Reported where it failed; the body is not used.
+                        self.failed = true;
+                        0
+                    }
                 }
-            },
+            }
             hir::PatternKind::Or(_) => unreachable!("an alternative is not an or-pattern"),
         })
     }

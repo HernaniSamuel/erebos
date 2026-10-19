@@ -15,7 +15,8 @@ use std::fmt::Write;
 use crate::diag::Diagnostic;
 use crate::hir::{
     self, Arm, BinOp, Block, EnumId, EnumTy, Expr, ExprId, ExprKind, Fn, FnKind, Hir, IntTy,
-    LocalId, NeverPosition, Pattern, PatternKind, Ptr, StaticId, Stmt, Ty, UnOp, UnsizedPosition,
+    LocalId, NeverPosition, Pattern, PatternId, PatternKind, Ptr, StaticId, Stmt, Ty, UnOp,
+    UnsizedPosition,
 };
 use crate::layout;
 use crate::query::Queries;
@@ -38,6 +39,8 @@ pub struct Tables {
     coercions: HashMap<ExprId, Ty>,
     /// The enum and variant index each `.V` names (ADR 0044).
     variants: HashMap<ExprId, (EnumId, u32)>,
+    /// Likewise for each `.V` pattern.
+    pattern_variants: HashMap<PatternId, (EnumId, u32)>,
 }
 
 impl Tables {
@@ -49,6 +52,7 @@ impl Tables {
             fields: HashMap::new(),
             coercions: HashMap::new(),
             variants: HashMap::new(),
+            pattern_variants: HashMap::new(),
         }
     }
 
@@ -71,6 +75,12 @@ impl Tables {
     /// resolved against its expected type (ADR 0044).
     pub fn variant(&self, id: ExprId) -> (EnumId, u32) {
         self.variants[&id]
+    }
+
+    /// The enum and the index of the variant that the `.V` pattern `id`
+    /// names, resolved against the type of its position (ADR 0044).
+    pub fn pattern_variant(&self, id: PatternId) -> (EnumId, u32) {
+        self.pattern_variants[&id]
     }
 }
 
@@ -1167,6 +1177,7 @@ impl Checker<'_, '_> {
             PatternKind::Variant(id, index, subs) => {
                 self.variant_pattern(f, pattern, ty, *id, *index, subs.as_deref())
             }
+            PatternKind::ContextVariant(..) => self.context_variant_pattern(f, pattern, ty),
             PatternKind::Or(alternatives) => {
                 let mut matched = Some(Vec::new());
                 for alternative in alternatives {
@@ -1244,6 +1255,53 @@ impl Checker<'_, '_> {
         let value = self.q.discriminant(id, index);
         self.elsewhere += self.q.diags.len() - before;
         Some(Pat::Value(value?, payload?))
+    }
+
+    /// `.V`, or `.V(subs)` when `subs` are written, against `ty`: the
+    /// variant `V` of the enum `ty` is, then checked as `E::V` is
+    /// (ADR 0044). When it names no variant, which is reported unless `ty`
+    /// is erroneous, its patterns are checked against `{error}`, so that
+    /// they report nothing more.
+    fn context_variant_pattern(&mut self, f: &Fn, pattern: &Pattern, ty: Ty) -> Option<Pat> {
+        let PatternKind::ContextVariant(id, name, name_span, subs) = &pattern.kind else {
+            unreachable!("a `.V` pattern")
+        };
+        let (id, name, name_span, subs) = (*id, name.as_str(), *name_span, subs.as_deref());
+        let hir = self.hir;
+        let found = match ty {
+            Ty::Enum(e) => {
+                let def = hir.enum_(e.id);
+                match def.variants.iter().position(|v| v.name == name) {
+                    Some(index) => Some((e.id, index as u32)),
+                    None => {
+                        self.q.diags.push(unknown_variant(def, name, name_span));
+                        None
+                    }
+                }
+            }
+            Ty::Error => None,
+            other => {
+                self.q.diags.push(
+                    Diagnostic::error("ty::mismatched-types", "mismatched types")
+                        .label(
+                            pattern.span,
+                            format!("expected `{other}`, found variant `.{name}`"),
+                        )
+                        .help(format!(
+                            "`.{name}` names a variant of the enum matched where it appears, and `{other}` is not an enum (ADR 0044)"
+                        )),
+                );
+                None
+            }
+        };
+        let Some((enum_id, index)) = found else {
+            for sub in subs.unwrap_or_default() {
+                self.pattern(f, sub, Ty::Error);
+            }
+            return None;
+        };
+        self.q.tables.pattern_variants.insert(id, (enum_id, index));
+        self.variant_pattern(f, pattern, ty, enum_id, index, subs)
     }
 
     /// Exhaustiveness and dead arms (ADR 0037, 0040) of a `match` on `ty`,
@@ -1358,7 +1416,11 @@ impl Checker<'_, '_> {
         written: &Pattern,
     ) {
         match (pattern, &written.kind) {
-            (Pat::Value(_, subs), PatternKind::Variant(_, _, Some(written_subs))) => {
+            (
+                Pat::Value(_, subs),
+                PatternKind::Variant(_, _, Some(written_subs))
+                | PatternKind::ContextVariant(_, _, _, Some(written_subs)),
+            ) => {
                 for (i, (sub, written_sub)) in subs.iter().zip(written_subs).enumerate() {
                     path.push(i);
                     self.dead_alternatives(arm, context, whole, path, sub, written_sub);
