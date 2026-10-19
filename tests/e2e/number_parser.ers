@@ -1,0 +1,183 @@
+// The M2.5 milestone program: a number parser returning `Result` (ADR 0044
+// to 0046). `parse` reads a decimal `u32` from a byte string: `?` passes on
+// the error of `digit`, and a `.None` from `shift_in`, which combines the
+// checked operations with `?`, becomes `.Err(.Overflow)` through a `match`.
+// The program parses a static table of byte strings and prints each result
+// or error, the bad byte included; a `comptime` block parses the same
+// table at compile time and asserts the same results.
+// expect-output: "0" -> 0
+// expect-output: "42" -> 42
+// expect-output: "4294967295" -> 4294967295
+// expect-output: "4294967296" -> overflow
+// expect-output: "4294967300" -> overflow
+// expect-output: "" -> empty
+// expect-output: "12a" -> bad digit 'a'
+// expect-exit: 0
+
+const UART: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+const FINISHER: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+
+enum ParseError: u8 { Empty = 0, BadDigit(u8) = 1, Overflow = 2 }
+
+static INPUTS: [*const [u8]; 7] = [
+    &raw const b"0",
+    &raw const b"42",
+    &raw const b"4294967295",
+    // Overflows in the addition: 4294967290 + 6 does not fit.
+    &raw const b"4294967296",
+    // Overflows in the multiplication: 429496730 * 10 does not fit.
+    &raw const b"4294967300",
+    &raw const b"",
+    &raw const b"12a",
+];
+
+// The value of the decimal digit `c`.
+fn digit(c: u8) -> Result(u32, ParseError) {
+    if c < b'0' || c > b'9' {
+        return .Err(.BadDigit(c));
+    }
+    .Ok((c - b'0') as u32)
+}
+
+// `v * 10`, unless it does not fit in a `u32`.
+fn checked_mul10(v: u32) -> Option(u32) {
+    if v > 429_496_729 { .None } else { .Some(v * 10) }
+}
+
+// `a + b`, unless it does not fit in a `u32`.
+fn checked_add(a: u32, b: u32) -> Option(u32) {
+    if a > 0xFFFF_FFFF - b { .None } else { .Some(a + b) }
+}
+
+// `acc` with the digit `d` appended, unless it does not fit in a `u32`.
+fn shift_in(acc: u32, d: u32) -> Option(u32) {
+    checked_add(checked_mul10(acc)?, d)
+}
+
+fn parse(s: *const [u8]) -> Result(u32, ParseError) {
+    if len(s) == 0 {
+        return .Err(.Empty);
+    }
+    let mut value: u32 = 0;
+    let mut i: usize = 0;
+    while i < len(s) {
+        let d: u32 = digit((*s)[i])?;
+        value = match shift_in(value, d) {
+            .Some(let v: u32) => v,
+            .None => return .Err(.Overflow),
+        };
+        i += 1;
+    }
+    .Ok(value)
+}
+
+comptime {
+    assert(
+        match parse(INPUTS[0]) {
+            .Ok(0) => true,
+            _ => false,
+        },
+        &raw const b"\"0\" is 0",
+    );
+    assert(
+        match parse(INPUTS[1]) {
+            .Ok(42) => true,
+            _ => false,
+        },
+        &raw const b"\"42\" is 42",
+    );
+    assert(
+        match parse(INPUTS[2]) {
+            .Ok(4_294_967_295) => true,
+            _ => false,
+        },
+        &raw const b"\"4294967295\" is the largest u32",
+    );
+    assert(
+        match parse(INPUTS[3]) {
+            .Err(.Overflow) => true,
+            _ => false,
+        },
+        &raw const b"\"4294967296\" overflows",
+    );
+    assert(
+        match parse(INPUTS[4]) {
+            .Err(.Overflow) => true,
+            _ => false,
+        },
+        &raw const b"\"4294967300\" overflows",
+    );
+    assert(
+        match parse(INPUTS[5]) {
+            .Err(.Empty) => true,
+            _ => false,
+        },
+        &raw const b"\"\" is empty",
+    );
+    assert(
+        match parse(INPUTS[6]) {
+            .Err(.BadDigit(b'a')) => true,
+            _ => false,
+        },
+        &raw const b"\"12a\" has the bad digit 'a'",
+    );
+}
+
+fn print(s: *const [u8]) {
+    let mut i: usize = 0;
+    while i < len(s) {
+        *UART = (*s)[i];
+        i += 1;
+    }
+}
+
+fn print_u32(value: u32) {
+    let mut digits: [u8; 10] = [0; 10];
+    let mut n: usize = 0;
+    let mut rest: u32 = value;
+    loop {
+        digits[9 - n] = b'0' + (rest % 10) as u8;
+        n += 1;
+        rest /= 10;
+        if rest == 0 {
+            break;
+        }
+    }
+    print(slice(&raw const digits[10 - n], n));
+}
+
+// Prints `s` in quotes, then what `parse` makes of it, on one line.
+fn show(s: *const [u8]) {
+    print(&raw const b"\"");
+    print(s);
+    print(&raw const b"\" -> ");
+    match parse(s) {
+        .Ok(let v: u32) => print_u32(v),
+        .Err(.Empty) => print(&raw const b"empty"),
+        .Err(.BadDigit(let c: u8)) => {
+            print(&raw const b"bad digit '");
+            *UART = c;
+            print(&raw const b"'");
+        }
+        .Err(.Overflow) => print(&raw const b"overflow"),
+    }
+    print(&raw const b"\n");
+}
+
+fn exit(code: u32) -> ! {
+    *FINISHER = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    loop {}
+}
+
+entry fn main() -> ! {
+    let mut i: usize = 0;
+    while i < len(&raw const INPUTS) {
+        show(INPUTS[i]);
+        i += 1;
+    }
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(1)
+}
