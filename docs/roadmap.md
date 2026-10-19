@@ -238,4 +238,8 @@ Documentation owed:
   `Result(u32, ParseError)`, combining checked operations with `?` and
   reporting overflow, empty input and the bad digit, on QEMU at both
   optimization levels, and checks the same results in a `comptime` block.
+  Its follow-ups give a zero-sized payload value an offset, as any other
+  (ADR 0047), and make a type that reaches a failed array length or
+  struct alignment erroneous, so that the failure is reported once
+  instead of a cascade computed from a wrong layout (ADR 0048).
 - **Next: M2.6** (modules and panic information).

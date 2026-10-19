@@ -289,7 +289,10 @@ extern static crc_lookup: [u32; 256];
 - `#[align(N)]` before a static raises its alignment, with `N` following
   the struct rules (`ty::invalid-align`). Unlike on a struct, it does not
   change the size: `DMA_BUF` is 512 bytes at an address that is a multiple
-  of 64. `#[packed]` does not apply to statics
+  of 64. An `N` in error is reported once, and the static keeps its type's
+  alignment: an alignment that is part of no type makes nothing erroneous,
+  and code using the static is built and checked as usual (ADR 0048, see
+  "Failed lengths and alignments"). `#[packed]` does not apply to statics
   (`resolve::misplaced-attribute`).
 
 **External statics.** An `extern static` is defined outside the program,
@@ -461,7 +464,9 @@ let w: Msg = Msg::Write(3, 0x1234);
   name, is reported once, at that type, also in an enum nothing uses, and
   the enum then counts as erroneous: its uses, in `size_of`, in building a
   variant, in a `match` or as a parameter, report nothing more because of
-  it.
+  it. So does an enum with a payload type that reaches a failed array
+  length or alignment, such as `*const Broken` (see "Failed lengths and
+  alignments").
 - An enum that contains itself by value, directly or through structs,
   arrays and other enums, is `ty::infinite-size`, which names every type
   of the cycle: `Cons(u8, List)` in `enum List` has no size, and
@@ -1119,7 +1124,9 @@ no variant, and how a `match` reads them.
   until M6, nor is `[T]` (`ty::unsized`). A type argument in error, such
   as these or an unknown name, is reported once, also where nothing uses
   the type, and the whole type then counts as erroneous: its uses report
-  nothing more because of it.
+  nothing more because of it. So does one with a type argument that
+  reaches a failed array length or alignment, as `Option(*const Broken)`
+  (see "Failed lengths and alignments").
 - **One type per set of arguments**: two `Option(T)` are the same type
   when their arguments are, compared once array lengths are computed, so
   `Option([u8; 4])` and `Option([u8; 2 + 2])` are one type, while
@@ -1154,6 +1161,7 @@ close after it as its alignment allows, as for any enum with payloads:
 | `Option(u8)` | 2 | 1 | 1 |
 | `Option(u32)`, `Option(*mut T)` | 8 | 4 | 4 |
 | `Option(())` | 1 | 1 | 1, of size 0 |
+| `Option([u32; 0])` | 4 | 4 | 4, of size 0 |
 | `Option(u64)` | 16 | 8 | 8 |
 | `Result(u32, ParseError)`, `ParseError` on `u8` without payloads | 8 | 4 | `Ok` 4, `Err` 1 |
 
@@ -1273,9 +1281,13 @@ unspecified values.
   constants; their argument is a type.
 - `#[packed]` before a struct removes padding and gives it alignment 1.
 - `#[align(N)]` before a struct raises its alignment to `N`, a power of two
-  not below the natural alignment, and rounds its size up to `N`. Before a
+  not below the natural alignment, and rounds its size up to `N`. An `N`
+  that fails to evaluate or to type check, or is `ty::invalid-align`, is
+  reported once, and the struct then counts as erroneous, as does every
+  type that reaches it (see "Failed lengths and alignments"). Before a
   static, it raises the static's alignment by the same rules, without
-  changing its size.
+  changing its size; there, an `N` in error leaves the type's alignment
+  (see "Statics").
 - `#[packed]` and `#[align(N)]` cannot be combined, and a packed struct
   cannot contain a type with `#[align(N)]`, at any depth: through fields,
   array elements or payload values.
@@ -1366,6 +1378,89 @@ A value that needs itself, directly or through other items, is a
 `ty::cycle`; reading a `static` asks for its value, but taking its address
 does not. Data the compiler emits has zero padding, so builds are
 reproducible byte for byte.
+
+### Failed lengths and alignments (ADR 0048)
+
+```
+const N: usize = 1 / 0;
+struct Broken { x: [u8; N], y: u32 }
+
+#[align(3)]
+struct Odd { x: u32 }
+
+enum E: u8 { A(*const Broken) = 0, B = 1 }
+```
+
+A **failed value** is an array length, or the argument of `#[align(N)]`
+before a struct, that is reported in error, whatever the error: a failed
+evaluation (a division by zero, a failed `assert`, the step limit, a
+`ty::cycle`), a type error (`[u8; true]`, a length of type `u32`), or, for
+an alignment, `ty::invalid-align` (not a power of two, as `#[align(3)]`,
+too large, or below the struct's natural alignment, as `#[align(2)]`
+would be on `Odd`). The error is reported once, where the value is
+written.
+
+A type **reaches** a failed value when it is, or contains at any depth,
+an array whose length failed or a struct whose alignment failed: as a
+field, an array element, a payload value, a type argument, or behind a
+pointer or a slice. `[u8; N]`, `Broken`, `Odd`, `*const Broken`,
+`*const [Odd]` and `Option(*const Broken)` all reach one. Such a type
+counts as erroneous, as one containing `!` does (see "Types"):
+
+- **Type errors are still reported.** Code using the type is type checked
+  to the end, and reports its own errors: with `p: *const Broken`,
+  `let q: *const Broken = 0 as *const u8;` is `ty::mismatched-types` and
+  `(*p).z` is `ty::unknown-field`. Only what depends on the type's
+  variants or layout reports nothing: a `match` on an enum that reaches a
+  failed value is not checked for exhaustiveness or dead arms, and its
+  payload patterns are checked against an erroneous type, so neither
+  `match e { E::B => 0 }` nor a pattern `E::A(let v: u32)` is an error
+  (see "`match`"); `?` with such an operand or return type checks nothing
+  (see "The `?` operator"). A type that is itself in error, such as
+  `[u8; N]`, reports nothing anywhere: `let a: [u8; N] = 5;` is no error.
+- **Layout queries have no value.** `size_of`, `align_of` and `offset_of`
+  of such a type have none, `size_of(*const Broken)` included, although a
+  pointer's size does not depend on its pointee. What is computed from
+  them is not evaluated and reports nothing: a constant, an `assert`, a
+  variant's value, and another length or alignment, which then fails in
+  turn, so that `struct V { a: [u8; size_of(Broken)] }` and
+  `#[align(align_of(Odd))] struct U { x: u8 }` reach a failed value too,
+  without an error of their own.
+- **Code reaching it is not built.** A body (a function, the initializer
+  of a constant or a static, a `comptime` expression or block) is not
+  lowered to MIR when its return type, a parameter or local, the type of
+  one of its expressions, or the operand of a `size_of`, `align_of` or
+  `offset_of` in it reaches a failed value. It is then neither run at
+  compile time nor checked for the values known at compile time (see
+  "Checks on values known at compile time"): `7 / 0` in a function taking
+  a `*const Broken` reports nothing, nor does a constant that calls it.
+  Such errors appear once the failed value is fixed.
+- **Errors that hold whatever the value are kept.** A type containing one
+  that reaches a failed value is still checked, with a failed length
+  counted as 0 and a failed alignment as the struct's natural one, the
+  least either can be, so that each error found would be one whatever the
+  value: a `#[packed]` struct containing a type with `#[align(N)]`, failed
+  or not (`ty::aligned-in-packed`), an `#[align(N)]` below the alignment
+  of a field that reaches a failed value (`ty::invalid-align`, as
+  `#[align(2)] struct W { o: Odd }`), and an array too large
+  (`ty::too-large`, as `[Broken; 0x4000_0000]`, `Broken` being at least
+  4 bytes). Each is reported where it would be for any other type.
+
+The `#[align(N)]` of a static is no failed value: it is part of no type.
+One in error is reported, and the static keeps the alignment of its type
+(see "Statics").
+
+Since whether a body is built depends on the lengths and alignments of
+the types it mentions, behind pointers too, a length or alignment of `S`
+computed by a function that takes a `*const S` is a `ty::cycle`, although
+the layout of `S` does not depend on that function; this is revisited in
+M6:
+
+```
+const N: usize = f(0 as *const S);
+fn f(p: *const S) -> usize { 4 }
+struct S { x: [u8; N] }
+```
 
 ### Pointers in results (ADR 0030)
 
@@ -1558,10 +1653,11 @@ let mask: u32 = if BITS < 32 { (1 << BITS) - 1 } else { 0xFFFF_FFFF };
 
 These checks run when a body is lowered to MIR, after type checking, for
 every body that type checks (functions, and the initializers of constants
-and statics, `comptime` expressions and blocks), whatever errors other
-bodies have; `--emit=typeck` stops before them. A body in which they fail
-is not run at compile time: an evaluation that needs it reports nothing
-more.
+and statics, `comptime` expressions and blocks) and reaches no failed
+array length or alignment (see "Failed lengths and alignments"), whatever
+errors other bodies have; `--emit=typeck` stops before them. A body in
+which they fail is not run at compile time: an evaluation that needs it
+reports nothing more.
 
 ### Conversions with `as` (ADR 0019)
 
