@@ -16,47 +16,47 @@ fn decode(_1: Msg) -> u16 {
 
     bb0: {
         _3 = copy _1;
-        switch copy _3.tag -> [0_u8: bb1, 1_u8: bb10, 2_u8: bb15, 3_u8: bb20, otherwise: bb9];
+        switch copy _3.tag -> [0_u8: bb1, 1_u8: bb10, 2_u8: bb15, 3_u8: bb19, otherwise: bb9];
     }
 
     bb1: {
         _4 = const 0_u16;
-        goto -> bb25;
+        goto -> bb23;
     }
 
     bb2: {
         _4 = const 1_u16;
-        goto -> bb25;
+        goto -> bb23;
     }
 
     bb3: {
         _4 = copy _2;
-        goto -> bb25;
+        goto -> bb23;
     }
 
     bb4: {
         _4 = const 2_u16;
-        goto -> bb25;
+        goto -> bb23;
     }
 
     bb5: {
         _4 = const 3_u16;
-        goto -> bb25;
+        goto -> bb23;
     }
 
     bb6: {
         _4 = const 4_u16;
-        goto -> bb25;
+        goto -> bb23;
     }
 
     bb7: {
         _4 = const 5_u16;
-        goto -> bb25;
+        goto -> bb23;
     }
 
     bb8: {
         _4 = const 6_u16;
-        goto -> bb25;
+        goto -> bb23;
     }
 
     bb9: {
@@ -89,7 +89,7 @@ fn decode(_1: Msg) -> u16 {
     }
 
     bb16: {
-        switch copy (_3 as 2).0 -> [1_u8: bb18, otherwise: bb19];
+        switch copy (_3 as 2).0 -> [1_u8: bb18, otherwise: bb9];
     }
 
     bb17: {
@@ -101,30 +101,22 @@ fn decode(_1: Msg) -> u16 {
     }
 
     bb19: {
-        panic(enum value is no variant);
+        switch copy (_3 as 3).0 -> [true: bb21, otherwise: bb20];
     }
 
     bb20: {
-        switch copy (_3 as 3).0 -> [true: bb22, otherwise: bb21];
+        switch copy (_3 as 3).0 -> [false: bb22, otherwise: bb9];
     }
 
     bb21: {
-        switch copy (_3 as 3).0 -> [false: bb23, otherwise: bb24];
-    }
-
-    bb22: {
         goto -> bb7;
     }
 
-    bb23: {
+    bb22: {
         goto -> bb8;
     }
 
-    bb24: {
-        panic(enum value is no variant);
-    }
-
-    bb25: {
+    bb23: {
         _0 = copy _4;
         return;
     }

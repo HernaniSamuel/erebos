@@ -8,8 +8,8 @@
 // the or-pattern `0x10 | 0x11` is one switch, and a `let` copies its
 // position where it is reached. An alternative testing nothing, as
 // `Msg::Write(_, _)`, is its arm. The tag default, and the end of a chain,
-// go to the `_` arm, or call the panic function: also at `Msg::Led`, whose
-// arms list both values of a `bool`.
+// go to the `_` arm, or to one block calling the panic function, which they
+// share: also at `Msg::Led`, whose arms list both values of a `bool`.
 enum Mode: u8 { Off = 0, Run = 1 }
 enum Msg: u8 { Nop = 0, Write(u8, u16) = 1, SetMode(Mode) = 2, Led(bool) = 3 }
 

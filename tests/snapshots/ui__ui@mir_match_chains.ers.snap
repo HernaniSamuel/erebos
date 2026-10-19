@@ -56,32 +56,32 @@ fn bools(_1: Msg) -> u8 {
 
     bb1: {
         _3 = const 0_u8;
-        goto -> bb13;
+        goto -> bb12;
     }
 
     bb2: {
         _3 = const 1_u8;
-        goto -> bb13;
+        goto -> bb12;
     }
 
     bb3: {
         _3 = const 2_u8;
-        goto -> bb13;
+        goto -> bb12;
     }
 
     bb4: {
         _3 = const 3_u8;
-        goto -> bb13;
+        goto -> bb12;
     }
 
     bb5: {
         _3 = const 4_u8;
-        goto -> bb13;
+        goto -> bb12;
     }
 
     bb6: {
         _3 = const 5_u8;
-        goto -> bb13;
+        goto -> bb12;
     }
 
     bb7: {
@@ -93,7 +93,7 @@ fn bools(_1: Msg) -> u8 {
     }
 
     bb9: {
-        switch copy (_2 as 1).0 -> [false: bb11, otherwise: bb12];
+        switch copy (_2 as 1).0 -> [false: bb11, otherwise: bb7];
     }
 
     bb10: {
@@ -105,10 +105,6 @@ fn bools(_1: Msg) -> u8 {
     }
 
     bb12: {
-        panic(enum value is no variant);
-    }
-
-    bb13: {
         _0 = copy _3;
         return;
     }

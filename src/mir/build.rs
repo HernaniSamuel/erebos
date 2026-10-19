@@ -103,19 +103,6 @@ struct Builder<'a, 'h> {
     current: Option<BasicBlock>,
     /// Enclosing loops, innermost last.
     loops: Vec<LoopScope>,
-    /// The call to the panic function ending the chain of a `match` being
-    /// built, once a test goes to it (ADR 0042). Patterns hold no `match`,
-    /// so one chain is built at a time.
-    chain_panic: Option<BasicBlock>,
-}
-
-/// Where a test of a `match` on an enum with payloads goes when it fails
-/// (ADR 0042): a block, or the call to the panic function that ends a
-/// chain without a catch-all arm, made where a test first goes to it.
-#[derive(Clone, Copy)]
-enum Failure {
-    To(BasicBlock),
-    Panic,
 }
 
 /// Whether `pattern` names one value of its position, as a literal, a
@@ -191,7 +178,6 @@ impl<'a, 'h> Builder<'a, 'h> {
             blocks: Vec::new(),
             current: None,
             loops: Vec::new(),
-            chain_panic: None,
         };
         // HIR locals become MIR locals `_1..`, in declaration order.
         for local in &f.locals {
@@ -899,8 +885,9 @@ impl Builder<'_, '_> {
     /// then the first catch-all arm, or else the call to the panic
     /// function. The default goes to the catch-all arm, or calls the panic
     /// function, for the variants no arm names and the tags that are no
-    /// variant. A `let` catch-all arm is entered at one block, which copies
-    /// the scrutinee into its variable.
+    /// variant. Without a catch-all arm, the default and every chain share
+    /// one block calling the panic function. A `let` catch-all arm is
+    /// entered at one block, which copies the scrutinee into its variable.
     fn chains(&mut self, scrutinee: Place, ty: hir::Ty, arms: &[hir::Arm], blocks: &[BasicBlock]) {
         let hir::Ty::Enum(e) = ty else {
             unreachable!("chains test enums with payloads")
@@ -935,14 +922,14 @@ impl Builder<'_, '_> {
             }
             _ => blocks[arm],
         });
-        let otherwise = entry.unwrap_or_else(|| self.panic_block());
-        let end = entry.map_or(Failure::Panic, Failure::To);
+        // Without a catch-all arm, the default and the end of every chain
+        // are one block calling the panic function.
+        let end = entry.unwrap_or_else(|| self.panic_block());
         let mut cases = Vec::with_capacity(chains.len());
         for (_, chain) in chains {
             let value = self
                 .pattern_value(chain[0].1, Ty::Int(e.int))
                 .expect("a variant names a value");
-            self.chain_panic = None;
             let start = self.chain(scrutinee, &chain, blocks, end);
             // Two variants with one value were reported; the body is not
             // used, and the switch holds each value once all the same.
@@ -954,7 +941,7 @@ impl Builder<'_, '_> {
         self.terminate(Terminator::Switch {
             discr: Operand::Copy(scrutinee.project(PlaceElem::Tag)),
             cases: cases.leak(),
-            otherwise,
+            otherwise: end,
         });
     }
 
@@ -968,8 +955,11 @@ impl Builder<'_, '_> {
         scrutinee: Place,
         chain: &[(usize, &hir::Pattern)],
         blocks: &[BasicBlock],
-        end: Failure,
+        end: BasicBlock,
     ) -> BasicBlock {
+        // The block where an alternative starts, and whether it tests or
+        // binds anything there: one that does neither starts at its arm's
+        // block.
         let start = |this: &mut Self, (arm, alternative): (usize, &hir::Pattern)| {
             let hir::PatternKind::Variant(_, _, patterns) = &alternative.kind else {
                 unreachable!("a chain holds variants")
@@ -979,28 +969,28 @@ impl Builder<'_, '_> {
                 .flatten()
                 .all(|pattern| matches!(pattern.kind, hir::PatternKind::Wildcard));
             if wildcards {
-                blocks[arm]
+                (blocks[arm], false)
             } else {
-                this.new_block()
+                (this.new_block(), true)
             }
         };
-        let first = start(self, chain[0]);
-        let mut block = first;
+        let (mut block, mut tests) = start(self, chain[0]);
+        let first = block;
         for (k, &(arm, alternative)) in chain.iter().enumerate() {
             let next = chain.get(k + 1).map(|&next| start(self, next));
-            if block != blocks[arm] {
+            if tests {
                 let hir::PatternKind::Variant(id, variant, Some(patterns)) = &alternative.kind
                 else {
                     unreachable!("an alternative that tests something has a payload")
                 };
                 self.current = Some(block);
-                let fail = next.map_or(end, Failure::To);
+                let fail = next.map_or(end, |(next, _)| next);
                 // The tag was switched on already.
                 self.payload(scrutinee, *id, *variant, patterns, &[], fail);
                 self.terminate(Terminator::Goto(blocks[arm]));
             }
             if let Some(next) = next {
-                block = next;
+                (block, tests) = next;
             }
         }
         first
@@ -1016,7 +1006,7 @@ impl Builder<'_, '_> {
         variant: u32,
         patterns: &[hir::Pattern],
         position: &[hir::PayloadStep],
-        fail: Failure,
+        fail: BasicBlock,
     ) {
         let hir = self.q.hir;
         let values = &hir.enum_(id).variants[variant as usize].payload;
@@ -1040,7 +1030,7 @@ impl Builder<'_, '_> {
         pattern: &hir::Pattern,
         position: &[hir::PayloadStep],
         ty: hir::Ty,
-        fail: Failure,
+        fail: BasicBlock,
     ) {
         match &pattern.kind {
             hir::PatternKind::Wildcard => {}
@@ -1055,9 +1045,8 @@ impl Builder<'_, '_> {
             kind => {
                 // A value, or a variant's tag, then its payload.
                 let pass = self.new_block();
-                let otherwise = self.failure(fail);
                 let one = std::slice::from_ref(pattern);
-                self.switch_values(scrutinee, one, position, ty, pass, otherwise);
+                self.switch_values(scrutinee, one, position, ty, pass, fail);
                 self.current = Some(pass);
                 if let hir::PatternKind::Variant(id, variant, Some(patterns)) = kind {
                     self.payload(scrutinee, *id, *variant, patterns, position, fail);
@@ -1077,7 +1066,7 @@ impl Builder<'_, '_> {
         alternatives: &[hir::Pattern],
         position: &[hir::PayloadStep],
         ty: hir::Ty,
-        fail: Failure,
+        fail: BasicBlock,
     ) {
         let join = self.new_block();
         let mut rest = alternatives;
@@ -1093,19 +1082,16 @@ impl Builder<'_, '_> {
             let next = if after.is_empty() {
                 fail
             } else {
-                Failure::To(self.new_block())
+                self.new_block()
             };
             if is_value(first) {
-                let otherwise = self.failure(next);
-                self.switch_values(scrutinee, group, position, ty, join, otherwise);
+                self.switch_values(scrutinee, group, position, ty, join, next);
             } else {
                 self.test(scrutinee, first, position, ty, next);
                 self.terminate(Terminator::Goto(join));
             }
-            if !after.is_empty()
-                && let Failure::To(block) = next
-            {
-                self.current = Some(block);
+            if !after.is_empty() {
+                self.current = Some(next);
             }
             rest = after;
         }
@@ -1141,22 +1127,6 @@ impl Builder<'_, '_> {
             cases: cases.leak(),
             otherwise,
         });
-    }
-
-    /// The block a test that fails at `fail` goes to: the call to the
-    /// panic function ending a chain is made the first time.
-    fn failure(&mut self, fail: Failure) -> BasicBlock {
-        match fail {
-            Failure::To(block) => block,
-            Failure::Panic => match self.chain_panic {
-                Some(block) => block,
-                None => {
-                    let block = self.panic_block();
-                    self.chain_panic = Some(block);
-                    block
-                }
-            },
-        }
     }
 
     /// A new block that calls the panic function for a value that is no

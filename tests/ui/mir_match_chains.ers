@@ -7,13 +7,13 @@
 // alternative in turn, and both jump to one block that tests the `7`
 // after it, once. In `mixed`, `Msg::Nop`, a value, fails to a block
 // testing `Msg::SetMode(Mode::Run)`, and both jump to the block testing
-// the `7`. The chain of `Msg::Led` in `bools`, whose arms test only
-// its `bool`, ends in the panic call all the same. The `let` arm of
-// `let_arm` is entered at one block, which copies the scrutinee, from the
-// tag default and the ends of the chains of `Msg::Write` and `Msg::Led`.
-// The arm `Msg::Led(true) | _` of `led_or_any` ends the chain of
-// `Msg::Write` and takes the tag default. In `copied`, `Msg::Write(5, 1)`
-// copies 5 into `r` before the `0` after it fails.
+// the `7`. The chain of `Msg::Led` in `bools`, whose arms test only its
+// `bool`, ends in the tag default's panic call all the same. The `let`
+// arm of `let_arm` is entered at one block, which copies the scrutinee,
+// from the tag default and the ends of the chains of `Msg::Write` and
+// `Msg::Led`. The arm `Msg::Led(true) | _` of `led_or_any` ends the chain
+// of `Msg::Write` and takes the tag default. In `copied`,
+// `Msg::Write(5, 1)` copies 5 into `r` before the `0` after it fails.
 enum Mode: u8 { Off = 0, Run = 1 }
 enum Msg: u8 {
     Nop = 0,

@@ -49,34 +49,34 @@ bb0:
     i8 0, label %bb1
     i8 1, label %bb10
     i8 2, label %bb15
-    i8 3, label %bb20
+    i8 3, label %bb19
   ]
 
 bb1:                                              ; preds = %bb0
-  br label %bb25
+  br label %bb23
 
 bb2:                                              ; preds = %bb13
-  br label %bb25
+  br label %bb23
 
 bb3:                                              ; preds = %bb14
-  br label %bb25
+  br label %bb23
 
 bb4:                                              ; preds = %bb11
-  br label %bb25
+  br label %bb23
 
 bb5:                                              ; preds = %bb17
-  br label %bb25
+  br label %bb23
 
 bb6:                                              ; preds = %bb18
-  br label %bb25
+  br label %bb23
 
-bb7:                                              ; preds = %bb22
-  br label %bb25
+bb7:                                              ; preds = %bb21
+  br label %bb23
 
-bb8:                                              ; preds = %bb23
-  br label %bb25
+bb8:                                              ; preds = %bb22
+  br label %bb23
 
-bb9:                                              ; preds = %bb0
+bb9:                                              ; preds = %bb20, %bb16, %bb0
   call void @on_panic()
   unreachable
 
@@ -120,7 +120,7 @@ bb15:                                             ; preds = %bb0
 bb16:                                             ; preds = %bb15
   %13 = getelementptr i8, ptr %_3, i32 1
   %14 = load i8, ptr %13, align 1
-  switch i8 %14, label %bb19 [
+  switch i8 %14, label %bb9 [
     i8 1, label %bb18
   ]
 
@@ -130,37 +130,29 @@ bb17:                                             ; preds = %bb15
 bb18:                                             ; preds = %bb16
   br label %bb6
 
-bb19:                                             ; preds = %bb16
-  call void @on_panic()
-  unreachable
-
-bb20:                                             ; preds = %bb0
+bb19:                                             ; preds = %bb0
   %15 = getelementptr i8, ptr %_3, i32 1
   %16 = load i8, ptr %15, align 1
   %17 = icmp ne i8 %16, 0
-  switch i1 %17, label %bb21 [
-    i1 true, label %bb22
+  switch i1 %17, label %bb20 [
+    i1 true, label %bb21
   ]
 
-bb21:                                             ; preds = %bb20
+bb20:                                             ; preds = %bb19
   %18 = getelementptr i8, ptr %_3, i32 1
   %19 = load i8, ptr %18, align 1
   %20 = icmp ne i8 %19, 0
-  switch i1 %20, label %bb24 [
-    i1 false, label %bb23
+  switch i1 %20, label %bb9 [
+    i1 false, label %bb22
   ]
 
-bb22:                                             ; preds = %bb20
+bb21:                                             ; preds = %bb19
   br label %bb7
 
-bb23:                                             ; preds = %bb21
+bb22:                                             ; preds = %bb20
   br label %bb8
 
-bb24:                                             ; preds = %bb21
-  call void @on_panic()
-  unreachable
-
-bb25:                                             ; preds = %bb8, %bb7, %bb6, %bb5, %bb4, %bb3, %bb2, %bb1
+bb23:                                             ; preds = %bb8, %bb7, %bb6, %bb5, %bb4, %bb3, %bb2, %bb1
   %_4.0 = phi i16 [ 0, %bb1 ], [ 2, %bb4 ], [ %10, %bb3 ], [ 1, %bb2 ], [ 4, %bb6 ], [ 3, %bb5 ], [ 6, %bb8 ], [ 5, %bb7 ]
   ret i16 %_4.0
 }
