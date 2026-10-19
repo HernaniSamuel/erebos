@@ -1,0 +1,250 @@
+// `Option(T)` and `Result(T, E)` at run time (ADR 0045): built with `.V`,
+// stored in a struct, an array and a static, passed, returned, and matched
+// with nested patterns, each outcome printed.
+// expect-output: mul 420
+// expect-output: mul none
+// expect-output: digit 7
+// expect-output: bad digit 120
+// expect-output: slot 0 empty
+// expect-output: slot 1 run 3
+// expect-output: slot 2 run 200
+// expect-output: slot 3 off
+// expect-output: slot 4 error
+// expect-output: nested some some 9
+// expect-output: nested some none
+// expect-output: nested none
+// expect-output: parsed 42
+// expect-output: parsed empty
+// expect-output: parsed bad digit 120
+// expect-output: parsed overflow
+// expect-output: last 5 6
+// expect-output: pair 1 2
+// expect-output: pair none
+// expect-exit: 0
+
+enum ParseError: u8 { Empty = 0, BadDigit(u8) = 1, Overflow = 2 }
+enum Mode: u8 { Off = 0, Run(u8) = 1 }
+
+struct Point { x: u16, y: u16 }
+
+// An option of each kind: of an enum with payloads, of a struct, and a
+// result whose error is an enum with payloads.
+struct Slots {
+    modes: [Option(Mode); 4],
+    error: Result(Mode, ParseError),
+}
+
+static mut LAST: Option(Point) = .None;
+
+fn checked_mul10(v: u32) -> Option(u32) {
+    if v > 429_496_729 {
+        return .None;
+    }
+    .Some(v * 10)
+}
+
+fn digit(c: u8) -> Result(u32, ParseError) {
+    if c < b'0' || c > b'9' {
+        return .Err(.BadDigit(c));
+    }
+    .Ok((c - b'0') as u32)
+}
+
+// Two digits at most: more is an overflow.
+fn parse(s: *const [u8]) -> Result(u32, ParseError) {
+    if len(s) == 0 {
+        return .Err(.Empty);
+    }
+    if len(s) > 2 {
+        return .Err(.Overflow);
+    }
+    let mut value: u32 = 0;
+    let mut i: usize = 0;
+    while i < len(s) {
+        match digit((*s)[i]) {
+            .Ok(let d: u32) => value = value * 10 + d,
+            .Err(let e: ParseError) => return .Err(e),
+        }
+        i += 1;
+    }
+    .Ok(value)
+}
+
+fn pair(a: Option(u16), b: Option(u16)) -> Option(Point) {
+    match a {
+        .Some(let x: u16) => match b {
+            .Some(let y: u16) => .Some(Point { x: x, y: y }),
+            .None => .None,
+        },
+        .None => .None,
+    }
+}
+
+fn putc(byte: u8) {
+    let thr: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+    *thr = byte;
+}
+
+fn puts(s: *const [u8]) {
+    let mut i: usize = 0;
+    while i < len(s) {
+        putc((*s)[i]);
+        i += 1;
+    }
+}
+
+fn print_u64(n: u64) {
+    if n >= 10 {
+        print_u64(n / 10);
+    }
+    putc(b'0' + (n % 10) as u8);
+}
+
+fn field(n: u64) {
+    putc(b' ');
+    print_u64(n);
+}
+
+fn line(s: *const [u8]) {
+    puts(s);
+    putc(b'\n');
+}
+
+fn show_mul(o: Option(u32)) {
+    match o {
+        .Some(let v: u32) => {
+            puts(&raw const b"mul");
+            field(v as u64);
+            putc(b'\n');
+        }
+        .None => line(&raw const b"mul none"),
+    }
+}
+
+fn show_digit(r: Result(u32, ParseError)) {
+    match r {
+        .Ok(let d: u32) => {
+            puts(&raw const b"digit");
+            field(d as u64);
+        }
+        .Err(.BadDigit(let c: u8)) => {
+            puts(&raw const b"bad digit");
+            field(c as u64);
+        }
+        .Err(.Empty | .Overflow) => puts(&raw const b"other"),
+    }
+    putc(b'\n');
+}
+
+fn show_slot(i: u64, o: Option(Mode)) {
+    puts(&raw const b"slot");
+    field(i);
+    match o {
+        .None => puts(&raw const b" empty"),
+        .Some(.Off) => puts(&raw const b" off"),
+        .Some(.Run(let speed: u8)) => {
+            puts(&raw const b" run");
+            field(speed as u64);
+        }
+    }
+    putc(b'\n');
+}
+
+fn show_error(r: Result(Mode, ParseError)) {
+    match r {
+        .Ok(_) => line(&raw const b"slot 4 ok"),
+        .Err(_) => line(&raw const b"slot 4 error"),
+    }
+}
+
+fn show_nested(o: Option(Option(u8))) {
+    match o {
+        .Some(.Some(let v: u8)) => {
+            puts(&raw const b"nested some some");
+            field(v as u64);
+            putc(b'\n');
+        }
+        .Some(.None) => line(&raw const b"nested some none"),
+        .None => line(&raw const b"nested none"),
+    }
+}
+
+fn show_parsed(r: Result(u32, ParseError)) {
+    puts(&raw const b"parsed");
+    match r {
+        .Ok(let v: u32) => field(v as u64),
+        .Err(.Empty) => puts(&raw const b" empty"),
+        .Err(.BadDigit(let c: u8)) => {
+            puts(&raw const b" bad digit");
+            field(c as u64);
+        }
+        .Err(.Overflow) => puts(&raw const b" overflow"),
+    }
+    putc(b'\n');
+}
+
+fn show_pair(o: Option(Point)) {
+    match o {
+        .Some(let p: Point) => {
+            puts(&raw const b"pair");
+            field(p.x as u64);
+            field(p.y as u64);
+            putc(b'\n');
+        }
+        .None => line(&raw const b"pair none"),
+    }
+}
+
+fn exit(code: u32) -> ! {
+    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+    *finisher = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    loop {}
+}
+
+entry fn main() -> ! {
+    show_mul(checked_mul10(42));
+    show_mul(checked_mul10(429_496_730));
+    show_digit(digit(b'7'));
+    show_digit(digit(b'x'));
+
+    let mut slots: Slots = Slots {
+        modes: [.None; 4],
+        error: .Err(.Overflow),
+    };
+    slots.modes[1] = .Some(.Run(3));
+    slots.modes[2] = .Some(.Run(200));
+    slots.modes[3] = .Some(.Off);
+    let mut i: usize = 0;
+    while i < 4 {
+        show_slot(i as u64, slots.modes[i]);
+        i += 1;
+    }
+    show_error(slots.error);
+
+    show_nested(.Some(.Some(9)));
+    show_nested(.Some(.None));
+    show_nested(.None);
+
+    show_parsed(parse(&raw const b"42"));
+    show_parsed(parse(&raw const b""));
+    show_parsed(parse(&raw const b"4x"));
+    show_parsed(parse(&raw const b"123"));
+
+    LAST = .Some(Point { x: 5, y: 6 });
+    match LAST {
+        .Some(let p: Point) => {
+            puts(&raw const b"last");
+            field(p.x as u64);
+            field(p.y as u64);
+            putc(b'\n');
+        }
+        .None => line(&raw const b"last none"),
+    }
+    show_pair(pair(.Some(1), .Some(2)));
+    show_pair(pair(.Some(1), .None));
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(1)
+}

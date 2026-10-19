@@ -1,0 +1,220 @@
+// `Option(T)` and `Result(T, E)` between Erebos and C compiled by clang
+// (ADR 0045): they cross calls as the enums with payloads they are
+// (ADR 0025, 0039), as their C twins, unions of structs that each start
+// with the tag, do: `Option(u8)` in one register, `Option(u32)` and
+// `Result(u32, Fault)` in a register pair, `Option(u64)` in memory; to and
+// from C, in both directions, with both variants. C reads what Erebos
+// returns through its union and writes the tag and the payload out as
+// integers, so that a mistake made the same way on both sides of a call
+// does not cancel out.
+// link-c: options_c.c
+// expect-output: u8 some 6
+// expect-output: u8 none
+// expect-output: u8 some 42
+// expect-output: u32 some 305419897
+// expect-output: u32 none
+// expect-output: u32 some 70000
+// expect-output: u64 some 4294967298
+// expect-output: u64 none
+// expect-output: u64 some 18446744073709551615
+// expect-output: result ok 4000000001
+// expect-output: result err 7
+// expect-output: result ok 300
+// expect-output: c sees u8 1 15
+// expect-output: c sees u8 0 0
+// expect-output: c sees u8 1 9
+// expect-output: c sees u32 1 3000000000
+// expect-output: c sees u32 0 0
+// expect-output: c sees u32 1 99
+// expect-output: c sees u64 1 12884901891
+// expect-output: c sees u64 0 0
+// expect-output: c sees u64 1 77
+// expect-output: c sees result 0 1500
+// expect-output: c sees result 1 3
+// expect-output: c sees result 0 1007
+// expect-exit: 0
+
+enum Fault: u8 { Timeout = 3, Busy = 7 }
+
+extern fn c_u8(x: Option(u8)) -> Option(u8);
+extern fn c_u32(x: Option(u32)) -> Option(u32);
+extern fn c_u64(x: Option(u64)) -> Option(u64);
+extern fn c_result(x: Result(u32, Fault)) -> Result(u32, Fault);
+extern fn c_sees_u8(tag: u8, value: u8, out_tag: *mut u8, out_value: *mut u64);
+extern fn c_sees_u32(tag: u8, value: u32, out_tag: *mut u8, out_value: *mut u64);
+extern fn c_sees_u64(tag: u8, value: u64, out_tag: *mut u8, out_value: *mut u64);
+extern fn c_sees_result(tag: u8, value: u32, out_tag: *mut u8, out_value: *mut u64);
+
+// Called from C: `.Some(0)` becomes `.None`, `.Some(v)` becomes
+// `.Some(v * 3)`, and `.None` becomes `.Some(9)`.
+fn erebos_u8(x: Option(u8)) -> Option(u8) {
+    match x {
+        .Some(0) => .None,
+        .Some(let v: u8) => .Some(v * 3),
+        .None => .Some(9),
+    }
+}
+
+fn erebos_u32(x: Option(u32)) -> Option(u32) {
+    match x {
+        .Some(0) => .None,
+        .Some(let v: u32) => .Some(v * 3),
+        .None => .Some(99),
+    }
+}
+
+fn erebos_u64(x: Option(u64)) -> Option(u64) {
+    match x {
+        .Some(0) => .None,
+        .Some(let v: u64) => .Some(v * 3),
+        .None => .Some(77),
+    }
+}
+
+// Called from C: `.Ok(0)` becomes `.Err(.Timeout)`, `.Ok(v)` becomes
+// `.Ok(v * 3)`, and `.Err(e)` becomes `.Ok(1000 + e)`.
+fn erebos_result(x: Result(u32, Fault)) -> Result(u32, Fault) {
+    match x {
+        .Ok(0) => .Err(.Timeout),
+        .Ok(let v: u32) => .Ok(v * 3),
+        .Err(let e: Fault) => .Ok(1000 + e as u32),
+    }
+}
+
+fn putc(byte: u8) {
+    let thr: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+    *thr = byte;
+}
+
+fn puts(s: *const [u8]) {
+    let mut i: usize = 0;
+    while i < len(s) {
+        putc((*s)[i]);
+        i += 1;
+    }
+}
+
+fn print_u64(n: u64) {
+    if n >= 10 {
+        print_u64(n / 10);
+    }
+    putc(b'0' + (n % 10) as u8);
+}
+
+fn field(n: u64) {
+    putc(b' ');
+    print_u64(n);
+}
+
+fn option(name: *const [u8], present: bool, value: u64) {
+    puts(name);
+    if present {
+        puts(&raw const b" some");
+        field(value);
+    } else {
+        puts(&raw const b" none");
+    }
+    putc(b'\n');
+}
+
+fn show_u8(x: Option(u8)) {
+    match x {
+        .Some(let v: u8) => option(&raw const b"u8", true, v as u64),
+        .None => option(&raw const b"u8", false, 0),
+    }
+}
+
+fn show_u32(x: Option(u32)) {
+    match x {
+        .Some(let v: u32) => option(&raw const b"u32", true, v as u64),
+        .None => option(&raw const b"u32", false, 0),
+    }
+}
+
+fn show_u64(x: Option(u64)) {
+    match x {
+        .Some(let v: u64) => option(&raw const b"u64", true, v),
+        .None => option(&raw const b"u64", false, 0),
+    }
+}
+
+fn show_result(x: Result(u32, Fault)) {
+    puts(&raw const b"result");
+    match x {
+        .Ok(let v: u32) => {
+            puts(&raw const b" ok");
+            field(v as u64);
+        }
+        .Err(let e: Fault) => {
+            puts(&raw const b" err");
+            field(e as u64);
+        }
+    }
+    putc(b'\n');
+}
+
+// What C saw: the tag and the payload value it read from its union.
+fn seen(name: *const [u8], tag: u8, value: u64) {
+    puts(&raw const b"c sees ");
+    puts(name);
+    field(tag as u64);
+    field(value);
+    putc(b'\n');
+}
+
+fn exit(code: u32) -> ! {
+    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+    *finisher = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    loop {}
+}
+
+entry fn main() -> ! {
+    // C: `.Some(0)` becomes `.None`, `.Some(v)` becomes `.Some(v + 1)`,
+    // and `.None` becomes `.Some` of a value of its own.
+    show_u8(c_u8(.Some(5)));
+    show_u8(c_u8(.Some(0)));
+    show_u8(c_u8(.None));
+    show_u32(c_u32(.Some(0x1234_5678)));
+    show_u32(c_u32(.Some(0)));
+    show_u32(c_u32(.None));
+    show_u64(c_u64(.Some(0x1_0000_0001)));
+    show_u64(c_u64(.Some(0)));
+    show_u64(c_u64(.None));
+    // C: `.Ok(0)` becomes `.Err(.Busy)`, `.Ok(v)` becomes `.Ok(v + 1)`,
+    // and `.Err(e)` becomes `.Ok(e * 100)`.
+    show_result(c_result(.Ok(4_000_000_000)));
+    show_result(c_result(.Ok(0)));
+    show_result(c_result(.Err(.Timeout)));
+
+    let mut tag: u8 = 0;
+    let mut value: u64 = 0;
+    c_sees_u8(1, 5, &raw mut tag, &raw mut value);
+    seen(&raw const b"u8", tag, value);
+    c_sees_u8(1, 0, &raw mut tag, &raw mut value);
+    seen(&raw const b"u8", tag, value);
+    c_sees_u8(0, 0, &raw mut tag, &raw mut value);
+    seen(&raw const b"u8", tag, value);
+    c_sees_u32(1, 1_000_000_000, &raw mut tag, &raw mut value);
+    seen(&raw const b"u32", tag, value);
+    c_sees_u32(1, 0, &raw mut tag, &raw mut value);
+    seen(&raw const b"u32", tag, value);
+    c_sees_u32(0, 0, &raw mut tag, &raw mut value);
+    seen(&raw const b"u32", tag, value);
+    c_sees_u64(1, 0x1_0000_0001, &raw mut tag, &raw mut value);
+    seen(&raw const b"u64", tag, value);
+    c_sees_u64(1, 0, &raw mut tag, &raw mut value);
+    seen(&raw const b"u64", tag, value);
+    c_sees_u64(0, 0, &raw mut tag, &raw mut value);
+    seen(&raw const b"u64", tag, value);
+    c_sees_result(0, 500, &raw mut tag, &raw mut value);
+    seen(&raw const b"result", tag, value);
+    c_sees_result(0, 0, &raw mut tag, &raw mut value);
+    seen(&raw const b"result", tag, value);
+    c_sees_result(1, 7, &raw mut tag, &raw mut value);
+    seen(&raw const b"result", tag, value);
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(1)
+}

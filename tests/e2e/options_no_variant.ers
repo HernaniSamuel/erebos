@@ -1,0 +1,67 @@
+// An `Option(u32)` whose tag, 2, is no variant (ADR 0040, 0045), read
+// through a cast pointer from a static byte array aligned as `Option(u32)`
+// is: a `_` arm handles it, and a `match` listing both variants, without a
+// catch-all arm, calls the panic function on it.
+// expect-output: some 5
+// expect-output: tag?
+// expect-output: some 5
+// expect-output: panic
+// expect-exit: 1
+
+// `.Some(5)`, then the tag 2.
+#[align(4)]
+static BYTES: [u8; 16] = [
+    1, 0, 0, 0, 5, 0, 0, 0,
+    2, 0, 0, 0, 0, 0, 0, 0,
+];
+
+fn putc(byte: u8) {
+    let thr: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+    *thr = byte;
+}
+
+fn print(s: *const [u8]) {
+    let mut i: usize = 0;
+    while i < len(s) {
+        putc((*s)[i]);
+        i += 1;
+    }
+    putc(b'\n');
+}
+
+fn exit(code: u32) -> ! {
+    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+    *finisher = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    loop {}
+}
+
+fn handled(o: Option(u32)) -> *const [u8] {
+    match o {
+        .None => &raw const b"none",
+        .Some(5) => &raw const b"some 5",
+        .Some(_) => &raw const b"some",
+        _ => &raw const b"tag?",
+    }
+}
+
+fn strict(o: Option(u32)) -> *const [u8] {
+    match o {
+        .None => &raw const b"none",
+        .Some(5) => &raw const b"some 5",
+        .Some(_) => &raw const b"some",
+    }
+}
+
+entry fn main() -> ! {
+    let options: *const Option(u32) = &raw const BYTES as *const Option(u32);
+    print(handled(options[0]));
+    print(handled(options[1]));
+    print(strict(options[0]));
+    print(strict(options[1]));
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    print(&raw const b"panic");
+    exit(1)
+}
