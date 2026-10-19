@@ -106,7 +106,15 @@ ADRs:
     today runs MIR they have not checked (ADR 0033).
 - **M6:**
   - `compile_error` (ADR 0031).
-  - Requirements on type arguments (ADR 0027).
+  - Requirements on type arguments (ADR 0027). The direction discussed:
+    a requirement is a `comptime` function returning `bool`, named in the
+    signature (as `where is_bus(B)`) and checked at each instantiation,
+    so that a failure is reported at the call with the requirement's
+    name, as C++20 concepts do. It needs comptime queries on types (which
+    functions and fields a type has, their types). No trait system: the
+    body is still checked only when instantiated, dynamic dispatch is a
+    struct of function pointers, and properties such as what may be
+    shared with interrupt handlers (M4, M5) are not requirements.
   - ADR 0027 writes return types Zig-style (`fn max(comptime T: type,
     a: T, b: T) T`); by ADR 0015 a function without `->` returns `()`, so
     the M6 ADR writes `-> T`.
