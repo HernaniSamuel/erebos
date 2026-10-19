@@ -1,0 +1,13 @@
+// emit: mir
+// Pins a false cycle (ADR 0048, Consequences), as for lengths: whether code
+// mentioning `*const T` is compiled depends on the alignment of `T`, so an
+// alignment of `T` computed by a function that only takes a `*const T` is
+// a `ty::cycle`, although the layout of `T` does not depend on that
+// function. Revisited in M6.
+#[align(f(0 as *const T))]
+struct T { x: u32 }
+
+fn f(p: *const T) -> usize { 8 }
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

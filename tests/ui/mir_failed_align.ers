@@ -1,0 +1,80 @@
+// emit: mir
+// Code using a struct whose `#[align(N)]` failed, whatever the failure, is
+// not built into MIR (ADR 0048), so the checks of values known at compile
+// time (ADR 0032) do not run on it: of the `7 / 0` below, only
+// those in `control`, which shows that lowering ran, and in `uses_statics`
+// are reported. A static whose alignment is in error is compiled with its
+// type's: only its own error is reported, and the code using it is built
+// and checked.
+
+// Evaluation.
+#[align(1 / 0)]
+struct T1 { x: u32 }
+struct Holder1 { t: T1 }
+fn by_value1(t: T1) -> u32 { 7 / 0 }
+fn pointer1(p: *const T1) -> u32 { 7 / 0 }
+fn array1(a: *const [T1; 2]) -> u32 { 7 / 0 }
+fn field1(h: *const Holder1) -> u32 { 7 / 0 }
+fn payload1(o: Option(T1)) -> u32 { 7 / 0 }
+const C1: u32 = pointer1(0 as *const T1);
+const D1: u32 = { let p: *const T1 = 0 as *const T1; 7 / 0 };
+static S1: u32 = { let a: *const [T1; 2] = 0 as *const [T1; 2]; 7 / 0 };
+comptime { let h: *const Holder1 = 0 as *const Holder1; let d: u32 = 7 / 0; }
+fn inner1() -> u32 { comptime { let o: Option(*const T1) = .None; 7 / 0 } }
+
+// Type.
+#[align(true)]
+struct T2 { x: u32 }
+struct Holder2 { t: T2 }
+fn by_value2(t: T2) -> u32 { 7 / 0 }
+fn pointer2(p: *const T2) -> u32 { 7 / 0 }
+fn array2(a: *const [T2; 2]) -> u32 { 7 / 0 }
+fn field2(h: *const Holder2) -> u32 { 7 / 0 }
+fn payload2(o: Option(T2)) -> u32 { 7 / 0 }
+const C2: u32 = pointer2(0 as *const T2);
+const D2: u32 = { let p: *const T2 = 0 as *const T2; 7 / 0 };
+static S2: u32 = { let a: *const [T2; 2] = 0 as *const [T2; 2]; 7 / 0 };
+comptime { let h: *const Holder2 = 0 as *const Holder2; let d: u32 = 7 / 0; }
+fn inner2() -> u32 { comptime { let o: Option(*const T2) = .None; 7 / 0 } }
+
+// Not a power of two.
+#[align(3)]
+struct T3 { x: u32 }
+struct Holder3 { t: T3 }
+fn by_value3(t: T3) -> u32 { 7 / 0 }
+fn pointer3(p: *const T3) -> u32 { 7 / 0 }
+fn array3(a: *const [T3; 2]) -> u32 { 7 / 0 }
+fn field3(h: *const Holder3) -> u32 { 7 / 0 }
+fn payload3(o: Option(T3)) -> u32 { 7 / 0 }
+const C3: u32 = pointer3(0 as *const T3);
+const D3: u32 = { let p: *const T3 = 0 as *const T3; 7 / 0 };
+static S3: u32 = { let a: *const [T3; 2] = 0 as *const [T3; 2]; 7 / 0 };
+comptime { let h: *const Holder3 = 0 as *const Holder3; let d: u32 = 7 / 0; }
+fn inner3() -> u32 { comptime { let o: Option(*const T3) = .None; 7 / 0 } }
+
+// Below the natural alignment.
+#[align(2)]
+struct T4 { x: u32 }
+struct Holder4 { t: T4 }
+fn by_value4(t: T4) -> u32 { 7 / 0 }
+fn pointer4(p: *const T4) -> u32 { 7 / 0 }
+fn array4(a: *const [T4; 2]) -> u32 { 7 / 0 }
+fn field4(h: *const Holder4) -> u32 { 7 / 0 }
+fn payload4(o: Option(T4)) -> u32 { 7 / 0 }
+const C4: u32 = pointer4(0 as *const T4);
+const D4: u32 = { let p: *const T4 = 0 as *const T4; 7 / 0 };
+static S4: u32 = { let a: *const [T4; 2] = 0 as *const [T4; 2]; 7 / 0 };
+comptime { let h: *const Holder4 = 0 as *const Holder4; let d: u32 = 7 / 0; }
+fn inner4() -> u32 { comptime { let o: Option(*const T4) = .None; 7 / 0 } }
+
+fn control() -> u32 { 7 / 0 }
+
+// Statics.
+#[align(1 / 0)]
+static X: u32 = 0;
+#[align(3)]
+static Y: u32 = 0;
+fn uses_statics() -> u32 { X + Y + 7 / 0 }
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

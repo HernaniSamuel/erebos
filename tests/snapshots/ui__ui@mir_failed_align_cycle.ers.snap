@@ -1,0 +1,20 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/mir_failed_align_cycle.ers
+---
+--- errors ---
+ty::cycle
+
+  × the layout of `T` depends on its own value
+   ╭─[mir_failed_align_cycle.ers:8:8]
+ 6 │ // function. Revisited in M6.
+ 7 │ #[align(f(0 as *const T))]
+   ·         ────────┬───────
+   ·                 ╰── through this value
+ 8 │ struct T { x: u32 }
+   ·        ┬
+   ·        ╰── needed while computing itself
+ 9 │ 
+   ╰────
+  help: break the cycle: a value cannot depend on itself (ADR 0028)

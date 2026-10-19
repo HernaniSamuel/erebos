@@ -119,8 +119,8 @@ pub struct Queries<'h> {
     /// Whether each enum, once checked, has every value computed and no
     /// two alike (ADR 0035).
     enums_ok: Vec<Option<bool>>,
-    /// The alignment of each static; `None` if its type has no layout or
-    /// its `#[align]` is invalid (reported).
+    /// The alignment of each static; `None` if its type has no layout
+    /// (reported).
     static_aligns: Vec<Option<Option<u64>>>,
     /// The MIR view of each static.
     mir_statics: Vec<Option<StaticRef>>,
@@ -461,7 +461,9 @@ impl<'h> Queries<'h> {
 
     /// The alignment of a static: its type's, raised by `#[align(N)]`,
     /// which does not change its size (ADR 0030). `None` if its type has no
-    /// layout or the alignment is invalid, reported once.
+    /// layout, reported once. An `#[align(N)]` in error, reported once,
+    /// leaves its type's alignment: it is part of no type, so nothing else
+    /// is affected (ADR 0048).
     pub fn static_align(&mut self, id: StaticId) -> Option<u64> {
         if let Some(align) = self.static_aligns[id.0 as usize] {
             return align;
@@ -481,12 +483,15 @@ impl<'h> Queries<'h> {
                 );
                 None
             }
-            Some(layout) => match def.align {
-                Some((len, span)) => self.array_len(len).and_then(|wanted| {
-                    self.checked_align(wanted, span, layout.align, &format!("`{ty}`"))
-                }),
-                None => Some(layout.align),
-            },
+            Some(layout) => Some(match def.align {
+                Some((len, span)) => self
+                    .array_len(len)
+                    .and_then(|wanted| {
+                        self.checked_align(wanted, span, layout.align, &format!("`{ty}`"))
+                    })
+                    .unwrap_or(layout.align),
+                None => layout.align,
+            }),
         };
         self.static_aligns[id.0 as usize] = Some(align);
         align
@@ -809,7 +814,8 @@ impl<'h> Queries<'h> {
     }
 
     /// Lays out a struct with C rules (ADR 0022), reporting structs that
-    /// contain themselves, too large ones, and misused attributes.
+    /// contain themselves, too large ones, and misused attributes. A struct
+    /// whose `#[align(N)]` failed is laid out without it, and marked so.
     pub fn struct_layout(&mut self, id: StructId) -> Option<StructLayout> {
         if let State::Done(layout) = &self.layouts[id.0 as usize] {
             return layout.clone();
@@ -873,15 +879,19 @@ impl<'h> Queries<'h> {
             offsets.push(offset.unwrap_or(0));
             end = offset.and_then(|offset| offset.checked_add(field_layout.size));
         }
-        let wanted = match def.align {
-            Some((len, span)) => self.array_len(len).map(|wanted| (wanted, span)),
-            None => None,
-        };
-        if let Some((wanted, span)) = wanted
-            && let Some(wanted) =
-                self.checked_align(wanted, span, align, &format!("`{}`", def.name))
-        {
-            align = wanted;
+        // An alignment in error, whatever the error, leaves the natural one,
+        // which `#[align(N)]` could only have raised: what is computed from
+        // it holds whatever `N` would have been (ADR 0048).
+        let mut align_failed = false;
+        if let Some((len, span)) = def.align {
+            let subject = format!("`{}`", def.name);
+            match self
+                .array_len(len)
+                .and_then(|wanted| self.checked_align(wanted, span, align, &subject))
+            {
+                Some(wanted) => align = wanted,
+                None => align_failed = true,
+            }
         }
         let size = end.and_then(|end| layout::align_up(end, align));
 
@@ -891,6 +901,7 @@ impl<'h> Queries<'h> {
                 layout: Layout { size, align },
                 offsets,
                 over_aligned,
+                align_failed,
             }),
             (true, _) => {
                 self.diags.push(
@@ -1301,7 +1312,8 @@ impl<'h> Queries<'h> {
     /// without a layout, or a type that failed; the types in `seen` were
     /// looked at already. The types of fields and payload values are not
     /// normalized, so an array length that failed is found here: `ty` is
-    /// in error wherever `normalize` would make it `{error}`.
+    /// in error wherever `normalize` would make it `{error}`. So is a
+    /// struct whose `#[align(N)]` failed (ADR 0048).
     fn lacks_layout(&mut self, ty: hir::Ty, seen: &mut Vec<Composite>) -> bool {
         match ty {
             hir::Ty::Ptr(ptr) => self.lacks_layout(*ptr.pointee, seen),
@@ -1318,8 +1330,12 @@ impl<'h> Queries<'h> {
                     return false;
                 }
                 seen.push(Composite::Struct(s.id));
-                if self.struct_layout(s.id).is_none() {
-                    return true;
+                // Its own `#[align(N)]` failed: it keeps a layout, like a
+                // struct with a field whose length failed.
+                match self.struct_layout(s.id) {
+                    None => return true,
+                    Some(layout) if layout.align_failed => return true,
+                    Some(_) => {}
                 }
                 let hir = self.hir;
                 hir.struct_(s.id)

@@ -1,0 +1,93 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/mir_failed_align.ers
+---
+--- errors ---
+ty::division-by-zero
+
+  × division by zero
+    ╭─[mir_failed_align.ers:11:13]
+ 10 │ // Evaluation.
+ 11 │ #[align(1 / 0)]
+    ·             ┬
+    ·             ╰── this divisor is zero
+ 12 │ struct T1 { x: u32 }
+    ╰────
+  help: at run time this would call the panic function (ADR 0007)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[mir_failed_align.ers:26:9]
+ 25 │ // Type.
+ 26 │ #[align(true)]
+    ·         ──┬─
+    ·           ╰── expected `usize`, found `bool`
+ 27 │ struct T2 { x: u32 }
+    ╰────
+ty::invalid-align
+
+  × invalid alignment 3
+    ╭─[mir_failed_align.ers:41:9]
+ 40 │ // Not a power of two.
+ 41 │ #[align(3)]
+    ·         ┬
+    ·         ╰── an alignment is a power of two
+ 42 │ struct T3 { x: u32 }
+    ╰────
+  help: `#[align(N)]` takes a power of two not below the natural alignment (ADR 0022)
+ty::invalid-align
+
+  × invalid alignment 2
+    ╭─[mir_failed_align.ers:56:9]
+ 55 │ // Below the natural alignment.
+ 56 │ #[align(2)]
+    ·         ┬
+    ·         ╰── `T4` already needs alignment 4; `#[align]` only raises it
+ 57 │ struct T4 { x: u32 }
+    ╰────
+  help: `#[align(N)]` takes a power of two not below the natural alignment (ADR 0022)
+ty::division-by-zero
+
+  × division by zero
+    ╭─[mir_failed_align.ers:70:27]
+ 69 │ 
+ 70 │ fn control() -> u32 { 7 / 0 }
+    ·                           ┬
+    ·                           ╰── this divisor is zero
+ 71 │ 
+    ╰────
+  help: at run time this would call the panic function (ADR 0007)
+ty::division-by-zero
+
+  × division by zero
+    ╭─[mir_failed_align.ers:73:13]
+ 72 │ // Statics.
+ 73 │ #[align(1 / 0)]
+    ·             ┬
+    ·             ╰── this divisor is zero
+ 74 │ static X: u32 = 0;
+    ╰────
+  help: at run time this would call the panic function (ADR 0007)
+ty::invalid-align
+
+  × invalid alignment 3
+    ╭─[mir_failed_align.ers:75:9]
+ 74 │ static X: u32 = 0;
+ 75 │ #[align(3)]
+    ·         ┬
+    ·         ╰── an alignment is a power of two
+ 76 │ static Y: u32 = 0;
+    ╰────
+  help: `#[align(N)]` takes a power of two not below the natural alignment (ADR 0022)
+ty::division-by-zero
+
+  × division by zero
+    ╭─[mir_failed_align.ers:77:40]
+ 76 │ static Y: u32 = 0;
+ 77 │ fn uses_statics() -> u32 { X + Y + 7 / 0 }
+    ·                                        ┬
+    ·                                        ╰── this divisor is zero
+ 78 │ 
+    ╰────
+  help: at run time this would call the panic function (ADR 0007)

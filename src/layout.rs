@@ -26,6 +26,10 @@ pub struct StructLayout {
     /// Asks for more than its natural alignment, through `#[align(N)]` on
     /// it or on something it contains; a packed struct could not keep it.
     pub over_aligned: bool,
+    /// Its `#[align(N)]` failed, reported: the layout is the one it has
+    /// without the attribute, a lower bound of any it could have had, and
+    /// the struct is erroneous (ADR 0048).
+    pub align_failed: bool,
 }
 
 /// The layout of an enum with payloads (ADR 0039).

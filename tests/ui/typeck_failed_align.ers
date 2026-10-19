@@ -1,0 +1,103 @@
+// emit: typeck
+// A struct whose `#[align(N)]` failed is erroneous (ADR 0048), whatever the
+// failure: an evaluation error, a type error, or an invalid alignment, here
+// one not a power of two and one below the natural alignment. Each reports
+// only its own error. `size_of`, `align_of` and `offset_of` of it have no
+// value, nor do the alignment and the length computed from them, so no
+// `assert` below reports anything, although each would otherwise; a
+// `match` on an enum with a payload reaching it is not checked for
+// coverage nor its payload patterns, nor `?` on such an enum. A mismatch is
+// still reported, and so are the diagnostics of a type containing it that
+// hold whatever the alignment: the `#[packed]` struct, the `#[align(2)]`
+// below its alignment and the array too large, each once.
+
+// Evaluation.
+#[align(1 / 0)]
+struct T1 { x: u32 }
+comptime { assert(size_of(T1) == 0); }
+comptime { assert(align_of(T1) == 0); }
+comptime { assert(offset_of(T1, x) == 1); }
+fn mismatch1() { let p: *const T1 = 0 as *const u8; }
+enum E1: u8 { A(*const T1) = 0, B = 1 }
+fn not_covered1(e: E1) -> u32 { match e { E1::B => 2 } }
+fn wrong_payload_type1(e: E1) -> u32 { match e { E1::A(let p: u32) => p, E1::B => 2 } }
+fn try1(r: Result(*const T1, u8)) -> Result(u32, u16) { let p: *const T1 = r?; .Ok(2) }
+#[align(align_of(T1))]
+struct U1 { x: u8 }
+struct V1 { a: [u8; size_of(T1)] }
+comptime { assert(size_of(U1) == 0); }
+comptime { assert(size_of(V1) == 0); }
+#[packed]
+struct P1 { t: T1 }
+#[align(2)]
+struct W1 { t: T1 }
+struct Big1 { t: [T1; 0x4000_0000] }
+
+// Type.
+#[align(true)]
+struct T2 { x: u32 }
+comptime { assert(size_of(T2) == 0); }
+comptime { assert(align_of(T2) == 0); }
+comptime { assert(offset_of(T2, x) == 1); }
+fn mismatch2() { let p: *const T2 = 0 as *const u8; }
+enum E2: u8 { A(*const T2) = 0, B = 1 }
+fn not_covered2(e: E2) -> u32 { match e { E2::B => 2 } }
+fn wrong_payload_type2(e: E2) -> u32 { match e { E2::A(let p: u32) => p, E2::B => 2 } }
+fn try2(r: Result(*const T2, u8)) -> Result(u32, u16) { let p: *const T2 = r?; .Ok(2) }
+#[align(align_of(T2))]
+struct U2 { x: u8 }
+struct V2 { a: [u8; size_of(T2)] }
+comptime { assert(size_of(U2) == 0); }
+comptime { assert(size_of(V2) == 0); }
+#[packed]
+struct P2 { t: T2 }
+#[align(2)]
+struct W2 { t: T2 }
+struct Big2 { t: [T2; 0x4000_0000] }
+
+// Not a power of two.
+#[align(3)]
+struct T3 { x: u32 }
+comptime { assert(size_of(T3) == 0); }
+comptime { assert(align_of(T3) == 0); }
+comptime { assert(offset_of(T3, x) == 1); }
+fn mismatch3() { let p: *const T3 = 0 as *const u8; }
+enum E3: u8 { A(*const T3) = 0, B = 1 }
+fn not_covered3(e: E3) -> u32 { match e { E3::B => 2 } }
+fn wrong_payload_type3(e: E3) -> u32 { match e { E3::A(let p: u32) => p, E3::B => 2 } }
+fn try3(r: Result(*const T3, u8)) -> Result(u32, u16) { let p: *const T3 = r?; .Ok(2) }
+#[align(align_of(T3))]
+struct U3 { x: u8 }
+struct V3 { a: [u8; size_of(T3)] }
+comptime { assert(size_of(U3) == 0); }
+comptime { assert(size_of(V3) == 0); }
+#[packed]
+struct P3 { t: T3 }
+#[align(2)]
+struct W3 { t: T3 }
+struct Big3 { t: [T3; 0x4000_0000] }
+
+// Below the natural alignment.
+#[align(2)]
+struct T4 { x: u32 }
+comptime { assert(size_of(T4) == 0); }
+comptime { assert(align_of(T4) == 0); }
+comptime { assert(offset_of(T4, x) == 1); }
+fn mismatch4() { let p: *const T4 = 0 as *const u8; }
+enum E4: u8 { A(*const T4) = 0, B = 1 }
+fn not_covered4(e: E4) -> u32 { match e { E4::B => 2 } }
+fn wrong_payload_type4(e: E4) -> u32 { match e { E4::A(let p: u32) => p, E4::B => 2 } }
+fn try4(r: Result(*const T4, u8)) -> Result(u32, u16) { let p: *const T4 = r?; .Ok(2) }
+#[align(align_of(T4))]
+struct U4 { x: u8 }
+struct V4 { a: [u8; size_of(T4)] }
+comptime { assert(size_of(U4) == 0); }
+comptime { assert(size_of(V4) == 0); }
+#[packed]
+struct P4 { t: T4 }
+#[align(2)]
+struct W4 { t: T4 }
+struct Big4 { t: [T4; 0x4000_0000] }
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }
