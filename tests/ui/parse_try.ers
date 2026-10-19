@@ -1,0 +1,16 @@
+// emit: ast
+// `?` is a postfix operator, binding as tightly as indexing and field
+// access (ADR 0046): `f()?.x` is `(f()?).x`, `-f()?` is `-(f()?)` and
+// `*p?` is `*(p?)`; `f()??` applies it twice, and a `match` takes it in
+// parentheses at the start of a statement.
+fn f() -> Option(u32) {
+    f()?;
+    a[i]?;
+    s.f?;
+    f()?.x;
+    f()??;
+    -f()?;
+    *p?;
+    (match r { _ => r })?;
+    .None
+}

@@ -1,0 +1,27 @@
+---
+source: tests/ui.rs
+assertion_line: 40
+expression: output
+input_file: tests/ui/parse_try_errors.ers
+---
+--- errors ---
+parser::unexpected-token
+
+  × expected an expression, found `?`
+   ╭─[parse_try_errors.ers:6:23]
+ 5 │ fn a(r: Option(u32)) -> Option(u32) {
+ 6 │     match r { _ => r }?;
+   ·                       ┬
+   ·                       ╰── expected an expression
+ 7 │     .None
+   ╰────
+parser::unexpected-token
+
+  × expected `;`, found `?`
+    ╭─[parse_try_errors.ers:11:26]
+ 10 │ fn b(x: u32) -> Option(u32) {
+ 11 │     let y: u32 = x as u32?;
+    ·                          ┬
+    ·                          ╰── expected `;`
+ 12 │     .None
+    ╰────

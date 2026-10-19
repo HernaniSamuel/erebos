@@ -71,6 +71,7 @@ impl Lexer<'_> {
                 ',' => TokenKind::Comma,
                 ';' => TokenKind::Semi,
                 '.' => TokenKind::Dot,
+                '?' => TokenKind::Question,
                 '#' => TokenKind::Pound,
                 '!' if self.eat('=') => TokenKind::Ne,
                 '!' => TokenKind::Bang,
@@ -510,6 +511,19 @@ mod tests {
             [
                 Match, Ident, LBrace, Underscore, FatArrow, Int, Comma, Ident, FatArrow, Int,
                 RBrace, Ident, EqEq, Ident, Eq, Ident, Eof
+            ]
+        );
+    }
+
+    #[test]
+    fn question_marks() {
+        use TokenKind::*;
+        let (kinds, diags) = kinds("f()?? x?.y");
+        assert!(!diags.has_errors());
+        assert_eq!(
+            kinds,
+            [
+                Ident, LParen, RParen, Question, Question, Ident, Question, Dot, Ident, Eof
             ]
         );
     }

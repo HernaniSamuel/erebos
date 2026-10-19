@@ -1,0 +1,24 @@
+---
+source: tests/ui.rs
+assertion_line: 40
+expression: output
+input_file: tests/ui/eval_try_no_variant.ers
+---
+--- errors ---
+eval::panic
+
+  × the evaluation called the panic function: enum value is no variant
+    ╭─[eval_try_no_variant.ers:14:11]
+ 13 │ fn plus_one() -> Option(u32) {
+ 14 │     .Some(odd()? + 1)
+    ·           ───┬──
+    ·              ╰── enum value is no variant
+ 15 │ }
+ 16 │ 
+ 17 │ const PANICS: Option(u32) = plus_one();
+    ·       ───┬──                ─────┬────
+    ·          │                       ╰── called here
+    ·          ╰── while evaluating the constant `PANICS`
+ 18 │ 
+    ╰────
+  help: this code runs at compile time (ADR 0027)

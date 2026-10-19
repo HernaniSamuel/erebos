@@ -1,0 +1,13 @@
+// emit: ast
+// A statement that starts with a `match` ends with it, so a `?` after it
+// starts nothing; and a type ends at its last token, so `x as T?` has a
+// `?` after the cast's type, where no operator is (ADR 0046).
+fn a(r: Option(u32)) -> Option(u32) {
+    match r { _ => r }?;
+    .None
+}
+
+fn b(x: u32) -> Option(u32) {
+    let y: u32 = x as u32?;
+    .None
+}

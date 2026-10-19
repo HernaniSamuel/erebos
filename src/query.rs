@@ -650,6 +650,13 @@ impl<'h> Queries<'h> {
         }
     }
 
+    /// Which of `Option` and `Result` the enum `id` is an instance of, if
+    /// it is one (ADR 0045).
+    pub fn builtin_enum(&self, id: EnumId) -> Option<BuiltinEnum> {
+        let index = (id.0 as usize).checked_sub(self.hir.enums.len())?;
+        Some(self.instances[index].0)
+    }
+
     /// The enums whose values a `match` on a value of type `scrutinee`
     /// with these arms needs, each once, in the order first needed
     /// (ADR 0038, 0040): the type of each position at which some

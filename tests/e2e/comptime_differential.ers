@@ -790,6 +790,42 @@ fn options_hash(from: u32) -> u64 {
     h
 }
 
+// `?` (ADR 0046) on results of an enum and on options of a struct and an
+// integer: each failure passed on, at the first `?` or at a later one,
+// and each value continued with.
+fn try_result(k: u32) -> Result(u64, Small) {
+    let l: Level = level_result(k)?;
+    let w: u64 = match wide_result(k) {
+        .Ok(let w: u64) => w,
+        .Err(let e: i8) => return .Err(.On(e as u8)),
+    };
+    .Ok(mix(l as u64, w))
+}
+
+fn try_option(k: u32) -> Option(u64) {
+    let p: Pair = pair_option(k)?;
+    let m: u32 = checked_mul10(p.b * 10_000_000)?;
+    .Some(mix(p.a as u64, m as u64))
+}
+
+fn try_hash(from: u32) -> u64 {
+    let mut h: u64 = 0;
+    let mut k: u32 = from;
+    while k < 20 {
+        h = mix(h, match try_result(k) {
+            .Ok(let v: u64) => v,
+            .Err(.On(let b: u8)) => mix(20, b as u64),
+            .Err(.Off) => 21,
+        });
+        h = mix(h, match try_option(k) {
+            .Some(let v: u64) => v,
+            .None => 22,
+        });
+        k += 1;
+    }
+    h
+}
+
 struct Uart { thr: u8 }
 
 fn putc(byte: u8) {
@@ -939,6 +975,8 @@ entry fn main() -> ! {
     // Built by a `comptime` expression and read at run time.
     failures += check(111, option_hash(comptime checked_mul10(7)), option_hash(checked_mul10(opaque_u32(7))));
     failures += check(112, option_hash(comptime checked_mul10(429_496_730)), option_hash(checked_mul10(opaque_u32(429_496_730))));
+    failures += check(113, comptime try_hash(0), try_hash(opaque_u32(0)));
+    failures += check(114, comptime try_hash(13), try_hash(opaque_u32(13)));
     if failures == 0 {
         putc(b'd'); putc(b'i'); putc(b'f'); putc(b'f'); putc(b'e'); putc(b'r'); putc(b'e');
         putc(b'n'); putc(b't'); putc(b'i'); putc(b'a'); putc(b'l'); putc(b' '); putc(b'o');

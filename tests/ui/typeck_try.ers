@@ -1,0 +1,52 @@
+// emit: typeck
+// `e?` on an `Option(T)` in a function returning an `Option(U)`, and on a
+// `Result(T, E)` in one returning a `Result(U, E)`, `U` other than `T`,
+// has type `T` (ADR 0046): its value is used where a `T` is expected, as
+// an operand, an argument, a field's base and the operand of another
+// `?`. An operand of type `!` gives `!`.
+enum ParseError: u8 { Empty = 0, BadDigit(u8) = 1 }
+struct Point { x: u16, y: u16 }
+
+fn half(v: u32) -> Option(u32) {
+    if v % 2 == 1 {
+        return .None;
+    }
+    .Some(v / 2)
+}
+
+fn quarter(v: u32) -> Option(u16) {
+    let h: u32 = half(half(v)?)?;
+    .Some(h as u16)
+}
+
+fn digit(c: u8) -> Result(u32, ParseError) {
+    if c < b'0' || c > b'9' {
+        return .Err(.BadDigit(c));
+    }
+    .Ok((c - b'0') as u32)
+}
+
+fn two(a: u8, b: u8) -> Result(u8, ParseError) {
+    .Ok((digit(a)? * 10 + digit(b)?) as u8)
+}
+
+fn point(o: Option(Point)) -> Option(u16) {
+    .Some(o?.x)
+}
+
+fn nested(o: Option(Option(u8))) -> Option(bool) {
+    .Some(o?? == 0)
+}
+
+fn unit(r: Result((), ParseError)) -> Result(u8, ParseError) {
+    r?;
+    .Ok(1)
+}
+
+fn never() -> Option(u8) {
+    let v: u8 = (loop {})?;
+    .Some(v)
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

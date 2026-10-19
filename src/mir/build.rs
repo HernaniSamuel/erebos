@@ -700,6 +700,7 @@ impl Builder<'_, '_> {
                 self.read_result(result)
             }
             hir::ExprKind::Match { scrutinee, arms } => self.match_(ty, scrutinee, arms),
+            hir::ExprKind::Try(operand) => self.try_(ty, operand),
             hir::ExprKind::Break { target, value } => {
                 let value = value.as_ref().map(|v| self.expr(v));
                 let index = self.loop_index(*target);
@@ -820,6 +821,102 @@ impl Builder<'_, '_> {
         }
         self.join(&ends);
         self.read_result(result)
+    }
+
+    /// `operand?` (ADR 0046), of type `ty`: the operand is read once, into
+    /// a temporary unless it is one, and a switch on its tag goes, for
+    /// `Some` or `Ok`, to a block that copies the payload into the result;
+    /// for `None` or `Err`, to one that builds `.None` or `.Err(x)` in the
+    /// return place and returns; and for a tag that is no variant, to the
+    /// panic function, as a `match` without a catch-all arm does
+    /// (ADR 0036, 0040).
+    fn try_(&mut self, ty: Ty, operand: &hir::Expr) -> Operand {
+        let operand_ty = self.ty_of(operand);
+        let hir::Ty::Enum(e) = self.q.tables.expr_ty(operand.id) else {
+            // `!`: nothing follows the operand.
+            self.expr(operand);
+            return Operand::Const(Const::Unit);
+        };
+        let value = self.expr(operand);
+        if self.current.is_none() {
+            return Operand::Const(Const::Unit);
+        }
+        let place = match value {
+            Operand::Copy(place)
+                if place.projection.is_empty()
+                    && self.locals[place.local.0 as usize].name.is_none() =>
+            {
+                place
+            }
+            _ => {
+                let temp = Place::local(self.new_local(operand_ty, None));
+                self.assign(temp, Rvalue::Use(value));
+                temp
+            }
+        };
+        let builtin = self
+            .q
+            .builtin_enum(e.id)
+            .expect("`?` takes an `Option` or a `Result`");
+        let (success, failure) = builtin.try_variants();
+        let success_bb = self.new_block();
+        let failure_bb = self.new_block();
+        let panic_bb = self.panic_block();
+        // Known without evaluation (ADR 0045).
+        let tag = |this: &mut Self, id: hir::EnumId, index: u32| {
+            this.discriminant(id, index)
+                .expect("the values of `Option` and `Result` are known")
+        };
+        let cases = vec![
+            (tag(self, e.id, success), success_bb),
+            (tag(self, e.id, failure), failure_bb),
+        ];
+        self.terminate(Terminator::Switch {
+            discr: Operand::Copy(place.project(PlaceElem::Tag)),
+            cases: cases.leak(),
+            otherwise: panic_bb,
+        });
+
+        // The function returns the same kind of enum, with the operand's
+        // error type for a `Result` (ADR 0046).
+        self.current = Some(failure_bb);
+        let hir = self.q.hir;
+        let ret_ty = hir.fn_(self.fn_id).ret;
+        let hir::Ty::Enum(r) = self.q.normalize(ret_ty) else {
+            unreachable!("`?` is in a function returning an `Option` or a `Result`")
+        };
+        let ret = Place::local(Local::RETURN);
+        let Ty::Enum(ret_enum) = self.locals[Local::RETURN.0 as usize].ty else {
+            unreachable!("an `Option` or a `Result` is an enum with payloads")
+        };
+        if builtin == hir::BuiltinEnum::Result {
+            let error = place.project(PlaceElem::Payload {
+                variant: failure,
+                index: 0,
+            });
+            let returned = ret.project(PlaceElem::Payload {
+                variant: failure,
+                index: 0,
+            });
+            self.assign(returned, Rvalue::Use(Operand::Copy(error)));
+        }
+        let ret_tag = tag(self, r.id, failure);
+        self.assign(
+            ret.project(PlaceElem::Tag),
+            Rvalue::Use(Operand::Const(Const::Int(ret_tag, ret_enum.def().int))),
+        );
+        self.terminate(Terminator::Return);
+
+        self.current = Some(success_bb);
+        let payload = place.project(PlaceElem::Payload {
+            variant: success,
+            index: 0,
+        });
+        if matches!(ty, Ty::Unit) {
+            Operand::Const(Const::Unit)
+        } else {
+            self.temp(ty, Rvalue::Use(Operand::Copy(payload)))
+        }
     }
 
     /// The switch of a `match` on `discr`, an integer, `bool` or enum

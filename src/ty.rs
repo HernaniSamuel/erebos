@@ -752,6 +752,7 @@ impl Checker<'_, '_> {
                 info.ty
             }
             ExprKind::AddrOf { mutable, place } => self.addr_of(f, *mutable, place),
+            ExprKind::Try(operand) => self.try_(f, expr, operand),
             ExprKind::Assign(place, value) => {
                 let place_ty = self.place(f, place);
                 self.check(f, value, Some(place_ty));
@@ -1657,6 +1658,84 @@ impl Checker<'_, '_> {
         };
         self.q.tables.variants.insert(expr.id, (id, index));
         self.variant(f, expr, id, index, args)
+    }
+
+    /// `operand?` (ADR 0046): the operand is typed on its own, and must be
+    /// an `Option(T)` or a `Result(T, E)`, in a function returning an
+    /// `Option(U)`, or a `Result(U, E)` with the same `E`, which is never
+    /// converted (ADR 0008). Its type is `T`. An operand of type `!` gives
+    /// `!`, and an erroneous one `{error}`, without checking the return
+    /// type; an erroneous return type reports nothing either.
+    fn try_(&mut self, f: &Fn, expr: &Expr, operand: &Expr) -> Ty {
+        let ty = self.check(f, operand, None);
+        let (e, builtin) = match ty {
+            Ty::Never | Ty::Error => return ty,
+            _ if self.q.is_erroneous(ty) => return Ty::Error,
+            Ty::Enum(e) if let Some(builtin) = self.q.builtin_enum(e.id) => (e, builtin),
+            other => {
+                let diag = Diagnostic::error(
+                    "ty::try-operand",
+                    format!("`?` takes an `Option` or a `Result`, not `{other}`"),
+                )
+                .label(operand.span, format!("has type `{other}`"))
+                .help("`?` gives the value of an `Option(T)` or a `Result(T, E)`, and returns its `.None` or `.Err(x)` from the function (ADR 0046)");
+                self.q.diags.push(diag);
+                return Ty::Error;
+            }
+        };
+        let def = self.q.enum_def(e.id);
+        let (value, failure) = builtin.try_variants();
+        let value_ty = def.variants[value as usize].payload[0].ty;
+        // The error type of a `Result`; an `Option` fails without a value.
+        let error = def.variants[failure as usize]
+            .payload
+            .first()
+            .map(|payload| payload.ty);
+        let ret = self.ret;
+        if ret == Ty::Error || self.q.is_erroneous(ret) {
+            return self.norm(value_ty);
+        }
+        // The same `E`, identical: no conversion applies (ADR 0008).
+        let ret_error = match ret {
+            Ty::Enum(r) if self.q.builtin_enum(r.id) == Some(builtin) => Some(
+                self.q.enum_def(r.id).variants[failure as usize]
+                    .payload
+                    .first()
+                    .map(|payload| payload.ty),
+            ),
+            _ => None,
+        };
+        if ret_error != Some(error) {
+            let (message, help) = match (builtin, error, ret_error) {
+                (hir::BuiltinEnum::Result, Some(error), Some(_)) => (
+                    "`?` on a `Result` whose error type is not the function's".to_owned(),
+                    format!(
+                        "errors are never converted (ADR 0008): on `.Err(x)`, `?` returns `.Err(x)` as it is, so the function must return a `Result(U, {error})`; convert the error with a `match` (ADR 0046)"
+                    ),
+                ),
+                (hir::BuiltinEnum::Result, Some(error), None) => (
+                    "`?` on a `Result` in a function that does not return a `Result`".to_owned(),
+                    format!(
+                        "on `.Err(x)`, `?` returns `.Err(x)`, so the function must return a `Result(U, {error})`, for any `U` (ADR 0046)"
+                    ),
+                ),
+                _ => (
+                    "`?` on an `Option` in a function that does not return an `Option`".to_owned(),
+                    "on `.None`, `?` returns `.None`, so the function must return an `Option(U)`, for any `U` (ADR 0046)".to_owned(),
+                ),
+            };
+            let (at, what) = match f.ret_span {
+                Some(span) => (span, format!("the function returns `{ret}`")),
+                None => (f.name_span, format!("returns `{ret}`")),
+            };
+            self.q.diags.push(
+                Diagnostic::error("ty::try-return", message)
+                    .label(expr.span, format!("`?` on `{ty}`"))
+                    .label(at, what)
+                    .help(help),
+            );
+        }
+        self.norm(value_ty)
     }
 
     /// Each argument is checked against its parameter's type.
@@ -3184,6 +3263,7 @@ fn expr_label(q: &Queries, f: &Fn, expr: &Expr) -> String {
         ExprKind::Unary(op, _) => format!("{op:?}").to_lowercase(),
         ExprKind::Deref(_) => "deref".to_owned(),
         ExprKind::Index(..) => "index".to_owned(),
+        ExprKind::Try(_) => "try".to_owned(),
         ExprKind::AddrOf { mutable: true, .. } => "&raw mut".to_owned(),
         ExprKind::AddrOf { mutable: false, .. } => "&raw const".to_owned(),
         ExprKind::Binary(op, _, _) => format!("binary {}", op.symbol()),

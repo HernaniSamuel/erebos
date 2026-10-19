@@ -1,0 +1,28 @@
+// emit: hir
+// `?` returns from the enclosing function, so code that runs at compile
+// time on its own, which has none, cannot use it, as it cannot use
+// `return` (ADR 0029, 0046): in a `comptime` expression, a `comptime`
+// block, a constant's initializer and an array length. A function using
+// `?` may be called there.
+fn half(v: u32) -> Option(u32) {
+    .Some(v / 2)
+}
+
+fn quarter(v: u32) -> Option(u32) {
+    half(half(v)?)
+}
+
+const HALF: u32 = half(8)?;
+
+comptime {
+    let h: u32 = half(4)?;
+}
+
+fn lengths() -> Option(u32) {
+    let h: u32 = comptime half(2)?;
+    let a: [u8; half(4)? as usize] = [0; 2];
+    quarter(h)
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

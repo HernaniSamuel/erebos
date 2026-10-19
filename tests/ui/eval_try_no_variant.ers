@@ -1,0 +1,20 @@
+// emit: mir
+// At compile time, a `?` whose operand's tag is no variant fails the
+// evaluation, as it calls the panic function at run time (ADR 0046). The
+// `Option(u32)`, with the tag 2, is read through a cast pointer from a
+// static byte array aligned as `Option(u32)` is.
+#[align(4)]
+static BYTES: [u8; 8] = [2, 0, 0, 0, 5, 0, 0, 0];
+
+fn odd() -> Option(u32) {
+    (&raw const BYTES as *const Option(u32))[0]
+}
+
+fn plus_one() -> Option(u32) {
+    .Some(odd()? + 1)
+}
+
+const PANICS: Option(u32) = plus_one();
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

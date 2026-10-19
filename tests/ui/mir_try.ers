@@ -1,0 +1,23 @@
+// emit: mir
+// `e?` (ADR 0046) evaluates its operand once, into a temporary unless it
+// is one, and switches on its tag: `Some` or `Ok` copies the payload into
+// the value of `e?`; `None` writes the tag of `.None`, and `Err` the
+// error and the tag of `.Err`, in the return place, and returns; any
+// other tag calls the panic function, as a `match` without a catch-all
+// arm does.
+enum ParseError: u8 { Empty = 0, BadDigit(u8) = 1 }
+
+fn half(v: u32) -> Option(u32) {
+    .Some(v / 2)
+}
+
+fn quarter(v: u32) -> Option(u16) {
+    .Some(half(half(v)?)? as u16)
+}
+
+fn tens(r: Result(u8, ParseError)) -> Result(u32, ParseError) {
+    .Ok(r? as u32 * 10)
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

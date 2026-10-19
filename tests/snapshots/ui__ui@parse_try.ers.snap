@@ -1,0 +1,290 @@
+---
+source: tests/ui.rs
+assertion_line: 40
+expression: output
+input_file: tests/ui/parse_try.ers
+---
+--- ast ---
+File {
+    items: [
+        Fn(
+            FnDecl {
+                attrs: [],
+                kind: Plain,
+                name: Ident {
+                    name: "f",
+                    span: 275..276,
+                },
+                params: [],
+                ret: Some(
+                    Ty {
+                        kind: Applied(
+                            Ident {
+                                name: "Option",
+                                span: 282..288,
+                            },
+                            [
+                                Ty {
+                                    kind: Named(
+                                        Ident {
+                                            name: "u32",
+                                            span: 289..292,
+                                        },
+                                    ),
+                                    span: 289..292,
+                                },
+                            ],
+                        ),
+                        span: 282..293,
+                    },
+                ),
+                body: Some(
+                    Block {
+                        stmts: [
+                            Expr {
+                                expr: Expr {
+                                    kind: Try(
+                                        Expr {
+                                            kind: Call(
+                                                Ident {
+                                                    name: "f",
+                                                    span: 300..301,
+                                                },
+                                                [],
+                                            ),
+                                            span: 300..303,
+                                        },
+                                    ),
+                                    span: 300..304,
+                                },
+                                semi: Some(
+                                    304..305,
+                                ),
+                            },
+                            Expr {
+                                expr: Expr {
+                                    kind: Try(
+                                        Expr {
+                                            kind: Index(
+                                                Expr {
+                                                    kind: Name(
+                                                        Ident {
+                                                            name: "a",
+                                                            span: 310..311,
+                                                        },
+                                                    ),
+                                                    span: 310..311,
+                                                },
+                                                Expr {
+                                                    kind: Name(
+                                                        Ident {
+                                                            name: "i",
+                                                            span: 312..313,
+                                                        },
+                                                    ),
+                                                    span: 312..313,
+                                                },
+                                            ),
+                                            span: 310..314,
+                                        },
+                                    ),
+                                    span: 310..315,
+                                },
+                                semi: Some(
+                                    315..316,
+                                ),
+                            },
+                            Expr {
+                                expr: Expr {
+                                    kind: Try(
+                                        Expr {
+                                            kind: Field(
+                                                Expr {
+                                                    kind: Name(
+                                                        Ident {
+                                                            name: "s",
+                                                            span: 321..322,
+                                                        },
+                                                    ),
+                                                    span: 321..322,
+                                                },
+                                                Ident {
+                                                    name: "f",
+                                                    span: 323..324,
+                                                },
+                                            ),
+                                            span: 321..324,
+                                        },
+                                    ),
+                                    span: 321..325,
+                                },
+                                semi: Some(
+                                    325..326,
+                                ),
+                            },
+                            Expr {
+                                expr: Expr {
+                                    kind: Field(
+                                        Expr {
+                                            kind: Try(
+                                                Expr {
+                                                    kind: Call(
+                                                        Ident {
+                                                            name: "f",
+                                                            span: 331..332,
+                                                        },
+                                                        [],
+                                                    ),
+                                                    span: 331..334,
+                                                },
+                                            ),
+                                            span: 331..335,
+                                        },
+                                        Ident {
+                                            name: "x",
+                                            span: 336..337,
+                                        },
+                                    ),
+                                    span: 331..337,
+                                },
+                                semi: Some(
+                                    337..338,
+                                ),
+                            },
+                            Expr {
+                                expr: Expr {
+                                    kind: Try(
+                                        Expr {
+                                            kind: Try(
+                                                Expr {
+                                                    kind: Call(
+                                                        Ident {
+                                                            name: "f",
+                                                            span: 343..344,
+                                                        },
+                                                        [],
+                                                    ),
+                                                    span: 343..346,
+                                                },
+                                            ),
+                                            span: 343..347,
+                                        },
+                                    ),
+                                    span: 343..348,
+                                },
+                                semi: Some(
+                                    348..349,
+                                ),
+                            },
+                            Expr {
+                                expr: Expr {
+                                    kind: Unary(
+                                        Neg,
+                                        Expr {
+                                            kind: Try(
+                                                Expr {
+                                                    kind: Call(
+                                                        Ident {
+                                                            name: "f",
+                                                            span: 355..356,
+                                                        },
+                                                        [],
+                                                    ),
+                                                    span: 355..358,
+                                                },
+                                            ),
+                                            span: 355..359,
+                                        },
+                                    ),
+                                    span: 354..359,
+                                },
+                                semi: Some(
+                                    359..360,
+                                ),
+                            },
+                            Expr {
+                                expr: Expr {
+                                    kind: Deref(
+                                        Expr {
+                                            kind: Try(
+                                                Expr {
+                                                    kind: Name(
+                                                        Ident {
+                                                            name: "p",
+                                                            span: 366..367,
+                                                        },
+                                                    ),
+                                                    span: 366..367,
+                                                },
+                                            ),
+                                            span: 366..368,
+                                        },
+                                    ),
+                                    span: 365..368,
+                                },
+                                semi: Some(
+                                    368..369,
+                                ),
+                            },
+                            Expr {
+                                expr: Expr {
+                                    kind: Try(
+                                        Expr {
+                                            kind: Match {
+                                                scrutinee: Expr {
+                                                    kind: Name(
+                                                        Ident {
+                                                            name: "r",
+                                                            span: 381..382,
+                                                        },
+                                                    ),
+                                                    span: 381..382,
+                                                },
+                                                arms: [
+                                                    Arm {
+                                                        pattern: Pattern {
+                                                            kind: Wildcard,
+                                                            span: 385..386,
+                                                        },
+                                                        body: Expr {
+                                                            kind: Name(
+                                                                Ident {
+                                                                    name: "r",
+                                                                    span: 390..391,
+                                                                },
+                                                            ),
+                                                            span: 390..391,
+                                                        },
+                                                    },
+                                                ],
+                                            },
+                                            span: 374..394,
+                                        },
+                                    ),
+                                    span: 374..395,
+                                },
+                                semi: Some(
+                                    395..396,
+                                ),
+                            },
+                        ],
+                        tail: Some(
+                            Expr {
+                                kind: ContextVariant(
+                                    Ident {
+                                        name: "None",
+                                        span: 402..406,
+                                    },
+                                    None,
+                                ),
+                                span: 401..406,
+                            },
+                        ),
+                        span: 294..408,
+                    },
+                ),
+                span: 272..408,
+            },
+        ),
+    ],
+}

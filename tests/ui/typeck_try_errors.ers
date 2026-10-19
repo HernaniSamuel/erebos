@@ -1,0 +1,70 @@
+// emit: typeck
+// What `?` refuses (ADR 0046). Its operand, typed on its own, is an
+// `Option` or a `Result` (`ty::try-operand`), and not a `.V`, which has no
+// type there (`ty::untyped-variant`). The function returns an `Option` for
+// an `Option`, and a `Result` with the same error type for a `Result`,
+// never converted, not even from `*mut u8` to `*const u8`
+// (`ty::try-return`). The value is a `T`, mismatched where another type
+// is expected. An erroneous operand, and an erroneous return type, report
+// nothing more.
+enum Small: u8 { Off = 0, On(u8) = 1 }
+enum Other: u8 { A = 0 }
+struct Point { x: u16, y: u16 }
+
+fn opt() -> Option(u32) { .None }
+fn res() -> Result(u32, Small) { .Err(.Off) }
+fn raw() -> Result(u32, *mut u8) { .Ok(0) }
+
+fn operands(n: u32, p: Point, s: Small) -> Option(u32) {
+    n?;
+    p?;
+    s?;
+    .Ok(1)?;
+    .None
+}
+
+fn option_in_result() -> Result(u32, Small) {
+    .Ok(opt()?)
+}
+
+fn result_in_option() -> Option(u32) {
+    .Some(res()?)
+}
+
+fn other_error() -> Result(u32, Other) {
+    .Ok(res()?)
+}
+
+fn not_converted() -> Result(u32, *const u8) {
+    .Ok(raw()?)
+}
+
+fn in_u32() -> u32 {
+    opt()?
+}
+
+fn in_unit() {
+    let v: u32 = res()?;
+}
+
+fn mismatched() -> Option(u16) {
+    let v: u16 = opt()?;
+    .Some(v)
+}
+
+fn erroneous(p: Point) -> Option(u32) {
+    p.z?;
+    .None
+}
+
+fn erroneous_return(o: Option(u32)) -> Result(u32, !) {
+    let v: u32 = o?;
+    .Ok(v)
+}
+
+entry fn main() -> ! {
+    let v: u32 = opt()?;
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

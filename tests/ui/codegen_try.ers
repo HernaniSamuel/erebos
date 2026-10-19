@@ -1,0 +1,22 @@
+// emit: llvm-ir
+// `e?` (ADR 0046) is a switch on the tag of its operand, loaded without
+// range metadata: `Some` or `Ok` continues with the payload, `None` and
+// `Err` store `.None` or `.Err(x)` in the result and return it, and the
+// default calls the panic function, since nothing tells LLVM that the tag
+// is a variant.
+enum ParseError: u8 { Empty = 0, BadDigit(u8) = 1 }
+
+fn half(v: u32) -> Option(u32) {
+    .Some(v / 2)
+}
+
+fn quarter(v: u32) -> Option(u16) {
+    .Some(half(half(v)?)? as u16)
+}
+
+fn tens(r: Result(u8, ParseError)) -> Result(u32, ParseError) {
+    .Ok(r? as u32 * 10)
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

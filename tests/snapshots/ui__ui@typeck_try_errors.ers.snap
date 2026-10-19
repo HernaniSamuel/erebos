@@ -1,0 +1,195 @@
+---
+source: tests/ui.rs
+assertion_line: 40
+expression: output
+input_file: tests/ui/typeck_try_errors.ers
+---
+--- errors ---
+ty::try-operand
+
+  × `?` takes an `Option` or a `Result`, not `u32`
+    ╭─[typeck_try_errors.ers:19:5]
+ 18 │ fn operands(n: u32, p: Point, s: Small) -> Option(u32) {
+ 19 │     n?;
+    ·     ┬
+    ·     ╰── has type `u32`
+ 20 │     p?;
+    ╰────
+  help: `?` gives the value of an `Option(T)` or a `Result(T, E)`, and returns its `.None` or
+        `.Err(x)` from the function (ADR 0046)
+ty::try-operand
+
+  × `?` takes an `Option` or a `Result`, not `Point`
+    ╭─[typeck_try_errors.ers:20:5]
+ 19 │     n?;
+ 20 │     p?;
+    ·     ┬
+    ·     ╰── has type `Point`
+ 21 │     s?;
+    ╰────
+  help: `?` gives the value of an `Option(T)` or a `Result(T, E)`, and returns its `.None` or
+        `.Err(x)` from the function (ADR 0046)
+ty::try-operand
+
+  × `?` takes an `Option` or a `Result`, not `Small`
+    ╭─[typeck_try_errors.ers:21:5]
+ 20 │     p?;
+ 21 │     s?;
+    ·     ┬
+    ·     ╰── has type `Small`
+ 22 │     .Ok(1)?;
+    ╰────
+  help: `?` gives the value of an `Option(T)` or a `Result(T, E)`, and returns its `.None` or
+        `.Err(x)` from the function (ADR 0046)
+ty::untyped-variant
+
+  × cannot tell the enum of `.Ok`
+    ╭─[typeck_try_errors.ers:22:5]
+ 21 │     s?;
+ 22 │     .Ok(1)?;
+    ·     ───┬──
+    ·        ╰── no type is expected here
+ 23 │     .None
+    ╰────
+  help: `.Ok` is a variant of `Result` where one is expected; write its type there, as in `let x:
+        Result(u32, E) = .Ok(1);` (ADR 0044, 0045)
+ty::try-return
+
+  × `?` on an `Option` in a function that does not return an `Option`
+    ╭─[typeck_try_errors.ers:27:9]
+ 25 │ 
+ 26 │ fn option_in_result() -> Result(u32, Small) {
+    ·                          ─────────┬────────
+    ·                                   ╰── the function returns `Result(u32, Small)`
+ 27 │     .Ok(opt()?)
+    ·         ───┬──
+    ·            ╰── `?` on `Option(u32)`
+ 28 │ }
+    ╰────
+  help: on `.None`, `?` returns `.None`, so the function must return an `Option(U)`, for any `U`
+        (ADR 0046)
+ty::try-return
+
+  × `?` on a `Result` in a function that does not return a `Result`
+    ╭─[typeck_try_errors.ers:31:11]
+ 29 │ 
+ 30 │ fn result_in_option() -> Option(u32) {
+    ·                          ─────┬─────
+    ·                               ╰── the function returns `Option(u32)`
+ 31 │     .Some(res()?)
+    ·           ───┬──
+    ·              ╰── `?` on `Result(u32, Small)`
+ 32 │ }
+    ╰────
+  help: on `.Err(x)`, `?` returns `.Err(x)`, so the function must return a `Result(U, Small)`, for
+        any `U` (ADR 0046)
+ty::try-return
+
+  × `?` on a `Result` whose error type is not the function's
+    ╭─[typeck_try_errors.ers:35:9]
+ 33 │ 
+ 34 │ fn other_error() -> Result(u32, Other) {
+    ·                     ─────────┬────────
+    ·                              ╰── the function returns `Result(u32, Other)`
+ 35 │     .Ok(res()?)
+    ·         ───┬──
+    ·            ╰── `?` on `Result(u32, Small)`
+ 36 │ }
+    ╰────
+  help: errors are never converted (ADR 0008): on `.Err(x)`, `?` returns `.Err(x)` as it is, so
+        the function must return a `Result(U, Small)`; convert the error with a `match` (ADR 0046)
+ty::try-return
+
+  × `?` on a `Result` whose error type is not the function's
+    ╭─[typeck_try_errors.ers:39:9]
+ 37 │ 
+ 38 │ fn not_converted() -> Result(u32, *const u8) {
+    ·                       ───────────┬──────────
+    ·                                  ╰── the function returns `Result(u32, *const u8)`
+ 39 │     .Ok(raw()?)
+    ·         ───┬──
+    ·            ╰── `?` on `Result(u32, *mut u8)`
+ 40 │ }
+    ╰────
+  help: errors are never converted (ADR 0008): on `.Err(x)`, `?` returns `.Err(x)` as it is, so
+        the function must return a `Result(U, *mut u8)`; convert the error with a `match` (ADR
+        0046)
+ty::try-return
+
+  × `?` on an `Option` in a function that does not return an `Option`
+    ╭─[typeck_try_errors.ers:43:5]
+ 41 │ 
+ 42 │ fn in_u32() -> u32 {
+    ·                ─┬─
+    ·                 ╰── the function returns `u32`
+ 43 │     opt()?
+    ·     ───┬──
+    ·        ╰── `?` on `Option(u32)`
+ 44 │ }
+    ╰────
+  help: on `.None`, `?` returns `.None`, so the function must return an `Option(U)`, for any `U`
+        (ADR 0046)
+ty::try-return
+
+  × `?` on a `Result` in a function that does not return a `Result`
+    ╭─[typeck_try_errors.ers:47:18]
+ 45 │ 
+ 46 │ fn in_unit() {
+    ·    ───┬───
+    ·       ╰── returns `()`
+ 47 │     let v: u32 = res()?;
+    ·                  ───┬──
+    ·                     ╰── `?` on `Result(u32, Small)`
+ 48 │ }
+    ╰────
+  help: on `.Err(x)`, `?` returns `.Err(x)`, so the function must return a `Result(U, Small)`, for
+        any `U` (ADR 0046)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_try_errors.ers:51:18]
+ 50 │ fn mismatched() -> Option(u16) {
+ 51 │     let v: u16 = opt()?;
+    ·                  ───┬──
+    ·                     ╰── expected `u16`, found `u32`
+ 52 │     .Some(v)
+    ╰────
+  help: integer types never convert implicitly; use `as u16` (ADR 0008)
+ty::unknown-field
+
+  × `Point` has no field `z`
+    ╭─[typeck_try_errors.ers:56:7]
+ 55 │ fn erroneous(p: Point) -> Option(u32) {
+ 56 │     p.z?;
+    ·       ┬
+    ·       ╰── unknown field
+ 57 │     .None
+    ╰────
+  help: its fields are `x`, `y`
+ty::never-in-memory
+
+  × `!` is not a type of memory
+    ╭─[typeck_try_errors.ers:60:52]
+ 59 │ 
+ 60 │ fn erroneous_return(o: Option(u32)) -> Result(u32, !) {
+    ·                                                    ┬
+    ·                                                    ╰── `!` as a type argument
+ 61 │     let v: u32 = o?;
+    ╰────
+  help: `!` is the type of expressions that do not finish, so no memory holds one; for a type
+        without data, use `()` (ADR 0034)
+ty::try-return
+
+  × `?` on an `Option` in a function that does not return an `Option`
+    ╭─[typeck_try_errors.ers:66:18]
+ 64 │ 
+ 65 │ entry fn main() -> ! {
+    ·                    ┬
+    ·                    ╰── the function returns `!`
+ 66 │     let v: u32 = opt()?;
+    ·                  ───┬──
+    ·                     ╰── `?` on `Option(u32)`
+ 67 │     loop {}
+    ╰────
+  help: on `.None`, `?` returns `.None`, so the function must return an `Option(U)`, for any `U`
+        (ADR 0046)

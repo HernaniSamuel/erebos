@@ -1,0 +1,154 @@
+// `?` at run time (ADR 0046): an error passed on through three calls, and
+// a value through them; `?` on options, failing at the first or at a
+// later one; and an operand evaluated where it appears, so that in
+// `add(three(ok)?, four())`, `four` does not run when `three` fails,
+// which a counter of its calls shows.
+// expect-output: chain ok 42
+// expect-output: chain bad digit 120
+// expect-output: chain empty
+// expect-output: sum 7 calls 1
+// expect-output: sum none calls 1
+// expect-output: quarter 3
+// expect-output: quarter none
+// expect-output: quarter none
+// expect-exit: 0
+
+enum ParseError: u8 { Empty = 0, BadDigit(u8) = 1 }
+
+static mut CALLS: u32 = 0;
+
+fn digit(s: *const [u8]) -> Result(u32, ParseError) {
+    if len(s) == 0 {
+        return .Err(.Empty);
+    }
+    let c: u8 = (*s)[0];
+    if c < b'0' || c > b'9' {
+        return .Err(.BadDigit(c));
+    }
+    .Ok((c - b'0') as u32)
+}
+
+// Each passes the error of the one it calls on.
+fn level3(s: *const [u8]) -> Result(u32, ParseError) {
+    .Ok(digit(s)? * 10)
+}
+
+fn level2(s: *const [u8]) -> Result(u32, ParseError) {
+    .Ok(level3(s)? + 2)
+}
+
+fn level1(s: *const [u8]) -> Result(u32, ParseError) {
+    let v: u32 = level2(s)?;
+    .Ok(v)
+}
+
+fn three(ok: bool) -> Option(u32) {
+    if ok { .Some(3) } else { .None }
+}
+
+fn four() -> u32 {
+    CALLS += 1;
+    4
+}
+
+fn add(a: u32, b: u32) -> u32 {
+    a + b
+}
+
+fn sum(ok: bool) -> Option(u32) {
+    .Some(add(three(ok)?, four()))
+}
+
+fn half(v: u32) -> Option(u32) {
+    if v % 2 == 1 {
+        return .None;
+    }
+    .Some(v / 2)
+}
+
+fn quarter(v: u32) -> Option(u32) {
+    half(half(v)?)
+}
+
+fn putc(byte: u8) {
+    let thr: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+    *thr = byte;
+}
+
+fn puts(s: *const [u8]) {
+    let mut i: usize = 0;
+    while i < len(s) {
+        putc((*s)[i]);
+        i += 1;
+    }
+}
+
+fn print_u64(n: u64) {
+    if n >= 10 {
+        print_u64(n / 10);
+    }
+    putc(b'0' + (n % 10) as u8);
+}
+
+fn field(n: u64) {
+    putc(b' ');
+    print_u64(n);
+}
+
+fn show_chain(r: Result(u32, ParseError)) {
+    puts(&raw const b"chain");
+    match r {
+        .Ok(let v: u32) => {
+            puts(&raw const b" ok");
+            field(v as u64);
+        }
+        .Err(.BadDigit(let c: u8)) => {
+            puts(&raw const b" bad digit");
+            field(c as u64);
+        }
+        .Err(.Empty) => puts(&raw const b" empty"),
+    }
+    putc(b'\n');
+}
+
+fn show_sum(o: Option(u32)) {
+    puts(&raw const b"sum");
+    match o {
+        .Some(let v: u32) => field(v as u64),
+        .None => puts(&raw const b" none"),
+    }
+    puts(&raw const b" calls");
+    field(CALLS as u64);
+    putc(b'\n');
+}
+
+fn show_quarter(o: Option(u32)) {
+    puts(&raw const b"quarter");
+    match o {
+        .Some(let v: u32) => field(v as u64),
+        .None => puts(&raw const b" none"),
+    }
+    putc(b'\n');
+}
+
+fn exit(code: u32) -> ! {
+    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+    *finisher = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    loop {}
+}
+
+entry fn main() -> ! {
+    show_chain(level1(&raw const b"4"));
+    show_chain(level1(&raw const b"x"));
+    show_chain(level1(&raw const b""));
+    show_sum(sum(true));
+    show_sum(sum(false));
+    show_quarter(quarter(12));
+    show_quarter(quarter(6));
+    show_quarter(quarter(5));
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(1)
+}

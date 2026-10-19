@@ -1,0 +1,153 @@
+---
+source: tests/ui.rs
+assertion_line: 40
+expression: output
+input_file: tests/ui/mir_try.ers
+---
+--- mir ---
+enum ParseError: u8 { 0 Empty = 0, 1 BadDigit(0 u8 at 1) = 1 } // size 2, align 1
+enum Option(u16): u8 { 0 None = 0, 1 Some(0 u16 at 2) = 1 } // size 4, align 2
+enum Option(u32): u8 { 0 None = 0, 1 Some(0 u32 at 4) = 1 } // size 8, align 4
+enum Result(u32, ParseError): u8 { 0 Ok(0 u32 at 4) = 0, 1 Err(0 ParseError at 1) = 1 } // size 8, align 4
+enum Result(u8, ParseError): u8 { 0 Ok(0 u8 at 1) = 0, 1 Err(0 ParseError at 1) = 1 } // size 3, align 1
+
+fn half(_1: u32) -> Option(u32) {
+    let _0: Option(u32);
+    let _1: u32; // v
+    let _2: u32;
+    let _3: Option(u32);
+
+    bb0: {
+        _2 = Div(copy _1, const 2_u32);
+        (_3 as 1).0 = copy _2;
+        _3.tag = const 1_u8;
+        _0 = copy _3;
+        return;
+    }
+}
+
+fn quarter(_1: u32) -> Option(u16) {
+    let _0: Option(u16);
+    let _1: u32; // v
+    let _2: Option(u32);
+    let _3: u32;
+    let _4: Option(u32);
+    let _5: u32;
+    let _6: u16;
+    let _7: Option(u16);
+
+    bb0: {
+        _2 = call half(copy _1);
+        switch copy _2.tag -> [1_u8: bb1, 0_u8: bb2, otherwise: bb3];
+    }
+
+    bb1: {
+        _3 = copy (_2 as 1).0;
+        _4 = call half(copy _3);
+        switch copy _4.tag -> [1_u8: bb4, 0_u8: bb5, otherwise: bb6];
+    }
+
+    bb2: {
+        _0.tag = const 0_u8;
+        return;
+    }
+
+    bb3: {
+        panic(enum value is no variant);
+    }
+
+    bb4: {
+        _5 = copy (_4 as 1).0;
+        _6 = copy _5 as u16;
+        (_7 as 1).0 = copy _6;
+        _7.tag = const 1_u8;
+        _0 = copy _7;
+        return;
+    }
+
+    bb5: {
+        _0.tag = const 0_u8;
+        return;
+    }
+
+    bb6: {
+        panic(enum value is no variant);
+    }
+}
+
+fn tens(_1: Result(u8, ParseError)) -> Result(u32, ParseError) {
+    let _0: Result(u32, ParseError);
+    let _1: Result(u8, ParseError); // r
+    let _2: Result(u8, ParseError);
+    let _3: u8;
+    let _4: u32;
+    let _5: u32;
+    let _6: Result(u32, ParseError);
+
+    bb0: {
+        _2 = copy _1;
+        switch copy _2.tag -> [0_u8: bb1, 1_u8: bb2, otherwise: bb3];
+    }
+
+    bb1: {
+        _3 = copy (_2 as 0).0;
+        _4 = copy _3 as u32;
+        _5 = Mul(copy _4, const 10_u32);
+        (_6 as 0).0 = copy _5;
+        _6.tag = const 0_u8;
+        _0 = copy _6;
+        return;
+    }
+
+    bb2: {
+        (_0 as 1).0 = copy (_2 as 1).0;
+        _0.tag = const 1_u8;
+        return;
+    }
+
+    bb3: {
+        panic(enum value is no variant);
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+comptime fn ParseError::Empty() -> u8 {
+    let _0: u8;
+
+    bb0: {
+        _0 = const 0_u8;
+        return;
+    }
+}
+
+comptime fn ParseError::BadDigit() -> u8 {
+    let _0: u8;
+
+    bb0: {
+        _0 = const 1_u8;
+        return;
+    }
+}

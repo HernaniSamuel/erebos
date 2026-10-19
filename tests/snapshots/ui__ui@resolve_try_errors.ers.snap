@@ -1,0 +1,55 @@
+---
+source: tests/ui.rs
+assertion_line: 40
+expression: output
+input_file: tests/ui/resolve_try_errors.ers
+---
+--- errors ---
+resolve::return-in-comptime
+
+  × `?` cannot leave code that runs at compile time
+    ╭─[resolve_try_errors.ers:15:19]
+ 14 │ 
+ 15 │ const HALF: u32 = half(8)?;
+    ·                   ────┬───
+    ·                       ╰── returns on a failure, with no function to return from
+ 16 │ 
+    ╰────
+  help: compile-time code gives its value as its last expression; take the value apart with a
+        `match`, or call a function that uses `?` (ADR 0029, 0046)
+resolve::return-in-comptime
+
+  × `?` cannot leave code that runs at compile time
+    ╭─[resolve_try_errors.ers:18:18]
+ 17 │ comptime {
+ 18 │     let h: u32 = half(4)?;
+    ·                  ────┬───
+    ·                      ╰── returns on a failure, with no function to return from
+ 19 │ }
+    ╰────
+  help: compile-time code gives its value as its last expression; take the value apart with a
+        `match`, or call a function that uses `?` (ADR 0029, 0046)
+resolve::return-in-comptime
+
+  × `?` cannot leave code that runs at compile time
+    ╭─[resolve_try_errors.ers:22:27]
+ 21 │ fn lengths() -> Option(u32) {
+ 22 │     let h: u32 = comptime half(2)?;
+    ·                           ────┬───
+    ·                               ╰── returns on a failure, with no function to return from
+ 23 │     let a: [u8; half(4)? as usize] = [0; 2];
+    ╰────
+  help: compile-time code gives its value as its last expression; take the value apart with a
+        `match`, or call a function that uses `?` (ADR 0029, 0046)
+resolve::return-in-comptime
+
+  × `?` cannot leave code that runs at compile time
+    ╭─[resolve_try_errors.ers:23:17]
+ 22 │     let h: u32 = comptime half(2)?;
+ 23 │     let a: [u8; half(4)? as usize] = [0; 2];
+    ·                 ────┬───
+    ·                     ╰── returns on a failure, with no function to return from
+ 24 │     quarter(h)
+    ╰────
+  help: compile-time code gives its value as its last expression; take the value apart with a
+        `match`, or call a function that uses `?` (ADR 0029, 0046)

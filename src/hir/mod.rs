@@ -305,6 +305,15 @@ impl BuiltinEnum {
         }
     }
 
+    /// The indices of the variant whose payload `?` gives, `Some` or `Ok`,
+    /// and of the one it returns, `None` or `Err` (ADR 0046).
+    pub fn try_variants(self) -> (u32, u32) {
+        match self {
+            BuiltinEnum::Option => (1, 0),
+            BuiltinEnum::Result => (0, 1),
+        }
+    }
+
     /// Its variants, in order: their names, values and the index of the
     /// type argument each carries, if any.
     fn variants(self) -> [(&'static str, u64, Option<usize>); 2] {
@@ -672,6 +681,9 @@ pub enum ExprKind {
     Deref(Box<Expr>),
     /// `base[index]`
     Index(Box<Expr>, Box<Expr>),
+    /// `operand?` (ADR 0046): the payload of an `Option`'s `Some` or a
+    /// `Result`'s `Ok`, or else a return of its `.None` or `.Err(x)`.
+    Try(Box<Expr>),
     /// `&raw const place` or `&raw mut place`
     AddrOf {
         mutable: bool,
@@ -814,7 +826,8 @@ impl Expr {
             | ExprKind::Field(e, _, _)
             | ExprKind::Assert(e, None)
             | ExprKind::Len(e)
-            | ExprKind::Comptime(e) => e.walk(f),
+            | ExprKind::Comptime(e)
+            | ExprKind::Try(e) => e.walk(f),
             ExprKind::StructLit(_, fields) => {
                 for (_, value) in fields {
                     value.walk(f);

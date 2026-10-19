@@ -58,6 +58,9 @@ pub enum TokenKind {
     Comma,
     Semi,
     Dot,
+    /// `?`, after an `Option` or a `Result`, which passes its failure on
+    /// (ADR 0046).
+    Question,
 
     /// `#`, which starts an attribute.
     Pound,
@@ -178,6 +181,7 @@ impl TokenKind {
             TokenKind::Comma => "`,`",
             TokenKind::Semi => "`;`",
             TokenKind::Dot => "`.`",
+            TokenKind::Question => "`?`",
             TokenKind::Pound => "`#`",
             TokenKind::Bang => "`!`",
             TokenKind::Plus => "`+`",

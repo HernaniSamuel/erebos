@@ -1,0 +1,56 @@
+// emit: mir
+// A function using `?` runs at compile time as at run time (ADR 0046):
+// on `.Some` and `.Ok` it continues with the payload, and on `.None` and
+// `.Err(x)` it returns them, at the first `?` or at a later one.
+enum ParseError: u8 { Empty = 0, BadDigit(u8) = 1 }
+
+fn half(v: u32) -> Option(u32) {
+    if v % 2 == 1 {
+        return .None;
+    }
+    .Some(v / 2)
+}
+
+fn quarter(v: u32) -> Option(u32) {
+    .Some(half(half(v)?)? + 1000)
+}
+
+fn or_zero(o: Option(u32)) -> u32 {
+    match o {
+        .Some(let v: u32) => v,
+        .None => 0,
+    }
+}
+
+fn digit(c: u8) -> Result(u32, ParseError) {
+    if c < b'0' || c > b'9' {
+        return .Err(.BadDigit(c));
+    }
+    .Ok((c - b'0') as u32)
+}
+
+fn two(a: u8, b: u8) -> Result(u32, ParseError) {
+    .Ok(digit(a)? * 10 + digit(b)?)
+}
+
+fn code(r: Result(u32, ParseError)) -> u32 {
+    match r {
+        .Ok(let v: u32) => v,
+        .Err(.BadDigit(let c: u8)) => 1000 + c as u32,
+        .Err(.Empty) => 2000,
+    }
+}
+
+const QUARTER: u32 = or_zero(quarter(12));
+
+comptime {
+    assert(QUARTER == 1003);
+    assert(or_zero(quarter(6)) == 0);
+    assert(or_zero(quarter(5)) == 0);
+    assert(code(two(b'4', b'2')) == 42);
+    assert(code(two(b'x', b'2')) == 1120);
+    assert(code(two(b'4', b'y')) == 1121);
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

@@ -849,7 +849,8 @@ impl Parser<'_> {
         })
     }
 
-    /// A primary expression followed by any indexing and field accesses.
+    /// A primary expression followed by any indexing, field accesses and
+    /// `?` (ADR 0046), which all bind as tightly.
     fn postfix(&mut self) -> PResult<Expr> {
         let mut expr = self.primary()?;
         loop {
@@ -865,6 +866,11 @@ impl Parser<'_> {
                 expr = Expr {
                     span: expr.span.to(field.span),
                     kind: ExprKind::Field(Box::new(expr), field),
+                };
+            } else if let Some(question) = self.eat(TokenKind::Question) {
+                expr = Expr {
+                    span: expr.span.to(question.span),
+                    kind: ExprKind::Try(Box::new(expr)),
                 };
             } else {
                 return Ok(expr);

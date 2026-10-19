@@ -1682,6 +1682,23 @@ impl Lowerer<'_> {
                 }
                 ExprKind::Return(value.as_ref().map(|e| self.boxed(e)))
             }
+            // It may return from the enclosing function, as `return` does
+            // (ADR 0046).
+            ast::ExprKind::Try(operand) => {
+                if self.in_comptime {
+                    self.diags.push(
+                        Diagnostic::error(
+                            "resolve::return-in-comptime",
+                            "`?` cannot leave code that runs at compile time",
+                        )
+                        .label(expr.span, "returns on a failure, with no function to return from")
+                        .help(
+                            "compile-time code gives its value as its last expression; take the value apart with a `match`, or call a function that uses `?` (ADR 0029, 0046)",
+                        ),
+                    );
+                }
+                ExprKind::Try(self.boxed(operand))
+            }
             ast::ExprKind::Comptime(inner) => {
                 // The enclosing function's variables and loops exist only at
                 // run time (ADR 0029).

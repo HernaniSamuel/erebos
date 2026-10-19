@@ -246,6 +246,9 @@ pub enum ExprKind {
     Deref(Box<Expr>),
     /// `base[index]`
     Index(Box<Expr>, Box<Expr>),
+    /// `operand?`: the value of an `Option` or a `Result`, or a return of
+    /// its failure (ADR 0046).
+    Try(Box<Expr>),
     /// `&raw const place` or `&raw mut place` (ADR 0021)
     AddrOf {
         mutable: bool,
