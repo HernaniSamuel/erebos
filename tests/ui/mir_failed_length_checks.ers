@@ -1,0 +1,24 @@
+// emit: mir
+// A function using a type that reaches a failed length, here only through a
+// pointer, is not built into MIR (ADR 0048), so the checks of values known
+// at compile time (ADR 0032) do not run on it: its division by zero and its
+// index out of bounds are not reported. The same errors in `control`, which
+// does not use the type, are, which shows that lowering ran.
+const N: usize = 1 / 0;
+
+struct Broken { x: [u8; N], y: u32 }
+
+fn uses_broken(p: *const Broken, t: [u8; 4]) -> u32 {
+    let d: u32 = 7 / 0;
+    let c: u8 = t[4];
+    d
+}
+
+fn control(t: [u8; 4]) -> u32 {
+    let d: u32 = 7 / 0;
+    let c: u8 = t[4];
+    d
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

@@ -1,0 +1,24 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/mir_failed_length_cycle.ers
+---
+--- errors ---
+ty::cycle
+
+  × the layout of `S` depends on its own value
+    ╭─[mir_failed_length_cycle.ers:11:8]
+  6 │ // in M6.
+  7 │ const N: usize = f(0 as *const S);
+    ·       ┬
+    ·       ╰── through the constant `N`
+  8 │ 
+  9 │ fn f(p: *const S) -> usize { 4 }
+ 10 │ 
+ 11 │ struct S { x: [u8; N] }
+    ·        ┬           ┬
+    ·        │           ╰── through this value
+    ·        ╰── needed while computing itself
+ 12 │ 
+    ╰────
+  help: break the cycle: a value cannot depend on itself (ADR 0028)

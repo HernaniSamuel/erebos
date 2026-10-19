@@ -1,0 +1,82 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_failed_length_values.ers
+---
+--- errors ---
+ty::division-by-zero
+
+  × division by zero
+    ╭─[typeck_failed_length_values.ers:10:22]
+  9 │ // and the array too large, each once.
+ 10 │ const N: usize = 1 / 0;
+    ·                      ┬
+    ·                      ╰── this divisor is zero
+ 11 │ 
+    ╰────
+  help: at run time this would call the panic function (ADR 0007)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_failed_length_values.ers:24:28]
+ 23 │ fn mismatch() -> u32 {
+ 24 │     let p: *const Broken = 0 as *const u8;
+    ·                            ───────┬──────
+    ·                                   ╰── expected `*const Broken`, found `*const u8`
+ 25 │     (*p).z
+    ╰────
+ty::unknown-field
+
+  × `Broken` has no field `z`
+    ╭─[typeck_failed_length_values.ers:25:10]
+ 24 │     let p: *const Broken = 0 as *const u8;
+ 25 │     (*p).z
+    ·          ┬
+    ·          ╰── unknown field
+ 26 │ }
+    ╰────
+  help: its fields are `x`, `y`
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_failed_length_values.ers:28:29]
+ 27 │ 
+ 28 │ struct BoolLength { x: [u8; true], y: u32 }
+    ·                             ──┬─
+    ·                               ╰── expected `usize`, found `bool`
+ 29 │ const M: u32 = 4;
+    ╰────
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_failed_length_values.ers:30:28]
+ 29 │ const M: u32 = 4;
+ 30 │ struct U32Length { x: [u8; M], y: u32 }
+    ·                            ┬
+    ·                            ╰── expected `usize`, found `u32`
+ 31 │ enum E: u8 { A(*const BoolLength) = 0, B(*const U32Length) = 1, C = 2 }
+    ╰────
+  help: integer types never convert implicitly; use `as usize` (ADR 0008)
+ty::aligned-in-packed
+
+  × a packed struct cannot contain `Holder`
+    ╭─[typeck_failed_length_values.ers:45:12]
+ 44 │ #[packed]
+ 45 │ struct P { h: Holder }
+    ·        ┬   ┬
+    ·        │   ╰── asks for an alignment through `#[align]`
+    ·        ╰── packed: alignment 1
+ 46 │ struct Big { x: [Broken; 0x4000_0000] }
+    ╰────
+  help: the alignment it asks for could not be kept (ADR 0022)
+ty::too-large
+
+  × `[Broken; 1073741824]` is too large
+    ╭─[typeck_failed_length_values.ers:46:14]
+ 45 │ struct P { h: Holder }
+ 46 │ struct Big { x: [Broken; 0x4000_0000] }
+    ·              ┬
+    ·              ╰── this field does not fit in the address space
+ 47 │ 
+    ╰────
+  help: objects are limited to 2147483647 bytes on this target

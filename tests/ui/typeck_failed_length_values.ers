@@ -1,0 +1,49 @@
+// emit: typeck
+// A type that reaches a failed length is erroneous (ADR 0048): `size_of`,
+// `align_of` and `offset_of` of it have no value, even through a pointer,
+// and what depends on them is not evaluated, so neither the static's length
+// nor any `assert` below reports anything, although each would otherwise.
+// A length that fails to type check does the same. Type errors in code
+// using such a type are still reported, and so are the diagnostics of a
+// type containing it that hold whatever the length: the `#[packed]` struct
+// and the array too large, each once.
+const N: usize = 1 / 0;
+
+struct Broken { x: [u8; N], y: u32 }
+
+const S: usize = size_of(Broken);
+static BUF: [u8; S] = [0; 5];
+comptime { assert(size_of(Broken) == 5); }
+
+struct WithPointer { a: u8, p: *const Broken }
+comptime { assert(size_of(*const Broken) == 0); }
+comptime { assert(align_of(Broken) == 0); }
+comptime { assert(offset_of(WithPointer, p) == 0); }
+
+fn mismatch() -> u32 {
+    let p: *const Broken = 0 as *const u8;
+    (*p).z
+}
+
+struct BoolLength { x: [u8; true], y: u32 }
+const M: u32 = 4;
+struct U32Length { x: [u8; M], y: u32 }
+enum E: u8 { A(*const BoolLength) = 0, B(*const U32Length) = 1, C = 2 }
+comptime { assert(size_of(BoolLength) == 0); }
+comptime { assert(size_of(U32Length) == 0); }
+
+fn not_covered(e: E) -> u32 {
+    match e {
+        E::C => 2,
+    }
+}
+
+#[align(8)]
+struct A8 { x: u8 }
+struct Holder { a: A8, b: Broken }
+#[packed]
+struct P { h: Holder }
+struct Big { x: [Broken; 0x4000_0000] }
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

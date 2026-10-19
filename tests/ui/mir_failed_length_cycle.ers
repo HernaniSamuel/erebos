@@ -1,0 +1,14 @@
+// emit: mir
+// Pins a false cycle (ADR 0048, Consequences): whether code mentioning
+// `*const S` is compiled depends on the lengths of `S`, so a length of `S`
+// computed by a function that only takes a `*const S` is a `ty::cycle`,
+// although the layout of `S` does not depend on that function. Revisited
+// in M6.
+const N: usize = f(0 as *const S);
+
+fn f(p: *const S) -> usize { 4 }
+
+struct S { x: [u8; N] }
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

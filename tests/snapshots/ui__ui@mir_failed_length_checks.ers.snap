@@ -1,0 +1,39 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/mir_failed_length_checks.ers
+---
+--- errors ---
+ty::division-by-zero
+
+  × division by zero
+   ╭─[mir_failed_length_checks.ers:7:22]
+ 6 │ // does not use the type, are, which shows that lowering ran.
+ 7 │ const N: usize = 1 / 0;
+   ·                      ┬
+   ·                      ╰── this divisor is zero
+ 8 │ 
+   ╰────
+  help: at run time this would call the panic function (ADR 0007)
+ty::division-by-zero
+
+  × division by zero
+    ╭─[mir_failed_length_checks.ers:18:22]
+ 17 │ fn control(t: [u8; 4]) -> u32 {
+ 18 │     let d: u32 = 7 / 0;
+    ·                      ┬
+    ·                      ╰── this divisor is zero
+ 19 │     let c: u8 = t[4];
+    ╰────
+  help: at run time this would call the panic function (ADR 0007)
+ty::index-out-of-bounds
+
+  × index out of bounds
+    ╭─[mir_failed_length_checks.ers:19:19]
+ 18 │     let d: u32 = 7 / 0;
+ 19 │     let c: u8 = t[4];
+    ·                   ┬
+    ·                   ╰── the length is 4 but the index is 4
+ 20 │     d
+    ╰────
+  help: at run time this would call the panic function (ADR 0021)
