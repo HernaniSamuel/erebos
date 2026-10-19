@@ -926,6 +926,13 @@ every variant is not dead while values that are no variant remain, and
 neither is `Msg::SetMode(_)` after `Msg::SetMode(Mode::Off)` and
 `Msg::SetMode(Mode::Run)`.
 
+Both checks examine once the values that the arms do not tell apart, so
+or-patterns at many positions cost what they write. Deciding
+exhaustiveness can still take time exponential in the patterns in the
+worst case: arms over many `bool` positions can state any boolean
+formula, and asking whether they cover every value asks whether it
+always holds. No limit is imposed (ADR 0043).
+
 **When the checks run.** Exhaustiveness and dead arms are part of type
 checking: their errors appear with `--emit=typeck`, and a function with
 one of them does not type check, so it is not lowered to MIR and the
