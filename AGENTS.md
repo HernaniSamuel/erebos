@@ -45,6 +45,11 @@ become language constructs. The compiler is written in Rust and uses LLVM via
   (see `CONTRIBUTING.md`). Only commit when asked.
 - When you make a design decision that is not covered by an ADR, write it
   down as a `Proposed` ADR and flag it to the user.
+- Record every other choice you make that the plan, an ADR or the
+  existing code does not dictate (where code lives, what a diagnostic
+  says and where, why one approach over another, which tests): under
+  `Decisions` in the plan step, or in the commit body when there is no
+  plan. Plans are versioned so that this record is kept.
 
 ## Project layout
 
@@ -52,6 +57,7 @@ become language constructs. The compiler is written in Rust and uses LLVM via
 docs/adr/       Architecture Decision Records (binding)
 docs/roadmap.md Milestones and pending decisions
 docs/reference.md The language as implemented (keep in sync with the compiler)
+.claude/plans/  Implementation plan per roadmap step, with the decisions taken while building it
 src/            Compiler (single crate; modules per layer, see ADR 0003)
 rt/             Runtime support functions in Erebos, built into every program (ADR 0020)
 tests/ui/       Snapshot tests per compiler stage

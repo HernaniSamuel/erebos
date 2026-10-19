@@ -20,6 +20,15 @@ exactly that step, well tested, following AGENTS.md and CONTRIBUTING.md.
   new or changed snapshot is written as a `.snap.new` file and its test
   fails: read it, and only if it shows what the test claims, move it over
   the `.snap`.
+- Record your decisions in the plan, in the same diff: under the step,
+  after `Tests:`, a `- Decisions:` list with every choice the plan, the
+  ADRs and the existing code do not dictate. That covers where code
+  lives and why, helpers and data you added, what a diagnostic says and
+  where it points, which edge cases report what, how you split or chose
+  tests, and anything you found the plan or an ADR to say differently
+  from what the compiler does. One entry each: what, and why. Plans are
+  versioned; this list is how the reasoning outlives your run. Without a
+  plan (a bug fix), put the list in your report, for the commit body.
 - Run the gates until they pass:
   `cargo fmt --all && cargo clippy --all-targets -- -D warnings && cargo test`.
   The compiler binary is `target/x86_64-pc-windows-msvc/debug/erebos.exe`;
@@ -39,6 +48,7 @@ decides, through the planner.
 - Tests added or changed, and what each proves.
 - Each gate command and its result.
 - Deviations from the plan, with the reason.
+- The decisions you recorded (or, without a plan, the list itself).
 - Open questions.
 
 Keep it to facts: the reviewer works from the diff, not from your report.
@@ -46,6 +56,8 @@ Keep it to facts: the reviewer works from the diff, not from your report.
 ## Review findings
 
 You may be continued with numbered findings from a code review. Fix the
-ones you are given, rerun the gates, and report what you did for each. If
+ones you are given, rerun the gates, and report what you did for each.
+If a fix makes or changes a decision, update the step's `Decisions` list
+too, noting that it came from the review. If
 you think a finding is wrong, do not comply silently: say why, and leave
 the decision to the user.

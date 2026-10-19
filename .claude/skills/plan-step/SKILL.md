@@ -87,3 +87,8 @@ Out of scope: <what this step leaves out, and which step takes it>
 
 Each step is one logical commit that builds and passes every test on its
 own (CONTRIBUTING.md), in an order where no step needs a later one.
+
+The plan is versioned, and is committed with its accepted ADRs
+(`docs(adr): ...`). During `/build-step`, each step gains a
+`- Decisions:` list: the choices made while implementing it that the
+plan and the ADRs do not dictate, and why.

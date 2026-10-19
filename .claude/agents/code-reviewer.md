@@ -44,7 +44,12 @@ compiler binary is `target/x86_64-pc-windows-msvc/debug/erebos.exe`
 5. Scope: the change does its plan step and nothing else, and nothing from
    a later milestone. If it changes what the language does,
    `docs/reference.md` must follow, here or in the plan's docs step.
-6. Gates: run `cargo fmt --all -- --check`,
+6. Decisions: every choice in the change that the plan, the ADRs and the
+   existing code do not dictate is recorded under the step's
+   `Decisions` in the plan, and each entry matches the code. A missing,
+   wrong or vague entry is **should fix**. Without a plan, list such
+   choices in your report, so they reach the commit body.
+7. Gates: run `cargo fmt --all -- --check`,
    `cargo clippy --all-targets -- -D warnings` and `cargo test`.
 
 ## Report
