@@ -1,0 +1,23 @@
+// emit: ast
+// `Option(u32)::None` parses as a call followed by `::`, which nothing
+// takes: `parser::unexpected-token`, with a help showing `.None` when the
+// name before the parentheses is `Option` or `Result` (ADR 0045), and
+// without it for any other name. In a pattern, the same path fails
+// earlier, with the parser's usual message.
+fn a() -> Option(u32) {
+    Option(u32)::None
+}
+
+fn b(x: u32) {
+    f(Result(u32, x)::Err(1));
+}
+
+fn c() {
+    let y: u8 = other(u32)::None;
+}
+
+fn d(x: Option(u8)) {
+    match x {
+        Option(u8)::None => {}
+    }
+}

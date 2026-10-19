@@ -86,6 +86,7 @@ pub fn of(ty: Ty, composite: &mut impl FnMut(Composite) -> Option<Layout>) -> Op
             }
         }
         Ty::Struct(s) => composite(Composite::Struct(s.id))?,
+        Ty::Applied(_) => unreachable!("types are normalized before they are laid out"),
     };
     (layout.size <= MAX_SIZE).then_some(layout)
 }

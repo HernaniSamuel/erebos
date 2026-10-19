@@ -1,0 +1,41 @@
+// emit: hir
+// `Option` takes one type argument and `Result` two, written in
+// parentheses; no other type takes any, nor is written with parentheses
+// (`resolve::type-argument-count`).
+// Both are names of built-in types, which no item has, as `bool` and the
+// integer types are not (`resolve::duplicate-type`, besides
+// `resolve::duplicate-item` for a name given twice). Their variants have
+// no path: `Option::None` is `resolve::not-an-enum`, with a help showing
+// `.None`. An unknown type as an argument is reported once (ADR 0045).
+struct Point { x: u8 }
+
+struct Counts {
+    a: Option,
+    b: Option(),
+    c: Option(u8, u8),
+    d: Result(u32),
+    e: u32(u8),
+    f: Point(u8),
+    h: u32(),
+    i: Point(),
+    g: Option(Unknown),
+}
+
+struct Option {}
+enum Result: u8 { A = 0 }
+fn Option() {}
+const Result: u32 = 0;
+fn usize() {}
+const u8: u16 = 1;
+static bool: u8 = 0;
+
+fn paths(x: u8) {
+    let a: u8 = Option::None;
+    match x {
+        Result::Ok => {}
+        _ => {}
+    }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

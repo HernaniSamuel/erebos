@@ -1,0 +1,51 @@
+---
+source: tests/ui.rs
+assertion_line: 40
+expression: output
+input_file: tests/ui/parse_option_result_errors.ers
+---
+--- errors ---
+parser::unexpected-token
+
+  × expected `;`, found `::`
+   ╭─[parse_option_result_errors.ers:8:16]
+ 7 │ fn a() -> Option(u32) {
+ 8 │     Option(u32)::None
+   ·                ─┬
+   ·                 ╰── expected `;`
+ 9 │ }
+   ╰────
+  help: the variants of `Option` have no path: write `.None` where an `Option(T)` is expected, and
+        that type gives it its enum (ADR 0044, 0045)
+parser::unexpected-token
+
+  × expected `)`, found `::`
+    ╭─[parse_option_result_errors.ers:12:21]
+ 11 │ fn b(x: u32) {
+ 12 │     f(Result(u32, x)::Err(1));
+    ·                     ─┬
+    ·                      ╰── expected `)`
+ 13 │ }
+    ╰────
+  help: the variants of `Result` have no path: write `.Err` where a `Result(T, E)` is expected,
+        and that type gives it its enum (ADR 0044, 0045)
+parser::unexpected-token
+
+  × expected `;`, found `::`
+    ╭─[parse_option_result_errors.ers:16:27]
+ 15 │ fn c() {
+ 16 │     let y: u8 = other(u32)::None;
+    ·                           ─┬
+    ·                            ╰── expected `;`
+ 17 │ }
+    ╰────
+parser::unexpected-token
+
+  × expected `=>`, found `(`
+    ╭─[parse_option_result_errors.ers:21:15]
+ 20 │     match x {
+ 21 │         Option(u8)::None => {}
+    ·               ┬
+    ·               ╰── expected `=>`
+ 22 │     }
+    ╰────

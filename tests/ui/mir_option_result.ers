@@ -1,0 +1,25 @@
+// emit: mir
+// An `Option(u32)` is an enum with payloads (ADR 0045): building `.Some`
+// writes its payload value and its tag, 1, and a `match` switches on the
+// tag. The enum is listed after the declared ones.
+enum Mode: u8 { Off = 0, Run = 1 }
+
+fn checked_mul10(v: u32) -> Option(u32) {
+    if v > 429_496_729 {
+        return .None;
+    }
+    .Some(v * 10)
+}
+
+fn or_zero(o: Option(u32)) -> u32 {
+    match o {
+        .Some(let v: u32) => v,
+        .None => 0,
+    }
+}
+
+entry fn main() -> ! {
+    let n: u32 = or_zero(checked_mul10(7));
+    loop {}
+}
+panic fn on_panic() -> ! { loop {} }

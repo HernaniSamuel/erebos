@@ -1,0 +1,56 @@
+// emit: typeck
+// What `Option(T)` and `Result(T, E)` refuse (ADR 0045). A type argument
+// is a payload type: `!` is `ty::never-in-memory` and `[T]` is
+// `ty::unsized`, each reported once, even where nothing uses the type. A
+// struct holding itself through one has infinite size, labelled at the
+// first declared type of the cycle; one too large is reported where it
+// is written, at each place, unless an argument has no layout, which was
+// reported. They are aggregates: no `==`, no `as`, no fields, no whole
+// volatile access. Two of them differ when their arguments do, and the
+// variants a `match` misses, or a wrong variant, are shown as `.V`.
+enum Mode: u8 { Off = 0, Run = 1 }
+
+fn never_and_unsized(a: Option(!), b: *const Result(u32, !), c: Option([u8])) {}
+
+struct List { next: Option(*const List) }
+struct Node { next: Option(Node) }
+struct A { x: [u8; size_of(Option(Tree))] }
+struct Tree { left: Option(Tree) }
+fn beside(n: Option(Node)) {}
+
+struct Huge { a: Option([u8; 0x7FFF_FFFF]), b: *const Option([u8; 0x7FFF_FFFF]) }
+struct Big { bytes: [u8; 0x7FFF_FFFF], more: u8 }
+fn big(b: *const Option(Big)) {}
+
+fn aggregates(o: Option(u8), p: Option(u8), v: *const volatile Option(u8)) {
+    let same: bool = o == p;
+    let n: u8 = o as u8;
+    let f: u8 = o.f;
+    let at: usize = offset_of(Option(u8), f);
+    let r: Option(u8) = *v;
+}
+
+fn arguments(x: Option(u32)) {
+    let y: Option(u16) = x;
+    let z: Option(u8) = .Some;
+    let w: Result(u8, Mode) = .Nope(1);
+}
+
+fn witnesses(o: Option(u8), r: Result(u8, Mode), m: Option(Mode)) {
+    match o {
+        .Some(_) => {}
+    }
+    match o {
+        .None => {}
+    }
+    match r {
+        .Ok(_) => {}
+    }
+    match m {
+        .None => {}
+        .Some(.Off) => {}
+    }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

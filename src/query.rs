@@ -9,7 +9,8 @@ use std::rc::Rc;
 use crate::diag::{Diagnostic, Diagnostics};
 use crate::eval::{self, ConstValue, Origin};
 use crate::hir::{
-    self, ArrayLen, Comptime, ConstId, EnumId, ExprId, ExprKind, FnId, Hir, StaticId, StructId,
+    self, ArrayLen, BuiltinEnum, Comptime, ConstId, EnumDef, EnumId, ExprId, ExprKind, FnId, Hir,
+    PatternKind, StaticId, StructId, VariantValue,
 };
 use crate::layout::{self, Composite, EnumLayout, Layout, MAX_ALIGN, MAX_SIZE, StructLayout};
 use crate::mir::{self, BodyId, ConstData, DataId, EnumRef, Field, Mir, Ptr, StaticRef, StructRef};
@@ -44,30 +45,30 @@ enum Item {
 }
 
 /// How diagnostics name a body.
-fn describe(hir: &Hir, f: &hir::Fn) -> String {
+fn describe(q: &Queries, f: &hir::Fn) -> String {
+    let hir = q.hir;
     match f.comptime {
         Some(Comptime::Const(id)) => format!("the constant `{}`", hir.const_(id).name),
         Some(Comptime::Static(id)) => format!("the static `{}`", hir.static_(id).name),
         Some(Comptime::Block) => "this `comptime` block".to_owned(),
         Some(Comptime::Value) => "this value".to_owned(),
-        Some(Comptime::Discriminant(id, index)) => variant_name(hir, id, index),
+        Some(Comptime::Discriminant(id, index)) => variant_name(q.enum_def(id), index),
         None => format!("the function `{}`", f.name),
     }
 }
 
-/// How diagnostics name a variant: "the variant `Mode::Run`".
-fn variant_name(hir: &Hir, id: EnumId, index: u32) -> String {
-    let def = hir.enum_(id);
-    format!(
-        "the variant `{}::{}`",
-        def.name, def.variants[index as usize].name
-    )
+/// How diagnostics name a variant whose value is computed: "the variant
+/// `Mode::Run`".
+fn variant_name(def: &EnumDef, index: u32) -> String {
+    format!("the variant `{}`", def.variant_path(index as usize))
 }
 
 /// An item being computed, as cycles report it.
 struct InProgress {
     item: Item,
-    span: Span,
+    /// `None` for the layout of an `Option(T)` or `Result(T, E)`, declared
+    /// nowhere (ADR 0045).
+    span: Option<Span>,
     what: String,
     /// A cycle through it was reported already: while it is computed, it
     /// may be asked for again, by the body of a constant a pattern uses
@@ -94,6 +95,13 @@ pub struct Queries<'h> {
     layouts: Vec<State<Option<StructLayout>>>,
     /// The layout of each enum with payloads, likewise (ADR 0039).
     enum_layouts: Vec<State<Option<EnumLayout>>>,
+    /// Each `Option(T)` and `Result(T, E)` made so far, numbered after the
+    /// declared enums, with its type arguments (ADR 0045).
+    instances: Vec<(BuiltinEnum, Vec<hir::Ty>, &'static EnumDef)>,
+    /// Those of them too large for the target while their arguments have
+    /// layouts: having no declaration, they are reported where they are
+    /// written (ADR 0045).
+    too_large_instances: Vec<EnumId>,
 
     /// The MIR type of each struct.
     mir_structs: Vec<Option<StructRef>>,
@@ -142,6 +150,8 @@ impl<'h> Queries<'h> {
             checked: hir.fns.iter().map(|_| State::NotStarted).collect(),
             layouts: hir.structs.iter().map(|_| State::NotStarted).collect(),
             enum_layouts: hir.enums.iter().map(|_| State::NotStarted).collect(),
+            instances: Vec::new(),
+            too_large_instances: Vec::new(),
 
             mir_structs: vec![None; hir.structs.len()],
             mir_enums: vec![None; hir.enums.len()],
@@ -180,6 +190,7 @@ impl<'h> Queries<'h> {
                 self.enum_layout(EnumId(id as u32));
             }
         }
+        self.report_too_large_applications();
         for id in 0..hir.fns.len() {
             self.typeck_fn(FnId(id as u32));
         }
@@ -230,7 +241,7 @@ impl<'h> Queries<'h> {
         }
         let hir = self.hir;
         let f = hir.fn_(id);
-        if !self.start(Item::Check(id), f.name_span, describe(hir, f)) {
+        if !self.start(Item::Check(id), f.name_span, describe(self, f)) {
             return false;
         }
         self.checked[id.0 as usize] = State::InProgress;
@@ -253,6 +264,11 @@ impl<'h> Queries<'h> {
 
     /// Marks `item` in progress, or reports a cycle if it already is.
     fn start(&mut self, item: Item, span: Span, what: String) -> bool {
+        self.start_at(item, Some(span), what)
+    }
+
+    /// `start`, for an item that may have no span.
+    fn start_at(&mut self, item: Item, span: Option<Span>, what: String) -> bool {
         let Some(at) = self.in_progress.iter().position(|p| p.item == item) else {
             self.in_progress.push(InProgress {
                 item,
@@ -280,23 +296,28 @@ impl<'h> Queries<'h> {
         if std::mem::replace(&mut self.in_progress[at].cycle_reported, true) {
             return false;
         }
-        let InProgress {
-            span: first,
-            what: first_what,
-            ..
-        } = &self.in_progress[at];
+        let first_what = &self.in_progress[at].what;
         let mut diag = Diagnostic::error(
             "ty::cycle",
             format!("{first_what} depends on its own value"),
-        )
-        .label(*first, "needed while computing itself");
-        // Checking a body and computing its value share a span.
-        let mut seen = vec![*first];
-        for InProgress { span, what, .. } in &self.in_progress[at + 1..] {
-            if span.file == first.file && !seen.contains(span) {
-                seen.push(*span);
-                diag = diag.label(*span, format!("through {what}"));
+        );
+        // Checking a body and computing its value share a span. An item
+        // without one, an `Option(T)` or `Result(T, E)`, is shown in the
+        // message or in the label of a later one.
+        let mut seen: Vec<Span> = Vec::new();
+        for (i, InProgress { span, what, .. }) in self.in_progress[at..].iter().enumerate() {
+            let Some(span) = *span else {
+                continue;
+            };
+            if seen.first().is_some_and(|first| first.file != span.file) || seen.contains(&span) {
+                continue;
             }
+            seen.push(span);
+            diag = if seen.len() == 1 && i == 0 {
+                diag.label(span, "needed while computing itself")
+            } else {
+                diag.label(span, format!("through {what}"))
+            };
         }
         self.diags
             .push(diag.help("break the cycle: a value cannot depend on itself (ADR 0028)"));
@@ -336,23 +357,26 @@ impl<'h> Queries<'h> {
     /// The value of a variant (ADR 0035), computed once, as the bits of the
     /// enum's integer type.
     pub fn discriminant(&mut self, id: EnumId, index: u32) -> Option<u64> {
+        let def = self.enum_def(id);
+        let variant = &def.variants[index as usize];
+        let body = match variant.value {
+            VariantValue::Known(value) => return Some(value),
+            VariantValue::Comptime(body) => body,
+        };
         let slot = (id.0 as usize, index as usize);
         if let State::Done(value) = self.discriminants[slot.0][slot.1] {
             return value;
         }
-        let hir = self.hir;
-        let def = hir.enum_(id);
-        let variant = &def.variants[slot.1];
-        let what = variant_name(hir, id, index);
-        if !self.start(Item::Discriminant(id, index), variant.span, what.clone()) {
+        let span = variant
+            .span
+            .expect("a variant computed at compile time is declared");
+        let what = variant_name(def, index);
+        if !self.start(Item::Discriminant(id, index), span, what.clone()) {
             return None;
         }
         self.discriminants[slot.0][slot.1] = State::InProgress;
-        let value = self.mir_body(variant.value).and_then(|body| {
-            let origin = Origin {
-                what,
-                span: variant.span,
-            };
+        let value = self.mir_body(body).and_then(|body| {
+            let origin = Origin { what, span };
             eval::evaluate(self, body, origin)
         });
         self.finish(Item::Discriminant(id, index));
@@ -366,11 +390,14 @@ impl<'h> Queries<'h> {
     /// was computed and none repeats: an enum with a value that failed or
     /// repeats was reported, and uses of it report nothing more.
     pub fn enum_ok(&mut self, id: EnumId) -> bool {
+        let def = self.enum_def(id);
+        // Its values are known, and differ (ADR 0045).
+        if !def.is_declared() {
+            return true;
+        }
         if let Some(ok) = self.enums_ok[id.0 as usize] {
             return ok;
         }
-        let hir = self.hir;
-        let def = hir.enum_(id);
         let mut ok = true;
         let mut seen: Vec<(u64, usize)> = Vec::new();
         for (index, variant) in def.variants.iter().enumerate() {
@@ -383,6 +410,7 @@ impl<'h> Queries<'h> {
                     ok = false;
                     let first = &def.variants[first];
                     let shown = def.ty.int.display_bits(value);
+                    let declared = "a declared enum's variants have spans";
                     self.diags.push(
                         Diagnostic::error(
                             "ty::duplicate-discriminant",
@@ -391,8 +419,8 @@ impl<'h> Queries<'h> {
                                 def.name, variant.name, first.name
                             ),
                         )
-                        .label(variant.span, format!("is {shown}"))
-                        .label(first.span, format!("is {shown} too"))
+                        .label(variant.span.expect(declared), format!("is {shown}"))
+                        .label(first.span.expect(declared), format!("is {shown} too"))
                         .help("each variant names a value of its own, so that a `match` can tell them apart (ADR 0035)"),
                     );
                 }
@@ -555,8 +583,9 @@ impl<'h> Queries<'h> {
         value
     }
 
-    /// `ty` with every array length known, or `{error}` if one failed
-    /// (reported).
+    /// `ty` with every array length known, and every `Option(T)` and
+    /// `Result(T, E)` the enum it is for its arguments, or `{error}` if a
+    /// length failed (reported).
     pub fn normalize(&mut self, ty: hir::Ty) -> hir::Ty {
         if ty.is_normal() {
             return ty;
@@ -577,7 +606,158 @@ impl<'h> Queries<'h> {
                 hir::Ty::Error => hir::Ty::Error,
                 elem => hir::Ty::slice(elem),
             },
+            hir::Ty::Applied(applied) => {
+                let args: Vec<hir::Ty> = applied
+                    .args
+                    .iter()
+                    .map(|&arg| self.normalize(arg))
+                    .collect();
+                if args.contains(&hir::Ty::Error) {
+                    return hir::Ty::Error;
+                }
+                hir::Ty::Enum(self.instance(applied.builtin, args))
+            }
             ty => ty,
+        }
+    }
+
+    /// The enum `builtin` is with the normalized type arguments `args`,
+    /// made the first time they are given (ADR 0045): two are one type
+    /// when their arguments are.
+    fn instance(&mut self, builtin: BuiltinEnum, args: Vec<hir::Ty>) -> hir::EnumTy {
+        if let Some((_, _, def)) = self
+            .instances
+            .iter()
+            .find(|(made, made_args, _)| *made == builtin && *made_args == args)
+        {
+            return def.ty;
+        }
+        let id = EnumId((self.hir.enums.len() + self.instances.len()) as u32);
+        let def: &'static EnumDef = Box::leak(Box::new(builtin.def(id, &args)));
+        self.instances.push((builtin, args, def));
+        self.enum_layouts.push(State::NotStarted);
+        self.mir_enums.push(None);
+        def.ty
+    }
+
+    /// The definition of the enum `id`: a declared one, or an `Option(T)`
+    /// or `Result(T, E)` made by `normalize` (ADR 0045).
+    pub fn enum_def(&self, id: EnumId) -> &'h EnumDef {
+        let hir = self.hir;
+        match (id.0 as usize).checked_sub(hir.enums.len()) {
+            Some(index) => self.instances[index].2,
+            None => &hir.enums[id.0 as usize],
+        }
+    }
+
+    /// The enums whose values a `match` on a value of type `scrutinee`
+    /// with these arms needs, each once, in the order first needed
+    /// (ADR 0038, 0040): the type of each position at which some
+    /// alternative is a variant or a constant, whatever its own type, and
+    /// the scrutinee's for a `match` without arms. The positions inside a
+    /// variant pattern have the types its declaration gives, those inside
+    /// a `.V` pattern the types its position's enum gives them (ADR 0044),
+    /// normalized, so that an `Option(T)` there is the enum it is
+    /// (ADR 0045).
+    pub fn enums_needed(&mut self, scrutinee: hir::Ty, arms: &[hir::Arm]) -> Vec<EnumId> {
+        fn walk(
+            q: &mut Queries,
+            pattern: &hir::Pattern,
+            ty: Option<hir::Ty>,
+            out: &mut Vec<EnumId>,
+        ) {
+            let need = |out: &mut Vec<EnumId>| {
+                if let Some(hir::Ty::Enum(e)) = ty
+                    && !out.contains(&e.id)
+                {
+                    out.push(e.id);
+                }
+            };
+            match &pattern.kind {
+                PatternKind::Or(alternatives) => {
+                    for alternative in alternatives {
+                        walk(q, alternative, ty, out);
+                    }
+                }
+                PatternKind::Const(_) => need(out),
+                PatternKind::Variant(id, index, subs) => {
+                    need(out);
+                    let payload = &q.enum_def(*id).variants[*index as usize].payload;
+                    payload_positions(q, Some(payload), subs.as_deref(), out);
+                }
+                // The enum of its position, whose variant `name`, if it
+                // has one, gives its payload positions their types; without
+                // it they have none, and need nothing (ADR 0044).
+                PatternKind::ContextVariant(_, name, _, subs) => {
+                    need(out);
+                    let payload = match ty {
+                        Some(hir::Ty::Enum(e)) => q
+                            .enum_def(e.id)
+                            .variants
+                            .iter()
+                            .find(|variant| variant.name == *name)
+                            .map(|variant| variant.payload.as_slice()),
+                        _ => None,
+                    };
+                    payload_positions(q, payload, subs.as_deref(), out);
+                }
+                _ => {}
+            }
+        }
+        /// The patterns `subs` at the positions of the values `payload`
+        /// types, if any.
+        fn payload_positions(
+            q: &mut Queries,
+            payload: Option<&[hir::PayloadDef]>,
+            subs: Option<&[hir::Pattern]>,
+            out: &mut Vec<EnumId>,
+        ) {
+            for (i, sub) in subs.unwrap_or_default().iter().enumerate() {
+                let value = payload.and_then(|payload| payload.get(i));
+                let sub_ty = value.map(|value| q.normalize(value.ty));
+                walk(q, sub, sub_ty, out);
+            }
+        }
+        let mut out = Vec::new();
+        if arms.is_empty()
+            && let hir::Ty::Enum(e) = scrutinee
+        {
+            out.push(e.id);
+        }
+        for arm in arms {
+            walk(self, &arm.pattern, Some(scrutinee), &mut out);
+        }
+        out
+    }
+
+    /// The `Option(T)` and `Result(T, E)` made so far, by their names, as
+    /// dumps list them: the order they are made in follows the schedule
+    /// (ADR 0028, 0045).
+    pub fn instances_by_name(&self) -> Vec<EnumId> {
+        let mut instances: Vec<&EnumDef> = self.instances.iter().map(|(_, _, def)| *def).collect();
+        instances.sort_by(|a, b| a.name.cmp(&b.name));
+        instances.into_iter().map(|def| def.ty.id).collect()
+    }
+
+    /// Reports each `Option(T)` and `Result(T, E)` written that is too
+    /// large for the target while its arguments have layouts, where it is
+    /// written: it has no declaration (ADR 0045). One whose argument has no
+    /// layout reports nothing more, that argument having been reported.
+    fn report_too_large_applications(&mut self) {
+        let hir = self.hir;
+        for &(span, ty) in &hir.applications {
+            let hir::Ty::Enum(e) = self.normalize(ty) else {
+                continue;
+            };
+            if self.enum_layout(e.id).is_none() && self.too_large_instances.contains(&e.id) {
+                self.diags.push(
+                    Diagnostic::error("ty::too-large", format!("`{}` is too large", e.name))
+                        .label(span, "does not fit in the address space")
+                        .help(format!(
+                            "objects are limited to {MAX_SIZE} bytes on this target; an enum is as large as its largest variant, with its tag, rounded up to its alignment (ADR 0039, 0045)"
+                        )),
+                );
+            }
         }
     }
 
@@ -724,21 +904,24 @@ impl<'h> Queries<'h> {
 
     /// Lays out an enum with payloads (ADR 0039), each variant as a struct
     /// of its tag and payload values, reporting payload types too large and
-    /// enums that contain themselves or are too large.
+    /// enums that contain themselves or are too large. An `Option(T)` or
+    /// `Result(T, E)` too large while its arguments have layouts is
+    /// recorded instead, to be reported where it is written (ADR 0045).
     pub fn enum_layout(&mut self, id: EnumId) -> Option<EnumLayout> {
         if let State::Done(layout) = &self.enum_layouts[id.0 as usize] {
             return layout.clone();
         }
-        let hir = self.hir;
-        let def = hir.enum_(id);
+        let def = self.enum_def(id);
         let what = format!("the layout of `{}`", def.name);
-        if !self.start(Item::EnumLayout(id), def.name_span, what) {
+        if !self.start_at(Item::EnumLayout(id), def.name_span, what) {
             return None;
         }
         self.enum_layouts[id.0 as usize] = State::InProgress;
 
         let mut variants = Vec::with_capacity(def.variants.len());
         let mut complete = true;
+        // A payload value without a layout of its own, reported.
+        let mut inner_failed_any = false;
         let mut over_aligned = false;
         for variant in &def.variants {
             let mut payload = Vec::with_capacity(variant.payload.len());
@@ -753,13 +936,11 @@ impl<'h> Queries<'h> {
                 let Some(value_layout) = value_layout else {
                     // A type inside without a layout was reported; otherwise
                     // the payload value alone is too large.
-                    if !inner_failed {
+                    inner_failed_any |= inner_failed;
+                    if !inner_failed && let Some(span) = value.span {
                         self.diags.push(
                             Diagnostic::error("ty::too-large", format!("`{ty}` is too large"))
-                                .label(
-                                    value.span,
-                                    "this payload value does not fit in the address space",
-                                )
+                                .label(span, "this payload value does not fit in the address space")
                                 .help(format!(
                                     "objects are limited to {MAX_SIZE} bytes on this target"
                                 )),
@@ -780,16 +961,21 @@ impl<'h> Queries<'h> {
         let laid_out = layout::enum_layout(tag, &variants);
 
         self.finish(Item::EnumLayout(id));
-        let layout = match (complete, laid_out) {
-            (true, Some((layout, offsets))) => Some(EnumLayout {
+        let layout = match (complete, laid_out, def.name_span) {
+            (true, Some((layout, offsets)), _) => Some(EnumLayout {
                 layout,
                 offsets,
                 over_aligned,
             }),
-            (true, None) => {
+            // Too large on its own: its arguments have layouts (ADR 0045).
+            (_, _, None) if !inner_failed_any => {
+                self.too_large_instances.push(id);
+                None
+            }
+            (true, None, Some(name_span)) => {
                 self.diags.push(
                     Diagnostic::error("ty::too-large", format!("`{}` is too large", def.name))
-                        .label(def.name_span, "does not fit in the address space")
+                        .label(name_span, "does not fit in the address space")
                         .help(format!(
                             "objects are limited to {MAX_SIZE} bytes on this target; an enum is as large as its largest variant, with its tag, rounded up to its alignment (ADR 0039)"
                         )),
@@ -798,7 +984,7 @@ impl<'h> Queries<'h> {
             }
             // A payload value without a layout was reported where it was
             // found.
-            (false, _) => None,
+            _ => None,
         };
         self.enum_layouts[id.0 as usize] = State::Done(layout.clone());
         layout
@@ -822,14 +1008,30 @@ impl<'h> Queries<'h> {
     }
 
     /// Structs and enums with payloads found while laying themselves out
-    /// contain each other by value; the first is the one found again.
+    /// contain each other by value; the first is the one found again. The
+    /// cycle is shown from the first of them that is declared, which it is
+    /// labelled at: an `Option(T)` or `Result(T, E)` is declared nowhere,
+    /// and a cycle always goes through a struct or enum that is, its type
+    /// arguments alone being finite (ADR 0045).
     fn report_containment_cycle(&mut self, cycle: &[Composite]) {
         let hir = self.hir;
         let name = |composite: &Composite| match *composite {
-            Composite::Struct(id) => (hir.struct_(id).name.as_str(), hir.struct_(id).name_span),
-            Composite::Enum(id) => (hir.enum_(id).name.as_str(), hir.enum_(id).name_span),
+            Composite::Struct(id) => (
+                hir.struct_(id).name.as_str(),
+                Some(hir.struct_(id).name_span),
+            ),
+            Composite::Enum(id) => {
+                let def = self.enum_def(id);
+                (def.name.as_str(), def.name_span)
+            }
         };
+        let start = cycle
+            .iter()
+            .position(|composite| name(composite).1.is_some())
+            .expect("a cycle goes through a declared struct or enum");
+        let cycle = [&cycle[start..], &cycle[..start]].concat();
         let (first, first_span) = name(&cycle[0]);
+        let first_span = first_span.expect("the cycle starts at a declared type");
         let message = if cycle.len() == 1 {
             format!("`{first}` contains itself")
         } else {
@@ -842,7 +1044,9 @@ impl<'h> Queries<'h> {
             };
             format!("these {what} contain each other: {}", path.join(" -> "))
         };
-        let adrs = if cycle.iter().any(|c| matches!(c, Composite::Enum(_))) {
+        let adrs = if cycle.iter().any(|c| name(c).1.is_none()) {
+            "ADR 0021, 0039, 0045"
+        } else if cycle.iter().any(|c| matches!(c, Composite::Enum(_))) {
             "ADR 0021, 0039"
         } else {
             "ADR 0021"
@@ -853,7 +1057,9 @@ impl<'h> Queries<'h> {
                 "contain a pointer instead, such as `*mut {first}` ({adrs})"
             ));
         for other in &cycle[1..] {
-            diag = diag.label(name(other).1, "part of the cycle");
+            if let Some(span) = name(other).1 {
+                diag = diag.label(span, "part of the cycle");
+            }
         }
         self.diags.push(diag);
     }
@@ -894,8 +1100,7 @@ impl<'h> Queries<'h> {
         if let Some(e) = self.mir_enums[id.0 as usize] {
             return e;
         }
-        let hir = self.hir;
-        let def = hir.enum_(id);
+        let def = self.enum_def(id);
         let layout = self
             .enum_layout(id)
             .expect("MIR is only built for well-typed programs");
@@ -994,6 +1199,10 @@ impl<'h> Queries<'h> {
             hir::Ty::Enum(e) if e.payloads => mir::Ty::Enum(self.mir_enum(e.id)),
             // Stored as its integer type, which is all MIR sees (ADR 0035).
             hir::Ty::Enum(e) => mir::Ty::Int(e.int),
+            hir::Ty::Applied(_) => {
+                let ty = self.normalize(ty);
+                self.mir_ty(ty)
+            }
             hir::Ty::Error => unreachable!("MIR is only built for well-typed programs"),
         }
     }
@@ -1110,12 +1319,15 @@ impl<'h> Queries<'h> {
                 if self.enum_layout(e.id).is_none() {
                     return true;
                 }
-                let hir = self.hir;
-                hir.enum_(e.id)
+                self.enum_def(e.id)
                     .variants
                     .iter()
                     .flat_map(|variant| &variant.payload)
                     .any(|value| self.lacks_layout(value.ty, seen))
+            }
+            hir::Ty::Applied(_) => {
+                let ty = self.normalize(ty);
+                self.lacks_layout(ty, seen)
             }
             // Reported, such as a field of type `!` (ADR 0034).
             hir::Ty::Error => true,
@@ -1132,26 +1344,32 @@ impl<'h> Queries<'h> {
         for id in 0..self.hir.fns.len() {
             self.mir_body(FnId(id as u32));
         }
-        let hir = self.hir;
-        let enums = hir
-            .enums
-            .iter()
-            .enumerate()
-            .map(|(id, def)| mir::Enum {
-                name: def.name.clone(),
-                int: def.ty.int,
-                def: def.ty.payloads.then(|| self.mir_enum(EnumId(id as u32))),
-                variants: def
-                    .variants
-                    .iter()
-                    .enumerate()
-                    .map(|(index, variant)| {
-                        let value = self
-                            .discriminant(EnumId(id as u32), index as u32)
-                            .expect("every variant of a program without errors has a value");
-                        (variant.name.clone(), value)
-                    })
-                    .collect(),
+        // The declared enums, then the `Option(T)` and `Result(T, E)` the
+        // program uses, by name (ADR 0045).
+        let ids: Vec<EnumId> = (0..self.hir.enums.len())
+            .map(|id| EnumId(id as u32))
+            .chain(self.instances_by_name())
+            .collect();
+        let enums = ids
+            .into_iter()
+            .map(|id| {
+                let def = self.enum_def(id);
+                mir::Enum {
+                    name: def.name.clone(),
+                    int: def.ty.int,
+                    def: def.ty.payloads.then(|| self.mir_enum(id)),
+                    variants: def
+                        .variants
+                        .iter()
+                        .enumerate()
+                        .map(|(index, variant)| {
+                            let value = self
+                                .discriminant(id, index as u32)
+                                .expect("every variant of a program without errors has a value");
+                            (variant.name.clone(), value)
+                        })
+                        .collect(),
+                }
             })
             .collect();
         let mut statics: Vec<mir::Static> = (0..self.hir.statics.len())

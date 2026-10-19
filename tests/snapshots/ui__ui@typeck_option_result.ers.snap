@@ -1,0 +1,177 @@
+---
+source: tests/ui.rs
+assertion_line: 40
+expression: output
+input_file: tests/ui/typeck_option_result.ers
+---
+--- typeck ---
+struct Slot { value: Option(u32) at 0, results: [Result(u8, Mode); 2] at 8 } size 12, align 4
+enum ParseError: u8 { Empty = 0, BadDigit(u8 at 1) = 1, Overflow = 2 } size 2, align 1
+enum Mode: u8 { Off = 0, Run = 1 }
+enum Cmd: u8 { Nop = 0, Set(Option(Mode) at 1) = 1 } size 3, align 1
+enum Option(()): u8 { None = 0, Some(() at 1) = 1 } size 1, align 1
+enum Option(*mut u8): u8 { None = 0, Some(*mut u8 at 4) = 1 } size 8, align 4
+enum Option(Mode): u8 { None = 0, Some(Mode at 1) = 1 } size 2, align 1
+enum Option(Option(u8)): u8 { None = 0, Some(Option(u8) at 1) = 1 } size 3, align 1
+enum Option([u8; 4]): u8 { None = 0, Some([u8; 4] at 1) = 1 } size 5, align 1
+enum Option(u32): u8 { None = 0, Some(u32 at 4) = 1 } size 8, align 4
+enum Option(u64): u8 { None = 0, Some(u64 at 8) = 1 } size 16, align 8
+enum Option(u8): u8 { None = 0, Some(u8 at 1) = 1 } size 2, align 1
+enum Result((), ParseError): u8 { Ok(() at 1) = 0, Err(ParseError at 1) = 1 } size 3, align 1
+enum Result(u32, ParseError): u8 { Ok(u32 at 4) = 0, Err(ParseError at 1) = 1 } size 8, align 4
+enum Result(u8, Mode): u8 { Ok(u8 at 1) = 0, Err(Mode at 1) = 1 } size 2, align 1
+fn digit(c: u8) -> Result(u32, ParseError)
+    expr 0 if 807..869: ()
+    expr 1 logical || 810..826: bool
+    expr 2 binary < 810..816: bool
+    expr 3 local c 810..811: u8
+    expr 4 int 48 814..816: u8
+    expr 5 binary > 820..826: bool
+    expr 6 local c 820..821: u8
+    expr 7 int 57 824..826: u8
+    expr 8 return 837..862: !
+    expr 9 variant .Err 844..862: Result(u32, ParseError)
+    expr 10 variant .BadDigit 849..861: ParseError
+    expr 11 local c 859..860: u8
+    expr 12 variant .Ok 874..894: Result(u32, ParseError)
+    expr 13 as u32 878..893: u32
+    expr 14 binary - 878..886: u8
+    expr 15 local c 879..880: u8
+    expr 16 int 48 883..885: u8
+fn first(bytes: Option([u8; 4])) -> Option(u8)
+    let b: [u8; 4]
+    expr 20 match 955..1044: Option(u8)
+    expr 21 local bytes 961..966: Option([u8; 4])
+    expr 22 variant .Some 1002..1013: Option(u8)
+    expr 23 index 1008..1012: u8
+    expr 24 local b 1008..1009: [u8; 4]
+    expr 25 int 0 1010..1011: usize
+    expr 26 variant .None 1032..1037: Option(u8)
+fn nested(o: Option(Option(u8)), s: Slot) -> u32
+    let four: Option([u8; 4])
+    let a: Option(u8)
+    let c: Cmd
+    let v: u8
+    let w: u32
+    expr 27 variant .Some 1131..1150: Option([u8; 4])
+    expr 28 array 1137..1149: [u8; 4]
+    expr 29 int 1 1138..1139: u8
+    expr 30 int 2 1141..1142: u8
+    expr 31 int 3 1144..1145: u8
+    expr 32 int 4 1147..1148: u8
+    expr 33 call 1176..1187: Option(u8)
+    expr 34 local four 1182..1186: Option([u8; 4])
+    expr 35 variant .Set 1206..1223: Cmd
+    expr 36 variant .Some 1211..1222: Option(Mode)
+    expr 37 variant .Run 1217..1221: Mode
+    expr 38 match 1229..1408: u32
+    expr 39 local o 1235..1236: Option(Option(u8))
+    expr 40 as u32 1274..1282: u32
+    expr 41 local v 1274..1275: u8
+    expr 42 match 1316..1401: u32
+    expr 43 field value 1322..1329: Option(u32)
+    expr 44 local s 1322..1323: Slot
+    expr 45 local w 1365..1366: u32
+    expr 46 int 0 1389..1390: u32
+fn parse(s: *const [u8]) -> Result(u32, ParseError)
+    let v: u32
+    let b: u8
+    expr 47 if 1470..1521: ()
+    expr 48 binary == 1473..1484: bool
+    expr 49 len 1473..1479: usize
+    expr 50 local s 1477..1478: *const [u8]
+    expr 51 int 0 1483..1484: usize
+    expr 52 return 1495..1514: !
+    expr 53 variant .Err 1502..1514: Result(u32, ParseError)
+    expr 54 variant .Empty 1507..1513: ParseError
+    expr 55 match 1526..1729: Result(u32, ParseError)
+    expr 56 call 1532..1546: Result(u32, ParseError)
+    expr 57 index 1538..1545: u8
+    expr 58 deref 1538..1542: [u8]
+    expr 59 local s 1540..1541: *const [u8]
+    expr 60 int 0 1543..1544: usize
+    expr 61 variant .Ok 1576..1582: Result(u32, ParseError)
+    expr 62 local v 1580..1581: u32
+    expr 63 variant .Err 1608..1620: Result(u32, ParseError)
+    expr 64 variant .Empty 1613..1619: ParseError
+    expr 65 variant .Err 1660..1678: Result(u32, ParseError)
+    expr 66 variant .BadDigit 1665..1677: ParseError
+    expr 67 local b 1675..1676: u8
+    expr 68 variant .Err 1707..1722: Result(u32, ParseError)
+    expr 69 variant .Overflow 1712..1721: ParseError
+entry fn main() -> !
+    expr 70 loop 2223..2230: !
+panic fn on_panic() -> !
+    expr 71 loop 2260..2267: !
+comptime fn NOTHING() -> Option(u64)
+    expr 72 variant .None 699..704: Option(u64)
+comptime fn LAST() -> Result((), ParseError)
+    expr 73 variant .Ok 748..755: Result((), ParseError)
+    expr 74 unit 752..754: ()
+comptime fn comptime() -> ()
+    expr 75 assert 1748..1809: ()
+    expr 76 logical && 1755..1808: bool
+    expr 77 binary == 1755..1779: bool
+    expr 78 size_of(Option(u8)) 1755..1774: usize
+    expr 79 int 2 1778..1779: usize
+    expr 80 binary == 1783..1808: bool
+    expr 81 align_of(Option(u8)) 1783..1803: usize
+    expr 82 int 1 1807..1808: usize
+    expr 83 assert 1815..1878: ()
+    expr 84 logical && 1822..1877: bool
+    expr 85 binary == 1822..1847: bool
+    expr 86 size_of(Option(u32)) 1822..1842: usize
+    expr 87 int 8 1846..1847: usize
+    expr 88 binary == 1851..1877: bool
+    expr 89 align_of(Option(u32)) 1851..1872: usize
+    expr 90 int 4 1876..1877: usize
+    expr 91 assert 1884..1955: ()
+    expr 92 logical && 1891..1954: bool
+    expr 93 binary == 1891..1920: bool
+    expr 94 size_of(Option(*mut u8)) 1891..1915: usize
+    expr 95 int 8 1919..1920: usize
+    expr 96 binary == 1924..1954: bool
+    expr 97 align_of(Option(*mut u8)) 1924..1949: usize
+    expr 98 int 4 1953..1954: usize
+    expr 99 assert 1961..2022: ()
+    expr 100 logical && 1968..2021: bool
+    expr 101 binary == 1968..1992: bool
+    expr 102 size_of(Option(())) 1968..1987: usize
+    expr 103 int 1 1991..1992: usize
+    expr 104 binary == 1996..2021: bool
+    expr 105 align_of(Option(())) 1996..2016: usize
+    expr 106 int 1 2020..2021: usize
+    expr 107 assert 2028..2092: ()
+    expr 108 logical && 2035..2091: bool
+    expr 109 binary == 2035..2061: bool
+    expr 110 size_of(Option(u64)) 2035..2055: usize
+    expr 111 int 16 2059..2061: usize
+    expr 112 binary == 2065..2091: bool
+    expr 113 align_of(Option(u64)) 2065..2086: usize
+    expr 114 int 8 2090..2091: usize
+    expr 115 assert 2098..2143: ()
+    expr 116 binary == 2105..2142: bool
+    expr 117 size_of(Result(u32, ParseError)) 2105..2137: usize
+    expr 118 int 8 2141..2142: usize
+    expr 119 assert 2149..2195: ()
+    expr 120 binary == 2156..2194: bool
+    expr 121 align_of(Result(u32, ParseError)) 2156..2189: usize
+    expr 122 int 4 2193..2194: usize
+comptime fn ParseError::Empty() -> u8
+    expr 123 int 0 482..483: u8
+comptime fn ParseError::BadDigit() -> u8
+    expr 124 int 1 500..501: u8
+comptime fn ParseError::Overflow() -> u8
+    expr 125 int 2 514..515: u8
+comptime fn Mode::Off() -> u8
+    expr 126 int 0 540..541: u8
+comptime fn Mode::Run() -> u8
+    expr 127 int 1 549..550: u8
+comptime fn Cmd::Nop() -> u8
+    expr 128 int 0 574..575: u8
+comptime fn Cmd::Set() -> u8
+    expr 129 int 1 597..598: u8
+comptime fn length() -> usize
+    expr 17 binary + 926..931: usize
+    expr 18 int 2 926..927: usize
+    expr 19 int 2 930..931: usize

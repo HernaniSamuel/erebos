@@ -379,7 +379,9 @@ impl fmt::Debug for StructRef {
     }
 }
 
-/// An enum with payloads, indexing [`Mir::enums`].
+/// An enum with payloads, numbered as type checking numbers enums: the
+/// declared ones, then each `Option(T)` and `Result(T, E)` as it is made
+/// (ADR 0045).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct EnumId(pub u32);
 

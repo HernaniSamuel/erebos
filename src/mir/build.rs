@@ -772,8 +772,7 @@ impl Builder<'_, '_> {
         // would panic on it as if it were no variant. The body is not used,
         // so nothing more is reported (ADR 0040). Type checking asked about
         // the same enums.
-        let hir = self.q.hir;
-        let needed = hir.enums_needed(hir_ty, arms);
+        let needed = self.q.enums_needed(hir_ty, arms);
         if needed.into_iter().any(|id| !self.q.enum_ok(id)) {
             self.failed = true;
         }
@@ -1013,15 +1012,16 @@ impl Builder<'_, '_> {
         position: &[hir::PayloadStep],
         fail: BasicBlock,
     ) {
-        let hir = self.q.hir;
-        let values = &hir.enum_(id).variants[variant as usize].payload;
+        let values = &self.q.enum_def(id).variants[variant as usize].payload;
         for (index, (pattern, value)) in patterns.iter().zip(values).enumerate() {
             let mut at = position.to_vec();
             at.push(hir::PayloadStep {
                 variant,
                 index: index as u32,
             });
-            self.test(scrutinee, pattern, &at, value.ty, fail);
+            // An `Option(T)` there is tested as the enum it is (ADR 0045).
+            let ty = self.q.normalize(value.ty);
+            self.test(scrutinee, pattern, &at, ty, fail);
         }
     }
 

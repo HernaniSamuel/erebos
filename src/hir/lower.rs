@@ -4,13 +4,14 @@ use std::collections::HashMap;
 
 use crate::diag::{Diagnostic, Diagnostics};
 use crate::hir::{
-    Arm, ArrayLen, Block, Comptime, ConstDef, ConstId, EnumDef, EnumId, EnumTy, Expr, ExprId,
-    ExprKind, FieldDef, Fn, FnId, FnKind, Hir, IntTy, Local, LocalId, NeverInMemory, NeverPosition,
-    Pattern, PatternId, PatternKind, PayloadDef, StaticDef, StaticId, Stmt, StructDef, StructId,
-    StructTy, Ty, UnsizedPosition, UnsizedType, VariantDef,
+    Arm, ArrayLen, Block, BuiltinEnum, Comptime, ConstDef, ConstId, EnumDef, EnumId, EnumTy, Expr,
+    ExprId, ExprKind, FieldDef, Fn, FnId, FnKind, Hir, IntTy, Local, LocalId, NeverInMemory,
+    NeverPosition, Pattern, PatternId, PatternKind, PayloadDef, StaticDef, StaticId, Stmt,
+    StructDef, StructId, StructTy, Ty, UnsizedPosition, UnsizedType, VariantDef, VariantValue,
 };
 use crate::span::Span;
 use crate::syntax::ast;
+use crate::syntax::parser::builtin_variant_help;
 
 /// Lowers a program, together with the runtime support functions when
 /// given (ADR 0020). Returns `None` only when no HIR can be built at all (no
@@ -110,21 +111,27 @@ pub fn lower(
         );
     }
 
+    // Items share one namespace with the built-in types, so no item is
+    // named like one (ADR 0029): in M6, `Option(u32)` is a call resolved
+    // there (ADR 0045).
+    for ident in items().filter_map(item_name) {
+        if is_builtin_type(&ident.name) {
+            diags.push(
+                Diagnostic::error(
+                    "resolve::duplicate-type",
+                    format!("`{}` is a built-in type", ident.name),
+                )
+                .label(ident.span, "cannot be redefined"),
+            );
+        }
+    }
+
     // Structs are global too, and their names are types.
     let mut struct_ids: HashMap<String, StructId> = HashMap::new();
     let mut struct_tys = Vec::new();
     for (i, decl) in struct_decls.iter().enumerate() {
         let name = &decl.name.name;
-        let builtin = name == "bool" || IntTy::from_name(name).is_some();
-        if builtin {
-            diags.push(
-                Diagnostic::error(
-                    "resolve::duplicate-type",
-                    format!("`{name}` is a built-in type"),
-                )
-                .label(decl.name.span, "cannot be redefined"),
-            );
-        } else {
+        if !is_builtin_type(name) {
             // A repeated name keeps its first definition and is reported
             // with the other items below.
             struct_ids.entry(name.clone()).or_insert(StructId(i as u32));
@@ -141,15 +148,7 @@ pub fn lower(
     let mut enum_tys = Vec::new();
     for (i, decl) in enum_decls.iter().enumerate() {
         let name = &decl.name.name;
-        if name == "bool" || IntTy::from_name(name).is_some() {
-            diags.push(
-                Diagnostic::error(
-                    "resolve::duplicate-type",
-                    format!("`{name}` is a built-in type"),
-                )
-                .label(decl.name.span, "cannot be redefined"),
-            );
-        } else {
+        if !is_builtin_type(name) {
             enum_ids.entry(name.clone()).or_insert(EnumId(i as u32));
         }
         let int = match &decl.ty.kind {
@@ -225,6 +224,7 @@ pub fn lower(
         enum_decls: &enum_decls,
         never_in_memory: Vec::new(),
         unsized_types: Vec::new(),
+        applications: Vec::new(),
         next_expr: 0,
         next_pattern: 0,
         diags,
@@ -273,6 +273,7 @@ pub fn lower(
     let expr_count = lowerer.next_expr;
     let never_in_memory = lowerer.never_in_memory;
     let unsized_types = lowerer.unsized_types;
+    let applications = lowerer.applications;
 
     check_duplicate_items(program, runtime, diags);
     check_start(&fns, &statics, diags);
@@ -288,10 +289,26 @@ pub fn lower(
         comptime_blocks,
         never_in_memory,
         unsized_types,
+        applications,
         entry: entry?,
         panic: panic?,
         expr_count,
     })
+}
+
+/// "1 type argument", or as many, or "no type arguments".
+fn type_arguments(count: usize) -> String {
+    match count {
+        0 => "no type arguments".to_owned(),
+        1 => "1 type argument".to_owned(),
+        n => format!("{n} type arguments"),
+    }
+}
+
+/// Whether `name` is a built-in type: `bool`, an integer type, `Option`
+/// or `Result` (ADR 0029, 0045).
+fn is_builtin_type(name: &str) -> bool {
+    name == "bool" || IntTy::from_name(name).is_some() || BuiltinEnum::from_name(name).is_some()
 }
 
 /// The built-in function named `name`, as a help saying how it is called
@@ -476,6 +493,8 @@ struct Lowerer<'a> {
     never_in_memory: Vec<NeverInMemory>,
     /// Each `[T]` written where a size is needed (ADR 0031).
     unsized_types: Vec<UnsizedType>,
+    /// Each `Option(T)` and `Result(T, E)` written (ADR 0045).
+    applications: Vec<(Span, Ty)>,
     next_expr: u32,
     /// The next `.V` pattern's id (ADR 0044).
     next_pattern: u32,
@@ -763,7 +782,7 @@ impl Lowerer<'_> {
                 .payload
                 .iter()
                 .map(|ty| PayloadDef {
-                    span: ty.span,
+                    span: Some(ty.span),
                     ty: self.memory_ty(ty, NeverPosition::Payload),
                 })
                 .collect();
@@ -771,9 +790,9 @@ impl Lowerer<'_> {
             let span = variant.name.span.to(value.span);
             variants.push(VariantDef {
                 name: variant.name.name.clone(),
-                span: variant.name.span,
+                span: Some(variant.name.span),
                 payload,
-                value: FnId(first_body + i as u32),
+                value: VariantValue::Comptime(FnId(first_body + i as u32)),
             });
             bodies.push(Fn {
                 name: format!("{}::{}", decl.name.name, variant.name.name),
@@ -795,7 +814,7 @@ impl Lowerer<'_> {
         }
         let def = EnumDef {
             name: decl.name.name.clone(),
-            name_span: decl.name.span,
+            name_span: Some(decl.name.span),
             ty,
             variants,
         };
@@ -806,6 +825,25 @@ impl Lowerer<'_> {
     /// items only, as a struct literal's is, so a local of that name does
     /// not hide the enum. Returns the enum and the variant's index.
     fn variant(&mut self, enum_name: &ast::Ident, variant: &ast::Ident) -> Option<(EnumId, u32)> {
+        // Not items: their variants are named by the expected type
+        // (ADR 0045).
+        if let Some(builtin) = BuiltinEnum::from_name(&enum_name.name) {
+            self.diags.push(
+                Diagnostic::error(
+                    "resolve::not-an-enum",
+                    format!("`{}` is not an enum", enum_name.name),
+                )
+                .label(
+                    enum_name.span,
+                    format!(
+                        "an enum only with its type arguments, as in `{}`",
+                        builtin.written()
+                    ),
+                )
+                .help(builtin_variant_help(builtin.name(), &variant.name)),
+            );
+            return None;
+        }
         let Some(&id) = self.enum_ids.get(&enum_name.name) else {
             let what = if self.struct_ids.contains_key(&enum_name.name) {
                 Some("a struct")
@@ -1176,7 +1214,26 @@ impl Lowerer<'_> {
                     elem => Ty::array_of(elem, len),
                 }
             }
+            ast::TyKind::Applied(name, args) => self.applied_ty(ty, name, args),
             ast::TyKind::Named(name) if name.name == "bool" => Ty::Bool,
+            ast::TyKind::Named(name) if let Some(builtin) = BuiltinEnum::from_name(&name.name) => {
+                self.diags.push(
+                    Diagnostic::error(
+                        "resolve::type-argument-count",
+                        format!(
+                            "`{}` takes {}, written in parentheses",
+                            name.name,
+                            type_arguments(builtin.arity())
+                        ),
+                    )
+                    .label(name.span, "written without them")
+                    .help(format!(
+                        "write the types it holds, as in `{}` (ADR 0045)",
+                        builtin.written()
+                    )),
+                );
+                Ty::Error
+            }
             ast::TyKind::Named(name) => match IntTy::from_name(&name.name) {
                 Some(int) => Ty::Int(int),
                 None if self.struct_ids.contains_key(&name.name) => {
@@ -1186,17 +1243,85 @@ impl Lowerer<'_> {
                     Ty::Enum(self.enum_tys[id.0 as usize])
                 }
                 None => {
-                    self.diags.push(
-                        Diagnostic::error(
-                            "resolve::unknown-type",
-                            format!("unknown type `{}`", name.name),
-                        )
-                        .label(name.span, "not a type"),
-                    );
+                    self.unknown_type(name);
                     Ty::Error
                 }
             },
         }
+    }
+
+    /// `name(args)`, written as `ty`: `Option(T)` or `Result(T, E)`, with
+    /// as many type arguments as it takes, each a type of memory, as a
+    /// payload type is (ADR 0045). Any other type takes none. One whose
+    /// arguments are in error, reported, is `{error}` as a whole.
+    fn applied_ty(&mut self, ty: &ast::Ty, name: &ast::Ident, args: &[ast::Ty]) -> Ty {
+        let lowered: Vec<Ty> = args
+            .iter()
+            .map(|arg| self.memory_ty(arg, NeverPosition::TypeArgument))
+            .collect();
+        let builtin = BuiltinEnum::from_name(&name.name);
+        if builtin.is_none() && !self.is_type_name(&name.name) {
+            self.unknown_type(name);
+            return Ty::Error;
+        }
+        let takes = builtin.map_or(0, BuiltinEnum::arity);
+        let Some(builtin) = builtin.filter(|_| args.len() == takes) else {
+            let given = match args.len() {
+                0 => "none were given".to_owned(),
+                1 => "1 was given".to_owned(),
+                n => format!("{n} were given"),
+            };
+            let help = match builtin {
+                Some(builtin) => format!("it is written `{}` (ADR 0045)", builtin.written()),
+                None => {
+                    "only `Option(T)` and `Result(T, E)` take type arguments (ADR 0045)".to_owned()
+                }
+            };
+            // `u32()`: no arguments, but parentheses all the same.
+            let message = if builtin.is_none() && args.is_empty() {
+                format!(
+                    "`{}` takes no type arguments, and is written without parentheses",
+                    name.name
+                )
+            } else {
+                format!(
+                    "`{}` takes {}, but {given}",
+                    name.name,
+                    type_arguments(takes)
+                )
+            };
+            self.diags.push(
+                Diagnostic::error("resolve::type-argument-count", message)
+                    .label(ty.span, "in this type")
+                    .help(help),
+            );
+            return Ty::Error;
+        };
+        if lowered.contains(&Ty::Error) {
+            return Ty::Error;
+        }
+        let applied = Ty::applied(builtin, lowered);
+        self.applications.push((ty.span, applied));
+        applied
+    }
+
+    /// Whether `name` is a type that takes no type arguments: `bool`, an
+    /// integer type, a struct or an enum.
+    fn is_type_name(&self, name: &str) -> bool {
+        name == "bool"
+            || IntTy::from_name(name).is_some()
+            || self.struct_ids.contains_key(name)
+            || self.enum_ids.contains_key(name)
+    }
+
+    fn unknown_type(&mut self, name: &ast::Ident) {
+        self.diags.push(
+            Diagnostic::error(
+                "resolve::unknown-type",
+                format!("unknown type `{}`", name.name),
+            )
+            .label(name.span, "not a type"),
+        );
     }
 
     fn block(&mut self, block: &ast::Block) -> Block {

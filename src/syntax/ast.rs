@@ -149,6 +149,9 @@ pub enum TyKind {
     Unit,
     /// A type written by name, such as `u32`.
     Named(Ident),
+    /// A name followed by type arguments in parentheses, such as
+    /// `Option(u32)` or `Result(u32, E)` (ADR 0045); none for `Name()`.
+    Applied(Ident, Vec<Ty>),
     /// `*const T`, `*mut T`, optionally `volatile` (ADR 0013).
     Ptr {
         mutable: bool,

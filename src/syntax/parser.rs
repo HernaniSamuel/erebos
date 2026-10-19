@@ -19,6 +19,7 @@ pub fn parse(text: &str, tokens: &[Token], diags: &mut Diagnostics) -> File {
         pos: 0,
         diags,
         no_struct: false,
+        after_builtin_call: None,
     };
     parser.file()
 }
@@ -36,6 +37,36 @@ struct Parser<'a> {
     /// Set while parsing the condition of `if` or `while`, where `{` opens
     /// the body: `if x == y { ... }` is not a struct literal `y { ... }`.
     no_struct: bool,
+    /// The position of the token after the last call to a function named
+    /// `Option` or `Result`, and that name: a `::` there is reported with
+    /// the help of `builtin_variant_help`.
+    after_builtin_call: Option<(usize, String)>,
+}
+
+/// Whether `name` is `Option` or `Result`, the built-in enums with type
+/// arguments (ADR 0045).
+fn is_builtin_enum(name: &str) -> bool {
+    matches!(name, "Option" | "Result")
+}
+
+/// The help for a path to a variant of `Option` or `Result`, `name`, such
+/// as `Option::None`: there is none, and the variant is named by the
+/// expected type (ADR 0044, 0045). `variant` is the name written after
+/// `::`, shown if it is one of theirs.
+pub(crate) fn builtin_variant_help(name: &str, variant: &str) -> String {
+    let (written, variants): (&str, &[&str]) = if name == "Option" {
+        ("an `Option(T)`", &["None", "Some"])
+    } else {
+        ("a `Result(T, E)`", &["Ok", "Err"])
+    };
+    let variant = if variants.contains(&variant) {
+        variant
+    } else {
+        variants[0]
+    };
+    format!(
+        "the variants of `{name}` have no path: write `.{variant}` where {written} is expected, and that type gives it its enum (ADR 0044, 0045)"
+    )
 }
 
 impl Parser<'_> {
@@ -87,13 +118,25 @@ impl Parser<'_> {
 
     fn report_unexpected(&mut self, what: &str, span: Span) -> Reported {
         let found = self.peek();
-        self.diags.push(
-            Diagnostic::error(
-                "parser::unexpected-token",
-                format!("expected {what}, found {}", found.kind.describe()),
-            )
-            .label(span, format!("expected {what}")),
-        );
+        let mut diag = Diagnostic::error(
+            "parser::unexpected-token",
+            format!("expected {what}, found {}", found.kind.describe()),
+        )
+        .label(span, format!("expected {what}"));
+        // `Option(u32)::None`, a path the variants of `Option` and `Result`
+        // do not have (ADR 0045).
+        if found.kind == TokenKind::ColonColon
+            && let Some((at, name)) = &self.after_builtin_call
+            && *at == self.pos
+        {
+            let variant = self
+                .tokens
+                .get(self.pos + 1)
+                .filter(|token| token.kind == TokenKind::Ident)
+                .map_or("", |token| &self.text[token.span.range()]);
+            diag = diag.help(builtin_variant_help(name, variant));
+        }
+        self.diags.push(diag);
         Reported
     }
 
@@ -465,7 +508,20 @@ impl Parser<'_> {
                     span: token.span.to(close.span),
                 });
             }
-            TokenKind::Ident => TyKind::Named(self.ident()?),
+            TokenKind::Ident => {
+                let name = self.ident()?;
+                // Type arguments, as `Option(u32)`; `Name()` parses, and is
+                // a count error (ADR 0045).
+                if self.eat(TokenKind::LParen).is_some() {
+                    let args = self.comma_list(Self::ty)?;
+                    let close = self.tokens[self.pos - 1].span;
+                    return Ok(Ty {
+                        kind: TyKind::Applied(name, args),
+                        span: token.span.to(close),
+                    });
+                }
+                TyKind::Named(name)
+            }
             TokenKind::LBracket => {
                 self.bump();
                 let elem = Box::new(self.ty()?);
@@ -899,6 +955,11 @@ impl Parser<'_> {
                 if self.eat(TokenKind::LParen).is_some() {
                     let args = self.comma_list(Self::nested_expr)?;
                     let end = self.tokens[self.pos - 1].span;
+                    // `Option(u32)::None` is no path: an error at the `::`
+                    // shows the variant as `.None` (ADR 0045).
+                    if is_builtin_enum(&name.name) {
+                        self.after_builtin_call = Some((self.pos, name.name.clone()));
+                    }
                     return Ok(Expr {
                         span: token.span.to(end),
                         kind: ExprKind::Call(name, args),

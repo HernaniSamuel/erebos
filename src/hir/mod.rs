@@ -64,6 +64,10 @@ pub struct Hir {
     /// Each `[T]` written where a size is needed, whose type was lowered
     /// as `{error}`; the type checker reports them (ADR 0031).
     pub unsized_types: Vec<UnsizedType>,
+    /// Each `Option(T)` and `Result(T, E)` written, with its span: one too
+    /// large for the target is reported at each, having no declaration to
+    /// be reported at (ADR 0045).
+    pub applications: Vec<(Span, Ty)>,
     pub entry: FnId,
     pub panic: FnId,
     /// Expression ids are `0..expr_count`.
@@ -84,10 +88,6 @@ impl Hir {
 
     pub fn struct_(&self, id: StructId) -> &StructDef {
         &self.structs[id.0 as usize]
-    }
-
-    pub fn enum_(&self, id: EnumId) -> &EnumDef {
-        &self.enums[id.0 as usize]
     }
 
     pub fn const_(&self, id: ConstId) -> &ConstDef {
@@ -143,6 +143,9 @@ pub enum NeverPosition {
     Field,
     /// A type of a variant's payload (ADR 0039).
     Payload,
+    /// A type argument of `Option` or `Result`, which is a payload type
+    /// (ADR 0045).
+    TypeArgument,
     /// The type of a `static` or `extern static`.
     Static,
     Const,
@@ -203,32 +206,150 @@ pub struct StructDef {
 /// `enum Name: Type { Variant = value, ... }` (ADR 0035): named values of
 /// an integer type, which the enum is stored as; or, if a variant carries a
 /// payload, an aggregate of a tag of that type and the values of the
-/// variant it holds (ADR 0039).
+/// variant it holds (ADR 0039). Also an `Option(T)` or `Result(T, E)`,
+/// which is declared nowhere (ADR 0045): its spans are `None`.
 #[derive(Debug)]
 pub struct EnumDef {
     pub name: String,
-    pub name_span: Span,
+    pub name_span: Option<Span>,
     pub ty: EnumTy,
     pub variants: Vec<VariantDef>,
+}
+
+impl EnumDef {
+    /// Whether it is declared in the program, unlike an `Option(T)` or a
+    /// `Result(T, E)` (ADR 0045).
+    pub fn is_declared(&self) -> bool {
+        self.name_span.is_some()
+    }
+
+    /// How diagnostics write its variant `index`: `E::V`, or `.V` for a
+    /// variant of `Option` or `Result`, which has no path (ADR 0044, 0045).
+    pub fn variant_path(&self, index: usize) -> String {
+        let variant = &self.variants[index].name;
+        if self.is_declared() {
+            format!("{}::{variant}", self.name)
+        } else {
+            format!(".{variant}")
+        }
+    }
 }
 
 #[derive(Debug)]
 pub struct VariantDef {
     pub name: String,
-    pub span: Span,
+    /// The span of its name; `None` in an enum declared nowhere.
+    pub span: Option<Span>,
     /// The types of its payload values, in order; empty without payload
     /// (ADR 0039).
     pub payload: Vec<PayloadDef>,
-    /// The body computing its value (ADR 0035).
-    pub value: FnId,
+    pub value: VariantValue,
+}
+
+/// The value of a variant (ADR 0035).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VariantValue {
+    /// Computed by a body of its own.
+    Comptime(FnId),
+    /// Known without evaluation, as those of `Option` and `Result` are
+    /// (ADR 0045).
+    Known(u64),
 }
 
 /// One value of a variant's payload (ADR 0039).
 #[derive(Debug)]
 pub struct PayloadDef {
-    /// The span of its written type.
-    pub span: Span,
+    /// The span of its written type; `None` in an enum declared nowhere.
+    pub span: Option<Span>,
     pub ty: Ty,
+}
+
+/// An enum with type arguments, known to the compiler (ADR 0045).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BuiltinEnum {
+    /// `Option(T)`: `None = 0`, `Some(T) = 1`.
+    Option,
+    /// `Result(T, E)`: `Ok(T) = 0`, `Err(E) = 1`.
+    Result,
+}
+
+impl BuiltinEnum {
+    pub fn from_name(name: &str) -> Option<BuiltinEnum> {
+        match name {
+            "Option" => Some(BuiltinEnum::Option),
+            "Result" => Some(BuiltinEnum::Result),
+            _ => None,
+        }
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            BuiltinEnum::Option => "Option",
+            BuiltinEnum::Result => "Result",
+        }
+    }
+
+    /// How it is written with its type arguments, named as ADR 0045 does.
+    pub fn written(self) -> &'static str {
+        match self {
+            BuiltinEnum::Option => "Option(T)",
+            BuiltinEnum::Result => "Result(T, E)",
+        }
+    }
+
+    /// How many type arguments it takes.
+    pub fn arity(self) -> usize {
+        match self {
+            BuiltinEnum::Option => 1,
+            BuiltinEnum::Result => 2,
+        }
+    }
+
+    /// Its variants, in order: their names, values and the index of the
+    /// type argument each carries, if any.
+    fn variants(self) -> [(&'static str, u64, Option<usize>); 2] {
+        match self {
+            BuiltinEnum::Option => [("None", 0, None), ("Some", 1, Some(0))],
+            BuiltinEnum::Result => [("Ok", 0, Some(0)), ("Err", 1, Some(1))],
+        }
+    }
+
+    /// The enum it is with the type arguments `args`, normalized, as the
+    /// enum `id`: one with payloads on `u8`, whose variants have values
+    /// known without evaluation, and whose name shows its arguments, as in
+    /// `Result([u8; 4], ParseError)` (ADR 0045).
+    pub fn def(self, id: EnumId, args: &[Ty]) -> EnumDef {
+        let shown: Vec<String> = args.iter().map(Ty::to_string).collect();
+        let name = format!("{}({})", self.name(), shown.join(", "));
+        let ty = EnumTy {
+            id,
+            name: Box::leak(name.clone().into_boxed_str()),
+            int: IntTy::U8,
+            payloads: true,
+        };
+        let variants = self
+            .variants()
+            .into_iter()
+            .map(|(name, value, arg)| VariantDef {
+                name: name.to_owned(),
+                span: None,
+                payload: arg
+                    .map(|arg| PayloadDef {
+                        span: None,
+                        ty: args[arg],
+                    })
+                    .into_iter()
+                    .collect(),
+                value: VariantValue::Known(value),
+            })
+            .collect();
+        EnumDef {
+            name,
+            name_span: None,
+            ty,
+            variants,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -298,9 +419,20 @@ pub enum Ty {
     Slice(&'static Ty),
     Struct(StructTy),
     Enum(EnumTy),
+    /// `Option(T)` or `Result(T, E)` as written (ADR 0045); normalizing it
+    /// makes it the enum it is for its arguments.
+    Applied(Applied),
     /// Produced only by the type checker after reporting an error, so one
     /// mistake does not cascade into more. Compatible with every type.
     Error,
+}
+
+/// `Option(T)` or `Result(T, E)` before normalization; the arguments are
+/// leaked like pointee types.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Applied {
+    pub builtin: BuiltinEnum,
+    pub args: &'static [Ty],
 }
 
 /// The length of an array: known, or computed at compile time by a body of
@@ -395,23 +527,37 @@ impl Ty {
         }
     }
 
-    /// Whether every array length in the type is known.
+    /// `Option(T)` or `Result(T, E)`, as written.
+    pub fn applied(builtin: BuiltinEnum, args: Vec<Ty>) -> Ty {
+        Ty::Applied(Applied {
+            builtin,
+            args: Box::leak(args.into_boxed_slice()),
+        })
+    }
+
+    /// Whether every array length in the type is known, and every
+    /// `Option(T)` and `Result(T, E)` is the enum it is (ADR 0045).
     pub fn is_normal(self) -> bool {
         match self {
             Ty::Array(elem, len) => matches!(len, ArrayLen::Known(_)) && elem.is_normal(),
             Ty::Slice(elem) => elem.is_normal(),
             Ty::Ptr(ptr) => ptr.pointee.is_normal(),
+            Ty::Applied(_) => false,
             _ => true,
         }
     }
 
     /// Arrays, structs, slices and enums with payloads: values made of
     /// other values. A slice is an address and a length (ADR 0031); an
-    /// enum with payloads, a tag and the values of a variant (ADR 0039).
+    /// enum with payloads, a tag and the values of a variant (ADR 0039),
+    /// as `Option(T)` and `Result(T, E)` are (ADR 0045).
     pub fn is_aggregate(self) -> bool {
         matches!(
             self,
-            Ty::Array(..) | Ty::Struct(_) | Ty::Enum(EnumTy { payloads: true, .. })
+            Ty::Array(..)
+                | Ty::Struct(_)
+                | Ty::Enum(EnumTy { payloads: true, .. })
+                | Ty::Applied(_)
         ) || self.slice_elem().is_some()
     }
 }
@@ -436,6 +582,10 @@ impl fmt::Display for Ty {
             Ty::Slice(elem) => write!(f, "[{elem}]"),
             Ty::Struct(s) => f.write_str(s.name),
             Ty::Enum(e) => f.write_str(e.name),
+            Ty::Applied(applied) => {
+                let args: Vec<String> = applied.args.iter().map(Ty::to_string).collect();
+                write!(f, "{}({})", applied.builtin.name(), args.join(", "))
+            }
             Ty::Error => f.write_str("{error}"),
         }
     }
@@ -626,72 +776,6 @@ impl Pattern {
             PatternKind::Or(alternatives) => alternatives,
             _ => std::slice::from_ref(self),
         }
-    }
-}
-
-impl Hir {
-    /// The enums whose values a `match` on a value of type `scrutinee`
-    /// with these arms needs, each once, in the order first needed
-    /// (ADR 0038, 0040): the type of each position at which some
-    /// alternative is a variant or a constant, whatever its own type, and
-    /// the scrutinee's for a `match` without arms. The positions inside a
-    /// variant pattern have the types its declaration gives, those inside
-    /// a `.V` pattern the types its position's enum gives them (ADR 0044).
-    pub fn enums_needed(&self, scrutinee: Ty, arms: &[Arm]) -> Vec<EnumId> {
-        fn walk(hir: &Hir, pattern: &Pattern, ty: Option<Ty>, out: &mut Vec<EnumId>) {
-            let need = |out: &mut Vec<EnumId>| {
-                if let Some(Ty::Enum(e)) = ty
-                    && !out.contains(&e.id)
-                {
-                    out.push(e.id);
-                }
-            };
-            match &pattern.kind {
-                PatternKind::Or(alternatives) => {
-                    for alternative in alternatives {
-                        walk(hir, alternative, ty, out);
-                    }
-                }
-                PatternKind::Const(_) => need(out),
-                PatternKind::Variant(id, index, subs) => {
-                    need(out);
-                    let payload = &hir.enum_(*id).variants[*index as usize].payload;
-                    for (i, sub) in subs.iter().flatten().enumerate() {
-                        walk(hir, sub, payload.get(i).map(|value| value.ty), out);
-                    }
-                }
-                // The enum of its position, whose variant `name`, if it
-                // has one, gives its payload positions their types; without
-                // it they have none, and need nothing (ADR 0044).
-                PatternKind::ContextVariant(_, name, _, subs) => {
-                    need(out);
-                    let payload = match ty {
-                        Some(Ty::Enum(e)) => hir
-                            .enum_(e.id)
-                            .variants
-                            .iter()
-                            .find(|variant| variant.name == *name)
-                            .map(|variant| variant.payload.as_slice()),
-                        _ => None,
-                    };
-                    for (i, sub) in subs.iter().flatten().enumerate() {
-                        let sub_ty = payload.and_then(|payload| payload.get(i));
-                        walk(hir, sub, sub_ty.map(|value| value.ty), out);
-                    }
-                }
-                _ => {}
-            }
-        }
-        let mut out = Vec::new();
-        if arms.is_empty()
-            && let Ty::Enum(e) = scrutinee
-        {
-            out.push(e.id);
-        }
-        for arm in arms {
-            walk(self, &arm.pattern, Some(scrutinee), &mut out);
-        }
-        out
     }
 }
 

@@ -1,0 +1,67 @@
+// emit: typeck
+// `Option(T)` and `Result(T, E)` are enums with payloads (ADR 0045), one
+// per set of arguments, compared once array lengths are computed: fields,
+// elements, parameters, return values, constants and statics, built with
+// `.V` and matched with `.V` patterns, nested, as payloads of declared
+// enums. The `comptime` block checks the layout of every row of ADR
+// 0045's table. The dump lists them after the declared enums, by name.
+enum ParseError: u8 { Empty = 0, BadDigit(u8) = 1, Overflow = 2 }
+enum Mode: u8 { Off = 0, Run = 1 }
+enum Cmd: u8 { Nop = 0, Set(Option(Mode)) = 1 }
+
+struct Slot { value: Option(u32), results: [Result(u8, Mode); 2] }
+
+const NOTHING: Option(u64) = .None;
+static mut LAST: Result((), ParseError) = .Ok(());
+
+fn digit(c: u8) -> Result(u32, ParseError) {
+    if c < 48 || c > 57 {
+        return .Err(.BadDigit(c));
+    }
+    .Ok((c - 48) as u32)
+}
+
+fn first(bytes: Option([u8; 2 + 2])) -> Option(u8) {
+    match bytes {
+        .Some(let b: [u8; 4]) => .Some(b[0]),
+        .None => .None,
+    }
+}
+
+fn nested(o: Option(Option(u8)), s: Slot) -> u32 {
+    let four: Option([u8; 4]) = .Some([1, 2, 3, 4]);
+    let a: Option(u8) = first(four);
+    let c: Cmd = .Set(.Some(.Run));
+    match o {
+        .Some(.Some(let v: u8)) => v as u32,
+        .Some(.None) | .None => match s.value {
+            .Some(let w: u32) => w,
+            .None => 0,
+        },
+    }
+}
+
+fn parse(s: *const [u8]) -> Result(u32, ParseError) {
+    if len(s) == 0 {
+        return .Err(.Empty);
+    }
+    match digit((*s)[0]) {
+        .Ok(let v: u32) => .Ok(v),
+        .Err(.Empty) => .Err(.Empty),
+        .Err(.BadDigit(let b: u8)) => .Err(.BadDigit(b)),
+        .Err(.Overflow) => .Err(.Overflow),
+    }
+}
+
+comptime {
+    assert(size_of(Option(u8)) == 2 && align_of(Option(u8)) == 1);
+    assert(size_of(Option(u32)) == 8 && align_of(Option(u32)) == 4);
+    assert(size_of(Option(*mut u8)) == 8 && align_of(Option(*mut u8)) == 4);
+    assert(size_of(Option(())) == 1 && align_of(Option(())) == 1);
+    assert(size_of(Option(u64)) == 16 && align_of(Option(u64)) == 8);
+    assert(size_of(Result(u32, ParseError)) == 8);
+    assert(align_of(Result(u32, ParseError)) == 4);
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

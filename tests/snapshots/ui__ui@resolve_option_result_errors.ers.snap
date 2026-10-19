@@ -1,0 +1,231 @@
+---
+source: tests/ui.rs
+assertion_line: 40
+expression: output
+input_file: tests/ui/resolve_option_result_errors.ers
+---
+--- errors ---
+resolve::type-argument-count
+
+  × `Option` takes 1 type argument, written in parentheses
+    ╭─[resolve_option_result_errors.ers:13:8]
+ 12 │ struct Counts {
+ 13 │     a: Option,
+    ·        ───┬──
+    ·           ╰── written without them
+ 14 │     b: Option(),
+    ╰────
+  help: write the types it holds, as in `Option(T)` (ADR 0045)
+resolve::type-argument-count
+
+  × `Option` takes 1 type argument, but none were given
+    ╭─[resolve_option_result_errors.ers:14:8]
+ 13 │     a: Option,
+ 14 │     b: Option(),
+    ·        ────┬───
+    ·            ╰── in this type
+ 15 │     c: Option(u8, u8),
+    ╰────
+  help: it is written `Option(T)` (ADR 0045)
+resolve::type-argument-count
+
+  × `Option` takes 1 type argument, but 2 were given
+    ╭─[resolve_option_result_errors.ers:15:8]
+ 14 │     b: Option(),
+ 15 │     c: Option(u8, u8),
+    ·        ───────┬──────
+    ·               ╰── in this type
+ 16 │     d: Result(u32),
+    ╰────
+  help: it is written `Option(T)` (ADR 0045)
+resolve::type-argument-count
+
+  × `Result` takes 2 type arguments, but 1 was given
+    ╭─[resolve_option_result_errors.ers:16:8]
+ 15 │     c: Option(u8, u8),
+ 16 │     d: Result(u32),
+    ·        ─────┬─────
+    ·             ╰── in this type
+ 17 │     e: u32(u8),
+    ╰────
+  help: it is written `Result(T, E)` (ADR 0045)
+resolve::type-argument-count
+
+  × `u32` takes no type arguments, but 1 was given
+    ╭─[resolve_option_result_errors.ers:17:8]
+ 16 │     d: Result(u32),
+ 17 │     e: u32(u8),
+    ·        ───┬───
+    ·           ╰── in this type
+ 18 │     f: Point(u8),
+    ╰────
+  help: only `Option(T)` and `Result(T, E)` take type arguments (ADR 0045)
+resolve::type-argument-count
+
+  × `Point` takes no type arguments, but 1 was given
+    ╭─[resolve_option_result_errors.ers:18:8]
+ 17 │     e: u32(u8),
+ 18 │     f: Point(u8),
+    ·        ────┬────
+    ·            ╰── in this type
+ 19 │     h: u32(),
+    ╰────
+  help: only `Option(T)` and `Result(T, E)` take type arguments (ADR 0045)
+resolve::type-argument-count
+
+  × `u32` takes no type arguments, and is written without parentheses
+    ╭─[resolve_option_result_errors.ers:19:8]
+ 18 │     f: Point(u8),
+ 19 │     h: u32(),
+    ·        ──┬──
+    ·          ╰── in this type
+ 20 │     i: Point(),
+    ╰────
+  help: only `Option(T)` and `Result(T, E)` take type arguments (ADR 0045)
+resolve::type-argument-count
+
+  × `Point` takes no type arguments, and is written without parentheses
+    ╭─[resolve_option_result_errors.ers:20:8]
+ 19 │     h: u32(),
+ 20 │     i: Point(),
+    ·        ───┬───
+    ·           ╰── in this type
+ 21 │     g: Option(Unknown),
+    ╰────
+  help: only `Option(T)` and `Result(T, E)` take type arguments (ADR 0045)
+resolve::unknown-type
+
+  × unknown type `Unknown`
+    ╭─[resolve_option_result_errors.ers:21:15]
+ 20 │     i: Point(),
+ 21 │     g: Option(Unknown),
+    ·               ───┬───
+    ·                  ╰── not a type
+ 22 │ }
+    ╰────
+resolve::duplicate-type
+
+  × `Option` is a built-in type
+    ╭─[resolve_option_result_errors.ers:24:8]
+ 23 │ 
+ 24 │ struct Option {}
+    ·        ───┬──
+    ·           ╰── cannot be redefined
+ 25 │ enum Result: u8 { A = 0 }
+    ╰────
+resolve::duplicate-type
+
+  × `Result` is a built-in type
+    ╭─[resolve_option_result_errors.ers:25:6]
+ 24 │ struct Option {}
+ 25 │ enum Result: u8 { A = 0 }
+    ·      ───┬──
+    ·         ╰── cannot be redefined
+ 26 │ fn Option() {}
+    ╰────
+resolve::duplicate-type
+
+  × `Option` is a built-in type
+    ╭─[resolve_option_result_errors.ers:26:4]
+ 25 │ enum Result: u8 { A = 0 }
+ 26 │ fn Option() {}
+    ·    ───┬──
+    ·       ╰── cannot be redefined
+ 27 │ const Result: u32 = 0;
+    ╰────
+resolve::duplicate-item
+
+  × `Option` is defined more than once
+    ╭─[resolve_option_result_errors.ers:26:4]
+ 23 │ 
+ 24 │ struct Option {}
+    ·        ───┬──
+    ·           ╰── first defined here
+ 25 │ enum Result: u8 { A = 0 }
+ 26 │ fn Option() {}
+    ·    ───┬──
+    ·       ╰── redefined here
+ 27 │ const Result: u32 = 0;
+    ╰────
+  help: functions, structs, enums, constants and statics share one namespace (ADR 0029, 0030,
+        0035)
+resolve::duplicate-type
+
+  × `Result` is a built-in type
+    ╭─[resolve_option_result_errors.ers:27:7]
+ 26 │ fn Option() {}
+ 27 │ const Result: u32 = 0;
+    ·       ───┬──
+    ·          ╰── cannot be redefined
+ 28 │ fn usize() {}
+    ╰────
+resolve::duplicate-item
+
+  × `Result` is defined more than once
+    ╭─[resolve_option_result_errors.ers:27:7]
+ 24 │ struct Option {}
+ 25 │ enum Result: u8 { A = 0 }
+    ·      ───┬──
+    ·         ╰── first defined here
+ 26 │ fn Option() {}
+ 27 │ const Result: u32 = 0;
+    ·       ───┬──
+    ·          ╰── redefined here
+ 28 │ fn usize() {}
+    ╰────
+  help: functions, structs, enums, constants and statics share one namespace (ADR 0029, 0030,
+        0035)
+resolve::duplicate-type
+
+  × `usize` is a built-in type
+    ╭─[resolve_option_result_errors.ers:28:4]
+ 27 │ const Result: u32 = 0;
+ 28 │ fn usize() {}
+    ·    ──┬──
+    ·      ╰── cannot be redefined
+ 29 │ const u8: u16 = 1;
+    ╰────
+resolve::duplicate-type
+
+  × `u8` is a built-in type
+    ╭─[resolve_option_result_errors.ers:29:7]
+ 28 │ fn usize() {}
+ 29 │ const u8: u16 = 1;
+    ·       ─┬
+    ·        ╰── cannot be redefined
+ 30 │ static bool: u8 = 0;
+    ╰────
+resolve::duplicate-type
+
+  × `bool` is a built-in type
+    ╭─[resolve_option_result_errors.ers:30:8]
+ 29 │ const u8: u16 = 1;
+ 30 │ static bool: u8 = 0;
+    ·        ──┬─
+    ·          ╰── cannot be redefined
+ 31 │ 
+    ╰────
+resolve::not-an-enum
+
+  × `Option` is not an enum
+    ╭─[resolve_option_result_errors.ers:33:17]
+ 32 │ fn paths(x: u8) {
+ 33 │     let a: u8 = Option::None;
+    ·                 ───┬──
+    ·                    ╰── an enum only with its type arguments, as in `Option(T)`
+ 34 │     match x {
+    ╰────
+  help: the variants of `Option` have no path: write `.None` where an `Option(T)` is expected, and
+        that type gives it its enum (ADR 0044, 0045)
+resolve::not-an-enum
+
+  × `Result` is not an enum
+    ╭─[resolve_option_result_errors.ers:35:9]
+ 34 │     match x {
+ 35 │         Result::Ok => {}
+    ·         ───┬──
+    ·            ╰── an enum only with its type arguments, as in `Result(T, E)`
+ 36 │         _ => {}
+    ╰────
+  help: the variants of `Result` have no path: write `.Ok` where a `Result(T, E)` is expected, and
+        that type gives it its enum (ADR 0044, 0045)

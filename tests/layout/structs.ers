@@ -44,5 +44,10 @@ enum Pay16: u16 { A(u8) = 0, B(u64, u8) = 1, C(S) = 2, D = 3 }
 enum Pay32: u32 { A(u8, u8) = 0, B(u16) = 1, C(Wide) = 2, D(i8, Pointers) = 3 }
 struct WithPayloads { a: u8, p: Pay8, b: u16, q: Pay16, c: u8, r: Pay32 }
 
+// `Option(T)` and `Result(T, E)` are enums with payloads on `u8`
+// (ADR 0045); the twin of each is a union named after it, its arguments
+// capitalized, `()` as `Unit`: `OptionU8`, `ResultU32Mode`.
+struct WithOptions { a: Option(u8), b: Option(u32), c: Option(u64), d: Option(()), e: Result(u32, Mode) }
+
 entry fn main() -> ! { loop {} }
 panic fn on_panic() -> ! { loop {} }

@@ -1,0 +1,236 @@
+---
+source: tests/ui.rs
+assertion_line: 40
+expression: output
+input_file: tests/ui/typeck_option_result_errors.ers
+---
+--- errors ---
+ty::never-in-memory
+
+  × `!` is not a type of memory
+    ╭─[typeck_option_result_errors.ers:13:32]
+ 12 │ 
+ 13 │ fn never_and_unsized(a: Option(!), b: *const Result(u32, !), c: Option([u8])) {}
+    ·                                ┬
+    ·                                ╰── `!` as a type argument
+ 14 │ 
+    ╰────
+  help: `!` is the type of expressions that do not finish, so no memory holds one; for a type
+        without data, use `()` (ADR 0034)
+ty::never-in-memory
+
+  × `!` is not a type of memory
+    ╭─[typeck_option_result_errors.ers:13:58]
+ 12 │ 
+ 13 │ fn never_and_unsized(a: Option(!), b: *const Result(u32, !), c: Option([u8])) {}
+    ·                                                          ┬
+    ·                                                          ╰── `!` as a type argument
+ 14 │ 
+    ╰────
+  help: `!` is the type of expressions that do not finish, so no memory holds one; for a type
+        without data, use `()` (ADR 0034)
+ty::unsized
+
+  × `[u8]` has no size known at compile time
+    ╭─[typeck_option_result_errors.ers:13:72]
+ 12 │ 
+ 13 │ fn never_and_unsized(a: Option(!), b: *const Result(u32, !), c: Option([u8])) {}
+    ·                                                                        ──┬─
+    ·                                                                          ╰── `[u8]` as a type argument
+ 14 │ 
+    ╰────
+  help: its length is known only at run time, so it exists only behind a pointer, as a slice:
+        `*const [T]` or `*mut [T]` (ADR 0031)
+ty::infinite-size
+
+  × these types contain each other: Node -> Option(Node) -> Node
+    ╭─[typeck_option_result_errors.ers:16:8]
+ 15 │ struct List { next: Option(*const List) }
+ 16 │ struct Node { next: Option(Node) }
+    ·        ──┬─
+    ·          ╰── would have infinite size
+ 17 │ struct A { x: [u8; size_of(Option(Tree))] }
+    ╰────
+  help: contain a pointer instead, such as `*mut Node` (ADR 0021, 0039, 0045)
+ty::infinite-size
+
+  × these types contain each other: Tree -> Option(Tree) -> Tree
+    ╭─[typeck_option_result_errors.ers:18:8]
+ 17 │ struct A { x: [u8; size_of(Option(Tree))] }
+ 18 │ struct Tree { left: Option(Tree) }
+    ·        ──┬─
+    ·          ╰── would have infinite size
+ 19 │ fn beside(n: Option(Node)) {}
+    ╰────
+  help: contain a pointer instead, such as `*mut Tree` (ADR 0021, 0039, 0045)
+ty::too-large
+
+  × `Option([u8; 2147483647])` is too large
+    ╭─[typeck_option_result_errors.ers:21:18]
+ 20 │ 
+ 21 │ struct Huge { a: Option([u8; 0x7FFF_FFFF]), b: *const Option([u8; 0x7FFF_FFFF]) }
+    ·                  ────────────┬────────────
+    ·                              ╰── does not fit in the address space
+ 22 │ struct Big { bytes: [u8; 0x7FFF_FFFF], more: u8 }
+    ╰────
+  help: objects are limited to 2147483647 bytes on this target; an enum is as large as its largest
+        variant, with its tag, rounded up to its alignment (ADR 0039, 0045)
+ty::too-large
+
+  × `Option([u8; 2147483647])` is too large
+    ╭─[typeck_option_result_errors.ers:21:55]
+ 20 │ 
+ 21 │ struct Huge { a: Option([u8; 0x7FFF_FFFF]), b: *const Option([u8; 0x7FFF_FFFF]) }
+    ·                                                       ────────────┬────────────
+    ·                                                                   ╰── does not fit in the address space
+ 22 │ struct Big { bytes: [u8; 0x7FFF_FFFF], more: u8 }
+    ╰────
+  help: objects are limited to 2147483647 bytes on this target; an enum is as large as its largest
+        variant, with its tag, rounded up to its alignment (ADR 0039, 0045)
+ty::too-large
+
+  × `Big` is too large
+    ╭─[typeck_option_result_errors.ers:22:8]
+ 21 │ struct Huge { a: Option([u8; 0x7FFF_FFFF]), b: *const Option([u8; 0x7FFF_FFFF]) }
+ 22 │ struct Big { bytes: [u8; 0x7FFF_FFFF], more: u8 }
+    ·        ─┬─
+    ·         ╰── does not fit in the address space
+ 23 │ fn big(b: *const Option(Big)) {}
+    ╰────
+  help: objects are limited to 2147483647 bytes on this target
+ty::invalid-operand
+
+  × `==` needs integers, pointers, `bool` or enums without payloads, found `Option(u8)`
+    ╭─[typeck_option_result_errors.ers:26:22]
+ 25 │ fn aggregates(o: Option(u8), p: Option(u8), v: *const volatile Option(u8)) {
+ 26 │     let same: bool = o == p;
+    ·                      ───┬──
+    ·                         ╰── has type `Option(u8)`
+ 27 │     let n: u8 = o as u8;
+    ╰────
+  help: an enum with payloads is an aggregate, which operators do not apply to; tell its variants
+        apart with a `match` (ADR 0039)
+ty::invalid-cast
+
+  × cannot cast `Option(u8)`
+    ╭─[typeck_option_result_errors.ers:27:17]
+ 26 │     let same: bool = o == p;
+ 27 │     let n: u8 = o as u8;
+    ·                 ┬
+    ·                 ╰── an enum with payloads converts to nothing
+ 28 │     let f: u8 = o.f;
+    ╰────
+  help: it is an aggregate, not an integer; its variant is read with a `match` (ADR 0039)
+ty::no-fields
+
+  × `Option(u8)` has no fields
+    ╭─[typeck_option_result_errors.ers:28:19]
+ 27 │     let n: u8 = o as u8;
+ 28 │     let f: u8 = o.f;
+    ·                   ┬
+    ·                   ╰── no such field
+ 29 │     let at: usize = offset_of(Option(u8), f);
+    ╰────
+  help: the values of an enum's payload have no names, and are reached only by patterns (ADR 0039,
+        0040)
+ty::no-fields
+
+  × `Option(u8)` has no fields
+    ╭─[typeck_option_result_errors.ers:29:43]
+ 28 │     let f: u8 = o.f;
+ 29 │     let at: usize = offset_of(Option(u8), f);
+    ·                                           ┬
+    ·                                           ╰── no such field
+ 30 │     let r: Option(u8) = *v;
+    ╰────
+  help: the values of an enum's payload have no names, and are reached only by patterns (ADR 0039,
+        0040)
+ty::volatile-aggregate
+
+  × a volatile `Option(u8)` cannot be accessed as a whole
+    ╭─[typeck_option_result_errors.ers:30:25]
+ 29 │     let at: usize = offset_of(Option(u8), f);
+ 30 │     let r: Option(u8) = *v;
+    ·                         ─┬
+    ·                          ╰── an enum with payloads is an aggregate, without fields to access one at a time
+ 31 │ }
+    ╰────
+  help: the width and number of the bus accesses would be up to the compiler; device registers are
+        described with structs, integers and enums without payloads (ADR 0023, 0039)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_option_result_errors.ers:34:26]
+ 33 │ fn arguments(x: Option(u32)) {
+ 34 │     let y: Option(u16) = x;
+    ·                          ┬
+    ·                          ╰── expected `Option(u16)`, found `Option(u32)`
+ 35 │     let z: Option(u8) = .Some;
+    ╰────
+ty::wrong-payload-count
+
+  × `.Some` carries 1 value, but none are given
+    ╭─[typeck_option_result_errors.ers:35:25]
+ 34 │     let y: Option(u16) = x;
+ 35 │     let z: Option(u8) = .Some;
+    ·                         ──┬──
+    ·                           ╰── built without its values
+ 36 │     let w: Result(u8, Mode) = .Nope(1);
+    ╰────
+  help: a variant with a payload is built with its values, as in `.Some(...)`; it is not a
+        function (ADR 0039)
+ty::unknown-variant
+
+  × `Result(u8, Mode)` has no variant `Nope`
+    ╭─[typeck_option_result_errors.ers:36:32]
+ 35 │     let z: Option(u8) = .Some;
+ 36 │     let w: Result(u8, Mode) = .Nope(1);
+    ·                                ──┬─
+    ·                                  ╰── unknown variant
+ 37 │ }
+    ╰────
+  help: its variants are `Ok`, `Err`
+ty::non-exhaustive-match
+
+  × non-exhaustive `match`: `.None` not covered
+    ╭─[typeck_option_result_errors.ers:40:11]
+ 39 │ fn witnesses(o: Option(u8), r: Result(u8, Mode), m: Option(Mode)) {
+ 40 │     match o {
+    ·           ┬
+    ·           ╰── missing: `.None`
+ 41 │         .Some(_) => {}
+    ╰────
+  help: add `.None => ...`, or a `_` arm (ADR 0037)
+ty::non-exhaustive-match
+
+  × non-exhaustive `match`: `.Some(_)` not covered
+    ╭─[typeck_option_result_errors.ers:43:11]
+ 42 │     }
+ 43 │     match o {
+    ·           ┬
+    ·           ╰── missing: `.Some(_)`
+ 44 │         .None => {}
+    ╰────
+  help: add `.Some(_) => ...`, or a `_` arm (ADR 0037)
+ty::non-exhaustive-match
+
+  × non-exhaustive `match`: `.Err(_)` not covered
+    ╭─[typeck_option_result_errors.ers:46:11]
+ 45 │     }
+ 46 │     match r {
+    ·           ┬
+    ·           ╰── missing: `.Err(_)`
+ 47 │         .Ok(_) => {}
+    ╰────
+  help: add `.Err(_) => ...`, or a `_` arm (ADR 0037)
+ty::non-exhaustive-match
+
+  × non-exhaustive `match`: `.Some(Mode::Run)` not covered
+    ╭─[typeck_option_result_errors.ers:49:11]
+ 48 │     }
+ 49 │     match m {
+    ·           ┬
+    ·           ╰── missing: `.Some(Mode::Run)`
+ 50 │         .None => {}
+    ╰────
+  help: add `.Some(Mode::Run) => ...`, or a `_` arm (ADR 0037)

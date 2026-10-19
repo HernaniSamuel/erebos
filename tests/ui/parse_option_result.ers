@@ -1,0 +1,21 @@
+// emit: ast
+// A name followed by type arguments in parentheses, comma-separated with
+// a trailing comma allowed, is a type (ADR 0045), wherever a type is
+// written: fields, payloads, constants, statics, `extern` signatures,
+// parameters, return types, `let`, `size_of` and its kin, casts and
+// bindings; nested, behind pointers and in array types. `Name()` parses,
+// and is a count error.
+enum E: u8 { A = 0, B(Option(u8)) = 1 }
+struct S { a: Option(u32), b: [Result(u8, E,); 2] }
+const C: Option(Option(u8)) = .None;
+static T: *const Result([u8; 4], E) = 0 as *const Result([u8; 4], E);
+extern fn ext(p: *mut Option(u64)) -> Result((), E);
+
+fn f(x: Option(*const [u8])) -> Option() {
+    let y: Result(Option(u8), *mut S) = .Ok(.None);
+    let n: usize = size_of(Option(u16)) + align_of(Result(u8, u8));
+    match y {
+        .Ok(let z: Option(u8)) => {}
+        _ => {}
+    }
+}

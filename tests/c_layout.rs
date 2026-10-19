@@ -1,7 +1,9 @@
 //! Struct layouts against C (ADR 0022): the layouts the compiler computes
 //! for `tests/layout/structs.ers` must be the ones clang gives the C twins
 //! in `tests/layout/structs.h` on the same target. The twin of an enum with
-//! payloads is a union of structs that each start with the tag (ADR 0039).
+//! payloads is a union of structs that each start with the tag (ADR 0039);
+//! that of an `Option(T)` or `Result(T, E)` (ADR 0045) is named as
+//! `c_name` names it.
 //!
 //! The compiler's layouts come from `--emit=typeck`; each becomes a
 //! `_Static_assert` on `sizeof`, `_Alignof` and `offsetof`, and clang checks
@@ -54,8 +56,8 @@ fn struct_layouts_match_c() {
             what("alignment")
         )
         .unwrap();
-        for field in fields.trim_start_matches('{').split(", ") {
-            let field = field.trim();
+        // A field's type may be `Result(u32, Mode)`.
+        for field in split_top_level(fields.trim_start_matches('{')) {
             let Some((field_name, at)) = field.split_once(": ") else {
                 continue;
             };
@@ -81,7 +83,8 @@ fn struct_layouts_match_c() {
         else {
             continue;
         };
-        let (name, rest) = rest.split_once(':').unwrap();
+        let (name, rest) = rest.split_once(": ").unwrap();
+        let name = c_name(name);
         let (variants, sizes) = rest.rsplit_once("} ").unwrap();
         let (size, align) = sizes
             .strip_prefix("size ")
@@ -156,8 +159,24 @@ fn struct_layouts_match_c() {
     );
 }
 
+/// The name of the C twin of the enum `name`: itself, or for an
+/// `Option(T)` or `Result(T, E)`, its name and arguments run together,
+/// each capitalized, `()` as `Unit`: `Result(u32, Mode)` is
+/// `ResultU32Mode`.
+fn c_name(name: &str) -> String {
+    if !name.contains('(') {
+        return name.to_owned();
+    }
+    name.replace("()", "Unit")
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .filter(|part| !part.is_empty())
+        .map(|part| part[..1].to_ascii_uppercase() + &part[1..])
+        .collect()
+}
+
 /// `text` split at the `, ` outside parentheses: the variants of an enum,
-/// or the values of a payload, whose types may hold `()`.
+/// the values of a payload, or the fields of a struct, whose types may
+/// hold `()` or type arguments.
 fn split_top_level(text: &str) -> Vec<&str> {
     let mut parts = Vec::new();
     let mut depth = 0;
