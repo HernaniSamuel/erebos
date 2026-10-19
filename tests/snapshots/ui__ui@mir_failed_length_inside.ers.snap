@@ -1,0 +1,17 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/mir_failed_length_inside.ers
+---
+--- errors ---
+ty::division-by-zero
+
+  × division by zero
+   ╭─[mir_failed_length_inside.ers:6:22]
+ 5 │ // lowered to MIR. One error, at the length, and nothing more.
+ 6 │ const N: usize = 1 / 0;
+   ·                      ┬
+   ·                      ╰── this divisor is zero
+ 7 │ 
+   ╰────
+  help: at run time this would call the panic function (ADR 0007)

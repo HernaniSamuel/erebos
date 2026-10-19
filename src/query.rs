@@ -1299,11 +1299,20 @@ impl<'h> Queries<'h> {
 
     /// Whether the MIR type of `ty` needs a struct or an enum with payloads
     /// without a layout, or a type that failed; the types in `seen` were
-    /// looked at already.
+    /// looked at already. The types of fields and payload values are not
+    /// normalized, so an array length that failed is found here: `ty` is
+    /// in error wherever `normalize` would make it `{error}`.
     fn lacks_layout(&mut self, ty: hir::Ty, seen: &mut Vec<Composite>) -> bool {
         match ty {
             hir::Ty::Ptr(ptr) => self.lacks_layout(*ptr.pointee, seen),
-            hir::Ty::Array(elem, _) | hir::Ty::Slice(elem) => self.lacks_layout(*elem, seen),
+            // A struct or enum lays out a field whose length failed as
+            // empty, keeping its own layout (see `layout::of`), so a
+            // length is checked wherever it is reached, behind pointers
+            // too.
+            hir::Ty::Array(elem, len) => {
+                self.lacks_layout(*elem, seen) || self.array_len(len).is_none()
+            }
+            hir::Ty::Slice(elem) => self.lacks_layout(*elem, seen),
             hir::Ty::Struct(s) => {
                 if seen.contains(&Composite::Struct(s.id)) {
                     return false;

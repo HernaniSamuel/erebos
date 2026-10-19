@@ -1,0 +1,37 @@
+// emit: mir
+// Regression: a length that fails to evaluate inside a struct or an enum
+// with payloads leaves the type its layout, the field laid out as empty;
+// the code using the type, by value or through a pointer, must still not be
+// lowered to MIR. One error, at the length, and nothing more.
+const N: usize = 1 / 0;
+
+struct Broken { x: [u8; N] }
+enum Payload: u8 { A([u8; N]) = 0, B = 1 }
+struct Outer { b: Broken }
+struct Holder { p: *const Broken }
+
+// Evaluated at compile time.
+fn through_pointer(p: *const Broken) -> u32 { 2 }
+const C: u32 = through_pointer(0 as *const Broken);
+fn enum_through_pointer(p: *const Payload) -> u32 { 2 }
+const D: u32 = enum_through_pointer(0 as *const Payload);
+fn returned() -> *const Broken { 0 as *const Broken }
+const R: *const Broken = returned();
+static S: *const Broken = 0 as *const Broken;
+const SIZE: usize = size_of(*const Broken);
+comptime { let p: *const Broken = 0 as *const Broken; }
+
+// Lowered for run time.
+fn by_value(b: Broken) -> u32 { 2 }
+fn local() { let p: *const Broken = 0 as *const Broken; }
+fn nested(p: *const Outer) -> u32 { 2 }
+fn array(p: *const [Broken; 2]) -> u32 { 2 }
+fn unsized(p: *const [Broken]) -> u32 { 2 }
+fn held(h: Holder) -> u32 { 2 }
+fn enum_by_value(e: Payload) -> u32 { match e { Payload::A(_) => 1, Payload::B => 2 } }
+fn option(p: Option(*const Broken)) -> u32 { 2 }
+fn field(p: *const Broken) -> u8 { (*p).x[0] }
+fn inner_comptime() -> usize { comptime { let p: *const Broken = 0 as *const Broken; 1 } }
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

@@ -1,0 +1,37 @@
+// emit: typeck
+// A type that reaches a length that failed to evaluate, through a field, a
+// payload value or a pointer, is in error like one with a payload of type
+// `!` (ADR 0034, 0039): reported once, at the length. A `match` on an enum
+// with such a payload checks neither its coverage nor its payload
+// patterns, and `?` on or returning such a type checks nothing more, so
+// each function below reports nothing although it would otherwise.
+const N: usize = 1 / 0;
+
+struct Broken { x: [u8; N] }
+enum E: u8 { A(*const Broken) = 0, B = 1 }
+
+fn not_covered(e: E) -> u32 {
+    match e {
+        E::B => 2,
+    }
+}
+
+fn wrong_payload_type(e: E) -> u32 {
+    match e {
+        E::A(let p: u32) => p,
+        E::B => 2,
+    }
+}
+
+fn try_other_error(r: Result(*const Broken, u8)) -> Result(u32, u16) {
+    let p: *const Broken = r?;
+    .Ok(2)
+}
+
+fn try_into_other_error(r: Result(u32, u8)) -> Result(*const Broken, u16) {
+    let n: u32 = r?;
+    .Ok(0 as *const Broken)
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

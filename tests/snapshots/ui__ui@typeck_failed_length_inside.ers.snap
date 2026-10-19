@@ -1,0 +1,17 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_failed_length_inside.ers
+---
+--- errors ---
+ty::division-by-zero
+
+  × division by zero
+   ╭─[typeck_failed_length_inside.ers:8:22]
+ 7 │ // each function below reports nothing although it would otherwise.
+ 8 │ const N: usize = 1 / 0;
+   ·                      ┬
+   ·                      ╰── this divisor is zero
+ 9 │ 
+   ╰────
+  help: at run time this would call the panic function (ADR 0007)
