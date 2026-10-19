@@ -1,6 +1,6 @@
 # 0039. Enum variants with payloads
 
-- Status: Accepted
+- Status: Accepted; amended by 0044 (`.V(args)` builds a variant)
 - Date: 2026-10-17
 - Amends: 0023 (an enum with payloads is an aggregate for volatile
   accesses), 0025 (enums with payloads cross calls as aggregates), 0032

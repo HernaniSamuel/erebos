@@ -1,6 +1,6 @@
 # 0040. Patterns in payloads
 
-- Status: Accepted; amended by 0042 (code generation), 0043 (witnesses listed without a count)
+- Status: Accepted; amended by 0042 (code generation), 0043 (witnesses listed without a count), 0044 (`.V` patterns, and the enums a `match` needs)
 - Date: 2026-10-17
 - Amends: 0036 (which values make a `match` call the panic function),
   0037 (what can be matched, variant patterns with payloads, nested

@@ -1,6 +1,6 @@
 # 0035. Enums with explicit discriminants
 
-- Status: Accepted; amended by 0038 (a `match` that needs no value is checked on an enum with a failed or repeated value), 0039 (an enum with payloads is not its integer)
+- Status: Accepted; amended by 0038 (a `match` that needs no value is checked on an enum with a failed or repeated value), 0039 (an enum with payloads is not its integer), 0044 (a variant may be named `.V`)
 - Date: 2026-10-16
 - Amends: 0023 (an enum is a scalar), 0032 (enum variants are known at
   compile time)

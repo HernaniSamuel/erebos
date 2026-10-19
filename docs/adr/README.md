@@ -64,12 +64,15 @@ Do not write one for local implementation details that the code already explains
 | 0032 | [Checks on values known at compile time](0032-checks-on-values-known-at-compile-time.md) | Accepted, amended by 0035, 0037, 0039 |
 | 0033 | [The compiler pipeline with compile-time evaluation](0033-compiler-pipeline-with-evaluation.md) | Accepted |
 | 0034 | [`!` is not a type of memory](0034-never-is-not-a-type-of-memory.md) | Accepted, amended by 0039 |
-| 0035 | [Enums with explicit discriminants](0035-enums-with-explicit-discriminants.md) | Accepted, amended by 0038, 0039 |
+| 0035 | [Enums with explicit discriminants](0035-enums-with-explicit-discriminants.md) | Accepted, amended by 0038, 0039, 0044 |
 | 0036 | [Enum values that are no variant](0036-enum-values-that-are-no-variant.md) | Accepted, amended by 0039, 0040 |
-| 0037 | [`match` and patterns](0037-match-and-patterns.md) | Accepted, amended by 0038, 0040, 0041 |
+| 0037 | [`match` and patterns](0037-match-and-patterns.md) | Accepted, amended by 0038, 0040, 0041, 0044 |
 | 0038 | [The enum values a `match` needs](0038-enum-values-a-match-needs.md) | Accepted, amended by 0040 |
-| 0039 | [Enum variants with payloads](0039-enum-variants-with-payloads.md) | Accepted |
-| 0040 | [Patterns in payloads](0040-patterns-in-payloads.md) | Accepted, amended by 0042, 0043 |
+| 0039 | [Enum variants with payloads](0039-enum-variants-with-payloads.md) | Accepted, amended by 0044 |
+| 0040 | [Patterns in payloads](0040-patterns-in-payloads.md) | Accepted, amended by 0042, 0043, 0044 |
 | 0041 | [Bindings in or-patterns](0041-bindings-in-or-patterns.md) | Accepted, amended by 0042 |
 | 0042 | [`match` code tested arm by arm](0042-match-code-tested-arm-by-arm.md) | Accepted |
 | 0043 | [At most four witnesses searched](0043-at-most-four-witnesses.md) | Accepted |
+| 0044 | [Variants named by the expected type](0044-variants-named-by-the-expected-type.md) | Accepted |
+| 0045 | [`Option(T)` and `Result(T, E)`](0045-option-and-result.md) | Accepted |
+| 0046 | [The `?` operator](0046-the-question-mark-operator.md) | Accepted |
