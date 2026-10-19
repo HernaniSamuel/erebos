@@ -200,6 +200,25 @@ fn pairs_without_a_wildcard_arm_lists_three_witnesses_and_more() {
         .unwrap_or_else(|| panic!("no `missing` label in:\n{diags}"));
     assert_eq!(label.matches("`P::A(").count(), 3, "{label}");
     assert!(label.ends_with("` and more"), "{label}");
+    // The message lists the same, on lines miette wraps at 100 columns.
+    let message = message(&diags);
+    assert_eq!(
+        message,
+        format!("non-exhaustive `match`: {label} not covered"),
+        "{diags}"
+    );
+}
+
+/// The message of the one diagnostic in `diags`, its wrapped lines joined.
+fn message(diags: &str) -> String {
+    let mut lines = diags.lines().skip_while(|line| !line.starts_with("  × "));
+    let first = lines
+        .next()
+        .unwrap_or_else(|| panic!("no message in:\n{diags}"));
+    std::iter::once(&first["  × ".len()..])
+        .chain(lines.map_while(|line| line.strip_prefix("  │ ")))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 #[test]

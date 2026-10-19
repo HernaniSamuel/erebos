@@ -15,11 +15,14 @@
 //! costs what its arms name.
 //!
 //! Values the rows do not tell apart are examined once: two values, or two
-//! alternatives of an or-pattern, at one position are alike when the rows
-//! that match each, and in `useful` the pattern left after each, are the
-//! same patterns of the same arms, and then they get the same answer. An
-//! or-pattern of values without payload, such as `1 | 2 | 3`, so costs
-//! one alternative where the rows treat its values alike, instead of
+//! alternatives of an or-pattern, at one position are alike when the
+//! columns left after each are the same, and the rows that match each, and
+//! in `useful` the pattern left after each, hold the same patterns, by
+//! address, row by row and position by position, and then they get the
+//! same answer. Which arm a row comes from is not compared: rows of
+//! different arms, or rows left without patterns, can be alike. An
+//! or-pattern of values without payload, such as `1 | 2 | 3`, so costs one
+//! alternative where the rows treat its values alike, instead of
 //! multiplying the cost of the positions after it. Only values at the same
 //! position are compared, so the worst case stays exponential (ADR 0043).
 
@@ -332,8 +335,9 @@ impl<'p> Next<'p> {
     }
 
     /// Whether the search goes on alike after both values: the same
-    /// columns, and the same rows and pattern left, pattern by pattern, as
-    /// the same patterns of the same arms.
+    /// columns, as many rows, and each row and the pattern left holding the
+    /// same patterns, by address, position by position. Which arm a row
+    /// comes from is not compared.
     fn alike(&self, other: &Next) -> bool {
         self.rows.len() == other.rows.len()
             && self.rows.iter().zip(&other.rows).all(|(a, b)| same(a, b))
@@ -779,6 +783,44 @@ mod tests {
         assert_eq!(
             missing_up_to(&enums, msg, &[], 4),
             missing_up_to(&enums, msg, &[], 100)[..4]
+        );
+    }
+
+    #[test]
+    fn the_search_stops_at_the_limit_inside_a_payload() {
+        let (msg, _, enums) = msg();
+        let v = |value: u64, subs: Vec<Pat>| Pat::Value(value, subs);
+        // The arms of `nested_witnesses_in_written_order`.
+        let arms = [
+            v(0, vec![]),
+            v(1, vec![value(1)]),
+            v(2, vec![value(0), value(5)]),
+        ];
+        let search_up_to = |limit: usize| {
+            let search = Search::new(&enums);
+            let found = missing(&search, &[msg], &rows(&arms), false, limit);
+            (found, search.calls())
+        };
+        // With 2, `Msg::Led(false)` is found first, and the search of the
+        // payload of `Msg::Write` wants one more: it stops after
+        // `Msg::Write(0, 0)`, before examining the value `1` of its first
+        // position, which `Msg::Write(1, _)` would come from.
+        let (two, two_calls) = search_up_to(2);
+        assert_eq!(
+            two,
+            vec![
+                vec![v(1, vec![value(0)])],
+                vec![v(2, vec![value(0), value(0)])],
+            ]
+        );
+        // With 3, that search goes on to `Msg::Write(1, _)`, and the one at
+        // the top stops after it: only the payload search did more.
+        let (three, three_calls) = search_up_to(3);
+        assert_eq!(three[..2], two);
+        assert_eq!(three[2], vec![v(2, vec![value(1), Pat::Wild])]);
+        assert!(
+            two_calls < three_calls,
+            "{two_calls} and {three_calls} calls"
         );
     }
 
