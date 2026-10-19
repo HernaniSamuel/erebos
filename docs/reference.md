@@ -839,9 +839,10 @@ written, depth first:
   literals, constants or variants written without a payload are one switch
   with one case per value, as in `0x10 | 0x11` or `Mode::Off | Mode::Run`.
 
-A test that fails never goes back into an earlier or-pattern: patterns
-read no memory, so which of its alternatives passed does not change
-whether a later position matches. A test at an enum position fails on a
+A test that fails never goes back into an earlier or-pattern: the
+positions of a pattern are disjoint, and patterns read no memory, so
+which of its alternatives passed does not change whether a later
+position matches. A test at an enum position fails on a
 value that is no variant, as on any variant it does not name. A chain
 without a catch-all arm ends in the call to the panic function, even at a
 variant whose arms test only `bool` and integer positions, which no value
