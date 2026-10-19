@@ -58,9 +58,24 @@ being designed twice.
 
 Agreed as useful, not yet scheduled:
 
-- `for i in 0..n` over integer ranges, without general iterators.
+- `for i in 0..n` over integer ranges, without general iterators. With
+  `n` evaluated once and `i` not assignable in the body, such a loop
+  always ends, so most counting `while` loops need no termination
+  argument.
 - Loop labels (`'outer: loop`) to break out of nested loops.
 - Warnings (unreachable code, unused variables); today there are only errors.
+  Among them, loops that certainly never end once entered: a `while`
+  whose condition reads nothing the body can change (no assignment to
+  its variables, no call, no write through a pointer, no volatile read),
+  and a `while` from which no path leaves, as one whose body always
+  enters a `loop` without `break`. A `loop` is infinite on purpose and a
+  volatile read may change from outside, so neither is warned about.
+- Loop variants, as SPARK Ada and Dafny have them: `while i < n
+  decreases n - i { ... }`, where the variant, an unsigned integer, must
+  decrease at every iteration. Checked at run time like division
+  (ADR 0007): the loop ends, or calls the panic function, and never hangs
+  silently; checks the compiler can prove, as `i = i + 1` with `n` fixed,
+  are removed.
 - A compiler server for AI agents: look up a symbol by name and get its
   definition, type and uses from the compiler, and edit by symbol (a patch
   to a function or item) with the change type checked before it is
