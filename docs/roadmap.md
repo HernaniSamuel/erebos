@@ -61,6 +61,12 @@ Agreed as useful, not yet scheduled:
 - `for i in 0..n` over integer ranges, without general iterators.
 - Loop labels (`'outer: loop`) to break out of nested loops.
 - Warnings (unreachable code, unused variables); today there are only errors.
+- A compiler server for AI agents: look up a symbol by name and get its
+  definition, type and uses from the compiler, and edit by symbol (a patch
+  to a function or item) with the change type checked before it is
+  applied, instead of reading and matching file text. Unlike LSP, queries
+  are by name, not by cursor position. It builds on the on-demand queries
+  of ADR 0028 and the structured diagnostics; still to be designed.
 
 ## Notes for M2
 
