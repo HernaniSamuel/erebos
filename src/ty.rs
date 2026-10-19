@@ -36,6 +36,8 @@ pub struct Tables {
     /// is (ADR 0031): unlike the other conversion (ADR 0024), it changes
     /// the representation.
     coercions: HashMap<ExprId, Ty>,
+    /// The enum and variant index each `.V` names (ADR 0044).
+    variants: HashMap<ExprId, (EnumId, u32)>,
 }
 
 impl Tables {
@@ -46,6 +48,7 @@ impl Tables {
             expr_types: vec![Ty::Error; expr_count as usize],
             fields: HashMap::new(),
             coercions: HashMap::new(),
+            variants: HashMap::new(),
         }
     }
 
@@ -62,6 +65,12 @@ impl Tables {
     /// converted to, if it is (ADR 0031).
     pub fn coercion(&self, id: ExprId) -> Option<Ty> {
         self.coercions.get(&id).copied()
+    }
+
+    /// The enum and the index of the variant that the `.V` `id` names,
+    /// resolved against its expected type (ADR 0044).
+    pub fn variant(&self, id: ExprId) -> (EnumId, u32) {
+        self.variants[&id]
     }
 }
 
@@ -217,16 +226,30 @@ fn comparable(ty: Ty) -> Ty {
     }
 }
 
-/// Expressions that cannot be typed on their own: integer literals, and
-/// operators applied only to them.
+/// Expressions that cannot be typed on their own: integer literals,
+/// variants named by the expected type (ADR 0044), and operators applied
+/// only to them.
 fn needs_expected_type(expr: &Expr) -> bool {
+    untyped(expr, true)
+}
+
+/// Whether the operand of `as` takes the type a literal there takes
+/// (ADR 0017): as `needs_expected_type`, but a `.V` takes none, since
+/// nothing converts to an enum (ADR 0044).
+fn takes_literal_type(expr: &Expr) -> bool {
+    untyped(expr, false)
+}
+
+/// `needs_expected_type`, where `.V` counts only with `variants`.
+fn untyped(expr: &Expr, variants: bool) -> bool {
     match &expr.kind {
         ExprKind::Int(_) => true,
-        ExprKind::Unary(_, operand) | ExprKind::Comptime(operand) => needs_expected_type(operand),
+        ExprKind::ContextVariant(..) => variants,
+        ExprKind::Unary(_, operand) | ExprKind::Comptime(operand) => untyped(operand, variants),
         // A comparison is a `bool` whatever its operands are.
         ExprKind::Binary(op, _, _) if op.is_comparison() => false,
-        ExprKind::Binary(op, lhs, _) if op.is_shift() => needs_expected_type(lhs),
-        ExprKind::Binary(_, lhs, rhs) => needs_expected_type(lhs) && needs_expected_type(rhs),
+        ExprKind::Binary(op, lhs, _) if op.is_shift() => untyped(lhs, variants),
+        ExprKind::Binary(_, lhs, rhs) => untyped(lhs, variants) && untyped(rhs, variants),
         _ => false,
     }
 }
@@ -607,6 +630,9 @@ impl Checker<'_, '_> {
             ExprKind::Const(id) => self.norm(self.hir.const_(*id).ty),
             ExprKind::Variant(id, index, args) => {
                 self.variant(f, expr, *id, *index, args.as_deref())
+            }
+            ExprKind::ContextVariant(name, name_span, args) => {
+                self.context_variant(f, expr, name, *name_span, args.as_deref(), expected)
             }
             // The value is computed later; its type is checked here, with
             // the expected type passed through (ADR 0029).
@@ -1520,6 +1546,61 @@ impl Checker<'_, '_> {
         Ty::Enum(def.ty)
     }
 
+    /// `.V`, or `.V(args)` when `args` are written: the variant `V` of the
+    /// enum that is the expected type, then checked as `E::V` is
+    /// (ADR 0044). When it names no variant, which is reported unless the
+    /// expected type is erroneous, its values are checked against
+    /// `{error}`, so that they report nothing more.
+    fn context_variant(
+        &mut self,
+        f: &Fn,
+        expr: &Expr,
+        name: &str,
+        name_span: Span,
+        args: Option<&[Expr]>,
+        expected: Option<Ty>,
+    ) -> Ty {
+        let hir = self.hir;
+        let found = match expected {
+            Some(Ty::Enum(e)) => {
+                let def = hir.enum_(e.id);
+                match def.variants.iter().position(|v| v.name == name) {
+                    Some(index) => Some((e.id, index as u32)),
+                    None => {
+                        self.q.diags.push(unknown_variant(def, name, name_span));
+                        None
+                    }
+                }
+            }
+            Some(Ty::Error) => None,
+            Some(other) => {
+                self.q.diags.push(
+                    Diagnostic::error("ty::mismatched-types", "mismatched types")
+                        .label(
+                            expr.span,
+                            format!("expected `{other}`, found variant `.{name}`"),
+                        )
+                        .help(format!(
+                            "`.{name}` names a variant of the enum expected where it appears, and `{other}` is not an enum (ADR 0044)"
+                        )),
+                );
+                None
+            }
+            None => {
+                self.q.diags.push(untyped_variant(hir, name, expr.span));
+                None
+            }
+        };
+        let Some((id, index)) = found else {
+            for arg in args.unwrap_or_default() {
+                self.check(f, arg, Some(Ty::Error));
+            }
+            return Ty::Error;
+        };
+        self.q.tables.variants.insert(expr.id, (id, index));
+        self.variant(f, expr, id, index, args)
+    }
+
     /// Each argument is checked against its parameter's type.
     fn call(&mut self, f: &Fn, expr: &Expr, callee: hir::FnId, args: &[Expr]) -> Ty {
         let target = self.hir.fn_(callee);
@@ -1861,7 +1942,7 @@ impl Checker<'_, '_> {
             Ty::Error | Ty::Never | Ty::Enum(_) => Some(Ty::Error),
             _ => None,
         };
-        let expected = if needs_expected_type(operand) {
+        let expected = if takes_literal_type(operand) {
             literal_ty
         } else {
             None
@@ -2846,6 +2927,79 @@ fn payload_count(
     Some(diag.label(variant.span, "declared here"))
 }
 
+/// `ty::unknown-variant` for `.name`, written at `span`, where a value of
+/// the enum `def` is expected (ADR 0044).
+fn unknown_variant(def: &hir::EnumDef, name: &str, span: Span) -> Diagnostic {
+    // A variant declared twice was reported, and is listed once.
+    let mut names: Vec<String> = Vec::new();
+    for variant in &def.variants {
+        let listed = format!("`{}`", variant.name);
+        if !names.contains(&listed) {
+            names.push(listed);
+        }
+    }
+    let diag = Diagnostic::error(
+        "ty::unknown-variant",
+        format!("`{}` has no variant `{name}`", def.name),
+    )
+    .label(span, "unknown variant")
+    .label(def.name_span, format!("`{}` is declared here", def.name));
+    if names.is_empty() {
+        diag.help(format!("`{}` has no variants", def.name))
+    } else {
+        diag.help(format!("its variants are {}", names.join(", ")))
+    }
+}
+
+/// `ty::untyped-variant` for `.name`, written at `span` where no type is
+/// expected (ADR 0044). The help names the enum when exactly one declared
+/// enum has a variant `name`, and writes the type for the variants of
+/// `Option` and `Result` (ADR 0045), both in one help when both apply.
+fn untyped_variant(hir: &Hir, name: &str, span: Span) -> Diagnostic {
+    let mut having = hir.enums.iter().filter_map(|def| {
+        def.variants
+            .iter()
+            .find(|variant| variant.name == name)
+            .map(|variant| (def, variant))
+    });
+    let named = match (having.next(), having.next()) {
+        (Some((def, variant)), None) => {
+            let values = if variant.payload.is_empty() {
+                ""
+            } else {
+                "(...)"
+            };
+            Some(format!("`{}::{name}{values}`", def.name))
+        }
+        _ => None,
+    };
+    let built_in = match name {
+        "None" => Some(("Option", "let x: Option(u32) = .None;")),
+        "Some" => Some(("Option", "let x: Option(u32) = .Some(1);")),
+        "Ok" => Some(("Result", "let x: Result(u32, E) = .Ok(1);")),
+        "Err" => Some(("Result", "let x: Result(u32, E) = .Err(e);")),
+        _ => None,
+    };
+    let help = match (named, built_in) {
+        (Some(named), None) => format!("name its enum: {named} (ADR 0044)"),
+        (None, Some((built_in, example))) => format!(
+            "`.{name}` is a variant of `{built_in}` where one is expected; write its type there, as in `{example}` (ADR 0044, 0045)"
+        ),
+        (Some(named), Some((built_in, example))) => format!(
+            "name its enum: {named}; or, for the variant of `{built_in}`, write its type where the value is expected, as in `{example}` (ADR 0044, 0045)"
+        ),
+        (None, None) => format!(
+            "`.{name}` takes its enum from the type expected where it appears; name the enum, as in `E::{name}`, or give the value a type first, as in `let x: E = .{name};` (ADR 0044)"
+        ),
+    };
+    Diagnostic::error(
+        "ty::untyped-variant",
+        format!("cannot tell the enum of `.{name}`"),
+    )
+    .label(span, "no type is expected here")
+    .help(help)
+}
+
 /// A variant pattern of `e`, naming its first variant, with `_` for each
 /// of its payload values.
 fn variant_pattern_example(hir: &Hir, e: EnumTy) -> String {
@@ -2953,6 +3107,7 @@ fn expr_label(hir: &Hir, f: &Fn, expr: &Expr) -> String {
                 def.name, def.variants[*index as usize].name
             )
         }
+        ExprKind::ContextVariant(name, _, _) => format!("variant .{name}"),
         ExprKind::Comptime(_) => "comptime".to_owned(),
         ExprKind::Array(_) => "array".to_owned(),
         ExprKind::StructLit(s, _) => format!("struct {}", s.name),

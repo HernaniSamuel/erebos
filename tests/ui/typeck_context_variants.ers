@@ -1,0 +1,90 @@
+// emit: typeck
+// `.V` and `.V(args)` name a variant of the enum that is the expected type
+// (ADR 0044), at every position an integer literal takes its type: the
+// initializer of a `let`, a constant and a static, the right side of an
+// assignment, an argument, a payload value, a struct literal's field, an
+// array element and a repeat operand, `return`'s value, a function's and a
+// block's tail, the branches of `if`, the arms of `match`, `break`'s value,
+// `comptime`'s operand, and either side of `==`; for an enum without
+// payloads and one with payloads. The type may come from a sibling: an
+// earlier branch, arm, `break` or element. Each has the type and value of
+// its `E::V`.
+enum Mode: u8 { Off = 0, Run = 3 }
+enum Msg: u8 { Nop = 0, Set(Mode) = 1, Write(u8, u16) = 2 }
+
+struct Holder { mode: Mode, msg: Msg }
+
+const START: Mode = .Run;
+const FIRST: Msg = .Write(3, 0x1234);
+static mut LAST: Msg = .Set(.Off);
+
+fn take(m: Mode, msg: Msg) -> Msg {
+    msg
+}
+
+fn statements(m: Mode) -> Mode {
+    let mut a: Mode = .Off;
+    a = .Run;
+    let mut b: Msg = .Nop;
+    b = .Write(1, 2);
+    LAST = .Set(.Run);
+    let c: Msg = take(.Run, .Set(.Off));
+    let h: Holder = Holder { mode: .Off, msg: .Write(4, 5) };
+    let modes: [Mode; 3] = [.Off, .Run, m];
+    let msgs: [Msg; 2] = [.Nop, .Set(.Run)];
+    let filled: [Mode; 4] = [.Run; 4];
+    let filled_msgs: [Msg; 2] = [.Write(0, 0); 2];
+    let block: Mode = { .Run };
+    let known: Msg = comptime .Write(7, 8);
+    .Off
+}
+
+fn returns(c: bool) -> Msg {
+    if c {
+        return .Set(.Run);
+    }
+    .Nop
+}
+
+fn branches(c: bool, x: u8) -> Msg {
+    let m: Mode = if c { .Run } else { .Off };
+    let n: Mode = match x {
+        0 => .Off,
+        _ => .Run,
+    };
+    let out: Msg = loop {
+        if c {
+            break .Write(1, 2);
+        }
+        break .Nop;
+    };
+    if c { .Set(m) } else { .Set(n) }
+}
+
+fn compared(m: Mode) -> bool {
+    m == .Run && .Off != m
+}
+
+// The type taken from a sibling.
+fn siblings(c: bool, x: u8, m: Mode, msg: Msg) -> Mode {
+    let a: Mode = if c { m } else { .Off };
+    let b: Msg = match x {
+        0 => msg,
+        1 => .Nop,
+        _ => .Write(1, 2),
+    };
+    let d: Mode = loop {
+        if c {
+            break m;
+        }
+        break .Run;
+    };
+    let e: [Mode; 2] = [m, .Off];
+    let f: u8 = [m, .Off][1] as u8;
+    let g: u8 = [.Off, m][0] as u8;
+    let h: u8 = (if c { m } else { .Run }) as u8;
+    a
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

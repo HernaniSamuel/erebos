@@ -478,6 +478,10 @@ pub enum ExprKind {
     /// constant. With its arguments, `Enum::Variant(args)`, if written with
     /// parentheses: the values of its payload, in order (ADR 0039).
     Variant(EnumId, u32, Option<Vec<Expr>>),
+    /// `.Variant`, with the span of its name, or `.Variant(args)`: a
+    /// variant of the enum that is the expected type, which the type
+    /// checker resolves (ADR 0044). Otherwise as `Variant`.
+    ContextVariant(String, Span, Option<Vec<Expr>>),
     /// `comptime expr`, evaluated at compile time (ADR 0029).
     Comptime(Box<Expr>),
     /// `[a, b, c]`
@@ -678,6 +682,7 @@ impl Expr {
             | ExprKind::Const(_)
             | ExprKind::Static(_)
             | ExprKind::Variant(_, _, None)
+            | ExprKind::ContextVariant(_, _, None)
             | ExprKind::Local(_)
             | ExprKind::Continue { .. }
             | ExprKind::Break { value: None, .. }
@@ -685,7 +690,8 @@ impl Expr {
             ExprKind::Break { value: Some(e), .. } | ExprKind::Return(Some(e)) => e.walk(f),
             ExprKind::Call { args, .. }
             | ExprKind::Array(args)
-            | ExprKind::Variant(_, _, Some(args)) => {
+            | ExprKind::Variant(_, _, Some(args))
+            | ExprKind::ContextVariant(_, _, Some(args)) => {
                 for arg in args {
                     arg.walk(f);
                 }

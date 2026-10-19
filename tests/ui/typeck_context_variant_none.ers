@@ -1,0 +1,12 @@
+// emit: typeck
+// `.None` where no type is expected, in a program that declares an enum
+// with a variant `None`: `ty::untyped-variant` gives both helps, naming
+// that enum and writing the type of an `Option` (ADR 0044, 0045).
+enum Slot: u8 { None = 0, Full = 1 }
+
+fn untyped() {
+    .None;
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

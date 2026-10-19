@@ -1,0 +1,18 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_context_variant_none.ers
+---
+--- errors ---
+ty::untyped-variant
+
+  × cannot tell the enum of `.None`
+   ╭─[typeck_context_variant_none.ers:8:5]
+ 7 │ fn untyped() {
+ 8 │     .None;
+   ·     ──┬──
+   ·       ╰── no type is expected here
+ 9 │ }
+   ╰────
+  help: name its enum: `Slot::None`; or, for the variant of `Option`, write its type where the
+        value is expected, as in `let x: Option(u32) = .None;` (ADR 0044, 0045)

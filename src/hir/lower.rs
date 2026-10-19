@@ -1378,6 +1378,14 @@ impl Lowerer<'_> {
                     None => ExprKind::Unit,
                 }
             }
+            // Its enum is the expected type, known to type checking
+            // (ADR 0044).
+            ast::ExprKind::ContextVariant(variant, args) => ExprKind::ContextVariant(
+                variant.name.clone(),
+                variant.span,
+                args.as_ref()
+                    .map(|args| args.iter().map(|arg| self.expr(arg)).collect()),
+            ),
             ast::ExprKind::Call(name, args) if name.name == "assert" => {
                 let mut args: Vec<Expr> = args.iter().map(|arg| self.expr(arg)).collect();
                 if !matches!(args.len(), 1 | 2) {

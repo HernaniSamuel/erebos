@@ -1,0 +1,269 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_context_variant_errors.ers
+---
+--- errors ---
+ty::never-in-memory
+
+  × `!` is not a type of memory
+    ╭─[typeck_context_variant_errors.ers:15:26]
+ 14 │ enum Msg: u8 { Nop = 0, Set(Mode) = 1, Write(u8, u16) = 2 }
+ 15 │ enum Broken: u8 { A(u32, !) = 0, B = 1 }
+    ·                          ┬
+    ·                          ╰── `!` as a payload type
+ 16 │ 
+    ╰────
+  help: `!` is the type of expressions that do not finish, so no memory holds one; for a type
+        without data, use `()` (ADR 0034)
+ty::untyped-variant
+
+  × cannot tell the enum of `.Run`
+    ╭─[typeck_context_variant_errors.ers:18:11]
+ 17 │ fn untyped() {
+ 18 │     match .Run {
+    ·           ──┬─
+    ·             ╰── no type is expected here
+ 19 │         _ => {}
+    ╰────
+  help: name its enum: `Mode::Run` (ADR 0044)
+ty::untyped-variant
+
+  × cannot tell the enum of `.Run`
+    ╭─[typeck_context_variant_errors.ers:21:17]
+ 20 │     }
+ 21 │     let a: u8 = .Run as u8;
+    ·                 ──┬─
+    ·                   ╰── no type is expected here
+ 22 │     let b: bool = .Off == .Run;
+    ╰────
+  help: name its enum: `Mode::Run` (ADR 0044)
+ty::untyped-variant
+
+  × cannot tell the enum of `.Off`
+    ╭─[typeck_context_variant_errors.ers:22:19]
+ 21 │     let a: u8 = .Run as u8;
+ 22 │     let b: bool = .Off == .Run;
+    ·                   ──┬─
+    ·                     ╰── no type is expected here
+ 23 │     .Run;
+    ╰────
+  help: `.Off` takes its enum from the type expected where it appears; name the enum, as in
+        `E::Off`, or give the value a type first, as in `let x: E = .Off;` (ADR 0044)
+ty::untyped-variant
+
+  × cannot tell the enum of `.Run`
+    ╭─[typeck_context_variant_errors.ers:23:5]
+ 22 │     let b: bool = .Off == .Run;
+ 23 │     .Run;
+    ·     ──┬─
+    ·       ╰── no type is expected here
+ 24 │     .Off;
+    ╰────
+  help: name its enum: `Mode::Run` (ADR 0044)
+ty::untyped-variant
+
+  × cannot tell the enum of `.Off`
+    ╭─[typeck_context_variant_errors.ers:24:5]
+ 23 │     .Run;
+ 24 │     .Off;
+    ·     ──┬─
+    ·       ╰── no type is expected here
+ 25 │     .None;
+    ╰────
+  help: `.Off` takes its enum from the type expected where it appears; name the enum, as in
+        `E::Off`, or give the value a type first, as in `let x: E = .Off;` (ADR 0044)
+ty::untyped-variant
+
+  × cannot tell the enum of `.None`
+    ╭─[typeck_context_variant_errors.ers:25:5]
+ 24 │     .Off;
+ 25 │     .None;
+    ·     ──┬──
+    ·       ╰── no type is expected here
+ 26 │     .Write(1, 2);
+    ╰────
+  help: `.None` is a variant of `Option` where one is expected; write its type there, as in `let
+        x: Option(u32) = .None;` (ADR 0044, 0045)
+ty::untyped-variant
+
+  × cannot tell the enum of `.Write`
+    ╭─[typeck_context_variant_errors.ers:26:5]
+ 25 │     .None;
+ 26 │     .Write(1, 2);
+    ·     ──────┬─────
+    ·           ╰── no type is expected here
+ 27 │ }
+    ╰────
+  help: name its enum: `Msg::Write(...)` (ADR 0044)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_context_variant_errors.ers:30:18]
+ 29 │ fn not_enums(m: Mode) {
+ 30 │     let a: u32 = .Run;
+    ·                  ──┬─
+    ·                    ╰── expected `u32`, found variant `.Run`
+ 31 │     let values: [u8; 2] = [1, 2];
+    ╰────
+  help: `.Run` names a variant of the enum expected where it appears, and `u32` is not an enum
+        (ADR 0044)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_context_variant_errors.ers:32:24]
+ 31 │     let values: [u8; 2] = [1, 2];
+ 32 │     let b: u8 = values[.Run];
+    ·                        ──┬─
+    ·                          ╰── expected `usize`, found variant `.Run`
+ 33 │     if .Run {}
+    ╰────
+  help: `.Run` names a variant of the enum expected where it appears, and `usize` is not an enum
+        (ADR 0044)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_context_variant_errors.ers:33:8]
+ 32 │     let b: u8 = values[.Run];
+ 33 │     if .Run {}
+    ·        ──┬─
+    ·          ╰── expected `bool`, found variant `.Run`
+ 34 │     let c: bool = .Run < m;
+    ╰────
+  help: `.Run` names a variant of the enum expected where it appears, and `bool` is not an enum
+        (ADR 0044)
+ty::invalid-operand
+
+  × `<` needs integers or pointers, found `Mode`
+    ╭─[typeck_context_variant_errors.ers:34:19]
+ 33 │     if .Run {}
+ 34 │     let c: bool = .Run < m;
+    ·                   ────┬───
+    ·                       ╰── has type `Mode`
+ 35 │ }
+    ╰────
+  help: an enum only compares with `==` and `!=`; for anything else, convert it to its integer
+        first, as in `x as u8` (ADR 0035)
+ty::unknown-variant
+
+  × `Mode` has no variant `Walk`
+    ╭─[typeck_context_variant_errors.ers:12:6]
+ 11 │ // values, and one whose expected type is erroneous reports nothing.
+ 12 │ enum Mode: u8 { Off = 0, Run = 3 }
+    ·      ──┬─
+    ·        ╰── `Mode` is declared here
+ 13 │ enum Power: u8 { Off = 0, Low = 1 }
+    ╰────
+    ╭─[typeck_context_variant_errors.ers:38:20]
+ 37 │ fn unknown() {
+ 38 │     let a: Mode = .Walk;
+    ·                    ──┬─
+    ·                      ╰── unknown variant
+ 39 │     let b: Msg = .Bogus(1);
+    ╰────
+  help: its variants are `Off`, `Run`
+ty::unknown-variant
+
+  × `Msg` has no variant `Bogus`
+    ╭─[typeck_context_variant_errors.ers:14:6]
+ 13 │ enum Power: u8 { Off = 0, Low = 1 }
+ 14 │ enum Msg: u8 { Nop = 0, Set(Mode) = 1, Write(u8, u16) = 2 }
+    ·      ─┬─
+    ·       ╰── `Msg` is declared here
+ 15 │ enum Broken: u8 { A(u32, !) = 0, B = 1 }
+    ╰────
+    ╭─[typeck_context_variant_errors.ers:39:19]
+ 38 │     let a: Mode = .Walk;
+ 39 │     let b: Msg = .Bogus(1);
+    ·                   ──┬──
+    ·                     ╰── unknown variant
+ 40 │ }
+    ╰────
+  help: its variants are `Nop`, `Set`, `Write`
+ty::wrong-payload-count
+
+  × `Msg::Write` carries 2 values, but 1 was given
+    ╭─[typeck_context_variant_errors.ers:14:40]
+ 13 │ enum Power: u8 { Off = 0, Low = 1 }
+ 14 │ enum Msg: u8 { Nop = 0, Set(Mode) = 1, Write(u8, u16) = 2 }
+    ·                                        ──┬──
+    ·                                          ╰── declared here
+ 15 │ enum Broken: u8 { A(u32, !) = 0, B = 1 }
+    ╰────
+    ╭─[typeck_context_variant_errors.ers:43:18]
+ 42 │ fn counts() {
+ 43 │     let a: Msg = .Write(3);
+    ·                  ────┬────
+    ·                      ╰── in this variant
+ 44 │     let b: Msg = .Nop();
+    ╰────
+ty::wrong-payload-count
+
+  × `Msg::Nop` carries no values, but is written with parentheses
+    ╭─[typeck_context_variant_errors.ers:14:16]
+ 13 │ enum Power: u8 { Off = 0, Low = 1 }
+ 14 │ enum Msg: u8 { Nop = 0, Set(Mode) = 1, Write(u8, u16) = 2 }
+    ·                ─┬─
+    ·                 ╰── declared here
+ 15 │ enum Broken: u8 { A(u32, !) = 0, B = 1 }
+    ╰────
+    ╭─[typeck_context_variant_errors.ers:44:18]
+ 43 │     let a: Msg = .Write(3);
+ 44 │     let b: Msg = .Nop();
+    ·                  ───┬──
+    ·                     ╰── in this variant
+ 45 │     let c: Msg = .Write;
+    ╰────
+  help: a variant without payload is named without parentheses: `Msg::Nop` (ADR 0039)
+ty::wrong-payload-count
+
+  × `Msg::Write` carries 2 values, but none are given
+    ╭─[typeck_context_variant_errors.ers:14:40]
+ 13 │ enum Power: u8 { Off = 0, Low = 1 }
+ 14 │ enum Msg: u8 { Nop = 0, Set(Mode) = 1, Write(u8, u16) = 2 }
+    ·                                        ──┬──
+    ·                                          ╰── declared here
+ 15 │ enum Broken: u8 { A(u32, !) = 0, B = 1 }
+    ╰────
+    ╭─[typeck_context_variant_errors.ers:45:18]
+ 44 │     let b: Msg = .Nop();
+ 45 │     let c: Msg = .Write;
+    ·                  ───┬──
+    ·                     ╰── built without its values
+ 46 │ }
+    ╰────
+  help: a variant with a payload is built with its values, as in `Msg::Write(..., ...)`; it is not
+        a function (ADR 0039)
+ty::literal-out-of-range
+
+  × literal out of range for `u8`
+    ╭─[typeck_context_variant_errors.ers:49:25]
+ 48 │ fn values() {
+ 49 │     let a: Msg = .Write(300, 1);
+    ·                         ─┬─
+    ·                          ╰── `300` does not fit in `u8`
+ 50 │     let b: u32 = .Write(3, 4);
+    ╰────
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_context_variant_errors.ers:50:18]
+ 49 │     let a: Msg = .Write(300, 1);
+ 50 │     let b: u32 = .Write(3, 4);
+    ·                  ──────┬─────
+    ·                        ╰── expected `u32`, found variant `.Write`
+ 51 │ }
+    ╰────
+  help: `.Write` names a variant of the enum expected where it appears, and `u32` is not an enum
+        (ADR 0044)
+ty::division-by-zero
+
+  × division by zero
+    ╭─[typeck_context_variant_errors.ers:54:23]
+ 53 │ fn erroneous() {
+ 54 │     let a: [Mode; 1 / 0] = [.Run, .Bogus(1)];
+    ·                       ┬
+    ·                       ╰── this divisor is zero
+ 55 │     let b: Broken = .A(1, 2);
+    ╰────
+  help: at run time this would call the panic function (ADR 0007)

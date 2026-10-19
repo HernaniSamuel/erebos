@@ -919,6 +919,22 @@ impl Parser<'_> {
                 }
                 ExprKind::Name(name)
             }
+            // A variant named by the expected type, its arguments parsed
+            // as a call's (ADR 0044). After an expression, `.` is a field
+            // access instead, in `postfix`.
+            TokenKind::Dot => {
+                self.bump();
+                let variant = self.ident()?;
+                let args = match self.eat(TokenKind::LParen) {
+                    Some(_) => Some(self.comma_list(Self::nested_expr)?),
+                    None => None,
+                };
+                let end = self.tokens[self.pos - 1].span;
+                return Ok(Expr {
+                    span: token.span.to(end),
+                    kind: ExprKind::ContextVariant(variant, args),
+                });
+            }
             TokenKind::LParen => {
                 self.bump();
                 if let Some(close) = self.eat(TokenKind::RParen) {

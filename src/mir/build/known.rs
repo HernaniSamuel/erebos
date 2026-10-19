@@ -31,7 +31,7 @@ pub(super) enum Known {
 
 impl Builder<'_, '_> {
     /// The value of `expr` if it is known at compile time: built only from
-    /// literals, constants, variants (ADR 0035), `comptime` expressions,
+    /// literals, constants, variants (ADR 0035, 0044), `comptime` expressions,
     /// layout queries, unary `-` and `!`, binary operators and `as`.
     pub(super) fn known(&mut self, expr: &hir::Expr) -> Known {
         if let Some(&known) = self.known.get(&expr.id) {
@@ -73,6 +73,14 @@ impl Builder<'_, '_> {
                 Some(value) => Known::Value(value & mask),
                 None => Known::Failed,
             },
+            // As `E::V`, once type checking resolved it (ADR 0044).
+            hir::ExprKind::ContextVariant(..) => {
+                let (id, index) = self.q.tables.variant(expr.id);
+                match self.discriminant(id, index) {
+                    Some(value) => Known::Value(value & mask),
+                    None => Known::Failed,
+                }
+            }
             hir::ExprKind::SizeOf(_) | hir::ExprKind::AlignOf(_) | hir::ExprKind::OffsetOf(..) => {
                 Known::Value(self.layout_query(expr))
             }

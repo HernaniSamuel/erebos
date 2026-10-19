@@ -1,0 +1,417 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/parse_context_variants.ers
+---
+--- ast ---
+File {
+    items: [
+        Enum(
+            EnumDecl {
+                attrs: [],
+                name: Ident {
+                    name: "Mode",
+                    span: 436..440,
+                },
+                ty: Ty {
+                    kind: Named(
+                        Ident {
+                            name: "u8",
+                            span: 442..444,
+                        },
+                    ),
+                    span: 442..444,
+                },
+                variants: [
+                    VariantDecl {
+                        name: Ident {
+                            name: "Off",
+                            span: 447..450,
+                        },
+                        payload: [],
+                        value: Expr {
+                            kind: Int(
+                                Some(
+                                    0,
+                                ),
+                            ),
+                            span: 453..454,
+                        },
+                    },
+                    VariantDecl {
+                        name: Ident {
+                            name: "Run",
+                            span: 456..459,
+                        },
+                        payload: [],
+                        value: Expr {
+                            kind: Int(
+                                Some(
+                                    1,
+                                ),
+                            ),
+                            span: 462..463,
+                        },
+                    },
+                ],
+                span: 431..465,
+            },
+        ),
+        Enum(
+            EnumDecl {
+                attrs: [],
+                name: Ident {
+                    name: "Msg",
+                    span: 471..474,
+                },
+                ty: Ty {
+                    kind: Named(
+                        Ident {
+                            name: "u8",
+                            span: 476..478,
+                        },
+                    ),
+                    span: 476..478,
+                },
+                variants: [
+                    VariantDecl {
+                        name: Ident {
+                            name: "Nop",
+                            span: 481..484,
+                        },
+                        payload: [],
+                        value: Expr {
+                            kind: Int(
+                                Some(
+                                    0,
+                                ),
+                            ),
+                            span: 487..488,
+                        },
+                    },
+                    VariantDecl {
+                        name: Ident {
+                            name: "Set",
+                            span: 490..493,
+                        },
+                        payload: [
+                            Ty {
+                                kind: Named(
+                                    Ident {
+                                        name: "Mode",
+                                        span: 494..498,
+                                    },
+                                ),
+                                span: 494..498,
+                            },
+                        ],
+                        value: Expr {
+                            kind: Int(
+                                Some(
+                                    1,
+                                ),
+                            ),
+                            span: 502..503,
+                        },
+                    },
+                    VariantDecl {
+                        name: Ident {
+                            name: "Write",
+                            span: 505..510,
+                        },
+                        payload: [
+                            Ty {
+                                kind: Named(
+                                    Ident {
+                                        name: "u8",
+                                        span: 511..513,
+                                    },
+                                ),
+                                span: 511..513,
+                            },
+                            Ty {
+                                kind: Named(
+                                    Ident {
+                                        name: "u16",
+                                        span: 515..518,
+                                    },
+                                ),
+                                span: 515..518,
+                            },
+                        ],
+                        value: Expr {
+                            kind: Int(
+                                Some(
+                                    2,
+                                ),
+                            ),
+                            span: 522..523,
+                        },
+                    },
+                ],
+                span: 466..525,
+            },
+        ),
+        Struct(
+            StructDecl {
+                attrs: [],
+                name: Ident {
+                    name: "Point",
+                    span: 533..538,
+                },
+                fields: [
+                    FieldDecl {
+                        name: Ident {
+                            name: "V",
+                            span: 541..542,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Ident {
+                                    name: "u8",
+                                    span: 544..546,
+                                },
+                            ),
+                            span: 544..546,
+                        },
+                    },
+                ],
+                span: 526..548,
+            },
+        ),
+        Fn(
+            FnDecl {
+                attrs: [],
+                kind: Plain,
+                name: Ident {
+                    name: "build",
+                    span: 553..558,
+                },
+                params: [
+                    Param {
+                        mutable: false,
+                        name: Ident {
+                            name: "x",
+                            span: 559..560,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Ident {
+                                    name: "Point",
+                                    span: 562..567,
+                                },
+                            ),
+                            span: 562..567,
+                        },
+                    },
+                ],
+                ret: Some(
+                    Ty {
+                        kind: Named(
+                            Ident {
+                                name: "Msg",
+                                span: 572..575,
+                            },
+                        ),
+                        span: 572..575,
+                    },
+                ),
+                body: Some(
+                    Block {
+                        stmts: [
+                            Let(
+                                Let {
+                                    mutable: false,
+                                    name: Ident {
+                                        name: "a",
+                                        span: 586..587,
+                                    },
+                                    ty: Ty {
+                                        kind: Named(
+                                            Ident {
+                                                name: "Mode",
+                                                span: 589..593,
+                                            },
+                                        ),
+                                        span: 589..593,
+                                    },
+                                    init: Expr {
+                                        kind: ContextVariant(
+                                            Ident {
+                                                name: "Run",
+                                                span: 597..600,
+                                            },
+                                            None,
+                                        ),
+                                        span: 596..600,
+                                    },
+                                    span: 582..601,
+                                },
+                            ),
+                            Let(
+                                Let {
+                                    mutable: false,
+                                    name: Ident {
+                                        name: "b",
+                                        span: 610..611,
+                                    },
+                                    ty: Ty {
+                                        kind: Named(
+                                            Ident {
+                                                name: "Msg",
+                                                span: 613..616,
+                                            },
+                                        ),
+                                        span: 613..616,
+                                    },
+                                    init: Expr {
+                                        kind: ContextVariant(
+                                            Ident {
+                                                name: "Write",
+                                                span: 620..625,
+                                            },
+                                            Some(
+                                                [
+                                                    Expr {
+                                                        kind: Int(
+                                                            Some(
+                                                                1,
+                                                            ),
+                                                        ),
+                                                        span: 626..627,
+                                                    },
+                                                    Expr {
+                                                        kind: Int(
+                                                            Some(
+                                                                2,
+                                                            ),
+                                                        ),
+                                                        span: 629..630,
+                                                    },
+                                                ],
+                                            ),
+                                        ),
+                                        span: 619..632,
+                                    },
+                                    span: 606..633,
+                                },
+                            ),
+                            Let(
+                                Let {
+                                    mutable: false,
+                                    name: Ident {
+                                        name: "c",
+                                        span: 642..643,
+                                    },
+                                    ty: Ty {
+                                        kind: Named(
+                                            Ident {
+                                                name: "Msg",
+                                                span: 645..648,
+                                            },
+                                        ),
+                                        span: 645..648,
+                                    },
+                                    init: Expr {
+                                        kind: ContextVariant(
+                                            Ident {
+                                                name: "Set",
+                                                span: 652..655,
+                                            },
+                                            Some(
+                                                [
+                                                    Expr {
+                                                        kind: ContextVariant(
+                                                            Ident {
+                                                                name: "Run",
+                                                                span: 657..660,
+                                                            },
+                                                            None,
+                                                        ),
+                                                        span: 656..660,
+                                                    },
+                                                ],
+                                            ),
+                                        ),
+                                        span: 651..661,
+                                    },
+                                    span: 638..662,
+                                },
+                            ),
+                            Let(
+                                Let {
+                                    mutable: false,
+                                    name: Ident {
+                                        name: "d",
+                                        span: 671..672,
+                                    },
+                                    ty: Ty {
+                                        kind: Named(
+                                            Ident {
+                                                name: "u8",
+                                                span: 674..676,
+                                            },
+                                        ),
+                                        span: 674..676,
+                                    },
+                                    init: Expr {
+                                        kind: Field(
+                                            Expr {
+                                                kind: Name(
+                                                    Ident {
+                                                        name: "x",
+                                                        span: 679..680,
+                                                    },
+                                                ),
+                                                span: 679..680,
+                                            },
+                                            Ident {
+                                                name: "V",
+                                                span: 681..682,
+                                            },
+                                        ),
+                                        span: 679..682,
+                                    },
+                                    span: 667..683,
+                                },
+                            ),
+                            Expr {
+                                expr: Expr {
+                                    kind: While {
+                                        cond: Expr {
+                                            kind: Bool(
+                                                false,
+                                            ),
+                                            span: 694..699,
+                                        },
+                                        body: Block {
+                                            stmts: [],
+                                            tail: None,
+                                            span: 700..702,
+                                        },
+                                    },
+                                    span: 688..702,
+                                },
+                                semi: None,
+                            },
+                        ],
+                        tail: Some(
+                            Expr {
+                                kind: ContextVariant(
+                                    Ident {
+                                        name: "Nop",
+                                        span: 708..711,
+                                    },
+                                    None,
+                                ),
+                                span: 707..711,
+                            },
+                        ),
+                        span: 576..713,
+                    },
+                ),
+                span: 550..713,
+            },
+        ),
+    ],
+}

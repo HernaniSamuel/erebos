@@ -220,6 +220,10 @@ pub enum ExprKind {
     /// A path followed by arguments, `Enum::Variant(args)` (ADR 0039):
     /// what the path names is resolved later.
     PathCall(Ident, Ident, Vec<Expr>),
+    /// `.Variant` or `.Variant(args)`, a variant of the enum that is the
+    /// expected type (ADR 0044); the arguments if written with
+    /// parentheses.
+    ContextVariant(Ident, Option<Vec<Expr>>),
     /// `name(args)`: a call to a function.
     Call(Ident, Vec<Expr>),
     /// `Name { field: value, ... }`, fields in the order written.

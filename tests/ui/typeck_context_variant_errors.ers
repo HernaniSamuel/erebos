@@ -1,0 +1,59 @@
+// emit: typeck
+// What `.V` does not do (ADR 0044). Where no type is expected (a `match`
+// scrutinee, the operand of `as`, both operands of one `==`, an expression
+// statement) it is `ty::untyped-variant`, whose help names the enum when
+// exactly one declared enum has the variant (`Run`), not when two do
+// (`Off`), and writes the type for a variant of `Option` or `Result`
+// (`.None`). Where the expected type is not an enum it is a mismatch, and
+// where the operator does not apply to the enum, the operator's error.
+// The enum must have the variant, and the values must be as many as its
+// payload has, each of its type. A `.V` in error reports nothing about its
+// values, and one whose expected type is erroneous reports nothing.
+enum Mode: u8 { Off = 0, Run = 3 }
+enum Power: u8 { Off = 0, Low = 1 }
+enum Msg: u8 { Nop = 0, Set(Mode) = 1, Write(u8, u16) = 2 }
+enum Broken: u8 { A(u32, !) = 0, B = 1 }
+
+fn untyped() {
+    match .Run {
+        _ => {}
+    }
+    let a: u8 = .Run as u8;
+    let b: bool = .Off == .Run;
+    .Run;
+    .Off;
+    .None;
+    .Write(1, 2);
+}
+
+fn not_enums(m: Mode) {
+    let a: u32 = .Run;
+    let values: [u8; 2] = [1, 2];
+    let b: u8 = values[.Run];
+    if .Run {}
+    let c: bool = .Run < m;
+}
+
+fn unknown() {
+    let a: Mode = .Walk;
+    let b: Msg = .Bogus(1);
+}
+
+fn counts() {
+    let a: Msg = .Write(3);
+    let b: Msg = .Nop();
+    let c: Msg = .Write;
+}
+
+fn values() {
+    let a: Msg = .Write(300, 1);
+    let b: u32 = .Write(3, 4);
+}
+
+fn erroneous() {
+    let a: [Mode; 1 / 0] = [.Run, .Bogus(1)];
+    let b: Broken = .A(1, 2);
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

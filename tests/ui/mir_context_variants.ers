@@ -1,0 +1,27 @@
+// emit: mir
+// A variant named by the expected type is the variant its `E::V` names
+// (ADR 0044): `with_dots` and `with_paths` are the same function, written
+// both ways, and their MIR is the same.
+enum Mode: u8 { Off = 0, Run = 3 }
+enum Msg: u8 { Nop = 0, Set(Mode) = 1, Write(u8, u16) = 2 }
+
+fn with_dots(c: bool, m: Mode) -> Msg {
+    let a: Mode = if c { .Run } else { m };
+    if a == .Off {
+        return .Nop;
+    }
+    let modes: [Mode; 2] = [m, .Run];
+    if c { .Set(.Off) } else { .Write(1, 2) }
+}
+
+fn with_paths(c: bool, m: Mode) -> Msg {
+    let a: Mode = if c { Mode::Run } else { m };
+    if a == Mode::Off {
+        return Msg::Nop;
+    }
+    let modes: [Mode; 2] = [m, Mode::Run];
+    if c { Msg::Set(Mode::Off) } else { Msg::Write(1, 2) }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

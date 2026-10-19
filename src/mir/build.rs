@@ -414,6 +414,11 @@ impl Builder<'_, '_> {
                 self.const_operand(ty, DataSource::Comptime(inner.id), value)
             }
             hir::ExprKind::Variant(id, index, args) => self.variant(ty, *id, *index, args),
+            // Resolved by type checking, as `E::V` is by name (ADR 0044).
+            hir::ExprKind::ContextVariant(_, _, args) => {
+                let (id, index) = self.q.tables.variant(expr.id);
+                self.variant(ty, id, index, args)
+            }
             hir::ExprKind::SizeOf(_) | hir::ExprKind::AlignOf(_) | hir::ExprKind::OffsetOf(..) => {
                 usize_const(self.layout_query(expr))
             }
@@ -1765,8 +1770,10 @@ fn is_simple(expr: &hir::Expr) -> bool {
         | hir::ExprKind::Bool(_)
         | hir::ExprKind::Unit
         | hir::ExprKind::Variant(_, _, None)
+        | hir::ExprKind::ContextVariant(_, _, None)
         | hir::ExprKind::Local(_) => true,
-        hir::ExprKind::Variant(_, _, Some(args)) => args.iter().all(is_simple),
+        hir::ExprKind::Variant(_, _, Some(args))
+        | hir::ExprKind::ContextVariant(_, _, Some(args)) => args.iter().all(is_simple),
         hir::ExprKind::Unary(UnOp::Neg, operand) => matches!(operand.kind, hir::ExprKind::Int(_)),
         _ => false,
     }

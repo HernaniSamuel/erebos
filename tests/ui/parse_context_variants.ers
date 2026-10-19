@@ -1,0 +1,19 @@
+// emit: ast
+// A `.` followed by a name, and optionally arguments parsed as a call's
+// (trailing comma allowed), is one expression: a variant named by the
+// expected type (ADR 0044). Arguments may be such variants themselves. A
+// statement starting with a block-like expression ends with it, so a `.V`
+// on the next line starts a new expression, here the block's tail; after
+// any other expression, `.` stays a field access.
+enum Mode: u8 { Off = 0, Run = 1 }
+enum Msg: u8 { Nop = 0, Set(Mode) = 1, Write(u8, u16) = 2 }
+struct Point { V: u8 }
+
+fn build(x: Point) -> Msg {
+    let a: Mode = .Run;
+    let b: Msg = .Write(1, 2,);
+    let c: Msg = .Set(.Run);
+    let d: u8 = x.V;
+    while false {}
+    .Nop
+}

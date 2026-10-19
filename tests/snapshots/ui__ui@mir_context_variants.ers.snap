@@ -1,0 +1,221 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/mir_context_variants.ers
+---
+--- mir ---
+enum Mode: u8 { Off = 0, Run = 3 }
+enum Msg: u8 { 0 Nop = 0, 1 Set(0 u8 at 1) = 1, 2 Write(0 u8 at 1, 1 u16 at 2) = 2 } // size 4, align 2
+
+fn with_dots(_1: bool, _2: u8) -> Msg {
+    let _0: Msg;
+    let _1: bool; // c
+    let _2: u8; // m
+    let _3: u8; // a
+    let _4: [u8; 2]; // modes
+    let _5: u8;
+    let _6: bool;
+    let _7: Msg;
+    let _8: [u8; 2];
+    let _9: Msg;
+    let _10: Msg;
+    let _11: Msg;
+
+    bb0: {
+        if copy _1 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _5 = const 3_u8;
+        goto -> bb3;
+    }
+
+    bb2: {
+        _5 = copy _2;
+        goto -> bb3;
+    }
+
+    bb3: {
+        _3 = copy _5;
+        _6 = Eq(copy _3, const 0_u8);
+        if copy _6 -> [true: bb4, false: bb5];
+    }
+
+    bb4: {
+        _7.tag = const 0_u8;
+        _0 = copy _7;
+        return;
+    }
+
+    bb5: {
+        goto -> bb6;
+    }
+
+    bb6: {
+        _8[0] = copy _2;
+        _8[1] = const 3_u8;
+        _4 = copy _8;
+        if copy _1 -> [true: bb7, false: bb8];
+    }
+
+    bb7: {
+        (_10 as 1).0 = const 0_u8;
+        _10.tag = const 1_u8;
+        _9 = copy _10;
+        goto -> bb9;
+    }
+
+    bb8: {
+        (_11 as 2).0 = const 1_u8;
+        (_11 as 2).1 = const 2_u16;
+        _11.tag = const 2_u8;
+        _9 = copy _11;
+        goto -> bb9;
+    }
+
+    bb9: {
+        _0 = copy _9;
+        return;
+    }
+}
+
+fn with_paths(_1: bool, _2: u8) -> Msg {
+    let _0: Msg;
+    let _1: bool; // c
+    let _2: u8; // m
+    let _3: u8; // a
+    let _4: [u8; 2]; // modes
+    let _5: u8;
+    let _6: bool;
+    let _7: Msg;
+    let _8: [u8; 2];
+    let _9: Msg;
+    let _10: Msg;
+    let _11: Msg;
+
+    bb0: {
+        if copy _1 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _5 = const 3_u8;
+        goto -> bb3;
+    }
+
+    bb2: {
+        _5 = copy _2;
+        goto -> bb3;
+    }
+
+    bb3: {
+        _3 = copy _5;
+        _6 = Eq(copy _3, const 0_u8);
+        if copy _6 -> [true: bb4, false: bb5];
+    }
+
+    bb4: {
+        _7.tag = const 0_u8;
+        _0 = copy _7;
+        return;
+    }
+
+    bb5: {
+        goto -> bb6;
+    }
+
+    bb6: {
+        _8[0] = copy _2;
+        _8[1] = const 3_u8;
+        _4 = copy _8;
+        if copy _1 -> [true: bb7, false: bb8];
+    }
+
+    bb7: {
+        (_10 as 1).0 = const 0_u8;
+        _10.tag = const 1_u8;
+        _9 = copy _10;
+        goto -> bb9;
+    }
+
+    bb8: {
+        (_11 as 2).0 = const 1_u8;
+        (_11 as 2).1 = const 2_u16;
+        _11.tag = const 2_u8;
+        _9 = copy _11;
+        goto -> bb9;
+    }
+
+    bb9: {
+        _0 = copy _9;
+        return;
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+comptime fn Mode::Off() -> u8 {
+    let _0: u8;
+
+    bb0: {
+        _0 = const 0_u8;
+        return;
+    }
+}
+
+comptime fn Mode::Run() -> u8 {
+    let _0: u8;
+
+    bb0: {
+        _0 = const 3_u8;
+        return;
+    }
+}
+
+comptime fn Msg::Nop() -> u8 {
+    let _0: u8;
+
+    bb0: {
+        _0 = const 0_u8;
+        return;
+    }
+}
+
+comptime fn Msg::Set() -> u8 {
+    let _0: u8;
+
+    bb0: {
+        _0 = const 1_u8;
+        return;
+    }
+}
+
+comptime fn Msg::Write() -> u8 {
+    let _0: u8;
+
+    bb0: {
+        _0 = const 2_u8;
+        return;
+    }
+}
