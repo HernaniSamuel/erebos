@@ -161,13 +161,16 @@ fn struct_layouts_match_c() {
 
 /// The name of the C twin of the enum `name`: itself, or for an
 /// `Option(T)` or `Result(T, E)`, its name and arguments run together,
-/// each capitalized, `()` as `Unit`: `Result(u32, Mode)` is
-/// `ResultU32Mode`.
+/// each capitalized, `()` as `Unit`, an array `[T; N]` as `<T>x<N>`:
+/// `Result(u32, Mode)` is `ResultU32Mode`, `Option([u32; 0])` is
+/// `OptionU32x0` (not `OptionU320`, which reads as a 320-bit integer).
 fn c_name(name: &str) -> String {
     if !name.contains('(') {
         return name.to_owned();
     }
     name.replace("()", "Unit")
+        .replace(['[', ']'], "")
+        .replace("; ", "x")
         .split(|c: char| !c.is_ascii_alphanumeric())
         .filter(|part| !part.is_empty())
         .map(|part| part[..1].to_ascii_uppercase() + &part[1..])

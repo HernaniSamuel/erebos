@@ -58,6 +58,7 @@ comptime {
     assert(size_of(Option(u32)) == 8 && align_of(Option(u32)) == 4);
     assert(size_of(Option(*mut u8)) == 8 && align_of(Option(*mut u8)) == 4);
     assert(size_of(Option(())) == 1 && align_of(Option(())) == 1);
+    assert(size_of(Option([u32; 0])) == 4 && align_of(Option([u32; 0])) == 4);
     assert(size_of(Option(u64)) == 16 && align_of(Option(u64)) == 8);
     assert(size_of(Result(u32, ParseError)) == 8);
     assert(align_of(Result(u32, ParseError)) == 4);

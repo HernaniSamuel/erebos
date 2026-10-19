@@ -54,11 +54,13 @@ union Pay32 {
 struct WithPayloads { uint8_t a; union Pay8 p; uint16_t b; union Pay16 q; uint8_t c; union Pay32 r; };
 
 /* `Option(T)` and `Result(T, E)` (ADR 0045), named as `tests/c_layout.rs`
- * names them; `()` is an empty struct, of size 0. */
+ * names them; `()` is an empty struct and `[u32; 0]` a zero-length array,
+ * both of size 0 (GNU C extensions). */
 union OptionU8 { uint8_t tag; struct { uint8_t tag; uint8_t p0; } Some; };
 union OptionU32 { uint8_t tag; struct { uint8_t tag; uint32_t p0; } Some; };
 union OptionU64 { uint8_t tag; struct { uint8_t tag; uint64_t p0; } Some; };
 union OptionUnit { uint8_t tag; struct { uint8_t tag; struct {} p0; } Some; };
+union OptionU32x0 { uint8_t tag; struct { uint8_t tag; uint32_t p0[0]; } Some; };
 union ResultU32Mode {
     uint8_t tag;
     struct { uint8_t tag; uint32_t p0; } Ok;
@@ -70,6 +72,7 @@ struct WithOptions {
     union OptionU64 c;
     union OptionUnit d;
     union ResultU32Mode e;
+    union OptionU32x0 f;
 };
 
 struct Message {

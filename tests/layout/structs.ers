@@ -46,8 +46,10 @@ struct WithPayloads { a: u8, p: Pay8, b: u16, q: Pay16, c: u8, r: Pay32 }
 
 // `Option(T)` and `Result(T, E)` are enums with payloads on `u8`
 // (ADR 0045); the twin of each is a union named after it, its arguments
-// capitalized, `()` as `Unit`: `OptionU8`, `ResultU32Mode`.
-struct WithOptions { a: Option(u8), b: Option(u32), c: Option(u64), d: Option(()), e: Result(u32, Mode) }
+// capitalized, `()` as `Unit` and an array `[T; N]` as `<T>x<N>`:
+// `OptionU8`, `ResultU32Mode`, `OptionU32x0`. A zero-sized payload is
+// placed at its alignment (ADR 0047).
+struct WithOptions { a: Option(u8), b: Option(u32), c: Option(u64), d: Option(()), e: Result(u32, Mode), f: Option([u32; 0]) }
 
 entry fn main() -> ! { loop {} }
 panic fn on_panic() -> ! { loop {} }
