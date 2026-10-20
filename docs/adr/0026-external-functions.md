@@ -1,6 +1,6 @@
 # 0026. External functions
 
-- Status: Accepted
+- Status: Accepted; amended by 0051 (which functions C calls by their name)
 - Date: 2026-10-14
 
 ## Context

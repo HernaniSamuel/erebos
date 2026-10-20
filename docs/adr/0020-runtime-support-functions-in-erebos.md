@@ -1,6 +1,6 @@
 # 0020. Runtime support functions written in Erebos
 
-- Status: Accepted
+- Status: Accepted; amended by 0052 (the runtime functions move into `core`)
 - Date: 2026-10-13
 
 ## Context

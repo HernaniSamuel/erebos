@@ -1,6 +1,6 @@
 # 0031. Byte strings and slices
 
-- Status: Accepted
+- Status: Accepted; amended by 0053 (an `assert` message reaches the panic function)
 - Date: 2026-10-15
 - Amends: 0008 (an implicit conversion to slices), 0018 (the message of
   `assert` runs only if it fails), 0019 (only thin pointers are

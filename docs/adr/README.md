@@ -43,29 +43,29 @@ Do not write one for local implementation details that the code already explains
 | 0011 | [Development environment: native Windows with prebuilt LLVM 22](0011-development-environment.md) | Accepted |
 | 0012 | [Provisional compiler-generated startup code](0012-provisional-compiler-generated-startup.md) | Accepted, amended by 0030 |
 | 0013 | [Provisional volatile pointers](0013-provisional-volatile-pointers.md) | Accepted |
-| 0014 | [Panic handler](0014-panic-handler.md)                          | Accepted |
+| 0014 | [Panic handler](0014-panic-handler.md)                          | Accepted, amended by 0053 |
 | 0015 | [Expression-oriented blocks and implicit unit return](0015-expression-oriented-blocks.md) | Accepted |
 | 0016 | [Literals: integers and bytes; no chars, strings or floats](0016-literals-bytes-no-floats.md) | Accepted |
 | 0017 | [Literal operands of `as` take the target type](0017-literal-cast-operands.md) | Accepted |
 | 0018 | [Evaluation order](0018-evaluation-order.md)                   | Accepted, amended by 0031 |
 | 0019 | [Conversions, pointer representation and pointer validity](0019-integer-pointer-conversions-and-operator-details.md) | Accepted, amended by 0031 |
-| 0020 | [Runtime support functions written in Erebos](0020-runtime-support-functions-in-erebos.md) | Accepted |
+| 0020 | [Runtime support functions written in Erebos](0020-runtime-support-functions-in-erebos.md) | Accepted, amended by 0052 |
 | 0021 | [Structs and arrays](0021-structs-and-arrays.md)               | Accepted, amended by 0031, 0032, 0034 |
 | 0022 | [Data layout and alignment control](0022-data-layout-and-alignment.md) | Accepted, amended by 0030, 0031, 0034 |
 | 0023 | [Volatile access guarantees](0023-volatile-access-guarantees.md) | Accepted, amended by 0031, 0035, 0039 |
 | 0024 | [Implicit conversion from `*mut T` to `*const T`](0024-mut-to-const-pointer-conversion.md) | Accepted |
 | 0025 | [Aggregates across calls on riscv32](0025-aggregates-across-calls.md) | Accepted, amended by 0031, 0039 |
-| 0026 | [External functions](0026-external-functions.md) | Accepted |
+| 0026 | [External functions](0026-external-functions.md) | Accepted, amended by 0051 |
 | 0027 | [Compile-time execution (comptime)](0027-compile-time-execution.md) | Accepted, amended by 0030 |
 | 0028 | [On-demand type checking and evaluation](0028-on-demand-compilation.md) | Accepted, amended by 0033 |
-| 0029 | [Constants and comptime expressions](0029-constants-and-comptime-syntax.md) | Accepted, amended by 0030, 0031, 0034 |
-| 0030 | [Statics and startup initialization](0030-statics-and-startup-initialization.md) | Accepted, amended by 0034 |
-| 0031 | [Byte strings and slices](0031-byte-strings-and-slices.md) | Accepted |
+| 0029 | [Constants and comptime expressions](0029-constants-and-comptime-syntax.md) | Accepted, amended by 0030, 0031, 0034, 0049 |
+| 0030 | [Statics and startup initialization](0030-statics-and-startup-initialization.md) | Accepted, amended by 0034, 0051 |
+| 0031 | [Byte strings and slices](0031-byte-strings-and-slices.md) | Accepted, amended by 0053 |
 | 0032 | [Checks on values known at compile time](0032-checks-on-values-known-at-compile-time.md) | Accepted, amended by 0035, 0037, 0039 |
 | 0033 | [The compiler pipeline with compile-time evaluation](0033-compiler-pipeline-with-evaluation.md) | Accepted |
 | 0034 | [`!` is not a type of memory](0034-never-is-not-a-type-of-memory.md) | Accepted, amended by 0039 |
-| 0035 | [Enums with explicit discriminants](0035-enums-with-explicit-discriminants.md) | Accepted, amended by 0038, 0039, 0044 |
-| 0036 | [Enum values that are no variant](0036-enum-values-that-are-no-variant.md) | Accepted, amended by 0039, 0040 |
+| 0035 | [Enums with explicit discriminants](0035-enums-with-explicit-discriminants.md) | Accepted, amended by 0038, 0039, 0044, 0049 |
+| 0036 | [Enum values that are no variant](0036-enum-values-that-are-no-variant.md) | Accepted, amended by 0039, 0040, 0053 |
 | 0037 | [`match` and patterns](0037-match-and-patterns.md) | Accepted, amended by 0038, 0040, 0041, 0044 |
 | 0038 | [The enum values a `match` needs](0038-enum-values-a-match-needs.md) | Accepted, amended by 0040 |
 | 0039 | [Enum variants with payloads](0039-enum-variants-with-payloads.md) | Accepted, amended by 0044 |
@@ -78,3 +78,8 @@ Do not write one for local implementation details that the code already explains
 | 0046 | [The `?` operator](0046-the-question-mark-operator.md) | Accepted |
 | 0047 | [Zero-sized payloads have an offset](0047-zero-sized-payloads-have-an-offset.md) | Accepted |
 | 0048 | [Types with a failed length or alignment are erroneous](0048-types-with-a-failed-length-or-alignment-are-erroneous.md) | Accepted |
+| 0049 | [Modules and paths](0049-modules-and-paths.md) | Accepted |
+| 0050 | [Visibility](0050-visibility.md) | Accepted |
+| 0051 | [Symbol names](0051-symbol-names.md) | Accepted |
+| 0052 | [The `core` module](0052-the-core-module.md) | Accepted |
+| 0053 | [Panic information](0053-panic-information.md) | Accepted |

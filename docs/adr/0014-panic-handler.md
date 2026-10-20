@@ -1,6 +1,6 @@
 # 0014. Panic handler
 
-- Status: Accepted
+- Status: Accepted; amended by 0053 (the panic function may take a `*const core::PanicInfo`)
 - Date: 2026-10-12
 
 ## Context
