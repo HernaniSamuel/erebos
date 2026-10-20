@@ -37,6 +37,20 @@ become language constructs. The compiler is written in Rust and uses LLVM via
 
 ## Workflow
 
+- For questions about Rust symbols (definitions, references, callers,
+  implementations, types), prefer the language server (the `LSP` tool)
+  over text search when it is available; use text search for everything
+  else (diagnostic messages, ADRs, snapshots, comments). The server needs
+  a few seconds to load the workspace: an empty answer right after it
+  starts means retry, not "no results".
+- Read only what the task needs. In a large file (several hundred lines,
+  like `src/ty.rs` or `docs/reference.md`), find the part with the
+  language server or a search and read that range; read a whole file only
+  when the task needs all of it. Do not read again what is already in
+  your context and has not changed since. Read again when something else
+  may have changed it: `cargo fmt`, a snapshot update, another agent, or
+  a compaction of your context, or when an edit fails because the text
+  differs.
 - Work in small steps that each build and pass
   `cargo fmt --all && cargo clippy --all-targets -- -D warnings && cargo test`.
 - Add or update tests with every change (snapshot tests per layer,

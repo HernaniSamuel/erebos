@@ -47,7 +47,8 @@ its review approves it. Commit nothing else, and never push.
    Do not pass on the implementer's report or your own view of the change.
 4. **Fix.** Send the blocking and should-fix findings to the implementer
    with the reviewer's numbers, then continue the same reviewer with what
-   was fixed, for a re-check. If the implementer disputes a finding, put
+   was fixed and the files the fixes touched (from the implementer's
+   report), for a re-check. If the implementer disputes a finding, put
    both positions to the user. Keep minor findings for the final report.
    After two rounds with findings still open, stop and ask the user.
 5. **Commit.** Once the reviewer approves, set the step's status to
@@ -64,4 +65,7 @@ Route its findings as above; fixes become new commits. Then write the
 minor findings left open under `## Left open` at the end of the plan and
 commit it (`docs: record what $ARGUMENTS left open`), so they are not
 lost with this conversation. Report to the user: the commits, the minor
-findings left open, and anything deferred to a later step.
+findings left open, and anything deferred to a later step. End by
+recommending a new conversation (`/clear`) for the next task: everything
+this one learned is in the commits and the plan, and its context would be
+reread on every call of the next task.

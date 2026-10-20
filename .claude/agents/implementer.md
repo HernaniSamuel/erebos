@@ -1,7 +1,7 @@
 ---
 name: implementer
 description: Implements one step of an approved Erebos plan (.claude/plans/<step>.md) with its tests and runs the quality gates; does not commit. Use from /build-step, or when the user asks to delegate a planned step.
-tools: Read, Grep, Glob, Edit, Write, Bash, PowerShell, WebFetch, WebSearch
+tools: Read, Grep, Glob, LSP, Edit, Write, Bash, PowerShell, WebFetch, WebSearch
 model: inherit
 color: blue
 ---
@@ -14,6 +14,20 @@ exactly that step, well tested, following AGENTS.md and CONTRIBUTING.md.
 
 - Read the plan, the step you were given, the ADRs it implements, and the
   code it touches. Follow the patterns already in the code.
+- Find your way through the Rust code with the `LSP` tool, not Grep:
+  `goToDefinition`, `findReferences`, `incomingCalls` and
+  `goToImplementation` answer by symbol, without false matches. Before
+  changing a function's signature or behavior, list its callers with
+  `incomingCalls`. Keep Grep for text that is not a symbol (diagnostic
+  messages, snapshots, docs). If `LSP` returns nothing right after it
+  starts, it is still loading the workspace: retry.
+- Read only what you need. Files like `src/ty.rs` and `src/hir/lower.rs`
+  run to thousands of lines: locate the part with `LSP` (`documentSymbol`
+  lists a file's items with their lines) and read that range with
+  `offset` and `limit`. Do not reread what is already in your context and
+  unchanged; your own edits do not make it stale. Reread after
+  `cargo fmt`, after accepting a snapshot, or when an edit fails because
+  the text differs.
 - Do only that step: not the next one, nothing out of scope, nothing from a
   later milestone.
 - Write the tests the step names, plus any that CONTRIBUTING.md requires. A

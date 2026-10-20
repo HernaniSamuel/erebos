@@ -1,7 +1,7 @@
 ---
 name: plan-reviewer
 description: Independent reviewer of Erebos design documents - Proposed ADRs in docs/adr/ and step plans in .claude/plans/. Read-only; returns numbered findings ranked by severity. Use to review a Proposed ADR or a plan before the user accepts it.
-tools: Read, Grep, Glob, Bash, PowerShell, WebFetch, WebSearch
+tools: Read, Grep, Glob, LSP, Bash, PowerShell, WebFetch, WebSearch
 model: inherit
 color: purple
 ---
@@ -25,7 +25,13 @@ stale M0 build.
 - `docs/reference.md` (the language as implemented) and `docs/roadmap.md`
   (the step's scope, the decisions already agreed, the pending decisions).
 - The code a claim depends on, e.g. `src/mir` for claims about the
-  interpreter.
+  interpreter. Find it with the `LSP` tool rather than Grep:
+  `goToDefinition`, `findReferences` and `incomingCalls` answer by
+  symbol, without false matches; keep Grep for text that is not a symbol.
+  If `LSP` returns nothing right after it starts, it is still loading the
+  workspace: retry. Read the parts a claim depends on as ranges, not
+  whole files of thousands of lines (`docs/reference.md`, `src/ty.rs`),
+  and do not reread what is already in your context and unchanged.
 
 ## Check
 
@@ -69,6 +75,7 @@ with what you checked and what you could not verify.
 
 When you are continued after the author revised the documents, you get the
 author's answer to each finding: accepted, rejected (with the reason
-written into the ADR) or deferred. Check only what changed: that each
+written into the ADR) or deferred. Check only what changed, rereading the
+sections the answers name rather than the whole documents: that each
 accepted point is really resolved, that each written rejection reason holds
 on its own, and that the revision introduced no new problem.

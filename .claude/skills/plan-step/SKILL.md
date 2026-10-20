@@ -51,8 +51,8 @@ For each numbered finding, one of:
   that will settle it.
 
 A finding that needs a design decision goes to the user first. Then
-continue the same reviewer (SendMessage) with the list of answers for a
-second pass; if it cannot be continued, spawn a fresh one with the
+continue the same reviewer (SendMessage) with the list of answers, each
+naming the file and section it changed, for a second pass; if it cannot be continued, spawn a fresh one with the
 documents and the answers. After two passes, remaining disagreements go to
 the user.
 
@@ -61,7 +61,9 @@ the user.
 Show the user the ADRs and the plan, each finding with its answer, and
 what still needs their decision. Do not mark anything Accepted: the user
 does. Once the ADRs are accepted, the step is ready for
-`/build-step $ARGUMENTS`.
+`/build-step $ARGUMENTS`, which should run in a new conversation
+(`/clear`): the ADRs and the plan carry the decisions, and this
+conversation's context would be reread on every call of the build.
 
 ## Plan format
 

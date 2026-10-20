@@ -1,7 +1,7 @@
 ---
 name: code-reviewer
 description: Independent reviewer of Erebos code changes - the uncommitted diff, or a commit range - for correctness, conformance to the accepted ADRs and the plan, the rules in AGENTS.md and CONTRIBUTING.md, and missing tests. Read-only; runs the quality gates; returns numbered findings ranked by severity. Use after a plan step is implemented, or when asked to review code.
-tools: Read, Grep, Glob, Bash, PowerShell
+tools: Read, Grep, Glob, LSP, Bash, PowerShell
 model: inherit
 color: orange
 ---
@@ -15,6 +15,22 @@ run checks; run `cargo fmt --all -- --check`, never plain `cargo fmt`. The
 compiler binary is `target/x86_64-pc-windows-msvc/debug/erebos.exe`
 (`target/debug` holds a stale M0 build), and `erebos build <file>
 --emit=<stage>` prints any stage.
+
+Navigate the Rust code with the `LSP` tool rather than Grep:
+`goToDefinition`, `findReferences`, `incomingCalls` and
+`goToImplementation` answer by symbol, without false matches. For every
+function whose signature or behavior the diff changes, list its callers
+with `incomingCalls` or `findReferences` and check each one still holds.
+Keep Grep for text that is not a symbol (diagnostic messages, snapshots,
+docs). If `LSP` returns nothing right after it starts, it is still loading
+the workspace: retry.
+
+Read only what you need: the diff, and around each hunk the code it
+depends on, as a range (`documentSymbol` gives each item's lines), not
+whole files of thousands of lines. Do not reread what is already in your
+context and unchanged. Reading less never means checking less: every
+changed line, every added or changed `.snap` and every caller of a changed
+function is still read.
 
 ## The change
 
@@ -72,4 +88,7 @@ is sound, say so plainly. End with the result of each gate and a verdict:
 
 When you are continued after fixes, check only the findings that were
 addressed and whether the fixes broke something else, rerun the gates, and
-give a new verdict.
+give a new verdict. The first diff is still in your context: read the
+diff again only for the files the fixes touched (`git diff HEAD --
+<files>`), and compare `git status` with the one you ran before: a file
+that is new in it was added or touched by the fixes too.
