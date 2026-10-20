@@ -82,6 +82,24 @@ Agreed as useful, not yet scheduled:
   applied, instead of reading and matching file text. Unlike LSP, queries
   are by name, not by cursor position. It builds on the on-demand queries
   of ADR 0028 and the structured diagnostics; still to be designed.
+- An effect system: annotations such as "never panics" or "safe in an
+  interrupt handler", checked over the call graph. With "anything" as the
+  default and annotations only restricting, it can be added without
+  changing existing programs, so it can wait. The one effect needed soon,
+  which statics an interrupt handler reaches, belongs to the concurrency
+  model of M4 and M5.
+- A generator of random valid programs, as Csmith does for C, feeding the
+  differential tests: each program runs at compile time and on QEMU at
+  `-O0` and `-O`, and the outputs must agree. Today's fuzzing only checks
+  that the compiler does not panic; this is what finds miscompilations.
+  It can start with a small part of the language and grow with it.
+- Deferred formatting for logs, as `defmt` does in Rust: the program sends
+  the index of a format string and its arguments, and the strings stay on
+  the host, in a section that is not loaded. `comptime` can build the
+  table.
+- Several cores (harts) sharing memory. On microcontrollers concurrency is
+  mostly interrupts, which M4 covers; several cores need atomics (the `A`
+  extension) and a memory model of their own.
 
 ## Notes for M2
 
@@ -104,8 +122,27 @@ ADRs:
     them.
   - The panic handler's signature: location, reason and message
     (ADR 0014, 0031).
+- **M3:**
+  - `peripheral` blocks must express what an SVD file describes, so that
+    a `svd2erebos` can generate them: access modes (read-only,
+    write-only, read-write), write-1-to-clear fields, reads with side
+    effects, reset values, register arrays, clusters and `derivedFrom`.
+    The SVD of a real riscv32 chip (ESP32-C3, GD32VF103 or CH32V) tests
+    the design. Also whether `svd2erebos` is a separate tool or a file
+    read at compile time, which bears on reproducible builds.
 - **M4:**
-  - Sharing a `static mut` with interrupt handlers (ADR 0030).
+  - A concurrency model spanning M4 and M5, in an ADR written before M4
+    starts, so that M4 decides nothing M5 must break. M4 may share a
+    `static mut` with interrupt handlers without checks (critical
+    sections, as in C; ADR 0030) if M5 then only adds checks and changes
+    no meaning. Rust checks sharing with the `Send` and `Sync` traits, and
+    Erebos has no traits (see M6). The direction discussed: interrupt
+    handlers and their priorities are declared in the language, so the
+    compiler can compute from the call graph which statics each handler
+    reaches and require a critical section only where code of another
+    priority reaches the same static, as the priority ceiling protocol of
+    RTIC does, but in the compiler instead of macros. A call through a
+    function pointer hides its callee; the ADR must say what that means.
   - Compiler and hardware fences (ADR 0023).
   - Moving `_start` into the language (ADR 0012, 0030).
 - **M5:**
@@ -116,6 +153,13 @@ ADRs:
   - The `(*s)[i]` syntax for slice elements (ADR 0031).
   - Whether the MIR analyses run before compile-time evaluation, which
     today runs MIR they have not checked (ADR 0033).
+  - Affine or linear values. Affine values, used at most once but free
+    to drop, are enough for typestate (a pin taken from `Disabled` to
+    `Output`, written `Pin(comptime state: PinState)` once M6 exists).
+    Linear values must be used, which also catches a DMA transfer whose
+    handle is dropped without waiting for it; Rust cannot, since
+    forgetting a value is safe there. Erebos has no destructors, so
+    requiring a value to be used costs less than it would in Rust.
 - **M6:**
   - `compile_error` (ADR 0031).
   - `!` as a type argument, such as `Result(T, !)` for generic code
@@ -138,6 +182,14 @@ ADRs:
   - ADR 0027 writes return types Zig-style (`fn max(comptime T: type,
     a: T, b: T) T`); by ADR 0015 a function without `->` returns `()`, so
     the M6 ADR writes `-> T`.
+
+Work owed:
+
+- A MIR validator, before M5: a pass that checks the invariants of MIR
+  (the types of places, a well-formed control flow graph) after MIR
+  building and after each pass over MIR, as rustc's MIR validation and
+  the LLVM verifier do. The borrow checker of M5 relies on those
+  invariants, and each new pass makes the validator costlier to add.
 
 Documentation owed:
 
