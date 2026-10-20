@@ -1,0 +1,102 @@
+---
+source: tests/ui.rs
+assertion_line: 40
+expression: output
+input_file: tests/ui/typeck_modules.ers
+---
+--- errors ---
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_modules.ers:16:27]
+ 15 │ fn types() {
+ 16 │     let c: uart::Config = 5;
+    ·                           ┬
+    ·                           ╰── expected `uart::Config`, found an integer
+ 17 │     uart::init(uart::Mode::Off);
+    ╰────
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_modules.ers:17:16]
+ 16 │     let c: uart::Config = 5;
+ 17 │     uart::init(uart::Mode::Off);
+    ·                ───────┬───────
+    ·                       ╰── expected `uart::Config`, found `uart::Mode`
+ 18 │     uart::init();
+    ╰────
+ty::wrong-arg-count
+
+  × `uart::init` takes 1 argument, but 0 were given
+    ╭─[typeck_modules.ers:18:5]
+ 10 │ 
+ 11 │     pub fn init(c: Config) {}
+    ·            ──┬─
+    ·              ╰── declared here
+ 12 │     pub fn config() -> Config { Config {} }
+ 13 │ }
+ 14 │ 
+ 15 │ fn types() {
+ 16 │     let c: uart::Config = 5;
+ 17 │     uart::init(uart::Mode::Off);
+ 18 │     uart::init();
+    ·     ──────┬─────
+    ·           ╰── in this call
+ 19 │     let m: uart::Mode = .Walk;
+    ╰────
+ty::unknown-variant
+
+  × `uart::Mode` has no variant `Walk`
+   ╭─[typeck_modules.ers:7:14]
+ 6 │     pub struct Config {}
+ 7 │     pub enum Mode: u8 { Off = 0, Run = 1 }
+   ·              ──┬─
+   ·                ╰── `uart::Mode` is declared here
+ 8 │     pub const LIMIT: u16 = 4;
+   ╰────
+    ╭─[typeck_modules.ers:19:26]
+ 18 │     uart::init();
+ 19 │     let m: uart::Mode = .Walk;
+    ·                          ──┬─
+    ·                            ╰── unknown variant
+ 20 │     let x: u32 = uart::config();
+    ╰────
+  help: its variants are `Off`, `Run`
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_modules.ers:20:18]
+ 19 │     let m: uart::Mode = .Walk;
+ 20 │     let x: u32 = uart::config();
+    ·                  ───────┬──────
+    ·                         ╰── expected `u32`, found `uart::Config`
+ 21 │     let y: u8 = uart::LIMIT;
+    ╰────
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_modules.ers:21:17]
+ 20 │     let x: u32 = uart::config();
+ 21 │     let y: u8 = uart::LIMIT;
+    ·                 ─────┬─────
+    ·                      ╰── expected `u8`, found `u16`
+ 22 │     uart::LEVEL = 2;
+    ╰────
+  help: integer types never convert implicitly; use `as u8` (ADR 0008)
+ty::assign-immutable
+
+  × cannot assign to `uart::LEVEL`, which is not `mut`
+    ╭─[typeck_modules.ers:9:16]
+  8 │     pub const LIMIT: u16 = 4;
+  9 │     pub static LEVEL: u8 = 1;
+    ·                ──┬──
+    ·                  ╰── help: declare it `static mut LEVEL`
+ 10 │ 
+    ╰────
+    ╭─[typeck_modules.ers:22:5]
+ 21 │     let y: u8 = uart::LIMIT;
+ 22 │     uart::LEVEL = 2;
+    ·     ─────┬─────
+    ·          ╰── assigned here
+ 23 │ }
+    ╰────

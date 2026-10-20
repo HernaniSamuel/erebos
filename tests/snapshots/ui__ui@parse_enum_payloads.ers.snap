@@ -9,6 +9,7 @@ File {
         Enum(
             EnumDecl {
                 attrs: [],
+                vis: Private,
                 name: Ident {
                     name: "Msg",
                     span: 269..272,
@@ -124,6 +125,7 @@ File {
         Fn(
             FnDecl {
                 attrs: [],
+                vis: Private,
                 kind: Plain,
                 name: Ident {
                     name: "build",

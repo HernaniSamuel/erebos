@@ -1,0 +1,26 @@
+// emit: typeck
+// Diagnostics name the items of a module by their path from the root
+// (ADR 0049): its structs and enums as types, and its functions, constants
+// and statics.
+mod uart {
+    pub struct Config {}
+    pub enum Mode: u8 { Off = 0, Run = 1 }
+    pub const LIMIT: u16 = 4;
+    pub static LEVEL: u8 = 1;
+
+    pub fn init(c: Config) {}
+    pub fn config() -> Config { Config {} }
+}
+
+fn types() {
+    let c: uart::Config = 5;
+    uart::init(uart::Mode::Off);
+    uart::init();
+    let m: uart::Mode = .Walk;
+    let x: u32 = uart::config();
+    let y: u8 = uart::LIMIT;
+    uart::LEVEL = 2;
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

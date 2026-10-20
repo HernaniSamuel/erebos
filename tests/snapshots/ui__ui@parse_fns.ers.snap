@@ -9,6 +9,7 @@ File {
         Fn(
             FnDecl {
                 attrs: [],
+                vis: Private,
                 kind: Entry,
                 name: Ident {
                     name: "main",
@@ -45,6 +46,7 @@ File {
         Fn(
             FnDecl {
                 attrs: [],
+                vis: Private,
                 kind: Plain,
                 name: Ident {
                     name: "helper",

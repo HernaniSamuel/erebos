@@ -488,6 +488,21 @@ mod tests {
     }
 
     #[test]
+    fn module_keywords() {
+        use TokenKind::*;
+        // `use` is not a keyword yet: `use` declarations come later.
+        let (kinds, diags) = kinds("pub mod m {} crate::super::x use");
+        assert!(!diags.has_errors());
+        assert_eq!(
+            kinds,
+            [
+                Pub, Mod, Ident, LBrace, RBrace, Crate, ColonColon, Super, ColonColon, Ident,
+                Ident, Eof
+            ]
+        );
+    }
+
+    #[test]
     fn paths_and_enums() {
         use TokenKind::*;
         let (kinds, diags) = kinds("enum E: u8 { A = 0 } E::A :::");

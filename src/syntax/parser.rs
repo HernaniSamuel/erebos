@@ -5,8 +5,8 @@ use crate::diag::{Diagnostic, Diagnostics};
 use crate::span::Span;
 use crate::syntax::ast::{
     Arm, Attr, BinOp, Block, ComptimeDecl, ConstDecl, EnumDecl, Expr, ExprKind, FieldDecl,
-    FieldInit, File, FnDecl, FnKind, Ident, Item, Let, LogicalOp, Param, Path, Pattern,
-    PatternKind, StaticDecl, Stmt, StructDecl, Ty, TyKind, UnOp, VariantDecl,
+    FieldInit, File, FnDecl, FnKind, Ident, Item, Let, LogicalOp, ModDecl, Param, Path, Pattern,
+    PatternKind, StaticDecl, Stmt, StructDecl, Ty, TyKind, UnOp, VariantDecl, Visibility,
 };
 use crate::syntax::lexer;
 use crate::syntax::token::{Token, TokenKind};
@@ -20,6 +20,8 @@ pub fn parse(text: &str, tokens: &[Token], diags: &mut Diagnostics) -> File {
         diags,
         no_struct: false,
         after_builtin_call: None,
+        depth: 0,
+        module_depth: None,
     };
     parser.file()
 }
@@ -41,6 +43,11 @@ struct Parser<'a> {
     /// `Option` or `Result`, and that name: a `::` there is reported with
     /// the help of `builtin_variant_help`.
     after_builtin_call: Option<(usize, String)>,
+    /// How many `{` the tokens consumed so far leave open.
+    depth: usize,
+    /// Inside the body of a module, the `depth` of its items: a `}` met
+    /// there while recovering closes the module.
+    module_depth: Option<usize>,
 }
 
 /// Whether `name` is `Option` or `Result`, the built-in enums with type
@@ -93,9 +100,13 @@ impl Parser<'_> {
 
     fn bump(&mut self) -> Token {
         let token = self.peek();
-        if token.kind != TokenKind::Eof {
-            self.pos += 1;
+        match token.kind {
+            TokenKind::Eof => return token,
+            TokenKind::LBrace => self.depth += 1,
+            TokenKind::RBrace => self.depth = self.depth.saturating_sub(1),
+            _ => {}
         }
+        self.pos += 1;
         token
     }
 
@@ -167,22 +178,32 @@ impl Parser<'_> {
         File { items }
     }
 
-    /// Skips to the next token that can start an item.
+    /// Skips to the next token that can start an item, or, in a module's
+    /// body, to the `}` that closes it, so that an error in its last item
+    /// does not carry the items after the module into it. `pub` is not
+    /// one: the token after it is, and the item parses as well without
+    /// it, so a misplaced `pub` that caused the error is not met again.
     fn recover_to_item(&mut self) {
-        while !matches!(
-            self.peek().kind,
-            TokenKind::Entry
-                | TokenKind::Panic
-                | TokenKind::Fn
-                | TokenKind::Extern
-                | TokenKind::Struct
-                | TokenKind::Enum
-                | TokenKind::Const
-                | TokenKind::Static
-                | TokenKind::Comptime
-                | TokenKind::Pound
-                | TokenKind::Eof
-        ) {
+        loop {
+            let closes_module = self.at(TokenKind::RBrace) && self.module_depth == Some(self.depth);
+            let starts_item = matches!(
+                self.peek().kind,
+                TokenKind::Entry
+                    | TokenKind::Panic
+                    | TokenKind::Fn
+                    | TokenKind::Extern
+                    | TokenKind::Struct
+                    | TokenKind::Enum
+                    | TokenKind::Const
+                    | TokenKind::Static
+                    | TokenKind::Comptime
+                    | TokenKind::Mod
+                    | TokenKind::Pound
+                    | TokenKind::Eof
+            );
+            if closes_module || starts_item {
+                return;
+            }
             self.bump();
         }
     }
@@ -192,16 +213,25 @@ impl Parser<'_> {
         while self.at(TokenKind::Pound) {
             attrs.push(self.attr()?);
         }
+        // After the attributes, before the item's keywords (ADR 0050).
+        let vis = match self.eat(TokenKind::Pub) {
+            Some(token) => {
+                self.misplaced_pub(token);
+                Visibility::Pub
+            }
+            None => Visibility::Private,
+        };
         if self.at_static() {
-            return Ok(Item::Static(self.static_decl(attrs)?));
+            return Ok(Item::Static(self.static_decl(attrs, vis)?));
         }
         match self.peek().kind {
             TokenKind::Entry | TokenKind::Panic | TokenKind::Fn | TokenKind::Extern => {
-                Ok(Item::Fn(self.fn_decl(attrs)?))
+                Ok(Item::Fn(self.fn_decl(attrs, vis)?))
             }
-            TokenKind::Struct => Ok(Item::Struct(self.struct_decl(attrs)?)),
-            TokenKind::Enum => Ok(Item::Enum(self.enum_decl(attrs)?)),
-            TokenKind::Const => Ok(Item::Const(self.const_decl(attrs)?)),
+            TokenKind::Struct => Ok(Item::Struct(self.struct_decl(attrs, vis)?)),
+            TokenKind::Enum => Ok(Item::Enum(self.enum_decl(attrs, vis)?)),
+            TokenKind::Const => Ok(Item::Const(self.const_decl(attrs, vis)?)),
+            TokenKind::Mod => Ok(Item::Mod(self.mod_decl(attrs, vis)?)),
             TokenKind::Comptime => {
                 let start = self.bump().span;
                 let block = self.block()?;
@@ -217,6 +247,85 @@ impl Parser<'_> {
                 // Guarantee progress before resynchronizing.
                 self.bump();
                 Err(err)
+            }
+        }
+    }
+
+    /// Reports `pub`, the token `pub_`, if the item after it is one that
+    /// `pub` does not apply to: a `comptime` block, which has no name, or
+    /// the entry function, which nothing calls (ADR 0050). Anything else
+    /// after `pub` is an item, or reported as not being one.
+    fn misplaced_pub(&mut self, pub_: Token) {
+        let (what, help) = match self.peek().kind {
+            TokenKind::Comptime => (
+                "a `comptime` block",
+                "a `comptime` block has no name for other modules to use; remove `pub` (ADR 0050)",
+            ),
+            TokenKind::Entry => (
+                "the entry function",
+                "nothing calls the entry function, so no module has a use for it; remove `pub` (ADR 0050)",
+            ),
+            _ => return,
+        };
+        self.diags.push(
+            Diagnostic::error(
+                "parser::misplaced-pub",
+                format!("`pub` does not apply to {what}"),
+            )
+            .label(pub_.span, "not allowed here")
+            .help(help),
+        );
+    }
+
+    /// `mod name { items }` or `mod name;` (ADR 0049).
+    fn mod_decl(&mut self, attrs: Vec<Attr>, vis: Visibility) -> PResult<ModDecl> {
+        let start = self.bump().span;
+        let name = self.ident()?;
+        if let Some(semi) = self.eat(TokenKind::Semi) {
+            return Ok(ModDecl {
+                attrs,
+                vis,
+                name,
+                items: None,
+                span: start.to(semi.span),
+            });
+        }
+        let Some(open) = self.eat(TokenKind::LBrace) else {
+            return Err(self.error_expected("`;` or `{`"));
+        };
+        let saved = self.module_depth.replace(self.depth);
+        let items = self.mod_items(open);
+        self.module_depth = saved;
+        let items = items?;
+        let close = self.bump();
+        Ok(ModDecl {
+            attrs,
+            vis,
+            name,
+            items: Some(items),
+            span: start.to(close.span),
+        })
+    }
+
+    /// The items of a module's body, after its `{`, which is `open`, up to
+    /// its `}`.
+    fn mod_items(&mut self, open: Token) -> PResult<Vec<Item>> {
+        let mut items = Vec::new();
+        loop {
+            match self.peek().kind {
+                TokenKind::RBrace => return Ok(items),
+                TokenKind::Eof => {
+                    self.diags.push(
+                        Diagnostic::error("parser::unclosed-block", "unclosed block")
+                            .label(open.span, "this `{` is never closed")
+                            .label(self.missing_token_span(), "expected `}`"),
+                    );
+                    return Err(Reported);
+                }
+                _ => match self.item() {
+                    Ok(item) => items.push(item),
+                    Err(Reported) => self.recover_to_item(),
+                },
             }
         }
     }
@@ -241,7 +350,7 @@ impl Parser<'_> {
         })
     }
 
-    fn fn_decl(&mut self, attrs: Vec<Attr>) -> PResult<FnDecl> {
+    fn fn_decl(&mut self, attrs: Vec<Attr>, vis: Visibility) -> PResult<FnDecl> {
         let start = self.peek().span;
         let external = self.eat(TokenKind::Extern).is_some();
         let kind = if external {
@@ -265,6 +374,7 @@ impl Parser<'_> {
             let semi = self.expect(TokenKind::Semi)?;
             return Ok(FnDecl {
                 attrs,
+                vis,
                 kind,
                 name,
                 params,
@@ -276,6 +386,7 @@ impl Parser<'_> {
         let body = self.block()?;
         Ok(FnDecl {
             attrs,
+            vis,
             kind,
             name,
             params,
@@ -285,7 +396,7 @@ impl Parser<'_> {
         })
     }
 
-    fn const_decl(&mut self, attrs: Vec<Attr>) -> PResult<ConstDecl> {
+    fn const_decl(&mut self, attrs: Vec<Attr>, vis: Visibility) -> PResult<ConstDecl> {
         let start = self.bump().span;
         let name = self.ident()?;
         self.expect(TokenKind::Colon)?;
@@ -295,6 +406,7 @@ impl Parser<'_> {
         let semi = self.expect(TokenKind::Semi)?;
         Ok(ConstDecl {
             attrs,
+            vis,
             name,
             ty,
             value,
@@ -303,7 +415,7 @@ impl Parser<'_> {
     }
 
     /// A static, or an `extern static`, which has no initializer.
-    fn static_decl(&mut self, attrs: Vec<Attr>) -> PResult<StaticDecl> {
+    fn static_decl(&mut self, attrs: Vec<Attr>, vis: Visibility) -> PResult<StaticDecl> {
         let start = self.peek().span;
         let external = self.eat(TokenKind::Extern).is_some();
         self.expect(TokenKind::Static)?;
@@ -320,6 +432,7 @@ impl Parser<'_> {
         let semi = self.expect(TokenKind::Semi)?;
         Ok(StaticDecl {
             attrs,
+            vis,
             external,
             mutable,
             name,
@@ -329,7 +442,7 @@ impl Parser<'_> {
         })
     }
 
-    fn struct_decl(&mut self, attrs: Vec<Attr>) -> PResult<StructDecl> {
+    fn struct_decl(&mut self, attrs: Vec<Attr>, vis: Visibility) -> PResult<StructDecl> {
         let start = self.bump().span;
         let name = self.ident()?;
         self.expect(TokenKind::LBrace)?;
@@ -341,6 +454,7 @@ impl Parser<'_> {
         })?;
         Ok(StructDecl {
             attrs,
+            vis,
             name,
             fields,
             span: start.to(self.tokens[self.pos - 1].span),
@@ -351,7 +465,7 @@ impl Parser<'_> {
     /// The integer type and every value are written, never implied
     /// (ADR 0035); a payload goes between a variant's name and its value
     /// (ADR 0039).
-    fn enum_decl(&mut self, attrs: Vec<Attr>) -> PResult<EnumDecl> {
+    fn enum_decl(&mut self, attrs: Vec<Attr>, vis: Visibility) -> PResult<EnumDecl> {
         let start = self.bump().span;
         let name = self.ident()?;
         if self.eat(TokenKind::Colon).is_none() {
@@ -417,6 +531,7 @@ impl Parser<'_> {
         })?;
         Ok(EnumDecl {
             attrs,
+            vis,
             name,
             ty,
             variants,
@@ -493,18 +608,37 @@ impl Parser<'_> {
         })
     }
 
-    /// The path of an expression or a pattern: a name, or `Enum::Variant`
-    /// (ADR 0035).
+    /// A path: names separated by `::`, the first of which may be `crate`
+    /// or `super`, and `super` again after `super` (ADR 0049).
     fn path(&mut self) -> PResult<Path> {
-        let first = self.ident()?;
-        if self.eat(TokenKind::ColonColon).is_none() {
-            return Ok(Path::single(first));
+        let first = match self.peek().kind {
+            TokenKind::Crate | TokenKind::Super => self.keyword_segment(),
+            _ => self.ident()?,
+        };
+        let mut supers = first.name == "super";
+        let mut segments = vec![first];
+        while self.eat(TokenKind::ColonColon).is_some() {
+            let segment = if supers && self.at(TokenKind::Super) {
+                self.keyword_segment()
+            } else {
+                supers = false;
+                self.ident()?
+            };
+            segments.push(segment);
         }
-        let variant = self.ident()?;
         Ok(Path {
-            span: first.span.to(variant.span),
-            segments: vec![first, variant],
+            span: segments[0].span.to(segments[segments.len() - 1].span),
+            segments,
         })
+    }
+
+    /// `crate` or `super` as a segment of a path, named by its keyword.
+    fn keyword_segment(&mut self) -> Ident {
+        let token = self.bump();
+        Ident {
+            name: self.text[token.span.range()].to_owned(),
+            span: token.span,
+        }
     }
 
     fn ty(&mut self) -> PResult<Ty> {
@@ -522,8 +656,8 @@ impl Parser<'_> {
                     span: token.span.to(close.span),
                 });
             }
-            TokenKind::Ident => {
-                let path = Path::single(self.ident()?);
+            TokenKind::Ident | TokenKind::Crate | TokenKind::Super => {
+                let path = self.path()?;
                 // Type arguments, as `Option(u32)`; `Name()` parses, and is
                 // a count error (ADR 0045).
                 if self.eat(TokenKind::LParen).is_some() {
@@ -534,7 +668,10 @@ impl Parser<'_> {
                         span: token.span.to(close),
                     });
                 }
-                TyKind::Named(path)
+                return Ok(Ty {
+                    span: path.span,
+                    kind: TyKind::Named(path),
+                });
             }
             TokenKind::LBracket => {
                 self.bump();
@@ -621,7 +758,7 @@ impl Parser<'_> {
                         .help("compute the value at compile time with `let name: T = comptime ...;`, or move the `const` out of the function (ADR 0029)"),
                     );
                     // Consumed, so that the rest of the block parses.
-                    self.const_decl(Vec::new())?;
+                    self.const_decl(Vec::new(), Visibility::Private)?;
                 }
                 _ if self.at_static() => {
                     let token = self.peek();
@@ -633,7 +770,19 @@ impl Parser<'_> {
                         .label(token.span, "inside a function")
                         .help("move the `static` out of the function (ADR 0030)"),
                     );
-                    self.static_decl(Vec::new())?;
+                    self.static_decl(Vec::new(), Visibility::Private)?;
+                }
+                TokenKind::Mod => {
+                    let token = self.peek();
+                    self.diags.push(
+                        Diagnostic::error(
+                            "parser::local-mod",
+                            "`mod` items cannot be declared inside a function",
+                        )
+                        .label(token.span, "inside a function")
+                        .help("move the `mod` out of the function (ADR 0049)"),
+                    );
+                    self.mod_decl(Vec::new(), Visibility::Private)?;
                 }
                 _ => {
                     // As in Rust, a statement starting with a block-like
@@ -953,7 +1102,7 @@ impl Parser<'_> {
                     kind: ExprKind::While { cond, body },
                 });
             }
-            TokenKind::Ident => {
+            TokenKind::Ident | TokenKind::Crate | TokenKind::Super => {
                 let path = self.path()?;
                 // Arguments as a call's, whatever the path names
                 // (ADR 0039).
@@ -972,11 +1121,9 @@ impl Parser<'_> {
                         kind: ExprKind::Call(path, args),
                     });
                 }
-                // `Enum::Variant` is no struct.
-                if path.as_single().is_some()
-                    && !self.no_struct
-                    && self.eat(TokenKind::LBrace).is_some()
-                {
+                // Whatever the path names: `uart::Config { .. }` is a
+                // struct of a module (ADR 0049).
+                if !self.no_struct && self.eat(TokenKind::LBrace).is_some() {
                     let fields = self.brace_list(|p| {
                         let name = p.ident()?;
                         p.expect(TokenKind::Colon)?;
@@ -1230,7 +1377,7 @@ impl Parser<'_> {
             },
             TokenKind::Byte => PatternKind::Byte(lexer::byte_value(text).ok()),
             TokenKind::True | TokenKind::False => PatternKind::Bool(token.kind == TokenKind::True),
-            TokenKind::Ident => {
+            TokenKind::Ident | TokenKind::Crate | TokenKind::Super => {
                 let path = self.path()?;
                 // `Enum::Variant()` parses, and is a count error
                 // (ADR 0040); a bare name takes no patterns.

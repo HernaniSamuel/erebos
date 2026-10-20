@@ -48,12 +48,12 @@ enum Item {
 fn describe(q: &Queries, f: &hir::Fn) -> String {
     let hir = q.hir;
     match f.comptime {
-        Some(Comptime::Const(id)) => format!("the constant `{}`", hir.const_(id).name),
-        Some(Comptime::Static(id)) => format!("the static `{}`", hir.static_(id).name),
+        Some(Comptime::Const(id)) => format!("the constant `{}`", hir.const_(id).path),
+        Some(Comptime::Static(id)) => format!("the static `{}`", hir.static_(id).path),
         Some(Comptime::Block) => "this `comptime` block".to_owned(),
         Some(Comptime::Value) => "this value".to_owned(),
         Some(Comptime::Discriminant(id, index)) => variant_name(q.enum_def(id), index),
-        None => format!("the function `{}`", f.name),
+        None => format!("the function `{}`", f.path),
     }
 }
 
@@ -337,7 +337,7 @@ impl<'h> Queries<'h> {
         }
         let hir = self.hir;
         let def = hir.const_(id);
-        let what = format!("the constant `{}`", def.name);
+        let what = format!("the constant `{}`", def.path);
         if !self.start(Item::Const(id), def.name_span, what.clone()) {
             return None;
         }
@@ -442,7 +442,7 @@ impl<'h> Queries<'h> {
         let hir = self.hir;
         let def = hir.static_(id);
         let init = def.init?;
-        let what = format!("the static `{}`", def.name);
+        let what = format!("the static `{}`", def.path);
         if !self.start(Item::Static(id), def.name_span, what.clone()) {
             return None;
         }
@@ -1256,7 +1256,7 @@ impl<'h> Queries<'h> {
             && !self.start(
                 Item::Body(id),
                 f.name_span,
-                format!("the function `{}`", f.name),
+                format!("the function `{}`", f.path),
             )
         {
             return None;

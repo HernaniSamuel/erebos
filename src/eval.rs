@@ -436,7 +436,7 @@ impl Interp<'_, '_> {
                 "eval::extern-call",
                 format!(
                     "`{}` is an `extern fn`, which cannot run at compile time",
-                    f.name
+                    f.path
                 ),
                 "called here",
                 span,

@@ -9,6 +9,7 @@ File {
         Struct(
             StructDecl {
                 attrs: [],
+                vis: Private,
                 name: Ident {
                     name: "S",
                     span: 461..462,
@@ -41,6 +42,7 @@ File {
         Fn(
             FnDecl {
                 attrs: [],
+                vis: Private,
                 kind: Plain,
                 name: Ident {
                     name: "arms",
@@ -445,6 +447,7 @@ File {
         Fn(
             FnDecl {
                 attrs: [],
+                vis: Private,
                 kind: Plain,
                 name: Ident {
                     name: "statement",
@@ -624,6 +627,7 @@ File {
         Fn(
             FnDecl {
                 attrs: [],
+                vis: Private,
                 kind: Entry,
                 name: Ident {
                     name: "main",
@@ -660,6 +664,7 @@ File {
         Fn(
             FnDecl {
                 attrs: [],
+                vis: Private,
                 kind: Panic,
                 name: Ident {
                     name: "on_panic",

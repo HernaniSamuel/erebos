@@ -9,6 +9,7 @@ File {
         Static(
             StaticDecl {
                 attrs: [],
+                vis: Private,
                 external: false,
                 mutable: false,
                 name: Ident {
@@ -91,6 +92,7 @@ File {
                         span: 185..197,
                     },
                 ],
+                vis: Private,
                 external: false,
                 mutable: true,
                 name: Ident {
@@ -153,6 +155,7 @@ File {
         Static(
             StaticDecl {
                 attrs: [],
+                vis: Private,
                 external: true,
                 mutable: true,
                 name: Ident {
@@ -180,6 +183,7 @@ File {
         Fn(
             FnDecl {
                 attrs: [],
+                vis: Private,
                 kind: Entry,
                 name: Ident {
                     name: "main",
@@ -216,6 +220,7 @@ File {
         Fn(
             FnDecl {
                 attrs: [],
+                vis: Private,
                 kind: Panic,
                 name: Ident {
                     name: "on_panic",

@@ -1,0 +1,364 @@
+---
+source: tests/ui.rs
+assertion_line: 40
+expression: output
+input_file: tests/ui/resolve_module_errors.ers
+---
+--- errors ---
+resolve::module-file
+
+  × the file of module `file` cannot be read
+    ╭─[resolve_module_errors.ers:13:1]
+ 12 │ struct Point { x: u8 }
+ 13 │ mod file;
+    · ────┬────
+    ·     ╰── declared without a body
+ 14 │ 
+    ╰────
+  help: modules in files of their own are not read yet; write the module's items in it, as in `mod
+        file { ... }` (ADR 0049)
+resolve::unknown-name
+
+  × cannot find `LIMIT` in this scope
+    ╭─[resolve_module_errors.ers:21:26]
+ 20 │ 
+ 21 │     fn parent() -> u32 { LIMIT }
+    ·                          ──┬──
+    ·                            ╰── not found in module `a`
+ 22 │     fn unknown_first() -> u8 { nope::x }
+    ╰────
+  help: a module does not see the names of the modules around it: the `LIMIT` of the root module
+        is written `super::LIMIT` here (ADR 0049)
+resolve::unknown-path
+
+  × cannot find `nope`
+    ╭─[resolve_module_errors.ers:22:32]
+ 21 │     fn parent() -> u32 { LIMIT }
+ 22 │     fn unknown_first() -> u8 { nope::x }
+    ·                                ──┬─
+    ·                                  ╰── not found in module `a`
+ 23 │     fn deeper() -> u8 { super::super::LIMIT }
+    ╰────
+resolve::super-at-root
+
+  × the root module has no parent
+    ╭─[resolve_module_errors.ers:23:32]
+ 22 │     fn unknown_first() -> u8 { nope::x }
+ 23 │     fn deeper() -> u8 { super::super::LIMIT }
+    ·                                ──┬──
+    ·                                  ╰── `super` of the root module
+ 24 │     fn twice() {}
+    ╰────
+  help: `super` names the module around the current one; the root module's items are named
+        directly, or from anywhere through `crate` (ADR 0049)
+resolve::duplicate-item
+
+  × `twice` is defined more than once
+    ╭─[resolve_module_errors.ers:25:11]
+ 23 │     fn deeper() -> u8 { super::super::LIMIT }
+ 24 │     fn twice() {}
+    ·        ──┬──
+    ·          ╰── first defined here
+ 25 │     const twice: u8 = 0;
+    ·           ──┬──
+    ·             ╰── redefined here
+ 26 │ }
+    ╰────
+  help: functions, structs, enums, constants and statics share one namespace (ADR 0029, 0030,
+        0035)
+resolve::duplicate-item
+
+  × `b` is defined more than once
+    ╭─[resolve_module_errors.ers:29:5]
+ 27 │ 
+ 28 │ fn b() {}
+    ·    ┬
+    ·    ╰── first defined here
+ 29 │ mod b {}
+    ·     ┬
+    ·     ╰── redefined here
+ 30 │ 
+    ╰────
+  help: the items and modules of a module share one namespace (ADR 0049)
+resolve::unknown-type
+
+  × unknown type `a::Nope`
+    ╭─[resolve_module_errors.ers:31:27]
+ 30 │ 
+ 31 │ fn unknown_segments(p: a::Nope) -> u8 {
+    ·                           ──┬─
+    ·                             ╰── not found in module `a`
+ 32 │     let x: u8 = a::NOPE;
+    ╰────
+resolve::unknown-name
+
+  × cannot find `a::NOPE`
+    ╭─[resolve_module_errors.ers:32:20]
+ 31 │ fn unknown_segments(p: a::Nope) -> u8 {
+ 32 │     let x: u8 = a::NOPE;
+    ·                    ──┬─
+    ·                      ╰── not found in module `a`
+ 33 │     a::nope();
+    ╰────
+resolve::unknown-function
+
+  × cannot find function `a::nope`
+    ╭─[resolve_module_errors.ers:33:8]
+ 32 │     let x: u8 = a::NOPE;
+ 33 │     a::nope();
+    ·        ──┬─
+    ·          ╰── not found in module `a`
+ 34 │     a::Nope {};
+    ╰────
+resolve::unknown-type
+
+  × unknown struct `a::Nope`
+    ╭─[resolve_module_errors.ers:34:8]
+ 33 │     a::nope();
+ 34 │     a::Nope {};
+    ·        ──┬─
+    ·          ╰── not found in module `a`
+ 35 │     let y: u8 = nope::x + a::nope::x + crate::nope::x;
+    ╰────
+resolve::unknown-path
+
+  × cannot find `nope`
+    ╭─[resolve_module_errors.ers:35:17]
+ 34 │     a::Nope {};
+ 35 │     let y: u8 = nope::x + a::nope::x + crate::nope::x;
+    ·                 ──┬─
+    ·                   ╰── not found in the root module
+ 36 │     let e: a::E = a::E::Nope;
+    ╰────
+resolve::unknown-path
+
+  × cannot find `a::nope`
+    ╭─[resolve_module_errors.ers:35:30]
+ 34 │     a::Nope {};
+ 35 │     let y: u8 = nope::x + a::nope::x + crate::nope::x;
+    ·                              ──┬─
+    ·                                ╰── not found in module `a`
+ 36 │     let e: a::E = a::E::Nope;
+    ╰────
+resolve::unknown-path
+
+  × cannot find `crate::nope`
+    ╭─[resolve_module_errors.ers:35:47]
+ 34 │     a::Nope {};
+ 35 │     let y: u8 = nope::x + a::nope::x + crate::nope::x;
+    ·                                               ──┬─
+    ·                                                 ╰── not found in the root module
+ 36 │     let e: a::E = a::E::Nope;
+    ╰────
+resolve::unknown-variant
+
+  × `a::E` has no variant `Nope`
+    ╭─[resolve_module_errors.ers:36:25]
+ 17 │     pub struct S {}
+ 18 │     pub enum E: u8 { V = 0 }
+    ·              ┬
+    ·              ╰── `a::E` is declared here
+ 19 │     pub mod b {}
+ 20 │ 
+ 21 │     fn parent() -> u32 { LIMIT }
+ 22 │     fn unknown_first() -> u8 { nope::x }
+ 23 │     fn deeper() -> u8 { super::super::LIMIT }
+ 24 │     fn twice() {}
+ 25 │     const twice: u8 = 0;
+ 26 │ }
+ 27 │ 
+ 28 │ fn b() {}
+ 29 │ mod b {}
+ 30 │ 
+ 31 │ fn unknown_segments(p: a::Nope) -> u8 {
+ 32 │     let x: u8 = a::NOPE;
+ 33 │     a::nope();
+ 34 │     a::Nope {};
+ 35 │     let y: u8 = nope::x + a::nope::x + crate::nope::x;
+ 36 │     let e: a::E = a::E::Nope;
+    ·                         ──┬─
+    ·                           ╰── unknown variant
+ 37 │     match x {
+    ╰────
+  help: its variants are `V`
+resolve::unknown-name
+
+  × cannot find `a::NOPE`
+    ╭─[resolve_module_errors.ers:38:12]
+ 37 │     match x {
+ 38 │         a::NOPE => 0,
+    ·            ──┬─
+    ·              ╰── not found in module `a`
+ 39 │         _ => 1,
+    ╰────
+resolve::not-an-enum
+
+  × `Point` is neither a module nor an enum
+    ╭─[resolve_module_errors.ers:44:17]
+ 43 │ fn not_enums() {
+ 44 │     let x: u8 = Point::Origin;
+    ·                 ──┬──
+    ·                   ╰── a struct
+ 45 │     let y: u8 = a::C::X;
+    ╰────
+  help: `::` follows a module, to name one of its items, or an enum, to name one of its variants,
+        as in `Mode::Run` (ADR 0035, 0049)
+resolve::not-an-enum
+
+  × `a::C` is neither a module nor an enum
+    ╭─[resolve_module_errors.ers:45:20]
+ 44 │     let x: u8 = Point::Origin;
+ 45 │     let y: u8 = a::C::X;
+    ·                    ┬
+    ·                    ╰── a constant
+ 46 │     let z: u8 = LIMIT::X;
+    ╰────
+  help: `::` follows a module, to name one of its items, or an enum, to name one of its variants,
+        as in `Mode::Run` (ADR 0035, 0049)
+resolve::not-an-enum
+
+  × `LIMIT` is neither a module nor an enum
+    ╭─[resolve_module_errors.ers:46:17]
+ 45 │     let y: u8 = a::C::X;
+ 46 │     let z: u8 = LIMIT::X;
+    ·                 ──┬──
+    ·                   ╰── a constant
+ 47 │     let o: Option(u8) = Option::None;
+    ╰────
+  help: `::` follows a module, to name one of its items, or an enum, to name one of its variants,
+        as in `Mode::Run` (ADR 0035, 0049)
+resolve::not-an-enum
+
+  × `Option` is not an enum
+    ╭─[resolve_module_errors.ers:47:25]
+ 46 │     let z: u8 = LIMIT::X;
+ 47 │     let o: Option(u8) = Option::None;
+    ·                         ───┬──
+    ·                            ╰── an enum only with its type arguments, as in `Option(T)`
+ 48 │     let v: u8 = a::E::V::X;
+    ╰────
+  help: the variants of `Option` have no path: write `.None` where an `Option(T)` is expected, and
+        that type gives it its enum (ADR 0044, 0045)
+resolve::not-an-enum
+
+  × `a::E::V` is neither a module nor an enum
+    ╭─[resolve_module_errors.ers:48:23]
+ 47 │     let o: Option(u8) = Option::None;
+ 48 │     let v: u8 = a::E::V::X;
+    ·                       ┬
+    ·                       ╰── a variant
+ 49 │ }
+    ╰────
+  help: `::` follows a module, to name one of its items, or an enum, to name one of its variants,
+        as in `Mode::Run` (ADR 0035, 0049)
+resolve::misused-module
+
+  × `a` is a module, not a type
+    ╭─[resolve_module_errors.ers:51:15]
+ 50 │ 
+ 51 │ fn misused(m: a) {
+    ·               ┬
+    ·               ╰── a module
+ 52 │     let x: u8 = a;
+    ╰────
+  help: a module holds items, each named by a path through it, as in `a::name` (ADR 0049)
+resolve::misused-module
+
+  × `a` is a module, not a value
+    ╭─[resolve_module_errors.ers:52:17]
+ 51 │ fn misused(m: a) {
+ 52 │     let x: u8 = a;
+    ·                 ┬
+    ·                 ╰── a module
+ 53 │     a();
+    ╰────
+  help: a module holds items, each named by a path through it, as in `a::name` (ADR 0049)
+resolve::misused-module
+
+  × `a` is a module, not a function
+    ╭─[resolve_module_errors.ers:53:5]
+ 52 │     let x: u8 = a;
+ 53 │     a();
+    ·     ┬
+    ·     ╰── a module
+ 54 │     a {};
+    ╰────
+  help: a module holds items, each named by a path through it, as in `a::name` (ADR 0049)
+resolve::misused-module
+
+  × `a` is a module, not a struct
+    ╭─[resolve_module_errors.ers:54:5]
+ 53 │     a();
+ 54 │     a {};
+    ·     ┬
+    ·     ╰── a module
+ 55 │     let y: u8 = crate;
+    ╰────
+  help: a module holds items, each named by a path through it, as in `a::name` (ADR 0049)
+resolve::misused-module
+
+  × `crate` is a module, not a value
+    ╭─[resolve_module_errors.ers:55:17]
+ 54 │     a {};
+ 55 │     let y: u8 = crate;
+    ·                 ──┬──
+    ·                   ╰── a module
+ 56 │     let z: a::b = a::b::S {};
+    ╰────
+  help: a module holds items, each named by a path through it, as in `crate::name` (ADR 0049)
+resolve::misused-module
+
+  × `a::b` is a module, not a type
+    ╭─[resolve_module_errors.ers:56:12]
+ 55 │     let y: u8 = crate;
+ 56 │     let z: a::b = a::b::S {};
+    ·            ──┬─
+    ·              ╰── a module
+ 57 │     match y {
+    ╰────
+  help: a module holds items, each named by a path through it, as in `a::b::name` (ADR 0049)
+resolve::unknown-type
+
+  × unknown struct `a::b::S`
+    ╭─[resolve_module_errors.ers:56:25]
+ 55 │     let y: u8 = crate;
+ 56 │     let z: a::b = a::b::S {};
+    ·                         ┬
+    ·                         ╰── not found in module `a::b`
+ 57 │     match y {
+    ╰────
+resolve::unknown-variant
+
+  × `a::C` is not a variant
+    ╭─[resolve_module_errors.ers:58:9]
+ 57 │     match y {
+ 58 │         a::C(let c: u8) => c,
+    ·         ──┬─
+    ·           ╰── a constant, not a variant
+ 59 │         a::b => 0,
+    ╰────
+  help: patterns in parentheses match the values of a variant's payload, as in `E::V(p)` (ADR
+        0040)
+resolve::misused-module
+
+  × `a::b` is a module, not a constant
+    ╭─[resolve_module_errors.ers:59:9]
+ 58 │         a::C(let c: u8) => c,
+ 59 │         a::b => 0,
+    ·         ──┬─
+    ·           ╰── a module
+ 60 │         _ => 1,
+    ╰────
+  help: a module holds items, each named by a path through it, as in `a::b::name` (ADR 0049)
+resolve::super-at-root
+
+  × the root module has no parent
+    ╭─[resolve_module_errors.ers:64:26]
+ 63 │ 
+ 64 │ fn root_super() -> u32 { super::LIMIT }
+    ·                          ──┬──
+    ·                            ╰── `super` of the root module
+ 65 │ 
+    ╰────
+  help: `super` names the module around the current one; the root module's items are named
+        directly, or from anywhere through `crate` (ADR 0049)

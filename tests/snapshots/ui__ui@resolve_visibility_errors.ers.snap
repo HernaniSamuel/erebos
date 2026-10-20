@@ -1,0 +1,109 @@
+---
+source: tests/ui.rs
+assertion_line: 40
+expression: output
+input_file: tests/ui/resolve_visibility_errors.ers
+---
+--- errors ---
+resolve::private-item
+
+  × `outer::helper` is private
+    ╭─[resolve_visibility_errors.ers:9:8]
+  8 │     const HIDDEN: u8 = 1;
+  9 │     fn helper() -> u8 { HIDDEN }
+    ·        ───┬──
+    ·           ╰── declared here without `pub`
+ 10 │ 
+    ╰────
+    ╭─[resolve_visibility_errors.ers:22:45]
+ 21 │ mod sibling {
+ 22 │     fn from_sibling() -> u8 { super::outer::helper() + crate::outer::HIDDEN }
+    ·                                             ───┬──
+    ·                                                ╰── not visible here
+ 23 │     fn through_private() -> u8 { crate::outer::inner::SHARED }
+    ╰────
+  help: a private item of module `outer` is visible only there and in the modules inside it;
+        declare it `pub` to use it elsewhere (ADR 0050)
+resolve::private-item
+
+  × `outer::HIDDEN` is private
+   ╭─[resolve_visibility_errors.ers:8:11]
+ 7 │ mod outer {
+ 8 │     const HIDDEN: u8 = 1;
+   ·           ───┬──
+   ·              ╰── declared here without `pub`
+ 9 │     fn helper() -> u8 { HIDDEN }
+   ╰────
+    ╭─[resolve_visibility_errors.ers:22:70]
+ 21 │ mod sibling {
+ 22 │     fn from_sibling() -> u8 { super::outer::helper() + crate::outer::HIDDEN }
+    ·                                                                      ───┬──
+    ·                                                                         ╰── not visible here
+ 23 │     fn through_private() -> u8 { crate::outer::inner::SHARED }
+    ╰────
+  help: a private item of module `outer` is visible only there and in the modules inside it;
+        declare it `pub` to use it elsewhere (ADR 0050)
+resolve::private-item
+
+  × `outer::inner` is private
+    ╭─[resolve_visibility_errors.ers:23:48]
+ 10 │ 
+ 11 │     mod inner {
+    ·         ──┬──
+    ·           ╰── declared here without `pub`
+ 12 │         pub const SHARED: u8 = 2;
+ 13 │         fn from_child() -> u8 { super::HIDDEN + super::helper() }
+ 14 │     }
+ 15 │ 
+ 16 │     pub mod open {
+ 17 │         pub fn reach() -> u8 { super::inner::SHARED }
+ 18 │     }
+ 19 │ }
+ 20 │ 
+ 21 │ mod sibling {
+ 22 │     fn from_sibling() -> u8 { super::outer::helper() + crate::outer::HIDDEN }
+ 23 │     fn through_private() -> u8 { crate::outer::inner::SHARED }
+    ·                                                ──┬──
+    ·                                                  ╰── not visible here
+ 24 │     fn through_pub() -> u8 { crate::outer::open::reach() }
+    ╰────
+  help: a private item of module `outer` is visible only there and in the modules inside it;
+        declare it `pub` to use it elsewhere (ADR 0050)
+resolve::private-item
+
+  × `outer::helper` is private
+    ╭─[resolve_visibility_errors.ers:9:8]
+  8 │     const HIDDEN: u8 = 1;
+  9 │     fn helper() -> u8 { HIDDEN }
+    ·        ───┬──
+    ·           ╰── declared here without `pub`
+ 10 │ 
+    ╰────
+    ╭─[resolve_visibility_errors.ers:27:33]
+ 26 │ 
+ 27 │ fn from_parent() -> u8 { outer::helper() + outer::inner::SHARED }
+    ·                                 ───┬──
+    ·                                    ╰── not visible here
+ 28 │ 
+    ╰────
+  help: a private item of module `outer` is visible only there and in the modules inside it;
+        declare it `pub` to use it elsewhere (ADR 0050)
+resolve::private-item
+
+  × `outer::inner` is private
+    ╭─[resolve_visibility_errors.ers:11:9]
+ 10 │ 
+ 11 │     mod inner {
+    ·         ──┬──
+    ·           ╰── declared here without `pub`
+ 12 │         pub const SHARED: u8 = 2;
+    ╰────
+    ╭─[resolve_visibility_errors.ers:27:51]
+ 26 │ 
+ 27 │ fn from_parent() -> u8 { outer::helper() + outer::inner::SHARED }
+    ·                                                   ──┬──
+    ·                                                     ╰── not visible here
+ 28 │ 
+    ╰────
+  help: a private item of module `outer` is visible only there and in the modules inside it;
+        declare it `pub` to use it elsewhere (ADR 0050)

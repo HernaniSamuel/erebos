@@ -1,0 +1,67 @@
+// emit: hir
+// A single name is looked up in the current module only, never in its
+// parent. A segment followed by `::` that names nothing is
+// `resolve::unknown-path`, and one that names neither a module nor an enum
+// `resolve::not-an-enum`; a last segment that names nothing is the error
+// of its position. Each says the module it looked in. A module where a
+// type, a value, a function or a struct is expected is
+// `resolve::misused-module`, and `super` in the root module
+// `resolve::super-at-root` (ADR 0049). A module's items and modules share
+// one namespace. A module without a body names a file, not read yet.
+const LIMIT: u32 = 10;
+struct Point { x: u8 }
+mod file;
+
+mod a {
+    pub const C: u8 = 1;
+    pub struct S {}
+    pub enum E: u8 { V = 0 }
+    pub mod b {}
+
+    fn parent() -> u32 { LIMIT }
+    fn unknown_first() -> u8 { nope::x }
+    fn deeper() -> u8 { super::super::LIMIT }
+    fn twice() {}
+    const twice: u8 = 0;
+}
+
+fn b() {}
+mod b {}
+
+fn unknown_segments(p: a::Nope) -> u8 {
+    let x: u8 = a::NOPE;
+    a::nope();
+    a::Nope {};
+    let y: u8 = nope::x + a::nope::x + crate::nope::x;
+    let e: a::E = a::E::Nope;
+    match x {
+        a::NOPE => 0,
+        _ => 1,
+    }
+}
+
+fn not_enums() {
+    let x: u8 = Point::Origin;
+    let y: u8 = a::C::X;
+    let z: u8 = LIMIT::X;
+    let o: Option(u8) = Option::None;
+    let v: u8 = a::E::V::X;
+}
+
+fn misused(m: a) {
+    let x: u8 = a;
+    a();
+    a {};
+    let y: u8 = crate;
+    let z: a::b = a::b::S {};
+    match y {
+        a::C(let c: u8) => c,
+        a::b => 0,
+        _ => 1,
+    }
+}
+
+fn root_super() -> u32 { super::LIMIT }
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

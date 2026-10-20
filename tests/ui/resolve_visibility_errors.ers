@@ -1,0 +1,51 @@
+// emit: hir
+// An item is private unless declared `pub`: visible in its module and the
+// modules inside it, and reported as `resolve::private-item` anywhere
+// else. A path is usable where each of its segments is visible, so a `pub`
+// item of a private module is reachable only where the module is. Every
+// kind of item may be `pub`, after its attributes (ADR 0050).
+mod outer {
+    const HIDDEN: u8 = 1;
+    fn helper() -> u8 { HIDDEN }
+
+    mod inner {
+        pub const SHARED: u8 = 2;
+        fn from_child() -> u8 { super::HIDDEN + super::helper() }
+    }
+
+    pub mod open {
+        pub fn reach() -> u8 { super::inner::SHARED }
+    }
+}
+
+mod sibling {
+    fn from_sibling() -> u8 { super::outer::helper() + crate::outer::HIDDEN }
+    fn through_private() -> u8 { crate::outer::inner::SHARED }
+    fn through_pub() -> u8 { crate::outer::open::reach() }
+}
+
+fn from_parent() -> u8 { outer::helper() + outer::inner::SHARED }
+
+mod every {
+    pub fn f() {}
+    pub extern fn g();
+    pub static S: u8 = 0;
+    #[align(4)]
+    pub static mut M: u8 = 0;
+    pub extern static E: u8;
+    pub struct T {}
+    pub enum N: u8 { A = 0 }
+    pub const C: u8 = 0;
+    pub mod m {}
+    pub panic fn on_panic() -> ! { loop {} }
+}
+
+fn uses_every() -> u8 {
+    every::f();
+    every::g();
+    let t: every::T = every::T {};
+    let n: every::N = every::N::A;
+    every::S + every::M + every::E + every::C
+}
+
+entry fn main() -> ! { loop {} }

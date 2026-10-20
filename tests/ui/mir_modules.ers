@@ -1,0 +1,26 @@
+// emit: mir
+// Calls and statics across modules, and the entry and panic functions in
+// modules, which the compiler finds wherever they are (ADR 0049). The
+// dump names functions and statics by their own names.
+static mut TOTAL: u32 = 0;
+
+fn add(n: u32) {
+    TOTAL = TOTAL + n;
+}
+
+mod app {
+    entry fn start() -> ! {
+        super::add(driver::read());
+        driver::COUNT = super::TOTAL;
+        loop {}
+    }
+
+    mod driver {
+        pub static mut COUNT: u32 = 0;
+        pub fn read() -> u32 { COUNT + 1 }
+    }
+}
+
+mod fault {
+    panic fn halt() -> ! { loop {} }
+}

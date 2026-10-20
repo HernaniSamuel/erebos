@@ -1,0 +1,144 @@
+---
+source: tests/ui.rs
+assertion_line: 40
+expression: output
+input_file: tests/ui/resolve_module_names.ers
+---
+--- errors ---
+resolve::duplicate-type
+
+  × `u32` is a built-in type
+   ╭─[resolve_module_names.ers:6:5]
+ 5 │ // An item of the wrong kind is reported saying what it is.
+ 6 │ mod u32 {}
+   ·     ─┬─
+   ·      ╰── cannot be redefined
+ 7 │ mod assert {}
+   ╰────
+resolve::reserved-name
+
+  × `assert` is a reserved name
+   ╭─[resolve_module_names.ers:7:5]
+ 6 │ mod u32 {}
+ 7 │ mod assert {}
+   ·     ───┬──
+   ·        ╰── a built-in function has this name
+ 8 │ #[packed]
+   ╰────
+  help: `assert(cond)` and `assert(cond, msg)` are built in (ADR 0029, 0031)
+resolve::misplaced-attribute
+
+  × `#[packed]` applies only to structs
+   ╭─[resolve_module_names.ers:8:1]
+ 7 │ mod assert {}
+ 8 │ #[packed]
+   · ────┬────
+   ·     ╰── not allowed on a module
+ 9 │ mod laid {}
+   ╰────
+resolve::reserved-name
+
+  × `__x` is a reserved name
+    ╭─[resolve_module_names.ers:14:8]
+ 13 │     pub enum E: u8 { V = 0 }
+ 14 │     fn __x() {}
+    ·        ─┬─
+    ·         ╰── names starting with `__` are reserved
+ 15 │     mod len {}
+    ╰────
+  help: the runtime support functions use them (ADR 0020)
+resolve::reserved-name
+
+  × `len` is a reserved name
+    ╭─[resolve_module_names.ers:15:9]
+ 14 │     fn __x() {}
+ 15 │     mod len {}
+    ·         ─┬─
+    ·          ╰── a built-in function has this name
+ 16 │     struct bool {}
+    ╰────
+  help: `len(s)` is built in (ADR 0031)
+resolve::duplicate-type
+
+  × `bool` is a built-in type
+    ╭─[resolve_module_names.ers:16:12]
+ 15 │     mod len {}
+ 16 │     struct bool {}
+    ·            ──┬─
+    ·              ╰── cannot be redefined
+ 17 │ }
+    ╰────
+resolve::unknown-type
+
+  × unknown type `a::C`
+    ╭─[resolve_module_names.ers:20:12]
+ 19 │ fn kinds() {
+ 20 │     let x: a::C = 0;
+    ·            ──┬─
+    ·              ╰── a constant, not a type
+ 21 │     let v: a::E::V = a::E::V;
+    ╰────
+resolve::unknown-type
+
+  × unknown type `a::E::V`
+    ╭─[resolve_module_names.ers:21:12]
+ 20 │     let x: a::C = 0;
+ 21 │     let v: a::E::V = a::E::V;
+    ·            ───┬───
+    ·               ╰── a variant, not a type
+ 22 │     a::C();
+    ╰────
+resolve::unknown-function
+
+  × cannot find function `a::C`
+    ╭─[resolve_module_names.ers:22:5]
+ 21 │     let v: a::E::V = a::E::V;
+ 22 │     a::C();
+    ·     ──┬─
+    ·       ╰── a constant, not a function
+ 23 │     a::E {};
+    ╰────
+resolve::unknown-type
+
+  × unknown struct `a::E`
+    ╭─[resolve_module_names.ers:23:5]
+ 22 │     a::C();
+ 23 │     a::E {};
+    ·     ──┬─
+    ·       ╰── an enum, not a struct
+ 24 │     a::E::V {};
+    ╰────
+resolve::unknown-type
+
+  × unknown struct `a::E::V`
+    ╭─[resolve_module_names.ers:24:5]
+ 23 │     a::E {};
+ 24 │     a::E::V {};
+    ·     ───┬───
+    ·        ╰── a variant, not a struct
+ 25 │     let m: u8 = u8::MAX;
+    ╰────
+resolve::not-an-enum
+
+  × `u8` is neither a module nor an enum
+    ╭─[resolve_module_names.ers:25:17]
+ 24 │     a::E::V {};
+ 25 │     let m: u8 = u8::MAX;
+    ·                 ─┬
+    ·                  ╰── a built-in type
+ 26 │     let n: u8 = len::x;
+    ╰────
+  help: `::` follows a module, to name one of its items, or an enum, to name one of its variants,
+        as in `Mode::Run` (ADR 0035, 0049)
+resolve::not-an-enum
+
+  × `len` is neither a module nor an enum
+    ╭─[resolve_module_names.ers:26:17]
+ 25 │     let m: u8 = u8::MAX;
+ 26 │     let n: u8 = len::x;
+    ·                 ─┬─
+    ·                  ╰── a built-in function
+ 27 │ }
+    ╰────
+  help: `::` follows a module, to name one of its items, or an enum, to name one of its variants,
+        as in `Mode::Run` (ADR 0035, 0049)

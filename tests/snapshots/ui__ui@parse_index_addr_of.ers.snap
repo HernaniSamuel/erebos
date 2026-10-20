@@ -9,6 +9,7 @@ File {
         Fn(
             FnDecl {
                 attrs: [],
+                vis: Private,
                 kind: Plain,
                 name: Ident {
                     name: "f",

@@ -1,0 +1,25 @@
+// emit: ast
+// `pub` applies to items with a name, but not to the entry function, which
+// nothing calls (`parser::misplaced-pub`); before anything else, such as a
+// variant, a parameter, a `let` or another `pub`, it is
+// `parser::unexpected-token` (ADR 0050). A `mod` inside a function is
+// `parser::local-mod` (ADR 0049). In a path, `super` follows only `super`
+// at the start, and `crate` comes only first. After an error in the last
+// item of a module, parsing resumes at the module's `}`, which closes it:
+// no `parser::unclosed-block`, and the items after it are not in it.
+pub comptime { }
+pub entry fn main() -> ! { loop {} }
+pub pub fn twice() {}
+enum E: u8 { pub A = 0 }
+fn param(pub x: u8) {}
+fn local() { pub let x: u8 = 0; }
+fn modules() {
+    mod inner { fn f() {} }
+    mod file;
+}
+fn supers() -> u8 { a::super::b }
+fn crates() -> u8 { crate::crate::b }
+mod broken {
+    fn last() { let }
+}
+panic fn on_panic() -> ! { loop {} }

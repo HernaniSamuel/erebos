@@ -149,7 +149,16 @@ fn lower<'ctx>(
         }
     }
 
-    module.set_inline_assembly(&start_stub(target, &mir.body(mir.entry).name));
+    // The entry function's name in the module, which LLVM may have made
+    // unique: a function of another module declared before it can have
+    // its name until symbols are named by module paths (ADR 0049, 0051).
+    let entry = fns[mir.entry.0 as usize]
+        .expect("the entry function runs at run time")
+        .get_name()
+        .to_str()
+        .expect("function names are UTF-8")
+        .to_owned();
+    module.set_inline_assembly(&start_stub(target, &entry));
 
     if let Err(e) = module.verify() {
         panic!("codegen produced invalid LLVM IR: {}", e.to_string());

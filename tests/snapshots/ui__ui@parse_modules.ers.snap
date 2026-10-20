@@ -1,0 +1,390 @@
+---
+source: tests/ui.rs
+assertion_line: 40
+expression: output
+input_file: tests/ui/parse_modules.ers
+---
+--- ast ---
+File {
+    items: [
+        Mod(
+            ModDecl {
+                attrs: [],
+                vis: Pub,
+                name: Ident {
+                    name: "uart",
+                    span: 316..320,
+                },
+                items: Some(
+                    [
+                        Mod(
+                            ModDecl {
+                                attrs: [],
+                                vis: Private,
+                                name: Ident {
+                                    name: "regs",
+                                    span: 331..335,
+                                },
+                                items: None,
+                                span: 327..336,
+                            },
+                        ),
+                        Static(
+                            StaticDecl {
+                                attrs: [
+                                    Attr {
+                                        name: Ident {
+                                            name: "align",
+                                            span: 343..348,
+                                        },
+                                        arg: Some(
+                                            Expr {
+                                                kind: Int(
+                                                    Some(
+                                                        4,
+                                                    ),
+                                                ),
+                                                span: 349..350,
+                                            },
+                                        ),
+                                        span: 341..352,
+                                    },
+                                ],
+                                vis: Pub,
+                                external: false,
+                                mutable: true,
+                                name: Ident {
+                                    name: "LAST",
+                                    span: 372..376,
+                                },
+                                ty: Ty {
+                                    kind: Named(
+                                        Path {
+                                            segments: [
+                                                Ident {
+                                                    name: "u8",
+                                                    span: 378..380,
+                                                },
+                                            ],
+                                            span: 378..380,
+                                        },
+                                    ),
+                                    span: 378..380,
+                                },
+                                value: Some(
+                                    Expr {
+                                        kind: Int(
+                                            Some(
+                                                0,
+                                            ),
+                                        ),
+                                        span: 383..384,
+                                    },
+                                ),
+                                span: 361..385,
+                            },
+                        ),
+                    ],
+                ),
+                span: 312..387,
+            },
+        ),
+        Fn(
+            FnDecl {
+                attrs: [],
+                vis: Private,
+                kind: Plain,
+                name: Ident {
+                    name: "paths",
+                    span: 392..397,
+                },
+                params: [
+                    Param {
+                        mutable: false,
+                        name: Ident {
+                            name: "x",
+                            span: 398..399,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Path {
+                                    segments: [
+                                        Ident {
+                                            name: "crate",
+                                            span: 401..406,
+                                        },
+                                        Ident {
+                                            name: "uart",
+                                            span: 408..412,
+                                        },
+                                        Ident {
+                                            name: "Mode",
+                                            span: 414..418,
+                                        },
+                                    ],
+                                    span: 401..418,
+                                },
+                            ),
+                            span: 401..418,
+                        },
+                    },
+                ],
+                ret: Some(
+                    Ty {
+                        kind: Named(
+                            Path {
+                                segments: [
+                                    Ident {
+                                        name: "super",
+                                        span: 423..428,
+                                    },
+                                    Ident {
+                                        name: "super",
+                                        span: 430..435,
+                                    },
+                                    Ident {
+                                        name: "T",
+                                        span: 437..438,
+                                    },
+                                ],
+                                span: 423..438,
+                            },
+                        ),
+                        span: 423..438,
+                    },
+                ),
+                body: Some(
+                    Block {
+                        stmts: [
+                            Expr {
+                                expr: Expr {
+                                    kind: Call(
+                                        Path {
+                                            segments: [
+                                                Ident {
+                                                    name: "uart",
+                                                    span: 445..449,
+                                                },
+                                                Ident {
+                                                    name: "regs",
+                                                    span: 451..455,
+                                                },
+                                                Ident {
+                                                    name: "init",
+                                                    span: 457..461,
+                                                },
+                                            ],
+                                            span: 445..461,
+                                        },
+                                        [
+                                            Expr {
+                                                kind: Name(
+                                                    Path {
+                                                        segments: [
+                                                            Ident {
+                                                                name: "uart",
+                                                                span: 462..466,
+                                                            },
+                                                            Ident {
+                                                                name: "Mode",
+                                                                span: 468..472,
+                                                            },
+                                                            Ident {
+                                                                name: "Run",
+                                                                span: 474..477,
+                                                            },
+                                                        ],
+                                                        span: 462..477,
+                                                    },
+                                                ),
+                                                span: 462..477,
+                                            },
+                                            Expr {
+                                                kind: Name(
+                                                    Path {
+                                                        segments: [
+                                                            Ident {
+                                                                name: "crate",
+                                                                span: 479..484,
+                                                            },
+                                                            Ident {
+                                                                name: "BASE",
+                                                                span: 486..490,
+                                                            },
+                                                        ],
+                                                        span: 479..490,
+                                                    },
+                                                ),
+                                                span: 479..490,
+                                            },
+                                        ],
+                                    ),
+                                    span: 445..491,
+                                },
+                                semi: Some(
+                                    491..492,
+                                ),
+                            },
+                            Expr {
+                                expr: Expr {
+                                    kind: StructLit(
+                                        Path {
+                                            segments: [
+                                                Ident {
+                                                    name: "uart",
+                                                    span: 497..501,
+                                                },
+                                                Ident {
+                                                    name: "Config",
+                                                    span: 503..509,
+                                                },
+                                            ],
+                                            span: 497..509,
+                                        },
+                                        [
+                                            FieldInit {
+                                                name: Ident {
+                                                    name: "baud",
+                                                    span: 512..516,
+                                                },
+                                                value: Expr {
+                                                    kind: Int(
+                                                        Some(
+                                                            1,
+                                                        ),
+                                                    ),
+                                                    span: 518..519,
+                                                },
+                                            },
+                                        ],
+                                    ),
+                                    span: 497..521,
+                                },
+                                semi: Some(
+                                    521..522,
+                                ),
+                            },
+                        ],
+                        tail: Some(
+                            Expr {
+                                kind: Match {
+                                    scrutinee: Expr {
+                                        kind: Name(
+                                            Path {
+                                                segments: [
+                                                    Ident {
+                                                        name: "x",
+                                                        span: 533..534,
+                                                    },
+                                                ],
+                                                span: 533..534,
+                                            },
+                                        ),
+                                        span: 533..534,
+                                    },
+                                    arms: [
+                                        Arm {
+                                            pattern: Pattern {
+                                                kind: PathArgs(
+                                                    Path {
+                                                        segments: [
+                                                            Ident {
+                                                                name: "uart",
+                                                                span: 545..549,
+                                                            },
+                                                            Ident {
+                                                                name: "Mode",
+                                                                span: 551..555,
+                                                            },
+                                                            Ident {
+                                                                name: "Write",
+                                                                span: 557..562,
+                                                            },
+                                                        ],
+                                                        span: 545..562,
+                                                    },
+                                                    [
+                                                        Pattern {
+                                                            kind: Binding {
+                                                                mutable: false,
+                                                                name: Ident {
+                                                                    name: "b",
+                                                                    span: 567..568,
+                                                                },
+                                                                ty: Ty {
+                                                                    kind: Named(
+                                                                        Path {
+                                                                            segments: [
+                                                                                Ident {
+                                                                                    name: "u8",
+                                                                                    span: 570..572,
+                                                                                },
+                                                                            ],
+                                                                            span: 570..572,
+                                                                        },
+                                                                    ),
+                                                                    span: 570..572,
+                                                                },
+                                                            },
+                                                            span: 563..572,
+                                                        },
+                                                    ],
+                                                ),
+                                                span: 545..573,
+                                            },
+                                            body: Expr {
+                                                kind: Name(
+                                                    Path {
+                                                        segments: [
+                                                            Ident {
+                                                                name: "b",
+                                                                span: 577..578,
+                                                            },
+                                                        ],
+                                                        span: 577..578,
+                                                    },
+                                                ),
+                                                span: 577..578,
+                                            },
+                                        },
+                                        Arm {
+                                            pattern: Pattern {
+                                                kind: Name(
+                                                    Path {
+                                                        segments: [
+                                                            Ident {
+                                                                name: "super",
+                                                                span: 588..593,
+                                                            },
+                                                            Ident {
+                                                                name: "LIMIT",
+                                                                span: 595..600,
+                                                            },
+                                                        ],
+                                                        span: 588..600,
+                                                    },
+                                                ),
+                                                span: 588..600,
+                                            },
+                                            body: Expr {
+                                                kind: Int(
+                                                    Some(
+                                                        0,
+                                                    ),
+                                                ),
+                                                span: 604..605,
+                                            },
+                                        },
+                                    ],
+                                },
+                                span: 527..612,
+                            },
+                        ),
+                        span: 439..614,
+                    },
+                ),
+                span: 389..614,
+            },
+        ),
+    ],
+}

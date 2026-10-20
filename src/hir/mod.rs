@@ -40,12 +40,32 @@ pub struct StructId(pub u32);
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct EnumId(pub u32);
 
+/// A module, indexing [`Hir::modules`]; the root module is `ModuleId(0)`
+/// (ADR 0049).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct ModuleId(pub u32);
+
+impl ModuleId {
+    pub const ROOT: ModuleId = ModuleId(0);
+}
+
+/// Where an item is visible: in its module and the modules inside it, or,
+/// with `pub`, wherever its module is (ADR 0050).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Visibility {
+    Private,
+    Pub,
+}
+
 /// A local variable, indexing [`Fn::locals`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct LocalId(pub u32);
 
 #[derive(Debug)]
 pub struct Hir {
+    /// The module tree, the root first, then each module in the order its
+    /// `mod` is met, depth first (ADR 0049).
+    pub modules: Vec<ModuleDef>,
     pub structs: Vec<StructDef>,
     pub enums: Vec<EnumDef>,
     /// Functions, then the bodies that run at compile time: one for each
@@ -82,6 +102,10 @@ impl Hir {
             .map(|(i, f)| (FnId(i as u32), f))
     }
 
+    pub fn module(&self, id: ModuleId) -> &ModuleDef {
+        &self.modules[id.0 as usize]
+    }
+
     pub fn fn_(&self, id: FnId) -> &Fn {
         &self.fns[id.0 as usize]
     }
@@ -99,12 +123,33 @@ impl Hir {
     }
 }
 
+/// A module: the root, or one declared with `mod` (ADR 0049).
+#[derive(Debug)]
+pub struct ModuleDef {
+    /// Empty for the root module.
+    pub name: String,
+    /// Its path from the root module, as diagnostics show it: `uart::regs`;
+    /// empty for the root module.
+    pub path: String,
+    /// `None` for the root module.
+    pub name_span: Option<Span>,
+    /// `None` for the root module.
+    pub parent: Option<ModuleId>,
+    /// `Pub` for the root module, which every module is inside.
+    pub vis: Visibility,
+}
+
 /// `const NAME: Type = value;` (ADR 0029). The value is computed by running
 /// `init`, a body of its own whose return value is the constant.
 #[derive(Debug)]
 pub struct ConstDef {
     pub name: String,
+    /// Its path from the root module, as diagnostics and dumps show it:
+    /// `uart::BASE`, or its name in the root module (ADR 0049).
+    pub path: String,
     pub name_span: Span,
+    pub module: ModuleId,
+    pub vis: Visibility,
     pub ty: Ty,
     pub init: FnId,
 }
@@ -115,7 +160,12 @@ pub struct ConstDef {
 #[derive(Debug)]
 pub struct StaticDef {
     pub name: String,
+    /// Its path from the root module, as diagnostics and dumps show it
+    /// (ADR 0049).
+    pub path: String,
     pub name_span: Span,
+    pub module: ModuleId,
+    pub vis: Visibility,
     pub mutable: bool,
     pub ty: Ty,
     pub ty_span: Span,
@@ -194,8 +244,12 @@ pub enum Comptime {
 /// `struct Name { field: Type, ... }` (ADR 0021)
 #[derive(Debug)]
 pub struct StructDef {
+    /// Its path from the root module, `uart::Config`, or its name in the
+    /// root module: how diagnostics and dumps show the type (ADR 0049).
     pub name: String,
     pub name_span: Span,
+    pub module: ModuleId,
+    pub vis: Visibility,
     pub fields: Vec<FieldDef>,
     /// `#[packed]`: alignment 1, no padding (ADR 0022).
     pub packed: bool,
@@ -210,8 +264,14 @@ pub struct StructDef {
 /// which is declared nowhere (ADR 0045): its spans are `None`.
 #[derive(Debug)]
 pub struct EnumDef {
+    /// Its path from the root module, or its name in the root module, as
+    /// a struct's (ADR 0049).
     pub name: String,
     pub name_span: Option<Span>,
+    /// The root module and `pub` for an enum declared nowhere, whose name
+    /// is in every module (ADR 0049).
+    pub module: ModuleId,
+    pub vis: Visibility,
     pub ty: EnumTy,
     pub variants: Vec<VariantDef>,
 }
@@ -355,6 +415,8 @@ impl BuiltinEnum {
         EnumDef {
             name,
             name_span: None,
+            module: ModuleId::ROOT,
+            vis: Visibility::Pub,
             ty,
             variants,
         }
@@ -377,8 +439,17 @@ pub enum FnKind {
 
 #[derive(Debug)]
 pub struct Fn {
+    /// The function's name, which is its symbol; for a body run at compile
+    /// time, what it computes.
     pub name: String,
+    /// Its path from the root module, as diagnostics and dumps show it
+    /// (ADR 0049).
+    pub path: String,
     pub name_span: Span,
+    /// The module its code is written in, where its names are looked up.
+    pub module: ModuleId,
+    /// Private for a body run at compile time, which nothing names.
+    pub vis: Visibility,
     pub kind: FnKind,
     pub ret: Ty,
     /// Span of the written return type; `None` when it was omitted.

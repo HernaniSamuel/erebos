@@ -17,12 +17,33 @@ pub enum Item {
     Const(ConstDecl),
     Static(StaticDecl),
     Comptime(ComptimeDecl),
+    Mod(ModDecl),
+}
+
+/// Whether an item is written with `pub` (ADR 0050).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Visibility {
+    Private,
+    Pub,
+}
+
+/// `mod name { items }`, or `mod name;`, whose items are in a file of
+/// their own (ADR 0049).
+#[derive(Debug)]
+pub struct ModDecl {
+    pub attrs: Vec<Attr>,
+    pub vis: Visibility,
+    pub name: Ident,
+    /// The items between the braces; `None` for `mod name;`.
+    pub items: Option<Vec<Item>>,
+    pub span: Span,
 }
 
 /// `const NAME: Type = value;` (ADR 0029)
 #[derive(Debug)]
 pub struct ConstDecl {
     pub attrs: Vec<Attr>,
+    pub vis: Visibility,
     pub name: Ident,
     pub ty: Ty,
     pub value: Expr,
@@ -34,6 +55,7 @@ pub struct ConstDecl {
 #[derive(Debug)]
 pub struct StaticDecl {
     pub attrs: Vec<Attr>,
+    pub vis: Visibility,
     pub external: bool,
     pub mutable: bool,
     pub name: Ident,
@@ -56,6 +78,7 @@ pub struct ComptimeDecl {
 #[derive(Debug)]
 pub struct StructDecl {
     pub attrs: Vec<Attr>,
+    pub vis: Visibility,
     pub name: Ident,
     pub fields: Vec<FieldDecl>,
     pub span: Span,
@@ -66,6 +89,7 @@ pub struct StructDecl {
 #[derive(Debug)]
 pub struct EnumDecl {
     pub attrs: Vec<Attr>,
+    pub vis: Visibility,
     pub name: Ident,
     /// The integer type written after `:`.
     pub ty: Ty,
@@ -102,6 +126,7 @@ pub struct Attr {
 #[derive(Debug)]
 pub struct FnDecl {
     pub attrs: Vec<Attr>,
+    pub vis: Visibility,
     pub kind: FnKind,
     pub name: Ident,
     pub params: Vec<Param>,
@@ -136,10 +161,13 @@ pub struct Ident {
 }
 
 /// Names separated by `::`, wherever an item is named: `x`, `Config`,
-/// `Mode::Run` (ADR 0049). What it names is resolved later.
+/// `uart::Mode::Run`, `super::x` (ADR 0049). What it names is resolved
+/// later.
 #[derive(Debug)]
 pub struct Path {
-    /// At least one.
+    /// At least one. The keywords `crate` and `super` are segments named
+    /// so, which no other name can be: `crate` only first, `super` only in
+    /// a run at the start.
     pub segments: Vec<Ident>,
     pub span: Span,
 }

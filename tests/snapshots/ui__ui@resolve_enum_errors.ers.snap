@@ -124,23 +124,24 @@ resolve::unknown-variant
   help: its variants are `Off`, `Run`
 resolve::not-an-enum
 
-  × `Point` is not an enum
+  × `Point` is neither a module nor an enum
     ╭─[resolve_enum_errors.ers:17:17]
  16 │     let a: Mode = Mode::Walk;
  17 │     let b: u8 = Point::Origin;
     ·                 ──┬──
-    ·                   ╰── a struct, not an enum
+    ·                   ╰── a struct
  18 │     let c: u8 = Nowhere::Thing;
     ╰────
-  help: `::` names a variant of an enum, as in `Mode::Run` (ADR 0035)
-resolve::unknown-type
+  help: `::` follows a module, to name one of its items, or an enum, to name one of its variants,
+        as in `Mode::Run` (ADR 0035, 0049)
+resolve::unknown-path
 
-  × unknown enum `Nowhere`
+  × cannot find `Nowhere`
     ╭─[resolve_enum_errors.ers:18:17]
  17 │     let b: u8 = Point::Origin;
  18 │     let c: u8 = Nowhere::Thing;
     ·                 ───┬───
-    ·                    ╰── not an enum
+    ·                    ╰── not found in the root module
  19 │     // An enum's name alone is no value, as a struct's is not.
     ╰────
 resolve::unknown-name
@@ -150,7 +151,7 @@ resolve::unknown-name
  19 │     // An enum's name alone is no value, as a struct's is not.
  20 │     let d: Mode = Mode;
     ·                   ──┬─
-    ·                     ╰── not found
+    ·                     ╰── an enum, which is not a value
  21 │     let e: Point = Point;
     ╰────
 resolve::unknown-name
@@ -160,6 +161,6 @@ resolve::unknown-name
  20 │     let d: Mode = Mode;
  21 │     let e: Point = Point;
     ·                    ──┬──
-    ·                      ╰── not found
+    ·                      ╰── a struct, which is not a value
  22 │ }
     ╰────

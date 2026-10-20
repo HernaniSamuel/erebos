@@ -6,12 +6,26 @@ input_file: tests/ui/resolve_ok.ers
 ---
 --- hir ---
 Hir {
+    modules: [
+        ModuleDef {
+            name: "",
+            path: "",
+            name_span: None,
+            parent: None,
+            vis: Pub,
+        },
+    ],
     structs: [],
     enums: [],
     fns: [
         Fn {
             name: "main",
+            path: "main",
             name_span: 22..26,
+            module: ModuleId(
+                0,
+            ),
+            vis: Private,
             kind: Entry,
             ret: Never,
             ret_span: Some(
@@ -46,7 +60,12 @@ Hir {
         },
         Fn {
             name: "idle",
+            path: "idle",
             name_span: 54..58,
+            module: ModuleId(
+                0,
+            ),
+            vis: Private,
             kind: Plain,
             ret: Unit,
             ret_span: None,
@@ -93,7 +112,12 @@ Hir {
         },
         Fn {
             name: "on_panic",
+            path: "on_panic",
             name_span: 96..104,
+            module: ModuleId(
+                0,
+            ),
+            vis: Private,
             kind: Panic,
             ret: Never,
             ret_span: Some(

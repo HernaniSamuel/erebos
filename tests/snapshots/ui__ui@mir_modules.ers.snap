@@ -1,0 +1,94 @@
+---
+source: tests/ui.rs
+assertion_line: 40
+expression: output
+input_file: tests/ui/mir_modules.ers
+---
+--- mir ---
+static mut TOTAL: u32; // align 4
+static mut COUNT: u32; // align 4
+
+fn add(_1: u32) -> () {
+    let _0: ();
+    let _1: u32; // n
+    let _2: *mut u32;
+    let _3: u32;
+    let _4: u32;
+    let _5: *mut u32;
+
+    bb0: {
+        _2 = const static TOTAL;
+        _3 = copy (*_2);
+        _4 = Add(copy _3, copy _1);
+        _5 = const static TOTAL;
+        (*_5) = copy _4;
+        return;
+    }
+}
+
+entry fn start() -> ! {
+    let _0: !;
+    let _1: u32;
+    let _2: *mut u32;
+    let _3: u32;
+    let _4: *mut u32;
+
+    bb0: {
+        _1 = call read();
+        call add(copy _1);
+        _2 = const static TOTAL;
+        _3 = copy (*_2);
+        _4 = const static COUNT;
+        (*_4) = copy _3;
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+fn read() -> u32 {
+    let _0: u32;
+    let _1: *mut u32;
+    let _2: u32;
+    let _3: u32;
+
+    bb0: {
+        _1 = const static COUNT;
+        _2 = copy (*_1);
+        _3 = Add(copy _2, const 1_u32);
+        _0 = copy _3;
+        return;
+    }
+}
+
+panic fn halt() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+comptime fn TOTAL() -> u32 {
+    let _0: u32;
+
+    bb0: {
+        _0 = const 0_u32;
+        return;
+    }
+}
+
+comptime fn COUNT() -> u32 {
+    let _0: u32;
+
+    bb0: {
+        _0 = const 0_u32;
+        return;
+    }
+}

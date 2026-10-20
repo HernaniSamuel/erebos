@@ -1,0 +1,110 @@
+---
+source: tests/ui.rs
+assertion_line: 40
+expression: output
+input_file: tests/ui/resolve_modules.ers
+---
+--- typeck ---
+struct uart::Config {} size 0, align 1
+struct uart::regs::Block { tx: u8 at 0, rx: u8 at 1 } size 2, align 1
+struct timer::Tick {} size 0, align 1
+enum uart::Mode: u8 { Off = 0, Run(u8 at 1) = 1 } size 2, align 1
+enum Option(uart::Mode): u8 { None = 0, Some(uart::Mode at 1) = 1 } size 3, align 1
+fn init() -> u8
+    expr 0 int 3 614..615: u8
+entry fn main() -> !
+    let t: timer::Tick
+    let n: u16
+    expr 1 call 646..680: ()
+    expr 2 call 657..679: uart::Config
+    expr 3 call 707..719: timer::Tick
+    expr 4 call 738..751: u16
+    expr 5 loop 757..764: !
+panic fn on_panic() -> !
+    expr 6 loop 795..802: !
+fn uart::default_config() -> uart::Config
+    expr 7 struct uart::Config 1019..1028: uart::Config
+fn uart::init(c: uart::Config) -> ()
+    let m: uart::Mode
+    expr 8 call 1083..1095: uart::Mode
+    expr 9 assign 1105..1136: ()
+    expr 10 static COUNT 1105..1117: u32
+    expr 11 binary + 1120..1136: u32
+    expr 12 static COUNT 1120..1132: u32
+    expr 13 int 1 1135..1136: u32
+    expr 14 assign 1146..1161: ()
+    expr 15 static uart::LAST 1146..1150: Option(uart::Mode)
+    expr 16 variant .Some 1153..1161: Option(uart::Mode)
+    expr 17 local m 1159..1160: uart::Mode
+fn uart::regs::mode() -> uart::Mode
+    expr 18 variant uart::Mode::Run 1361..1392: uart::Mode
+    expr 19 call 1378..1391: u8
+fn uart::regs::limit() -> u32
+    expr 20 const LIMIT 1427..1446: u32
+fn uart::regs::block() -> uart::regs::Block
+    expr 21 struct uart::regs::Block 1483..1505: uart::regs::Block
+    expr 22 int 0 1495..1496: u8
+    expr 23 int 1 1502..1503: u8
+fn uart::regs::rx_at() -> usize
+    expr 24 offset_of(uart::regs::Block, rx) 1542..1581: usize
+extern fn timer::source() -> u32
+fn timer::now() -> timer::Tick
+    expr 25 struct timer::Tick 1778..1785: timer::Tick
+fn timer::init() -> u16
+    expr 26 int 1 1815..1816: u16
+fn timer::uses(m: uart::Mode) -> u8
+    let configs: [uart::Config; 2]
+    let last: Option(uart::Mode)
+    let block: uart::regs::Block
+    let p: *const uart::regs::Block
+    let size: usize
+    let built: uart::Mode
+    let ticks: u32
+    let x: u8
+    expr 27 array 1910..1965: [uart::Config; 2]
+    expr 28 struct uart::Config 1911..1933: uart::Config
+    expr 29 call 1935..1964: uart::Config
+    expr 30 variant .Some 2013..2037: Option(uart::Mode)
+    expr 31 const uart::MODE 2019..2036: uart::Mode
+    expr 32 call 2085..2111: uart::regs::Block
+    expr 33 &raw const 2162..2178: *const uart::regs::Block
+    expr 34 local block 2173..2178: uart::regs::Block
+    expr 35 binary + 2206..2271: usize
+    expr 36 size_of(uart::Config) 2206..2234: usize
+    expr 37 align_of(uart::regs::Block) 2237..2271: usize
+    expr 38 variant uart::Mode::Run 2312..2341: uart::Mode
+    expr 39 const timer::SMALL 2335..2340: u8
+    expr 40 binary + 2368..2384: u32
+    expr 41 static timer::TICKS 2368..2373: u32
+    expr 42 call 2376..2384: u32
+    expr 43 match 2394..2580: u8
+    expr 44 local m 2400..2401: uart::Mode
+    expr 45 call 2442..2455: u8
+    expr 46 int 1 2516..2517: u8
+    expr 47 local x 2568..2569: u8
+comptime fn LIMIT() -> u32
+    expr 48 binary + 527..566: u32
+    expr 49 as u32 527..550: u32
+    expr 50 const uart::regs::BASE 527..543: usize
+    expr 51 const timer::PERIOD 553..566: u32
+comptime fn uart::MODE() -> uart::Mode
+    expr 52 variant uart::Mode::Off 920..929: uart::Mode
+comptime fn uart::regs::BASE() -> usize
+    expr 53 int 268435456 1264..1275: usize
+comptime fn timer::PERIOD() -> u32
+    expr 54 int 10 1660..1662: u32
+comptime fn timer::SMALL() -> u8
+    expr 55 int 2 1686..1687: u8
+comptime fn COUNT() -> u32
+    expr 56 int 0 592..593: u32
+comptime fn uart::LAST() -> Option(uart::Mode)
+    expr 57 variant .None 971..976: Option(uart::Mode)
+comptime fn comptime() -> ()
+    expr 58 assert 1185..1208: ()
+    expr 59 binary != 1192..1207: bool
+    expr 60 const uart::regs::BASE 1192..1202: usize
+    expr 61 int 0 1206..1207: usize
+comptime fn uart::Mode::Off() -> u8
+    expr 62 int 0 876..877: u8
+comptime fn uart::Mode::Run() -> u8
+    expr 63 int 1 889..890: u8

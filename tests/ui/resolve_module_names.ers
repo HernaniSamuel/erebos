@@ -1,0 +1,30 @@
+// emit: hir
+// The built-in names are in every module: no item or module of any module
+// takes one (`resolve::duplicate-type`, `resolve::reserved-name`), nor a
+// name starting with `__` (ADR 0020, 0049). A `mod` takes no attributes.
+// An item of the wrong kind is reported saying what it is.
+mod u32 {}
+mod assert {}
+#[packed]
+mod laid {}
+
+mod a {
+    pub const C: u8 = 1;
+    pub enum E: u8 { V = 0 }
+    fn __x() {}
+    mod len {}
+    struct bool {}
+}
+
+fn kinds() {
+    let x: a::C = 0;
+    let v: a::E::V = a::E::V;
+    a::C();
+    a::E {};
+    a::E::V {};
+    let m: u8 = u8::MAX;
+    let n: u8 = len::x;
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

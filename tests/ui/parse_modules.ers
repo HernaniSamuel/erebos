@@ -1,0 +1,19 @@
+// emit: ast
+// A module is declared with its items between braces, or with `;` for a
+// file of its own; `pub` comes after the attributes and before the item's
+// keywords (ADR 0049, 0050). A path is names separated by `::`: the first
+// may be `crate` or `super`, and `super` follows `super` at the start.
+pub mod uart {
+    mod regs;
+    #[align(4)]
+    pub static mut LAST: u8 = 0;
+}
+
+fn paths(x: crate::uart::Mode) -> super::super::T {
+    uart::regs::init(uart::Mode::Run, crate::BASE);
+    uart::Config { baud: 1 };
+    match x {
+        uart::Mode::Write(let b: u8) => b,
+        super::LIMIT => 0,
+    }
+}

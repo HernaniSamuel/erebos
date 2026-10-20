@@ -9,6 +9,7 @@ File {
         Const(
             ConstDecl {
                 attrs: [],
+                vis: Private,
                 name: Ident {
                     name: "SIZE",
                     span: 104..108,
@@ -116,6 +117,7 @@ File {
         Fn(
             FnDecl {
                 attrs: [],
+                vis: Private,
                 kind: Plain,
                 name: Ident {
                     name: "f",

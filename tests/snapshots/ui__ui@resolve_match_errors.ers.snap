@@ -134,57 +134,61 @@ resolve::unknown-variant
  37 │         Moder::Off => 2,
     ╰────
   help: its variants are `Off`
-resolve::unknown-type
+resolve::unknown-path
 
-  × unknown enum `Moder`
+  × cannot find `Moder`
     ╭─[resolve_match_errors.ers:37:9]
  36 │         Mode::Nope => 1,
  37 │         Moder::Off => 2,
     ·         ──┬──
-    ·           ╰── not an enum
+    ·           ╰── not found in the root module
  38 │         Point::A => 3,
     ╰────
 resolve::not-an-enum
 
-  × `Point` is not an enum
+  × `Point` is neither a module nor an enum
     ╭─[resolve_match_errors.ers:38:9]
  37 │         Moder::Off => 2,
  38 │         Point::A => 3,
     ·         ──┬──
-    ·           ╰── a struct, not an enum
+    ·           ╰── a struct
  39 │         LIMIT::A => 4,
     ╰────
-  help: `::` names a variant of an enum, as in `Mode::Run` (ADR 0035)
+  help: `::` follows a module, to name one of its items, or an enum, to name one of its variants,
+        as in `Mode::Run` (ADR 0035, 0049)
 resolve::not-an-enum
 
-  × `LIMIT` is not an enum
+  × `LIMIT` is neither a module nor an enum
     ╭─[resolve_match_errors.ers:39:9]
  38 │         Point::A => 3,
  39 │         LIMIT::A => 4,
     ·         ──┬──
-    ·           ╰── a constant, not an enum
+    ·           ╰── a constant
  40 │         LEVEL::A => 5,
     ╰────
-  help: `::` names a variant of an enum, as in `Mode::Run` (ADR 0035)
+  help: `::` follows a module, to name one of its items, or an enum, to name one of its variants,
+        as in `Mode::Run` (ADR 0035, 0049)
 resolve::not-an-enum
 
-  × `LEVEL` is not an enum
+  × `LEVEL` is neither a module nor an enum
     ╭─[resolve_match_errors.ers:40:9]
  39 │         LIMIT::A => 4,
  40 │         LEVEL::A => 5,
     ·         ──┬──
-    ·           ╰── a static, not an enum
+    ·           ╰── a static
  41 │         helper::A => 6,
     ╰────
-  help: `::` names a variant of an enum, as in `Mode::Run` (ADR 0035)
+  help: `::` follows a module, to name one of its items, or an enum, to name one of its variants,
+        as in `Mode::Run` (ADR 0035, 0049)
 resolve::not-an-enum
 
-  × `helper` is not an enum
+  × `helper` is neither a module nor an enum
     ╭─[resolve_match_errors.ers:41:9]
  40 │         LEVEL::A => 5,
  41 │         helper::A => 6,
     ·         ───┬──
-    ·            ╰── a function, not an enum
+    ·            ╰── a function
  42 │         _ => 7,
     ╰────
-  help: `::` names a variant of an enum, as in `Mode::Run` (ADR 0035)
+  help: `::` follows a module, to name one of its items, or an enum, to name one of its variants,
+        as in `Mode::Run` (ADR 0035, 0049)

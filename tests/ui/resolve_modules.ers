@@ -1,0 +1,74 @@
+// emit: typeck
+// Modules hold every kind of item. Their items are named by paths: from
+// the root, from a child through `super` and `super::super`, and from
+// anywhere through `crate`, in types, `Option(T)`, arrays, pointers,
+// constants, statics, calls, struct literals, variants, patterns,
+// `size_of`, `align_of` and `offset_of`. The same name in two modules is
+// two items, and items refer to each other across modules in any order
+// (ADR 0049). The dump shows each item of a module by its path.
+const LIMIT: u32 = uart::regs::BASE as u32 + timer::PERIOD;
+static mut COUNT: u32 = 0;
+
+fn init() -> u8 { 3 }
+
+entry fn main() -> ! {
+    uart::init(uart::default_config());
+    let t: timer::Tick = timer::now();
+    let n: u16 = timer::init();
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }
+
+pub mod uart {
+    pub struct Config {}
+    pub enum Mode: u8 { Off = 0, Run(u8) = 1 }
+    pub const MODE: Mode = Mode::Off;
+    pub static mut LAST: Option(Mode) = .None;
+
+    pub fn default_config() -> Config { Config {} }
+
+    pub fn init(c: Config) {
+        let m: Mode = regs::mode();
+        super::COUNT = super::COUNT + 1;
+        LAST = .Some(m);
+    }
+
+    comptime { assert(regs::BASE != 0); }
+
+    pub mod regs {
+        pub const BASE: usize = 0x1000_0000;
+        pub struct Block { tx: u8, rx: u8 }
+
+        pub fn mode() -> super::Mode { super::Mode::Run(crate::init()) }
+        pub fn limit() -> u32 { super::super::LIMIT }
+        pub fn block() -> Block { Block { tx: 0, rx: 1 } }
+        pub fn rx_at() -> usize { offset_of(crate::uart::regs::Block, rx) }
+    }
+}
+
+pub mod timer {
+    pub struct Tick {}
+    pub const PERIOD: u32 = 10;
+    const SMALL: u8 = 2;
+    extern static TICKS: u32;
+    extern fn source() -> u32;
+
+    pub fn now() -> Tick { Tick {} }
+    pub fn init() -> u16 { 1 }
+
+    fn uses(m: super::uart::Mode) -> u8 {
+        let configs: [crate::uart::Config; 2] = [crate::uart::Config {}, super::uart::default_config()];
+        let last: Option(super::uart::Mode) = .Some(crate::uart::MODE);
+        let block: crate::uart::regs::Block = super::uart::regs::block();
+        let p: *const super::uart::regs::Block = &raw const block;
+        let size: usize = size_of(super::uart::Config) + align_of(crate::uart::regs::Block);
+        let built: super::uart::Mode = super::uart::Mode::Run(SMALL);
+        let ticks: u32 = TICKS + source();
+        match m {
+            super::uart::Mode::Off => crate::init(),
+            crate::uart::Mode::Run(crate::timer::SMALL) => 1,
+            super::uart::Mode::Run(let x: u8) => x,
+        }
+    }
+}

@@ -1147,7 +1147,7 @@ impl Checker<'_, '_> {
                         )
                         .label(
                             pattern.span,
-                            format!("`{}` has type `{const_ty}`", def.name),
+                            format!("`{}` has type `{const_ty}`", def.path),
                         )
                         .help(help),
                     );
@@ -1749,7 +1749,7 @@ impl Checker<'_, '_> {
                     "ty::wrong-arg-count",
                     format!(
                         "`{}` takes {} argument{plural}, but {} {} given",
-                        target.name,
+                        target.path,
                         params.len(),
                         args.len(),
                         if args.len() == 1 { "was" } else { "were" }
@@ -1890,8 +1890,8 @@ impl Checker<'_, '_> {
     fn path_text(&self, f: &Fn, expr: &Expr) -> Option<String> {
         match &expr.kind {
             ExprKind::Local(id) => Some(f.local(*id).name.clone()),
-            ExprKind::Const(id) => Some(self.hir.const_(*id).name.clone()),
-            ExprKind::Static(id) => Some(self.hir.static_(*id).name.clone()),
+            ExprKind::Const(id) => Some(self.hir.const_(*id).path.clone()),
+            ExprKind::Static(id) => Some(self.hir.static_(*id).path.clone()),
             ExprKind::Variant(id, index, None) => {
                 Some(self.q.enum_def(*id).variant_path(*index as usize))
             }
@@ -2626,7 +2626,7 @@ impl Checker<'_, '_> {
                 self.q.diags.push(
                     Diagnostic::error(
                         "ty::assign-immutable",
-                        format!("cannot assign to `{}`, which is not `mut`", def.name),
+                        format!("cannot assign to `{}`, which is not `mut`", def.path),
                     )
                     .label(place.span, "assigned here")
                     .label(
@@ -2725,7 +2725,7 @@ impl Checker<'_, '_> {
                             "ty::address-of-immutable",
                             format!(
                                 "cannot take a `*mut` address of `{}`, which is not `mut`",
-                                def.name
+                                def.path
                             ),
                         )
                         .label(place.span, "address taken here")
@@ -2945,7 +2945,7 @@ pub fn dump(q: &mut Queries) -> String {
         writeln!(
             out,
             "{external}{kind}fn {}({}) -> {}",
-            f.name,
+            f.path,
             params.join(", "),
             q.normalize(f.ret)
         )
@@ -3244,8 +3244,8 @@ fn expr_label(q: &Queries, f: &Fn, expr: &Expr) -> String {
         ExprKind::Byte(value) => format!("byte {value}"),
         ExprKind::ByteString(bytes) => format!("byte string b\"{}\"", bytes.escape_ascii()),
         ExprKind::Unit => "unit".to_owned(),
-        ExprKind::Const(id) => format!("const {}", hir.const_(*id).name),
-        ExprKind::Static(id) => format!("static {}", hir.static_(*id).name),
+        ExprKind::Const(id) => format!("const {}", hir.const_(*id).path),
+        ExprKind::Static(id) => format!("static {}", hir.static_(*id).path),
         ExprKind::Variant(id, index, _) => {
             format!("variant {}", q.enum_def(*id).variant_path(*index as usize))
         }

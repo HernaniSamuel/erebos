@@ -18,6 +18,7 @@ File {
                         span: 13..22,
                     },
                 ],
+                vis: Private,
                 name: Ident {
                     name: "Header",
                     span: 30..36,
@@ -88,6 +89,7 @@ File {
                         span: 61..73,
                     },
                 ],
+                vis: Private,
                 name: Ident {
                     name: "Descriptor",
                     span: 81..91,
