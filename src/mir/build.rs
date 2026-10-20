@@ -34,8 +34,10 @@ pub fn build_body(q: &mut Queries, id: hir::FnId) -> Option<Body> {
             builder.terminate(Terminator::Return);
         }
     }
+    // A body run at compile time has no symbol, and is shown by what it
+    // computes (ADR 0049, 0051).
     builder.finish(
-        f.name.clone(),
+        f.symbol.clone().unwrap_or_else(|| f.path.clone()),
         f.span,
         f.comptime.is_some(),
         f.runtime,

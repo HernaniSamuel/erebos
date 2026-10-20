@@ -1,0 +1,52 @@
+// An `#[export]` function and an `#[export]` static of a submodule have
+// their own names as symbols, so C calls the one and reads the other
+// (ADR 0051).
+// link-c: export_c.c
+// expect-output: 42 43 85
+// expect-exit: 0
+
+extern fn c_read_ticks() -> u32;
+extern fn c_double_plus_one(n: u32) -> u32;
+
+mod timer {
+    #[export]
+    pub static mut ticks: u32 = 42;
+
+    #[export]
+    pub fn erebos_double(n: u32) -> u32 {
+        n * 2
+    }
+}
+
+fn putc(byte: u8) {
+    let thr: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+    *thr = byte;
+}
+
+fn print_u32(n: u32) {
+    if n >= 10 {
+        print_u32(n / 10);
+    }
+    putc(b'0' + (n % 10) as u8);
+}
+
+fn exit(code: u32) -> ! {
+    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+    *finisher = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    loop {}
+}
+
+entry fn main() -> ! {
+    print_u32(c_read_ticks());
+    putc(b' ');
+    timer::ticks += 1;
+    print_u32(c_read_ticks());
+    putc(b' ');
+    print_u32(c_double_plus_one(42));
+    putc(b'\n');
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(1)
+}

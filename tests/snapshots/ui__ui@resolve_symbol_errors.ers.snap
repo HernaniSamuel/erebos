@@ -1,0 +1,241 @@
+---
+source: tests/ui.rs
+assertion_line: 40
+expression: output
+input_file: tests/ui/resolve_symbol_errors.ers
+---
+--- errors ---
+resolve::duplicate-symbol
+
+  × the symbol `putc` is given to more than one item
+    ╭─[resolve_symbol_errors.ers:12:8]
+  7 │ // `_start` in every module.
+  8 │ fn putc(byte: u8) {}
+    ·    ──┬─
+    ·      ╰── first given here, to `putc`
+  9 │ 
+ 10 │ mod uart {
+ 11 │     #[export]
+ 12 │     fn putc(byte: u8) {}
+    ·        ──┬─
+    ·          ╰── given again here, to `uart::putc`
+ 13 │ }
+    ╰────
+  help: an item of the root module, an `#[export]` item and an `extern` item each have their own
+        name as their symbol: rename one of the two (ADR 0051)
+resolve::duplicate-symbol
+
+  × the symbol `TICKS` is given to more than one item
+    ╭─[resolve_symbol_errors.ers:23:20]
+ 16 │     #[export]
+ 17 │     static mut TICKS: u32 = 0;
+    ·                ──┬──
+    ·                  ╰── first given here, to `a::TICKS`
+ 18 │ }
+ 19 │ 
+ 20 │ mod b {
+ 21 │     mod c {
+ 22 │         #[export]
+ 23 │         static mut TICKS: u32 = 0;
+    ·                    ──┬──
+    ·                      ╰── given again here, to `b::c::TICKS`
+ 24 │     }
+    ╰────
+  help: an item of the root module, an `#[export]` item and an `extern` item each have their own
+        name as their symbol: rename one of the two (ADR 0051)
+resolve::duplicate-symbol
+
+  × the symbol `c_checksum` is given to more than one item
+    ╭─[resolve_symbol_errors.ers:32:15]
+ 27 │ mod d {
+ 28 │     extern fn c_checksum(n: u32) -> u32;
+    ·               ─────┬────
+    ·                    ╰── first given here, to `d::c_checksum`
+ 29 │ }
+ 30 │ 
+ 31 │ mod e {
+ 32 │     extern fn c_checksum(n: u32) -> u32;
+    ·               ─────┬────
+    ·                    ╰── given again here, to `e::c_checksum`
+ 33 │ }
+    ╰────
+  help: an `extern` item has its own name as its symbol in any module: declare it in one module,
+        and name it by its path in the others (ADR 0051)
+resolve::duplicate-symbol
+
+  × the symbol `twice` is given to more than one item
+    ╭─[resolve_symbol_errors.ers:39:8]
+ 34 │ 
+ 35 │ fn twice() {}
+    ·    ──┬──
+    ·      ╰── first given here, to `twice`
+ 36 │ 
+ 37 │ mod f {
+ 38 │     #[export]
+ 39 │     fn twice() {}
+    ·        ──┬──
+    ·          ╰── given again here, to `f::twice`
+ 40 │ 
+    ╰────
+  help: an item of the root module, an `#[export]` item and an `extern` item each have their own
+        name as their symbol: rename one of the two (ADR 0051)
+resolve::duplicate-item
+
+  × `twice` is defined more than once
+    ╭─[resolve_symbol_errors.ers:42:8]
+ 38 │     #[export]
+ 39 │     fn twice() {}
+    ·        ──┬──
+    ·          ╰── first defined here
+ 40 │ 
+ 41 │     #[export]
+ 42 │     fn twice() {}
+    ·        ──┬──
+    ·          ╰── redefined here
+ 43 │ }
+    ╰────
+  help: functions, structs, enums, constants and statics share one namespace (ADR 0029, 0030,
+        0035)
+resolve::misplaced-attribute
+
+  × `#[export]` applies only to functions and statics defined in the program
+    ╭─[resolve_symbol_errors.ers:45:1]
+ 44 │ 
+ 45 │ #[export]
+    · ────┬────
+    ·     ╰── not allowed on an `extern fn`
+ 46 │ extern fn c_init();
+    ╰────
+  help: `#[export]` gives a function or static its own name as its symbol; an `extern` item always
+        has its own name (ADR 0051)
+resolve::misplaced-attribute
+
+  × `#[export]` applies only to functions and statics defined in the program
+    ╭─[resolve_symbol_errors.ers:48:1]
+ 47 │ 
+ 48 │ #[export]
+    · ────┬────
+    ·     ╰── not allowed on an `extern static`
+ 49 │ extern static c_table: [u8; 4];
+    ╰────
+  help: `#[export]` gives a function or static its own name as its symbol; an `extern` item always
+        has its own name (ADR 0051)
+resolve::misplaced-attribute
+
+  × `#[export]` applies only to functions and statics defined in the program
+    ╭─[resolve_symbol_errors.ers:51:1]
+ 50 │ 
+ 51 │ #[export]
+    · ────┬────
+    ·     ╰── not allowed on a struct
+ 52 │ struct S { x: u8 }
+    ╰────
+  help: `#[export]` gives a function or static its own name as its symbol; an `extern` item always
+        has its own name (ADR 0051)
+resolve::misplaced-attribute
+
+  × `#[export]` applies only to functions and statics defined in the program
+    ╭─[resolve_symbol_errors.ers:54:1]
+ 53 │ 
+ 54 │ #[export]
+    · ────┬────
+    ·     ╰── not allowed on an enum
+ 55 │ enum E: u8 { A = 0 }
+    ╰────
+  help: `#[export]` gives a function or static its own name as its symbol; an `extern` item always
+        has its own name (ADR 0051)
+resolve::misplaced-attribute
+
+  × `#[export]` applies only to functions and statics defined in the program
+    ╭─[resolve_symbol_errors.ers:57:1]
+ 56 │ 
+ 57 │ #[export]
+    · ────┬────
+    ·     ╰── not allowed on a constant
+ 58 │ const C: u32 = 1;
+    ╰────
+  help: `#[export]` gives a function or static its own name as its symbol; an `extern` item always
+        has its own name (ADR 0051)
+resolve::misplaced-attribute
+
+  × `#[export]` applies only to functions and statics defined in the program
+    ╭─[resolve_symbol_errors.ers:60:1]
+ 59 │ 
+ 60 │ #[export]
+    · ────┬────
+    ·     ╰── not allowed on a module
+ 61 │ mod g {}
+    ╰────
+  help: `#[export]` gives a function or static its own name as its symbol; an `extern` item always
+        has its own name (ADR 0051)
+resolve::misplaced-attribute
+
+  × `#[export]` applies only to functions and statics defined in the program
+    ╭─[resolve_symbol_errors.ers:63:1]
+ 62 │ 
+ 63 │ #[export]
+    · ────┬────
+    ·     ╰── not allowed on a `comptime` block
+ 64 │ comptime {}
+    ╰────
+  help: `#[export]` gives a function or static its own name as its symbol; an `extern` item always
+        has its own name (ADR 0051)
+resolve::attribute-argument
+
+  × `#[export]` takes no argument
+    ╭─[resolve_symbol_errors.ers:66:10]
+ 65 │ 
+ 66 │ #[export(1)]
+    ·          ┬
+    ·          ╰── remove this
+ 67 │ fn with_argument() {}
+    ╰────
+resolve::duplicate-attribute
+
+  × `#[export]` is given more than once
+    ╭─[resolve_symbol_errors.ers:70:1]
+ 68 │ 
+ 69 │ #[export]
+    · ────┬────
+    ·     ╰── first given here
+ 70 │ #[export]
+    · ────┬────
+    ·     ╰── given again here
+ 71 │ static TWICE: u8 = 0;
+    ╰────
+resolve::reserved-name
+
+  × `llvm` is a reserved name
+    ╭─[resolve_symbol_errors.ers:73:5]
+ 72 │ 
+ 73 │ mod llvm {
+    ·     ──┬─
+    ·       ╰── reserved for LLVM in the root module
+ 74 │     fn f() {}
+    ╰────
+  help: the symbols of its items would start with `llvm.`, which LLVM reserves for its intrinsics
+        (ADR 0051)
+resolve::reserved-name
+
+  × `_start` is a reserved name
+    ╭─[resolve_symbol_errors.ers:84:8]
+ 83 │ mod s {
+ 84 │     fn _start() {}
+    ·        ───┬──
+    ·           ╰── reserved for the startup code
+ 85 │ }
+    ╰────
+  help: the compiler generates `_start`, which sets up the stack and jumps to the entry function
+        (ADR 0012)
+resolve::reserved-name
+
+  × `_start` is a reserved name
+    ╭─[resolve_symbol_errors.ers:89:8]
+ 88 │     #[export]
+ 89 │     fn _start() {}
+    ·        ───┬──
+    ·           ╰── reserved for the startup code
+ 90 │ }
+    ╰────
+  help: the compiler generates `_start`, which sets up the stack and jumps to the entry function
+        (ADR 0012)

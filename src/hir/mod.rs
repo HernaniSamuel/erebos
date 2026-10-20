@@ -163,6 +163,9 @@ pub struct StaticDef {
     /// Its path from the root module, as diagnostics and dumps show it
     /// (ADR 0049).
     pub path: String,
+    /// Its symbol (ADR 0051): its path joined by dots, or its own name in
+    /// the root module, with `#[export]` or for an `extern static`.
+    pub symbol: String,
     pub name_span: Span,
     pub module: ModuleId,
     pub vis: Visibility,
@@ -439,12 +442,16 @@ pub enum FnKind {
 
 #[derive(Debug)]
 pub struct Fn {
-    /// The function's name, which is its symbol; for a body run at compile
-    /// time, what it computes.
+    /// The function's name as declared; for a body run at compile time,
+    /// what it computes.
     pub name: String,
     /// Its path from the root module, as diagnostics and dumps show it
     /// (ADR 0049).
     pub path: String,
+    /// Its symbol (ADR 0051): its path joined by dots, or its own name in
+    /// the root module, with `#[export]` or for an `extern fn`. `None` for
+    /// a body run at compile time, which is never emitted.
+    pub symbol: Option<String>,
     pub name_span: Span,
     /// The module its code is written in, where its names are looked up.
     pub module: ModuleId,

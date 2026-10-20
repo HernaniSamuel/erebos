@@ -209,11 +209,13 @@ pub fn lower(
     let unsized_types = lowerer.unsized_types;
     let applications = lowerer.applications;
     let modules = lowerer.modules;
+    let namespaces = lowerer.namespaces;
 
     for diag in duplicates {
         diags.push(diag);
     }
     check_start(&fns, &statics, diags);
+    check_symbols(&fns, &statics, &namespaces, &runtime_names, diags);
     // In any module, whatever their visibility (ADR 0049, 0050).
     let entry = find_unique(&fns, FnKind::Entry, diags);
     let panic = find_unique(&fns, FnKind::Panic, diags);
@@ -366,7 +368,8 @@ impl<'a> Items<'a> {
     /// Adds `name` to the namespace of `module`, unless it is taken: one
     /// name per module for items and modules alike (ADR 0029, 0049). No
     /// item or module takes a built-in name, and the program's take none of
-    /// the runtime's (ADR 0020), in any module.
+    /// the runtime's (ADR 0020), in any module; no module of the root is
+    /// named `llvm` (ADR 0051).
     fn declare(
         &mut self,
         module: ModuleId,
@@ -392,6 +395,11 @@ impl<'a> Items<'a> {
                 Some((
                     "the runtime defines this function".to_owned(),
                     format!("call the runtime's `{name}` instead of defining it (ADR 0020)"),
+                ))
+            } else if name == "llvm" && module == ModuleId::ROOT && matches!(def, Def::Module(_)) {
+                Some((
+                    "reserved for LLVM in the root module".to_owned(),
+                    "the symbols of its items would start with `llvm.`, which LLVM reserves for its intrinsics (ADR 0051)".to_owned(),
                 ))
             } else {
                 None
@@ -467,6 +475,19 @@ fn item_path(modules: &[ModuleDef], module: ModuleId, name: &str) -> String {
         name.to_owned()
     } else {
         format!("{prefix}::{name}")
+    }
+}
+
+/// The symbol of the function or static `name` of `module`, unless it is
+/// `#[export]` or `extern` (ADR 0051): its path joined by dots, and its own
+/// name in the root module. A module's path is its names joined by `::`,
+/// which no name contains.
+fn path_symbol(modules: &[ModuleDef], module: ModuleId, name: &str) -> String {
+    let prefix = &modules[module.0 as usize].path;
+    if prefix.is_empty() {
+        name.to_owned()
+    } else {
+        format!("{}.{name}", prefix.replace("::", "."))
     }
 }
 
@@ -559,6 +580,89 @@ fn check_start(fns: &[Fn], statics: &[StaticDef], diags: &mut Diagnostics) {
             Diagnostic::error("resolve::reserved-name", "`_start` is a reserved name")
                 .label(span, "reserved for the startup code")
                 .help("the compiler generates `_start`, which sets up the stack and jumps to the entry function (ADR 0012)"),
+        );
+    }
+}
+
+/// A function or static with a symbol, as `check_symbols` compares them.
+struct Symbol<'a> {
+    symbol: &'a str,
+    path: &'a str,
+    span: Span,
+    external: bool,
+}
+
+/// Every symbol of the program is unique (ADR 0051): two functions or
+/// statics with one, in any modules, are `resolve::duplicate-symbol`, each
+/// later one reported against the first. An item that did not get its name
+/// in its module's namespace was reported as `resolve::duplicate-item`, and
+/// a program item named like a runtime one as `resolve::reserved-name`
+/// (ADR 0020), until `core` replaces that check (ADR 0052): both are left
+/// out. The symbol of a program item can equal a runtime item's only
+/// through such a name, since the runtime's symbols are plain names.
+fn check_symbols(
+    fns: &[Fn],
+    statics: &[StaticDef],
+    namespaces: &[HashMap<String, Entry>],
+    runtime_names: &[&str],
+    diags: &mut Diagnostics,
+) {
+    // Whether the item holds its name in its module, and is not a program
+    // item named like a runtime one.
+    let checked = |module: ModuleId, name: &str, def: Def| {
+        namespaces[module.0 as usize]
+            .get(name)
+            .is_some_and(|entry| {
+                entry.def == def && (entry.runtime || !runtime_names.contains(&name))
+            })
+    };
+    let mut items: Vec<Symbol> = Vec::new();
+    for (i, f) in fns.iter().enumerate() {
+        let Some(symbol) = &f.symbol else { continue };
+        if checked(f.module, &f.name, Def::Fn(FnId(i as u32))) {
+            let item = Symbol {
+                symbol,
+                path: &f.path,
+                span: f.name_span,
+                external: f.body.is_none(),
+            };
+            items.push(item);
+        }
+    }
+    for (i, s) in statics.iter().enumerate() {
+        if checked(s.module, &s.name, Def::Static(StaticId(i as u32))) {
+            let item = Symbol {
+                symbol: &s.symbol,
+                path: &s.path,
+                span: s.name_span,
+                external: s.init.is_none(),
+            };
+            items.push(item);
+        }
+    }
+    // In source order, so that the first is the one declared first.
+    items.sort_by_key(|item| (item.span.file, item.span.lo));
+
+    let mut firsts: HashMap<&str, &Symbol> = HashMap::new();
+    for again in &items {
+        let Some(&first) = firsts.get(again.symbol) else {
+            firsts.insert(again.symbol, again);
+            continue;
+        };
+        let symbol = again.symbol;
+        let help = if again.external && first.external {
+            "an `extern` item has its own name as its symbol in any module: declare it in one module, and name it by its path in the others (ADR 0051)"
+        } else {
+            "an item of the root module, an `#[export]` item and an `extern` item each have their own name as their symbol: rename one of the two (ADR 0051)"
+        };
+        diags.push(
+            Diagnostic::error(
+                "resolve::duplicate-symbol",
+                format!("the symbol `{symbol}` is given to more than one item"),
+            )
+            .label(again.span, format!("given again here, to `{}`", again.path))
+            .label(first.span, format!("first given here, to `{}`", first.path))
+            .help(help),
         );
     }
 }
@@ -1036,6 +1140,10 @@ impl Lowerer<'_> {
                     }
                     align_attr.replace(attr.span)
                 }
+                "export" => {
+                    self.misplaced_attr(attr, "a struct");
+                    None
+                }
                 _ => {
                     self.unknown_attr(attr);
                     None
@@ -1066,42 +1174,86 @@ impl Lowerer<'_> {
         (packed.is_some(), align)
     }
 
-    /// Items other than structs and statics take no attributes yet; `what`
-    /// names the item.
+    /// Items other than structs, statics and functions with a body take no
+    /// attributes; `what` names the item.
     fn no_attrs(&mut self, attrs: &[ast::Attr], what: &str) {
         for attr in attrs {
             match attr.name.name.as_str() {
-                "packed" | "align" => self.misplaced_attr(attr, what),
+                "packed" | "align" | "export" => self.misplaced_attr(attr, what),
                 _ => self.unknown_attr(attr),
             }
         }
     }
 
     fn misplaced_attr(&mut self, attr: &ast::Attr, what: &str) {
-        let applies_to = if attr.name.name == "align" {
-            "structs and statics"
-        } else {
-            "structs"
+        let applies_to = match attr.name.name.as_str() {
+            "align" => "structs and statics",
+            "export" => "functions and statics defined in the program",
+            _ => "structs",
         };
-        self.diags.push(
-            Diagnostic::error(
-                "resolve::misplaced-attribute",
-                format!("`#[{}]` applies only to {applies_to}", attr.name.name),
-            )
-            .label(attr.span, format!("not allowed on {what}")),
-        );
+        let mut diag = Diagnostic::error(
+            "resolve::misplaced-attribute",
+            format!("`#[{}]` applies only to {applies_to}", attr.name.name),
+        )
+        .label(attr.span, format!("not allowed on {what}"));
+        if attr.name.name == "export" {
+            diag = diag.help("`#[export]` gives a function or static its own name as its symbol; an `extern` item always has its own name (ADR 0051)");
+        }
+        self.diags.push(diag);
     }
 
-    /// `#[align(N)]`, at most once, is the only attribute of a static; an
-    /// `extern static` takes none, since its definition decides its
-    /// alignment (ADR 0030). Returns it.
-    fn static_attrs(&mut self, attrs: &[ast::Attr], external: bool) -> Option<(ArrayLen, Span)> {
+    /// `#[export]` (ADR 0051): no argument, at most once; `export` holds
+    /// the span of the one already given.
+    fn export_attr(&mut self, attr: &ast::Attr, export: &mut Option<Span>) {
+        if let Some(arg) = &attr.arg {
+            self.attr_error(arg.span, "`#[export]` takes no argument", "remove this");
+        }
+        if let Some(first) = export.replace(attr.span) {
+            self.diags.push(
+                Diagnostic::error(
+                    "resolve::duplicate-attribute",
+                    "`#[export]` is given more than once",
+                )
+                .label(attr.span, "given again here")
+                .label(first, "first given here"),
+            );
+        }
+    }
+
+    /// `#[export]` is the only attribute of a function with a body; an
+    /// `extern fn` takes none (ADR 0051). Returns whether it is exported.
+    fn fn_attrs(&mut self, attrs: &[ast::Attr], external: bool) -> bool {
+        if external {
+            self.no_attrs(attrs, "an `extern fn`");
+            return false;
+        }
+        let mut export = None;
+        for attr in attrs {
+            match attr.name.name.as_str() {
+                "export" => self.export_attr(attr, &mut export),
+                "packed" | "align" => self.misplaced_attr(attr, "a function"),
+                _ => self.unknown_attr(attr),
+            }
+        }
+        export.is_some()
+    }
+
+    /// `#[align(N)]` and `#[export]`, at most once each, are the attributes
+    /// of a static; an `extern static` takes none, since its definition
+    /// decides its alignment and its name is its symbol (ADR 0030, 0051).
+    /// Returns the alignment, and whether it is exported.
+    fn static_attrs(
+        &mut self,
+        attrs: &[ast::Attr],
+        external: bool,
+    ) -> (Option<(ArrayLen, Span)>, bool) {
         if external {
             self.no_attrs(attrs, "an `extern static`");
-            return None;
+            return (None, false);
         }
         let mut align: Option<(ArrayLen, Span)> = None;
         let mut align_attr: Option<Span> = None;
+        let mut export = None;
         for attr in attrs {
             match attr.name.name.as_str() {
                 "align" => {
@@ -1124,11 +1276,12 @@ impl Lowerer<'_> {
                         );
                     }
                 }
+                "export" => self.export_attr(attr, &mut export),
                 "packed" => self.misplaced_attr(attr, "a static"),
                 _ => self.unknown_attr(attr),
             }
         }
-        align
+        (align, export.is_some())
     }
 
     /// A static, and the body that computes its initial value, `init`; an
@@ -1139,11 +1292,16 @@ impl Lowerer<'_> {
         id: StaticId,
         init: FnId,
     ) -> (StaticDef, Option<Fn>) {
-        let align = self.static_attrs(&decl.attrs, decl.external);
+        let (align, export) = self.static_attrs(&decl.attrs, decl.external);
         let ty = self.memory_ty(&decl.ty, NeverPosition::Static);
         let mut def = StaticDef {
             name: decl.name.name.clone(),
             path: self.path_of(self.module, &decl.name.name),
+            symbol: if decl.external || export {
+                decl.name.name.clone()
+            } else {
+                path_symbol(&self.modules, self.module, &decl.name.name)
+            },
             name_span: decl.name.span,
             module: self.module,
             vis: visibility(decl.vis),
@@ -1161,6 +1319,7 @@ impl Lowerer<'_> {
         let body = Fn {
             name: decl.name.name.clone(),
             path: self.path_of(self.module, &decl.name.name),
+            symbol: None,
             name_span: decl.name.span,
             module: self.module,
             vis: Visibility::Private,
@@ -1198,6 +1357,7 @@ impl Lowerer<'_> {
         let body = Fn {
             name: decl.name.name.clone(),
             path: self.path_of(self.module, &decl.name.name),
+            symbol: None,
             name_span: decl.name.span,
             module: self.module,
             vis: Visibility::Private,
@@ -1278,6 +1438,7 @@ impl Lowerer<'_> {
             bodies.push(Fn {
                 name: format!("{}::{}", decl.name.name, variant.name.name),
                 path: format!("{}::{}", ty.name, variant.name.name),
+                symbol: None,
                 name_span: variant.name.span,
                 module: self.module,
                 vis: Visibility::Private,
@@ -1333,6 +1494,7 @@ impl Lowerer<'_> {
         Fn {
             name: "comptime".to_owned(),
             path: "comptime".to_owned(),
+            symbol: None,
             name_span: Span::new(
                 decl.span.file,
                 decl.span.lo as usize,
@@ -1376,6 +1538,7 @@ impl Lowerer<'_> {
         self.values.push(Fn {
             name: "length".to_owned(),
             path: "length".to_owned(),
+            symbol: None,
             name_span: expr.span,
             module: self.module,
             vis: Visibility::Private,
@@ -1417,7 +1580,7 @@ impl Lowerer<'_> {
                 format!("unknown attribute `#[{}]`", attr.name.name),
             )
             .label(attr.name.span, "not an attribute")
-            .help("the attributes are `#[packed]` and `#[align(N)]` on structs (ADR 0022), and `#[align(N)]` on statics (ADR 0030)"),
+            .help("the attributes are `#[packed]` and `#[align(N)]` on structs (ADR 0022), `#[align(N)]` on statics (ADR 0030), and `#[export]` on functions and statics (ADR 0051)"),
         );
     }
 
@@ -1535,7 +1698,8 @@ impl Lowerer<'_> {
     }
 
     fn fn_decl(&mut self, decl: &ast::FnDecl) -> Fn {
-        self.no_attrs(&decl.attrs, "a function");
+        let external = decl.body.is_none();
+        let export = self.fn_attrs(&decl.attrs, external);
         self.locals.clear();
         self.scopes.clear();
         self.loops.clear();
@@ -1578,6 +1742,11 @@ impl Lowerer<'_> {
         Fn {
             name: decl.name.name.clone(),
             path: self.path_of(self.module, &decl.name.name),
+            symbol: Some(if external || export {
+                decl.name.name.clone()
+            } else {
+                path_symbol(&self.modules, self.module, &decl.name.name)
+            }),
             name_span: decl.name.span,
             module: self.module,
             vis: visibility(decl.vis),
@@ -2656,8 +2825,11 @@ mod tests {
         );
     }
 
-    /// Symbols are still the items' own names, so a module's item cannot
-    /// take a runtime function's name either (ADR 0020, 0049).
+    /// Until the runtime becomes `core` (ADR 0052), a module's item cannot
+    /// take a runtime function's name either (ADR 0020, 0049). Items so
+    /// reported are not also `resolve::duplicate-symbol` (ADR 0051), whether
+    /// their symbol is the runtime function's (a root item, an `#[export]`
+    /// one) or another such item's (two `#[export]` ones in two modules).
     #[test]
     fn runtime_names_are_reserved_in_every_module() {
         let mut sources = SourceMap::default();
@@ -2667,7 +2839,10 @@ mod tests {
             "main.ers",
             "entry fn main() -> ! { loop {} }
              panic fn on_panic() -> ! { loop {} }
+             fn memcpy() {}
              mod m { fn memcpy() {} mod n { static memcpy: u8 = 0; } }
+             mod e { #[export] fn memcpy() {} }
+             mod f { #[export] fn memcpy() {} }
 ",
             &mut diags,
         );
@@ -2689,6 +2864,9 @@ mod tests {
         assert_eq!(
             reported,
             [
+                ("resolve::reserved-name", true),
+                ("resolve::reserved-name", true),
+                ("resolve::reserved-name", true),
                 ("resolve::reserved-name", true),
                 ("resolve::reserved-name", true)
             ]

@@ -14,8 +14,8 @@ resolve::unknown-attribute
    ·      ╰── not an attribute
  3 │ struct A { x: u8 }
    ╰────
-  help: the attributes are `#[packed]` and `#[align(N)]` on structs (ADR 0022), and `#[align(N)]`
-        on statics (ADR 0030)
+  help: the attributes are `#[packed]` and `#[align(N)]` on structs (ADR 0022), `#[align(N)]` on
+        statics (ADR 0030), and `#[export]` on functions and statics (ADR 0051)
 resolve::attribute-argument
 
   × `#[packed]` takes no argument

@@ -1,0 +1,50 @@
+// emit: llvm-ir
+// Symbols (ADR 0051): a function or static of a module is named by its path
+// joined by dots, `uart.regs.step`; one of the root module keeps its own
+// name, and so do an `#[export]` item, in the root or in a module, and an
+// `extern` declaration, in any module. `_start` jumps to the entry
+// function's symbol.
+static mut COUNT: u32 = 0;
+
+#[export]
+fn tick() {
+    COUNT = COUNT + uart::regs::step();
+}
+
+mod uart {
+    static BASE: u32 = 0x1000_0000;
+
+    #[export]
+    pub static mut RX_READY: bool = false;
+
+    extern fn c_checksum(n: u32) -> u32;
+    extern static mut c_counter: u32;
+
+    pub fn init() -> u32 {
+        c_checksum(c_counter) + BASE
+    }
+
+    #[export]
+    pub fn uart_rx_ready() -> bool {
+        RX_READY
+    }
+
+    pub mod regs {
+        pub static mut LAST: u32 = 0;
+
+        pub fn step() -> u32 {
+            LAST = LAST + 1;
+            LAST
+        }
+    }
+}
+
+mod app {
+    entry fn main() -> ! {
+        let n: u32 = super::uart::init();
+        super::tick();
+        loop {}
+    }
+}
+
+panic fn on_panic() -> ! { loop {} }

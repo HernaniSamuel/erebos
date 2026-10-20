@@ -1,0 +1,78 @@
+---
+source: tests/ui.rs
+assertion_line: 40
+expression: output
+input_file: tests/ui/eval_module_static_errors.ers
+---
+--- errors ---
+eval::static-mut
+
+  × `m::COUNT` is a `static mut`, whose value is only known when the program runs
+    ╭─[eval_module_static_errors.ers:11:23]
+ 10 │ 
+ 11 │ const READ_MUT: u32 = m::COUNT;
+    ·       ────┬───        ────┬───
+    ·           │               ╰── read here
+    ·           ╰── while evaluating the constant `READ_MUT`
+ 12 │ const WRITE_STATIC: u32 = write_static();
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::extern-static
+
+  × `m::c_value` is an `extern static`, defined outside the program, so it cannot be read or
+  │ written at compile time
+    ╭─[eval_module_static_errors.ers:13:26]
+ 12 │ const WRITE_STATIC: u32 = write_static();
+ 13 │ const READ_EXTERN: u32 = m::c_value;
+    ·       ─────┬─────        ─────┬────
+    ·            │                  ╰── read here
+    ·            ╰── while evaluating the constant `READ_EXTERN`
+ 14 │ const TWO_PAST: *const u16 = &raw const (&raw const m::TABLE as *const u16)[5];
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::pointer-out-of-bounds
+
+  × the value holds a pointer to offset 10 of `m::TABLE`, which is 8 bytes long
+    ╭─[eval_module_static_errors.ers:14:1]
+ 13 │ const READ_EXTERN: u32 = m::c_value;
+ 14 │ const TWO_PAST: *const u16 = &raw const (&raw const m::TABLE as *const u16)[5];
+    · ───────────────────────────────────────┬───────────────────────────────────────┬
+    ·                                        │                                       ╰── while evaluating the constant `TWO_PAST`
+    ·                                        ╰── this value
+ 15 │ const TOO_LONG: *const [u16] = slice(&raw const m::TABLE as *const u16, 5);
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::pointer-out-of-bounds
+
+  × the value holds a slice of 5 elements of `u16` from offset 0 of `m::TABLE`, which is 8 bytes
+  │ long
+    ╭─[eval_module_static_errors.ers:15:1]
+ 14 │ const TWO_PAST: *const u16 = &raw const (&raw const m::TABLE as *const u16)[5];
+ 15 │ const TOO_LONG: *const [u16] = slice(&raw const m::TABLE as *const u16, 5);
+    · ─────────────────────────────────────┬─────────────────────────────────────┬
+    ·                                      │                                     ╰── while evaluating the constant `TOO_LONG`
+    ·                                      ╰── this value
+ 16 │ 
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::read-only-write
+
+  × `m::LIMIT` is a `static`, which cannot be written
+    ╭─[eval_module_static_errors.ers:19:5]
+ 11 │ const READ_MUT: u32 = m::COUNT;
+ 12 │ const WRITE_STATIC: u32 = write_static();
+    ·       ──────┬─────        ───────┬──────
+    ·             │                    ╰── called here
+    ·             ╰── while evaluating the constant `WRITE_STATIC`
+ 13 │ const READ_EXTERN: u32 = m::c_value;
+ 14 │ const TWO_PAST: *const u16 = &raw const (&raw const m::TABLE as *const u16)[5];
+ 15 │ const TOO_LONG: *const [u16] = slice(&raw const m::TABLE as *const u16, 5);
+ 16 │ 
+ 17 │ fn write_static() -> u32 {
+ 18 │     let p: *mut u32 = &raw const m::LIMIT as *mut u32;
+ 19 │     *p = 11;
+    ·     ───┬───
+    ·        ╰── written here
+ 20 │     m::LIMIT
+    ╰────
+  help: this code runs at compile time (ADR 0027)

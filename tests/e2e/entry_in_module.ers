@@ -1,8 +1,7 @@
 // The entry function may be in any module, and share its name with a
-// function of another module declared before it, which keeps the name in
-// LLVM until symbols are named by module paths: `_start` jumps to the
-// entry function by the name LLVM gave it (ADR 0012, 0049). Booting the
-// root `main` instead would return to nowhere.
+// function of another module declared before it: its symbol is
+// `app.main`, which `_start` jumps to (ADR 0012, 0051). Booting the root
+// `main` instead would return to nowhere.
 // expect-exit: 7
 fn main() -> u32 { 7 }
 

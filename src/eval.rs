@@ -232,6 +232,19 @@ impl Interp<'_, '_> {
             .unwrap_or(data.terminator_span)
     }
 
+    /// How diagnostics name a static: by its path (ADR 0049), not by its
+    /// symbol; a byte string by its bytes.
+    fn static_name(&self, def: &crate::mir::StaticDef) -> String {
+        if def.byte_string.is_some() {
+            return def.name.clone();
+        }
+        self.q
+            .hir
+            .static_(crate::hir::StaticId(def.id.0))
+            .path
+            .clone()
+    }
+
     fn error(&self, code: &'static str, message: String, label: &str, span: Span) -> Failure {
         Failure::Error(EvalError {
             code,
@@ -612,7 +625,7 @@ impl Interp<'_, '_> {
                     format!(
                         "the value holds a pointer to offset {} of `{}`, which is {size} bytes long",
                         addend as i32,
-                        s.def.def().name
+                        self.static_name(s.def.def())
                     ),
                     "this value",
                     span,
@@ -715,13 +728,14 @@ impl Interp<'_, '_> {
     ) -> EvalResult<()> {
         let width = target::POINTER_BYTES as u32;
         let target = &self.allocs[pointers[&offset].0 as usize];
-        let name = &target
-            .static_
-            .as_ref()
-            .expect("a slice of a static")
-            .def
-            .def()
-            .name;
+        let name = &self.static_name(
+            target
+                .static_
+                .as_ref()
+                .expect("a slice of a static")
+                .def
+                .def(),
+        );
         let size = target.bytes.len();
         let address = &bytes[offset as usize..(offset + width) as usize];
         let addend = u32::from_le_bytes(address.try_into().expect("an address is four bytes"));
@@ -886,7 +900,7 @@ impl Interp<'_, '_> {
                             "eval::extern-static",
                             format!(
                                 "`{}` is an `extern static`, defined outside the program, so it cannot be read or written at compile time",
-                                def.name
+                                self.static_name(def)
                             ),
                             label,
                             span,
@@ -897,7 +911,7 @@ impl Interp<'_, '_> {
                             "eval::static-mut",
                             format!(
                                 "`{}` is a `static mut`, whose value is only known when the program runs",
-                                def.name
+                                self.static_name(def)
                             ),
                             label,
                             span,
@@ -906,7 +920,7 @@ impl Interp<'_, '_> {
                     if write {
                         let what = match def.byte_string {
                             Some(_) => "a byte string".to_owned(),
-                            None => format!("`{}` is a `static`, which", def.name),
+                            None => format!("`{}` is a `static`, which", self.static_name(def)),
                         };
                         return Err(self.error(
                             "eval::read-only-write",

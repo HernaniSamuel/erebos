@@ -49,6 +49,52 @@ fn startup_ranges() {
     }
 }
 
+/// Functions and statics of modules, named by their paths joined by dots,
+/// and an `#[export]` function, named by its own name (ADR 0051).
+const MODULES: &str = "\
+mod m {
+    pub fn f() -> u32 { n::S }
+
+    pub mod n {
+        pub static S: u32 = 7;
+    }
+
+    #[export]
+    pub fn exported() -> u32 { 1 }
+}
+
+entry fn main() -> ! {
+    let x: u32 = m::f() + m::exported();
+    loop {}
+}
+panic fn on_panic() -> ! { loop {} }
+";
+
+#[test]
+fn module_symbols() {
+    let work = Path::new(env!("CARGO_TARGET_TMPDIR")).join("elf");
+    fs::create_dir_all(&work).unwrap();
+    let source = work.join("modules.ers");
+    fs::write(&source, MODULES).unwrap();
+    for opt in [OptLevel::None, OptLevel::Speed] {
+        let elf = work.join(format!("modules-{opt:?}.elf"));
+        driver::build(&source, &elf, &[], opt, false).unwrap();
+        let symbols = symbols(&elf);
+        let defined = |name: &str| {
+            symbols
+                .iter()
+                .any(|s| s.name == name && s.section != "UND" && s.section != "ABS")
+        };
+        for name in ["m.f", "m.n.S", "exported", "main", "on_panic"] {
+            assert!(defined(name), "{opt:?}: no symbol {name}");
+        }
+        assert!(
+            !symbols.iter().any(|s| s.name == "m.exported"),
+            "{opt:?}: the `#[export]` function has its path as symbol"
+        );
+    }
+}
+
 fn check(elf: &Path, opt: OptLevel) {
     let sections = sections(elf);
     let symbols = symbols(elf);

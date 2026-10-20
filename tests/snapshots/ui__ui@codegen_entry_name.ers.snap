@@ -34,7 +34,7 @@ module asm "\09addi t0, t0, 4"
 module asm "\09addi t2, t2, 4"
 module asm "\09j .Lcopy_word"
 module asm ".Lenter:"
-module asm "\09j main.1"
+module asm "\09j app.main"
 
 ; Function Attrs: nounwind null_pointer_is_valid
 define i32 @main() #0 {
@@ -43,7 +43,7 @@ bb0:
 }
 
 ; Function Attrs: noreturn nounwind null_pointer_is_valid
-define void @main.1() #1 {
+define void @app.main() #1 {
 bb0:
   %0 = call i32 @main()
   br label %bb1

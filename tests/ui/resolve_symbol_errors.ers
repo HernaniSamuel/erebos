@@ -1,0 +1,93 @@
+// emit: hir
+// Every symbol of the program is unique (ADR 0051): a root item and an
+// `#[export]` one, two `#[export]` ones and one `extern fn` declared in two
+// modules are `resolve::duplicate-symbol`. A pair that is already
+// `resolve::duplicate-item` is not reported again. `#[export]` applies only
+// to functions and statics defined in the program, and takes no argument. `llvm` is reserved for modules of the root module only, and
+// `_start` in every module.
+fn putc(byte: u8) {}
+
+mod uart {
+    #[export]
+    fn putc(byte: u8) {}
+}
+
+mod a {
+    #[export]
+    static mut TICKS: u32 = 0;
+}
+
+mod b {
+    mod c {
+        #[export]
+        static mut TICKS: u32 = 0;
+    }
+}
+
+mod d {
+    extern fn c_checksum(n: u32) -> u32;
+}
+
+mod e {
+    extern fn c_checksum(n: u32) -> u32;
+}
+
+fn twice() {}
+
+mod f {
+    #[export]
+    fn twice() {}
+
+    #[export]
+    fn twice() {}
+}
+
+#[export]
+extern fn c_init();
+
+#[export]
+extern static c_table: [u8; 4];
+
+#[export]
+struct S { x: u8 }
+
+#[export]
+enum E: u8 { A = 0 }
+
+#[export]
+const C: u32 = 1;
+
+#[export]
+mod g {}
+
+#[export]
+comptime {}
+
+#[export(1)]
+fn with_argument() {}
+
+#[export]
+#[export]
+static TWICE: u8 = 0;
+
+mod llvm {
+    fn f() {}
+}
+
+mod h {
+    mod llvm {
+        fn f() {}
+    }
+}
+
+mod s {
+    fn _start() {}
+}
+
+mod t {
+    #[export]
+    fn _start() {}
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

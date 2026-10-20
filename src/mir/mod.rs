@@ -74,7 +74,11 @@ impl Mir {
 
 #[derive(Clone, Debug)]
 pub struct Body {
-    /// Symbol name; Erebos uses the C ABI and does not mangle (ADR 0006).
+    /// Its symbol (ADR 0051): the function's path joined by dots, as in
+    /// `uart.init`, or its own name for an item of the root module, an
+    /// `#[export]` function or an `extern fn`; Erebos has no other mangling
+    /// and uses the C ABI (ADR 0006). For a body run at compile time, which
+    /// has no symbol, its path as diagnostics show it.
     pub name: String,
     pub span: Span,
     /// Runs only at compile time: a constant's value or a `comptime`
@@ -188,8 +192,8 @@ pub struct StaticId(pub u32);
 /// What MIR knows of a static (ADR 0030); its memory is a [`Static`].
 pub struct StaticDef {
     pub id: StaticId,
-    /// Its symbol name (ADR 0030); for a byte string, which has none, its
-    /// bytes as written.
+    /// Its symbol (ADR 0030, 0051), as a function's; for a byte string,
+    /// which has none, its bytes as written.
     pub name: String,
     pub ty: Ty,
     /// `static mut`: written by the program.

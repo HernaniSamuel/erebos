@@ -1,0 +1,24 @@
+// emit: mir
+// Compile-time errors about a static of a module name it by its path, as
+// every diagnostic does (ADR 0049), not by its symbol (ADR 0051).
+mod m {
+    pub static mut COUNT: u32 = 0;
+    pub static LIMIT: u32 = 10;
+    pub static TABLE: [u16; 4] = [1, 2, 3, 4];
+    pub extern static c_value: u32;
+}
+
+const READ_MUT: u32 = m::COUNT;
+const WRITE_STATIC: u32 = write_static();
+const READ_EXTERN: u32 = m::c_value;
+const TWO_PAST: *const u16 = &raw const (&raw const m::TABLE as *const u16)[5];
+const TOO_LONG: *const [u16] = slice(&raw const m::TABLE as *const u16, 5);
+
+fn write_static() -> u32 {
+    let p: *mut u32 = &raw const m::LIMIT as *mut u32;
+    *p = 11;
+    m::LIMIT
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

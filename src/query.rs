@@ -1162,7 +1162,7 @@ impl<'h> Queries<'h> {
         let ty = self.mir_ty(def.ty);
         let s = StaticRef::new(
             mir::StaticId(id.0),
-            def.name.clone(),
+            def.symbol.clone(),
             ty,
             def.mutable,
             def.init.is_none(),

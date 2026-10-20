@@ -21,6 +21,9 @@ Hir {
         Fn {
             name: "main",
             path: "main",
+            symbol: Some(
+                "main",
+            ),
             name_span: 22..26,
             module: ModuleId(
                 0,
@@ -61,6 +64,9 @@ Hir {
         Fn {
             name: "idle",
             path: "idle",
+            symbol: Some(
+                "idle",
+            ),
             name_span: 54..58,
             module: ModuleId(
                 0,
@@ -113,6 +119,9 @@ Hir {
         Fn {
             name: "on_panic",
             path: "on_panic",
+            symbol: Some(
+                "on_panic",
+            ),
             name_span: 96..104,
             module: ModuleId(
                 0,

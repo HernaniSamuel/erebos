@@ -1,7 +1,8 @@
 // emit: mir
 // Calls and statics across modules, and the entry and panic functions in
 // modules, which the compiler finds wherever they are (ADR 0049). The
-// dump names functions and statics by their own names.
+// dump names functions and statics by their symbols, their paths joined by
+// dots, and the root's items by their names (ADR 0051).
 static mut TOTAL: u32 = 0;
 
 fn add(n: u32) {

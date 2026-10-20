@@ -1,0 +1,107 @@
+---
+source: tests/ui.rs
+assertion_line: 40
+expression: output
+input_file: tests/ui/codegen_symbols.ers
+---
+--- llvm-ir ---
+; ModuleID = 'erebos'
+source_filename = "erebos"
+target datalayout = "e-m:e-p:32:32-i64:64-n32-S128"
+target triple = "riscv32-unknown-none-elf"
+
+module asm "\09.section .text.start, \22ax\22, @progbits"
+module asm "\09.globl _start"
+module asm "\09.type _start, @function"
+module asm "_start:"
+module asm "\09li sp, 0x88000000"
+module asm "\09la t0, __bss_start"
+module asm "\09la t1, __bss_end"
+module asm ".Lzero_bss:"
+module asm "\09bgeu t0, t1, .Lcopy_data"
+module asm "\09sw zero, 0(t0)"
+module asm "\09addi t0, t0, 4"
+module asm "\09j .Lzero_bss"
+module asm ".Lcopy_data:"
+module asm "\09la t0, __data_start"
+module asm "\09la t1, __data_end"
+module asm "\09la t2, __data_load"
+module asm ".Lcopy_word:"
+module asm "\09bgeu t0, t1, .Lenter"
+module asm "\09lw t3, 0(t2)"
+module asm "\09sw t3, 0(t0)"
+module asm "\09addi t0, t0, 4"
+module asm "\09addi t2, t2, 4"
+module asm "\09j .Lcopy_word"
+module asm ".Lenter:"
+module asm "\09j app.main"
+
+@COUNT = global [4 x i8] zeroinitializer, align 4
+@uart.BASE = constant [4 x i8] c"\00\00\00\10", align 4
+@RX_READY = global [1 x i8] zeroinitializer, align 1
+@c_counter = external global [4 x i8], align 4
+@uart.regs.LAST = global [4 x i8] zeroinitializer, align 4
+
+; Function Attrs: nounwind null_pointer_is_valid
+define void @tick() #0 {
+bb0:
+  %0 = load i32, ptr @COUNT, align 4
+  %1 = call i32 @uart.regs.step()
+  %2 = add i32 %0, %1
+  store i32 %2, ptr @COUNT, align 4
+  ret void
+}
+
+; Function Attrs: nounwind null_pointer_is_valid
+declare i32 @c_checksum(i32) #0
+
+; Function Attrs: nounwind null_pointer_is_valid
+define i32 @uart.init() #0 {
+bb0:
+  %0 = load i32, ptr @c_counter, align 4
+  %1 = call i32 @c_checksum(i32 %0)
+  %2 = load i32, ptr @uart.BASE, align 4
+  %3 = add i32 %1, %2
+  ret i32 %3
+}
+
+; Function Attrs: nounwind null_pointer_is_valid
+define zeroext i1 @uart_rx_ready() #0 {
+bb0:
+  %0 = load i8, ptr @RX_READY, align 1
+  %1 = icmp ne i8 %0, 0
+  ret i1 %1
+}
+
+; Function Attrs: nounwind null_pointer_is_valid
+define i32 @uart.regs.step() #0 {
+bb0:
+  %0 = load i32, ptr @uart.regs.LAST, align 4
+  %1 = add i32 %0, 1
+  store i32 %1, ptr @uart.regs.LAST, align 4
+  %2 = load i32, ptr @uart.regs.LAST, align 4
+  ret i32 %2
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @app.main() #1 {
+bb0:
+  %0 = call i32 @uart.init()
+  call void @tick()
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @on_panic() #1 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+attributes #0 = { nounwind null_pointer_is_valid }
+attributes #1 = { noreturn nounwind null_pointer_is_valid }
