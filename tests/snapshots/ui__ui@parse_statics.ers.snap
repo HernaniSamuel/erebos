@@ -19,8 +19,13 @@ File {
                     kind: Array {
                         elem: Ty {
                             kind: Named(
-                                Ident {
-                                    name: "u8",
+                                Path {
+                                    segments: [
+                                        Ident {
+                                            name: "u8",
+                                            span: 168..170,
+                                        },
+                                    ],
                                     span: 168..170,
                                 },
                             ),
@@ -96,8 +101,13 @@ File {
                     kind: Array {
                         elem: Ty {
                             kind: Named(
-                                Ident {
-                                    name: "u8",
+                                Path {
+                                    segments: [
+                                        Ident {
+                                            name: "u8",
+                                            span: 215..217,
+                                        },
+                                    ],
                                     span: 215..217,
                                 },
                             ),
@@ -151,8 +161,13 @@ File {
                 },
                 ty: Ty {
                     kind: Named(
-                        Ident {
-                            name: "u32",
+                        Path {
+                            segments: [
+                                Ident {
+                                    name: "u32",
+                                    span: 260..263,
+                                },
+                            ],
                             span: 260..263,
                         },
                     ),

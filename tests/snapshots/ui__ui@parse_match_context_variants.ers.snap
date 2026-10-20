@@ -23,8 +23,13 @@ File {
                         },
                         ty: Ty {
                             kind: Named(
-                                Ident {
-                                    name: "Msg",
+                                Path {
+                                    segments: [
+                                        Ident {
+                                            name: "Msg",
+                                            span: 360..363,
+                                        },
+                                    ],
                                     span: 360..363,
                                 },
                             ),
@@ -35,8 +40,13 @@ File {
                 ret: Some(
                     Ty {
                         kind: Named(
-                            Ident {
-                                name: "u8",
+                            Path {
+                                segments: [
+                                    Ident {
+                                        name: "u8",
+                                        span: 368..370,
+                                    },
+                                ],
                                 span: 368..370,
                             },
                         ),
@@ -51,8 +61,13 @@ File {
                                 kind: Match {
                                     scrutinee: Expr {
                                         kind: Name(
-                                            Ident {
-                                                name: "m",
+                                            Path {
+                                                segments: [
+                                                    Ident {
+                                                        name: "m",
+                                                        span: 383..384,
+                                                    },
+                                                ],
                                                 span: 383..384,
                                             },
                                         ),
@@ -122,8 +137,13 @@ File {
                                                                     },
                                                                     ty: Ty {
                                                                         kind: Named(
-                                                                            Ident {
-                                                                                name: "u16",
+                                                                            Path {
+                                                                                segments: [
+                                                                                    Ident {
+                                                                                        name: "u16",
+                                                                                        span: 441..444,
+                                                                                    },
+                                                                                ],
                                                                                 span: 441..444,
                                                                             },
                                                                         ),
@@ -182,13 +202,18 @@ File {
                                         Arm {
                                             pattern: Pattern {
                                                 kind: PathArgs(
-                                                    Ident {
-                                                        name: "Msg",
-                                                        span: 490..493,
-                                                    },
-                                                    Ident {
-                                                        name: "Nested",
-                                                        span: 495..501,
+                                                    Path {
+                                                        segments: [
+                                                            Ident {
+                                                                name: "Msg",
+                                                                span: 490..493,
+                                                            },
+                                                            Ident {
+                                                                name: "Nested",
+                                                                span: 495..501,
+                                                            },
+                                                        ],
+                                                        span: 490..501,
                                                     },
                                                     [
                                                         Pattern {
@@ -201,13 +226,18 @@ File {
                                                                     [
                                                                         Pattern {
                                                                             kind: PathArgs(
-                                                                                Ident {
-                                                                                    name: "Inner",
-                                                                                    span: 506..511,
-                                                                                },
-                                                                                Ident {
-                                                                                    name: "A",
-                                                                                    span: 513..514,
+                                                                                Path {
+                                                                                    segments: [
+                                                                                        Ident {
+                                                                                            name: "Inner",
+                                                                                            span: 506..511,
+                                                                                        },
+                                                                                        Ident {
+                                                                                            name: "A",
+                                                                                            span: 513..514,
+                                                                                        },
+                                                                                    ],
+                                                                                    span: 506..514,
                                                                                 },
                                                                                 [
                                                                                     Pattern {
@@ -313,14 +343,19 @@ File {
                                                             span: 570..578,
                                                         },
                                                         Pattern {
-                                                            kind: Path(
-                                                                Ident {
-                                                                    name: "Msg",
-                                                                    span: 581..584,
-                                                                },
-                                                                Ident {
-                                                                    name: "Nop",
-                                                                    span: 586..589,
+                                                            kind: Name(
+                                                                Path {
+                                                                    segments: [
+                                                                        Ident {
+                                                                            name: "Msg",
+                                                                            span: 581..584,
+                                                                        },
+                                                                        Ident {
+                                                                            name: "Nop",
+                                                                            span: 586..589,
+                                                                        },
+                                                                    ],
+                                                                    span: 581..589,
                                                                 },
                                                             ),
                                                             span: 581..589,

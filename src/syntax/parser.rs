@@ -5,8 +5,8 @@ use crate::diag::{Diagnostic, Diagnostics};
 use crate::span::Span;
 use crate::syntax::ast::{
     Arm, Attr, BinOp, Block, ComptimeDecl, ConstDecl, EnumDecl, Expr, ExprKind, FieldDecl,
-    FieldInit, File, FnDecl, FnKind, Ident, Item, Let, LogicalOp, Param, Pattern, PatternKind,
-    StaticDecl, Stmt, StructDecl, Ty, TyKind, UnOp, VariantDecl,
+    FieldInit, File, FnDecl, FnKind, Ident, Item, Let, LogicalOp, Param, Path, Pattern,
+    PatternKind, StaticDecl, Stmt, StructDecl, Ty, TyKind, UnOp, VariantDecl,
 };
 use crate::syntax::lexer;
 use crate::syntax::token::{Token, TokenKind};
@@ -493,6 +493,20 @@ impl Parser<'_> {
         })
     }
 
+    /// The path of an expression or a pattern: a name, or `Enum::Variant`
+    /// (ADR 0035).
+    fn path(&mut self) -> PResult<Path> {
+        let first = self.ident()?;
+        if self.eat(TokenKind::ColonColon).is_none() {
+            return Ok(Path::single(first));
+        }
+        let variant = self.ident()?;
+        Ok(Path {
+            span: first.span.to(variant.span),
+            segments: vec![first, variant],
+        })
+    }
+
     fn ty(&mut self) -> PResult<Ty> {
         let token = self.peek();
         let kind = match token.kind {
@@ -509,18 +523,18 @@ impl Parser<'_> {
                 });
             }
             TokenKind::Ident => {
-                let name = self.ident()?;
+                let path = Path::single(self.ident()?);
                 // Type arguments, as `Option(u32)`; `Name()` parses, and is
                 // a count error (ADR 0045).
                 if self.eat(TokenKind::LParen).is_some() {
                     let args = self.comma_list(Self::ty)?;
                     let close = self.tokens[self.pos - 1].span;
                     return Ok(Ty {
-                        kind: TyKind::Applied(name, args),
+                        kind: TyKind::Applied(path, args),
                         span: token.span.to(close),
                     });
                 }
-                TyKind::Named(name)
+                TyKind::Named(path)
             }
             TokenKind::LBracket => {
                 self.bump();
@@ -940,38 +954,29 @@ impl Parser<'_> {
                 });
             }
             TokenKind::Ident => {
-                let name = self.ident()?;
-                if self.eat(TokenKind::ColonColon).is_some() {
-                    let variant = self.ident()?;
-                    // Arguments as a call's, whatever the path names
-                    // (ADR 0039).
-                    if self.eat(TokenKind::LParen).is_some() {
-                        let args = self.comma_list(Self::nested_expr)?;
-                        let end = self.tokens[self.pos - 1].span;
-                        return Ok(Expr {
-                            span: token.span.to(end),
-                            kind: ExprKind::PathCall(name, variant, args),
-                        });
-                    }
-                    return Ok(Expr {
-                        span: token.span.to(variant.span),
-                        kind: ExprKind::Path(name, variant),
-                    });
-                }
+                let path = self.path()?;
+                // Arguments as a call's, whatever the path names
+                // (ADR 0039).
                 if self.eat(TokenKind::LParen).is_some() {
                     let args = self.comma_list(Self::nested_expr)?;
                     let end = self.tokens[self.pos - 1].span;
                     // `Option(u32)::None` is no path: an error at the `::`
                     // shows the variant as `.None` (ADR 0045).
-                    if is_builtin_enum(&name.name) {
+                    if let Some(name) = path.as_single()
+                        && is_builtin_enum(&name.name)
+                    {
                         self.after_builtin_call = Some((self.pos, name.name.clone()));
                     }
                     return Ok(Expr {
                         span: token.span.to(end),
-                        kind: ExprKind::Call(name, args),
+                        kind: ExprKind::Call(path, args),
                     });
                 }
-                if !self.no_struct && self.eat(TokenKind::LBrace).is_some() {
+                // `Enum::Variant` is no struct.
+                if path.as_single().is_some()
+                    && !self.no_struct
+                    && self.eat(TokenKind::LBrace).is_some()
+                {
                     let fields = self.brace_list(|p| {
                         let name = p.ident()?;
                         p.expect(TokenKind::Colon)?;
@@ -981,10 +986,13 @@ impl Parser<'_> {
                     let end = self.tokens[self.pos - 1].span;
                     return Ok(Expr {
                         span: token.span.to(end),
-                        kind: ExprKind::StructLit(name, fields),
+                        kind: ExprKind::StructLit(path, fields),
                     });
                 }
-                ExprKind::Name(name)
+                return Ok(Expr {
+                    span: path.span,
+                    kind: ExprKind::Name(path),
+                });
             }
             // A variant named by the expected type, its arguments parsed
             // as a call's (ADR 0044). After an expression, `.` is a field
@@ -1223,27 +1231,20 @@ impl Parser<'_> {
             TokenKind::Byte => PatternKind::Byte(lexer::byte_value(text).ok()),
             TokenKind::True | TokenKind::False => PatternKind::Bool(token.kind == TokenKind::True),
             TokenKind::Ident => {
-                let name = self.ident()?;
-                if self.eat(TokenKind::ColonColon).is_some() {
-                    let variant = self.ident()?;
-                    // `Enum::Variant()` parses, and is a count error
-                    // (ADR 0040).
-                    if self.eat(TokenKind::LParen).is_some() {
-                        let patterns = self.comma_list(Self::pattern)?;
-                        let end = self.tokens[self.pos - 1].span;
-                        return Ok(Pattern {
-                            span: name.span.to(end),
-                            kind: PatternKind::PathArgs(name, variant, patterns),
-                        });
-                    }
+                let path = self.path()?;
+                // `Enum::Variant()` parses, and is a count error
+                // (ADR 0040); a bare name takes no patterns.
+                if path.as_single().is_none() && self.eat(TokenKind::LParen).is_some() {
+                    let patterns = self.comma_list(Self::pattern)?;
+                    let end = self.tokens[self.pos - 1].span;
                     return Ok(Pattern {
-                        span: name.span.to(variant.span),
-                        kind: PatternKind::Path(name, variant),
+                        span: path.span.to(end),
+                        kind: PatternKind::PathArgs(path, patterns),
                     });
                 }
                 return Ok(Pattern {
-                    span: name.span,
-                    kind: PatternKind::Name(name),
+                    span: path.span,
+                    kind: PatternKind::Name(path),
                 });
             }
             TokenKind::Minus => {

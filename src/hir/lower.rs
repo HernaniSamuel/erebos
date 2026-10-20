@@ -152,7 +152,11 @@ pub fn lower(
             enum_ids.entry(name.clone()).or_insert(EnumId(i as u32));
         }
         let int = match &decl.ty.kind {
-            ast::TyKind::Named(ty) if let Some(int) = IntTy::from_name(&ty.name) => int,
+            ast::TyKind::Named(path)
+                if let Some(int) = path.as_single().and_then(|ty| IntTy::from_name(&ty.name)) =>
+            {
+                int
+            }
             _ => {
                 diags.push(
                     Diagnostic::error(
@@ -331,6 +335,15 @@ fn item_name(item: &ast::Item) -> Option<&ast::Ident> {
         ast::Item::Const(decl) => Some(&decl.name),
         ast::Item::Static(decl) => Some(&decl.name),
         ast::Item::Comptime(_) => None,
+    }
+}
+
+/// The name a path is, where it is not `Enum::Variant`: the parser makes
+/// paths of one name, but for variants, of two.
+fn one_name(path: &ast::Path) -> &ast::Ident {
+    match path.as_single() {
+        Some(name) => name,
+        None => unreachable!("a path of several names is `Enum::Variant`"),
     }
 }
 
@@ -1214,39 +1227,46 @@ impl Lowerer<'_> {
                     elem => Ty::array_of(elem, len),
                 }
             }
-            ast::TyKind::Applied(name, args) => self.applied_ty(ty, name, args),
-            ast::TyKind::Named(name) if name.name == "bool" => Ty::Bool,
-            ast::TyKind::Named(name) if let Some(builtin) = BuiltinEnum::from_name(&name.name) => {
-                self.diags.push(
-                    Diagnostic::error(
-                        "resolve::type-argument-count",
-                        format!(
-                            "`{}` takes {}, written in parentheses",
-                            name.name,
-                            type_arguments(builtin.arity())
-                        ),
-                    )
-                    .label(name.span, "written without them")
-                    .help(format!(
-                        "write the types it holds, as in `{}` (ADR 0045)",
-                        builtin.written()
-                    )),
-                );
+            ast::TyKind::Applied(path, args) => self.applied_ty(ty, one_name(path), args),
+            ast::TyKind::Named(path) => self.named_ty(one_name(path)),
+        }
+    }
+
+    /// A type written by name, without type arguments.
+    fn named_ty(&mut self, name: &ast::Ident) -> Ty {
+        if name.name == "bool" {
+            return Ty::Bool;
+        }
+        if let Some(builtin) = BuiltinEnum::from_name(&name.name) {
+            self.diags.push(
+                Diagnostic::error(
+                    "resolve::type-argument-count",
+                    format!(
+                        "`{}` takes {}, written in parentheses",
+                        name.name,
+                        type_arguments(builtin.arity())
+                    ),
+                )
+                .label(name.span, "written without them")
+                .help(format!(
+                    "write the types it holds, as in `{}` (ADR 0045)",
+                    builtin.written()
+                )),
+            );
+            return Ty::Error;
+        }
+        match IntTy::from_name(&name.name) {
+            Some(int) => Ty::Int(int),
+            None if self.struct_ids.contains_key(&name.name) => {
+                Ty::Struct(self.struct_tys[self.struct_ids[&name.name].0 as usize])
+            }
+            None if let Some(&id) = self.enum_ids.get(&name.name) => {
+                Ty::Enum(self.enum_tys[id.0 as usize])
+            }
+            None => {
+                self.unknown_type(name);
                 Ty::Error
             }
-            ast::TyKind::Named(name) => match IntTy::from_name(&name.name) {
-                Some(int) => Ty::Int(int),
-                None if self.struct_ids.contains_key(&name.name) => {
-                    Ty::Struct(self.struct_tys[self.struct_ids[&name.name].0 as usize])
-                }
-                None if let Some(&id) = self.enum_ids.get(&name.name) => {
-                    Ty::Enum(self.enum_tys[id.0 as usize])
-                }
-                None => {
-                    self.unknown_type(name);
-                    Ty::Error
-                }
-            },
         }
     }
 
@@ -1484,20 +1504,25 @@ impl Lowerer<'_> {
                 let value = self.boxed(value);
                 ExprKind::Repeat(value, self.array_len(len))
             }
-            ast::ExprKind::Name(name) => match self.resolve(name) {
-                Some(kind) => kind,
-                // Reported; any placeholder works since lowering errors stop
-                // the pipeline.
-                None => ExprKind::Unit,
-            },
-            ast::ExprKind::Path(enum_name, variant) => match self.variant(enum_name, variant) {
-                Some((id, index)) => ExprKind::Variant(id, index, None),
-                // Reported; lowering errors stop the pipeline.
-                None => ExprKind::Unit,
+            ast::ExprKind::Name(path) => match path.segments.as_slice() {
+                [name] => match self.resolve(name) {
+                    Some(kind) => kind,
+                    // Reported; any placeholder works since lowering errors
+                    // stop the pipeline.
+                    None => ExprKind::Unit,
+                },
+                [enum_name, variant] => match self.variant(enum_name, variant) {
+                    Some((id, index)) => ExprKind::Variant(id, index, None),
+                    // Reported; lowering errors stop the pipeline.
+                    None => ExprKind::Unit,
+                },
+                _ => unreachable!("a path is a name or `Enum::Variant`"),
             },
             // The values of a variant's payload (ADR 0039); type checking
             // counts them.
-            ast::ExprKind::PathCall(enum_name, variant, args) => {
+            ast::ExprKind::Call(path, args)
+                if let [enum_name, variant] = path.segments.as_slice() =>
+            {
                 let found = self.variant(enum_name, variant);
                 let args = args.iter().map(|arg| self.expr(arg)).collect();
                 match found {
@@ -1514,7 +1539,7 @@ impl Lowerer<'_> {
                 args.as_ref()
                     .map(|args| args.iter().map(|arg| self.expr(arg)).collect()),
             ),
-            ast::ExprKind::Call(name, args) if name.name == "assert" => {
+            ast::ExprKind::Call(path, args) if one_name(path).name == "assert" => {
                 let mut args: Vec<Expr> = args.iter().map(|arg| self.expr(arg)).collect();
                 if !matches!(args.len(), 1 | 2) {
                     let given = if args.len() == 1 { "was" } else { "were" };
@@ -1541,7 +1566,10 @@ impl Lowerer<'_> {
                 ExprKind::Assert(Box::new(args.remove(0)), message)
             }
             // Built in, whatever else has the name (ADR 0031).
-            ast::ExprKind::Call(name, args) if matches!(name.name.as_str(), "len" | "slice") => {
+            ast::ExprKind::Call(path, args)
+                if matches!(one_name(path).name.as_str(), "len" | "slice") =>
+            {
+                let name = one_name(path);
                 let mut args: Vec<Expr> = args.iter().map(|arg| self.expr(arg)).collect();
                 let (params, help) = if name.name == "len" {
                     (1, "`len(s)` gives the length of one slice (ADR 0031)")
@@ -1575,8 +1603,8 @@ impl Lowerer<'_> {
                     None => ExprKind::Len(first),
                 }
             }
-            ast::ExprKind::Call(name, args) => {
-                let callee = self.resolve_fn(name);
+            ast::ExprKind::Call(path, args) => {
+                let callee = self.resolve_fn(one_name(path));
                 let args = args.iter().map(|arg| self.expr(arg)).collect();
                 match callee {
                     Some(callee) => ExprKind::Call { callee, args },
@@ -1586,7 +1614,7 @@ impl Lowerer<'_> {
             }
             ast::ExprKind::Unary(op, operand) => ExprKind::Unary(*op, self.boxed(operand)),
             ast::ExprKind::Deref(operand) => ExprKind::Deref(self.boxed(operand)),
-            ast::ExprKind::StructLit(name, fields) => self.struct_lit(expr, name, fields),
+            ast::ExprKind::StructLit(path, fields) => self.struct_lit(expr, one_name(path), fields),
             ast::ExprKind::Field(base, field) => {
                 ExprKind::Field(self.boxed(base), field.name.clone(), field.span)
             }
@@ -1813,18 +1841,24 @@ impl Lowerer<'_> {
             },
             ast::PatternKind::Byte(value) => PatternKind::Byte(value.unwrap_or(0)),
             ast::PatternKind::Bool(value) => PatternKind::Bool(*value),
-            ast::PatternKind::Name(name) => match self.pattern_const(name) {
-                Some(id) => PatternKind::Const(id),
-                // Reported; lowering errors stop the pipeline.
-                None => PatternKind::Wildcard,
+            ast::PatternKind::Name(path) => match path.segments.as_slice() {
+                [name] => match self.pattern_const(name) {
+                    Some(id) => PatternKind::Const(id),
+                    // Reported; lowering errors stop the pipeline.
+                    None => PatternKind::Wildcard,
+                },
+                // Resolved as in an expression (ADR 0037).
+                [enum_name, variant] => match self.variant(enum_name, variant) {
+                    Some((id, index)) => PatternKind::Variant(id, index, None),
+                    // Reported; lowering errors stop the pipeline.
+                    None => PatternKind::Wildcard,
+                },
+                _ => unreachable!("a path is a name or `Enum::Variant`"),
             },
-            // Resolved as in an expression (ADR 0037).
-            ast::PatternKind::Path(enum_name, variant) => match self.variant(enum_name, variant) {
-                Some((id, index)) => PatternKind::Variant(id, index, None),
-                // Reported; lowering errors stop the pipeline.
-                None => PatternKind::Wildcard,
-            },
-            ast::PatternKind::PathArgs(enum_name, variant, patterns) => {
+            ast::PatternKind::PathArgs(path, patterns) => {
+                let [enum_name, variant] = path.segments.as_slice() else {
+                    unreachable!("only `Enum::Variant` takes patterns")
+                };
                 let found = self.variant(enum_name, variant);
                 let patterns = patterns
                     .iter()

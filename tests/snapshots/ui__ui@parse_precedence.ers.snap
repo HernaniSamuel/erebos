@@ -24,8 +24,13 @@ File {
                                     kind: Assign(
                                         Expr {
                                             kind: Name(
-                                                Ident {
-                                                    name: "x",
+                                                Path {
+                                                    segments: [
+                                                        Ident {
+                                                            name: "x",
+                                                            span: 26..27,
+                                                        },
+                                                    ],
                                                     span: 26..27,
                                                 },
                                             ),
@@ -47,8 +52,13 @@ File {
                                                                                 Neg,
                                                                                 Expr {
                                                                                     kind: Name(
-                                                                                        Ident {
-                                                                                            name: "a",
+                                                                                        Path {
+                                                                                            segments: [
+                                                                                                Ident {
+                                                                                                    name: "a",
+                                                                                                    span: 31..32,
+                                                                                                },
+                                                                                            ],
                                                                                             span: 31..32,
                                                                                         },
                                                                                     ),
@@ -59,8 +69,13 @@ File {
                                                                         },
                                                                         Ty {
                                                                             kind: Named(
-                                                                                Ident {
-                                                                                    name: "u8",
+                                                                                Path {
+                                                                                    segments: [
+                                                                                        Ident {
+                                                                                            name: "u8",
+                                                                                            span: 36..38,
+                                                                                        },
+                                                                                    ],
                                                                                     span: 36..38,
                                                                                 },
                                                                             ),
@@ -74,8 +89,13 @@ File {
                                                                         Mul,
                                                                         Expr {
                                                                             kind: Name(
-                                                                                Ident {
-                                                                                    name: "b",
+                                                                                Path {
+                                                                                    segments: [
+                                                                                        Ident {
+                                                                                            name: "b",
+                                                                                            span: 41..42,
+                                                                                        },
+                                                                                    ],
                                                                                     span: 41..42,
                                                                                 },
                                                                             ),
@@ -83,8 +103,13 @@ File {
                                                                         },
                                                                         Expr {
                                                                             kind: Name(
-                                                                                Ident {
-                                                                                    name: "c",
+                                                                                Path {
+                                                                                    segments: [
+                                                                                        Ident {
+                                                                                            name: "c",
+                                                                                            span: 45..46,
+                                                                                        },
+                                                                                    ],
                                                                                     span: 45..46,
                                                                                 },
                                                                             ),
@@ -109,8 +134,13 @@ File {
                                                 },
                                                 Expr {
                                                     kind: Name(
-                                                        Ident {
-                                                            name: "d",
+                                                        Path {
+                                                            segments: [
+                                                                Ident {
+                                                                    name: "d",
+                                                                    span: 54..55,
+                                                                },
+                                                            ],
                                                             span: 54..55,
                                                         },
                                                     ),

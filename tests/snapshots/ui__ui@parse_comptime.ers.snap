@@ -15,8 +15,13 @@ File {
                 },
                 ty: Ty {
                     kind: Named(
-                        Ident {
-                            name: "usize",
+                        Path {
+                            segments: [
+                                Ident {
+                                    name: "usize",
+                                    span: 110..115,
+                                },
+                            ],
                             span: 110..115,
                         },
                     ),
@@ -55,8 +60,13 @@ File {
                         Expr {
                             expr: Expr {
                                 kind: Call(
-                                    Ident {
-                                        name: "assert",
+                                    Path {
+                                        segments: [
+                                            Ident {
+                                                name: "assert",
+                                                span: 144..150,
+                                            },
+                                        ],
                                         span: 144..150,
                                     },
                                     [
@@ -65,8 +75,13 @@ File {
                                                 Gt,
                                                 Expr {
                                                     kind: Name(
-                                                        Ident {
-                                                            name: "SIZE",
+                                                        Path {
+                                                            segments: [
+                                                                Ident {
+                                                                    name: "SIZE",
+                                                                    span: 151..155,
+                                                                },
+                                                            ],
                                                             span: 151..155,
                                                         },
                                                     ),
@@ -115,8 +130,13 @@ File {
                         },
                         ty: Ty {
                             kind: Named(
-                                Ident {
-                                    name: "u32",
+                                Path {
+                                    segments: [
+                                        Ident {
+                                            name: "u32",
+                                            span: 173..176,
+                                        },
+                                    ],
                                     span: 173..176,
                                 },
                             ),
@@ -127,8 +147,13 @@ File {
                 ret: Some(
                     Ty {
                         kind: Named(
-                            Ident {
-                                name: "u32",
+                            Path {
+                                segments: [
+                                    Ident {
+                                        name: "u32",
+                                        span: 181..184,
+                                    },
+                                ],
                                 span: 181..184,
                             },
                         ),
@@ -147,8 +172,13 @@ File {
                                     },
                                     ty: Ty {
                                         kind: Named(
-                                            Ident {
-                                                name: "u32",
+                                            Path {
+                                                segments: [
+                                                    Ident {
+                                                        name: "u32",
+                                                        span: 198..201,
+                                                    },
+                                                ],
                                                 span: 198..201,
                                             },
                                         ),
@@ -161,8 +191,13 @@ File {
                                                     Add,
                                                     Expr {
                                                         kind: Call(
-                                                            Ident {
-                                                                name: "g",
+                                                            Path {
+                                                                segments: [
+                                                                    Ident {
+                                                                        name: "g",
+                                                                        span: 213..214,
+                                                                    },
+                                                                ],
                                                                 span: 213..214,
                                                             },
                                                             [
@@ -204,8 +239,13 @@ File {
                                     },
                                     ty: Ty {
                                         kind: Named(
-                                            Ident {
-                                                name: "u32",
+                                            Path {
+                                                segments: [
+                                                    Ident {
+                                                        name: "u32",
+                                                        span: 234..237,
+                                                    },
+                                                ],
                                                 span: 234..237,
                                             },
                                         ),
@@ -218,8 +258,13 @@ File {
                                                 kind: Comptime(
                                                     Expr {
                                                         kind: Call(
-                                                            Ident {
-                                                                name: "g",
+                                                            Path {
+                                                                segments: [
+                                                                    Ident {
+                                                                        name: "g",
+                                                                        span: 250..251,
+                                                                    },
+                                                                ],
                                                                 span: 250..251,
                                                             },
                                                             [
@@ -240,8 +285,13 @@ File {
                                             },
                                             Expr {
                                                 kind: Name(
-                                                    Ident {
-                                                        name: "y",
+                                                    Path {
+                                                        segments: [
+                                                            Ident {
+                                                                name: "y",
+                                                                span: 258..259,
+                                                            },
+                                                        ],
                                                         span: 258..259,
                                                     },
                                                 ),
@@ -260,8 +310,13 @@ File {
                                     Add,
                                     Expr {
                                         kind: Name(
-                                            Ident {
-                                                name: "a",
+                                            Path {
+                                                segments: [
+                                                    Ident {
+                                                        name: "a",
+                                                        span: 265..266,
+                                                    },
+                                                ],
                                                 span: 265..266,
                                             },
                                         ),
@@ -269,8 +324,13 @@ File {
                                     },
                                     Expr {
                                         kind: Name(
-                                            Ident {
-                                                name: "b",
+                                            Path {
+                                                segments: [
+                                                    Ident {
+                                                        name: "b",
+                                                        span: 269..270,
+                                                    },
+                                                ],
                                                 span: 269..270,
                                             },
                                         ),

@@ -29,8 +29,13 @@ File {
                                     kind: Slice(
                                         Ty {
                                             kind: Named(
-                                                Ident {
-                                                    name: "u8",
+                                                Path {
+                                                    segments: [
+                                                        Ident {
+                                                            name: "u8",
+                                                            span: 104..106,
+                                                        },
+                                                    ],
                                                     span: 104..106,
                                                 },
                                             ),
@@ -59,8 +64,13 @@ File {
                                             kind: Array {
                                                 elem: Ty {
                                                     kind: Named(
-                                                        Ident {
-                                                            name: "u16",
+                                                        Path {
+                                                            segments: [
+                                                                Ident {
+                                                                    name: "u16",
+                                                                    span: 128..131,
+                                                                },
+                                                            ],
                                                             span: 128..131,
                                                         },
                                                     ),
@@ -100,8 +110,13 @@ File {
                                                 kind: Slice(
                                                     Ty {
                                                         kind: Named(
-                                                            Ident {
-                                                                name: "u8",
+                                                            Path {
+                                                                segments: [
+                                                                    Ident {
+                                                                        name: "u8",
+                                                                        span: 155..157,
+                                                                    },
+                                                                ],
                                                                 span: 155..157,
                                                             },
                                                         ),

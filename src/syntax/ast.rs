@@ -135,6 +135,33 @@ pub struct Ident {
     pub span: Span,
 }
 
+/// Names separated by `::`, wherever an item is named: `x`, `Config`,
+/// `Mode::Run` (ADR 0049). What it names is resolved later.
+#[derive(Debug)]
+pub struct Path {
+    /// At least one.
+    pub segments: Vec<Ident>,
+    pub span: Span,
+}
+
+impl Path {
+    /// A path of one name.
+    pub fn single(name: Ident) -> Path {
+        Path {
+            span: name.span,
+            segments: vec![name],
+        }
+    }
+
+    /// The name, if the path is one name, as `x` or `u32`.
+    pub fn as_single(&self) -> Option<&Ident> {
+        match self.segments.as_slice() {
+            [name] => Some(name),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Ty {
     pub kind: TyKind,
@@ -147,11 +174,11 @@ pub enum TyKind {
     Never,
     /// `()`
     Unit,
-    /// A type written by name, such as `u32`.
-    Named(Ident),
-    /// A name followed by type arguments in parentheses, such as
+    /// A type written by its path, such as `u32`.
+    Named(Path),
+    /// A path followed by type arguments in parentheses, such as
     /// `Option(u32)` or `Result(u32, E)` (ADR 0045); none for `Name()`.
-    Applied(Ident, Vec<Ty>),
+    Applied(Path, Vec<Ty>),
     /// `*const T`, `*mut T`, optionally `volatile` (ADR 0013).
     Ptr {
         mutable: bool,
@@ -216,21 +243,19 @@ pub enum ExprKind {
     Array(Vec<Expr>),
     /// `[value; N]`, where `N` is computed at compile time (ADR 0029).
     Repeat(Box<Expr>, Box<Expr>),
-    /// A name, such as a local variable.
-    Name(Ident),
+    /// A path used as a value: a local variable, a constant, a static, or
     /// `Enum::Variant` (ADR 0035).
-    Path(Ident, Ident),
-    /// A path followed by arguments, `Enum::Variant(args)` (ADR 0039):
-    /// what the path names is resolved later.
-    PathCall(Ident, Ident, Vec<Expr>),
+    Name(Path),
     /// `.Variant` or `.Variant(args)`, a variant of the enum that is the
     /// expected type (ADR 0044); the arguments if written with
     /// parentheses.
     ContextVariant(Ident, Option<Vec<Expr>>),
-    /// `name(args)`: a call to a function.
-    Call(Ident, Vec<Expr>),
+    /// A path followed by arguments: `name(args)`, a call to a function, or
+    /// `Enum::Variant(args)` (ADR 0039). What the path names is resolved
+    /// later.
+    Call(Path, Vec<Expr>),
     /// `Name { field: value, ... }`, fields in the order written.
-    StructLit(Ident, Vec<FieldInit>),
+    StructLit(Path, Vec<FieldInit>),
     /// `base.field`
     Field(Box<Expr>, Ident),
     /// `size_of(T)` (ADR 0022)
@@ -321,13 +346,12 @@ pub enum PatternKind {
     Byte(Option<u8>),
     /// `true` or `false`
     Bool(bool),
-    /// A bare name, which is always a constant.
-    Name(Ident),
-    /// `Enum::Variant` (ADR 0035, 0037).
-    Path(Ident, Ident),
+    /// A path: a bare name, which is always a constant, or `Enum::Variant`
+    /// (ADR 0035, 0037).
+    Name(Path),
     /// A path followed by patterns, `Enum::Variant(p, ...)`, one per
     /// payload value (ADR 0040); none for `Enum::Variant()`.
-    PathArgs(Ident, Ident, Vec<Pattern>),
+    PathArgs(Path, Vec<Pattern>),
     /// `.Variant` or `.Variant(p, ...)`, a variant of the enum that is the
     /// type of its position (ADR 0044); the patterns if written with
     /// parentheses.

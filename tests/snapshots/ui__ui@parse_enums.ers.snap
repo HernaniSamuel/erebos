@@ -15,8 +15,13 @@ File {
                 },
                 ty: Ty {
                     kind: Named(
-                        Ident {
-                            name: "u8",
+                        Path {
+                            segments: [
+                                Ident {
+                                    name: "u8",
+                                    span: 230..232,
+                                },
+                            ],
                             span: 230..232,
                         },
                     ),
@@ -65,22 +70,32 @@ File {
                                 Expr {
                                     kind: Cast(
                                         Expr {
-                                            kind: Path(
-                                                Ident {
-                                                    name: "Mode",
-                                                    span: 272..276,
-                                                },
-                                                Ident {
-                                                    name: "Idle",
-                                                    span: 278..282,
+                                            kind: Name(
+                                                Path {
+                                                    segments: [
+                                                        Ident {
+                                                            name: "Mode",
+                                                            span: 272..276,
+                                                        },
+                                                        Ident {
+                                                            name: "Idle",
+                                                            span: 278..282,
+                                                        },
+                                                    ],
+                                                    span: 272..282,
                                                 },
                                             ),
                                             span: 272..282,
                                         },
                                         Ty {
                                             kind: Named(
-                                                Ident {
-                                                    name: "u8",
+                                                Path {
+                                                    segments: [
+                                                        Ident {
+                                                            name: "u8",
+                                                            span: 286..288,
+                                                        },
+                                                    ],
                                                     span: 286..288,
                                                 },
                                             ),
@@ -123,8 +138,13 @@ File {
                 },
                 ty: Ty {
                     kind: Named(
-                        Ident {
-                            name: "i8",
+                        Path {
+                            segments: [
+                                Ident {
+                                    name: "i8",
+                                    span: 319..321,
+                                },
+                            ],
                             span: 319..321,
                         },
                     ),
@@ -183,8 +203,13 @@ File {
                 ret: Some(
                     Ty {
                         kind: Named(
-                            Ident {
-                                name: "bool",
+                            Path {
+                                segments: [
+                                    Ident {
+                                        name: "bool",
+                                        span: 356..360,
+                                    },
+                                ],
                                 span: 356..360,
                             },
                         ),
@@ -199,27 +224,37 @@ File {
                                 kind: Binary(
                                     Eq,
                                     Expr {
-                                        kind: Path(
-                                            Ident {
-                                                name: "Mode",
-                                                span: 367..371,
-                                            },
-                                            Ident {
-                                                name: "Run",
-                                                span: 373..376,
+                                        kind: Name(
+                                            Path {
+                                                segments: [
+                                                    Ident {
+                                                        name: "Mode",
+                                                        span: 367..371,
+                                                    },
+                                                    Ident {
+                                                        name: "Run",
+                                                        span: 373..376,
+                                                    },
+                                                ],
+                                                span: 367..376,
                                             },
                                         ),
                                         span: 367..376,
                                     },
                                     Expr {
-                                        kind: Path(
-                                            Ident {
-                                                name: "Mode",
-                                                span: 380..384,
-                                            },
-                                            Ident {
-                                                name: "Off",
-                                                span: 386..389,
+                                        kind: Name(
+                                            Path {
+                                                segments: [
+                                                    Ident {
+                                                        name: "Mode",
+                                                        span: 380..384,
+                                                    },
+                                                    Ident {
+                                                        name: "Off",
+                                                        span: 386..389,
+                                                    },
+                                                ],
+                                                span: 380..389,
                                             },
                                         ),
                                         span: 380..389,
