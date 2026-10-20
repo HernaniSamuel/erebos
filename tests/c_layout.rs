@@ -23,8 +23,14 @@ use erebos::driver::{self, OptLevel, Stage};
 fn struct_layouts_match_c() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/layout");
     let source = fs::read_to_string(dir.join("structs.ers")).unwrap();
-    let dump = driver::dump("structs.ers", &source, Stage::Typeck, OptLevel::None, false)
-        .unwrap_or_else(|diags| panic!("structs.ers does not compile:\n{diags}"));
+    let dump = driver::dump(
+        &dir.join("structs.ers"),
+        &source,
+        Stage::Typeck,
+        OptLevel::None,
+        false,
+    )
+    .unwrap_or_else(|diags| panic!("structs.ers does not compile:\n{diags}"));
 
     let mut checks = String::from("#include <stddef.h>\n#include \"structs.h\"\n\n");
     let mut structs = 0;

@@ -1,0 +1,7 @@
+// The file of module `a`, beside the root file.
+pub mod b;
+
+pub const START: u32 = b::FACTOR + 1;
+pub static mut COUNT: u32 = 0;
+
+pub fn unit() -> crate::c::d::Unit { crate::c::d::Unit {} }

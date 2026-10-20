@@ -1,0 +1,87 @@
+---
+source: tests/ui.rs
+assertion_line: 29
+expression: output
+input_file: tests/ui/resolve_module_file_errors/main.ers
+---
+--- errors ---
+resolve::module-file
+
+  × cannot find `missing.ers`, the file of module `missing`
+    ╭─[main.ers:10:1]
+  9 │ // the root file, has its labels in the two files (ADR 0050).
+ 10 │ mod missing;
+    · ──────┬─────
+    ·       ╰── declared here
+ 11 │ mod net;
+    ╰────
+  help: `mod name;` reads `name.ers` from the directory of the module declaring it, which is the
+        root file's directory for the root module and the directory named after the module for any
+        other; there is no `mod.ers` (ADR 0049)
+resolve::module-file
+
+  × cannot find `net.ers`, the file of module `net`
+    ╭─[main.ers:11:1]
+ 10 │ mod missing;
+ 11 │ mod net;
+    · ────┬───
+    ·     ╰── declared here
+ 12 │ mod uart;
+    ╰────
+  help: `mod name;` reads `name.ers` from the directory of the module declaring it, which is the
+        root file's directory for the root module and the directory named after the module for any
+        other; there is no `mod.ers` (ADR 0049)
+resolve::module-file
+
+  × cannot find `uart.ers`, the file of module `uart`
+    ╭─[main.ers:12:1]
+ 11 │ mod net;
+ 12 │ mod uart;
+    · ────┬────
+    ·     ╰── declared here
+ 13 │ mod main;
+    ╰────
+  help: `Uart.ers` differs from `uart.ers` only in case: the names of files and directories must
+        match the names of modules exactly, also where the file system ignores case (ADR 0049)
+resolve::module-file
+
+  × the file of module `main` is the root file, `main.ers`
+    ╭─[main.ers:13:1]
+ 12 │ mod uart;
+ 13 │ mod main;
+    · ────┬────
+    ·     ╰── declared here
+ 14 │ 
+    ╰────
+  help: the root module cannot be its own child: give the module another name (ADR 0049)
+resolve::module-file
+
+  × cannot find `timer/regs.ers`, the file of module `timer::regs`
+    ╭─[main.ers:16:5]
+ 15 │ mod timer {
+ 16 │     mod regs;
+    ·     ────┬────
+    ·         ╰── declared here
+ 17 │ }
+    ╰────
+  help: `Timer` differs from `timer` only in case: the names of files and directories must match
+        the names of modules exactly, also where the file system ignores case (ADR 0049)
+resolve::private-item
+
+  × `drivers::secret` is private
+    ╭─[main.ers:22:14]
+ 21 │ entry fn start() -> ! {
+ 22 │     drivers::secret();
+    ·              ───┬──
+    ·                 ╰── not visible here
+ 23 │     loop {}
+    ╰────
+   ╭─[drivers.ers:2:4]
+ 1 │ // The file of module `drivers`; `secret` is private to it.
+ 2 │ fn secret() {}
+   ·    ───┬──
+   ·       ╰── declared here without `pub`
+ 3 │ 
+   ╰────
+  help: a private item of module `drivers` is visible only there and in the modules inside it;
+        declare it `pub` to use it elsewhere (ADR 0050)

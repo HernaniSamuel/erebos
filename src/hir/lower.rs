@@ -1468,23 +1468,12 @@ impl Lowerer<'_> {
         (def, bodies)
     }
 
-    /// A `mod`: it takes no attributes. One without a body names a file,
-    /// which is not read yet (ADR 0049).
+    /// A `mod`: it takes no attributes. The driver has put the items of a
+    /// module file in its body; one still without a body is a file the
+    /// driver could not read and has reported (`resolve::module-file`,
+    /// ADR 0049), and is an empty module here.
     fn mod_decl(&mut self, decl: &ast::ModDecl) {
         self.no_attrs(&decl.attrs, "a module");
-        if decl.items.is_none() {
-            let name = &decl.name.name;
-            self.diags.push(
-                Diagnostic::error(
-                    "resolve::module-file",
-                    format!("the file of module `{name}` cannot be read"),
-                )
-                .label(decl.span, "declared without a body")
-                .help(format!(
-                    "modules in files of their own are not read yet; write the module's items in it, as in `mod {name} {{ ... }}` (ADR 0049)"
-                )),
-            );
-        }
     }
 
     /// A `comptime { ... }` item, as a body returning `()`.

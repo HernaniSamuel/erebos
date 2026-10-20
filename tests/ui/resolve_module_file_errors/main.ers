@@ -1,0 +1,26 @@
+// The file of a module declared without a body that cannot be read is
+// `resolve::module-file`, at the declaration, naming the path tried from
+// the root file's directory (ADR 0049): a file that does not exist; the
+// file of `mod net;`, which is `net.ers`, not `net/mod.ers`; a file and a
+// directory whose names differ from the module's only in case (`Uart.ers`,
+// `Timer/regs.ers`), on every file system; and `mod main;`, whose file
+// would be the root file itself. The modules are then empty, and the other
+// errors are still reported: a private item of a file module, used from
+// the root file, has its labels in the two files (ADR 0050).
+mod missing;
+mod net;
+mod uart;
+mod main;
+
+mod timer {
+    mod regs;
+}
+
+mod drivers;
+
+entry fn start() -> ! {
+    drivers::secret();
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

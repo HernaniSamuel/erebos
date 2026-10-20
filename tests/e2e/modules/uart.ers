@@ -1,0 +1,24 @@
+// The UART of QEMU `virt`, and the number of lines written to it.
+const THR: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+
+pub static mut LINES: u32 = 0;
+
+pub fn print(s: *const [u8]) {
+    let mut i: usize = 0;
+    while i < len(s) {
+        *THR = (*s)[i];
+        i += 1;
+    }
+}
+
+pub fn print_u32(n: u32) {
+    if n >= 10 {
+        print_u32(n / 10);
+    }
+    *THR = b'0' + (n % 10) as u8;
+}
+
+pub fn newline() {
+    print(&raw const b"\n");
+    LINES += 1;
+}

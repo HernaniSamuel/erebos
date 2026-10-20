@@ -6,6 +6,8 @@
 //! sizes are chosen so that the M2.4b compiler would take more than 2^30
 //! steps on them, while the fixed one takes milliseconds.
 
+use std::path::Path;
+
 use erebos::driver::{self, OptLevel, Stage};
 
 /// A pattern as source text, and the number of patterns it writes, as
@@ -127,7 +129,13 @@ fn ors(k: usize, last: &[&str], arms: &[Pat]) -> Program {
 /// The rendered diagnostics of `text` compiled up to `stage`; the program
 /// must fail.
 fn errors(text: &str, stage: Stage) -> String {
-    match driver::dump("match_cost.ers", text, stage, OptLevel::None, false) {
+    match driver::dump(
+        Path::new("match_cost.ers"),
+        text,
+        stage,
+        OptLevel::None,
+        false,
+    ) {
         Ok(dump) => panic!("expected diagnostics, got:\n{dump}"),
         Err(diags) => diags,
     }
@@ -159,7 +167,7 @@ fn underlined(diags: &str, line: usize) -> bool {
 /// the patterns of its `match` and v those variants (ADR 0042).
 fn assert_linear(program: &Program, variants: usize) {
     let dump = match driver::dump(
-        "match_cost.ers",
+        Path::new("match_cost.ers"),
         &program.text,
         Stage::Mir,
         OptLevel::None,
@@ -267,7 +275,7 @@ fn ors_with_a_last_bool_is_exhaustive() {
     ];
     let text = ors(32, &["bool"], &arms).text;
     if let Err(diags) = driver::dump(
-        "match_cost.ers",
+        Path::new("match_cost.ers"),
         &text,
         Stage::Typeck,
         OptLevel::None,

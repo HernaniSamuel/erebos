@@ -1,0 +1,2 @@
+// Not read: `mod net;` in `main.ers` reads `net.ers` (ADR 0049).
+pub fn send() {}

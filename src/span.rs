@@ -43,12 +43,6 @@ impl fmt::Debug for Span {
     }
 }
 
-impl From<Span> for miette::SourceSpan {
-    fn from(span: Span) -> Self {
-        (span.lo as usize, (span.hi - span.lo) as usize).into()
-    }
-}
-
 pub struct SourceFile {
     pub name: String,
     pub text: String,
@@ -71,6 +65,11 @@ impl SourceMap {
 
     pub fn file(&self, id: FileId) -> &SourceFile {
         &self.files[id.0 as usize]
+    }
+
+    /// The files, in the order of their ids.
+    pub fn files(&self) -> impl Iterator<Item = &SourceFile> {
+        self.files.iter()
     }
 
     pub fn snippet(&self, span: Span) -> &str {

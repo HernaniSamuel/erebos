@@ -59,7 +59,10 @@ cargo test
   diagnostics. Snapshot changes must be reviewed, not blindly accepted.
   Each `tests/ui/*.ers` file is compiled up to the stage named in its header
   (`// emit: <stage>`); with `// opt: both` it is also compiled with `-O`,
-  and both results go in the snapshot. Review new snapshots with
+  and both results go in the snapshot. A directory `tests/ui/<name>/`
+  with a `main.ers` is a program of several files: `main.ers` is its root
+  file, with the headers, and its module files sit beside it and below
+  (ADR 0049); it is snapshotted as `<name>`. Review new snapshots with
   `cargo insta review`.
 - **End-to-end tests** (`tests/e2e/*.ers`) compile an Erebos program and boot
   it on QEMU. They need `qemu-system-riscv32` on `PATH` (or `EREBOS_QEMU`).
@@ -70,7 +73,9 @@ cargo test
   `// link-c: file.c` (repeatable) compiles a C file next to the program
   with clang for the target, at the matching optimization level, and links
   it in; the program declares its functions with `extern fn` and its
-  globals with `extern static`. `// c-flags: <flags>` (repeatable) passes
+  globals with `extern static`. A directory `tests/e2e/<name>/` with a
+  `main.ers` is a program of several files, its headers in `main.ers` and
+  its `link-c` files beside it. `// c-flags: <flags>` (repeatable) passes
   extra flags to clang for those C files, such as
   `-msmall-data-limit=8` or `-g`.
   Every program runs both unoptimized and with `-O`: the optimizer exploits

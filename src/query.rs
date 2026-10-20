@@ -309,7 +309,7 @@ impl<'h> Queries<'h> {
             let Some(span) = *span else {
                 continue;
             };
-            if seen.first().is_some_and(|first| first.file != span.file) || seen.contains(&span) {
+            if seen.contains(&span) {
                 continue;
             }
             seen.push(span);

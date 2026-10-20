@@ -1,0 +1,47 @@
+---
+source: tests/ui.rs
+assertion_line: 29
+expression: output
+input_file: tests/ui/resolve_file_modules/main.ers
+---
+--- typeck ---
+struct c::d::Unit {} size 0, align 1
+fn a::b::scale(x: u32) -> u32
+    expr 0 binary * 125..163: u32
+    expr 1 local x 125..126: u32
+    expr 2 call 129..163: u32
+    expr 3 const a::b::FACTOR 156..162: u32
+fn a::unit() -> c::d::Unit
+    expr 4 struct c::d::Unit 168..188: c::d::Unit
+fn c::d::double(x: u32) -> u32
+    expr 5 binary + 152..208: u32
+    expr 6 binary - 152..204: u32
+    expr 7 binary + 152..179: u32
+    expr 8 binary + 152..157: u32
+    expr 9 local x 152..153: u32
+    expr 10 local x 156..157: u32
+    expr 11 const a::b::FACTOR 160..179: u32
+    expr 12 const a::START 182..204: u32
+    expr 13 int 1 207..208: u32
+fn c::twice(x: u32) -> u32
+    expr 14 call 509..521: u32
+    expr 15 local x 519..520: u32
+entry fn main() -> !
+    let unit: c::d::Unit
+    expr 16 assign 554..596: ()
+    expr 17 static a::COUNT 554..562: u32
+    expr 18 call 565..596: u32
+    expr 19 call 577..595: u32
+    expr 20 const a::START 586..594: u32
+    expr 21 call 625..634: c::d::Unit
+    expr 22 loop 640..647: !
+panic fn on_panic() -> !
+    expr 23 loop 678..685: !
+comptime fn a::b::FACTOR() -> u32
+    expr 24 int 4 91..92: u32
+comptime fn a::START() -> u32
+    expr 25 binary + 84..97: u32
+    expr 26 const a::b::FACTOR 84..93: u32
+    expr 27 int 1 96..97: u32
+comptime fn a::COUNT() -> u32
+    expr 28 int 0 127..128: u32

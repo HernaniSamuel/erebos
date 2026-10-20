@@ -1,0 +1,14 @@
+// emit: mir
+// A compile-time failure points at its place, at the calls on the way and
+// at what was being evaluated, in whichever files they are (ADR 0027,
+// 0049): a division by zero in `m.ers`, in a function called by a
+// constant of `main.ers`. A cycle of constants through both files points
+// at each of them (ADR 0028).
+mod m;
+
+const X: u32 = m::f(0);
+const A: u32 = m::B + 1;
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

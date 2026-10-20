@@ -1,0 +1,4 @@
+// The file of module `a::b`: `mod b;` in `a.ers` reads `a/b.ers`.
+pub const FACTOR: u32 = 4;
+
+pub fn scale(x: u32) -> u32 { x * super::super::c::d::double(FACTOR) }

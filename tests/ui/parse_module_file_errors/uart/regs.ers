@@ -1,0 +1,2 @@
+// The file of module `uart::regs`, with a syntax error.
+pub const BASE: usize = ;

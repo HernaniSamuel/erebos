@@ -1,0 +1,4 @@
+// The file of module `drivers`; `secret` is private to it.
+fn secret() {}
+
+pub fn open() {}

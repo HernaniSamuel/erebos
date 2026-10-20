@@ -262,24 +262,17 @@ impl Interp<'_, '_> {
     }
 
     /// Points at the failure, at every call on the way and at what was
-    /// being evaluated, as far as they are in one file: a diagnostic's
-    /// labels must be, and the evaluation's own file is the one to show.
+    /// being evaluated, in whichever files they are.
     fn diagnostic(&self, error: EvalError, origin: &Origin) -> Diagnostic {
-        let file = origin.span.file;
+        let mut diag =
+            Diagnostic::error(error.code, error.message).label(error.span, error.label.as_str());
         // Recursion calls from one place many times; one label is enough.
-        let mut seen = Vec::new();
-        let mut spans = std::iter::once((error.span, error.label.as_str()))
-            .chain(error.calls.iter().map(|span| (*span, "called here")))
-            .filter(|(span, _)| span.file == file)
-            .filter(|(span, _)| {
-                let new = !seen.contains(span);
+        let mut seen = vec![error.span];
+        for span in &error.calls {
+            if !seen.contains(span) {
                 seen.push(*span);
-                new
-            });
-        let (span, label) = spans.next().unwrap_or((origin.span, error.label.as_str()));
-        let mut diag = Diagnostic::error(error.code, error.message).label(span, label);
-        for (span, label) in spans {
-            diag = diag.label(span, label);
+                diag = diag.label(*span, "called here");
+            }
         }
         diag.label(origin.span, format!("while evaluating {}", origin.what))
             .help("this code runs at compile time (ADR 0027)")

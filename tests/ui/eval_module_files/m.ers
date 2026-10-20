@@ -1,0 +1,5 @@
+// A function that divides by zero when `main.ers` calls it at compile
+// time, and a constant in a cycle with one of `main.ers`.
+pub fn f(d: u32) -> u32 { 10 / d }
+
+pub const B: u32 = super::A * 2;

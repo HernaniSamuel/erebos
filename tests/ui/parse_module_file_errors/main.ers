@@ -1,0 +1,13 @@
+// emit: hir
+// The files of modules are read and parsed even when the root file has
+// syntax errors, and each error is reported in its own file, under that
+// file's name (ADR 0049): one in `main.ers`, one in `uart.ers` and one in
+// its child `uart/regs.ers`. Syntax errors stop the pipeline before
+// resolution, so the unknown name below is not reported.
+mod uart;
+
+fn broken() { let }
+
+entry fn main() -> ! { nope(); loop {} }
+
+panic fn on_panic() -> ! { loop {} }

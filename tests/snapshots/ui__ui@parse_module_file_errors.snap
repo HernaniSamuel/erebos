@@ -1,0 +1,35 @@
+---
+source: tests/ui.rs
+assertion_line: 29
+expression: output
+input_file: tests/ui/parse_module_file_errors/main.ers
+---
+--- errors ---
+parser::unexpected-token
+
+  × expected identifier, found `}`
+    ╭─[main.ers:9:19]
+  8 │ 
+  9 │ fn broken() { let }
+    ·                   ┬
+    ·                   ╰── expected identifier
+ 10 │ 
+    ╰────
+parser::unexpected-token
+
+  × expected an expression, found `}`
+   ╭─[uart.ers:4:27]
+ 3 │ 
+ 4 │ pub fn init() -> u8 { 1 + }
+   ·                           ┬
+   ·                           ╰── expected an expression
+   ╰────
+parser::unexpected-token
+
+  × expected an expression, found `;`
+   ╭─[uart/regs.ers:2:25]
+ 1 │ // The file of module `uart::regs`, with a syntax error.
+ 2 │ pub const BASE: usize = ;
+   ·                         ┬
+   ·                         ╰── expected an expression
+   ╰────

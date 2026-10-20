@@ -1,0 +1,3 @@
+// Not read: `mod uart;` reads `uart.ers`, and names must match exactly
+// (ADR 0049).
+pub fn putc() {}

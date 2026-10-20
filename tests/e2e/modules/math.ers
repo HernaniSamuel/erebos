@@ -1,0 +1,14 @@
+// Arithmetic over the table of the child module, in `math/table.ers`.
+pub mod table;
+
+pub const COUNT: usize = 4;
+
+pub fn sum() -> u32 {
+    let mut total: u32 = 0;
+    let mut i: usize = 0;
+    while i < COUNT {
+        total += table::SQUARES[i];
+        i += 1;
+    }
+    total
+}

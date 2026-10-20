@@ -1,0 +1,13 @@
+// A table computed at compile time, as long as a constant of the parent
+// module's file says.
+pub static SQUARES: [u32; super::COUNT] = squares();
+
+fn squares() -> [u32; super::COUNT] {
+    let mut out: [u32; super::COUNT] = [0; super::COUNT];
+    let mut i: usize = 0;
+    while i < super::COUNT {
+        out[i] = ((i + 1) * (i + 1)) as u32;
+        i += 1;
+    }
+    out
+}

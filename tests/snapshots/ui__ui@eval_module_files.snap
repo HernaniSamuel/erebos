@@ -1,0 +1,43 @@
+---
+source: tests/ui.rs
+assertion_line: 29
+expression: output
+input_file: tests/ui/eval_module_files/main.ers
+---
+--- errors ---
+eval::panic
+
+  × the evaluation called the panic function: division by zero
+   ╭─[m.ers:3:27]
+ 2 │ // time, and a constant in a cycle with one of `main.ers`.
+ 3 │ pub fn f(d: u32) -> u32 { 10 / d }
+   ·                           ───┬──
+   ·                              ╰── division by zero
+ 4 │ 
+   ╰────
+    ╭─[main.ers:9:7]
+  8 │ 
+  9 │ const X: u32 = m::f(0);
+    ·       ┬        ───┬───
+    ·       │           ╰── called here
+    ·       ╰── while evaluating the constant `X`
+ 10 │ const A: u32 = m::B + 1;
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+ty::cycle
+
+  × the constant `m::B` depends on its own value
+   ╭─[m.ers:5:11]
+ 4 │ 
+ 5 │ pub const B: u32 = super::A * 2;
+   ·           ┬
+   ·           ╰── needed while computing itself
+   ╰────
+    ╭─[main.ers:10:7]
+  9 │ const X: u32 = m::f(0);
+ 10 │ const A: u32 = m::B + 1;
+    ·       ┬
+    ·       ╰── through the constant `A`
+ 11 │ 
+    ╰────
+  help: break the cycle: a value cannot depend on itself (ADR 0028)

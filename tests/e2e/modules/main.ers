@@ -1,0 +1,46 @@
+// A program of several files (ADR 0049): `uart.ers` writes to the UART,
+// `math.ers` computes over the table of its child `math/table.ers`, and
+// each file calls the functions and reads the statics and constants of the
+// others by path.
+// expect-output: modules
+// expect-output: squares 1 4 9 16
+// expect-output: sum 30
+// expect-output: lines 3
+// expect-exit: 0
+
+mod uart;
+mod math;
+
+const FINISHER: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+
+entry fn main() -> ! {
+    uart::print(&raw const b"modules");
+    uart::newline();
+
+    uart::print(&raw const b"squares");
+    let mut i: usize = 0;
+    while i < math::COUNT {
+        uart::print(&raw const b" ");
+        uart::print_u32(math::table::SQUARES[i]);
+        i += 1;
+    }
+    uart::newline();
+
+    uart::print(&raw const b"sum ");
+    uart::print_u32(math::sum());
+    uart::newline();
+
+    // Read before the line below adds to it.
+    let lines: u32 = uart::LINES;
+    uart::print(&raw const b"lines ");
+    uart::print_u32(lines);
+    uart::newline();
+
+    *FINISHER = 0x5555;
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    *FINISHER = 1 << 16 | 0x3333;
+    loop {}
+}

@@ -1,0 +1,22 @@
+// emit: typeck
+// A module declared without a body is read from a file (ADR 0049):
+// `mod a;` in the root file from `a.ers` beside it, `mod b;` in `a.ers`
+// from `a/b.ers`, and `mod d;` in the inline module `c` of the root file
+// from `c/d.ers`. The items of each file use those of the others by path,
+// in any order, and the files are numbered depth first in the order their
+// `mod`s are met: `main.ers`, `a.ers`, `a/b.ers`, `c/d.ers`.
+mod a;
+
+mod c {
+    pub mod d;
+
+    pub fn twice(x: u32) -> u32 { d::double(x) }
+}
+
+entry fn main() -> ! {
+    a::COUNT = a::b::scale(c::twice(a::START));
+    let unit: c::d::Unit = a::unit();
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

@@ -10,8 +10,8 @@ use std::str::FromStr;
 pub use crate::codegen::OptLevel;
 use crate::diag::{self, Diagnostic, Diagnostics};
 use crate::query::Queries;
-use crate::span::{FileId, SourceMap};
-use crate::syntax::{lexer, parser};
+use crate::span::SourceMap;
+use crate::syntax::{ast, lexer, parser};
 use crate::{codegen, hir, link, mir, target, ty};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -74,21 +74,23 @@ impl fmt::Display for Stage {
 pub const RUNTIME_SOURCE: &str = include_str!("../rt/builtins.ers");
 const RUNTIME_NAME: &str = "rt/builtins.ers";
 
-/// Runs the pipeline on one file up to `stage`. Dumps show the program
+/// Runs the pipeline up to `stage` on the program whose root file is at
+/// `path` and holds `text`: the text is compiled, and the path gives the
+/// root file its name and locates the module files. Dumps show the program
 /// alone, without the runtime support functions. On failure, returns the
 /// rendered diagnostics.
 pub fn dump(
-    name: &str,
+    path: &Path,
     text: &str,
     stage: Stage,
     opt: OptLevel,
     color: bool,
 ) -> Result<String, String> {
     let mut sources = SourceMap::default();
-    let file = sources.add(name, text);
     let mut diags = Diagnostics::default();
 
-    let output = match front_end(&sources, file, None, Some(stage), &mut diags) {
+    let program = Program::at(path, text);
+    let output = match front_end(&program, false, Some(stage), &mut sources, &mut diags) {
         FrontEnd::Dump(dump) => Some(dump),
         FrontEnd::Mir(mir) => codegen::emit_llvm_ir(&mir, &target::RISCV32_VIRT, opt)
             .map_err(|e| diags.push(Diagnostic::error("codegen::llvm", e)))
@@ -101,9 +103,9 @@ pub fn dump(
     }
 }
 
-/// Compiles `input` into an ELF executable at `output`, linked with the
-/// object files `link` (ADR 0026). On failure, returns the rendered
-/// diagnostics or error message.
+/// Compiles the program whose root file is `input` into an ELF executable
+/// at `output`, linked with the object files `link` (ADR 0026). On
+/// failure, returns the rendered diagnostics or error message.
 pub fn build(
     input: &Path,
     output: &Path,
@@ -114,11 +116,10 @@ pub fn build(
     let text = fs::read_to_string(input)
         .map_err(|e| format!("error: cannot read `{}`: {e}", input.display()))?;
     let mut sources = SourceMap::default();
-    let file = sources.add(input.display().to_string(), text);
     let mut diags = Diagnostics::default();
 
-    let runtime = sources.add(RUNTIME_NAME, RUNTIME_SOURCE);
-    let mir = match front_end(&sources, file, Some(runtime), None, &mut diags) {
+    let program = Program::at(input, &text);
+    let mir = match front_end(&program, true, None, &mut sources, &mut diags) {
         FrontEnd::Mir(mir) if !diags.has_errors() => mir,
         _ => return Err(diag::render(&diags.into_vec(), &sources, color)),
     };
@@ -138,6 +139,219 @@ pub fn build(
     result.map_err(|e| format!("error: {e}"))
 }
 
+/// A program to compile: its root file's name and text, and where the
+/// files of its modules are read from.
+struct Program<'a> {
+    /// The name sources and diagnostics give the root file. Every file of
+    /// a program is named by its path from the root file's directory
+    /// (ADR 0049), so the root file is named by its file name.
+    name: String,
+    text: &'a str,
+    loader: Loader,
+}
+
+impl<'a> Program<'a> {
+    /// The program whose root file is at `path` and holds `text`.
+    fn at(path: &Path, text: &'a str) -> Self {
+        let name = path.file_name().map_or_else(
+            || path.display().to_string(),
+            |name| name.to_string_lossy().into_owned(),
+        );
+        let dir = match path.parent() {
+            Some(dir) if !dir.as_os_str().is_empty() => dir.to_path_buf(),
+            _ => PathBuf::from("."),
+        };
+        Program {
+            name,
+            text,
+            loader: Loader::Dir(dir),
+        }
+    }
+}
+
+/// Where the files of a program's modules are read from. Paths are
+/// relative to the root file's directory, with `/` between names
+/// (ADR 0049); `""` is that directory.
+enum Loader {
+    /// The file system, below this directory.
+    Dir(PathBuf),
+    /// Files held in memory, each by its path, with its text or the error
+    /// reading it gives.
+    #[cfg(test)]
+    Memory(Vec<(&'static str, Result<&'static str, &'static str>)>),
+}
+
+impl Loader {
+    /// The text of the file at `path`.
+    fn read(&self, path: &str) -> Result<String, String> {
+        match self {
+            Loader::Dir(dir) => fs::read_to_string(dir.join(path)).map_err(|e| e.to_string()),
+            #[cfg(test)]
+            Loader::Memory(files) => files.iter().find(|(name, _)| *name == path).map_or_else(
+                || Err("not found".to_owned()),
+                |(_, text)| text.map(str::to_owned).map_err(str::to_owned),
+            ),
+        }
+    }
+
+    /// The names of the files and directories in the directory at `dir`,
+    /// or why it cannot be listed.
+    fn entries(&self, dir: &str) -> Result<Vec<String>, String> {
+        match self {
+            Loader::Dir(root) => fs::read_dir(root.join(dir))
+                .and_then(|entries| {
+                    entries
+                        .map(|entry| Ok(entry?.file_name().to_string_lossy().into_owned()))
+                        .collect()
+                })
+                .map_err(|e| e.to_string()),
+            // A directory's own path given with an error stands for a
+            // directory that cannot be listed.
+            #[cfg(test)]
+            Loader::Memory(files) => {
+                if let Some((_, Err(e))) = files.iter().find(|(path, _)| *path == dir) {
+                    return Err((*e).to_owned());
+                }
+                let prefix = if dir.is_empty() {
+                    String::new()
+                } else {
+                    format!("{dir}/")
+                };
+                Ok(files
+                    .iter()
+                    .filter_map(|(path, _)| path.strip_prefix(prefix.as_str()))
+                    .filter_map(|rest| rest.split('/').next())
+                    .map(str::to_owned)
+                    .collect())
+            }
+        }
+    }
+}
+
+/// Reads the file of every `mod name;` among `items`, and in the modules
+/// they hold, and puts its items in the module's body, then does the same
+/// in that file (ADR 0049). `dir` is the directory of the module holding
+/// `items`, and `module` its path, both `""` for the root module. Files are
+/// added to `sources` in the order their `mod` declarations are met, depth
+/// first. Syntax errors go to `diags`; a file that cannot be read is
+/// `resolve::module-file`, in `file_errors`, and its module stays without
+/// a body.
+fn load_modules(
+    items: &mut [ast::Item],
+    dir: &str,
+    module: &str,
+    program: &Program,
+    sources: &mut SourceMap,
+    diags: &mut Diagnostics,
+    file_errors: &mut Diagnostics,
+) {
+    for item in items {
+        let ast::Item::Mod(decl) = item else {
+            continue;
+        };
+        let name = &decl.name.name;
+        let path = join(module, "::", name);
+        let child_dir = join(dir, "/", name);
+        let mut items = match decl.items.take() {
+            Some(items) => items,
+            None => {
+                let file_path = join(dir, "/", &format!("{name}.ers"));
+                let text = match read_module_file(&file_path, &path, program) {
+                    Ok(text) => text,
+                    Err(error) => {
+                        file_errors.push(error.label(decl.span, "declared here"));
+                        continue;
+                    }
+                };
+                let file = sources.add(file_path, text);
+                let text = &sources.file(file).text;
+                let tokens = lexer::lex(file, text, diags);
+                parser::parse(text, &tokens, diags).items
+            }
+        };
+        load_modules(
+            &mut items,
+            &child_dir,
+            &path,
+            program,
+            sources,
+            diags,
+            file_errors,
+        );
+        decl.items = Some(items);
+    }
+}
+
+/// `a` and `b` joined by `sep`, or `b` alone if `a` is empty.
+fn join(a: &str, sep: &str, b: &str) -> String {
+    if a.is_empty() {
+        b.to_owned()
+    } else {
+        format!("{a}{sep}{b}")
+    }
+}
+
+/// The text of `file`, the file of module `module`, or the
+/// `resolve::module-file` error, still to be labelled. Every name on the
+/// path must be in its directory's listing as written: one found there
+/// only when case is ignored is an error on every file system, so that a
+/// program reads the same files, or fails the same way, everywhere
+/// (ADR 0049).
+fn read_module_file(file: &str, module: &str, program: &Program) -> Result<String, Diagnostic> {
+    let cannot_find = || {
+        Diagnostic::error(
+            "resolve::module-file",
+            format!("cannot find `{file}`, the file of module `{module}`"),
+        )
+    };
+    if file == program.name {
+        return Err(Diagnostic::error(
+            "resolve::module-file",
+            format!("the file of module `{module}` is the root file, `{file}`"),
+        )
+        .help("the root module cannot be its own child: give the module another name (ADR 0049)"));
+    }
+
+    let cannot_read = |reason: String| {
+        Diagnostic::error(
+            "resolve::module-file",
+            format!("cannot read `{file}`, the file of module `{module}`: {reason}"),
+        )
+    };
+
+    // Each directory listed is the root file's or one found in the listing
+    // before, so failing to list it is not a missing file.
+    let mut dir = String::new();
+    for name in file.split('/') {
+        let entries = program.loader.entries(&dir).map_err(|e| {
+            let what = if dir.is_empty() {
+                "the root file's directory".to_owned()
+            } else {
+                format!("`{dir}`")
+            };
+            cannot_read(format!("cannot list {what}: {e}"))
+        })?;
+        let at = join(&dir, "/", name);
+        if !entries.iter().any(|entry| entry == name) {
+            let other = entries
+                .iter()
+                .find(|entry| entry.to_lowercase() == name.to_lowercase());
+            return Err(match other {
+                Some(other) => cannot_find().help(format!(
+                    "`{}` differs from `{at}` only in case: the names of files and directories must match the names of modules exactly, also where the file system ignores case (ADR 0049)",
+                    join(&dir, "/", other)
+                )),
+                None => cannot_find().help(
+                    "`mod name;` reads `name.ers` from the directory of the module declaring it, which is the root file's directory for the root module and the directory named after the module for any other; there is no `mod.ers` (ADR 0049)",
+                ),
+            });
+        }
+        dir = at;
+    }
+
+    program.loader.read(file).map_err(cannot_read)
+}
+
 enum FrontEnd {
     /// Stopped at the requested stage.
     Dump(String),
@@ -148,18 +362,20 @@ enum FrontEnd {
 }
 
 /// Runs everything up to MIR, stopping early at `stop` if it is a front-end
-/// stage.
+/// stage. The `tokens` and `ast` stages show the root file alone: the
+/// files of its modules are read after it is parsed, and the runtime
+/// support functions (with `runtime`) after them (ADR 0049).
 fn front_end(
-    sources: &SourceMap,
-    file: FileId,
-    runtime: Option<FileId>,
+    program: &Program,
+    runtime: bool,
     stop: Option<Stage>,
+    sources: &mut SourceMap,
     diags: &mut Diagnostics,
 ) -> FrontEnd {
-    let text = &sources.file(file).text;
+    let file = sources.add(&program.name, program.text);
 
     // Syntax phases keep going after errors to report as much as possible.
-    let tokens = lexer::lex(file, text, diags);
+    let tokens = lexer::lex(file, program.text, diags);
     if stop == Some(Stage::Tokens) {
         let dump = tokens
             .iter()
@@ -168,19 +384,34 @@ fn front_end(
         return FrontEnd::Dump(dump);
     }
 
-    let ast = parser::parse(text, &tokens, diags);
+    let mut ast = parser::parse(program.text, &tokens, diags);
     if stop == Some(Stage::Ast) {
         return FrontEnd::Dump(format!("{ast:#?}\n"));
     }
 
-    let runtime_ast = runtime.map(|rt| {
-        let text = &sources.file(rt).text;
-        let tokens = lexer::lex(rt, text, diags);
-        parser::parse(text, &tokens, diags)
+    let mut file_errors = Diagnostics::default();
+    load_modules(
+        &mut ast.items,
+        "",
+        "",
+        program,
+        sources,
+        diags,
+        &mut file_errors,
+    );
+
+    let runtime_ast = runtime.then(|| {
+        let rt = sources.add(RUNTIME_NAME, RUNTIME_SOURCE);
+        let tokens = lexer::lex(rt, RUNTIME_SOURCE, diags);
+        parser::parse(RUNTIME_SOURCE, &tokens, diags)
     });
 
-    // Semantic phases need a well-formed input.
-    if diags.has_errors() {
+    // Semantic phases need a well-formed input. A module whose file could
+    // not be read is resolved as empty, and its error reported with the
+    // resolver's.
+    let syntax_errors = diags.has_errors();
+    diags.append(file_errors);
+    if syntax_errors {
         return FrontEnd::Failed;
     }
 
@@ -217,4 +448,94 @@ fn front_end(
         return FrontEnd::Dump(mir.to_string());
     }
     FrontEnd::Mir(mir)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The program of root file `main.ers`, holding `text`, whose module
+    /// files are `files`.
+    fn program(
+        text: &'static str,
+        files: Vec<(&'static str, Result<&'static str, &'static str>)>,
+    ) -> Program<'static> {
+        Program {
+            name: "main.ers".to_owned(),
+            text,
+            loader: Loader::Memory(files),
+        }
+    }
+
+    /// The names of the files `program` reads, in the order of their ids,
+    /// and the codes it reports up to the HIR.
+    fn load(program: &Program) -> (Vec<String>, Vec<&'static str>) {
+        let mut sources = SourceMap::default();
+        let mut diags = Diagnostics::default();
+        front_end(program, false, Some(Stage::Hir), &mut sources, &mut diags);
+        let names = sources.files().map(|file| file.name.clone()).collect();
+        let codes = diags.into_vec().iter().map(|d| d.code).collect();
+        (names, codes)
+    }
+
+    /// Files are numbered depth first, in the order their `mod`s are met,
+    /// whatever the order of the loader's files (ADR 0049).
+    #[test]
+    fn module_files_are_numbered_depth_first() {
+        let program = program(
+            "mod a; mod c { mod d; } mod e;",
+            vec![
+                ("e.ers", Ok("")),
+                ("c/d.ers", Ok("")),
+                ("a/b.ers", Ok("")),
+                ("a.ers", Ok("mod b;")),
+            ],
+        );
+        let (names, codes) = load(&program);
+        assert_eq!(names, ["main.ers", "a.ers", "a/b.ers", "c/d.ers", "e.ers"]);
+        assert_eq!(codes, ["resolve::missing-entry", "resolve::missing-panic"]);
+    }
+
+    /// A file that is listed but cannot be read is `resolve::module-file`,
+    /// with the reason, and the other files are still read.
+    #[test]
+    fn unreadable_module_file() {
+        let program = program(
+            "mod a; mod b;",
+            vec![
+                ("a.ers", Err("stream did not contain valid UTF-8")),
+                ("b.ers", Ok("")),
+            ],
+        );
+        let mut sources = SourceMap::default();
+        let mut diags = Diagnostics::default();
+        front_end(&program, false, Some(Stage::Hir), &mut sources, &mut diags);
+        let diags = diags.into_vec();
+        assert_eq!(diags[0].code, "resolve::module-file");
+        assert_eq!(
+            diags[0].message,
+            "cannot read `a.ers`, the file of module `a`: stream did not contain valid UTF-8"
+        );
+        assert_eq!(sources.files().count(), 2);
+    }
+
+    /// A directory on the path that is there but cannot be listed is
+    /// `resolve::module-file` with the reason, not a missing file.
+    #[test]
+    fn unlistable_module_directory() {
+        let program = program(
+            "mod a { mod b; }",
+            vec![("a", Err("access denied")), ("a/b.ers", Ok(""))],
+        );
+        let mut sources = SourceMap::default();
+        let mut diags = Diagnostics::default();
+        front_end(&program, false, Some(Stage::Hir), &mut sources, &mut diags);
+        let diags = diags.into_vec();
+        assert_eq!(diags[0].code, "resolve::module-file");
+        assert_eq!(
+            diags[0].message,
+            "cannot read `a/b.ers`, the file of module `a::b`: cannot list `a`: access denied"
+        );
+        assert_eq!(diags[0].help, None);
+    }
 }

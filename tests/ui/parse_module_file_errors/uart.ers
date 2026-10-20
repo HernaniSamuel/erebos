@@ -1,0 +1,4 @@
+// The file of module `uart`, with a syntax error.
+pub mod regs;
+
+pub fn init() -> u8 { 1 + }

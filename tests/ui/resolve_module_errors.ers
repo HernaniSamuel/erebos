@@ -7,7 +7,7 @@
 // type, a value, a function or a struct is expected is
 // `resolve::misused-module`, and `super` in the root module
 // `resolve::super-at-root` (ADR 0049). A module's items and modules share
-// one namespace. A module without a body names a file, not read yet.
+// one namespace. A module whose file is missing is `resolve::module-file`.
 const LIMIT: u32 = 10;
 struct Point { x: u8 }
 mod file;

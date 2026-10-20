@@ -219,7 +219,13 @@ fn compiler_never_panics() {
     for i in 0..iterations {
         let input = mutate(&mut rng, &sources);
         let result = panic::catch_unwind(AssertUnwindSafe(|| {
-            driver::dump("fuzz.ers", &input, Stage::LlvmIr, OptLevel::None, false)
+            driver::dump(
+                Path::new("fuzz.ers"),
+                &input,
+                Stage::LlvmIr,
+                OptLevel::None,
+                false,
+            )
         }));
         if let Err(payload) = result {
             let message = payload

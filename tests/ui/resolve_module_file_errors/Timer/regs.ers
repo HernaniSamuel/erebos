@@ -1,0 +1,3 @@
+// Not read: `mod regs;` in the inline module `timer` reads
+// `timer/regs.ers`, and names must match exactly (ADR 0049).
+pub const CONTROL: u32 = 0;

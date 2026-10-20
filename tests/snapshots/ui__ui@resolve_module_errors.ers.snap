@@ -7,16 +7,17 @@ input_file: tests/ui/resolve_module_errors.ers
 --- errors ---
 resolve::module-file
 
-  × the file of module `file` cannot be read
+  × cannot find `file.ers`, the file of module `file`
     ╭─[resolve_module_errors.ers:13:1]
  12 │ struct Point { x: u8 }
  13 │ mod file;
     · ────┬────
-    ·     ╰── declared without a body
+    ·     ╰── declared here
  14 │ 
     ╰────
-  help: modules in files of their own are not read yet; write the module's items in it, as in `mod
-        file { ... }` (ADR 0049)
+  help: `mod name;` reads `name.ers` from the directory of the module declaring it, which is the
+        root file's directory for the root module and the directory named after the module for any
+        other; there is no `mod.ers` (ADR 0049)
 resolve::unknown-name
 
   × cannot find `LIMIT` in this scope

@@ -1,12 +1,14 @@
 //! End-to-end tests: every `tests/e2e/*.ers` is compiled to an ELF and booted
-//! on QEMU `virt` (ADR 0010).
+//! on QEMU `virt` (ADR 0010). So is every `tests/e2e/*/main.ers`, the root
+//! file of a program of several files (ADR 0049), which holds the headers;
+//! that program is named after its directory.
 //!
 //! A program states what it should do in header comments:
 //!
 //! ```text
 //! // expect-output: hi        (one line of UART output; may repeat)
 //! // expect-exit: 0           (exit code written to the test finisher)
-//! // link-c: helpers.c        (a C file, next to the program, compiled
+//! // link-c: helpers.c        (a C file, next to the root file, compiled
 //! //                           with clang and linked in; may repeat)
 //! // c-flags: -O1 -DX         (extra clang flags for those C files)
 //! ```
@@ -44,7 +46,13 @@ fn e2e() {
     let mut programs: Vec<PathBuf> = fs::read_dir(&dir)
         .unwrap()
         .map(|entry| entry.unwrap().path())
-        .filter(|path| path.extension().is_some_and(|ext| ext == "ers"))
+        .filter_map(|path| {
+            if path.is_dir() {
+                Some(path.join("main.ers")).filter(|main| main.is_file())
+            } else {
+                Some(path).filter(|path| path.extension().is_some_and(|ext| ext == "ers"))
+            }
+        })
         .collect();
     programs.sort();
     assert!(!programs.is_empty(), "no programs in {}", dir.display());
@@ -92,7 +100,13 @@ fn expectation(source: &str) -> Expectation {
 }
 
 fn run(program: &Path, opt: OptLevel) -> Result<(), String> {
-    let stem = program.file_stem().unwrap().to_string_lossy();
+    // A program of several files is named after its directory.
+    let named = if program.file_name().unwrap() == "main.ers" {
+        program.parent().unwrap().file_name().unwrap()
+    } else {
+        program.file_stem().unwrap()
+    };
+    let stem = named.to_string_lossy();
     let name = match opt {
         OptLevel::None => stem.to_string(),
         OptLevel::Speed => format!("{stem} (-O)"),

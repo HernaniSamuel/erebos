@@ -34,7 +34,9 @@ pub struct ModDecl {
     pub attrs: Vec<Attr>,
     pub vis: Visibility,
     pub name: Ident,
-    /// The items between the braces; `None` for `mod name;`.
+    /// The items between the braces. The parser gives `None` for `mod
+    /// name;`, and the driver replaces it with the items of the module's
+    /// file, when it can read it.
     pub items: Option<Vec<Item>>,
     pub span: Span,
 }
