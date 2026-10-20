@@ -130,6 +130,21 @@ ADRs:
     The SVD of a real riscv32 chip (ESP32-C3, GD32VF103 or CH32V) tests
     the design. Also whether `svd2erebos` is a separate tool or a file
     read at compile time, which bears on reproducible builds.
+  - A second target, so that riscv32 assumptions are found before they
+    spread: ARM Cortex-M on QEMU (`mps2-an385` or `lm3s6965evb`) is
+    32-bit like riscv32, so `usize` keeps its width, and is where most
+    microcontrollers are. Today the target is fixed in several places:
+    `POINTER_BITS` and `WIDEST_ACCESS_BITS` are constants
+    (`src/target.rs`), the ABI is riscv32's alone (`src/codegen/abi.rs`,
+    ADR 0025), and `_start`, the linker script and LLVM's initialization
+    are written for RISC-V (ADR 0012, 0030); the 64-bit division of
+    `core` exists because RV32 lacks it (ADR 0020). M3 generates the
+    linker script from `memory` blocks, a per-board matter, so it
+    decides whether the second target comes with M3 or right after,
+    and makes those places a per-target description either way. A
+    64-bit target, such as x86-64 bare metal, would also make the
+    pointer width a parameter of layout, types and the compile-time
+    interpreter; it is not planned (ADR 0002, 0010).
 - **M4:**
   - A concurrency model spanning M4 and M5, in an ADR written before M4
     starts, so that M4 decides nothing M5 must break. M4 may share a
