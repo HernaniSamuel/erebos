@@ -2717,10 +2717,20 @@ impl Checker<'_, '_> {
         }
     }
 
+    /// Checks `expr`, written where a place is needed and found not to be
+    /// one, with no type expected. A `.V` is not checked: with no type
+    /// expected it would also be `ty::untyped-variant`, and that it is no
+    /// place is enough.
+    fn check_not_a_place(&mut self, f: &Fn, expr: &Expr) {
+        if !matches!(expr.kind, ExprKind::ContextVariant(..)) {
+            self.check(f, expr, None);
+        }
+    }
+
     /// Checks that `place` can be assigned to and returns its type.
     fn place(&mut self, f: &Fn, place: &Expr) -> Ty {
         let Some(info) = self.place_info(f, place) else {
-            self.check(f, place, None);
+            self.check_not_a_place(f, place);
             self.q.diags.push(
                 Diagnostic::error("ty::not-assignable", "cannot assign to this expression")
                     .label(place.span, "not a variable, `*pointer` or `a[index]`"),
@@ -2807,7 +2817,7 @@ impl Checker<'_, '_> {
             .label(place.span, "a value, not a place")
             .help("take the address of a variable, `*pointer` or `a[index]`; to point at a value, store it in a `let` first");
         let Some(info) = self.place_info(f, place) else {
-            self.check(f, place, None);
+            self.check_not_a_place(f, place);
             self.q.diags.push(not_a_place);
             return Ty::Error;
         };

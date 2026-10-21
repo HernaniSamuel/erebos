@@ -8,7 +8,8 @@
 // where the operator does not apply to the enum, the operator's error.
 // The enum must have the variant, and the values must be as many as its
 // payload has, each of its type. A `.V` in error reports nothing about its
-// values, and one whose expected type is erroneous reports nothing.
+// values, and one whose expected type is erroneous reports nothing. It is
+// not a place to assign to.
 enum Mode: u8 { Off = 0, Run = 3 }
 enum Power: u8 { Off = 0, Low = 1 }
 enum Msg: u8 { Nop = 0, Set(Mode) = 1, Write(u8, u16) = 2 }
@@ -32,6 +33,12 @@ fn not_enums(m: Mode) {
     let b: u8 = values[.Run];
     if .Run {}
     let c: bool = .Run < m;
+}
+
+// A `.V` is a value, not a place.
+fn not_a_place(m: Mode) {
+    .Run = m;
+    let p: *const Mode = &raw const .Run;
 }
 
 fn unknown() {
