@@ -1,6 +1,5 @@
 ---
 source: tests/ui.rs
-assertion_line: 40
 expression: output
 input_file: tests/ui/resolve_modules.ers
 ---
@@ -34,7 +33,7 @@ fn uart::init(c: uart::Config) -> ()
     expr 13 int 1 1135..1136: u32
     expr 14 assign 1146..1161: ()
     expr 15 static uart::LAST 1146..1150: Option(uart::Mode)
-    expr 16 variant .Some 1153..1161: Option(uart::Mode)
+    expr 16 variant .Some (Option(uart::Mode)::Some) 1153..1161: Option(uart::Mode)
     expr 17 local m 1159..1160: uart::Mode
 fn uart::regs::mode() -> uart::Mode
     expr 18 variant uart::Mode::Run 1361..1392: uart::Mode
@@ -64,7 +63,7 @@ fn timer::uses(m: uart::Mode) -> u8
     expr 27 array 1910..1965: [uart::Config; 2]
     expr 28 struct uart::Config 1911..1933: uart::Config
     expr 29 call 1935..1964: uart::Config
-    expr 30 variant .Some 2013..2037: Option(uart::Mode)
+    expr 30 variant .Some (Option(uart::Mode)::Some) 2013..2037: Option(uart::Mode)
     expr 31 const uart::MODE 2019..2036: uart::Mode
     expr 32 call 2085..2111: uart::regs::Block
     expr 33 &raw const 2162..2178: *const uart::regs::Block
@@ -98,7 +97,7 @@ comptime fn timer::SMALL() -> u8
 comptime fn COUNT() -> u32
     expr 56 int 0 592..593: u32
 comptime fn uart::LAST() -> Option(uart::Mode)
-    expr 57 variant .None 971..976: Option(uart::Mode)
+    expr 57 variant .None (Option(uart::Mode)::None) 971..976: Option(uart::Mode)
 comptime fn comptime() -> ()
     expr 58 assert 1185..1208: ()
     expr 59 binary != 1192..1207: bool

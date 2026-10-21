@@ -3463,7 +3463,15 @@ fn expr_label(q: &Queries, f: &Fn, expr: &Expr) -> String {
         ExprKind::Variant(id, index, _) => {
             format!("variant {}", q.enum_def(*id).variant_path(*index as usize))
         }
-        ExprKind::ContextVariant(name, _, _) => format!("variant .{name}"),
+        // With the variant it names, once resolved (ADR 0044).
+        ExprKind::ContextVariant(name, _, _) => match q.tables.variants.get(&expr.id) {
+            Some(&(id, index)) => {
+                let def = q.enum_def(id);
+                let variant = &def.variants[index as usize].name;
+                format!("variant .{name} ({}::{variant})", def.name)
+            }
+            None => format!("variant .{name}"),
+        },
         ExprKind::Comptime(_) => "comptime".to_owned(),
         ExprKind::Array(_) => "array".to_owned(),
         ExprKind::StructLit(s, _) => format!("struct {}", s.name),

@@ -1,6 +1,5 @@
 ---
 source: tests/ui.rs
-assertion_line: 22
 expression: output
 input_file: tests/ui/resolve_use.ers
 ---
@@ -26,7 +25,7 @@ entry fn main() -> !
     expr 3 const uart::regs::BASE 776..785: usize
     expr 4 const uart::regs::BASE 788..798: usize
     expr 5 call 818..824: timer::Tick
-    expr 6 variant .None 855..860: Option(timer::Tick)
+    expr 6 variant .None (Option(timer::Tick)::None) 855..860: Option(timer::Tick)
     expr 7 struct timer::Tick 884..891: timer::Tick
     expr 8 call 920..935: Option(drivers::block::Block)
     expr 9 variant chain::Mode::Run 955..964: chain::Mode
@@ -48,7 +47,7 @@ fn timer::init() -> timer::Tick
     expr 21 byte 116 1598..1602: u8
     expr 22 struct timer::Tick 1605..1612: timer::Tick
 fn drivers::make() -> Option(drivers::block::Block)
-    expr 23 variant .Some 1784..1803: Option(drivers::block::Block)
+    expr 23 variant .Some (Option(drivers::block::Block)::Some) 1784..1803: Option(drivers::block::Block)
     expr 24 call 1790..1802: drivers::block::Block
 fn drivers::block::make() -> drivers::block::Block
     expr 25 struct drivers::block::Block 1884..1892: drivers::block::Block

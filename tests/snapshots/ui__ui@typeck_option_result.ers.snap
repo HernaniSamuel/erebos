@@ -1,6 +1,5 @@
 ---
 source: tests/ui.rs
-assertion_line: 40
 expression: output
 input_file: tests/ui/typeck_option_result.ers
 ---
@@ -31,10 +30,10 @@ fn digit(c: u8) -> Result(u32, ParseError)
     expr 6 local c 820..821: u8
     expr 7 int 57 824..826: u8
     expr 8 return 837..862: !
-    expr 9 variant .Err 844..862: Result(u32, ParseError)
-    expr 10 variant .BadDigit 849..861: ParseError
+    expr 9 variant .Err (Result(u32, ParseError)::Err) 844..862: Result(u32, ParseError)
+    expr 10 variant .BadDigit (ParseError::BadDigit) 849..861: ParseError
     expr 11 local c 859..860: u8
-    expr 12 variant .Ok 874..894: Result(u32, ParseError)
+    expr 12 variant .Ok (Result(u32, ParseError)::Ok) 874..894: Result(u32, ParseError)
     expr 13 as u32 878..893: u32
     expr 14 binary - 878..886: u8
     expr 15 local c 879..880: u8
@@ -43,18 +42,18 @@ fn first(bytes: Option([u8; 4])) -> Option(u8)
     let b: [u8; 4]
     expr 20 match 955..1044: Option(u8)
     expr 21 local bytes 961..966: Option([u8; 4])
-    expr 22 variant .Some 1002..1013: Option(u8)
+    expr 22 variant .Some (Option(u8)::Some) 1002..1013: Option(u8)
     expr 23 index 1008..1012: u8
     expr 24 local b 1008..1009: [u8; 4]
     expr 25 int 0 1010..1011: usize
-    expr 26 variant .None 1032..1037: Option(u8)
+    expr 26 variant .None (Option(u8)::None) 1032..1037: Option(u8)
 fn nested(o: Option(Option(u8)), s: Slot) -> u32
     let four: Option([u8; 4])
     let a: Option(u8)
     let c: Cmd
     let v: u8
     let w: u32
-    expr 27 variant .Some 1131..1150: Option([u8; 4])
+    expr 27 variant .Some (Option([u8; 4])::Some) 1131..1150: Option([u8; 4])
     expr 28 array 1137..1149: [u8; 4]
     expr 29 int 1 1138..1139: u8
     expr 30 int 2 1141..1142: u8
@@ -62,9 +61,9 @@ fn nested(o: Option(Option(u8)), s: Slot) -> u32
     expr 32 int 4 1147..1148: u8
     expr 33 call 1176..1187: Option(u8)
     expr 34 local four 1182..1186: Option([u8; 4])
-    expr 35 variant .Set 1206..1223: Cmd
-    expr 36 variant .Some 1211..1222: Option(Mode)
-    expr 37 variant .Run 1217..1221: Mode
+    expr 35 variant .Set (Cmd::Set) 1206..1223: Cmd
+    expr 36 variant .Some (Option(Mode)::Some) 1211..1222: Option(Mode)
+    expr 37 variant .Run (Mode::Run) 1217..1221: Mode
     expr 38 match 1229..1408: u32
     expr 39 local o 1235..1236: Option(Option(u8))
     expr 40 as u32 1274..1282: u32
@@ -83,31 +82,31 @@ fn parse(s: *const [u8]) -> Result(u32, ParseError)
     expr 50 local s 1477..1478: *const [u8]
     expr 51 int 0 1483..1484: usize
     expr 52 return 1495..1514: !
-    expr 53 variant .Err 1502..1514: Result(u32, ParseError)
-    expr 54 variant .Empty 1507..1513: ParseError
+    expr 53 variant .Err (Result(u32, ParseError)::Err) 1502..1514: Result(u32, ParseError)
+    expr 54 variant .Empty (ParseError::Empty) 1507..1513: ParseError
     expr 55 match 1526..1729: Result(u32, ParseError)
     expr 56 call 1532..1546: Result(u32, ParseError)
     expr 57 index 1538..1545: u8
     expr 58 deref 1538..1542: [u8]
     expr 59 local s 1540..1541: *const [u8]
     expr 60 int 0 1543..1544: usize
-    expr 61 variant .Ok 1576..1582: Result(u32, ParseError)
+    expr 61 variant .Ok (Result(u32, ParseError)::Ok) 1576..1582: Result(u32, ParseError)
     expr 62 local v 1580..1581: u32
-    expr 63 variant .Err 1608..1620: Result(u32, ParseError)
-    expr 64 variant .Empty 1613..1619: ParseError
-    expr 65 variant .Err 1660..1678: Result(u32, ParseError)
-    expr 66 variant .BadDigit 1665..1677: ParseError
+    expr 63 variant .Err (Result(u32, ParseError)::Err) 1608..1620: Result(u32, ParseError)
+    expr 64 variant .Empty (ParseError::Empty) 1613..1619: ParseError
+    expr 65 variant .Err (Result(u32, ParseError)::Err) 1660..1678: Result(u32, ParseError)
+    expr 66 variant .BadDigit (ParseError::BadDigit) 1665..1677: ParseError
     expr 67 local b 1675..1676: u8
-    expr 68 variant .Err 1707..1722: Result(u32, ParseError)
-    expr 69 variant .Overflow 1712..1721: ParseError
+    expr 68 variant .Err (Result(u32, ParseError)::Err) 1707..1722: Result(u32, ParseError)
+    expr 69 variant .Overflow (ParseError::Overflow) 1712..1721: ParseError
 entry fn main() -> !
     expr 70 loop 2302..2309: !
 panic fn on_panic() -> !
     expr 71 loop 2339..2346: !
 comptime fn NOTHING() -> Option(u64)
-    expr 72 variant .None 699..704: Option(u64)
+    expr 72 variant .None (Option(u64)::None) 699..704: Option(u64)
 comptime fn LAST() -> Result((), ParseError)
-    expr 73 variant .Ok 748..755: Result((), ParseError)
+    expr 73 variant .Ok (Result((), ParseError)::Ok) 748..755: Result((), ParseError)
     expr 74 unit 752..754: ()
 comptime fn comptime() -> ()
     expr 75 assert 1748..1809: ()

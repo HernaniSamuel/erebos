@@ -1,6 +1,5 @@
 ---
 source: tests/ui.rs
-assertion_line: 40
 expression: output
 input_file: tests/ui/typeck_try.ers
 ---
@@ -24,8 +23,8 @@ fn half(v: u32) -> Option(u32)
     expr 4 int 2 479..480: u32
     expr 5 int 1 484..485: u32
     expr 6 return 496..508: !
-    expr 7 variant .None 503..508: Option(u32)
-    expr 8 variant .Some 520..532: Option(u32)
+    expr 7 variant .None (Option(u32)::None) 503..508: Option(u32)
+    expr 8 variant .Some (Option(u32)::Some) 520..532: Option(u32)
     expr 9 binary / 526..531: u32
     expr 10 local v 526..527: u32
     expr 11 int 2 530..531: u32
@@ -36,7 +35,7 @@ fn quarter(v: u32) -> Option(u16)
     expr 14 try 594..602: u32
     expr 15 call 594..601: Option(u32)
     expr 16 local v 599..600: u32
-    expr 17 variant .Some 610..625: Option(u16)
+    expr 17 variant .Some (Option(u16)::Some) 610..625: Option(u16)
     expr 18 as u16 616..624: u16
     expr 19 local h 616..617: u32
 fn digit(c: u8) -> Result(u32, ParseError)
@@ -49,16 +48,16 @@ fn digit(c: u8) -> Result(u32, ParseError)
     expr 26 local c 693..694: u8
     expr 27 byte 57 697..701: u8
     expr 28 return 712..737: !
-    expr 29 variant .Err 719..737: Result(u32, ParseError)
-    expr 30 variant .BadDigit 724..736: ParseError
+    expr 29 variant .Err (Result(u32, ParseError)::Err) 719..737: Result(u32, ParseError)
+    expr 30 variant .BadDigit (ParseError::BadDigit) 724..736: ParseError
     expr 31 local c 734..735: u8
-    expr 32 variant .Ok 749..771: Result(u32, ParseError)
+    expr 32 variant .Ok (Result(u32, ParseError)::Ok) 749..771: Result(u32, ParseError)
     expr 33 as u32 753..770: u32
     expr 34 binary - 753..763: u8
     expr 35 local c 754..755: u8
     expr 36 byte 48 758..762: u8
 fn two(a: u8, b: u8) -> Result(u8, ParseError)
-    expr 37 variant .Ok 828..867: Result(u8, ParseError)
+    expr 37 variant .Ok (Result(u8, ParseError)::Ok) 828..867: Result(u8, ParseError)
     expr 38 as u8 832..866: u8
     expr 39 binary + 832..860: u32
     expr 40 binary * 833..847: u32
@@ -70,12 +69,12 @@ fn two(a: u8, b: u8) -> Result(u8, ParseError)
     expr 46 call 850..858: Result(u32, ParseError)
     expr 47 local b 856..857: u8
 fn point(o: Option(Point)) -> Option(u16)
-    expr 48 variant .Some 919..930: Option(u16)
+    expr 48 variant .Some (Option(u16)::Some) 919..930: Option(u16)
     expr 49 field x 925..929: u16
     expr 50 try 925..927: Point
     expr 51 local o 925..926: Option(Point)
 fn nested(o: Option(Option(u8))) -> Option(bool)
-    expr 52 variant .Some 989..1004: Option(bool)
+    expr 52 variant .Some (Option(bool)::Some) 989..1004: Option(bool)
     expr 53 binary == 995..1003: bool
     expr 54 try 995..998: u8
     expr 55 try 995..997: Option(u8)
@@ -84,13 +83,13 @@ fn nested(o: Option(Option(u8))) -> Option(bool)
 fn unit(r: Result((), ParseError)) -> Result(u8, ParseError)
     expr 58 try 1075..1077: ()
     expr 59 local r 1075..1076: Result((), ParseError)
-    expr 60 variant .Ok 1083..1089: Result(u8, ParseError)
+    expr 60 variant .Ok (Result(u8, ParseError)::Ok) 1083..1089: Result(u8, ParseError)
     expr 61 int 1 1087..1088: u8
 fn never() -> Option(u8)
     let v: u8
     expr 62 try 1136..1146: !
     expr 63 loop 1136..1145: !
-    expr 64 variant .Some 1152..1160: Option(u8)
+    expr 64 variant .Some (Option(u8)::Some) 1152..1160: Option(u8)
     expr 65 local v 1158..1159: u8
 entry fn main() -> !
     expr 66 loop 1187..1194: !
