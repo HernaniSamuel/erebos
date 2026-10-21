@@ -14,8 +14,8 @@ use crate::hir::{
 };
 use crate::layout::{self, Composite, EnumLayout, Layout, MAX_ALIGN, MAX_SIZE, StructLayout};
 use crate::mir::{
-    self, BodyId, ConstData, DataId, EnumRef, Field, LeftOut, Mir, PanicCause, PanicSite, Ptr,
-    StaticRef, StructRef,
+    self, BodyId, ConstData, DataId, EnumRef, Field, LeftOut, Mir, PanicCause, PanicInfoAt,
+    PanicSite, Ptr, StaticRef, StructRef,
 };
 use crate::span::Span;
 use crate::target;
@@ -26,6 +26,27 @@ use crate::ty::{self, Tables};
 pub enum DataSource {
     Const(ConstId),
     Comptime(ExprId),
+}
+
+/// What the `core::PanicInfo` of a check holds, but its message: the
+/// fields known at compile time (ADR 0053).
+#[derive(Clone, Copy, Debug)]
+pub struct PanicFields {
+    /// The byte string naming the file, which `file` points to.
+    pub file: StaticRef,
+    pub line: u32,
+    pub column: u32,
+    /// The bits of the `core::PanicReason` variant, of type `reason_ty`.
+    pub reason: u64,
+    pub reason_ty: hir::IntTy,
+}
+
+impl PanicFields {
+    /// The length of the file's name, in bytes.
+    pub fn name_len(&self) -> usize {
+        let name = self.file.def().byte_string.as_ref();
+        name.expect("a file name is a byte string").len()
+    }
 }
 
 /// An item being computed; one requested again while in progress depends
@@ -1223,21 +1244,11 @@ impl<'h> Queries<'h> {
         s
     }
 
-    /// Where the check that `cause` names is, located at the first byte of
-    /// `at`, as the panic function learns it (ADR 0053): a `PanicInfo` in
-    /// read-only data of its own, its `file` pointing to the byte string
-    /// naming the file, its `message` empty, address 0 and length 0.
-    pub fn panic_site(&mut self, cause: PanicCause, at: Span) -> PanicSite {
+    /// The fields of the `core::PanicInfo` of the check that `cause` names,
+    /// located at the first byte of `at`, but its message (ADR 0053).
+    pub fn panic_fields(&mut self, cause: PanicCause, at: Span) -> PanicFields {
         let hir = self.hir;
-        let (file, line, column) = hir.location(at);
-        let def = hir.struct_(hir.panic_info);
-        let layout = self
-            .struct_layout(hir.panic_info)
-            .expect("`core::PanicInfo` has a layout");
-        let offset = |name: &str| {
-            let index = def.fields.iter().position(|field| field.name == name);
-            layout.offsets[index.expect("a field of `core::PanicInfo`")] as usize
-        };
+        let (_, line, column) = hir.location(at);
         let reason = self.enum_def(hir.panic_reason);
         let index = reason
             .variants
@@ -1247,36 +1258,59 @@ impl<'h> Queries<'h> {
         let tag = self
             .discriminant(hir.panic_reason, index)
             .expect("the variants of `core::PanicReason` have values");
-        let tag_bytes = reason.ty.int.bytes() as usize;
+        PanicFields {
+            file: self.file_names[at.file.index()],
+            line,
+            column,
+            reason: tag,
+            reason_ty: reason.ty.int,
+        }
+    }
+
+    /// Where the check that `cause` names is, located at the first byte of
+    /// `at`, as the panic function learns it (ADR 0053): a `PanicInfo` in
+    /// read-only data of its own, its `file` pointing to the byte string
+    /// naming the file, its `message` empty, address 0 and length 0.
+    pub fn panic_site(&mut self, cause: PanicCause, at: Span) -> PanicSite {
+        let hir = self.hir;
+        let fields = self.panic_fields(cause, at);
+        let def = hir.struct_(hir.panic_info);
+        let layout = self
+            .struct_layout(hir.panic_info)
+            .expect("`core::PanicInfo` has a layout");
+        let offset = |name: &str| {
+            let index = def.fields.iter().position(|field| field.name == name);
+            layout.offsets[index.expect("a field of `core::PanicInfo`")] as usize
+        };
+        let tag_bytes = fields.reason_ty.bytes() as usize;
 
         let mut bytes = vec![0; layout.layout.size as usize];
         let mut put = |at: usize, value: &[u8]| bytes[at..at + value.len()].copy_from_slice(value);
         // A slice is its address, then its length (ADR 0031); the address
         // of the file's name is the linker's to fill in (ADR 0030).
-        let name_len = u32::try_from(file.name.len()).expect("file names are short");
+        let name_len = u32::try_from(fields.name_len()).expect("file names are short");
         put(
             offset("file") + target::POINTER_BYTES as usize,
             &name_len.to_le_bytes(),
         );
-        put(offset("line"), &line.to_le_bytes());
-        put(offset("column"), &column.to_le_bytes());
-        put(offset("reason"), &tag.to_le_bytes()[..tag_bytes]);
-        let file_name = self.file_names[at.file.index()];
+        put(offset("line"), &fields.line.to_le_bytes());
+        put(offset("column"), &fields.column.to_le_bytes());
+        put(offset("reason"), &fields.reason.to_le_bytes()[..tag_bytes]);
         let info = DataId(self.data.len() as u32);
         self.data.push(ConstData {
             bytes,
             align: layout.layout.align,
             relocations: vec![mir::Relocation {
                 offset: offset("file") as u32,
-                target: file_name.def().id,
+                target: fields.file.def().id,
                 addend: 0,
             }],
         });
         PanicSite {
-            info,
-            file: file_name,
-            line,
-            column,
+            info: PanicInfoAt::Data(info),
+            file: fields.file,
+            line: fields.line,
+            column: fields.column,
         }
     }
 

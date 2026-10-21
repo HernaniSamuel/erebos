@@ -1,0 +1,26 @@
+---
+source: tests/ui.rs
+assertion_line: 22
+expression: output
+input_file: tests/ui/eval_assert_panic_info.ers
+---
+--- errors ---
+eval::assertion-failed
+
+  × assertion failed: x is too large
+    ╭─[eval_assert_panic_info.ers:7:5]
+  6 │ fn checked(x: u32) -> u32 {
+  7 │     assert(x < 10, &raw const b"x is too large");
+    ·     ──────────────────────┬─────────────────────
+    ·                           ╰── assertion failed
+  8 │     x
+  9 │ }
+ 10 │ 
+ 11 │ const FINE: u32 = checked(3);
+ 12 │ const LARGE: u32 = checked(12);
+    ·       ──┬──        ─────┬─────
+    ·         │               ╰── called here
+    ·         ╰── while evaluating the constant `LARGE`
+ 13 │ 
+    ╰────
+  help: this code runs at compile time (ADR 0027)

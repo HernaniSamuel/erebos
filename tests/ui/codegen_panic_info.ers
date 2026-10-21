@@ -2,10 +2,10 @@
 // opt: both
 // Each check passes the panic function the address of its own
 // `core::PanicInfo`, private read-only data whose `file` points to the
-// file's name, stored once for the two checks of this file; the names of
+// file's name, stored once for the checks of this file; the names of
 // `core`'s files are left out of the dump, like `core` (ADR 0052, 0053).
-// The panic function writes the address it receives to a device, so that
-// with `-O`, where it is inlined, the data stays.
+// The panic function hands the address it receives to C, so that with
+// `-O` the data and what a frame's `PanicInfo` holds stay.
 fn divide(a: u32, b: u32) -> u32 {
     a / b
 }
@@ -14,9 +14,16 @@ fn element(a: [u8; 4], i: usize) -> u8 {
     a[i]
 }
 
+// An `assert` with a message fills a `PanicInfo` in its frame instead, on
+// the failing path, with the message computed there (ADR 0053).
+fn checked(x: u32, m: *const [u8]) {
+    assert(x < 10, m);
+}
+
+extern fn report(info: *const core::PanicInfo);
+
 entry fn main() -> ! { loop {} }
 panic fn on_panic(info: *const core::PanicInfo) -> ! {
-    let device: *mut volatile usize = 0x1000_0000 as *mut volatile usize;
-    *device = info as usize;
+    report(info);
     loop {}
 }

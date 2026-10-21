@@ -107,7 +107,11 @@ impl Mir {
                     used[data.0 as usize] = true;
                 }
             }
-            body.for_each_site(&mut |site| used[site.info.0 as usize] = true);
+            body.for_each_site(&mut |site| {
+                if let PanicInfoAt::Data(data) = site.info {
+                    used[data.0 as usize] = true;
+                }
+            });
             if !left_out.bodies[i] {
                 body.for_each_site(&mut |site| statics_used[site.file.def().id.0 as usize] = true);
                 body.for_each_operand(&mut |operand| {
@@ -221,8 +225,9 @@ impl Mir {
                 }
             }
             body.for_each_site(&mut |site| {
-                site.info =
-                    data_ids[site.info.0 as usize].expect("a body kept uses only data kept");
+                if let PanicInfoAt::Data(data) = &mut site.info {
+                    *data = data_ids[data.0 as usize].expect("a body kept uses only data kept");
+                }
                 site.file = new_static(site.file);
             });
             body.for_each_operand(&mut |operand| {
@@ -949,14 +954,25 @@ pub enum Terminator {
 /// Where a check is, as the panic function learns it (ADR 0053).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PanicSite {
-    /// The check's `core::PanicInfo`, in read-only data of its own, whose
-    /// address the call passes.
-    pub info: DataId,
-    /// What the data holds, for dumps: the byte string naming the file,
-    /// which its `file` points to, its `line` and its `column`.
+    /// The check's `core::PanicInfo`, whose address the call passes.
+    pub info: PanicInfoAt,
+    /// What the information holds, for dumps: the byte string naming the
+    /// file, which its `file` points to, its `line` and its `column`.
     pub file: StaticRef,
     pub line: u32,
     pub column: u32,
+}
+
+/// Where the `core::PanicInfo` of a check is (ADR 0053).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PanicInfoAt {
+    /// In read-only data of its own, when every field is known at compile
+    /// time.
+    Data(DataId),
+    /// In a local of the failing function, for an `assert` with a message:
+    /// the block that ends in the call fills it, with the message computed
+    /// there.
+    Local(Local),
 }
 
 /// Why the compiler's own checks call the panic function.
@@ -1122,10 +1138,13 @@ impl Mir {
                 // The data passed, and the location it holds (ADR 0053).
                 if let Some(site) = site {
                     let file = site.file.def().byte_string.as_ref().expect("a byte string");
+                    match site.info {
+                        PanicInfoAt::Data(data) => write!(f, ", data{}", data.0)?,
+                        PanicInfoAt::Local(local) => write!(f, ", &raw const {local}")?,
+                    }
                     write!(
                         f,
-                        ", data{} at {}:{}:{}",
-                        site.info.0,
+                        " at {}:{}:{}",
                         String::from_utf8_lossy(file),
                         site.line,
                         site.column

@@ -13,13 +13,16 @@ pub use builtins::{memcpy, memmove, memset};
 //
 // A panic function declared `panic fn on_panic(info: *const core::PanicInfo)`
 // learns where and why the program panicked. For the compiler's own checks,
-// `info` points to read-only data the compiler fills in, one per check; the
-// handler must not write through it.
+// `info` points to read-only data the compiler fills in, one per check, or,
+// for an `assert` with a message, to a `PanicInfo` in the failing function's
+// frame; the handler must not write through it.
 
 // What failed, where. `file` is the name of the file holding the check,
 // relative to the root file's directory (`main.ers`, `uart/regs.ers`), and
 // `line` and `column` locate the first byte of the token that performs it,
-// both from 1, the column in bytes.
+// both from 1, the column in bytes. `message` is the message of
+// `assert(c, msg)`, computed when the assertion fails; for every other
+// check it is empty.
 pub struct PanicInfo {
     pub file: *const [u8],
     pub line: u32,

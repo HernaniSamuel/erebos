@@ -6,7 +6,8 @@ use crate::eval::ConstValue;
 use crate::hir;
 use crate::mir::{
     BasicBlock, BasicBlockData, BinOp, Body, BodyId, Const, DataId, Local, LocalDecl, Operand,
-    PanicCause, Place, PlaceElem, Rvalue, Statement, StaticRef, Terminator, Ty, UnOp,
+    PanicCause, PanicInfoAt, PanicSite, Place, PlaceElem, Rvalue, Statement, StaticRef, Terminator,
+    Ty, UnOp,
 };
 use crate::query::{DataSource, Queries};
 use crate::span::Span;
@@ -632,12 +633,10 @@ impl Builder<'_, '_> {
                     });
                     self.current = Some(fail_bb);
                     let value = self.checked_if(!holds, |this| this.expr(message));
+                    // A message that diverges, as `return 4`, leaves no
+                    // block to fill and call from.
                     if self.current.is_some() {
-                        // The information passed is read-only data, as for
-                        // an `assert` without a message: its message is
-                        // empty.
-                        let cause = PanicCause::AssertionFailed(Some((value, message.span)));
-                        let panic = self.panic(cause, expr.span);
+                        let panic = self.assert_panic(value, message.span, expr.span);
                         self.terminate(panic);
                     }
                     self.current = Some(ok_bb);
@@ -1281,6 +1280,50 @@ impl Builder<'_, '_> {
     fn panic(&mut self, cause: PanicCause, at: Span) -> Terminator {
         let site = self.located.then(|| self.q.panic_site(cause, at));
         Terminator::Panic(cause, site)
+    }
+
+    /// The call to the panic function for an `assert` located at `at`,
+    /// whose `message`, from the expression at `message_span`, the current
+    /// block has computed. When the panic function takes the information,
+    /// the current block also fills a new local `core::PanicInfo` with the
+    /// fields known at compile time and the message, in declaration order,
+    /// and the call passes its address (ADR 0053).
+    fn assert_panic(&mut self, message: Operand, message_span: Span, at: Span) -> Terminator {
+        let cause = PanicCause::AssertionFailed(Some((message, message_span)));
+        if !self.located {
+            return Terminator::Panic(cause, None);
+        }
+        let hir = self.q.hir;
+        let s = self.q.mir_struct(hir.panic_info);
+        let info = self.new_local(Ty::Struct(s), None);
+        let fields = self.q.panic_fields(cause, at);
+        let int = |value: u64, ty: Ty| match ty {
+            Ty::Int(int) => Rvalue::Use(Operand::Const(Const::Int(value, int))),
+            ty => unreachable!("`core::PanicInfo` has an integer here, not `{ty}`"),
+        };
+        for (index, field) in s.def().fields().iter().enumerate() {
+            let value = match field.name.as_str() {
+                // A slice of the whole name (ADR 0031).
+                "file" => Rvalue::Slice {
+                    ptr: Operand::Const(Const::Static(fields.file)),
+                    len: usize_const(fields.name_len() as u64),
+                },
+                "line" => int(u64::from(fields.line), field.ty),
+                "column" => int(u64::from(fields.column), field.ty),
+                "reason" => int(fields.reason, field.ty),
+                "message" => Rvalue::Use(message),
+                name => unreachable!("`core::PanicInfo` has no field `{name}`"),
+            };
+            let place = Place::local(info).project(PlaceElem::Field(index as u32));
+            self.assign(place, value);
+        }
+        let site = PanicSite {
+            info: PanicInfoAt::Local(info),
+            file: fields.file,
+            line: fields.line,
+            column: fields.column,
+        };
+        Terminator::Panic(cause, Some(site))
     }
 
     /// `Enum::Variant` or `Enum::Variant(args)`, of type `ty`. Without

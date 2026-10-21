@@ -25,8 +25,8 @@ use inkwell::values::{
 use inkwell::{IntPredicate, OptimizationLevel};
 
 use crate::mir::{
-    BinOp, Body, Const, IntTy, Local, Mir, Operand, Place, PlaceElem, Ptr, Relocation, Rvalue,
-    Statement, Terminator, Ty, UnOp,
+    BinOp, Body, Const, IntTy, Local, Mir, Operand, PanicInfoAt, Place, PlaceElem, Ptr, Relocation,
+    Rvalue, Statement, Terminator, Ty, UnOp,
 };
 use crate::target::Target;
 use abi::{Cast, FnAbi, PassMode};
@@ -1246,11 +1246,14 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                 PassMode::Ignore | PassMode::Indirect => b.build_return(None),
             },
             Terminator::Unreachable => b.build_unreachable(),
-            // With the address of the check's information when the panic
-            // function takes it (ADR 0053).
+            // With the address of the check's information, in read-only data
+            // or in a local, when the panic function takes it (ADR 0053).
             Terminator::Panic(_, site) => {
                 let args: Vec<_> = site
-                    .map(|site| self.data[site.info.0 as usize].into())
+                    .map(|site| match site.info {
+                        PanicInfoAt::Data(data) => self.data[data.0 as usize].into(),
+                        PanicInfoAt::Local(local) => self.address(Place::local(local)).ptr.into(),
+                    })
                     .into_iter()
                     .collect();
                 b.build_call(self.function(self.panic), &args, "")

@@ -26,5 +26,15 @@ fn checks(x: u32, mode: Mode, msg: Msg, o: Option(u32)) -> Option(u32) {
     .Some(v + w + o?)
 }
 
+// An `assert` with a message fills a local `PanicInfo` on the failing path,
+// after computing the message, and passes its address; one whose message
+// diverges calls nothing.
+fn messages(x: u32, m: *const [u8]) -> u32 {
+    assert(x < 10, m);
+    assert(x < 20, &raw const b"x is too large");
+    assert(x < 3, return 4);
+    x
+}
+
 entry fn main() -> ! { loop {} }
 panic fn on_panic(info: *const core::PanicInfo) -> ! { loop {} }
