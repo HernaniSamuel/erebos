@@ -50,9 +50,9 @@ The target is RV32IMAC on QEMU `virt` (ADR 0010).
 
 - **Comments:** `// to end of line` and `/* block */`; block comments nest.
 - **Identifiers:** `[A-Za-z_][A-Za-z0-9_]*`, except `_` alone. No item,
-  module or `use` may take a name starting with `__`, which the runtime
-  support functions of `core` use, nor `_start`, nor `core`, in any module
-  (`resolve::reserved-name`, ADR 0020, 0052); a module of the root module
+  module or `use` of the program may take a name starting with `__`,
+  which the runtime support functions of `core` use, nor `_start`, nor
+  `core`, in any module (`resolve::reserved-name`, ADR 0020, 0052); a module of the root module
   may not be named `llvm` (see "Symbols").
 - **Keywords:** `align_of as break comptime const continue crate else entry
   enum extern false fn if let loop match mod mut offset_of panic pub return
@@ -850,7 +850,8 @@ an enclosing position, whose type that variant's declaration gives.
 - **A path** of several segments, such as `uart::LIMIT`, names a variant
   or a constant, as in an expression; one whose last segment names another
   item is `resolve::not-a-constant`, and one whose last segment names
-  nothing `resolve::unknown-name`. A path followed by patterns in
+  nothing `resolve::unknown-name`, or `resolve::unknown-variant` after an
+  enum. A path followed by patterns in
   parentheses that names no variant, as `uart::LIMIT(p)`, is
   `resolve::unknown-variant`.
 - **Only constants of an integer type, `bool` or an enum without payloads

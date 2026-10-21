@@ -63,7 +63,8 @@ Agreed as useful, not yet scheduled:
   always ends, so most counting `while` loops need no termination
   argument.
 - Loop labels (`'outer: loop`) to break out of nested loops.
-- Warnings (unreachable code, unused variables); today there are only errors.
+- Warnings (unreachable code, unused variables, private types in public
+  signatures, ADR 0050); today there are only errors.
   Among them, loops that certainly never end once entered: a `while`
   whose condition reads nothing the body can change (no assignment to
   its variables, no call, no write through a pointer, no volatile read),

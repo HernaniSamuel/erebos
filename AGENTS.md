@@ -73,7 +73,7 @@ docs/roadmap.md Milestones and pending decisions
 docs/reference.md The language as implemented (keep in sync with the compiler)
 .claude/plans/  Implementation plan per roadmap step, with the decisions taken while building it
 src/            Compiler (single crate; modules per layer, see ADR 0003)
-rt/             Runtime support functions in Erebos, built into every program (ADR 0020)
+rt/             The `core` module in Erebos, built into every program (ADR 0020, 0052)
 tests/ui/       Snapshot tests per compiler stage
 tests/e2e/      Programs run on QEMU, with expected output and exit code
 tests/layout/   Structs whose layout is checked against clang
