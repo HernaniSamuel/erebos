@@ -8,8 +8,9 @@
 //! The compiler's layouts come from `--emit=typeck`; each becomes a
 //! `_Static_assert` on `sizeof`, `_Alignof` and `offsetof`, and clang checks
 //! them all. `core::PanicInfo`, which dumps leave out, is checked against
-//! the numbers of ADR 0053 instead, which `core` asserts. Needs clang, found like `ld.lld`: `EREBOS_CLANG`, then the LLVM
-//! we build against (`LLVM_SYS_221_PREFIX`), then `PATH`.
+//! the numbers of ADR 0053 instead, which `core` asserts. Needs clang,
+//! found like `ld.lld`: `EREBOS_CLANG`, then the LLVM we build against
+//! (`LLVM_SYS_221_PREFIX`), then `PATH`.
 
 mod common;
 

@@ -250,11 +250,7 @@ mod tests {
     #[test]
     fn diagnostics_come_out_in_source_order() {
         let mut sources = SourceMap::default();
-        let file = sources.add(
-            "test.ers",
-            "fn main() {}
-",
-        );
+        let file = sources.add("test.ers", "fn main() {}\n");
         let mut diags = Diagnostics::default();
         diags.push(Diagnostic::error("test::unlabeled", "no position"));
         diags.push(Diagnostic::error("test::late", "late").label(Span::new(file, 9, 10), ""));

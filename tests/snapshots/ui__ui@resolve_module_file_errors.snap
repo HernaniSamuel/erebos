@@ -1,6 +1,5 @@
 ---
 source: tests/ui.rs
-assertion_line: 29
 expression: output
 input_file: tests/ui/resolve_module_file_errors/main.ers
 ---

@@ -1,6 +1,5 @@
 ---
 source: tests/ui.rs
-assertion_line: 40
 expression: output
 input_file: tests/ui/typeck_try_errors.ers
 ---
