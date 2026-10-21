@@ -1,6 +1,6 @@
 # 0050. Visibility
 
-- Status: Accepted
+- Status: Accepted; amended by 0054 (only `_` covers an enum that is not reachable)
 - Date: 2026-10-20
 
 ## Context

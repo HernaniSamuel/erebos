@@ -79,7 +79,8 @@ Do not write one for local implementation details that the code already explains
 | 0047 | [Zero-sized payloads have an offset](0047-zero-sized-payloads-have-an-offset.md) | Accepted |
 | 0048 | [Types with a failed length or alignment are erroneous](0048-types-with-a-failed-length-or-alignment-are-erroneous.md) | Accepted |
 | 0049 | [Modules and paths](0049-modules-and-paths.md) | Accepted |
-| 0050 | [Visibility](0050-visibility.md) | Accepted |
+| 0050 | [Visibility](0050-visibility.md) | Accepted, amended by 0054 |
 | 0051 | [Symbol names](0051-symbol-names.md) | Accepted |
 | 0052 | [The `core` module](0052-the-core-module.md) | Accepted |
 | 0053 | [Panic information](0053-panic-information.md) | Accepted |
+| 0054 | [Only `_` covers an enum that is not reachable](0054-only-wildcards-cover-unreachable-enums.md) | Accepted |
