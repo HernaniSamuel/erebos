@@ -102,6 +102,26 @@ Agreed as useful, not yet scheduled:
 - Several cores (harts) sharing memory. On microcontrollers concurrency is
   mostly interrupts, which M4 covers; several cores need atomics (the `A`
   extension) and a memory model of their own.
+- Ada-inspired types for hardware, to design together with `peripheral`
+  in M3 so that registers do not get two mechanisms for one job:
+  representation clauses (a field at given bit positions of a register,
+  an enum with explicit values), range types checked at run time through
+  the panic function (ADR 0007, 0014), and possibly a `newtype` that
+  keeps a distinct type with the same representation. Compatible with
+  ADR 0008 (no implicit conversions) and with the no-runtime rule. Fixed
+  point is out of scope for now. Needs a `Proposed` ADR reviewed before
+  any implementation.
+- Range-typed array indexes, as in Ada (`type Pin is range 0 .. 3`, an
+  array indexed by `Pin`): when the index type is exactly the array's
+  range, no bounds check is needed. A third way next to the checked and
+  unchecked indexing of M2.1; part of the Ada-inspired types above.
+- Typestate for hardware, as Rust's `Pin<Input>` / `Pin<Output>` pattern:
+  a conversion consumes the old value and returns the new type, so using
+  an input pin as an output is a compile error. It needs the moves of
+  M5 and no new type-system feature; revisit when M5 lands.
+- Effects in function types ("reads MMIO", "disables interrupts", "may
+  panic"), for example to forbid some calls inside interrupt handlers.
+  A type-system feature of its own; not scheduled. Revisit after M6.
 
 ## Notes for M2
 
