@@ -504,8 +504,9 @@ impl Checker<'_, '_> {
                         volatile: false,
                         pointee: Ty::Struct(s),
                     }) if s.id == info => return,
-                    // Reported where the type is written.
-                    Ty::Error => return,
+                    // Reported where the type is written, or as a
+                    // parameter's type below.
+                    Ty::Error | Ty::Unit | Ty::Never => return,
                     _ => (param.span, format!("has type `{ty}`")),
                 }
             }

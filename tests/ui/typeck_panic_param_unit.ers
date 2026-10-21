@@ -1,0 +1,5 @@
+// emit: typeck
+// A panic function taking `()` is reported once, as any parameter of
+// type `()`, not also as a parameter the panic function cannot take.
+entry fn main() -> ! { loop {} }
+panic fn on_panic(x: ()) -> ! { loop {} }
