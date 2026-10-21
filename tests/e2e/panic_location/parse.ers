@@ -1,0 +1,23 @@
+// Sums of the readings written in a text, read by the child module in
+// `parse/digits.ers`.
+mod digits;
+
+// The total of a group of readings, and how many there were.
+pub struct Sum {
+    pub total: u32,
+    pub count: u32,
+}
+
+pub fn sum(text: *const [u8]) -> Sum {
+    let mut reader: digits::Reader = digits::reader(text);
+    let mut s: Sum = Sum { total: 0, count: 0 };
+    loop {
+        match digits::next(&raw mut reader) {
+            .Some(let n: u32) => {
+                s.total += n;
+                s.count += 1;
+            }
+            .None => return s,
+        }
+    }
+}

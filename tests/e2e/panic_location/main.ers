@@ -1,0 +1,58 @@
+// The program of M2.6 (roadmap), in five files: it averages groups of
+// readings, and the panic function prints why and where it was called.
+// expect-output: 3 readings, average 20
+// expect-output: division by zero at main.ers:12
+// expect-exit: 1
+mod fmt;
+mod parse;
+mod uart;
+use parse::Sum;
+
+fn average(s: Sum) -> u32 {
+    s.total / s.count
+}
+
+use core::{PanicInfo, PanicReason};
+use fmt::print_u32;
+use uart::print;
+
+const FINISHER: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+
+// The second group has no reading, so its average divides by zero above.
+entry fn main() -> ! {
+    report(&raw const b"12, 30, 18");
+    report(&raw const b"none");
+    exit(0)
+}
+
+fn report(text: *const [u8]) {
+    let s: Sum = parse::sum(text);
+    let mean: u32 = average(s);
+    print_u32(s.count);
+    print(&raw const b" readings, average ");
+    print_u32(mean);
+    print(&raw const b"\n");
+}
+
+fn exit(code: u32) -> ! {
+    *FINISHER = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    loop {}
+}
+
+// Prints `<reason> at <file>:<line>` from the information the compiler
+// placed for the check that failed (ADR 0053), then stops QEMU.
+panic fn on_panic(info: *const PanicInfo) -> ! {
+    let reason: *const [u8] = match (*info).reason {
+        PanicReason::DivisionByZero => &raw const b"division by zero",
+        PanicReason::IndexOutOfBounds => &raw const b"index out of bounds",
+        PanicReason::AssertionFailed => &raw const b"assertion failed",
+        PanicReason::NoVariant => &raw const b"enum value is no variant",
+    };
+    print(reason);
+    print(&raw const b" at ");
+    print((*info).file);
+    print(&raw const b":");
+    print_u32((*info).line);
+    print(&raw const b"\n");
+    exit(1)
+}

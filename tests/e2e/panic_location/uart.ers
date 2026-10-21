@@ -1,0 +1,10 @@
+// The UART of QEMU `virt`.
+const THR: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+
+pub fn print(s: *const [u8]) {
+    let mut i: usize = 0;
+    while i < len(s) {
+        *THR = (*s)[i];
+        i += 1;
+    }
+}

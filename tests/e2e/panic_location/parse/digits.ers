@@ -1,0 +1,34 @@
+// Decimal numbers in a text, read one after the other; whatever is not a
+// digit separates them.
+
+// How far a text has been read. Its fields are private: outside this
+// module, only `reader` builds one (ADR 0050).
+pub struct Reader {
+    text: *const [u8],
+    at: usize,
+}
+
+pub fn reader(text: *const [u8]) -> Reader {
+    Reader { text: text, at: 0 }
+}
+
+// The next number, or `.None` once the text is read.
+pub fn next(r: *mut Reader) -> Option(u32) {
+    let text: *const [u8] = (*r).text;
+    while (*r).at < len(text) && !is_digit((*text)[(*r).at]) {
+        (*r).at += 1;
+    }
+    if (*r).at == len(text) {
+        return .None;
+    }
+    let mut value: u32 = 0;
+    while (*r).at < len(text) && is_digit((*text)[(*r).at]) {
+        value = value * 10 + ((*text)[(*r).at] - b'0') as u32;
+        (*r).at += 1;
+    }
+    .Some(value)
+}
+
+fn is_digit(c: u8) -> bool {
+    c >= b'0' && c <= b'9'
+}
