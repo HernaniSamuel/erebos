@@ -1,6 +1,7 @@
 //! Recursive-descent parser (ADR 0004). Errors are reported and the parser
 //! resynchronizes at the next item, so one run reports several errors.
 
+use crate::builtin::{builtin_variant_help, is_builtin_enum};
 use crate::diag::{Diagnostic, Diagnostics};
 use crate::span::Span;
 use crate::syntax::ast::{
@@ -49,32 +50,6 @@ struct Parser<'a> {
     /// Inside the body of a module, the `depth` of its items: a `}` met
     /// there while recovering closes the module.
     module_depth: Option<usize>,
-}
-
-/// Whether `name` is `Option` or `Result`, the built-in enums with type
-/// arguments (ADR 0045).
-fn is_builtin_enum(name: &str) -> bool {
-    matches!(name, "Option" | "Result")
-}
-
-/// The help for a path to a variant of `Option` or `Result`, `name`, such
-/// as `Option::None`: there is none, and the variant is named by the
-/// expected type (ADR 0044, 0045). `variant` is the name written after
-/// `::`, shown if it is one of theirs.
-pub(crate) fn builtin_variant_help(name: &str, variant: &str) -> String {
-    let (written, variants): (&str, &[&str]) = if name == "Option" {
-        ("an `Option(T)`", &["None", "Some"])
-    } else {
-        ("a `Result(T, E)`", &["Ok", "Err"])
-    };
-    let variant = if variants.contains(&variant) {
-        variant
-    } else {
-        variants[0]
-    };
-    format!(
-        "the variants of `{name}` have no path: write `.{variant}` where {written} is expected, and that type gives it its enum (ADR 0044, 0045)"
-    )
 }
 
 impl Parser<'_> {

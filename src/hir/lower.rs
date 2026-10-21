@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 
+use crate::builtin::builtin_variant_help;
 use crate::diag::{Diagnostic, Diagnostics};
 use crate::hir::{
     self, Arm, ArrayLen, Block, BuiltinEnum, Comptime, ConstDef, ConstId, CoreStart, EnumDef,
@@ -12,7 +13,6 @@ use crate::hir::{
 };
 use crate::span::Span;
 use crate::syntax::ast;
-use crate::syntax::parser::builtin_variant_help;
 
 /// Lowers a program, together with `core` (ADR 0052), whose root file is
 /// `core_file`. `files` are the source files, by id, `core`'s from index
