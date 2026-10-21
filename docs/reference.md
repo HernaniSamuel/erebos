@@ -34,7 +34,7 @@ panic fn on_panic() -> ! {
   parameters, must return `!`, and cannot be called.
 - `panic fn` runs when an operation cannot produce a result, such as
   division by zero, an index out of bounds, a failed `assert`, or an enum
-  value that is no variant in a `match` that no arm matches or under `?`
+  value that is no variant, met by a `match` that no arm matches or by `?`
   (ADR 0014, 0036, 0040, 0046). It must return `!`, and may be called
   explicitly. It takes **no parameter, or one of type
   `*const core::PanicInfo`**, through which it learns why and where the
@@ -489,8 +489,9 @@ let w: Msg = Msg::Write(3, 0x1234);
   name, is reported once, at that type, also in an enum nothing uses, and
   the enum then counts as erroneous: its uses, in `size_of`, in building a
   variant, in a `match` or as a parameter, report nothing more because of
-  it. So does an enum with a payload type that reaches a failed array
-  length or alignment, such as `*const Broken` (see "Failed lengths and
+  it. An enum with a payload type that reaches a failed array length or
+  alignment, such as `*const Broken`, counts as erroneous too, although
+  type errors in its uses are still reported (see "Failed lengths and
   alignments").
 - An enum that contains itself by value, directly or through structs,
   arrays and other enums, is `ty::infinite-size`, which names every type
@@ -868,12 +869,12 @@ an enclosing position, whose type that variant's declaration gives.
   value that is no variant, and then matches exactly that value.
 - **A new variable is always written with `let` and its type**, which must
   be its position's type, with no conversion (`ty::mismatched-types`);
-  without the type, the pattern is `parser::let-without-type`. The
-  variable holds a copy of the value at its position and, with `let mut`,
-  may be assigned. It exists in its arm's expression only, where it
-  shadows, as a value, any item or variable of the same name; it is not
-  visible in the rest of the pattern: in `Msg::Pair(let X: u8, X)`, the
-  second `X` is a constant named `X`. One name bound twice in one pattern, or in one
+  without the type, the pattern is `parser::let-without-type`. The variable
+  holds a copy of the value at its position and, with `let mut`, may be
+  assigned. It exists in its arm's expression only, where it shadows, as a
+  value, any item or variable of the same name; it is not visible in the
+  rest of the pattern: in `Msg::Pair(let X: u8, X)`, the second `X` is a
+  constant named `X`. One name bound twice in one pattern, or in one
   alternative of an or-pattern, as in `Msg::Write(let a: u8, let a: u16)`,
   is `resolve::duplicate-binding`.
 - **Or-patterns** list alternatives of any pattern, at any position:
@@ -1169,9 +1170,10 @@ no variant, and how a `match` reads them.
   until M6, nor is `[T]` (`ty::unsized`). A type argument in error, such
   as these or an unknown name, is reported once, also where nothing uses
   the type, and the whole type then counts as erroneous: its uses report
-  nothing more because of it. So does one with a type argument that
-  reaches a failed array length or alignment, as `Option(*const Broken)`
-  (see "Failed lengths and alignments").
+  nothing more because of it. One with a type argument that reaches a
+  failed array length or alignment, as `Option(*const Broken)`, counts as
+  erroneous too, although type errors in its uses are still reported (see
+  "Failed lengths and alignments").
 - **One type per set of arguments**: two `Option(T)` are the same type
   when their arguments are, compared once array lengths are computed, so
   `Option([u8; 4])` and `Option([u8; 2 + 2])` are one type, while
@@ -1487,9 +1489,11 @@ counts as erroneous, as one containing `!` does (see "Types"):
   value: a `#[packed]` struct containing a type with `#[align(N)]`, failed
   or not (`ty::aligned-in-packed`), an `#[align(N)]` below the alignment
   of a field that reaches a failed value (`ty::invalid-align`, as
-  `#[align(2)] struct W { o: Odd }`), and an array too large
-  (`ty::too-large`, as `[Broken; 0x4000_0000]`, `Broken` being at least
-  4 bytes). Each is reported where it would be for any other type.
+  `#[align(2)] struct W { o: Odd }`), and a type too large
+  (`ty::too-large`): an array, as `[Broken; 0x4000_0000]`, `Broken` being
+  at least 4 bytes, and a struct, an enum or an `Option` or `Result` that
+  grows too large from those least sizes. Each is reported where it would
+  be for any other type.
 
 The `#[align(N)]` of a static is no failed value: it is part of no type.
 One in error is reported, and the static keeps the alignment of its type

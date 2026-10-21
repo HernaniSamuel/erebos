@@ -43,9 +43,10 @@ Decisions already agreed for the later steps (their ADRs come with the step):
 - **M2.5:** `Option(T)` and `Result(T, E)` are compiler-known types, as
   `[T; N]` is; in M6 they become ordinary comptime functions in `core`
   returning enums (ADR 0027), with the same syntax, so programs do not
-  change. They are written with parentheses, like any comptime call. `?` requires the same error
-  type, with no conversion. `Option(*mut T)` takes 8 bytes: address 0 is
-  valid (ADR 0019), so there is no null niche for `None`.
+  change. They are written with parentheses, like any comptime call. `?`
+  requires the same error type, with no conversion. `Option(*mut T)` takes 8
+  bytes: address 0 is valid (ADR 0019), so there is no null niche for
+  `None`.
 
 Until M5, there are no methods: functions are free and take their receiver
 explicitly (`fn rect_area(r: *const Rect) -> u32`), and modules (M2.6)
@@ -286,39 +287,39 @@ Documentation owed:
   program runs such matches on QEMU, at both optimization levels, printing
   the arm each input takes, and checks the same arms in a `comptime` block.
 - **M2.5 done.** A variant may be named by the expected type, `.Run` or
-  `.Write(3, 4)`, in expressions and patterns, wherever a literal takes
-  its type (ADR 0044). `Option(T)` and `Result(T, E)` are built-in enums
-  with payloads, one per set of type arguments, with a `u8` tag and no
-  niches, checked against clang in layout and across calls (ADR 0045);
-  `!` is not a type argument until M6. The `?` operator returns a
-  `.None` or an `.Err(x)` from the function, with the same error type and
-  no conversion, and calls the panic function on a tag that is no
-  variant (ADR 0046). A differential test runs options, results and `?`
-  alike at compile time and on the target. The milestone program parses
-  decimal numbers from a static table of byte strings into
+  `.Write(3, 4)`, in expressions and patterns, wherever a literal takes its
+  type but in the operand of `as` (ADR 0044). `Option(T)` and `Result(T, E)`
+  are built-in enums with payloads, one per set of type arguments, with a
+  `u8` tag and no niches, checked against clang in layout and across calls
+  (ADR 0045); `!` is not a type argument until M6. The `?` operator returns
+  a `.None` or an `.Err(x)` from the function, with the same error type and
+  no conversion, and calls the panic function on a tag that is no variant
+  (ADR 0046). A differential test runs options, results and `?` alike at
+  compile time and on the target. The milestone program parses decimal
+  numbers from a static table of byte strings into
   `Result(u32, ParseError)`, combining checked operations with `?` and
   reporting overflow, empty input and the bad digit, on QEMU at both
   optimization levels, and checks the same results in a `comptime` block.
-  Its follow-ups give a zero-sized payload value an offset, as any other
-  (ADR 0047), and make a type that reaches a failed array length or
-  struct alignment erroneous, so that the failure is reported once
+  Its follow-ups record that a zero-sized payload value has an offset, as
+  any other (ADR 0047), and make a type that reaches a failed array length
+  or struct alignment erroneous, so that the failure is reported once
   instead of a cascade computed from a wrong layout (ADR 0048).
-- **M2.6 done.** Programs are split into modules, inline or in files
-  found by a fixed rule, each with its own namespace; items are named by
-  paths from `crate`, `super`, `core` or a name in scope, and brought in
-  with `use` (ADR 0049). Items and fields are private to their module unless `pub`,
-  variants are visible where their enum is reachable, and `pub use`
-  offers items of private children (ADR 0050, 0054). Functions and
-  statics outside the root module have their paths as symbols,
-  `uart.init`, and `#[export]` keeps a name for C (ADR 0051). The runtime
-  support functions became the module `core`, written in Erebos and
-  shipped inside the compiler (ADR 0052). The panic function may take a
+- **M2.6 done.** Programs are split into modules, inline or in files found
+  by a fixed rule, each with its own namespace; items are named by paths
+  from `crate`, `super`, `core` or a name in scope, and brought in with
+  `use` (ADR 0049). Items and fields are private to their module unless
+  `pub`, variants are visible where their enum is reachable, and `pub use`
+  offers items of private children (ADR 0050, 0054). Functions and statics
+  outside the root module have their paths as symbols, `uart.init`, and
+  `#[export]` keeps a name for C (ADR 0051). The runtime support functions
+  became the module `core`, written in Erebos and shipped inside the
+  compiler (ADR 0052). The panic function may take a
   `*const core::PanicInfo` giving the reason, file, line and column of the
   failed check and the message of an `assert`, read-only data for every
   check but an `assert` with a message; a handler without it pays nothing
   (ADR 0053). Diagnostics may point into several files, and the test
   harnesses run programs of several files. The milestone program, in five
-  files, averages groups of readings on QEMU, at both optimization
-  levels, until a division by zero makes its handler print
+  files, averages groups of readings on QEMU, at both optimization levels,
+  until a division by zero makes its handler print
   `division by zero at main.ers:12`. With it, M2 is done.
 - **Next: M3** (memory maps and peripherals).
