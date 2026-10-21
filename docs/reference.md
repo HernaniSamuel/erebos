@@ -1831,10 +1831,12 @@ fn base() -> usize {
   items is reported too.
 - **File names.** Files are named relative to the root file's directory,
   with `/` between directories (`uart/regs.ers`), and the root file by its
-  file name, however the command line wrote its path. Diagnostics and
-  panic locations (see "Panic information") therefore do not depend on
-  the directory the compiler runs in. The files of `core` are named
-  `rt/core.ers` and `rt/builtins.ers`.
+  file name, however the command line wrote its path; on a file system
+  that ignores case, as its directory lists it (`erebos build MAIN.ERS`
+  names `main.ers`). Diagnostics and panic locations (see "Panic
+  information") therefore do not depend on the directory the compiler
+  runs in. The files of `core` are named `rt/core.ers` and
+  `rt/builtins.ers`.
 - **Order.** Files are numbered in the order their `mod` declarations are
   met, depth first, starting from the root file; the files of `core` come
   after every file of the program. Diagnostics, sorted by file and offset,

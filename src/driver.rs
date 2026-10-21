@@ -157,14 +157,18 @@ struct Program<'a> {
 impl<'a> Program<'a> {
     /// The program whose root file is at `path` and holds `text`.
     fn at(path: &Path, text: &'a str) -> Self {
-        let name = path.file_name().map_or_else(
-            || path.display().to_string(),
-            |name| name.to_string_lossy().into_owned(),
-        );
         let dir = match path.parent() {
             Some(dir) if !dir.as_os_str().is_empty() => dir.to_path_buf(),
             _ => PathBuf::from("."),
         };
+        let name = path.file_name().map_or_else(
+            || path.display().to_string(),
+            |name| {
+                let typed = name.to_string_lossy();
+                let entries = Loader::Dir(dir.clone()).entries("").unwrap_or_default();
+                listed_name(&typed, &entries)
+            },
+        );
         Program {
             name,
             text,
@@ -184,6 +188,25 @@ impl Program<'static> {
             text,
             loader: Loader::Core,
         }
+    }
+}
+
+/// The root file's name as its directory lists it, `entries`, given the
+/// name `typed` on the command line. On a file system that ignores case,
+/// `MAIN.ERS` opens `main.ers`; naming the root file as listed keeps
+/// `mod main;` in it from reading it again, and diagnostics name it as
+/// its modules' files are named (ADR 0049). The name as typed if no entry
+/// matches it, even ignoring case, or several do.
+fn listed_name(typed: &str, entries: &[String]) -> String {
+    if entries.iter().any(|entry| entry == typed) {
+        return typed.to_owned();
+    }
+    let mut matches = entries
+        .iter()
+        .filter(|entry| entry.to_lowercase() == typed.to_lowercase());
+    match (matches.next(), matches.next()) {
+        (Some(entry), None) => entry.clone(),
+        _ => typed.to_owned(),
     }
 }
 
@@ -601,5 +624,19 @@ mod tests {
             "cannot read `a/b.ers`, the file of module `a::b`: cannot list `a`: access denied"
         );
         assert_eq!(diags[0].help, None);
+    }
+
+    /// The root file is named as its directory lists it, so that on a file
+    /// system that ignores case `MAIN.ERS` is `main.ers`, and `mod main;`
+    /// in it is still the root file.
+    #[test]
+    fn root_file_named_as_listed() {
+        let entries = ["main.ers".to_owned(), "uart.ers".to_owned()];
+        assert_eq!(listed_name("MAIN.ERS", &entries), "main.ers");
+        assert_eq!(listed_name("main.ers", &entries), "main.ers");
+        assert_eq!(listed_name("other.ers", &entries), "other.ers");
+        let both = ["MAIN.ERS".to_owned(), "main.ers".to_owned()];
+        assert_eq!(listed_name("MAIN.ERS", &both), "MAIN.ERS");
+        assert_eq!(listed_name("Main.ers", &both), "Main.ers");
     }
 }
