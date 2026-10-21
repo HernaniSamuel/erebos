@@ -119,6 +119,17 @@ Agreed as useful, not yet scheduled:
   a conversion consumes the old value and returns the new type, so using
   an input pin as an output is a compile error. It needs the moves of
   M5 and no new type-system feature; revisit when M5 lands.
+- Affine or linear ownership, to decide with the moves of M5 (ADR 0009).
+  Rust's types are affine: a value is used at most once and may be
+  dropped, with `Drop` running implicitly at the end of the scope.
+  Linear types, as Haskell's `LinearTypes` (`a %1 -> b`), require exactly
+  one use, so forgetting a value is a compile error. That fits hardware
+  tokens that must be given back, such as "interrupts disabled" for a
+  critical section, or exclusive ownership of a peripheral. Questions for
+  the M5 ADR: affine or linear, or both by marking some types; what
+  happens to an unconsumed value; and no implicit code at scope end,
+  given ADR 0008 and the no-runtime rule. Typestate (above) depends on
+  this choice.
 - Effects in function types ("reads MMIO", "disables interrupts", "may
   panic"), for example to forbid some calls inside interrupt handlers.
   A type-system feature of its own; not scheduled. Revisit after M6.
