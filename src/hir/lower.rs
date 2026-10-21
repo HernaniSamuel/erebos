@@ -2854,7 +2854,8 @@ impl Lowerer<'_> {
                     .map(|args| args.iter().map(|arg| self.expr(arg)).collect()),
             ),
             ast::ExprKind::Call(path, args)
-                if plain_name(path).is_some_and(|name| name.name == "assert") =>
+                if let Some(name) = plain_name(path)
+                    && name.name == "assert" =>
             {
                 let mut args: Vec<Expr> = args.iter().map(|arg| self.expr(arg)).collect();
                 if !matches!(args.len(), 1 | 2) {
@@ -2879,7 +2880,7 @@ impl Lowerer<'_> {
                     };
                 }
                 let message = (args.len() == 2).then(|| Box::new(args.remove(1)));
-                ExprKind::Assert(Box::new(args.remove(0)), message)
+                ExprKind::Assert(Box::new(args.remove(0)), message, name.span)
             }
             // Built in, whatever else has the name (ADR 0031).
             ast::ExprKind::Call(path, args)
@@ -2989,10 +2990,18 @@ impl Lowerer<'_> {
                 self.loops.pop();
                 ExprKind::Loop(body)
             }
-            ast::ExprKind::Match { scrutinee, arms } => {
+            ast::ExprKind::Match {
+                scrutinee,
+                arms,
+                keyword,
+            } => {
                 let scrutinee = self.boxed(scrutinee);
                 let arms = arms.iter().map(|arm| self.arm(arm)).collect();
-                ExprKind::Match { scrutinee, arms }
+                ExprKind::Match {
+                    scrutinee,
+                    arms,
+                    keyword: *keyword,
+                }
             }
             ast::ExprKind::Break(value) => {
                 let target = self.loop_target(expr.span, "break");
@@ -3031,7 +3040,7 @@ impl Lowerer<'_> {
             }
             // It may return from the enclosing function, as `return` does
             // (ADR 0046).
-            ast::ExprKind::Try(operand) => {
+            ast::ExprKind::Try(operand, question) => {
                 if self.in_comptime {
                     self.diags.push(
                         Diagnostic::error(
@@ -3044,7 +3053,7 @@ impl Lowerer<'_> {
                         ),
                     );
                 }
-                ExprKind::Try(self.boxed(operand))
+                ExprKind::Try(self.boxed(operand), *question)
             }
             ast::ExprKind::Comptime(inner) => {
                 // The enclosing function's variables and loops exist only at

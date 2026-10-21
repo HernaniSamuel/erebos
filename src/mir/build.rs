@@ -611,13 +611,12 @@ impl Builder<'_, '_> {
                 }
                 Operand::Const(Const::Unit)
             }
-            hir::ExprKind::Assert(cond, None) => {
+            hir::ExprKind::Assert(cond, None, keyword) => {
                 let cond = self.expr(cond);
-                // Located at `assert`, where the expression starts.
-                self.panic_unless(cond, PanicCause::AssertionFailed(None), expr.span);
+                self.panic_unless(cond, PanicCause::AssertionFailed(None), *keyword);
                 Operand::Const(Const::Unit)
             }
-            hir::ExprKind::Assert(cond_expr, Some(message)) => {
+            hir::ExprKind::Assert(cond_expr, Some(message), keyword) => {
                 let cond = self.expr(cond_expr);
                 // Like the right operand of `||`: the message is evaluated
                 // only if the assertion fails (ADR 0031), so it cannot run
@@ -636,7 +635,7 @@ impl Builder<'_, '_> {
                     // A message that diverges, as `return 4`, leaves no
                     // block to fill and call from.
                     if self.current.is_some() {
-                        let panic = self.assert_panic(value, message.span, expr.span);
+                        let panic = self.assert_panic(value, message.span, *keyword);
                         self.terminate(panic);
                     }
                     self.current = Some(ok_bb);
@@ -714,8 +713,12 @@ impl Builder<'_, '_> {
                 self.current = scope.break_to;
                 self.read_result(result)
             }
-            hir::ExprKind::Match { scrutinee, arms } => self.match_(ty, scrutinee, arms, expr.span),
-            hir::ExprKind::Try(operand) => self.try_(ty, operand, expr.span),
+            hir::ExprKind::Match {
+                scrutinee,
+                arms,
+                keyword,
+            } => self.match_(ty, scrutinee, arms, *keyword),
+            hir::ExprKind::Try(operand, question) => self.try_(ty, operand, *question),
             hir::ExprKind::Break { target, value } => {
                 let value = value.as_ref().map(|v| self.expr(v));
                 let index = self.loop_index(*target);
@@ -773,10 +776,16 @@ impl Builder<'_, '_> {
     /// only the arm it takes is checked (ADR 0032). On an enum with
     /// payloads, a switch on the tag starts, for each variant the arms
     /// name, the chain of the alternatives naming it, tested in arm order
-    /// (ADR 0042). Either way, each arm's expression is built once. `span`
-    /// is the `match`'s, which starts at the keyword, where the call to the
-    /// panic function is located (ADR 0053).
-    fn match_(&mut self, ty: Ty, scrutinee: &hir::Expr, arms: &[hir::Arm], span: Span) -> Operand {
+    /// (ADR 0042). Either way, each arm's expression is built once. The
+    /// call to the panic function is located at `keyword`, the `match`
+    /// (ADR 0053).
+    fn match_(
+        &mut self,
+        ty: Ty,
+        scrutinee: &hir::Expr,
+        arms: &[hir::Arm],
+        keyword: Span,
+    ) -> Operand {
         let scrutinee_ty = self.ty_of(scrutinee);
         let hir_ty = self.q.tables.expr_ty(scrutinee.id);
         let value = self.expr(scrutinee);
@@ -811,11 +820,11 @@ impl Builder<'_, '_> {
             let Operand::Copy(place) = discr else {
                 unreachable!("an enum with payloads is an aggregate, read from a place")
             };
-            self.chains(place, hir_ty, arms, &blocks, span);
+            self.chains(place, hir_ty, arms, &blocks, keyword);
             // No value of an enum with payloads is known (ADR 0039).
             None
         } else {
-            self.switch(scrutinee, scrutinee_ty, discr, arms, &blocks, span)
+            self.switch(scrutinee, scrutinee_ty, discr, arms, &blocks, keyword)
         };
 
         let result = self.result_place(ty);
@@ -846,9 +855,8 @@ impl Builder<'_, '_> {
     /// for `None` or `Err`, to one that builds `.None` or `.Err(x)` in the
     /// return place and returns; and for a tag that is no variant, to the
     /// panic function, as a `match` without a catch-all arm does
-    /// (ADR 0036, 0040), located at the `?`, the last byte of `span`, the
-    /// expression's (ADR 0053).
-    fn try_(&mut self, ty: Ty, operand: &hir::Expr, span: Span) -> Operand {
+    /// (ADR 0036, 0040), located at `question`, the `?` (ADR 0053).
+    fn try_(&mut self, ty: Ty, operand: &hir::Expr, question: Span) -> Operand {
         let operand_ty = self.ty_of(operand);
         let hir::Ty::Enum(e) = self.q.tables.expr_ty(operand.id) else {
             // `!`: nothing follows the operand.
@@ -879,10 +887,6 @@ impl Builder<'_, '_> {
         let (success, failure) = builtin.try_variants();
         let success_bb = self.new_block();
         let failure_bb = self.new_block();
-        let question = Span {
-            lo: span.hi - 1,
-            ..span
-        };
         let panic_bb = self.panic_block(question);
         // Known without evaluation (ADR 0045).
         let tag = |this: &mut Self, id: hir::EnumId, index: u32| {

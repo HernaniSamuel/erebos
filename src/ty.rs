@@ -786,7 +786,7 @@ impl Checker<'_, '_> {
                 info.ty
             }
             ExprKind::AddrOf { mutable, place } => self.addr_of(f, *mutable, place),
-            ExprKind::Try(operand) => self.try_(f, expr, operand),
+            ExprKind::Try(operand, _) => self.try_(f, expr, operand),
             ExprKind::Assign(place, value) => {
                 let place_ty = self.place(f, place);
                 self.check(f, value, Some(place_ty));
@@ -807,7 +807,7 @@ impl Checker<'_, '_> {
                 }
                 Ty::Unit
             }
-            ExprKind::Assert(cond, message) => {
+            ExprKind::Assert(cond, message, _) => {
                 self.check(f, cond, Some(Ty::Bool));
                 // Any `*const [u8]`, or what converts to one (ADR 0031).
                 if let Some(message) = message {
@@ -882,7 +882,9 @@ impl Checker<'_, '_> {
                 // Without a `break`, a loop never finishes.
                 ctx.break_ty.unwrap_or(Ty::Never)
             }
-            ExprKind::Match { scrutinee, arms } => self.match_(f, scrutinee, arms, expected),
+            ExprKind::Match {
+                scrutinee, arms, ..
+            } => self.match_(f, scrutinee, arms, expected),
             ExprKind::Break { target, value } => {
                 self.break_(f, expr, *target, value.as_deref());
                 Ty::Never
@@ -3438,7 +3440,7 @@ fn expr_label(q: &Queries, f: &Fn, expr: &Expr) -> String {
         ExprKind::Unary(op, _) => format!("{op:?}").to_lowercase(),
         ExprKind::Deref(_) => "deref".to_owned(),
         ExprKind::Index(..) => "index".to_owned(),
-        ExprKind::Try(_) => "try".to_owned(),
+        ExprKind::Try(..) => "try".to_owned(),
         ExprKind::AddrOf { mutable: true, .. } => "&raw mut".to_owned(),
         ExprKind::AddrOf { mutable: false, .. } => "&raw const".to_owned(),
         ExprKind::Binary(op, _, _, _) => format!("binary {}", op.symbol()),

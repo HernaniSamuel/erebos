@@ -38,3 +38,13 @@ fn messages(x: u32, m: *const [u8]) -> u32 {
 
 entry fn main() -> ! { loop {} }
 panic fn on_panic(info: *const core::PanicInfo) -> ! { loop {} }
+
+// In parentheses, a check is still located at the token that performs it,
+// not at the `(` or the `)` around it.
+fn parenthesized(c: bool, m: *const [u8], mode: Mode, o: Option(u32)) -> Option(u32) {
+    (assert(c));
+    (assert(c, m));
+    let v: u32 = (match mode { .Off => 0, .Run => 1 });
+    let x: u32 = (o?);
+    .Some(v + x)
+}

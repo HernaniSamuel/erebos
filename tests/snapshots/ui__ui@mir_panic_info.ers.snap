@@ -391,6 +391,88 @@ panic fn on_panic(_1: *const core::PanicInfo) -> ! {
     }
 }
 
+fn parenthesized(_1: bool, _2: *const [u8], _3: u8, _4: Option(u32)) -> Option(u32) {
+    let _0: Option(u32);
+    let _1: bool; // c
+    let _2: *const [u8]; // m
+    let _3: u8; // mode
+    let _4: Option(u32); // o
+    let _5: u32; // v
+    let _6: u32; // x
+    let _7: core::PanicInfo;
+    let _8: u8;
+    let _9: u32;
+    let _10: Option(u32);
+    let _11: u32;
+    let _12: u32;
+    let _13: Option(u32);
+
+    bb0: {
+        if copy _1 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        if copy _1 -> [true: bb3, false: bb4];
+    }
+
+    bb2: {
+        panic(assertion failed, data15 at mir_panic_info.ers:45:6);
+    }
+
+    bb3: {
+        _8 = copy _3;
+        switch copy _8 -> [0_u8: bb5, 1_u8: bb6, otherwise: bb7];
+    }
+
+    bb4: {
+        _7.0 = slice(const b"mir_panic_info.ers", const 18_usize);
+        _7.1 = const 46_u32;
+        _7.2 = const 6_u32;
+        _7.3 = const 2_u8;
+        _7.4 = copy _2;
+        panic(assertion failed, copy _2, &raw const _7 at mir_panic_info.ers:46:6);
+    }
+
+    bb5: {
+        _9 = const 0_u32;
+        goto -> bb8;
+    }
+
+    bb6: {
+        _9 = const 1_u32;
+        goto -> bb8;
+    }
+
+    bb7: {
+        panic(enum value is no variant, data16 at mir_panic_info.ers:47:19);
+    }
+
+    bb8: {
+        _5 = copy _9;
+        _10 = copy _4;
+        switch copy _10.tag -> [1_u8: bb9, 0_u8: bb10, otherwise: bb11];
+    }
+
+    bb9: {
+        _11 = copy (_10 as 1).0;
+        _6 = copy _11;
+        _12 = Add(copy _5, copy _6);
+        (_13 as 1).0 = copy _12;
+        _13.tag = const 1_u8;
+        _0 = copy _13;
+        return;
+    }
+
+    bb10: {
+        _0.tag = const 0_u8;
+        return;
+    }
+
+    bb11: {
+        panic(enum value is no variant, data17 at mir_panic_info.ers:48:20);
+    }
+}
+
 comptime fn Mode::Off() -> u8 {
     let _0: u8;
 

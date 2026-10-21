@@ -330,8 +330,9 @@ pub enum ExprKind {
     /// located (ADR 0053).
     Index(Box<Expr>, Box<Expr>, Span),
     /// `operand?`: the value of an `Option` or a `Result`, or a return of
-    /// its failure (ADR 0046).
-    Try(Box<Expr>),
+    /// its failure (ADR 0046), with the span of the `?`, where the check of
+    /// its tag is located (ADR 0053).
+    Try(Box<Expr>, Span),
     /// `&raw const place` or `&raw mut place` (ADR 0021)
     AddrOf {
         mutable: bool,
@@ -360,10 +361,13 @@ pub enum ExprKind {
         body: Block,
     },
     Loop(Block),
-    /// `match scrutinee { pattern => expr, ... }` (ADR 0037)
+    /// `match scrutinee { pattern => expr, ... }` (ADR 0037), with the span
+    /// of the keyword, where the check of an enum's value is located
+    /// (ADR 0053).
     Match {
         scrutinee: Box<Expr>,
         arms: Vec<Arm>,
+        keyword: Span,
     },
     /// `break` or `break value`
     Break(Option<Box<Expr>>),

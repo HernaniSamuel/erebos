@@ -937,8 +937,9 @@ pub enum ExprKind {
     StructLit(StructTy, Vec<(u32, Expr)>),
     /// `base.field`; the type checker resolves the field.
     Field(Box<Expr>, String, Span),
-    /// `assert(cond)` or `assert(cond, msg)`, built in (ADR 0029, 0031).
-    Assert(Box<Expr>, Option<Box<Expr>>),
+    /// `assert(cond)` or `assert(cond, msg)`, built in (ADR 0029, 0031),
+    /// with the span of `assert`, where its check is located (ADR 0053).
+    Assert(Box<Expr>, Option<Box<Expr>>, Span),
     /// `len(s)`, built in (ADR 0031): the length of a slice.
     Len(Box<Expr>),
     /// `slice(p, n)`, built in (ADR 0031): a slice of `n` elements from `p`.
@@ -957,8 +958,10 @@ pub enum ExprKind {
     /// located (ADR 0053).
     Index(Box<Expr>, Box<Expr>, Span),
     /// `operand?` (ADR 0046): the payload of an `Option`'s `Some` or a
-    /// `Result`'s `Ok`, or else a return of its `.None` or `.Err(x)`.
-    Try(Box<Expr>),
+    /// `Result`'s `Ok`, or else a return of its `.None` or `.Err(x)`; with
+    /// the span of the `?`, where the check of its tag is located
+    /// (ADR 0053).
+    Try(Box<Expr>, Span),
     /// `&raw const place` or `&raw mut place`
     AddrOf {
         mutable: bool,
@@ -984,10 +987,12 @@ pub enum ExprKind {
         body: Block,
     },
     Loop(Block),
-    /// `match scrutinee { arms }` (ADR 0037).
+    /// `match scrutinee { arms }` (ADR 0037), with the span of the keyword,
+    /// where the check of an enum's value is located (ADR 0053).
     Match {
         scrutinee: Box<Expr>,
         arms: Vec<Arm>,
+        keyword: Span,
     },
     /// Leaves the loop expression `target` (a `loop` or `while`).
     Break {
@@ -1102,10 +1107,10 @@ impl Expr {
             }
             ExprKind::Repeat(e, _)
             | ExprKind::Field(e, _, _)
-            | ExprKind::Assert(e, None)
+            | ExprKind::Assert(e, None, _)
             | ExprKind::Len(e)
             | ExprKind::Comptime(e)
-            | ExprKind::Try(e) => e.walk(f),
+            | ExprKind::Try(e, _) => e.walk(f),
             ExprKind::StructLit(_, fields) => {
                 for (_, value) in fields {
                     value.walk(f);
@@ -1118,7 +1123,7 @@ impl Expr {
             ExprKind::Binary(_, a, b, _)
             | ExprKind::Index(a, b, _)
             | ExprKind::Slice(a, b)
-            | ExprKind::Assert(a, Some(b))
+            | ExprKind::Assert(a, Some(b), _)
             | ExprKind::Logical(_, a, b)
             | ExprKind::Assign(a, b)
             | ExprKind::CompoundAssign(_, a, b, _) => {
@@ -1137,7 +1142,9 @@ impl Expr {
                 cond.walk(f);
                 body.walk(f);
             }
-            ExprKind::Match { scrutinee, arms } => {
+            ExprKind::Match {
+                scrutinee, arms, ..
+            } => {
                 scrutinee.walk(f);
                 for arm in arms {
                     arm.body.walk(f);

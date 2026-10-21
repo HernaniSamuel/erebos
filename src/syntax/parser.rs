@@ -1135,7 +1135,7 @@ impl Parser<'_> {
             } else if let Some(question) = self.eat(TokenKind::Question) {
                 expr = Expr {
                     span: expr.span.to(question.span),
-                    kind: ExprKind::Try(Box::new(expr)),
+                    kind: ExprKind::Try(Box::new(expr), question.span),
                 };
             } else {
                 return Ok(expr);
@@ -1412,7 +1412,11 @@ impl Parser<'_> {
         let arms = arms?;
         let close = self.tokens[self.pos - 1].span;
         Ok(Expr {
-            kind: ExprKind::Match { scrutinee, arms },
+            kind: ExprKind::Match {
+                scrutinee,
+                arms,
+                keyword: start,
+            },
             span: start.to(close),
         })
     }
