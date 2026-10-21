@@ -4,8 +4,9 @@
 // one prefix, with a trailing comma. A `use` may go through another `use`,
 // and `use`s and items refer to each other across modules in any order. A
 // `pub use` offers an item of a private child outside its module (ADR 0049,
-// 0050). The dump shows each item by its path, whatever name it is used by;
-// the functions called return different types, which tells them apart.
+// 0050), and so may a private `use` of a `pub` item. The dump shows each
+// item by its path, whatever name it is used by; the functions called
+// return different types, which tells them apart.
 use uart::putc;
 use uart::regs::BASE as UART_BASE;
 use crate::timer::{init, Tick, regs::CONTROL,};
@@ -21,6 +22,9 @@ entry fn main() -> ! {
     let built: Tick = Tick {};
     let b: Option(Block) = drivers::make();
     let m: Mode = Mode::Run;
+    let resent: u8 = timer::send(b'b');
+    // `CONTROL` as a pattern is the constant `use` brought in: a new name
+    // there would be `resolve::unknown-name`. The dump shows no patterns.
     let c: u32 = match CONTROL {
         CONTROL => 0,
         let x: u32 => x,
@@ -52,6 +56,7 @@ pub mod uart {
 
 pub mod timer {
     use super::uart::putc;
+    pub use putc as send;
 
     pub struct Tick {}
     pub fn init() -> Tick { putc(b't'); Tick {} }

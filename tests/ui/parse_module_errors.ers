@@ -6,7 +6,8 @@
 // `parser::local-mod` (ADR 0049). In a path, `super` follows only `super`
 // at the start, and `crate` comes only first. After an error in the last
 // item of a module, parsing resumes at the module's `}`, which closes it:
-// no `parser::unclosed-block`, and the items after it are not in it.
+// no `parser::unclosed-block` is reported, and the items after it are not
+// in it (tested in `src/syntax/parser.rs`, since this dump shows errors).
 pub comptime { }
 pub entry fn main() -> ! { loop {} }
 pub pub fn twice() {}

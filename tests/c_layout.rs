@@ -204,7 +204,8 @@ fn struct_layouts_match_c() {
 /// `Option(T)` or `Result(T, E)`, its name and arguments run together,
 /// each capitalized, `()` as `Unit`, an array `[T; N]` as `<T>x<N>`:
 /// `Result(u32, Mode)` is `ResultU32Mode`, `Option([u32; 0])` is
-/// `OptionU32x0` (not `OptionU320`, which reads as a 320-bit integer).
+/// `OptionU32x0` (not `OptionU320`, which reads as a 320-bit integer), and
+/// `[Option(u8); 2]` is `OptionU8x2`.
 fn c_name(name: &str) -> String {
     if !name.contains('(') {
         return name.replace("::", "__");
@@ -214,7 +215,14 @@ fn c_name(name: &str) -> String {
         .replace("; ", "x")
         .split(|c: char| !c.is_ascii_alphanumeric())
         .filter(|part| !part.is_empty())
-        .map(|part| part[..1].to_ascii_uppercase() + &part[1..])
+        // The `x` of an array's length stays lowercase: `OptionU8x2`.
+        .map(|part| {
+            if part.starts_with('x') && part[1..].bytes().all(|b| b.is_ascii_digit()) {
+                part.to_owned()
+            } else {
+                part[..1].to_ascii_uppercase() + &part[1..]
+            }
+        })
         .collect()
 }
 
@@ -238,4 +246,13 @@ fn split_top_level(text: &str) -> Vec<&str> {
     }
     parts.push(text[start..].trim());
     parts
+}
+
+#[test]
+fn c_names() {
+    assert_eq!(c_name("regs::Block"), "regs__Block");
+    assert_eq!(c_name("Result(u32, Mode)"), "ResultU32Mode");
+    assert_eq!(c_name("Option([u32; 0])"), "OptionU32x0");
+    assert_eq!(c_name("Option(())"), "OptionUnit");
+    assert_eq!(c_name("[Option(u8); 2]"), "OptionU8x2");
 }

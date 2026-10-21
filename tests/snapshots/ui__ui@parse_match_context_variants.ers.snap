@@ -13,14 +13,14 @@ File {
                 kind: Plain,
                 name: Ident {
                     name: "patterns",
-                    span: 348..356,
+                    span: 454..462,
                 },
                 params: [
                     Param {
                         mutable: false,
                         name: Ident {
                             name: "m",
-                            span: 357..358,
+                            span: 463..464,
                         },
                         ty: Ty {
                             kind: Named(
@@ -28,13 +28,13 @@ File {
                                     segments: [
                                         Ident {
                                             name: "Msg",
-                                            span: 360..363,
+                                            span: 466..469,
                                         },
                                     ],
-                                    span: 360..363,
+                                    span: 466..469,
                                 },
                             ),
-                            span: 360..363,
+                            span: 466..469,
                         },
                     },
                 ],
@@ -45,13 +45,13 @@ File {
                                 segments: [
                                     Ident {
                                         name: "u8",
-                                        span: 368..370,
+                                        span: 474..476,
                                     },
                                 ],
-                                span: 368..370,
+                                span: 474..476,
                             },
                         ),
-                        span: 368..370,
+                        span: 474..476,
                     },
                 ),
                 body: Some(
@@ -66,13 +66,13 @@ File {
                                                 segments: [
                                                     Ident {
                                                         name: "m",
-                                                        span: 383..384,
+                                                        span: 489..490,
                                                     },
                                                 ],
-                                                span: 383..384,
+                                                span: 489..490,
                                             },
                                         ),
-                                        span: 383..384,
+                                        span: 489..490,
                                     },
                                     arms: [
                                         Arm {
@@ -80,11 +80,11 @@ File {
                                                 kind: ContextVariant(
                                                     Ident {
                                                         name: "Nop",
-                                                        span: 396..399,
+                                                        span: 502..505,
                                                     },
                                                     None,
                                                 ),
-                                                span: 395..399,
+                                                span: 501..505,
                                             },
                                             body: Expr {
                                                 kind: Int(
@@ -92,7 +92,7 @@ File {
                                                         0,
                                                     ),
                                                 ),
-                                                span: 403..404,
+                                                span: 509..510,
                                             },
                                         },
                                         Arm {
@@ -100,7 +100,7 @@ File {
                                                 kind: ContextVariant(
                                                     Ident {
                                                         name: "Write",
-                                                        span: 415..420,
+                                                        span: 521..526,
                                                     },
                                                     Some(
                                                         [
@@ -114,7 +114,7 @@ File {
                                                                                 ),
                                                                                 negated: false,
                                                                             },
-                                                                            span: 421..425,
+                                                                            span: 527..531,
                                                                         },
                                                                         Pattern {
                                                                             kind: Int {
@@ -123,18 +123,18 @@ File {
                                                                                 ),
                                                                                 negated: false,
                                                                             },
-                                                                            span: 428..432,
+                                                                            span: 534..538,
                                                                         },
                                                                     ],
                                                                 ),
-                                                                span: 421..432,
+                                                                span: 527..538,
                                                             },
                                                             Pattern {
                                                                 kind: Binding {
                                                                     mutable: false,
                                                                     name: Ident {
                                                                         name: "v",
-                                                                        span: 438..439,
+                                                                        span: 544..545,
                                                                     },
                                                                     ty: Ty {
                                                                         kind: Named(
@@ -142,21 +142,21 @@ File {
                                                                                 segments: [
                                                                                     Ident {
                                                                                         name: "u16",
-                                                                                        span: 441..444,
+                                                                                        span: 547..550,
                                                                                     },
                                                                                 ],
-                                                                                span: 441..444,
+                                                                                span: 547..550,
                                                                             },
                                                                         ),
-                                                                        span: 441..444,
+                                                                        span: 547..550,
                                                                     },
                                                                 },
-                                                                span: 434..444,
+                                                                span: 540..550,
                                                             },
                                                         ],
                                                     ),
                                                 ),
-                                                span: 414..446,
+                                                span: 520..552,
                                             },
                                             body: Expr {
                                                 kind: Int(
@@ -164,7 +164,7 @@ File {
                                                         1,
                                                     ),
                                                 ),
-                                                span: 450..451,
+                                                span: 556..557,
                                             },
                                         },
                                         Arm {
@@ -172,7 +172,7 @@ File {
                                                 kind: ContextVariant(
                                                     Ident {
                                                         name: "SetMode",
-                                                        span: 462..469,
+                                                        span: 568..575,
                                                     },
                                                     Some(
                                                         [
@@ -180,16 +180,16 @@ File {
                                                                 kind: ContextVariant(
                                                                     Ident {
                                                                         name: "Run",
-                                                                        span: 471..474,
+                                                                        span: 577..580,
                                                                     },
                                                                     None,
                                                                 ),
-                                                                span: 470..474,
+                                                                span: 576..580,
                                                             },
                                                         ],
                                                     ),
                                                 ),
-                                                span: 461..475,
+                                                span: 567..581,
                                             },
                                             body: Expr {
                                                 kind: Int(
@@ -197,7 +197,7 @@ File {
                                                         2,
                                                     ),
                                                 ),
-                                                span: 479..480,
+                                                span: 585..586,
                                             },
                                         },
                                         Arm {
@@ -207,21 +207,21 @@ File {
                                                         segments: [
                                                             Ident {
                                                                 name: "Msg",
-                                                                span: 490..493,
+                                                                span: 596..599,
                                                             },
                                                             Ident {
                                                                 name: "Nested",
-                                                                span: 495..501,
+                                                                span: 601..607,
                                                             },
                                                         ],
-                                                        span: 490..501,
+                                                        span: 596..607,
                                                     },
                                                     [
                                                         Pattern {
                                                             kind: ContextVariant(
                                                                 Ident {
                                                                     name: "In",
-                                                                    span: 503..505,
+                                                                    span: 609..611,
                                                                 },
                                                                 Some(
                                                                     [
@@ -231,34 +231,34 @@ File {
                                                                                     segments: [
                                                                                         Ident {
                                                                                             name: "Inner",
-                                                                                            span: 506..511,
+                                                                                            span: 612..617,
                                                                                         },
                                                                                         Ident {
                                                                                             name: "A",
-                                                                                            span: 513..514,
+                                                                                            span: 619..620,
                                                                                         },
                                                                                     ],
-                                                                                    span: 506..514,
+                                                                                    span: 612..620,
                                                                                 },
                                                                                 [
                                                                                     Pattern {
                                                                                         kind: Wildcard,
-                                                                                        span: 515..516,
+                                                                                        span: 621..622,
                                                                                     },
                                                                                     Pattern {
                                                                                         kind: Bool(
                                                                                             true,
                                                                                         ),
-                                                                                        span: 518..522,
+                                                                                        span: 624..628,
                                                                                     },
                                                                                 ],
                                                                             ),
-                                                                            span: 506..523,
+                                                                            span: 612..629,
                                                                         },
                                                                     ],
                                                                 ),
                                                             ),
-                                                            span: 502..524,
+                                                            span: 608..630,
                                                         },
                                                         Pattern {
                                                             kind: Or(
@@ -267,29 +267,29 @@ File {
                                                                         kind: ContextVariant(
                                                                             Ident {
                                                                                 name: "X",
-                                                                                span: 527..528,
+                                                                                span: 633..634,
                                                                             },
                                                                             None,
                                                                         ),
-                                                                        span: 526..528,
+                                                                        span: 632..634,
                                                                     },
                                                                     Pattern {
                                                                         kind: ContextVariant(
                                                                             Ident {
                                                                                 name: "Y",
-                                                                                span: 532..533,
+                                                                                span: 638..639,
                                                                             },
                                                                             None,
                                                                         ),
-                                                                        span: 531..533,
+                                                                        span: 637..639,
                                                                     },
                                                                 ],
                                                             ),
-                                                            span: 526..533,
+                                                            span: 632..639,
                                                         },
                                                     ],
                                                 ),
-                                                span: 490..534,
+                                                span: 596..640,
                                             },
                                             body: Expr {
                                                 kind: Int(
@@ -297,7 +297,7 @@ File {
                                                         3,
                                                     ),
                                                 ),
-                                                span: 538..539,
+                                                span: 644..645,
                                             },
                                         },
                                         Arm {
@@ -305,13 +305,13 @@ File {
                                                 kind: ContextVariant(
                                                     Ident {
                                                         name: "Led",
-                                                        span: 550..553,
+                                                        span: 656..659,
                                                     },
                                                     Some(
                                                         [],
                                                     ),
                                                 ),
-                                                span: 549..555,
+                                                span: 655..661,
                                             },
                                             body: Expr {
                                                 kind: Int(
@@ -319,7 +319,7 @@ File {
                                                         4,
                                                     ),
                                                 ),
-                                                span: 559..560,
+                                                span: 665..666,
                                             },
                                         },
                                         Arm {
@@ -330,18 +330,18 @@ File {
                                                             kind: ContextVariant(
                                                                 Ident {
                                                                     name: "Wide",
-                                                                    span: 571..575,
+                                                                    span: 677..681,
                                                                 },
                                                                 Some(
                                                                     [
                                                                         Pattern {
                                                                             kind: Wildcard,
-                                                                            span: 576..577,
+                                                                            span: 682..683,
                                                                         },
                                                                     ],
                                                                 ),
                                                             ),
-                                                            span: 570..578,
+                                                            span: 676..684,
                                                         },
                                                         Pattern {
                                                             kind: Name(
@@ -349,23 +349,23 @@ File {
                                                                     segments: [
                                                                         Ident {
                                                                             name: "Msg",
-                                                                            span: 581..584,
+                                                                            span: 687..690,
                                                                         },
                                                                         Ident {
                                                                             name: "Nop",
-                                                                            span: 586..589,
+                                                                            span: 692..695,
                                                                         },
                                                                     ],
-                                                                    span: 581..589,
+                                                                    span: 687..695,
                                                                 },
                                                             ),
-                                                            span: 581..589,
+                                                            span: 687..695,
                                                         },
                                                         Pattern {
                                                             kind: ContextVariant(
                                                                 Ident {
                                                                     name: "Led",
-                                                                    span: 593..596,
+                                                                    span: 699..702,
                                                                 },
                                                                 Some(
                                                                     [
@@ -373,16 +373,16 @@ File {
                                                                             kind: Bool(
                                                                                 true,
                                                                             ),
-                                                                            span: 597..601,
+                                                                            span: 703..707,
                                                                         },
                                                                     ],
                                                                 ),
                                                             ),
-                                                            span: 592..602,
+                                                            span: 698..708,
                                                         },
                                                     ],
                                                 ),
-                                                span: 570..602,
+                                                span: 676..708,
                                             },
                                             body: Expr {
                                                 kind: Int(
@@ -390,13 +390,13 @@ File {
                                                         5,
                                                     ),
                                                 ),
-                                                span: 606..607,
+                                                span: 712..713,
                                             },
                                         },
                                         Arm {
                                             pattern: Pattern {
                                                 kind: Wildcard,
-                                                span: 617..618,
+                                                span: 723..724,
                                             },
                                             body: Expr {
                                                 kind: Int(
@@ -404,19 +404,151 @@ File {
                                                         6,
                                                     ),
                                                 ),
-                                                span: 622..623,
+                                                span: 728..729,
                                             },
                                         },
                                     ],
-                                    keyword: 377..382,
+                                    keyword: 483..488,
                                 },
-                                span: 377..630,
+                                span: 483..736,
                             },
                         ),
-                        span: 371..632,
+                        span: 477..738,
                     },
                 ),
-                span: 345..632,
+                span: 451..738,
+            },
+        ),
+        Fn(
+            FnDecl {
+                attrs: [],
+                vis: Private,
+                kind: Plain,
+                name: Ident {
+                    name: "after_block",
+                    span: 743..754,
+                },
+                params: [
+                    Param {
+                        mutable: false,
+                        name: Ident {
+                            name: "m",
+                            span: 755..756,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Path {
+                                    segments: [
+                                        Ident {
+                                            name: "Mode",
+                                            span: 758..762,
+                                        },
+                                    ],
+                                    span: 758..762,
+                                },
+                            ),
+                            span: 758..762,
+                        },
+                    },
+                ],
+                ret: Some(
+                    Ty {
+                        kind: Named(
+                            Path {
+                                segments: [
+                                    Ident {
+                                        name: "u8",
+                                        span: 767..769,
+                                    },
+                                ],
+                                span: 767..769,
+                            },
+                        ),
+                        span: 767..769,
+                    },
+                ),
+                body: Some(
+                    Block {
+                        stmts: [],
+                        tail: Some(
+                            Expr {
+                                kind: Match {
+                                    scrutinee: Expr {
+                                        kind: Name(
+                                            Path {
+                                                segments: [
+                                                    Ident {
+                                                        name: "m",
+                                                        span: 782..783,
+                                                    },
+                                                ],
+                                                span: 782..783,
+                                            },
+                                        ),
+                                        span: 782..783,
+                                    },
+                                    arms: [
+                                        Arm {
+                                            pattern: Pattern {
+                                                kind: ContextVariant(
+                                                    Ident {
+                                                        name: "Off",
+                                                        span: 795..798,
+                                                    },
+                                                    None,
+                                                ),
+                                                span: 794..798,
+                                            },
+                                            body: Expr {
+                                                kind: Block(
+                                                    Block {
+                                                        stmts: [],
+                                                        tail: Some(
+                                                            Expr {
+                                                                kind: Int(
+                                                                    Some(
+                                                                        0,
+                                                                    ),
+                                                                ),
+                                                                span: 804..805,
+                                                            },
+                                                        ),
+                                                        span: 802..807,
+                                                    },
+                                                ),
+                                                span: 802..807,
+                                            },
+                                        },
+                                        Arm {
+                                            pattern: Pattern {
+                                                kind: ContextVariant(
+                                                    Ident {
+                                                        name: "Run",
+                                                        span: 817..820,
+                                                    },
+                                                    None,
+                                                ),
+                                                span: 816..820,
+                                            },
+                                            body: Expr {
+                                                kind: Int(
+                                                    Some(
+                                                        1,
+                                                    ),
+                                                ),
+                                                span: 824..825,
+                                            },
+                                        },
+                                    ],
+                                    keyword: 776..781,
+                                },
+                                span: 776..832,
+                            },
+                        ),
+                        span: 770..834,
+                    },
+                ),
+                span: 740..834,
             },
         ),
     ],

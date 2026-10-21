@@ -3,7 +3,8 @@
 // and `.V(p, ...)` with a pattern for each payload value, each a pattern
 // with alternatives, nested to any depth, with an optional trailing comma;
 // `.V()` parses, and is a count error later. They mix with `E::V`, inside
-// payloads and as alternatives.
+// payloads and as alternatives. After an arm whose body is a block, with
+// no comma, `.V` starts the next arm, not a field of the block.
 fn patterns(m: Msg) -> u8 {
     match m {
         .Nop => 0,
@@ -13,5 +14,12 @@ fn patterns(m: Msg) -> u8 {
         .Led() => 4,
         .Wide(_) | Msg::Nop | .Led(true) => 5,
         _ => 6,
+    }
+}
+
+fn after_block(m: Mode) -> u8 {
+    match m {
+        .Off => { 0 }
+        .Run => 1,
     }
 }

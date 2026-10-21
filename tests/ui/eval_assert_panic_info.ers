@@ -1,8 +1,8 @@
 // emit: mir
-// With a panic function that takes the information, a program function
-// run at compile time fills the `PanicInfo` of a failing `assert` with a
-// message, then fails the evaluation with its message, as without it: the
-// panic function's body never runs there (ADR 0053).
+// With a panic function that takes the information, a failing `assert`
+// with a message, in a program function run at compile time, fails the
+// evaluation with its message, as without it: the panic function's body
+// never runs there (ADR 0053).
 fn checked(x: u32) -> u32 {
     assert(x < 10, &raw const b"x is too large");
     x

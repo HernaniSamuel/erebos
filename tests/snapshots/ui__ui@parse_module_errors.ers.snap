@@ -1,6 +1,5 @@
 ---
 source: tests/ui.rs
-assertion_line: 40
 expression: output
 input_file: tests/ui/parse_module_errors.ers
 ---
@@ -8,124 +7,124 @@ input_file: tests/ui/parse_module_errors.ers
 parser::misplaced-pub
 
   × `pub` does not apply to a `comptime` block
-    ╭─[parse_module_errors.ers:10:1]
-  9 │ // no `parser::unclosed-block`, and the items after it are not in it.
- 10 │ pub comptime { }
+    ╭─[parse_module_errors.ers:11:1]
+ 10 │ // in it (tested in `src/syntax/parser.rs`, since this dump shows errors).
+ 11 │ pub comptime { }
     · ─┬─
     ·  ╰── not allowed here
- 11 │ pub entry fn main() -> ! { loop {} }
+ 12 │ pub entry fn main() -> ! { loop {} }
     ╰────
   help: a `comptime` block has no name for other modules to use; remove `pub` (ADR 0050)
 parser::misplaced-pub
 
   × `pub` does not apply to the entry function
-    ╭─[parse_module_errors.ers:11:1]
- 10 │ pub comptime { }
- 11 │ pub entry fn main() -> ! { loop {} }
+    ╭─[parse_module_errors.ers:12:1]
+ 11 │ pub comptime { }
+ 12 │ pub entry fn main() -> ! { loop {} }
     · ─┬─
     ·  ╰── not allowed here
- 12 │ pub pub fn twice() {}
+ 13 │ pub pub fn twice() {}
     ╰────
   help: nothing calls the entry function, so no module has a use for it; remove `pub` (ADR 0050)
 parser::unexpected-token
 
   × expected an item, found `pub`
-    ╭─[parse_module_errors.ers:12:5]
- 11 │ pub entry fn main() -> ! { loop {} }
- 12 │ pub pub fn twice() {}
+    ╭─[parse_module_errors.ers:13:5]
+ 12 │ pub entry fn main() -> ! { loop {} }
+ 13 │ pub pub fn twice() {}
     ·     ─┬─
     ·      ╰── expected an item
- 13 │ enum E: u8 { pub A = 0 }
+ 14 │ enum E: u8 { pub A = 0 }
     ╰────
 parser::unexpected-token
 
   × expected identifier, found `pub`
-    ╭─[parse_module_errors.ers:13:14]
- 12 │ pub pub fn twice() {}
- 13 │ enum E: u8 { pub A = 0 }
+    ╭─[parse_module_errors.ers:14:14]
+ 13 │ pub pub fn twice() {}
+ 14 │ enum E: u8 { pub A = 0 }
     ·              ─┬─
     ·               ╰── expected identifier
- 14 │ fn param(pub x: u8) {}
+ 15 │ fn param(pub x: u8) {}
     ╰────
 parser::unexpected-token
 
   × expected identifier, found `pub`
-    ╭─[parse_module_errors.ers:14:10]
- 13 │ enum E: u8 { pub A = 0 }
- 14 │ fn param(pub x: u8) {}
+    ╭─[parse_module_errors.ers:15:10]
+ 14 │ enum E: u8 { pub A = 0 }
+ 15 │ fn param(pub x: u8) {}
     ·          ─┬─
     ·           ╰── expected identifier
- 15 │ fn local() { pub let x: u8 = 0; }
+ 16 │ fn local() { pub let x: u8 = 0; }
     ╰────
 parser::unexpected-token
 
   × expected an expression, found `pub`
-    ╭─[parse_module_errors.ers:15:14]
- 14 │ fn param(pub x: u8) {}
- 15 │ fn local() { pub let x: u8 = 0; }
+    ╭─[parse_module_errors.ers:16:14]
+ 15 │ fn param(pub x: u8) {}
+ 16 │ fn local() { pub let x: u8 = 0; }
     ·              ─┬─
     ·               ╰── expected an expression
- 16 │ fn modules() {
+ 17 │ fn modules() {
     ╰────
 parser::local-mod
 
   × `mod` items cannot be declared inside a function
-    ╭─[parse_module_errors.ers:17:5]
- 16 │ fn modules() {
- 17 │     mod inner { fn f() {} }
+    ╭─[parse_module_errors.ers:18:5]
+ 17 │ fn modules() {
+ 18 │     mod inner { fn f() {} }
     ·     ─┬─
     ·      ╰── inside a function
- 18 │     mod file;
+ 19 │     mod file;
     ╰────
   help: move the `mod` out of the function (ADR 0049)
 parser::local-mod
 
   × `mod` items cannot be declared inside a function
-    ╭─[parse_module_errors.ers:18:5]
- 17 │     mod inner { fn f() {} }
- 18 │     mod file;
+    ╭─[parse_module_errors.ers:19:5]
+ 18 │     mod inner { fn f() {} }
+ 19 │     mod file;
     ·     ─┬─
     ·      ╰── inside a function
- 19 │ }
+ 20 │ }
     ╰────
   help: move the `mod` out of the function (ADR 0049)
 parser::unexpected-token
 
   × expected identifier, found `super`
-    ╭─[parse_module_errors.ers:20:24]
- 19 │ }
- 20 │ fn supers() -> u8 { a::super::b }
+    ╭─[parse_module_errors.ers:21:24]
+ 20 │ }
+ 21 │ fn supers() -> u8 { a::super::b }
     ·                        ──┬──
     ·                          ╰── expected identifier
- 21 │ fn crates() -> u8 { crate::crate::b }
+ 22 │ fn crates() -> u8 { crate::crate::b }
     ╰────
 parser::unexpected-token
 
   × expected identifier, found `crate`
-    ╭─[parse_module_errors.ers:21:28]
- 20 │ fn supers() -> u8 { a::super::b }
- 21 │ fn crates() -> u8 { crate::crate::b }
+    ╭─[parse_module_errors.ers:22:28]
+ 21 │ fn supers() -> u8 { a::super::b }
+ 22 │ fn crates() -> u8 { crate::crate::b }
     ·                            ──┬──
     ·                              ╰── expected identifier
- 22 │ mod broken {
+ 23 │ mod broken {
     ╰────
 parser::unexpected-token
 
   × expected identifier, found `}`
-    ╭─[parse_module_errors.ers:23:21]
- 22 │ mod broken {
- 23 │     fn last() { let }
+    ╭─[parse_module_errors.ers:24:21]
+ 23 │ mod broken {
+ 24 │     fn last() { let }
     ·                     ┬
     ·                     ╰── expected identifier
- 24 │ }
+ 25 │ }
     ╰────
 parser::unexpected-token
 
   × expected identifier, found `pub`
-    ╭─[parse_module_errors.ers:25:16]
- 24 │ }
- 25 │ struct S { pub pub x: u8 }
+    ╭─[parse_module_errors.ers:26:16]
+ 25 │ }
+ 26 │ struct S { pub pub x: u8 }
     ·                ─┬─
     ·                 ╰── expected identifier
- 26 │ panic fn on_panic() -> ! { loop {} }
+ 27 │ panic fn on_panic() -> ! { loop {} }
     ╰────

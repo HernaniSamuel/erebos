@@ -663,7 +663,7 @@ fn holder_hash(from: u8) -> u64 {
 }
 
 // `Option(T)` and `Result(T, E)` (ADR 0045) of integers, enums and
-// structs: built with `.V` in constants, in `comptime` and at run time from
+// structs, on either side of a `Result`: built with `.V` in constants, in `comptime` and at run time from
 // values C hides, stored in an array, returned, and matched with nested
 // patterns.
 const SOME_PAIR: Option(Pair) = .Some(Pair { a: 3, b: 0xFFFF_FFFF });
@@ -684,7 +684,8 @@ fn option_hash(o: Option(u32)) -> u64 {
     }
 }
 
-// Multiplies by 10 until it no longer fits, and on.
+// Multiplies by 10 twelve times: once the value no longer fits, every
+// later step gives `.None` too.
 fn mul_chain(v: u32) -> u64 {
     let mut h: u64 = 0;
     let mut x: Option(u32) = .Some(v);
@@ -718,6 +719,14 @@ fn pair_option(k: u32) -> Option(Pair) {
 
 fn wide_result(k: u32) -> Result(u64, i8) {
     if k % 2 == 0 { .Ok(k as u64 * 0x1_0000_0001) } else { .Err(-(k as i8)) }
+}
+
+fn pair_result(k: u32) -> Result(Pair, Mixed) {
+    if k % 2 == 0 {
+        .Ok(Pair { a: k, b: k + 1 })
+    } else {
+        .Err(Mixed { flag: k % 3 == 0, value: k as u16 * 1000, pair: Pair { a: k * 3, b: 5 } })
+    }
 }
 
 fn small_result(r: Result(i16, Small)) -> u64 {
@@ -774,6 +783,10 @@ fn options_match(k: u32) -> u64 {
         .Some(.Err(let m: Mode)) => mix(12, m as u64),
         .None => 13,
     });
+    h = mix(h, match pair_result(k) {
+        .Ok(let p: Pair) => mix(p.a as u64, p.b as u64),
+        .Err(let m: Mixed) => mix(if m.flag { 23 } else { 24 }, mix(m.value as u64, m.pair.a as u64)),
+    });
     h = mix(h, small_result(FAILED));
     h = mix(h, small_result(if k % 2 == 0 { .Ok(-(k as i16)) } else { .Err(.Off) }));
     h = mix(h, level_option(NO_LEVEL));
@@ -791,8 +804,8 @@ fn options_hash(from: u32) -> u64 {
 }
 
 // `?` (ADR 0046) on results of an enum and on options of a struct and an
-// integer: each failure passed on, at the first `?` or at a later one,
-// and each value continued with.
+// integer: each failure passed on, by the first `?` or, in `try_option`,
+// by the second, and each value continued with.
 fn try_result(k: u32) -> Result(u64, Small) {
     let l: Level = level_result(k)?;
     let w: u64 = match wide_result(k) {

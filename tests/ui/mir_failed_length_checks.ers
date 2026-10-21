@@ -3,7 +3,7 @@
 // pointer, is not built into MIR (ADR 0048), so the checks of values known
 // at compile time (ADR 0032) do not run on it: its division by zero and its
 // index out of bounds are not reported. The same errors in `control`, which
-// does not use the type, are, which shows that lowering ran.
+// does not use the type, are reported, so the checks did run.
 const N: usize = 1 / 0;
 
 struct Broken { x: [u8; N], y: u32 }

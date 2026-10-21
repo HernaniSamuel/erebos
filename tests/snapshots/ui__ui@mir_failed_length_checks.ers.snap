@@ -8,7 +8,7 @@ ty::division-by-zero
 
   × division by zero
    ╭─[mir_failed_length_checks.ers:7:22]
- 6 │ // does not use the type, are, which shows that lowering ran.
+ 6 │ // does not use the type, are reported, so the checks did run.
  7 │ const N: usize = 1 / 0;
    ·                      ┬
    ·                      ╰── this divisor is zero

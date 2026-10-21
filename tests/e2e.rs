@@ -100,8 +100,10 @@ fn expectation(source: &str) -> Expectation {
 }
 
 fn run(program: &Path, opt: OptLevel) -> Result<(), String> {
-    // A program of several files is named after its directory.
-    let named = if program.file_name().unwrap() == "main.ers" {
+    // A program of several files is named after its directory; a
+    // `main.ers` among the single files is `main`.
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/e2e");
+    let named = if program.file_name().unwrap() == "main.ers" && program.parent().unwrap() != dir {
         program.parent().unwrap().file_name().unwrap()
     } else {
         program.file_stem().unwrap()

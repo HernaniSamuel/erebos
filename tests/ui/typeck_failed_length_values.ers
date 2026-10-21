@@ -28,13 +28,22 @@ fn mismatch() -> u32 {
 struct BoolLength { x: [u8; true], y: u32 }
 const M: u32 = 4;
 struct U32Length { x: [u8; M], y: u32 }
-enum E: u8 { A(*const BoolLength) = 0, B(*const U32Length) = 1, C = 2 }
+enum EBool: u8 { A(*const BoolLength) = 0, C = 2 }
+enum EU32: u8 { B(*const U32Length) = 1, C = 2 }
 comptime { assert(size_of(BoolLength) == 0); }
 comptime { assert(size_of(U32Length) == 0); }
 
-fn not_covered(e: E) -> u32 {
+// Each enum reaches one kind of failed length, and neither `match` is
+// reported as not covering its enum.
+fn not_covered_bool(e: EBool) -> u32 {
     match e {
-        E::C => 2,
+        EBool::C => 2,
+    }
+}
+
+fn not_covered_u32(e: EU32) -> u32 {
+    match e {
+        EU32::C => 2,
     }
 }
 

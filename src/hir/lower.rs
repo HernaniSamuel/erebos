@@ -3518,3 +3518,56 @@ impl Lowerer<'_> {
         Box::new(self.expr(expr))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::span::SourceMap;
+    use crate::syntax::{lexer, parser};
+
+    /// The codes `program` reports when lowered with `core` as its `core`.
+    fn lower_codes(program: &str, core: &str) -> Vec<&'static str> {
+        let mut sources = SourceMap::default();
+        let mut diags = Diagnostics::default();
+        let mut parse = |name: &str, text: &str, diags: &mut Diagnostics| {
+            let file = sources.add(name, text);
+            let tokens = lexer::lex(file, text, diags);
+            (file, parser::parse(text, &tokens, diags))
+        };
+        let (_, program) = parse("main.ers", program, &mut diags);
+        let (core_file, core) = parse("rt/core.ers", core, &mut diags);
+        let files = sources
+            .files()
+            .map(|file| FileDef::new(&file.name, &file.text))
+            .collect();
+        lower(&program, &core, files, core_file.index(), &mut diags);
+        diags.into_vec().iter().map(|d| d.code).collect()
+    }
+
+    /// Inside `core`, at its root and in its modules, `crate` is `core`'s
+    /// root, not the program's (ADR 0049, 0052): the program has no `LIMIT`.
+    #[test]
+    fn crate_in_core_is_core() {
+        let core = "
+            pub struct PanicInfo { pub line: u32 }
+            pub enum PanicReason: u8 { DivisionByZero = 0 }
+            const LIMIT: u32 = 3;
+            pub fn limit() -> u32 { crate::LIMIT }
+            mod inner {
+                fn limit() -> u32 { crate::LIMIT }
+            }
+        ";
+        let program = "
+            entry fn main() -> ! { loop {} }
+            panic fn on_panic() -> ! { loop {} }
+        ";
+        assert_eq!(lower_codes(program, core), Vec::<&str>::new());
+        // The same paths in the program are reported.
+        let program = "
+            entry fn main() -> ! { loop {} }
+            panic fn on_panic() -> ! { loop {} }
+            fn limit() -> u32 { crate::LIMIT }
+        ";
+        assert_eq!(lower_codes(program, core), ["resolve::unknown-name"]);
+    }
+}

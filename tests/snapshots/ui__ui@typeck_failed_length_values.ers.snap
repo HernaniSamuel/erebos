@@ -54,29 +54,29 @@ ty::mismatched-types
  30 │ struct U32Length { x: [u8; M], y: u32 }
     ·                            ┬
     ·                            ╰── expected `usize`, found `u32`
- 31 │ enum E: u8 { A(*const BoolLength) = 0, B(*const U32Length) = 1, C = 2 }
+ 31 │ enum EBool: u8 { A(*const BoolLength) = 0, C = 2 }
     ╰────
   help: integer types never convert implicitly; use `as usize` (ADR 0008)
 ty::aligned-in-packed
 
   × a packed struct cannot contain `Holder`
-    ╭─[typeck_failed_length_values.ers:45:12]
- 44 │ #[packed]
- 45 │ struct P { h: Holder }
+    ╭─[typeck_failed_length_values.ers:54:12]
+ 53 │ #[packed]
+ 54 │ struct P { h: Holder }
     ·        ┬   ┬
     ·        │   ╰── asks for an alignment through `#[align]`
     ·        ╰── packed: alignment 1
- 46 │ struct Big { x: [Broken; 0x4000_0000] }
+ 55 │ struct Big { x: [Broken; 0x4000_0000] }
     ╰────
   help: the alignment it asks for could not be kept (ADR 0022)
 ty::too-large
 
   × `[Broken; 1073741824]` is too large
-    ╭─[typeck_failed_length_values.ers:46:14]
- 45 │ struct P { h: Holder }
- 46 │ struct Big { x: [Broken; 0x4000_0000] }
+    ╭─[typeck_failed_length_values.ers:55:14]
+ 54 │ struct P { h: Holder }
+ 55 │ struct Big { x: [Broken; 0x4000_0000] }
     ·              ┬
     ·              ╰── this field does not fit in the address space
- 47 │ 
+ 56 │ 
     ╰────
   help: objects are limited to 2147483647 bytes on this target

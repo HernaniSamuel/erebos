@@ -1585,3 +1585,34 @@ fn infix(kind: TokenKind) -> Option<(u8, u8, Infix)> {
         _ => return None,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::span::SourceMap;
+
+    /// After an error in the last item of a module, parsing resumes at the
+    /// module's `}`, which closes it: the items after it are not in it
+    /// (ADR 0049).
+    #[test]
+    fn items_after_a_broken_module_are_outside_it() {
+        let text = "mod broken { fn first() {} fn last() { let } } struct After {}";
+        let mut sources = SourceMap::default();
+        let file = sources.add("main.ers", text);
+        let mut diags = Diagnostics::default();
+        let tokens = lexer::lex(file, text, &mut diags);
+        let ast = parse(text, &tokens, &mut diags);
+        let codes: Vec<&str> = diags.into_vec().iter().map(|d| d.code).collect();
+        assert!(!codes.contains(&"parser::unclosed-block"), "{codes:?}");
+        let [Item::Mod(module), Item::Struct(after)] = ast.items.as_slice() else {
+            panic!("a module, then a struct: {:#?}", ast.items);
+        };
+        let inside = module.items.as_deref().unwrap_or_default();
+        assert!(
+            matches!(inside, [Item::Fn(first), ..] if first.name.name == "first")
+                && !inside.iter().any(|item| matches!(item, Item::Struct(_))),
+            "{inside:#?}"
+        );
+        assert_eq!(after.name.name, "After");
+    }
+}

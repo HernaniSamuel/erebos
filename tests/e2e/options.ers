@@ -9,7 +9,7 @@
 // expect-output: slot 1 run 3
 // expect-output: slot 2 run 200
 // expect-output: slot 3 off
-// expect-output: slot 4 error
+// expect-output: slot 4 error bad digit 113
 // expect-output: nested some some 9
 // expect-output: nested some none
 // expect-output: nested none
@@ -153,7 +153,12 @@ fn show_slot(i: u64, o: Option(Mode)) {
 fn show_error(r: Result(Mode, ParseError)) {
     match r {
         .Ok(_) => line(&raw const b"slot 4 ok"),
-        .Err(_) => line(&raw const b"slot 4 error"),
+        .Err(.BadDigit(let c: u8)) => {
+            puts(&raw const b"slot 4 error bad digit");
+            field(c as u64);
+            putc(b'\n');
+        }
+        .Err(_) => line(&raw const b"slot 4 error other"),
     }
 }
 
@@ -209,7 +214,7 @@ entry fn main() -> ! {
 
     let mut slots: Slots = Slots {
         modes: [.None; 4],
-        error: .Err(.Overflow),
+        error: .Err(.BadDigit(b'q')),
     };
     slots.modes[1] = .Some(.Run(3));
     slots.modes[2] = .Some(.Run(200));
