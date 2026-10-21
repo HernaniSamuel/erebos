@@ -62,9 +62,11 @@ Spawn a fresh code-reviewer over the range from `Base` to `HEAD`, against
 the whole plan: every rule of its ADRs implemented and tested, the docs
 updated, the program on QEMU in place, every step's `Decisions` present.
 Route its findings as above; fixes become new commits. Then write the
-minor findings left open under `## Left open` at the end of the plan and
-commit it (`docs: record what $ARGUMENTS left open`), so they are not
-lost with this conversation. Report to the user: the commits, the minor
+minor findings left open under `## Left open` at the end of the plan,
+which keeps when and why each was found, and add each to its section of
+`docs/open-findings.md`, the list worked off between steps, ending with
+`($ARGUMENTS)`. Commit both (`docs: record what $ARGUMENTS left open`), so
+they are not lost with this conversation. Report to the user: the commits, the minor
 findings left open, and anything deferred to a later step. End by
 recommending a new conversation (`/clear`) for the next task: everything
 this one learned is in the commits and the plan, and its context would be

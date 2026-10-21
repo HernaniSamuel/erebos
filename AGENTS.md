@@ -71,6 +71,7 @@ become language constructs. The compiler is written in Rust and uses LLVM via
 docs/adr/       Architecture Decision Records (binding)
 docs/roadmap.md Milestones and pending decisions
 docs/reference.md The language as implemented (keep in sync with the compiler)
+docs/open-findings.md Minor findings left open, to work off between steps
 .claude/plans/  Implementation plan per roadmap step, with the decisions taken while building it
 src/            Compiler (single crate; modules per layer, see ADR 0003)
 rt/             The `core` module in Erebos, built into every program (ADR 0020, 0052)
