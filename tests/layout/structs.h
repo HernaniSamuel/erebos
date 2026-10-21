@@ -81,3 +81,7 @@ struct Message {
     struct { uint16_t *ptr; size_t len; } parts[2];
     uint16_t end;
 };
+
+/* `regs::Block`, of the module `regs`, with private and `pub` fields
+ * (ADR 0050); `::` is `__` in C. */
+struct regs__Block { uint32_t ctrl; uint8_t status; uint16_t data; uint8_t reserved[3]; uint64_t last; };

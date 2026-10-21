@@ -2,8 +2,8 @@
 //! for `tests/layout/structs.ers` must be the ones clang gives the C twins
 //! in `tests/layout/structs.h` on the same target. The twin of an enum with
 //! payloads is a union of structs that each start with the tag (ADR 0039);
-//! that of an `Option(T)` or `Result(T, E)` (ADR 0045) is named as
-//! `c_name` names it.
+//! that of an `Option(T)` or `Result(T, E)` (ADR 0045), or of an item of a
+//! module (ADR 0049), is named as `c_name` names it.
 //!
 //! The compiler's layouts come from `--emit=typeck`; each becomes a
 //! `_Static_assert` on `sizeof`, `_Alignof` and `offsetof`, and clang checks
@@ -44,6 +44,7 @@ fn struct_layouts_match_c() {
             continue;
         };
         let (name, rest) = rest.split_once(' ').unwrap();
+        let name = c_name(name);
         let (fields, sizes) = rest.rsplit_once("} ").unwrap();
         let (size, align) = sizes
             .strip_prefix("size ")
@@ -165,14 +166,15 @@ fn struct_layouts_match_c() {
     );
 }
 
-/// The name of the C twin of the enum `name`: itself, or for an
+/// The name of the C twin of the struct or enum `name`: itself, with `__`
+/// for each `::` of a path (`regs::Block` is `regs__Block`), or for an
 /// `Option(T)` or `Result(T, E)`, its name and arguments run together,
 /// each capitalized, `()` as `Unit`, an array `[T; N]` as `<T>x<N>`:
 /// `Result(u32, Mode)` is `ResultU32Mode`, `Option([u32; 0])` is
 /// `OptionU32x0` (not `OptionU320`, which reads as a 320-bit integer).
 fn c_name(name: &str) -> String {
     if !name.contains('(') {
-        return name.to_owned();
+        return name.replace("::", "__");
     }
     name.replace("()", "Unit")
         .replace(['[', ']'], "")

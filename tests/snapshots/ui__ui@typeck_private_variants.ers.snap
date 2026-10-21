@@ -1,0 +1,167 @@
+---
+source: tests/ui.rs
+assertion_line: 22
+expression: output
+input_file: tests/ui/typeck_private_variants.ers
+---
+--- errors ---
+ty::private-variant
+
+  × `.Run` names a variant of `uart::Mode`, which cannot be named here
+    ╭─[typeck_private_variants.ers:10:10]
+  9 │ mod uart {
+ 10 │     enum Mode: u8 { Off = 0, Run = 1, Fast(u8) = 2 }
+    ·          ──┬─
+    ·            ╰── `uart::Mode` is declared here
+ 11 │ 
+    ╰────
+    ╭─[typeck_private_variants.ers:40:27]
+ 39 │     fn arguments() {
+ 40 │         crate::uart::set(.Run);
+    ·                           ─┬─
+    ·                            ╰── not visible here
+ 41 │         crate::uart::set(.Fast(1));
+    ╰────
+  help: the variants of an enum are visible only where a path can name the enum, and none written
+        in module `sibling` can name `uart::Mode`: make its values with a function of its module,
+        or offer the enum with `pub` or `pub use` (ADR 0050)
+ty::private-variant
+
+  × `.Fast` names a variant of `uart::Mode`, which cannot be named here
+    ╭─[typeck_private_variants.ers:10:10]
+  9 │ mod uart {
+ 10 │     enum Mode: u8 { Off = 0, Run = 1, Fast(u8) = 2 }
+    ·          ──┬─
+    ·            ╰── `uart::Mode` is declared here
+ 11 │ 
+    ╰────
+    ╭─[typeck_private_variants.ers:41:27]
+ 40 │         crate::uart::set(.Run);
+ 41 │         crate::uart::set(.Fast(1));
+    ·                           ──┬─
+    ·                             ╰── not visible here
+ 42 │     }
+    ╰────
+  help: the variants of an enum are visible only where a path can name the enum, and none written
+        in module `sibling` can name `uart::Mode`: make its values with a function of its module,
+        or offer the enum with `pub` or `pub use` (ADR 0050)
+ty::private-variant
+
+  × `.Run` names a variant of `uart::Mode`, which cannot be named here
+    ╭─[typeck_private_variants.ers:10:10]
+  9 │ mod uart {
+ 10 │     enum Mode: u8 { Off = 0, Run = 1, Fast(u8) = 2 }
+    ·          ──┬─
+    ·            ╰── `uart::Mode` is declared here
+ 11 │ 
+    ╰────
+    ╭─[typeck_private_variants.ers:46:14]
+ 45 │         match crate::uart::get() {
+ 46 │             .Run => 1,
+    ·              ─┬─
+    ·               ╰── not visible here
+ 47 │             _ => 0,
+    ╰────
+  help: the variants of an enum are visible only where a path can name the enum, and none written
+        in module `sibling` can name `uart::Mode`: match its values with `_`, which names no
+        variant, or offer the enum with `pub` or `pub use` (ADR 0050)
+ty::non-exhaustive-match
+
+  × non-exhaustive `match`: `uart::Mode::Off`, `uart::Mode::Run` and `uart::Mode::Fast(_)` not
+  │ covered
+    ╭─[typeck_private_variants.ers:68:15]
+ 67 │     fn missing() -> u8 {
+ 68 │         match crate::uart::get() {}
+    ·               ─────────┬────────
+    ·                        ╰── missing: `uart::Mode::Off`, `uart::Mode::Run` and `uart::Mode::Fast(_)`
+ 69 │     }
+    ╰────
+  help: `uart::Mode` cannot be named in module `sibling`, so neither can its variants: cover them
+        with `_`, which names no variant (ADR 0037, 0050, 0054)
+ty::non-exhaustive-match
+
+  × non-exhaustive `match`: `.Some(uart::Mode::Run)` and `.Some(uart::Mode::Fast(_))` not covered
+    ╭─[typeck_private_variants.ers:72:15]
+ 71 │     fn missing_inside() -> u8 {
+ 72 │         match crate::uart::maybe() { .None => 0, .Some(.Off) => 1 }
+    ·               ──────────┬─────────
+    ·                         ╰── missing: `.Some(uart::Mode::Run)` and `.Some(uart::Mode::Fast(_))`
+ 73 │     }
+    ╰────
+  help: `uart::Mode` cannot be named in module `sibling`, so neither can its variants: cover them
+        with `_`, which names no variant (ADR 0037, 0050, 0054)
+ty::private-variant
+
+  × `.Off` names a variant of `uart::Mode`, which cannot be named here
+    ╭─[typeck_private_variants.ers:10:10]
+  9 │ mod uart {
+ 10 │     enum Mode: u8 { Off = 0, Run = 1, Fast(u8) = 2 }
+    ·          ──┬─
+    ·            ╰── `uart::Mode` is declared here
+ 11 │ 
+    ╰────
+    ╭─[typeck_private_variants.ers:72:57]
+ 71 │     fn missing_inside() -> u8 {
+ 72 │         match crate::uart::maybe() { .None => 0, .Some(.Off) => 1 }
+    ·                                                         ─┬─
+    ·                                                          ╰── not visible here
+ 73 │     }
+    ╰────
+  help: the variants of an enum are visible only where a path can name the enum, and none written
+        in module `sibling` can name `uart::Mode`: match its values with `_`, which names no
+        variant, or offer the enum with `pub` or `pub use` (ADR 0050)
+ty::non-exhaustive-match
+
+  × non-exhaustive `match`: `uart::Msg::Clear`, `uart::Msg::Set(uart::Mode::Run)` and
+  │ `uart::Msg::Set(uart::Mode::Fast(_))` not covered
+    ╭─[typeck_private_variants.ers:78:15]
+ 77 │     fn missing_mixed() -> u8 {
+ 78 │         match crate::uart::msg() { .Set(.Off) => 0 }
+    ·               ─────────┬────────
+    ·                        ╰── missing: `uart::Msg::Clear`, `uart::Msg::Set(uart::Mode::Run)` and `uart::Msg::Set(uart::Mode::Fast(_))`
+ 79 │     }
+    ╰────
+  help: `uart::Mode` cannot be named in module `sibling`, so neither can its variants: cover them
+        with `_`, which names no variant (ADR 0037, 0050, 0054)
+ty::private-variant
+
+  × `.Off` names a variant of `uart::Mode`, which cannot be named here
+    ╭─[typeck_private_variants.ers:10:10]
+  9 │ mod uart {
+ 10 │     enum Mode: u8 { Off = 0, Run = 1, Fast(u8) = 2 }
+    ·          ──┬─
+    ·            ╰── `uart::Mode` is declared here
+ 11 │ 
+    ╰────
+    ╭─[typeck_private_variants.ers:78:42]
+ 77 │     fn missing_mixed() -> u8 {
+ 78 │         match crate::uart::msg() { .Set(.Off) => 0 }
+    ·                                          ─┬─
+    ·                                           ╰── not visible here
+ 79 │     }
+    ╰────
+  help: the variants of an enum are visible only where a path can name the enum, and none written
+        in module `sibling` can name `uart::Mode`: match its values with `_`, which names no
+        variant, or offer the enum with `pub` or `pub use` (ADR 0050)
+ty::private-variant
+
+  × `.Slow` names a variant of `hw::regs::Speed`, which cannot be named here
+     ╭─[typeck_private_variants.ers:121:35]
+ 113 │     mod regs {
+ 114 │         pub enum Speed: u8 { Slow = 0, Fast = 1 }
+     ·                  ──┬──
+     ·                    ╰── `hw::regs::Speed` is declared here
+ 115 │     }
+ 116 │ 
+ 117 │     pub fn set_speed(s: regs::Speed) {}
+ 118 │     fn parent() { set_speed(.Fast); }
+ 119 │ }
+ 120 │ 
+ 121 │ fn not_offered() { hw::set_speed(.Slow); }
+     ·                                   ──┬─
+     ·                                     ╰── not visible here
+ 122 │ 
+     ╰────
+  help: the variants of an enum are visible only where a path can name the enum, and none written
+        in the root module can name `hw::regs::Speed`: make its values with a function of its
+        module, or offer the enum with `pub` or `pub use` (ADR 0050)

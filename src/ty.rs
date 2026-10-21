@@ -15,8 +15,8 @@ use std::fmt::Write;
 use crate::diag::Diagnostic;
 use crate::hir::{
     self, Arm, BinOp, Block, EnumId, EnumTy, Expr, ExprId, ExprKind, Fn, FnKind, Hir, IntTy,
-    LocalId, NeverPosition, Pattern, PatternId, PatternKind, Ptr, StaticId, Stmt, Ty, UnOp,
-    UnsizedPosition,
+    LocalId, ModuleId, NeverPosition, Pattern, PatternId, PatternKind, Ptr, StaticId, Stmt, Ty,
+    UnOp, UnsizedPosition,
 };
 use crate::layout;
 use crate::query::Queries;
@@ -669,7 +669,7 @@ impl Checker<'_, '_> {
                 match self.norm(*ty) {
                     // The struct is not accessed: any place will do.
                     ty @ Ty::Struct(_) => {
-                        self.field(expr, ty, PlaceInfo::ERROR, name, *name_span);
+                        self.field(f, expr, ty, PlaceInfo::ERROR, name, *name_span);
                     }
                     Ty::Error => {}
                     other => {
@@ -940,7 +940,7 @@ impl Checker<'_, '_> {
             && let Some(enums) = enums
             && matched != Ty::Error
         {
-            self.coverage(scrutinee, matched, arms, &values, &enums);
+            self.coverage(f.module, scrutinee, matched, arms, &values, &enums);
         }
         match expected.or(first) {
             // Without an arm that finishes, neither does the `match`.
@@ -1297,8 +1297,42 @@ impl Checker<'_, '_> {
             }
             return None;
         };
+        self.reachable_variant(f, enum_id, name, name_span, true);
         self.q.tables.pattern_variants.insert(id, (enum_id, index));
         self.variant_pattern(f, pattern, ty, enum_id, index, subs)
+    }
+
+    /// Reports `.name`, written at `span` in the body `f`, in a pattern if
+    /// `pattern`, which names a variant of the enum `id`, if that enum is
+    /// not reachable from the module of `f`: only there may its variants be
+    /// named (ADR 0050). It still names the variant, so nothing more is
+    /// reported about it.
+    fn reachable_variant(&mut self, f: &Fn, id: EnumId, name: &str, span: Span, pattern: bool) {
+        let def = self.q.enum_def(id);
+        if def.reachable_from(f.module) {
+            return;
+        }
+        let module = self.hir.module(f.module).describe();
+        let help = if pattern {
+            "match its values with `_`, which names no variant, or offer the enum with `pub` or `pub use`"
+        } else {
+            "make its values with a function of its module, or offer the enum with `pub` or `pub use`"
+        };
+        let mut diag = Diagnostic::error(
+            "ty::private-variant",
+            format!(
+                "`.{name}` names a variant of `{}`, which cannot be named here",
+                def.name
+            ),
+        )
+        .label(span, "not visible here");
+        if let Some(name_span) = def.name_span {
+            diag = diag.label(name_span, format!("`{}` is declared here", def.name));
+        }
+        self.q.diags.push(diag.help(format!(
+            "the variants of an enum are visible only where a path can name the enum, and none written in {module} can name `{}`: {help} (ADR 0050)",
+            def.name
+        )));
     }
 
     /// Exhaustiveness and dead arms (ADR 0037, 0040) of a `match` on `ty`,
@@ -1308,7 +1342,18 @@ impl Checker<'_, '_> {
     /// of an enum are all those of its integer type (ADR 0036): for dead
     /// arms, those that are no variant remain after every variant, but a
     /// `match` is exhaustive with every variant.
-    fn coverage(&mut self, scrutinee: &Expr, ty: Ty, arms: &[Arm], values: &[Pat], enums: &Enums) {
+    /// The `match` is written in `module`: a missing value that names a
+    /// variant of an enum not reachable there cannot be written there, and
+    /// the help says how to cover it (ADR 0050).
+    fn coverage(
+        &mut self,
+        module: ModuleId,
+        scrutinee: &Expr,
+        ty: Ty,
+        arms: &[Arm],
+        values: &[Pat],
+        enums: &Enums,
+    ) {
         let column = column(ty);
         let columns = [column];
         let search = Search::new(enums);
@@ -1377,12 +1422,23 @@ impl Checker<'_, '_> {
                     .iter()
                     .map(|name| format!("`{name} => ...`"))
                     .collect();
+                let hidden = missing
+                    .iter()
+                    .take(3)
+                    .find_map(|witness| self.hidden_enum(enums, column, &witness[0], module));
+                let help = match hidden {
+                    Some(name) => format!(
+                        "`{name}` cannot be named in {}, so neither can its variants: cover them with `_`, which names no variant (ADR 0037, 0050, 0054)",
+                        self.hir.module(module).describe()
+                    ),
+                    None => format!("add {}, or a `_` arm (ADR 0037)", and_list(&arms)),
+                };
                 Diagnostic::error(
                     "ty::non-exhaustive-match",
                     format!("non-exhaustive `match`: {listed} not covered"),
                 )
                 .label(scrutinee.span, format!("missing: {listed}"))
-                .help(format!("add {}, or a `_` arm (ADR 0037)", and_list(&arms)))
+                .help(help)
             }
             _ => Diagnostic::error(
                 "ty::non-exhaustive-match",
@@ -1486,6 +1542,35 @@ impl Checker<'_, '_> {
             variants.push(Variant { value, payload });
         }
         variants
+    }
+
+    /// The name of the first enum, in `witness` at a position of type
+    /// `column`, that is not reachable from `module`, whose variants cannot
+    /// be written there (ADR 0050); `None` if there is none.
+    fn hidden_enum(
+        &self,
+        enums: &Enums,
+        column: Column,
+        witness: &Pat,
+        module: ModuleId,
+    ) -> Option<String> {
+        let (Pat::Value(value, subs), Column::Enum(e)) = (witness, column) else {
+            return None;
+        };
+        let def = self.q.enum_def(e.id);
+        if !def.reachable_from(module) {
+            return Some(def.name.clone());
+        }
+        let variants = &enums[&e.id];
+        let variant = variants
+            .iter()
+            .find(|variant| variant.value == *value)
+            .expect("a value a `match` misses at an enum position is a variant");
+        variant
+            .payload
+            .iter()
+            .zip(subs)
+            .find_map(|(&column, sub)| self.hidden_enum(enums, column, sub, module))
     }
 
     /// A value a `match` misses, at a position of type `column`, as a
@@ -1656,6 +1741,7 @@ impl Checker<'_, '_> {
             }
             return Ty::Error;
         };
+        self.reachable_variant(f, id, name, name_span, false);
         self.q.tables.variants.insert(expr.id, (id, index));
         self.variant(f, expr, id, index, args)
     }
@@ -2415,7 +2501,7 @@ impl Checker<'_, '_> {
             }
             ExprKind::Field(base, name, name_span) => {
                 let (ty, base_place) = self.base(f, base);
-                self.field(expr, ty, base_place, name, *name_span)
+                self.field(f, expr, ty, base_place, name, *name_span)
             }
             ExprKind::Index(base, index) => {
                 // An array is indexed where it is; anything else is read as
@@ -2508,9 +2594,11 @@ impl Checker<'_, '_> {
         }
     }
 
-    /// `base.name`, where `base` has type `ty` and place `base_place`.
+    /// `base.name`, where `base` has type `ty` and place `base_place`, in
+    /// the body `f`, whose module must see the field (ADR 0050).
     fn field(
         &mut self,
+        f: &Fn,
         expr: &Expr,
         ty: Ty,
         base_place: PlaceInfo,
@@ -2562,6 +2650,13 @@ impl Checker<'_, '_> {
             self.q.diags.push(diag);
             return PlaceInfo::ERROR;
         };
+        // A field that is not visible is still the one named, so nothing
+        // more is reported about it.
+        if !hir.field_visible(s.id, index, f.module) {
+            self.q
+                .diags
+                .push(private_field(hir, s.id, index, f.module, name_span));
+        }
         self.q.tables.fields.insert(expr.id, index as u32);
         PlaceInfo {
             ty: self.norm(def.fields[index].ty),
@@ -3068,6 +3163,47 @@ fn payload_count(
         Some(span) => diag.label(span, "declared here"),
         None => diag,
     })
+}
+
+/// `ty::private-field` for the field `index` of the struct `id`, named at
+/// `span` in `module`, which does not see it (ADR 0050): a private field
+/// outside its struct's module, or a `pub` one where the struct cannot be
+/// named.
+fn private_field(
+    hir: &Hir,
+    id: hir::StructId,
+    index: usize,
+    module: ModuleId,
+    span: Span,
+) -> Diagnostic {
+    let def = hir.struct_(id);
+    let field = &def.fields[index];
+    match field.vis {
+        hir::Visibility::Private => Diagnostic::error(
+            "ty::private-field",
+            format!("the field `{}` of `{}` is private", field.name, def.name),
+        )
+        .label(span, "not visible here")
+        .label(field.span, "declared here without `pub`")
+        .help(format!(
+            "a private field is visible only in {} and the modules inside it; declare it `pub` to use it elsewhere (ADR 0050)",
+            hir.module(def.module).describe()
+        )),
+        hir::Visibility::Pub => Diagnostic::error(
+            "ty::private-field",
+            format!(
+                "the field `{}` of `{}` is not visible here",
+                field.name, def.name
+            ),
+        )
+        .label(span, "not visible here")
+        .label(def.name_span, format!("`{}` is declared here", def.name))
+        .help(format!(
+            "a `pub` field is visible wherever a path can name its struct, and none written in {} can name `{}`: offer the struct with `pub` or `pub use` (ADR 0050)",
+            hir.module(module).describe(),
+            def.name
+        )),
+    }
 }
 
 /// `ty::unknown-variant` for `.name`, written at `span`, where a value of

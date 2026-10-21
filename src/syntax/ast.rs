@@ -134,8 +134,11 @@ pub struct VariantDecl {
     pub value: Expr,
 }
 
+/// `name: Type`, or `pub name: Type`, visible wherever its struct is
+/// reachable (ADR 0050).
 #[derive(Debug)]
 pub struct FieldDecl {
+    pub vis: Visibility,
     pub name: Ident,
     pub ty: Ty,
 }

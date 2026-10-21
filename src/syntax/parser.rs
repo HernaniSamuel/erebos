@@ -519,10 +519,15 @@ impl Parser<'_> {
         let name = self.ident()?;
         self.expect(TokenKind::LBrace)?;
         let fields = self.brace_list(|p| {
+            // A field is private unless written `pub` (ADR 0050).
+            let vis = match p.eat(TokenKind::Pub) {
+                Some(_) => Visibility::Pub,
+                None => Visibility::Private,
+            };
             let name = p.ident()?;
             p.expect(TokenKind::Colon)?;
             let ty = p.ty()?;
-            Ok(FieldDecl { name, ty })
+            Ok(FieldDecl { vis, name, ty })
         })?;
         Ok(StructDecl {
             attrs,

@@ -4,10 +4,10 @@ use std::collections::HashMap;
 
 use crate::diag::{Diagnostic, Diagnostics};
 use crate::hir::{
-    Arm, ArrayLen, Block, BuiltinEnum, Comptime, ConstDef, ConstId, EnumDef, EnumId, EnumTy, Expr,
-    ExprId, ExprKind, FieldDef, Fn, FnId, FnKind, Hir, IntTy, Local, LocalId, ModuleDef, ModuleId,
-    NeverInMemory, NeverPosition, Pattern, PatternId, PatternKind, PayloadDef, StaticDef, StaticId,
-    Stmt, StructDef, StructId, StructTy, Ty, UnsizedPosition, UnsizedType, VariantDef,
+    self, Arm, ArrayLen, Block, BuiltinEnum, Comptime, ConstDef, ConstId, EnumDef, EnumId, EnumTy,
+    Expr, ExprId, ExprKind, FieldDef, Fn, FnId, FnKind, Hir, IntTy, Local, LocalId, ModuleDef,
+    ModuleId, NeverInMemory, NeverPosition, Pattern, PatternId, PatternKind, PayloadDef, StaticDef,
+    StaticId, Stmt, StructDef, StructId, StructTy, Ty, UnsizedPosition, UnsizedType, VariantDef,
     VariantValue, Visibility,
 };
 use crate::span::Span;
@@ -163,7 +163,7 @@ pub fn lower(
         lowerer.mod_decl(decl);
     }
     lowerer.use_decls(&use_decls);
-    let structs: Vec<StructDef> = struct_decls
+    let mut structs: Vec<StructDef> = struct_decls
         .iter()
         .map(|&(decl, module)| {
             lowerer.module = module;
@@ -220,6 +220,13 @@ pub fn lower(
     let applications = lowerer.applications;
     let modules = lowerer.modules;
     let namespaces = lowerer.namespaces;
+    reachability(
+        &modules,
+        &namespaces,
+        &lowerer.uses,
+        &mut structs,
+        &mut enums,
+    );
 
     for diag in duplicates {
         diags.push(diag);
@@ -245,6 +252,59 @@ pub fn lower(
         panic: panic?,
         expr_count,
     })
+}
+
+/// Fills in the `reachable` of every struct and enum: the modules where a
+/// path written would name it and be usable (ADR 0050). Any path can be
+/// written from the root module, through `crate`, and a segment is usable
+/// from a module if it is `pub` or that module is within the one holding
+/// it. So what is reachable from a module is what a walk of the namespaces
+/// from the root finds through the names visible from there, `use`s
+/// included. Every `use` is resolved by now; one that failed was reported.
+fn reachability(
+    modules: &[ModuleDef],
+    namespaces: &[HashMap<String, Entry>],
+    uses: &[Use],
+    structs: &mut [StructDef],
+    enums: &mut [EnumDef],
+) {
+    for from in 0..modules.len() {
+        let from = ModuleId(from as u32);
+        let mut seen = vec![false; modules.len()];
+        seen[ModuleId::ROOT.0 as usize] = true;
+        let mut pending = vec![ModuleId::ROOT];
+        while let Some(module) = pending.pop() {
+            for entry in namespaces[module.0 as usize].values() {
+                if entry.vis == Visibility::Private && !hir::is_within(modules, from, module) {
+                    continue;
+                }
+                let def = match entry.binding {
+                    Binding::Def(def) => def,
+                    Binding::Use(id) => match uses[id].state {
+                        UseState::Resolved(def) => def,
+                        _ => continue,
+                    },
+                };
+                // `from` goes in id order, so each list stays in order; a
+                // second path to an item adds nothing.
+                let reachable = match def {
+                    Def::Module(id) => {
+                        if !seen[id.0 as usize] {
+                            seen[id.0 as usize] = true;
+                            pending.push(id);
+                        }
+                        continue;
+                    }
+                    Def::Struct(id) => &mut structs[id.0 as usize].reachable,
+                    Def::Enum(id) => &mut enums[id.0 as usize].reachable,
+                    Def::Fn(_) | Def::Const(_) | Def::Static(_) => continue,
+                };
+                if reachable.last() != Some(&from) {
+                    reachable.push(from);
+                }
+            }
+        }
+    }
 }
 
 /// What a name in a module's namespace is (ADR 0049).
@@ -951,11 +1011,7 @@ impl Lowerer<'_> {
     /// How diagnostics name a module: "module `uart::regs`", or "the root
     /// module".
     fn module_name(&self, module: ModuleId) -> String {
-        if module == ModuleId::ROOT {
-            "the root module".to_owned()
-        } else {
-            format!("module `{}`", self.modules[module.0 as usize].path)
-        }
+        self.modules[module.0 as usize].describe()
     }
 
     /// The path of the item `name` of `module`, as diagnostics show it.
@@ -966,14 +1022,7 @@ impl Lowerer<'_> {
     /// Whether `inner` is `outer` or a module inside it, where the private
     /// items of `outer` are visible (ADR 0050).
     fn is_within(&self, inner: ModuleId, outer: ModuleId) -> bool {
-        let mut at = Some(inner);
-        while let Some(module) = at {
-            if module == outer {
-                return true;
-            }
-            at = self.modules[module.0 as usize].parent;
-        }
-        false
+        hir::is_within(&self.modules, inner, outer)
     }
 
     /// The segment `name` in the namespace of `module`. Naming an item that
@@ -1534,12 +1583,15 @@ impl Lowerer<'_> {
             name_span: decl.name.span,
             module: self.module,
             vis: visibility(decl.vis),
+            // Filled in once every `use` is resolved, by `reachability`.
+            reachable: Vec::new(),
             fields: decl
                 .fields
                 .iter()
                 .map(|field| FieldDef {
                     name: field.name.name.clone(),
                     span: field.name.span,
+                    vis: visibility(field.vis),
                     ty: self.memory_ty(&field.ty, NeverPosition::Field),
                 })
                 .collect(),
@@ -1893,6 +1945,8 @@ impl Lowerer<'_> {
             name_span: Some(decl.name.span),
             module: self.module,
             vis: visibility(decl.vis),
+            // Filled in once every `use` is resolved, by `reachability`.
+            reachable: Vec::new(),
             ty,
             variants,
         };
@@ -2054,7 +2108,7 @@ impl Lowerer<'_> {
         let Some(id) = id else {
             return ExprKind::Unit;
         };
-        let decl = self.struct_decls[id.0 as usize].0;
+        let (decl, module) = self.struct_decls[id.0 as usize];
         let name = self.struct_tys[id.0 as usize].name;
         let mut given: Vec<Option<Span>> = vec![None; decl.fields.len()];
         for (init, (index, _)) in inits.iter().zip(&fields) {
@@ -2078,6 +2132,22 @@ impl Lowerer<'_> {
                     ),
                     None => given[*i as usize] = Some(init.name.span),
                 },
+            }
+        }
+        // A literal gives every field (ADR 0021), so outside the visibility
+        // of a private field it cannot be written, whether it gives that
+        // field or not (ADR 0050); what it misses is not reported then.
+        if !self.is_within(self.module, module) {
+            let private: Vec<(&ast::FieldDecl, Option<Span>)> = decl
+                .fields
+                .iter()
+                .zip(&given)
+                .filter(|(field, _)| field.vis == ast::Visibility::Private)
+                .map(|(field, &given)| (field, given))
+                .collect();
+            if !private.is_empty() {
+                self.private_fields(path, name, module, &private);
+                return ExprKind::Unit;
             }
         }
         // A field declared twice was reported; only its first counts.
@@ -2115,6 +2185,43 @@ impl Lowerer<'_> {
                 .filter_map(|(index, value)| Some((index?, value)))
                 .collect(),
         )
+    }
+
+    /// `resolve::private-field` for a literal, written at `path`, of the
+    /// struct `name` of `module`, outside the visibility of its fields
+    /// `private`, each with where the literal gives it, if it does
+    /// (ADR 0050).
+    fn private_fields(
+        &mut self,
+        path: &ast::Path,
+        name: &str,
+        module: ModuleId,
+        private: &[(&ast::FieldDecl, Option<Span>)],
+    ) {
+        let names: Vec<String> = private
+            .iter()
+            .map(|(field, _)| format!("`{}`", field.name.name))
+            .collect();
+        let message = match names.split_last() {
+            Some((last, [])) => format!("the field {last} of `{name}` is private"),
+            Some((last, others)) => format!(
+                "the fields {} and {last} of `{name}` are private",
+                others.join(", ")
+            ),
+            None => unreachable!("a struct with a private field"),
+        };
+        let mut diag = Diagnostic::error("resolve::private-field", message)
+            .label(path.span, "cannot be built here");
+        for (field, given) in private {
+            if let Some(given) = given {
+                diag = diag.label(*given, "not visible here");
+            }
+            diag = diag.label(field.name.span, "declared here without `pub`");
+        }
+        self.diags.push(diag.help(format!(
+            "a struct literal gives every field (ADR 0021), and a private field is visible only in {} and the modules inside it: build the struct with a function of that module, or declare the field `pub` (ADR 0050)",
+            self.module_name(module)
+        )));
     }
 
     fn fn_decl(&mut self, decl: &ast::FnDecl) -> Fn {

@@ -51,5 +51,12 @@ struct WithPayloads { a: u8, p: Pay8, b: u16, q: Pay16, c: u8, r: Pay32 }
 // placed at its alignment (ADR 0047).
 struct WithOptions { a: Option(u8), b: Option(u32), c: Option(u64), d: Option(()), e: Result(u32, Mode), f: Option([u32; 0]) }
 
+// Visibility changes no layout (ADR 0050): private fields are laid out like
+// `pub` ones. A struct of a module is shown by its path, `regs::Block`, and
+// its twin is named with `__` for `::`, `regs__Block`.
+mod regs {
+    pub struct Block { pub ctrl: u32, status: u8, pub data: u16, reserved: [u8; 3], pub last: u64 }
+}
+
 entry fn main() -> ! { loop {} }
 panic fn on_panic() -> ! { loop {} }

@@ -189,6 +189,7 @@ File {
                 },
                 fields: [
                     FieldDecl {
+                        vis: Private,
                         name: Ident {
                             name: "V",
                             span: 541..542,

@@ -1,0 +1,64 @@
+// emit: typeck
+// A private field is visible in its struct's module and the modules inside
+// it; elsewhere a place or `offset_of` naming it is `ty::private-field`,
+// read, written or with its address taken. A `pub` field is visible
+// wherever its struct is reachable, and only there: a `pub fn` may return a
+// private type, whose value another module can only pass on (ADR 0050).
+// Struct literals are checked by the resolver, in
+// `resolve_private_fields.ers`.
+mod uart {
+    pub struct Config { pub baud: u32, divisor: u16 }
+
+    pub fn config(baud: u32) -> Config { Config { baud: baud, divisor: 1 } }
+
+    // From its module: accepted.
+    fn inside() -> u16 {
+        let mut c: Config = config(1);
+        c.divisor = 2;
+        let p: *const u16 = &raw const c.divisor;
+        c.divisor + offset_of(Config, divisor) as u16
+    }
+
+    mod regs {
+        // From a module inside it: accepted.
+        fn inner() -> u16 {
+            let mut c: super::Config = super::config(2);
+            c.divisor = 3;
+            let p: *mut u16 = &raw mut c.divisor;
+            c.divisor + offset_of(super::Config, divisor) as u16
+        }
+    }
+}
+
+// From outside its module: rejected.
+fn outside() -> u16 {
+    let mut c: uart::Config = uart::config(3);
+    c.divisor = 4;
+    let p: *const u16 = &raw const c.divisor;
+    let at: usize = offset_of(uart::Config, divisor);
+    c.divisor
+}
+
+// Accepted: a `pub` field, and a struct with a private field built through
+// a function of its module.
+fn public() -> u32 {
+    let c: uart::Config = uart::config(9600);
+    c.baud + offset_of(uart::Config, baud) as u32
+}
+
+mod vault {
+    struct Secret { pub value: u8, hidden: u8 }
+
+    pub fn secret() -> Secret { Secret { value: 1, hidden: 2 } }
+    pub fn reveal(s: Secret) -> u8 { s.value + s.hidden }
+}
+
+mod sibling {
+    // A private type returned by a `pub fn`, passed on: accepted.
+    fn pass_on() -> u8 { crate::vault::reveal(crate::vault::secret()) }
+    // Its `pub` field is not visible where no path names the struct.
+    fn field() -> u8 { crate::vault::secret().value }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

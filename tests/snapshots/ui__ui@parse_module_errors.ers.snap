@@ -119,3 +119,13 @@ parser::unexpected-token
     ·                     ╰── expected identifier
  24 │ }
     ╰────
+parser::unexpected-token
+
+  × expected identifier, found `pub`
+    ╭─[parse_module_errors.ers:25:16]
+ 24 │ }
+ 25 │ struct S { pub pub x: u8 }
+    ·                ─┬─
+    ·                 ╰── expected identifier
+ 26 │ panic fn on_panic() -> ! { loop {} }
+    ╰────

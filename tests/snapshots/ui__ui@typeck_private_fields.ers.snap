@@ -1,0 +1,107 @@
+---
+source: tests/ui.rs
+assertion_line: 22
+expression: output
+input_file: tests/ui/typeck_private_fields.ers
+---
+--- errors ---
+ty::private-field
+
+  × the field `divisor` of `uart::Config` is private
+    ╭─[typeck_private_fields.ers:10:40]
+  9 │ mod uart {
+ 10 │     pub struct Config { pub baud: u32, divisor: u16 }
+    ·                                        ───┬───
+    ·                                           ╰── declared here without `pub`
+ 11 │ 
+    ╰────
+    ╭─[typeck_private_fields.ers:36:7]
+ 35 │     let mut c: uart::Config = uart::config(3);
+ 36 │     c.divisor = 4;
+    ·       ───┬───
+    ·          ╰── not visible here
+ 37 │     let p: *const u16 = &raw const c.divisor;
+    ╰────
+  help: a private field is visible only in module `uart` and the modules inside it; declare it
+        `pub` to use it elsewhere (ADR 0050)
+ty::private-field
+
+  × the field `divisor` of `uart::Config` is private
+    ╭─[typeck_private_fields.ers:10:40]
+  9 │ mod uart {
+ 10 │     pub struct Config { pub baud: u32, divisor: u16 }
+    ·                                        ───┬───
+    ·                                           ╰── declared here without `pub`
+ 11 │ 
+    ╰────
+    ╭─[typeck_private_fields.ers:37:38]
+ 36 │     c.divisor = 4;
+ 37 │     let p: *const u16 = &raw const c.divisor;
+    ·                                      ───┬───
+    ·                                         ╰── not visible here
+ 38 │     let at: usize = offset_of(uart::Config, divisor);
+    ╰────
+  help: a private field is visible only in module `uart` and the modules inside it; declare it
+        `pub` to use it elsewhere (ADR 0050)
+ty::private-field
+
+  × the field `divisor` of `uart::Config` is private
+    ╭─[typeck_private_fields.ers:10:40]
+  9 │ mod uart {
+ 10 │     pub struct Config { pub baud: u32, divisor: u16 }
+    ·                                        ───┬───
+    ·                                           ╰── declared here without `pub`
+ 11 │ 
+    ╰────
+    ╭─[typeck_private_fields.ers:38:45]
+ 37 │     let p: *const u16 = &raw const c.divisor;
+ 38 │     let at: usize = offset_of(uart::Config, divisor);
+    ·                                             ───┬───
+    ·                                                ╰── not visible here
+ 39 │     c.divisor
+    ╰────
+  help: a private field is visible only in module `uart` and the modules inside it; declare it
+        `pub` to use it elsewhere (ADR 0050)
+ty::private-field
+
+  × the field `divisor` of `uart::Config` is private
+    ╭─[typeck_private_fields.ers:10:40]
+  9 │ mod uart {
+ 10 │     pub struct Config { pub baud: u32, divisor: u16 }
+    ·                                        ───┬───
+    ·                                           ╰── declared here without `pub`
+ 11 │ 
+    ╰────
+    ╭─[typeck_private_fields.ers:39:7]
+ 38 │     let at: usize = offset_of(uart::Config, divisor);
+ 39 │     c.divisor
+    ·       ───┬───
+    ·          ╰── not visible here
+ 40 │ }
+    ╰────
+  help: a private field is visible only in module `uart` and the modules inside it; declare it
+        `pub` to use it elsewhere (ADR 0050)
+ty::private-field
+
+  × the field `value` of `vault::Secret` is not visible here
+    ╭─[typeck_private_fields.ers:60:47]
+ 49 │ mod vault {
+ 50 │     struct Secret { pub value: u8, hidden: u8 }
+    ·            ───┬──
+    ·               ╰── `vault::Secret` is declared here
+ 51 │ 
+ 52 │     pub fn secret() -> Secret { Secret { value: 1, hidden: 2 } }
+ 53 │     pub fn reveal(s: Secret) -> u8 { s.value + s.hidden }
+ 54 │ }
+ 55 │ 
+ 56 │ mod sibling {
+ 57 │     // A private type returned by a `pub fn`, passed on: accepted.
+ 58 │     fn pass_on() -> u8 { crate::vault::reveal(crate::vault::secret()) }
+ 59 │     // Its `pub` field is not visible where no path names the struct.
+ 60 │     fn field() -> u8 { crate::vault::secret().value }
+    ·                                               ──┬──
+    ·                                                 ╰── not visible here
+ 61 │ }
+    ╰────
+  help: a `pub` field is visible wherever a path can name its struct, and none written in module
+        `sibling` can name `vault::Secret`: offer the struct with `pub` or `pub use` (ADR 0050)

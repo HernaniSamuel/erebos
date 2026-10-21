@@ -1,0 +1,129 @@
+---
+source: tests/ui.rs
+assertion_line: 22
+expression: output
+input_file: tests/ui/resolve_private_fields.ers
+---
+--- errors ---
+resolve::private-field
+
+  × the field `divisor` of `uart::Config` is private
+    ╭─[resolve_private_fields.ers:11:40]
+ 10 │ mod uart {
+ 11 │     pub struct Config { pub baud: u32, divisor: u16 }
+    ·                                        ───┬───
+    ·                                           ╰── declared here without `pub`
+ 12 │     pub struct Pair { a: u8, b: u8, pub c: u8 }
+    ╰────
+    ╭─[resolve_private_fields.ers:24:30]
+ 23 │ // From the parent of its module.
+ 24 │ fn given() -> uart::Config { uart::Config { baud: 9600, divisor: 2 } }
+    ·                              ──────┬─────               ───┬───
+    ·                                    │                       ╰── not visible here
+    ·                                    ╰── cannot be built here
+ 25 │ fn left_out() -> uart::Config { uart::Config { baud: 9600 } }
+    ╰────
+  help: a struct literal gives every field (ADR 0021), and a private field is visible only in
+        module `uart` and the modules inside it: build the struct with a function of that module,
+        or declare the field `pub` (ADR 0050)
+resolve::private-field
+
+  × the field `divisor` of `uart::Config` is private
+    ╭─[resolve_private_fields.ers:11:40]
+ 10 │ mod uart {
+ 11 │     pub struct Config { pub baud: u32, divisor: u16 }
+    ·                                        ───┬───
+    ·                                           ╰── declared here without `pub`
+ 12 │     pub struct Pair { a: u8, b: u8, pub c: u8 }
+    ╰────
+    ╭─[resolve_private_fields.ers:25:33]
+ 24 │ fn given() -> uart::Config { uart::Config { baud: 9600, divisor: 2 } }
+ 25 │ fn left_out() -> uart::Config { uart::Config { baud: 9600 } }
+    ·                                 ──────┬─────
+    ·                                       ╰── cannot be built here
+ 26 │ fn both_left_out() -> uart::Pair { uart::Pair { c: 0 } }
+    ╰────
+  help: a struct literal gives every field (ADR 0021), and a private field is visible only in
+        module `uart` and the modules inside it: build the struct with a function of that module,
+        or declare the field `pub` (ADR 0050)
+resolve::private-field
+
+  × the fields `a` and `b` of `uart::Pair` are private
+    ╭─[resolve_private_fields.ers:12:23]
+ 11 │     pub struct Config { pub baud: u32, divisor: u16 }
+ 12 │     pub struct Pair { a: u8, b: u8, pub c: u8 }
+    ·                       ┬      ┬
+    ·                       │      ╰── declared here without `pub`
+    ·                       ╰── declared here without `pub`
+ 13 │     pub struct Open { pub baud: u32 }
+    ╰────
+    ╭─[resolve_private_fields.ers:26:36]
+ 25 │ fn left_out() -> uart::Config { uart::Config { baud: 9600 } }
+ 26 │ fn both_left_out() -> uart::Pair { uart::Pair { c: 0 } }
+    ·                                    ─────┬────
+    ·                                         ╰── cannot be built here
+ 27 │ fn one_given() -> uart::Pair { uart::Pair { b: 1, c: 0, extra: 2 } }
+    ╰────
+  help: a struct literal gives every field (ADR 0021), and a private field is visible only in
+        module `uart` and the modules inside it: build the struct with a function of that module,
+        or declare the field `pub` (ADR 0050)
+resolve::private-field
+
+  × the fields `a` and `b` of `uart::Pair` are private
+    ╭─[resolve_private_fields.ers:12:23]
+ 11 │     pub struct Config { pub baud: u32, divisor: u16 }
+ 12 │     pub struct Pair { a: u8, b: u8, pub c: u8 }
+    ·                       ┬      ┬
+    ·                       │      ╰── declared here without `pub`
+    ·                       ╰── declared here without `pub`
+ 13 │     pub struct Open { pub baud: u32 }
+    ╰────
+    ╭─[resolve_private_fields.ers:27:32]
+ 26 │ fn both_left_out() -> uart::Pair { uart::Pair { c: 0 } }
+ 27 │ fn one_given() -> uart::Pair { uart::Pair { b: 1, c: 0, extra: 2 } }
+    ·                                ─────┬────   ┬
+    ·                                     │       ╰── not visible here
+    ·                                     ╰── cannot be built here
+ 28 │ 
+    ╰────
+  help: a struct literal gives every field (ADR 0021), and a private field is visible only in
+        module `uart` and the modules inside it: build the struct with a function of that module,
+        or declare the field `pub` (ADR 0050)
+resolve::unknown-field
+
+  × `uart::Pair` has no field `extra`
+    ╭─[resolve_private_fields.ers:12:16]
+ 11 │     pub struct Config { pub baud: u32, divisor: u16 }
+ 12 │     pub struct Pair { a: u8, b: u8, pub c: u8 }
+    ·                ──┬─
+    ·                  ╰── `uart::Pair` is declared here
+ 13 │     pub struct Open { pub baud: u32 }
+    ╰────
+    ╭─[resolve_private_fields.ers:27:57]
+ 26 │ fn both_left_out() -> uart::Pair { uart::Pair { c: 0 } }
+ 27 │ fn one_given() -> uart::Pair { uart::Pair { b: 1, c: 0, extra: 2 } }
+    ·                                                         ──┬──
+    ·                                                           ╰── unknown field
+ 28 │ 
+    ╰────
+resolve::private-field
+
+  × the field `divisor` of `uart::Config` is private
+    ╭─[resolve_private_fields.ers:11:40]
+ 10 │ mod uart {
+ 11 │     pub struct Config { pub baud: u32, divisor: u16 }
+    ·                                        ───┬───
+    ·                                           ╰── declared here without `pub`
+ 12 │     pub struct Pair { a: u8, b: u8, pub c: u8 }
+    ╰────
+    ╭─[resolve_private_fields.ers:34:48]
+ 33 │ mod sibling {
+ 34 │     fn from_sibling() -> crate::uart::Config { crate::uart::Config { baud: 1, divisor: 1 } }
+    ·                                                ─────────┬─────────            ───┬───
+    ·                                                         │                        ╰── not visible here
+    ·                                                         ╰── cannot be built here
+ 35 │ }
+    ╰────
+  help: a struct literal gives every field (ADR 0021), and a private field is visible only in
+        module `uart` and the modules inside it: build the struct with a function of that module,
+        or declare the field `pub` (ADR 0050)

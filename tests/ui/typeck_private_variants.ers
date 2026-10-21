@@ -1,0 +1,124 @@
+// emit: typeck
+// The variants of an enum are visible where the enum is reachable, and only
+// there: `.V`, which does not write the enum, is `ty::private-variant` in
+// an expression or a pattern where no path can name its enum, even as the
+// argument or the result of a `pub fn`. `_` names no variant and is
+// accepted; a `match` missing variants that cannot be written there says
+// to cover them with `_` (ADR 0054). An enum or struct offered with `pub
+// use` is reachable through it, its `.V` and `pub` fields with it (ADR 0050).
+mod uart {
+    enum Mode: u8 { Off = 0, Run = 1, Fast(u8) = 2 }
+
+    pub fn set(m: Mode) {}
+    pub fn get() -> Mode { .Run }
+    pub fn maybe() -> Option(Mode) { .Some(.Off) }
+    pub enum Msg: u8 { Clear = 0, Set(Mode) = 1 }
+    pub fn msg() -> Msg { .Clear }
+
+    // From its module: accepted.
+    fn inside() -> u8 {
+        set(.Fast(2));
+        match get() {
+            .Off => 0,
+            .Run => 1,
+            .Fast(let n: u8) => n,
+        }
+    }
+
+    mod regs {
+        // From a module inside it: accepted.
+        fn inner() -> u8 {
+            super::set(.Off);
+            match super::get() { .Run => 1, _ => 0 }
+        }
+    }
+}
+
+mod sibling {
+    // Rejected.
+    fn arguments() {
+        crate::uart::set(.Run);
+        crate::uart::set(.Fast(1));
+    }
+
+    fn patterns() -> u8 {
+        match crate::uart::get() {
+            .Run => 1,
+            _ => 0,
+        }
+    }
+
+    // Accepted: `_` names no variant.
+    fn catch_all() -> u8 {
+        match crate::uart::get() { _ => 0 }
+    }
+
+    fn some_catch_all() -> u8 {
+        match crate::uart::maybe() { .None => 0, .Some(_) => 1 }
+    }
+
+    // Accepted: a `let` of a reachable type that holds the enum.
+    fn enclosing_let() -> u8 {
+        match crate::uart::msg() { .Set(_) => 0, let m: crate::uart::Msg => 1 }
+    }
+
+    // Not exhaustive, with witnesses that cannot be written here: the
+    // enum's variants, or variants inside a payload.
+    fn missing() -> u8 {
+        match crate::uart::get() {}
+    }
+
+    fn missing_inside() -> u8 {
+        match crate::uart::maybe() { .None => 0, .Some(.Off) => 1 }
+    }
+
+    // Mixed: `uart::Msg::Clear` could be written, but `_` alone covers
+    // every witness, and the help names it only.
+    fn missing_mixed() -> u8 {
+        match crate::uart::msg() { .Set(.Off) => 0 }
+    }
+}
+
+// Offered with `pub use` by the parent of a private module.
+mod dev {
+    mod regs {
+        pub enum Level: u8 { Low = 0, High = 1 }
+        pub struct Block { pub ctrl: u32, status: u8 }
+
+        pub fn block() -> Block { Block { ctrl: 7, status: 0 } }
+    }
+
+    pub use regs::{Block, Level, block};
+
+    // From the parent of the private module, without the `pub use`.
+    fn parent(b: regs::Block) -> u32 {
+        let l: regs::Level = .High;
+        b.ctrl
+    }
+}
+
+// From outside, through the `pub use`: accepted.
+fn offered() -> u32 {
+    let l: dev::Level = .Low;
+    let b: dev::Block = dev::block();
+    match l {
+        .Low => b.ctrl,
+        .High => 0,
+    }
+}
+
+// A `pub` enum of a private module, not offered: reachable from the
+// module's parent (accepted), not from outside (rejected).
+mod hw {
+    mod regs {
+        pub enum Speed: u8 { Slow = 0, Fast = 1 }
+    }
+
+    pub fn set_speed(s: regs::Speed) {}
+    fn parent() { set_speed(.Fast); }
+}
+
+fn not_offered() { hw::set_speed(.Slow); }
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

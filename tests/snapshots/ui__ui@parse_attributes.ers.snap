@@ -25,6 +25,7 @@ File {
                 },
                 fields: [
                     FieldDecl {
+                        vis: Private,
                         name: Ident {
                             name: "kind",
                             span: 39..43,
@@ -45,6 +46,7 @@ File {
                         },
                     },
                     FieldDecl {
+                        vis: Private,
                         name: Ident {
                             name: "len",
                             span: 49..52,
@@ -96,6 +98,7 @@ File {
                 },
                 fields: [
                     FieldDecl {
+                        vis: Private,
                         name: Ident {
                             name: "addr",
                             span: 94..98,
@@ -116,6 +119,7 @@ File {
                         },
                     },
                     FieldDecl {
+                        vis: Private,
                         name: Ident {
                             name: "len",
                             span: 105..108,

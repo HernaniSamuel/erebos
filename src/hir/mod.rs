@@ -121,6 +121,30 @@ impl Hir {
     pub fn static_(&self, id: StaticId) -> &StaticDef {
         &self.statics[id.0 as usize]
     }
+
+    /// Whether the field `index` of the struct `id` is visible from
+    /// `module`: a private one where a private item of the struct's module
+    /// would be, a `pub` one wherever the struct is reachable (ADR 0050).
+    pub fn field_visible(&self, id: StructId, index: usize, module: ModuleId) -> bool {
+        let def = self.struct_(id);
+        match def.fields[index].vis {
+            Visibility::Private => is_within(&self.modules, module, def.module),
+            Visibility::Pub => def.reachable_from(module),
+        }
+    }
+}
+
+/// Whether `inner` is `outer` or a module inside it, in the module tree
+/// `modules`: where the private items of `outer` are visible (ADR 0050).
+pub(crate) fn is_within(modules: &[ModuleDef], inner: ModuleId, outer: ModuleId) -> bool {
+    let mut at = Some(inner);
+    while let Some(module) = at {
+        if module == outer {
+            return true;
+        }
+        at = modules[module.0 as usize].parent;
+    }
+    false
 }
 
 /// A module: the root, or one declared with `mod` (ADR 0049).
@@ -137,6 +161,18 @@ pub struct ModuleDef {
     pub parent: Option<ModuleId>,
     /// `Pub` for the root module, which every module is inside.
     pub vis: Visibility,
+}
+
+impl ModuleDef {
+    /// How diagnostics name it: "module `uart::regs`", or "the root
+    /// module".
+    pub fn describe(&self) -> String {
+        if self.parent.is_none() {
+            "the root module".to_owned()
+        } else {
+            format!("module `{}`", self.path)
+        }
+    }
 }
 
 /// `const NAME: Type = value;` (ADR 0029). The value is computed by running
@@ -253,11 +289,22 @@ pub struct StructDef {
     pub name_span: Span,
     pub module: ModuleId,
     pub vis: Visibility,
+    /// The modules it is reachable from, in id order: those where a path
+    /// written would name it and be usable, through a `pub use` too
+    /// (ADR 0050). Its `pub` fields are visible there.
+    pub reachable: Vec<ModuleId>,
     pub fields: Vec<FieldDef>,
     /// `#[packed]`: alignment 1, no padding (ADR 0022).
     pub packed: bool,
     /// `#[align(N)]`, with the span of `N` (ADR 0022).
     pub align: Option<(ArrayLen, Span)>,
+}
+
+impl StructDef {
+    /// Whether a path written in `module` can name it (ADR 0050).
+    pub fn reachable_from(&self, module: ModuleId) -> bool {
+        self.reachable.contains(&module)
+    }
 }
 
 /// `enum Name: Type { Variant = value, ... }` (ADR 0035): named values of
@@ -275,6 +322,10 @@ pub struct EnumDef {
     /// is in every module (ADR 0049).
     pub module: ModuleId,
     pub vis: Visibility,
+    /// The modules it is reachable from, in id order, as a struct's
+    /// (ADR 0050): its variants are visible there. Empty for an enum
+    /// declared nowhere, which is reachable from every module.
+    pub reachable: Vec<ModuleId>,
     pub ty: EnumTy,
     pub variants: Vec<VariantDef>,
 }
@@ -284,6 +335,12 @@ impl EnumDef {
     /// `Result(T, E)` (ADR 0045).
     pub fn is_declared(&self) -> bool {
         self.name_span.is_some()
+    }
+
+    /// Whether a path written in `module` can name it, so that `.V` may
+    /// name its variants there (ADR 0050).
+    pub fn reachable_from(&self, module: ModuleId) -> bool {
+        !self.is_declared() || self.reachable.contains(&module)
     }
 
     /// How diagnostics write its variant `index`: `E::V`, or `.V` for a
@@ -420,6 +477,7 @@ impl BuiltinEnum {
             name_span: None,
             module: ModuleId::ROOT,
             vis: Visibility::Pub,
+            reachable: Vec::new(),
             ty,
             variants,
         }
@@ -430,6 +488,8 @@ impl BuiltinEnum {
 pub struct FieldDef {
     pub name: String,
     pub span: Span,
+    /// Private unless written `pub` (ADR 0050).
+    pub vis: Visibility,
     pub ty: Ty,
 }
 

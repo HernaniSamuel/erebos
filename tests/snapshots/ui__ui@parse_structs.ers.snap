@@ -16,6 +16,7 @@ File {
                 },
                 fields: [
                     FieldDecl {
+                        vis: Private,
                         name: Ident {
                             name: "x",
                             span: 156..157,
@@ -36,6 +37,7 @@ File {
                         },
                     },
                     FieldDecl {
+                        vis: Private,
                         name: Ident {
                             name: "y",
                             span: 168..169,

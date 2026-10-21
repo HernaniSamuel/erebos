@@ -1,0 +1,38 @@
+// emit: hir
+// A field is private unless declared `pub`, visible where a private item
+// of its struct's module is: there and in the modules inside it. A struct
+// literal gives every field (ADR 0021), so elsewhere a literal of a struct
+// with a private field is `resolve::private-field`, whether it gives the
+// field or leaves it out, and the fields it leaves out are not reported as
+// missing (ADR 0050). Such a struct is built elsewhere by a function of its
+// module. Places and `offset_of` are checked by the type checker, in
+// `typeck_private_fields.ers`.
+mod uart {
+    pub struct Config { pub baud: u32, divisor: u16 }
+    pub struct Pair { a: u8, b: u8, pub c: u8 }
+    pub struct Open { pub baud: u32 }
+
+    // From its module and from a module inside it: accepted.
+    pub fn config(baud: u32) -> Config { Config { baud: baud, divisor: 1 } }
+
+    mod regs {
+        fn inner() -> super::Config { super::Config { divisor: 0, baud: 0 } }
+    }
+}
+
+// From the parent of its module.
+fn given() -> uart::Config { uart::Config { baud: 9600, divisor: 2 } }
+fn left_out() -> uart::Config { uart::Config { baud: 9600 } }
+fn both_left_out() -> uart::Pair { uart::Pair { c: 0 } }
+fn one_given() -> uart::Pair { uart::Pair { b: 1, c: 0, extra: 2 } }
+
+// Accepted: every field `pub`, or built by a function of its module.
+fn open() -> uart::Open { uart::Open { baud: 1 } }
+fn through_function() -> uart::Config { uart::config(115200) }
+
+mod sibling {
+    fn from_sibling() -> crate::uart::Config { crate::uart::Config { baud: 1, divisor: 1 } }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

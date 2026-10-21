@@ -17,3 +17,6 @@ fn paths(x: crate::uart::Mode) -> super::super::T {
         super::LIMIT => 0,
     }
 }
+
+// `pub` before a field (ADR 0050).
+pub struct Config { pub baud: u32, divisor: u16 }

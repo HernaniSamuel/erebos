@@ -386,5 +386,60 @@ File {
                 span: 389..614,
             },
         ),
+        Struct(
+            StructDecl {
+                attrs: [],
+                vis: Pub,
+                name: Ident {
+                    name: "Config",
+                    span: 663..669,
+                },
+                fields: [
+                    FieldDecl {
+                        vis: Pub,
+                        name: Ident {
+                            name: "baud",
+                            span: 676..680,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Path {
+                                    segments: [
+                                        Ident {
+                                            name: "u32",
+                                            span: 682..685,
+                                        },
+                                    ],
+                                    span: 682..685,
+                                },
+                            ),
+                            span: 682..685,
+                        },
+                    },
+                    FieldDecl {
+                        vis: Private,
+                        name: Ident {
+                            name: "divisor",
+                            span: 687..694,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Path {
+                                    segments: [
+                                        Ident {
+                                            name: "u16",
+                                            span: 696..699,
+                                        },
+                                    ],
+                                    span: 696..699,
+                                },
+                            ),
+                            span: 696..699,
+                        },
+                    },
+                ],
+                span: 656..701,
+            },
+        ),
     ],
 }

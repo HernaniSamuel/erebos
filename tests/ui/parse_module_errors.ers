@@ -1,7 +1,7 @@
 // emit: ast
-// `pub` applies to items with a name, but not to the entry function, which
-// nothing calls (`parser::misplaced-pub`); before anything else, such as a
-// variant, a parameter, a `let` or another `pub`, it is
+// `pub` applies to items with a name and to fields, but not to the entry
+// function, which nothing calls (`parser::misplaced-pub`); before anything
+// else, such as a variant, a parameter, a `let` or another `pub`, it is
 // `parser::unexpected-token` (ADR 0050). A `mod` inside a function is
 // `parser::local-mod` (ADR 0049). In a path, `super` follows only `super`
 // at the start, and `crate` comes only first. After an error in the last
@@ -22,4 +22,5 @@ fn crates() -> u8 { crate::crate::b }
 mod broken {
     fn last() { let }
 }
+struct S { pub pub x: u8 }
 panic fn on_panic() -> ! { loop {} }
