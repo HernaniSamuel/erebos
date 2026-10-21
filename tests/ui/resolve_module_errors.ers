@@ -65,3 +65,13 @@ fn root_super() -> u32 { super::LIMIT }
 
 entry fn main() -> ! { loop {} }
 panic fn on_panic() -> ! { loop {} }
+
+// A single name in a pattern is a constant: a module there, `core`
+// included, is `resolve::misused-module` (ADR 0049, 0052).
+fn module_patterns(x: u8) -> u8 {
+    match x {
+        a => 0,
+        core => 1,
+        _ => 2,
+    }
+}

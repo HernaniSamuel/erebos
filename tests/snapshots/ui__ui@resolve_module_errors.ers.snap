@@ -363,3 +363,25 @@ resolve::super-at-root
     ╰────
   help: `super` names the module around the current one; the root module's items are named
         directly, or from anywhere through `crate` (ADR 0049)
+resolve::misused-module
+
+  × `a` is a module, not a constant
+    ╭─[resolve_module_errors.ers:73:9]
+ 72 │     match x {
+ 73 │         a => 0,
+    ·         ┬
+    ·         ╰── a module
+ 74 │         core => 1,
+    ╰────
+  help: a module holds items, each named by a path through it, as in `a::name` (ADR 0049)
+resolve::misused-module
+
+  × `core` is a module, not a constant
+    ╭─[resolve_module_errors.ers:74:9]
+ 73 │         a => 0,
+ 74 │         core => 1,
+    ·         ──┬─
+    ·           ╰── a module
+ 75 │         _ => 2,
+    ╰────
+  help: a module holds items, each named by a path through it, as in `core::name` (ADR 0049)

@@ -3401,7 +3401,8 @@ impl Lowerer<'_> {
 
     /// A bare name in a pattern, which is always a constant (ADR 0037). It
     /// is looked up as in an expression, so a local variable shadows a
-    /// constant of the same name.
+    /// constant of the same name. `core` names `core`'s root, as in a path
+    /// (ADR 0052).
     fn pattern_const(&mut self, name: &ast::Ident) -> Option<ConstId> {
         let path = ast::Path {
             segments: vec![ast::Ident {
@@ -3410,9 +3411,13 @@ impl Lowerer<'_> {
             }],
             span: name.span,
         };
-        let binding = self.namespaces[self.module.0 as usize]
-            .get(&name.name)
-            .map(|entry| entry.binding);
+        let binding = if name.name == "core" {
+            Some(Binding::Def(Def::Module(self.core_root)))
+        } else {
+            self.namespaces[self.module.0 as usize]
+                .get(&name.name)
+                .map(|entry| entry.binding)
+        };
         let def = match binding {
             Some(binding) => match self.binding_def(binding) {
                 Some(def) => Lookup::Found(def),
