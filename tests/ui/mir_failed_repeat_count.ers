@@ -1,0 +1,35 @@
+// emit: mir
+// A repeat count is an array length: one that fails is a failed value (ADR
+// 0048, 0055). Its error is reported, and the body using the type is not
+// built, as for any failed length, so its `7 / 0` is not reported, unlike
+// the one in `control`; meanwhile type errors that hold whatever the count
+// are still reported: in `&raw const [0; 2 / 0]`, `0` has no expected type
+// and a repeat expression is no place. A `match` on an enum that reaches a
+// failed value is checked neither for coverage nor for dead arms: the
+// repeated `E::B` reports nothing.
+const N: usize = 1 / 0;
+struct Broken { x: [u8; N] }
+enum E: u8 { A(*const Broken) = 0, B = 1 }
+
+fn silenced() -> u32 {
+    let a: [u8; 4] = [0; 1 / 0];
+    7 / 0
+}
+
+fn control() -> u32 {
+    7 / 0
+}
+
+fn still_reported() {
+    let p: *const [u8; 4] = &raw const [0; 2 / 0];
+}
+
+fn dead_arm(e: E) -> u32 {
+    match e {
+        E::B => 0,
+        E::B => 1,
+    }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

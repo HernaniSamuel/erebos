@@ -1,0 +1,74 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/mir_failed_repeat_count.ers
+---
+--- errors ---
+ty::division-by-zero
+
+  × division by zero
+    ╭─[mir_failed_repeat_count.ers:10:22]
+  9 │ // repeated `E::B` reports nothing.
+ 10 │ const N: usize = 1 / 0;
+    ·                      ┬
+    ·                      ╰── this divisor is zero
+ 11 │ struct Broken { x: [u8; N] }
+    ╰────
+  help: at run time this would call the panic function (ADR 0007)
+ty::division-by-zero
+
+  × division by zero
+    ╭─[mir_failed_repeat_count.ers:15:30]
+ 14 │ fn silenced() -> u32 {
+ 15 │     let a: [u8; 4] = [0; 1 / 0];
+    ·                              ┬
+    ·                              ╰── this divisor is zero
+ 16 │     7 / 0
+    ╰────
+  help: at run time this would call the panic function (ADR 0007)
+ty::division-by-zero
+
+  × division by zero
+    ╭─[mir_failed_repeat_count.ers:20:9]
+ 19 │ fn control() -> u32 {
+ 20 │     7 / 0
+    ·         ┬
+    ·         ╰── this divisor is zero
+ 21 │ }
+    ╰────
+  help: at run time this would call the panic function (ADR 0007)
+ty::not-a-place
+
+  × `&raw` needs a place in memory
+    ╭─[mir_failed_repeat_count.ers:24:40]
+ 23 │ fn still_reported() {
+ 24 │     let p: *const [u8; 4] = &raw const [0; 2 / 0];
+    ·                                        ─────┬────
+    ·                                             ╰── a value, not a place
+ 25 │ }
+    ╰────
+  help: take the address of a variable, `*pointer` or `a[index]`; to point at a value, store it in
+        a `let` first
+ty::untyped-literal
+
+  × cannot tell the type of this literal
+    ╭─[mir_failed_repeat_count.ers:24:41]
+ 23 │ fn still_reported() {
+ 24 │     let p: *const [u8; 4] = &raw const [0; 2 / 0];
+    ·                                         ┬
+    ·                                         ╰── no type is expected here
+ 25 │ }
+    ╰────
+  help: literals take the type expected where they appear; bind it first, e.g. `let x: u32 = ...`
+        (ADR 0008)
+ty::division-by-zero
+
+  × division by zero
+    ╭─[mir_failed_repeat_count.ers:24:48]
+ 23 │ fn still_reported() {
+ 24 │     let p: *const [u8; 4] = &raw const [0; 2 / 0];
+    ·                                                ┬
+    ·                                                ╰── this divisor is zero
+ 25 │ }
+    ╰────
+  help: at run time this would call the panic function (ADR 0007)
