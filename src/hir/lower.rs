@@ -2317,13 +2317,23 @@ impl Lowerer<'_> {
         // A literal gives every field (ADR 0021), so outside the visibility
         // of a private field it cannot be written, whether it gives that
         // field or not (ADR 0050); what it misses is not reported then.
-        if !self.is_within(self.module, module) {
+        // A private struct is named from outside its module only by a path
+        // already reported as private (ADR 0050); its fields are not
+        // reported again.
+        if !self.is_within(self.module, module) && decl.vis != ast::Visibility::Private {
+            // A field declared twice was reported; only its first counts.
             let private: Vec<(&ast::FieldDecl, Option<Span>)> = decl
                 .fields
                 .iter()
                 .zip(&given)
-                .filter(|(field, _)| field.vis == ast::Visibility::Private)
-                .map(|(field, &given)| (field, given))
+                .enumerate()
+                .filter(|(i, (field, _))| {
+                    field.vis == ast::Visibility::Private
+                        && decl.fields[..*i]
+                            .iter()
+                            .all(|earlier| earlier.name.name != field.name.name)
+                })
+                .map(|(_, (field, &given))| (field, given))
                 .collect();
             if !private.is_empty() {
                 self.private_fields(path, name, module, &private);

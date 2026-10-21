@@ -1,6 +1,5 @@
 ---
 source: tests/ui.rs
-assertion_line: 22
 expression: output
 input_file: tests/ui/resolve_private_fields.ers
 ---
@@ -106,6 +105,51 @@ resolve::unknown-field
     ·                                                           ╰── unknown field
  28 │ 
     ╰────
+resolve::private-item
+
+  × `hidden::Secret` is private
+    ╭─[resolve_private_fields.ers:38:23]
+ 35 │ mod hidden {
+ 36 │     struct Secret { key: u32 }
+    ·            ───┬──
+    ·               ╰── declared here without `pub`
+ 37 │ }
+ 38 │ fn secret() { hidden::Secret { key: 1 }; }
+    ·                       ───┬──
+    ·                          ╰── not visible here
+ 39 │ 
+    ╰────
+  help: a private item of module `hidden` is visible only there and in the modules inside it;
+        declare it `pub` to use it elsewhere (ADR 0050)
+resolve::duplicate-field
+
+  × the field `a` is declared more than once
+    ╭─[resolve_private_fields.ers:42:31]
+ 41 │ mod twice {
+ 42 │     pub struct Twice { a: u8, a: u8 }
+    ·                        ┬      ┬
+    ·                        │      ╰── declared again here
+    ·                        ╰── first declared here
+ 43 │ }
+    ╰────
+resolve::private-field
+
+  × the field `a` of `twice::Twice` is private
+    ╭─[resolve_private_fields.ers:44:23]
+ 41 │ mod twice {
+ 42 │     pub struct Twice { a: u8, a: u8 }
+    ·                        ┬
+    ·                        ╰── declared here without `pub`
+ 43 │ }
+ 44 │ fn declared_twice() { twice::Twice { a: 1 }; }
+    ·                       ──────┬─────   ┬
+    ·                             │        ╰── not visible here
+    ·                             ╰── cannot be built here
+ 45 │ 
+    ╰────
+  help: a struct literal gives every field (ADR 0021), and a private field is visible only in
+        module `twice` and the modules inside it: build the struct with a function of that module,
+        or declare the field `pub` (ADR 0050)
 resolve::private-field
 
   × the field `divisor` of `uart::Config` is private
@@ -116,13 +160,13 @@ resolve::private-field
     ·                                           ╰── declared here without `pub`
  12 │     pub struct Pair { a: u8, b: u8, pub c: u8 }
     ╰────
-    ╭─[resolve_private_fields.ers:34:48]
- 33 │ mod sibling {
- 34 │     fn from_sibling() -> crate::uart::Config { crate::uart::Config { baud: 1, divisor: 1 } }
+    ╭─[resolve_private_fields.ers:47:48]
+ 46 │ mod sibling {
+ 47 │     fn from_sibling() -> crate::uart::Config { crate::uart::Config { baud: 1, divisor: 1 } }
     ·                                                ─────────┬─────────            ───┬───
     ·                                                         │                        ╰── not visible here
     ·                                                         ╰── cannot be built here
- 35 │ }
+ 48 │ }
     ╰────
   help: a struct literal gives every field (ADR 0021), and a private field is visible only in
         module `uart` and the modules inside it: build the struct with a function of that module,

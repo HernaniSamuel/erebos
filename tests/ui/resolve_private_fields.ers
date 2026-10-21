@@ -30,6 +30,19 @@ fn one_given() -> uart::Pair { uart::Pair { b: 1, c: 0, extra: 2 } }
 fn open() -> uart::Open { uart::Open { baud: 1 } }
 fn through_function() -> uart::Config { uart::config(115200) }
 
+// A private struct is `resolve::private-item` alone: its fields are not
+// reported too.
+mod hidden {
+    struct Secret { key: u32 }
+}
+fn secret() { hidden::Secret { key: 1 }; }
+
+// A field declared twice is reported once, and listed once.
+mod twice {
+    pub struct Twice { a: u8, a: u8 }
+}
+fn declared_twice() { twice::Twice { a: 1 }; }
+
 mod sibling {
     fn from_sibling() -> crate::uart::Config { crate::uart::Config { baud: 1, divisor: 1 } }
 }
