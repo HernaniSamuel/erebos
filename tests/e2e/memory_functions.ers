@@ -1,7 +1,7 @@
-// The runtime's memory functions (ADR 0020), called directly and, at `-O`,
-// through loops that LLVM turns into calls to them. If the runtime's own
-// loops became calls to themselves, these would recurse until the stack
-// overflowed.
+// The runtime's memory functions (ADR 0020), called through `core`
+// (ADR 0052) and, at `-O`, through loops that LLVM turns into calls to them.
+// If the runtime's own loops became calls to themselves, these would recurse
+// until the stack overflowed.
 // expect-output: hello
 // expect-output: hhello
 // expect-output: ello
@@ -49,18 +49,18 @@ entry fn main() -> ! {
     a[3] = b'l';
     a[4] = b'o';
     let b: *mut u8 = &raw mut a[16];
-    memcpy(b, a, 5);
+    core::memcpy(b, a, 5);
     print(b, 5);
 
     // Overlapping, destination above the source: copies backwards.
-    memmove(&raw mut b[1], b, 5);
+    core::memmove(&raw mut b[1], b, 5);
     print(b, 6);
 
     // Overlapping, destination below the source.
-    memmove(b, &raw const b[2], 4);
+    core::memmove(b, &raw const b[2], 4);
     print(b, 4);
 
-    memset(b, 0x178, 5);
+    core::memset(b, 0x178, 5);
     print(b, 5);
 
     // A fill loop, which `-O` turns into a call to `memset`.

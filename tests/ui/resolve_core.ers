@@ -1,0 +1,47 @@
+// emit: hir
+// `core` (ADR 0052): a name no item, module or `use` takes, symbols the
+// program cannot give again, private items it cannot name, and `pub` items
+// named through `core::` from any module.
+
+// `core` as the name of an item, a module and a `use`.
+fn core() {}
+mod modules {
+    mod core {}
+}
+mod uses {
+    use crate::helper as core;
+}
+
+pub fn helper() {}
+
+// Symbols of `core`: a root function and an `#[export]` function in a
+// module. A function of a module has its path as symbol, `fill.memmove`.
+fn memcpy() {}
+mod fill {
+    #[export]
+    fn memset() {}
+    fn memmove() {}
+}
+
+// A private item of `core`.
+fn divide(n: u64) -> u64 {
+    core::builtins::__udivdi3(n, 3)
+}
+
+// A path into `core` that names nothing, and `core` as a value.
+fn nothing() {
+    core::nope();
+    let x: u32 = core;
+}
+
+// `pub` items of `core`, brought in by `use` and named by path: accepted.
+mod copy {
+    use core::memcpy;
+    pub fn twice(dest: *mut u8, src: *const u8) {
+        memcpy(dest, src, 1);
+        core::memmove(dest, src, 1);
+    }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

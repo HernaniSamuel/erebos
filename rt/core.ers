@@ -1,0 +1,10 @@
+// The module `core` (ADR 0052): Erebos code shipped inside the compiler and
+// compiled with every program. Any module of a program names its items
+// through `core::`, as in `core::memcpy`; inside `core`, `crate` is this
+// file's module.
+
+// The runtime support functions (ADR 0020), private but for the memory
+// functions, which programs may call.
+mod builtins;
+
+pub use builtins::{memcpy, memmove, memset};

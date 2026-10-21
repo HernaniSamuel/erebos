@@ -70,6 +70,52 @@ impl Mir {
     pub fn body(&self, id: BodyId) -> &Body {
         &self.bodies[id.0 as usize]
     }
+
+    /// Leaves out the bodies marked in `left_out`, as dumps leave `core`
+    /// out (ADR 0052). One that a body kept calls stays as a declaration,
+    /// as an `extern fn` would be, so that the call still names it; the
+    /// others go, and the bodies kept are renumbered.
+    pub fn leave_out(&mut self, left_out: &[bool]) {
+        let mut called = vec![false; self.bodies.len()];
+        for (_, body) in self.bodies().filter(|(id, _)| !left_out[id.0 as usize]) {
+            for block in &body.blocks {
+                for statement in &block.statements {
+                    if let Statement::Call { callee, .. } = statement {
+                        called[callee.0 as usize] = true;
+                    }
+                }
+            }
+        }
+        let mut ids = Vec::with_capacity(self.bodies.len());
+        let mut kept = Vec::new();
+        for (i, mut body) in std::mem::take(&mut self.bodies).into_iter().enumerate() {
+            if left_out[i] && !called[i] {
+                ids.push(None);
+                continue;
+            }
+            if left_out[i] {
+                body.external = true;
+                body.runtime = false;
+                body.blocks.clear();
+                body.locals.truncate(1 + body.param_count);
+            }
+            ids.push(Some(BodyId(kept.len() as u32)));
+            kept.push(body);
+        }
+        let new_id = |id: BodyId| ids[id.0 as usize].expect("a body kept calls only bodies kept");
+        for body in &mut kept {
+            for block in &mut body.blocks {
+                for statement in &mut block.statements {
+                    if let Statement::Call { callee, .. } = statement {
+                        *callee = new_id(*callee);
+                    }
+                }
+            }
+        }
+        self.entry = new_id(self.entry);
+        self.panic = new_id(self.panic);
+        self.bodies = kept;
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -91,8 +137,9 @@ pub struct Body {
     pub locals: Vec<LocalDecl>,
     /// `blocks[0]` is the start block; nothing jumps back to it.
     pub blocks: Vec<BasicBlockData>,
-    /// A runtime support function (ADR 0020). LLVM must not turn its code
-    /// into calls to the runtime, which may be the function itself.
+    /// A function of `core`, which holds the runtime support functions
+    /// (ADR 0020, 0052). LLVM must not turn its code into calls to the
+    /// runtime, which may be the function itself.
     pub runtime: bool,
     /// Defined outside the program (ADR 0026): no locals besides the
     /// parameters, and no blocks.

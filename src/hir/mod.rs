@@ -61,18 +61,22 @@ pub enum Visibility {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct LocalId(pub u32);
 
+/// The program, then `core` (ADR 0052): in each list, the items of `core`
+/// follow the program's, so that the ids of the program's items, and the
+/// dumps that leave `core` out, are those of the program alone.
 #[derive(Debug)]
 pub struct Hir {
     /// The module tree, the root first, then each module in the order its
-    /// `mod` is met, depth first (ADR 0049).
+    /// `mod` is met, depth first (ADR 0049); then `core`'s tree, likewise.
     pub modules: Vec<ModuleDef>,
     pub structs: Vec<StructDef>,
     pub enums: Vec<EnumDef>,
-    /// Functions, then the bodies that run at compile time: one for each
-    /// constant, each static with an initializer (not an `extern static`)
-    /// and each `comptime` block, in source order, then one for each
-    /// variant of each enum, then one for each value computed at compile
-    /// time.
+    /// The program's functions, then its bodies that run at compile time:
+    /// one for each constant, each static with an initializer (not an
+    /// `extern static`) and each `comptime` block, in source order, then
+    /// one for each variant of each enum. Then `core`'s, in the same order.
+    /// Then one for each value computed at compile time, the program's
+    /// first.
     pub fns: Vec<Fn>,
     pub consts: Vec<ConstDef>,
     pub statics: Vec<StaticDef>,
@@ -92,9 +96,80 @@ pub struct Hir {
     pub panic: FnId,
     /// Expression ids are `0..expr_count`.
     pub expr_count: u32,
+    /// Where `core` starts.
+    pub core: CoreStart,
+}
+
+/// Where `core`'s part starts in the lists of the HIR, whose items are
+/// lowered after the program's (ADR 0052).
+#[derive(Clone, Copy, Debug)]
+pub struct CoreStart {
+    /// The root of `core`: every module from it on is `core`'s.
+    pub module: ModuleId,
+    /// The first expression id of `core`.
+    pub expr: u32,
+    pub never_in_memory: usize,
+    pub unsized_types: usize,
+    pub applications: usize,
 }
 
 impl Hir {
+    /// Whether `module` is a module of `core` (ADR 0052).
+    pub fn in_core(&self, module: ModuleId) -> bool {
+        module.0 >= self.core.module.0
+    }
+
+    /// The HIR of the program, as `--emit=hir` shows it: `core` left out
+    /// (ADR 0052). Its fields are those of `Hir`, in its order.
+    pub fn dump(&self) -> String {
+        #[derive(Debug)]
+        #[expect(dead_code, reason = "only its `Debug` output is read")]
+        struct Hir<'a> {
+            modules: &'a [ModuleDef],
+            structs: Vec<&'a StructDef>,
+            enums: Vec<&'a EnumDef>,
+            fns: Vec<&'a Fn>,
+            consts: Vec<&'a ConstDef>,
+            statics: Vec<&'a StaticDef>,
+            comptime_blocks: Vec<FnId>,
+            never_in_memory: &'a [NeverInMemory],
+            unsized_types: &'a [UnsizedType],
+            applications: &'a [(Span, Ty)],
+            entry: FnId,
+            panic: FnId,
+            expr_count: u32,
+        }
+        let core = self.core;
+        let program = Hir {
+            modules: &self.modules[..core.module.0 as usize],
+            structs: (self.structs.iter())
+                .filter(|s| !self.in_core(s.module))
+                .collect(),
+            enums: (self.enums.iter())
+                .filter(|e| !self.in_core(e.module))
+                .collect(),
+            fns: (self.fns.iter())
+                .filter(|f| !self.in_core(f.module))
+                .collect(),
+            consts: (self.consts.iter())
+                .filter(|c| !self.in_core(c.module))
+                .collect(),
+            statics: (self.statics.iter())
+                .filter(|s| !self.in_core(s.module))
+                .collect(),
+            comptime_blocks: (self.comptime_blocks.iter().copied())
+                .filter(|&id| !self.in_core(self.fn_(id).module))
+                .collect(),
+            never_in_memory: &self.never_in_memory[..core.never_in_memory],
+            unsized_types: &self.unsized_types[..core.unsized_types],
+            applications: &self.applications[..core.applications],
+            entry: self.entry,
+            panic: self.panic,
+            expr_count: core.expr,
+        };
+        format!("{program:#?}\n")
+    }
+
     pub fn fns(&self) -> impl Iterator<Item = (FnId, &Fn)> {
         self.fns
             .iter()
@@ -147,27 +222,30 @@ pub(crate) fn is_within(modules: &[ModuleDef], inner: ModuleId, outer: ModuleId)
     false
 }
 
-/// A module: the root, or one declared with `mod` (ADR 0049).
+/// A module: the root, one declared with `mod` (ADR 0049), or the root of
+/// `core` (ADR 0052), which has no parent either.
 #[derive(Debug)]
 pub struct ModuleDef {
-    /// Empty for the root module.
+    /// Empty for the root module; `core` for the root of `core`.
     pub name: String,
-    /// Its path from the root module, as diagnostics show it: `uart::regs`;
-    /// empty for the root module.
+    /// Its path, as diagnostics show it: `uart::regs`; empty for the root
+    /// module. The modules of `core` start with `core`, as every module
+    /// names them (`core::builtins`).
     pub path: String,
-    /// `None` for the root module.
+    /// `None` for the root module and the root of `core`.
     pub name_span: Option<Span>,
-    /// `None` for the root module.
+    /// `None` for the root module and the root of `core`.
     pub parent: Option<ModuleId>,
-    /// `Pub` for the root module, which every module is inside.
+    /// `Pub` for the root module, which every module is inside, and for
+    /// the root of `core`.
     pub vis: Visibility,
 }
 
 impl ModuleDef {
-    /// How diagnostics name it: "module `uart::regs`", or "the root
-    /// module".
+    /// How diagnostics name it: "module `uart::regs`", "module `core`", or
+    /// "the root module".
     pub fn describe(&self) -> String {
-        if self.parent.is_none() {
+        if self.path.is_empty() {
             "the root module".to_owned()
         } else {
             format!("module `{}`", self.path)
@@ -527,7 +605,9 @@ pub struct Fn {
     /// `None` for an `extern fn`, defined outside the program (ADR 0026).
     pub body: Option<Block>,
     pub span: Span,
-    /// Defined by the runtime support functions (ADR 0020).
+    /// A function of `core` (ADR 0052), which holds the runtime support
+    /// functions (ADR 0020): LLVM must not turn its code into calls to
+    /// them.
     pub runtime: bool,
     /// A body run only at compile time, never part of the program.
     pub comptime: Option<Comptime>,

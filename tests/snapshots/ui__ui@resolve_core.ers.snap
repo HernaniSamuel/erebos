@@ -1,0 +1,140 @@
+---
+source: tests/ui.rs
+assertion_line: 22
+expression: output
+input_file: tests/ui/resolve_core.ers
+---
+--- errors ---
+resolve::reserved-name
+
+  × `core` is a reserved name
+   ╭─[resolve_core.ers:7:4]
+ 6 │ // `core` as the name of an item, a module and a `use`.
+ 7 │ fn core() {}
+   ·    ──┬─
+   ·      ╰── the name of the module `core`
+ 8 │ mod modules {
+   ╰────
+  help: every module names the module `core`, shipped with the compiler, by this name, as in
+        `core::memcpy`, so no item, module or `use` of the program can take it (ADR 0052)
+resolve::reserved-name
+
+  × `core` is a reserved name
+    ╭─[resolve_core.ers:9:9]
+  8 │ mod modules {
+  9 │     mod core {}
+    ·         ──┬─
+    ·           ╰── the name of the module `core`
+ 10 │ }
+    ╰────
+  help: every module names the module `core`, shipped with the compiler, by this name, as in
+        `core::memcpy`, so no item, module or `use` of the program can take it (ADR 0052)
+resolve::reserved-name
+
+  × `core` is a reserved name
+    ╭─[resolve_core.ers:12:26]
+ 11 │ mod uses {
+ 12 │     use crate::helper as core;
+    ·                          ──┬─
+    ·                            ╰── the name of the module `core`
+ 13 │ }
+    ╰────
+  help: every module names the module `core`, shipped with the compiler, by this name, as in
+        `core::memcpy`, so no item, module or `use` of the program can take it (ADR 0052)
+resolve::duplicate-symbol
+
+  × the symbol `memcpy` is given to more than one item
+    ╭─[resolve_core.ers:19:4]
+ 18 │ // module. A function of a module has its path as symbol, `fill.memmove`.
+ 19 │ fn memcpy() {}
+    ·    ───┬──
+    ·       ╰── given here, to `memcpy`
+ 20 │ mod fill {
+    ╰────
+    ╭─[rt/builtins.ers:21:8]
+ 20 │ #[export]
+ 21 │ pub fn memcpy(dest: *mut u8, src: *const u8, n: usize) -> *mut u8 {
+    ·        ───┬──
+    ·           ╰── and here, in `core`, to `core::builtins::memcpy`
+ 22 │     let mut i: usize = 0;
+    ╰────
+  help: `core::memcpy` has this symbol (ADR 0052): call it rather than declaring another, or give
+        this item another name (ADR 0051)
+resolve::duplicate-symbol
+
+  × the symbol `memset` is given to more than one item
+    ╭─[resolve_core.ers:22:8]
+ 21 │     #[export]
+ 22 │     fn memset() {}
+    ·        ───┬──
+    ·           ╰── given here, to `fill::memset`
+ 23 │     fn memmove() {}
+    ╰────
+    ╭─[rt/builtins.ers:47:8]
+ 46 │ #[export]
+ 47 │ pub fn memset(dest: *mut u8, c: i32, n: usize) -> *mut u8 {
+    ·        ───┬──
+    ·           ╰── and here, in `core`, to `core::builtins::memset`
+ 48 │     let byte: u8 = c as u8;
+    ╰────
+  help: `core::memset` has this symbol (ADR 0052): call it rather than declaring another, or give
+        this item another name (ADR 0051)
+resolve::private-item
+
+  × `core::builtins` is private
+    ╭─[resolve_core.ers:28:11]
+ 27 │ fn divide(n: u64) -> u64 {
+ 28 │     core::builtins::__udivdi3(n, 3)
+    ·           ────┬───
+    ·               ╰── not visible here
+ 29 │ }
+    ╰────
+   ╭─[rt/core.ers:8:5]
+ 7 │ // functions, which programs may call.
+ 8 │ mod builtins;
+   ·     ────┬───
+   ·         ╰── declared here without `pub`
+ 9 │ 
+   ╰────
+  help: a private item of module `core` is visible only there and in the modules inside it; the
+        program uses what `core` declares `pub` (ADR 0050, 0052)
+resolve::private-item
+
+  × `core::builtins::__udivdi3` is private
+    ╭─[resolve_core.ers:28:21]
+ 27 │ fn divide(n: u64) -> u64 {
+ 28 │     core::builtins::__udivdi3(n, 3)
+    ·                     ────┬────
+    ·                         ╰── not visible here
+ 29 │ }
+    ╰────
+    ╭─[rt/builtins.ers:88:4]
+ 87 │ #[export]
+ 88 │ fn __udivdi3(n: u64, d: u64) -> u64 {
+    ·    ────┬────
+    ·        ╰── declared here without `pub`
+ 89 │     __erebos_udivmod64(n, d, false)
+    ╰────
+  help: a private item of module `core::builtins` is visible only there and in the modules inside
+        it; the program uses what `core` declares `pub` (ADR 0050, 0052)
+resolve::unknown-function
+
+  × cannot find function `core::nope`
+    ╭─[resolve_core.ers:33:11]
+ 32 │ fn nothing() {
+ 33 │     core::nope();
+    ·           ──┬─
+    ·             ╰── not found in module `core`
+ 34 │     let x: u32 = core;
+    ╰────
+resolve::misused-module
+
+  × `core` is a module, not a value
+    ╭─[resolve_core.ers:34:18]
+ 33 │     core::nope();
+ 34 │     let x: u32 = core;
+    ·                  ──┬─
+    ·                    ╰── a module
+ 35 │ }
+    ╰────
+  help: a module holds items, each named by a path through it, as in `core::name` (ADR 0049)

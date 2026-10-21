@@ -1,0 +1,20 @@
+// emit: mir
+// Calls into `core` (ADR 0052), through `use` and by path, from the root
+// module and from a submodule. Dumps leave `core` out: a function of `core`
+// the program calls is shown as a declaration, under its symbol, and the
+// others not at all.
+use core::memcpy;
+
+mod fill {
+    pub fn zero(dest: *mut u8, n: usize) {
+        core::memset(dest, 0, n);
+    }
+}
+
+entry fn main() -> ! {
+    let buf: *mut u8 = 0x8000_0000 as *mut u8;
+    memcpy(buf, &raw const buf[4], 4);
+    fill::zero(buf, 8);
+    loop {}
+}
+panic fn on_panic() -> ! { loop {} }

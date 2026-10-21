@@ -8,13 +8,13 @@ resolve::reserved-name
 
   × `__udivdi3` is a reserved name
    ╭─[resolve_reserved_runtime_name.ers:3:4]
- 2 │ // Names starting with `__` belong to the runtime (ADR 0020).
+ 2 │ // Names starting with `__` belong to the runtime in `core` (ADR 0020, 0052).
  3 │ fn __udivdi3(n: u64, d: u64) -> u64 { n }
    ·    ────┬────
    ·        ╰── names starting with `__` are reserved
  4 │ fn __helper() {}
    ╰────
-  help: the runtime support functions use them (ADR 0020)
+  help: the runtime support functions of `core` use them (ADR 0020, 0052)
 resolve::reserved-name
 
   × `__helper` is a reserved name
@@ -25,4 +25,4 @@ resolve::reserved-name
    ·        ╰── names starting with `__` are reserved
  5 │ 
    ╰────
-  help: the runtime support functions use them (ADR 0020)
+  help: the runtime support functions of `core` use them (ADR 0020, 0052)

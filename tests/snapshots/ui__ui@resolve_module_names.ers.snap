@@ -46,7 +46,7 @@ resolve::reserved-name
     ·         ╰── names starting with `__` are reserved
  15 │     mod len {}
     ╰────
-  help: the runtime support functions use them (ADR 0020)
+  help: the runtime support functions of `core` use them (ADR 0020, 0052)
 resolve::reserved-name
 
   × `len` is a reserved name

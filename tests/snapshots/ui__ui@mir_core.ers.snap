@@ -1,0 +1,59 @@
+---
+source: tests/ui.rs
+assertion_line: 22
+expression: output
+input_file: tests/ui/mir_core.ers
+---
+--- mir ---
+fn fill.zero(_1: *mut u8, _2: usize) -> () {
+    let _0: ();
+    let _1: *mut u8; // dest
+    let _2: usize; // n
+    let _3: *mut u8;
+
+    bb0: {
+        _3 = call memset(copy _1, const 0_i32, copy _2);
+        return;
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+    let _1: *mut u8; // buf
+    let _2: *mut u8;
+    let _3: *mut u8;
+    let _4: usize;
+    let _5: *const u8;
+    let _6: *mut u8;
+
+    bb0: {
+        _2 = const 2147483648_usize as *mut u8;
+        _1 = copy _2;
+        _3 = copy _1;
+        _4 = const 4_usize;
+        _5 = &raw const (*(_1 + _4));
+        _6 = call memcpy(copy _3, copy _5, const 4_usize);
+        call fill.zero(copy _1, const 8_usize);
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+extern fn memcpy(_1: *mut u8, _2: *const u8, _3: usize) -> *mut u8;
+
+extern fn memset(_1: *mut u8, _2: i32, _3: usize) -> *mut u8;

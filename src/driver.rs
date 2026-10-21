@@ -70,15 +70,19 @@ impl fmt::Display for Stage {
     }
 }
 
-/// The runtime support functions, compiled into every program (ADR 0020).
-pub const RUNTIME_SOURCE: &str = include_str!("../rt/builtins.ers");
-const RUNTIME_NAME: &str = "rt/builtins.ers";
+/// The files of `core`, embedded in the compiler and compiled with every
+/// program (ADR 0052), each by the name diagnostics give it; the root file
+/// first.
+const CORE_FILES: &[(&str, &str)] = &[
+    ("rt/core.ers", include_str!("../rt/core.ers")),
+    ("rt/builtins.ers", include_str!("../rt/builtins.ers")),
+];
 
 /// Runs the pipeline up to `stage` on the program whose root file is at
 /// `path` and holds `text`: the text is compiled, and the path gives the
-/// root file its name and locates the module files. Dumps show the program
-/// alone, without the runtime support functions. On failure, returns the
-/// rendered diagnostics.
+/// root file its name and locates the module files. `core` is compiled
+/// with it, but dumps show the program alone (ADR 0052). On failure,
+/// returns the rendered diagnostics.
 pub fn dump(
     path: &Path,
     text: &str,
@@ -90,7 +94,7 @@ pub fn dump(
     let mut diags = Diagnostics::default();
 
     let program = Program::at(path, text);
-    let output = match front_end(&program, false, Some(stage), &mut sources, &mut diags) {
+    let output = match front_end(&program, Some(stage), &mut sources, &mut diags) {
         FrontEnd::Dump(dump) => Some(dump),
         FrontEnd::Mir(mir) => codegen::emit_llvm_ir(&mir, &target::RISCV32_VIRT, opt)
             .map_err(|e| diags.push(Diagnostic::error("codegen::llvm", e)))
@@ -119,7 +123,7 @@ pub fn build(
     let mut diags = Diagnostics::default();
 
     let program = Program::at(input, &text);
-    let mir = match front_end(&program, true, None, &mut sources, &mut diags) {
+    let mir = match front_end(&program, None, &mut sources, &mut diags) {
         FrontEnd::Mir(mir) if !diags.has_errors() => mir,
         _ => return Err(diag::render(&diags.into_vec(), &sources, color)),
     };
@@ -169,12 +173,28 @@ impl<'a> Program<'a> {
     }
 }
 
+impl Program<'static> {
+    /// `core`, from the compiler binary (ADR 0052). Its files are named
+    /// from the repository's root, `rt/core.ers`, so its root module's
+    /// directory is `rt`.
+    fn core() -> Self {
+        let (name, text) = CORE_FILES[0];
+        Program {
+            name: name.to_owned(),
+            text,
+            loader: Loader::Core,
+        }
+    }
+}
+
 /// Where the files of a program's modules are read from. Paths are
 /// relative to the root file's directory, with `/` between names
 /// (ADR 0049); `""` is that directory.
 enum Loader {
     /// The file system, below this directory.
     Dir(PathBuf),
+    /// The files of `core`, `CORE_FILES` (ADR 0052).
+    Core,
     /// Files held in memory, each by its path, with its text or the error
     /// reading it gives.
     #[cfg(test)]
@@ -186,6 +206,11 @@ impl Loader {
     fn read(&self, path: &str) -> Result<String, String> {
         match self {
             Loader::Dir(dir) => fs::read_to_string(dir.join(path)).map_err(|e| e.to_string()),
+            Loader::Core => CORE_FILES
+                .iter()
+                .find(|(name, _)| *name == path)
+                .map(|(_, text)| (*text).to_owned())
+                .ok_or_else(|| "not found".to_owned()),
             #[cfg(test)]
             Loader::Memory(files) => files.iter().find(|(name, _)| *name == path).map_or_else(
                 || Err("not found".to_owned()),
@@ -205,6 +230,7 @@ impl Loader {
                         .collect()
                 })
                 .map_err(|e| e.to_string()),
+            Loader::Core => Ok(listing(CORE_FILES.iter().map(|(path, _)| *path), dir)),
             // A directory's own path given with an error stands for a
             // directory that cannot be listed.
             #[cfg(test)]
@@ -212,20 +238,25 @@ impl Loader {
                 if let Some((_, Err(e))) = files.iter().find(|(path, _)| *path == dir) {
                     return Err((*e).to_owned());
                 }
-                let prefix = if dir.is_empty() {
-                    String::new()
-                } else {
-                    format!("{dir}/")
-                };
-                Ok(files
-                    .iter()
-                    .filter_map(|(path, _)| path.strip_prefix(prefix.as_str()))
-                    .filter_map(|rest| rest.split('/').next())
-                    .map(str::to_owned)
-                    .collect())
+                Ok(listing(files.iter().map(|(path, _)| *path), dir))
             }
         }
     }
+}
+
+/// The names of the files and directories in the directory `dir`, among
+/// files held in memory at `paths`.
+fn listing<'a>(paths: impl Iterator<Item = &'a str>, dir: &str) -> Vec<String> {
+    let prefix = if dir.is_empty() {
+        String::new()
+    } else {
+        format!("{dir}/")
+    };
+    paths
+        .filter_map(|path| path.strip_prefix(prefix.as_str()))
+        .filter_map(|rest| rest.split('/').next())
+        .map(str::to_owned)
+        .collect()
 }
 
 /// Reads the file of every `mod name;` among `items`, and in the modules
@@ -363,11 +394,11 @@ enum FrontEnd {
 
 /// Runs everything up to MIR, stopping early at `stop` if it is a front-end
 /// stage. The `tokens` and `ast` stages show the root file alone: the
-/// files of its modules are read after it is parsed, and the runtime
-/// support functions (with `runtime`) after them (ADR 0049).
+/// files of its modules are read after it is parsed, and `core`'s after
+/// them (ADR 0049, 0052). Every later dump leaves `core` out, and so does
+/// the MIR returned with a `stop`, for the `llvm-ir` dump.
 fn front_end(
     program: &Program,
-    runtime: bool,
     stop: Option<Stage>,
     sources: &mut SourceMap,
     diags: &mut Diagnostics,
@@ -400,11 +431,19 @@ fn front_end(
         &mut file_errors,
     );
 
-    let runtime_ast = runtime.then(|| {
-        let rt = sources.add(RUNTIME_NAME, RUNTIME_SOURCE);
-        let tokens = lexer::lex(rt, RUNTIME_SOURCE, diags);
-        parser::parse(RUNTIME_SOURCE, &tokens, diags)
-    });
+    let core = Program::core();
+    let core_file = sources.add(&core.name, core.text);
+    let tokens = lexer::lex(core_file, core.text, diags);
+    let mut core_ast = parser::parse(core.text, &tokens, diags);
+    load_modules(
+        &mut core_ast.items,
+        "rt",
+        "core",
+        &core,
+        sources,
+        diags,
+        &mut file_errors,
+    );
 
     // Semantic phases need a well-formed input. A module whose file could
     // not be read is resolved as empty, and its error reported with the
@@ -415,13 +454,13 @@ fn front_end(
         return FrontEnd::Failed;
     }
 
-    let hir = match hir::lower(&ast, runtime_ast.as_ref(), diags) {
+    let hir = match hir::lower(&ast, &core_ast, diags) {
         // Type checking needs every name resolved.
         Some(hir) if !diags.has_errors() || stop == Some(Stage::Hir) => hir,
         _ => return FrontEnd::Failed,
     };
     if stop == Some(Stage::Hir) {
-        return FrontEnd::Dump(format!("{hir:#?}\n"));
+        return FrontEnd::Dump(hir.dump());
     }
 
     // Every item is checked, on demand of the others and then in order
@@ -443,7 +482,11 @@ fn front_end(
         return FrontEnd::Failed;
     }
 
-    let mir = queries.into_mir();
+    let mut mir = queries.into_mir();
+    if stop.is_some() {
+        let in_core: Vec<bool> = hir.fns.iter().map(|f| hir.in_core(f.module)).collect();
+        mir.leave_out(&in_core);
+    }
     if stop == Some(Stage::Mir) {
         return FrontEnd::Dump(mir.to_string());
     }
@@ -472,14 +515,15 @@ mod tests {
     fn load(program: &Program) -> (Vec<String>, Vec<&'static str>) {
         let mut sources = SourceMap::default();
         let mut diags = Diagnostics::default();
-        front_end(program, false, Some(Stage::Hir), &mut sources, &mut diags);
+        front_end(program, Some(Stage::Hir), &mut sources, &mut diags);
         let names = sources.files().map(|file| file.name.clone()).collect();
         let codes = diags.into_vec().iter().map(|d| d.code).collect();
         (names, codes)
     }
 
     /// Files are numbered depth first, in the order their `mod`s are met,
-    /// whatever the order of the loader's files (ADR 0049).
+    /// whatever the order of the loader's files (ADR 0049); `core`'s follow
+    /// the program's (ADR 0052).
     #[test]
     fn module_files_are_numbered_depth_first() {
         let program = program(
@@ -492,7 +536,18 @@ mod tests {
             ],
         );
         let (names, codes) = load(&program);
-        assert_eq!(names, ["main.ers", "a.ers", "a/b.ers", "c/d.ers", "e.ers"]);
+        assert_eq!(
+            names,
+            [
+                "main.ers",
+                "a.ers",
+                "a/b.ers",
+                "c/d.ers",
+                "e.ers",
+                "rt/core.ers",
+                "rt/builtins.ers"
+            ]
+        );
         assert_eq!(codes, ["resolve::missing-entry", "resolve::missing-panic"]);
     }
 
@@ -509,14 +564,18 @@ mod tests {
         );
         let mut sources = SourceMap::default();
         let mut diags = Diagnostics::default();
-        front_end(&program, false, Some(Stage::Hir), &mut sources, &mut diags);
+        front_end(&program, Some(Stage::Hir), &mut sources, &mut diags);
         let diags = diags.into_vec();
         assert_eq!(diags[0].code, "resolve::module-file");
         assert_eq!(
             diags[0].message,
             "cannot read `a.ers`, the file of module `a`: stream did not contain valid UTF-8"
         );
-        assert_eq!(sources.files().count(), 2);
+        let names: Vec<&str> = sources.files().map(|file| file.name.as_str()).collect();
+        assert_eq!(
+            names,
+            ["main.ers", "b.ers", "rt/core.ers", "rt/builtins.ers"]
+        );
     }
 
     /// A directory on the path that is there but cannot be listed is
@@ -529,7 +588,7 @@ mod tests {
         );
         let mut sources = SourceMap::default();
         let mut diags = Diagnostics::default();
-        front_end(&program, false, Some(Stage::Hir), &mut sources, &mut diags);
+        front_end(&program, Some(Stage::Hir), &mut sources, &mut diags);
         let diags = diags.into_vec();
         assert_eq!(diags[0].code, "resolve::module-file");
         assert_eq!(

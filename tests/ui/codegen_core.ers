@@ -1,0 +1,9 @@
+// emit: llvm-ir
+// A function of `core` the program calls is declared, under its symbol, and
+// `core`'s bodies are left out of the dump (ADR 0052).
+entry fn main() -> ! {
+    let buf: *mut u8 = 0x8000_0000 as *mut u8;
+    core::memcpy(buf, &raw const buf[4], 4);
+    loop {}
+}
+panic fn on_panic() -> ! { loop {} }

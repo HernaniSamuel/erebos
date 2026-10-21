@@ -1,10 +1,15 @@
-// Runtime support functions (ADR 0020).
+// Runtime support functions (ADR 0020), the module `core::builtins`
+// (ADR 0052).
 //
 // LLVM emits calls to these functions, named as in libgcc/compiler-rt and
 // the C library, for operations the target has no instruction for. They
 // are compiled into every program, in plain Erebos, so nothing runs that
-// the repository does not show (ADR 0002). The compiler marks them
-// `no-builtins`, so LLVM does not turn their loops back into calls.
+// the repository does not show (ADR 0002). Each is `#[export]`, so that its
+// symbol is the name LLVM calls (ADR 0051); `memcpy`, `memmove` and `memset`
+// are also `pub`, offered to programs as `core::memcpy` and so on. The
+// `__erebos_` helpers are private and keep their paths as symbols
+// (`core.builtins.__erebos_udivmod64`). The compiler marks every function of
+// `core` `no-builtins`, so LLVM does not turn their loops back into calls.
 
 // --- Memory ---------------------------------------------------------------
 //
@@ -12,7 +17,8 @@
 // at `-O` so do copy and fill loops. Byte by byte: small and obviously
 // right; speed can come later.
 
-fn memcpy(dest: *mut u8, src: *const u8, n: usize) -> *mut u8 {
+#[export]
+pub fn memcpy(dest: *mut u8, src: *const u8, n: usize) -> *mut u8 {
     let mut i: usize = 0;
     while i < n {
         dest[i] = src[i];
@@ -23,7 +29,8 @@ fn memcpy(dest: *mut u8, src: *const u8, n: usize) -> *mut u8 {
 
 // Like `memcpy`, but the two areas may overlap: copying backwards when the
 // destination is above the source never overwrites bytes not yet copied.
-fn memmove(dest: *mut u8, src: *const u8, n: usize) -> *mut u8 {
+#[export]
+pub fn memmove(dest: *mut u8, src: *const u8, n: usize) -> *mut u8 {
     if (dest as usize) < (src as usize) {
         return memcpy(dest, src, n);
     }
@@ -36,7 +43,8 @@ fn memmove(dest: *mut u8, src: *const u8, n: usize) -> *mut u8 {
 }
 
 // `c` is a C `int`; only its low byte is stored.
-fn memset(dest: *mut u8, c: i32, n: usize) -> *mut u8 {
+#[export]
+pub fn memset(dest: *mut u8, c: i32, n: usize) -> *mut u8 {
     let byte: u8 = c as u8;
     let mut i: usize = 0;
     while i < n {
@@ -76,22 +84,26 @@ fn __erebos_magnitude64(x: i64) -> u64 {
     if x < 0 { (0 - x) as u64 } else { x as u64 }
 }
 
+#[export]
 fn __udivdi3(n: u64, d: u64) -> u64 {
     __erebos_udivmod64(n, d, false)
 }
 
+#[export]
 fn __umoddi3(n: u64, d: u64) -> u64 {
     __erebos_udivmod64(n, d, true)
 }
 
 // Signed division truncates toward zero: the quotient is negative when
 // exactly one operand is.
+#[export]
 fn __divdi3(a: i64, b: i64) -> i64 {
     let magnitude: u64 = __erebos_udivmod64(__erebos_magnitude64(a), __erebos_magnitude64(b), false);
     if (a < 0) != (b < 0) { 0 - magnitude as i64 } else { magnitude as i64 }
 }
 
 // The remainder takes the sign of the dividend.
+#[export]
 fn __moddi3(a: i64, b: i64) -> i64 {
     let magnitude: u64 = __erebos_udivmod64(__erebos_magnitude64(a), __erebos_magnitude64(b), true);
     if a < 0 { 0 - magnitude as i64 } else { magnitude as i64 }

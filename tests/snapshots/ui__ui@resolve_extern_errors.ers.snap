@@ -15,6 +15,25 @@ resolve::mut-extern-param
  3 │ extern fn memcpy(dest: *mut u8, src: *const u8, n: usize) -> *mut u8;
    ╰────
   help: remove `mut` (ADR 0026)
+resolve::duplicate-symbol
+
+  × the symbol `memcpy` is given to more than one item
+   ╭─[resolve_extern_errors.ers:3:11]
+ 2 │ extern fn c_add(mut a: u32, b: u32) -> u32;
+ 3 │ extern fn memcpy(dest: *mut u8, src: *const u8, n: usize) -> *mut u8;
+   ·           ───┬──
+   ·              ╰── given here, to `memcpy`
+ 4 │ extern fn c_add(a: u32) -> u32;
+   ╰────
+    ╭─[rt/builtins.ers:21:8]
+ 20 │ #[export]
+ 21 │ pub fn memcpy(dest: *mut u8, src: *const u8, n: usize) -> *mut u8 {
+    ·        ───┬──
+    ·           ╰── and here, in `core`, to `core::builtins::memcpy`
+ 22 │     let mut i: usize = 0;
+    ╰────
+  help: `core::memcpy` has this symbol (ADR 0052): call it rather than declaring another, or give
+        this item another name (ADR 0051)
 resolve::duplicate-item
 
   × `c_add` is defined more than once

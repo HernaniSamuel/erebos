@@ -4,37 +4,24 @@ use std::collections::HashMap;
 
 use crate::diag::{Diagnostic, Diagnostics};
 use crate::hir::{
-    self, Arm, ArrayLen, Block, BuiltinEnum, Comptime, ConstDef, ConstId, EnumDef, EnumId, EnumTy,
-    Expr, ExprId, ExprKind, FieldDef, Fn, FnId, FnKind, Hir, IntTy, Local, LocalId, ModuleDef,
-    ModuleId, NeverInMemory, NeverPosition, Pattern, PatternId, PatternKind, PayloadDef, StaticDef,
-    StaticId, Stmt, StructDef, StructId, StructTy, Ty, UnsizedPosition, UnsizedType, VariantDef,
-    VariantValue, Visibility,
+    self, Arm, ArrayLen, Block, BuiltinEnum, Comptime, ConstDef, ConstId, CoreStart, EnumDef,
+    EnumId, EnumTy, Expr, ExprId, ExprKind, FieldDef, Fn, FnId, FnKind, Hir, IntTy, Local, LocalId,
+    ModuleDef, ModuleId, NeverInMemory, NeverPosition, Pattern, PatternId, PatternKind, PayloadDef,
+    StaticDef, StaticId, Stmt, StructDef, StructId, StructTy, Ty, UnsizedPosition, UnsizedType,
+    VariantDef, VariantValue, Visibility,
 };
 use crate::span::Span;
 use crate::syntax::ast;
 use crate::syntax::parser::builtin_variant_help;
 
-/// Lowers a program, together with the runtime support functions when
-/// given (ADR 0020). Returns `None` only when no HIR can be built at all (no
+/// Lowers a program, together with `core` (ADR 0052), whose root file is
+/// `core_file`. Returns `None` only when no HIR can be built at all (no
 /// entry or panic function); other errors are reported and lowering
 /// continues.
-pub fn lower(
-    program: &ast::File,
-    runtime: Option<&ast::File>,
-    diags: &mut Diagnostics,
-) -> Option<Hir> {
-    // Names starting with `__` belong to the runtime (ADR 0020), and so do
-    // the C names it defines, such as `memcpy`.
-    let runtime_names: Vec<&str> = runtime
-        .into_iter()
-        .flat_map(|rt| &rt.items)
-        .filter_map(item_name)
-        .map(|name| name.name.as_str())
-        .collect();
-
+pub fn lower(program: &ast::File, core_file: &ast::File, diags: &mut Diagnostics) -> Option<Hir> {
     // Every item of every module is known before any is lowered, so that
-    // items refer to each other in any order. The runtime's items are in
-    // the root module, after the program's.
+    // items refer to each other in any order. `core` is a module tree of its
+    // own, after the program's.
     let mut items = Items {
         modules: vec![ModuleDef {
             name: String::new(),
@@ -44,7 +31,8 @@ pub fn lower(
             vis: Visibility::Pub,
         }],
         namespaces: vec![HashMap::new()],
-        runtime_names: &runtime_names,
+        core_fns: usize::MAX,
+        core_fn_base: 0,
         fns: Vec::new(),
         structs: Vec::new(),
         enums: Vec::new(),
@@ -57,14 +45,30 @@ pub fn lower(
         duplicates: Vec::new(),
     };
     items.collect(&program.items, ModuleId::ROOT, false, diags);
-    let program_fns = items.fns.len();
-    if let Some(rt) = runtime {
-        items.collect(&rt.items, ModuleId::ROOT, true, diags);
-    }
+    let program_end = items.counts();
+    let core_root = ModuleId(items.modules.len() as u32);
+    items.modules.push(ModuleDef {
+        name: "core".to_owned(),
+        path: "core".to_owned(),
+        name_span: None,
+        parent: None,
+        vis: Visibility::Pub,
+    });
+    items.namespaces.push(HashMap::new());
+    // Every body of the program, those run at compile time included, comes
+    // before `core`'s, so that the program's ids are its own.
+    items.core_fns = program_end.fns;
+    items.core_fn_base = items.bodies(Counts::default(), program_end);
+    items.collect(&core_file.items, core_root, true, diags);
+    let core_end = items.counts();
+    // Values computed at compile time get bodies after every other.
+    let value_base = items.core_fn_base + items.bodies(program_end, core_end);
     items.declare_uses(diags);
     let Items {
         modules,
         namespaces,
+        core_fns,
+        core_fn_base,
         fns: fn_decls,
         structs: struct_decls,
         enums: enum_decls,
@@ -75,7 +79,6 @@ pub fn lower(
         use_decls,
         uses,
         duplicates,
-        ..
     } = items;
 
     // Structs are types, shown by their path (ADR 0049).
@@ -124,19 +127,11 @@ pub fn lower(
         modules,
         namespaces,
         module: ModuleId::ROOT,
+        core_root,
         fn_decls: &fn_decls,
-        // Values computed at compile time get bodies after every other.
-        value_base: (fn_decls.len()
-            + const_decls.len()
-            + static_decls
-                .iter()
-                .filter(|(decl, _)| !decl.external)
-                .count()
-            + comptime_decls.len()
-            + enum_decls
-                .iter()
-                .map(|(decl, _)| decl.variants.len())
-                .sum::<usize>()) as u32,
+        core_fns,
+        core_fn_base,
+        value_base,
         values: Vec::new(),
         comptime_floor: None,
         in_comptime: false,
@@ -163,54 +158,84 @@ pub fn lower(
         lowerer.mod_decl(decl);
     }
     lowerer.use_decls(&use_decls);
-    let mut structs: Vec<StructDef> = struct_decls
-        .iter()
-        .map(|&(decl, module)| {
-            lowerer.module = module;
-            lowerer.struct_decl(decl)
-        })
-        .collect();
-    let mut fns: Vec<Fn> = fn_decls
-        .iter()
-        .map(|&(decl, module)| {
-            lowerer.module = module;
-            lowerer.fn_decl(decl)
-        })
-        .collect();
-    for f in &mut fns[program_fns..] {
-        f.runtime = true;
-    }
-    // Bodies run at compile time follow the functions, so function ids
-    // stay those of the declarations.
+
+    // The program's items, then `core`'s, each part lowered whole, so that
+    // the program's expression ids are those of the program alone.
+    let mut structs = Vec::new();
+    let mut fns = Vec::new();
     let mut consts = Vec::new();
-    for (i, &(decl, module)) in const_decls.iter().enumerate() {
-        lowerer.module = module;
-        let init = FnId(fns.len() as u32);
-        let id = ConstId(i as u32);
-        let (def, body) = lowerer.const_decl(decl, id, init);
-        consts.push(def);
-        fns.push(body);
-    }
     let mut statics = Vec::new();
-    for (i, &(decl, module)) in static_decls.iter().enumerate() {
-        lowerer.module = module;
-        let init = FnId(fns.len() as u32);
-        let (def, body) = lowerer.static_decl(decl, StaticId(i as u32), init);
-        statics.push(def);
-        fns.extend(body);
-    }
     let mut comptime_blocks = Vec::new();
-    for &(decl, module) in &comptime_decls {
-        lowerer.module = module;
-        comptime_blocks.push(FnId(fns.len() as u32));
-        fns.push(lowerer.comptime_decl(decl));
-    }
     let mut enums = Vec::new();
-    for (i, &(decl, module)) in enum_decls.iter().enumerate() {
-        lowerer.module = module;
-        let (def, bodies) = lowerer.enum_decl(decl, EnumId(i as u32), fns.len() as u32);
-        enums.push(def);
-        fns.extend(bodies);
+    let mut core = None;
+    for (from, to, in_core) in [
+        (Counts::default(), program_end, false),
+        (program_end, core_end, true),
+    ] {
+        if in_core {
+            debug_assert_eq!(fns.len() as u32, core_fn_base);
+            core = Some(CoreStart {
+                module: core_root,
+                expr: lowerer.next_expr,
+                never_in_memory: lowerer.never_in_memory.len(),
+                unsized_types: lowerer.unsized_types.len(),
+                applications: lowerer.applications.len(),
+            });
+        }
+        for &(decl, module) in &struct_decls[from.structs..to.structs] {
+            lowerer.module = module;
+            structs.push(lowerer.struct_decl(decl));
+        }
+        for &(decl, module) in &fn_decls[from.fns..to.fns] {
+            lowerer.module = module;
+            let mut f = lowerer.fn_decl(decl);
+            // LLVM must not turn the loops of `core` into calls to `core`
+            // (ADR 0020).
+            f.runtime = in_core;
+            fns.push(f);
+        }
+        // Bodies run at compile time follow the functions, so function ids
+        // stay those of the declarations.
+        for (i, &(decl, module)) in const_decls
+            .iter()
+            .enumerate()
+            .take(to.consts)
+            .skip(from.consts)
+        {
+            lowerer.module = module;
+            let init = FnId(fns.len() as u32);
+            let (def, body) = lowerer.const_decl(decl, ConstId(i as u32), init);
+            consts.push(def);
+            fns.push(body);
+        }
+        for (i, &(decl, module)) in static_decls
+            .iter()
+            .enumerate()
+            .take(to.statics)
+            .skip(from.statics)
+        {
+            lowerer.module = module;
+            let init = FnId(fns.len() as u32);
+            let (def, body) = lowerer.static_decl(decl, StaticId(i as u32), init);
+            statics.push(def);
+            fns.extend(body);
+        }
+        for &(decl, module) in &comptime_decls[from.comptimes..to.comptimes] {
+            lowerer.module = module;
+            comptime_blocks.push(FnId(fns.len() as u32));
+            fns.push(lowerer.comptime_decl(decl));
+        }
+        for (i, &(decl, module)) in enum_decls
+            .iter()
+            .enumerate()
+            .take(to.enums)
+            .skip(from.enums)
+        {
+            lowerer.module = module;
+            let (def, bodies) = lowerer.enum_decl(decl, EnumId(i as u32), fns.len() as u32);
+            enums.push(def);
+            fns.extend(bodies);
+        }
     }
     debug_assert_eq!(fns.len() as u32, lowerer.value_base);
     fns.append(&mut lowerer.values);
@@ -220,10 +245,12 @@ pub fn lower(
     let applications = lowerer.applications;
     let modules = lowerer.modules;
     let namespaces = lowerer.namespaces;
+    let uses = lowerer.uses;
     reachability(
         &modules,
         &namespaces,
-        &lowerer.uses,
+        &uses,
+        core_root,
         &mut structs,
         &mut enums,
     );
@@ -232,7 +259,7 @@ pub fn lower(
         diags.push(diag);
     }
     check_start(&fns, &statics, diags);
-    check_symbols(&fns, &statics, &namespaces, &runtime_names, diags);
+    check_symbols(&fns, &statics, &namespaces, &uses, core_root, diags);
     // In any module, whatever their visibility (ADR 0049, 0050).
     let entry = find_unique(&fns, FnKind::Entry, diags);
     let panic = find_unique(&fns, FnKind::Panic, diags);
@@ -251,7 +278,20 @@ pub fn lower(
         entry: entry?,
         panic: panic?,
         expr_count,
+        core: core.expect("`core` is lowered after the program"),
     })
+}
+
+/// How many items of each kind `Items` holds: where the program's end and
+/// `core`'s start, or where `core`'s end.
+#[derive(Clone, Copy, Default)]
+struct Counts {
+    structs: usize,
+    enums: usize,
+    fns: usize,
+    consts: usize,
+    statics: usize,
+    comptimes: usize,
 }
 
 /// Fills in the `reachable` of every struct and enum: the modules where a
@@ -261,18 +301,28 @@ pub fn lower(
 /// it. So what is reachable from a module is what a walk of the namespaces
 /// from the root finds through the names visible from there, `use`s
 /// included. Every `use` is resolved by now; one that failed was reported.
+/// Every module of the program also writes paths from `core`'s root,
+/// `core_root`, and a module of `core` writes them from there only: `crate`
+/// is `core`'s root there, and `core` cannot name the program (ADR 0052).
 fn reachability(
     modules: &[ModuleDef],
     namespaces: &[HashMap<String, Entry>],
     uses: &[Use],
+    core_root: ModuleId,
     structs: &mut [StructDef],
     enums: &mut [EnumDef],
 ) {
     for from in 0..modules.len() {
         let from = ModuleId(from as u32);
         let mut seen = vec![false; modules.len()];
-        seen[ModuleId::ROOT.0 as usize] = true;
-        let mut pending = vec![ModuleId::ROOT];
+        let mut pending = if from.0 >= core_root.0 {
+            vec![core_root]
+        } else {
+            vec![core_root, ModuleId::ROOT]
+        };
+        for root in &pending {
+            seen[root.0 as usize] = true;
+        }
         while let Some(module) = pending.pop() {
             for entry in namespaces[module.0 as usize].values() {
                 if entry.vis == Visibility::Private && !hir::is_within(modules, from, module) {
@@ -349,8 +399,6 @@ struct Entry {
     vis: Visibility,
     /// The span of its name where it is declared.
     span: Span,
-    /// Declared by the runtime support functions (ADR 0020).
-    runtime: bool,
 }
 
 /// A name a `use` brings in (ADR 0049): one per path of the declaration.
@@ -364,8 +412,8 @@ struct Use {
     name: ast::Ident,
     module: ModuleId,
     vis: Visibility,
-    /// Declared by the runtime support functions (ADR 0020).
-    runtime: bool,
+    /// Declared in `core` (ADR 0052).
+    in_core: bool,
     state: UseState,
 }
 
@@ -386,9 +434,12 @@ enum UseState {
 struct Items<'a> {
     modules: Vec<ModuleDef>,
     namespaces: Vec<HashMap<String, Entry>>,
-    /// The names the runtime declares, which the program's items cannot
-    /// take (ADR 0020).
-    runtime_names: &'a [&'a str],
+    /// The index in `fns` of `core`'s first function, and its id: every
+    /// body of the program comes before `core`'s (ADR 0052), those run at
+    /// compile time included, so `core`'s functions are not numbered by
+    /// their index.
+    core_fns: usize,
+    core_fn_base: u32,
     fns: Vec<(&'a ast::FnDecl, ModuleId)>,
     structs: Vec<(&'a ast::StructDecl, ModuleId)>,
     enums: Vec<(&'a ast::EnumDecl, ModuleId)>,
@@ -406,25 +457,61 @@ struct Items<'a> {
 }
 
 impl<'a> Items<'a> {
+    /// How many items of each kind are gathered so far.
+    fn counts(&self) -> Counts {
+        Counts {
+            structs: self.structs.len(),
+            enums: self.enums.len(),
+            fns: self.fns.len(),
+            consts: self.consts.len(),
+            statics: self.statics.len(),
+            comptimes: self.comptimes.len(),
+        }
+    }
+
+    /// How many bodies the items from `from` to `to` have: one per
+    /// function, constant, static with an initializer, `comptime` block
+    /// and variant.
+    fn bodies(&self, from: Counts, to: Counts) -> u32 {
+        let statics = self.statics[from.statics..to.statics]
+            .iter()
+            .filter(|(decl, _)| !decl.external)
+            .count();
+        let variants: usize = self.enums[from.enums..to.enums]
+            .iter()
+            .map(|(decl, _)| decl.variants.len())
+            .sum();
+        let count = (to.fns - from.fns)
+            + (to.consts - from.consts)
+            + statics
+            + (to.comptimes - from.comptimes)
+            + variants;
+        count as u32
+    }
+
     /// Gathers `items`, declared in `module`, and those of the modules
-    /// among them, depth first in the order written; `runtime` if they are
-    /// the runtime's.
+    /// among them, depth first in the order written; `in_core` if they are
+    /// `core`'s (ADR 0052).
     fn collect(
         &mut self,
         items: &'a [ast::Item],
         module: ModuleId,
-        runtime: bool,
+        in_core: bool,
         diags: &mut Diagnostics,
     ) {
         for item in items {
             let (name, vis, def) = match item {
                 ast::Item::Use(decl) => {
-                    self.use_decl(decl, module, runtime);
+                    self.use_decl(decl, module, in_core);
                     continue;
                 }
                 ast::Item::Fn(decl) => {
                     self.fns.push((decl, module));
-                    let id = FnId(self.fns.len() as u32 - 1);
+                    let index = self.fns.len() - 1;
+                    let id = match index.checked_sub(self.core_fns) {
+                        Some(i) => FnId(self.core_fn_base + i as u32),
+                        None => FnId(index as u32),
+                    };
                     (&decl.name, decl.vis, Def::Fn(id))
                 }
                 ast::Item::Struct(decl) => {
@@ -467,11 +554,11 @@ impl<'a> Items<'a> {
                         &decl.name,
                         visibility(decl.vis),
                         Binding::Def(Def::Module(id)),
-                        runtime,
+                        in_core,
                         diags,
                     );
                     if let Some(items) = &decl.items {
-                        self.collect(items, id, runtime, diags);
+                        self.collect(items, id, in_core, diags);
                     }
                     continue;
                 }
@@ -481,7 +568,7 @@ impl<'a> Items<'a> {
                 name,
                 visibility(vis),
                 Binding::Def(def),
-                runtime,
+                in_core,
                 diags,
             );
         }
@@ -489,7 +576,7 @@ impl<'a> Items<'a> {
 
     /// Gathers the names the `use` declaration `decl`, of `module`, brings
     /// in; they are declared after every item (`declare_uses`).
-    fn use_decl(&mut self, decl: &'a ast::UseDecl, module: ModuleId, runtime: bool) {
+    fn use_decl(&mut self, decl: &'a ast::UseDecl, module: ModuleId, in_core: bool) {
         self.use_decls.push((decl, module));
         for name in &decl.names {
             let path = match &decl.prefix {
@@ -511,7 +598,7 @@ impl<'a> Items<'a> {
                 name: name.alias.as_ref().unwrap_or(last).clone(),
                 module,
                 vis: visibility(decl.vis),
-                runtime,
+                in_core,
                 state: UseState::Unresolved,
             });
         }
@@ -523,30 +610,29 @@ impl<'a> Items<'a> {
     fn declare_uses(&mut self, diags: &mut Diagnostics) {
         for id in 0..self.uses.len() {
             let u = &self.uses[id];
-            let (module, name, vis, runtime) = (u.module, u.name.clone(), u.vis, u.runtime);
-            self.declare(module, &name, vis, Binding::Use(id), runtime, diags);
+            let (module, name, vis, in_core) = (u.module, u.name.clone(), u.vis, u.in_core);
+            self.declare(module, &name, vis, Binding::Use(id), in_core, diags);
         }
     }
 
     /// Adds `name` to the namespace of `module`, unless it is taken: one
     /// name per module for items, modules and `use`s alike (ADR 0029,
-    /// 0049). No item, module or `use` takes a built-in name, in any
-    /// module; the program's items and modules take none of the runtime's
-    /// (ADR 0020) in any module, and its `use`s none in the root module,
-    /// where the runtime's items are; no module of the root is named `llvm`
-    /// (ADR 0051).
+    /// 0049). No item, module or `use` of the program takes a built-in
+    /// name, a name starting with `__` (ADR 0020) or `core` (ADR 0052), in
+    /// any module; no module of the root is named `llvm` (ADR 0051). The
+    /// items of `core` (`in_core`) are not checked: they are the compiler's.
     fn declare(
         &mut self,
         module: ModuleId,
         ident: &ast::Ident,
         vis: Visibility,
         binding: Binding,
-        runtime: bool,
+        in_core: bool,
         diags: &mut Diagnostics,
     ) {
         let name = ident.name.as_str();
         let is_use = matches!(binding, Binding::Use(_));
-        if !runtime {
+        if !in_core {
             let reserved = if let Some(help) = builtin_fn(name) {
                 Some((
                     "a built-in function has this name".to_owned(),
@@ -555,19 +641,12 @@ impl<'a> Items<'a> {
             } else if name.starts_with("__") {
                 Some((
                     "names starting with `__` are reserved".to_owned(),
-                    "the runtime support functions use them (ADR 0020)".to_owned(),
+                    "the runtime support functions of `core` use them (ADR 0020, 0052)".to_owned(),
                 ))
-            } else if self.runtime_names.contains(&name) && !is_use {
+            } else if name == "core" {
                 Some((
-                    "the runtime defines this function".to_owned(),
-                    format!("call the runtime's `{name}` instead of defining it (ADR 0020)"),
-                ))
-            } else if self.runtime_names.contains(&name) && module == ModuleId::ROOT {
-                Some((
-                    "the runtime defines this function".to_owned(),
-                    format!(
-                        "the runtime's `{name}` is in the root module already; bring the item in under another name with `as` (ADR 0020, 0049)"
-                    ),
+                    "the name of the module `core`".to_owned(),
+                    "every module names the module `core`, shipped with the compiler, by this name, as in `core::memcpy`, so no item, module or `use` of the program can take it (ADR 0052)".to_owned(),
                 ))
             } else if name == "llvm"
                 && module == ModuleId::ROOT
@@ -606,18 +685,12 @@ impl<'a> Items<'a> {
             binding,
             vis,
             span: ident.span,
-            runtime,
         };
         let namespace = &mut self.namespaces[module.0 as usize];
         let Some(first) = namespace.get(name) else {
             namespace.insert(name.to_owned(), entry);
             return;
         };
-        // A program item named like a runtime one was reported as a
-        // reserved name; the two live in different files.
-        if first.runtime != runtime {
-            return;
-        }
         let help = if matches!(first.binding, Binding::Use(_)) || is_use {
             "a module's items, its modules and the names its `use` declarations bring in share one namespace (ADR 0049)"
         } else if matches!(first.binding, Binding::Def(Def::Module(_)))
@@ -717,18 +790,6 @@ fn builtin_fn(name: &str) -> Option<&'static str> {
     }
 }
 
-fn item_name(item: &ast::Item) -> Option<&ast::Ident> {
-    match item {
-        ast::Item::Fn(decl) => Some(&decl.name),
-        ast::Item::Struct(decl) => Some(&decl.name),
-        ast::Item::Enum(decl) => Some(&decl.name),
-        ast::Item::Const(decl) => Some(&decl.name),
-        ast::Item::Static(decl) => Some(&decl.name),
-        ast::Item::Mod(decl) => Some(&decl.name),
-        ast::Item::Comptime(_) | ast::Item::Use(_) => None,
-    }
-}
-
 /// A path as written, `uart::Mode::Run`.
 fn written(path: &ast::Path) -> String {
     written_segments(&path.segments)
@@ -798,53 +859,64 @@ struct Symbol<'a> {
     path: &'a str,
     span: Span,
     external: bool,
+    def: Def,
+    /// An item of `core` (ADR 0052).
+    in_core: bool,
 }
 
-/// Every symbol of the program is unique (ADR 0051): two functions or
-/// statics with one, in any modules, are `resolve::duplicate-symbol`, each
-/// later one reported against the first. An item that did not get its name
-/// in its module's namespace was reported as `resolve::duplicate-item`, and
-/// a program item named like a runtime one as `resolve::reserved-name`
-/// (ADR 0020), until `core` replaces that check (ADR 0052): both are left
-/// out. The symbol of a program item can equal a runtime item's only
-/// through such a name, since the runtime's symbols are plain names.
+/// Every symbol of the program and of `core` is unique (ADR 0051, 0052):
+/// two functions or statics with one, in any modules, are
+/// `resolve::duplicate-symbol`, each later one reported against the first.
+/// An item that did not get its name in its module's namespace was reported
+/// as `resolve::duplicate-item`, and an item of the program named with `__`
+/// as `resolve::reserved-name` (ADR 0020): both are left out, the latter
+/// since `core` gives such names as symbols. `core`'s files come after the
+/// program's, so an item of the program taking a symbol of `core` is
+/// reported at the program's item, with a help naming what to call instead
+/// (ADR 0052).
 fn check_symbols(
     fns: &[Fn],
     statics: &[StaticDef],
     namespaces: &[HashMap<String, Entry>],
-    runtime_names: &[&str],
+    uses: &[Use],
+    core_root: ModuleId,
     diags: &mut Diagnostics,
 ) {
-    // Whether the item holds its name in its module, and is not a program
-    // item named like a runtime one.
+    let in_core = |module: ModuleId| module.0 >= core_root.0;
+    // Whether the item holds its name in its module, and is not an item of
+    // the program with a reserved name.
     let checked = |module: ModuleId, name: &str, def: Def| {
-        namespaces[module.0 as usize]
-            .get(name)
-            .is_some_and(|entry| {
-                entry.binding == Binding::Def(def)
-                    && (entry.runtime || !runtime_names.contains(&name))
-            })
+        (in_core(module) || !name.starts_with("__"))
+            && namespaces[module.0 as usize]
+                .get(name)
+                .is_some_and(|entry| entry.binding == Binding::Def(def))
     };
     let mut items: Vec<Symbol> = Vec::new();
     for (i, f) in fns.iter().enumerate() {
         let Some(symbol) = &f.symbol else { continue };
-        if checked(f.module, &f.name, Def::Fn(FnId(i as u32))) {
+        let def = Def::Fn(FnId(i as u32));
+        if checked(f.module, &f.name, def) {
             let item = Symbol {
                 symbol,
                 path: &f.path,
                 span: f.name_span,
                 external: f.body.is_none(),
+                def,
+                in_core: in_core(f.module),
             };
             items.push(item);
         }
     }
     for (i, s) in statics.iter().enumerate() {
-        if checked(s.module, &s.name, Def::Static(StaticId(i as u32))) {
+        let def = Def::Static(StaticId(i as u32));
+        if checked(s.module, &s.name, def) {
             let item = Symbol {
                 symbol: &s.symbol,
                 path: &s.path,
                 span: s.name_span,
                 external: s.init.is_none(),
+                def,
+                in_core: in_core(s.module),
             };
             items.push(item);
         }
@@ -859,21 +931,60 @@ fn check_symbols(
             continue;
         };
         let symbol = again.symbol;
-        let help = if again.external && first.external {
-            "an `extern` item has its own name as its symbol in any module: declare it in one module, and bring it into the others with `use` or name it by its path (ADR 0049, 0051)"
-        } else {
-            "an item of the root module, an `#[export]` item and an `extern` item each have their own name as their symbol: rename one of the two (ADR 0051)"
-        };
-        diags.push(
-            Diagnostic::error(
-                "resolve::duplicate-symbol",
-                format!("the symbol `{symbol}` is given to more than one item"),
-            )
-            .label(again.span, format!("given again here, to `{}`", again.path))
-            .label(first.span, format!("first given here, to `{}`", first.path))
-            .help(help),
+        let diag = Diagnostic::error(
+            "resolve::duplicate-symbol",
+            format!("the symbol `{symbol}` is given to more than one item"),
         );
+        let diag = if again.in_core || first.in_core {
+            let (item, core_item) = if again.in_core {
+                (first, again)
+            } else {
+                (again, first)
+            };
+            let call = core_path(namespaces, uses, core_root, core_item);
+            diag.label(item.span, format!("given here, to `{}`", item.path))
+                .label(
+                    core_item.span,
+                    format!("and here, in `core`, to `{}`", core_item.path),
+                )
+                .help(format!(
+                    "`{call}` has this symbol (ADR 0052): call it rather than declaring another, or give this item another name (ADR 0051)"
+                ))
+        } else {
+            let help = if again.external && first.external {
+                "an `extern` item has its own name as its symbol in any module: declare it in one module, and bring it into the others with `use` or name it by its path (ADR 0049, 0051)"
+            } else {
+                "an item of the root module, an `#[export]` item and an `extern` item each have their own name as their symbol: rename one of the two (ADR 0051)"
+            };
+            diag.label(again.span, format!("given again here, to `{}`", again.path))
+                .label(first.span, format!("first given here, to `{}`", first.path))
+                .help(help)
+        };
+        diags.push(diag);
     }
+}
+
+/// How a program names `item`, an item of `core`: by the `pub` name of
+/// `core`'s root that stands for it, such as `core::memcpy`, which a `pub
+/// use` offers, or else by its path (ADR 0052).
+fn core_path(
+    namespaces: &[HashMap<String, Entry>],
+    uses: &[Use],
+    core_root: ModuleId,
+    item: &Symbol,
+) -> String {
+    namespaces[core_root.0 as usize]
+        .iter()
+        .filter(|(_, entry)| entry.vis == Visibility::Pub)
+        .filter(|(_, entry)| match entry.binding {
+            Binding::Def(def) => def == item.def,
+            Binding::Use(id) => {
+                matches!(uses[id].state, UseState::Resolved(def) if def == item.def)
+            }
+        })
+        .map(|(name, _)| format!("core::{name}"))
+        .min()
+        .unwrap_or_else(|| item.path.to_owned())
 }
 
 /// Finds the single function of a special kind (entry or panic), reporting
@@ -958,8 +1069,14 @@ struct Lowerer<'a> {
     /// The module of the item being lowered, where its names are looked up
     /// and from which visibility is judged (ADR 0049, 0050).
     module: ModuleId,
-    /// Every function's declaration, by id, with its module.
+    /// The root of `core` (ADR 0052); the modules from it on are `core`'s.
+    core_root: ModuleId,
+    /// Every function's declaration, the program's then `core`'s, with its
+    /// module; `fn_decl` finds one by id.
     fn_decls: &'a [(&'a ast::FnDecl, ModuleId)],
+    /// The index in `fn_decls` of `core`'s first function, and its id.
+    core_fns: usize,
+    core_fn_base: u32,
     /// Inside `comptime expr`, the number of scopes outside it: their
     /// variables exist only at run time (ADR 0029).
     comptime_floor: Option<usize>,
@@ -1025,6 +1142,30 @@ impl Lowerer<'_> {
         hir::is_within(&self.modules, inner, outer)
     }
 
+    /// Whether `module` is a module of `core` (ADR 0052).
+    fn in_core(&self, module: ModuleId) -> bool {
+        module.0 >= self.core_root.0
+    }
+
+    /// The root of the tree `module` is in, which `crate` names there: the
+    /// root module, or `core`'s root in `core` (ADR 0049, 0052).
+    fn crate_root(&self, module: ModuleId) -> ModuleId {
+        if self.in_core(module) {
+            self.core_root
+        } else {
+            ModuleId::ROOT
+        }
+    }
+
+    /// The declaration of the function `id`, with its module.
+    fn fn_decl_of(&self, id: FnId) -> (&ast::FnDecl, ModuleId) {
+        let index = match id.0.checked_sub(self.core_fn_base) {
+            Some(i) => self.core_fns + i as usize,
+            None => id.0 as usize,
+        };
+        self.fn_decls[index]
+    }
+
     /// The segment `name` in the namespace of `module`. Naming an item that
     /// is not visible from the current module is reported (ADR 0050); it
     /// is still what the name means, so nothing more is reported about it.
@@ -1034,6 +1175,12 @@ impl Lowerer<'_> {
             return Lookup::Missing;
         };
         if entry.vis == Visibility::Private && !self.is_within(self.module, module) {
+            // The program cannot change `core`, only use what it offers.
+            let remedy = if self.in_core(module) {
+                "the program uses what `core` declares `pub` (ADR 0050, 0052)"
+            } else {
+                "declare it `pub` to use it elsewhere (ADR 0050)"
+            };
             self.diags.push(
                 Diagnostic::error(
                     "resolve::private-item",
@@ -1042,7 +1189,7 @@ impl Lowerer<'_> {
                 .label(name.span, "not visible here")
                 .label(entry.span, "declared here without `pub`")
                 .help(format!(
-                    "a private item of {} is visible only there and in the modules inside it; declare it `pub` to use it elsewhere (ADR 0050)",
+                    "a private item of {} is visible only there and in the modules inside it; {remedy}",
                     self.module_name(module)
                 )),
             );
@@ -1289,7 +1436,7 @@ impl Lowerer<'_> {
         };
         match def {
             Def::Fn(id) => {
-                let (decl, module) = self.fn_decls[id.0 as usize];
+                let (decl, module) = self.fn_decl_of(id);
                 item(decl.vis, module, &decl.name)
             }
             Def::Struct(id) => {
@@ -1361,7 +1508,10 @@ impl Lowerer<'_> {
                 }
             };
             at = match segment.name.as_str() {
-                "crate" => Prefix::Module(ModuleId::ROOT),
+                "crate" => Prefix::Module(self.crate_root(module)),
+                // `core` names `core` in every module, `core`'s included;
+                // no item can take the name (ADR 0052).
+                "core" if i == 0 => Prefix::Module(self.core_root),
                 "super" => match self.parent(module, segment) {
                     Some(parent) => Prefix::Module(parent),
                     None => return Named::Failed,
@@ -1429,7 +1579,8 @@ impl Lowerer<'_> {
                 None => Named::Failed,
             },
             Prefix::Module(module) => match last.name.as_str() {
-                "crate" => Named::Item(Def::Module(ModuleId::ROOT)),
+                "crate" => Named::Item(Def::Module(self.crate_root(module))),
+                "core" if init.is_empty() => Named::Item(Def::Module(self.core_root)),
                 "super" => match self.parent(module, last) {
                     Some(parent) => Named::Item(Def::Module(parent)),
                     None => Named::Failed,
@@ -2616,7 +2767,7 @@ impl Lowerer<'_> {
         );
         let diag = match self.lookup_path(path) {
             Named::Item(Def::Fn(id)) => {
-                if self.fn_decls[id.0 as usize].0.kind == ast::FnKind::Entry {
+                if self.fn_decl_of(id).0.kind == ast::FnKind::Entry {
                     self.diags.push(
                         Diagnostic::error(
                             "resolve::call-entry",
@@ -3301,158 +3452,5 @@ impl Lowerer<'_> {
 
     fn boxed(&mut self, expr: &ast::Expr) -> Box<Expr> {
         Box::new(self.expr(expr))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::span::SourceMap;
-    use crate::syntax::{lexer, parser};
-
-    fn parse(
-        sources: &mut SourceMap,
-        name: &str,
-        text: &str,
-        diags: &mut Diagnostics,
-    ) -> ast::File {
-        let file = sources.add(name, text);
-        let tokens = lexer::lex(file, text, diags);
-        parser::parse(text, &tokens, diags)
-    }
-
-    /// Dumps leave the runtime out, so snapshot tests cannot show this.
-    #[test]
-    fn runtime_names_are_reserved_in_the_program_only() {
-        let mut sources = SourceMap::default();
-        let mut diags = Diagnostics::default();
-        let program = parse(
-            &mut sources,
-            "main.ers",
-            "entry fn main() -> ! { loop {} }
-             panic fn on_panic() -> ! { loop {} }
-             fn memcpy() {}
-             fn __helper() {}
-",
-            &mut diags,
-        );
-        let runtime = parse(
-            &mut sources,
-            "rt.ers",
-            "fn memcpy() {}
-",
-            &mut diags,
-        );
-        let main = program_file(&program);
-        lower(&program, Some(&runtime), &mut diags);
-
-        let reported: Vec<_> = diags
-            .into_vec()
-            .into_iter()
-            .map(|d| (d.code, d.labels.iter().all(|l| l.span.file == main)))
-            .collect();
-        assert_eq!(
-            reported,
-            [
-                ("resolve::reserved-name", true),
-                ("resolve::reserved-name", true)
-            ]
-        );
-    }
-
-    /// Until the runtime becomes `core` (ADR 0052), a module's item cannot
-    /// take a runtime function's name either (ADR 0020, 0049). Items so
-    /// reported are not also `resolve::duplicate-symbol` (ADR 0051), whether
-    /// their symbol is the runtime function's (a root item, an `#[export]`
-    /// one) or another such item's (two `#[export]` ones in two modules).
-    #[test]
-    fn runtime_names_are_reserved_in_every_module() {
-        let mut sources = SourceMap::default();
-        let mut diags = Diagnostics::default();
-        let program = parse(
-            &mut sources,
-            "main.ers",
-            "entry fn main() -> ! { loop {} }
-             panic fn on_panic() -> ! { loop {} }
-             fn memcpy() {}
-             mod m { fn memcpy() {} mod n { static memcpy: u8 = 0; } }
-             mod e { #[export] fn memcpy() {} }
-             mod f { #[export] fn memcpy() {} }
-",
-            &mut diags,
-        );
-        let runtime = parse(
-            &mut sources,
-            "rt.ers",
-            "fn memcpy() {}
-",
-            &mut diags,
-        );
-        let main = program_file(&program);
-        lower(&program, Some(&runtime), &mut diags);
-
-        let reported: Vec<_> = diags
-            .into_vec()
-            .into_iter()
-            .map(|d| (d.code, d.labels.iter().all(|l| l.span.file == main)))
-            .collect();
-        assert_eq!(
-            reported,
-            [
-                ("resolve::reserved-name", true),
-                ("resolve::reserved-name", true),
-                ("resolve::reserved-name", true),
-                ("resolve::reserved-name", true),
-                ("resolve::reserved-name", true)
-            ]
-        );
-    }
-
-    /// A `use` defines no symbol, so a module may bring in the runtime's
-    /// `memcpy` under its name; the root module, where the runtime's items
-    /// are until `core` (ADR 0052), cannot take the name with a `use`
-    /// (ADR 0020, 0049).
-    #[test]
-    fn runtime_names_and_use() {
-        let mut sources = SourceMap::default();
-        let mut diags = Diagnostics::default();
-        let program = parse(
-            &mut sources,
-            "main.ers",
-            "entry fn main() -> ! { loop {} }
-             panic fn on_panic() -> ! { loop {} }
-             mod m { use crate::memcpy; pub fn copy() { memcpy(); } }
-             use m::copy as memcpy;
-",
-            &mut diags,
-        );
-        let runtime = parse(
-            &mut sources,
-            "rt.ers",
-            "fn memcpy() {}
-",
-            &mut diags,
-        );
-        let main = program_file(&program);
-        lower(&program, Some(&runtime), &mut diags);
-
-        let reported: Vec<_> = diags
-            .into_vec()
-            .into_iter()
-            .map(|d| {
-                let span = d.labels[0].span;
-                (d.code, span.file == main, span.lo)
-            })
-            .collect();
-        let text = &sources.file(main).text;
-        let at = text.rfind("memcpy;").expect("the root `use`") as u32;
-        assert_eq!(reported, [("resolve::reserved-name", true, at)]);
-    }
-
-    fn program_file(file: &ast::File) -> crate::span::FileId {
-        item_name(&file.items[0])
-            .expect("the first item has a name")
-            .span
-            .file
     }
 }

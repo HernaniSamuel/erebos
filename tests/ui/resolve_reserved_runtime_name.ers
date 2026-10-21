@@ -1,5 +1,5 @@
 // emit: hir
-// Names starting with `__` belong to the runtime (ADR 0020).
+// Names starting with `__` belong to the runtime in `core` (ADR 0020, 0052).
 fn __udivdi3(n: u64, d: u64) -> u64 { n }
 fn __helper() {}
 

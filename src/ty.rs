@@ -2924,7 +2924,11 @@ impl Checker<'_, '_> {
 pub fn dump(q: &mut Queries) -> String {
     let hir = q.hir;
     let mut out = String::new();
+    // `core` is left out (ADR 0052).
     for (i, def) in hir.structs.iter().enumerate() {
+        if hir.in_core(def.module) {
+            continue;
+        }
         let Some(layout) = q.struct_layout(hir::StructId(i as u32)) else {
             continue;
         };
@@ -2960,6 +2964,7 @@ pub fn dump(q: &mut Queries) -> String {
     // The declared enums, then the `Option(T)` and `Result(T, E)` the
     // program uses, by name (ADR 0045).
     let ids: Vec<EnumId> = (0..hir.enums.len())
+        .filter(|&id| !hir.in_core(hir.enums[id].module))
         .map(|id| EnumId(id as u32))
         .chain(q.instances_by_name())
         .collect();
@@ -3020,7 +3025,7 @@ pub fn dump(q: &mut Queries) -> String {
         )
         .unwrap();
     }
-    for (_, f) in hir.fns() {
+    for (_, f) in hir.fns().filter(|(_, f)| !hir.in_core(f.module)) {
         let kind = match f.kind {
             FnKind::Plain => "",
             FnKind::Entry => "entry ",

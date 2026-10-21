@@ -95,6 +95,43 @@ fn module_symbols() {
     }
 }
 
+/// The functions of `core` (ADR 0052): the runtime support functions keep
+/// the names LLVM and C call them by, being `#[export]`, and a private
+/// helper has its path as symbol (ADR 0051).
+#[test]
+fn core_symbols() {
+    let work = Path::new(env!("CARGO_TARGET_TMPDIR")).join("elf");
+    fs::create_dir_all(&work).unwrap();
+    let source = work.join("core.ers");
+    fs::write(&source, PROGRAM).unwrap();
+    for opt in [OptLevel::None, OptLevel::Speed] {
+        let elf = work.join(format!("core-{opt:?}.elf"));
+        driver::build(&source, &elf, &[], opt, false).unwrap();
+        let symbols = symbols(&elf);
+        let defined = |name: &str| {
+            symbols
+                .iter()
+                .any(|s| s.name == name && s.section != "UND" && s.section != "ABS")
+        };
+        for name in [
+            "memcpy",
+            "memmove",
+            "memset",
+            "__udivdi3",
+            "__moddi3",
+            "core.builtins.__erebos_udivmod64",
+        ] {
+            assert!(defined(name), "{opt:?}: no symbol {name}");
+        }
+        for name in ["core.builtins.memcpy", "core.builtins.__udivdi3"] {
+            assert!(
+                !symbols.iter().any(|s| s.name == name),
+                "{opt:?}: the `#[export]` function {name} has its path as symbol"
+            );
+        }
+    }
+}
+
 fn check(elf: &Path, opt: OptLevel) {
     let sections = sections(elf);
     let symbols = symbols(elf);
