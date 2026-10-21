@@ -1,6 +1,6 @@
 # 0048. Types with a failed length or alignment are erroneous
 
-- Status: Accepted
+- Status: Accepted; amended by 0055 (repeat counts and dead arms under failed values)
 - Date: 2026-10-19
 
 ## Context

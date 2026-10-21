@@ -77,10 +77,12 @@ Do not write one for local implementation details that the code already explains
 | 0045 | [`Option(T)` and `Result(T, E)`](0045-option-and-result.md) | Accepted, amended by 0047 |
 | 0046 | [The `?` operator](0046-the-question-mark-operator.md) | Accepted |
 | 0047 | [Zero-sized payloads have an offset](0047-zero-sized-payloads-have-an-offset.md) | Accepted |
-| 0048 | [Types with a failed length or alignment are erroneous](0048-types-with-a-failed-length-or-alignment-are-erroneous.md) | Accepted |
+| 0048 | [Types with a failed length or alignment are erroneous](0048-types-with-a-failed-length-or-alignment-are-erroneous.md) | Accepted, amended by 0055 |
 | 0049 | [Modules and paths](0049-modules-and-paths.md) | Accepted |
 | 0050 | [Visibility](0050-visibility.md) | Accepted, amended by 0054 |
 | 0051 | [Symbol names](0051-symbol-names.md) | Accepted |
-| 0052 | [The `core` module](0052-the-core-module.md) | Accepted |
+| 0052 | [The `core` module](0052-the-core-module.md) | Accepted, amended by 0056 |
 | 0053 | [Panic information](0053-panic-information.md) | Accepted |
 | 0054 | [Only `_` covers an enum that is not reachable](0054-only-wildcards-cover-unreachable-enums.md) | Accepted |
+| 0055 | [Repeat counts and dead arms under failed values](0055-repeat-counts-and-dead-arms-under-failed-values.md) | Accepted |
+| 0056 | [`rt` is reserved in the root module](0056-rt-is-reserved-in-the-root-module.md) | Accepted |

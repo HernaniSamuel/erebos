@@ -1,6 +1,6 @@
 # 0052. The `core` module
 
-- Status: Accepted
+- Status: Accepted; amended by 0056 (`rt` is reserved in the root module)
 - Date: 2026-10-20
 - Amends: 0020 (the runtime support functions move into `core`; the
   check against defining one becomes a check of symbols)
