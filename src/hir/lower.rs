@@ -689,6 +689,14 @@ impl<'a> Items<'a> {
                     "reserved for LLVM in the root module".to_owned(),
                     "the symbols of its items would start with `llvm.`, which LLVM reserves for its intrinsics (ADR 0051)".to_owned(),
                 ))
+            } else if name == "rt"
+                && module == ModuleId::ROOT
+                && matches!(binding, Binding::Def(Def::Module(_)))
+            {
+                Some((
+                    "reserved for `core` in the root module".to_owned(),
+                    "the files of `core` are named `rt/core.ers` and `rt/builtins.ers`, so the files of this module could be named like them: give it another name, or put it inside another module (ADR 0056)".to_owned(),
+                ))
             } else {
                 None
             };

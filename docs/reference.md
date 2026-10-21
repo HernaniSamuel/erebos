@@ -50,10 +50,11 @@ The target is RV32IMAC on QEMU `virt` (ADR 0010).
 
 - **Comments:** `// to end of line` and `/* block */`; block comments nest.
 - **Identifiers:** `[A-Za-z_][A-Za-z0-9_]*`, except `_` alone. No item,
-  module or `use` of the program may take a name starting with `__`,
-  which the runtime support functions of `core` use, nor `_start`, nor
-  `core`, in any module (`resolve::reserved-name`, ADR 0020, 0052); a module of the root module
-  may not be named `llvm` (see "Symbols").
+  module or `use` of the program may take a name starting with `__`, which
+  the runtime support functions of `core` use, nor `_start`, nor `core`, in
+  any module (`resolve::reserved-name`, ADR 0020, 0052); a module of the
+  root module may not be named `llvm` (see "Symbols") or `rt` (see
+  "Modules and paths").
 - **Keywords:** `align_of as break comptime const continue crate else entry
   enum extern false fn if let loop match mod mut offset_of panic pub return
   size_of static struct super true use volatile while`. `raw` is a keyword
@@ -1841,7 +1842,9 @@ fn base() -> usize {
   names `main.ers`). Diagnostics and panic locations (see "Panic
   information") therefore do not depend on the directory the compiler
   runs in. The files of `core` are named `rt/core.ers` and
-  `rt/builtins.ers`.
+  `rt/builtins.ers`, so a module of the root module may not be named `rt`
+  (`resolve::reserved-name`, ADR 0056), which would let a program file
+  have one of their names; a module elsewhere, or a `use`, may.
 - **Order.** Files are numbered in the order their `mod` declarations are
   met, depth first, starting from the root file; the files of `core` come
   after every file of the program. Diagnostics, sorted by file and offset,
@@ -2398,7 +2401,7 @@ Every error has a stable code, shown with the message.
 | `resolve::not-a-constant` | a name or path in a pattern that is not a constant: a local variable, parameter, static, function, struct or enum |
 | `resolve::duplicate-binding` | one name bound twice in one pattern, or in one alternative of an or-pattern |
 | `resolve::inconsistent-binding` | a name not bound by every alternative of an or-pattern, or bound with `let mut` by only some |
-| `resolve::reserved-name` | an item, module or `use` named `_start`, `core`, with a name starting with `__`, or like a built-in function (`assert`, `len`, `slice`); a module of the root module named `llvm` |
+| `resolve::reserved-name` | an item, module or `use` named `_start`, `core`, with a name starting with `__`, or like a built-in function (`assert`, `len`, `slice`); a module of the root module named `llvm` or `rt` |
 | `resolve::unknown-attribute` | an attribute that does not exist |
 | `resolve::misplaced-attribute` | an attribute on an item it does not apply to |
 | `resolve::attribute-argument` | an attribute with a missing or extra argument |

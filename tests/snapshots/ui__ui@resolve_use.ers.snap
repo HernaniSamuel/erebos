@@ -17,48 +17,50 @@ entry fn main() -> !
     let built: timer::Tick
     let b: Option(drivers::block::Block)
     let m: chain::Mode
+    let r: chain::Mode
     let resent: u8
     let x: u32
     let c: u32
-    expr 0 call 789..799: u8
-    expr 1 byte 97 794..798: u8
-    expr 2 binary + 823..845: usize
-    expr 3 const uart::regs::BASE 823..832: usize
-    expr 4 const uart::regs::BASE 835..845: usize
-    expr 5 call 865..871: timer::Tick
-    expr 6 variant .None (Option(timer::Tick)::None) 902..907: Option(timer::Tick)
-    expr 7 struct timer::Tick 931..938: timer::Tick
-    expr 8 call 967..982: Option(drivers::block::Block)
-    expr 9 variant chain::Mode::Run 1002..1011: chain::Mode
-    expr 10 call 1034..1051: u8
-    expr 11 byte 98 1046..1050: u8
-    expr 12 match 1220..1288: u32
-    expr 13 const timer::regs::CONTROL 1226..1233: u32
-    expr 14 int 0 1255..1256: u32
-    expr 15 local x 1280..1281: u32
-    expr 16 loop 1294..1301: !
+    expr 0 call 879..889: u8
+    expr 1 byte 97 884..888: u8
+    expr 2 binary + 913..935: usize
+    expr 3 const uart::regs::BASE 913..922: usize
+    expr 4 const uart::regs::BASE 925..935: usize
+    expr 5 call 955..961: timer::Tick
+    expr 6 variant .None (Option(timer::Tick)::None) 992..997: Option(timer::Tick)
+    expr 7 struct timer::Tick 1021..1028: timer::Tick
+    expr 8 call 1057..1072: Option(drivers::block::Block)
+    expr 9 variant chain::Mode::Run 1092..1101: chain::Mode
+    expr 10 variant chain::Mode::Off 1125..1138: chain::Mode
+    expr 11 call 1161..1178: u8
+    expr 12 byte 98 1173..1177: u8
+    expr 13 match 1347..1415: u32
+    expr 14 const timer::regs::CONTROL 1353..1360: u32
+    expr 15 int 0 1382..1383: u32
+    expr 16 local x 1407..1408: u32
+    expr 17 loop 1421..1428: !
 panic fn on_panic() -> !
-    expr 17 loop 1332..1339: !
+    expr 18 loop 1459..1466: !
 fn uart::putc(byte: u8) -> u8
-    expr 18 call 1597..1608: u16
-    expr 19 local byte 1603..1607: u8
-    expr 20 local byte 1610..1614: u8
+    expr 19 call 1724..1735: u16
+    expr 20 local byte 1730..1734: u8
+    expr 21 local byte 1737..1741: u8
 fn uart::regs::write(byte: u8) -> u16
-    expr 21 int 0 1722..1723: u16
+    expr 22 int 0 1849..1850: u16
 fn timer::init() -> timer::Tick
-    expr 22 call 1856..1866: u8
-    expr 23 byte 116 1861..1865: u8
-    expr 24 struct timer::Tick 1868..1875: timer::Tick
+    expr 23 call 1983..1993: u8
+    expr 24 byte 116 1988..1992: u8
+    expr 25 struct timer::Tick 1995..2002: timer::Tick
 fn drivers::make() -> Option(drivers::block::Block)
-    expr 25 variant .Some (Option(drivers::block::Block)::Some) 2047..2066: Option(drivers::block::Block)
-    expr 26 call 2053..2065: drivers::block::Block
+    expr 26 variant .Some (Option(drivers::block::Block)::Some) 2174..2193: Option(drivers::block::Block)
+    expr 27 call 2180..2192: drivers::block::Block
 fn drivers::block::make() -> drivers::block::Block
-    expr 27 struct drivers::block::Block 2147..2155: drivers::block::Block
+    expr 28 struct drivers::block::Block 2274..2282: drivers::block::Block
 comptime fn uart::regs::BASE() -> usize
-    expr 28 int 268435456 1669..1680: usize
+    expr 29 int 268435456 1796..1807: usize
 comptime fn timer::regs::CONTROL() -> u32
-    expr 29 int 4 1931..1932: u32
+    expr 30 int 4 2058..2059: u32
 comptime fn chain::Mode::Off() -> u8
-    expr 30 int 0 1510..1511: u8
+    expr 31 int 0 1637..1638: u8
 comptime fn chain::Mode::Run() -> u8
-    expr 31 int 1 1519..1520: u8
+    expr 32 int 1 1646..1647: u8

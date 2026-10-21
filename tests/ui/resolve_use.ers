@@ -13,6 +13,8 @@ use crate::timer::{init, Tick, regs::CONTROL,};
 use uart::regs;
 use drivers::Block;
 use later::Mode;
+// A `use` may take the name `rt`, reserved only for modules (ADR 0056).
+use chain as rt;
 
 entry fn main() -> ! {
     let sent: u8 = putc(b'a');
@@ -22,6 +24,7 @@ entry fn main() -> ! {
     let built: Tick = Tick {};
     let b: Option(Block) = drivers::make();
     let m: Mode = Mode::Run;
+    let r: rt::Mode = rt::Mode::Off;
     let resent: u8 = timer::send(b'b');
     // `CONTROL` as a pattern is the constant `use` brought in: a new name
     // there would be `resolve::unknown-name`. The dump shows no patterns.

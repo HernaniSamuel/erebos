@@ -3,8 +3,9 @@
 // `#[export]` one, two `#[export]` ones and one `extern fn` declared in two
 // modules are `resolve::duplicate-symbol`. A pair that is already
 // `resolve::duplicate-item` is not reported again. `#[export]` applies only
-// to functions and statics defined in the program, and takes no argument. `llvm` is reserved for modules of the root module only, and
-// `_start` in every module.
+// to functions and statics defined in the program, and takes no argument.
+// `llvm` and `rt` (ADR 0056) are reserved for modules of the root module
+// only, so a `use` may take them, and `_start` in every module.
 fn putc(byte: u8) {}
 
 mod uart {
@@ -78,6 +79,17 @@ mod h {
     mod llvm {
         fn f() {}
     }
+    mod rt {
+        fn f() {}
+    }
+}
+
+mod rt {
+    fn f() {}
+}
+
+mod u {
+    use super::h as rt;
 }
 
 mod s {
