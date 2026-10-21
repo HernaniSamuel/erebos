@@ -7,7 +7,7 @@ and ends with a program running on QEMU, verified by an automated test.
 |-----------|----------|
 | **M0** ✅ | `entry fn main() -> ! { loop {} }` compiles to an object file, links, and boots on QEMU. Every layer that has work to do exists, even if trivial (const evaluation waits for M2). |
 | **M1** ✅ | Functions, integers, `bool`, typed `let`, `if`/`while`/`loop`, raw and volatile pointers (ADR 0013), byte literals (ADR 0016), checked division (ADR 0007), the panic function (ADR 0014). Prints "hello" over the QEMU UART via volatile pointer writes. |
-| **M2** | Compound data, enums and modules, in the steps below. |
+| **M2** ✅ | Compound data, enums and modules, in the steps below. |
 | **M3** | `memory { ... }` blocks generating the linker script; `peripheral` blocks with native MMIO. The UART is declared in the language. |
 | **M4** | Interrupt handlers, vector tables, inline `asm`, compiler and hardware fences (ADR 0023). |
 | **M5** | Moves/ownership, then references and borrow checking (ADR 0009); methods (`impl`, `self`, `&self`, `&mut self`, `x.f()`). |
@@ -28,7 +28,7 @@ updated, and a program on QEMU.
 | **M2.4b** ✅ Enum payloads | variants carrying data, their layout and ABI, patterns nested in payloads | a command decoder: messages with payloads, decoded from bytes and dispatched with `match` |
 | **M2.4c** ✅ Cost of `match` | code of a `match` on an enum with payloads tested arm by arm, linear in its patterns (ADR 0042); checks of exhaustiveness and dead arms that examine once the values the arms do not tell apart; at most four witnesses searched (ADR 0043) | matches whose code and checks grew exponentially, built and run |
 | **M2.5** ✅ `Option` and `Result` | built into the compiler until generics exist; the `?` operator | a number parser returning `Result` |
-| **M2.6** Modules and panic information | `mod`, `use`, `pub`, `core`; `panic fn on_panic(info: *const PanicInfo) -> !` with file, line and a `PanicReason` enum (ADR 0014) | a panic prints `division by zero at main.ers:12` |
+| **M2.6** ✅ Modules and panic information | `mod`, `use`, `pub`, `core`; `panic fn on_panic(info: *const PanicInfo) -> !` with file, line and a `PanicReason` enum (ADR 0014) | a panic prints `division by zero at main.ers:12` |
 
 Decisions already agreed for the later steps (their ADRs come with the step):
 
@@ -115,13 +115,6 @@ Agreed as useful, not yet scheduled:
 Questions accepted ADRs leave to a later step, to settle in that step's
 ADRs:
 
-- **M2.6:**
-  - Symbol names with modules: functions and statics are emitted under
-    their own names (ADR 0006, 0026, 0030). With modules, names must be
-    unique across the program, or be mangled with an attribute to export
-    them.
-  - The panic handler's signature: location, reason and message
-    (ADR 0014, 0031).
 - **M3:**
   - `peripheral` blocks must express what an SVD file describes, so that
     a `svd2erebos` can generate them: access modes (read-only,
@@ -309,4 +302,22 @@ Documentation owed:
   (ADR 0047), and make a type that reaches a failed array length or
   struct alignment erroneous, so that the failure is reported once
   instead of a cascade computed from a wrong layout (ADR 0048).
-- **Next: M2.6** (modules and panic information).
+- **M2.6 done.** Programs are split into modules, inline or in files
+  found by a fixed rule, each with its own namespace; items are named by
+  paths from `crate`, `super`, `core` or a name in scope, and brought in
+  with `use` (ADR 0049). Items and fields are private to their module unless `pub`,
+  variants are visible where their enum is reachable, and `pub use`
+  offers items of private children (ADR 0050, 0054). Functions and
+  statics outside the root module have their paths as symbols,
+  `uart.init`, and `#[export]` keeps a name for C (ADR 0051). The runtime
+  support functions became the module `core`, written in Erebos and
+  shipped inside the compiler (ADR 0052). The panic function may take a
+  `*const core::PanicInfo` giving the reason, file, line and column of the
+  failed check and the message of an `assert`, read-only data for every
+  check but an `assert` with a message; a handler without it pays nothing
+  (ADR 0053). Diagnostics may point into several files, and the test
+  harnesses run programs of several files. The milestone program, in five
+  files, averages groups of readings on QEMU, at both optimization
+  levels, until a division by zero makes its handler print
+  `division by zero at main.ers:12`. With it, M2 is done.
+- **Next: M3** (memory maps and peripherals).

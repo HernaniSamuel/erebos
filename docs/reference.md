@@ -1,4 +1,4 @@
-# Erebos language reference (M2.5)
+# Erebos language reference (M2.6)
 
 This describes the language as the compiler implements it today. The
 reasoning behind each rule lives in the ADRs (`docs/adr/`), cited as
@@ -7,13 +7,17 @@ one of them.
 
 ## Programs
 
-A program is one source file (`.ers`) plus the runtime support functions
-(`rt/builtins.ers`, ADR 0020). It is a list of items, in any order:
-functions, external functions, structs, enums, constants, statics,
-external statics and `comptime` blocks.
-Items share one namespace, and may refer to each other whatever their
-order (ADR 0028). It must contain exactly one **entry function** and
-one **panic function**:
+A program is a **root file** (`.ers`), the one given to `erebos build`,
+plus the files of the modules it declares (ADR 0049), plus the module
+`core`, shipped inside the compiler (ADR 0052). Each file is a list of
+items, in any order: functions, external functions, structs, enums,
+constants, statics, external statics, `comptime` blocks, modules (`mod`)
+and `use` declarations. The root file is the **root module**, and the
+modules it declares, inline or in their own files, form a tree under it;
+each module has its own namespace (see "Modules and paths"). Items may
+refer to each other whatever their order and their files (ADR 0028). The
+program must contain exactly one **entry function** and one **panic
+function**, in any of its modules:
 
 ```
 entry fn main() -> ! {
@@ -29,37 +33,47 @@ panic fn on_panic() -> ! {
   stack, `.bss` and `.data` (see "Startup and memory" below). It takes no
   parameters, must return `!`, and cannot be called.
 - `panic fn` runs when an operation cannot produce a result, such as
-  division by zero, an index out of bounds, or a `match` that no arm
-  matches or a `?`, on an enum value that is no variant (ADR 0014, 0036,
-  0040, 0046). It takes no parameters, must return `!`, and may be called
-  explicitly.
+  division by zero, an index out of bounds, a failed `assert`, or an enum
+  value that is no variant in a `match` that no arm matches or under `?`
+  (ADR 0014, 0036, 0040, 0046). It must return `!`, and may be called
+  explicitly. It takes **no parameter, or one of type
+  `*const core::PanicInfo`**, through which it learns why and where the
+  program panicked (ADR 0053, see "Panic information"):
+
+  ```
+  panic fn on_panic(info: *const core::PanicInfo) -> ! { ... }
+  ```
 
 The target is RV32IMAC on QEMU `virt` (ADR 0010).
 
 ## Lexical structure
 
 - **Comments:** `// to end of line` and `/* block */`; block comments nest.
-- **Identifiers:** `[A-Za-z_][A-Za-z0-9_]*`, except `_` alone. Names
-  starting with `__` are reserved for the runtime, and so are the C names
-  it defines (`memcpy`, `memmove`, `memset`) and `_start`.
-- **Keywords:** `align_of as break comptime const continue else entry enum
-  extern false fn if let loop match mut offset_of panic return size_of
-  static struct true volatile while`. `raw` is a keyword only right after
-  `&`.
+- **Identifiers:** `[A-Za-z_][A-Za-z0-9_]*`, except `_` alone. No item,
+  module or `use` may take a name starting with `__`, which the runtime
+  support functions of `core` use, nor `_start`, nor `core`, in any module
+  (`resolve::reserved-name`, ADR 0020, 0052); a module of the root module
+  may not be named `llvm` (see "Symbols").
+- **Keywords:** `align_of as break comptime const continue crate else entry
+  enum extern false fn if let loop match mod mut offset_of panic pub return
+  size_of static struct super true use volatile while`. `raw` is a keyword
+  only right after `&`.
 - **`_`** is a token of its own, the wildcard pattern of `match`, and
   nothing else (ADR 0037): no variable, parameter, item, field or variant
   can be named `_` (`let _: u32` and `const _: u32` are
   `parser::unexpected-token`), and `_` is not an expression. Names that
   only start with `_`, such as `_x`, are identifiers.
-- **`::`** separates an enum from its variant (`Mode::Run`), and **`=>`**
-  a pattern from its arm's expression.
+- **`::`** separates the segments of a path: a module from its items
+  (`uart::init`) and an enum from its variant (`Mode::Run`), see "Modules
+  and paths". **`=>`** separates a pattern from its arm's expression.
 - **`.`** before a name, where an operand or a pattern starts, names a
   variant of the expected enum (`.Run`, see "Enums"); after an
   expression, it reaches a field (`p.x`).
 - **`?`** is the postfix operator of "The `?` operator".
 - **Built-in functions:** `assert`, `len` and `slice` are reserved names:
-  no item may have one of them. A call to one of these names is always the
-  built-in; variables may still be named so (ADR 0031).
+  no item, module or `use` may have one of them, in any module. A call to
+  one of these names is always the built-in; variables may still be named
+  so (ADR 0031).
 - **Integer literals** (ADR 0016): `42`, `0x2A`, `0o52`, `0b10_1010`; `_`
   separates digits. A decimal literal with a leading zero (`017`) is an
   error. Values must fit in 64 bits. There are no suffixes (`1u8`).
@@ -85,8 +99,8 @@ The target is RV32IMAC on QEMU `virt` (ADR 0010).
 | `*const volatile T`, `*mut volatile T` | raw pointers whose accesses are volatile (ADR 0013, 0023) |
 | `[T; N]` | an array of `N` values of type `T`; `N` is a `usize` computed at compile time (ADR 0021, 0029) |
 | `*const [T]`, `*mut [T]` | slices: the address of `T` values and how many there are (ADR 0031); `volatile` as for any pointer |
-| `Name` | a struct declared with `struct Name { ... }` (ADR 0021) |
-| `Name` | an enum declared with `enum Name: u8 { ... }`: without payloads, stored as its integer type (ADR 0035); with payloads, a tag and the payload values of its variant (ADR 0039) |
+| `Name`, `uart::Name` | a struct declared with `struct Name { ... }`, named by a path (ADR 0021, 0049) |
+| `Name`, `uart::Name` | an enum declared with `enum Name: u8 { ... }`: without payloads, stored as its integer type (ADR 0035); with payloads, a tag and the payload values of its variant (ADR 0039) |
 | `Option(T)`, `Result(T, E)` | built-in enums with payloads: a `T` or nothing, and a `T` or an error `E` (ADR 0045, see "`Option` and `Result`") |
 
 Every `let`, parameter and return type is written explicitly; there is no
@@ -95,8 +109,10 @@ and enums with payloads are **aggregates**, and so are slices where a rule
 depends on it.
 
 The names of the built-in types, `bool`, the integer types, `Option` and
-`Result`, are no item's: a struct, enum, function, constant or static
-named so is `resolve::duplicate-type` (ADR 0029, 0045).
+`Result`, are no item's: a struct, enum, function, constant, static,
+module or `use` named so, in any module, is `resolve::duplicate-type`
+(ADR 0029, 0045, 0049). They are seen from every module, as a single name:
+`uart::u32` is no type.
 
 A pointer to a sized type is a **thin pointer**: a plain address. `[T]` on
 its own is **unsized**: it exists only behind a pointer, and a variable,
@@ -134,8 +150,10 @@ fn add(a: u32, mut b: u32) -> u32 {
 - Parameters cannot have type `()` or `!`.
 - There are no methods: functions take their receiver explicitly, such as
   `fn area(r: *const Rect) -> u32` (methods come with references, M5).
-- All functions use the C ABI of the target (ADR 0006); symbol names are not
-  mangled, so C code can call any Erebos function by its name.
+- All functions use the C ABI of the target (ADR 0006). A function of the
+  root module has its own name as its symbol, and so has one marked
+  `#[export]`, so C code can call it by that name; a function of another
+  module is named by its path, `uart.init` (ADR 0051, see "Symbols").
 
 ### Aggregates by value (ADR 0025, 0039)
 
@@ -168,7 +186,9 @@ declares a function defined outside the program, in C, assembly or a
 vendor library, which the linker finds; `erebos build --link file.o` adds
 the object file. It is called like any function. Its parameters cannot be
 `mut`, and nothing checks the declaration against the definition: as in C,
-a mismatch is undefined.
+a mismatch is undefined. Its symbol is its own name, in any module; a C
+function is declared in one module and brought into the others with `use`
+(see "Symbols").
 
 ## Statements and blocks
 
@@ -202,6 +222,9 @@ buf[i] = buf[0];
 
 - A struct literal gives every field exactly once, in any order; the
   values run in the order written.
+- A field is private to the struct's module unless declared `pub`
+  (`pub x: i32`): outside, it cannot be named, and the struct cannot be
+  built with a literal (ADR 0050, see "Visibility").
 - `[a, b, c]` lists every element. `[v; N]` evaluates `v` exactly once,
   even for `N` of 0, and copies it into every element.
 - `s.field` and `a[i]` are places when `s` and `a` are: reading or writing
@@ -259,7 +282,7 @@ extern static mut rx_count: u32;
 extern static crc_lookup: [u32; 256];
 ```
 
-- A static is a top-level item with an explicit type and an initializer,
+- A static is an item of a module with an explicit type and an initializer,
   which runs at compile time (see "Compile-time execution"). Its type is
   any type a constant may have: sized, and not `!`. A static without an
   initializer is a `parser::unexpected-token`; one inside a function body
@@ -275,8 +298,10 @@ extern static crc_lookup: [u32; 256];
 - **A static is read where the read is written**, like a read through a
   pointer, never deferred: in `TICKS + bump()`, where `bump` changes
   `TICKS`, `TICKS` is read before the call.
-- Every static is evaluated and emitted, used or not, with its own name as
-  its symbol: C code can declare `extern uint32_t TICKS;`.
+- Every static is evaluated and emitted, used or not. A static of the root
+  module, or one marked `#[export]`, has its own name as its symbol, so C
+  code can declare `extern uint32_t TICKS;`; one of another module is named
+  by its path, `uart.regs.BASE` (ADR 0051, see "Symbols").
 - **Where they live.** A `static` goes to `.rodata`. A `static mut` goes to
   `.data`, or to `.bss` when its initial value is all zero bytes. Padding
   in initial values is zero, and so are the bytes of an enum with payloads
@@ -421,7 +446,7 @@ let w: Msg = Msg::Write(3, 0x1234);
 
 **Declaration.**
 
-- An enum is an item, in the one namespace of items. Its name is followed
+- An enum is an item, in the namespace of its module. Its name is followed
   by `:` and its **integer type**, any of `u8 u16 u32 u64 usize i8 i16 i32
   i64 isize` (`resolve::enum-type` for any other type), and then its
   variants, separated by commas, with an optional trailing comma.
@@ -499,13 +524,19 @@ let w: Msg = Msg::Write(3, 0x1234);
   is such a variant converted with `as` (see "Checks on values known at
   compile time"): `[u8; Mode::Run as usize]` is fine. No value of an enum
   with payloads is known, not even `Msg::Nop`.
-- The name before `::` is looked up among items only, as the name of a
-  struct literal is, so a local variable named `Mode` does not hide the
-  enum. A name that is no item there is `resolve::unknown-type`, an item
-  that is not an enum is `resolve::not-an-enum`, and `Mode::Walk`, with no
-  such variant, is `resolve::unknown-variant`. `Option` and `Result` are
-  no items, and their variants have no path: `Option::None` is
-  `resolve::not-an-enum` (see "`Option` and `Result`").
+- `Mode::Run` is a path (see "Modules and paths"), and so is
+  `uart::Mode::Run`: the name before `::` is looked up among items only,
+  as the name of a struct literal is, so a local variable named `Mode`
+  does not hide the enum. A name that is nothing there is
+  `resolve::unknown-path`, an item that is neither a module nor an enum is
+  `resolve::not-an-enum`, and `Mode::Walk`, with no such variant, is
+  `resolve::unknown-variant`. A variant ends the path: `Mode::Run::x` is
+  `resolve::not-an-enum`. `Option` and `Result` are no items, and their
+  variants have no path: `Option::None` is `resolve::not-an-enum` (see
+  "`Option` and `Result`").
+- Variants are visible wherever their enum is reachable, and only there;
+  `.Run` where `Mode` is not is `ty::private-variant` (ADR 0050, see
+  "Visibility").
 
 **Variants named by the expected type (ADR 0044).**
 
@@ -555,7 +586,8 @@ if m == .Off { ... }
   `while c {}` starts a new expression.
 - `E::V` keeps its meaning, and is how a variant is written where no type
   is expected. Diagnostics show the variants of declared enums as `E::V`,
-  and those of `Option` and `Result`, which have no path, as `.V`.
+  `E` being the enum's path (`uart::Mode::Run` for an enum of module
+  `uart`), and those of `Option` and `Result`, which have no path, as `.V`.
 - `Mode` alone is not an expression; like a struct's name alone, it is
   `resolve::unknown-name`.
 
@@ -765,7 +797,7 @@ an enclosing position, whose type that variant's declaration gives.
 | `Mode::Run` | that variant, without payload |
 | `Msg::Write(p, q)` | that variant, with payload values that match `p` and `q` |
 | `.Run`, `.Write(p, q)` | as `E::Run` and `E::Write(p, q)`, `E` being the position's enum (ADR 0044) |
-| `NAME` | the value of the constant `NAME` |
+| `NAME`, `uart::NAME` | the value of the constant the name or path names |
 | `p \| q \| ...` | any of the alternatives |
 
 - **Literals** take their position's type, as against any expected type:
@@ -810,10 +842,17 @@ an enclosing position, whose type that variant's declaration gives.
   `const` item; a
   name that names nothing is `resolve::unknown-name`, and one that names a
   local variable, a parameter or an item that is not a constant (a
-  static, function, struct or enum) is `resolve::not-a-constant`. A local
+  static, function, struct or enum) is `resolve::not-a-constant`; a module
+  is `resolve::misused-module`. A local
   variable shadows a constant of the same name here as anywhere, so it is
   then `resolve::not-a-constant` too; to compare with the constant, write
   `let x: T => if x == NAME { ... }`.
+- **A path** of several segments, such as `uart::LIMIT`, names a variant
+  or a constant, as in an expression; one whose last segment names another
+  item is `resolve::not-a-constant`, and one whose last segment names
+  nothing `resolve::unknown-name`. A path followed by patterns in
+  parentheses that names no variant, as `uart::LIMIT(p)`, is
+  `resolve::unknown-variant`.
 - **Only constants of an integer type, `bool` or an enum without payloads
   are patterns.** A constant of any other type, such as an enum with
   payloads, a struct or a pointer, is `ty::constant-pattern-type`,
@@ -995,8 +1034,12 @@ are all listed, joined with "and". With the arms `Msg::Nop`,
 `Msg::Write(_, _)` and more. The message does not say how many more:
 counting them would mean finding them all, and their number can grow
 exponentially with the patterns. A witness writes the variants of declared
-enums as `E::V`, whichever way the arms write them, and those of `Option`
-and `Result` as `.V`: `.None`, `.Err(_)`, `.Some(Mode::Run)`.
+enums as `E::V`, `E` being the enum's path, whichever way the arms write
+them, and those of `Option` and `Result` as `.V`: `.None`, `.Err(_)`,
+`.Some(Mode::Run)`, `uart::Mode::Run`. When a shown witness names a
+variant of an enum that is not reachable from the module of the `match`,
+the help says to cover such values with `_` (ADR 0054, see
+"Visibility").
 
 **Dead arms.** An arm that matches no value the arms before it leave is
 `ty::unreachable-pattern`, reported once for the arm, pointing at the first
@@ -1504,7 +1547,7 @@ or is an error (`eval::pointer-compare`) where that answer is not known:
 - Pointers made from integers compare by address. Comparing one with a
   pointer into an object is an error.
 
-### Messages in `assert` (ADR 0031)
+### Messages in `assert` (ADR 0031, 0053)
 
 ```
 comptime {
@@ -1519,8 +1562,11 @@ comptime {
 - At compile time, `eval::assertion-failed` shows the message: printable
   ASCII as it is, other bytes as `\xNN`. A message that cannot be read
   reports that error instead.
-- At run time, the panic function takes no parameters yet (M2.6), so the
-  message is evaluated and dropped before it is called.
+- At run time, when the panic function takes a `*const core::PanicInfo`,
+  the message reaches it as the `message` field (ADR 0053, see "Panic
+  information"). When it takes no parameter, the message is still
+  evaluated, and dropped, before it is called: what runs before the panic
+  function does not depend on its signature.
 
 ## Expressions
 
@@ -1745,6 +1791,326 @@ the block reads `x` before the index changes it. `e?` runs `e` where it is
 written, and when it returns from the function, nothing after it runs: in
 `f(a()?, b())`, `b()` does not run when `a()` fails (ADR 0046).
 
+## Modules and paths (ADR 0049)
+
+```
+mod uart;                  // the items of uart.ers
+
+mod regs {                 // the items between the braces
+    pub const BASE: usize = 0x1000_0000;
+}
+
+fn base() -> usize {
+    regs::BASE
+}
+```
+
+**Modules.**
+
+- `mod name { ... }` declares an **inline module**, holding the items
+  between the braces, and `mod name;` a **file module**, holding the items
+  of its own file. A module is an item of the module that declares it, its
+  **parent**. The root file is the **root module**, and the modules form a
+  tree under it.
+- **Files.** In the root file, `mod uart;` reads `uart.ers` in the root
+  file's directory. In any other file, `dir/uart.ers`, `mod regs;` reads
+  `dir/uart/regs.ers`: the children of a file module live in a directory
+  named after it. An inline module adds its name to that directory: in
+  the root file, `mod a { mod b; }` reads `a/b.ers`. There is no `mod.ers`
+  and no attribute choosing another path, so each module has exactly one
+  file.
+- Every directory and file name on that path must be the module's name
+  exactly, also on file systems that ignore case: `mod Uart;` does not
+  read `uart.ers`, nor `mod timer { mod regs; }` `Timer/regs.ers`. A file
+  that is missing, whose name differs only in case, or that cannot be
+  read, and a `mod` in the root file whose file would be the root file
+  itself (`mod main;` in `main.ers`), are `resolve::module-file`, at the
+  declaration, naming the path tried. Such a module is then empty, and
+  the other errors of name resolution are still reported, so a use of its
+  items is reported too.
+- **File names.** Files are named relative to the root file's directory,
+  with `/` between directories (`uart/regs.ers`), and the root file by its
+  file name, however the command line wrote its path. Diagnostics and
+  panic locations (see "Panic information") therefore do not depend on
+  the directory the compiler runs in. The files of `core` are named
+  `rt/core.ers` and `rt/builtins.ers`.
+- **Order.** Files are numbered in the order their `mod` declarations are
+  met, depth first, starting from the root file; the files of `core` come
+  after every file of the program. Diagnostics, sorted by file and offset,
+  and dumps follow that order. A diagnostic may point into several files,
+  each shown under its own name.
+- Every kind of item may appear in any module, `comptime` blocks, modules
+  and `use` declarations included, and the entry and panic functions may be
+  in any module. A `mod` inside a function body is `parser::local-mod`. No
+  attribute applies to a module (`resolve::misplaced-attribute`).
+- Module files are read even when a file has syntax errors, so that the
+  syntax errors of every file are reported; any of them stops the
+  compilation before names are resolved.
+
+**Namespaces.**
+
+- Each module has **one namespace**, holding its items, its child modules
+  and the names its `use` declarations bring in. Two of these with one
+  name are `resolve::duplicate-item`. The same name in two modules names
+  two items.
+- The **built-in names**, the types `bool`, the integer types, `Option`
+  and `Result`, and the functions `assert`, `len` and `slice`, are seen
+  from every module, as single names, and no item, module or `use` may
+  take one (`resolve::duplicate-type`, `resolve::reserved-name`). Nor may
+  any take `core`, the name by which every module names the module `core`
+  (ADR 0052).
+- A **single name**, such as `x` or `Config`, is looked up among the
+  locals (in a body), then in the namespace of the module where it is
+  written. It is **never looked up in a parent**: a child module writes
+  `super::x`, or brings the name in with `use super::x;`. When a name is
+  found nowhere but a module around the current one has it, the error's
+  help writes the path to it.
+
+**Paths.** A path is names separated by `::`: `uart::init`,
+`uart::Mode::Run`, `crate::uart::regs::BASE`.
+
+- Its first segment is one of:
+  - `crate`: the root of the module tree the path is written in, the root
+    module (inside `core`, the root of `core`);
+  - `super`: the parent of the current module, and `super::super` its
+    parent's parent; `super` appears only at the start of a path, and
+    `a::super` and `crate::super` are `parser::unexpected-token`;
+  - `core`: the root of `core`, from any module (see "`core`");
+  - any other name: looked up in the namespace of the current module, or
+    as a built-in name, never among locals.
+- Each following segment is looked up in the namespace of the module
+  named so far. When the path so far names an enum, the next segment is
+  one of its variants and ends the path: `uart::Mode::Run`,
+  `uart::Mode::Write(3, 4)`.
+- Each segment must be visible from the module the path is written in
+  (see "Visibility").
+- Paths go wherever an item is named: types (`uart::Config`,
+  `Option(uart::Config)`, `*const uart::regs::Block`), constants, statics,
+  calls, struct literals (`uart::Config { baud: 115_200 }`), variants and
+  patterns (`uart::Mode::Run`), and the type operand of `size_of`,
+  `align_of` and `offset_of`. Locals, fields and the names declarations
+  give are single names.
+- `crate`, `super`, `mod`, `use` and `pub` are keywords; `core` is a
+  reserved name.
+
+The errors of a path say in which module each name was looked up ("not
+found in module `uart`"):
+
+| Path | Error |
+|------|-------|
+| a last segment that names nothing | the code of its position: `resolve::unknown-type` for a type or a struct literal, `resolve::unknown-function` for a callee, `resolve::unknown-name` for a value or a pattern, `resolve::unknown-variant` after an enum |
+| a last segment that names an item of another kind, such as a constant as a type | the code of its position, labelled with what the item is ("a constant, not a type"); in a pattern, `resolve::not-a-constant` |
+| a segment followed by `::` that names nothing | `resolve::unknown-path` |
+| a segment followed by `::` that names neither a module nor an enum: a struct, a constant, a variant (`Mode::Run::x`), a built-in type or function (`u8::MAX`) | `resolve::not-an-enum` |
+| a module where a type, a value, a function, a struct or, in a pattern, a constant or a variant is expected (`let x: uart`, `uart()`, `uart { }`) | `resolve::misused-module` |
+| `super` in the root module, or `super::super` one level below it | `resolve::super-at-root` |
+
+**Names in diagnostics and dumps.** An item outside the root module is
+shown by its path from the root, `uart::init`, `uart::Config`,
+`core::PanicInfo`, in diagnostics and in the `hir` and `typeck` dumps;
+items of the root module keep their own names, so one-file programs show
+what they showed before modules. The `mir` and `llvm-ir` dumps name
+functions and statics by their symbols, `uart.init` (see "Symbols").
+
+## `use` (ADR 0049, 0050)
+
+```
+use uart::putc;
+use uart::regs::BASE as UART_BASE;
+use crate::timer::{init, Tick, regs::CONTROL,};
+pub use regs::Block;
+```
+
+- `use path;` brings the item or module the path names into the
+  namespace of the module of the `use`, under the path's last name; `use
+  path as name;` under `name`. Braces after `::` list several paths from
+  one prefix, each with an optional `as`, with a trailing comma allowed.
+  The paths between braces are names separated by `::`: braces do not
+  nest, and `crate`, `super` or nothing between them is
+  `parser::unexpected-token`.
+- A `use` path resolves as every path does, from the module of the `use`:
+  from its namespace, `crate`, `super` or `core`, each segment visible
+  there. It may go through a name another `use` brought in. `use`
+  declarations, like items, apply whatever their order and their files.
+- A path made only of `crate`, `super` or `core`, as `use crate;` or `use
+  super as parent;`, brings in no name and is `parser::unexpected-token`.
+  A `use` inside a function body is `parser::local-use`.
+- A `use` names an item or a module, never a variant
+  (`resolve::use-variant`): bring in the enum and write `E::V`, or `.V`
+  where the type is known (ADR 0044). A built-in name is no item either:
+  `use u8 as byte;` is `resolve::unknown-path`, and the built-in names are
+  seen from every module already. A last segment that names nothing is
+  `resolve::unknown-path` too.
+- The name a `use` brings in is in its module's one namespace: no item,
+  module or other `use` of that module may have it
+  (`resolve::duplicate-item`), and it cannot be a reserved name or a
+  built-in type's name.
+- A `use` whose target can only be found through itself, as `use b::x;`
+  in module `a` with `use a::x;` in module `b`, or `use x;` where nothing
+  else is named `x`, is `resolve::use-cycle`, reported once, at the first
+  `use` of the cycle in file order, then offset, naming the others.
+- Once a `use` is reported in error, the uses of the name it brings in
+  report nothing more.
+- There are **no glob imports** (`use uart::*`) and **no prelude**: every
+  name a module uses is written in that module or in the `use` that
+  brings it in, and an item of `core` is written `core::x` or brought in
+  with `use`.
+- A `use` is private unless declared `pub`: `pub use` makes the name it
+  brings in a `pub` name of its module, so that a module can offer items
+  of its private children (see "Visibility").
+- No attribute applies to a `use` (`resolve::misplaced-attribute`), and a
+  `use` gives nothing a symbol.
+
+## Visibility (ADR 0050, 0054)
+
+```
+pub struct Config {
+    pub baud: u32,
+    divisor: u16,
+}
+
+pub fn config(baud: u32) -> Config {
+    Config { baud: baud, divisor: (48_000_000 / (16 * baud)) as u16 }
+}
+```
+
+**Items.**
+
+- An item, module or `use` is **private** unless declared `pub`. A
+  private item is visible in the module that declares it and in that
+  module's descendants; a `pub` item wherever its module is.
+- `pub` comes after the attributes and before the item's keywords: `pub
+  fn`, `pub extern fn`, `pub static mut`, `pub extern static`, `pub
+  struct`, `pub enum`, `pub const`, `pub mod`, `pub use`, `pub panic fn`,
+  `#[export] pub fn`. On a `comptime` block, which has no name, and on the
+  entry function, which nothing may call, it is `parser::misplaced-pub`.
+  Before a field it is allowed (below); before anything else, such as a
+  variant, a parameter, a `let` or another `pub`, it is
+  `parser::unexpected-token`.
+- A path is usable where **each of its segments** is visible: a `pub` item
+  inside a private module is usable only where that module is. Naming an
+  item that is not visible is `resolve::private-item`, pointing at the use
+  and at the declaration; the item is still resolved, so nothing else is
+  reported about it. `core` follows the same rules: its private items are
+  its own.
+- An item is **reachable** from a module when some path written there
+  would name it and be usable, through `pub use` names too: an enum of a
+  private module offered with `pub use` is reachable wherever the
+  `pub use` is. What writes no path to the item, `.V` and fields, is
+  judged by reachability.
+- **`pub use`** makes the name it brings in `pub`. The item it names,
+  through any other `use`s, must itself be declared `pub`
+  (`resolve::private-reexport`): re-exporting cannot widen what an item
+  declared. Only the item's declaration counts: a `pub use` may offer a
+  `pub` item through a name that a private `use` brought in.
+- The compiler calls the entry and panic functions whatever their
+  visibility.
+
+**Fields.**
+
+- A **field is private** unless declared `pub`: visible where a private
+  item of the struct's module would be, in that module and its
+  descendants. A `pub` field is visible wherever its struct is reachable.
+- Where a field is not visible, **no place may name it**: reading or
+  writing `c.divisor`, `&raw const c.divisor` and
+  `offset_of(Config, divisor)` are `ty::private-field`. So is naming a
+  `pub` field of a struct that is not reachable there, such as a value of
+  a private type returned by a `pub fn`.
+- A **struct literal** of a struct with a private field, outside that
+  field's visibility, is `resolve::private-field`, whether it gives the
+  field or leaves it out: a literal gives every field, so it cannot be
+  completed there. The error names every private field, and
+  `resolve::missing-fields` is not reported for that literal. Such a
+  struct is built outside its module only by a function of that module.
+- Visibility changes no layout: private fields are laid out, copied and
+  passed like any other, and `size_of` counts them.
+
+**Variants.**
+
+- The variants of an enum, and their payloads, are visible wherever the
+  enum is reachable, and only there. `uart::Mode::Run` checks `Mode` as
+  every path checks its segments; `.Run` (ADR 0044), which does not write
+  the enum, is `ty::private-variant`, in an expression or a pattern, where
+  the enum it names is not reachable. So `set(.Run)` and `match get() {
+  .Run => ... }` in another module are rejected when `Mode` is private,
+  even if `set` and `get` are `pub`: only the module of a private enum,
+  and its descendants, make its values or name its variants.
+- Where an enum is not reachable, **only `_`** matches its values without
+  naming a variant, as a whole arm or inside a payload (`.Some(_)`). A
+  `let` pattern names no variant, but its type, always written, cannot
+  name the enum there (ADR 0054); a `let` of a reachable type that holds
+  the enum, such as a `pub` enum with a payload of it, still covers the
+  enum's values inside.
+- A `match` that leaves values unmatched is `ty::non-exhaustive-match`,
+  with its witnesses as usual. When a shown witness names, at any depth, a
+  variant of an enum that is not reachable from the module of the `match`
+  (`uart::Mode::Run`, `.Some(uart::Mode::Run)`), the help says to cover
+  them with `_`, which names no variant, and proposes nothing else, even
+  when other witnesses could be written: one `_` arm covers them all.
+
+**What visibility is not.**
+
+- It controls names, not memory: a private static may still be reached
+  through a pointer the module hands out.
+- It is checked where a name is used, never in signatures: a `pub fn` may
+  take or return a private type. Outside the module the type cannot be
+  named, so, with types always written (ADR 0008), such a value can only
+  be passed on.
+- It does not change symbols: a private function or static is still
+  emitted, as an external symbol of the object file (see "Symbols").
+- Evaluation at compile time is unaffected.
+
+## Symbols (ADR 0051)
+
+- The symbol of a **function with a body or a static** (`static`, `static
+  mut`) is its **path joined by dots**: the names of the modules from the
+  root of its tree down to it, then its own name. `fn init` in `uart` is
+  `uart.init`; `static BASE` in `uart::regs` is `uart.regs.BASE`. The root
+  module contributes no name, so **items of the root module have their own
+  names** as symbols. The root of `core` contributes `core`.
+- **`#[export]`** before a function with a body or a static gives it its
+  **own name** as its symbol, whatever its module:
+
+  ```
+  #[export]
+  pub fn uart_rx_ready() -> bool { ... }    // symbol `uart_rx_ready`
+  ```
+
+  On an item of the root module it changes nothing, and is allowed, so
+  that an item can move between modules without changing its symbol. It
+  takes no argument (`resolve::attribute-argument`), and given twice is
+  `resolve::duplicate-attribute`. On any other item (`extern fn`,
+  `extern static`, struct, enum, constant, module, `use`, `comptime`
+  block) it is `resolve::misplaced-attribute`.
+- An **`extern fn` or `extern static`** always has its own name, in any
+  module: it names a symbol defined outside the program.
+- The entry and panic functions follow the same rules; `_start` jumps to
+  the entry function's symbol, whatever it is.
+- A dot occurs in no Erebos or C identifier, so a path symbol never equals
+  a plain name. C code names the root module's items and the exported
+  ones; to call another function from C, mark it `#[export]`. Linker
+  scripts and debuggers accept dots (`break 'uart.init'` in gdb).
+- **Every symbol of the program is unique.** Two items with one symbol, in
+  any modules, `core` included, are `resolve::duplicate-symbol`, pointing
+  at both: a root `fn putc` and an `#[export] fn putc` in `uart`, or one
+  `extern fn c_checksum` declared in two modules. The fix for the latter
+  is to declare it once and bring it in with `use`; nothing checks that two
+  declarations of one C function agree. Against a symbol of `core`, such
+  as a root `fn memcpy`, the help names the function of `core` to call. Two
+  items with one name in one module are `resolve::duplicate-item`, and are
+  not reported again, nor is an item whose name starts with `__`, already
+  `resolve::reserved-name`.
+- **Reserved names.** LLVM gives symbols starting with `llvm.` a meaning
+  of their own, so `llvm` is a reserved module name in the root module
+  (`resolve::reserved-name`); a module of another module, or a root item,
+  may be named `llvm`. `_start` stays reserved in every module, with or
+  without `#[export]` (ADR 0012), and so are names starting with `__`
+  (ADR 0052).
+- Symbols are not visibility: every function and static, private or not,
+  is emitted as an external symbol of the object file (ADR 0030). Byte
+  strings and other constant data keep private names, and bodies run only
+  at compile time are not emitted.
+
 ## Startup and memory (ADR 0012, 0030)
 
 `_start`, generated by the compiler and visible in `--emit=llvm-ir`, runs
@@ -1754,7 +2120,7 @@ at the reset address and does, in order:
 2. fill `.bss` with zeros;
 3. copy the initial values of `.data` from their load address to their
    run address;
-4. jump to the entry function.
+4. jump to the entry function, by its symbol (see "Symbols").
 
 Nothing else runs before the entry function: there are no constructors and
 no order of initialization. The loops work a word at a time between
@@ -1782,13 +2148,158 @@ Object files given with `--link` may use the small-data sections
 link error, not data left uninitialized. No `__global_pointer$` is
 defined, so nothing is addressed relative to `gp`.
 
-## Runtime support functions (ADR 0020)
+## `core` (ADR 0020, 0052)
 
-Every program includes `rt/builtins.ers`: the 64-bit division functions
-riscv32 needs (`__udivdi3`, `__umoddi3`, `__divdi3`, `__moddi3`) and
-`memcpy`, `memmove` and `memset`, which LLVM calls for large copies and
-fills. Programs may call them; they cannot define functions with these
-names.
+`core` is a module tree written in Erebos and shipped inside the
+compiler: its root is `rt/core.ers`, whose `mod builtins;` is
+`rt/builtins.ers`, found as any file module is. Its files are embedded in
+the compiler binary, and compiled and checked with every program.
+
+- A path in any module of the program may start with `core`:
+  `core::PanicInfo`, `use core::PanicReason;`. `core` is a reserved name:
+  no item, module or `use` of the program may take it
+  (`resolve::reserved-name`). Inside `core`, `crate` is the root of `core`,
+  and nothing names the program.
+- `core` holds:
+  - `PanicInfo` and `PanicReason`, `pub` in its root (see "Panic
+    information");
+  - the **runtime support functions**, in its private module
+    `core::builtins`: `memcpy`, `memmove` and `memset`, which LLVM calls
+    for large copies and fills, `pub` and offered from the root with
+    `pub use`, so that a program calls `core::memcpy`; and the 64-bit
+    division functions riscv32 needs, `__udivdi3`, `__umoddi3`, `__divdi3`
+    and `__moddi3`, private, since LLVM calls them and programs write `/`
+    and `%`.
+
+  Each support function is `#[export]`, so that its symbol is the name
+  LLVM calls (see "Symbols"); their private helpers are not
+  (`core.builtins.__erebos_udivmod64`). The compiler marks every function
+  of `core` `no-builtins`, so that LLVM does not turn their loops back into
+  calls to them.
+- `Option`, `Result`, `assert`, `len` and `slice` are not in `core`: they
+  stay built-in names, seen from every module.
+- A program item whose symbol is one of `core`'s, such as a root `fn
+  memcpy` or an `#[export] fn memset` in any module, is
+  `resolve::duplicate-symbol`, whose help names the function of `core` to
+  call; an item named with `__` is `resolve::reserved-name`.
+- `core` has no entry or panic function. Every program includes all of
+  it, the functions the program does not call too.
+- The `--emit` dumps leave `core` out (see "Building"). An error reported
+  in a file of `core` is a compiler bug.
+
+## Panic information (ADR 0053)
+
+```
+use core::{PanicInfo, PanicReason};
+
+panic fn on_panic(info: *const PanicInfo) -> ! {
+    let reason: *const [u8] = match (*info).reason {
+        PanicReason::DivisionByZero => &raw const b"division by zero",
+        PanicReason::IndexOutOfBounds => &raw const b"index out of bounds",
+        PanicReason::AssertionFailed => &raw const b"assertion failed",
+        PanicReason::NoVariant => &raw const b"enum value is no variant",
+    };
+    print(reason);
+    print(&raw const b" at ");
+    print((*info).file);
+    print(&raw const b":");
+    print_u32((*info).line);
+    loop {}
+}
+```
+
+**The panic function's parameter.**
+
+- The panic function takes no parameter, or one of exactly the type
+  `*const core::PanicInfo`, however the path to it is written; the
+  parameter may be `mut`, as any parameter. Any other parameter list is
+  `ty::panic-param`: two parameters, a `*mut` or `*const volatile` pointer,
+  `PanicInfo` by value, or a pointer to another struct, even one named
+  `PanicInfo`.
+- **Without the parameter, no panic information is built or emitted**: a
+  program pays nothing for what its handler ignores. The message of an
+  `assert` is still evaluated when the assertion fails, and dropped.
+- The compiler's checks call the panic function directly. It may still be
+  called explicitly, with the arguments its signature asks for: a caller
+  of a handler with the parameter builds the `PanicInfo` itself. Code that
+  panics on purpose writes `assert(false, msg)`, and the compiler fills in
+  the information.
+
+**`core::PanicInfo` and `core::PanicReason`.**
+
+```
+pub struct PanicInfo {
+    pub file: *const [u8],
+    pub line: u32,
+    pub column: u32,
+    pub reason: PanicReason,
+    pub message: *const [u8],
+}
+
+pub enum PanicReason: u8 {
+    DivisionByZero = 0,
+    IndexOutOfBounds = 1,
+    AssertionFailed = 2,
+    NoVariant = 3,
+}
+```
+
+`PanicInfo` takes 28 bytes, aligned to 4: `file` at offset 0, `line` at
+8, `column` at 12, `reason` at 16 and `message` at 20. A `comptime` block
+in `core` asserts this layout, and `tests/layout` checks it against
+clang's.
+
+- **`file`** is the name of the source file holding the check, as
+  diagnostics name it (see "Modules and paths"): relative to the root
+  file's directory, with `/` between directories (`main.ers`,
+  `uart/regs.ers`), and `rt/core.ers` or `rt/builtins.ers` in `core`. It
+  depends neither on the directory the compiler runs in nor on how the
+  command line wrote the root file's path, so builds stay reproducible.
+- **`line`** and **`column`** locate the first byte of the token that
+  performs the check, both counted from 1, the column in bytes (the
+  character, in ASCII sources), so that nested checks, as in `a[i][j]` or
+  `a / b / c`, each have their own. Parentheses change nothing: `(a / b)`
+  is located at its `/`.
+
+  | Reason | Checked by | Located at |
+  |--------|------------|------------|
+  | `DivisionByZero` | `a / b`, `a % b`, `a /= b`, `a %= b` (ADR 0007) | the operator |
+  | `IndexOutOfBounds` | `a[i]`, `(*s)[i]` (ADR 0021, 0031) | the `[` |
+  | `AssertionFailed` | `assert(c)`, `assert(c, msg)` (ADR 0029, 0031) | `assert` |
+  | `NoVariant` | a `match` without a catch-all arm (ADR 0036, 0042) | `match` |
+  | `NoVariant` | `e?` (ADR 0046) | the `?` |
+
+- **`reason`** is the cause of the check.
+- **`message`** is the message of `assert(c, msg)`, computed only when the
+  assertion fails (see "Messages in `assert`"); for every other check, and
+  for an `assert` without one, it is an empty slice, whose address is
+  unspecified.
+
+**Where the information lives.**
+
+- For every check but an `assert` with a message, every field is known at
+  compile time, and the `PanicInfo` is **read-only data** the compiler
+  emits, one per check (LLVM may merge identical ones); the call passes
+  its address. The file names are byte strings, one per file: the name of
+  every file of the program and of `core` is emitted, and `-O` removes
+  those no check uses.
+- An `assert` with a message builds its `PanicInfo` in the frame of the
+  failing function, on the failing path only, once the message is
+  computed, and passes its address. The panic function never returns, so
+  the pointer stays valid while it runs.
+- The handler must not write through `info`: it points at read-only
+  memory or into another function's frame.
+- Each check costs about 28 bytes of read-only data when the handler
+  takes the parameter, and nothing when it does not.
+
+**At compile time** nothing changes: a failed check fails the evaluation
+with `eval::panic` and its cause, or `eval::assertion-failed` for an
+`assert` (see "Compile-time execution"); the panic function's body never
+runs there, and no `PanicInfo` is read.
+
+A new kind of check would add a variant to `PanicReason`; a handler that
+matches the reason without a catch-all arm, as above, would then fail to
+compile until it handles it.
 
 ## Building
 
@@ -1796,15 +2307,28 @@ names.
 erebos build program.ers [-o program.elf] [-O] [--link file.o]... [--emit=<stage>]
 ```
 
-`-O` enables LLVM optimizations. `--link` adds an object file defining
-`extern fn`s and `extern static`s; it may be repeated. `--emit` prints a
-compiler stage instead: `tokens`, `ast`, `hir`, `typeck`, `mir` or
-`llvm-ir` (dumps leave out the runtime; `typeck` and `mir` start with every
-struct's layout and every enum with its integer type and the values of its
-variants, an enum with payloads also with the offset of each payload value,
-its size and its alignment, then each `Option(T)` and `Result(T, E)` used,
-sorted by name, and list the bodies run at compile time as
-`comptime fn`, a variant's value as `comptime fn Mode::Run`).
+`program.ers` is the root file: the files of its modules are read from its
+directory, and every file is named relative to it (see "Modules and
+paths"). `-O` enables LLVM optimizations. `--link` adds an object file
+defining `extern fn`s and `extern static`s; it may be repeated. `--emit`
+prints a compiler stage instead: `tokens`, `ast`, `hir`, `typeck`, `mir` or
+`llvm-ir`.
+
+- `tokens` and `ast` show the root file alone, before any module file is
+  read; the later stages show the whole program.
+- The dumps leave `core` out: `mir` and `llvm-ir` show a function of `core`
+  the program calls as a declaration (`extern fn memcpy(...)`,
+  `declare ptr @memcpy`), and the others not at all.
+- `hir` and `typeck` show the items outside the root module by their
+  paths, and `mir` and `llvm-ir` show functions and statics by their
+  symbols (see "Symbols"); the `hir` dump starts with the module tree.
+- `typeck` and `mir` start with every struct's layout and every enum with
+  its integer type and the values of its variants, an enum with payloads
+  also with the offset of each payload value, its size and its alignment,
+  then each `Option(T)` and `Result(T, E)` used, sorted by name, and list
+  the bodies run at compile time as `comptime fn`, named by path, a
+  variant's value as `comptime fn Mode::Run`.
+
 See `CONTRIBUTING.md` for setup and running on QEMU.
 
 ## Diagnostics
@@ -1822,23 +2346,36 @@ Every error has a stable code, shown with the message.
 | `lexer::invalid-byte` | malformed byte literal, or a character or escape not allowed in a byte literal or byte string |
 | `lexer::unterminated-byte` | byte literal without closing `'` |
 | `lexer::unterminated-byte-string` | `b"` without its closing `"` on the same line |
-| `parser::unexpected-token` | a token where it cannot appear, such as `_` as a name or a value |
+| `parser::unexpected-token` | a token where it cannot appear, such as `_` as a name or a value, `pub` before a variant, or a `use` of a path made only of `crate`, `super` or `core` |
 | `parser::unclosed-block` | `{` without its `}` |
 | `parser::let-without-type` | `let` without `: Type`, also in a pattern |
 | `parser::chained-comparison` | `a < b < c` |
 | `parser::local-const` | `const` inside a function body |
 | `parser::local-static` | `static` or `extern static` inside a function body |
+| `parser::local-mod` | `mod` inside a function body |
+| `parser::local-use` | `use` inside a function body |
+| `parser::misplaced-pub` | `pub` on a `comptime` block or on the entry function |
 | `parser::enum-without-type` | an enum without `: Type` |
 | `parser::variant-without-value` | a variant without `= value` |
 | `parser::empty-payload` | a variant written `V()`, a payload without types |
-| `resolve::unknown-name` | name not in scope, also in a pattern; an enum's or struct's name alone |
-| `resolve::unknown-type` | type, struct or enum name that does not exist, also before `::` |
+| `resolve::module-file` | the file of `mod name;` does not exist, cannot be read, has a name that differs in case, or is the root file |
+| `resolve::unknown-name` | a name, or a path's last segment, that names no value where one is expected, also in a pattern; an enum's or struct's name alone; a name only a module around the current one has |
+| `resolve::unknown-type` | a type, or the struct of a literal, whose name or last path segment names nothing or an item of another kind |
+| `resolve::unknown-path` | a path segment followed by `::` that names nothing; a `use` whose last segment names nothing, or that names a built-in name |
+| `resolve::misused-module` | a module where a type, a value, a function, a struct or, in a pattern, a constant or a variant is expected |
+| `resolve::super-at-root` | `super` in the root module, or `super::super` one level below it |
 | `resolve::type-argument-count` | `Option` or `Result` with the wrong number of type arguments, as `Option`, `Option()` or `Result(u32)`, or parentheses after a type that takes none, as `u32(u8)` |
-| `resolve::unknown-function` | call to a function that does not exist |
+| `resolve::unknown-function` | call to a function that does not exist, or to an item that is not a function |
 | `resolve::not-a-function` | call to a variable |
 | `resolve::call-entry` | call to the entry function |
-| `resolve::duplicate-item` | two items (functions, structs, enums, constants, statics) with one name |
-| `resolve::duplicate-type` | any item (struct, enum, function, constant or static) named like a built-in type: `bool`, an integer type, `Option` or `Result` |
+| `resolve::duplicate-item` | two items, modules or `use` names with one name in one module |
+| `resolve::duplicate-symbol` | two items of the program, `core` included, with one symbol |
+| `resolve::duplicate-type` | any item, module or `use` name named like a built-in type: `bool`, an integer type, `Option` or `Result` |
+| `resolve::use-variant` | a `use` naming an enum variant |
+| `resolve::use-cycle` | `use` declarations that can only be resolved through themselves |
+| `resolve::private-item` | naming an item that is not visible here |
+| `resolve::private-reexport` | `pub use` of an item that is not `pub` |
+| `resolve::private-field` | a struct literal of a struct with a field that is not visible here |
 | `resolve::duplicate-param` | two parameters with one name |
 | `resolve::mut-extern-param` | a `mut` parameter in an `extern fn` |
 | `resolve::duplicate-field` | a field declared, or given in a literal, twice |
@@ -1847,19 +2384,19 @@ Every error has a stable code, shown with the message.
 | `resolve::enum-type` | an enum whose type after `:` is not an integer type |
 | `resolve::duplicate-variant` | two variants with one name |
 | `resolve::empty-enum` | an enum without variants |
-| `resolve::unknown-variant` | `E::V` where `E` has no variant `V` |
-| `resolve::not-an-enum` | `X::V` where `X` is an item that is not an enum, or `Option` or `Result`, which are no items and whose variants are written `.V` |
-| `resolve::not-a-constant` | a bare name in a pattern that is not a constant: a local variable, parameter, static, function, struct or enum |
+| `resolve::unknown-variant` | `E::V` where `E` has no variant `V`; a path followed by patterns in parentheses that names no variant |
+| `resolve::not-an-enum` | `X::V` where `X` names neither a module nor an enum: a struct, a constant, a variant, a built-in type or function, or `Option` or `Result`, which are no items and whose variants are written `.V` |
+| `resolve::not-a-constant` | a name or path in a pattern that is not a constant: a local variable, parameter, static, function, struct or enum |
 | `resolve::duplicate-binding` | one name bound twice in one pattern, or in one alternative of an or-pattern |
 | `resolve::inconsistent-binding` | a name not bound by every alternative of an or-pattern, or bound with `let mut` by only some |
-| `resolve::reserved-name` | `_start`, a name starting with `__`, a runtime function's name, or a built-in function's (`assert`, `len`, `slice`) |
+| `resolve::reserved-name` | an item, module or `use` named `_start`, `core`, with a name starting with `__`, or like a built-in function (`assert`, `len`, `slice`); a module of the root module named `llvm` |
 | `resolve::unknown-attribute` | an attribute that does not exist |
 | `resolve::misplaced-attribute` | an attribute on an item it does not apply to |
 | `resolve::attribute-argument` | an attribute with a missing or extra argument |
 | `resolve::duplicate-attribute` | an attribute given twice |
 | `resolve::conflicting-attributes` | `#[packed]` with `#[align(N)]` |
-| `resolve::missing-entry`, `resolve::multiple-entries` | not exactly one `entry fn` |
-| `resolve::missing-panic`, `resolve::multiple-panics` | not exactly one `panic fn` |
+| `resolve::missing-entry`, `resolve::multiple-entries` | not exactly one `entry fn` in the program |
+| `resolve::missing-panic`, `resolve::multiple-panics` | not exactly one `panic fn` in the program |
 | `resolve::outside-loop` | `break`/`continue` outside a loop |
 | `resolve::break-value-in-while` | `break value` in a `while` |
 | `resolve::return-in-comptime` | `return` or `?` in code run at compile time on its own: a `comptime` expression or block, the initializer of a constant or static, a variant's value, an array length, a repeat count or an `#[align(N)]` argument |
@@ -1880,6 +2417,8 @@ Every error has a stable code, shown with the message.
 | `ty::slice-pointer-index` | indexing a slice pointer directly (`s[i]`); write `(*s)[i]` |
 | `ty::no-fields` | field access on a value that is not a struct |
 | `ty::unknown-field` | field access to a field the struct does not have |
+| `ty::private-field` | a place or `offset_of` naming a field that is not visible here |
+| `ty::private-variant` | `.V` naming a variant of an enum that is not reachable here |
 | `ty::write-through-const` | assignment through a `*const` pointer |
 | `ty::not-assignable` | assignment to something that is not a place, or to part of a temporary |
 | `ty::assign-immutable` | assignment to a variable without `mut`, a `static`, an `extern static` without `mut`, or a byte string |
@@ -1908,7 +2447,8 @@ Every error has a stable code, shown with the message.
 | `ty::if-without-else` | `if` without `else` where a value is expected |
 | `ty::wrong-arg-count` | call with the wrong number of arguments |
 | `ty::param-type` | parameter of type `()` or `!` |
-| `ty::special-fn-params` | entry or panic function with parameters |
+| `ty::special-fn-params` | entry function with parameters |
+| `ty::panic-param` | a panic function whose parameters are not none or one `*const core::PanicInfo` |
 | `ty::entry-returns`, `ty::panic-returns` | entry or panic function that can return |
 | `eval::panic` | compile-time code reached the panic function: a zero divisor, an index out of bounds, an enum value that is no variant in a `match` that no arm matches or under `?`, an explicit call |
 | `eval::assertion-failed` | `assert` with a false condition at compile time, with its message if it has one |
