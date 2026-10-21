@@ -566,15 +566,16 @@ if m == .Off { ... }
 - **Where no type is expected**, `.V` is `ty::untyped-variant`: as the
   scrutinee of a `match`, the operand of `as` or of `?`, an expression
   statement, and in `.Off == .Run`, where it is reported at the first
-  operand. Its help shows `E::V` when exactly one declared enum has a
-  variant of that name, and, for `.None`, `.Some`, `.Ok` and `.Err`, how
-  to write an `Option` or `Result` type where the value is expected; both
-  when both apply.
+  operand. Its help shows `E::V` when exactly one declared enum reachable
+  there has a variant of that name, and, for `.None`, `.Some`, `.Ok` and
+  `.Err`, how to write an `Option` or `Result` type where the value is
+  expected; both when both apply.
 - Where the expected type is not an enum, `.V` is `ty::mismatched-types`
   ("expected `usize`, found variant `.Run`"), as in `let x: u32 = .Run;`,
-  `a[.Run]` and `if .Run {}`. Where the expected enum has no variant of
-  that name, it is `ty::unknown-variant`, found by type checking, as an
-  unknown field is. Where the expected type is erroneous, nothing is
+  `a[.Run]` and `if .Run {}`. Where the expected enum has no variant of that
+  name, it is `ty::unknown-variant`, found by type checking, as an unknown
+  field is. Their helps list only the variants and fields that may be named
+  there (ADR 0050). Where the expected type is erroneous, nothing is
   reported. An operator that does not apply to the enum reports its own
   error, as for any operand of it: `.Run < m` is `ty::invalid-operand`.
 - A `.V` in error still checks its values, against no type, so that a

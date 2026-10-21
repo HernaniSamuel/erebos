@@ -1,0 +1,40 @@
+// emit: typeck
+// The helps of `ty::unknown-field`, `ty::unknown-variant` and
+// `ty::untyped-variant` name only what may be named where the error is
+// (ADR 0050): fields visible there, variants of an enum reachable there,
+// and enums reachable there.
+mod hw {
+    pub struct Regs { pub data: u32, ctrl: u32 }
+    pub struct Hidden { a: u32 }
+    enum Mode: u8 { Idle = 0, Run = 1 }
+    pub fn regs() -> Regs { Regs { data: 0, ctrl: 0 } }
+    pub fn hidden() -> Hidden { Hidden { a: 0 } }
+    pub fn mode() -> Mode { Mode::Idle }
+    pub enum Level: u8 { Low = 0, High = 1 }
+}
+
+enum Pick: u8 { One = 1, Run = 2 }
+
+fn fields() -> u32 {
+    let r: hw::Regs = hw::regs();
+    let h: hw::Hidden = hw::hidden();
+    r.dat + h.b
+}
+
+fn variants() {
+    let l: hw::Level = .Medium;
+    match hw::mode() {
+        .Stop => {}
+        _ => {}
+    }
+}
+
+fn untyped() {
+    // `hw::Mode` has a `Run` too, but cannot be named here.
+    match .Run {
+        _ => {}
+    }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

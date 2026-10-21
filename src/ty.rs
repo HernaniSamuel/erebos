@@ -1308,7 +1308,9 @@ impl Checker<'_, '_> {
                 match def.variants.iter().position(|v| v.name == name) {
                     Some(index) => Some((e.id, index as u32)),
                     None => {
-                        self.q.diags.push(unknown_variant(def, name, name_span));
+                        self.q
+                            .diags
+                            .push(unknown_variant(def, name, name_span, f.module));
                         None
                     }
                 }
@@ -1748,7 +1750,9 @@ impl Checker<'_, '_> {
                 match def.variants.iter().position(|v| v.name == name) {
                     Some(index) => Some((e.id, index as u32)),
                     None => {
-                        self.q.diags.push(unknown_variant(def, name, name_span));
+                        self.q
+                            .diags
+                            .push(unknown_variant(def, name, name_span, f.module));
                         None
                     }
                 }
@@ -1768,7 +1772,9 @@ impl Checker<'_, '_> {
                 None
             }
             None => {
-                self.q.diags.push(untyped_variant(hir, name, expr.span));
+                self.q
+                    .diags
+                    .push(untyped_variant(hir, name, expr.span, f.module));
                 None
             }
         };
@@ -2673,14 +2679,23 @@ impl Checker<'_, '_> {
         };
         let def = hir.struct_(s.id);
         let Some(index) = def.fields.iter().position(|field| field.name == name) else {
-            let names: Vec<String> = def.fields.iter().map(|f| format!("`{}`", f.name)).collect();
+            // Only the fields visible here are listed (ADR 0050).
+            let names: Vec<String> = def
+                .fields
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| hir.field_visible(s.id, *i, f.module))
+                .map(|(_, field)| format!("`{}`", field.name))
+                .collect();
             let mut diag = Diagnostic::error(
                 "ty::unknown-field",
                 format!("`{}` has no field `{name}`", s.name),
             )
             .label(name_span, "unknown field");
-            diag = if names.is_empty() {
+            diag = if def.fields.is_empty() {
                 diag.help(format!("`{}` has no fields", s.name))
+            } else if names.is_empty() {
+                diag.help("none of its fields is visible here (ADR 0050)")
             } else {
                 diag.help(format!("its fields are {}", names.join(", ")))
             };
@@ -3248,9 +3263,10 @@ fn private_field(
     }
 }
 
-/// `ty::unknown-variant` for `.name`, written at `span`, where a value of
-/// the enum `def` is expected (ADR 0044).
-fn unknown_variant(def: &hir::EnumDef, name: &str, span: Span) -> Diagnostic {
+/// `ty::unknown-variant` for `.name`, written at `span` in `module`, where
+/// a value of the enum `def` is expected (ADR 0044). The help lists its
+/// variants only where they may be named (ADR 0050).
+fn unknown_variant(def: &hir::EnumDef, name: &str, span: Span, module: ModuleId) -> Diagnostic {
     // A variant declared twice was reported, and is listed once.
     let mut names: Vec<String> = Vec::new();
     for variant in &def.variants {
@@ -3268,24 +3284,34 @@ fn unknown_variant(def: &hir::EnumDef, name: &str, span: Span) -> Diagnostic {
     if let Some(name_span) = def.name_span {
         diag = diag.label(name_span, format!("`{}` is declared here", def.name));
     }
-    if names.is_empty() {
+    if !def.reachable_from(module) {
+        diag.help(format!(
+            "`{}` is not reachable here, so none of its variants can be named (ADR 0050)",
+            def.name
+        ))
+    } else if names.is_empty() {
         diag.help(format!("`{}` has no variants", def.name))
     } else {
         diag.help(format!("its variants are {}", names.join(", ")))
     }
 }
 
-/// `ty::untyped-variant` for `.name`, written at `span` where no type is
-/// expected (ADR 0044). The help names the enum when exactly one declared
-/// enum has a variant `name`, and writes the type for the variants of
+/// `ty::untyped-variant` for `.name`, written at `span` in `module` where no
+/// type is expected (ADR 0044). The help names the enum when exactly one
+/// declared enum reachable from `module` has a variant `name` (ADR 0050),
+/// and writes the type for the variants of
 /// `Option` and `Result` (ADR 0045), both in one help when both apply.
-fn untyped_variant(hir: &Hir, name: &str, span: Span) -> Diagnostic {
-    let mut having = hir.enums.iter().filter_map(|def| {
-        def.variants
-            .iter()
-            .find(|variant| variant.name == name)
-            .map(|variant| (def, variant))
-    });
+fn untyped_variant(hir: &Hir, name: &str, span: Span, module: ModuleId) -> Diagnostic {
+    let mut having = hir
+        .enums
+        .iter()
+        .filter(|def| def.reachable_from(module))
+        .filter_map(|def| {
+            def.variants
+                .iter()
+                .find(|variant| variant.name == name)
+                .map(|variant| (def, variant))
+        });
     let named = match (having.next(), having.next()) {
         (Some((def, variant)), None) => {
             let values = if variant.payload.is_empty() {

@@ -1,0 +1,82 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_helps_visible.ers
+---
+--- errors ---
+ty::unknown-field
+
+  × `hw::Regs` has no field `dat`
+    ╭─[typeck_helps_visible.ers:21:7]
+ 20 │     let h: hw::Hidden = hw::hidden();
+ 21 │     r.dat + h.b
+    ·       ─┬─
+    ·        ╰── unknown field
+ 22 │ }
+    ╰────
+  help: its fields are `data`
+ty::unknown-field
+
+  × `hw::Hidden` has no field `b`
+    ╭─[typeck_helps_visible.ers:21:15]
+ 20 │     let h: hw::Hidden = hw::hidden();
+ 21 │     r.dat + h.b
+    ·               ┬
+    ·               ╰── unknown field
+ 22 │ }
+    ╰────
+  help: none of its fields is visible here (ADR 0050)
+ty::unknown-variant
+
+  × `hw::Level` has no variant `Medium`
+    ╭─[typeck_helps_visible.ers:25:25]
+ 12 │     pub fn mode() -> Mode { Mode::Idle }
+ 13 │     pub enum Level: u8 { Low = 0, High = 1 }
+    ·              ──┬──
+    ·                ╰── `hw::Level` is declared here
+ 14 │ }
+ 15 │ 
+ 16 │ enum Pick: u8 { One = 1, Run = 2 }
+ 17 │ 
+ 18 │ fn fields() -> u32 {
+ 19 │     let r: hw::Regs = hw::regs();
+ 20 │     let h: hw::Hidden = hw::hidden();
+ 21 │     r.dat + h.b
+ 22 │ }
+ 23 │ 
+ 24 │ fn variants() {
+ 25 │     let l: hw::Level = .Medium;
+    ·                         ───┬──
+    ·                            ╰── unknown variant
+ 26 │     match hw::mode() {
+    ╰────
+  help: its variants are `Low`, `High`
+ty::unknown-variant
+
+  × `hw::Mode` has no variant `Stop`
+    ╭─[typeck_helps_visible.ers:9:10]
+  8 │     pub struct Hidden { a: u32 }
+  9 │     enum Mode: u8 { Idle = 0, Run = 1 }
+    ·          ──┬─
+    ·            ╰── `hw::Mode` is declared here
+ 10 │     pub fn regs() -> Regs { Regs { data: 0, ctrl: 0 } }
+    ╰────
+    ╭─[typeck_helps_visible.ers:27:10]
+ 26 │     match hw::mode() {
+ 27 │         .Stop => {}
+    ·          ──┬─
+    ·            ╰── unknown variant
+ 28 │         _ => {}
+    ╰────
+  help: `hw::Mode` is not reachable here, so none of its variants can be named (ADR 0050)
+ty::untyped-variant
+
+  × cannot tell the enum of `.Run`
+    ╭─[typeck_helps_visible.ers:34:11]
+ 33 │     // `hw::Mode` has a `Run` too, but cannot be named here.
+ 34 │     match .Run {
+    ·           ──┬─
+    ·             ╰── no type is expected here
+ 35 │         _ => {}
+    ╰────
+  help: name its enum: `Pick::Run` (ADR 0044)
