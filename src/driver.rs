@@ -454,7 +454,12 @@ fn front_end(
         return FrontEnd::Failed;
     }
 
-    let hir = match hir::lower(&ast, &core_ast, diags) {
+    // Later layers locate the compiler's checks without the text (ADR 0053).
+    let files = sources
+        .files()
+        .map(|file| hir::FileDef::new(&file.name, &file.text))
+        .collect();
+    let hir = match hir::lower(&ast, &core_ast, files, core_file.index(), diags) {
         // Type checking needs every name resolved.
         Some(hir) if !diags.has_errors() || stop == Some(Stage::Hir) => hir,
         _ => return FrontEnd::Failed,
@@ -482,10 +487,10 @@ fn front_end(
         return FrontEnd::Failed;
     }
 
+    let core = queries.core_parts();
     let mut mir = queries.into_mir();
     if stop.is_some() {
-        let in_core: Vec<bool> = hir.fns.iter().map(|f| hir.in_core(f.module)).collect();
-        mir.leave_out(&in_core);
+        mir.leave_out(&core);
     }
     if stop == Some(Stage::Mir) {
         return FrontEnd::Dump(mir.to_string());

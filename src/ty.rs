@@ -258,9 +258,9 @@ fn untyped(expr: &Expr, variants: bool) -> bool {
         ExprKind::ContextVariant(..) => variants,
         ExprKind::Unary(_, operand) | ExprKind::Comptime(operand) => untyped(operand, variants),
         // A comparison is a `bool` whatever its operands are.
-        ExprKind::Binary(op, _, _) if op.is_comparison() => false,
-        ExprKind::Binary(op, lhs, _) if op.is_shift() => untyped(lhs, variants),
-        ExprKind::Binary(_, lhs, rhs) => untyped(lhs, variants) && untyped(rhs, variants),
+        ExprKind::Binary(op, _, _, _) if op.is_comparison() => false,
+        ExprKind::Binary(op, lhs, _, _) if op.is_shift() => untyped(lhs, variants),
+        ExprKind::Binary(_, lhs, rhs, _) => untyped(lhs, variants) && untyped(rhs, variants),
         _ => false,
     }
 }
@@ -458,23 +458,22 @@ impl Checker<'_, '_> {
     }
 
     /// Parameters carry values, so `()` and `!` make no sense there; the entry
-    /// and panic functions are called by no one and take none.
+    /// function is called by no one and takes none, and the panic function
+    /// takes none or one `*const core::PanicInfo` (ADR 0053).
     fn params(&mut self, f: &Fn) {
-        if f.kind != FnKind::Plain
+        if f.kind == FnKind::Entry
             && let Some(first) = f.params().first()
         {
-            let what = if f.kind == FnKind::Entry {
-                "entry"
-            } else {
-                "panic"
-            };
             self.q.diags.push(
                 Diagnostic::error(
                     "ty::special-fn-params",
-                    format!("the {what} function takes no parameters"),
+                    "the entry function takes no parameters",
                 )
                 .label(first.span, "parameter here"),
             );
+        }
+        if f.kind == FnKind::Panic {
+            self.panic_params(f);
         }
         for param in f.params() {
             if matches!(param.ty, Ty::Unit | Ty::Never) {
@@ -487,6 +486,41 @@ impl Checker<'_, '_> {
                 );
             }
         }
+    }
+
+    /// The panic function takes no parameter, or one through which it
+    /// learns where and why the program panicked: exactly a
+    /// `*const core::PanicInfo`, since the information is read-only
+    /// (ADR 0053).
+    fn panic_params(&mut self, f: &Fn) {
+        let label = match f.params() {
+            [] => return,
+            [param] => {
+                let ty = self.norm(param.ty);
+                let info = self.q.hir.panic_info;
+                match ty {
+                    Ty::Ptr(Ptr {
+                        mutable: false,
+                        volatile: false,
+                        pointee: Ty::Struct(s),
+                    }) if s.id == info => return,
+                    // Reported where the type is written.
+                    Ty::Error => return,
+                    _ => (param.span, format!("has type `{ty}`")),
+                }
+            }
+            [_, second, ..] => (second.span, "a second parameter".to_owned()),
+        };
+        self.q.diags.push(
+            Diagnostic::error(
+                "ty::panic-param",
+                "the panic function takes no parameter or one `*const core::PanicInfo`",
+            )
+            .label(label.0, label.1)
+            .help(
+                "declare it `panic fn on_panic() -> !`, or `panic fn on_panic(info: *const core::PanicInfo) -> !` to learn where and why the program panicked, from read-only data (ADR 0053)",
+            ),
+        );
     }
 
     /// A block without a tail whose type is not the expected one.
@@ -692,13 +726,13 @@ impl Checker<'_, '_> {
             }
             ExprKind::Call { callee, args } => self.call(f, expr, *callee, args),
             ExprKind::Unary(op, operand) => self.unary(f, expr, *op, operand, expected),
-            ExprKind::Binary(op, lhs, rhs) if op.is_shift() => {
+            ExprKind::Binary(op, lhs, rhs, _) if op.is_shift() => {
                 let lhs_ty = self.check(f, lhs, expected);
                 self.require(lhs, lhs_ty, op.symbol(), Operands::Int);
                 self.shift_amount(f, rhs, lhs_ty, op.symbol());
                 lhs_ty
             }
-            ExprKind::Binary(op, lhs, rhs) if op.is_comparison() => {
+            ExprKind::Binary(op, lhs, rhs, _) if op.is_comparison() => {
                 // Both sides have one type, never converted (ADR 0008),
                 // except that pointers may differ in mutability (ADR 0024).
                 let equality = matches!(op, BinOp::Eq | BinOp::Ne).then_some(Equality {
@@ -717,7 +751,7 @@ impl Checker<'_, '_> {
                 self.require(expr, ty, op.symbol(), allowed);
                 Ty::Bool
             }
-            ExprKind::Binary(op, lhs, rhs) => {
+            ExprKind::Binary(op, lhs, rhs, _) => {
                 let ty = self.same_type_operands(f, lhs, rhs, expected, |ty| ty);
                 let allowed = if op.is_bitwise() {
                     Operands::IntOrBool
@@ -758,7 +792,7 @@ impl Checker<'_, '_> {
                 self.check(f, value, Some(place_ty));
                 Ty::Unit
             }
-            ExprKind::CompoundAssign(op, place, value) => {
+            ExprKind::CompoundAssign(op, place, value, _) => {
                 let place_ty = self.place(f, place);
                 let allowed = if op.is_bitwise() {
                     Operands::IntOrBool
@@ -2503,7 +2537,7 @@ impl Checker<'_, '_> {
                 let (ty, base_place) = self.base(f, base);
                 self.field(f, expr, ty, base_place, name, *name_span)
             }
-            ExprKind::Index(base, index) => {
+            ExprKind::Index(base, index, _) => {
                 // An array is indexed where it is; anything else is read as
                 // a value, which must be a pointer.
                 let base_place = self.place_info(f, base);
@@ -3407,10 +3441,10 @@ fn expr_label(q: &Queries, f: &Fn, expr: &Expr) -> String {
         ExprKind::Try(_) => "try".to_owned(),
         ExprKind::AddrOf { mutable: true, .. } => "&raw mut".to_owned(),
         ExprKind::AddrOf { mutable: false, .. } => "&raw const".to_owned(),
-        ExprKind::Binary(op, _, _) => format!("binary {}", op.symbol()),
+        ExprKind::Binary(op, _, _, _) => format!("binary {}", op.symbol()),
         ExprKind::Cast(_, ty, _) => format!("as {ty}"),
         ExprKind::Assign(..) => "assign".to_owned(),
-        ExprKind::CompoundAssign(op, _, _) => format!("assign {}=", op.symbol()),
+        ExprKind::CompoundAssign(op, _, _, _) => format!("assign {}=", op.symbol()),
         ExprKind::Block(_) => "block".to_owned(),
         ExprKind::Assert(..) => "assert".to_owned(),
         ExprKind::Len(_) => "len".to_owned(),

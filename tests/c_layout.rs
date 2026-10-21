@@ -7,7 +7,8 @@
 //!
 //! The compiler's layouts come from `--emit=typeck`; each becomes a
 //! `_Static_assert` on `sizeof`, `_Alignof` and `offsetof`, and clang checks
-//! them all. Needs clang, found like `ld.lld`: `EREBOS_CLANG`, then the LLVM
+//! them all. `core::PanicInfo`, which dumps leave out, is checked against
+//! the numbers of ADR 0053 instead, which `core` asserts. Needs clang, found like `ld.lld`: `EREBOS_CLANG`, then the LLVM
 //! we build against (`LLVM_SYS_221_PREFIX`), then `PATH`.
 
 mod common;
@@ -139,6 +140,38 @@ fn struct_layouts_match_c() {
         enums >= 3,
         "found only {enums} enums with payloads in:\n{dump}"
     );
+
+    // `core::PanicInfo`, which dumps leave out with `core` (ADR 0052): its
+    // twin is checked against the layout ADR 0053 gives, which a `comptime`
+    // block of `core` asserts on the compiler's side.
+    let name = "core__PanicInfo";
+    let what = |what: &str| format!("\"{name}: {what} differs from ADR 0053\"");
+    writeln!(
+        checks,
+        "_Static_assert(sizeof(struct {name}) == 28, {});",
+        what("size")
+    )
+    .unwrap();
+    writeln!(
+        checks,
+        "_Static_assert(_Alignof(struct {name}) == 4, {});",
+        what("alignment")
+    )
+    .unwrap();
+    for (field, offset) in [
+        ("file", 0),
+        ("line", 8),
+        ("column", 12),
+        ("reason", 16),
+        ("message", 20),
+    ] {
+        writeln!(
+            checks,
+            "_Static_assert(offsetof(struct {name}, {field}) == {offset}, {});",
+            what(&format!("offset of `{field}`"))
+        )
+        .unwrap();
+    }
 
     let work = Path::new(env!("CARGO_TARGET_TMPDIR")).join("c_layout");
     fs::create_dir_all(&work).unwrap();

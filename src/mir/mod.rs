@@ -71,13 +71,18 @@ impl Mir {
         &self.bodies[id.0 as usize]
     }
 
-    /// Leaves out the bodies marked in `left_out`, as dumps leave `core`
-    /// out (ADR 0052). One that a body kept calls stays as a declaration,
-    /// as an `extern fn` would be, so that the call still names it; the
-    /// others go, and the bodies kept are renumbered.
-    pub fn leave_out(&mut self, left_out: &[bool]) {
+    /// Leaves out what `left_out` marks, as dumps leave `core` out
+    /// (ADR 0052). A body that a body kept calls stays as a declaration, as
+    /// an `extern fn` would be, so that the call still names it; the other
+    /// bodies marked go. A static or byte string marked stays if what is
+    /// kept points to it. Read-only data that only the bodies left out use
+    /// goes with them. What is kept is renumbered.
+    pub fn leave_out(&mut self, left_out: &LeftOut) {
         let mut called = vec![false; self.bodies.len()];
-        for (_, body) in self.bodies().filter(|(id, _)| !left_out[id.0 as usize]) {
+        for (_, body) in self
+            .bodies()
+            .filter(|(id, _)| !left_out.bodies[id.0 as usize])
+        {
             for block in &body.blocks {
                 for statement in &block.statements {
                     if let Statement::Call { callee, .. } = statement {
@@ -86,14 +91,69 @@ impl Mir {
                 }
             }
         }
+
+        // The data and statics that the bodies kept whole use.
+        let mut data_kept = vec![false; self.data.len()];
+        let mut data_dropped = vec![false; self.data.len()];
+        let mut statics_used = vec![false; self.statics.len()];
+        for (i, body) in self.bodies.iter_mut().enumerate() {
+            let used = if left_out.bodies[i] {
+                &mut data_dropped
+            } else {
+                &mut data_kept
+            };
+            for local in &body.locals {
+                if let Some(data) = local.constant {
+                    used[data.0 as usize] = true;
+                }
+            }
+            body.for_each_site(&mut |site| used[site.info.0 as usize] = true);
+            if !left_out.bodies[i] {
+                body.for_each_site(&mut |site| statics_used[site.file.def().id.0 as usize] = true);
+                body.for_each_operand(&mut |operand| {
+                    if let Operand::Const(Const::Static(s)) = operand {
+                        statics_used[s.def().id.0 as usize] = true;
+                    }
+                });
+            }
+        }
+        // Data no body uses, if any, stays as it was.
+        let data_keep: Vec<bool> = (data_kept.iter().zip(&data_dropped))
+            .map(|(&kept, &dropped)| kept || !dropped)
+            .collect();
+        for (data, _) in self.data.iter().zip(&data_keep).filter(|(_, keep)| **keep) {
+            for relocation in &data.relocations {
+                statics_used[relocation.target.0 as usize] = true;
+            }
+        }
+        // A static kept may point to one marked, which is then kept too.
+        let mut statics_keep: Vec<bool> = (left_out.statics.iter().zip(&statics_used))
+            .map(|(&marked, &used)| !marked || used)
+            .collect();
+        loop {
+            let mut changed = false;
+            for (i, s) in self.statics.iter().enumerate() {
+                if !statics_keep[i] {
+                    continue;
+                }
+                for relocation in &s.relocations {
+                    let target = relocation.target.0 as usize;
+                    changed |= !std::mem::replace(&mut statics_keep[target], true);
+                }
+            }
+            if !changed {
+                break;
+            }
+        }
+
         let mut ids = Vec::with_capacity(self.bodies.len());
         let mut kept = Vec::new();
         for (i, mut body) in std::mem::take(&mut self.bodies).into_iter().enumerate() {
-            if left_out[i] && !called[i] {
+            if left_out.bodies[i] && !called[i] {
                 ids.push(None);
                 continue;
             }
-            if left_out[i] {
+            if left_out.bodies[i] {
                 body.external = true;
                 body.runtime = false;
                 body.blocks.clear();
@@ -115,7 +175,87 @@ impl Mir {
         self.entry = new_id(self.entry);
         self.panic = new_id(self.panic);
         self.bodies = kept;
+
+        self.structs = unmarked(std::mem::take(&mut self.structs), &left_out.structs);
+        self.enums = unmarked(std::mem::take(&mut self.enums), &left_out.enums);
+
+        // Statics and data, renumbered.
+        let mut statics = Vec::new();
+        let mut new_statics = Vec::with_capacity(self.statics.len());
+        for (s, keep) in std::mem::take(&mut self.statics)
+            .into_iter()
+            .zip(statics_keep)
+        {
+            if keep {
+                let def = s.def.renumbered(StaticId(statics.len() as u32));
+                new_statics.push(Some(def));
+                statics.push(Static { def, ..s });
+            } else {
+                new_statics.push(None);
+            }
+        }
+        let new_static = |s: StaticRef| {
+            new_statics[s.def().id.0 as usize].expect("what is kept points only to statics kept")
+        };
+        let mut data_ids = Vec::with_capacity(self.data.len());
+        let mut data = Vec::new();
+        for (d, keep) in std::mem::take(&mut self.data).into_iter().zip(data_keep) {
+            data_ids.push(keep.then_some(DataId(data.len() as u32)));
+            if keep {
+                data.push(d);
+            }
+        }
+        let relocations = (statics.iter_mut().map(|s| &mut s.relocations))
+            .chain(data.iter_mut().map(|d| &mut d.relocations));
+        for relocations in relocations {
+            for relocation in relocations {
+                let target = new_statics[relocation.target.0 as usize]
+                    .expect("what is kept points only to statics kept");
+                relocation.target = target.def().id;
+            }
+        }
+        for body in &mut self.bodies {
+            for local in &mut body.locals {
+                if let Some(id) = &mut local.constant {
+                    *id = data_ids[id.0 as usize].expect("a body kept uses only data kept");
+                }
+            }
+            body.for_each_site(&mut |site| {
+                site.info =
+                    data_ids[site.info.0 as usize].expect("a body kept uses only data kept");
+                site.file = new_static(site.file);
+            });
+            body.for_each_operand(&mut |operand| {
+                if let Operand::Const(Const::Static(s)) = operand {
+                    *s = new_static(*s);
+                }
+            });
+        }
+        self.statics = statics;
+        self.data = data;
     }
+}
+
+/// The items of `list` that `marks` does not mark; those past its end are
+/// not marked.
+fn unmarked<T>(list: Vec<T>, marks: &[bool]) -> Vec<T> {
+    let marks = marks.iter().copied().chain(std::iter::repeat(false));
+    (list.into_iter().zip(marks))
+        .filter(|&(_, marked)| !marked)
+        .map(|(item, _)| item)
+        .collect()
+}
+
+/// What dumps leave out of the MIR: the parts of `core` (ADR 0052), each
+/// list a mask over the MIR's list of its kind.
+pub struct LeftOut {
+    pub bodies: Vec<bool>,
+    pub structs: Vec<bool>,
+    /// Over the declared enums, which `Mir::enums` lists first; the
+    /// `Option(T)` and `Result(T, E)` after them are kept.
+    pub enums: Vec<bool>,
+    /// Over the statics, then the byte strings.
+    pub statics: Vec<bool>,
 }
 
 #[derive(Clone, Debug)]
@@ -167,6 +307,54 @@ impl Body {
 
     pub fn local_ty(&self, local: Local) -> Ty {
         self.locals[local.0 as usize].ty
+    }
+
+    /// Calls `f` on every operand of its statements and terminators.
+    fn for_each_operand(&mut self, f: &mut impl FnMut(&mut Operand)) {
+        for block in &mut self.blocks {
+            for statement in &mut block.statements {
+                match statement {
+                    Statement::Assign(_, rvalue) => match rvalue {
+                        Rvalue::Use(operand)
+                        | Rvalue::Unary(_, operand)
+                        | Rvalue::Cast(operand, _) => f(operand),
+                        Rvalue::Binary(_, lhs, rhs) => {
+                            f(lhs);
+                            f(rhs);
+                        }
+                        Rvalue::Slice { ptr, len } => {
+                            f(ptr);
+                            f(len);
+                        }
+                        Rvalue::AddressOf { .. }
+                        | Rvalue::SliceAddress(_)
+                        | Rvalue::SliceLen(_) => {}
+                    },
+                    Statement::Call { args, .. } => args.iter_mut().for_each(&mut *f),
+                }
+            }
+            match &mut block.terminator {
+                Terminator::If { cond: operand, .. }
+                | Terminator::Switch { discr: operand, .. }
+                | Terminator::Panic(PanicCause::AssertionFailed(Some((operand, _))), _) => {
+                    f(operand)
+                }
+                Terminator::Goto(_)
+                | Terminator::Return
+                | Terminator::Unreachable
+                | Terminator::Panic(..) => {}
+            }
+        }
+    }
+
+    /// Calls `f` on where each check is, if the panic function learns it
+    /// (ADR 0053).
+    fn for_each_site(&mut self, f: &mut impl FnMut(&mut PanicSite)) {
+        for block in &mut self.blocks {
+            if let Terminator::Panic(_, Some(site)) = &mut block.terminator {
+                f(site);
+            }
+        }
     }
 
     pub fn place_ty(&self, place: Place) -> Ty {
@@ -237,6 +425,7 @@ pub struct Relocation {
 pub struct StaticId(pub u32);
 
 /// What MIR knows of a static (ADR 0030); its memory is a [`Static`].
+#[derive(Clone)]
 pub struct StaticDef {
     pub id: StaticId,
     /// Its symbol (ADR 0030, 0051), as a function's; for a byte string,
@@ -306,6 +495,17 @@ impl StaticRef {
 
     pub fn def(self) -> &'static StaticDef {
         self.0
+    }
+
+    /// The same static, numbered `id`: itself if it is already.
+    fn renumbered(self, id: StaticId) -> StaticRef {
+        if self.0.id == id {
+            return self;
+        }
+        StaticRef(Box::leak(Box::new(StaticDef {
+            id,
+            ..self.0.clone()
+        })))
     }
 }
 
@@ -740,8 +940,23 @@ pub enum Terminator {
     /// Control never reaches the end of this block.
     Unreachable,
     /// A check failed: calls the panic function (ADR 0014), which never
-    /// returns.
-    Panic(PanicCause),
+    /// returns. When the panic function takes a `*const core::PanicInfo`,
+    /// with where the check is, whose information the call passes
+    /// (ADR 0053).
+    Panic(PanicCause, Option<PanicSite>),
+}
+
+/// Where a check is, as the panic function learns it (ADR 0053).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PanicSite {
+    /// The check's `core::PanicInfo`, in read-only data of its own, whose
+    /// address the call passes.
+    pub info: DataId,
+    /// What the data holds, for dumps: the byte string naming the file,
+    /// which its `file` points to, its `line` and its `column`.
+    pub file: StaticRef,
+    pub line: u32,
+    pub column: u32,
 }
 
 /// Why the compiler's own checks call the panic function.
@@ -767,6 +982,16 @@ impl PanicCause {
             PanicCause::IndexOutOfBounds => "index out of bounds",
             PanicCause::AssertionFailed(_) => "assertion failed",
             PanicCause::NoVariant => "enum value is no variant",
+        }
+    }
+
+    /// The variant of `core::PanicReason` that names it (ADR 0053).
+    pub fn reason(self) -> &'static str {
+        match self {
+            PanicCause::DivisionByZero => "DivisionByZero",
+            PanicCause::IndexOutOfBounds => "IndexOutOfBounds",
+            PanicCause::AssertionFailed(_) => "AssertionFailed",
+            PanicCause::NoVariant => "NoVariant",
         }
     }
 }
@@ -889,10 +1114,25 @@ impl Mir {
             }
             Terminator::Return => f.write_str("return"),
             Terminator::Unreachable => f.write_str("unreachable"),
-            Terminator::Panic(PanicCause::AssertionFailed(Some((message, _)))) => {
-                write!(f, "panic(assertion failed, {message})")
+            Terminator::Panic(cause, site) => {
+                write!(f, "panic({}", cause.describe())?;
+                if let PanicCause::AssertionFailed(Some((message, _))) = cause {
+                    write!(f, ", {message}")?;
+                }
+                // The data passed, and the location it holds (ADR 0053).
+                if let Some(site) = site {
+                    let file = site.file.def().byte_string.as_ref().expect("a byte string");
+                    write!(
+                        f,
+                        ", data{} at {}:{}:{}",
+                        site.info.0,
+                        String::from_utf8_lossy(file),
+                        site.line,
+                        site.column
+                    )?;
+                }
+                f.write_str(")")
             }
-            Terminator::Panic(cause) => write!(f, "panic({})", cause.describe()),
         }
     }
 

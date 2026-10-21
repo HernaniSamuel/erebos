@@ -487,7 +487,9 @@ impl Interp<'_, '_> {
             Terminator::Unreachable => {
                 unreachable!("control never reaches `unreachable` in well-typed MIR (ADR 0034)")
             }
-            Terminator::Panic(cause) => {
+            // The panic function's body never runs at compile time, so no
+            // panic information is read (ADR 0053).
+            Terminator::Panic(cause, _) => {
                 let (code, message) = match cause {
                     PanicCause::AssertionFailed(None) => {
                         ("eval::assertion-failed", "assertion failed".to_owned())

@@ -56,6 +56,7 @@ pub fn build_expr_body(q: &mut Queries, id: hir::FnId, expr: &hir::Expr) -> Opti
     let ret = q.mir_ty(ty);
     let mut builder = Builder::new(q, id, ret);
     builder.span = expr.span;
+    builder.located = false;
     let start = builder.new_block();
     builder.current = Some(start);
     let value = builder.expr(expr);
@@ -85,6 +86,10 @@ struct Builder<'a, 'h> {
     failed: bool,
     /// Whether the checks of ADR 0032 apply: off in code that cannot run.
     checks: bool,
+    /// Whether the compiler's checks pass where they are to the panic
+    /// function: when it takes the information, in code of the program;
+    /// code run at compile time never calls it (ADR 0053).
+    located: bool,
     /// Values known at compile time, by expression.
     known: HashMap<hir::ExprId, Known>,
     /// The values of the constants and `comptime` expressions used, asked
@@ -161,12 +166,14 @@ impl<'a, 'h> Builder<'a, 'h> {
     fn new(q: &'a mut Queries<'h>, fn_id: hir::FnId, ret: Ty) -> Builder<'a, 'h> {
         let hir = q.hir;
         let f = hir.fn_(fn_id);
+        let located = f.comptime.is_none() && q.takes_panic_info();
         let mut builder = Builder {
             q,
             fn_id,
             span: f.span,
             failed: false,
             checks: true,
+            located,
             known: HashMap::new(),
             const_values: HashMap::new(),
             comptime_values: HashMap::new(),
@@ -506,7 +513,7 @@ impl Builder<'_, '_> {
                 let operand = self.expr(operand);
                 self.temp(ty, Rvalue::Unary(*op, operand))
             }
-            hir::ExprKind::Binary(op, lhs, rhs) => {
+            hir::ExprKind::Binary(op, lhs, rhs, op_span) => {
                 let mut lhs_value = self.expr(lhs);
                 // Reading a local is deferred to where its operand is used;
                 // if evaluating the right side could assign it, read now.
@@ -524,7 +531,7 @@ impl Builder<'_, '_> {
                 let reported = self.check_divisor(*op, rhs);
                 let rhs = rhs_value;
                 if matches!(op, BinOp::Div | BinOp::Rem) && !reported {
-                    self.divide(*op, lhs, rhs, ty)
+                    self.divide(*op, lhs, rhs, ty, *op_span)
                 } else {
                     self.temp(ty, Rvalue::Binary(*op, lhs, rhs))
                 }
@@ -586,7 +593,7 @@ impl Builder<'_, '_> {
                 self.assign(place, Rvalue::Use(value));
                 Operand::Const(Const::Unit)
             }
-            hir::ExprKind::CompoundAssign(op, place, value_expr) => {
+            hir::ExprKind::CompoundAssign(op, place, value_expr, op_span) => {
                 let value = self.expr(value_expr);
                 let place = self.place(place);
                 if op.is_shift() {
@@ -596,7 +603,7 @@ impl Builder<'_, '_> {
                 let reported = self.check_divisor(*op, value_expr);
                 if matches!(op, BinOp::Div | BinOp::Rem) && !reported {
                     let ty = self.operand_ty(Operand::Copy(place));
-                    let quotient = self.divide(*op, Operand::Copy(place), value, ty);
+                    let quotient = self.divide(*op, Operand::Copy(place), value, ty, *op_span);
                     self.assign(place, Rvalue::Use(quotient));
                 } else {
                     self.assign(place, Rvalue::Binary(*op, Operand::Copy(place), value));
@@ -605,7 +612,8 @@ impl Builder<'_, '_> {
             }
             hir::ExprKind::Assert(cond, None) => {
                 let cond = self.expr(cond);
-                self.panic_unless(cond, PanicCause::AssertionFailed(None));
+                // Located at `assert`, where the expression starts.
+                self.panic_unless(cond, PanicCause::AssertionFailed(None), expr.span);
                 Operand::Const(Const::Unit)
             }
             hir::ExprKind::Assert(cond_expr, Some(message)) => {
@@ -624,8 +632,14 @@ impl Builder<'_, '_> {
                     });
                     self.current = Some(fail_bb);
                     let value = self.checked_if(!holds, |this| this.expr(message));
-                    let cause = PanicCause::AssertionFailed(Some((value, message.span)));
-                    self.terminate(Terminator::Panic(cause));
+                    if self.current.is_some() {
+                        // The information passed is read-only data, as for
+                        // an `assert` without a message: its message is
+                        // empty.
+                        let cause = PanicCause::AssertionFailed(Some((value, message.span)));
+                        let panic = self.panic(cause, expr.span);
+                        self.terminate(panic);
+                    }
                     self.current = Some(ok_bb);
                 }
                 Operand::Const(Const::Unit)
@@ -701,8 +715,8 @@ impl Builder<'_, '_> {
                 self.current = scope.break_to;
                 self.read_result(result)
             }
-            hir::ExprKind::Match { scrutinee, arms } => self.match_(ty, scrutinee, arms),
-            hir::ExprKind::Try(operand) => self.try_(ty, operand),
+            hir::ExprKind::Match { scrutinee, arms } => self.match_(ty, scrutinee, arms, expr.span),
+            hir::ExprKind::Try(operand) => self.try_(ty, operand, expr.span),
             hir::ExprKind::Break { target, value } => {
                 let value = value.as_ref().map(|v| self.expr(v));
                 let index = self.loop_index(*target);
@@ -760,8 +774,10 @@ impl Builder<'_, '_> {
     /// only the arm it takes is checked (ADR 0032). On an enum with
     /// payloads, a switch on the tag starts, for each variant the arms
     /// name, the chain of the alternatives naming it, tested in arm order
-    /// (ADR 0042). Either way, each arm's expression is built once.
-    fn match_(&mut self, ty: Ty, scrutinee: &hir::Expr, arms: &[hir::Arm]) -> Operand {
+    /// (ADR 0042). Either way, each arm's expression is built once. `span`
+    /// is the `match`'s, which starts at the keyword, where the call to the
+    /// panic function is located (ADR 0053).
+    fn match_(&mut self, ty: Ty, scrutinee: &hir::Expr, arms: &[hir::Arm], span: Span) -> Operand {
         let scrutinee_ty = self.ty_of(scrutinee);
         let hir_ty = self.q.tables.expr_ty(scrutinee.id);
         let value = self.expr(scrutinee);
@@ -796,11 +812,11 @@ impl Builder<'_, '_> {
             let Operand::Copy(place) = discr else {
                 unreachable!("an enum with payloads is an aggregate, read from a place")
             };
-            self.chains(place, hir_ty, arms, &blocks);
+            self.chains(place, hir_ty, arms, &blocks, span);
             // No value of an enum with payloads is known (ADR 0039).
             None
         } else {
-            self.switch(scrutinee, scrutinee_ty, discr, arms, &blocks)
+            self.switch(scrutinee, scrutinee_ty, discr, arms, &blocks, span)
         };
 
         let result = self.result_place(ty);
@@ -831,8 +847,9 @@ impl Builder<'_, '_> {
     /// for `None` or `Err`, to one that builds `.None` or `.Err(x)` in the
     /// return place and returns; and for a tag that is no variant, to the
     /// panic function, as a `match` without a catch-all arm does
-    /// (ADR 0036, 0040).
-    fn try_(&mut self, ty: Ty, operand: &hir::Expr) -> Operand {
+    /// (ADR 0036, 0040), located at the `?`, the last byte of `span`, the
+    /// expression's (ADR 0053).
+    fn try_(&mut self, ty: Ty, operand: &hir::Expr, span: Span) -> Operand {
         let operand_ty = self.ty_of(operand);
         let hir::Ty::Enum(e) = self.q.tables.expr_ty(operand.id) else {
             // `!`: nothing follows the operand.
@@ -863,7 +880,11 @@ impl Builder<'_, '_> {
         let (success, failure) = builtin.try_variants();
         let success_bb = self.new_block();
         let failure_bb = self.new_block();
-        let panic_bb = self.panic_block();
+        let question = Span {
+            lo: span.hi - 1,
+            ..span
+        };
+        let panic_bb = self.panic_block(question);
         // Known without evaluation (ADR 0045).
         let tag = |this: &mut Self, id: hir::EnumId, index: u32| {
             this.discriminant(id, index)
@@ -923,7 +944,8 @@ impl Builder<'_, '_> {
 
     /// The switch of a `match` on `discr`, an integer, `bool` or enum
     /// without payloads, of type `ty`, to the `blocks` of its arms; returns
-    /// the arm a known scrutinee takes, as `known_arm` does.
+    /// the arm a known scrutinee takes, as `known_arm` does. A call to the
+    /// panic function is located at `at` (ADR 0053).
     fn switch(
         &mut self,
         scrutinee: &hir::Expr,
@@ -931,6 +953,7 @@ impl Builder<'_, '_> {
         discr: Operand,
         arms: &[hir::Arm],
         blocks: &[BasicBlock],
+        at: Span,
     ) -> Option<Option<usize>> {
         let is_enum = matches!(self.q.tables.expr_ty(scrutinee.id), hir::Ty::Enum(_));
         // For each arm, the values its alternatives match, `None` for every
@@ -971,11 +994,12 @@ impl Builder<'_, '_> {
         if let Some(block) = unlisted {
             self.current = Some(block);
             // Never assumed to hold a variant (ADR 0036).
-            self.terminate(if is_enum {
-                Terminator::Panic(PanicCause::NoVariant)
+            let end = if is_enum {
+                self.panic(PanicCause::NoVariant, at)
             } else {
                 Terminator::Unreachable
-            });
+            };
+            self.terminate(end);
         }
         taken
     }
@@ -992,7 +1016,15 @@ impl Builder<'_, '_> {
     /// variant. Without a catch-all arm, the default and every chain share
     /// one block calling the panic function. A `let` catch-all arm is
     /// entered at one block, which copies the scrutinee into its variable.
-    fn chains(&mut self, scrutinee: Place, ty: hir::Ty, arms: &[hir::Arm], blocks: &[BasicBlock]) {
+    /// The call to the panic function is located at `at` (ADR 0053).
+    fn chains(
+        &mut self,
+        scrutinee: Place,
+        ty: hir::Ty,
+        arms: &[hir::Arm],
+        blocks: &[BasicBlock],
+        at: Span,
+    ) {
         let hir::Ty::Enum(e) = ty else {
             unreachable!("chains test enums with payloads")
         };
@@ -1028,7 +1060,7 @@ impl Builder<'_, '_> {
         });
         // Without a catch-all arm, the default and the end of every chain
         // are one block calling the panic function.
-        let end = entry.unwrap_or_else(|| self.panic_block());
+        let end = entry.unwrap_or_else(|| self.panic_block(at));
         let mut cases = Vec::with_capacity(chains.len());
         for (_, chain) in chains {
             let value = self
@@ -1234,12 +1266,21 @@ impl Builder<'_, '_> {
     }
 
     /// A new block that calls the panic function for a value that is no
-    /// variant (ADR 0036), leaving the current block as it is.
-    fn panic_block(&mut self) -> BasicBlock {
+    /// variant (ADR 0036), located at `at` (ADR 0053), leaving the current
+    /// block as it is.
+    fn panic_block(&mut self, at: Span) -> BasicBlock {
         let block = self.new_block();
-        self.blocks[block.0 as usize].terminator =
-            Some((Terminator::Panic(PanicCause::NoVariant), self.span));
+        let panic = self.panic(PanicCause::NoVariant, at);
+        self.blocks[block.0 as usize].terminator = Some((panic, self.span));
         block
+    }
+
+    /// The call to the panic function for `cause`, from the check located
+    /// at the first byte of `at`: with its information when the panic
+    /// function takes it (ADR 0053).
+    fn panic(&mut self, cause: PanicCause, at: Span) -> Terminator {
+        let site = self.located.then(|| self.q.panic_site(cause, at));
+        Terminator::Panic(cause, site)
     }
 
     /// `Enum::Variant` or `Enum::Variant(args)`, of type `ty`. Without
@@ -1359,8 +1400,9 @@ impl Builder<'_, '_> {
     /// - for signed types, a divisor of -1 gives `-lhs` (so `MIN / -1` wraps
     ///   to `MIN`) and a remainder of 0, never reaching the division.
     ///
-    /// Checks that a constant divisor makes pointless are left out.
-    fn divide(&mut self, op: BinOp, lhs: Operand, rhs: Operand, ty: Ty) -> Operand {
+    /// Checks that a constant divisor makes pointless are left out. The
+    /// check is located at `at`, the operator (ADR 0053).
+    fn divide(&mut self, op: BinOp, lhs: Operand, rhs: Operand, ty: Ty, at: Span) -> Operand {
         let Ty::Int(int) = ty else {
             unreachable!("division of `{ty}`")
         };
@@ -1375,7 +1417,8 @@ impl Builder<'_, '_> {
         // A known zero divisor is rejected where it can run (ADR 0032); in
         // code that cannot, this keeps the `Div`/`Rem` left in MIR valid.
         if constant == Some(0) {
-            self.terminate(Terminator::Panic(PanicCause::DivisionByZero));
+            let panic = self.panic(PanicCause::DivisionByZero, at);
+            self.terminate(panic);
             return Operand::Const(Const::Int(0, int));
         }
         if constant.is_none() {
@@ -1389,7 +1432,8 @@ impl Builder<'_, '_> {
                 else_: ok_bb,
             });
             self.current = Some(panic_bb);
-            self.terminate(Terminator::Panic(PanicCause::DivisionByZero));
+            let panic = self.panic(PanicCause::DivisionByZero, at);
+            self.terminate(panic);
             self.current = Some(ok_bb);
         }
 
@@ -1570,8 +1614,9 @@ impl Builder<'_, '_> {
         self.current = Some(exit);
     }
 
-    /// Continues only if `ok` is true; otherwise calls the panic function.
-    fn panic_unless(&mut self, ok: Operand, cause: PanicCause) {
+    /// Continues only if `ok` is true; otherwise calls the panic function,
+    /// from the check located at `at` (ADR 0053).
+    fn panic_unless(&mut self, ok: Operand, cause: PanicCause, at: Span) {
         if self.current.is_none() {
             return;
         }
@@ -1583,7 +1628,8 @@ impl Builder<'_, '_> {
             else_: panic_bb,
         });
         self.current = Some(panic_bb);
-        self.terminate(Terminator::Panic(cause));
+        let panic = self.panic(cause, at);
+        self.terminate(panic);
         self.current = Some(ok_bb);
     }
 
@@ -1760,19 +1806,19 @@ impl Builder<'_, '_> {
             hir::ExprKind::Deref(pointer) => self
                 .pointer_place(pointer, later_writes)
                 .project(PlaceElem::Deref),
-            hir::ExprKind::Index(base, index) => {
+            hir::ExprKind::Index(base, index, open) => {
                 let later_writes = later_writes || !is_simple(index);
                 match self.ty_of(base) {
                     Ty::Array(_, len) => {
                         let base = self.place_then(base, later_writes, address);
-                        let elem = self.array_index(index, len);
+                        let elem = self.array_index(index, len, *open);
                         base.project(elem)
                     }
                     Ty::Slice(_) => {
                         let hir::ExprKind::Deref(pointer) = &base.kind else {
                             unreachable!("only what a slice points to has type `[T]`")
                         };
-                        self.slice_index(pointer, index, later_writes)
+                        self.slice_index(pointer, index, later_writes, *open)
                     }
                     _ => {
                         let base = self.pointer_place(base, later_writes);
@@ -1834,8 +1880,9 @@ impl Builder<'_, '_> {
 
     /// The projection to element `index` of an array of `len` elements,
     /// after checking the bounds (ADR 0021): an index known at compile time
-    /// while building, any other at run time (ADR 0032).
-    fn array_index(&mut self, index: &hir::Expr, len: u64) -> PlaceElem {
+    /// while building, any other at run time (ADR 0032), located at `at`,
+    /// the `[` (ADR 0053).
+    fn array_index(&mut self, index: &hir::Expr, len: u64, at: Span) -> PlaceElem {
         self.check_index(index, len);
         if let hir::ExprKind::Int(value) = index.kind
             && value < len
@@ -1852,15 +1899,22 @@ impl Builder<'_, '_> {
                 Operand::Const(Const::Int(len, usize_ty)),
             ),
         );
-        self.panic_unless(in_bounds, PanicCause::IndexOutOfBounds);
+        self.panic_unless(in_bounds, PanicCause::IndexOutOfBounds, at);
         PlaceElem::Index(local)
     }
 
     /// `(*slice)[index]` (ADR 0031): the index is checked against the
     /// length at run time, which is never known while building, and the
     /// element is then reached through the address of the first one, a
-    /// thin pointer of the slice's volatility.
-    fn slice_index(&mut self, slice: &hir::Expr, index: &hir::Expr, later_writes: bool) -> Place {
+    /// thin pointer of the slice's volatility. The check is located at
+    /// `at`, the `[` (ADR 0053).
+    fn slice_index(
+        &mut self,
+        slice: &hir::Expr,
+        index: &hir::Expr,
+        later_writes: bool,
+        at: Span,
+    ) -> Place {
         let slice = self.pointer_place(slice, later_writes);
         let index = self.fixed_index(index);
         let slice_ty = self.place_ty(slice);
@@ -1869,7 +1923,7 @@ impl Builder<'_, '_> {
             Ty::Bool,
             Rvalue::Binary(BinOp::Lt, Operand::Copy(Place::local(index)), len),
         );
-        self.panic_unless(in_bounds, PanicCause::IndexOutOfBounds);
+        self.panic_unless(in_bounds, PanicCause::IndexOutOfBounds, at);
         let address_ty = slice_ty
             .slice_address_ty()
             .expect("only slices point to a `[T]`");

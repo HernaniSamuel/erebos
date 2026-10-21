@@ -1246,8 +1246,14 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                 PassMode::Ignore | PassMode::Indirect => b.build_return(None),
             },
             Terminator::Unreachable => b.build_unreachable(),
-            Terminator::Panic(_) => {
-                b.build_call(self.function(self.panic), &[], "")
+            // With the address of the check's information when the panic
+            // function takes it (ADR 0053).
+            Terminator::Panic(_, site) => {
+                let args: Vec<_> = site
+                    .map(|site| self.data[site.info.0 as usize].into())
+                    .into_iter()
+                    .collect();
+                b.build_call(self.function(self.panic), &args, "")
                     .expect("builder is positioned");
                 b.build_unreachable()
             }

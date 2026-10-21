@@ -1,0 +1,6 @@
+// The sensors, whose readings are in the table of `sensors/table.ers`.
+mod table;
+
+pub fn reading(i: usize) -> u32 {
+    table::raw(i) * 10
+}

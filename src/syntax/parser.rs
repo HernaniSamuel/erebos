@@ -1030,15 +1030,15 @@ impl Parser<'_> {
             if left_bp < min_bp {
                 break;
             }
-            self.bump();
+            let op_span = self.bump().span;
             let rhs = self.expr_bp(right_bp)?;
             let span = lhs.span.to(rhs.span);
             let (l, r) = (Box::new(lhs), Box::new(rhs));
             let kind = match op {
-                Infix::Binary(op) => ExprKind::Binary(op, l, r),
+                Infix::Binary(op) => ExprKind::Binary(op, l, r, op_span),
                 Infix::Logical(op) => ExprKind::Logical(op, l, r),
                 Infix::Assign => ExprKind::Assign(l, r),
-                Infix::CompoundAssign(op) => ExprKind::CompoundAssign(op, l, r),
+                Infix::CompoundAssign(op) => ExprKind::CompoundAssign(op, l, r, op_span),
             };
             lhs = Expr { kind, span };
 
@@ -1119,12 +1119,12 @@ impl Parser<'_> {
     fn postfix(&mut self) -> PResult<Expr> {
         let mut expr = self.primary()?;
         loop {
-            if self.eat(TokenKind::LBracket).is_some() {
+            if let Some(open) = self.eat(TokenKind::LBracket) {
                 let index = self.nested_expr()?;
                 let close = self.expect(TokenKind::RBracket)?;
                 expr = Expr {
                     span: expr.span.to(close.span),
-                    kind: ExprKind::Index(Box::new(expr), Box::new(index)),
+                    kind: ExprKind::Index(Box::new(expr), Box::new(index), open.span),
                 };
             } else if self.eat(TokenKind::Dot).is_some() {
                 let field = self.ident()?;

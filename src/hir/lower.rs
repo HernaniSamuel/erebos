@@ -5,20 +5,27 @@ use std::collections::HashMap;
 use crate::diag::{Diagnostic, Diagnostics};
 use crate::hir::{
     self, Arm, ArrayLen, Block, BuiltinEnum, Comptime, ConstDef, ConstId, CoreStart, EnumDef,
-    EnumId, EnumTy, Expr, ExprId, ExprKind, FieldDef, Fn, FnId, FnKind, Hir, IntTy, Local, LocalId,
-    ModuleDef, ModuleId, NeverInMemory, NeverPosition, Pattern, PatternId, PatternKind, PayloadDef,
-    StaticDef, StaticId, Stmt, StructDef, StructId, StructTy, Ty, UnsizedPosition, UnsizedType,
-    VariantDef, VariantValue, Visibility,
+    EnumId, EnumTy, Expr, ExprId, ExprKind, FieldDef, FileDef, Fn, FnId, FnKind, Hir, IntTy, Local,
+    LocalId, ModuleDef, ModuleId, NeverInMemory, NeverPosition, Pattern, PatternId, PatternKind,
+    PayloadDef, StaticDef, StaticId, Stmt, StructDef, StructId, StructTy, Ty, UnsizedPosition,
+    UnsizedType, VariantDef, VariantValue, Visibility,
 };
 use crate::span::Span;
 use crate::syntax::ast;
 use crate::syntax::parser::builtin_variant_help;
 
 /// Lowers a program, together with `core` (ADR 0052), whose root file is
-/// `core_file`. Returns `None` only when no HIR can be built at all (no
+/// `core_file`. `files` are the source files, by id, `core`'s from index
+/// `core_files` on. Returns `None` only when no HIR can be built at all (no
 /// entry or panic function); other errors are reported and lowering
 /// continues.
-pub fn lower(program: &ast::File, core_file: &ast::File, diags: &mut Diagnostics) -> Option<Hir> {
+pub fn lower(
+    program: &ast::File,
+    core_file: &ast::File,
+    files: Vec<FileDef>,
+    core_files: usize,
+    diags: &mut Diagnostics,
+) -> Option<Hir> {
     // Every item of every module is known before any is lowered, so that
     // items refer to each other in any order. `core` is a module tree of its
     // own, after the program's.
@@ -180,6 +187,7 @@ pub fn lower(program: &ast::File, core_file: &ast::File, diags: &mut Diagnostics
                 never_in_memory: lowerer.never_in_memory.len(),
                 unsized_types: lowerer.unsized_types.len(),
                 applications: lowerer.applications.len(),
+                file: core_files,
             });
         }
         for &(decl, module) in &struct_decls[from.structs..to.structs] {
@@ -263,6 +271,20 @@ pub fn lower(program: &ast::File, core_file: &ast::File, diags: &mut Diagnostics
     // In any module, whatever their visibility (ADR 0049, 0050).
     let entry = find_unique(&fns, FnKind::Entry, diags);
     let panic = find_unique(&fns, FnKind::Panic, diags);
+    // The items of `core`'s root that the compiler knows (ADR 0052).
+    let core_item = |name: &str| match namespaces[core_root.0 as usize].get(name) {
+        Some(Entry {
+            binding: Binding::Def(def),
+            ..
+        }) => *def,
+        _ => unreachable!("`core` declares `{name}` in its root"),
+    };
+    let Def::Struct(panic_info) = core_item("PanicInfo") else {
+        unreachable!("`core::PanicInfo` is a struct")
+    };
+    let Def::Enum(panic_reason) = core_item("PanicReason") else {
+        unreachable!("`core::PanicReason` is an enum")
+    };
 
     Some(Hir {
         modules,
@@ -279,6 +301,9 @@ pub fn lower(program: &ast::File, core_file: &ast::File, diags: &mut Diagnostics
         panic: panic?,
         expr_count,
         core: core.expect("`core` is lowered after the program"),
+        panic_info,
+        panic_reason,
+        files,
     })
 }
 
@@ -2922,15 +2947,15 @@ impl Lowerer<'_> {
                 let ty = self.memory_ty(ty, NeverPosition::LayoutQuery("offset_of"));
                 ExprKind::OffsetOf(ty, field.name.clone(), field.span)
             }
-            ast::ExprKind::Index(base, index) => {
-                ExprKind::Index(self.boxed(base), self.boxed(index))
+            ast::ExprKind::Index(base, index, open) => {
+                ExprKind::Index(self.boxed(base), self.boxed(index), *open)
             }
             ast::ExprKind::AddrOf { mutable, place } => ExprKind::AddrOf {
                 mutable: *mutable,
                 place: self.boxed(place),
             },
-            ast::ExprKind::Binary(op, lhs, rhs) => {
-                ExprKind::Binary(*op, self.boxed(lhs), self.boxed(rhs))
+            ast::ExprKind::Binary(op, lhs, rhs, op_span) => {
+                ExprKind::Binary(*op, self.boxed(lhs), self.boxed(rhs), *op_span)
             }
             ast::ExprKind::Logical(op, lhs, rhs) => {
                 ExprKind::Logical(*op, self.boxed(lhs), self.boxed(rhs))
@@ -2942,8 +2967,8 @@ impl Lowerer<'_> {
             ast::ExprKind::Assign(place, value) => {
                 ExprKind::Assign(self.boxed(place), self.boxed(value))
             }
-            ast::ExprKind::CompoundAssign(op, place, value) => {
-                ExprKind::CompoundAssign(*op, self.boxed(place), self.boxed(value))
+            ast::ExprKind::CompoundAssign(op, place, value, op_span) => {
+                ExprKind::CompoundAssign(*op, self.boxed(place), self.boxed(value), *op_span)
             }
             ast::ExprKind::Block(block) => ExprKind::Block(self.block(block)),
             ast::ExprKind::If { cond, then, else_ } => ExprKind::If {

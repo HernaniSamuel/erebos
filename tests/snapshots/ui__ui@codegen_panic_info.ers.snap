@@ -1,0 +1,201 @@
+---
+source: tests/ui.rs
+assertion_line: 22
+expression: output
+input_file: tests/ui/codegen_panic_info.ers
+---
+--- llvm-ir ---
+; ModuleID = 'erebos'
+source_filename = "erebos"
+target datalayout = "e-m:e-p:32:32-i64:64-n32-S128"
+target triple = "riscv32-unknown-none-elf"
+
+module asm "\09.section .text.start, \22ax\22, @progbits"
+module asm "\09.globl _start"
+module asm "\09.type _start, @function"
+module asm "_start:"
+module asm "\09li sp, 0x88000000"
+module asm "\09la t0, __bss_start"
+module asm "\09la t1, __bss_end"
+module asm ".Lzero_bss:"
+module asm "\09bgeu t0, t1, .Lcopy_data"
+module asm "\09sw zero, 0(t0)"
+module asm "\09addi t0, t0, 4"
+module asm "\09j .Lzero_bss"
+module asm ".Lcopy_data:"
+module asm "\09la t0, __data_start"
+module asm "\09la t1, __data_end"
+module asm "\09la t2, __data_load"
+module asm ".Lcopy_word:"
+module asm "\09bgeu t0, t1, .Lenter"
+module asm "\09lw t3, 0(t2)"
+module asm "\09sw t3, 0(t0)"
+module asm "\09addi t0, t0, 4"
+module asm "\09addi t2, t2, 4"
+module asm "\09j .Lcopy_word"
+module asm ".Lenter:"
+module asm "\09j main"
+
+@bytes = private unnamed_addr constant [22 x i8] c"codegen_panic_info.ers", align 1
+@data0 = private unnamed_addr constant <{ ptr, [24 x i8] }> <{ ptr @bytes, [24 x i8] c"\16\00\00\00\0A\00\00\00\07\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00" }>, align 4
+@data1 = private unnamed_addr constant <{ ptr, [24 x i8] }> <{ ptr @bytes, [24 x i8] c"\16\00\00\00\0E\00\00\00\06\00\00\00\01\00\00\00\00\00\00\00\00\00\00\00" }>, align 4
+
+; Function Attrs: nounwind null_pointer_is_valid
+define i32 @divide(i32 %0, i32 %1) #0 {
+bb0:
+  %2 = icmp eq i32 %1, 0
+  br i1 %2, label %bb1, label %bb2
+
+bb1:                                              ; preds = %bb0
+  call void @on_panic(ptr @data0)
+  unreachable
+
+bb2:                                              ; preds = %bb0
+  %3 = udiv i32 %0, %1
+  ret i32 %3
+}
+
+; Function Attrs: nounwind null_pointer_is_valid
+define zeroext i8 @element(i32 %0, i32 %1) #0 {
+bb0:
+  %2 = alloca i32, align 8
+  %_1 = alloca [4 x i8], align 1
+  store i32 %0, ptr %2, align 4
+  call void @llvm.memcpy.p0.p0.i32(ptr align 1 %_1, ptr align 8 %2, i32 4, i1 false)
+  %3 = icmp ult i32 %1, 4
+  br i1 %3, label %bb1, label %bb2
+
+bb1:                                              ; preds = %bb0
+  %4 = getelementptr i8, ptr %_1, i32 %1
+  %5 = load i8, ptr %4, align 1
+  ret i8 %5
+
+bb2:                                              ; preds = %bb0
+  call void @on_panic(ptr @data1)
+  unreachable
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @main() #1 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @on_panic(ptr %0) #1 {
+bb0:
+  %1 = ptrtoint ptr %0 to i32
+  store volatile i32 %1, ptr inttoptr (i32 268435456 to ptr), align 4
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: readwrite)
+declare void @llvm.memcpy.p0.p0.i32(ptr noalias writeonly captures(none), ptr noalias readonly captures(none), i32, i1 immarg) #2
+
+attributes #0 = { nounwind null_pointer_is_valid }
+attributes #1 = { noreturn nounwind null_pointer_is_valid }
+attributes #2 = { nocallback nofree nounwind willreturn memory(argmem: readwrite) }
+--- llvm-ir -O ---
+; ModuleID = 'erebos'
+source_filename = "erebos"
+target datalayout = "e-m:e-p:32:32-i64:64-n32-S128"
+target triple = "riscv32-unknown-none-elf"
+
+module asm "\09.section .text.start, \22ax\22, @progbits"
+module asm "\09.globl _start"
+module asm "\09.type _start, @function"
+module asm "_start:"
+module asm "\09li sp, 0x88000000"
+module asm "\09la t0, __bss_start"
+module asm "\09la t1, __bss_end"
+module asm ".Lzero_bss:"
+module asm "\09bgeu t0, t1, .Lcopy_data"
+module asm "\09sw zero, 0(t0)"
+module asm "\09addi t0, t0, 4"
+module asm "\09j .Lzero_bss"
+module asm ".Lcopy_data:"
+module asm "\09la t0, __data_start"
+module asm "\09la t1, __data_end"
+module asm "\09la t2, __data_load"
+module asm ".Lcopy_word:"
+module asm "\09bgeu t0, t1, .Lenter"
+module asm "\09lw t3, 0(t2)"
+module asm "\09sw t3, 0(t0)"
+module asm "\09addi t0, t0, 4"
+module asm "\09addi t2, t2, 4"
+module asm "\09j .Lcopy_word"
+module asm ".Lenter:"
+module asm "\09j main"
+
+@bytes = private unnamed_addr constant [22 x i8] c"codegen_panic_info.ers", align 1
+@data0 = private unnamed_addr constant <{ ptr, [24 x i8] }> <{ ptr @bytes, [24 x i8] c"\16\00\00\00\0A\00\00\00\07\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00" }>, align 4
+@data1 = private unnamed_addr constant <{ ptr, [24 x i8] }> <{ ptr @bytes, [24 x i8] c"\16\00\00\00\0E\00\00\00\06\00\00\00\01\00\00\00\00\00\00\00\00\00\00\00" }>, align 4
+
+; Function Attrs: nofree norecurse nounwind null_pointer_is_valid memory(readwrite, target_mem0: none, target_mem1: none)
+define i32 @divide(i32 %0, i32 %1) local_unnamed_addr #0 {
+bb0:
+  %2 = icmp eq i32 %1, 0
+  br i1 %2, label %bb1, label %bb2
+
+bb1:                                              ; preds = %bb0
+  store volatile i32 ptrtoint (ptr @data0 to i32), ptr inttoptr (i32 268435456 to ptr), align 268435456
+  br label %bb1.i
+
+bb1.i:                                            ; preds = %bb1.i, %bb1
+  br label %bb1.i
+
+bb2:                                              ; preds = %bb0
+  %3 = udiv i32 %0, %1
+  ret i32 %3
+}
+
+; Function Attrs: nofree norecurse nounwind null_pointer_is_valid memory(readwrite, target_mem0: none, target_mem1: none)
+define zeroext i8 @element(i32 %0, i32 %1) local_unnamed_addr #0 {
+bb0:
+  %_1 = alloca [4 x i8], align 4
+  store i32 %0, ptr %_1, align 4
+  %2 = icmp ult i32 %1, 4
+  br i1 %2, label %bb1, label %bb2
+
+bb1:                                              ; preds = %bb0
+  %3 = getelementptr i8, ptr %_1, i32 %1
+  %4 = load i8, ptr %3, align 1
+  ret i8 %4
+
+bb2:                                              ; preds = %bb0
+  store volatile i32 ptrtoint (ptr @data1 to i32), ptr inttoptr (i32 268435456 to ptr), align 268435456
+  br label %bb1.i
+
+bb1.i:                                            ; preds = %bb1.i, %bb2
+  br label %bb1.i
+}
+
+; Function Attrs: nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none)
+define void @main() local_unnamed_addr #1 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: nofree norecurse noreturn nounwind null_pointer_is_valid memory(readwrite, target_mem0: none, target_mem1: none)
+define void @on_panic(ptr %0) local_unnamed_addr #2 {
+bb0:
+  %1 = ptrtoint ptr %0 to i32
+  store volatile i32 %1, ptr inttoptr (i32 268435456 to ptr), align 268435456
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+attributes #0 = { nofree norecurse nounwind null_pointer_is_valid memory(readwrite, target_mem0: none, target_mem1: none) }
+attributes #1 = { nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none) }
+attributes #2 = { nofree norecurse noreturn nounwind null_pointer_is_valid memory(readwrite, target_mem0: none, target_mem1: none) }

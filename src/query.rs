@@ -13,8 +13,12 @@ use crate::hir::{
     PatternKind, StaticId, StructId, VariantValue,
 };
 use crate::layout::{self, Composite, EnumLayout, Layout, MAX_ALIGN, MAX_SIZE, StructLayout};
-use crate::mir::{self, BodyId, ConstData, DataId, EnumRef, Field, Mir, Ptr, StaticRef, StructRef};
+use crate::mir::{
+    self, BodyId, ConstData, DataId, EnumRef, Field, LeftOut, Mir, PanicCause, PanicSite, Ptr,
+    StaticRef, StructRef,
+};
 use crate::span::Span;
+use crate::target;
 use crate::ty::{self, Tables};
 
 /// Where a piece of constant data comes from.
@@ -125,8 +129,16 @@ pub struct Queries<'h> {
     /// The MIR view of each static.
     mir_statics: Vec<Option<StaticRef>>,
     /// Each byte string used, as a static numbered after the statics, in
-    /// the order MIR building meets them (ADR 0031).
+    /// the order MIR building meets them (ADR 0031), after the names of the
+    /// files, if any.
     byte_strings: Vec<StaticRef>,
+    /// Whether each byte string is `core`'s (ADR 0052).
+    byte_strings_in_core: Vec<bool>,
+    /// When the panic function takes a `*const core::PanicInfo`, the name of
+    /// each source file, by id, as a byte string its checks point to
+    /// (ADR 0053); the first byte strings, made before any body is built,
+    /// so that their numbers do not depend on the order bodies are built.
+    file_names: Vec<StaticRef>,
     /// The index in `byte_strings` of the byte string at each expression.
     byte_string_ids: HashMap<ExprId, usize>,
     /// The value of each `comptime` expression.
@@ -143,7 +155,7 @@ pub struct Queries<'h> {
 
 impl<'h> Queries<'h> {
     pub fn new(hir: &'h Hir) -> Queries<'h> {
-        Queries {
+        let mut q = Queries {
             hir,
             diags: Diagnostics::default(),
             tables: Tables::new(hir.expr_count),
@@ -167,13 +179,31 @@ impl<'h> Queries<'h> {
             static_aligns: vec![None; hir.statics.len()],
             mir_statics: vec![None; hir.statics.len()],
             byte_strings: Vec::new(),
+            byte_strings_in_core: Vec::new(),
+            file_names: Vec::new(),
             byte_string_ids: HashMap::new(),
             comptime: HashMap::new(),
             values: HashMap::new(),
             data: Vec::new(),
             data_ids: HashMap::new(),
             in_progress: Vec::new(),
+        };
+        // Every file, whether or not it holds a check: that is only known
+        // while building MIR (ADR 0032, 0053).
+        if q.takes_panic_info() {
+            for (i, file) in hir.files.iter().enumerate() {
+                let s = q.new_byte_string(file.name.as_bytes(), i >= hir.core.file);
+                q.file_names.push(s);
+            }
         }
+        q
+    }
+
+    /// Whether the panic function takes a parameter, through which the
+    /// compiler's checks pass a `*const core::PanicInfo` (ADR 0053); one of
+    /// another type was reported.
+    pub fn takes_panic_info(&self) -> bool {
+        self.hir.fn_(self.hir.panic).param_count == 1
     }
 
     /// Checks every item, in source order, whether or not something else
@@ -1178,11 +1208,76 @@ impl<'h> Queries<'h> {
             return self.byte_strings[index];
         }
         let index = self.byte_strings.len();
+        let s = self.new_byte_string(bytes, expr.0 >= self.hir.core.expr);
+        self.byte_string_ids.insert(expr, index);
+        s
+    }
+
+    /// A new byte string holding `bytes`, of `core` or not (ADR 0052).
+    fn new_byte_string(&mut self, bytes: &[u8], in_core: bool) -> StaticRef {
+        let index = self.byte_strings.len();
         let id = mir::StaticId((self.hir.statics.len() + index) as u32);
         let s = StaticRef::byte_string(id, bytes.to_vec());
         self.byte_strings.push(s);
-        self.byte_string_ids.insert(expr, index);
+        self.byte_strings_in_core.push(in_core);
         s
+    }
+
+    /// Where the check that `cause` names is, located at the first byte of
+    /// `at`, as the panic function learns it (ADR 0053): a `PanicInfo` in
+    /// read-only data of its own, its `file` pointing to the byte string
+    /// naming the file, its `message` empty, address 0 and length 0.
+    pub fn panic_site(&mut self, cause: PanicCause, at: Span) -> PanicSite {
+        let hir = self.hir;
+        let (file, line, column) = hir.location(at);
+        let def = hir.struct_(hir.panic_info);
+        let layout = self
+            .struct_layout(hir.panic_info)
+            .expect("`core::PanicInfo` has a layout");
+        let offset = |name: &str| {
+            let index = def.fields.iter().position(|field| field.name == name);
+            layout.offsets[index.expect("a field of `core::PanicInfo`")] as usize
+        };
+        let reason = self.enum_def(hir.panic_reason);
+        let index = reason
+            .variants
+            .iter()
+            .position(|v| v.name == cause.reason());
+        let index = index.expect("a variant of `core::PanicReason`") as u32;
+        let tag = self
+            .discriminant(hir.panic_reason, index)
+            .expect("the variants of `core::PanicReason` have values");
+        let tag_bytes = reason.ty.int.bytes() as usize;
+
+        let mut bytes = vec![0; layout.layout.size as usize];
+        let mut put = |at: usize, value: &[u8]| bytes[at..at + value.len()].copy_from_slice(value);
+        // A slice is its address, then its length (ADR 0031); the address
+        // of the file's name is the linker's to fill in (ADR 0030).
+        let name_len = u32::try_from(file.name.len()).expect("file names are short");
+        put(
+            offset("file") + target::POINTER_BYTES as usize,
+            &name_len.to_le_bytes(),
+        );
+        put(offset("line"), &line.to_le_bytes());
+        put(offset("column"), &column.to_le_bytes());
+        put(offset("reason"), &tag.to_le_bytes()[..tag_bytes]);
+        let file_name = self.file_names[at.file.index()];
+        let info = DataId(self.data.len() as u32);
+        self.data.push(ConstData {
+            bytes,
+            align: layout.layout.align,
+            relocations: vec![mir::Relocation {
+                offset: offset("file") as u32,
+                target: file_name.def().id,
+                addend: 0,
+            }],
+        });
+        PanicSite {
+            info,
+            file: file_name,
+            line,
+            column,
+        }
     }
 
     /// The static numbered `id` in MIR: a static, or a byte string.
@@ -1364,6 +1459,20 @@ impl<'h> Queries<'h> {
             // Reported, such as a field of type `!` (ADR 0034).
             hir::Ty::Error => true,
             _ => false,
+        }
+    }
+
+    /// What dumps leave out of the MIR that `into_mir` makes: the bodies,
+    /// structs, enums, statics and byte strings of `core` (ADR 0052).
+    pub fn core_parts(&self) -> LeftOut {
+        let hir = self.hir;
+        LeftOut {
+            bodies: hir.fns.iter().map(|f| hir.in_core(f.module)).collect(),
+            structs: hir.structs.iter().map(|s| hir.in_core(s.module)).collect(),
+            enums: hir.enums.iter().map(|e| hir.in_core(e.module)).collect(),
+            statics: (hir.statics.iter().map(|s| hir.in_core(s.module)))
+                .chain(self.byte_strings_in_core.iter().copied())
+                .collect(),
         }
     }
 

@@ -6,6 +6,14 @@ use std::fmt;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct FileId(u32);
 
+impl FileId {
+    /// Its position among the files of the source map, which numbers them
+    /// from 0 in the order they are added.
+    pub fn index(self) -> usize {
+        self.0 as usize
+    }
+}
+
 /// A half-open byte range `lo..hi` inside one source file.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Span {

@@ -1,0 +1,13 @@
+// emit: llvm-ir
+// A panic function without a parameter is called without arguments, and no
+// panic information or file name is emitted (ADR 0053).
+fn divide(a: u32, b: u32) -> u32 {
+    a / b
+}
+
+fn element(a: [u8; 4], i: usize) -> u8 {
+    a[i]
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

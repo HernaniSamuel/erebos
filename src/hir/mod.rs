@@ -98,6 +98,48 @@ pub struct Hir {
     pub expr_count: u32,
     /// Where `core` starts.
     pub core: CoreStart,
+    /// `core::PanicInfo` and `core::PanicReason`, which the panic function
+    /// and the compiler's checks use (ADR 0052, 0053).
+    pub panic_info: StructId,
+    pub panic_reason: EnumId,
+    /// Every source file, indexed by its id: the program's in the order of
+    /// ADR 0049, then `core`'s (ADR 0052).
+    pub files: Vec<FileDef>,
+}
+
+/// A source file, as panic locations name it (ADR 0053), with what turns
+/// a span into a line and a column without the source text.
+#[derive(Debug)]
+pub struct FileDef {
+    /// Relative to the root file's directory, with `/` between names
+    /// (ADR 0049): `main.ers`, `uart/regs.ers`; `rt/core.ers` for `core`'s
+    /// root (ADR 0052).
+    pub name: String,
+    /// The offset of the first byte of each line, the first line's 0.
+    pub lines: Vec<u32>,
+}
+
+impl FileDef {
+    /// The file named `name`, holding `text`.
+    pub fn new(name: &str, text: &str) -> FileDef {
+        let starts = text
+            .bytes()
+            .enumerate()
+            .filter(|&(_, byte)| byte == b'\n')
+            .map(|(i, _)| u32::try_from(i + 1).expect("source files are limited to 4 GiB"));
+        FileDef {
+            name: name.to_owned(),
+            lines: std::iter::once(0).chain(starts).collect(),
+        }
+    }
+
+    /// The line and the column of the byte at `offset`, both counted from
+    /// 1, the column in bytes (ADR 0053).
+    pub fn line_column(&self, offset: u32) -> (u32, u32) {
+        let line = self.lines.partition_point(|&start| start <= offset);
+        let column = offset - self.lines[line - 1] + 1;
+        (line as u32, column)
+    }
 }
 
 /// Where `core`'s part starts in the lists of the HIR, whose items are
@@ -111,6 +153,9 @@ pub struct CoreStart {
     pub never_in_memory: usize,
     pub unsized_types: usize,
     pub applications: usize,
+    /// The index of `core`'s root file in `Hir::files`: every file from it
+    /// on is `core`'s.
+    pub file: usize,
 }
 
 impl Hir {
@@ -119,8 +164,19 @@ impl Hir {
         module.0 >= self.core.module.0
     }
 
+    /// Where the first byte of `span` is: its file, its line and its
+    /// column, both counted from 1, the column in bytes (ADR 0053).
+    pub fn location(&self, span: Span) -> (&FileDef, u32, u32) {
+        let file = &self.files[span.file.index()];
+        let (line, column) = file.line_column(span.lo);
+        (file, line, column)
+    }
+
     /// The HIR of the program, as `--emit=hir` shows it: `core` left out
-    /// (ADR 0052). Its fields are those of `Hir`, in its order.
+    /// (ADR 0052). Its fields are those of `Hir`, in its order, but for
+    /// those about `core` (where it starts, the ids of `PanicInfo` and
+    /// `PanicReason`) and the table of files, which only turns the spans
+    /// shown into lines and columns.
     pub fn dump(&self) -> String {
         #[derive(Debug)]
         #[expect(dead_code, reason = "only its `Debug` output is read")]
@@ -897,8 +953,9 @@ pub enum ExprKind {
     Unary(UnOp, Box<Expr>),
     /// `*ptr`
     Deref(Box<Expr>),
-    /// `base[index]`
-    Index(Box<Expr>, Box<Expr>),
+    /// `base[index]`, with the span of the `[`, where the bounds check is
+    /// located (ADR 0053).
+    Index(Box<Expr>, Box<Expr>, Span),
     /// `operand?` (ADR 0046): the payload of an `Option`'s `Some` or a
     /// `Result`'s `Ok`, or else a return of its `.None` or `.Err(x)`.
     Try(Box<Expr>),
@@ -907,12 +964,15 @@ pub enum ExprKind {
         mutable: bool,
         place: Box<Expr>,
     },
-    Binary(BinOp, Box<Expr>, Box<Expr>),
+    /// `lhs op rhs`, with the span of the operator, where a division's
+    /// check is located (ADR 0053).
+    Binary(BinOp, Box<Expr>, Box<Expr>, Span),
     Logical(LogicalOp, Box<Expr>, Box<Expr>),
     /// `expr as ty`; the span is the written type's.
     Cast(Box<Expr>, Ty, Span),
     Assign(Box<Expr>, Box<Expr>),
-    CompoundAssign(BinOp, Box<Expr>, Box<Expr>),
+    /// `place op= value`, with the span of the operator, as `Binary`.
+    CompoundAssign(BinOp, Box<Expr>, Box<Expr>, Span),
     Block(Block),
     If {
         cond: Box<Expr>,
@@ -1055,13 +1115,13 @@ impl Expr {
             | ExprKind::Deref(e)
             | ExprKind::Cast(e, _, _)
             | ExprKind::AddrOf { place: e, .. } => e.walk(f),
-            ExprKind::Binary(_, a, b)
-            | ExprKind::Index(a, b)
+            ExprKind::Binary(_, a, b, _)
+            | ExprKind::Index(a, b, _)
             | ExprKind::Slice(a, b)
             | ExprKind::Assert(a, Some(b))
             | ExprKind::Logical(_, a, b)
             | ExprKind::Assign(a, b)
-            | ExprKind::CompoundAssign(_, a, b) => {
+            | ExprKind::CompoundAssign(_, a, b, _) => {
                 a.walk(f);
                 b.walk(f);
             }
@@ -1098,5 +1158,24 @@ impl Block {
         if let Some(tail) = &self.tail {
             tail.walk(f);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Lines and columns count from 1, the column in bytes, whatever ends
+    /// the lines before (ADR 0053).
+    #[test]
+    fn locations_count_lines_and_byte_columns_from_one() {
+        let file = FileDef::new("main.ers", "ab\n\r\nx / y\nb\"é\" / z");
+        assert_eq!(file.lines, [0, 3, 5, 11]);
+        assert_eq!(file.line_column(0), (1, 1));
+        assert_eq!(file.line_column(2), (1, 3));
+        assert_eq!(file.line_column(3), (2, 1));
+        assert_eq!(file.line_column(7), (3, 3));
+        // `é` takes two bytes.
+        assert_eq!(file.line_column(17), (4, 7));
     }
 }

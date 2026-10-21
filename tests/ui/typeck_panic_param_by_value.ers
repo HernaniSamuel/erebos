@@ -1,0 +1,5 @@
+// emit: typeck
+// The panic information is passed by address, not by value: a
+// `core::PanicInfo` parameter is `ty::panic-param` (ADR 0053).
+entry fn main() -> ! { loop {} }
+panic fn on_panic(info: core::PanicInfo) -> ! { loop {} }

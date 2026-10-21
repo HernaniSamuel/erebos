@@ -1,0 +1,28 @@
+---
+source: tests/ui.rs
+assertion_line: 22
+expression: output
+input_file: tests/ui/typeck_panic_param.ers
+---
+--- typeck ---
+panic fn handler::on_panic(info: *const core::PanicInfo) -> !
+    expr 0 assign 429..440: ()
+    expr 1 local info 429..433: *const core::PanicInfo
+    expr 2 local info 436..440: *const core::PanicInfo
+    expr 3 loop 450..457: !
+fn handler::fail(line: u32) -> !
+    let info: core::PanicInfo
+    expr 4 struct core::PanicInfo 529..746: core::PanicInfo
+    expr 5 &raw const 559..584: *const [u8; 11] as *const [u8]
+    expr 6 byte string b"handler.ers" 570..584: [u8; 11]
+    expr 7 local line 604..608: u32
+    expr 8 int 1 630..631: u32
+    expr 9 variant core::PanicReason::AssertionFailed 653..681: core::PanicReason
+    expr 10 &raw const 704..735: *const [u8; 17] as *const [u8]
+    expr 11 byte string b"failed on purpose" 715..735: [u8; 17]
+    expr 12 call 756..781: !
+    expr 13 &raw const 765..780: *const core::PanicInfo
+    expr 14 local info 776..780: core::PanicInfo
+entry fn main() -> !
+    expr 15 call 818..834: !
+    expr 16 int 3 832..833: u32

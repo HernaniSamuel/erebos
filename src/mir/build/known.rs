@@ -91,7 +91,7 @@ impl Builder<'_, '_> {
                     other => other,
                 }
             }
-            hir::ExprKind::Binary(op, lhs, rhs) => self.known_binary(*op, lhs, rhs),
+            hir::ExprKind::Binary(op, lhs, rhs, _) => self.known_binary(*op, lhs, rhs),
             hir::ExprKind::Logical(op, lhs, rhs) => {
                 let decided_by = u64::from(*op == LogicalOp::Or);
                 match self.known(lhs) {

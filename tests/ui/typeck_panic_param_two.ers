@@ -1,0 +1,5 @@
+// emit: typeck
+// The panic function takes no parameter or one (ADR 0053): a second one is
+// `ty::panic-param`.
+entry fn main() -> ! { loop {} }
+panic fn on_panic(info: *const core::PanicInfo, code: u32) -> ! { loop {} }

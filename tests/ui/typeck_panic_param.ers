@@ -1,0 +1,29 @@
+// emit: typeck
+// The panic function may take a `*const core::PanicInfo` (ADR 0053), in any
+// module, naming the struct through `use` (ADR 0049, 0052), its parameter
+// `mut` as any parameter may be. Called explicitly, it takes what its
+// signature asks for: the caller builds the `PanicInfo`.
+mod handler {
+    use core::PanicInfo;
+    use core::PanicReason;
+
+    panic fn on_panic(mut info: *const PanicInfo) -> ! {
+        info = info;
+        loop {}
+    }
+
+    pub fn fail(line: u32) -> ! {
+        let info: PanicInfo = PanicInfo {
+            file: &raw const b"handler.ers",
+            line: line,
+            column: 1,
+            reason: PanicReason::AssertionFailed,
+            message: &raw const b"failed on purpose",
+        };
+        on_panic(&raw const info)
+    }
+}
+
+entry fn main() -> ! {
+    handler::fail(3)
+}

@@ -8,3 +8,41 @@
 mod builtins;
 
 pub use builtins::{memcpy, memmove, memset};
+
+// --- Panic information (ADR 0053) -------------------------------------------
+//
+// A panic function declared `panic fn on_panic(info: *const core::PanicInfo)`
+// learns where and why the program panicked. For the compiler's own checks,
+// `info` points to read-only data the compiler fills in, one per check; the
+// handler must not write through it.
+
+// What failed, where. `file` is the name of the file holding the check,
+// relative to the root file's directory (`main.ers`, `uart/regs.ers`), and
+// `line` and `column` locate the first byte of the token that performs it,
+// both from 1, the column in bytes.
+pub struct PanicInfo {
+    pub file: *const [u8],
+    pub line: u32,
+    pub column: u32,
+    pub reason: PanicReason,
+    pub message: *const [u8],
+}
+
+// Why: the compiler's check that failed.
+pub enum PanicReason: u8 {
+    DivisionByZero = 0,
+    IndexOutOfBounds = 1,
+    AssertionFailed = 2,
+    NoVariant = 3,
+}
+
+// The layout ADR 0053 gives, which `tests/layout` checks against C.
+comptime {
+    assert(size_of(PanicInfo) == 28);
+    assert(align_of(PanicInfo) == 4);
+    assert(offset_of(PanicInfo, file) == 0);
+    assert(offset_of(PanicInfo, line) == 8);
+    assert(offset_of(PanicInfo, column) == 12);
+    assert(offset_of(PanicInfo, reason) == 16);
+    assert(offset_of(PanicInfo, message) == 20);
+}

@@ -326,8 +326,9 @@ pub enum ExprKind {
     Unary(UnOp, Box<Expr>),
     /// `*ptr`
     Deref(Box<Expr>),
-    /// `base[index]`
-    Index(Box<Expr>, Box<Expr>),
+    /// `base[index]`, with the span of the `[`, where the bounds check is
+    /// located (ADR 0053).
+    Index(Box<Expr>, Box<Expr>, Span),
     /// `operand?`: the value of an `Option` or a `Result`, or a return of
     /// its failure (ADR 0046).
     Try(Box<Expr>),
@@ -336,15 +337,17 @@ pub enum ExprKind {
         mutable: bool,
         place: Box<Expr>,
     },
-    Binary(BinOp, Box<Expr>, Box<Expr>),
+    /// `lhs op rhs`, with the span of the operator, where a division's
+    /// check is located (ADR 0053).
+    Binary(BinOp, Box<Expr>, Box<Expr>, Span),
     /// `&&` and `||`, which short-circuit.
     Logical(LogicalOp, Box<Expr>, Box<Expr>),
     /// `expr as Type`
     Cast(Box<Expr>, Ty),
     /// `place = value`
     Assign(Box<Expr>, Box<Expr>),
-    /// `place op= value`
-    CompoundAssign(BinOp, Box<Expr>, Box<Expr>),
+    /// `place op= value`, with the span of the operator, as `Binary`.
+    CompoundAssign(BinOp, Box<Expr>, Box<Expr>, Span),
     Block(Block),
     /// `if cond { .. } else ..`; the `else` part is a block or another `if`.
     If {

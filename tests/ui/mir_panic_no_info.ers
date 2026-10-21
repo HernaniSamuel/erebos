@@ -1,0 +1,16 @@
+// emit: mir
+// A panic function without a parameter learns nothing, and nothing is built
+// for it: the checks call it without arguments, and no read-only data holds
+// where they are (ADR 0053). The message of an `assert` is still computed
+// on the failing path, by calling `reason`, and dropped (ADR 0031).
+fn reason() -> *const [u8] {
+    &raw const b"x is too large"
+}
+
+fn checked(x: u32, a: [u32; 4]) -> u32 {
+    assert(x < 10, reason());
+    a[x as usize] / x
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

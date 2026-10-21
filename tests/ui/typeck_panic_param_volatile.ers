@@ -1,0 +1,5 @@
+// emit: typeck
+// The parameter is exactly a `*const core::PanicInfo`: a volatile pointer
+// is `ty::panic-param` (ADR 0053).
+entry fn main() -> ! { loop {} }
+panic fn on_panic(info: *const volatile core::PanicInfo) -> ! { loop {} }

@@ -85,3 +85,21 @@ struct Message {
 /* `regs::Block`, of the module `regs`, with private and `pub` fields
  * (ADR 0050); `::` is `__` in C. */
 struct regs__Block { uint32_t ctrl; uint8_t status; uint16_t data; uint8_t reserved[3]; uint64_t last; };
+
+/* `core::PanicInfo` and `core::PanicReason` (ADR 0052, 0053), which the
+ * dumps leave out with `core`: `tests/c_layout.rs` checks this twin against
+ * the numbers of ADR 0053, which a `comptime` block of `core` asserts on
+ * the compiler's side. */
+enum core__PanicReason : uint8_t {
+    core__PanicReason_DivisionByZero = 0,
+    core__PanicReason_IndexOutOfBounds = 1,
+    core__PanicReason_AssertionFailed = 2,
+    core__PanicReason_NoVariant = 3,
+};
+struct core__PanicInfo {
+    struct { const uint8_t *ptr; size_t len; } file;
+    uint32_t line;
+    uint32_t column;
+    enum core__PanicReason reason;
+    struct { const uint8_t *ptr; size_t len; } message;
+};

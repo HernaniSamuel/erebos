@@ -1,0 +1,7 @@
+// emit: typeck
+// A pointer to another struct is `ty::panic-param`, even one named
+// `PanicInfo` like `core`'s (ADR 0053).
+struct PanicInfo { line: u32 }
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic(info: *const PanicInfo) -> ! { loop {} }

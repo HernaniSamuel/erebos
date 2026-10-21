@@ -1,0 +1,22 @@
+// emit: llvm-ir
+// opt: both
+// Each check passes the panic function the address of its own
+// `core::PanicInfo`, private read-only data whose `file` points to the
+// file's name, stored once for the two checks of this file; the names of
+// `core`'s files are left out of the dump, like `core` (ADR 0052, 0053).
+// The panic function writes the address it receives to a device, so that
+// with `-O`, where it is inlined, the data stays.
+fn divide(a: u32, b: u32) -> u32 {
+    a / b
+}
+
+fn element(a: [u8; 4], i: usize) -> u8 {
+    a[i]
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic(info: *const core::PanicInfo) -> ! {
+    let device: *mut volatile usize = 0x1000_0000 as *mut volatile usize;
+    *device = info as usize;
+    loop {}
+}

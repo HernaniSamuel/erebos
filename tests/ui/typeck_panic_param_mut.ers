@@ -1,0 +1,5 @@
+// emit: typeck
+// The panic information is read-only: a `*mut core::PanicInfo` is
+// `ty::panic-param` (ADR 0053).
+entry fn main() -> ! { loop {} }
+panic fn on_panic(info: *mut core::PanicInfo) -> ! { loop {} }

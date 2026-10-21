@@ -1,0 +1,6 @@
+// A table of raw readings, indexed here.
+static READINGS: [u32; 4] = [1, 2, 3, 4];
+
+pub fn raw(i: usize) -> u32 {
+    READINGS[i]
+}
