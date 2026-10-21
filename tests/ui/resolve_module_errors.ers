@@ -75,3 +75,14 @@ fn module_patterns(x: u8) -> u8 {
         _ => 2,
     }
 }
+
+// A pattern of a submodule naming a constant of a parent module gives both
+// readings: a new variable, or the parent's constant through `super`.
+mod patterns {
+    fn limit(x: u32) -> u32 {
+        match x {
+            LIMIT => 0,
+            _ => 1,
+        }
+    }
+}

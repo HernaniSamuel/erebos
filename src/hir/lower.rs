@@ -3472,12 +3472,19 @@ impl Lowerer<'_> {
                     let diag = Diagnostic::error(
                         "resolve::unknown-name",
                         format!("cannot find `{}` in this scope", name.name),
-                    )
-                    .help(format!(
+                    );
+                    let mut diag = self.missing(diag, &path, self.module, "not found");
+                    // A constant of a parent module, if there is one, is
+                    // the other reading, given after this one.
+                    let binding = format!(
                         "a name in a pattern is always a constant; to bind the value to a new variable, write `let {}: T` (ADR 0037)",
                         name.name
-                    ));
-                    self.missing(diag, &path, self.module, "not found")
+                    );
+                    diag.help = Some(match diag.help.take() {
+                        Some(parent) => format!("{binding}; {parent}"),
+                        None => binding,
+                    });
+                    diag
                 }
             }
         };
