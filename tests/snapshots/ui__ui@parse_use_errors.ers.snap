@@ -1,0 +1,100 @@
+---
+source: tests/ui.rs
+assertion_line: 22
+expression: output
+input_file: tests/ui/parse_use_errors.ers
+---
+--- errors ---
+parser::unexpected-token
+
+  × expected `::`, found `;`
+   ╭─[parse_use_errors.ers:7:10]
+ 6 │ // `parser::local-use` (ADR 0049).
+ 7 │ use crate;
+   ·          ┬
+   ·          ╰── expected `::`
+ 8 │ use super::super;
+   ╰────
+  help: a `use` brings in a name, and a path made only of `crate`, `super` or `core` has none:
+        continue it with `::` and the name of an item or module, as in `use super::name;` (ADR
+        0049)
+parser::unexpected-token
+
+  × expected `::`, found `;`
+   ╭─[parse_use_errors.ers:8:17]
+ 7 │ use crate;
+ 8 │ use super::super;
+   ·                 ┬
+   ·                 ╰── expected `::`
+ 9 │ use core;
+   ╰────
+  help: a `use` brings in a name, and a path made only of `crate`, `super` or `core` has none:
+        continue it with `::` and the name of an item or module, as in `use super::name;` (ADR
+        0049)
+parser::unexpected-token
+
+  × expected `::`, found `;`
+    ╭─[parse_use_errors.ers:9:9]
+  8 │ use super::super;
+  9 │ use core;
+    ·         ┬
+    ·         ╰── expected `::`
+ 10 │ use crate as root;
+    ╰────
+  help: a `use` brings in a name, and a path made only of `crate`, `super` or `core` has none:
+        continue it with `::` and the name of an item or module, as in `use super::name;` (ADR
+        0049)
+parser::unexpected-token
+
+  × expected `::`, found `as`
+    ╭─[parse_use_errors.ers:10:11]
+  9 │ use core;
+ 10 │ use crate as root;
+    ·           ─┬
+    ·            ╰── expected `::`
+ 11 │ use a::{};
+    ╰────
+  help: a `use` brings in a name, and a path made only of `crate`, `super` or `core` has none:
+        continue it with `::` and the name of an item or module, as in `use super::name;` (ADR
+        0049)
+parser::unexpected-token
+
+  × expected identifier, found `}`
+    ╭─[parse_use_errors.ers:11:9]
+ 10 │ use crate as root;
+ 11 │ use a::{};
+    ·         ┬
+    ·         ╰── expected identifier
+ 12 │ use a::{b::{c}};
+    ╰────
+parser::unexpected-token
+
+  × expected identifier, found `{`
+    ╭─[parse_use_errors.ers:12:12]
+ 11 │ use a::{};
+ 12 │ use a::{b::{c}};
+    ·            ┬
+    ·            ╰── expected identifier
+ 13 │ use a::{crate::b};
+    ╰────
+parser::unexpected-token
+
+  × expected identifier, found `crate`
+    ╭─[parse_use_errors.ers:13:9]
+ 12 │ use a::{b::{c}};
+ 13 │ use a::{crate::b};
+    ·         ──┬──
+    ·           ╰── expected identifier
+ 14 │ fn local() {
+    ╰────
+parser::local-use
+
+  × `use` declarations cannot be written inside a function
+    ╭─[parse_use_errors.ers:15:5]
+ 14 │ fn local() {
+ 15 │     use a::b;
+    ·     ─┬─
+    ·      ╰── inside a function
+ 16 │ }
+    ╰────
+  help: move the `use` out of the function, to bring the name into its module (ADR 0049)

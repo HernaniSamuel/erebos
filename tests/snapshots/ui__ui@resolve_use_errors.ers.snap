@@ -1,0 +1,247 @@
+---
+source: tests/ui.rs
+assertion_line: 22
+expression: output
+input_file: tests/ui/resolve_use_errors.ers
+---
+--- errors ---
+resolve::use-variant
+
+  × `E::A` is a variant, which `use` cannot bring in
+    ╭─[resolve_use_errors.ers:16:5]
+ 15 │ enum E: u8 { A = 0 }
+ 16 │ use E::A;
+    ·     ──┬─
+    ·       ╰── a variant of `E`
+ 17 │ 
+    ╰────
+  help: a variant is written with its enum, or as `.A` where the enum is the expected type: bring
+        in the enum with `use E;` and write `E::A` (ADR 0044, 0049)
+resolve::use-cycle
+
+  × the `use` declarations bringing in `a::x`, `b::x` and `c::x` can only be resolved through each
+  │ other
+    ╭─[resolve_use_errors.ers:18:17]
+ 17 │ 
+ 18 │ mod a { pub use super::b::x; }
+    ·                 ─────┬─────
+    ·                      ╰── brings in `a::x` through `b::x`
+ 19 │ mod b { pub use super::c::x; }
+    ·                 ─────┬─────
+    ·                      ╰── brings in `b::x` through `c::x`
+ 20 │ mod c { pub use super::a::x; }
+    ·                 ─────┬─────
+    ·                      ╰── brings in `c::x` through `a::x`
+ 21 │ use a::x;
+    ╰────
+  help: each of these `use` declarations finds what it names through the next, and none where it
+        is declared: write one of their paths to the item itself (ADR 0049)
+resolve::use-cycle
+
+  × the `use` bringing in `itself` can only be resolved through itself
+    ╭─[resolve_use_errors.ers:23:5]
+ 22 │ 
+ 23 │ use itself;
+    ·     ───┬──
+    ·        ╰── brings in `itself` through itself
+ 24 │ use crate::nothing;
+    ╰────
+  help: a `use` path is looked up as any path is, from the module of the `use`, and this one leads
+        to `itself`, the name this `use` brings in: write the path to where the item is declared
+        (ADR 0049)
+resolve::use-cycle
+
+  × the `use` bringing in `nothing` can only be resolved through itself
+    ╭─[resolve_use_errors.ers:24:5]
+ 23 │ use itself;
+ 24 │ use crate::nothing;
+    ·     ───────┬──────
+    ·            ╰── brings in `nothing` through itself
+ 25 │ 
+    ╰────
+  help: a `use` path is looked up as any path is, from the module of the `use`, and this one leads
+        to `nothing`, the name this `use` brings in: write the path to where the item is declared
+        (ADR 0049)
+resolve::use-cycle
+
+  × the `use` bringing in `child::LIMIT` can only be resolved through itself
+    ╭─[resolve_use_errors.ers:27:17]
+ 26 │ const LIMIT: u32 = 1;
+ 27 │ mod child { use LIMIT; }
+    ·                 ──┬──
+    ·                   ╰── brings in `child::LIMIT` through itself
+ 28 │ 
+    ╰────
+  help: a module does not see the names of the modules around it: the `LIMIT` of the root module
+        is written `super::LIMIT` here (ADR 0049)
+resolve::private-reexport
+
+  × `helper` is private, so `pub use` cannot offer it
+    ╭─[resolve_use_errors.ers:30:21]
+ 28 │ 
+ 29 │ fn helper() {}
+    ·    ───┬──
+    ·       ╰── declared here without `pub`
+ 30 │ mod offer { pub use super::helper; }
+    ·                     ──────┬──────
+    ·                           ╰── offered here with `pub use`
+ 31 │ 
+    ╰────
+  help: a `pub use` makes the name it brings in `pub`, which cannot widen what the item declared:
+        declare the item `pub`, or the `use` without `pub` (ADR 0050)
+resolve::private-item
+
+  × `sibling::hidden` is private
+    ╭─[resolve_use_errors.ers:33:33]
+ 31 │ 
+ 32 │ mod sibling { fn hidden() {} }
+    ·                  ───┬──
+    ·                     ╰── declared here without `pub`
+ 33 │ mod other { use super::sibling::hidden; }
+    ·                                 ───┬──
+    ·                                    ╰── not visible here
+ 34 │ 
+    ╰────
+  help: a private item of module `sibling` is visible only there and in the modules inside it;
+        declare it `pub` to use it elsewhere (ADR 0050)
+resolve::unknown-path
+
+  × cannot find `nowhere`
+    ╭─[resolve_use_errors.ers:35:5]
+ 34 │ 
+ 35 │ use nowhere::f;
+    ·     ───┬───
+    ·        ╰── not found in the root module
+ 36 │ use offer::nope;
+    ╰────
+resolve::unknown-path
+
+  × cannot find `offer::nope`
+    ╭─[resolve_use_errors.ers:36:12]
+ 35 │ use nowhere::f;
+ 36 │ use offer::nope;
+    ·            ──┬─
+    ·              ╰── not found in module `offer`
+ 37 │ 
+    ╰────
+resolve::duplicate-item
+
+  × `later` is defined more than once
+    ╭─[resolve_use_errors.ers:39:4]
+ 37 │ 
+ 38 │ use offer::helper as later;
+    ·                      ──┬──
+    ·                        ╰── first defined here
+ 39 │ fn later() {}
+    ·    ──┬──
+    ·      ╰── redefined here
+ 40 │ 
+    ╰────
+  help: a module's items, its modules and the names its `use` declarations bring in share one
+        namespace (ADR 0049)
+resolve::duplicate-item
+
+  × `earlier` is defined more than once
+    ╭─[resolve_use_errors.ers:42:22]
+ 40 │ 
+ 41 │ fn earlier() {}
+    ·    ───┬───
+    ·       ╰── first defined here
+ 42 │ use offer::helper as earlier;
+    ·                      ───┬───
+    ·                         ╰── redefined here
+ 43 │ 
+    ╰────
+  help: a module's items, its modules and the names its `use` declarations bring in share one
+        namespace (ADR 0049)
+resolve::duplicate-item
+
+  × `twice` is defined more than once
+    ╭─[resolve_use_errors.ers:45:22]
+ 43 │ 
+ 44 │ use helper as twice;
+    ·               ──┬──
+    ·                 ╰── first defined here
+ 45 │ use offer::helper as twice;
+    ·                      ──┬──
+    ·                        ╰── redefined here
+ 46 │ 
+    ╰────
+  help: a module's items, its modules and the names its `use` declarations bring in share one
+        namespace (ADR 0049)
+resolve::misplaced-attribute
+
+  × `#[export]` applies only to functions and statics defined in the program
+    ╭─[resolve_use_errors.ers:47:1]
+ 46 │ 
+ 47 │ #[export]
+    · ────┬────
+    ·     ╰── not allowed on a `use`
+ 48 │ use helper as exported;
+    ╰────
+  help: `#[export]` gives a function or static its own name as its symbol; an `extern` item always
+        has its own name (ADR 0051)
+resolve::misplaced-attribute
+
+  × `#[packed]` applies only to structs
+    ╭─[resolve_use_errors.ers:49:1]
+ 48 │ use helper as exported;
+ 49 │ #[packed]
+    · ────┬────
+    ·     ╰── not allowed on a `use`
+ 50 │ use helper as packed;
+    ╰────
+resolve::reserved-name
+
+  × `assert` is a reserved name
+    ╭─[resolve_use_errors.ers:52:15]
+ 51 │ 
+ 52 │ use helper as assert;
+    ·               ───┬──
+    ·                  ╰── a built-in function has this name
+ 53 │ use E as u8;
+    ╰────
+  help: `assert(cond)` and `assert(cond, msg)` are built in (ADR 0029, 0031)
+resolve::duplicate-type
+
+  × `u8` is a built-in type
+    ╭─[resolve_use_errors.ers:53:10]
+ 52 │ use helper as assert;
+ 53 │ use E as u8;
+    ·          ─┬
+    ·           ╰── cannot be redefined
+ 54 │ use u8 as byte;
+    ╰────
+resolve::unknown-path
+
+  × `u8` is a built-in type, not an item, and `use` brings in items and modules
+    ╭─[resolve_use_errors.ers:54:5]
+ 53 │ use E as u8;
+ 54 │ use u8 as byte;
+    ·     ─┬
+    ·      ╰── a built-in type
+ 55 │ use assert as check;
+    ╰────
+  help: the built-in names are in every module already: write `u8` itself (ADR 0049)
+resolve::unknown-path
+
+  × `assert` is a built-in function, not an item, and `use` brings in items and modules
+    ╭─[resolve_use_errors.ers:55:5]
+ 54 │ use u8 as byte;
+ 55 │ use assert as check;
+    ·     ───┬──
+    ·        ╰── a built-in function
+ 56 │ use Option as Opt;
+    ╰────
+  help: the built-in names are in every module already: write `assert` itself (ADR 0049)
+resolve::unknown-path
+
+  × `Option` is a built-in type, not an item, and `use` brings in items and modules
+    ╭─[resolve_use_errors.ers:56:5]
+ 55 │ use assert as check;
+ 56 │ use Option as Opt;
+    ·     ───┬──
+    ·        ╰── a built-in type
+ 57 │ 
+    ╰────
+  help: the built-in names are in every module already: write `Option` itself (ADR 0049)

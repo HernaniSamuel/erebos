@@ -46,6 +46,8 @@ pub enum TokenKind {
     /// `super`, the parent module, at the start of a path (ADR 0049).
     Super,
     True,
+    /// `use`, which brings a name into a module (ADR 0049).
+    Use,
     Volatile,
     While,
 
@@ -140,6 +142,7 @@ impl TokenKind {
             "struct" => TokenKind::Struct,
             "super" => TokenKind::Super,
             "true" => TokenKind::True,
+            "use" => TokenKind::Use,
             "volatile" => TokenKind::Volatile,
             "while" => TokenKind::While,
             "_" => TokenKind::Underscore,
@@ -182,6 +185,7 @@ impl TokenKind {
             TokenKind::Struct => "`struct`",
             TokenKind::Super => "`super`",
             TokenKind::True => "`true`",
+            TokenKind::Use => "`use`",
             TokenKind::Volatile => "`volatile`",
             TokenKind::While => "`while`",
             TokenKind::LParen => "`(`",

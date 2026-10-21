@@ -1,0 +1,64 @@
+// emit: hir
+// The errors of `use` (ADR 0049, 0050): a variant (`resolve::use-variant`);
+// a cycle of three `use`s across modules, reported once, at the first in the
+// file, and a `use` naming itself, by one name or by a path
+// (`resolve::use-cycle`), with the help of a parent's name in a child; a
+// `pub use` of an item that is not `pub` (`resolve::private-reexport`); a
+// `use` of a private item of a sibling (`resolve::private-item`); a path
+// naming nothing, before its last segment and at it; a `use` name colliding
+// with an item written after it, with one written before it, and with
+// another `use` (`resolve::duplicate-item`); attributes
+// (`resolve::misplaced-attribute`); built-in names, taken by a `use` or
+// named by one (`resolve::unknown-path`). A name whose `use` failed reports
+// nothing more where it is used. The parser's errors are in
+// `parse_use_errors.ers`.
+enum E: u8 { A = 0 }
+use E::A;
+
+mod a { pub use super::b::x; }
+mod b { pub use super::c::x; }
+mod c { pub use super::a::x; }
+use a::x;
+
+use itself;
+use crate::nothing;
+
+const LIMIT: u32 = 1;
+mod child { use LIMIT; }
+
+fn helper() {}
+mod offer { pub use super::helper; }
+
+mod sibling { fn hidden() {} }
+mod other { use super::sibling::hidden; }
+
+use nowhere::f;
+use offer::nope;
+
+use offer::helper as later;
+fn later() {}
+
+fn earlier() {}
+use offer::helper as earlier;
+
+use helper as twice;
+use offer::helper as twice;
+
+#[export]
+use helper as exported;
+#[packed]
+use helper as packed;
+
+use helper as assert;
+use E as u8;
+use u8 as byte;
+use assert as check;
+use Option as Opt;
+
+entry fn main() -> ! {
+    let e: E = A;
+    let y: u32 = x;
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

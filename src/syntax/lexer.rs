@@ -490,13 +490,13 @@ mod tests {
     #[test]
     fn module_keywords() {
         use TokenKind::*;
-        // `use` is not a keyword yet: `use` declarations come later.
-        let (kinds, diags) = kinds("pub mod m {} crate::super::x use");
+        // `core` is a reserved name, not a keyword (ADR 0049, 0052).
+        let (kinds, diags) = kinds("pub mod m {} crate::super::x use core");
         assert!(!diags.has_errors());
         assert_eq!(
             kinds,
             [
-                Pub, Mod, Ident, LBrace, RBrace, Crate, ColonColon, Super, ColonColon, Ident,
+                Pub, Mod, Ident, LBrace, RBrace, Crate, ColonColon, Super, ColonColon, Ident, Use,
                 Ident, Eof
             ]
         );

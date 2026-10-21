@@ -1,0 +1,16 @@
+// emit: ast
+// A `use` path made only of `crate`, `super` or `core` brings in no name,
+// with `as` too, and neither do empty braces; braces do not nest, and a path
+// in them continues the prefix, so it starts with a name: each is
+// `parser::unexpected-token`. A `use` inside a function is
+// `parser::local-use` (ADR 0049).
+use crate;
+use super::super;
+use core;
+use crate as root;
+use a::{};
+use a::{b::{c}};
+use a::{crate::b};
+fn local() {
+    use a::b;
+}

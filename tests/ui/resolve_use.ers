@@ -1,0 +1,73 @@
+// emit: typeck
+// `use` brings an item or a module into the namespace of its module, under
+// the path's last name or the one after `as`; braces list several paths from
+// one prefix, with a trailing comma. A `use` may go through another `use`,
+// and `use`s and items refer to each other across modules in any order. A
+// `pub use` offers an item of a private child outside its module (ADR 0049,
+// 0050). The dump shows each item by its path, whatever name it is used by;
+// the functions called return different types, which tells them apart.
+use uart::putc;
+use uart::regs::BASE as UART_BASE;
+use crate::timer::{init, Tick, regs::CONTROL,};
+use uart::regs;
+use drivers::Block;
+use later::Mode;
+
+entry fn main() -> ! {
+    let sent: u8 = putc(b'a');
+    let base: usize = UART_BASE + regs::BASE;
+    let t: Tick = init();
+    let none: Option(Tick) = .None;
+    let built: Tick = Tick {};
+    let b: Option(Block) = drivers::make();
+    let m: Mode = Mode::Run;
+    let c: u32 = match CONTROL {
+        CONTROL => 0,
+        let x: u32 => x,
+    };
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }
+
+// `Mode` goes through the `use` of `later`, written before the one it names.
+mod later {
+    pub use super::chain::Mode;
+}
+
+mod chain {
+    pub enum Mode: u8 { Off = 0, Run = 1 }
+}
+
+pub mod uart {
+    use regs::write;
+
+    pub fn putc(byte: u8) -> u8 { write(byte); byte }
+
+    pub mod regs {
+        pub const BASE: usize = 0x1000_0000;
+        pub fn write(byte: u8) -> u16 { 0 }
+    }
+}
+
+pub mod timer {
+    use super::uart::putc;
+
+    pub struct Tick {}
+    pub fn init() -> Tick { putc(b't'); Tick {} }
+
+    pub mod regs {
+        pub const CONTROL: u32 = 4;
+    }
+}
+
+pub mod drivers {
+    pub use block::{Block, make as make_block};
+
+    pub fn make() -> Option(Block) { .Some(make_block()) }
+
+    mod block {
+        pub struct Block {}
+        pub fn make() -> Block { Block {} }
+    }
+}

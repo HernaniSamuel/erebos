@@ -1,0 +1,10 @@
+// emit: ast
+// `use` brings in a path, under its last name or the one after `as`; braces
+// after `::` list several paths from one prefix, each with an optional `as`,
+// and a trailing comma (ADR 0049). `pub` and attributes go before `use`, as
+// before any item (ADR 0050).
+use uart::putc;
+use crate::uart::regs::BASE as UART_BASE;
+pub use super::super::timer::{init, Tick as T, regs::CONTROL,};
+#[export]
+use core::x;

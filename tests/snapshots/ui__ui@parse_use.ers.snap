@@ -1,0 +1,184 @@
+---
+source: tests/ui.rs
+assertion_line: 22
+expression: output
+input_file: tests/ui/parse_use.ers
+---
+--- ast ---
+File {
+    items: [
+        Use(
+            UseDecl {
+                attrs: [],
+                vis: Private,
+                prefix: None,
+                names: [
+                    UseName {
+                        path: Path {
+                            segments: [
+                                Ident {
+                                    name: "uart",
+                                    span: 280..284,
+                                },
+                                Ident {
+                                    name: "putc",
+                                    span: 286..290,
+                                },
+                            ],
+                            span: 280..290,
+                        },
+                        alias: None,
+                    },
+                ],
+                span: 276..291,
+            },
+        ),
+        Use(
+            UseDecl {
+                attrs: [],
+                vis: Private,
+                prefix: None,
+                names: [
+                    UseName {
+                        path: Path {
+                            segments: [
+                                Ident {
+                                    name: "crate",
+                                    span: 296..301,
+                                },
+                                Ident {
+                                    name: "uart",
+                                    span: 303..307,
+                                },
+                                Ident {
+                                    name: "regs",
+                                    span: 309..313,
+                                },
+                                Ident {
+                                    name: "BASE",
+                                    span: 315..319,
+                                },
+                            ],
+                            span: 296..319,
+                        },
+                        alias: Some(
+                            Ident {
+                                name: "UART_BASE",
+                                span: 323..332,
+                            },
+                        ),
+                    },
+                ],
+                span: 292..333,
+            },
+        ),
+        Use(
+            UseDecl {
+                attrs: [],
+                vis: Pub,
+                prefix: Some(
+                    Path {
+                        segments: [
+                            Ident {
+                                name: "super",
+                                span: 342..347,
+                            },
+                            Ident {
+                                name: "super",
+                                span: 349..354,
+                            },
+                            Ident {
+                                name: "timer",
+                                span: 356..361,
+                            },
+                        ],
+                        span: 342..361,
+                    },
+                ),
+                names: [
+                    UseName {
+                        path: Path {
+                            segments: [
+                                Ident {
+                                    name: "init",
+                                    span: 364..368,
+                                },
+                            ],
+                            span: 364..368,
+                        },
+                        alias: None,
+                    },
+                    UseName {
+                        path: Path {
+                            segments: [
+                                Ident {
+                                    name: "Tick",
+                                    span: 370..374,
+                                },
+                            ],
+                            span: 370..374,
+                        },
+                        alias: Some(
+                            Ident {
+                                name: "T",
+                                span: 378..379,
+                            },
+                        ),
+                    },
+                    UseName {
+                        path: Path {
+                            segments: [
+                                Ident {
+                                    name: "regs",
+                                    span: 381..385,
+                                },
+                                Ident {
+                                    name: "CONTROL",
+                                    span: 387..394,
+                                },
+                            ],
+                            span: 381..394,
+                        },
+                        alias: None,
+                    },
+                ],
+                span: 338..397,
+            },
+        ),
+        Use(
+            UseDecl {
+                attrs: [
+                    Attr {
+                        name: Ident {
+                            name: "export",
+                            span: 400..406,
+                        },
+                        arg: None,
+                        span: 398..407,
+                    },
+                ],
+                vis: Private,
+                prefix: None,
+                names: [
+                    UseName {
+                        path: Path {
+                            segments: [
+                                Ident {
+                                    name: "core",
+                                    span: 412..416,
+                                },
+                                Ident {
+                                    name: "x",
+                                    span: 418..419,
+                                },
+                            ],
+                            span: 412..419,
+                        },
+                        alias: None,
+                    },
+                ],
+                span: 408..420,
+            },
+        ),
+    ],
+}

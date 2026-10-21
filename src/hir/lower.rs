@@ -52,6 +52,8 @@ pub fn lower(
         statics: Vec::new(),
         comptimes: Vec::new(),
         mods: Vec::new(),
+        use_decls: Vec::new(),
+        uses: Vec::new(),
         duplicates: Vec::new(),
     };
     items.collect(&program.items, ModuleId::ROOT, false, diags);
@@ -59,6 +61,7 @@ pub fn lower(
     if let Some(rt) = runtime {
         items.collect(&rt.items, ModuleId::ROOT, true, diags);
     }
+    items.declare_uses(diags);
     let Items {
         modules,
         namespaces,
@@ -69,6 +72,8 @@ pub fn lower(
         statics: static_decls,
         comptimes: comptime_decls,
         mods: mod_decls,
+        use_decls,
+        uses,
         duplicates,
         ..
     } = items;
@@ -139,6 +144,10 @@ pub fn lower(
         struct_decls: &struct_decls,
         enum_tys,
         enum_decls: &enum_decls,
+        const_decls: &const_decls,
+        static_decls: &static_decls,
+        uses,
+        use_stack: Vec::new(),
         never_in_memory: Vec::new(),
         unsized_types: Vec::new(),
         applications: Vec::new(),
@@ -153,6 +162,7 @@ pub fn lower(
         lowerer.module = parent;
         lowerer.mod_decl(decl);
     }
+    lowerer.use_decls(&use_decls);
     let structs: Vec<StructDef> = struct_decls
         .iter()
         .map(|&(decl, module)| {
@@ -262,15 +272,53 @@ impl Def {
     }
 }
 
-/// A name in a module's namespace: an item or a child module.
+/// What a name in a module's namespace stands for: an item or a child
+/// module, or what a `use` names, resolved when first needed (ADR 0049).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Binding {
+    Def(Def),
+    /// The index of the `use` in `Lowerer::uses`.
+    Use(usize),
+}
+
+/// A name in a module's namespace: an item, a child module or a name a
+/// `use` brings in.
 #[derive(Clone, Copy, Debug)]
 struct Entry {
-    def: Def,
+    binding: Binding,
     vis: Visibility,
     /// The span of its name where it is declared.
     span: Span,
     /// Declared by the runtime support functions (ADR 0020).
     runtime: bool,
+}
+
+/// A name a `use` brings in (ADR 0049): one per path of the declaration.
+struct Use {
+    /// The path from the module of the `use`, the prefix before braces
+    /// included.
+    path: ast::Path,
+    /// The path as written: between the braces, without the prefix.
+    span: Span,
+    /// The name it brings in: the one after `as`, or the path's last.
+    name: ast::Ident,
+    module: ModuleId,
+    vis: Visibility,
+    /// Declared by the runtime support functions (ADR 0020).
+    runtime: bool,
+    state: UseState,
+}
+
+/// How far a `use` is resolved; each is resolved once, when first needed
+/// (ADR 0049).
+#[derive(Clone, Copy)]
+enum UseState {
+    Unresolved,
+    /// Being resolved: met again then, it is in a cycle.
+    Resolving,
+    Resolved(Def),
+    /// Reported, or naming what was.
+    Failed,
 }
 
 /// The items of every module, each with the module it is declared in, and
@@ -289,6 +337,9 @@ struct Items<'a> {
     comptimes: Vec<(&'a ast::ComptimeDecl, ModuleId)>,
     /// Each `mod`, with the module that declares it.
     mods: Vec<(&'a ast::ModDecl, ModuleId)>,
+    /// Each `use` declaration, with its module, and each name they bring in.
+    use_decls: Vec<(&'a ast::UseDecl, ModuleId)>,
+    uses: Vec<Use>,
     /// Each `resolve::duplicate-item`, reported after the items are
     /// lowered, as they were with one namespace.
     duplicates: Vec<Diagnostic>,
@@ -307,6 +358,10 @@ impl<'a> Items<'a> {
     ) {
         for item in items {
             let (name, vis, def) = match item {
+                ast::Item::Use(decl) => {
+                    self.use_decl(decl, module, runtime);
+                    continue;
+                }
                 ast::Item::Fn(decl) => {
                     self.fns.push((decl, module));
                     let id = FnId(self.fns.len() as u32 - 1);
@@ -350,8 +405,8 @@ impl<'a> Items<'a> {
                     self.declare(
                         module,
                         &decl.name,
-                        decl.vis,
-                        Def::Module(id),
+                        visibility(decl.vis),
+                        Binding::Def(Def::Module(id)),
                         runtime,
                         diags,
                     );
@@ -361,25 +416,76 @@ impl<'a> Items<'a> {
                     continue;
                 }
             };
-            self.declare(module, name, vis, def, runtime, diags);
+            self.declare(
+                module,
+                name,
+                visibility(vis),
+                Binding::Def(def),
+                runtime,
+                diags,
+            );
+        }
+    }
+
+    /// Gathers the names the `use` declaration `decl`, of `module`, brings
+    /// in; they are declared after every item (`declare_uses`).
+    fn use_decl(&mut self, decl: &'a ast::UseDecl, module: ModuleId, runtime: bool) {
+        self.use_decls.push((decl, module));
+        for name in &decl.names {
+            let path = match &decl.prefix {
+                Some(prefix) => ast::Path {
+                    segments: prefix
+                        .segments
+                        .iter()
+                        .chain(&name.path.segments)
+                        .cloned()
+                        .collect(),
+                    span: prefix.span.to(name.path.span),
+                },
+                None => name.path.clone(),
+            };
+            let last = &name.path.segments[name.path.segments.len() - 1];
+            self.uses.push(Use {
+                path,
+                span: name.path.span,
+                name: name.alias.as_ref().unwrap_or(last).clone(),
+                module,
+                vis: visibility(decl.vis),
+                runtime,
+                state: UseState::Unresolved,
+            });
+        }
+    }
+
+    /// Adds the name of each `use` to the namespace of its module, after
+    /// every item, so that an item keeps its name against a `use` whichever
+    /// is written first (ADR 0049).
+    fn declare_uses(&mut self, diags: &mut Diagnostics) {
+        for id in 0..self.uses.len() {
+            let u = &self.uses[id];
+            let (module, name, vis, runtime) = (u.module, u.name.clone(), u.vis, u.runtime);
+            self.declare(module, &name, vis, Binding::Use(id), runtime, diags);
         }
     }
 
     /// Adds `name` to the namespace of `module`, unless it is taken: one
-    /// name per module for items and modules alike (ADR 0029, 0049). No
-    /// item or module takes a built-in name, and the program's take none of
-    /// the runtime's (ADR 0020), in any module; no module of the root is
-    /// named `llvm` (ADR 0051).
+    /// name per module for items, modules and `use`s alike (ADR 0029,
+    /// 0049). No item, module or `use` takes a built-in name, in any
+    /// module; the program's items and modules take none of the runtime's
+    /// (ADR 0020) in any module, and its `use`s none in the root module,
+    /// where the runtime's items are; no module of the root is named `llvm`
+    /// (ADR 0051).
     fn declare(
         &mut self,
         module: ModuleId,
         ident: &ast::Ident,
-        vis: ast::Visibility,
-        def: Def,
+        vis: Visibility,
+        binding: Binding,
         runtime: bool,
         diags: &mut Diagnostics,
     ) {
         let name = ident.name.as_str();
+        let is_use = matches!(binding, Binding::Use(_));
         if !runtime {
             let reserved = if let Some(help) = builtin_fn(name) {
                 Some((
@@ -391,12 +497,22 @@ impl<'a> Items<'a> {
                     "names starting with `__` are reserved".to_owned(),
                     "the runtime support functions use them (ADR 0020)".to_owned(),
                 ))
-            } else if self.runtime_names.contains(&name) {
+            } else if self.runtime_names.contains(&name) && !is_use {
                 Some((
                     "the runtime defines this function".to_owned(),
                     format!("call the runtime's `{name}` instead of defining it (ADR 0020)"),
                 ))
-            } else if name == "llvm" && module == ModuleId::ROOT && matches!(def, Def::Module(_)) {
+            } else if self.runtime_names.contains(&name) && module == ModuleId::ROOT {
+                Some((
+                    "the runtime defines this function".to_owned(),
+                    format!(
+                        "the runtime's `{name}` is in the root module already; bring the item in under another name with `as` (ADR 0020, 0049)"
+                    ),
+                ))
+            } else if name == "llvm"
+                && module == ModuleId::ROOT
+                && matches!(binding, Binding::Def(Def::Module(_)))
+            {
                 Some((
                     "reserved for LLVM in the root module".to_owned(),
                     "the symbols of its items would start with `llvm.`, which LLVM reserves for its intrinsics (ADR 0051)".to_owned(),
@@ -427,8 +543,8 @@ impl<'a> Items<'a> {
             );
         }
         let entry = Entry {
-            def,
-            vis: visibility(vis),
+            binding,
+            vis,
             span: ident.span,
             runtime,
         };
@@ -442,19 +558,31 @@ impl<'a> Items<'a> {
         if first.runtime != runtime {
             return;
         }
-        let help = if matches!(first.def, Def::Module(_)) || matches!(def, Def::Module(_)) {
+        let help = if matches!(first.binding, Binding::Use(_)) || is_use {
+            "a module's items, its modules and the names its `use` declarations bring in share one namespace (ADR 0049)"
+        } else if matches!(first.binding, Binding::Def(Def::Module(_)))
+            || matches!(binding, Binding::Def(Def::Module(_)))
+        {
             "the items and modules of a module share one namespace (ADR 0049)"
         } else {
             "functions, structs, enums, constants and statics share one namespace (ADR 0029, 0030, 0035)"
         };
-        // A repeated name keeps its first definition.
+        // A repeated name keeps its first definition, but an item keeps it
+        // against a `use`, even one written before it: the labels follow
+        // the source.
+        let (again, before) = if (ident.span.file, ident.span.lo) < (first.span.file, first.span.lo)
+        {
+            (first.span, ident.span)
+        } else {
+            (ident.span, first.span)
+        };
         self.duplicates.push(
             Diagnostic::error(
                 "resolve::duplicate-item",
                 format!("`{name}` is defined more than once"),
             )
-            .label(ident.span, "redefined here")
-            .label(first.span, "first defined here")
+            .label(again, "redefined here")
+            .label(before, "first defined here")
             .help(help),
         );
     }
@@ -506,6 +634,17 @@ fn is_builtin_type(name: &str) -> bool {
     name == "bool" || IntTy::from_name(name).is_some() || BuiltinEnum::from_name(name).is_some()
 }
 
+/// What the built-in name `name` is, as diagnostics say it, if it is one.
+fn builtin_what(name: &str) -> Option<&'static str> {
+    if is_builtin_type(name) {
+        Some("a built-in type")
+    } else if builtin_fn(name).is_some() {
+        Some("a built-in function")
+    } else {
+        None
+    }
+}
+
 /// The built-in function named `name`, as a help saying how it is called
 /// and which ADRs define it. A call by that name is always the built-in,
 /// so no item can have it.
@@ -526,7 +665,7 @@ fn item_name(item: &ast::Item) -> Option<&ast::Ident> {
         ast::Item::Const(decl) => Some(&decl.name),
         ast::Item::Static(decl) => Some(&decl.name),
         ast::Item::Mod(decl) => Some(&decl.name),
-        ast::Item::Comptime(_) => None,
+        ast::Item::Comptime(_) | ast::Item::Use(_) => None,
     }
 }
 
@@ -564,6 +703,15 @@ enum Named {
 enum Prefix {
     Module(ModuleId),
     Enum(EnumId),
+}
+
+/// What a name is in a module's namespace, a `use` resolved to what it
+/// names.
+enum Lookup {
+    Found(Def),
+    Missing,
+    /// A `use` that failed, which was reported.
+    Failed,
 }
 
 /// The compiler defines `_start` itself (ADR 0012). The bodies include
@@ -613,7 +761,8 @@ fn check_symbols(
         namespaces[module.0 as usize]
             .get(name)
             .is_some_and(|entry| {
-                entry.def == def && (entry.runtime || !runtime_names.contains(&name))
+                entry.binding == Binding::Def(def)
+                    && (entry.runtime || !runtime_names.contains(&name))
             })
     };
     let mut items: Vec<Symbol> = Vec::new();
@@ -651,7 +800,7 @@ fn check_symbols(
         };
         let symbol = again.symbol;
         let help = if again.external && first.external {
-            "an `extern` item has its own name as its symbol in any module: declare it in one module, and name it by its path in the others (ADR 0051)"
+            "an `extern` item has its own name as its symbol in any module: declare it in one module, and bring it into the others with `use` or name it by its path (ADR 0049, 0051)"
         } else {
             "an item of the root module, an `#[export]` item and an `extern` item each have their own name as their symbol: rename one of the two (ADR 0051)"
         };
@@ -765,6 +914,12 @@ struct Lowerer<'a> {
     struct_decls: &'a [(&'a ast::StructDecl, ModuleId)],
     enum_tys: Vec<EnumTy>,
     enum_decls: &'a [(&'a ast::EnumDecl, ModuleId)],
+    const_decls: &'a [(&'a ast::ConstDecl, ModuleId)],
+    static_decls: &'a [(&'a ast::StaticDecl, ModuleId)],
+    /// Each name a `use` brings in (ADR 0049).
+    uses: Vec<Use>,
+    /// The `use`s being resolved, each through the next.
+    use_stack: Vec<usize>,
     /// Each `!` written where memory would have its type (ADR 0034).
     never_in_memory: Vec<NeverInMemory>,
     /// Each `[T]` written where a size is needed (ADR 0031).
@@ -824,8 +979,11 @@ impl Lowerer<'_> {
     /// The segment `name` in the namespace of `module`. Naming an item that
     /// is not visible from the current module is reported (ADR 0050); it
     /// is still what the name means, so nothing more is reported about it.
-    fn lookup(&mut self, module: ModuleId, name: &ast::Ident) -> Option<Def> {
-        let entry = *self.namespaces[module.0 as usize].get(&name.name)?;
+    /// A name a `use` brings in is what the `use` names (ADR 0049).
+    fn lookup(&mut self, module: ModuleId, name: &ast::Ident) -> Lookup {
+        let Some(&entry) = self.namespaces[module.0 as usize].get(&name.name) else {
+            return Lookup::Missing;
+        };
         if entry.vis == Visibility::Private && !self.is_within(self.module, module) {
             self.diags.push(
                 Diagnostic::error(
@@ -840,7 +998,278 @@ impl Lowerer<'_> {
                 )),
             );
         }
-        Some(entry.def)
+        match self.binding_def(entry.binding) {
+            Some(def) => Lookup::Found(def),
+            None => Lookup::Failed,
+        }
+    }
+
+    /// What `binding` stands for; `None` for a `use` that failed, which was
+    /// reported.
+    fn binding_def(&mut self, binding: Binding) -> Option<Def> {
+        match binding {
+            Binding::Def(def) => Some(def),
+            Binding::Use(id) => self.resolve_use(id),
+        }
+    }
+
+    /// What the `use` `id` names, resolved the first time it is needed, as
+    /// any path is from the module of the `use` (ADR 0049). `None` if that
+    /// failed, which is reported: a path in error, a variant, or a cycle
+    /// of `use`s.
+    fn resolve_use(&mut self, id: usize) -> Option<Def> {
+        match self.uses[id].state {
+            UseState::Resolved(def) => return Some(def),
+            UseState::Failed => return None,
+            UseState::Resolving => {
+                self.use_cycle(id);
+                return None;
+            }
+            UseState::Unresolved => {}
+        }
+        self.uses[id].state = UseState::Resolving;
+        self.use_stack.push(id);
+        let saved = std::mem::replace(&mut self.module, self.uses[id].module);
+        let path = self.uses[id].path.clone();
+        let state = if let Some(single) = plain_name(&path)
+            && let Some(what) = builtin_what(&single.name)
+        {
+            // Without `as`, the name is the built-in's, which `declare`
+            // reported.
+            if self.uses[id].name.name != single.name {
+                self.use_builtin(single, what);
+            }
+            UseState::Failed
+        } else {
+            self.use_state(id, &path)
+        };
+        self.module = saved;
+        self.use_stack.pop();
+        self.uses[id].state = state;
+        match state {
+            UseState::Resolved(def) => Some(def),
+            _ => None,
+        }
+    }
+
+    /// `resolve::unknown-path` for `name`, a built-in name a `use` names,
+    /// which is `what`: not an item, and in every module already
+    /// (ADR 0049).
+    fn use_builtin(&mut self, name: &ast::Ident, what: &str) {
+        self.diags.push(
+            Diagnostic::error(
+                "resolve::unknown-path",
+                format!(
+                    "`{}` is {what}, not an item, and `use` brings in items and modules",
+                    name.name
+                ),
+            )
+            .label(name.span, what)
+            .help(format!(
+                "the built-in names are in every module already: write `{}` itself (ADR 0049)",
+                name.name
+            )),
+        );
+    }
+
+    /// What the path of the `use` `id` names, from its module, as the state
+    /// it leaves the `use` in; errors are reported.
+    fn use_state(&mut self, id: usize, path: &ast::Path) -> UseState {
+        match self.lookup_path(path) {
+            // In a cycle, which was reported.
+            _ if matches!(self.uses[id].state, UseState::Failed) => UseState::Failed,
+            Named::Item(def) => UseState::Resolved(def),
+            Named::Variant(enum_id, _) => {
+                self.use_variant(id, enum_id);
+                UseState::Failed
+            }
+            Named::Missing(module) => {
+                let diag = Diagnostic::error(
+                    "resolve::unknown-path",
+                    format!("cannot find `{}`", written(path)),
+                );
+                let diag = self.missing(diag, path, module, "not found");
+                self.diags.push(diag);
+                UseState::Failed
+            }
+            Named::Failed => UseState::Failed,
+        }
+    }
+
+    /// `resolve::use-variant` for the `use` `id`, which names a variant of
+    /// the enum `enum_id` (ADR 0049).
+    fn use_variant(&mut self, id: usize, enum_id: EnumId) {
+        let u = &self.uses[id];
+        let path = &u.path;
+        let (variant, prefix) = path
+            .segments
+            .split_last()
+            .expect("a variant follows its enum");
+        let enum_name = self.enum_tys[enum_id.0 as usize].name;
+        let written_enum = written_segments(prefix);
+        let as_used = &prefix[prefix.len() - 1].name;
+        self.diags.push(
+            Diagnostic::error(
+                "resolve::use-variant",
+                format!("`{}` is a variant, which `use` cannot bring in", written(path)),
+            )
+            .label(u.span, format!("a variant of `{enum_name}`"))
+            .help(format!(
+                "a variant is written with its enum, or as `.{}` where the enum is the expected type: bring in the enum with `use {written_enum};` and write `{as_used}::{}` (ADR 0044, 0049)",
+                variant.name, variant.name
+            )),
+        );
+    }
+
+    /// `resolve::use-cycle` for the `use`s from `id` to the last one being
+    /// resolved, which names `id` again, each through the next (ADR 0049).
+    /// Each of them fails, so the cycle is reported once, at the first of
+    /// them in file order, then offset; the labels name the others.
+    fn use_cycle(&mut self, id: usize) {
+        let at = self
+            .use_stack
+            .iter()
+            .position(|&u| u == id)
+            .expect("a `use` being resolved is on the stack");
+        let mut cycle = self.use_stack[at..].to_vec();
+        for &u in &cycle {
+            self.uses[u].state = UseState::Failed;
+        }
+        let first = (0..cycle.len())
+            .min_by_key(|&i| {
+                let span = self.uses[cycle[i]].span;
+                (span.file, span.lo)
+            })
+            .expect("a cycle has a `use`");
+        cycle.rotate_left(first);
+        // Each by the path of the name it brings in.
+        let names: Vec<String> = cycle
+            .iter()
+            .map(|&u| {
+                let u = &self.uses[u];
+                format!("`{}`", item_path(&self.modules, u.module, &u.name.name))
+            })
+            .collect();
+        let mut diag = if let [name] = names.as_slice() {
+            let head = &self.uses[cycle[0]];
+            let saved = std::mem::replace(&mut self.module, head.module);
+            let help = match head.path.as_single() {
+                Some(single) => self.parent_help(0, &single.name),
+                None => None,
+            };
+            self.module = saved;
+            let head = &self.uses[cycle[0]];
+            Diagnostic::error(
+                "resolve::use-cycle",
+                format!("the `use` bringing in {name} can only be resolved through itself"),
+            )
+            .label(head.span, format!("brings in {name} through itself"))
+            .help(help.unwrap_or_else(|| {
+                format!(
+                    "a `use` path is looked up as any path is, from the module of the `use`, and this one leads to `{}`, the name this `use` brings in: write the path to where the item is declared (ADR 0049)",
+                    head.name.name
+                )
+            }))
+        } else {
+            let (last, others) = names.split_last().expect("a cycle has a `use`");
+            Diagnostic::error(
+                "resolve::use-cycle",
+                format!(
+                    "the `use` declarations bringing in {} and {last} can only be resolved through each other",
+                    others.join(", ")
+                ),
+            )
+            .help("each of these `use` declarations finds what it names through the next, and none where it is declared: write one of their paths to the item itself (ADR 0049)")
+        };
+        if names.len() > 1 {
+            for (i, &u) in cycle.iter().enumerate() {
+                let next = &names[(i + 1) % names.len()];
+                diag = diag.label(
+                    self.uses[u].span,
+                    format!("brings in {} through {next}", names[i]),
+                );
+            }
+        }
+        self.diags.push(diag);
+    }
+
+    /// Every `use` declaration: its attributes, none of which applies, and
+    /// each name it brings in, resolved now if no item needed it yet, so
+    /// that every error is reported; a `pub use` offers only a `pub` item
+    /// (ADR 0049, 0050).
+    fn use_decls(&mut self, decls: &[(&ast::UseDecl, ModuleId)]) {
+        for &(decl, _) in decls {
+            self.no_attrs(&decl.attrs, "a `use`");
+        }
+        for id in 0..self.uses.len() {
+            let Some(def) = self.resolve_use(id) else {
+                continue;
+            };
+            let u = &self.uses[id];
+            if u.vis == Visibility::Private {
+                continue;
+            }
+            let (span, module) = (u.span, u.module);
+            let (vis, declared_in, name_span, path) = self.declared(def);
+            // Where the item is not visible, naming it was reported as
+            // `resolve::private-item`.
+            if vis == Visibility::Private && self.is_within(module, declared_in) {
+                self.diags.push(
+                    Diagnostic::error(
+                        "resolve::private-reexport",
+                        format!("`{path}` is private, so `pub use` cannot offer it"),
+                    )
+                    .label(span, "offered here with `pub use`")
+                    .label(name_span, "declared here without `pub`")
+                    .help("a `pub use` makes the name it brings in `pub`, which cannot widen what the item declared: declare the item `pub`, or the `use` without `pub` (ADR 0050)"),
+                );
+            }
+        }
+    }
+
+    /// How the item or module `def` is declared: its visibility, its
+    /// module, the span of its name and its path.
+    fn declared(&self, def: Def) -> (Visibility, ModuleId, Span, String) {
+        let item = |vis: ast::Visibility, module: ModuleId, name: &ast::Ident| {
+            (
+                visibility(vis),
+                module,
+                name.span,
+                item_path(&self.modules, module, &name.name),
+            )
+        };
+        match def {
+            Def::Fn(id) => {
+                let (decl, module) = self.fn_decls[id.0 as usize];
+                item(decl.vis, module, &decl.name)
+            }
+            Def::Struct(id) => {
+                let (decl, module) = self.struct_decls[id.0 as usize];
+                item(decl.vis, module, &decl.name)
+            }
+            Def::Enum(id) => {
+                let (decl, module) = self.enum_decls[id.0 as usize];
+                item(decl.vis, module, &decl.name)
+            }
+            Def::Const(id) => {
+                let (decl, module) = self.const_decls[id.0 as usize];
+                item(decl.vis, module, &decl.name)
+            }
+            Def::Static(id) => {
+                let (decl, module) = self.static_decls[id.0 as usize];
+                item(decl.vis, module, &decl.name)
+            }
+            Def::Module(id) => {
+                let def = &self.modules[id.0 as usize];
+                (
+                    def.vis,
+                    def.parent.expect("no name stands for the root module"),
+                    def.name_span
+                        .expect("a module other than the root has a name"),
+                    def.path.clone(),
+                )
+            }
+        }
     }
 
     /// The module that `super`, written at `segment`, names after a path
@@ -919,13 +1348,14 @@ impl Lowerer<'_> {
                     return Named::Failed;
                 }
                 _ => match self.lookup(module, segment) {
-                    Some(Def::Module(module)) => Prefix::Module(module),
-                    Some(Def::Enum(id)) => Prefix::Enum(id),
-                    Some(def) => {
+                    Lookup::Found(Def::Module(module)) => Prefix::Module(module),
+                    Lookup::Found(Def::Enum(id)) => Prefix::Enum(id),
+                    Lookup::Found(def) => {
                         self.not_an_enum(&path.segments[..=i], def.what());
                         return Named::Failed;
                     }
-                    None => {
+                    Lookup::Failed => return Named::Failed,
+                    Lookup::Missing => {
                         let diag = Diagnostic::error(
                             "resolve::unknown-path",
                             format!("cannot find `{}`", written_segments(&path.segments[..=i])),
@@ -956,8 +1386,9 @@ impl Lowerer<'_> {
                     None => Named::Failed,
                 },
                 _ => match self.lookup(module, last) {
-                    Some(def) => Named::Item(def),
-                    None => Named::Missing(module),
+                    Lookup::Found(def) => Named::Item(def),
+                    Lookup::Missing => Named::Missing(module),
+                    Lookup::Failed => Named::Failed,
                 },
             },
         }
@@ -2687,9 +3118,16 @@ impl Lowerer<'_> {
             }],
             span: name.span,
         };
-        let def = self.namespaces[self.module.0 as usize]
+        let binding = self.namespaces[self.module.0 as usize]
             .get(&name.name)
-            .map(|entry| entry.def);
+            .map(|entry| entry.binding);
+        let def = match binding {
+            Some(binding) => match self.binding_def(binding) {
+                Some(def) => Lookup::Found(def),
+                None => Lookup::Failed,
+            },
+            None => Lookup::Missing,
+        };
         let diag = if let Some(local) = self.find_local(&name.name) {
             let declared = self.locals[local.0 as usize].span;
             let compare = format!(
@@ -2702,7 +3140,7 @@ impl Lowerer<'_> {
             )
             .label(name.span, "a name in a pattern is a constant")
             .label(declared, "the variable is declared here");
-            if matches!(def, Some(Def::Const(_))) {
+            if matches!(def, Lookup::Found(Def::Const(_))) {
                 diag.help(format!(
                     "the variable shadows the constant `{}` here (ADR 0029); {compare}",
                     name.name
@@ -2712,13 +3150,14 @@ impl Lowerer<'_> {
             }
         } else {
             match def {
-                Some(Def::Const(id)) => return Some(id),
-                Some(Def::Module(_)) => {
+                Lookup::Found(Def::Const(id)) => return Some(id),
+                Lookup::Found(Def::Module(_)) => {
                     self.misused_module(&path, "a constant");
                     return None;
                 }
-                Some(def) => self.not_a_constant(&path, def),
-                None => {
+                Lookup::Found(def) => self.not_a_constant(&path, def),
+                Lookup::Failed => return None,
+                Lookup::Missing => {
                     let diag = Diagnostic::error(
                         "resolve::unknown-name",
                         format!("cannot find `{}` in this scope", name.name),
@@ -2860,6 +3299,47 @@ mod tests {
                 ("resolve::reserved-name", true)
             ]
         );
+    }
+
+    /// A `use` defines no symbol, so a module may bring in the runtime's
+    /// `memcpy` under its name; the root module, where the runtime's items
+    /// are until `core` (ADR 0052), cannot take the name with a `use`
+    /// (ADR 0020, 0049).
+    #[test]
+    fn runtime_names_and_use() {
+        let mut sources = SourceMap::default();
+        let mut diags = Diagnostics::default();
+        let program = parse(
+            &mut sources,
+            "main.ers",
+            "entry fn main() -> ! { loop {} }
+             panic fn on_panic() -> ! { loop {} }
+             mod m { use crate::memcpy; pub fn copy() { memcpy(); } }
+             use m::copy as memcpy;
+",
+            &mut diags,
+        );
+        let runtime = parse(
+            &mut sources,
+            "rt.ers",
+            "fn memcpy() {}
+",
+            &mut diags,
+        );
+        let main = program_file(&program);
+        lower(&program, Some(&runtime), &mut diags);
+
+        let reported: Vec<_> = diags
+            .into_vec()
+            .into_iter()
+            .map(|d| {
+                let span = d.labels[0].span;
+                (d.code, span.file == main, span.lo)
+            })
+            .collect();
+        let text = &sources.file(main).text;
+        let at = text.rfind("memcpy;").expect("the root `use`") as u32;
+        assert_eq!(reported, [("resolve::reserved-name", true, at)]);
     }
 
     fn program_file(file: &ast::File) -> crate::span::FileId {

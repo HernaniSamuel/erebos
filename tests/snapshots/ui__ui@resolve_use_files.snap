@@ -1,0 +1,26 @@
+---
+source: tests/ui.rs
+assertion_line: 29
+expression: output
+input_file: tests/ui/resolve_use_files/main.ers
+---
+--- errors ---
+resolve::use-cycle
+
+  × the `use` declarations bringing in `x` and `m::y` can only be resolved through each other
+    ╭─[main.ers:9:5]
+  8 │ 
+  9 │ use m::y as x;
+    ·     ──┬─
+    ·       ╰── brings in `x` through `m::y`
+ 10 │ 
+    ╰────
+   ╭─[m.ers:2:9]
+ 1 │ // Met before the `use` of `main.ers` that it goes through.
+ 2 │ pub use super::x as y;
+   ·         ────┬───
+   ·             ╰── brings in `m::y` through `x`
+ 3 │ 
+   ╰────
+  help: each of these `use` declarations finds what it names through the next, and none where it
+        is declared: write one of their paths to the item itself (ADR 0049)

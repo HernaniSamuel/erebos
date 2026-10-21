@@ -6,7 +6,8 @@ use crate::span::Span;
 use crate::syntax::ast::{
     Arm, Attr, BinOp, Block, ComptimeDecl, ConstDecl, EnumDecl, Expr, ExprKind, FieldDecl,
     FieldInit, File, FnDecl, FnKind, Ident, Item, Let, LogicalOp, ModDecl, Param, Path, Pattern,
-    PatternKind, StaticDecl, Stmt, StructDecl, Ty, TyKind, UnOp, VariantDecl, Visibility,
+    PatternKind, StaticDecl, Stmt, StructDecl, Ty, TyKind, UnOp, UseDecl, UseName, VariantDecl,
+    Visibility,
 };
 use crate::syntax::lexer;
 use crate::syntax::token::{Token, TokenKind};
@@ -198,6 +199,7 @@ impl Parser<'_> {
                     | TokenKind::Static
                     | TokenKind::Comptime
                     | TokenKind::Mod
+                    | TokenKind::Use
                     | TokenKind::Pound
                     | TokenKind::Eof
             );
@@ -232,6 +234,7 @@ impl Parser<'_> {
             TokenKind::Enum => Ok(Item::Enum(self.enum_decl(attrs, vis)?)),
             TokenKind::Const => Ok(Item::Const(self.const_decl(attrs, vis)?)),
             TokenKind::Mod => Ok(Item::Mod(self.mod_decl(attrs, vis)?)),
+            TokenKind::Use => Ok(Item::Use(self.use_decl(attrs, vis)?)),
             TokenKind::Comptime => {
                 let start = self.bump().span;
                 let block = self.block()?;
@@ -327,6 +330,75 @@ impl Parser<'_> {
                     Err(Reported) => self.recover_to_item(),
                 },
             }
+        }
+    }
+
+    /// `use path;`, `use path as name;` or `use prefix::{path, path as
+    /// name, ...};`, with an optional trailing comma and no braces inside the
+    /// braces (ADR 0049).
+    fn use_decl(&mut self, attrs: Vec<Attr>, vis: Visibility) -> PResult<UseDecl> {
+        let start = self.bump().span;
+        let (path, braces) = self.path_until_brace(true)?;
+        let (prefix, names) = if braces {
+            // `prefix::{}` would bring in no name.
+            if self.peek_second() == TokenKind::RBrace {
+                self.bump();
+                return Err(self.error_expected("identifier"));
+            }
+            self.bump();
+            let names = self.brace_list(|p| {
+                let path = p.use_inner_path()?;
+                let alias = p.use_alias()?;
+                Ok(UseName { path, alias })
+            })?;
+            (Some(path), names)
+        } else {
+            // `use crate;`, `use super;` or `use core;` names no item or
+            // module inside the root or the parent.
+            let last = path.segments[path.segments.len() - 1].name.as_str();
+            if matches!(last, "crate" | "super") || (path.segments.len() == 1 && last == "core") {
+                let found = self.peek();
+                self.diags.push(
+                    Diagnostic::error(
+                        "parser::unexpected-token",
+                        format!("expected `::`, found {}", found.kind.describe()),
+                    )
+                    .label(self.missing_token_span(), "expected `::`")
+                    .help("a `use` brings in a name, and a path made only of `crate`, `super` or `core` has none: continue it with `::` and the name of an item or module, as in `use super::name;` (ADR 0049)"),
+                );
+                return Err(Reported);
+            }
+            let alias = self.use_alias()?;
+            (None, vec![UseName { path, alias }])
+        };
+        let semi = self.expect(TokenKind::Semi)?;
+        Ok(UseDecl {
+            attrs,
+            vis,
+            prefix,
+            names,
+            span: start.to(semi.span),
+        })
+    }
+
+    /// A path between the braces of a `use`, which continues the prefix:
+    /// names only, and no braces (ADR 0049).
+    fn use_inner_path(&mut self) -> PResult<Path> {
+        let mut segments = vec![self.ident()?];
+        while self.eat(TokenKind::ColonColon).is_some() {
+            segments.push(self.ident()?);
+        }
+        Ok(Path {
+            span: segments[0].span.to(segments[segments.len() - 1].span),
+            segments,
+        })
+    }
+
+    /// `as name` after a path of a `use`, if written.
+    fn use_alias(&mut self) -> PResult<Option<Ident>> {
+        match self.eat(TokenKind::As) {
+            Some(_) => Ok(Some(self.ident()?)),
+            None => Ok(None),
         }
     }
 
@@ -611,13 +683,25 @@ impl Parser<'_> {
     /// A path: names separated by `::`, the first of which may be `crate`
     /// or `super`, and `super` again after `super` (ADR 0049).
     fn path(&mut self) -> PResult<Path> {
+        Ok(self.path_until_brace(false)?.0)
+    }
+
+    /// A path, as `path` reads it; with `brace`, a `::` followed by `{` ends
+    /// it, as in a `use` with braces: the `::` is consumed, the `{` left to
+    /// the caller, and the second value says so.
+    fn path_until_brace(&mut self, brace: bool) -> PResult<(Path, bool)> {
         let first = match self.peek().kind {
             TokenKind::Crate | TokenKind::Super => self.keyword_segment(),
             _ => self.ident()?,
         };
         let mut supers = first.name == "super";
         let mut segments = vec![first];
+        let mut braces = false;
         while self.eat(TokenKind::ColonColon).is_some() {
+            if brace && self.at(TokenKind::LBrace) {
+                braces = true;
+                break;
+            }
             let segment = if supers && self.at(TokenKind::Super) {
                 self.keyword_segment()
             } else {
@@ -626,10 +710,11 @@ impl Parser<'_> {
             };
             segments.push(segment);
         }
-        Ok(Path {
+        let path = Path {
             span: segments[0].span.to(segments[segments.len() - 1].span),
             segments,
-        })
+        };
+        Ok((path, braces))
     }
 
     /// `crate` or `super` as a segment of a path, named by its keyword.
@@ -783,6 +868,18 @@ impl Parser<'_> {
                         .help("move the `mod` out of the function (ADR 0049)"),
                     );
                     self.mod_decl(Vec::new(), Visibility::Private)?;
+                }
+                TokenKind::Use => {
+                    let token = self.peek();
+                    self.diags.push(
+                        Diagnostic::error(
+                            "parser::local-use",
+                            "`use` declarations cannot be written inside a function",
+                        )
+                        .label(token.span, "inside a function")
+                        .help("move the `use` out of the function, to bring the name into its module (ADR 0049)"),
+                    );
+                    self.use_decl(Vec::new(), Visibility::Private)?;
                 }
                 _ => {
                     // As in Rust, a statement starting with a block-like

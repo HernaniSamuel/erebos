@@ -60,7 +60,7 @@ resolve::duplicate-symbol
  33 │ }
     ╰────
   help: an `extern` item has its own name as its symbol in any module: declare it in one module,
-        and name it by its path in the others (ADR 0051)
+        and bring it into the others with `use` or name it by its path (ADR 0049, 0051)
 resolve::duplicate-symbol
 
   × the symbol `twice` is given to more than one item

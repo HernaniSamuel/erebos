@@ -18,6 +18,7 @@ pub enum Item {
     Static(StaticDecl),
     Comptime(ComptimeDecl),
     Mod(ModDecl),
+    Use(UseDecl),
 }
 
 /// Whether an item is written with `pub` (ADR 0050).
@@ -39,6 +40,29 @@ pub struct ModDecl {
     /// file, when it can read it.
     pub items: Option<Vec<Item>>,
     pub span: Span,
+}
+
+/// `use path;`, `use path as name;` or `use prefix::{path, path as name,
+/// ...};`, which brings items and modules into the namespace of its module
+/// (ADR 0049).
+#[derive(Debug)]
+pub struct UseDecl {
+    pub attrs: Vec<Attr>,
+    pub vis: Visibility,
+    /// The path before `::{`, in a `use` with braces.
+    pub prefix: Option<Path>,
+    /// What it brings in: its path, or with braces each path between them,
+    /// which continues the prefix. Never empty.
+    pub names: Vec<UseName>,
+    pub span: Span,
+}
+
+/// A path of a `use`, and the name it brings in when written with `as`
+/// (ADR 0049); without, the name is the path's last.
+#[derive(Debug)]
+pub struct UseName {
+    pub path: Path,
+    pub alias: Option<Ident>,
 }
 
 /// `const NAME: Type = value;` (ADR 0029)
@@ -156,7 +180,7 @@ pub struct Param {
     pub ty: Ty,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Ident {
     pub name: String,
     pub span: Span,
@@ -165,7 +189,7 @@ pub struct Ident {
 /// Names separated by `::`, wherever an item is named: `x`, `Config`,
 /// `uart::Mode::Run`, `super::x` (ADR 0049). What it names is resolved
 /// later.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Path {
     /// At least one. The keywords `crate` and `super` are segments named
     /// so, which no other name can be: `crate` only first, `super` only in

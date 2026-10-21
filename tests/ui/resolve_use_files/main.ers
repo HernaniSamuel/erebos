@@ -1,0 +1,20 @@
+// emit: hir
+// A cycle of `use`s is reported at its first `use` in file order, then
+// offset, whichever is resolved first (ADR 0049): `m.ers` comes after
+// `main.ers`, though its `use` is met first, depth first from `mod m;`, so
+// the cycle is reported here. Across the files, `use` brings in what `m.ers`
+// declares, and `m.ers` what this file declares.
+mod m;
+
+use m::y as x;
+
+use m::{double, LIMIT};
+
+fn add(a: u32, b: u32) -> u32 { a + b }
+
+entry fn main() -> ! {
+    let n: u32 = double(LIMIT);
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

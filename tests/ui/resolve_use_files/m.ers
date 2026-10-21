@@ -1,0 +1,8 @@
+// Met before the `use` of `main.ers` that it goes through.
+pub use super::x as y;
+
+use super::add;
+
+pub const LIMIT: u32 = 4;
+
+pub fn double(n: u32) -> u32 { add(n, n) }

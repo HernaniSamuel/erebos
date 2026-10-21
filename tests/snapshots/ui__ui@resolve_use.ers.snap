@@ -1,0 +1,62 @@
+---
+source: tests/ui.rs
+assertion_line: 22
+expression: output
+input_file: tests/ui/resolve_use.ers
+---
+--- typeck ---
+struct timer::Tick {} size 0, align 1
+struct drivers::block::Block {} size 0, align 1
+enum chain::Mode: u8 { Off = 0, Run = 1 }
+enum Option(drivers::block::Block): u8 { None = 0, Some(drivers::block::Block at 1) = 1 } size 1, align 1
+enum Option(timer::Tick): u8 { None = 0, Some(timer::Tick at 1) = 1 } size 1, align 1
+entry fn main() -> !
+    let sent: u8
+    let base: usize
+    let t: timer::Tick
+    let none: Option(timer::Tick)
+    let built: timer::Tick
+    let b: Option(drivers::block::Block)
+    let m: chain::Mode
+    let x: u32
+    let c: u32
+    expr 0 call 742..752: u8
+    expr 1 byte 97 747..751: u8
+    expr 2 binary + 776..798: usize
+    expr 3 const uart::regs::BASE 776..785: usize
+    expr 4 const uart::regs::BASE 788..798: usize
+    expr 5 call 818..824: timer::Tick
+    expr 6 variant .None 855..860: Option(timer::Tick)
+    expr 7 struct timer::Tick 884..891: timer::Tick
+    expr 8 call 920..935: Option(drivers::block::Block)
+    expr 9 variant chain::Mode::Run 955..964: chain::Mode
+    expr 10 match 983..1051: u32
+    expr 11 const timer::regs::CONTROL 989..996: u32
+    expr 12 int 0 1018..1019: u32
+    expr 13 local x 1043..1044: u32
+    expr 14 loop 1057..1064: !
+panic fn on_panic() -> !
+    expr 15 loop 1095..1102: !
+fn uart::putc(byte: u8) -> u8
+    expr 16 call 1360..1371: u16
+    expr 17 local byte 1366..1370: u8
+    expr 18 local byte 1373..1377: u8
+fn uart::regs::write(byte: u8) -> u16
+    expr 19 int 0 1485..1486: u16
+fn timer::init() -> timer::Tick
+    expr 20 call 1593..1603: u8
+    expr 21 byte 116 1598..1602: u8
+    expr 22 struct timer::Tick 1605..1612: timer::Tick
+fn drivers::make() -> Option(drivers::block::Block)
+    expr 23 variant .Some 1784..1803: Option(drivers::block::Block)
+    expr 24 call 1790..1802: drivers::block::Block
+fn drivers::block::make() -> drivers::block::Block
+    expr 25 struct drivers::block::Block 1884..1892: drivers::block::Block
+comptime fn uart::regs::BASE() -> usize
+    expr 26 int 268435456 1432..1443: usize
+comptime fn timer::regs::CONTROL() -> u32
+    expr 27 int 4 1668..1669: u32
+comptime fn chain::Mode::Off() -> u8
+    expr 28 int 0 1273..1274: u8
+comptime fn chain::Mode::Run() -> u8
+    expr 29 int 1 1282..1283: u8
