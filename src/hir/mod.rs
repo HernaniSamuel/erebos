@@ -562,10 +562,17 @@ impl BuiltinEnum {
     /// The indices of the variant whose payload `?` gives, `Some` or `Ok`,
     /// and of the one it returns, `None` or `Err` (ADR 0046).
     pub fn try_variants(self) -> (u32, u32) {
-        match self {
-            BuiltinEnum::Option => (1, 0),
-            BuiltinEnum::Result => (0, 1),
-        }
+        let (success, failure) = match self {
+            BuiltinEnum::Option => ("Some", "None"),
+            BuiltinEnum::Result => ("Ok", "Err"),
+        };
+        let index = |name| {
+            self.variants()
+                .iter()
+                .position(|(variant, ..)| *variant == name)
+                .expect("a variant of the built-in enum") as u32
+        };
+        (index(success), index(failure))
     }
 
     /// Its variants, in order: their names, values and the index of the

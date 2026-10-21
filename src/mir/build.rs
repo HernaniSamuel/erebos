@@ -88,8 +88,9 @@ struct Builder<'a, 'h> {
     /// Whether the checks of ADR 0032 apply: off in code that cannot run.
     checks: bool,
     /// Whether the compiler's checks pass where they are to the panic
-    /// function: when it takes the information, in code of the program;
-    /// code run at compile time never calls it (ADR 0053).
+    /// function: when it takes the information, in code that runs on the
+    /// target, `core` included; code run at compile time never calls it
+    /// (ADR 0053).
     located: bool,
     /// Values known at compile time, by expression.
     known: HashMap<hir::ExprId, Known>,
@@ -1314,7 +1315,10 @@ impl Builder<'_, '_> {
                 },
                 "line" => int(u64::from(fields.line), field.ty),
                 "column" => int(u64::from(fields.column), field.ty),
-                "reason" => int(fields.reason, field.ty),
+                // Its type is the one read-only data takes, `reason_ty`.
+                "reason" => {
+                    Rvalue::Use(Operand::Const(Const::Int(fields.reason, fields.reason_ty)))
+                }
                 "message" => Rvalue::Use(message),
                 name => unreachable!("`core::PanicInfo` has no field `{name}`"),
             };

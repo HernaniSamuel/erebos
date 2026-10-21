@@ -353,8 +353,10 @@ impl<'h> Queries<'h> {
             format!("{first_what} depends on its own value"),
         );
         // Checking a body and computing its value share a span. An item
-        // without one, an `Option(T)` or `Result(T, E)`, is shown in the
-        // message or in the label of a later one.
+        // without one, an `Option(T)` or `Result(T, E)`, gets no label: it
+        // shows only where the message or a later label names it, and not
+        // at all in `const N: usize = size_of(Option(S));` with `S`
+        // holding `[u8; N]`.
         let mut seen: Vec<Span> = Vec::new();
         for (i, InProgress { span, what, .. }) in self.in_progress[at..].iter().enumerate() {
             let Some(span) = *span else {

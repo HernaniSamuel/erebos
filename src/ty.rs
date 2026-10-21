@@ -1813,8 +1813,8 @@ impl Checker<'_, '_> {
             }
         };
         let def = self.q.enum_def(e.id);
-        let (value, failure) = builtin.try_variants();
-        let value_ty = def.variants[value as usize].payload[0].ty;
+        let (success, failure) = builtin.try_variants();
+        let value_ty = def.variants[success as usize].payload[0].ty;
         // The error type of a `Result`; an `Option` fails without a value.
         let error = def.variants[failure as usize]
             .payload
