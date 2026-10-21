@@ -1,0 +1,12 @@
+// emit: typeck
+// A literal length or alignment too large for `usize` is out of range, as
+// the same literal is in a `usize` constant, not an alignment or a type too
+// large.
+#[align(4294967296)]
+static A: u8 = 0;
+static B: [u8; 4294967297] = [0; 4294967297];
+const X: usize = 4294967296;
+struct S { x: [u8; 18446744073709551615] }
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

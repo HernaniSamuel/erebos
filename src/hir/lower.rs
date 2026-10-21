@@ -2167,8 +2167,12 @@ impl Lowerer<'_> {
     /// A `usize` needed at compile time (ADR 0029): known for a literal, as
     /// most are, or computed by a body of its own.
     fn array_len(&mut self, expr: &ast::Expr) -> ArrayLen {
-        if let ast::ExprKind::Int(value) = expr.kind {
-            // A rejected literal was reported by the lexer.
+        // A rejected literal was reported by the lexer. One too large for
+        // `usize` is lowered as any other length, so that type checking
+        // reports it as it does `const X: usize = 4294967296;`.
+        if let ast::ExprKind::Int(value) = expr.kind
+            && value.is_none_or(|value| value <= IntTy::Usize.max())
+        {
             return ArrayLen::Known(value.unwrap_or(0));
         }
         let id = FnId(self.value_base + self.values.len() as u32);

@@ -21,7 +21,7 @@ fn by_value(a: [u8; 4]) -> [u8; 4] {
 entry fn main() -> ! { loop {} }
 panic fn on_panic() -> ! { loop {} }
 
-fn huge_values(p: *const [u8; 5_000_000_000]) -> u8 {
+fn huge_values(p: *const [u8; 3_000_000_000]) -> u8 {
     let a: u8 = [b'a'; 3_000_000_000][0];
     let b: u8 = (*p)[1];
     let c: u8 = p[1][0];

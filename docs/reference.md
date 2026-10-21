@@ -97,7 +97,7 @@ The target is RV32IMAC on QEMU `virt` (ADR 0010).
 | `!` | never: the type of an expression that does not finish, never of memory (ADR 0034) |
 | `*const T`, `*mut T` | raw pointers |
 | `*const volatile T`, `*mut volatile T` | raw pointers whose accesses are volatile (ADR 0013, 0023) |
-| `[T; N]` | an array of `N` values of type `T`; `N` is a `usize` computed at compile time (ADR 0021, 0029) |
+| `[T; N]` | an array of `N` values of type `T`; `N` is a `usize` computed at compile time (ADR 0021, 0029), so a literal too large for `usize` is `ty::literal-out-of-range`, as it is in `#[align(N)]` |
 | `*const [T]`, `*mut [T]` | slices: the address of `T` values and how many there are (ADR 0031); `volatile` as for any pointer |
 | `Name`, `uart::Name` | a struct declared with `struct Name { ... }`, named by a path (ADR 0021, 0049) |
 | `Name`, `uart::Name` | an enum declared with `enum Name: u8 { ... }`: without payloads, stored as its integer type (ADR 0035); with payloads, a tag and the payload values of its variant (ADR 0039) |

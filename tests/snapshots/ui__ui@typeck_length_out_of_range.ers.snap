@@ -1,0 +1,56 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_length_out_of_range.ers
+---
+--- errors ---
+ty::literal-out-of-range
+
+  × literal out of range for `usize`
+   ╭─[typeck_length_out_of_range.ers:5:9]
+ 4 │ // large.
+ 5 │ #[align(4294967296)]
+   ·         ─────┬────
+   ·              ╰── `4294967296` does not fit in `usize`
+ 6 │ static A: u8 = 0;
+   ╰────
+ty::literal-out-of-range
+
+  × literal out of range for `usize`
+   ╭─[typeck_length_out_of_range.ers:7:16]
+ 6 │ static A: u8 = 0;
+ 7 │ static B: [u8; 4294967297] = [0; 4294967297];
+   ·                ─────┬────
+   ·                     ╰── `4294967297` does not fit in `usize`
+ 8 │ const X: usize = 4294967296;
+   ╰────
+ty::literal-out-of-range
+
+  × literal out of range for `usize`
+   ╭─[typeck_length_out_of_range.ers:7:34]
+ 6 │ static A: u8 = 0;
+ 7 │ static B: [u8; 4294967297] = [0; 4294967297];
+   ·                                  ─────┬────
+   ·                                       ╰── `4294967297` does not fit in `usize`
+ 8 │ const X: usize = 4294967296;
+   ╰────
+ty::literal-out-of-range
+
+  × literal out of range for `usize`
+   ╭─[typeck_length_out_of_range.ers:8:18]
+ 7 │ static B: [u8; 4294967297] = [0; 4294967297];
+ 8 │ const X: usize = 4294967296;
+   ·                  ─────┬────
+   ·                       ╰── `4294967296` does not fit in `usize`
+ 9 │ struct S { x: [u8; 18446744073709551615] }
+   ╰────
+ty::literal-out-of-range
+
+  × literal out of range for `usize`
+    ╭─[typeck_length_out_of_range.ers:9:20]
+  8 │ const X: usize = 4294967296;
+  9 │ struct S { x: [u8; 18446744073709551615] }
+    ·                    ──────────┬─────────
+    ·                              ╰── `18446744073709551615` does not fit in `usize`
+ 10 │ 
+    ╰────

@@ -26,17 +26,16 @@ ty::invalid-align
  12 │ static LOW: u32 = 0;
     ╰────
   help: `#[align(N)]` takes a power of two not below the natural alignment (ADR 0022)
-ty::invalid-align
+ty::literal-out-of-range
 
-  × invalid alignment 4294967296
+  × literal out of range for `usize`
     ╭─[typeck_static_errors.ers:13:9]
  12 │ static LOW: u32 = 0;
  13 │ #[align(4_294_967_296)]
     ·         ──────┬──────
-    ·               ╰── alignments go up to 2147483648
+    ·               ╰── `4294967296` does not fit in `usize`
  14 │ static HIGH: u8 = 0;
     ╰────
-  help: `#[align(N)]` takes a power of two not below the natural alignment (ADR 0022)
 ty::assign-immutable
 
   × cannot assign to `LIMIT`, which is not `mut`
