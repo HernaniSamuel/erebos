@@ -52,6 +52,7 @@ use helper as packed;
 use helper as assert;
 use E as u8;
 use u8 as byte;
+mod alone { use u8; }
 use assert as check;
 use Option as Opt;
 

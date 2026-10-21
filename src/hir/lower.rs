@@ -657,6 +657,14 @@ impl<'a> Items<'a> {
     ) {
         let name = ident.name.as_str();
         let is_use = matches!(binding, Binding::Use(_));
+        // `use u8;` names a built-in by its own name: it brings nothing in,
+        // and is reported once, as naming a built-in (`resolve_use`).
+        if let Binding::Use(id) = binding
+            && plain_name(&self.uses[id].path).is_some_and(|single| single.name == name)
+            && builtin_what(name).is_some()
+        {
+            return;
+        }
         if !in_core {
             let reserved = if let Some(help) = builtin_fn(name) {
                 Some((
@@ -1255,11 +1263,7 @@ impl Lowerer<'_> {
         let state = if let Some(single) = plain_name(&path)
             && let Some(what) = builtin_what(&single.name)
         {
-            // Without `as`, the name is the built-in's, which `declare`
-            // reported.
-            if self.uses[id].name.name != single.name {
-                self.use_builtin(single, what);
-            }
+            self.use_builtin(single, what);
             UseState::Failed
         } else {
             self.use_state(id, &path)

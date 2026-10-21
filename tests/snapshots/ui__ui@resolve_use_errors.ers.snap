@@ -1,6 +1,5 @@
 ---
 source: tests/ui.rs
-assertion_line: 22
 expression: output
 input_file: tests/ui/resolve_use_errors.ers
 ---
@@ -220,28 +219,39 @@ resolve::unknown-path
  54 │ use u8 as byte;
     ·     ─┬
     ·      ╰── a built-in type
- 55 │ use assert as check;
+ 55 │ mod alone { use u8; }
+    ╰────
+  help: the built-in names are in every module already: write `u8` itself (ADR 0049)
+resolve::unknown-path
+
+  × `u8` is a built-in type, not an item, and `use` brings in items and modules
+    ╭─[resolve_use_errors.ers:55:17]
+ 54 │ use u8 as byte;
+ 55 │ mod alone { use u8; }
+    ·                 ─┬
+    ·                  ╰── a built-in type
+ 56 │ use assert as check;
     ╰────
   help: the built-in names are in every module already: write `u8` itself (ADR 0049)
 resolve::unknown-path
 
   × `assert` is a built-in function, not an item, and `use` brings in items and modules
-    ╭─[resolve_use_errors.ers:55:5]
- 54 │ use u8 as byte;
- 55 │ use assert as check;
+    ╭─[resolve_use_errors.ers:56:5]
+ 55 │ mod alone { use u8; }
+ 56 │ use assert as check;
     ·     ───┬──
     ·        ╰── a built-in function
- 56 │ use Option as Opt;
+ 57 │ use Option as Opt;
     ╰────
   help: the built-in names are in every module already: write `assert` itself (ADR 0049)
 resolve::unknown-path
 
   × `Option` is a built-in type, not an item, and `use` brings in items and modules
-    ╭─[resolve_use_errors.ers:56:5]
- 55 │ use assert as check;
- 56 │ use Option as Opt;
+    ╭─[resolve_use_errors.ers:57:5]
+ 56 │ use assert as check;
+ 57 │ use Option as Opt;
     ·     ───┬──
     ·        ╰── a built-in type
- 57 │ 
+ 58 │ 
     ╰────
   help: the built-in names are in every module already: write `Option` itself (ADR 0049)

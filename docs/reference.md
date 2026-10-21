@@ -1942,8 +1942,9 @@ pub use regs::Block;
 - A `use` names an item or a module, never a variant
   (`resolve::use-variant`): bring in the enum and write `E::V`, or `.V`
   where the type is known (ADR 0044). A built-in name is no item either:
-  `use u8 as byte;` is `resolve::unknown-path`, and the built-in names are
-  seen from every module already. A last segment that names nothing is
+  `use u8 as byte;` and `use u8;` are `resolve::unknown-path`, the second
+  reported once, and the built-in names are seen from every module
+  already. A last segment that names nothing is
   `resolve::unknown-path` too.
 - The name a `use` brings in is in its module's one namespace: no item,
   module or other `use` of that module may have it
