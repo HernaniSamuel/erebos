@@ -49,3 +49,13 @@ panic fn on_panic() -> ! {
     print(&raw const b"panic");
     exit(1)
 }
+
+// QEMU `virt`'s RAM laid out as ADR 0030 had it: the image in the first
+// 64 MiB, a 1 MiB stack, `.data` and `.bss` in the last 64 MiB.
+memory {
+    region IMAGE { origin: 0x8000_0000, size: 0x0400_0000 }
+    region RAM { origin: 0x8400_0000, size: 0x0400_0000 }
+    code in IMAGE;
+    data in RAM;
+    stack in RAM { size: 0x0010_0000 }
+}

@@ -24,6 +24,17 @@ entry fn main() -> ! { loop {} }
 panic fn on_panic() -> ! { loop {} }
 ";
 
+/// The memory block of the programs that do not test memory maps: QEMU
+/// `virt`'s RAM laid out as ADR 0030 had it, as the e2e programs declare it.
+const VIRT_MAP: &str = "memory {
+    region IMAGE { origin: 0x8000_0000, size: 0x0400_0000 }
+    region RAM { origin: 0x8400_0000, size: 0x0400_0000 }
+    code in IMAGE;
+    data in RAM;
+    stack in RAM { size: 0x0010_0000 }
+}
+";
+
 struct Section {
     name: String,
     address: u64,
@@ -42,7 +53,7 @@ fn startup_ranges() {
     let work = Path::new(env!("CARGO_TARGET_TMPDIR")).join("elf");
     fs::create_dir_all(&work).unwrap();
     let source = work.join("startup.ers");
-    fs::write(&source, PROGRAM).unwrap();
+    fs::write(&source, format!("{VIRT_MAP}\n{PROGRAM}")).unwrap();
     for opt in [OptLevel::None, OptLevel::Speed] {
         let elf = work.join(format!("startup-{opt:?}.elf"));
         driver::build(&source, &elf, &[], opt, false).unwrap();
@@ -427,7 +438,7 @@ fn module_symbols() {
     let work = Path::new(env!("CARGO_TARGET_TMPDIR")).join("elf");
     fs::create_dir_all(&work).unwrap();
     let source = work.join("modules.ers");
-    fs::write(&source, MODULES).unwrap();
+    fs::write(&source, format!("{VIRT_MAP}\n{MODULES}")).unwrap();
     for opt in [OptLevel::None, OptLevel::Speed] {
         let elf = work.join(format!("modules-{opt:?}.elf"));
         driver::build(&source, &elf, &[], opt, false).unwrap();
@@ -455,7 +466,7 @@ fn core_symbols() {
     let work = Path::new(env!("CARGO_TARGET_TMPDIR")).join("elf");
     fs::create_dir_all(&work).unwrap();
     let source = work.join("core.ers");
-    fs::write(&source, PROGRAM).unwrap();
+    fs::write(&source, format!("{VIRT_MAP}\n{PROGRAM}")).unwrap();
     for opt in [OptLevel::None, OptLevel::Speed] {
         let elf = work.join(format!("core-{opt:?}.elf"));
         driver::build(&source, &elf, &[], opt, false).unwrap();
