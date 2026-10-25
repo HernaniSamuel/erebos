@@ -61,14 +61,14 @@ impl OptLevel {
 pub fn emit_llvm_ir(mir: &Mir, target: &Target, opt: OptLevel) -> Result<String, String> {
     let machine = target_machine(target, opt)?;
     let context = Context::create();
-    let module = lower(&context, mir, target, &machine, opt);
+    let module = lower(&context, mir, &machine, opt);
     Ok(module.print_to_string().to_string())
 }
 
 pub fn emit_object(mir: &Mir, target: &Target, opt: OptLevel, path: &Path) -> Result<(), String> {
     let machine = target_machine(target, opt)?;
     let context = Context::create();
-    let module = lower(&context, mir, target, &machine, opt);
+    let module = lower(&context, mir, &machine, opt);
     machine
         .write_to_file(&module, FileType::Object, path)
         .map_err(|e| format!("cannot write `{}`: {e}", path.display()))
@@ -94,7 +94,6 @@ fn target_machine(target: &Target, opt: OptLevel) -> Result<TargetMachine, Strin
 fn lower<'ctx>(
     context: &'ctx Context,
     mir: &Mir,
-    target: &Target,
     machine: &TargetMachine,
     opt: OptLevel,
 ) -> Module<'ctx> {
@@ -151,7 +150,7 @@ fn lower<'ctx>(
 
     // The entry function's symbol (ADR 0051): symbols are unique, so LLVM
     // keeps it as the function's name.
-    module.set_inline_assembly(&start_stub(target, &mir.body(mir.entry).name));
+    module.set_inline_assembly(&start_stub(&mir.body(mir.entry).name));
 
     if let Err(e) = module.verify() {
         panic!("codegen produced invalid LLVM IR: {}", e.to_string());
@@ -1265,18 +1264,19 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
     }
 }
 
-/// Provisional startup code (ADR 0012, 0030): sets up the stack, fills
-/// `.bss` with zeros, copies the initial values of `.data` from their load
-/// address, a word at a time between the linker script's symbols, and
-/// jumps to the entry function. It goes away once the language can express
-/// it (M3/M4).
-fn start_stub(target: &Target, entry: &str) -> String {
+/// Provisional startup code (ADR 0012, 0030): sets the stack pointer to
+/// the top of the stack, fills `.bss` with zeros, copies the initial values
+/// of `.data` from their load address, a word at a time between the linker
+/// script's symbols, and jumps to the entry function. Every address comes
+/// from the linker script, so the code does not depend on the memory map
+/// (ADR 0057). It goes away once the language can express it (M4).
+fn start_stub(entry: &str) -> String {
     format!(
         "\t.section .text.start, \"ax\", @progbits\n\
          \t.globl _start\n\
          \t.type _start, @function\n\
          _start:\n\
-         \tli sp, {:#x}\n\
+         \tla sp, __stack_end\n\
          \tla t0, __bss_start\n\
          \tla t1, __bss_end\n\
          .Lzero_bss:\n\
@@ -1296,7 +1296,6 @@ fn start_stub(target: &Target, entry: &str) -> String {
          \taddi t2, t2, 4\n\
          \tj .Lcopy_word\n\
          .Lenter:\n\
-         \tj {entry}\n",
-        target.stack_top()
+         \tj {entry}\n"
     )
 }

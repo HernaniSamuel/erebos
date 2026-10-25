@@ -1,0 +1,70 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/link_memory_shared.ers
+---
+--- linker-script ---
+OUTPUT_ARCH(riscv)
+ENTRY(_start)
+
+MEMORY {
+    STACK : ORIGIN = 0x81000000, LENGTH = 0x1000
+    RAM : ORIGIN = 0x80000000, LENGTH = 0x100000
+}
+
+SECTIONS {
+    /* The reset entry, alone so that only its own alignment counts:
+       it is at the origin of the code's region (ADR 0057). */
+    .text.start : { KEEP(*(.text.start)) } > RAM
+    .text : { *(.text .text.*) } > RAM
+    .rodata : { *(.rodata .rodata.* .srodata .srodata.*) } > RAM
+    /* At the start of its region, below anything else there (ADR 0057). */
+    .stack (NOLOAD) : ALIGN(16) {
+        __stack_start = .;
+        . += 0x1000;
+        __stack_end = .;
+    } > STACK
+    /* Aligned on the section, so that its load address is too. */
+    .data : ALIGN(4) {
+        __data_start = .;
+        *(.data .data.* .sdata .sdata.*)
+        . = ALIGN(4);
+        __data_end = .;
+    } > RAM
+    __data_load = LOADADDR(.data);
+    .bss (NOLOAD) : ALIGN(4) {
+        __bss_start = .;
+        *(.bss .bss.* .sbss .sbss.* COMMON)
+        . = ALIGN(4);
+        __bss_end = .;
+    } > RAM
+    /* Not loaded. */
+    .symtab 0 : { *(.symtab) }
+    .strtab 0 : { *(.strtab) }
+    .shstrtab 0 : { *(.shstrtab) }
+    .comment 0 : { *(.comment) }
+    .riscv.attributes 0 : { *(.riscv.attributes) }
+    .debug_abbrev 0 : { *(.debug_abbrev) }
+    .debug_addr 0 : { *(.debug_addr) }
+    .debug_aranges 0 : { *(.debug_aranges) }
+    .debug_cu_index 0 : { *(.debug_cu_index) }
+    .debug_frame 0 : { *(.debug_frame) }
+    .debug_gnu_pubnames 0 : { *(.debug_gnu_pubnames) }
+    .debug_gnu_pubtypes 0 : { *(.debug_gnu_pubtypes) }
+    .debug_info 0 : { *(.debug_info) }
+    .debug_line 0 : { *(.debug_line) }
+    .debug_line_str 0 : { *(.debug_line_str) }
+    .debug_loc 0 : { *(.debug_loc) }
+    .debug_loclists 0 : { *(.debug_loclists) }
+    .debug_macinfo 0 : { *(.debug_macinfo) }
+    .debug_macro 0 : { *(.debug_macro) }
+    .debug_names 0 : { *(.debug_names) }
+    .debug_pubnames 0 : { *(.debug_pubnames) }
+    .debug_pubtypes 0 : { *(.debug_pubtypes) }
+    .debug_ranges 0 : { *(.debug_ranges) }
+    .debug_rnglists 0 : { *(.debug_rnglists) }
+    .debug_str 0 : { *(.debug_str) }
+    .debug_str_offsets 0 : { *(.debug_str_offsets) }
+    .debug_tu_index 0 : { *(.debug_tu_index) }
+    .debug_types 0 : { *(.debug_types) }
+}

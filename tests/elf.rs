@@ -1,6 +1,7 @@
 //! Inspects built executables with `llvm-readelf` (ADR 0030): where statics
 //! go, and the symbols `_start` uses to fill `.bss` with zeros and copy the
-//! initial values of `.data`.
+//! initial values of `.data`; where a memory map puts the code, the data
+//! and the stack, and what fails to build when they do not fit (ADR 0057).
 
 mod common;
 
@@ -45,8 +46,359 @@ fn startup_ranges() {
     for opt in [OptLevel::None, OptLevel::Speed] {
         let elf = work.join(format!("startup-{opt:?}.elf"));
         driver::build(&source, &elf, &[], opt, false).unwrap();
-        check(&elf, opt);
+        check(&elf, opt, false);
     }
+}
+
+/// A region of a memory map, `[origin, origin + size)`.
+#[derive(Clone, Copy)]
+struct Region {
+    origin: u64,
+    size: u64,
+}
+
+impl Region {
+    fn contains(&self, start: u64, end: u64) -> bool {
+        self.origin <= start && start <= end && end <= self.origin + self.size
+    }
+}
+
+/// The regions of a memory map holding the code, the data and the stack,
+/// and the stack's size: `memory_block` writes it as a `memory` block.
+struct Map {
+    code: Region,
+    data: Region,
+    stack: Region,
+    stack_size: u64,
+}
+
+impl Map {
+    /// The block: a region `CODE`, `DATA` unless data shares the code's
+    /// region, `STACK` unless the stack shares the data's, and `spare`,
+    /// holding nothing, apart from them.
+    fn memory_block(&self, spare: Region) -> String {
+        let mut regions = vec![("CODE", self.code)];
+        let data = if self.data.origin == self.code.origin {
+            "CODE"
+        } else {
+            regions.push(("DATA", self.data));
+            "DATA"
+        };
+        let stack = if self.stack.origin == self.data.origin {
+            data
+        } else {
+            regions.push(("STACK", self.stack));
+            "STACK"
+        };
+        regions.push(("SPARE", spare));
+        let regions: String = regions
+            .iter()
+            .map(|(name, r)| {
+                format!(
+                    "    region {name} {{ origin: {:#x}, size: {:#x} }}\n",
+                    r.origin, r.size
+                )
+            })
+            .collect();
+        format!(
+            "memory {{\n{regions}    code in CODE;\n    data in {data};\n    stack in {stack} {{ size: {:#x} }}\n}}\n",
+            self.stack_size
+        )
+    }
+}
+
+/// Builds `PROGRAM` with the memory map `map` at both levels, and checks
+/// where the linker script of ADR 0057 puts things: `_start` at the code
+/// region's origin; the stack at the start of its region, rounded up to 16,
+/// with its size; `.data` above the stack; every loaded section, and the
+/// load image of `.data`, in its region; and the guarantees of ADR 0030,
+/// without the disjointness of the load image when data shares the code's
+/// region, where it is the run range.
+fn check_map(name: &str, map: &Map) {
+    let work = Path::new(env!("CARGO_TARGET_TMPDIR")).join("elf");
+    fs::create_dir_all(&work).unwrap();
+    let source = work.join(format!("{name}.ers"));
+    let spare = Region {
+        origin: 0x8800_0000,
+        size: 0x1000,
+    };
+    fs::write(&source, format!("{}\n{PROGRAM}", map.memory_block(spare))).unwrap();
+    let shared = map.code.origin == map.data.origin;
+    for opt in [OptLevel::None, OptLevel::Speed] {
+        let elf = work.join(format!("{name}-{opt:?}.elf"));
+        driver::build(&source, &elf, &[], opt, false).unwrap();
+        check(&elf, opt, shared);
+
+        let sections = sections(&elf);
+        let symbols = symbols(&elf);
+        let value = |name: &str| {
+            symbols
+                .iter()
+                .find(|s| s.name == name)
+                .unwrap_or_else(|| panic!("{opt:?}: no symbol {name}"))
+                .value
+        };
+        let section = |name: &str| {
+            sections
+                .iter()
+                .find(|s| s.name == name)
+                .unwrap_or_else(|| panic!("{opt:?}: no section {name}"))
+        };
+
+        assert_eq!(value("_start"), map.code.origin, "{opt:?}: `_start`");
+        let stack_start = map.stack.origin.next_multiple_of(16);
+        assert_eq!(
+            value("__stack_start"),
+            stack_start,
+            "{opt:?}: `__stack_start`"
+        );
+        assert_eq!(
+            value("__stack_end"),
+            stack_start + map.stack_size,
+            "{opt:?}: `__stack_end`"
+        );
+        if map.data.origin == map.stack.origin {
+            assert!(
+                section(".data").address >= value("__stack_end"),
+                "{opt:?}: `.data` is below the top of the stack"
+            );
+        }
+
+        let data_load = value("__data_load");
+        let data_size = value("__data_end") - value("__data_start");
+        assert!(
+            map.code.contains(data_load, data_load + data_size),
+            "{opt:?}: the load image of `.data` is outside the code's region"
+        );
+        for (name, region) in [
+            (".text.start", map.code),
+            (".text", map.code),
+            (".rodata", map.code),
+            (".stack", map.stack),
+            (".data", map.data),
+            (".bss", map.data),
+        ] {
+            let s = section(name);
+            assert!(
+                region.contains(s.address, s.address + s.size),
+                "{opt:?}: {name} is outside its region"
+            );
+        }
+    }
+}
+
+/// Code in one region; the stack, then `.data` and `.bss`, in another
+/// (ADR 0057).
+#[test]
+fn memory_map_layout() {
+    check_map(
+        "map",
+        &Map {
+            code: Region {
+                origin: 0x8000_0000,
+                size: 0x1_0000,
+            },
+            data: Region {
+                origin: 0x8002_0000,
+                size: 0x4000,
+            },
+            stack: Region {
+                origin: 0x8002_0000,
+                size: 0x4000,
+            },
+            stack_size: 0x800,
+        },
+    );
+}
+
+/// A stack region whose origin is not a multiple of 16: the stack starts
+/// at the next one.
+#[test]
+fn memory_map_stack_rounded_up() {
+    let ram = Region {
+        origin: 0x8002_0004,
+        size: 0x4000,
+    };
+    check_map(
+        "map_rounded",
+        &Map {
+            code: Region {
+                origin: 0x8000_0000,
+                size: 0x1_0000,
+            },
+            data: ram,
+            stack: ram,
+            stack_size: 0x800,
+        },
+    );
+}
+
+/// Code and data sharing a region, the stack in one of its own: the load
+/// image of `.data` is its run range.
+#[test]
+fn memory_map_shared() {
+    let ram = Region {
+        origin: 0x8000_0000,
+        size: 0x1_0000,
+    };
+    check_map(
+        "map_shared",
+        &Map {
+            code: ram,
+            data: ram,
+            stack: Region {
+                origin: 0x8100_0000,
+                size: 0x1000,
+            },
+            stack_size: 0x1000,
+        },
+    );
+    let work = Path::new(env!("CARGO_TARGET_TMPDIR")).join("elf");
+    for opt in [OptLevel::None, OptLevel::Speed] {
+        let symbols = symbols(&work.join(format!("map_shared-{opt:?}.elf")));
+        let value = |name: &str| symbols.iter().find(|s| s.name == name).unwrap().value;
+        assert_eq!(
+            value("__data_load"),
+            value("__data_start"),
+            "{opt:?}: the load image of `.data` is not its run range"
+        );
+    }
+}
+
+/// An object linked in whose code section is aligned to 64 does not move
+/// `_start` off the origin of the code's region: the reset entry has an
+/// output section of its own (ADR 0057).
+#[test]
+fn reset_entry_alone() {
+    let work = Path::new(env!("CARGO_TARGET_TMPDIR")).join("elf");
+    fs::create_dir_all(&work).unwrap();
+    let asm = work.join("aligned.s");
+    fs::write(
+        &asm,
+        "\t.text\n\t.p2align 6\n\t.globl aligned\naligned:\n\tret\n",
+    )
+    .unwrap();
+    let object = work.join("aligned.o");
+    let clang = common::clang_path();
+    let output = Command::new(&clang)
+        .args(common::CLANG_TARGET)
+        .arg("-c")
+        .arg(&asm)
+        .arg("-o")
+        .arg(&object)
+        .output()
+        .unwrap_or_else(|e| {
+            panic!(
+                "cannot run `{}` ({e}); install clang or set EREBOS_CLANG",
+                clang.display()
+            )
+        });
+    assert!(
+        output.status.success(),
+        "clang failed:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let source = work.join("reset_entry.ers");
+    let block = "memory {
+    region FLASH { origin: 0x8000_0004, size: 0x1_0000 }
+    region RAM { origin: 0x8002_0000, size: 0x4000 }
+    code in FLASH;
+    data in RAM;
+    stack in RAM { size: 0x800 }
+}
+";
+    fs::write(&source, format!("{block}\n{PROGRAM}")).unwrap();
+    for opt in [OptLevel::None, OptLevel::Speed] {
+        let elf = work.join(format!("reset_entry-{opt:?}.elf"));
+        driver::build(&source, &elf, std::slice::from_ref(&object), opt, false).unwrap();
+        let symbols = symbols(&elf);
+        let value = |name: &str| symbols.iter().find(|s| s.name == name).unwrap().value;
+        assert_eq!(
+            value("aligned") % 64,
+            0,
+            "{opt:?}: the object's code is not aligned to 64, so the test proves nothing"
+        );
+        assert_eq!(value("_start"), 0x8000_0004, "{opt:?}: `_start` moved");
+    }
+}
+
+/// `link::region-overflow` (ADR 0057): building `name`, `PROGRAM` with the
+/// memory block `block`, fails, and the rendered diagnostics are returned.
+/// No executable is written.
+fn overflow(name: &str, block: &str) -> String {
+    let work = Path::new(env!("CARGO_TARGET_TMPDIR")).join("elf");
+    fs::create_dir_all(&work).unwrap();
+    let source = work.join(format!("{name}.ers"));
+    fs::write(&source, format!("{block}\n{PROGRAM}")).unwrap();
+    let elf = work.join(format!("{name}.elf"));
+    let _ = fs::remove_file(&elf);
+    let error = driver::build(&source, &elf, &[], OptLevel::None, false).unwrap_err();
+    assert!(!elf.exists(), "{name}: an executable was written");
+    error
+}
+
+/// Code and `.rodata` past the end of their region: `ld.lld` reports each
+/// section that ends past it, the compiler one diagnostic naming the first,
+/// with the largest overflow, that of the load image of `.data`, which
+/// comes last.
+#[test]
+fn region_overflow_code() {
+    let error = overflow(
+        "overflow_code",
+        "memory {
+    region FLASH { origin: 0x8000_0000, size: 0x100 }
+    region RAM { origin: 0x8002_0000, size: 0x4000 }
+    code in FLASH;
+    data in RAM;
+    stack in RAM { size: 0x800 }
+}
+",
+    );
+    assert_eq!(error.matches("link::region-overflow").count(), 1, "{error}");
+
+    // The overflow is how far the load image of `.data` ends past the
+    // region, as in the same program with a region large enough.
+    let work = Path::new(env!("CARGO_TARGET_TMPDIR")).join("elf");
+    let source = work.join("overflow_code_fits.ers");
+    let block = "memory {
+    region FLASH { origin: 0x8000_0000, size: 0x1_0000 }
+    region RAM { origin: 0x8002_0000, size: 0x4000 }
+    code in FLASH;
+    data in RAM;
+    stack in RAM { size: 0x800 }
+}
+";
+    fs::write(&source, format!("{block}\n{PROGRAM}")).unwrap();
+    let elf = work.join("overflow_code_fits.elf");
+    driver::build(&source, &elf, &[], OptLevel::None, false).unwrap();
+    let symbols = symbols(&elf);
+    let value = |name: &str| symbols.iter().find(|s| s.name == name).unwrap().value;
+    let end = value("__data_load") + value("__data_end") - value("__data_start");
+    let lacks = end - (0x8000_0000 + 0x100);
+    assert!(
+        error.contains(&format!("{lacks} bytes too small")),
+        "{error}"
+    );
+
+    insta::assert_snapshot!(error);
+}
+
+/// `.bss` past the end of the region it shares with the stack.
+#[test]
+fn region_overflow_bss() {
+    let error = overflow(
+        "overflow_bss",
+        "memory {
+    region FLASH { origin: 0x8000_0000, size: 0x1_0000 }
+    region RAM { origin: 0x8002_0000, size: 0x808 }
+    code in FLASH;
+    data in RAM;
+    stack in RAM { size: 0x800 }
+}
+",
+    );
+    insta::assert_snapshot!(error);
 }
 
 /// Functions and statics of modules, named by their paths joined by dots,
@@ -132,7 +484,10 @@ fn core_symbols() {
     }
 }
 
-fn check(elf: &Path, opt: OptLevel) {
+/// The guarantees of ADR 0030 on the startup ranges; with `shared`, data
+/// shares the code's region and the load image of `.data` is its run range
+/// (ADR 0057), so it is not disjoint from it.
+fn check(elf: &Path, opt: OptLevel, shared: bool) {
     let sections = sections(elf);
     let symbols = symbols(elf);
     let section = |name: &str| {
@@ -199,6 +554,9 @@ fn check(elf: &Path, opt: OptLevel) {
     ];
     for (i, a) in ranges.iter().enumerate() {
         for b in &ranges[i + 1..] {
+            if shared && (a.0, b.0) == ("data", "load") {
+                continue;
+            }
             assert!(
                 a.2 <= b.1 || b.2 <= a.1,
                 "{opt:?}: the {} and {} ranges overlap",

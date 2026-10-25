@@ -9,6 +9,7 @@ use std::str::FromStr;
 
 pub use crate::codegen::OptLevel;
 use crate::diag::{self, Diagnostic, Diagnostics};
+use crate::link::LinkError;
 use crate::query::Queries;
 use crate::span::SourceMap;
 use crate::syntax::{ast, lexer, parser};
@@ -21,6 +22,7 @@ pub enum Stage {
     Hir,
     Typeck,
     Mir,
+    LinkerScript,
     LlvmIr,
 }
 
@@ -31,6 +33,7 @@ impl Stage {
         Stage::Hir,
         Stage::Typeck,
         Stage::Mir,
+        Stage::LinkerScript,
         Stage::LlvmIr,
     ];
 
@@ -41,6 +44,7 @@ impl Stage {
             Stage::Hir => "hir",
             Stage::Typeck => "typeck",
             Stage::Mir => "mir",
+            Stage::LinkerScript => "linker-script",
             Stage::LlvmIr => "llvm-ir",
         }
     }
@@ -96,6 +100,10 @@ pub fn dump(
     let program = Program::at(path, text);
     let output = match front_end(&program, Some(stage), &mut sources, &mut diags) {
         FrontEnd::Dump(dump) => Some(dump),
+        FrontEnd::Mir(mir) if stage == Stage::LinkerScript => Some(link::linker_script(
+            mir.memory.as_ref(),
+            &target::RISCV32_VIRT,
+        )),
         FrontEnd::Mir(mir) => codegen::emit_llvm_ir(&mir, &target::RISCV32_VIRT, opt)
             .map_err(|e| diags.push(Diagnostic::error("codegen::llvm", e)))
             .ok(),
@@ -134,13 +142,43 @@ pub fn build(
     let script = output.with_extension("ld");
     let result = codegen::emit_object(&mir, target, opt, &object)
         .and_then(|()| {
-            fs::write(&script, link::linker_script(target))
+            fs::write(&script, link::linker_script(mir.memory.as_ref(), target))
                 .map_err(|e| format!("cannot write `{}`: {e}", script.display()))
         })
-        .and_then(|()| link::link(&object, link, &script, output));
+        .map_err(|e| format!("error: {e}"))
+        .and_then(|()| {
+            link::link(&object, link, &script, output).map_err(|e| match e {
+                LinkError::Run(e) => format!("error: {e}"),
+                LinkError::Failed(stderr) => {
+                    link_failure(&stderr, mir.memory.as_ref(), &sources, color)
+                }
+            })
+        });
     let _ = fs::remove_file(&object);
     let _ = fs::remove_file(&script);
-    result.map_err(|e| format!("error: {e}"))
+    result
+}
+
+/// What `build` reports when `ld.lld` fails with the error output
+/// `stderr`: a `link::region-overflow` per region it reports overflowing,
+/// when the program has a memory map, then the linker's other lines as
+/// they are.
+fn link_failure(
+    stderr: &str,
+    map: Option<&mir::MemoryMap>,
+    sources: &SourceMap,
+    color: bool,
+) -> String {
+    let (overflows, rest) = match map {
+        Some(map) => link::region_overflows(stderr, map),
+        None => (Vec::new(), stderr.lines().collect()),
+    };
+    let mut out = diag::render(&overflows, sources, color);
+    let rest = rest.join("\n");
+    if !rest.trim().is_empty() || overflows.is_empty() {
+        out += &format!("error: linking failed:\n{}", rest.trim_end());
+    }
+    out
 }
 
 /// A program to compile: its root file's name and text, and where the

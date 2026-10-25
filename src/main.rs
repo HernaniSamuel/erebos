@@ -14,7 +14,7 @@ usage: erebos build <input.ers> [-o <output>] [-O] [--link <file.o>]... [--emit=
   --link <file.o>  an object file to link with, defining `extern fn`s
   -O               optimize (LLVM -O2)
   --emit=<stage>   print a compiler stage instead of building:
-                   tokens, ast, hir, typeck, mir, llvm-ir";
+                   tokens, ast, hir, typeck, mir, linker-script, llvm-ir";
 
 struct Args {
     input: PathBuf,

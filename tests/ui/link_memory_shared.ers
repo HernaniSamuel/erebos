@@ -1,0 +1,15 @@
+// emit: linker-script
+// The linker script of a board that runs from RAM (ADR 0057): code and
+// data share `RAM`, so `.data` has no `AT>` and its initial values are at
+// its run addresses; the stack is in a region of its own.
+memory {
+    region STACK { origin: 0x8100_0000, size: 0x1000 }
+    region RAM { origin: 0x8000_0000, size: 0x10_0000 }
+
+    stack in STACK { size: 0x1000 }
+    data in RAM;
+    code in RAM;
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

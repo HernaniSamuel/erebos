@@ -1,0 +1,20 @@
+// emit: linker-script
+// The linker script of a memory map (ADR 0057): every region under its own
+// name, `SPARE` holding nothing; the reset entry in an output section of
+// its own, then the code, the read-only data and the initial values of
+// `.data` in `FLASH`; the stack at the start of `RAM`, then `.data` and
+// `.bss`.
+const KIB: usize = 1024;
+
+memory {
+    region FLASH { origin: 0x0800_0000, size: 64 * KIB }
+    region RAM { origin: 0x2000_0000, size: 16 * KIB }
+    region SPARE { origin: 0x2000_4000, size: 16 * KIB }
+
+    code in FLASH;
+    data in RAM;
+    stack in RAM { size: 2 * KIB }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }
