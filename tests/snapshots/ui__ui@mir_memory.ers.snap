@@ -1,0 +1,136 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/mir_memory.ers
+---
+--- mir ---
+memory {
+    region FLASH { origin: 0x8000000, size: 65536 }
+    region RAM { origin: 0x20000000, size: 16384 }
+    region SRAM2 { origin: 0x20004000, size: 16384 }
+    code in FLASH;
+    data in RAM;
+    stack in RAM { size: 2048 }
+}
+
+fn kib(_1: usize) -> usize {
+    let _0: usize;
+    let _1: usize; // n
+    let _2: usize;
+    let _3: usize;
+
+    bb0: {
+        _2 = copy _1;
+        _3 = Mul(copy _2, const 1024_usize);
+        _0 = copy _3;
+        return;
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+comptime fn KIB() -> usize {
+    let _0: usize;
+
+    bb0: {
+        _0 = const 1024_usize;
+        return;
+    }
+}
+
+comptime fn FLASH_BASE() -> usize {
+    let _0: usize;
+
+    bb0: {
+        _0 = const 134217728_usize;
+        return;
+    }
+}
+
+comptime fn origin() -> usize {
+    let _0: usize;
+
+    bb0: {
+        _0 = const 134217728_usize;
+        return;
+    }
+}
+
+comptime fn size() -> usize {
+    let _0: usize;
+    let _1: usize;
+
+    bb0: {
+        _1 = call kib(const 64_usize);
+        _0 = copy _1;
+        return;
+    }
+}
+
+comptime fn size() -> usize {
+    let _0: usize;
+    let _1: usize;
+
+    bb0: {
+        _1 = call kib(const 16_usize);
+        _0 = copy _1;
+        return;
+    }
+}
+
+comptime fn origin() -> usize {
+    let _0: usize;
+    let _1: usize;
+    let _2: usize;
+
+    bb0: {
+        _1 = call kib(const 16_usize);
+        _2 = Add(const 536870912_usize, copy _1);
+        _0 = copy _2;
+        return;
+    }
+}
+
+comptime fn size() -> usize {
+    let _0: usize;
+    let _1: usize;
+
+    bb0: {
+        _1 = Mul(const 16_usize, const 1024_usize);
+        _0 = copy _1;
+        return;
+    }
+}
+
+comptime fn stack_size() -> usize {
+    let _0: usize;
+    let _1: usize;
+
+    bb0: {
+        _1 = Mul(const 2_usize, const 1024_usize);
+        _0 = copy _1;
+        return;
+    }
+}

@@ -2980,12 +2980,17 @@ impl Checker<'_, '_> {
     }
 }
 
-/// Lists struct layouts, enums with their values and, with payloads, their
-/// layouts, `Option(T)` and `Result(T, E)` among them, then every
-/// function's locals and expression types, for `--emit=typeck`.
+/// Lists the memory map with its values (ADR 0057), struct layouts, enums
+/// with their values and, with payloads, their layouts, `Option(T)` and
+/// `Result(T, E)` among them, then every function's locals and expression
+/// types, for `--emit=typeck`.
 pub fn dump(q: &mut Queries) -> String {
     let hir = q.hir;
     let mut out = String::new();
+    // Left out if a value failed, which was reported.
+    if let Some(memory) = q.memory_map() {
+        write!(out, "{memory}").unwrap();
+    }
     // `core` is left out (ADR 0052).
     for (i, def) in hir.structs.iter().enumerate() {
         if hir.in_core(def.module) {

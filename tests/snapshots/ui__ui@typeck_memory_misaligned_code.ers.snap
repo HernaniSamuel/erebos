@@ -1,0 +1,22 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_memory_misaligned_code.ers
+---
+--- errors ---
+ty::misaligned-code
+
+  × the code's region `FLASH` starts at a misaligned address
+   ╭─[typeck_memory_misaligned_code.ers:6:28]
+ 5 │ memory {
+ 6 │     region FLASH { origin: 0x8000_0002, size: 0x1_0000 }
+   ·                            ─────┬─────
+   ·                                 ╰── 0x80000002 is not a multiple of 4
+ 7 │     region RAM { origin: 0x8400_0000, size: 0x1_0000 }
+ 8 │     code in FLASH;
+   ·     ──────┬──────
+   ·           ╰── places the code, from the reset entry on, in `FLASH`
+ 9 │     data in RAM;
+   ╰────
+  help: the reset entry is at the origin of the code's region, which must therefore be a multiple
+        of the target's code alignment, 4 bytes (ADR 0057)

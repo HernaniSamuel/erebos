@@ -1,0 +1,17 @@
+// emit: typeck
+// Only the code's region needs an aligned origin (ADR 0057): a region
+// holding only data, or nothing, may start anywhere. The stack's region
+// may too, its start being rounded up: from 0x8800_0010, the stack fills
+// `STACK` to its end exactly.
+memory {
+    region FLASH { origin: 0x8000_0000, size: 0x1_0000 }
+    region RAM { origin: 0x8400_0002, size: 0x1_0000 }
+    region STACK { origin: 0x8800_0001, size: 0x100F }
+    region SPARE { origin: 0x8c00_0003, size: 0x10 }
+    code in FLASH;
+    data in RAM;
+    stack in STACK { size: 0x1000 }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

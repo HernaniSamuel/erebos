@@ -1,0 +1,29 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_memory_failed_values.ers
+---
+--- errors ---
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_memory_failed_values.ers:15:45]
+ 14 │     region FLASH { origin: 0x8000_0000, size: 0x1_0000 }
+ 15 │     region RAM { origin: 0x8000_FFF8, size: SIXTEEN }
+    ·                                             ───┬───
+    ·                                                ╰── expected `usize`, found `u32`
+ 16 │     region STACK { origin: 0x8000_0000 + 4 / zero(), size: 0x1000 }
+    ╰────
+  help: integer types never convert implicitly; use `as usize` (ADR 0008)
+eval::panic
+
+  × the evaluation called the panic function: division by zero
+    ╭─[typeck_memory_failed_values.ers:16:42]
+ 15 │     region RAM { origin: 0x8000_FFF8, size: SIXTEEN }
+ 16 │     region STACK { origin: 0x8000_0000 + 4 / zero(), size: 0x1000 }
+    ·                            ────────────┬───────────┬
+    ·                                        │           ╰── division by zero
+    ·                                        ╰── while evaluating this value
+ 17 │     code in FLASH;
+    ╰────
+  help: this code runs at compile time (ADR 0027)

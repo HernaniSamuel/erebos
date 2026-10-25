@@ -1,0 +1,28 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_memory_empty_region.ers
+---
+--- errors ---
+ty::empty-region
+
+  × the region `SPARE` is empty
+   ╭─[typeck_memory_empty_region.ers:7:47]
+ 6 │     region RAM { origin: 0x8400_0000, size: 0x1_0000 }
+ 7 │     region SPARE { origin: 0x8800_0000, size: 0 }
+   ·                                               ┬
+   ·                                               ╰── a size of 0
+ 8 │     region DATA { origin: 0x8c00_0000, size: 0x0 }
+   ╰────
+  help: a region covers `[origin, origin + size)`: give it at least one byte (ADR 0057)
+ty::empty-region
+
+  × the region `DATA` is empty
+   ╭─[typeck_memory_empty_region.ers:8:46]
+ 7 │     region SPARE { origin: 0x8800_0000, size: 0 }
+ 8 │     region DATA { origin: 0x8c00_0000, size: 0x0 }
+   ·                                              ─┬─
+   ·                                               ╰── a size of 0
+ 9 │     code in FLASH;
+   ╰────
+  help: a region covers `[origin, origin + size)`: give it at least one byte (ADR 0057)

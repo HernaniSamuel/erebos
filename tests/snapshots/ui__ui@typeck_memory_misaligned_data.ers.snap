@@ -1,0 +1,19 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_memory_misaligned_data.ers
+---
+--- typeck ---
+memory {
+    region FLASH { origin: 0x80000000, size: 65536 }
+    region RAM { origin: 0x84000002, size: 65536 }
+    region STACK { origin: 0x88000001, size: 4111 }
+    region SPARE { origin: 0x8c000003, size: 16 }
+    code in FLASH;
+    data in RAM;
+    stack in STACK { size: 4096 }
+}
+entry fn main() -> !
+    expr 0 loop 592..599: !
+panic fn on_panic() -> !
+    expr 1 loop 629..636: !

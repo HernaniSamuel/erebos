@@ -1,0 +1,74 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_memory_overlap.ers
+---
+--- errors ---
+ty::region-overlap
+
+  × the regions `RAM` and `BYTE` overlap
+    ╭─[typeck_memory_overlap.ers:10:12]
+  8 │     region FLASH { origin: 0x8000_0000, size: 0x1_0000 }
+  9 │     region RAM { origin: 0x8001_0000, size: 0x1_0000 }
+    ·            ─┬─
+    ·             ╰── covers [0x80010000, 0x80020000)
+ 10 │     region BYTE { origin: 0x8001_FFFF, size: 0x10 }
+    ·            ──┬─
+    ·              ╰── covers [0x8001ffff, 0x8002000f)
+ 11 │     region A { origin: 0x9000_0000, size: 0x300 }
+    ╰────
+  help: they share the byte at 0x8001ffff; the regions of a memory map are disjoint (ADR 0057)
+ty::region-overlap
+
+  × the regions `A` and `B` overlap
+    ╭─[typeck_memory_overlap.ers:12:12]
+ 10 │     region BYTE { origin: 0x8001_FFFF, size: 0x10 }
+ 11 │     region A { origin: 0x9000_0000, size: 0x300 }
+    ·            ┬
+    ·            ╰── covers [0x90000000, 0x90000300)
+ 12 │     region B { origin: 0x9000_0100, size: 0x300 }
+    ·            ┬
+    ·            ╰── covers [0x90000100, 0x90000400)
+ 13 │     region C { origin: 0x9000_0200, size: 0x300 }
+    ╰────
+  help: they share 512 bytes from 0x90000100; the regions of a memory map are disjoint (ADR 0057)
+ty::region-overlap
+
+  × the regions `A` and `C` overlap
+    ╭─[typeck_memory_overlap.ers:13:12]
+ 10 │     region BYTE { origin: 0x8001_FFFF, size: 0x10 }
+ 11 │     region A { origin: 0x9000_0000, size: 0x300 }
+    ·            ┬
+    ·            ╰── covers [0x90000000, 0x90000300)
+ 12 │     region B { origin: 0x9000_0100, size: 0x300 }
+ 13 │     region C { origin: 0x9000_0200, size: 0x300 }
+    ·            ┬
+    ·            ╰── covers [0x90000200, 0x90000500)
+ 14 │     region EMPTY { origin: 0x9000_0010, size: 0 }
+    ╰────
+  help: they share 256 bytes from 0x90000200; the regions of a memory map are disjoint (ADR 0057)
+ty::region-overlap
+
+  × the regions `B` and `C` overlap
+    ╭─[typeck_memory_overlap.ers:13:12]
+ 11 │     region A { origin: 0x9000_0000, size: 0x300 }
+ 12 │     region B { origin: 0x9000_0100, size: 0x300 }
+    ·            ┬
+    ·            ╰── covers [0x90000100, 0x90000400)
+ 13 │     region C { origin: 0x9000_0200, size: 0x300 }
+    ·            ┬
+    ·            ╰── covers [0x90000200, 0x90000500)
+ 14 │     region EMPTY { origin: 0x9000_0010, size: 0 }
+    ╰────
+  help: they share 512 bytes from 0x90000200; the regions of a memory map are disjoint (ADR 0057)
+ty::empty-region
+
+  × the region `EMPTY` is empty
+    ╭─[typeck_memory_overlap.ers:14:47]
+ 13 │     region C { origin: 0x9000_0200, size: 0x300 }
+ 14 │     region EMPTY { origin: 0x9000_0010, size: 0 }
+    ·                                               ┬
+    ·                                               ╰── a size of 0
+ 15 │     code in FLASH;
+    ╰────
+  help: a region covers `[origin, origin + size)`: give it at least one byte (ADR 0057)

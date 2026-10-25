@@ -1,0 +1,22 @@
+// emit: mir
+// The MIR carries the memory map with its values computed (ADR 0057), the
+// map of `typeck_memory.ers`, and shows it first, as the `typeck` dump
+// does.
+const KIB: usize = 1024;
+const FLASH_BASE: usize = 0x0800_0000;
+
+fn kib(n: usize) -> usize {
+    n * KIB
+}
+
+memory {
+    stack in RAM { size: 2 * KIB }
+    region FLASH { origin: FLASH_BASE, size: kib(64) }
+    region RAM { origin: 0x2000_0000, size: kib(16) }
+    region SRAM2 { origin: 0x2000_0000 + kib(16), size: 16 * KIB }
+    data in RAM;
+    code in FLASH;
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

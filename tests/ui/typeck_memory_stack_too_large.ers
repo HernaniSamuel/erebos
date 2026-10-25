@@ -1,0 +1,14 @@
+// emit: typeck
+// A stack larger than its region is `ty::stack-size` (ADR 0057), at its
+// size, labeling the region: here 16 bytes more than `RAM`, whose size is a
+// multiple of 16.
+memory {
+    region FLASH { origin: 0x8000_0000, size: 0x1_0000 }
+    region RAM { origin: 0x8400_0000, size: 0x1_0000 }
+    code in FLASH;
+    data in RAM;
+    stack in RAM { size: 0x1_0000 + 16 }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

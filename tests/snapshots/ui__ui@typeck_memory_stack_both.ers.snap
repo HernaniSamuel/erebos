@@ -1,0 +1,18 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_memory_stack_both.ers
+---
+--- errors ---
+ty::stack-size
+
+  × the stack's size, 24, is not a multiple of 16
+    ╭─[typeck_memory_stack_both.ers:10:28]
+  9 │     data in RAM;
+ 10 │     stack in STACK { size: 24 }
+    ·                            ─┬
+    ·                             ╰── not a multiple of 16
+ 11 │ }
+    ╰────
+  help: the stack's size is a non-zero multiple of the target's stack alignment, 16 bytes (ADR
+        0057)

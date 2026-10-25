@@ -1,0 +1,12 @@
+// emit: typeck
+// A stack of size 0 is `ty::stack-size` (ADR 0057), at its size.
+memory {
+    region FLASH { origin: 0x8000_0000, size: 0x1_0000 }
+    region RAM { origin: 0x8400_0000, size: 0x1_0000 }
+    code in FLASH;
+    data in RAM;
+    stack in RAM { size: 0 }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

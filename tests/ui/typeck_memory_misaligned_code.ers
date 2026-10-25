@@ -1,0 +1,14 @@
+// emit: typeck
+// The reset entry is at the origin of the code's region, which must be a
+// multiple of the target's code alignment, 4 on riscv32 (ADR 0057):
+// `ty::misaligned-code` at the origin, labeling the placement.
+memory {
+    region FLASH { origin: 0x8000_0002, size: 0x1_0000 }
+    region RAM { origin: 0x8400_0000, size: 0x1_0000 }
+    code in FLASH;
+    data in RAM;
+    stack in RAM { size: 0x1000 }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

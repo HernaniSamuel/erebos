@@ -1,0 +1,23 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_memory_stack_rounded.ers
+---
+--- errors ---
+ty::stack-size
+
+  × the stack does not fit in the region `STACK`
+    ╭─[typeck_memory_stack_rounded.ers:12:28]
+  8 │     region RAM { origin: 0x2001_0000, size: 0x1_0000 }
+  9 │     region STACK { origin: 0x2000_0004, size: 0x1000 }
+    ·            ──┬──
+    ·              ╰── ends at 0x20001004
+ 10 │     code in FLASH;
+ 11 │     data in RAM;
+ 12 │     stack in STACK { size: 0x1000 }
+    ·                            ───┬──
+    ·                               ╰── 4096 bytes from 0x20000010 end at 0x20001010
+ 13 │ }
+    ╰────
+  help: the stack starts at its region's origin rounded up to the target's stack alignment, 16
+        bytes, and ends within the region (ADR 0057)

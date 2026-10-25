@@ -1,0 +1,23 @@
+// emit: typeck
+// A value of the memory map that fails reports its own error, and the
+// checks that need it are skipped (ADR 0057): `RAM`'s size has the wrong
+// type, and `STACK`'s origin fails to evaluate. Computed as written, `RAM`
+// would overlap `FLASH`, and `STACK` would overlap `FLASH` and be too small
+// for the stack; none of that is reported.
+const SIXTEEN: u32 = 16;
+
+fn zero() -> usize {
+    0
+}
+
+memory {
+    region FLASH { origin: 0x8000_0000, size: 0x1_0000 }
+    region RAM { origin: 0x8000_FFF8, size: SIXTEEN }
+    region STACK { origin: 0x8000_0000 + 4 / zero(), size: 0x1000 }
+    code in FLASH;
+    data in RAM;
+    stack in STACK { size: 0x2000 }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

@@ -1,0 +1,23 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_memory_stack_too_large.ers
+---
+--- errors ---
+ty::stack-size
+
+  × the stack does not fit in the region `RAM`
+    ╭─[typeck_memory_stack_too_large.ers:10:26]
+  6 │     region FLASH { origin: 0x8000_0000, size: 0x1_0000 }
+  7 │     region RAM { origin: 0x8400_0000, size: 0x1_0000 }
+    ·            ─┬─
+    ·             ╰── ends at 0x84010000
+  8 │     code in FLASH;
+  9 │     data in RAM;
+ 10 │     stack in RAM { size: 0x1_0000 + 16 }
+    ·                          ──────┬──────
+    ·                                ╰── 65552 bytes from 0x84000000 end at 0x84010010
+ 11 │ }
+    ╰────
+  help: the stack starts at its region's origin rounded up to the target's stack alignment, 16
+        bytes, and ends within the region (ADR 0057)

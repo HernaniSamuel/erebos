@@ -1,0 +1,47 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_memory.ers
+---
+--- typeck ---
+memory {
+    region FLASH { origin: 0x8000000, size: 65536 }
+    region RAM { origin: 0x20000000, size: 16384 }
+    region SRAM2 { origin: 0x20004000, size: 16384 }
+    code in FLASH;
+    data in RAM;
+    stack in RAM { size: 2048 }
+}
+fn kib(n: usize) -> usize
+    expr 0 binary * 328..335: usize
+    expr 1 local n 328..329: usize
+    expr 2 const KIB 332..335: usize
+entry fn main() -> !
+    expr 3 loop 621..628: !
+panic fn on_panic() -> !
+    expr 4 loop 658..665: !
+comptime fn KIB() -> usize
+    expr 5 int 1024 250..254: usize
+comptime fn FLASH_BASE() -> usize
+    expr 6 int 134217728 282..293: usize
+comptime fn origin() -> usize
+    expr 7 const FLASH_BASE 410..420: usize
+comptime fn size() -> usize
+    expr 8 call 428..435: usize
+    expr 9 int 64 432..434: usize
+comptime fn size() -> usize
+    expr 10 call 482..489: usize
+    expr 11 int 16 486..488: usize
+comptime fn origin() -> usize
+    expr 12 binary + 519..540: usize
+    expr 13 int 536870912 519..530: usize
+    expr 14 call 533..540: usize
+    expr 15 int 16 537..539: usize
+comptime fn size() -> usize
+    expr 16 binary * 548..556: usize
+    expr 17 int 16 548..550: usize
+    expr 18 const KIB 553..556: usize
+comptime fn stack_size() -> usize
+    expr 19 binary * 373..380: usize
+    expr 20 int 2 373..374: usize
+    expr 21 const KIB 377..380: usize

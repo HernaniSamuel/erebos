@@ -1,0 +1,21 @@
+// emit: typeck
+// Regions sharing an address are `ty::region-overlap` (ADR 0057), once per
+// pair, at the later region, labeling the earlier. `FLASH` and `RAM` touch
+// at one end and are accepted; `BYTE` shares one byte with `RAM`; `A`, `B`
+// and `C` overlap pairwise, which is three errors. `EMPTY`, inside `A`,
+// holds no address, so it shares none (its own error aside).
+memory {
+    region FLASH { origin: 0x8000_0000, size: 0x1_0000 }
+    region RAM { origin: 0x8001_0000, size: 0x1_0000 }
+    region BYTE { origin: 0x8001_FFFF, size: 0x10 }
+    region A { origin: 0x9000_0000, size: 0x300 }
+    region B { origin: 0x9000_0100, size: 0x300 }
+    region C { origin: 0x9000_0200, size: 0x300 }
+    region EMPTY { origin: 0x9000_0010, size: 0 }
+    code in FLASH;
+    data in RAM;
+    stack in RAM { size: 0x1000 }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

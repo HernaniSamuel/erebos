@@ -1,0 +1,16 @@
+// emit: typeck
+// The stack starts at its region's origin rounded up to the stack
+// alignment, 16 on riscv32 (ADR 0057): filling `STACK` exactly from its
+// origin, 0x2000_0004, it would end 12 bytes past it once its start is
+// rounded up to 0x2000_0010, which is `ty::stack-size`.
+memory {
+    region FLASH { origin: 0x0800_0000, size: 0x1_0000 }
+    region RAM { origin: 0x2001_0000, size: 0x1_0000 }
+    region STACK { origin: 0x2000_0004, size: 0x1000 }
+    code in FLASH;
+    data in RAM;
+    stack in STACK { size: 0x1000 }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

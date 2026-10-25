@@ -1,0 +1,14 @@
+// emit: typeck
+// A stack size both not a multiple of the stack alignment and too large for
+// its region is reported as not a multiple (ADR 0057): one error.
+memory {
+    region FLASH { origin: 0x8000_0000, size: 0x1_0000 }
+    region RAM { origin: 0x8400_0000, size: 0x1_0000 }
+    region STACK { origin: 0x8800_0000, size: 16 }
+    code in FLASH;
+    data in RAM;
+    stack in STACK { size: 24 }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

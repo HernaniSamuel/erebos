@@ -266,6 +266,7 @@ impl<'h> Queries<'h> {
                 self.array_len(ArrayLen::Comptime(id));
             }
         }
+        self.check_memory_map();
         for (id, f) in hir.fns() {
             let Some(body) = &f.body else {
                 continue;
@@ -639,6 +640,206 @@ impl<'h> Queries<'h> {
         let value = value.map(|value| value.int(crate::target::POINTER_BYTES as usize));
         self.values.insert(id, value);
         value
+    }
+
+    /// Checks the values of the program's `memory` block, if any
+    /// (ADR 0057): no region empty or ending at 2³² or past it, no two
+    /// sharing an address, the code's region starting at a multiple of the
+    /// code alignment, and the stack's size a non-zero multiple of the
+    /// stack alignment that fits in its region from its origin rounded up
+    /// to that alignment. A check that needs a value that failed, which was
+    /// reported, is skipped.
+    fn check_memory_map(&mut self) {
+        let hir = self.hir;
+        let Some(map) = &hir.memory else {
+            return;
+        };
+        // Each region's origin and size, `None` where it failed, and its
+        // range where both were computed.
+        let values: Vec<(Option<u64>, Option<u64>)> = map
+            .regions
+            .iter()
+            .map(|region| {
+                (
+                    self.array_len(region.origin.0),
+                    self.array_len(region.size.0),
+                )
+            })
+            .collect();
+        let ranges: Vec<Option<(u64, u64)>> = values
+            .iter()
+            .map(|&(origin, size)| Some((origin?, origin? + size?)))
+            .collect();
+
+        let limit = 1u64 << target::POINTER_BITS;
+        for ((region, &(_, size)), &range) in map.regions.iter().zip(&values).zip(&ranges) {
+            if size == Some(0) {
+                self.diags.push(
+                    Diagnostic::error(
+                        "ty::empty-region",
+                        format!("the region `{}` is empty", region.name),
+                    )
+                    .label(region.size.1, "a size of 0")
+                    .help("a region covers `[origin, origin + size)`: give it at least one byte (ADR 0057)"),
+                );
+            }
+            if let Some((_, end)) = range
+                && end >= limit
+            {
+                self.diags.push(
+                    Diagnostic::error(
+                        "ty::region-out-of-range",
+                        format!("the region `{}` ends past the address space", region.name),
+                    )
+                    .label(region.name_span, format!("ends at {end:#x}"))
+                    .help(format!(
+                        "a region covers `[origin, origin + size)`, whose end must be below 2³² ({limit:#x}) so that the address one past it exists (ADR 0057)"
+                    )),
+                );
+            }
+        }
+
+        // Once per pair, at the later region (ADR 0057).
+        for (later, &later_range) in ranges.iter().enumerate() {
+            let Some((later_lo, later_hi)) = later_range else {
+                continue;
+            };
+            for (earlier, &earlier_range) in ranges[..later].iter().enumerate() {
+                let Some((earlier_lo, earlier_hi)) = earlier_range else {
+                    continue;
+                };
+                let lo = later_lo.max(earlier_lo);
+                let hi = later_hi.min(earlier_hi);
+                if lo >= hi {
+                    continue;
+                }
+                let (later, earlier) = (&map.regions[later], &map.regions[earlier]);
+                let shared = match hi - lo {
+                    1 => format!("the byte at {lo:#x}"),
+                    n => format!("{n} bytes from {lo:#x}"),
+                };
+                self.diags.push(
+                    Diagnostic::error(
+                        "ty::region-overlap",
+                        format!(
+                            "the regions `{}` and `{}` overlap",
+                            earlier.name, later.name
+                        ),
+                    )
+                    .label(
+                        later.name_span,
+                        format!("covers [{later_lo:#x}, {later_hi:#x})"),
+                    )
+                    .label(
+                        earlier.name_span,
+                        format!("covers [{earlier_lo:#x}, {earlier_hi:#x})"),
+                    )
+                    .help(format!(
+                        "they share {shared}; the regions of a memory map are disjoint (ADR 0057)"
+                    )),
+                );
+            }
+        }
+
+        let code = &map.regions[map.code.region];
+        if let (Some(origin), _) = values[map.code.region]
+            && origin % target::CODE_ALIGN != 0
+        {
+            self.diags.push(
+                Diagnostic::error(
+                    "ty::misaligned-code",
+                    format!(
+                        "the code's region `{}` starts at a misaligned address",
+                        code.name
+                    ),
+                )
+                .label(
+                    code.origin.1,
+                    format!("{origin:#x} is not a multiple of {}", target::CODE_ALIGN),
+                )
+                .label(
+                    map.code.span,
+                    format!("places the code, from the reset entry on, in `{}`", code.name),
+                )
+                .help(format!(
+                    "the reset entry is at the origin of the code's region, which must therefore be a multiple of the target's code alignment, {} bytes (ADR 0057)",
+                    target::CODE_ALIGN
+                )),
+            );
+        }
+
+        let (Some(size), size_span) = (self.array_len(map.stack_size.0), map.stack_size.1) else {
+            return;
+        };
+        let align = target::STACK_ALIGN;
+        let alignment_help = format!(
+            "the stack's size is a non-zero multiple of the target's stack alignment, {align} bytes (ADR 0057)"
+        );
+        if size == 0 {
+            self.diags.push(
+                Diagnostic::error("ty::stack-size", "the stack has a size of 0")
+                    .label(size_span, "a stack of 0 bytes")
+                    .help(alignment_help),
+            );
+        } else if size % align != 0 {
+            self.diags.push(
+                Diagnostic::error(
+                    "ty::stack-size",
+                    format!("the stack's size, {size}, is not a multiple of {align}"),
+                )
+                .label(size_span, format!("not a multiple of {align}"))
+                .help(alignment_help),
+            );
+        } else if let Some((origin, end)) = ranges[map.stack.region] {
+            let start = origin.next_multiple_of(align);
+            if start + size > end {
+                let region = &map.regions[map.stack.region];
+                self.diags.push(
+                    Diagnostic::error(
+                        "ty::stack-size",
+                        format!("the stack does not fit in the region `{}`", region.name),
+                    )
+                    .label(
+                        size_span,
+                        format!(
+                            "{size} bytes from {start:#x} end at {:#x}",
+                            start + size
+                        ),
+                    )
+                    .label(region.name_span, format!("ends at {end:#x}"))
+                    .help(format!(
+                        "the stack starts at its region's origin rounded up to the target's stack alignment, {align} bytes, and ends within the region (ADR 0057)"
+                    )),
+                );
+            }
+        }
+    }
+
+    /// The program's memory map with its values computed (ADR 0057);
+    /// `None` without a `memory` block, or when one of its values failed,
+    /// which was reported.
+    pub fn memory_map(&mut self) -> Option<mir::MemoryMap> {
+        let hir = self.hir;
+        let map = hir.memory.as_ref()?;
+        let regions = map
+            .regions
+            .iter()
+            .map(|region| {
+                Some(mir::Region {
+                    name: region.name.clone(),
+                    origin: self.array_len(region.origin.0)?,
+                    size: self.array_len(region.size.0)?,
+                    span: region.name_span,
+                })
+            })
+            .collect::<Option<Vec<_>>>()?;
+        Some(mir::MemoryMap {
+            regions,
+            code: map.code.region,
+            data: map.data.region,
+            stack: map.stack.region,
+            stack_size: self.array_len(map.stack_size.0)?,
+        })
     }
 
     /// `ty` with every array length known, and every `Option(T)` and
@@ -1579,6 +1780,10 @@ impl<'h> Queries<'h> {
             align: 1,
             relocations: Vec::new(),
         }));
+        let memory = self.hir.memory.as_ref().map(|_| {
+            self.memory_map()
+                .expect("every value of a program without errors is computed")
+        });
         Mir {
             structs,
             enums,
@@ -1594,6 +1799,7 @@ impl<'h> Queries<'h> {
                 .collect(),
             entry: BodyId(self.hir.entry.0),
             panic: BodyId(self.hir.panic.0),
+            memory,
         }
     }
 }
