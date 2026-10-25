@@ -1,0 +1,106 @@
+// The M3.1 milestone program: laid out as on a small board, with 64 KiB of
+// "flash" and 16 KiB of RAM above it, the first 2 KiB of which hold the
+// stack (ADR 0057). The block's values are constants the program also
+// reads, so it checks where its local, statics and read-only data are
+// against the map it declares: a local is in the stack, a `static mut` with
+// an initial value (`.data`) and a zero one (`.bss`) are in RAM above the
+// stack and hold their initial values, and a `static` is in flash.
+// expect-output: stack ok
+// expect-output: data ok
+// expect-output: bss ok
+// expect-output: rodata ok
+// expect-exit: 0
+
+const KIB: usize = 1024;
+
+const FLASH_ORIGIN: usize = 0x8000_0000;
+const FLASH_SIZE: usize = 64 * KIB;
+const RAM_ORIGIN: usize = FLASH_ORIGIN + FLASH_SIZE;
+const RAM_SIZE: usize = 16 * KIB;
+const STACK_SIZE: usize = 2 * KIB;
+
+memory {
+    region FLASH { origin: FLASH_ORIGIN, size: FLASH_SIZE }
+    region RAM { origin: RAM_ORIGIN, size: RAM_SIZE }
+    code in FLASH;
+    data in RAM;
+    stack in RAM { size: STACK_SIZE }
+}
+
+// `RAM_ORIGIN` is a multiple of 16, so the stack starts at the region's
+// origin and the statics come after it.
+const STACK_END: usize = RAM_ORIGIN + STACK_SIZE;
+const RAM_END: usize = RAM_ORIGIN + RAM_SIZE;
+const FLASH_END: usize = FLASH_ORIGIN + FLASH_SIZE;
+
+const UART: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+const FINISHER: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+const HEX_DIGITS: *const [u8] = &raw const b"0123456789abcdef";
+
+static mut COUNTER: u32 = 0x1234_5678;
+static mut ZEROED: u32 = 0;
+static GREETING: [u8; 4] = [b'e', b'r', b'e', b'b'];
+
+fn print(s: *const [u8]) {
+    let mut i: usize = 0;
+    while i < len(s) {
+        *UART = (*s)[i];
+        i += 1;
+    }
+}
+
+fn print_hex(value: usize) {
+    print(&raw const b"0x");
+    let mut shift: usize = 32;
+    while shift > 0 {
+        shift -= 4;
+        *UART = (*HEX_DIGITS)[(value >> shift) & 0xF];
+    }
+}
+
+fn in_range(address: usize, start: usize, end: usize) -> bool {
+    address >= start && address < end
+}
+
+// Prints `<what> ok`, or `<what> at <address>` and counts a failure.
+fn check(what: *const [u8], fine: bool, address: usize) -> u32 {
+    print(what);
+    if fine {
+        print(&raw const b" ok\n");
+        0
+    } else {
+        print(&raw const b" at ");
+        print_hex(address);
+        print(&raw const b"\n");
+        1
+    }
+}
+
+fn exit(code: u32) -> ! {
+    *FINISHER = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    loop {}
+}
+
+entry fn main() -> ! {
+    let mut failures: u32 = 0;
+
+    let local: u32 = 7;
+    let at: usize = &raw const local as usize;
+    failures += check(&raw const b"stack", in_range(at, RAM_ORIGIN, STACK_END) && local == 7, at);
+
+    let at: usize = &raw const COUNTER as usize;
+    failures += check(&raw const b"data", in_range(at, STACK_END, RAM_END) && COUNTER == 0x1234_5678, at);
+
+    let at: usize = &raw const ZEROED as usize;
+    failures += check(&raw const b"bss", in_range(at, STACK_END, RAM_END) && ZEROED == 0, at);
+
+    let at: usize = &raw const GREETING as usize;
+    let fine: bool = in_range(at, FLASH_ORIGIN, FLASH_END) && GREETING[0] == b'e' && GREETING[3] == b'b';
+    failures += check(&raw const b"rodata", fine, at);
+
+    exit(failures)
+}
+
+panic fn on_panic() -> ! {
+    exit(99)
+}

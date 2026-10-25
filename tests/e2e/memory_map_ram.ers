@@ -1,0 +1,102 @@
+// A board that runs from RAM (ADR 0057): code and data share the region at
+// `0x8000_0000`, so the initial values of `.data` are at its run addresses
+// and `_start` copies them onto themselves, and the stack has a region of
+// its own above it. It checks that a local is in the stack's region, that
+// the statics are in the shared region and hold their initial values, and
+// that `.data` follows the read-only data there.
+// expect-output: stack ok
+// expect-output: data ok
+// expect-output: bss ok
+// expect-output: rodata ok
+// expect-exit: 0
+
+const KIB: usize = 1024;
+
+const RAM_ORIGIN: usize = 0x8000_0000;
+const RAM_SIZE: usize = 32 * KIB;
+const STACK_ORIGIN: usize = RAM_ORIGIN + RAM_SIZE;
+const STACK_SIZE: usize = 4 * KIB;
+
+memory {
+    region RAM { origin: RAM_ORIGIN, size: RAM_SIZE }
+    region STACK { origin: STACK_ORIGIN, size: STACK_SIZE }
+    code in RAM;
+    data in RAM;
+    stack in STACK { size: STACK_SIZE }
+}
+
+const RAM_END: usize = RAM_ORIGIN + RAM_SIZE;
+const STACK_END: usize = STACK_ORIGIN + STACK_SIZE;
+
+const UART: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+const FINISHER: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+const HEX_DIGITS: *const [u8] = &raw const b"0123456789abcdef";
+
+static mut COUNTER: u32 = 0x1234_5678;
+static mut ZEROED: u32 = 0;
+static GREETING: [u8; 4] = [b'e', b'r', b'e', b'b'];
+
+fn print(s: *const [u8]) {
+    let mut i: usize = 0;
+    while i < len(s) {
+        *UART = (*s)[i];
+        i += 1;
+    }
+}
+
+fn print_hex(value: usize) {
+    print(&raw const b"0x");
+    let mut shift: usize = 32;
+    while shift > 0 {
+        shift -= 4;
+        *UART = (*HEX_DIGITS)[(value >> shift) & 0xF];
+    }
+}
+
+fn in_range(address: usize, start: usize, end: usize) -> bool {
+    address >= start && address < end
+}
+
+// Prints `<what> ok`, or `<what> at <address>` and counts a failure.
+fn check(what: *const [u8], fine: bool, address: usize) -> u32 {
+    print(what);
+    if fine {
+        print(&raw const b" ok\n");
+        0
+    } else {
+        print(&raw const b" at ");
+        print_hex(address);
+        print(&raw const b"\n");
+        1
+    }
+}
+
+fn exit(code: u32) -> ! {
+    *FINISHER = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    loop {}
+}
+
+entry fn main() -> ! {
+    let mut failures: u32 = 0;
+
+    let local: u32 = 7;
+    let at: usize = &raw const local as usize;
+    failures += check(&raw const b"stack", in_range(at, STACK_ORIGIN, STACK_END) && local == 7, at);
+
+    let rodata: usize = &raw const GREETING as usize;
+    let at: usize = &raw const COUNTER as usize;
+    let fine: bool = in_range(at, RAM_ORIGIN, RAM_END) && at > rodata && COUNTER == 0x1234_5678;
+    failures += check(&raw const b"data", fine, at);
+
+    let at: usize = &raw const ZEROED as usize;
+    failures += check(&raw const b"bss", in_range(at, RAM_ORIGIN, RAM_END) && ZEROED == 0, at);
+
+    let fine: bool = in_range(rodata, RAM_ORIGIN, RAM_END) && GREETING[0] == b'e' && GREETING[3] == b'b';
+    failures += check(&raw const b"rodata", fine, rodata);
+
+    exit(failures)
+}
+
+panic fn on_panic() -> ! {
+    exit(99)
+}
