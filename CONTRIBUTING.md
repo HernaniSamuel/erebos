@@ -71,8 +71,10 @@ cargo test
   through the test finisher with that code. A program without
   `expect-exit` must run forever. Any CPU exception fails the test.
   Every program declares its memory map, a `memory` block (ADR 0057),
-  since none is built without one: most end with the block that lays out
-  QEMU `virt`'s RAM as ADR 0030 had it, which a new program can copy.
+  since none is built without one: most end with the same block, which a
+  new program can copy: QEMU `virt`'s RAM in two regions of 64 MiB, the
+  image in the first, and in the second a 1 MiB stack at its start, then
+  `.data` and `.bss`.
   `// link-c: file.c` (repeatable) compiles a C file next to the program
   with clang for the target, at the matching optimization level, and links
   it in; the program declares its functions with `extern fn` and its
@@ -96,10 +98,11 @@ cargo test
 - **ELF checks** (`tests/elf.rs`) build a program and read its sections,
   symbols and program headers with `llvm-readelf`: where each kind of
   static goes, the symbols `_start` uses to initialize `.data` and
-  `.bss` (ADR 0030), and where the memory map puts the reset entry, the
-  stack and the statics (ADR 0057). Its programs declare a `memory` block
-  too, `VIRT_MAP` or a map of their own, but for the one showing
-  `link::no-memory-map`. It needs `llvm-readelf`, found like clang:
+  `.bss` (ADR 0030), where the memory map puts the reset entry, the
+  stack and the statics, and the `link::region-overflow` of a program
+  that does not fit in its regions (ADR 0057). Its programs declare a
+  `memory` block too, `VIRT_MAP` or a map of their own, but for the one
+  showing `link::no-memory-map`. It needs `llvm-readelf`, found like clang:
   `EREBOS_READELF`, or the one in the LLVM archive
   (`C:\llvm-22\bin\llvm-readelf.exe`).
 - **Reproducible builds** (`tests/reproducible.rs`) compile a program twice
