@@ -1,0 +1,16 @@
+// emit: hir
+// A placement names a region of its `memory` block (ADR 0057): not a
+// constant, nor a misspelled region. A placement naming no region is still
+// placed: it is not also reported as missing.
+const ROM: usize = 0x0800_0000;
+
+memory {
+    region FLASH { origin: ROM, size: 0x1_0000 }
+    region SRAM { origin: 0x2000_0000, size: 0x4000 }
+    code in ROM;
+    data in SRAM;
+    stack in SRAM2 { size: 0x800 }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

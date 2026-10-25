@@ -1,0 +1,19 @@
+// emit: hir
+// A `memory` block in a module (ADR 0057): its values are computed in the
+// scope of that module, so they name its private constant `KIB`, which the
+// root module does not see. The map lists the regions in source order and
+// each placement by its region's index.
+mod board {
+    const KIB: usize = 1024;
+
+    memory {
+        stack in RAM { size: 2 * KIB }
+        region FLASH { origin: 0x0800_0000, size: 64 * KIB }
+        region RAM { origin: 0x2000_0000, size: 16 * KIB }
+        data in RAM;
+        code in FLASH;
+    }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

@@ -1,0 +1,30 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/resolve_memory_unknown_region.ers
+---
+--- errors ---
+resolve::unknown-region
+
+  × no region named `ROM` in this `memory` block
+    ╭─[resolve_memory_unknown_region.ers:10:13]
+  9 │     region SRAM { origin: 0x2000_0000, size: 0x4000 }
+ 10 │     code in ROM;
+    ·             ─┬─
+    ·              ╰── not a region of this block
+ 11 │     data in SRAM;
+    ╰────
+  help: a placement names a region declared in its `memory` block; regions are not items, so a
+        constant or a module of that name does not count (ADR 0057)
+resolve::unknown-region
+
+  × no region named `SRAM2` in this `memory` block
+    ╭─[resolve_memory_unknown_region.ers:12:14]
+ 11 │     data in SRAM;
+ 12 │     stack in SRAM2 { size: 0x800 }
+    ·              ──┬──
+    ·                ╰── not a region of this block
+ 13 │ }
+    ╰────
+  help: a placement names a region declared in its `memory` block; regions are not items, so a
+        constant or a module of that name does not count (ADR 0057)

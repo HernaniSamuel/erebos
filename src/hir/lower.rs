@@ -7,9 +7,9 @@ use crate::diag::{Diagnostic, Diagnostics};
 use crate::hir::{
     self, Arm, ArrayLen, Block, BuiltinEnum, Comptime, ConstDef, ConstId, CoreStart, EnumDef,
     EnumId, EnumTy, Expr, ExprId, ExprKind, FieldDef, FileDef, Fn, FnId, FnKind, Hir, IntTy, Local,
-    LocalId, ModuleDef, ModuleId, NeverInMemory, NeverPosition, Pattern, PatternId, PatternKind,
-    PayloadDef, StaticDef, StaticId, Stmt, StructDef, StructId, StructTy, Ty, UnsizedPosition,
-    UnsizedType, VariantDef, VariantValue, Visibility,
+    LocalId, MemoryMap, ModuleDef, ModuleId, NeverInMemory, NeverPosition, Pattern, PatternId,
+    PatternKind, PayloadDef, Placement, RegionDef, StaticDef, StaticId, Stmt, StructDef, StructId,
+    StructTy, Ty, UnsizedPosition, UnsizedType, VariantDef, VariantValue, Visibility,
 };
 use crate::span::Span;
 use crate::syntax::ast;
@@ -46,6 +46,7 @@ pub fn lower(
         consts: Vec::new(),
         statics: Vec::new(),
         comptimes: Vec::new(),
+        memories: Vec::new(),
         mods: Vec::new(),
         use_decls: Vec::new(),
         uses: Vec::new(),
@@ -82,6 +83,7 @@ pub fn lower(
         consts: const_decls,
         statics: static_decls,
         comptimes: comptime_decls,
+        memories: memory_decls,
         mods: mod_decls,
         use_decls,
         uses,
@@ -174,6 +176,7 @@ pub fn lower(
     let mut statics = Vec::new();
     let mut comptime_blocks = Vec::new();
     let mut enums = Vec::new();
+    let mut maps = Vec::new();
     let mut core = None;
     for (from, to, in_core) in [
         (Counts::default(), program_end, false),
@@ -244,6 +247,10 @@ pub fn lower(
             enums.push(def);
             fns.extend(bodies);
         }
+        for &(decl, module) in &memory_decls[from.memories..to.memories] {
+            lowerer.module = module;
+            maps.push((decl.span, lowerer.memory_decl(decl)));
+        }
     }
     debug_assert_eq!(fns.len() as u32, lowerer.value_base);
     fns.append(&mut lowerer.values);
@@ -266,6 +273,7 @@ pub fn lower(
     for diag in duplicates {
         diags.push(diag);
     }
+    let memory = memory_map(maps, diags);
     check_start(&fns, &statics, diags);
     check_symbols(&fns, &statics, &namespaces, &uses, core_root, diags);
     // In any module, whatever their visibility (ADR 0049, 0050).
@@ -294,6 +302,7 @@ pub fn lower(
         consts,
         statics,
         comptime_blocks,
+        memory,
         never_in_memory,
         unsized_types,
         applications,
@@ -317,6 +326,7 @@ struct Counts {
     consts: usize,
     statics: usize,
     comptimes: usize,
+    memories: usize,
 }
 
 /// Fills in the `reachable` of every struct and enum: the modules where a
@@ -471,6 +481,7 @@ struct Items<'a> {
     consts: Vec<(&'a ast::ConstDecl, ModuleId)>,
     statics: Vec<(&'a ast::StaticDecl, ModuleId)>,
     comptimes: Vec<(&'a ast::ComptimeDecl, ModuleId)>,
+    memories: Vec<(&'a ast::MemoryDecl, ModuleId)>,
     /// Each `mod`, with the module that declares it.
     mods: Vec<(&'a ast::ModDecl, ModuleId)>,
     /// Each `use` declaration, with its module, and each name they bring in.
@@ -491,6 +502,7 @@ impl<'a> Items<'a> {
             consts: self.consts.len(),
             statics: self.statics.len(),
             comptimes: self.comptimes.len(),
+            memories: self.memories.len(),
         }
     }
 
@@ -563,8 +575,10 @@ impl<'a> Items<'a> {
                     self.comptimes.push((decl, module));
                     continue;
                 }
-                // Not lowered yet (M3.1, step 2).
-                ast::Item::Memory(_) => continue,
+                ast::Item::Memory(decl) => {
+                    self.memories.push((decl, module));
+                    continue;
+                }
                 ast::Item::Mod(decl) => {
                     let id = ModuleId(self.modules.len() as u32);
                     self.modules.push(ModuleDef {
@@ -1073,6 +1087,39 @@ fn find_unique(fns: &[Fn], kind: FnKind, diags: &mut Diagnostics) -> Option<FnId
         );
     }
     Some(id)
+}
+
+/// The program's memory map, out of its `memory` blocks, each with its
+/// span and its map if it resolved (ADR 0057): the first block in the order
+/// of files, then of positions (ADR 0049), which is not the order modules
+/// are gathered in, since a `mod` before a block reaches a later file. Each
+/// other block is a `resolve::duplicate-memory`.
+fn memory_map(
+    mut maps: Vec<(Span, Option<MemoryMap>)>,
+    diags: &mut Diagnostics,
+) -> Option<MemoryMap> {
+    maps.sort_by_key(|(span, _)| (span.file, span.lo));
+    let mut maps = maps.into_iter();
+    let (first, map) = maps.next()?;
+    for (again, _) in maps {
+        diags.push(
+            Diagnostic::error(
+                "resolve::duplicate-memory",
+                "the program has more than one `memory` block",
+            )
+            .label(memory_word(again), "another `memory` block")
+            .label(memory_word(first), "the first one")
+            .help("a program has one memory map, whose `memory` block may sit in any module (ADR 0057)"),
+        );
+    }
+    map
+}
+
+/// The word `memory` that starts the block spanning `block`, where the
+/// errors about the whole block point.
+fn memory_word(block: Span) -> Span {
+    let lo = block.lo as usize;
+    Span::new(block.file, lo, lo + "memory".len())
 }
 
 /// A variable a pattern binds, as lowering collects them (ADR 0040, 0041).
@@ -2178,9 +2225,173 @@ impl Lowerer<'_> {
         }
     }
 
+    /// A `memory` block (ADR 0057), checked on its own: each region name
+    /// once and not `INCLUDE`, each of `code`, `data` and `stack` placed
+    /// exactly once in a region of the block, the stack outside the code's
+    /// region. "Second" is later in the source: the error points there and
+    /// labels the first. Every value is lowered, those of a repeated region
+    /// or placement too, so that the errors in them are reported. Returns
+    /// the map, unless a placement is missing or names no region.
+    fn memory_decl(&mut self, decl: &ast::MemoryDecl) -> Option<MemoryMap> {
+        self.no_attrs(&decl.attrs, "a `memory` block");
+        let mut regions: Vec<RegionDef> = Vec::new();
+        let mut by_name: HashMap<&str, usize> = HashMap::new();
+        for region in &decl.regions {
+            let name = region.name.name.as_str();
+            if name == "INCLUDE" {
+                self.diags.push(
+                    Diagnostic::error(
+                        "resolve::reserved-name",
+                        "`INCLUDE` is a reserved name",
+                    )
+                    .label(region.name.span, "a command of the linker script language")
+                    .help("the generated linker script names each region as the source does, and would read `INCLUDE` as a command there: give the region another name (ADR 0057)"),
+                );
+            }
+            let origin = (
+                self.comptime_usize(&region.origin, "origin"),
+                region.origin.span,
+            );
+            let size = (self.comptime_usize(&region.size, "size"), region.size.span);
+            if let Some(&first) = by_name.get(name) {
+                self.diags.push(
+                    Diagnostic::error(
+                        "resolve::duplicate-region",
+                        format!("the region `{name}` is declared more than once"),
+                    )
+                    .label(region.name.span, "declared again here")
+                    .label(regions[first].name_span, "first declared here"),
+                );
+                continue;
+            }
+            by_name.insert(name, regions.len());
+            regions.push(RegionDef {
+                name: name.to_owned(),
+                name_span: region.name.span,
+                origin,
+                size,
+                span: region.span,
+            });
+        }
+
+        // By `code`, `data` and `stack`: the first placement of each, with
+        // its region if the block has one of that name.
+        let mut placed: [Option<(Option<usize>, Span)>; 3] = [None; 3];
+        let mut stack_size = None;
+        for placement in &decl.placements {
+            let (slot, word) = match &placement.kind {
+                ast::PlacementKind::Code => (0, "code"),
+                ast::PlacementKind::Data => (1, "data"),
+                ast::PlacementKind::Stack { .. } => (2, "stack"),
+            };
+            let span = Span::new(
+                placement.span.file,
+                placement.span.lo as usize,
+                placement.region.span.hi as usize,
+            );
+            let name = &placement.region;
+            let region = by_name.get(name.name.as_str()).copied();
+            if region.is_none() {
+                self.diags.push(
+                    Diagnostic::error(
+                        "resolve::unknown-region",
+                        format!("no region named `{}` in this `memory` block", name.name),
+                    )
+                    .label(name.span, "not a region of this block")
+                    .help("a placement names a region declared in its `memory` block; regions are not items, so a constant or a module of that name does not count (ADR 0057)"),
+                );
+            }
+            if let ast::PlacementKind::Stack { size } = &placement.kind {
+                let size = (self.comptime_usize(size, "stack_size"), size.span);
+                stack_size.get_or_insert(size);
+            }
+            if let Some((_, first)) = placed[slot] {
+                self.diags.push(
+                    Diagnostic::error(
+                        "resolve::duplicate-placement",
+                        format!("`{word}` is placed more than once"),
+                    )
+                    .label(span, "placed again here")
+                    .label(first, "first placed here")
+                    .help("each of `code`, `data` and `stack` is placed exactly once (ADR 0057)"),
+                );
+                continue;
+            }
+            placed[slot] = Some((region, span));
+        }
+        for (slot, (word, example)) in [
+            ("code", "code in REGION;"),
+            ("data", "data in REGION;"),
+            ("stack", "stack in REGION { size: SIZE }"),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            if placed[slot].is_none() {
+                self.diags.push(
+                    Diagnostic::error(
+                        "resolve::missing-placement",
+                        format!("the `memory` block does not place `{word}`"),
+                    )
+                    .label(memory_word(decl.span), format!("no `{word} in`"))
+                    .help(format!("each of `code`, `data` and `stack` is placed exactly once: add `{example}` (ADR 0057)")),
+                );
+            }
+        }
+        if let [
+            Some((Some(code), code_span)),
+            _,
+            Some((Some(stack), stack_span)),
+        ] = placed
+            && code == stack
+        {
+            let name = &regions[code].name;
+            let stack_label = (stack_span, format!("the stack, in `{name}`"));
+            let code_label = (code_span, format!("the code, in `{name}`"));
+            let (again, first) = if stack_span.lo > code_span.lo {
+                (stack_label, code_label)
+            } else {
+                (code_label, stack_label)
+            };
+            self.diags.push(
+                Diagnostic::error(
+                    "resolve::stack-with-code",
+                    "the stack cannot share the code's region",
+                )
+                .label(again.0, again.1)
+                .label(first.0, first.1)
+                .help("the reset entry is at the origin of the code's region, where the stack would be reserved: place the stack in another region (ADR 0057)"),
+            );
+        }
+
+        let [Some(code), Some(data), Some(stack)] = placed.map(|p| {
+            p.and_then(|(region, span)| {
+                Some(Placement {
+                    region: region?,
+                    span,
+                })
+            })
+        }) else {
+            return None;
+        };
+        Some(MemoryMap {
+            span: decl.span,
+            regions,
+            code,
+            data,
+            stack,
+            stack_size: stack_size.expect("a placed stack has a size"),
+        })
+    }
+
     /// A `usize` needed at compile time (ADR 0029): known for a literal, as
     /// most are, or computed by a body of its own.
     fn array_len(&mut self, expr: &ast::Expr) -> ArrayLen {
+        self.comptime_usize(expr, "length")
+    }
+
+    /// `array_len`, its body, if any, named `name` in the dumps.
+    fn comptime_usize(&mut self, expr: &ast::Expr, name: &str) -> ArrayLen {
         // A rejected literal was reported by the lexer. One too large for
         // `usize` is lowered as any other length, so that type checking
         // reports it as it does `const X: usize = 4294967296;`.
@@ -2204,8 +2415,8 @@ impl Lowerer<'_> {
         self.loops = loops;
         let body_locals = std::mem::replace(&mut self.locals, locals);
         self.values.push(Fn {
-            name: "length".to_owned(),
-            path: "length".to_owned(),
+            name: name.to_owned(),
+            path: name.to_owned(),
             symbol: None,
             name_span: expr.span,
             module: self.module,

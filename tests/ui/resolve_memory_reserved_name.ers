@@ -1,0 +1,15 @@
+// emit: hir
+// A region cannot be named `INCLUDE`, a command of the linker script
+// language, where the generated script names it (ADR 0057). Other
+// spellings are names as any other.
+memory {
+    region INCLUDE { origin: 0x0800_0000, size: 0x1_0000 }
+    region include { origin: 0x2000_0000, size: 0x4000 }
+    region Include { origin: 0x2000_4000, size: 0x4000 }
+    code in INCLUDE;
+    data in include;
+    stack in Include { size: 0x800 }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

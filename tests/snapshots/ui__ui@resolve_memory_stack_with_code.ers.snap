@@ -1,0 +1,22 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/resolve_memory_stack_with_code.ers
+---
+--- errors ---
+resolve::stack-with-code
+
+  × the stack cannot share the code's region
+   ╭─[resolve_memory_stack_with_code.ers:8:5]
+ 5 │     region RAM { origin: 0x8000_0000, size: 0x10_0000 }
+ 6 │     stack in RAM { size: 0x1000 }
+   ·     ──────┬─────
+   ·           ╰── the stack, in `RAM`
+ 7 │     data in RAM;
+ 8 │     code in RAM;
+   ·     ─────┬─────
+   ·          ╰── the code, in `RAM`
+ 9 │ }
+   ╰────
+  help: the reset entry is at the origin of the code's region, where the stack would be reserved:
+        place the stack in another region (ADR 0057)

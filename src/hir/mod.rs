@@ -82,6 +82,9 @@ pub struct Hir {
     pub statics: Vec<StaticDef>,
     /// The bodies of `comptime { ... }` items.
     pub comptime_blocks: Vec<FnId>,
+    /// The program's `memory` block (ADR 0057); `None` without one, or when
+    /// its placements could not be resolved, which was reported.
+    pub memory: Option<MemoryMap>,
     /// Each `!` written where it would be the type of memory, whose type
     /// was lowered as `{error}`; the type checker reports them (ADR 0034).
     pub never_in_memory: Vec<NeverInMemory>,
@@ -188,6 +191,7 @@ impl Hir {
             consts: Vec<&'a ConstDef>,
             statics: Vec<&'a StaticDef>,
             comptime_blocks: Vec<FnId>,
+            memory: Option<&'a MemoryMap>,
             never_in_memory: &'a [NeverInMemory],
             unsized_types: &'a [UnsizedType],
             applications: &'a [(Span, Ty)],
@@ -216,6 +220,7 @@ impl Hir {
             comptime_blocks: (self.comptime_blocks.iter().copied())
                 .filter(|&id| !self.in_core(self.fn_(id).module))
                 .collect(),
+            memory: self.memory.as_ref(),
             never_in_memory: &self.never_in_memory[..core.never_in_memory],
             unsized_types: &self.unsized_types[..core.unsized_types],
             applications: &self.applications[..core.applications],
@@ -348,6 +353,44 @@ pub struct StaticDef {
     pub align: Option<(ArrayLen, Span)>,
 }
 
+/// The `memory` block (ADR 0057): the regions of the address space, and
+/// the region each of the code, the data and the stack is placed in. Its
+/// values are computed at compile time in the scope of the block's module,
+/// as `#[align(N)]` arguments are.
+#[derive(Debug)]
+pub struct MemoryMap {
+    /// From `memory` to its `}`.
+    pub span: Span,
+    /// In source order, each name once.
+    pub regions: Vec<RegionDef>,
+    pub code: Placement,
+    pub data: Placement,
+    pub stack: Placement,
+    /// The stack's size, with the span of its expression.
+    pub stack_size: (ArrayLen, Span),
+}
+
+/// `region NAME { origin: E, size: E }` (ADR 0057), each value with the
+/// span of its expression.
+#[derive(Debug)]
+pub struct RegionDef {
+    pub name: String,
+    pub name_span: Span,
+    pub origin: (ArrayLen, Span),
+    pub size: (ArrayLen, Span),
+    /// From `region` to its `}`.
+    pub span: Span,
+}
+
+/// Where `code`, `data` or `stack` is placed (ADR 0057).
+#[derive(Clone, Copy, Debug)]
+pub struct Placement {
+    /// Indexes [`MemoryMap::regions`].
+    pub region: usize,
+    /// From the placement's word to the region's name: `stack in RAM`.
+    pub span: Span,
+}
+
 /// A `!` written where memory would have its type (ADR 0034).
 #[derive(Clone, Copy, Debug)]
 pub struct NeverInMemory {
@@ -410,7 +453,8 @@ pub enum Comptime {
     /// (ADR 0035).
     Discriminant(EnumId, u32),
     /// A `usize` the program needs at compile time: an array length, a
-    /// repeat count, the argument of `#[align]`.
+    /// repeat count, the argument of `#[align]`, a value of the `memory`
+    /// block (ADR 0057).
     Value,
 }
 

@@ -162,6 +162,7 @@ Hir {
     consts: [],
     statics: [],
     comptime_blocks: [],
+    memory: None,
     never_in_memory: [],
     unsized_types: [],
     applications: [],

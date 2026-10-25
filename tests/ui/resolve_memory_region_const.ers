@@ -1,0 +1,21 @@
+// emit: typeck
+// Region names are not items (ADR 0057): a constant may have the name of a
+// region, and the block's expressions, looked up among items, name the
+// constant. So does code.
+const RAM: usize = 0x2000_0000;
+const FLASH: usize = 0x0800_0000;
+
+memory {
+    region FLASH { origin: FLASH, size: 0x1_0000 }
+    region RAM { origin: RAM, size: 0x4000 }
+    code in FLASH;
+    data in RAM;
+    stack in RAM { size: RAM / 0x4_0000 }
+}
+
+fn base() -> usize {
+    RAM
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

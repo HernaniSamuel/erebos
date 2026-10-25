@@ -1,0 +1,16 @@
+// emit: hir
+// Region names belong to their block (ADR 0057): code cannot name a region.
+memory {
+    region FLASH { origin: 0x0800_0000, size: 0x1_0000 }
+    region RAM { origin: 0x2000_0000, size: 0x4000 }
+    code in FLASH;
+    data in RAM;
+    stack in RAM { size: 0x800 }
+}
+
+fn base() -> usize {
+    RAM
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

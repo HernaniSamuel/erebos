@@ -1,0 +1,18 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/resolve_memory_reserved_name.ers
+---
+--- errors ---
+resolve::reserved-name
+
+  × `INCLUDE` is a reserved name
+   ╭─[resolve_memory_reserved_name.ers:6:12]
+ 5 │ memory {
+ 6 │     region INCLUDE { origin: 0x0800_0000, size: 0x1_0000 }
+   ·            ───┬───
+   ·               ╰── a command of the linker script language
+ 7 │     region include { origin: 0x2000_0000, size: 0x4000 }
+   ╰────
+  help: the generated linker script names each region as the source does, and would read `INCLUDE`
+        as a command there: give the region another name (ADR 0057)

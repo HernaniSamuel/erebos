@@ -1,0 +1,30 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/resolve_memory_missing_placement.ers
+---
+--- errors ---
+resolve::missing-placement
+
+  × the `memory` block does not place `code`
+   ╭─[resolve_memory_missing_placement.ers:4:1]
+ 3 │ // missing placement, at the block.
+ 4 │ memory {
+   · ───┬──
+   ·    ╰── no `code in`
+ 5 │     region FLASH { origin: 0x0800_0000, size: 0x1_0000 }
+   ╰────
+  help: each of `code`, `data` and `stack` is placed exactly once: add `code in REGION;` (ADR
+        0057)
+resolve::missing-placement
+
+  × the `memory` block does not place `stack`
+   ╭─[resolve_memory_missing_placement.ers:4:1]
+ 3 │ // missing placement, at the block.
+ 4 │ memory {
+   · ───┬──
+   ·    ╰── no `stack in`
+ 5 │     region FLASH { origin: 0x0800_0000, size: 0x1_0000 }
+   ╰────
+  help: each of `code`, `data` and `stack` is placed exactly once: add `stack in REGION { size:
+        SIZE }` (ADR 0057)

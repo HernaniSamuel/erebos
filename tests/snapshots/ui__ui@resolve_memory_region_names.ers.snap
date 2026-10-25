@@ -1,0 +1,16 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/resolve_memory_region_names.ers
+---
+--- errors ---
+resolve::unknown-name
+
+  × cannot find `RAM` in this scope
+    ╭─[resolve_memory_region_names.ers:12:5]
+ 11 │ fn base() -> usize {
+ 12 │     RAM
+    ·     ─┬─
+    ·      ╰── not found
+ 13 │ }
+    ╰────

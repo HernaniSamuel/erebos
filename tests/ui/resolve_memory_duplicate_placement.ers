@@ -1,0 +1,20 @@
+// emit: hir
+// Each of `code`, `data` and `stack` is placed exactly once (ADR 0057): a
+// second placement is reported at itself, labeling the first, whether it
+// names the same region or another; a third is reported too. A repeated
+// placement naming no region is also an unknown region.
+memory {
+    region FLASH { origin: 0x0800_0000, size: 0x1_0000 }
+    region SRAM { origin: 0x2000_0000, size: 0x4000 }
+    region SRAM2 { origin: 0x2000_4000, size: 0x4000 }
+    code in FLASH;
+    data in SRAM;
+    stack in SRAM { size: 0x800 }
+    code in FLASH;
+    stack in SRAM2 { size: 0x400 }
+    data in SRAM2;
+    data in NOWHERE;
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

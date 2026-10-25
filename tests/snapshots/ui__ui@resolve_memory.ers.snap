@@ -1,0 +1,439 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/resolve_memory.ers
+---
+--- hir ---
+Hir {
+    modules: [
+        ModuleDef {
+            name: "",
+            path: "",
+            name_span: None,
+            parent: None,
+            vis: Pub,
+        },
+        ModuleDef {
+            name: "board",
+            path: "board",
+            name_span: Some(
+                284..289,
+            ),
+            parent: Some(
+                ModuleId(
+                    0,
+                ),
+            ),
+            vis: Private,
+        },
+    ],
+    structs: [],
+    enums: [],
+    fns: [
+        Fn {
+            name: "main",
+            path: "main",
+            symbol: Some(
+                "main",
+            ),
+            name_span: 556..560,
+            module: ModuleId(
+                0,
+            ),
+            vis: Private,
+            kind: Entry,
+            ret: Never,
+            ret_span: Some(
+                566..567,
+            ),
+            param_count: 0,
+            locals: [],
+            body: Some(
+                Block {
+                    stmts: [],
+                    tail: Some(
+                        Expr {
+                            id: ExprId(
+                                0,
+                            ),
+                            kind: Loop(
+                                Block {
+                                    stmts: [],
+                                    tail: None,
+                                    span: 575..577,
+                                },
+                            ),
+                            span: 570..577,
+                        },
+                    ),
+                    span: 568..579,
+                },
+            ),
+            span: 547..579,
+            runtime: false,
+            comptime: None,
+        },
+        Fn {
+            name: "on_panic",
+            path: "on_panic",
+            symbol: Some(
+                "on_panic",
+            ),
+            name_span: 589..597,
+            module: ModuleId(
+                0,
+            ),
+            vis: Private,
+            kind: Panic,
+            ret: Never,
+            ret_span: Some(
+                603..604,
+            ),
+            param_count: 0,
+            locals: [],
+            body: Some(
+                Block {
+                    stmts: [],
+                    tail: Some(
+                        Expr {
+                            id: ExprId(
+                                1,
+                            ),
+                            kind: Loop(
+                                Block {
+                                    stmts: [],
+                                    tail: None,
+                                    span: 612..614,
+                                },
+                            ),
+                            span: 607..614,
+                        },
+                    ),
+                    span: 605..616,
+                },
+            ),
+            span: 580..616,
+            runtime: false,
+            comptime: None,
+        },
+        Fn {
+            name: "KIB",
+            path: "board::KIB",
+            symbol: None,
+            name_span: 302..305,
+            module: ModuleId(
+                1,
+            ),
+            vis: Private,
+            kind: Plain,
+            ret: Int(
+                Usize,
+            ),
+            ret_span: Some(
+                307..312,
+            ),
+            param_count: 0,
+            locals: [],
+            body: Some(
+                Block {
+                    stmts: [],
+                    tail: Some(
+                        Expr {
+                            id: ExprId(
+                                2,
+                            ),
+                            kind: Int(
+                                1024,
+                            ),
+                            span: 315..319,
+                        },
+                    ),
+                    span: 315..319,
+                },
+            ),
+            span: 296..320,
+            runtime: false,
+            comptime: Some(
+                Const(
+                    ConstId(
+                        0,
+                    ),
+                ),
+            ),
+        },
+        Fn {
+            name: "size",
+            path: "size",
+            symbol: None,
+            name_span: 424..432,
+            module: ModuleId(
+                1,
+            ),
+            vis: Private,
+            kind: Plain,
+            ret: Int(
+                Usize,
+            ),
+            ret_span: None,
+            param_count: 0,
+            locals: [],
+            body: Some(
+                Block {
+                    stmts: [],
+                    tail: Some(
+                        Expr {
+                            id: ExprId(
+                                3,
+                            ),
+                            kind: Binary(
+                                Mul,
+                                Expr {
+                                    id: ExprId(
+                                        4,
+                                    ),
+                                    kind: Int(
+                                        64,
+                                    ),
+                                    span: 424..426,
+                                },
+                                Expr {
+                                    id: ExprId(
+                                        5,
+                                    ),
+                                    kind: Const(
+                                        ConstId(
+                                            0,
+                                        ),
+                                    ),
+                                    span: 429..432,
+                                },
+                                427..428,
+                            ),
+                            span: 424..432,
+                        },
+                    ),
+                    span: 424..432,
+                },
+            ),
+            span: 424..432,
+            runtime: false,
+            comptime: Some(
+                Value,
+            ),
+        },
+        Fn {
+            name: "size",
+            path: "size",
+            symbol: None,
+            name_span: 483..491,
+            module: ModuleId(
+                1,
+            ),
+            vis: Private,
+            kind: Plain,
+            ret: Int(
+                Usize,
+            ),
+            ret_span: None,
+            param_count: 0,
+            locals: [],
+            body: Some(
+                Block {
+                    stmts: [],
+                    tail: Some(
+                        Expr {
+                            id: ExprId(
+                                6,
+                            ),
+                            kind: Binary(
+                                Mul,
+                                Expr {
+                                    id: ExprId(
+                                        7,
+                                    ),
+                                    kind: Int(
+                                        16,
+                                    ),
+                                    span: 483..485,
+                                },
+                                Expr {
+                                    id: ExprId(
+                                        8,
+                                    ),
+                                    kind: Const(
+                                        ConstId(
+                                            0,
+                                        ),
+                                    ),
+                                    span: 488..491,
+                                },
+                                486..487,
+                            ),
+                            span: 483..491,
+                        },
+                    ),
+                    span: 483..491,
+                },
+            ),
+            span: 483..491,
+            runtime: false,
+            comptime: Some(
+                Value,
+            ),
+        },
+        Fn {
+            name: "stack_size",
+            path: "stack_size",
+            symbol: None,
+            name_span: 364..371,
+            module: ModuleId(
+                1,
+            ),
+            vis: Private,
+            kind: Plain,
+            ret: Int(
+                Usize,
+            ),
+            ret_span: None,
+            param_count: 0,
+            locals: [],
+            body: Some(
+                Block {
+                    stmts: [],
+                    tail: Some(
+                        Expr {
+                            id: ExprId(
+                                9,
+                            ),
+                            kind: Binary(
+                                Mul,
+                                Expr {
+                                    id: ExprId(
+                                        10,
+                                    ),
+                                    kind: Int(
+                                        2,
+                                    ),
+                                    span: 364..365,
+                                },
+                                Expr {
+                                    id: ExprId(
+                                        11,
+                                    ),
+                                    kind: Const(
+                                        ConstId(
+                                            0,
+                                        ),
+                                    ),
+                                    span: 368..371,
+                                },
+                                366..367,
+                            ),
+                            span: 364..371,
+                        },
+                    ),
+                    span: 364..371,
+                },
+            ),
+            span: 364..371,
+            runtime: false,
+            comptime: Some(
+                Value,
+            ),
+        },
+    ],
+    consts: [
+        ConstDef {
+            name: "KIB",
+            path: "board::KIB",
+            name_span: 302..305,
+            module: ModuleId(
+                1,
+            ),
+            vis: Private,
+            ty: Int(
+                Usize,
+            ),
+            init: FnId(
+                2,
+            ),
+        },
+    ],
+    statics: [],
+    comptime_blocks: [],
+    memory: Some(
+        MemoryMap {
+            span: 326..543,
+            regions: [
+                RegionDef {
+                    name: "FLASH",
+                    name_span: 389..394,
+                    origin: (
+                        Known(
+                            134217728,
+                        ),
+                        405..416,
+                    ),
+                    size: (
+                        Comptime(
+                            FnId(
+                                17,
+                            ),
+                        ),
+                        424..432,
+                    ),
+                    span: 382..434,
+                },
+                RegionDef {
+                    name: "RAM",
+                    name_span: 450..453,
+                    origin: (
+                        Known(
+                            536870912,
+                        ),
+                        464..475,
+                    ),
+                    size: (
+                        Comptime(
+                            FnId(
+                                18,
+                            ),
+                        ),
+                        483..491,
+                    ),
+                    span: 443..493,
+                },
+            ],
+            code: Placement {
+                region: 0,
+                span: 523..536,
+            },
+            data: Placement {
+                region: 1,
+                span: 502..513,
+            },
+            stack: Placement {
+                region: 1,
+                span: 343..355,
+            },
+            stack_size: (
+                Comptime(
+                    FnId(
+                        19,
+                    ),
+                ),
+                364..371,
+            ),
+        },
+    ),
+    never_in_memory: [],
+    unsized_types: [],
+    applications: [],
+    entry: FnId(
+        0,
+    ),
+    panic: FnId(
+        1,
+    ),
+    expr_count: 12,
+}

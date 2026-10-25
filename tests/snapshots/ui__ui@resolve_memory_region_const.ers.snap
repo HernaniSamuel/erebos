@@ -1,0 +1,24 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/resolve_memory_region_const.ers
+---
+--- typeck ---
+fn base() -> usize
+    expr 0 const RAM 469..472: usize
+entry fn main() -> !
+    expr 1 loop 499..506: !
+panic fn on_panic() -> !
+    expr 2 loop 536..543: !
+comptime fn RAM() -> usize
+    expr 3 int 536870912 210..221: usize
+comptime fn FLASH() -> usize
+    expr 4 int 134217728 244..255: usize
+comptime fn origin() -> usize
+    expr 5 const FLASH 294..299: usize
+comptime fn origin() -> usize
+    expr 6 const RAM 343..346: usize
+comptime fn stack_size() -> usize
+    expr 7 binary / 424..438: usize
+    expr 8 const RAM 424..427: usize
+    expr 9 int 262144 430..438: usize

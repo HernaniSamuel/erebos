@@ -1,0 +1,17 @@
+// emit: hir
+// Attributes do not apply to a `memory` block (ADR 0057): those of other
+// items are misplaced there, any other is unknown.
+#[align(4)]
+#[packed]
+#[export]
+#[section]
+memory {
+    region FLASH { origin: 0x0800_0000, size: 0x1_0000 }
+    region SRAM { origin: 0x2000_0000, size: 0x4000 }
+    code in FLASH;
+    data in SRAM;
+    stack in SRAM { size: 0x800 }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }
