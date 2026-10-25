@@ -48,6 +48,25 @@ Decisions already agreed for the later steps (their ADRs come with the step):
   bytes: address 0 is valid (ADR 0019), so there is no null niche for
   `None`.
 
+## M3 steps
+
+M3 is split into steps like M2's, each ending with ADRs, the reference
+updated, and a program on QEMU.
+
+| Step | Delivers | Program on QEMU |
+|------|----------|-----------------|
+| **M3.1** Memory maps | `memory { ... }` blocks: regions, where code, data and the stack go, the linker script generated from them; the stack with a declared size at the start of its region; region overflows as diagnostics (ADR 0057) | a program laid out as on a small board, checking where its code, data and stack are |
+| **M3.2** Peripherals | `peripheral` blocks: registers at offsets, with widths and access modes (read-only, write-only, read-write), accessed as MMIO; a write to a read-only register is a compile error; the UART declared in the language | hello world through a UART and a test finisher declared as peripherals |
+| **M3.3** Register fields | fields at bit positions of a register (representation clauses, as in Ada), enums in fields, write-1-to-clear fields, reads with side effects, reset values | the UART configured through its fields |
+| **M3.4** Register arrays and SVD | register arrays, clusters and `derivedFrom`; the design checked against the SVD of a real riscv32 chip; whether `svd2erebos` is a tool of its own | a peripheral generated from SVD, run on QEMU |
+| **M3.5** Second target | ARM Cortex-M on QEMU; what depends on the target becomes a per-target description (pointer width, widest access, ABI, startup, linker script, LLVM setup, runtime functions) | the e2e programs on both targets |
+
+Decisions already agreed for the later steps:
+
+- **M3.5:** the second target comes before M4, so that interrupts and
+  vector tables, the most target-specific part of the language, are
+  designed with both targets in view.
+
 Until M5, there are no methods: functions are free and take their receiver
 explicitly (`fn rect_area(r: *const Rect) -> u32`), and modules (M2.6)
 provide namespacing. Method receivers are references (`&self`,
@@ -130,6 +149,18 @@ Agreed as useful, not yet scheduled:
   happens to an unconsumed value; and no implicit code at scope end,
   given ADR 0008 and the no-runtime rule. Typestate (above) depends on
   this choice.
+- Placing a static in a named region of the memory map, for DMA buffers
+  or memory with other properties, and statics left uninitialized so that
+  they survive a reset. A region other than `data`'s holding initial
+  values needs `_start` to fill more than one range. Region names are
+  not items (ADR 0057), so how a static names its region is open: an
+  attribute on the static naming a region would make region names
+  visible to code, while a placement in the `memory` block naming the
+  static would not.
+- Reading the values of the memory map from code (a region's origin and
+  size, the stack's bounds), for example to check stack use. Until then a
+  value both need is a `const` used in the block and in the code
+  (ADR 0057).
 - Effects in function types ("reads MMIO", "disables interrupts", "may
   panic"), for example to forbid some calls inside interrupt handlers.
   A type-system feature of its own; not scheduled. Revisit after M6.
@@ -148,7 +179,7 @@ Agreed as useful, not yet scheduled:
 Questions accepted ADRs leave to a later step, to settle in that step's
 ADRs:
 
-- **M3:**
+- **M3** (M3.2 to M3.4 for peripherals, M3.5 for the target):
   - `peripheral` blocks must express what an SVD file describes, so that
     a `svd2erebos` can generate them: access modes (read-only,
     write-only, read-write), write-1-to-clear fields, reads with side
@@ -164,10 +195,9 @@ ADRs:
     (`src/target.rs`), the ABI is riscv32's alone (`src/codegen/abi.rs`,
     ADR 0025), and `_start`, the linker script and LLVM's initialization
     are written for RISC-V (ADR 0012, 0030); the 64-bit division of
-    `core` exists because RV32 lacks it (ADR 0020). M3 generates the
-    linker script from `memory` blocks, a per-board matter, so it
-    decides whether the second target comes with M3 or right after,
-    and makes those places a per-target description either way. A
+    `core` exists because RV32 lacks it (ADR 0020). Decided: the second
+    target is M3.5, which makes those places a per-target description;
+    M3.1 takes the board out of the target (ADR 0057). A
     64-bit target, such as x86-64 bare metal, would also make the
     pointer width a parameter of layout, types and the compile-time
     interpreter; it is not planned (ADR 0002, 0010).

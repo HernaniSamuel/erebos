@@ -41,7 +41,7 @@ Do not write one for local implementation details that the code already explains
 | 0009 | [Defer borrow checking](0009-defer-borrow-checking.md)           | Accepted |
 | 0010 | [First target: riscv32 on QEMU `virt`](0010-first-target-riscv32-qemu-virt.md) | Accepted |
 | 0011 | [Development environment: native Windows with prebuilt LLVM 22](0011-development-environment.md) | Accepted |
-| 0012 | [Provisional compiler-generated startup code](0012-provisional-compiler-generated-startup.md) | Accepted, amended by 0030 |
+| 0012 | [Provisional compiler-generated startup code](0012-provisional-compiler-generated-startup.md) | Accepted, amended by 0030, 0057 |
 | 0013 | [Provisional volatile pointers](0013-provisional-volatile-pointers.md) | Accepted |
 | 0014 | [Panic handler](0014-panic-handler.md)                          | Accepted, amended by 0053 |
 | 0015 | [Expression-oriented blocks and implicit unit return](0015-expression-oriented-blocks.md) | Accepted |
@@ -59,7 +59,7 @@ Do not write one for local implementation details that the code already explains
 | 0027 | [Compile-time execution (comptime)](0027-compile-time-execution.md) | Accepted, amended by 0030 |
 | 0028 | [On-demand type checking and evaluation](0028-on-demand-compilation.md) | Accepted, amended by 0033 |
 | 0029 | [Constants and comptime expressions](0029-constants-and-comptime-syntax.md) | Accepted, amended by 0030, 0031, 0034, 0049 |
-| 0030 | [Statics and startup initialization](0030-statics-and-startup-initialization.md) | Accepted, amended by 0034, 0051 |
+| 0030 | [Statics and startup initialization](0030-statics-and-startup-initialization.md) | Accepted, amended by 0034, 0051, 0057 |
 | 0031 | [Byte strings and slices](0031-byte-strings-and-slices.md) | Accepted, amended by 0053 |
 | 0032 | [Checks on values known at compile time](0032-checks-on-values-known-at-compile-time.md) | Accepted, amended by 0035, 0037, 0039 |
 | 0033 | [The compiler pipeline with compile-time evaluation](0033-compiler-pipeline-with-evaluation.md) | Accepted |
@@ -86,3 +86,4 @@ Do not write one for local implementation details that the code already explains
 | 0054 | [Only `_` covers an enum that is not reachable](0054-only-wildcards-cover-unreachable-enums.md) | Accepted |
 | 0055 | [Repeat counts and dead arms under failed values](0055-repeat-counts-and-dead-arms-under-failed-values.md) | Accepted |
 | 0056 | [`rt` is reserved in the root module](0056-rt-is-reserved-in-the-root-module.md) | Accepted |
+| 0057 | [Memory maps](0057-memory-maps.md) | Accepted |

@@ -1,6 +1,6 @@
 # 0012. Provisional compiler-generated startup code
 
-- Status: Accepted; amended by 0030 (`_start` initializes `.data` and `.bss`)
+- Status: Accepted; amended by 0030 (`_start` initializes `.data` and `.bss`), 0057 (`_start` at the origin of the code's region, the stack's top from the linker script, a declared stack)
 - Date: 2026-10-12
 
 ## Context
