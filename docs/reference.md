@@ -1,4 +1,4 @@
-# Erebos language reference (M2.6)
+# Erebos language reference (M3.1)
 
 This describes the language as the compiler implements it today. The
 reasoning behind each rule lives in the ADRs (`docs/adr/`), cited as
@@ -11,15 +11,27 @@ A program is a **root file** (`.ers`), the one given to `erebos build`,
 plus the files of the modules it declares (ADR 0049), plus the module
 `core`, shipped inside the compiler (ADR 0052). Each file is a list of
 items, in any order: functions, external functions, structs, enums,
-constants, statics, external statics, `comptime` blocks, modules (`mod`)
-and `use` declarations. The root file is the **root module**, and the
-modules it declares, inline or in their own files, form a tree under it;
-each module has its own namespace (see "Modules and paths"). Items may
-refer to each other whatever their order and their files (ADR 0028). The
-program must contain exactly one **entry function** and one **panic
-function**, in any of its modules:
+constants, statics, external statics, `comptime` blocks, modules (`mod`),
+`use` declarations and the `memory` block. The root file is the **root
+module**, and the modules it declares, inline or in their own files, form
+a tree under it; each module has its own namespace (see "Modules and
+paths"). Items may refer to each other whatever their order and their
+files (ADR 0028). The program must contain exactly one **entry function**
+and one **panic function**, in any of its modules, and, to be built into
+an executable, exactly one **`memory` block**, which gives the board's
+memory and what each part of it holds (ADR 0057, see "Memory maps"):
 
 ```
+const KIB: usize = 1024;
+
+memory {
+    region FLASH { origin: 0x8000_0000, size: 64 * KIB }
+    region RAM { origin: 0x8001_0000, size: 16 * KIB }
+    code in FLASH;
+    data in RAM;
+    stack in RAM { size: 2 * KIB }
+}
+
 entry fn main() -> ! {
     loop {}
 }
@@ -44,7 +56,8 @@ panic fn on_panic() -> ! {
   panic fn on_panic(info: *const core::PanicInfo) -> ! { ... }
   ```
 
-The target is RV32IMAC on QEMU `virt` (ADR 0010).
+The target is RV32IMAC on QEMU `virt` (ADR 0010). The board's memory is
+not part of the target: each program declares it in its `memory` block.
 
 ## Lexical structure
 
@@ -58,7 +71,10 @@ The target is RV32IMAC on QEMU `virt` (ADR 0010).
 - **Keywords:** `align_of as break comptime const continue crate else entry
   enum extern false fn if let loop match mod mut offset_of panic pub return
   size_of static struct super true use volatile while`. `raw` is a keyword
-  only right after `&`.
+  only right after `&`. `memory`, and the words inside a `memory` block
+  (`region`, `origin`, `size`, `code`, `data`, `stack`, `in`), are no
+  keywords: they are recognized only in their place (see "Memory maps"),
+  and are ordinary names elsewhere.
 - **`_`** is a token of its own, the wildcard pattern of `match`, and
   nothing else (ADR 0037): no variable, parameter, item, field or variant
   can be named `_` (`let _: u32` and `const _: u32` are
@@ -1390,8 +1406,9 @@ fn f() -> u32 {
   false condition calls the panic function; at compile time it fails the
   compilation (`eval::assertion-failed`). See "Messages in `assert`".
 - **Values required at compile time:** array lengths, repeat counts
-  (`[v; N]`) and the argument of `#[align(N)]` are `usize` expressions,
-  such as `[u8; 2 * SECTOR]`. Two array types are the same when their
+  (`[v; N]`), the argument of `#[align(N)]` and the values of a `memory`
+  block (see "Memory maps") are `usize` expressions, such as
+  `[u8; 2 * SECTOR]`. Two array types are the same when their
   lengths have the same value; diagnostics show the value.
 
 What runs at compile time follows the target exactly (32-bit `usize`,
@@ -1850,10 +1867,11 @@ fn base() -> usize {
   after every file of the program. Diagnostics, sorted by file and offset,
   and dumps follow that order. A diagnostic may point into several files,
   each shown under its own name.
-- Every kind of item may appear in any module, `comptime` blocks, modules
-  and `use` declarations included, and the entry and panic functions may be
-  in any module. A `mod` inside a function body is `parser::local-mod`. No
-  attribute applies to a module (`resolve::misplaced-attribute`).
+- Every kind of item may appear in any module, `comptime` blocks, modules,
+  `use` declarations and the `memory` block included, and the entry and
+  panic functions may be in any module. A `mod` inside a function body is
+  `parser::local-mod`. No attribute applies to a module
+  (`resolve::misplaced-attribute`).
 - Module files are read even when a file has syntax errors, so that the
   syntax errors of every file are reported; any of them stops the
   compilation before names are resolved.
@@ -1994,8 +2012,9 @@ pub fn config(baud: u32) -> Config {
 - `pub` comes after the attributes and before the item's keywords: `pub
   fn`, `pub extern fn`, `pub static mut`, `pub extern static`, `pub
   struct`, `pub enum`, `pub const`, `pub mod`, `pub use`, `pub panic fn`,
-  `#[export] pub fn`. On a `comptime` block, which has no name, and on the
-  entry function, which nothing may call, it is `parser::misplaced-pub`.
+  `#[export] pub fn`. On a `comptime` or `memory` block, which has no
+  name, and on the entry function, which nothing may call, it is
+  `parser::misplaced-pub`.
   Before a field it is allowed (below); before anything else, such as a
   variant, a parameter, a `let` or another `pub`, it is
   `parser::unexpected-token`.
@@ -2123,35 +2142,183 @@ pub fn config(baud: u32) -> Config {
   strings and other constant data keep private names, and bodies run only
   at compile time are not emitted.
 
-## Startup and memory (ADR 0012, 0030)
+## Memory maps (ADR 0057)
 
-`_start`, generated by the compiler and visible in `--emit=llvm-ir`, runs
-at the reset address and does, in order:
+```
+const KIB: usize = 1024;
 
-1. set the stack pointer to the end of RAM;
+memory {
+    region FLASH { origin: 0x0800_0000, size: 64 * KIB }
+    region RAM { origin: 0x2000_0000, size: 16 * KIB }
+    region SRAM2 { origin: 0x2000_4000, size: 16 * KIB }
+
+    code in FLASH;
+    data in RAM;
+    stack in RAM { size: 2 * KIB }
+}
+```
+
+A `memory` block gives the board's memory as **regions**, ranges of
+addresses with a name, and says in **placements** what each region holds.
+The compiler checks it and generates the linker script from it.
+
+**The block.**
+
+- A `memory` block is an item, in any module, so that a module describing
+  a board can hold it. A program has at most one: a second one anywhere in
+  the program is `resolve::duplicate-memory`. To be built into an
+  executable, or to print its linker script (see "Building"), a program
+  needs one (`link::no-memory-map`); the other stages do not.
+- Its grammar, where regions and placements come in any order:
+
+  ```
+  memory_block = "memory" "{" { region | placement } "}"
+  region       = "region" NAME "{" "origin" ":" expr "," "size" ":" expr [","] "}"
+  placement    = "code" "in" NAME ";"
+               | "data" "in" NAME ";"
+               | "stack" "in" NAME "{" "size" ":" expr [","] "}"
+  ```
+
+  A syntax error in it is a `parser::unexpected-token`.
+- `memory` starts a block only where an item starts and `{` follows it;
+  the words inside (`region`, `origin`, `size`, `code`, `data`, `stack`,
+  `in`) are recognized only there. Elsewhere all of them are ordinary
+  names, of variables, functions, modules or fields.
+- Inside a function body, `memory {` followed by `region` and a name, or
+  by `code`, `data` or `stack` and `in`, is `parser::local-memory`.
+  Anything else after `memory {` there is a struct literal, as
+  `memory { data: 1 }` for a struct named `memory`.
+- Attributes do not apply to a `memory` block
+  (`resolve::misplaced-attribute`, or `resolve::unknown-attribute` for an
+  attribute that does not exist), nor does `pub` (`parser::misplaced-pub`):
+  it has no name and describes the whole program.
+
+**Regions.**
+
+- `origin` and `size` are `usize` values computed at compile time, like
+  array lengths (see "Compile-time execution"), in the scope of the module
+  holding the block: they may name its private constants and call its
+  functions. A region covers `[origin, origin + size)`.
+- Region names belong to the block. They are not items: a constant of the
+  same name is no conflict, a name in an expression of the block is looked
+  up among items as anywhere else, and code cannot name a region
+  (`resolve::unknown-name`). Two regions of one name are
+  `resolve::duplicate-region`, and a region named `INCLUDE`, a command of
+  the linker script language, is `resolve::reserved-name` (`include` is
+  fine).
+- A region nothing is placed in is allowed: it documents memory the
+  program uses by address.
+
+**Placements.** Each of `code`, `data` and `stack` is placed exactly once:
+twice is `resolve::duplicate-placement`, never is
+`resolve::missing-placement`, and a placement naming no region of the
+block is `resolve::unknown-region`.
+
+- `code in R;` puts in `R`, in this order, the reset entry `_start` (see
+  "Startup and memory"), the code (`.text`), the read-only data
+  (`.rodata`) and the initial values of `.data`. `_start` is at `R`'s
+  origin, which must be a multiple of 4 (`ty::misaligned-code`) and must
+  be the address the board jumps to at reset, which the compiler cannot
+  check. On QEMU `virt` run with `-bios none`, as the tests do, that is
+  `0x8000_0000`, the start of its RAM; with QEMU's default firmware,
+  OpenSBI, loaded there, such a program does not boot.
+- `data in R;` puts in `R` the run addresses of `.data`, then `.bss`.
+  `R` may be the code's region, for a board that runs from RAM: the
+  initial values of `.data` are then at its run addresses, and nothing
+  else is set aside for them.
+- `stack in R { size: E }` reserves `E` bytes for the stack at the
+  **start** of `R`, below anything else `R` holds. Its start is `R`'s
+  origin rounded up to 16, the stack alignment of riscv32, and `E` must be
+  a multiple of 16. The stack grows down, so one that overflows leaves its
+  region below its origin, where many chips have no memory or memory that
+  faults, instead of running over `.data` and `.bss`. Nothing detects the
+  overflow at run time yet (it needs trap handlers, M4); on QEMU `virt`,
+  where every region is part of one RAM, an overflow writes into the
+  region below, if there is one. The stack cannot be in the code's region
+  (`resolve::stack-with-code`), whose origin `_start` needs; a program on
+  one region of RAM, as QEMU's, splits it in two.
+
+**What is checked.** When names are resolved:
+
+| Code | Case |
+|------|------|
+| `resolve::duplicate-memory` | a second `memory` block in the program |
+| `resolve::duplicate-region` | two regions with one name |
+| `resolve::unknown-region` | a placement names no region of the block |
+| `resolve::duplicate-placement` | `code`, `data` or `stack` placed twice |
+| `resolve::missing-placement` | `code`, `data` or `stack` not placed, reported at `memory`, once for each |
+| `resolve::stack-with-code` | the stack placed in the code's region |
+| `resolve::reserved-name` | a region named `INCLUDE` |
+
+"Second" means later in the order of files, which are numbered depth
+first (see "Modules and paths"), then of positions in a file: the error
+points at the second block, region or placement, and labels the first.
+
+Once the block's values are computed, during type checking, so whatever
+stage `--emit` asks for after it:
+
+| Code | Case |
+|------|------|
+| `ty::empty-region` | a region of size 0 |
+| `ty::region-out-of-range` | a region whose end, `origin + size`, is above `0xFFFF_FFFF`, so that the address one past it, which the linker's end symbols hold, would not exist; the last byte of the address space cannot belong to a region |
+| `ty::region-overlap` | two regions sharing an address; reported once per pair, at the later region, labeling the earlier |
+| `ty::misaligned-code` | the code's region starting at an address that is not a multiple of 4 |
+| `ty::stack-size` | a stack of size 0, or not a multiple of 16, or one that does not fit in its region once its start is rounded up |
+
+A stack size that is both not a multiple of 16 and too large is reported
+as not a multiple. A value whose computation failed is reported once,
+where it is written, with the errors of any compile-time evaluation or a
+`ty::mismatched-types`, and the checks that need it are skipped: a region
+whose origin failed overlaps nothing.
+
+**The linker script.** `erebos build --emit=linker-script` prints the
+script the compiler passes to `ld.lld`:
+
+- `MEMORY` lists every region in source order under its own name, so that
+  the script and the linker's messages read like the source.
+- In the code's region: `_start` in an output section of its own,
+  `.text.start`, so that only its own alignment counts and an object given
+  with `--link` whose code is aligned to 64 cannot move it off the origin;
+  then `.text`, `.rodata` and the initial values of `.data`.
+- In the stack's region: a section `.stack` without contents, from
+  `__stack_start` to `__stack_end`, the bounds of the stack. In the data's
+  region: `.data`, then `.bss`. `.stack` comes before both, so that it is
+  first in its region whether or not that region also holds the data.
+- The rest is as before (ADR 0030): `.data` and `.bss` aligned to 4 and
+  padded inside, the symbols of the startup loops, the small-data
+  sections, the sections that are not loaded, and a link error for a
+  section the script does not place.
+
+**Region overflow.** Only the linker knows how large the code is, so a
+region too small for what it holds is found at link time: the compiler
+reads `ld.lld`'s errors back and reports one `link::region-overflow` per
+region, at the region's name in the source, naming the first section that
+does not fit (the initial values of `.data` by that name, when the data
+is elsewhere) and how many bytes the region lacks; its help lists what
+the region holds, since the section that overflows is often not the one
+to shrink. The linker's other errors are shown as `ld.lld` writes them,
+after `error: linking failed:`.
+
+## Startup and memory (ADR 0012, 0030, 0057)
+
+`_start`, generated by the compiler and visible in `--emit=llvm-ir`, is the
+reset entry: it sits alone at the origin of the code's region (see "Memory
+maps"), and does, in order:
+
+1. set the stack pointer to `__stack_end`, the end of the stack the
+   `memory` block declares;
 2. fill `.bss` with zeros;
 3. copy the initial values of `.data` from their load address to their
-   run address;
+   run address; when the data shares the code's region the two are one,
+   and each word is copied onto itself;
 4. jump to the entry function, by its symbol (see "Symbols").
 
 Nothing else runs before the entry function: there are no constructors and
 no order of initialization. The loops work a word at a time between
 symbols the linker script defines (`__bss_start`, `__bss_end`,
 `__data_start`, `__data_end`, `__data_load`), and do nothing when a range
-is empty.
-
-**Memory layout until M3.** The generated linker script lays the program
-out as on a board whose program is in flash, splitting QEMU's 128 MiB of
-RAM in two regions:
-
-| Region | Addresses | Holds |
-|--------|-----------|-------|
-| `IMAGE` | `0x8000_0000` to `0x83FF_FFFF` | `.text`, `.rodata`, and the load image of `.data` |
-| `RAM` | `0x8400_0000` to `0x87FF_FFFF` | `.data`, `.bss`, and the stack, growing down from `0x8800_0000` |
-
-So `.data` is copied on every boot, on QEMU too. A program and its `.data`
-image must fit in `IMAGE`, and `.data`, `.bss` and the stack in `RAM`. In
-M3, memory maps declared in the language replace this split.
+is empty. `_start` takes `__stack_end` from the script too, so the LLVM
+IR of a program is the same whatever its board.
 
 Object files given with `--link` may use the small-data sections
 (`.srodata`, `.sdata`, `.sbss`, as GCC emits by default and clang with
@@ -2323,9 +2490,12 @@ erebos build program.ers [-o program.elf] [-O] [--link file.o]... [--emit=<stage
 directory, and every file is named relative to it (see "Modules and
 paths"). `-O` enables LLVM optimizations. `--link` adds an object file
 defining `extern fn`s and `extern static`s; it may be repeated. `--emit`
-prints a compiler stage instead: `tokens`, `ast`, `hir`, `typeck`, `mir` or
-`llvm-ir`.
+prints a compiler stage instead: `tokens`, `ast`, `hir`, `typeck`, `mir`,
+`linker-script` or `llvm-ir`.
 
+- Building an executable and `linker-script` need the program's `memory`
+  block (`link::no-memory-map`, see "Memory maps"); the other stages do
+  not. `linker-script` prints the script `ld.lld` is given.
 - `tokens` and `ast` show the root file alone, before any module file is
   read; the later stages show the whole program.
 - The dumps leave `core` out: `mir` and `llvm-ir` show a function of `core`
@@ -2334,12 +2504,15 @@ prints a compiler stage instead: `tokens`, `ast`, `hir`, `typeck`, `mir` or
 - `hir` and `typeck` show the items outside the root module by their
   paths, and `mir` and `llvm-ir` show functions and statics by their
   symbols (see "Symbols"); the `hir` dump starts with the module tree.
-- `typeck` and `mir` start with every struct's layout and every enum with
-  its integer type and the values of its variants, an enum with payloads
-  also with the offset of each payload value, its size and its alignment,
-  then each `Option(T)` and `Result(T, E)` used, sorted by name, and list
-  the bodies run at compile time as `comptime fn`, named by path, a
-  variant's value as `comptime fn Mode::Run`.
+- `typeck` and `mir` start with the `memory` block, as written but with
+  its values computed and its placements in the order `code`, `data`,
+  `stack`, then every struct's layout and every enum with its integer
+  type and the values of its variants, an enum with payloads also with
+  the offset of each payload value, its size and its alignment, then each
+  `Option(T)` and `Result(T, E)` used, sorted by name, and list the bodies
+  run at compile time as `comptime fn`, named by path, a variant's value
+  as `comptime fn Mode::Run` and the values of the `memory` block as
+  `comptime fn origin`, `size` and `stack_size`.
 
 See `CONTRIBUTING.md` for setup and running on QEMU.
 
@@ -2366,7 +2539,8 @@ Every error has a stable code, shown with the message.
 | `parser::local-static` | `static` or `extern static` inside a function body |
 | `parser::local-mod` | `mod` inside a function body |
 | `parser::local-use` | `use` inside a function body |
-| `parser::misplaced-pub` | `pub` on a `comptime` block or on the entry function |
+| `parser::local-memory` | a `memory` block inside a function body: `memory {` followed by `region` and a name, or by `code`, `data` or `stack` and `in` |
+| `parser::misplaced-pub` | `pub` on a `comptime` block, a `memory` block or the entry function |
 | `parser::enum-without-type` | an enum without `: Type` |
 | `parser::variant-without-value` | a variant without `= value` |
 | `parser::empty-payload` | a variant written `V()`, a payload without types |
@@ -2401,7 +2575,7 @@ Every error has a stable code, shown with the message.
 | `resolve::not-a-constant` | a name or path in a pattern that is not a constant: a local variable, parameter, static, function, struct or enum |
 | `resolve::duplicate-binding` | one name bound twice in one pattern, or in one alternative of an or-pattern |
 | `resolve::inconsistent-binding` | a name not bound by every alternative of an or-pattern, or bound with `let mut` by only some |
-| `resolve::reserved-name` | an item, module or `use` named `_start`, `core`, with a name starting with `__`, or like a built-in function (`assert`, `len`, `slice`); a module of the root module named `llvm` or `rt` |
+| `resolve::reserved-name` | an item, module or `use` named `_start`, `core`, with a name starting with `__`, or like a built-in function (`assert`, `len`, `slice`); a module of the root module named `llvm` or `rt`; a region named `INCLUDE` |
 | `resolve::unknown-attribute` | an attribute that does not exist |
 | `resolve::misplaced-attribute` | an attribute on an item it does not apply to |
 | `resolve::attribute-argument` | an attribute with a missing or extra argument |
@@ -2409,9 +2583,15 @@ Every error has a stable code, shown with the message.
 | `resolve::conflicting-attributes` | `#[packed]` with `#[align(N)]` |
 | `resolve::missing-entry`, `resolve::multiple-entries` | not exactly one `entry fn` in the program |
 | `resolve::missing-panic`, `resolve::multiple-panics` | not exactly one `panic fn` in the program |
+| `resolve::duplicate-memory` | a second `memory` block in the program |
+| `resolve::duplicate-region` | two regions with one name in a `memory` block |
+| `resolve::unknown-region` | a placement names no region of its `memory` block |
+| `resolve::duplicate-placement` | `code`, `data` or `stack` placed twice |
+| `resolve::missing-placement` | `code`, `data` or `stack` not placed |
+| `resolve::stack-with-code` | the stack placed in the code's region |
 | `resolve::outside-loop` | `break`/`continue` outside a loop |
 | `resolve::break-value-in-while` | `break value` in a `while` |
-| `resolve::return-in-comptime` | `return` or `?` in code run at compile time on its own: a `comptime` expression or block, the initializer of a constant or static, a variant's value, an array length, a repeat count or an `#[align(N)]` argument |
+| `resolve::return-in-comptime` | `return` or `?` in code run at compile time on its own: a `comptime` expression or block, the initializer of a constant or static, a variant's value, an array length, a repeat count, an `#[align(N)]` argument or a value of a `memory` block |
 | `ty::mismatched-types` | a value of the wrong type, or a `.V` where the expected type, or the position's type, is not an enum |
 | `ty::untyped-literal` | a literal or array literal with no expected type |
 | `ty::untyped-variant` | a `.V` with no expected type, as a `match` scrutinee, the operand of `as` or `?`, or an expression statement |
@@ -2462,6 +2642,11 @@ Every error has a stable code, shown with the message.
 | `ty::special-fn-params` | entry function with parameters |
 | `ty::panic-param` | a panic function whose parameters are not none or one `*const core::PanicInfo` |
 | `ty::entry-returns`, `ty::panic-returns` | entry or panic function that can return |
+| `ty::empty-region` | a region of size 0 |
+| `ty::region-out-of-range` | a region whose end is above `0xFFFF_FFFF` |
+| `ty::region-overlap` | two regions sharing an address |
+| `ty::misaligned-code` | the code's region starting at an address that is not a multiple of 4 |
+| `ty::stack-size` | a stack of size 0, not a multiple of 16, or that does not fit in its region |
 | `eval::panic` | compile-time code reached the panic function: a zero divisor, an index out of bounds, an enum value that is no variant in a `match` that no arm matches or under `?`, an explicit call |
 | `eval::assertion-failed` | `assert` with a false condition at compile time, with its message if it has one |
 | `eval::step-limit` | compile-time code ran more than 10,000,000 steps |
@@ -2479,3 +2664,5 @@ Every error has a stable code, shown with the message.
 | `eval::pointer-escapes` | a compile-time result holding a pointer into the evaluation's own memory |
 | `eval::pointer-out-of-bounds` | a compile-time result holding a pointer outside its object and not one past its end, or a slice not inside its object |
 | `codegen::llvm` | LLVM rejected the target; an environment problem |
+| `link::no-memory-map` | building an executable, or printing its linker script, for a program without a `memory` block |
+| `link::region-overflow` | what is placed in a region does not fit in it, found by the linker |

@@ -55,7 +55,7 @@ updated, and a program on QEMU.
 
 | Step | Delivers | Program on QEMU |
 |------|----------|-----------------|
-| **M3.1** Memory maps | `memory { ... }` blocks: regions, where code, data and the stack go, the linker script generated from them; the stack with a declared size at the start of its region; region overflows as diagnostics (ADR 0057) | a program laid out as on a small board, checking where its code, data and stack are |
+| **M3.1** ✅ Memory maps | `memory { ... }` blocks: regions, where code, data and the stack go, the linker script generated from them; the stack with a declared size at the start of its region; region overflows as diagnostics (ADR 0057) | a program laid out as on a small board, checking where its code, data and stack are |
 | **M3.2** Peripherals | `peripheral` blocks: registers at offsets, with widths and access modes (read-only, write-only, read-write), accessed as MMIO; a write to a read-only register is a compile error; the UART declared in the language | hello world through a UART and a test finisher declared as peripherals |
 | **M3.3** Register fields | fields at bit positions of a register (representation clauses, as in Ada), enums in fields, write-1-to-clear fields, reads with side effects, reset values | the UART configured through its fields |
 | **M3.4** Register arrays and SVD | register arrays, clusters and `derivedFrom`; the design checked against the SVD of a real riscv32 chip; whether `svd2erebos` is a tool of its own | a peripheral generated from SVD, run on QEMU |
@@ -197,7 +197,7 @@ ADRs:
     are written for RISC-V (ADR 0012, 0030); the 64-bit division of
     `core` exists because RV32 lacks it (ADR 0020). Decided: the second
     target is M3.5, which makes those places a per-target description;
-    M3.1 takes the board out of the target (ADR 0057). A
+    M3.1 took the board out of the target (ADR 0057). A
     64-bit target, such as x86-64 bare metal, would also make the
     pointer width a parameter of layout, types and the compile-time
     interpreter; it is not planned (ADR 0002, 0010).
@@ -383,4 +383,22 @@ Documentation owed:
   files, averages groups of readings on QEMU, at both optimization levels,
   until a division by zero makes its handler print
   `division by zero at main.ers:12`. With it, M2 is done.
-- **Next: M3** (memory maps and peripherals).
+- **M3.1 done.** A program declares its board's memory in a `memory`
+  block (ADR 0057): regions, whose origins and sizes are computed at
+  compile time, and the regions that hold the code, the data and the
+  stack, which has a declared size at the start of its region, so that an
+  overflow leaves the region instead of running over the statics. The
+  compiler checks the map (empty, overlapping or out-of-range regions, a
+  misaligned code origin, a stack that does not fit) and generates the
+  linker script from it, which `--emit=linker-script` prints; `_start`
+  sits alone at the origin of the code's region and takes the stack's top
+  from the script, so code generation does not depend on the board. A
+  region too small for what it holds is reported at the region in the
+  source, from the linker's error. The target description no longer holds
+  QEMU's RAM, and every program built, the test programs included,
+  declares its map. The milestone program, laid out as on a small board
+  with 64 KiB of flash and 16 KiB of RAM, checks on QEMU at both
+  optimization levels that its stack, statics and read-only data are
+  where its map puts them; a second one runs from RAM, its code and data
+  in one region.
+- **Next: M3.2** (peripherals).
