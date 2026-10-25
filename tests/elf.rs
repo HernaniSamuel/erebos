@@ -395,6 +395,27 @@ fn region_overflow_code() {
     insta::assert_snapshot!(error);
 }
 
+/// A region overflowing into the next one, which holds the stack: the
+/// sections overlap there, and `ld.lld`'s reports of it follow from the
+/// overflow, so only the overflow is reported.
+#[test]
+fn region_overflow_into_next() {
+    let error = overflow(
+        "overflow_into_next",
+        "memory {
+    region FLASH { origin: 0x8000_0000, size: 0x100 }
+    region RAM { origin: 0x8000_0100, size: 0x4000 }
+    code in FLASH;
+    data in RAM;
+    stack in RAM { size: 0x800 }
+}
+",
+    );
+    assert_eq!(error.matches("link::region-overflow").count(), 1, "{error}");
+    assert!(!error.contains("linking failed"), "{error}");
+    assert!(!error.contains("overlaps"), "{error}");
+}
+
 /// `.bss` past the end of the region it shares with the stack.
 #[test]
 fn region_overflow_bss() {

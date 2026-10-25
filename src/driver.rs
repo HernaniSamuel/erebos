@@ -166,7 +166,8 @@ pub fn build(
 
 /// What `build` reports when `ld.lld` fails with the error output
 /// `stderr`: a `link::region-overflow` per region of `map` it reports
-/// overflowing, then the linker's other lines as they are.
+/// overflowing, then the linker's other lines as they are, but for what
+/// follows from an overflow.
 fn link_failure(stderr: &str, map: &mir::MemoryMap, sources: &SourceMap, color: bool) -> String {
     let (overflows, rest) = link::region_overflows(stderr, map);
     let mut out = diag::render(&overflows, sources, color);

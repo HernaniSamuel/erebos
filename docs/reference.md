@@ -2297,7 +2297,10 @@ does not fit (the initial values of `.data` by that name, when the data
 is elsewhere) and how many bytes the region lacks; its help lists what
 the region holds, since the section that overflows is often not the one
 to shrink. The linker's other errors are shown as `ld.lld` writes them,
-after `error: linking failed:`.
+after `error: linking failed:`, but for the sections it finds overlapping
+when a region overflows: the regions being disjoint, sections overlap
+only past the end of one, so those errors follow from the overflow and
+are left out.
 
 ## Startup and memory (ADR 0012, 0030, 0057)
 

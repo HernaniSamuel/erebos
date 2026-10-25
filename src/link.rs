@@ -220,7 +220,8 @@ impl<'a> Overflow<'a> {
 /// region, at its name in the source, naming the first section reported
 /// there and giving the largest overflow, which is how many bytes the
 /// region lacks (ADR 0057); in the order of the regions. Also returns the
-/// lines of `stderr` that report something else.
+/// lines of `stderr` that report something else, but for the overlaps of
+/// sections when a region overflows, which follow from it.
 pub fn region_overflows<'a>(stderr: &'a str, map: &MemoryMap) -> (Vec<Diagnostic>, Vec<&'a str>) {
     // Per region, the first section and the largest overflow.
     let mut found: Vec<Option<(&str, u64)>> = vec![None; map.regions.len()];
@@ -237,6 +238,21 @@ pub fn region_overflows<'a>(stderr: &'a str, map: &MemoryMap) -> (Vec<Diagnostic
             }
             None => rest.push(line),
         }
+    }
+    // The regions are disjoint and the script keeps each section in its
+    // region, so sections overlap only past the end of one: once a region
+    // overflows, each overlap `ld.lld` reports, with its `>>>` lines and
+    // the blank line after them, is dropped.
+    if found.iter().any(Option::is_some) {
+        let mut overlap = false;
+        rest.retain(|line| {
+            if line.contains("error: section ") && line.contains(" range overlaps with ") {
+                overlap = true;
+            } else if !(overlap && (line.starts_with(">>> ") || line.is_empty())) {
+                overlap = false;
+            }
+            !overlap
+        });
     }
     let diags = found
         .into_iter()
@@ -401,6 +417,34 @@ ld.lld: error: something else
                 "ld.lld: error: something else"
             ]
         );
+    }
+
+    /// Once a region overflows, the overlaps of sections that follow from
+    /// it are dropped, with their `>>>` lines; the other lines are kept.
+    /// Without an overflow, an overlap is kept.
+    #[test]
+    fn overlaps_after_an_overflow() {
+        let overlap = "\
+ld.lld: error: section .text virtual address range overlaps with .stack
+>>> .text range is [0x80000052, 0x800003AB]
+>>> .stack range is [0x80000100, 0x800008FF]
+
+ld.lld: error: section .stack load address range overlaps with .rodata
+>>> .stack range is [0x80000100, 0x800008FF]
+>>> .rodata range is [0x800003AC, 0x800003B2]
+";
+        let stderr = format!(
+            "ld.lld: error: section '.text' will not fit in region 'FLASH': overflowed by 9 bytes\n\
+             {overlap}\n\
+             ld.lld: error: something else\n"
+        );
+        let (diags, rest) = region_overflows(&stderr, &map());
+        assert_eq!(diags.len(), 1);
+        assert_eq!(rest, ["ld.lld: error: something else"]);
+
+        let (diags, rest) = region_overflows(overlap, &map());
+        assert!(diags.is_empty());
+        assert_eq!(rest, overlap.lines().collect::<Vec<_>>());
     }
 
     /// When data shares the code's region, `.data` there is its run range,
