@@ -563,6 +563,8 @@ impl<'a> Items<'a> {
                     self.comptimes.push((decl, module));
                     continue;
                 }
+                // Not lowered yet (M3.1, step 2).
+                ast::Item::Memory(_) => continue,
                 ast::Item::Mod(decl) => {
                     let id = ModuleId(self.modules.len() as u32);
                     self.modules.push(ModuleDef {

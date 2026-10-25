@@ -6,9 +6,9 @@ use crate::diag::{Diagnostic, Diagnostics};
 use crate::span::Span;
 use crate::syntax::ast::{
     Arm, Attr, BinOp, Block, ComptimeDecl, ConstDecl, EnumDecl, Expr, ExprKind, FieldDecl,
-    FieldInit, File, FnDecl, FnKind, Ident, Item, Let, LogicalOp, ModDecl, Param, Path, Pattern,
-    PatternKind, StaticDecl, Stmt, StructDecl, Ty, TyKind, UnOp, UseDecl, UseName, VariantDecl,
-    Visibility,
+    FieldInit, File, FnDecl, FnKind, Ident, Item, Let, LogicalOp, MemoryDecl, ModDecl, Param, Path,
+    Pattern, PatternKind, Placement, PlacementKind, RegionDecl, StaticDecl, Stmt, StructDecl, Ty,
+    TyKind, UnOp, UseDecl, UseName, VariantDecl, Visibility,
 };
 use crate::syntax::lexer;
 use crate::syntax::token::{Token, TokenKind};
@@ -74,6 +74,40 @@ impl Parser<'_> {
             || (self.at(TokenKind::Extern) && self.peek_second() == TokenKind::Static)
     }
 
+    /// The text of the token at `pos`, if it is an identifier. The words of
+    /// a `memory` block are identifiers, recognized by their text where
+    /// they are keywords (ADR 0057).
+    fn word_at(&self, pos: usize) -> Option<&str> {
+        let token = self.tokens.get(pos)?;
+        (token.kind == TokenKind::Ident).then(|| &self.text[token.span.range()])
+    }
+
+    /// At the identifier `word`.
+    fn at_word(&self, word: &str) -> bool {
+        self.word_at(self.pos) == Some(word)
+    }
+
+    /// At `memory {`, which starts a `memory` block where an item starts
+    /// (ADR 0057).
+    fn at_memory(&self) -> bool {
+        self.at_word("memory") && self.peek_second() == TokenKind::LBrace
+    }
+
+    /// At a `memory` block in a function body: `memory {` followed by
+    /// `region` and a name, or by `code`, `data` or `stack` and `in`.
+    /// Anything else after `memory {` there is a struct literal, as
+    /// `memory { data: 1 }` (ADR 0057).
+    fn at_local_memory(&self) -> bool {
+        if !self.at_memory() {
+            return false;
+        }
+        match self.word_at(self.pos + 2) {
+            Some("region") => self.word_at(self.pos + 3).is_some(),
+            Some("code" | "data" | "stack") => self.word_at(self.pos + 3) == Some("in"),
+            _ => false,
+        }
+    }
+
     fn bump(&mut self) -> Token {
         let token = self.peek();
         match token.kind {
@@ -101,6 +135,26 @@ impl Parser<'_> {
     fn error_expected(&mut self, what: &str) -> Reported {
         let span = self.missing_token_span();
         self.report_unexpected(what, span)
+    }
+
+    /// Reports that `what` is missing before the next token, with `help`.
+    fn error_expected_help(&mut self, what: &str, help: &str) -> Reported {
+        let span = self.missing_token_span();
+        self.report_unexpected_help(what, span, help)
+    }
+
+    /// `report_unexpected`, with `help`.
+    fn report_unexpected_help(&mut self, what: &str, span: Span, help: &str) -> Reported {
+        let found = self.peek();
+        self.diags.push(
+            Diagnostic::error(
+                "parser::unexpected-token",
+                format!("expected {what}, found {}", found.kind.describe()),
+            )
+            .label(span, format!("expected {what}"))
+            .help(help),
+        );
+        Reported
     }
 
     fn report_unexpected(&mut self, what: &str, span: Span) -> Reported {
@@ -177,7 +231,7 @@ impl Parser<'_> {
                     | TokenKind::Use
                     | TokenKind::Pound
                     | TokenKind::Eof
-            );
+            ) || self.at_memory();
             if closes_module || starts_item {
                 return;
             }
@@ -200,6 +254,9 @@ impl Parser<'_> {
         };
         if self.at_static() {
             return Ok(Item::Static(self.static_decl(attrs, vis)?));
+        }
+        if self.at_memory() {
+            return Ok(Item::Memory(self.memory_decl(attrs, vis)?));
         }
         match self.peek().kind {
             TokenKind::Entry | TokenKind::Panic | TokenKind::Fn | TokenKind::Extern => {
@@ -230,11 +287,15 @@ impl Parser<'_> {
     }
 
     /// Reports `pub`, the token `pub_`, if the item after it is one that
-    /// `pub` does not apply to: a `comptime` block, which has no name, or
-    /// the entry function, which nothing calls (ADR 0050). Anything else
-    /// after `pub` is an item, or reported as not being one.
+    /// `pub` does not apply to: a `comptime` or `memory` block, which has no
+    /// name, or the entry function, which nothing calls (ADR 0050, 0057).
+    /// Anything else after `pub` is an item, or reported as not being one.
     fn misplaced_pub(&mut self, pub_: Token) {
         let (what, help) = match self.peek().kind {
+            _ if self.at_memory() => (
+                "a `memory` block",
+                "a `memory` block describes the memory of the whole program and has no name for other modules to use; remove `pub` (ADR 0057)",
+            ),
             TokenKind::Comptime => (
                 "a `comptime` block",
                 "a `comptime` block has no name for other modules to use; remove `pub` (ADR 0050)",
@@ -613,6 +674,122 @@ impl Parser<'_> {
         Ok(types)
     }
 
+    /// `memory { ... }`, its regions and placements in any order
+    /// (ADR 0057). At `memory {`.
+    fn memory_decl(&mut self, attrs: Vec<Attr>, vis: Visibility) -> PResult<MemoryDecl> {
+        const HELP: &str = "a `memory` block holds regions, `region NAME { origin: ADDRESS, size: BYTES }`, and placements, `code in NAME;`, `data in NAME;` and `stack in NAME { size: BYTES }` (ADR 0057)";
+        let start = self.bump().span;
+        self.bump();
+        let mut regions = Vec::new();
+        let mut placements = Vec::new();
+        loop {
+            if self.at_word("region") {
+                regions.push(self.region_decl()?);
+            } else if self.at_word("code") || self.at_word("data") || self.at_word("stack") {
+                placements.push(self.placement()?);
+            } else if self.at(TokenKind::RBrace) {
+                break;
+            } else {
+                let what = "`region`, `code`, `data`, `stack` or `}`";
+                if self.at(TokenKind::Eof) {
+                    return Err(self.error_expected_help(what, HELP));
+                }
+                // A stray token, not a missing one: point at the token
+                // itself.
+                let span = self.peek().span;
+                return Err(self.report_unexpected_help(what, span, HELP));
+            }
+        }
+        let close = self.bump();
+        Ok(MemoryDecl {
+            attrs,
+            vis,
+            regions,
+            placements,
+            span: start.to(close.span),
+        })
+    }
+
+    /// `region NAME { origin: expr, size: expr }`, with an optional
+    /// trailing comma (ADR 0057). At `region`.
+    fn region_decl(&mut self) -> PResult<RegionDecl> {
+        const HELP: &str = "a region is written `region NAME { origin: ADDRESS, size: BYTES }`, with both fields, in that order (ADR 0057)";
+        let start = self.bump().span;
+        let name = self.ident()?;
+        self.expect_help(TokenKind::LBrace, HELP)?;
+        self.expect_word("origin", HELP)?;
+        self.expect_help(TokenKind::Colon, HELP)?;
+        let origin = self.nested_expr()?;
+        self.expect_help(TokenKind::Comma, HELP)?;
+        self.expect_word("size", HELP)?;
+        self.expect_help(TokenKind::Colon, HELP)?;
+        let size = self.nested_expr()?;
+        self.eat(TokenKind::Comma);
+        let close = self.expect_help(TokenKind::RBrace, HELP)?;
+        Ok(RegionDecl {
+            name,
+            origin,
+            size,
+            span: start.to(close.span),
+        })
+    }
+
+    /// `code in NAME;`, `data in NAME;` or `stack in NAME { size: expr }`,
+    /// the stack's size with an optional trailing comma (ADR 0057). At
+    /// `code`, `data` or `stack`.
+    fn placement(&mut self) -> PResult<Placement> {
+        const HELP: &str =
+            "`code` and `data` are placed with `code in NAME;` and `data in NAME;` (ADR 0057)";
+        const STACK_HELP: &str =
+            "the stack is placed with its size, `stack in NAME { size: BYTES }` (ADR 0057)";
+        let keyword = self.bump();
+        let text = self.text;
+        let word = &text[keyword.span.range()];
+        let help = if word == "stack" { STACK_HELP } else { HELP };
+        self.expect_word("in", help)?;
+        let region = self.ident()?;
+        let (kind, end) = if word == "stack" {
+            self.expect_help(TokenKind::LBrace, help)?;
+            self.expect_word("size", help)?;
+            self.expect_help(TokenKind::Colon, help)?;
+            let size = self.nested_expr()?;
+            self.eat(TokenKind::Comma);
+            let close = self.expect_help(TokenKind::RBrace, help)?;
+            (PlacementKind::Stack { size }, close.span)
+        } else {
+            let semi = self.expect_help(TokenKind::Semi, help)?;
+            let kind = if word == "code" {
+                PlacementKind::Code
+            } else {
+                PlacementKind::Data
+            };
+            (kind, semi.span)
+        };
+        Ok(Placement {
+            kind,
+            region,
+            span: keyword.span.to(end),
+        })
+    }
+
+    /// `expect`, with `help` on the error.
+    fn expect_help(&mut self, kind: TokenKind, help: &str) -> PResult<Token> {
+        match self.eat(kind) {
+            Some(token) => Ok(token),
+            None => Err(self.error_expected_help(kind.describe(), help)),
+        }
+    }
+
+    /// Consumes the identifier `word`, a word of a `memory` block
+    /// (ADR 0057), or reports it missing, with `help`.
+    fn expect_word(&mut self, word: &str, help: &str) -> PResult<Token> {
+        if self.at_word(word) {
+            Ok(self.bump())
+        } else {
+            Err(self.error_expected_help(&format!("`{word}`"), help))
+        }
+    }
+
     /// Parses `item, item, ...}` after an opening `{`, allowing a trailing
     /// comma, and consumes the `}`.
     fn brace_list<T>(&mut self, mut item: impl FnMut(&mut Self) -> PResult<T>) -> PResult<Vec<T>> {
@@ -836,6 +1013,18 @@ impl Parser<'_> {
                         .help("move the `static` out of the function (ADR 0030)"),
                     );
                     self.static_decl(Vec::new(), Visibility::Private)?;
+                }
+                _ if self.at_local_memory() => {
+                    let token = self.peek();
+                    self.diags.push(
+                        Diagnostic::error(
+                            "parser::local-memory",
+                            "a `memory` block cannot be declared inside a function",
+                        )
+                        .label(token.span, "inside a function")
+                        .help("move the `memory` block out of the function: it is an item, which describes the memory of the whole program (ADR 0057)"),
+                    );
+                    self.memory_decl(Vec::new(), Visibility::Private)?;
                 }
                 TokenKind::Mod => {
                     let token = self.peek();

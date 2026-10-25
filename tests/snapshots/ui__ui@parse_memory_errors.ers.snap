@@ -1,0 +1,90 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/parse_memory_errors.ers
+---
+--- errors ---
+parser::misplaced-pub
+
+  × `pub` does not apply to a `memory` block
+   ╭─[parse_memory_errors.ers:6:1]
+ 5 │ // `pub` after an error.
+ 6 │ pub memory {
+   · ─┬─
+   ·  ╰── not allowed here
+ 7 │     code in FLASH;
+   ╰────
+  help: a `memory` block describes the memory of the whole program and has no name for other
+        modules to use; remove `pub` (ADR 0057)
+parser::unexpected-token
+
+  × expected `origin`, found identifier
+    ╭─[parse_memory_errors.ers:12:20]
+ 11 │ memory {
+ 12 │     region FLASH { size: 0x1000, origin: 0x8000_0000 }
+    ·                    ──┬─
+    ·                      ╰── expected `origin`
+ 13 │ }
+    ╰────
+  help: a region is written `region NAME { origin: ADDRESS, size: BYTES }`, with both fields, in
+        that order (ADR 0057)
+parser::unexpected-token
+
+  × expected `,`, found `}`
+    ╭─[parse_memory_errors.ers:17:40]
+ 16 │ memory {
+ 17 │     region FLASH { origin: 0x8000_0000 }
+    ·                                        ┬
+    ·                                        ╰── expected `,`
+ 18 │ }
+    ╰────
+  help: a region is written `region NAME { origin: ADDRESS, size: BYTES }`, with both fields, in
+        that order (ADR 0057)
+parser::unexpected-token
+
+  × expected `region`, `code`, `data`, `stack` or `}`, found identifier
+    ╭─[parse_memory_errors.ers:23:5]
+ 22 │     region FLASH { origin: 0x8000_0000, size: 0x1000 }
+ 23 │     heap in FLASH;
+    ·     ──┬─
+    ·       ╰── expected `region`, `code`, `data`, `stack` or `}`
+ 24 │ }
+    ╰────
+  help: a `memory` block holds regions, `region NAME { origin: ADDRESS, size: BYTES }`, and
+        placements, `code in NAME;`, `data in NAME;` and `stack in NAME { size: BYTES }` (ADR
+        0057)
+parser::unexpected-token
+
+  × expected `;`, found identifier
+    ╭─[parse_memory_errors.ers:28:18]
+ 27 │ memory {
+ 28 │     code in FLASH
+    ·                  ▲
+    ·                  ╰── expected `;`
+ 29 │     data in RAM;
+    ╰────
+  help: `code` and `data` are placed with `code in NAME;` and `data in NAME;` (ADR 0057)
+parser::unexpected-token
+
+  × expected `region`, `code`, `data`, `stack` or `}`, found `;`
+    ╭─[parse_memory_errors.ers:34:33]
+ 33 │ memory {
+ 34 │     stack in RAM { size: 0x400 };
+    ·                                 ┬
+    ·                                 ╰── expected `region`, `code`, `data`, `stack` or `}`
+ 35 │ }
+    ╰────
+  help: a `memory` block holds regions, `region NAME { origin: ADDRESS, size: BYTES }`, and
+        placements, `code in NAME;`, `data in NAME;` and `stack in NAME { size: BYTES }` (ADR
+        0057)
+parser::unexpected-token
+
+  × expected `{`, found `;`
+    ╭─[parse_memory_errors.ers:39:17]
+ 38 │ memory {
+ 39 │     stack in RAM;
+    ·                 ┬
+    ·                 ╰── expected `{`
+ 40 │ }
+    ╰────
+  help: the stack is placed with its size, `stack in NAME { size: BYTES }` (ADR 0057)

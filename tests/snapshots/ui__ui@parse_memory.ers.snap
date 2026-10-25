@@ -1,0 +1,279 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/parse_memory.ers
+---
+--- ast ---
+File {
+    items: [
+        Const(
+            ConstDecl {
+                attrs: [],
+                vis: Private,
+                name: Ident {
+                    name: "KIB",
+                    span: 169..172,
+                },
+                ty: Ty {
+                    kind: Named(
+                        Path {
+                            segments: [
+                                Ident {
+                                    name: "usize",
+                                    span: 174..179,
+                                },
+                            ],
+                            span: 174..179,
+                        },
+                    ),
+                    span: 174..179,
+                },
+                value: Expr {
+                    kind: Int(
+                        Some(
+                            1024,
+                        ),
+                    ),
+                    span: 182..186,
+                },
+                span: 163..187,
+            },
+        ),
+        Const(
+            ConstDecl {
+                attrs: [],
+                vis: Private,
+                name: Ident {
+                    name: "FLASH_ORIGIN",
+                    span: 194..206,
+                },
+                ty: Ty {
+                    kind: Named(
+                        Path {
+                            segments: [
+                                Ident {
+                                    name: "usize",
+                                    span: 208..213,
+                                },
+                            ],
+                            span: 208..213,
+                        },
+                    ),
+                    span: 208..213,
+                },
+                value: Expr {
+                    kind: Int(
+                        Some(
+                            134217728,
+                        ),
+                    ),
+                    span: 216..227,
+                },
+                span: 188..228,
+            },
+        ),
+        Memory(
+            MemoryDecl {
+                attrs: [],
+                vis: Private,
+                regions: [
+                    RegionDecl {
+                        name: Ident {
+                            name: "FLASH",
+                            span: 269..274,
+                        },
+                        origin: Expr {
+                            kind: Name(
+                                Path {
+                                    segments: [
+                                        Ident {
+                                            name: "FLASH_ORIGIN",
+                                            span: 285..297,
+                                        },
+                                    ],
+                                    span: 285..297,
+                                },
+                            ),
+                            span: 285..297,
+                        },
+                        size: Expr {
+                            kind: Binary(
+                                Mul,
+                                Expr {
+                                    kind: Int(
+                                        Some(
+                                            64,
+                                        ),
+                                    ),
+                                    span: 305..307,
+                                },
+                                Expr {
+                                    kind: Name(
+                                        Path {
+                                            segments: [
+                                                Ident {
+                                                    name: "KIB",
+                                                    span: 310..313,
+                                                },
+                                            ],
+                                            span: 310..313,
+                                        },
+                                    ),
+                                    span: 310..313,
+                                },
+                                308..309,
+                            ),
+                            span: 305..313,
+                        },
+                        span: 262..315,
+                    },
+                    RegionDecl {
+                        name: Ident {
+                            name: "RAM",
+                            span: 363..366,
+                        },
+                        origin: Expr {
+                            kind: Int(
+                                Some(
+                                    536870912,
+                                ),
+                            ),
+                            span: 377..388,
+                        },
+                        size: Expr {
+                            kind: Binary(
+                                Mul,
+                                Expr {
+                                    kind: Int(
+                                        Some(
+                                            16,
+                                        ),
+                                    ),
+                                    span: 396..398,
+                                },
+                                Expr {
+                                    kind: Name(
+                                        Path {
+                                            segments: [
+                                                Ident {
+                                                    name: "KIB",
+                                                    span: 401..404,
+                                                },
+                                            ],
+                                            span: 401..404,
+                                        },
+                                    ),
+                                    span: 401..404,
+                                },
+                                399..400,
+                            ),
+                            span: 396..404,
+                        },
+                        span: 356..407,
+                    },
+                    RegionDecl {
+                        name: Ident {
+                            name: "SRAM2",
+                            span: 436..441,
+                        },
+                        origin: Expr {
+                            kind: Int(
+                                Some(
+                                    536887296,
+                                ),
+                            ),
+                            span: 452..463,
+                        },
+                        size: Expr {
+                            kind: Binary(
+                                Mul,
+                                Expr {
+                                    kind: Int(
+                                        Some(
+                                            16,
+                                        ),
+                                    ),
+                                    span: 471..473,
+                                },
+                                Expr {
+                                    kind: Name(
+                                        Path {
+                                            segments: [
+                                                Ident {
+                                                    name: "KIB",
+                                                    span: 476..479,
+                                                },
+                                            ],
+                                            span: 476..479,
+                                        },
+                                    ),
+                                    span: 476..479,
+                                },
+                                474..475,
+                            ),
+                            span: 471..479,
+                        },
+                        span: 429..481,
+                    },
+                ],
+                placements: [
+                    Placement {
+                        kind: Code,
+                        region: Ident {
+                            name: "FLASH",
+                            span: 251..256,
+                        },
+                        span: 243..257,
+                    },
+                    Placement {
+                        kind: Stack {
+                            size: Expr {
+                                kind: Binary(
+                                    Mul,
+                                    Expr {
+                                        kind: Int(
+                                            Some(
+                                                2,
+                                            ),
+                                        ),
+                                        span: 341..342,
+                                    },
+                                    Expr {
+                                        kind: Name(
+                                            Path {
+                                                segments: [
+                                                    Ident {
+                                                        name: "KIB",
+                                                        span: 345..348,
+                                                    },
+                                                ],
+                                                span: 345..348,
+                                            },
+                                        ),
+                                        span: 345..348,
+                                    },
+                                    343..344,
+                                ),
+                                span: 341..348,
+                            },
+                        },
+                        region: Ident {
+                            name: "RAM",
+                            span: 329..332,
+                        },
+                        span: 320..351,
+                    },
+                    Placement {
+                        kind: Data,
+                        region: Ident {
+                            name: "RAM",
+                            span: 420..423,
+                        },
+                        span: 412..424,
+                    },
+                ],
+                span: 230..483,
+            },
+        ),
+    ],
+}

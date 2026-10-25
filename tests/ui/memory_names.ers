@@ -1,0 +1,46 @@
+// emit: typeck
+// The words of a `memory` block are keywords only inside it, and `memory`
+// only where an item starts and `{` follows (ADR 0057): elsewhere they are
+// names as any other, and `memory { data: 1, ... }` or
+// `memory { region: 1, ... }` at the start of a statement is a literal of
+// the struct `memory`, not a block: `data` is followed by `:`, not `in`, and
+// `region` by `:`, not a name.
+struct memory {
+    data: u32,
+    region: u32,
+}
+
+mod stack {
+    pub fn size(origin: u32) -> u32 {
+        origin
+    }
+}
+
+fn region(code: u32) -> u32 {
+    code
+}
+
+fn data() -> memory {
+    memory { data: 1, region: 2 }
+}
+
+fn area() -> memory {
+    memory { region: 3, data: 4 }
+}
+
+fn origin() -> u32 {
+    let memory: memory = data();
+    let in: u32 = memory.data;
+    let size: u32 = stack::size(in);
+    let stack: u32 = region(size);
+    stack
+}
+
+fn code() -> u32 {
+    let region: u32 = origin();
+    let code: u32 = memory { data: region, region: 5 }.data;
+    code
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

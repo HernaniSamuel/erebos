@@ -1,0 +1,45 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/memory_names.ers
+---
+--- typeck ---
+struct memory { data: u32 at 0, region: u32 at 4 } size 8, align 4
+fn stack::size(origin: u32) -> u32
+    expr 0 local origin 517..523: u32
+fn region(code: u32) -> u32
+    expr 1 local code 567..571: u32
+fn data() -> memory
+    expr 2 struct memory 601..630: memory
+    expr 3 int 1 616..617: u32
+    expr 4 int 2 627..628: u32
+fn area() -> memory
+    expr 5 struct memory 660..689: memory
+    expr 6 int 3 677..678: u32
+    expr 7 int 4 686..687: u32
+fn origin() -> u32
+    let memory: memory
+    let in: u32
+    let size: u32
+    let stack: u32
+    expr 8 call 739..745: memory
+    expr 9 field data 765..776: u32
+    expr 10 local memory 765..771: memory
+    expr 11 call 798..813: u32
+    expr 12 local in 810..812: u32
+    expr 13 call 836..848: u32
+    expr 14 local size 843..847: u32
+    expr 15 local stack 854..859: u32
+fn code() -> u32
+    let region: u32
+    let code: u32
+    expr 16 call 904..912: u32
+    expr 17 field data 934..973: u32
+    expr 18 struct memory 934..968: memory
+    expr 19 local region 949..955: u32
+    expr 20 int 5 965..966: u32
+    expr 21 local code 979..983: u32
+entry fn main() -> !
+    expr 22 loop 1010..1017: !
+panic fn on_panic() -> !
+    expr 23 loop 1047..1054: !

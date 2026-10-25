@@ -1,0 +1,40 @@
+// Syntax errors in `memory` blocks (ADR 0057). Each block after the first
+// is broken once, and parsing resumes at the next `memory {`.
+
+// `pub` does not apply to a `memory` block. First, since recovery skips a
+// `pub` after an error.
+pub memory {
+    code in FLASH;
+}
+
+// Fields out of order.
+memory {
+    region FLASH { size: 0x1000, origin: 0x8000_0000 }
+}
+
+// A missing field.
+memory {
+    region FLASH { origin: 0x8000_0000 }
+}
+
+// An unknown word.
+memory {
+    region FLASH { origin: 0x8000_0000, size: 0x1000 }
+    heap in FLASH;
+}
+
+// A missing `;`.
+memory {
+    code in FLASH
+    data in RAM;
+}
+
+// A `;` after the stack's braces.
+memory {
+    stack in RAM { size: 0x400 };
+}
+
+// A stack without a size.
+memory {
+    stack in RAM;
+}

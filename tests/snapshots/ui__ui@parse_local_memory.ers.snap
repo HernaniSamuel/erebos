@@ -1,0 +1,98 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/parse_local_memory.ers
+---
+--- errors ---
+parser::local-memory
+
+  × a `memory` block cannot be declared inside a function
+   ╭─[parse_local_memory.ers:5:5]
+ 4 │ fn f() -> u32 {
+ 5 │     memory {
+   ·     ───┬──
+   ·        ╰── inside a function
+ 6 │         region RAM { origin: 0x8000_0000, size: 0x1000 }
+   ╰────
+  help: move the `memory` block out of the function: it is an item, which describes the memory of
+        the whole program (ADR 0057)
+parser::local-memory
+
+  × a `memory` block cannot be declared inside a function
+    ╭─[parse_local_memory.ers:9:5]
+  8 │     }
+  9 │     memory {
+    ·     ───┬──
+    ·        ╰── inside a function
+ 10 │         stack in RAM { size: 0x400 }
+    ╰────
+  help: move the `memory` block out of the function: it is an item, which describes the memory of
+        the whole program (ADR 0057)
+parser::local-memory
+
+  × a `memory` block cannot be declared inside a function
+    ╭─[parse_local_memory.ers:12:5]
+ 11 │     }
+ 12 │     memory {
+    ·     ───┬──
+    ·        ╰── inside a function
+ 13 │         data in RAM;
+    ╰────
+  help: move the `memory` block out of the function: it is an item, which describes the memory of
+        the whole program (ADR 0057)
+parser::local-memory
+
+  × a `memory` block cannot be declared inside a function
+    ╭─[parse_local_memory.ers:15:5]
+ 14 │     }
+ 15 │     memory {
+    ·     ───┬──
+    ·        ╰── inside a function
+ 16 │         code in RAM;
+    ╰────
+  help: move the `memory` block out of the function: it is an item, which describes the memory of
+        the whole program (ADR 0057)
+parser::unexpected-token
+
+  × expected `,`, found `}`
+    ╭─[parse_local_memory.ers:24:38]
+ 23 │ memory {
+ 24 │     region RAM { origin: 0x8000_0000 }
+    ·                                      ┬
+    ·                                      ╰── expected `,`
+ 25 │ }
+    ╰────
+  help: a region is written `region NAME { origin: ADDRESS, size: BYTES }`, with both fields, in
+        that order (ADR 0057)
+parser::local-const
+
+  × `const` items cannot be declared inside a function
+    ╭─[parse_local_memory.ers:28:5]
+ 27 │ fn g() {
+ 28 │     const X: u32 = 1;
+    ·     ──┬──
+    ·       ╰── inside a function
+ 29 │ }
+    ╰────
+  help: compute the value at compile time with `let name: T = comptime ...;`, or move the `const`
+        out of the function (ADR 0029)
+parser::unexpected-token
+
+  × expected an expression, found `;`
+    ╭─[parse_local_memory.ers:34:18]
+ 33 │ fn h() {
+ 34 │     let x: u32 = ;
+    ·                  ┬
+    ·                  ╰── expected an expression
+ 35 │ }
+    ╰────
+parser::unexpected-token
+
+  × expected identifier, found `;`
+    ╭─[parse_local_memory.ers:38:13]
+ 37 │ memory {
+ 38 │     code in ;
+    ·             ┬
+    ·             ╰── expected identifier
+ 39 │ }
+    ╰────

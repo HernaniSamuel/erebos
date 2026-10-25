@@ -1,0 +1,39 @@
+// A `memory` block is an item, which describes the whole program: inside a
+// function it is reported, whether it starts with a region or a placement,
+// and the rest of the body still parses (ADR 0057).
+fn f() -> u32 {
+    memory {
+        region RAM { origin: 0x8000_0000, size: 0x1000 }
+        code in RAM;
+    }
+    memory {
+        stack in RAM { size: 0x400 }
+    }
+    memory {
+        data in RAM;
+    }
+    memory {
+        code in RAM;
+    }
+    0
+}
+
+// A broken block: the parser resumes at the next item, whose error is
+// reported.
+memory {
+    region RAM { origin: 0x8000_0000 }
+}
+
+fn g() {
+    const X: u32 = 1;
+}
+
+// A broken function: the parser resumes at the `memory` block after it,
+// whose error is reported.
+fn h() {
+    let x: u32 = ;
+}
+
+memory {
+    code in ;
+}

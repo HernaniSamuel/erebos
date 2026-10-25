@@ -1,0 +1,15 @@
+// emit: ast
+// A `memory` block: regions and placements in any order, one region
+// holding nothing, a trailing comma, and values naming constants
+// (ADR 0057).
+const KIB: usize = 1024;
+const FLASH_ORIGIN: usize = 0x0800_0000;
+
+memory {
+    code in FLASH;
+    region FLASH { origin: FLASH_ORIGIN, size: 64 * KIB }
+    stack in RAM { size: 2 * KIB, }
+    region RAM { origin: 0x2000_0000, size: 16 * KIB, }
+    data in RAM;
+    region SRAM2 { origin: 0x2000_4000, size: 16 * KIB }
+}

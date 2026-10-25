@@ -19,6 +19,7 @@ pub enum Item {
     Comptime(ComptimeDecl),
     Mod(ModDecl),
     Use(UseDecl),
+    Memory(MemoryDecl),
 }
 
 /// Whether an item is written with `pub` (ADR 0050).
@@ -98,6 +99,48 @@ pub struct ComptimeDecl {
     pub attrs: Vec<Attr>,
     pub block: Block,
     pub span: Span,
+}
+
+/// `memory { ... }`: the regions of the address space, and what each holds
+/// (ADR 0057). Attributes and `pub` do not apply to it; they are kept to be
+/// reported.
+#[derive(Debug)]
+pub struct MemoryDecl {
+    pub attrs: Vec<Attr>,
+    pub vis: Visibility,
+    /// In source order.
+    pub regions: Vec<RegionDecl>,
+    /// In source order; the regions and placements may be interleaved,
+    /// which their spans show.
+    pub placements: Vec<Placement>,
+    pub span: Span,
+}
+
+/// `region NAME { origin: expr, size: expr }`, a range of addresses
+/// (ADR 0057).
+#[derive(Debug)]
+pub struct RegionDecl {
+    pub name: Ident,
+    pub origin: Expr,
+    pub size: Expr,
+    pub span: Span,
+}
+
+/// `code in NAME;`, `data in NAME;` or `stack in NAME { size: expr }`
+/// (ADR 0057).
+#[derive(Debug)]
+pub struct Placement {
+    pub kind: PlacementKind,
+    /// The region's name.
+    pub region: Ident,
+    pub span: Span,
+}
+
+#[derive(Debug)]
+pub enum PlacementKind {
+    Code,
+    Data,
+    Stack { size: Expr },
 }
 
 /// `struct Name { field: Type, ... }` (ADR 0021)
