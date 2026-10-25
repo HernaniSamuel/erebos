@@ -1122,6 +1122,14 @@ fn memory_word(block: Span) -> Span {
     Span::new(block.file, lo, lo + "memory".len())
 }
 
+/// The words a `memory` block places, each with the placement a block
+/// missing it is told to add.
+const PLACEMENTS: [(&str, &str); 3] = [
+    ("code", "code in REGION;"),
+    ("data", "data in REGION;"),
+    ("stack", "stack in REGION { size: SIZE }"),
+];
+
 /// A variable a pattern binds, as lowering collects them (ADR 0040, 0041).
 #[derive(Clone)]
 struct Bound {
@@ -2274,16 +2282,19 @@ impl Lowerer<'_> {
             });
         }
 
-        // By `code`, `data` and `stack`: the first placement of each, with
-        // its region if the block has one of that name.
-        let mut placed: [Option<(Option<usize>, Span)>; 3] = [None; 3];
+        // By `code`, `data` and `stack`, in the order of `PLACEMENTS`: the
+        // first placement of each, with its region if the block has one of
+        // that name.
+        let mut placed: [Option<(Option<usize>, Span)>; PLACEMENTS.len()] =
+            [None; PLACEMENTS.len()];
         let mut stack_size = None;
         for placement in &decl.placements {
-            let (slot, word) = match &placement.kind {
-                ast::PlacementKind::Code => (0, "code"),
-                ast::PlacementKind::Data => (1, "data"),
-                ast::PlacementKind::Stack { .. } => (2, "stack"),
+            let slot = match &placement.kind {
+                ast::PlacementKind::Code => 0,
+                ast::PlacementKind::Data => 1,
+                ast::PlacementKind::Stack { .. } => 2,
             };
+            let word = PLACEMENTS[slot].0;
             let span = Span::new(
                 placement.span.file,
                 placement.span.lo as usize,
@@ -2319,14 +2330,7 @@ impl Lowerer<'_> {
             }
             placed[slot] = Some((region, span));
         }
-        for (slot, (word, example)) in [
-            ("code", "code in REGION;"),
-            ("data", "data in REGION;"),
-            ("stack", "stack in REGION { size: SIZE }"),
-        ]
-        .into_iter()
-        .enumerate()
-        {
+        for (slot, (word, example)) in PLACEMENTS.into_iter().enumerate() {
             if placed[slot].is_none() {
                 self.diags.push(
                     Diagnostic::error(
@@ -2384,13 +2388,14 @@ impl Lowerer<'_> {
         })
     }
 
-    /// A `usize` needed at compile time (ADR 0029): known for a literal, as
-    /// most are, or computed by a body of its own.
+    /// An array length, its body, if any, named `length` in the dumps.
     fn array_len(&mut self, expr: &ast::Expr) -> ArrayLen {
         self.comptime_usize(expr, "length")
     }
 
-    /// `array_len`, its body, if any, named `name` in the dumps.
+    /// A `usize` needed at compile time (ADR 0029): known for a literal, as
+    /// most are, or computed by a body of its own, named `name` in the
+    /// dumps.
     fn comptime_usize(&mut self, expr: &ast::Expr, name: &str) -> ArrayLen {
         // A rejected literal was reported by the lexer. One too large for
         // `usize` is lowered as any other length, so that type checking

@@ -13,6 +13,7 @@ use crate::hir::{
     PatternKind, StaticId, StructId, VariantValue,
 };
 use crate::layout::{self, Composite, EnumLayout, Layout, MAX_ALIGN, MAX_SIZE, StructLayout};
+use crate::memory::{MemoryMap, Region};
 use crate::mir::{
     self, BodyId, ConstData, DataId, EnumRef, Field, LeftOut, Mir, PanicCause, PanicInfoAt,
     PanicSite, Ptr, StaticRef, StructRef,
@@ -818,14 +819,14 @@ impl<'h> Queries<'h> {
     /// The program's memory map with its values computed (ADR 0057);
     /// `None` without a `memory` block, or when one of its values failed,
     /// which was reported.
-    pub fn memory_map(&mut self) -> Option<mir::MemoryMap> {
+    pub fn memory_map(&mut self) -> Option<MemoryMap> {
         let hir = self.hir;
         let map = hir.memory.as_ref()?;
         let regions = map
             .regions
             .iter()
             .map(|region| {
-                Some(mir::Region {
+                Some(Region {
                     name: region.name.clone(),
                     origin: self.array_len(region.origin.0)?,
                     size: self.array_len(region.size.0)?,
@@ -833,7 +834,7 @@ impl<'h> Queries<'h> {
                 })
             })
             .collect::<Option<Vec<_>>>()?;
-        Some(mir::MemoryMap {
+        Some(MemoryMap {
             regions,
             code: map.code.region,
             data: map.data.region,

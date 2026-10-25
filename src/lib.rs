@@ -10,6 +10,7 @@ pub mod hir;
 pub mod int;
 pub mod layout;
 pub mod link;
+pub mod memory;
 pub mod mir;
 pub mod ops;
 pub mod query;
