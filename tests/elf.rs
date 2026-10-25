@@ -412,6 +412,32 @@ fn region_overflow_bss() {
     insta::assert_snapshot!(error);
 }
 
+/// A program without a `memory` block is not built: `link::no-memory-map`
+/// (ADR 0057), and neither the executable nor the object and the linker
+/// script beside it are written.
+#[test]
+fn no_memory_map() {
+    let work = Path::new(env!("CARGO_TARGET_TMPDIR")).join("elf");
+    fs::create_dir_all(&work).unwrap();
+    let source = work.join("no_memory_map.ers");
+    fs::write(&source, PROGRAM).unwrap();
+    let elf = work.join("no_memory_map.elf");
+    let written = [
+        elf.clone(),
+        elf.with_extension("o"),
+        elf.with_extension("ld"),
+    ];
+    for path in &written {
+        let _ = fs::remove_file(path);
+    }
+    let error = driver::build(&source, &elf, &[], OptLevel::None, false).unwrap_err();
+    assert!(error.starts_with("link::no-memory-map\n"), "{error}");
+    assert_eq!(error.matches("link::").count(), 1, "{error}");
+    for path in &written {
+        assert!(!path.exists(), "`{}` was written", path.display());
+    }
+}
+
 /// Functions and statics of modules, named by their paths joined by dots,
 /// and an `#[export]` function, named by its own name (ADR 0051).
 const MODULES: &str = "\

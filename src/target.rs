@@ -21,52 +21,17 @@ pub const STACK_ALIGN: u64 = 16;
 /// code's region is a multiple of it (ADR 0057).
 pub const CODE_ALIGN: u64 = 4;
 
+/// The machine code is generated for. Where its memory is belongs to the
+/// board, which the program's `memory` block describes (ADR 0057).
 pub struct Target {
     pub llvm_triple: &'static str,
     pub llvm_cpu: &'static str,
     pub llvm_features: &'static str,
-    /// Where RAM starts; with QEMU `-bios none`, execution starts here too.
-    pub ram_origin: u64,
-    pub ram_size: u64,
 }
 
-/// A range of memory the linker script places sections in.
-pub struct Region {
-    pub origin: u64,
-    pub size: u64,
-}
-
-impl Target {
-    /// The stack grows down from the end of RAM.
-    pub fn stack_top(&self) -> u64 {
-        self.ram_origin + self.ram_size
-    }
-
-    /// Until M3, the first half of RAM plays the part of flash: it holds
-    /// the code, the read-only data and the initial values of `.data`
-    /// (ADR 0030).
-    pub fn image(&self) -> Region {
-        Region {
-            origin: self.ram_origin,
-            size: self.ram_size / 2,
-        }
-    }
-
-    /// The second half of RAM holds `.data`, `.bss` and the stack
-    /// (ADR 0030).
-    pub fn ram(&self) -> Region {
-        Region {
-            origin: self.ram_origin + self.ram_size / 2,
-            size: self.ram_size / 2,
-        }
-    }
-}
-
-/// RV32IMAC on QEMU's `virt` machine with its default 128 MiB of RAM.
+/// RV32IMAC, as on QEMU's `virt` machine.
 pub const RISCV32_VIRT: Target = Target {
     llvm_triple: "riscv32-unknown-none-elf",
     llvm_cpu: "generic-rv32",
     llvm_features: "+m,+a,+c",
-    ram_origin: 0x8000_0000,
-    ram_size: 128 * 1024 * 1024,
 };

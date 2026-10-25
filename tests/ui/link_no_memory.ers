@@ -1,0 +1,6 @@
+// emit: linker-script
+// A program without a `memory` block has no linker script:
+// `link::no-memory-map` (ADR 0057), with a help showing a block. The other
+// stages, as `llvm-ir`, do not need one.
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

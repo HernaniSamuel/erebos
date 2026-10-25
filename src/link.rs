@@ -8,7 +8,7 @@ use std::process::Command;
 
 use crate::diag::Diagnostic;
 use crate::mir::MemoryMap;
-use crate::target::{self, Target};
+use crate::target;
 
 /// The sections that are not loaded, placed explicitly so that no section
 /// is an orphan; the symbol table is what tools read (ADR 0030).
@@ -45,21 +45,12 @@ const UNLOADED: &[&str] = &[
     ".debug_types",
 ];
 
-/// The linker script: from the program's memory map, or with the fixed
-/// layout of ADR 0030 for a program without one.
-pub fn linker_script(map: Option<&MemoryMap>, target: &Target) -> String {
-    match map {
-        Some(map) => mapped_script(map),
-        None => fixed_script(target),
-    }
-}
-
-/// The script of a `memory` block (ADR 0057): every region under its own
-/// name; in the code's region the reset entry in an output section of its
-/// own, then the code, the read-only data and the initial values of
-/// `.data`; at the start of the stack's region the stack; `.data` and
-/// `.bss` in theirs, as ADR 0030 lays them out.
-fn mapped_script(map: &MemoryMap) -> String {
+/// The linker script of the program's `memory` block (ADR 0057): every
+/// region under its own name; in the code's region the reset entry in an
+/// output section of its own, then the code, the read-only data and the
+/// initial values of `.data`; at the start of the stack's region the stack;
+/// `.data` and `.bss` in theirs, as ADR 0030 lays them out.
+pub fn linker_script(map: &MemoryMap) -> String {
     let regions: String = map
         .regions
         .iter()
@@ -108,38 +99,20 @@ fn mapped_script(map: &MemoryMap) -> String {
     )
 }
 
-/// The image laid out as on a board whose program is in flash: code,
-/// read-only data and the initial values of `.data` in `IMAGE`; `.data`
-/// and `.bss` in `RAM`, where `_start` sets them up from the symbols
-/// defined here (ADR 0030). The stack has no size: it grows down from the
-/// end of RAM towards `.bss`. A program without a `memory` block keeps
-/// this layout until every program declares one (M3.1).
-fn fixed_script(target: &Target) -> String {
-    let (image, ram) = (target.image(), target.ram());
-    format!(
-        "{HEADER}\
-         MEMORY {{\n\
-         \x20   IMAGE (rx) : ORIGIN = {:#x}, LENGTH = {:#x}\n\
-         \x20   RAM (rw) : ORIGIN = {:#x}, LENGTH = {:#x}\n\
-         }}\n\
-         \n\
-         SECTIONS {{\n\
-         \x20   /* The startup stub must be at the reset address (ADR 0012). */\n\
-         \x20   .text : {{ KEEP(*(.text.start)) *(.text .text.*) }} > IMAGE\n\
-         \x20   .rodata : {{ {RODATA} }} > IMAGE\n\
-         {statics}\
-         \x20   /* The stack, from the end of `.bss` to the end of RAM. */\n\
-         \x20   __stack_start = __bss_end;\n\
-         \x20   __stack_end = {:#x};\n\
-         {unloaded}\
-         }}\n",
-        image.origin,
-        image.size,
-        ram.origin,
-        ram.size,
-        target.stack_top(),
-        statics = statics("> RAM AT> IMAGE", "RAM"),
-        unloaded = unloaded(),
+/// `link::no-memory-map`: the program has no `memory` block, so there is
+/// no linker script to make (ADR 0057). Nothing in the source to point at;
+/// the help shows a block.
+pub fn no_memory_map() -> Diagnostic {
+    Diagnostic::error("link::no-memory-map", "the program has no `memory` block").help(
+        "a program built into an executable declares exactly one, giving the board's memory \
+         and what each region holds (ADR 0057), such as:\n\
+         memory {\n\
+         \x20   region FLASH { origin: 0x0800_0000, size: 0x1_0000 }\n\
+         \x20   region RAM { origin: 0x2000_0000, size: 0x4000 }\n\
+         \x20   code in FLASH;\n\
+         \x20   data in RAM;\n\
+         \x20   stack in RAM { size: 0x800 }\n\
+         }",
     )
 }
 

@@ -100,10 +100,13 @@ pub fn dump(
     let program = Program::at(path, text);
     let output = match front_end(&program, Some(stage), &mut sources, &mut diags) {
         FrontEnd::Dump(dump) => Some(dump),
-        FrontEnd::Mir(mir) if stage == Stage::LinkerScript => Some(link::linker_script(
-            mir.memory.as_ref(),
-            &target::RISCV32_VIRT,
-        )),
+        FrontEnd::Mir(mir) if stage == Stage::LinkerScript => match &mir.memory {
+            Some(map) => Some(link::linker_script(map)),
+            None => {
+                diags.push(link::no_memory_map());
+                None
+            }
+        },
         FrontEnd::Mir(mir) => codegen::emit_llvm_ir(&mir, &target::RISCV32_VIRT, opt)
             .map_err(|e| diags.push(Diagnostic::error("codegen::llvm", e)))
             .ok(),
@@ -135,6 +138,10 @@ pub fn build(
         FrontEnd::Mir(mir) if !diags.has_errors() => mir,
         _ => return Err(diag::render(&diags.into_vec(), &sources, color)),
     };
+    // Checked before code generation, so that nothing is written.
+    let Some(map) = &mir.memory else {
+        return Err(diag::render(&[link::no_memory_map()], &sources, color));
+    };
 
     // Intermediate files sit next to the output and are removed afterwards.
     let target = &target::RISCV32_VIRT;
@@ -142,16 +149,14 @@ pub fn build(
     let script = output.with_extension("ld");
     let result = codegen::emit_object(&mir, target, opt, &object)
         .and_then(|()| {
-            fs::write(&script, link::linker_script(mir.memory.as_ref(), target))
+            fs::write(&script, link::linker_script(map))
                 .map_err(|e| format!("cannot write `{}`: {e}", script.display()))
         })
         .map_err(|e| format!("error: {e}"))
         .and_then(|()| {
             link::link(&object, link, &script, output).map_err(|e| match e {
                 LinkError::Run(e) => format!("error: {e}"),
-                LinkError::Failed(stderr) => {
-                    link_failure(&stderr, mir.memory.as_ref(), &sources, color)
-                }
+                LinkError::Failed(stderr) => link_failure(&stderr, map, &sources, color),
             })
         });
     let _ = fs::remove_file(&object);
@@ -160,19 +165,10 @@ pub fn build(
 }
 
 /// What `build` reports when `ld.lld` fails with the error output
-/// `stderr`: a `link::region-overflow` per region it reports overflowing,
-/// when the program has a memory map, then the linker's other lines as
-/// they are.
-fn link_failure(
-    stderr: &str,
-    map: Option<&mir::MemoryMap>,
-    sources: &SourceMap,
-    color: bool,
-) -> String {
-    let (overflows, rest) = match map {
-        Some(map) => link::region_overflows(stderr, map),
-        None => (Vec::new(), stderr.lines().collect()),
-    };
+/// `stderr`: a `link::region-overflow` per region of `map` it reports
+/// overflowing, then the linker's other lines as they are.
+fn link_failure(stderr: &str, map: &mir::MemoryMap, sources: &SourceMap, color: bool) -> String {
+    let (overflows, rest) = link::region_overflows(stderr, map);
     let mut out = diag::render(&overflows, sources, color);
     let rest = rest.join("\n");
     if !rest.trim().is_empty() || overflows.is_empty() {

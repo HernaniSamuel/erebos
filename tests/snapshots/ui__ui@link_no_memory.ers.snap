@@ -1,0 +1,18 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/link_no_memory.ers
+---
+--- errors ---
+link::no-memory-map
+
+  × the program has no `memory` block
+  help: a program built into an executable declares exactly one, giving the board's memory and
+        what each region holds (ADR 0057), such as:
+        memory {
+            region FLASH { origin: 0x0800_0000, size: 0x1_0000 }
+            region RAM { origin: 0x2000_0000, size: 0x4000 }
+            code in FLASH;
+            data in RAM;
+            stack in RAM { size: 0x800 }
+        }
