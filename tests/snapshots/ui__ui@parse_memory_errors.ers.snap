@@ -30,12 +30,12 @@ parser::unexpected-token
         that order (ADR 0057)
 parser::unexpected-token
 
-  × expected `,`, found `}`
+  × expected `size`, found `}`
     ╭─[parse_memory_errors.ers:17:40]
  16 │ memory {
  17 │     region FLASH { origin: 0x8000_0000 }
     ·                                        ┬
-    ·                                        ╰── expected `,`
+    ·                                        ╰── expected `size`
  18 │ }
     ╰────
   help: a region is written `region NAME { origin: ADDRESS, size: BYTES }`, with both fields, in

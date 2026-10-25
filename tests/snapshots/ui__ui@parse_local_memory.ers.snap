@@ -54,12 +54,12 @@ parser::local-memory
         the whole program (ADR 0057)
 parser::unexpected-token
 
-  × expected `,`, found `}`
+  × expected `size`, found `}`
     ╭─[parse_local_memory.ers:24:38]
  23 │ memory {
  24 │     region RAM { origin: 0x8000_0000 }
     ·                                      ┬
-    ·                                      ╰── expected `,`
+    ·                                      ╰── expected `size`
  25 │ }
     ╰────
   help: a region is written `region NAME { origin: ADDRESS, size: BYTES }`, with both fields, in
@@ -95,4 +95,24 @@ parser::unexpected-token
     ·             ┬
     ·             ╰── expected identifier
  39 │ }
+    ╰────
+parser::unexpected-token
+
+  × expected an expression, found `;`
+    ╭─[parse_local_memory.ers:45:18]
+ 44 │ fn k() -> u32 {
+ 45 │     let x: u32 = ;
+    ·                  ┬
+    ·                  ╰── expected an expression
+ 46 │     memory { region: 1 }.region
+    ╰────
+parser::unexpected-token
+
+  × expected identifier, found `;`
+    ╭─[parse_local_memory.ers:50:13]
+ 49 │ memory {
+ 50 │     data in ;
+    ·             ┬
+    ·             ╰── expected identifier
+ 51 │ }
     ╰────

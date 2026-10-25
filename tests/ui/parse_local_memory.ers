@@ -37,3 +37,15 @@ fn h() {
 memory {
     code in ;
 }
+
+// A broken function whose body goes on with a struct literal named
+// `memory`: recovery skips it with the rest of the body, so only the error
+// of the block after it is reported.
+fn k() -> u32 {
+    let x: u32 = ;
+    memory { region: 1 }.region
+}
+
+memory {
+    data in ;
+}

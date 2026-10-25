@@ -213,8 +213,11 @@ impl Parser<'_> {
     /// does not carry the items after the module into it. `pub` is not
     /// one: the token after it is, and the item parses as well without
     /// it, so a misplaced `pub` that caused the error is not met again.
+    /// Nor is a `memory {` deeper than the items: in a body it is an
+    /// expression, such as the struct literal `memory { data: 1 }`.
     fn recover_to_item(&mut self) {
         loop {
+            let at_items = self.depth == self.module_depth.unwrap_or(0);
             let closes_module = self.at(TokenKind::RBrace) && self.module_depth == Some(self.depth);
             let starts_item = matches!(
                 self.peek().kind,
@@ -231,7 +234,7 @@ impl Parser<'_> {
                     | TokenKind::Use
                     | TokenKind::Pound
                     | TokenKind::Eof
-            ) || self.at_memory();
+            ) || (at_items && self.at_memory());
             if closes_module || starts_item {
                 return;
             }
@@ -720,7 +723,11 @@ impl Parser<'_> {
         self.expect_word("origin", HELP)?;
         self.expect_help(TokenKind::Colon, HELP)?;
         let origin = self.nested_expr()?;
-        self.expect_help(TokenKind::Comma, HELP)?;
+        // A region closed after its origin misses its size, rather than
+        // the `,` before it.
+        if !self.at(TokenKind::RBrace) {
+            self.expect_help(TokenKind::Comma, HELP)?;
+        }
         self.expect_word("size", HELP)?;
         self.expect_help(TokenKind::Colon, HELP)?;
         let size = self.nested_expr()?;
