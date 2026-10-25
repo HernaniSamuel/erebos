@@ -412,6 +412,34 @@ fn region_overflow_bss() {
     insta::assert_snapshot!(error);
 }
 
+/// The linker's errors other than a region overflow are reported as they
+/// were before ADR 0057: an `extern fn` that is called and that nothing
+/// defines fails to link with `error: linking failed:` and `ld.lld`'s line,
+/// and no executable is written.
+#[test]
+fn link_failure_other() {
+    let work = Path::new(env!("CARGO_TARGET_TMPDIR")).join("elf");
+    fs::create_dir_all(&work).unwrap();
+    let source = work.join("undefined_extern.ers");
+    let program = "\
+extern fn missing(x: u32) -> u32;
+
+entry fn main() -> ! {
+    let x: u32 = missing(1);
+    loop {}
+}
+panic fn on_panic() -> ! { loop {} }
+";
+    fs::write(&source, format!("{VIRT_MAP}\n{program}")).unwrap();
+    let elf = work.join("undefined_extern.elf");
+    let _ = fs::remove_file(&elf);
+    let error = driver::build(&source, &elf, &[], OptLevel::None, false).unwrap_err();
+    assert!(error.starts_with("error: linking failed:\n"), "{error}");
+    assert!(error.contains("undefined symbol: missing"), "{error}");
+    assert!(!error.contains("link::region-overflow"), "{error}");
+    assert!(!elf.exists(), "an executable was written");
+}
+
 /// A program without a `memory` block is not built: `link::no-memory-map`
 /// (ADR 0057), and neither the executable nor the object and the linker
 /// script beside it are written.
