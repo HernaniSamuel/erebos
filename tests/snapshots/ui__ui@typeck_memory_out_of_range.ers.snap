@@ -7,12 +7,53 @@ input_file: tests/ui/typeck_memory_out_of_range.ers
 ty::region-out-of-range
 
   × the region `LAST` ends past the address space
-    ╭─[typeck_memory_out_of_range.ers:10:12]
-  9 │     region TOP { origin: 0xF000_0000, size: 0x0FFF_FFFF }
- 10 │     region LAST { origin: 0xFFFF_FFFF, size: 1 }
+    ╭─[typeck_memory_out_of_range.ers:12:12]
+ 11 │     region TOP { origin: 0xF000_0000, size: 0x0FFF_FFFF }
+ 12 │     region LAST { origin: 0xFFFF_FFFF, size: 1 }
     ·            ──┬─
     ·              ╰── ends at 0x100000000
- 11 │     code in FLASH;
+ 13 │     region WIDE { origin: 0xFFFF_FFF0, size: 0x20 }
     ╰────
   help: a region covers `[origin, origin + size)`, whose end must be below 2³² (0x100000000) so
         that the address one past it exists (ADR 0057)
+ty::region-out-of-range
+
+  × the region `WIDE` ends past the address space
+    ╭─[typeck_memory_out_of_range.ers:13:12]
+ 12 │     region LAST { origin: 0xFFFF_FFFF, size: 1 }
+ 13 │     region WIDE { origin: 0xFFFF_FFF0, size: 0x20 }
+    ·            ──┬─
+    ·              ╰── ends at 0x100000010
+ 14 │     code in FLASH;
+    ╰────
+  help: a region covers `[origin, origin + size)`, whose end must be below 2³² (0x100000000) so
+        that the address one past it exists (ADR 0057)
+ty::region-overlap
+
+  × the regions `TOP` and `WIDE` overlap
+    ╭─[typeck_memory_out_of_range.ers:13:12]
+ 10 │     region RAM { origin: 0x8400_0000, size: 0x1_0000 }
+ 11 │     region TOP { origin: 0xF000_0000, size: 0x0FFF_FFFF }
+    ·            ─┬─
+    ·             ╰── covers [0xf0000000, 0xffffffff)
+ 12 │     region LAST { origin: 0xFFFF_FFFF, size: 1 }
+ 13 │     region WIDE { origin: 0xFFFF_FFF0, size: 0x20 }
+    ·            ──┬─
+    ·              ╰── covers [0xfffffff0, 0x100000010)
+ 14 │     code in FLASH;
+    ╰────
+  help: they share 15 bytes from 0xfffffff0; the regions of a memory map are disjoint (ADR 0057)
+ty::region-overlap
+
+  × the regions `LAST` and `WIDE` overlap
+    ╭─[typeck_memory_out_of_range.ers:13:12]
+ 11 │     region TOP { origin: 0xF000_0000, size: 0x0FFF_FFFF }
+ 12 │     region LAST { origin: 0xFFFF_FFFF, size: 1 }
+    ·            ──┬─
+    ·              ╰── covers [0xffffffff, 0x100000000)
+ 13 │     region WIDE { origin: 0xFFFF_FFF0, size: 0x20 }
+    ·            ──┬─
+    ·              ╰── covers [0xfffffff0, 0x100000010)
+ 14 │     code in FLASH;
+    ╰────
+  help: they share the byte at 0xffffffff; the regions of a memory map are disjoint (ADR 0057)

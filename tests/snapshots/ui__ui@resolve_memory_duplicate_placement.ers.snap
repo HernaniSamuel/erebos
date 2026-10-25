@@ -7,78 +7,88 @@ input_file: tests/ui/resolve_memory_duplicate_placement.ers
 resolve::duplicate-placement
 
   × `code` is placed more than once
-    ╭─[resolve_memory_duplicate_placement.ers:13:5]
-  9 │     region SRAM2 { origin: 0x2000_4000, size: 0x4000 }
- 10 │     code in FLASH;
+    ╭─[resolve_memory_duplicate_placement.ers:14:5]
+ 10 │     region SRAM2 { origin: 0x2000_4000, size: 0x4000 }
+ 11 │     code in FLASH;
     ·     ──────┬──────
     ·           ╰── first placed here
- 11 │     data in SRAM;
- 12 │     stack in SRAM { size: 0x800 }
- 13 │     code in FLASH;
+ 12 │     data in SRAM;
+ 13 │     stack in SRAM { size: 0x800 }
+ 14 │     code in FLASH;
     ·     ──────┬──────
     ·           ╰── placed again here
- 14 │     stack in SRAM2 { size: 0x400 }
+ 15 │     stack in SRAM2 { size: NO_SIZE }
     ╰────
   help: each of `code`, `data` and `stack` is placed exactly once (ADR 0057)
 resolve::duplicate-placement
 
   × `stack` is placed more than once
-    ╭─[resolve_memory_duplicate_placement.ers:14:5]
- 11 │     data in SRAM;
- 12 │     stack in SRAM { size: 0x800 }
+    ╭─[resolve_memory_duplicate_placement.ers:15:5]
+ 12 │     data in SRAM;
+ 13 │     stack in SRAM { size: 0x800 }
     ·     ──────┬──────
     ·           ╰── first placed here
- 13 │     code in FLASH;
- 14 │     stack in SRAM2 { size: 0x400 }
+ 14 │     code in FLASH;
+ 15 │     stack in SRAM2 { size: NO_SIZE }
     ·     ───────┬──────
     ·            ╰── placed again here
- 15 │     data in SRAM2;
+ 16 │     data in SRAM2;
     ╰────
   help: each of `code`, `data` and `stack` is placed exactly once (ADR 0057)
-resolve::duplicate-placement
+resolve::unknown-name
 
-  × `data` is placed more than once
-    ╭─[resolve_memory_duplicate_placement.ers:15:5]
- 10 │     code in FLASH;
- 11 │     data in SRAM;
-    ·     ──────┬─────
-    ·           ╰── first placed here
- 12 │     stack in SRAM { size: 0x800 }
- 13 │     code in FLASH;
- 14 │     stack in SRAM2 { size: 0x400 }
- 15 │     data in SRAM2;
-    ·     ──────┬──────
-    ·           ╰── placed again here
- 16 │     data in NOWHERE;
+  × cannot find `NO_SIZE` in this scope
+    ╭─[resolve_memory_duplicate_placement.ers:15:28]
+ 14 │     code in FLASH;
+ 15 │     stack in SRAM2 { size: NO_SIZE }
+    ·                            ───┬───
+    ·                               ╰── not found
+ 16 │     data in SRAM2;
     ╰────
-  help: each of `code`, `data` and `stack` is placed exactly once (ADR 0057)
 resolve::duplicate-placement
 
   × `data` is placed more than once
     ╭─[resolve_memory_duplicate_placement.ers:16:5]
- 10 │     code in FLASH;
- 11 │     data in SRAM;
+ 11 │     code in FLASH;
+ 12 │     data in SRAM;
     ·     ──────┬─────
     ·           ╰── first placed here
- 12 │     stack in SRAM { size: 0x800 }
- 13 │     code in FLASH;
- 14 │     stack in SRAM2 { size: 0x400 }
- 15 │     data in SRAM2;
- 16 │     data in NOWHERE;
+ 13 │     stack in SRAM { size: 0x800 }
+ 14 │     code in FLASH;
+ 15 │     stack in SRAM2 { size: NO_SIZE }
+ 16 │     data in SRAM2;
+    ·     ──────┬──────
+    ·           ╰── placed again here
+ 17 │     data in NOWHERE;
+    ╰────
+  help: each of `code`, `data` and `stack` is placed exactly once (ADR 0057)
+resolve::duplicate-placement
+
+  × `data` is placed more than once
+    ╭─[resolve_memory_duplicate_placement.ers:17:5]
+ 11 │     code in FLASH;
+ 12 │     data in SRAM;
+    ·     ──────┬─────
+    ·           ╰── first placed here
+ 13 │     stack in SRAM { size: 0x800 }
+ 14 │     code in FLASH;
+ 15 │     stack in SRAM2 { size: NO_SIZE }
+ 16 │     data in SRAM2;
+ 17 │     data in NOWHERE;
     ·     ───────┬───────
     ·            ╰── placed again here
- 17 │ }
+ 18 │ }
     ╰────
   help: each of `code`, `data` and `stack` is placed exactly once (ADR 0057)
 resolve::unknown-region
 
   × no region named `NOWHERE` in this `memory` block
-    ╭─[resolve_memory_duplicate_placement.ers:16:13]
- 15 │     data in SRAM2;
- 16 │     data in NOWHERE;
+    ╭─[resolve_memory_duplicate_placement.ers:17:13]
+ 16 │     data in SRAM2;
+ 17 │     data in NOWHERE;
     ·             ───┬───
     ·                ╰── not a region of this block
- 17 │ }
+ 18 │ }
     ╰────
   help: a placement names a region declared in its `memory` block; regions are not items, so a
         constant or a module of that name does not count (ADR 0057)

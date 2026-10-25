@@ -8,7 +8,7 @@ ty::empty-region
 
   × the region `SPARE` is empty
    ╭─[typeck_memory_empty_region.ers:7:47]
- 6 │     region RAM { origin: 0x8400_0000, size: 0x1_0000 }
+ 6 │     region FLASH { origin: 0x8000_0000, size: 0x1_0000 }
  7 │     region SPARE { origin: 0x8800_0000, size: 0 }
    ·                                               ┬
    ·                                               ╰── a size of 0
@@ -23,6 +23,34 @@ ty::empty-region
  8 │     region DATA { origin: 0x8c00_0000, size: 0x0 }
    ·                                              ─┬─
    ·                                               ╰── a size of 0
- 9 │     code in FLASH;
+ 9 │     region STACK { origin: 0x9000_0000, size: 0 }
    ╰────
   help: a region covers `[origin, origin + size)`: give it at least one byte (ADR 0057)
+ty::empty-region
+
+  × the region `STACK` is empty
+    ╭─[typeck_memory_empty_region.ers:9:47]
+  8 │     region DATA { origin: 0x8c00_0000, size: 0x0 }
+  9 │     region STACK { origin: 0x9000_0000, size: 0 }
+    ·                                               ┬
+    ·                                               ╰── a size of 0
+ 10 │     code in FLASH;
+    ╰────
+  help: a region covers `[origin, origin + size)`: give it at least one byte (ADR 0057)
+ty::stack-size
+
+  × the stack does not fit in the region `STACK`
+    ╭─[typeck_memory_empty_region.ers:12:28]
+  8 │     region DATA { origin: 0x8c00_0000, size: 0x0 }
+  9 │     region STACK { origin: 0x9000_0000, size: 0 }
+    ·            ──┬──
+    ·              ╰── ends at 0x90000000
+ 10 │     code in FLASH;
+ 11 │     data in DATA;
+ 12 │     stack in STACK { size: 0x1000 }
+    ·                            ───┬──
+    ·                               ╰── 4096 bytes from 0x90000000 end at 0x90001000
+ 13 │ }
+    ╰────
+  help: the stack starts at its region's origin rounded up to the target's stack alignment, 16
+        bytes, and ends within the region (ADR 0057)

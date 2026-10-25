@@ -1,14 +1,15 @@
 // emit: typeck
 // A region of size 0 is `ty::empty-region` (ADR 0057), at its size, whether
-// something is placed in it or not.
+// something is placed in it or not. The stack does not fit in one either:
+// `STACK` is also `ty::stack-size`.
 memory {
     region FLASH { origin: 0x8000_0000, size: 0x1_0000 }
-    region RAM { origin: 0x8400_0000, size: 0x1_0000 }
     region SPARE { origin: 0x8800_0000, size: 0 }
     region DATA { origin: 0x8c00_0000, size: 0x0 }
+    region STACK { origin: 0x9000_0000, size: 0 }
     code in FLASH;
     data in DATA;
-    stack in RAM { size: 0x1000 }
+    stack in STACK { size: 0x1000 }
 }
 
 entry fn main() -> ! { loop {} }

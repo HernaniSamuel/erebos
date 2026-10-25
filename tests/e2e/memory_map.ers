@@ -4,7 +4,9 @@
 // reads, so it checks where its local, statics and read-only data are
 // against the map it declares: a local is in the stack, a `static mut` with
 // an initial value (`.data`) and a zero one (`.bss`) are in RAM above the
-// stack and hold their initial values, and a `static` is in flash.
+// stack and hold their initial values, and a `static` is in flash. QEMU
+// starts with RAM zeroed, so the `.bss` value would be 0 even if `_start`
+// did not zero it; `tests/elf.rs` checks the range `_start` zeroes.
 // expect-output: stack ok
 // expect-output: data ok
 // expect-output: bss ok
@@ -86,16 +88,19 @@ entry fn main() -> ! {
 
     let local: u32 = 7;
     let at: usize = &raw const local as usize;
-    failures += check(&raw const b"stack", in_range(at, RAM_ORIGIN, STACK_END) && local == 7, at);
+    let fine: bool = in_range(at, RAM_ORIGIN, STACK_END) && local == 7;
+    failures += check(&raw const b"stack", fine, at);
 
     let at: usize = &raw const COUNTER as usize;
-    failures += check(&raw const b"data", in_range(at, STACK_END, RAM_END) && COUNTER == 0x1234_5678, at);
+    let fine: bool = in_range(at, STACK_END, RAM_END) && COUNTER == 0x1234_5678;
+    failures += check(&raw const b"data", fine, at);
 
     let at: usize = &raw const ZEROED as usize;
     failures += check(&raw const b"bss", in_range(at, STACK_END, RAM_END) && ZEROED == 0, at);
 
     let at: usize = &raw const GREETING as usize;
-    let fine: bool = in_range(at, FLASH_ORIGIN, FLASH_END) && GREETING[0] == b'e' && GREETING[3] == b'b';
+    let fine: bool =
+        in_range(at, FLASH_ORIGIN, FLASH_END) && GREETING[0] == b'e' && GREETING[3] == b'b';
     failures += check(&raw const b"rodata", fine, at);
 
     exit(failures)

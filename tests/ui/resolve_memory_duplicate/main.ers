@@ -4,7 +4,8 @@
 // (ADR 0049): the block of `board.ers` is gathered first, through the
 // `mod` before the root's block, but its file comes after the root file, so
 // the error is there, labeling the root's block. A third block, in an
-// inline module of the root file, after the root's, is reported too.
+// inline module of the root file, after the root's, is reported too, and
+// so is the unknown name in its values.
 mod board;
 
 memory {
@@ -21,7 +22,7 @@ mod other {
         region RAM { origin: 16, size: 16 }
         code in ROM;
         data in RAM;
-        stack in RAM { size: 16 }
+        stack in RAM { size: NO_SIZE }
     }
 }
 

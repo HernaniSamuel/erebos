@@ -24,8 +24,10 @@ entry fn main() -> ! { loop {} }
 panic fn on_panic() -> ! { loop {} }
 ";
 
-/// The memory block of the programs that do not test memory maps: QEMU
-/// `virt`'s RAM laid out as ADR 0030 had it, as the e2e programs declare it.
+/// The memory block of the programs that do not test memory maps, as the
+/// e2e programs declare it: QEMU `virt`'s RAM in two regions of 64 MiB, the
+/// image in the first, and in the second a 1 MiB stack at its start, then
+/// `.data` and `.bss`.
 const VIRT_MAP: &str = "memory {
     region IMAGE { origin: 0x8000_0000, size: 0x0400_0000 }
     region RAM { origin: 0x8400_0000, size: 0x0400_0000 }
@@ -349,10 +351,35 @@ fn overflow(name: &str, block: &str) -> String {
     error
 }
 
+/// Where the load image of `.data` starts and ends when `PROGRAM` is
+/// built with its code in a region large enough at 0x8000_0000, which tells
+/// how far a smaller region overflows; `name` names the files.
+fn data_image(name: &str) -> (u64, u64) {
+    let work = Path::new(env!("CARGO_TARGET_TMPDIR")).join("elf");
+    fs::create_dir_all(&work).unwrap();
+    let source = work.join(format!("{name}.ers"));
+    let block = "memory {
+    region FLASH { origin: 0x8000_0000, size: 0x1_0000 }
+    region RAM { origin: 0x8002_0000, size: 0x4000 }
+    code in FLASH;
+    data in RAM;
+    stack in RAM { size: 0x800 }
+}
+";
+    fs::write(&source, format!("{block}\n{PROGRAM}")).unwrap();
+    let elf = work.join(format!("{name}.elf"));
+    driver::build(&source, &elf, &[], OptLevel::None, false).unwrap();
+    let symbols = symbols(&elf);
+    let value = |name: &str| symbols.iter().find(|s| s.name == name).unwrap().value;
+    let start = value("__data_load");
+    (start, start + value("__data_end") - value("__data_start"))
+}
+
 /// Code and `.rodata` past the end of their region: `ld.lld` reports each
 /// section that ends past it, the compiler one diagnostic naming the first,
 /// with the largest overflow, that of the load image of `.data`, which
-/// comes last.
+/// comes last. That count changes with the size of the code, so the
+/// snapshot has it redacted.
 #[test]
 fn region_overflow_code() {
     let error = overflow(
@@ -368,30 +395,42 @@ fn region_overflow_code() {
     );
     assert_eq!(error.matches("link::region-overflow").count(), 1, "{error}");
 
-    // The overflow is how far the load image of `.data` ends past the
-    // region, as in the same program with a region large enough.
-    let work = Path::new(env!("CARGO_TARGET_TMPDIR")).join("elf");
-    let source = work.join("overflow_code_fits.ers");
+    let (_, end) = data_image("overflow_code_fits");
+    let lacks = format!("{} bytes too small", end - (0x8000_0000 + 0x100));
+    assert!(error.contains(&lacks), "{error}");
+    insta::assert_snapshot!(error.replace(&lacks, "[N] bytes too small"));
+}
+
+/// Two regions overflowing at once, one diagnostic each, in the order of
+/// the regions: `FLASH` ends where the read-only data does, so only the
+/// load image of `.data` is past it, by the size of `.data`; `RAM` lacks
+/// room for `.bss`. `FLASH`'s size depends on the size of the code, so it
+/// is a constant declared away from the lines the snapshot shows.
+#[test]
+fn region_overflow_data_image() {
+    let (start, end) = data_image("overflow_data_image_fits");
     let block = "memory {
-    region FLASH { origin: 0x8000_0000, size: 0x1_0000 }
-    region RAM { origin: 0x8002_0000, size: 0x4000 }
+    region FLASH { origin: 0x8000_0000, size: FLASH_SIZE }
+    region RAM { origin: 0x8002_0000, size: 0x808 }
     code in FLASH;
     data in RAM;
     stack in RAM { size: 0x800 }
 }
 ";
-    fs::write(&source, format!("{block}\n{PROGRAM}")).unwrap();
-    let elf = work.join("overflow_code_fits.elf");
-    driver::build(&source, &elf, &[], OptLevel::None, false).unwrap();
-    let symbols = symbols(&elf);
-    let value = |name: &str| symbols.iter().find(|s| s.name == name).unwrap().value;
-    let end = value("__data_load") + value("__data_end") - value("__data_start");
-    let lacks = end - (0x8000_0000 + 0x100);
+    let error = overflow(
+        "overflow_data_image",
+        &format!(
+            "{block}{}\nconst FLASH_SIZE: usize = {:#x};\n",
+            "\n".repeat(4),
+            start - 0x8000_0000
+        ),
+    );
+    assert_eq!(error.matches("link::region-overflow").count(), 2, "{error}");
+    let lacks = end - start;
     assert!(
         error.contains(&format!("{lacks} bytes too small")),
         "{error}"
     );
-
     insta::assert_snapshot!(error);
 }
 

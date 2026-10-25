@@ -1,0 +1,12 @@
+// emit: hir
+// The stack cannot share the code's region (ADR 0057): the error is at the
+// later of the two placements, here the stack's, labeling the other.
+memory {
+    region RAM { origin: 0x8000_0000, size: 0x10_0000 }
+    code in RAM;
+    data in RAM;
+    stack in RAM { size: 0x1000 }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

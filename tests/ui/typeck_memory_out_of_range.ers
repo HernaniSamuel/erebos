@@ -2,12 +2,15 @@
 // A region must end below 2³² (ADR 0057): `TOP` ends at 0xFFFF_FFFF, its
 // last byte at 0xFFFF_FFFE, and is accepted; `LAST`, the region of the
 // address space's last byte, ends at 2³²: `ty::region-out-of-range` at its
-// name. The two touch, without overlapping.
+// name. The two touch, without overlapping. A region out of range still
+// takes part in the overlap checks: `WIDE`, out of range too, shares
+// addresses with `TOP` and with `LAST`.
 memory {
     region FLASH { origin: 0x8000_0000, size: 0x1_0000 }
     region RAM { origin: 0x8400_0000, size: 0x1_0000 }
     region TOP { origin: 0xF000_0000, size: 0x0FFF_FFFF }
     region LAST { origin: 0xFFFF_FFFF, size: 1 }
+    region WIDE { origin: 0xFFFF_FFF0, size: 0x20 }
     code in FLASH;
     data in RAM;
     stack in RAM { size: 0x1000 }

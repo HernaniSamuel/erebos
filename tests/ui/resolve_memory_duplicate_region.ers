@@ -1,7 +1,9 @@
 // emit: hir
 // Two regions of a `memory` block with one name (ADR 0057): the error is at
 // the later one, labeling the first, once per repetition. A placement
-// naming the repeated name is in the first region, and not reported.
+// naming the repeated name is in the first region, and not reported. The
+// values of a repeated region are lowered all the same: the unknown name in
+// the last one is reported.
 memory {
     region RAM { origin: 0x2000_0000, size: 0x4000 }
     region FLASH { origin: 0x0800_0000, size: 0x1_0000 }
@@ -9,7 +11,7 @@ memory {
     region RAM { origin: 0x3000_0000, size: 0x4000 }
     data in RAM;
     stack in RAM { size: 0x800 }
-    region RAM { origin: 0x4000_0000, size: 0x4000 }
+    region RAM { origin: NO_ORIGIN, size: 0x4000 }
 }
 
 entry fn main() -> ! { loop {} }

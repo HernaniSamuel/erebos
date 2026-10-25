@@ -7,25 +7,35 @@ input_file: tests/ui/resolve_memory_duplicate/main.ers
 resolve::duplicate-memory
 
   × the program has more than one `memory` block
-    ╭─[main.ers:19:5]
-  9 │ 
- 10 │ memory {
+    ╭─[main.ers:20:5]
+ 10 │ 
+ 11 │ memory {
     · ───┬──
     ·    ╰── the first one
- 11 │     region IMAGE { origin: 0x8000_0000, size: 0x10_0000 }
- 12 │     region RAM { origin: 0x8400_0000, size: 0x10_0000 }
- 13 │     code in IMAGE;
- 14 │     data in RAM;
- 15 │     stack in RAM { size: 0x1000 }
- 16 │ }
- 17 │ 
- 18 │ mod other {
- 19 │     memory {
+ 12 │     region IMAGE { origin: 0x8000_0000, size: 0x10_0000 }
+ 13 │     region RAM { origin: 0x8400_0000, size: 0x10_0000 }
+ 14 │     code in IMAGE;
+ 15 │     data in RAM;
+ 16 │     stack in RAM { size: 0x1000 }
+ 17 │ }
+ 18 │ 
+ 19 │ mod other {
+ 20 │     memory {
     ·     ───┬──
     ·        ╰── another `memory` block
- 20 │         region ROM { origin: 0, size: 16 }
+ 21 │         region ROM { origin: 0, size: 16 }
     ╰────
   help: a program has one memory map, whose `memory` block may sit in any module (ADR 0057)
+resolve::unknown-name
+
+  × cannot find `NO_SIZE` in this scope
+    ╭─[main.ers:25:30]
+ 24 │         data in RAM;
+ 25 │         stack in RAM { size: NO_SIZE }
+    ·                              ───┬───
+    ·                                 ╰── not found in module `other`
+ 26 │     }
+    ╰────
 resolve::duplicate-memory
 
   × the program has more than one `memory` block
@@ -35,11 +45,11 @@ resolve::duplicate-memory
    ·    ╰── another `memory` block
  2 │     region FLASH { origin: 0x0800_0000, size: 0x1_0000 }
    ╰────
-    ╭─[main.ers:10:1]
-  9 │ 
- 10 │ memory {
+    ╭─[main.ers:11:1]
+ 10 │ 
+ 11 │ memory {
     · ───┬──
     ·    ╰── the first one
- 11 │     region IMAGE { origin: 0x8000_0000, size: 0x10_0000 }
+ 12 │     region IMAGE { origin: 0x8000_0000, size: 0x10_0000 }
     ╰────
   help: a program has one memory map, whose `memory` block may sit in any module (ADR 0057)

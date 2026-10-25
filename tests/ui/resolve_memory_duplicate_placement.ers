@@ -2,7 +2,8 @@
 // Each of `code`, `data` and `stack` is placed exactly once (ADR 0057): a
 // second placement is reported at itself, labeling the first, whether it
 // names the same region or another; a third is reported too. A repeated
-// placement naming no region is also an unknown region.
+// placement naming no region is also an unknown region. The size of a
+// repeated stack is lowered all the same: its unknown name is reported.
 memory {
     region FLASH { origin: 0x0800_0000, size: 0x1_0000 }
     region SRAM { origin: 0x2000_0000, size: 0x4000 }
@@ -11,7 +12,7 @@ memory {
     data in SRAM;
     stack in SRAM { size: 0x800 }
     code in FLASH;
-    stack in SRAM2 { size: 0x400 }
+    stack in SRAM2 { size: NO_SIZE }
     data in SRAM2;
     data in NOWHERE;
 }

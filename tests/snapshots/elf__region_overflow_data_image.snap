@@ -1,0 +1,27 @@
+---
+source: tests/elf.rs
+expression: error
+---
+link::region-overflow
+
+  × the initial values of `.data` do not fit in the region `FLASH`
+   ╭─[overflow_data_image.ers:2:12]
+ 1 │ memory {
+ 2 │     region FLASH { origin: 0x8000_0000, size: FLASH_SIZE }
+   ·            ──┬──
+   ·              ╰── 4 bytes too small
+ 3 │     region RAM { origin: 0x8002_0000, size: 0x808 }
+   ╰────
+  help: `FLASH` holds the reset entry, the code, the read-only data and the initial values of
+        `.data`
+link::region-overflow
+
+  × `.bss` does not fit in the region `RAM`
+   ╭─[overflow_data_image.ers:3:12]
+ 2 │     region FLASH { origin: 0x8000_0000, size: FLASH_SIZE }
+ 3 │     region RAM { origin: 0x8002_0000, size: 0x808 }
+   ·            ─┬─
+   ·             ╰── 4 bytes too small
+ 4 │     code in FLASH;
+   ╰────
+  help: `RAM` holds the stack (2048 bytes), `.data` and `.bss`

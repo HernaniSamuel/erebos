@@ -3,7 +3,9 @@
 // and `_start` copies them onto themselves, and the stack has a region of
 // its own above it. It checks that a local is in the stack's region, that
 // the statics are in the shared region and hold their initial values, and
-// that `.data` follows the read-only data there.
+// that `.data` follows the read-only data there. QEMU starts with RAM
+// zeroed, so the `.bss` value would be 0 even if `_start` did not zero it;
+// `tests/elf.rs` checks the range `_start` zeroes.
 // expect-output: stack ok
 // expect-output: data ok
 // expect-output: bss ok
@@ -81,7 +83,8 @@ entry fn main() -> ! {
 
     let local: u32 = 7;
     let at: usize = &raw const local as usize;
-    failures += check(&raw const b"stack", in_range(at, STACK_ORIGIN, STACK_END) && local == 7, at);
+    let fine: bool = in_range(at, STACK_ORIGIN, STACK_END) && local == 7;
+    failures += check(&raw const b"stack", fine, at);
 
     let rodata: usize = &raw const GREETING as usize;
     let at: usize = &raw const COUNTER as usize;
@@ -91,7 +94,8 @@ entry fn main() -> ! {
     let at: usize = &raw const ZEROED as usize;
     failures += check(&raw const b"bss", in_range(at, RAM_ORIGIN, RAM_END) && ZEROED == 0, at);
 
-    let fine: bool = in_range(rodata, RAM_ORIGIN, RAM_END) && GREETING[0] == b'e' && GREETING[3] == b'b';
+    let fine: bool =
+        in_range(rodata, RAM_ORIGIN, RAM_END) && GREETING[0] == b'e' && GREETING[3] == b'b';
     failures += check(&raw const b"rodata", fine, rodata);
 
     exit(failures)

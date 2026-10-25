@@ -7,33 +7,43 @@ input_file: tests/ui/resolve_memory_duplicate_region.ers
 resolve::duplicate-region
 
   × the region `RAM` is declared more than once
-    ╭─[resolve_memory_duplicate_region.ers:9:12]
-  5 │ memory {
-  6 │     region RAM { origin: 0x2000_0000, size: 0x4000 }
+    ╭─[resolve_memory_duplicate_region.ers:11:12]
+  7 │ memory {
+  8 │     region RAM { origin: 0x2000_0000, size: 0x4000 }
     ·            ─┬─
     ·             ╰── first declared here
-  7 │     region FLASH { origin: 0x0800_0000, size: 0x1_0000 }
-  8 │     code in FLASH;
-  9 │     region RAM { origin: 0x3000_0000, size: 0x4000 }
+  9 │     region FLASH { origin: 0x0800_0000, size: 0x1_0000 }
+ 10 │     code in FLASH;
+ 11 │     region RAM { origin: 0x3000_0000, size: 0x4000 }
     ·            ─┬─
     ·             ╰── declared again here
- 10 │     data in RAM;
+ 12 │     data in RAM;
     ╰────
 resolve::duplicate-region
 
   × the region `RAM` is declared more than once
-    ╭─[resolve_memory_duplicate_region.ers:12:12]
-  5 │ memory {
-  6 │     region RAM { origin: 0x2000_0000, size: 0x4000 }
+    ╭─[resolve_memory_duplicate_region.ers:14:12]
+  7 │ memory {
+  8 │     region RAM { origin: 0x2000_0000, size: 0x4000 }
     ·            ─┬─
     ·             ╰── first declared here
-  7 │     region FLASH { origin: 0x0800_0000, size: 0x1_0000 }
-  8 │     code in FLASH;
-  9 │     region RAM { origin: 0x3000_0000, size: 0x4000 }
- 10 │     data in RAM;
- 11 │     stack in RAM { size: 0x800 }
- 12 │     region RAM { origin: 0x4000_0000, size: 0x4000 }
+  9 │     region FLASH { origin: 0x0800_0000, size: 0x1_0000 }
+ 10 │     code in FLASH;
+ 11 │     region RAM { origin: 0x3000_0000, size: 0x4000 }
+ 12 │     data in RAM;
+ 13 │     stack in RAM { size: 0x800 }
+ 14 │     region RAM { origin: NO_ORIGIN, size: 0x4000 }
     ·            ─┬─
     ·             ╰── declared again here
- 13 │ }
+ 15 │ }
+    ╰────
+resolve::unknown-name
+
+  × cannot find `NO_ORIGIN` in this scope
+    ╭─[resolve_memory_duplicate_region.ers:14:26]
+ 13 │     stack in RAM { size: 0x800 }
+ 14 │     region RAM { origin: NO_ORIGIN, size: 0x4000 }
+    ·                          ────┬────
+    ·                              ╰── not found
+ 15 │ }
     ╰────
