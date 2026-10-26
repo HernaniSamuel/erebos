@@ -181,6 +181,17 @@ pub enum AccessMode {
     ReadWrite,
 }
 
+impl AccessMode {
+    /// As written: `read`, `write` or `read write`.
+    pub fn words(self) -> &'static str {
+        match self {
+            AccessMode::Read => "read",
+            AccessMode::Write => "write",
+            AccessMode::ReadWrite => "read write",
+        }
+    }
+}
+
 /// `peripheral NAME: Type at ADDRESS;`, an instance of a peripheral type at
 /// an address (ADR 0058). Attributes do not apply to it; they are kept to
 /// be reported.

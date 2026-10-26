@@ -1,0 +1,23 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_peripheral_overlap_modules/main.ers
+---
+--- errors ---
+ty::peripheral-overlap
+
+  × the peripherals `CONSOLE` and `board::UART` overlap
+   ╭─[board.ers:7:16]
+ 6 │ 
+ 7 │ pub peripheral UART: Uart at 0x1000_0004;
+   ·                ──┬─
+   ·                  ╰── covers [0x10000004, 0x1000000a)
+   ╰────
+   ╭─[main.ers:8:12]
+ 7 │ 
+ 8 │ peripheral CONSOLE: board::Uart at 0x1000_0000;
+   ·            ───┬───
+   ·               ╰── covers [0x10000000, 0x10000006)
+ 9 │ 
+   ╰────
+  help: they share 2 bytes from 0x10000004; two peripherals cannot share a byte (ADR 0058)

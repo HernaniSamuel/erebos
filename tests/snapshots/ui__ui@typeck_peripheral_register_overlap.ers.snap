@@ -1,0 +1,112 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_peripheral_register_overlap.ers
+---
+--- errors ---
+ty::register-overlap
+
+  × the registers `a` and `b` overlap
+    ╭─[typeck_peripheral_register_overlap.ers:10:10]
+  8 │ peripheral Regs {
+  9 │     read a: u8 at 0,
+    ·          ┬
+    ·          ╰── `read`, covers [0x0, 0x1)
+ 10 │     read b: u8 at 0,
+    ·          ┬
+    ·          ╰── `read`, covers [0x0, 0x1)
+ 11 │     write c: u16 at 2,
+    ╰────
+  help: they share the byte at 0x0; two registers share a byte only when one is `read` and the
+        other `write`, so that a read means one and a write the other (ADR 0058)
+ty::register-overlap
+
+  × the registers `c` and `d` overlap
+    ╭─[typeck_peripheral_register_overlap.ers:12:11]
+ 10 │     read b: u8 at 0,
+ 11 │     write c: u16 at 2,
+    ·           ┬
+    ·           ╰── `write`, covers [0x2, 0x4)
+ 12 │     write d: u16 at 2,
+    ·           ┬
+    ·           ╰── `write`, covers [0x2, 0x4)
+ 13 │     read write ctrl: u32 at 0x10,
+    ╰────
+  help: they share 2 bytes from 0x2; two registers share a byte only when one is `read` and the
+        other `write`, so that a read means one and a write the other (ADR 0058)
+ty::register-overlap
+
+  × the registers `ctrl` and `flag` overlap
+    ╭─[typeck_peripheral_register_overlap.ers:14:16]
+ 12 │     write d: u16 at 2,
+ 13 │     read write ctrl: u32 at 0x10,
+    ·                ──┬─
+    ·                  ╰── `read write`, covers [0x10, 0x14)
+ 14 │     read write flag: u8 at 0x12,
+    ·                ──┬─
+    ·                  ╰── `read write`, covers [0x12, 0x13)
+ 15 │     read write x: u8 at 0x20,
+    ╰────
+  help: they share the byte at 0x12; two registers share a byte only when one is `read` and the
+        other `write`, so that a read means one and a write the other (ADR 0058)
+ty::register-overlap
+
+  × the registers `x` and `y` overlap
+    ╭─[typeck_peripheral_register_overlap.ers:16:10]
+ 14 │     read write flag: u8 at 0x12,
+ 15 │     read write x: u8 at 0x20,
+    ·                ┬
+    ·                ╰── `read write`, covers [0x20, 0x21)
+ 16 │     read y: u8 at 0x20,
+    ·          ┬
+    ·          ╰── `read`, covers [0x20, 0x21)
+ 17 │     read rbr: u8 at 0x30,
+    ╰────
+  help: they share the byte at 0x20; two registers share a byte only when one is `read` and the
+        other `write`, so that a read means one and a write the other (ADR 0058)
+ty::register-overlap
+
+  × the registers `p` and `q` overlap
+    ╭─[typeck_peripheral_register_overlap.ers:22:16]
+ 20 │     write narrow: u8 at 0x41,
+ 21 │     read write p: u16 at 0x50,
+    ·                ┬
+    ·                ╰── `read write`, covers [0x50, 0x52)
+ 22 │     read write q: u8 at 0x51,
+    ·                ┬
+    ·                ╰── `read write`, covers [0x51, 0x52)
+ 23 │     read write r: u32 at 0x50,
+    ╰────
+  help: they share the byte at 0x51; two registers share a byte only when one is `read` and the
+        other `write`, so that a read means one and a write the other (ADR 0058)
+ty::register-overlap
+
+  × the registers `p` and `r` overlap
+    ╭─[typeck_peripheral_register_overlap.ers:23:16]
+ 20 │     write narrow: u8 at 0x41,
+ 21 │     read write p: u16 at 0x50,
+    ·                ┬
+    ·                ╰── `read write`, covers [0x50, 0x52)
+ 22 │     read write q: u8 at 0x51,
+ 23 │     read write r: u32 at 0x50,
+    ·                ┬
+    ·                ╰── `read write`, covers [0x50, 0x54)
+ 24 │ }
+    ╰────
+  help: they share 2 bytes from 0x50; two registers share a byte only when one is `read` and the
+        other `write`, so that a read means one and a write the other (ADR 0058)
+ty::register-overlap
+
+  × the registers `q` and `r` overlap
+    ╭─[typeck_peripheral_register_overlap.ers:23:16]
+ 21 │     read write p: u16 at 0x50,
+ 22 │     read write q: u8 at 0x51,
+    ·                ┬
+    ·                ╰── `read write`, covers [0x51, 0x52)
+ 23 │     read write r: u32 at 0x50,
+    ·                ┬
+    ·                ╰── `read write`, covers [0x50, 0x54)
+ 24 │ }
+    ╰────
+  help: they share the byte at 0x51; two registers share a byte only when one is `read` and the
+        other `write`, so that a read means one and a write the other (ADR 0058)

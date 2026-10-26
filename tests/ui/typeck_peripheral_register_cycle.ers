@@ -1,0 +1,38 @@
+// A register type that mentions a peripheral type is no register type
+// (ADR 0058). It stays silent only when it reaches a peripheral type whose
+// failure is explained by an error reported elsewhere (see
+// `typeck_peripheral_failed_values.ers`). Those here are not: their only
+// failures are registers that mention peripheral types, in cycles with no
+// base failure, which may be the very register, so each is
+// `ty::register-type`. That
+// covers a pointer to its own type and the type itself (`Own`), two types
+// whose registers point to each other (`Ping`, `Pong`), a pointer to a
+// type whose only failures are such registers (`Outer`), and a cycle
+// through a struct (`Held`). Which is reported does not depend on the
+// order the types are checked in.
+peripheral Own {
+    read write ok: u8 at 0,
+    read write own: *mut Own at 4,
+    read write whole: Own at 8,
+}
+
+peripheral Ping {
+    read write pong: *mut Pong at 0,
+}
+
+peripheral Pong {
+    read write ping: *mut Ping at 0,
+}
+
+peripheral Outer {
+    read write own: *mut Own at 0,
+}
+
+struct Holder { held: *mut Held }
+
+peripheral Held {
+    read write holder: Holder at 0,
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

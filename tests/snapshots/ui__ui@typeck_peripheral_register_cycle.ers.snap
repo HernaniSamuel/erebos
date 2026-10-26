@@ -1,0 +1,78 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_peripheral_register_cycle.ers
+---
+--- errors ---
+ty::register-type
+
+  × `*mut Own` is not a register type
+    ╭─[typeck_peripheral_register_cycle.ers:15:21]
+ 14 │     read write ok: u8 at 0,
+ 15 │     read write own: *mut Own at 4,
+    ·                     ────┬───
+    ·                         ╰── the type of the register `own`
+ 16 │     read write whole: Own at 8,
+    ╰────
+  help: a register is a `u8`, a `u16` or a `u32`: an unsigned integer as wide as the register,
+        read and written in one access (ADR 0058)
+ty::register-type
+
+  × `Own` is not a register type
+    ╭─[typeck_peripheral_register_cycle.ers:16:23]
+ 15 │     read write own: *mut Own at 4,
+ 16 │     read write whole: Own at 8,
+    ·                       ─┬─
+    ·                        ╰── the type of the register `whole`
+ 17 │ }
+    ╰────
+  help: a register is a `u8`, a `u16` or a `u32`: an unsigned integer as wide as the register,
+        read and written in one access (ADR 0058)
+ty::register-type
+
+  × `*mut Pong` is not a register type
+    ╭─[typeck_peripheral_register_cycle.ers:20:22]
+ 19 │ peripheral Ping {
+ 20 │     read write pong: *mut Pong at 0,
+    ·                      ────┬────
+    ·                          ╰── the type of the register `pong`
+ 21 │ }
+    ╰────
+  help: a register is a `u8`, a `u16` or a `u32`: an unsigned integer as wide as the register,
+        read and written in one access (ADR 0058)
+ty::register-type
+
+  × `*mut Ping` is not a register type
+    ╭─[typeck_peripheral_register_cycle.ers:24:22]
+ 23 │ peripheral Pong {
+ 24 │     read write ping: *mut Ping at 0,
+    ·                      ────┬────
+    ·                          ╰── the type of the register `ping`
+ 25 │ }
+    ╰────
+  help: a register is a `u8`, a `u16` or a `u32`: an unsigned integer as wide as the register,
+        read and written in one access (ADR 0058)
+ty::register-type
+
+  × `*mut Own` is not a register type
+    ╭─[typeck_peripheral_register_cycle.ers:28:21]
+ 27 │ peripheral Outer {
+ 28 │     read write own: *mut Own at 0,
+    ·                     ────┬───
+    ·                         ╰── the type of the register `own`
+ 29 │ }
+    ╰────
+  help: a register is a `u8`, a `u16` or a `u32`: an unsigned integer as wide as the register,
+        read and written in one access (ADR 0058)
+ty::register-type
+
+  × `Holder` is not a register type
+    ╭─[typeck_peripheral_register_cycle.ers:34:24]
+ 33 │ peripheral Held {
+ 34 │     read write holder: Holder at 0,
+    ·                        ───┬──
+    ·                           ╰── the type of the register `holder`
+ 35 │ }
+    ╰────
+  help: a register is a `u8`, a `u16` or a `u32`: an unsigned integer as wide as the register,
+        read and written in one access (ADR 0058)

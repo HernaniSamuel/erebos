@@ -9,10 +9,12 @@ use std::rc::Rc;
 use crate::diag::{Diagnostic, Diagnostics};
 use crate::eval::{self, ConstValue, Origin};
 use crate::hir::{
-    self, ArrayLen, BuiltinEnum, Comptime, ConstId, EnumDef, EnumId, ExprId, ExprKind, FnId, Hir,
-    PatternKind, StaticId, StructId, VariantValue,
+    self, AccessMode, ArrayLen, BuiltinEnum, Comptime, ConstId, EnumDef, EnumId, ExprId, ExprKind,
+    FnId, Hir, PatternKind, PeripheralId, PeripheralTypeId, StaticId, StructId, VariantValue,
 };
-use crate::layout::{self, Composite, EnumLayout, Layout, MAX_ALIGN, MAX_SIZE, StructLayout};
+use crate::layout::{
+    self, Composite, EnumLayout, Layout, MAX_ALIGN, MAX_SIZE, PeripheralLayout, StructLayout,
+};
 use crate::memory::{MemoryMap, Region};
 use crate::mir::{
     self, BodyId, ConstData, DataId, EnumRef, Field, LeftOut, Mir, PanicCause, PanicInfoAt,
@@ -68,6 +70,22 @@ enum Item {
     Layout(StructId),
     /// The layout of an enum with payloads (ADR 0039).
     EnumLayout(EnumId),
+    /// The layout of a peripheral type (ADR 0058).
+    PeripheralLayout(PeripheralTypeId),
+}
+
+/// Which peripheral types `lacks_layout` counts as in error (ADR 0058).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PeripheralFailures {
+    /// Every one that reaches a failed value, as ADR 0048's predicates
+    /// need.
+    All,
+    /// Those whose failure is explained (`explain_peripherals`): an error
+    /// reported whatever points to them, which silences
+    /// `ty::register-type`.
+    Explained,
+    /// None: whether a type is in error without a peripheral type.
+    Ignored,
 }
 
 /// How diagnostics name a body.
@@ -87,6 +105,15 @@ fn describe(q: &Queries, f: &hir::Fn) -> String {
 /// `Mode::Run`".
 fn variant_name(def: &EnumDef, index: u32) -> String {
     format!("the variant `{}`", def.variant_path(index as usize))
+}
+
+/// How diagnostics name the bytes `[lo, hi)` two ranges share: "the byte
+/// at 0x10", "4 bytes from 0x10".
+fn shared_bytes(lo: u64, hi: u64) -> String {
+    match hi - lo {
+        1 => format!("the byte at {lo:#x}"),
+        n => format!("{n} bytes from {lo:#x}"),
+    }
 }
 
 /// An item being computed, as cycles report it.
@@ -121,6 +148,14 @@ pub struct Queries<'h> {
     layouts: Vec<State<Option<StructLayout>>>,
     /// The layout of each enum with payloads, likewise (ADR 0039).
     enum_layouts: Vec<State<Option<EnumLayout>>>,
+    /// The layout of each peripheral type; `None` when it reaches a failed
+    /// value, an offset or a register type in error, all reported
+    /// (ADR 0058).
+    peripheral_layouts: Vec<State<Option<PeripheralLayout>>>,
+    /// Whether each peripheral type's failure is explained by an error
+    /// reported elsewhere (`explain_peripherals`); computed for all of
+    /// them at once, when first needed.
+    peripherals_explained: Option<Vec<bool>>,
     /// Each `Option(T)` and `Result(T, E)` made so far, numbered after the
     /// declared enums, with its type arguments (ADR 0045).
     instances: Vec<(BuiltinEnum, Vec<hir::Ty>, &'static EnumDef)>,
@@ -184,6 +219,10 @@ impl<'h> Queries<'h> {
             checked: hir.fns.iter().map(|_| State::NotStarted).collect(),
             layouts: hir.structs.iter().map(|_| State::NotStarted).collect(),
             enum_layouts: hir.enums.iter().map(|_| State::NotStarted).collect(),
+            peripheral_layouts: (hir.peripheral_types.iter())
+                .map(|_| State::NotStarted)
+                .collect(),
+            peripherals_explained: None,
             instances: Vec::new(),
             too_large_instances: Vec::new(),
 
@@ -270,6 +309,7 @@ impl<'h> Queries<'h> {
             }
         }
         self.check_memory_map();
+        self.check_peripherals();
         for (id, f) in hir.fns() {
             let Some(body) = &f.body else {
                 continue;
@@ -717,10 +757,7 @@ impl<'h> Queries<'h> {
                     continue;
                 }
                 let (later, earlier) = (&map.regions[later], &map.regions[earlier]);
-                let shared = match hi - lo {
-                    1 => format!("the byte at {lo:#x}"),
-                    n => format!("{n} bytes from {lo:#x}"),
-                };
+                let shared = shared_bytes(lo, hi);
                 self.diags.push(
                     Diagnostic::error(
                         "ty::region-overlap",
@@ -843,6 +880,389 @@ impl<'h> Queries<'h> {
             stack: map.stack.region,
             stack_size: self.array_len(map.stack_size.0)?,
         })
+    }
+
+    /// The layout of a peripheral type (ADR 0058), computed once from its
+    /// registers' offsets and types; `None` when it reaches a failed value:
+    /// an offset that failed, or a register type that is in error or no
+    /// register type, all reported (by `check_peripherals` for the last).
+    pub fn peripheral_layout(&mut self, id: PeripheralTypeId) -> Option<PeripheralLayout> {
+        if let State::Done(layout) = &self.peripheral_layouts[id.0 as usize] {
+            return layout.clone();
+        }
+        let hir = self.hir;
+        let def = hir.peripheral_type(id);
+        let what = format!("the layout of `{}`", def.path);
+        if !self.start(Item::PeripheralLayout(id), def.name_span, what) {
+            return None;
+        }
+        self.peripheral_layouts[id.0 as usize] = State::InProgress;
+        let mut registers = Vec::with_capacity(def.registers.len());
+        let mut failed = false;
+        for register in &def.registers {
+            let offset = self.array_len(register.offset.0);
+            let ty = self.normalize(register.ty);
+            match (offset, layout::register_width(ty)) {
+                (Some(offset), Some(width)) => registers.push((offset, width)),
+                _ => failed = true,
+            }
+        }
+        self.finish(Item::PeripheralLayout(id));
+        let layout = (!failed).then(|| layout::peripheral_layout(&registers));
+        self.peripheral_layouts[id.0 as usize] = State::Done(layout.clone());
+        layout
+    }
+
+    /// Whether the peripheral type `id` reaches a failed value (ADR 0058).
+    /// One whose layout is being computed does not, as a struct seen
+    /// already does not for `lacks_layout`: what computes it, such as an
+    /// offset naming a pointer to it, needs no layout of it.
+    fn peripheral_type_failed(&mut self, id: PeripheralTypeId) -> bool {
+        match self.peripheral_layouts[id.0 as usize] {
+            State::InProgress => false,
+            _ => self.peripheral_layout(id).is_none(),
+        }
+    }
+
+    /// Whether the failure of the peripheral type `id` is explained by an
+    /// error reported elsewhere, so that a register type reaching it stays
+    /// silent, as a type reaching a failed value does (ADR 0058, as settled
+    /// in M3.2 step 3).
+    fn peripheral_explained(&mut self, id: PeripheralTypeId) -> bool {
+        if self.peripherals_explained.is_none() {
+            self.explain_peripherals();
+        }
+        let explained = self.peripherals_explained.as_ref();
+        explained.expect("computed above")[id.0 as usize]
+    }
+
+    /// Finds which peripheral types have an explained failure: those with a
+    /// base failure (`peripheral_base_failure`), and those with a register
+    /// whose type, no register type, reaches one already explained, so
+    /// that the silence chains as far as the failure reaches. The least
+    /// fixed point over every declaration: types failing only through
+    /// registers that point to each other, with no base failure among
+    /// them, are not explained, and those registers are reported, since
+    /// their failure is their own. The result does not depend on the
+    /// order the types are looked at in.
+    fn explain_peripherals(&mut self) {
+        let hir = self.hir;
+        let base = (0..hir.peripheral_types.len())
+            .map(|id| self.peripheral_base_failure(PeripheralTypeId(id as u32)))
+            .collect();
+        self.peripherals_explained = Some(base);
+        // Each round marks at least one more type, or ends.
+        loop {
+            let mut changed = false;
+            for (id, def) in hir.peripheral_types.iter().enumerate() {
+                if self.peripherals_explained.as_ref().expect("set above")[id] {
+                    continue;
+                }
+                let reaches = def.registers.iter().any(|register| {
+                    let ty = self.normalize(register.ty);
+                    layout::register_width(ty).is_none()
+                        && self.lacks_layout(
+                            register.ty,
+                            &mut Vec::new(),
+                            PeripheralFailures::Explained,
+                        )
+                });
+                if reaches {
+                    self.peripherals_explained.as_mut().expect("set above")[id] = true;
+                    changed = true;
+                }
+            }
+            if !changed {
+                break;
+            }
+        }
+    }
+
+    /// Whether the peripheral type `id` has a base failure: an offset that
+    /// failed, or a register type in error without a peripheral type,
+    /// which is in error in itself or is no register type and mentions no
+    /// peripheral type. Its error is reported whatever points to the type.
+    /// A failure owed only to registers that mention peripheral types may
+    /// be one such register's own, and is no base failure. It depends only
+    /// on the type's own declaration.
+    fn peripheral_base_failure(&mut self, id: PeripheralTypeId) -> bool {
+        let hir = self.hir;
+        hir.peripheral_type(id).registers.iter().any(|register| {
+            if self.array_len(register.offset.0).is_none() {
+                return true;
+            }
+            let ty = self.normalize(register.ty);
+            layout::register_width(ty).is_none()
+                && (self.lacks_layout(register.ty, &mut Vec::new(), PeripheralFailures::Ignored)
+                    || !self.mentions_peripheral(register.ty, &mut Vec::new()))
+        })
+    }
+
+    /// Whether `ty` contains a peripheral type anywhere: behind pointers,
+    /// in elements, fields, payload values and type arguments; the types
+    /// in `seen` were looked at already.
+    fn mentions_peripheral(&mut self, ty: hir::Ty, seen: &mut Vec<Composite>) -> bool {
+        match ty {
+            hir::Ty::Peripheral(_) => true,
+            hir::Ty::Ptr(ptr) => self.mentions_peripheral(*ptr.pointee, seen),
+            hir::Ty::Array(elem, _) | hir::Ty::Slice(elem) => self.mentions_peripheral(*elem, seen),
+            hir::Ty::Struct(s) => {
+                if seen.contains(&Composite::Struct(s.id)) {
+                    return false;
+                }
+                seen.push(Composite::Struct(s.id));
+                let hir = self.hir;
+                (hir.struct_(s.id).fields.iter())
+                    .any(|field| self.mentions_peripheral(field.ty, seen))
+            }
+            hir::Ty::Enum(e) if e.payloads => {
+                if seen.contains(&Composite::Enum(e.id)) {
+                    return false;
+                }
+                seen.push(Composite::Enum(e.id));
+                (self.enum_def(e.id).variants.iter())
+                    .flat_map(|variant| &variant.payload)
+                    .any(|value| self.mentions_peripheral(value.ty, seen))
+            }
+            hir::Ty::Applied(applied) => {
+                (applied.args.iter()).any(|&arg| self.mentions_peripheral(arg, seen))
+            }
+            _ => false,
+        }
+    }
+
+    /// Whether the peripheral `id` is erroneous (ADR 0058): its type is no
+    /// peripheral type or reaches a failed value, or its address failed,
+    /// all reported.
+    fn peripheral_erroneous(&mut self, id: PeripheralId) -> bool {
+        let def = self.hir.peripheral(id);
+        let type_failed = match def.ty {
+            hir::Ty::Peripheral(ty) => self.peripheral_type_failed(ty.id),
+            _ => true,
+        };
+        type_failed || self.array_len(def.address.0).is_none()
+    }
+
+    /// The address of the peripheral `id` and the layout of its type;
+    /// `None` when it is erroneous (ADR 0058).
+    pub fn placed_peripheral(&mut self, id: PeripheralId) -> Option<(u64, PeripheralLayout)> {
+        let def = self.hir.peripheral(id);
+        let hir::Ty::Peripheral(ty) = def.ty else {
+            return None;
+        };
+        let address = self.array_len(def.address.0)?;
+        Some((address, self.peripheral_layout(ty.id)?))
+    }
+
+    /// Checks every peripheral type and peripheral of the program, used or
+    /// not, once their values are computed (ADR 0058): registers of a
+    /// register type, at offsets aligned for their widths, sharing no byte
+    /// unless one is `read` and the other `write`; peripherals at addresses
+    /// aligned for their types, ending at 2³² or below, sharing no byte. A
+    /// check that needs a value that failed, which was reported, is
+    /// skipped; a register whose type is wrong takes part in no other
+    /// check, and a peripheral of a type that reaches a failed value in
+    /// none.
+    fn check_peripherals(&mut self) {
+        let hir = self.hir;
+        for id in 0..hir.peripheral_types.len() {
+            self.check_peripheral_type(PeripheralTypeId(id as u32));
+        }
+
+        let placed: Vec<Option<(u64, PeripheralLayout)>> = (0..hir.peripherals.len())
+            .map(|id| self.placed_peripheral(PeripheralId(id as u32)))
+            .collect();
+        let limit = 1u64 << target::POINTER_BITS;
+        for (def, placed) in hir.peripherals.iter().zip(&placed) {
+            let Some((address, layout)) = placed else {
+                continue;
+            };
+            if address % layout.align != 0 {
+                self.diags.push(
+                    Diagnostic::error(
+                        "ty::misaligned-peripheral",
+                        format!("the peripheral `{}` is at a misaligned address", def.path),
+                    )
+                    .label(
+                        def.address.1,
+                        format!("{address:#x} is not a multiple of {}", layout.align),
+                    )
+                    .label(
+                        def.ty_span,
+                        format!("`{}` has alignment {}", def.ty, layout.align),
+                    )
+                    .help("a peripheral's address is a multiple of its type's alignment, the width of its widest register, so that every register is accessed aligned (ADR 0058)"),
+                );
+            }
+            let end = address + layout.extent;
+            if end > limit {
+                self.diags.push(
+                    Diagnostic::error(
+                        "ty::peripheral-out-of-range",
+                        format!("the peripheral `{}` ends past the address space", def.path),
+                    )
+                    .label(def.name_span, format!("covers [{address:#x}, {end:#x})"))
+                    .help(format!(
+                        "a peripheral covers `[address, address + extent)`, its type's extent being the end of its last register, and ends at 2³² ({limit:#x}) or below (ADR 0058)"
+                    )),
+                );
+            }
+        }
+
+        // Once per pair, at the later peripheral: in the order of files,
+        // numbered depth first, then of positions in a file (ADR 0057,
+        // 0058), which is not the order peripherals are gathered in.
+        let ranges: Vec<Option<(u64, u64)>> = (placed.iter())
+            .map(|placed| {
+                let (address, layout) = placed.as_ref()?;
+                Some((*address, address + layout.extent))
+            })
+            .collect();
+        let mut order: Vec<usize> = (0..hir.peripherals.len()).collect();
+        order.sort_by_key(|&i| {
+            let span = hir.peripherals[i].name_span;
+            (span.file, span.lo)
+        });
+        for (k, &later) in order.iter().enumerate() {
+            let Some((later_lo, later_hi)) = ranges[later] else {
+                continue;
+            };
+            for &earlier in &order[..k] {
+                let Some((earlier_lo, earlier_hi)) = ranges[earlier] else {
+                    continue;
+                };
+                let lo = later_lo.max(earlier_lo);
+                let hi = later_hi.min(earlier_hi);
+                if lo >= hi {
+                    continue;
+                }
+                let (later, earlier) = (&hir.peripherals[later], &hir.peripherals[earlier]);
+                self.diags.push(
+                    Diagnostic::error(
+                        "ty::peripheral-overlap",
+                        format!(
+                            "the peripherals `{}` and `{}` overlap",
+                            earlier.path, later.path
+                        ),
+                    )
+                    .label(
+                        later.name_span,
+                        format!("covers [{later_lo:#x}, {later_hi:#x})"),
+                    )
+                    .label(
+                        earlier.name_span,
+                        format!("covers [{earlier_lo:#x}, {earlier_hi:#x})"),
+                    )
+                    .help(format!(
+                        "they share {}; two peripherals cannot share a byte (ADR 0058)",
+                        shared_bytes(lo, hi)
+                    )),
+                );
+            }
+        }
+    }
+
+    /// Checks the registers of the peripheral type `id` (ADR 0058): their
+    /// types, the alignment of their offsets, and their overlaps, once per
+    /// pair, at the later register.
+    fn check_peripheral_type(&mut self, id: PeripheralTypeId) {
+        let hir = self.hir;
+        let def = hir.peripheral_type(id);
+        // Each register's offset and width, `None` when its offset failed
+        // or its type is wrong, both reported.
+        let mut placed: Vec<Option<(u64, u64)>> = Vec::with_capacity(def.registers.len());
+        for register in &def.registers {
+            let ty = self.normalize(register.ty);
+            let width = layout::register_width(ty);
+            // A type in error was reported, and so was what explains the
+            // failure of a peripheral type it reaches. One reaching only
+            // peripheral types whose failure is not explained is reported
+            // here: their failure may be this very register, or registers
+            // that point back to its type.
+            if width.is_none()
+                && !self.lacks_layout(register.ty, &mut Vec::new(), PeripheralFailures::Explained)
+            {
+                self.diags.push(
+                    Diagnostic::error("ty::register-type", format!("`{ty}` is not a register type"))
+                        .label(register.ty_span, format!("the type of the register `{}`", register.name))
+                        .help("a register is a `u8`, a `u16` or a `u32`: an unsigned integer as wide as the register, read and written in one access (ADR 0058)"),
+                );
+            }
+            placed.push(self.array_len(register.offset.0).zip(width));
+        }
+
+        for (register, &placed) in def.registers.iter().zip(&placed) {
+            let Some((offset, width)) = placed else {
+                continue;
+            };
+            if offset % width != 0 {
+                let ty = self.normalize(register.ty);
+                self.diags.push(
+                    Diagnostic::error(
+                        "ty::misaligned-register",
+                        format!("the register `{}` is at a misaligned offset", register.name),
+                    )
+                    .label(
+                        register.offset.1,
+                        format!("{offset:#x} is not a multiple of {width}"),
+                    )
+                    .label(register.ty_span, format!("`{ty}` is {width} bytes wide"))
+                    .help("a register's offset is a multiple of its width, so that each access to it, one instruction, is aligned (ADR 0023, 0058)"),
+                );
+            }
+        }
+
+        // In source order, which registers are kept in.
+        for (later, &later_placed) in placed.iter().enumerate() {
+            let Some((later_lo, later_width)) = later_placed else {
+                continue;
+            };
+            let later_hi = later_lo + later_width;
+            for (earlier, &earlier_placed) in placed[..later].iter().enumerate() {
+                let Some((earlier_lo, earlier_width)) = earlier_placed else {
+                    continue;
+                };
+                let earlier_hi = earlier_lo + earlier_width;
+                let lo = later_lo.max(earlier_lo);
+                let hi = later_hi.min(earlier_hi);
+                let (later, earlier) = (&def.registers[later], &def.registers[earlier]);
+                // A read can only mean one and a write the other.
+                let apart = matches!(
+                    (earlier.access, later.access),
+                    (AccessMode::Read, AccessMode::Write) | (AccessMode::Write, AccessMode::Read)
+                );
+                if lo >= hi || apart {
+                    continue;
+                }
+                self.diags.push(
+                    Diagnostic::error(
+                        "ty::register-overlap",
+                        format!(
+                            "the registers `{}` and `{}` overlap",
+                            earlier.name, later.name
+                        ),
+                    )
+                    .label(
+                        later.span,
+                        format!(
+                            "`{}`, covers [{later_lo:#x}, {later_hi:#x})",
+                            later.access.words()
+                        ),
+                    )
+                    .label(
+                        earlier.span,
+                        format!(
+                            "`{}`, covers [{earlier_lo:#x}, {earlier_hi:#x})",
+                            earlier.access.words()
+                        ),
+                    )
+                    .help(format!(
+                        "they share {}; two registers share a byte only when one is `read` and the other `write`, so that a read means one and a write the other (ADR 0058)",
+                        shared_bytes(lo, hi)
+                    )),
+                );
+            }
+        }
     }
 
     /// `ty` with every array length known, and every `Option(T)` and
@@ -1616,32 +2036,39 @@ impl<'h> Queries<'h> {
     }
 
     /// Whether lowering function `id` needs the layout of a struct that has
-    /// none, or of a type that failed, both reported where they failed.
-    /// Like a body that does not type check, it is then left out without a
-    /// new diagnostic.
+    /// none, or of a type that failed, both reported where they failed, or
+    /// names an erroneous peripheral (ADR 0058). Like a body that does not
+    /// type check, it is then left out without a new diagnostic.
     fn needs_missing_layout(&mut self, id: FnId) -> bool {
         let f = self.hir.fn_(id);
         let mut types = vec![f.ret];
         types.extend(f.locals.iter().map(|local| local.ty));
+        let mut peripherals = Vec::new();
         if let Some(body) = &f.body {
             body.walk(&mut |e| {
                 types.push(self.tables.expr_ty(e.id));
-                if let ExprKind::SizeOf(ty) | ExprKind::AlignOf(ty) | ExprKind::OffsetOf(ty, _, _) =
-                    &e.kind
-                {
-                    types.push(*ty);
+                match &e.kind {
+                    ExprKind::SizeOf(ty) | ExprKind::AlignOf(ty) | ExprKind::OffsetOf(ty, _, _) => {
+                        types.push(*ty);
+                    }
+                    ExprKind::Peripheral(id) => peripherals.push(*id),
+                    _ => {}
                 }
             });
         }
         let mut seen = Vec::new();
-        types.into_iter().any(|ty| self.lacks_layout(ty, &mut seen))
+        types
+            .into_iter()
+            .any(|ty| self.lacks_layout(ty, &mut seen, PeripheralFailures::All))
+            || (peripherals.into_iter()).any(|id| self.peripheral_erroneous(id))
     }
 
     /// Whether `ty` needs a struct or an enum with payloads without a
     /// layout, or a type that failed, as a payload of type `!` is
-    /// (ADR 0034, 0039): all reported, so its uses report nothing more.
+    /// (ADR 0034, 0039), or reaches a peripheral type that reaches a failed
+    /// value (ADR 0058): all reported, so its uses report nothing more.
     pub fn is_erroneous(&mut self, ty: hir::Ty) -> bool {
-        self.lacks_layout(ty, &mut Vec::new())
+        self.lacks_layout(ty, &mut Vec::new(), PeripheralFailures::All)
     }
 
     /// Whether the MIR type of `ty` needs a struct or an enum with payloads
@@ -1649,18 +2076,24 @@ impl<'h> Queries<'h> {
     /// looked at already. The types of fields and payload values are not
     /// normalized, so an array length that failed is found here: `ty` is
     /// in error wherever `normalize` would make it `{error}`. So is a
-    /// struct whose `#[align(N)]` failed (ADR 0048).
-    fn lacks_layout(&mut self, ty: hir::Ty, seen: &mut Vec<Composite>) -> bool {
+    /// struct whose `#[align(N)]` failed (ADR 0048), and a peripheral type
+    /// that `peripherals` counts (ADR 0058).
+    fn lacks_layout(
+        &mut self,
+        ty: hir::Ty,
+        seen: &mut Vec<Composite>,
+        peripherals: PeripheralFailures,
+    ) -> bool {
         match ty {
-            hir::Ty::Ptr(ptr) => self.lacks_layout(*ptr.pointee, seen),
+            hir::Ty::Ptr(ptr) => self.lacks_layout(*ptr.pointee, seen, peripherals),
             // A struct or enum lays out a field whose length failed as
             // empty, keeping its own layout (see `layout::of`), so a
             // length is checked wherever it is reached, behind pointers
             // too.
             hir::Ty::Array(elem, len) => {
-                self.lacks_layout(*elem, seen) || self.array_len(len).is_none()
+                self.lacks_layout(*elem, seen, peripherals) || self.array_len(len).is_none()
             }
-            hir::Ty::Slice(elem) => self.lacks_layout(*elem, seen),
+            hir::Ty::Slice(elem) => self.lacks_layout(*elem, seen, peripherals),
             hir::Ty::Struct(s) => {
                 if seen.contains(&Composite::Struct(s.id)) {
                     return false;
@@ -1677,7 +2110,7 @@ impl<'h> Queries<'h> {
                 hir.struct_(s.id)
                     .fields
                     .iter()
-                    .any(|field| self.lacks_layout(field.ty, seen))
+                    .any(|field| self.lacks_layout(field.ty, seen, peripherals))
             }
             hir::Ty::Enum(e) if e.payloads => {
                 if seen.contains(&Composite::Enum(e.id)) {
@@ -1691,12 +2124,17 @@ impl<'h> Queries<'h> {
                     .variants
                     .iter()
                     .flat_map(|variant| &variant.payload)
-                    .any(|value| self.lacks_layout(value.ty, seen))
+                    .any(|value| self.lacks_layout(value.ty, seen, peripherals))
             }
             hir::Ty::Applied(_) => {
                 let ty = self.normalize(ty);
-                self.lacks_layout(ty, seen)
+                self.lacks_layout(ty, seen, peripherals)
             }
+            hir::Ty::Peripheral(p) => match peripherals {
+                PeripheralFailures::All => self.peripheral_type_failed(p.id),
+                PeripheralFailures::Explained => self.peripheral_explained(p.id),
+                PeripheralFailures::Ignored => false,
+            },
             // Reported, such as a field of type `!` (ADR 0034).
             hir::Ty::Error => true,
             _ => false,

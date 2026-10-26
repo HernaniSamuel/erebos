@@ -1,0 +1,89 @@
+// A register's offset, a register's type in error and a peripheral's
+// address are failed values (ADR 0048, 0058): each reports its own error,
+// once, and the checks that need it are skipped. In `Failed`, `a`'s offset
+// fails to evaluate, `b`'s type has a length that fails, which is its only
+// error, and `c` is of type `!`, which is `ty::never-in-memory` and not
+// also `ty::register-type`; none of them is checked against `d`, which
+// they would overlap. `Failed` reaches a failed value, so its
+// peripherals `F0` and `F1`, misaligned and overlapping as written, take
+// part in no check. `TYPED`'s address has the wrong type and `ZERO`'s fails
+// to evaluate: as written, both would overlap `UART`.
+//
+// A register type reaching a peripheral type with a base failure stays
+// silent too, as a type reaching a failed value does: `failed` points to
+// `Failed`, and `wrong` to `Wrong`, whose `u64` register is reported. A
+// base failure is an offset that failed or a register type in error
+// without a peripheral type. The silence chains: `C`'s `*mut A` stays
+// silent, as `A`'s `*mut B` does, `B`'s `u64` being reported; `Z`, `Y` and
+// `X` are the same chain declared the other way round. A cycle reaching a
+// base failure is explained too: `Loop1` points to `B` and to `Loop2`,
+// which points back, and only `B`'s error is reported.
+// `typeck_peripheral_register_cycle.ers` shows failures nothing explains.
+fn zero() -> usize {
+    0
+}
+
+const SIXTEEN: u32 = 16;
+
+peripheral Failed {
+    read write a: u8 at 4 / zero(),
+    read write b: [u8; 4 / zero()] at 1,
+    read c: ! at 0,
+    read write d: u32 at 0,
+}
+
+peripheral Uart {
+    read rbr: u8 at 0,
+    write thr: u8 at 0,
+}
+
+peripheral Wrong {
+    read write wide: u64 at 0,
+}
+
+peripheral Pointing {
+    read write failed: *mut Failed at 0,
+    read write wrong: *mut Wrong at 4,
+}
+
+peripheral B {
+    read write s: u64 at 0,
+}
+
+peripheral A {
+    read write r: *mut B at 0,
+}
+
+peripheral C {
+    read write t: *mut A at 0,
+}
+
+peripheral Z {
+    read write t: *mut Y at 0,
+}
+
+peripheral Y {
+    read write r: *mut X at 0,
+}
+
+peripheral X {
+    read write s: u64 at 0,
+}
+
+peripheral Loop1 {
+    read write other: *mut Loop2 at 0,
+    read write failed: *mut B at 4,
+}
+
+peripheral Loop2 {
+    read write back: *mut Loop1 at 0,
+}
+
+peripheral F0: Failed at 1;
+peripheral F1: Failed at 1;
+peripheral UART: Uart at 16;
+peripheral TYPED: Uart at SIXTEEN;
+peripheral ZERO: Uart at 16 + 0 / zero();
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

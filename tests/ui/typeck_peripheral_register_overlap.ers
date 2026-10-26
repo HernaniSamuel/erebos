@@ -1,0 +1,27 @@
+// Two registers of one peripheral type may not share a byte, unless one is
+// `read` and the other `write` (ADR 0058): `ty::register-overlap`, once per
+// pair, at the later register, labeling the earlier. Two `read` registers
+// at one offset, two `write` ones, a `u32` with a `u8` inside it, and a
+// `read write` register with a `read` one overlap. A `read` and a `write`
+// register at one offset, or overlapping in part, are accepted. `p`, `q`
+// and `r` share the byte at 0x51: three errors, one per pair.
+peripheral Regs {
+    read a: u8 at 0,
+    read b: u8 at 0,
+    write c: u16 at 2,
+    write d: u16 at 2,
+    read write ctrl: u32 at 0x10,
+    read write flag: u8 at 0x12,
+    read write x: u8 at 0x20,
+    read y: u8 at 0x20,
+    read rbr: u8 at 0x30,
+    write thr: u8 at 0x30,
+    read wide: u32 at 0x40,
+    write narrow: u8 at 0x41,
+    read write p: u16 at 0x50,
+    read write q: u8 at 0x51,
+    read write r: u32 at 0x50,
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

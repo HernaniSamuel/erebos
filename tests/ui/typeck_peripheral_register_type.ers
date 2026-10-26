@@ -1,0 +1,23 @@
+// A register is a `u8`, a `u16` or a `u32` (ADR 0058): any other type is
+// `ty::register-type`, at the type, once per register. A register whose
+// type is wrong takes part in no other check: all of these are at offset 0
+// with `ok`, in `read write` mode, and none overlaps it, nor is `wide`
+// misaligned at 4. Register types that mention peripheral types are in
+// `typeck_peripheral_register_cycle.ers`.
+enum Mode: u8 { Off = 0, On = 1 }
+
+struct Pair { a: u8, b: u8 }
+
+peripheral Regs {
+    read write ok: u8 at 0,
+    read write wide: u64 at 4,
+    read write signed: i32 at 0,
+    read write size: usize at 0,
+    read write flag: bool at 0,
+    read write mode: Mode at 0,
+    read write pair: Pair at 0,
+    read write pointer: *mut u32 at 0,
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

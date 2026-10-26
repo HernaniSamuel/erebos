@@ -1,0 +1,23 @@
+// A peripheral ends at 2³² or below (ADR 0058): unlike a region, it needs
+// no address one past its end. `PAST` ends past 2³²:
+// `ty::peripheral-out-of-range` at its name. `EXACT` ends at 2³² and is
+// accepted, and so is `WHOLE`, at 0, whose type's `u32` at `0xFFFF_FFFC`
+// gives it an extent of 2³², the whole address space. A peripheral out of
+// range still takes part in the overlap checks: the three share the last
+// bytes of the address space, which is three errors.
+peripheral Block {
+    read write data: u32 at 0,
+    read write ctrl: u32 at 0xC,
+}
+
+peripheral Top {
+    read write first: u8 at 0,
+    read write last: u32 at 0xFFFF_FFFC,
+}
+
+peripheral PAST: Block at 0xFFFF_FFF8;
+peripheral EXACT: Block at 0xFFFF_FFF0;
+peripheral WHOLE: Top at 0;
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

@@ -1,0 +1,61 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_peripheral_out_of_range.ers
+---
+--- errors ---
+ty::peripheral-out-of-range
+
+  × the peripheral `PAST` ends past the address space
+    ╭─[typeck_peripheral_out_of_range.ers:18:12]
+ 17 │ 
+ 18 │ peripheral PAST: Block at 0xFFFF_FFF8;
+    ·            ──┬─
+    ·              ╰── covers [0xfffffff8, 0x100000008)
+ 19 │ peripheral EXACT: Block at 0xFFFF_FFF0;
+    ╰────
+  help: a peripheral covers `[address, address + extent)`, its type's extent being the end of its
+        last register, and ends at 2³² (0x100000000) or below (ADR 0058)
+ty::peripheral-overlap
+
+  × the peripherals `PAST` and `EXACT` overlap
+    ╭─[typeck_peripheral_out_of_range.ers:19:12]
+ 17 │ 
+ 18 │ peripheral PAST: Block at 0xFFFF_FFF8;
+    ·            ──┬─
+    ·              ╰── covers [0xfffffff8, 0x100000008)
+ 19 │ peripheral EXACT: Block at 0xFFFF_FFF0;
+    ·            ──┬──
+    ·              ╰── covers [0xfffffff0, 0x100000000)
+ 20 │ peripheral WHOLE: Top at 0;
+    ╰────
+  help: they share 8 bytes from 0xfffffff8; two peripherals cannot share a byte (ADR 0058)
+ty::peripheral-overlap
+
+  × the peripherals `PAST` and `WHOLE` overlap
+    ╭─[typeck_peripheral_out_of_range.ers:20:12]
+ 17 │ 
+ 18 │ peripheral PAST: Block at 0xFFFF_FFF8;
+    ·            ──┬─
+    ·              ╰── covers [0xfffffff8, 0x100000008)
+ 19 │ peripheral EXACT: Block at 0xFFFF_FFF0;
+ 20 │ peripheral WHOLE: Top at 0;
+    ·            ──┬──
+    ·              ╰── covers [0x0, 0x100000000)
+ 21 │ 
+    ╰────
+  help: they share 8 bytes from 0xfffffff8; two peripherals cannot share a byte (ADR 0058)
+ty::peripheral-overlap
+
+  × the peripherals `EXACT` and `WHOLE` overlap
+    ╭─[typeck_peripheral_out_of_range.ers:20:12]
+ 18 │ peripheral PAST: Block at 0xFFFF_FFF8;
+ 19 │ peripheral EXACT: Block at 0xFFFF_FFF0;
+    ·            ──┬──
+    ·              ╰── covers [0xfffffff0, 0x100000000)
+ 20 │ peripheral WHOLE: Top at 0;
+    ·            ──┬──
+    ·              ╰── covers [0x0, 0x100000000)
+ 21 │ 
+    ╰────
+  help: they share 16 bytes from 0xfffffff0; two peripherals cannot share a byte (ADR 0058)

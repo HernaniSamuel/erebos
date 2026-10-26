@@ -1,0 +1,11 @@
+// Two peripherals in two files that share bytes (ADR 0058): "later" is in
+// the order of files, numbered depth first (ADR 0049, 0057), then of
+// positions in a file. `board::UART` is gathered first, through the `mod`
+// before `CONSOLE`, but its file comes after the root file, so the error
+// is there, labeling `CONSOLE`.
+mod board;
+
+peripheral CONSOLE: board::Uart at 0x1000_0000;
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

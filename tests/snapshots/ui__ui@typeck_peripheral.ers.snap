@@ -1,0 +1,15 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_peripheral.ers
+---
+--- typeck ---
+peripheral Uart { read rbr: u8 at 0x0, write thr: u8 at 0x0, read write ier: u8 at 0x1, read write ctrl: u32 at 0xc, read write div: u16 at 0x2, read lsr: u8 at 0x5 } extent 16, align 4
+peripheral Empty {} extent 0, align 1
+peripheral UART0: Uart at 0x10000000 covers [0x10000000, 0x10000010)
+peripheral UART1: Uart at 0x10001000 covers [0x10001000, 0x10001010)
+peripheral NOTHING: Empty at 0x20000001 covers [0x20000001, 0x20000001)
+entry fn main() -> !
+    expr 0 loop 820..827: !
+panic fn on_panic() -> !
+    expr 1 loop 857..864: !

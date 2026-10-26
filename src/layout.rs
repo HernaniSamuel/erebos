@@ -3,7 +3,7 @@
 //! and `query` applies them on demand, laying out structs and enums with
 //! payloads for type checking, MIR building and the evaluator.
 
-use crate::hir::{EnumId, EnumTy, StructId, Ty};
+use crate::hir::{EnumId, EnumTy, IntTy, StructId, Ty};
 use crate::target;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -44,8 +44,51 @@ pub struct EnumLayout {
     pub over_aligned: bool,
 }
 
+/// The layout of a peripheral type (ADR 0058): where its registers are, and
+/// what a peripheral of it covers and must be aligned to. No value has a
+/// peripheral type, so it has no size.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PeripheralLayout {
+    /// The offset of each register, in declaration order.
+    pub offsets: Vec<u64>,
+    /// The end of its last register, `max(offset + width)`, and 0 with no
+    /// register. Computed exactly: a `u32` at `0xFFFF_FFFC` gives 2³²,
+    /// which is no `usize`.
+    pub extent: u64,
+    /// The width of its widest register, and 1 with no register.
+    pub align: u64,
+}
+
 /// The largest alignment `#[align(N)]` accepts: the address space itself.
 pub const MAX_ALIGN: u64 = 1 << (target::POINTER_BITS - 1);
+
+/// The width in bytes of a register of type `ty`, if it is a register type
+/// (ADR 0058): `u8`, `u16` or `u32`, an unsigned integer as wide as the
+/// register and at most as wide as the target's widest single access
+/// (ADR 0023).
+pub fn register_width(ty: Ty) -> Option<u64> {
+    const _: () = assert!(target::WIDEST_ACCESS_BITS >= 32);
+    match ty {
+        Ty::Int(int @ (IntTy::U8 | IntTy::U16 | IntTy::U32)) => Some(int.bytes()),
+        _ => None,
+    }
+}
+
+/// Lays out a peripheral type whose registers, in declaration order, have
+/// the offsets and widths in `registers` (ADR 0058).
+pub fn peripheral_layout(registers: &[(u64, u64)]) -> PeripheralLayout {
+    PeripheralLayout {
+        offsets: registers.iter().map(|&(offset, _)| offset).collect(),
+        extent: (registers.iter())
+            .map(|&(offset, width)| offset + width)
+            .max()
+            .unwrap_or(0),
+        align: (registers.iter())
+            .map(|&(_, width)| width)
+            .max()
+            .unwrap_or(1),
+    }
+}
 
 /// A type laid out by rules of its own, once, on demand: a struct
 /// (ADR 0022) or an enum with payloads (ADR 0039).
@@ -199,6 +242,34 @@ mod tests {
         let fits = enum_layout(int(1), &[vec![bytes(MAX_SIZE - 1)]]).unwrap();
         assert_eq!(fits.0.size, MAX_SIZE);
         assert_eq!(enum_layout(int(1), &[vec![bytes(u64::MAX)]]), None);
+    }
+
+    /// The 16550 UART of ADR 0058, an empty peripheral type, and a register
+    /// ending at 2³².
+    #[test]
+    fn peripheral_types_reach_to_their_last_register() {
+        let uart = peripheral_layout(&[(0, 1), (0, 1), (1, 1), (5, 1)]);
+        assert_eq!(uart.offsets, [0, 0, 1, 5]);
+        assert_eq!((uart.extent, uart.align), (6, 1));
+        let empty = peripheral_layout(&[]);
+        assert_eq!((empty.extent, empty.align), (0, 1));
+        // The widest register aligns it, the last to end gives its extent,
+        // in whatever order they are declared.
+        let mixed = peripheral_layout(&[(8, 1), (0, 4), (2, 2)]);
+        assert_eq!((mixed.extent, mixed.align), (9, 4));
+        let top = peripheral_layout(&[(0, 1), (0xFFFF_FFFC, 4)]);
+        assert_eq!((top.extent, top.align), (1 << 32, 4));
+    }
+
+    #[test]
+    fn registers_are_u8_u16_or_u32() {
+        assert_eq!(register_width(Ty::Int(IntTy::U8)), Some(1));
+        assert_eq!(register_width(Ty::Int(IntTy::U16)), Some(2));
+        assert_eq!(register_width(Ty::Int(IntTy::U32)), Some(4));
+        for int in [IntTy::U64, IntTy::Usize, IntTy::I8, IntTy::I32] {
+            assert_eq!(register_width(Ty::Int(int)), None);
+        }
+        assert_eq!(register_width(Ty::Bool), None);
     }
 
     #[test]

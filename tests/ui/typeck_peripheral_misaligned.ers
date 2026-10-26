@@ -1,0 +1,28 @@
+// A peripheral's address is a multiple of its type's alignment, the width
+// of its widest register (ADR 0058): `ty::misaligned-peripheral` at the
+// address, labeling the type. `WORD` must be aligned to 4 and `HALF` to 2;
+// `WORD_OK` is. A peripheral of a type of `u8` registers, or of an empty
+// one, may be anywhere.
+peripheral Word {
+    read write data: u32 at 0,
+    read status: u8 at 4,
+}
+
+peripheral Half {
+    read write data: u16 at 0,
+}
+
+peripheral Bytes {
+    read write data: u8 at 0,
+}
+
+peripheral Empty {}
+
+peripheral WORD: Word at 0x1000_0002;
+peripheral HALF: Half at 0x1000_0101;
+peripheral BYTES: Bytes at 0x1000_0203;
+peripheral EMPTY: Empty at 0x1000_0305;
+peripheral WORD_OK: Word at 0x1000_0404;
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

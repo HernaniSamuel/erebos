@@ -1,0 +1,90 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_peripheral_register_type.ers
+---
+--- errors ---
+ty::register-type
+
+  × `u64` is not a register type
+    ╭─[typeck_peripheral_register_type.ers:13:22]
+ 12 │     read write ok: u8 at 0,
+ 13 │     read write wide: u64 at 4,
+    ·                      ─┬─
+    ·                       ╰── the type of the register `wide`
+ 14 │     read write signed: i32 at 0,
+    ╰────
+  help: a register is a `u8`, a `u16` or a `u32`: an unsigned integer as wide as the register,
+        read and written in one access (ADR 0058)
+ty::register-type
+
+  × `i32` is not a register type
+    ╭─[typeck_peripheral_register_type.ers:14:24]
+ 13 │     read write wide: u64 at 4,
+ 14 │     read write signed: i32 at 0,
+    ·                        ─┬─
+    ·                         ╰── the type of the register `signed`
+ 15 │     read write size: usize at 0,
+    ╰────
+  help: a register is a `u8`, a `u16` or a `u32`: an unsigned integer as wide as the register,
+        read and written in one access (ADR 0058)
+ty::register-type
+
+  × `usize` is not a register type
+    ╭─[typeck_peripheral_register_type.ers:15:22]
+ 14 │     read write signed: i32 at 0,
+ 15 │     read write size: usize at 0,
+    ·                      ──┬──
+    ·                        ╰── the type of the register `size`
+ 16 │     read write flag: bool at 0,
+    ╰────
+  help: a register is a `u8`, a `u16` or a `u32`: an unsigned integer as wide as the register,
+        read and written in one access (ADR 0058)
+ty::register-type
+
+  × `bool` is not a register type
+    ╭─[typeck_peripheral_register_type.ers:16:22]
+ 15 │     read write size: usize at 0,
+ 16 │     read write flag: bool at 0,
+    ·                      ──┬─
+    ·                        ╰── the type of the register `flag`
+ 17 │     read write mode: Mode at 0,
+    ╰────
+  help: a register is a `u8`, a `u16` or a `u32`: an unsigned integer as wide as the register,
+        read and written in one access (ADR 0058)
+ty::register-type
+
+  × `Mode` is not a register type
+    ╭─[typeck_peripheral_register_type.ers:17:22]
+ 16 │     read write flag: bool at 0,
+ 17 │     read write mode: Mode at 0,
+    ·                      ──┬─
+    ·                        ╰── the type of the register `mode`
+ 18 │     read write pair: Pair at 0,
+    ╰────
+  help: a register is a `u8`, a `u16` or a `u32`: an unsigned integer as wide as the register,
+        read and written in one access (ADR 0058)
+ty::register-type
+
+  × `Pair` is not a register type
+    ╭─[typeck_peripheral_register_type.ers:18:22]
+ 17 │     read write mode: Mode at 0,
+ 18 │     read write pair: Pair at 0,
+    ·                      ──┬─
+    ·                        ╰── the type of the register `pair`
+ 19 │     read write pointer: *mut u32 at 0,
+    ╰────
+  help: a register is a `u8`, a `u16` or a `u32`: an unsigned integer as wide as the register,
+        read and written in one access (ADR 0058)
+ty::register-type
+
+  × `*mut u32` is not a register type
+    ╭─[typeck_peripheral_register_type.ers:19:25]
+ 18 │     read write pair: Pair at 0,
+ 19 │     read write pointer: *mut u32 at 0,
+    ·                         ────┬───
+    ·                             ╰── the type of the register `pointer`
+ 20 │ }
+    ╰────
+  help: a register is a `u8`, a `u16` or a `u32`: an unsigned integer as wide as the register,
+        read and written in one access (ADR 0058)

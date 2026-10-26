@@ -1,0 +1,15 @@
+// A register's offset is a multiple of its width (ADR 0058):
+// `ty::misaligned-register` at the offset, labeling the type. A `u32` at
+// 0x12 and a `u16` at 7 are misaligned; a `u8` at an odd offset, a `u16` at
+// 6 and a `u32` at 8 are not. A misaligned register still takes part in
+// the overlap checks: `low` shares a byte with `half` and one with `word`.
+peripheral Regs {
+    read write byte: u8 at 1,
+    read write half: u16 at 6,
+    read write word: u32 at 8,
+    read write wide: u32 at 0x12,
+    read write low: u16 at 0x7,
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

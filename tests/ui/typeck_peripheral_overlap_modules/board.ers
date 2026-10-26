@@ -1,0 +1,7 @@
+pub peripheral Uart {
+    pub read rbr: u8 at 0,
+    pub write thr: u8 at 0,
+    read lsr: u8 at 5,
+}
+
+pub peripheral UART: Uart at 0x1000_0004;

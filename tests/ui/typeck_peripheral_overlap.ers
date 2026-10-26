@@ -1,0 +1,27 @@
+// Two peripherals may not share a byte (ADR 0058): `ty::peripheral-overlap`,
+// once per pair, at the later peripheral, labeling the earlier. `UART1`
+// shares 4 bytes with `UART0`, and `LAST`, of another type, one byte with
+// `UART2`; `UART2` touches `UART1` at its end and is accepted. `NOTHING`,
+// of an empty peripheral type, covers no byte, so it overlaps nothing,
+// though it is inside `UART0`.
+peripheral Uart {
+    read rbr: u8 at 0,
+    write thr: u8 at 0,
+    read lsr: u8 at 5,
+    read write scr: u8 at 7,
+}
+
+peripheral Status {
+    read flags: u8 at 0,
+}
+
+peripheral Empty {}
+
+peripheral UART0: Uart at 0x1000_0000;
+peripheral UART1: Uart at 0x1000_0004;
+peripheral UART2: Uart at 0x1000_000C;
+peripheral LAST: Status at 0x1000_0013;
+peripheral NOTHING: Empty at 0x1000_0002;
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

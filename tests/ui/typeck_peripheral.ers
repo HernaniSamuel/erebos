@@ -1,0 +1,25 @@
+// emit: typeck
+// The layout of a peripheral type (ADR 0058): each register at its offset,
+// the extent the end of the register ending last, wherever it is declared,
+// and the alignment the width of the widest register. `rbr` and `thr`, a
+// `read` and a `write` register, share offset 0. A peripheral covers
+// `[address, address + extent)`; two peripherals of one type are two
+// instances of one design. An empty peripheral type has extent 0 and
+// alignment 1.
+peripheral Uart {
+    read rbr: u8 at 0,
+    write thr: u8 at 0,
+    read write ier: u8 at 1,
+    read write ctrl: u32 at 0xC,
+    read write div: u16 at 2,
+    pub read lsr: u8 at 5,
+}
+
+peripheral Empty {}
+
+peripheral UART0: Uart at 0x1000_0000;
+peripheral UART1: Uart at 0x1000_1000;
+peripheral NOTHING: Empty at 0x2000_0001;
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

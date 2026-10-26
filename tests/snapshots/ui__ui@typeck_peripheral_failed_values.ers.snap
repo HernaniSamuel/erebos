@@ -1,0 +1,101 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_peripheral_failed_values.ers
+---
+--- errors ---
+eval::panic
+
+  × the evaluation called the panic function: division by zero
+    ╭─[typeck_peripheral_failed_values.ers:29:25]
+ 28 │ peripheral Failed {
+ 29 │     read write a: u8 at 4 / zero(),
+    ·                         ─────┬────┬
+    ·                              │    ╰── while evaluating this value
+    ·                              ╰── division by zero
+ 30 │     read write b: [u8; 4 / zero()] at 1,
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::panic
+
+  × the evaluation called the panic function: division by zero
+    ╭─[typeck_peripheral_failed_values.ers:30:24]
+ 29 │     read write a: u8 at 4 / zero(),
+ 30 │     read write b: [u8; 4 / zero()] at 1,
+    ·                        ─────┬────┬
+    ·                             │    ╰── while evaluating this value
+    ·                             ╰── division by zero
+ 31 │     read c: ! at 0,
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+ty::never-in-memory
+
+  × `!` is not a type of memory
+    ╭─[typeck_peripheral_failed_values.ers:31:13]
+ 30 │     read write b: [u8; 4 / zero()] at 1,
+ 31 │     read c: ! at 0,
+    ·             ┬
+    ·             ╰── `!` as the type of a register
+ 32 │     read write d: u32 at 0,
+    ╰────
+  help: `!` is the type of expressions that do not finish, so no memory holds one; a register is a
+        `u8`, a `u16` or a `u32` (ADR 0058)
+ty::register-type
+
+  × `u64` is not a register type
+    ╭─[typeck_peripheral_failed_values.ers:41:22]
+ 40 │ peripheral Wrong {
+ 41 │     read write wide: u64 at 0,
+    ·                      ─┬─
+    ·                       ╰── the type of the register `wide`
+ 42 │ }
+    ╰────
+  help: a register is a `u8`, a `u16` or a `u32`: an unsigned integer as wide as the register,
+        read and written in one access (ADR 0058)
+ty::register-type
+
+  × `u64` is not a register type
+    ╭─[typeck_peripheral_failed_values.ers:50:19]
+ 49 │ peripheral B {
+ 50 │     read write s: u64 at 0,
+    ·                   ─┬─
+    ·                    ╰── the type of the register `s`
+ 51 │ }
+    ╰────
+  help: a register is a `u8`, a `u16` or a `u32`: an unsigned integer as wide as the register,
+        read and written in one access (ADR 0058)
+ty::register-type
+
+  × `u64` is not a register type
+    ╭─[typeck_peripheral_failed_values.ers:70:19]
+ 69 │ peripheral X {
+ 70 │     read write s: u64 at 0,
+    ·                   ─┬─
+    ·                    ╰── the type of the register `s`
+ 71 │ }
+    ╰────
+  help: a register is a `u8`, a `u16` or a `u32`: an unsigned integer as wide as the register,
+        read and written in one access (ADR 0058)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_peripheral_failed_values.ers:85:27]
+ 84 │ peripheral UART: Uart at 16;
+ 85 │ peripheral TYPED: Uart at SIXTEEN;
+    ·                           ───┬───
+    ·                              ╰── expected `usize`, found `u32`
+ 86 │ peripheral ZERO: Uart at 16 + 0 / zero();
+    ╰────
+  help: integer types never convert implicitly; use `as usize` (ADR 0008)
+eval::panic
+
+  × the evaluation called the panic function: division by zero
+    ╭─[typeck_peripheral_failed_values.ers:86:31]
+ 85 │ peripheral TYPED: Uart at SIXTEEN;
+ 86 │ peripheral ZERO: Uart at 16 + 0 / zero();
+    ·                          ───────┬───────┬
+    ·                                 │       ╰── division by zero
+    ·                                 ╰── while evaluating this value
+ 87 │ 
+    ╰────
+  help: this code runs at compile time (ADR 0027)

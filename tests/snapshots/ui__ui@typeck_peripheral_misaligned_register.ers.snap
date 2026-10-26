@@ -1,0 +1,65 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_peripheral_misaligned_register.ers
+---
+--- errors ---
+ty::misaligned-register
+
+  × the register `wide` is at a misaligned offset
+    ╭─[typeck_peripheral_misaligned_register.ers:10:29]
+  9 │     read write word: u32 at 8,
+ 10 │     read write wide: u32 at 0x12,
+    ·                      ─┬─    ──┬─
+    ·                       │       ╰── 0x12 is not a multiple of 4
+    ·                       ╰── `u32` is 4 bytes wide
+ 11 │     read write low: u16 at 0x7,
+    ╰────
+  help: a register's offset is a multiple of its width, so that each access to it, one
+        instruction, is aligned (ADR 0023, 0058)
+ty::register-overlap
+
+  × the registers `half` and `low` overlap
+    ╭─[typeck_peripheral_misaligned_register.ers:11:16]
+  7 │     read write byte: u8 at 1,
+  8 │     read write half: u16 at 6,
+    ·                ──┬─
+    ·                  ╰── `read write`, covers [0x6, 0x8)
+  9 │     read write word: u32 at 8,
+ 10 │     read write wide: u32 at 0x12,
+ 11 │     read write low: u16 at 0x7,
+    ·                ─┬─
+    ·                 ╰── `read write`, covers [0x7, 0x9)
+ 12 │ }
+    ╰────
+  help: they share the byte at 0x7; two registers share a byte only when one is `read` and the
+        other `write`, so that a read means one and a write the other (ADR 0058)
+ty::register-overlap
+
+  × the registers `word` and `low` overlap
+    ╭─[typeck_peripheral_misaligned_register.ers:11:16]
+  8 │     read write half: u16 at 6,
+  9 │     read write word: u32 at 8,
+    ·                ──┬─
+    ·                  ╰── `read write`, covers [0x8, 0xc)
+ 10 │     read write wide: u32 at 0x12,
+ 11 │     read write low: u16 at 0x7,
+    ·                ─┬─
+    ·                 ╰── `read write`, covers [0x7, 0x9)
+ 12 │ }
+    ╰────
+  help: they share the byte at 0x8; two registers share a byte only when one is `read` and the
+        other `write`, so that a read means one and a write the other (ADR 0058)
+ty::misaligned-register
+
+  × the register `low` is at a misaligned offset
+    ╭─[typeck_peripheral_misaligned_register.ers:11:28]
+ 10 │     read write wide: u32 at 0x12,
+ 11 │     read write low: u16 at 0x7,
+    ·                     ─┬─    ─┬─
+    ·                      │      ╰── 0x7 is not a multiple of 2
+    ·                      ╰── `u16` is 2 bytes wide
+ 12 │ }
+    ╰────
+  help: a register's offset is a multiple of its width, so that each access to it, one
+        instruction, is aligned (ADR 0023, 0058)

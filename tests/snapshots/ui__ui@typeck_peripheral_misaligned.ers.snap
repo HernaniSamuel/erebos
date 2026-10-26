@@ -1,0 +1,32 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_peripheral_misaligned.ers
+---
+--- errors ---
+ty::misaligned-peripheral
+
+  × the peripheral `WORD` is at a misaligned address
+    ╭─[typeck_peripheral_misaligned.ers:21:26]
+ 20 │ 
+ 21 │ peripheral WORD: Word at 0x1000_0002;
+    ·                  ──┬─    ─────┬─────
+    ·                    │          ╰── 0x10000002 is not a multiple of 4
+    ·                    ╰── `Word` has alignment 4
+ 22 │ peripheral HALF: Half at 0x1000_0101;
+    ╰────
+  help: a peripheral's address is a multiple of its type's alignment, the width of its widest
+        register, so that every register is accessed aligned (ADR 0058)
+ty::misaligned-peripheral
+
+  × the peripheral `HALF` is at a misaligned address
+    ╭─[typeck_peripheral_misaligned.ers:22:26]
+ 21 │ peripheral WORD: Word at 0x1000_0002;
+ 22 │ peripheral HALF: Half at 0x1000_0101;
+    ·                  ──┬─    ─────┬─────
+    ·                    │          ╰── 0x10000101 is not a multiple of 2
+    ·                    ╰── `Half` has alignment 2
+ 23 │ peripheral BYTES: Bytes at 0x1000_0203;
+    ╰────
+  help: a peripheral's address is a multiple of its type's alignment, the width of its widest
+        register, so that every register is accessed aligned (ADR 0058)

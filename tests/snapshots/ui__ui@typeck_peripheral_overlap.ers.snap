@@ -1,0 +1,34 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_peripheral_overlap.ers
+---
+--- errors ---
+ty::peripheral-overlap
+
+  × the peripherals `UART0` and `UART1` overlap
+    ╭─[typeck_peripheral_overlap.ers:21:12]
+ 19 │ 
+ 20 │ peripheral UART0: Uart at 0x1000_0000;
+    ·            ──┬──
+    ·              ╰── covers [0x10000000, 0x10000008)
+ 21 │ peripheral UART1: Uart at 0x1000_0004;
+    ·            ──┬──
+    ·              ╰── covers [0x10000004, 0x1000000c)
+ 22 │ peripheral UART2: Uart at 0x1000_000C;
+    ╰────
+  help: they share 4 bytes from 0x10000004; two peripherals cannot share a byte (ADR 0058)
+ty::peripheral-overlap
+
+  × the peripherals `UART2` and `LAST` overlap
+    ╭─[typeck_peripheral_overlap.ers:23:12]
+ 21 │ peripheral UART1: Uart at 0x1000_0004;
+ 22 │ peripheral UART2: Uart at 0x1000_000C;
+    ·            ──┬──
+    ·              ╰── covers [0x1000000c, 0x10000014)
+ 23 │ peripheral LAST: Status at 0x1000_0013;
+    ·            ──┬─
+    ·              ╰── covers [0x10000013, 0x10000014)
+ 24 │ peripheral NOTHING: Empty at 0x1000_0002;
+    ╰────
+  help: they share the byte at 0x10000013; two peripherals cannot share a byte (ADR 0058)

@@ -3039,16 +3039,61 @@ impl Checker<'_, '_> {
     }
 }
 
-/// Lists the memory map with its values (ADR 0057), struct layouts, enums
-/// with their values and, with payloads, their layouts, `Option(T)` and
-/// `Result(T, E)` among them, then every function's locals and expression
-/// types, for `--emit=typeck`.
+/// Lists the memory map with its values (ADR 0057), peripheral types with
+/// their layouts and peripherals with their addresses (ADR 0058), struct
+/// layouts, enums with their values and, with payloads, their layouts,
+/// `Option(T)` and `Result(T, E)` among them, then every function's locals
+/// and expression types, for `--emit=typeck`.
 pub fn dump(q: &mut Queries) -> String {
     let hir = q.hir;
     let mut out = String::new();
     // Left out if a value failed, which was reported.
     if let Some(memory) = q.memory_map() {
         write!(out, "{memory}").unwrap();
+    }
+    // Those reaching a failed value, reported, and `core`'s are left out.
+    for (i, def) in hir.peripheral_types.iter().enumerate() {
+        if hir.in_core(def.module) {
+            continue;
+        }
+        let Some(layout) = q.peripheral_layout(hir::PeripheralTypeId(i as u32)) else {
+            continue;
+        };
+        let registers: Vec<String> = (def.registers.iter())
+            .zip(&layout.offsets)
+            .map(|(register, offset)| {
+                let ty = q.normalize(register.ty);
+                let access = register.access.words();
+                format!("{access} {}: {ty} at {offset:#x}", register.name)
+            })
+            .collect();
+        let registers = if registers.is_empty() {
+            "{}".to_owned()
+        } else {
+            format!("{{ {} }}", registers.join(", "))
+        };
+        writeln!(
+            out,
+            "peripheral {} {registers} extent {}, align {}",
+            def.path, layout.extent, layout.align
+        )
+        .unwrap();
+    }
+    for (i, def) in hir.peripherals.iter().enumerate() {
+        if hir.in_core(def.module) {
+            continue;
+        }
+        let Some((address, layout)) = q.placed_peripheral(hir::PeripheralId(i as u32)) else {
+            continue;
+        };
+        writeln!(
+            out,
+            "peripheral {}: {} at {address:#x} covers [{address:#x}, {:#x})",
+            def.path,
+            def.ty,
+            address + layout.extent
+        )
+        .unwrap();
     }
     // `core` is left out (ADR 0052).
     for (i, def) in hir.structs.iter().enumerate() {
