@@ -234,6 +234,8 @@ impl<'h> Queries<'h> {
         let hir = self.hir;
         ty::report_never_in_memory(self);
         ty::report_unsized_types(self);
+        ty::report_peripherals_by_value(self);
+        ty::report_volatile_peripherals(self);
         for id in 0..hir.structs.len() {
             self.struct_layout(StructId(id as u32));
         }
@@ -1554,6 +1556,7 @@ impl<'h> Queries<'h> {
                 let ty = self.normalize(ty);
                 self.mir_ty(ty)
             }
+            hir::Ty::Peripheral(_) => todo!("M3.2 step 5: pointers to peripheral types in MIR"),
             hir::Ty::Error => unreachable!("MIR is only built for well-typed programs"),
         }
     }

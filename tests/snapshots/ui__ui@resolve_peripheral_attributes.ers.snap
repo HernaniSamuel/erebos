@@ -1,0 +1,72 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/resolve_peripheral_attributes.ers
+---
+--- errors ---
+resolve::misplaced-attribute
+
+  × `#[packed]` applies only to structs
+   ╭─[resolve_peripheral_attributes.ers:4:1]
+ 3 │ // those of other items are misplaced there, any other is unknown.
+ 4 │ #[packed]
+   · ────┬────
+   ·     ╰── not allowed on a peripheral type
+ 5 │ #[align(4)]
+   ╰────
+resolve::misplaced-attribute
+
+  × `#[align]` applies only to structs and statics
+   ╭─[resolve_peripheral_attributes.ers:5:1]
+ 4 │ #[packed]
+ 5 │ #[align(4)]
+   · ─────┬─────
+   ·      ╰── not allowed on a peripheral type
+ 6 │ #[section]
+   ╰────
+resolve::unknown-attribute
+
+  × unknown attribute `#[section]`
+   ╭─[resolve_peripheral_attributes.ers:6:3]
+ 5 │ #[align(4)]
+ 6 │ #[section]
+   ·   ───┬───
+   ·      ╰── not an attribute
+ 7 │ peripheral Uart {
+   ╰────
+  help: the attributes are `#[packed]` and `#[align(N)]` on structs (ADR 0022), `#[align(N)]` on
+        statics (ADR 0030), and `#[export]` on functions and statics (ADR 0051)
+resolve::misplaced-attribute
+
+  × `#[export]` applies only to functions and statics defined in the program
+    ╭─[resolve_peripheral_attributes.ers:11:1]
+ 10 │ 
+ 11 │ #[export]
+    · ────┬────
+    ·     ╰── not allowed on a peripheral
+ 12 │ #[align(4)]
+    ╰────
+  help: `#[export]` gives a function or static its own name as its symbol; an `extern` item always
+        has its own name (ADR 0051)
+resolve::misplaced-attribute
+
+  × `#[align]` applies only to structs and statics
+    ╭─[resolve_peripheral_attributes.ers:12:1]
+ 11 │ #[export]
+ 12 │ #[align(4)]
+    · ─────┬─────
+    ·      ╰── not allowed on a peripheral
+ 13 │ #[mmio]
+    ╰────
+resolve::unknown-attribute
+
+  × unknown attribute `#[mmio]`
+    ╭─[resolve_peripheral_attributes.ers:13:3]
+ 12 │ #[align(4)]
+ 13 │ #[mmio]
+    ·   ──┬─
+    ·     ╰── not an attribute
+ 14 │ peripheral UART0: Uart at 0x1000_0000;
+    ╰────
+  help: the attributes are `#[packed]` and `#[align(N)]` on structs (ADR 0022), `#[align(N)]` on
+        statics (ADR 0030), and `#[export]` on functions and statics (ADR 0051)

@@ -1,0 +1,65 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/resolve_peripheral_not_a_type.ers
+---
+--- errors ---
+resolve::not-a-peripheral-type
+
+  × the type of the peripheral `A` is not a peripheral type
+    ╭─[resolve_peripheral_not_a_type.ers:14:15]
+ 13 │ 
+ 14 │ peripheral A: Regs at 0x1000_0000;
+    ·               ──┬─
+    ·                 ╰── a struct, not a peripheral type
+ 15 │ peripheral B: u32 at 0x1000_1000;
+    ╰────
+  help: a peripheral places a device's registers at an address: its type is declared as
+        `peripheral NAME { registers }`, and a pointer to one is written in code, as `*mut NAME`
+        (ADR 0058)
+resolve::not-a-peripheral-type
+
+  × the type of the peripheral `B` is not a peripheral type
+    ╭─[resolve_peripheral_not_a_type.ers:15:15]
+ 14 │ peripheral A: Regs at 0x1000_0000;
+ 15 │ peripheral B: u32 at 0x1000_1000;
+    ·               ─┬─
+    ·                ╰── a built-in type, not a peripheral type
+ 16 │ peripheral C: *mut Uart at 0x1000_2000;
+    ╰────
+  help: a peripheral places a device's registers at an address: its type is declared as
+        `peripheral NAME { registers }`, and a pointer to one is written in code, as `*mut NAME`
+        (ADR 0058)
+resolve::not-a-peripheral-type
+
+  × the type of the peripheral `C` is not a peripheral type
+    ╭─[resolve_peripheral_not_a_type.ers:16:15]
+ 15 │ peripheral B: u32 at 0x1000_1000;
+ 16 │ peripheral C: *mut Uart at 0x1000_2000;
+    ·               ────┬────
+    ·                   ╰── a pointer type, not a peripheral type
+ 17 │ peripheral D: Nothing at 0x1000_3000;
+    ╰────
+  help: a peripheral places a device's registers at an address: its type is declared as
+        `peripheral NAME { registers }`, and a pointer to one is written in code, as `*mut NAME`
+        (ADR 0058)
+resolve::unknown-type
+
+  × unknown type `Nothing`
+    ╭─[resolve_peripheral_not_a_type.ers:17:15]
+ 16 │ peripheral C: *mut Uart at 0x1000_2000;
+ 17 │ peripheral D: Nothing at 0x1000_3000;
+    ·               ───┬───
+    ·                  ╰── not a type
+ 18 │ peripheral E: BASE at 0x1000_4000;
+    ╰────
+resolve::unknown-type
+
+  × unknown type `BASE`
+    ╭─[resolve_peripheral_not_a_type.ers:18:15]
+ 17 │ peripheral D: Nothing at 0x1000_3000;
+ 18 │ peripheral E: BASE at 0x1000_4000;
+    ·               ──┬─
+    ·                 ╰── a constant, not a type
+ 19 │ 
+    ╰────

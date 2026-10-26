@@ -1,0 +1,29 @@
+// emit: hir
+// Peripheral types and peripherals (ADR 0058): a peripheral type in a
+// module, with `pub` and private registers, whose offsets name a constant
+// of that module; peripherals of it in another module, its type named
+// through a path and through `use`, their addresses naming a constant of
+// their own module. Each offset and address computed from a constant gets
+// a body of its own; a literal is known.
+mod uart {
+    const LSR: usize = 5;
+
+    pub peripheral Uart16550 {
+        pub read rbr: u8 at 0,
+        pub write thr: u8 at 0,
+        read write ier: u8 at 1,
+        read lsr: u8 at LSR,
+    }
+}
+
+mod board {
+    use crate::uart::Uart16550;
+
+    const UART1_BASE: usize = 0x1000_1000;
+
+    pub peripheral UART0: crate::uart::Uart16550 at 0x1000_0000;
+    peripheral UART1: Uart16550 at UART1_BASE;
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

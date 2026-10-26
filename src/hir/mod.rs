@@ -11,6 +11,7 @@ use std::fmt;
 pub use crate::int::IntTy;
 pub use crate::ops::{BinOp, LogicalOp, UnOp};
 use crate::span::Span;
+pub use crate::syntax::ast::AccessMode;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct FnId(pub u32);
@@ -39,6 +40,14 @@ pub struct StructId(pub u32);
 /// An enum, indexing [`Hir::enums`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct EnumId(pub u32);
+
+/// A peripheral type, indexing [`Hir::peripheral_types`] (ADR 0058).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct PeripheralTypeId(pub u32);
+
+/// A peripheral, indexing [`Hir::peripherals`] (ADR 0058).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct PeripheralId(pub u32);
 
 /// A module, indexing [`Hir::modules`]; the root module is `ModuleId(0)`
 /// (ADR 0049).
@@ -85,12 +94,21 @@ pub struct Hir {
     /// The program's `memory` block (ADR 0057); `None` without one, or when
     /// its placements could not be resolved, which was reported.
     pub memory: Option<MemoryMap>,
+    pub peripheral_types: Vec<PeripheralTypeDef>,
+    pub peripherals: Vec<PeripheralDef>,
     /// Each `!` written where it would be the type of memory, whose type
     /// was lowered as `{error}`; the type checker reports them (ADR 0034).
     pub never_in_memory: Vec<NeverInMemory>,
     /// Each `[T]` written where a size is needed, whose type was lowered
     /// as `{error}`; the type checker reports them (ADR 0031).
     pub unsized_types: Vec<UnsizedType>,
+    /// Each peripheral type written where a value would have it, whose
+    /// type was lowered as `{error}`; the type checker reports them
+    /// (ADR 0058).
+    pub peripherals_by_value: Vec<PeripheralByValue>,
+    /// Each pointer to a peripheral type written `volatile`, lowered as the
+    /// pointer without it; the type checker reports them (ADR 0058).
+    pub volatile_peripherals: Vec<VolatilePeripheral>,
     /// Each `Option(T)` and `Result(T, E)` written, with its span: one too
     /// large for the target is reported at each, having no declaration to
     /// be reported at (ADR 0045).
@@ -155,6 +173,8 @@ pub struct CoreStart {
     pub expr: u32,
     pub never_in_memory: usize,
     pub unsized_types: usize,
+    pub peripherals_by_value: usize,
+    pub volatile_peripherals: usize,
     pub applications: usize,
     /// The index of `core`'s root file in `Hir::files`: every file from it
     /// on is `core`'s.
@@ -192,8 +212,12 @@ impl Hir {
             statics: Vec<&'a StaticDef>,
             comptime_blocks: Vec<FnId>,
             memory: Option<&'a MemoryMap>,
+            peripheral_types: Vec<&'a PeripheralTypeDef>,
+            peripherals: Vec<&'a PeripheralDef>,
             never_in_memory: &'a [NeverInMemory],
             unsized_types: &'a [UnsizedType],
+            peripherals_by_value: &'a [PeripheralByValue],
+            volatile_peripherals: &'a [VolatilePeripheral],
             applications: &'a [(Span, Ty)],
             entry: FnId,
             panic: FnId,
@@ -221,8 +245,16 @@ impl Hir {
                 .filter(|&id| !self.in_core(self.fn_(id).module))
                 .collect(),
             memory: self.memory.as_ref(),
+            peripheral_types: (self.peripheral_types.iter())
+                .filter(|p| !self.in_core(p.module))
+                .collect(),
+            peripherals: (self.peripherals.iter())
+                .filter(|p| !self.in_core(p.module))
+                .collect(),
             never_in_memory: &self.never_in_memory[..core.never_in_memory],
             unsized_types: &self.unsized_types[..core.unsized_types],
+            peripherals_by_value: &self.peripherals_by_value[..core.peripherals_by_value],
+            volatile_peripherals: &self.volatile_peripherals[..core.volatile_peripherals],
             applications: &self.applications[..core.applications],
             entry: self.entry,
             panic: self.panic,
@@ -256,6 +288,14 @@ impl Hir {
 
     pub fn static_(&self, id: StaticId) -> &StaticDef {
         &self.statics[id.0 as usize]
+    }
+
+    pub fn peripheral_type(&self, id: PeripheralTypeId) -> &PeripheralTypeDef {
+        &self.peripheral_types[id.0 as usize]
+    }
+
+    pub fn peripheral(&self, id: PeripheralId) -> &PeripheralDef {
+        &self.peripherals[id.0 as usize]
     }
 
     /// Whether the field `index` of the struct `id` is visible from
@@ -391,6 +431,87 @@ pub struct Placement {
     pub span: Span,
 }
 
+/// `peripheral NAME { registers }` (ADR 0058): a device's registers, a
+/// type that only a peripheral and the pointee of a pointer have. Its
+/// values are computed at compile time in the scope of its module, as
+/// those of the `memory` block are.
+#[derive(Debug)]
+pub struct PeripheralTypeDef {
+    /// Its path from the root module, as diagnostics and dumps show the
+    /// type (ADR 0049).
+    pub path: String,
+    pub name_span: Span,
+    pub module: ModuleId,
+    pub vis: Visibility,
+    /// The modules it is reachable from, in id order, as a struct's
+    /// (ADR 0050): its `pub` registers are visible there.
+    pub reachable: Vec<ModuleId>,
+    /// In source order; a name declared twice was reported.
+    pub registers: Vec<RegisterDef>,
+}
+
+impl PeripheralTypeDef {
+    /// Whether a path written in `module` can name it (ADR 0050).
+    pub fn reachable_from(&self, module: ModuleId) -> bool {
+        self.reachable.contains(&module)
+    }
+}
+
+/// `[pub] ACCESS NAME: Type at OFFSET`, a register (ADR 0058).
+#[derive(Debug)]
+pub struct RegisterDef {
+    pub name: String,
+    /// The span of its name.
+    pub span: Span,
+    /// Private unless written `pub`, as a field (ADR 0050, 0058).
+    pub vis: Visibility,
+    pub access: AccessMode,
+    pub ty: Ty,
+    pub ty_span: Span,
+    /// From the start of its peripheral, with the span of its expression.
+    pub offset: (ArrayLen, Span),
+}
+
+/// `peripheral NAME: Type at ADDRESS;` (ADR 0058): an instance of a
+/// peripheral type at an address, a place named like a static, with no
+/// storage of its own.
+#[derive(Debug)]
+pub struct PeripheralDef {
+    /// Its path from the root module, as diagnostics and dumps show it
+    /// (ADR 0049).
+    pub path: String,
+    pub name_span: Span,
+    pub module: ModuleId,
+    pub vis: Visibility,
+    /// The peripheral type it is of, `Ty::Peripheral`; `{error}` when what
+    /// is written is no peripheral type, which was reported.
+    pub ty: Ty,
+    pub ty_span: Span,
+    /// With the span of its expression.
+    pub address: (ArrayLen, Span),
+}
+
+/// A peripheral type written where a value would have it (ADR 0058), at
+/// one of the positions where `[T]` would need a size (ADR 0031).
+#[derive(Clone, Copy, Debug)]
+pub struct PeripheralByValue {
+    /// The span of the type's path.
+    pub span: Span,
+    /// The peripheral type written.
+    pub ty: Ty,
+    pub position: UnsizedPosition,
+}
+
+/// `*mut volatile T` or `*const volatile T` with `T` a peripheral type
+/// (ADR 0058).
+#[derive(Clone, Copy, Debug)]
+pub struct VolatilePeripheral {
+    /// The span of the pointer type.
+    pub span: Span,
+    /// The pointer type, as lowered: without `volatile`.
+    pub ty: Ty,
+}
+
 /// A `!` written where memory would have its type (ADR 0034).
 #[derive(Clone, Copy, Debug)]
 pub struct NeverInMemory {
@@ -415,6 +536,8 @@ pub enum NeverPosition {
     /// The type of a `static` or `extern static`.
     Static,
     Const,
+    /// The type of a register of a peripheral type (ADR 0058).
+    Register,
     /// The operand of `size_of`, `align_of` or `offset_of`, named.
     LayoutQuery(&'static str),
 }
@@ -454,7 +577,8 @@ pub enum Comptime {
     Discriminant(EnumId, u32),
     /// A `usize` the program needs at compile time: an array length, a
     /// repeat count, the argument of `#[align]`, a value of the `memory`
-    /// block (ADR 0057).
+    /// block (ADR 0057), a register's offset or a peripheral's address
+    /// (ADR 0058).
     Value,
 }
 
@@ -756,6 +880,9 @@ pub enum Ty {
     /// `Option(T)` or `Result(T, E)` as written (ADR 0045); normalizing it
     /// makes it the enum it is for its arguments.
     Applied(Applied),
+    /// A peripheral type (ADR 0058): the type of a peripheral, or the
+    /// pointee of a pointer, never the type of a value.
+    Peripheral(PeripheralTy),
     /// Produced only by the type checker after reporting an error, so one
     /// mistake does not cascade into more. Compatible with every type.
     Error,
@@ -802,6 +929,13 @@ impl fmt::Display for ArrayLen {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct StructTy {
     pub id: StructId,
+    pub name: &'static str,
+}
+
+/// A peripheral type (ADR 0058), its name carried along like a struct's.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PeripheralTy {
+    pub id: PeripheralTypeId,
     pub name: &'static str,
 }
 
@@ -916,6 +1050,7 @@ impl fmt::Display for Ty {
             Ty::Slice(elem) => write!(f, "[{elem}]"),
             Ty::Struct(s) => f.write_str(s.name),
             Ty::Enum(e) => f.write_str(e.name),
+            Ty::Peripheral(p) => f.write_str(p.name),
             Ty::Applied(applied) => {
                 let args: Vec<String> = applied.args.iter().map(Ty::to_string).collect();
                 write!(f, "{}({})", applied.builtin.name(), args.join(", "))
@@ -964,6 +1099,8 @@ pub enum ExprKind {
     Const(ConstId),
     /// A static (ADR 0030): a place.
     Static(StaticId),
+    /// A peripheral (ADR 0058): a place of its peripheral type.
+    Peripheral(PeripheralId),
     /// `Enum::Variant`, by index (ADR 0035): a value, not a place, like a
     /// constant. With its arguments, `Enum::Variant(args)`, if written with
     /// parentheses: the values of its payload, in order (ADR 0039).
@@ -1141,6 +1278,7 @@ impl Expr {
             | ExprKind::OffsetOf(..)
             | ExprKind::Const(_)
             | ExprKind::Static(_)
+            | ExprKind::Peripheral(_)
             | ExprKind::Variant(_, _, None)
             | ExprKind::ContextVariant(_, _, None)
             | ExprKind::Local(_)

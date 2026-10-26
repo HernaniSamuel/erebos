@@ -1,0 +1,17 @@
+// emit: hir
+// Attributes do not apply to peripheral types or peripherals (ADR 0058):
+// those of other items are misplaced there, any other is unknown.
+#[packed]
+#[align(4)]
+#[section]
+peripheral Uart {
+    read write data: u8 at 0,
+}
+
+#[export]
+#[align(4)]
+#[mmio]
+peripheral UART0: Uart at 0x1000_0000;
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

@@ -1,0 +1,80 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/resolve_peripheral_names.ers
+---
+--- errors ---
+resolve::duplicate-item
+
+  × `Regs` is defined more than once
+    ╭─[resolve_peripheral_names.ers:9:12]
+  6 │ // type's name; a peripheral is no type.
+  7 │ struct Regs { data: u32 }
+    ·        ──┬─
+    ·          ╰── first defined here
+  8 │ 
+  9 │ peripheral Regs {
+    ·            ──┬─
+    ·              ╰── redefined here
+ 10 │     read write data: u32 at 0,
+    ╰────
+  help: functions, structs, enums, constants, statics, peripheral types and peripherals share one
+        namespace (ADR 0029, 0030, 0035, 0058)
+resolve::duplicate-item
+
+  × `COUNTER` is defined more than once
+    ╭─[resolve_peripheral_names.ers:19:12]
+ 12 │ 
+ 13 │ static COUNTER: u32 = 0;
+    ·        ───┬───
+    ·           ╰── first defined here
+ 14 │ 
+ 15 │ peripheral Timer {
+ 16 │     read write count: u32 at 0,
+ 17 │ }
+ 18 │ 
+ 19 │ peripheral COUNTER: Timer at 0x2000_0000;
+    ·            ───┬───
+    ·               ╰── redefined here
+ 20 │ 
+    ╰────
+  help: functions, structs, enums, constants, statics, peripheral types and peripherals share one
+        namespace (ADR 0029, 0030, 0035, 0058)
+resolve::duplicate-item
+
+  × `UART` is defined more than once
+    ╭─[resolve_peripheral_names.ers:25:12]
+ 20 │ 
+ 21 │ peripheral UART {
+    ·            ──┬─
+    ·              ╰── first defined here
+ 22 │     read write data: u8 at 0,
+ 23 │ }
+ 24 │ 
+ 25 │ peripheral UART: UART at 0x1000_0000;
+    ·            ──┬─
+    ·              ╰── redefined here
+ 26 │ 
+    ╰────
+  help: functions, structs, enums, constants, statics, peripheral types and peripherals share one
+        namespace (ADR 0029, 0030, 0035, 0058)
+resolve::duplicate-type
+
+  × `u32` is a built-in type
+    ╭─[resolve_peripheral_names.ers:27:12]
+ 26 │ 
+ 27 │ peripheral u32 {
+    ·            ─┬─
+    ·             ╰── cannot be redefined
+ 28 │     read write data: u32 at 0,
+    ╰────
+resolve::unknown-type
+
+  × unknown type `TIMER0`
+    ╭─[resolve_peripheral_names.ers:33:22]
+ 32 │ 
+ 33 │ fn reset(timer: *mut TIMER0) {}
+    ·                      ───┬──
+    ·                         ╰── a peripheral, not a type
+ 34 │ 
+    ╰────

@@ -146,8 +146,8 @@ resolve::duplicate-item
     ·       ╰── redefined here
  27 │ const Result: u32 = 0;
     ╰────
-  help: functions, structs, enums, constants and statics share one namespace (ADR 0029, 0030,
-        0035)
+  help: functions, structs, enums, constants, statics, peripheral types and peripherals share one
+        namespace (ADR 0029, 0030, 0035, 0058)
 resolve::duplicate-type
 
   × `Result` is a built-in type
@@ -172,8 +172,8 @@ resolve::duplicate-item
     ·          ╰── redefined here
  28 │ fn usize() {}
     ╰────
-  help: functions, structs, enums, constants and statics share one namespace (ADR 0029, 0030,
-        0035)
+  help: functions, structs, enums, constants, statics, peripheral types and peripherals share one
+        namespace (ADR 0029, 0030, 0035, 0058)
 resolve::duplicate-type
 
   × `usize` is a built-in type

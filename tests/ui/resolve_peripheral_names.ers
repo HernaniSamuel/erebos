@@ -1,0 +1,36 @@
+// emit: hir
+// Peripheral types and peripherals share their module's one namespace with
+// every other item (ADR 0049, 0058): a peripheral type named as a struct, a
+// peripheral named as a static, and a peripheral named as its own type are
+// each `resolve::duplicate-item`; a peripheral type cannot take a built-in
+// type's name; a peripheral is no type.
+struct Regs { data: u32 }
+
+peripheral Regs {
+    read write data: u32 at 0,
+}
+
+static COUNTER: u32 = 0;
+
+peripheral Timer {
+    read write count: u32 at 0,
+}
+
+peripheral COUNTER: Timer at 0x2000_0000;
+
+peripheral UART {
+    read write data: u8 at 0,
+}
+
+peripheral UART: UART at 0x1000_0000;
+
+peripheral u32 {
+    read write data: u32 at 0,
+}
+
+peripheral TIMER0: Timer at 0x2000_1000;
+
+fn reset(timer: *mut TIMER0) {}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

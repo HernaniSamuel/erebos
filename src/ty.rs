@@ -91,6 +91,7 @@ pub fn report_never_in_memory(q: &mut Queries) {
     for never in &hir.never_in_memory {
         let help = match never.position {
             NeverPosition::Static => NeverHelp::Static,
+            NeverPosition::Register => NeverHelp::Register,
             _ => NeverHelp::Unit,
         };
         q.diags.push(never_in_memory(
@@ -106,13 +107,7 @@ pub fn report_never_in_memory(q: &mut Queries) {
 pub fn report_unsized_types(q: &mut Queries) {
     let hir = q.hir;
     for found in &hir.unsized_types {
-        let what = match found.position {
-            UnsizedPosition::Memory(position) => memory_position(position),
-            UnsizedPosition::Variable => "the type of a variable".to_owned(),
-            UnsizedPosition::Parameter => "the type of a parameter".to_owned(),
-            UnsizedPosition::Return => "a return type".to_owned(),
-            UnsizedPosition::Cast => "the target of a cast".to_owned(),
-        };
+        let what = position(found.position);
         // A length that failed was reported; the type shows it as `_`.
         let ty = match q.normalize(found.ty) {
             Ty::Error => found.ty,
@@ -123,6 +118,62 @@ pub fn report_unsized_types(q: &mut Queries) {
                 .label(found.span, format!("`{ty}` as {what}"))
                 .help("its length is known only at run time, so it exists only behind a pointer, as a slice: `*const [T]` or `*mut [T]` (ADR 0031)"),
         );
+    }
+}
+
+/// Reports each peripheral type written where a value would have it, which
+/// HIR lowering made `{error}` (ADR 0058).
+pub fn report_peripherals_by_value(q: &mut Queries) {
+    let hir = q.hir;
+    for found in &hir.peripherals_by_value {
+        let ty = found.ty;
+        q.diags.push(
+            Diagnostic::error(
+                "ty::peripheral-by-value",
+                format!("`{ty}` is a peripheral type, which no value has"),
+            )
+            .label(found.span, format!("`{ty}` as {}", position(found.position)))
+            .help(format!(
+                "a peripheral type describes a device's registers, reached one at a time from a peripheral or through a pointer, such as `*mut {ty}` (ADR 0058)"
+            )),
+        );
+    }
+}
+
+/// Reports each pointer to a peripheral type written `volatile`, which HIR
+/// lowering made the pointer without it (ADR 0058).
+pub fn report_volatile_peripherals(q: &mut Queries) {
+    let hir = q.hir;
+    for found in &hir.volatile_peripherals {
+        let Ty::Ptr(ptr) = found.ty else {
+            unreachable!("lowered as a pointer to a peripheral type")
+        };
+        q.diags.push(
+            Diagnostic::error(
+                "ty::volatile-peripheral",
+                format!(
+                    "a pointer to the peripheral type `{}` cannot be `volatile`",
+                    ptr.pointee
+                ),
+            )
+            .label(found.span, "its accesses are volatile without the word")
+            .help(format!(
+                "accesses through a pointer to a peripheral type reach its registers, which are always accessed volatile: write `{}` (ADR 0058)",
+                found.ty
+            )),
+        );
+    }
+}
+
+/// How diagnostics name a position where `[T]` would need a size, or a
+/// peripheral type would be the type of a value.
+fn position(position: UnsizedPosition) -> String {
+    match position {
+        UnsizedPosition::Memory(position) => memory_position(position),
+        UnsizedPosition::Variable => "the type of a variable".to_owned(),
+        UnsizedPosition::Parameter => "the type of a parameter".to_owned(),
+        UnsizedPosition::Return => "a return type".to_owned(),
+        UnsizedPosition::Cast => "the target of a cast".to_owned(),
     }
 }
 
@@ -137,6 +188,7 @@ fn memory_position(position: NeverPosition) -> String {
         NeverPosition::TypeArgument => "a type argument".to_owned(),
         NeverPosition::Static => "the type of a static".to_owned(),
         NeverPosition::Const => "the type of a constant".to_owned(),
+        NeverPosition::Register => "the type of a register".to_owned(),
         NeverPosition::LayoutQuery(name) => format!("the operand of `{name}`"),
     }
 }
@@ -163,6 +215,8 @@ enum NeverHelp {
     Unit,
     /// A static's address must be a real one.
     Static,
+    /// A register holds an integer of its width (ADR 0058).
+    Register,
 }
 
 fn never_in_memory(span: Span, what: &str, help: NeverHelp) -> Diagnostic {
@@ -171,6 +225,7 @@ fn never_in_memory(span: Span, what: &str, help: NeverHelp) -> Diagnostic {
         NeverHelp::Static => {
             "use a type of non-zero size, such as `u8`, whose address is a real one (ADR 0022, 0034)"
         }
+        NeverHelp::Register => "a register is a `u8`, a `u16` or a `u32` (ADR 0058)",
     };
     Diagnostic::error("ty::never-in-memory", "`!` is not a type of memory")
         .label(span, format!("`!` as {what}"))
@@ -787,6 +842,7 @@ impl Checker<'_, '_> {
                 info.ty
             }
             ExprKind::AddrOf { mutable, place } => self.addr_of(f, *mutable, place),
+            ExprKind::Peripheral(_) => todo!("M3.2 step 4: a peripheral as a place"),
             ExprKind::Try(operand, _) => self.try_(f, expr, operand),
             ExprKind::Assign(place, value) => {
                 let place_ty = self.place(f, place);
@@ -2533,6 +2589,7 @@ impl Checker<'_, '_> {
                     constant: false,
                 }
             }
+            ExprKind::Peripheral(_) => todo!("M3.2 step 4: a peripheral as a place"),
             ExprKind::Deref(pointer) => {
                 let ty = self.check(f, pointer, None);
                 let error = Diagnostic::error(
@@ -2939,6 +2996,8 @@ impl Checker<'_, '_> {
             // Aggregates compare part by part (ADR 0021); an `Option(T)`
             // is checked as the enum it is (ADR 0045).
             Ty::Unit | Ty::Array(..) | Ty::Slice(_) | Ty::Struct(_) | Ty::Applied(_) => false,
+            // A device, reached one register at a time (ADR 0058).
+            Ty::Peripheral(_) => false,
         };
         if !ok {
             let payloads = matches!(ty, Ty::Enum(EnumTy { payloads: true, .. }));
@@ -3465,6 +3524,7 @@ fn expr_label(q: &Queries, f: &Fn, expr: &Expr) -> String {
         ExprKind::Unit => "unit".to_owned(),
         ExprKind::Const(id) => format!("const {}", hir.const_(*id).path),
         ExprKind::Static(id) => format!("static {}", hir.static_(*id).path),
+        ExprKind::Peripheral(id) => format!("peripheral {}", hir.peripheral(*id).path),
         ExprKind::Variant(id, index, _) => {
             format!("variant {}", q.enum_def(*id).variant_path(*index as usize))
         }

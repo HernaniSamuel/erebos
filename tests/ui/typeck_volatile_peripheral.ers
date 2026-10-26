@@ -1,0 +1,20 @@
+// emit: typeck
+// Accesses through a pointer to a peripheral type are volatile without the
+// word, so the pointer is never written `volatile` (ADR 0058): each such
+// pointer type is reported once, and is then the pointer without it, so
+// that nothing more is reported where it is used. A volatile pointer to
+// any other type stays (ADR 0013).
+peripheral Uart {
+    read write data: u8 at 0,
+}
+
+fn parameters(m: *mut volatile Uart, c: *const volatile Uart) {}
+
+fn values(u: *mut Uart) {
+    let m: *mut volatile Uart = u;
+    let c: *const Uart = 0x1000_0000 as *const volatile Uart;
+    let bytes: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

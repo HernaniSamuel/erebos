@@ -8,8 +8,10 @@ use crate::hir::{
     self, Arm, ArrayLen, Block, BuiltinEnum, Comptime, ConstDef, ConstId, CoreStart, EnumDef,
     EnumId, EnumTy, Expr, ExprId, ExprKind, FieldDef, FileDef, Fn, FnId, FnKind, Hir, IntTy, Local,
     LocalId, MemoryMap, ModuleDef, ModuleId, NeverInMemory, NeverPosition, Pattern, PatternId,
-    PatternKind, PayloadDef, Placement, RegionDef, StaticDef, StaticId, Stmt, StructDef, StructId,
-    StructTy, Ty, UnsizedPosition, UnsizedType, VariantDef, VariantValue, Visibility,
+    PatternKind, PayloadDef, PeripheralByValue, PeripheralDef, PeripheralId, PeripheralTy,
+    PeripheralTypeDef, PeripheralTypeId, Placement, RegionDef, RegisterDef, StaticDef, StaticId,
+    Stmt, StructDef, StructId, StructTy, Ty, UnsizedPosition, UnsizedType, VariantDef,
+    VariantValue, Visibility, VolatilePeripheral,
 };
 use crate::span::Span;
 use crate::syntax::ast;
@@ -47,6 +49,8 @@ pub fn lower(
         statics: Vec::new(),
         comptimes: Vec::new(),
         memories: Vec::new(),
+        peripheral_types: Vec::new(),
+        peripherals: Vec::new(),
         mods: Vec::new(),
         use_decls: Vec::new(),
         uses: Vec::new(),
@@ -84,6 +88,8 @@ pub fn lower(
         statics: static_decls,
         comptimes: comptime_decls,
         memories: memory_decls,
+        peripheral_types: peripheral_type_decls,
+        peripherals: peripheral_decls,
         mods: mod_decls,
         use_decls,
         uses,
@@ -132,6 +138,16 @@ pub fn lower(
         });
     }
 
+    // Peripheral types too (ADR 0058).
+    let peripheral_tys = peripheral_type_decls
+        .iter()
+        .enumerate()
+        .map(|(i, &(decl, module))| PeripheralTy {
+            id: PeripheralTypeId(i as u32),
+            name: Box::leak(item_path(&modules, module, &decl.name.name).into_boxed_str()),
+        })
+        .collect();
+
     let mut lowerer = Lowerer {
         modules,
         namespaces,
@@ -150,10 +166,15 @@ pub fn lower(
         enum_decls: &enum_decls,
         const_decls: &const_decls,
         static_decls: &static_decls,
+        peripheral_tys,
+        peripheral_type_decls: &peripheral_type_decls,
+        peripheral_decls: &peripheral_decls,
         uses,
         use_stack: Vec::new(),
         never_in_memory: Vec::new(),
         unsized_types: Vec::new(),
+        peripherals_by_value: Vec::new(),
+        volatile_peripherals: Vec::new(),
         applications: Vec::new(),
         next_expr: 0,
         next_pattern: 0,
@@ -177,6 +198,8 @@ pub fn lower(
     let mut comptime_blocks = Vec::new();
     let mut enums = Vec::new();
     let mut maps = Vec::new();
+    let mut peripheral_types = Vec::new();
+    let mut peripherals = Vec::new();
     let mut core = None;
     for (from, to, in_core) in [
         (Counts::default(), program_end, false),
@@ -189,6 +212,8 @@ pub fn lower(
                 expr: lowerer.next_expr,
                 never_in_memory: lowerer.never_in_memory.len(),
                 unsized_types: lowerer.unsized_types.len(),
+                peripherals_by_value: lowerer.peripherals_by_value.len(),
+                volatile_peripherals: lowerer.volatile_peripherals.len(),
                 applications: lowerer.applications.len(),
                 file: core_files,
             });
@@ -251,12 +276,22 @@ pub fn lower(
             lowerer.module = module;
             maps.push((decl.span, lowerer.memory_decl(decl)));
         }
+        for &(decl, module) in &peripheral_type_decls[from.peripheral_types..to.peripheral_types] {
+            lowerer.module = module;
+            peripheral_types.push(lowerer.peripheral_type_decl(decl));
+        }
+        for &(decl, module) in &peripheral_decls[from.peripherals..to.peripherals] {
+            lowerer.module = module;
+            peripherals.push(lowerer.peripheral_decl(decl));
+        }
     }
     debug_assert_eq!(fns.len() as u32, lowerer.value_base);
     fns.append(&mut lowerer.values);
     let expr_count = lowerer.next_expr;
     let never_in_memory = lowerer.never_in_memory;
     let unsized_types = lowerer.unsized_types;
+    let peripherals_by_value = lowerer.peripherals_by_value;
+    let volatile_peripherals = lowerer.volatile_peripherals;
     let applications = lowerer.applications;
     let modules = lowerer.modules;
     let namespaces = lowerer.namespaces;
@@ -268,6 +303,7 @@ pub fn lower(
         core_root,
         &mut structs,
         &mut enums,
+        &mut peripheral_types,
     );
 
     for diag in duplicates {
@@ -303,8 +339,12 @@ pub fn lower(
         statics,
         comptime_blocks,
         memory,
+        peripheral_types,
+        peripherals,
         never_in_memory,
         unsized_types,
+        peripherals_by_value,
+        volatile_peripherals,
         applications,
         entry: entry?,
         panic: panic?,
@@ -327,13 +367,15 @@ struct Counts {
     statics: usize,
     comptimes: usize,
     memories: usize,
+    peripheral_types: usize,
+    peripherals: usize,
 }
 
-/// Fills in the `reachable` of every struct and enum: the modules where a
-/// path written would name it and be usable (ADR 0050). Any path can be
-/// written from the root module, through `crate`, and a segment is usable
-/// from a module if it is `pub` or that module is within the one holding
-/// it. So what is reachable from a module is what a walk of the namespaces
+/// Fills in the `reachable` of every struct, enum and peripheral type: the
+/// modules where a path written would name it and be usable (ADR 0050,
+/// 0058). Any path can be written from the root module, through `crate`,
+/// and a segment is usable from a module if it is `pub` or that module is
+/// within the one holding it. So what is reachable from a module is what a walk of the namespaces
 /// from the root finds through the names visible from there, `use`s
 /// included. Every `use` is resolved by now; one that failed was reported.
 /// Every module of the program also writes paths from `core`'s root,
@@ -346,6 +388,7 @@ fn reachability(
     core_root: ModuleId,
     structs: &mut [StructDef],
     enums: &mut [EnumDef],
+    peripheral_types: &mut [PeripheralTypeDef],
 ) {
     for from in 0..modules.len() {
         let from = ModuleId(from as u32);
@@ -382,7 +425,8 @@ fn reachability(
                     }
                     Def::Struct(id) => &mut structs[id.0 as usize].reachable,
                     Def::Enum(id) => &mut enums[id.0 as usize].reachable,
-                    Def::Fn(_) | Def::Const(_) | Def::Static(_) => continue,
+                    Def::PeripheralType(id) => &mut peripheral_types[id.0 as usize].reachable,
+                    Def::Fn(_) | Def::Const(_) | Def::Static(_) | Def::Peripheral(_) => continue,
                 };
                 if reachable.last() != Some(&from) {
                     reachable.push(from);
@@ -400,6 +444,8 @@ enum Def {
     Enum(EnumId),
     Const(ConstId),
     Static(StaticId),
+    PeripheralType(PeripheralTypeId),
+    Peripheral(PeripheralId),
     Module(ModuleId),
 }
 
@@ -412,6 +458,8 @@ impl Def {
             Def::Enum(_) => "an enum",
             Def::Const(_) => "a constant",
             Def::Static(_) => "a static",
+            Def::PeripheralType(_) => "a peripheral type",
+            Def::Peripheral(_) => "a peripheral",
             Def::Module(_) => "a module",
         }
     }
@@ -482,6 +530,8 @@ struct Items<'a> {
     statics: Vec<(&'a ast::StaticDecl, ModuleId)>,
     comptimes: Vec<(&'a ast::ComptimeDecl, ModuleId)>,
     memories: Vec<(&'a ast::MemoryDecl, ModuleId)>,
+    peripheral_types: Vec<(&'a ast::PeripheralTypeDecl, ModuleId)>,
+    peripherals: Vec<(&'a ast::PeripheralDecl, ModuleId)>,
     /// Each `mod`, with the module that declares it.
     mods: Vec<(&'a ast::ModDecl, ModuleId)>,
     /// Each `use` declaration, with its module, and each name they bring in.
@@ -503,6 +553,8 @@ impl<'a> Items<'a> {
             statics: self.statics.len(),
             comptimes: self.comptimes.len(),
             memories: self.memories.len(),
+            peripheral_types: self.peripheral_types.len(),
+            peripherals: self.peripherals.len(),
         }
     }
 
@@ -579,8 +631,16 @@ impl<'a> Items<'a> {
                     self.memories.push((decl, module));
                     continue;
                 }
-                // Not lowered yet (M3.2, step 2).
-                ast::Item::PeripheralType(_) | ast::Item::Peripheral(_) => continue,
+                ast::Item::PeripheralType(decl) => {
+                    self.peripheral_types.push((decl, module));
+                    let id = PeripheralTypeId(self.peripheral_types.len() as u32 - 1);
+                    (&decl.name, decl.vis, Def::PeripheralType(id))
+                }
+                ast::Item::Peripheral(decl) => {
+                    self.peripherals.push((decl, module));
+                    let id = PeripheralId(self.peripherals.len() as u32 - 1);
+                    (&decl.name, decl.vis, Def::Peripheral(id))
+                }
                 ast::Item::Mod(decl) => {
                     let id = ModuleId(self.modules.len() as u32);
                     self.modules.push(ModuleDef {
@@ -757,7 +817,7 @@ impl<'a> Items<'a> {
         {
             "the items and modules of a module share one namespace (ADR 0049)"
         } else {
-            "functions, structs, enums, constants and statics share one namespace (ADR 0029, 0030, 0035)"
+            "functions, structs, enums, constants, statics, peripheral types and peripherals share one namespace (ADR 0029, 0030, 0035, 0058)"
         };
         // A repeated name keeps its first definition, but an item keeps it
         // against a `use`, even one written before it: the labels follow
@@ -1193,6 +1253,9 @@ struct Lowerer<'a> {
     enum_decls: &'a [(&'a ast::EnumDecl, ModuleId)],
     const_decls: &'a [(&'a ast::ConstDecl, ModuleId)],
     static_decls: &'a [(&'a ast::StaticDecl, ModuleId)],
+    peripheral_tys: Vec<PeripheralTy>,
+    peripheral_type_decls: &'a [(&'a ast::PeripheralTypeDecl, ModuleId)],
+    peripheral_decls: &'a [(&'a ast::PeripheralDecl, ModuleId)],
     /// Each name a `use` brings in (ADR 0049).
     uses: Vec<Use>,
     /// The `use`s being resolved, each through the next.
@@ -1201,6 +1264,10 @@ struct Lowerer<'a> {
     never_in_memory: Vec<NeverInMemory>,
     /// Each `[T]` written where a size is needed (ADR 0031).
     unsized_types: Vec<UnsizedType>,
+    /// Each peripheral type written where a value would have it, and each
+    /// pointer to one written `volatile` (ADR 0058).
+    peripherals_by_value: Vec<PeripheralByValue>,
+    volatile_peripherals: Vec<VolatilePeripheral>,
     /// Each `Option(T)` and `Result(T, E)` written (ADR 0045).
     applications: Vec<(Span, Ty)>,
     next_expr: u32,
@@ -1549,6 +1616,14 @@ impl Lowerer<'_> {
             }
             Def::Static(id) => {
                 let (decl, module) = self.static_decls[id.0 as usize];
+                item(decl.vis, module, &decl.name)
+            }
+            Def::PeripheralType(id) => {
+                let (decl, module) = self.peripheral_type_decls[id.0 as usize];
+                item(decl.vis, module, &decl.name)
+            }
+            Def::Peripheral(id) => {
+                let (decl, module) = self.peripheral_decls[id.0 as usize];
                 item(decl.vis, module, &decl.name)
             }
             Def::Module(id) => {
@@ -2390,6 +2465,115 @@ impl Lowerer<'_> {
         })
     }
 
+    /// A peripheral type (ADR 0058): it takes no attributes, and each
+    /// register name is declared once; a register's type is a type of
+    /// memory, and its offset a `usize` computed at compile time in the
+    /// type's module.
+    fn peripheral_type_decl(&mut self, decl: &ast::PeripheralTypeDecl) -> PeripheralTypeDef {
+        self.no_attrs(&decl.attrs, "a peripheral type");
+        let mut seen: HashMap<&str, Span> = HashMap::new();
+        for register in &decl.registers {
+            if let Some(&first) = seen.get(register.name.name.as_str()) {
+                self.diags.push(
+                    Diagnostic::error(
+                        "resolve::duplicate-register",
+                        format!(
+                            "the register `{}` is declared more than once",
+                            register.name.name
+                        ),
+                    )
+                    .label(register.name.span, "declared again here")
+                    .label(first, "first declared here")
+                    .help("each register of a peripheral type has a name of its own; two registers at one offset, as a `read` one and a `write` one, take two names (ADR 0058)"),
+                );
+            }
+            seen.entry(&register.name.name)
+                .or_insert(register.name.span);
+        }
+        let registers = decl
+            .registers
+            .iter()
+            .map(|register| RegisterDef {
+                name: register.name.name.clone(),
+                span: register.name.span,
+                vis: visibility(register.vis),
+                access: register.access,
+                ty: self.memory_ty(&register.ty, NeverPosition::Register),
+                ty_span: register.ty.span,
+                offset: (
+                    self.comptime_usize(&register.offset, "offset"),
+                    register.offset.span,
+                ),
+            })
+            .collect();
+        PeripheralTypeDef {
+            path: self.path_of(self.module, &decl.name.name),
+            name_span: decl.name.span,
+            module: self.module,
+            vis: visibility(decl.vis),
+            // Filled in once every `use` is resolved, by `reachability`.
+            reachable: Vec::new(),
+            registers,
+        }
+    }
+
+    /// A peripheral (ADR 0058): it takes no attributes, its type names a
+    /// peripheral type, and its address is a `usize` computed at compile
+    /// time in its module.
+    fn peripheral_decl(&mut self, decl: &ast::PeripheralDecl) -> PeripheralDef {
+        self.no_attrs(&decl.attrs, "a peripheral");
+        let ty = self.peripheral_of(decl);
+        PeripheralDef {
+            path: self.path_of(self.module, &decl.name.name),
+            name_span: decl.name.span,
+            module: self.module,
+            vis: visibility(decl.vis),
+            ty,
+            ty_span: decl.ty.span,
+            address: (
+                self.comptime_usize(&decl.address, "address"),
+                decl.address.span,
+            ),
+        }
+    }
+
+    /// The type of the peripheral `decl`: a peripheral type, or `{error}`
+    /// once reported. A path that names no type, or a type written with
+    /// the wrong type arguments, is reported as anywhere; any other type is
+    /// `resolve::not-a-peripheral-type`. The parts of a pointer, array or
+    /// slice type are not lowered: whatever they are, the type is no
+    /// peripheral type.
+    fn peripheral_of(&mut self, decl: &ast::PeripheralDecl) -> Ty {
+        let what = match &decl.ty.kind {
+            ast::TyKind::Named(path) => match self.named_ty(path) {
+                ty @ (Ty::Peripheral(_) | Ty::Error) => return ty,
+                Ty::Struct(_) => "a struct",
+                Ty::Enum(_) => "an enum",
+                _ => "a built-in type",
+            },
+            ast::TyKind::Applied(path, args) => match self.applied_ty(&decl.ty, path, args) {
+                Ty::Error => return Ty::Error,
+                _ => "an enum",
+            },
+            ast::TyKind::Ptr { .. } => "a pointer type",
+            ast::TyKind::Array { .. } => "an array type",
+            ast::TyKind::Slice(_) => "a slice type",
+            ast::TyKind::Never | ast::TyKind::Unit => "a built-in type",
+        };
+        self.diags.push(
+            Diagnostic::error(
+                "resolve::not-a-peripheral-type",
+                format!(
+                    "the type of the peripheral `{}` is not a peripheral type",
+                    self.path_of(self.module, &decl.name.name)
+                ),
+            )
+            .label(decl.ty.span, format!("{what}, not a peripheral type"))
+            .help("a peripheral places a device's registers at an address: its type is declared as `peripheral NAME { registers }`, and a pointer to one is written in code, as `*mut NAME` (ADR 0058)"),
+        );
+        Ty::Error
+    }
+
     /// An array length, its body, if any, named `length` in the dumps.
     fn array_len(&mut self, expr: &ast::Expr) -> ArrayLen {
         self.comptime_usize(expr, "length")
@@ -2767,6 +2951,16 @@ impl Lowerer<'_> {
                 };
                 match pointee {
                     Ty::Error => Ty::Error,
+                    // Accesses through it are volatile already (ADR 0058):
+                    // reported, and lowered as written without the word.
+                    Ty::Peripheral(_) if *volatile => {
+                        let lowered = Ty::ptr(*mutable, false, pointee);
+                        self.volatile_peripherals.push(VolatilePeripheral {
+                            span: ty.span,
+                            ty: lowered,
+                        });
+                        lowered
+                    }
                     pointee => Ty::ptr(*mutable, *volatile, pointee),
                 }
             }
@@ -2779,11 +2973,29 @@ impl Lowerer<'_> {
                 }
             }
             ast::TyKind::Applied(path, args) => self.applied_ty(ty, path, args),
-            ast::TyKind::Named(path) => self.named_ty(path),
+            ast::TyKind::Named(path) => match self.named_ty(path) {
+                // Only behind a pointer, or as a register's type, which is
+                // checked once types are computed (ADR 0058).
+                peripheral @ Ty::Peripheral(_)
+                    if !matches!(
+                        position,
+                        UnsizedPosition::Memory(NeverPosition::Pointee | NeverPosition::Register)
+                    ) =>
+                {
+                    self.peripherals_by_value.push(PeripheralByValue {
+                        span: ty.span,
+                        ty: peripheral,
+                        position,
+                    });
+                    Ty::Error
+                }
+                lowered => lowered,
+            },
         }
     }
 
-    /// A type written by its path, without type arguments.
+    /// A type written by its path, without type arguments; a peripheral
+    /// type whatever the position, which the caller judges.
     fn named_ty(&mut self, path: &ast::Path) -> Ty {
         if let Some(name) = plain_name(path) {
             if name.name == "bool" {
@@ -2814,6 +3026,9 @@ impl Lowerer<'_> {
         match self.lookup_path(path) {
             Named::Item(Def::Struct(id)) => Ty::Struct(self.struct_tys[id.0 as usize]),
             Named::Item(Def::Enum(id)) => Ty::Enum(self.enum_tys[id.0 as usize]),
+            Named::Item(Def::PeripheralType(id)) => {
+                Ty::Peripheral(self.peripheral_tys[id.0 as usize])
+            }
             named => {
                 self.not_a_type(path, named);
                 Ty::Error
@@ -2870,7 +3085,8 @@ impl Lowerer<'_> {
     }
 
     /// Whether `path` names a type that takes no type arguments: `bool`,
-    /// an integer type, a struct or an enum. Anything else is reported.
+    /// an integer type, a struct, an enum or a peripheral type. Anything
+    /// else is reported.
     fn names_type(&mut self, path: &ast::Path) -> bool {
         if let Some(name) = plain_name(path)
             && (name.name == "bool" || IntTy::from_name(&name.name).is_some())
@@ -2878,7 +3094,7 @@ impl Lowerer<'_> {
             return true;
         }
         match self.lookup_path(path) {
-            Named::Item(Def::Struct(_) | Def::Enum(_)) => true,
+            Named::Item(Def::Struct(_) | Def::Enum(_) | Def::PeripheralType(_)) => true,
             named => {
                 self.not_a_type(path, named);
                 false
@@ -2968,7 +3184,8 @@ impl Lowerer<'_> {
     }
 
     /// A path used as a value: a local, shadowing an item of the same name,
-    /// a constant, a static, or `Enum::Variant` (ADR 0035).
+    /// a constant, a static, a peripheral (ADR 0058), or `Enum::Variant`
+    /// (ADR 0035).
     fn resolve(&mut self, path: &ast::Path) -> Option<ExprKind> {
         if let Some(name) = plain_name(path)
             && let Some((local, depth)) = self.find_local_scope(&name.name)
@@ -2996,6 +3213,7 @@ impl Lowerer<'_> {
         let diag = match named {
             Named::Item(Def::Const(id)) => return Some(ExprKind::Const(id)),
             Named::Item(Def::Static(id)) => return Some(ExprKind::Static(id)),
+            Named::Item(Def::Peripheral(id)) => return Some(ExprKind::Peripheral(id)),
             Named::Variant(id, index) => return Some(ExprKind::Variant(id, index, None)),
             Named::Failed => return None,
             Named::Item(Def::Module(_)) => {

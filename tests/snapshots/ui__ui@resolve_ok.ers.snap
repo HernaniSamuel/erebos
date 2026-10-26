@@ -163,8 +163,12 @@ Hir {
     statics: [],
     comptime_blocks: [],
     memory: None,
+    peripheral_types: [],
+    peripherals: [],
     never_in_memory: [],
     unsized_types: [],
+    peripherals_by_value: [],
+    volatile_peripherals: [],
     applications: [],
     entry: FnId(
         0,

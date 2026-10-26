@@ -82,6 +82,9 @@ pub fn of(ty: Ty, composite: &mut impl FnMut(Composite) -> Option<Layout>) -> Op
         },
         // Unsized: only the pointee of a slice, never laid out (ADR 0031).
         Ty::Slice(_) => return None,
+        // No size: only the type of a peripheral and the pointee of a
+        // pointer, never laid out as a value (ADR 0058).
+        Ty::Peripheral(_) => return None,
         Ty::Array(elem, len) => {
             let elem = of(*elem, composite)?;
             Layout {

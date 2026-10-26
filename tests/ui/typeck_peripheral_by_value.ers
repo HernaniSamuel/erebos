@@ -1,0 +1,46 @@
+// emit: typeck
+// A peripheral type is no type a value can have (ADR 0058): like `[T]`
+// (ADR 0031), it exists behind a pointer and as the type of a peripheral.
+// Each position where a value would have it reports it once, and the type
+// containing it then causes no further error. A pointer to one, an
+// `Option` of such a pointer and a parameter of pointer type are accepted.
+peripheral Uart {
+    read write data: u8 at 0,
+}
+
+struct Field { a: u32, uart: Uart }
+
+enum Payload: u8 { Device(Uart) = 0 }
+
+static STATIC: Uart = 0;
+extern static EXTERN: Uart;
+const CONST: Uart = 0;
+
+fn parameter(uart: Uart) {}
+
+fn ret() -> Uart { loop {} }
+
+fn values() {
+    let variable: Uart = loop {};
+    let elements: [Uart; 2] = loop {};
+    let argument: Option(Uart) = loop {};
+    let cast: u32 = 0 as Uart;
+}
+
+fn layouts() -> usize {
+    size_of(Uart) + align_of(Uart) + offset_of(Uart, data)
+}
+
+fn slice_elements(uarts: *const [Uart]) {}
+
+// Behind a pointer, it is accepted.
+struct Device { regs: *mut Uart }
+
+fn pointers(u: *mut Uart, c: *const Uart, maybe: Option(*mut Uart)) -> *const Uart {
+    let device: Device = Device { regs: u };
+    let size: usize = size_of(*mut Uart);
+    c
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

@@ -1,0 +1,186 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_peripheral_by_value.ers
+---
+--- errors ---
+ty::peripheral-by-value
+
+  × `Uart` is a peripheral type, which no value has
+    ╭─[typeck_peripheral_by_value.ers:11:30]
+ 10 │ 
+ 11 │ struct Field { a: u32, uart: Uart }
+    ·                              ──┬─
+    ·                                ╰── `Uart` as the type of a field
+ 12 │ 
+    ╰────
+  help: a peripheral type describes a device's registers, reached one at a time from a peripheral
+        or through a pointer, such as `*mut Uart` (ADR 0058)
+ty::peripheral-by-value
+
+  × `Uart` is a peripheral type, which no value has
+    ╭─[typeck_peripheral_by_value.ers:13:27]
+ 12 │ 
+ 13 │ enum Payload: u8 { Device(Uart) = 0 }
+    ·                           ──┬─
+    ·                             ╰── `Uart` as a payload type
+ 14 │ 
+    ╰────
+  help: a peripheral type describes a device's registers, reached one at a time from a peripheral
+        or through a pointer, such as `*mut Uart` (ADR 0058)
+ty::peripheral-by-value
+
+  × `Uart` is a peripheral type, which no value has
+    ╭─[typeck_peripheral_by_value.ers:15:16]
+ 14 │ 
+ 15 │ static STATIC: Uart = 0;
+    ·                ──┬─
+    ·                  ╰── `Uart` as the type of a static
+ 16 │ extern static EXTERN: Uart;
+    ╰────
+  help: a peripheral type describes a device's registers, reached one at a time from a peripheral
+        or through a pointer, such as `*mut Uart` (ADR 0058)
+ty::peripheral-by-value
+
+  × `Uart` is a peripheral type, which no value has
+    ╭─[typeck_peripheral_by_value.ers:16:23]
+ 15 │ static STATIC: Uart = 0;
+ 16 │ extern static EXTERN: Uart;
+    ·                       ──┬─
+    ·                         ╰── `Uart` as the type of a static
+ 17 │ const CONST: Uart = 0;
+    ╰────
+  help: a peripheral type describes a device's registers, reached one at a time from a peripheral
+        or through a pointer, such as `*mut Uart` (ADR 0058)
+ty::peripheral-by-value
+
+  × `Uart` is a peripheral type, which no value has
+    ╭─[typeck_peripheral_by_value.ers:17:14]
+ 16 │ extern static EXTERN: Uart;
+ 17 │ const CONST: Uart = 0;
+    ·              ──┬─
+    ·                ╰── `Uart` as the type of a constant
+ 18 │ 
+    ╰────
+  help: a peripheral type describes a device's registers, reached one at a time from a peripheral
+        or through a pointer, such as `*mut Uart` (ADR 0058)
+ty::peripheral-by-value
+
+  × `Uart` is a peripheral type, which no value has
+    ╭─[typeck_peripheral_by_value.ers:19:20]
+ 18 │ 
+ 19 │ fn parameter(uart: Uart) {}
+    ·                    ──┬─
+    ·                      ╰── `Uart` as the type of a parameter
+ 20 │ 
+    ╰────
+  help: a peripheral type describes a device's registers, reached one at a time from a peripheral
+        or through a pointer, such as `*mut Uart` (ADR 0058)
+ty::peripheral-by-value
+
+  × `Uart` is a peripheral type, which no value has
+    ╭─[typeck_peripheral_by_value.ers:21:13]
+ 20 │ 
+ 21 │ fn ret() -> Uart { loop {} }
+    ·             ──┬─
+    ·               ╰── `Uart` as a return type
+ 22 │ 
+    ╰────
+  help: a peripheral type describes a device's registers, reached one at a time from a peripheral
+        or through a pointer, such as `*mut Uart` (ADR 0058)
+ty::peripheral-by-value
+
+  × `Uart` is a peripheral type, which no value has
+    ╭─[typeck_peripheral_by_value.ers:24:19]
+ 23 │ fn values() {
+ 24 │     let variable: Uart = loop {};
+    ·                   ──┬─
+    ·                     ╰── `Uart` as the type of a variable
+ 25 │     let elements: [Uart; 2] = loop {};
+    ╰────
+  help: a peripheral type describes a device's registers, reached one at a time from a peripheral
+        or through a pointer, such as `*mut Uart` (ADR 0058)
+ty::peripheral-by-value
+
+  × `Uart` is a peripheral type, which no value has
+    ╭─[typeck_peripheral_by_value.ers:25:20]
+ 24 │     let variable: Uart = loop {};
+ 25 │     let elements: [Uart; 2] = loop {};
+    ·                    ──┬─
+    ·                      ╰── `Uart` as an array element
+ 26 │     let argument: Option(Uart) = loop {};
+    ╰────
+  help: a peripheral type describes a device's registers, reached one at a time from a peripheral
+        or through a pointer, such as `*mut Uart` (ADR 0058)
+ty::peripheral-by-value
+
+  × `Uart` is a peripheral type, which no value has
+    ╭─[typeck_peripheral_by_value.ers:26:26]
+ 25 │     let elements: [Uart; 2] = loop {};
+ 26 │     let argument: Option(Uart) = loop {};
+    ·                          ──┬─
+    ·                            ╰── `Uart` as a type argument
+ 27 │     let cast: u32 = 0 as Uart;
+    ╰────
+  help: a peripheral type describes a device's registers, reached one at a time from a peripheral
+        or through a pointer, such as `*mut Uart` (ADR 0058)
+ty::peripheral-by-value
+
+  × `Uart` is a peripheral type, which no value has
+    ╭─[typeck_peripheral_by_value.ers:27:26]
+ 26 │     let argument: Option(Uart) = loop {};
+ 27 │     let cast: u32 = 0 as Uart;
+    ·                          ──┬─
+    ·                            ╰── `Uart` as the target of a cast
+ 28 │ }
+    ╰────
+  help: a peripheral type describes a device's registers, reached one at a time from a peripheral
+        or through a pointer, such as `*mut Uart` (ADR 0058)
+ty::peripheral-by-value
+
+  × `Uart` is a peripheral type, which no value has
+    ╭─[typeck_peripheral_by_value.ers:31:13]
+ 30 │ fn layouts() -> usize {
+ 31 │     size_of(Uart) + align_of(Uart) + offset_of(Uart, data)
+    ·             ──┬─
+    ·               ╰── `Uart` as the operand of `size_of`
+ 32 │ }
+    ╰────
+  help: a peripheral type describes a device's registers, reached one at a time from a peripheral
+        or through a pointer, such as `*mut Uart` (ADR 0058)
+ty::peripheral-by-value
+
+  × `Uart` is a peripheral type, which no value has
+    ╭─[typeck_peripheral_by_value.ers:31:30]
+ 30 │ fn layouts() -> usize {
+ 31 │     size_of(Uart) + align_of(Uart) + offset_of(Uart, data)
+    ·                              ──┬─
+    ·                                ╰── `Uart` as the operand of `align_of`
+ 32 │ }
+    ╰────
+  help: a peripheral type describes a device's registers, reached one at a time from a peripheral
+        or through a pointer, such as `*mut Uart` (ADR 0058)
+ty::peripheral-by-value
+
+  × `Uart` is a peripheral type, which no value has
+    ╭─[typeck_peripheral_by_value.ers:31:48]
+ 30 │ fn layouts() -> usize {
+ 31 │     size_of(Uart) + align_of(Uart) + offset_of(Uart, data)
+    ·                                                ──┬─
+    ·                                                  ╰── `Uart` as the operand of `offset_of`
+ 32 │ }
+    ╰────
+  help: a peripheral type describes a device's registers, reached one at a time from a peripheral
+        or through a pointer, such as `*mut Uart` (ADR 0058)
+ty::peripheral-by-value
+
+  × `Uart` is a peripheral type, which no value has
+    ╭─[typeck_peripheral_by_value.ers:34:34]
+ 33 │ 
+ 34 │ fn slice_elements(uarts: *const [Uart]) {}
+    ·                                  ──┬─
+    ·                                    ╰── `Uart` as the element type of a slice
+ 35 │ 
+    ╰────
+  help: a peripheral type describes a device's registers, reached one at a time from a peripheral
+        or through a pointer, such as `*mut Uart` (ADR 0058)

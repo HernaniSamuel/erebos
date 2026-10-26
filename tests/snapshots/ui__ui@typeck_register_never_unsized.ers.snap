@@ -1,0 +1,30 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_register_never_unsized.ers
+---
+--- errors ---
+ty::never-in-memory
+
+  × `!` is not a type of memory
+   ╭─[typeck_register_never_unsized.ers:6:17]
+ 5 │ peripheral Device {
+ 6 │     read never: ! at 0,
+   ·                 ┬
+   ·                 ╰── `!` as the type of a register
+ 7 │     read write bytes: [u8] at 4,
+   ╰────
+  help: `!` is the type of expressions that do not finish, so no memory holds one; a register is a
+        `u8`, a `u16` or a `u32` (ADR 0058)
+ty::unsized
+
+  × `[u8]` has no size known at compile time
+   ╭─[typeck_register_never_unsized.ers:7:23]
+ 6 │     read never: ! at 0,
+ 7 │     read write bytes: [u8] at 4,
+   ·                       ──┬─
+   ·                         ╰── `[u8]` as the type of a register
+ 8 │     read write data: u32 at 8,
+   ╰────
+  help: its length is known only at run time, so it exists only behind a pointer, as a slice:
+        `*const [T]` or `*mut [T]` (ADR 0031)

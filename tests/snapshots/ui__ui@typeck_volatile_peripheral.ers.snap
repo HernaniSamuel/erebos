@@ -1,0 +1,54 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_volatile_peripheral.ers
+---
+--- errors ---
+ty::volatile-peripheral
+
+  × a pointer to the peripheral type `Uart` cannot be `volatile`
+    ╭─[typeck_volatile_peripheral.ers:11:18]
+ 10 │ 
+ 11 │ fn parameters(m: *mut volatile Uart, c: *const volatile Uart) {}
+    ·                  ─────────┬────────
+    ·                           ╰── its accesses are volatile without the word
+ 12 │ 
+    ╰────
+  help: accesses through a pointer to a peripheral type reach its registers, which are always
+        accessed volatile: write `*mut Uart` (ADR 0058)
+ty::volatile-peripheral
+
+  × a pointer to the peripheral type `Uart` cannot be `volatile`
+    ╭─[typeck_volatile_peripheral.ers:11:41]
+ 10 │ 
+ 11 │ fn parameters(m: *mut volatile Uart, c: *const volatile Uart) {}
+    ·                                         ──────────┬─────────
+    ·                                                   ╰── its accesses are volatile without the word
+ 12 │ 
+    ╰────
+  help: accesses through a pointer to a peripheral type reach its registers, which are always
+        accessed volatile: write `*const Uart` (ADR 0058)
+ty::volatile-peripheral
+
+  × a pointer to the peripheral type `Uart` cannot be `volatile`
+    ╭─[typeck_volatile_peripheral.ers:14:12]
+ 13 │ fn values(u: *mut Uart) {
+ 14 │     let m: *mut volatile Uart = u;
+    ·            ─────────┬────────
+    ·                     ╰── its accesses are volatile without the word
+ 15 │     let c: *const Uart = 0x1000_0000 as *const volatile Uart;
+    ╰────
+  help: accesses through a pointer to a peripheral type reach its registers, which are always
+        accessed volatile: write `*mut Uart` (ADR 0058)
+ty::volatile-peripheral
+
+  × a pointer to the peripheral type `Uart` cannot be `volatile`
+    ╭─[typeck_volatile_peripheral.ers:15:41]
+ 14 │     let m: *mut volatile Uart = u;
+ 15 │     let c: *const Uart = 0x1000_0000 as *const volatile Uart;
+    ·                                         ──────────┬─────────
+    ·                                                   ╰── its accesses are volatile without the word
+ 16 │     let bytes: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+    ╰────
+  help: accesses through a pointer to a peripheral type reach its registers, which are always
+        accessed volatile: write `*const Uart` (ADR 0058)

@@ -1,0 +1,18 @@
+// emit: hir
+// A register name is declared once in its peripheral type (ADR 0058): the
+// second is reported, labeling the first, whatever their modes, types and
+// offsets. Registers of two peripheral types may share a name.
+peripheral Uart {
+    read data: u8 at 0,
+    write data: u8 at 0,
+    read write ier: u8 at 1,
+    read lsr: u8 at 5,
+    read write ier: u16 at 2,
+}
+
+peripheral Timer {
+    read write data: u32 at 0,
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

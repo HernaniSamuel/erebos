@@ -93,8 +93,8 @@ resolve::duplicate-item
     ·          ╰── redefined here
  44 │ }
     ╰────
-  help: functions, structs, enums, constants and statics share one namespace (ADR 0029, 0030,
-        0035)
+  help: functions, structs, enums, constants, statics, peripheral types and peripherals share one
+        namespace (ADR 0029, 0030, 0035, 0058)
 resolve::misplaced-attribute
 
   × `#[export]` applies only to functions and statics defined in the program

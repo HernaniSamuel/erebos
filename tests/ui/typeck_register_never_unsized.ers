@@ -1,0 +1,12 @@
+// emit: typeck
+// A register's type is a type of memory (ADR 0058): `!` there is
+// `ty::never-in-memory` (ADR 0034), `[u8]` `ty::unsized` (ADR 0031), each
+// reported once.
+peripheral Device {
+    read never: ! at 0,
+    read write bytes: [u8] at 4,
+    read write data: u32 at 8,
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

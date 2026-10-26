@@ -1,0 +1,37 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/resolve_peripheral_duplicate_register.ers
+---
+--- errors ---
+resolve::duplicate-register
+
+  × the register `data` is declared more than once
+   ╭─[resolve_peripheral_duplicate_register.ers:7:11]
+ 5 │ peripheral Uart {
+ 6 │     read data: u8 at 0,
+   ·          ──┬─
+   ·            ╰── first declared here
+ 7 │     write data: u8 at 0,
+   ·           ──┬─
+   ·             ╰── declared again here
+ 8 │     read write ier: u8 at 1,
+   ╰────
+  help: each register of a peripheral type has a name of its own; two registers at one offset, as
+        a `read` one and a `write` one, take two names (ADR 0058)
+resolve::duplicate-register
+
+  × the register `ier` is declared more than once
+    ╭─[resolve_peripheral_duplicate_register.ers:10:16]
+  7 │     write data: u8 at 0,
+  8 │     read write ier: u8 at 1,
+    ·                ─┬─
+    ·                 ╰── first declared here
+  9 │     read lsr: u8 at 5,
+ 10 │     read write ier: u16 at 2,
+    ·                ─┬─
+    ·                 ╰── declared again here
+ 11 │ }
+    ╰────
+  help: each register of a peripheral type has a name of its own; two registers at one offset, as
+        a `read` one and a `write` one, take two names (ADR 0058)

@@ -426,6 +426,7 @@ impl Builder<'_, '_> {
                 self.const_operand(ty, DataSource::Comptime(inner.id), value)
             }
             hir::ExprKind::Variant(id, index, args) => self.variant(ty, *id, *index, args),
+            hir::ExprKind::Peripheral(_) => todo!("M3.2 step 5: peripherals in MIR"),
             // Resolved by type checking, as `E::V` is by name (ADR 0044).
             hir::ExprKind::ContextVariant(_, _, args) => {
                 let (id, index) = self.q.tables.variant(expr.id);

@@ -1,0 +1,21 @@
+// emit: hir
+// The type of a peripheral names a peripheral type (ADR 0058): another
+// type is `resolve::not-a-peripheral-type`, a pointer to a peripheral type
+// too; a name of nothing stays `resolve::unknown-type`, and an item that
+// is no type is reported as in any type.
+struct Regs { data: u32 }
+
+const BASE: usize = 0x1000_0000;
+
+peripheral Uart {
+    read write data: u8 at 0,
+}
+
+peripheral A: Regs at 0x1000_0000;
+peripheral B: u32 at 0x1000_1000;
+peripheral C: *mut Uart at 0x1000_2000;
+peripheral D: Nothing at 0x1000_3000;
+peripheral E: BASE at 0x1000_4000;
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

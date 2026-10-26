@@ -1,0 +1,491 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/resolve_peripheral.ers
+---
+--- hir ---
+Hir {
+    modules: [
+        ModuleDef {
+            name: "",
+            path: "",
+            name_span: None,
+            parent: None,
+            vis: Pub,
+        },
+        ModuleDef {
+            name: "uart",
+            path: "uart",
+            name_span: Some(
+                425..429,
+            ),
+            parent: Some(
+                ModuleId(
+                    0,
+                ),
+            ),
+            vis: Private,
+        },
+        ModuleDef {
+            name: "board",
+            path: "board",
+            name_span: Some(
+                628..633,
+            ),
+            parent: Some(
+                ModuleId(
+                    0,
+                ),
+            ),
+            vis: Private,
+        },
+    ],
+    structs: [],
+    enums: [],
+    fns: [
+        Fn {
+            name: "main",
+            path: "main",
+            symbol: Some(
+                "main",
+            ),
+            name_span: 837..841,
+            module: ModuleId(
+                0,
+            ),
+            vis: Private,
+            kind: Entry,
+            ret: Never,
+            ret_span: Some(
+                847..848,
+            ),
+            param_count: 0,
+            locals: [],
+            body: Some(
+                Block {
+                    stmts: [],
+                    tail: Some(
+                        Expr {
+                            id: ExprId(
+                                0,
+                            ),
+                            kind: Loop(
+                                Block {
+                                    stmts: [],
+                                    tail: None,
+                                    span: 856..858,
+                                },
+                            ),
+                            span: 851..858,
+                        },
+                    ),
+                    span: 849..860,
+                },
+            ),
+            span: 828..860,
+            runtime: false,
+            comptime: None,
+        },
+        Fn {
+            name: "on_panic",
+            path: "on_panic",
+            symbol: Some(
+                "on_panic",
+            ),
+            name_span: 870..878,
+            module: ModuleId(
+                0,
+            ),
+            vis: Private,
+            kind: Panic,
+            ret: Never,
+            ret_span: Some(
+                884..885,
+            ),
+            param_count: 0,
+            locals: [],
+            body: Some(
+                Block {
+                    stmts: [],
+                    tail: Some(
+                        Expr {
+                            id: ExprId(
+                                1,
+                            ),
+                            kind: Loop(
+                                Block {
+                                    stmts: [],
+                                    tail: None,
+                                    span: 893..895,
+                                },
+                            ),
+                            span: 888..895,
+                        },
+                    ),
+                    span: 886..897,
+                },
+            ),
+            span: 861..897,
+            runtime: false,
+            comptime: None,
+        },
+        Fn {
+            name: "LSR",
+            path: "uart::LSR",
+            symbol: None,
+            name_span: 442..445,
+            module: ModuleId(
+                1,
+            ),
+            vis: Private,
+            kind: Plain,
+            ret: Int(
+                Usize,
+            ),
+            ret_span: Some(
+                447..452,
+            ),
+            param_count: 0,
+            locals: [],
+            body: Some(
+                Block {
+                    stmts: [],
+                    tail: Some(
+                        Expr {
+                            id: ExprId(
+                                2,
+                            ),
+                            kind: Int(
+                                5,
+                            ),
+                            span: 455..456,
+                        },
+                    ),
+                    span: 455..456,
+                },
+            ),
+            span: 436..457,
+            runtime: false,
+            comptime: Some(
+                Const(
+                    ConstId(
+                        0,
+                    ),
+                ),
+            ),
+        },
+        Fn {
+            name: "UART1_BASE",
+            path: "board::UART1_BASE",
+            symbol: None,
+            name_span: 679..689,
+            module: ModuleId(
+                2,
+            ),
+            vis: Private,
+            kind: Plain,
+            ret: Int(
+                Usize,
+            ),
+            ret_span: Some(
+                691..696,
+            ),
+            param_count: 0,
+            locals: [],
+            body: Some(
+                Block {
+                    stmts: [],
+                    tail: Some(
+                        Expr {
+                            id: ExprId(
+                                3,
+                            ),
+                            kind: Int(
+                                268439552,
+                            ),
+                            span: 699..710,
+                        },
+                    ),
+                    span: 699..710,
+                },
+            ),
+            span: 673..711,
+            runtime: false,
+            comptime: Some(
+                Const(
+                    ConstId(
+                        1,
+                    ),
+                ),
+            ),
+        },
+        Fn {
+            name: "offset",
+            path: "offset",
+            symbol: None,
+            name_span: 610..613,
+            module: ModuleId(
+                1,
+            ),
+            vis: Private,
+            kind: Plain,
+            ret: Int(
+                Usize,
+            ),
+            ret_span: None,
+            param_count: 0,
+            locals: [],
+            body: Some(
+                Block {
+                    stmts: [],
+                    tail: Some(
+                        Expr {
+                            id: ExprId(
+                                4,
+                            ),
+                            kind: Const(
+                                ConstId(
+                                    0,
+                                ),
+                            ),
+                            span: 610..613,
+                        },
+                    ),
+                    span: 610..613,
+                },
+            ),
+            span: 610..613,
+            runtime: false,
+            comptime: Some(
+                Value,
+            ),
+        },
+        Fn {
+            name: "address",
+            path: "address",
+            symbol: None,
+            name_span: 813..823,
+            module: ModuleId(
+                2,
+            ),
+            vis: Private,
+            kind: Plain,
+            ret: Int(
+                Usize,
+            ),
+            ret_span: None,
+            param_count: 0,
+            locals: [],
+            body: Some(
+                Block {
+                    stmts: [],
+                    tail: Some(
+                        Expr {
+                            id: ExprId(
+                                5,
+                            ),
+                            kind: Const(
+                                ConstId(
+                                    1,
+                                ),
+                            ),
+                            span: 813..823,
+                        },
+                    ),
+                    span: 813..823,
+                },
+            ),
+            span: 813..823,
+            runtime: false,
+            comptime: Some(
+                Value,
+            ),
+        },
+    ],
+    consts: [
+        ConstDef {
+            name: "LSR",
+            path: "uart::LSR",
+            name_span: 442..445,
+            module: ModuleId(
+                1,
+            ),
+            vis: Private,
+            ty: Int(
+                Usize,
+            ),
+            init: FnId(
+                2,
+            ),
+        },
+        ConstDef {
+            name: "UART1_BASE",
+            path: "board::UART1_BASE",
+            name_span: 679..689,
+            module: ModuleId(
+                2,
+            ),
+            vis: Private,
+            ty: Int(
+                Usize,
+            ),
+            init: FnId(
+                3,
+            ),
+        },
+    ],
+    statics: [],
+    comptime_blocks: [],
+    memory: None,
+    peripheral_types: [
+        PeripheralTypeDef {
+            path: "uart::Uart16550",
+            name_span: 478..487,
+            module: ModuleId(
+                1,
+            ),
+            vis: Pub,
+            reachable: [
+                ModuleId(
+                    0,
+                ),
+                ModuleId(
+                    1,
+                ),
+                ModuleId(
+                    2,
+                ),
+            ],
+            registers: [
+                RegisterDef {
+                    name: "rbr",
+                    span: 507..510,
+                    vis: Pub,
+                    access: Read,
+                    ty: Int(
+                        U8,
+                    ),
+                    ty_span: 512..514,
+                    offset: (
+                        Known(
+                            0,
+                        ),
+                        518..519,
+                    ),
+                },
+                RegisterDef {
+                    name: "thr",
+                    span: 539..542,
+                    vis: Pub,
+                    access: Write,
+                    ty: Int(
+                        U8,
+                    ),
+                    ty_span: 544..546,
+                    offset: (
+                        Known(
+                            0,
+                        ),
+                        550..551,
+                    ),
+                },
+                RegisterDef {
+                    name: "ier",
+                    span: 572..575,
+                    vis: Private,
+                    access: ReadWrite,
+                    ty: Int(
+                        U8,
+                    ),
+                    ty_span: 577..579,
+                    offset: (
+                        Known(
+                            1,
+                        ),
+                        583..584,
+                    ),
+                },
+                RegisterDef {
+                    name: "lsr",
+                    span: 599..602,
+                    vis: Private,
+                    access: Read,
+                    ty: Int(
+                        U8,
+                    ),
+                    ty_span: 604..606,
+                    offset: (
+                        Comptime(
+                            FnId(
+                                18,
+                            ),
+                        ),
+                        610..613,
+                    ),
+                },
+            ],
+        },
+    ],
+    peripherals: [
+        PeripheralDef {
+            path: "board::UART0",
+            name_span: 732..737,
+            module: ModuleId(
+                2,
+            ),
+            vis: Pub,
+            ty: Peripheral(
+                PeripheralTy {
+                    id: PeripheralTypeId(
+                        0,
+                    ),
+                    name: "uart::Uart16550",
+                },
+            ),
+            ty_span: 739..761,
+            address: (
+                Known(
+                    268435456,
+                ),
+                765..776,
+            ),
+        },
+        PeripheralDef {
+            path: "board::UART1",
+            name_span: 793..798,
+            module: ModuleId(
+                2,
+            ),
+            vis: Private,
+            ty: Peripheral(
+                PeripheralTy {
+                    id: PeripheralTypeId(
+                        0,
+                    ),
+                    name: "uart::Uart16550",
+                },
+            ),
+            ty_span: 800..809,
+            address: (
+                Comptime(
+                    FnId(
+                        19,
+                    ),
+                ),
+                813..823,
+            ),
+        },
+    ],
+    never_in_memory: [],
+    unsized_types: [],
+    peripherals_by_value: [],
+    volatile_peripherals: [],
+    applications: [],
+    entry: FnId(
+        0,
+    ),
+    panic: FnId(
+        1,
+    ),
+    expr_count: 6,
+}
