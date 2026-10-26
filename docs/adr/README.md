@@ -42,7 +42,7 @@ Do not write one for local implementation details that the code already explains
 | 0010 | [First target: riscv32 on QEMU `virt`](0010-first-target-riscv32-qemu-virt.md) | Accepted |
 | 0011 | [Development environment: native Windows with prebuilt LLVM 22](0011-development-environment.md) | Accepted |
 | 0012 | [Provisional compiler-generated startup code](0012-provisional-compiler-generated-startup.md) | Accepted, amended by 0030, 0057 |
-| 0013 | [Provisional volatile pointers](0013-provisional-volatile-pointers.md) | Accepted |
+| 0013 | [Provisional volatile pointers](0013-provisional-volatile-pointers.md) | Accepted, amended by 0058 |
 | 0014 | [Panic handler](0014-panic-handler.md)                          | Accepted, amended by 0053 |
 | 0015 | [Expression-oriented blocks and implicit unit return](0015-expression-oriented-blocks.md) | Accepted |
 | 0016 | [Literals: integers and bytes; no chars, strings or floats](0016-literals-bytes-no-floats.md) | Accepted |
@@ -52,7 +52,7 @@ Do not write one for local implementation details that the code already explains
 | 0020 | [Runtime support functions written in Erebos](0020-runtime-support-functions-in-erebos.md) | Accepted, amended by 0052 |
 | 0021 | [Structs and arrays](0021-structs-and-arrays.md)               | Accepted, amended by 0031, 0032, 0034 |
 | 0022 | [Data layout and alignment control](0022-data-layout-and-alignment.md) | Accepted, amended by 0030, 0031, 0034 |
-| 0023 | [Volatile access guarantees](0023-volatile-access-guarantees.md) | Accepted, amended by 0031, 0035, 0039 |
+| 0023 | [Volatile access guarantees](0023-volatile-access-guarantees.md) | Accepted, amended by 0031, 0035, 0039, 0058 |
 | 0024 | [Implicit conversion from `*mut T` to `*const T`](0024-mut-to-const-pointer-conversion.md) | Accepted |
 | 0025 | [Aggregates across calls on riscv32](0025-aggregates-across-calls.md) | Accepted, amended by 0031, 0039 |
 | 0026 | [External functions](0026-external-functions.md) | Accepted, amended by 0051 |
@@ -77,7 +77,7 @@ Do not write one for local implementation details that the code already explains
 | 0045 | [`Option(T)` and `Result(T, E)`](0045-option-and-result.md) | Accepted, amended by 0047 |
 | 0046 | [The `?` operator](0046-the-question-mark-operator.md) | Accepted |
 | 0047 | [Zero-sized payloads have an offset](0047-zero-sized-payloads-have-an-offset.md) | Accepted |
-| 0048 | [Types with a failed length or alignment are erroneous](0048-types-with-a-failed-length-or-alignment-are-erroneous.md) | Accepted, amended by 0055 |
+| 0048 | [Types with a failed length or alignment are erroneous](0048-types-with-a-failed-length-or-alignment-are-erroneous.md) | Accepted, amended by 0055, 0058 |
 | 0049 | [Modules and paths](0049-modules-and-paths.md) | Accepted |
 | 0050 | [Visibility](0050-visibility.md) | Accepted, amended by 0054 |
 | 0051 | [Symbol names](0051-symbol-names.md) | Accepted |
@@ -87,3 +87,4 @@ Do not write one for local implementation details that the code already explains
 | 0055 | [Repeat counts and dead arms under failed values](0055-repeat-counts-and-dead-arms-under-failed-values.md) | Accepted |
 | 0056 | [`rt` is reserved in the root module](0056-rt-is-reserved-in-the-root-module.md) | Accepted |
 | 0057 | [Memory maps](0057-memory-maps.md) | Accepted |
+| 0058 | [Peripherals](0058-peripherals.md) | Accepted |

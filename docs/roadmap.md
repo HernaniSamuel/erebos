@@ -181,9 +181,16 @@ ADRs:
 
 - **M3** (M3.2 to M3.4 for peripherals, M3.5 for the target):
   - `peripheral` blocks must express what an SVD file describes, so that
-    a `svd2erebos` can generate them: access modes (read-only,
-    write-only, read-write), write-1-to-clear fields, reads with side
-    effects, reset values, register arrays, clusters and `derivedFrom`.
+    a `svd2erebos` can generate them: write-1-to-clear fields, reads
+    with side effects, reset values, register arrays, clusters and
+    `derivedFrom`. Access modes, offsets and widths are settled
+    (ADR 0058).
+  - Registers sharing an address in one mode, and peripherals sharing
+    addresses (ADR 0058): the 16550's divisor latch over RBR/THR and IER
+    when DLAB is set, SVD's `alternateRegister` and
+    `alternatePeripheral`. ADR 0058 rejects both overlaps; M3.3, whose
+    program configures the UART through its fields, or M3.4, checking
+    against SVD, decides whether to relax them.
     The SVD of a real riscv32 chip (ESP32-C3, GD32VF103 or CH32V) tests
     the design. Also whether `svd2erebos` is a separate tool or a file
     read at compile time, which bears on reproducible builds.

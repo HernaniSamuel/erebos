@@ -1,6 +1,6 @@
 # 0013. Provisional volatile pointers
 
-- Status: Accepted
+- Status: Accepted; amended by 0058 (accesses through a pointer to a peripheral type are volatile without `volatile`, which is an error there)
 - Date: 2026-10-12
 
 ## Context
