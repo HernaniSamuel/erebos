@@ -1,0 +1,36 @@
+// The program of M3.2 (roadmap): hello world through a UART and a test
+// finisher declared as peripherals in `board.ers` (ADR 0058). The console
+// is a static pointer to the UART, computed at compile time, through which
+// the driver function `board::putc` reaches its registers.
+// expect-output: hello world
+// expect-exit: 0
+mod board;
+
+static CONSOLE: *mut board::Uart16550 = &raw mut board::UART0;
+
+fn print(s: *const [u8]) {
+    let mut i: usize = 0;
+    while i < len(s) {
+        board::putc(CONSOLE, (*s)[i]);
+        i += 1;
+    }
+}
+
+entry fn main() -> ! {
+    print(&raw const b"hello world\n");
+    board::exit(0)
+}
+
+panic fn on_panic() -> ! {
+    board::exit(1)
+}
+
+// QEMU `virt`'s RAM in two regions of 64 MiB: the image in the first, and
+// in the second a 1 MiB stack at its start, then `.data` and `.bss`.
+memory {
+    region IMAGE { origin: 0x8000_0000, size: 0x0400_0000 }
+    region RAM { origin: 0x8400_0000, size: 0x0400_0000 }
+    code in IMAGE;
+    data in RAM;
+    stack in RAM { size: 0x0010_0000 }
+}

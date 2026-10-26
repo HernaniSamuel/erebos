@@ -1,18 +1,27 @@
-// Writes to the UART through a volatile pointer, then stops QEMU through
-// the test finisher (ADR 0010).
+// Writes to the UART, then stops QEMU through the test finisher
+// (ADR 0010), both declared as peripherals (ADR 0058).
 // expect-output: hello
 // expect-exit: 0
-entry fn main() -> ! {
-    let uart: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
-    *uart = b'h';
-    *uart = b'e';
-    *uart = b'l';
-    *uart = b'l';
-    *uart = b'o';
-    *uart = b'\n';
+peripheral Uart {
+    write thr: u8 at 0,
+}
 
-    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
-    *finisher = 0x5555;
+peripheral TestFinisher {
+    write status: u32 at 0,
+}
+
+peripheral UART0: Uart at 0x1000_0000;
+peripheral FINISHER: TestFinisher at 0x0010_0000;
+
+entry fn main() -> ! {
+    UART0.thr = b'h';
+    UART0.thr = b'e';
+    UART0.thr = b'l';
+    UART0.thr = b'l';
+    UART0.thr = b'o';
+    UART0.thr = b'\n';
+
+    FINISHER.status = 0x5555;
     loop {}
 }
 

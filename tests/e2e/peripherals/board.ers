@@ -1,0 +1,30 @@
+// The devices of QEMU `virt` the program uses, declared as peripherals
+// (ADR 0058): the 16550 UART and the test finisher (ADR 0010). The line
+// status register is private: only `putc` waits on it.
+pub peripheral Uart16550 {
+    pub read rbr: u8 at 0x00,
+    pub write thr: u8 at 0x00,
+    read lsr: u8 at 0x05,
+}
+
+pub peripheral TestFinisher {
+    write status: u32 at 0x00,
+}
+
+pub peripheral UART0: Uart16550 at 0x1000_0000;
+pub peripheral FINISHER: TestFinisher at 0x0010_0000;
+
+// Bit 5 of `lsr`: the transmit holding register is empty.
+const THR_EMPTY: u8 = 0x20;
+
+// Writes a byte to any 16550, once it can take one.
+pub fn putc(u: *mut Uart16550, byte: u8) {
+    while (*u).lsr & THR_EMPTY == 0 {}
+    (*u).thr = byte;
+}
+
+// Stops QEMU: 0 passes, any other code fails with it.
+pub fn exit(code: u32) -> ! {
+    FINISHER.status = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    loop {}
+}
