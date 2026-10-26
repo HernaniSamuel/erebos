@@ -56,7 +56,7 @@ updated, and a program on QEMU.
 | Step | Delivers | Program on QEMU |
 |------|----------|-----------------|
 | **M3.1** ✅ Memory maps | `memory { ... }` blocks: regions, where code, data and the stack go, the linker script generated from them; the stack with a declared size at the start of its region; region overflows as diagnostics (ADR 0057) | a program laid out as on a small board, checking where its code, data and stack are |
-| **M3.2** Peripherals | `peripheral` blocks: registers at offsets, with widths and access modes (read-only, write-only, read-write), accessed as MMIO; a write to a read-only register is a compile error; the UART declared in the language | hello world through a UART and a test finisher declared as peripherals |
+| **M3.2** ✅ Peripherals | `peripheral` blocks: registers at offsets, with widths and access modes (read-only, write-only, read-write), accessed as MMIO; a write to a read-only register is a compile error; the UART declared in the language | hello world through a UART and a test finisher declared as peripherals |
 | **M3.3** Register fields | fields at bit positions of a register (representation clauses, as in Ada), enums in fields, write-1-to-clear fields, reads with side effects, reset values | the UART configured through its fields |
 | **M3.4** Register arrays and SVD | register arrays, clusters and `derivedFrom`; the design checked against the SVD of a real riscv32 chip; whether `svd2erebos` is a tool of its own | a peripheral generated from SVD, run on QEMU |
 | **M3.5** Second target | ARM Cortex-M on QEMU; what depends on the target becomes a per-target description (pointer width, widest access, ABI, startup, linker script, LLVM setup, runtime functions) | the e2e programs on both targets |
@@ -408,4 +408,22 @@ Documentation owed:
   optimization levels that its stack, statics and read-only data are
   where its map puts them; a second one runs from RAM, its code and data
   in one region.
-- **Next: M3.2** (peripherals).
+- **M3.2 done.** Devices are declared in the language (ADR 0058): a
+  peripheral type gives a device's registers at offsets computed at
+  compile time, each a `u8`, `u16` or `u32` with an access mode (`read`,
+  `write` or `read write`), and a peripheral is an instance of one at an
+  address, so that two instances of one design share a type and one
+  driver serves both through a pointer to it. Each register access is one
+  volatile load or store of the register's width, from a peripheral with
+  no pointer on its path or through a pointer written without
+  `volatile`; reading a write-only register and writing a read-only one
+  are compile errors, as are `&raw` of a register and a device used as a
+  whole. The compiler checks register types, misaligned and overlapping
+  registers, and misaligned, overlapping or out-of-range peripherals, and
+  treats failed offsets, register types and addresses as failed values
+  (ADR 0048). Volatile pointers stay for memory that is not a register.
+  The milestone program prints hello world on QEMU at both optimization
+  levels through a 16550 UART and the test finisher declared as
+  peripherals, its driver reaching the UART through a pointer held in a
+  static; the hello world test writes them through peripherals too.
+- **Next: M3.3** (register fields).

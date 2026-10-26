@@ -1,4 +1,4 @@
-# Erebos language reference (M3.1)
+# Erebos language reference (M3.2)
 
 This describes the language as the compiler implements it today. The
 reasoning behind each rule lives in the ADRs (`docs/adr/`), cited as
@@ -12,7 +12,8 @@ plus the files of the modules it declares (ADR 0049), plus the module
 `core`, shipped inside the compiler (ADR 0052). Each file is a list of
 items, in any order: functions, external functions, structs, enums,
 constants, statics, external statics, `comptime` blocks, modules (`mod`),
-`use` declarations and the `memory` block. The root file is the **root
+`use` declarations, the `memory` block, peripheral types and peripherals
+(see "Peripherals"). The root file is the **root
 module**, and the modules it declares, inline or in their own files, form
 a tree under it; each module has its own namespace (see "Modules and
 paths"). Items may refer to each other whatever their order and their
@@ -74,7 +75,10 @@ not part of the target: each program declares it in its `memory` block.
   only right after `&`. `memory`, and the words inside a `memory` block
   (`region`, `origin`, `size`, `code`, `data`, `stack`, `in`), are no
   keywords: they are recognized only in their place (see "Memory maps"),
-  and are ordinary names elsewhere.
+  and are ordinary names elsewhere. Nor are `peripheral`, which starts an
+  item only where an item starts and a name follows it, and the words
+  `read`, `write` and `at`, recognized only inside the two `peripheral`
+  items (see "Peripherals").
 - **`_`** is a token of its own, the wildcard pattern of `match`, and
   nothing else (ADR 0037): no variable, parameter, item, field or variant
   can be named `_` (`let _: u32` and `const _: u32` are
@@ -113,12 +117,13 @@ not part of the target: each program declares it in its `memory` block.
 | `()` | the unit type: no value to speak of |
 | `!` | never: the type of an expression that does not finish, never of memory (ADR 0034) |
 | `*const T`, `*mut T` | raw pointers |
-| `*const volatile T`, `*mut volatile T` | raw pointers whose accesses are volatile (ADR 0013, 0023) |
+| `*const volatile T`, `*mut volatile T` | raw pointers whose accesses are volatile (ADR 0013, 0023); never to a peripheral type, whose pointers are volatile without the word (ADR 0058) |
 | `[T; N]` | an array of `N` values of type `T`; `N` is a `usize` computed at compile time (ADR 0021, 0029), so a literal too large for `usize` is `ty::literal-out-of-range`, as it is in `#[align(N)]` |
 | `*const [T]`, `*mut [T]` | slices: the address of `T` values and how many there are (ADR 0031); `volatile` as for any pointer |
 | `Name`, `uart::Name` | a struct declared with `struct Name { ... }`, named by a path (ADR 0021, 0049) |
 | `Name`, `uart::Name` | an enum declared with `enum Name: u8 { ... }`: without payloads, stored as its integer type (ADR 0035); with payloads, a tag and the payload values of its variant (ADR 0039) |
 | `Option(T)`, `Result(T, E)` | built-in enums with payloads: a `T` or nothing, and a `T` or an error `E` (ADR 0045, see "`Option` and `Result`") |
+| `Name`, `uart::Name` | a peripheral type declared with `peripheral Name { ... }`: a device's registers, the type of a peripheral and the pointee of pointers, but never the type of a value (ADR 0058, see "Peripherals") |
 
 Every `let`, parameter and return type is written explicitly; there is no
 inference (ADR 0008). `-> ()` may be omitted (ADR 0015). Arrays, structs
@@ -127,30 +132,42 @@ depends on it.
 
 The names of the built-in types, `bool`, the integer types, `Option` and
 `Result`, are no item's: a struct, enum, function, constant, static,
-module or `use` named so, in any module, is `resolve::duplicate-type`
-(ADR 0029, 0045, 0049). They are seen from every module, as a single name:
-`uart::u32` is no type.
+peripheral type, peripheral, module or `use` named so, in any module, is
+`resolve::duplicate-type` (ADR 0029, 0045, 0049, 0058). They are seen
+from every module, as a single name: `uart::u32` is no type.
 
-A pointer to a sized type is a **thin pointer**: a plain address. `[T]` on
-its own is **unsized**: it exists only behind a pointer, and a variable,
-parameter, return value, field, array element or payload value of type
-`[T]`, a `static`, `extern static` or `const` of that type, a layout
-query (`size_of`, `align_of`, `offset_of`) of it, and a slice of `[T]`
-are errors (`ty::unsized`). `[[u8; 4]]` is a slice of arrays, and fine.
+A pointer to a sized type, or to a peripheral type, is a **thin
+pointer**: a plain address. `[T]` on its own is **unsized**: it exists
+only behind a pointer, and a variable, parameter, return value, field,
+array element or payload value of type `[T]`, a `static`, `extern static`
+or `const` of that type, a layout query (`size_of`, `align_of`,
+`offset_of`) of it, and a slice of `[T]` are errors (`ty::unsized`).
+`[[u8; 4]]` is a slice of arrays, and fine.
+
+**A peripheral type is no type of a value** (ADR 0058). Like `[T]`, it
+exists only behind a pointer (`*mut Uart`, a thin pointer), and as the
+type of a peripheral. As the type of a variable, parameter, return value,
+field, array or slice element, payload value or type argument of `Option`
+or `Result`, the type of a `static`, `extern static` or `const`, an
+operand of `size_of`, `align_of` or `offset_of`, or the target of a cast
+(`0 as Uart`), it is `ty::peripheral-by-value`, reported once, and the
+type containing it causes no further error. `Option(*mut Uart)` and a
+field of type `*mut Uart` are fine. As a register's type it is
+`ty::register-type` (see "Peripherals").
 
 **`!` is not a type of memory** (ADR 0034, 0039). No value of type `!`
 exists, so it is an error (`ty::never-in-memory`) as the pointee of a
 pointer (`*const !`), the element of an array or slice type (`[!; 0]`,
-`*const [!]`), a field type, a payload type, the type of a `static`,
-`extern static`, `const` or `comptime` value, an operand of `size_of`,
-`align_of` or `offset_of`, and under `&raw` (`&raw const x` with
-`x: !`). Each `!` written there is reported once, also where nothing uses
-it, and the type containing it causes no further error. `!` stays valid
-as the type of an expression, as a return type (`-> !`) and in a `let`
-whose initializer never finishes (`let x: ! = loop {};`). An array literal
-or repeat with an element of type `!` (`[loop {}; 3]`) has type `!`; its
-other elements are checked against the expected element type, or the
-first element whose type is not `!`. Use `()` for a type without data.
+`*const [!]`), a field type, a payload type, a register's type, the type
+of a `static`, `extern static`, `const` or `comptime` value, an operand of
+`size_of`, `align_of` or `offset_of`, and under `&raw` (`&raw const x`
+with `x: !`). Each `!` written there is reported once, also where nothing
+uses it, and the type containing it causes no further error. `!` stays
+valid as the type of an expression, as a return type (`-> !`) and in a
+`let` whose initializer never finishes (`let x: ! = loop {};`). An array
+literal or repeat with an element of type `!` (`[loop {}; 3]`) has type
+`!`; its other elements are checked against the expected element type, or
+the first element whose type is not `!`. Use `()` for a type without data.
 
 ## Functions
 
@@ -255,7 +272,8 @@ buf[i] = buf[0];
 - **Pointer indexing is not.** With `p: *const T` or `*mut T`, `p[i]` is the
   place at address `p + i * size_of(T)`, computed with wrapping arithmetic,
   as in C. `(*p)[i]` with `p: *mut [T; N]` is the checked form, and so is
-  `(*s)[i]` with a slice `s` (see "Slices").
+  `(*s)[i]` with a slice `s` (see "Slices"). A pointer to a peripheral
+  type cannot be indexed (see "Pointers").
 - `let`, assignment and reading a place copy aggregates whole. `==` and
   `!=` do not apply to them; compare their parts.
 - A struct may contain itself only behind a pointer (`next: *mut Node`).
@@ -265,12 +283,16 @@ buf[i] = buf[0];
 ### Addresses: `&raw`
 
 `&raw const place` and `&raw mut place` give a `*const T` or `*mut T` to a
-place: a variable, a static, a byte string, `*pointer`, `a[i]`, `p[i]`,
-`(*s)[i]` or a field. `&raw mut` needs a mutable place: not a variable
-without `mut`, a `static`, an `extern static` without `mut`, a byte string,
-part of a temporary, nor anything reached through a `*const` pointer
-(`ty::address-of-immutable`). The result is never
-volatile. A plain `&` is reserved for references (M5).
+place: a variable, a static, a peripheral, a byte string, `*pointer`,
+`a[i]`, `p[i]`, `(*s)[i]` or a field. `&raw mut` needs a mutable place:
+not a variable without `mut`, a `static`, an `extern static` without
+`mut`, a byte string, part of a temporary, nor anything reached through a
+`*const` pointer (`ty::address-of-immutable`). A peripheral is not `mut`,
+yet `&raw mut UART0` is allowed: what may be written is its registers'
+business (ADR 0058). The result is never a volatile pointer; one to a
+peripheral type, as `&raw mut UART0` gives, is accessed volatile through
+its pointee (see "Peripherals"). A register has no address
+(`ty::register-address`). A plain `&` is reserved for references (M5).
 
 A constant has no address, and neither does any element or field of it:
 `&raw const T`, `&raw const T[1]` and `&raw const S.f` are
@@ -1330,7 +1352,9 @@ fn two_digits(a: u8, b: u8) -> Result(u32, ParseError) {
 | an enum with payloads (ADR 0039), `Option(T)` and `Result(T, E)` (ADR 0045) | the largest variant's size, rounded up to the alignment | the largest variant's alignment |
 | `()` | 0 | 1 |
 
-`[T]` and `!` have no layout a program can ask for (see "Types"). Each
+`[T]`, `!` and peripheral types have no layout a program can ask for (see
+"Types"); a peripheral type's registers are placed at their offsets, and
+it has an extent and an alignment instead (see "Peripherals"). Each
 variant of an enum with payloads is laid out as a struct of its tag and its
 payload values (see "Enums").
 
@@ -1406,8 +1430,9 @@ fn f() -> u32 {
   false condition calls the panic function; at compile time it fails the
   compilation (`eval::assertion-failed`). See "Messages in `assert`".
 - **Values required at compile time:** array lengths, repeat counts
-  (`[v; N]`), the argument of `#[align(N)]` and the values of a `memory`
-  block (see "Memory maps") are `usize` expressions, such as
+  (`[v; N]`), the argument of `#[align(N)]`, the values of a `memory`
+  block (see "Memory maps"), and the offsets of registers and addresses
+  of peripherals (see "Peripherals") are `usize` expressions, such as
   `[u8; 2 * SECTOR]`. Two array types are the same when their
   lengths have the same value; diagnostics show the value.
 
@@ -1416,9 +1441,11 @@ wrapping arithmetic, the layouts above), and cannot:
 
 - use the enclosing function's variables (`ty::not-comptime`), nor `return`
   or `?` out of it (`resolve::return-in-comptime`);
-- access memory through a volatile pointer, call an `extern fn`, or read or
-  write through a pointer made from an integer (computing an address from
-  one, as in `&raw mut (*UART).ctrl`, is fine);
+- access memory through a volatile pointer, or a register however it is
+  reached (`eval::volatile-access`), call an `extern fn`, or read or write
+  through a pointer made from an integer (computing an address from one,
+  as in `&raw mut (*UART).ctrl`, is fine; `&raw mut UART0` is one, see
+  "Peripherals");
 - read or write a `static mut` (`eval::static-mut`), whose value is only
   known at run time, or an `extern static` (`eval::extern-static`), defined
   outside the program; taking the address of either is fine;
@@ -1444,7 +1471,7 @@ A value that needs itself, directly or through other items, is a
 does not. Data the compiler emits has zero padding, so builds are
 reproducible byte for byte.
 
-### Failed lengths and alignments (ADR 0048)
+### Failed lengths and alignments (ADR 0048, 0058)
 
 ```
 const N: usize = 1 / 0;
@@ -1465,12 +1492,21 @@ too large, or below the struct's natural alignment, as `#[align(2)]`
 would be on `Odd`). The error is reported once, where the value is
 written.
 
+A register's offset, a register's type in error and a peripheral's
+address are failed values too (ADR 0058): an offset or an address whose
+evaluation fails or that is no `usize`, and a register type that is `!`,
+`[T]`, reaches a failed value, or is `ty::register-type` (see
+"Peripherals", which also says when a register type reaching a failed
+value is reported).
+
 A type **reaches** a failed value when it is, or contains at any depth,
-an array whose length failed or a struct whose alignment failed: as a
-field, an array element, a payload value, a type argument, or behind a
-pointer or a slice. `[u8; N]`, `Broken`, `Odd`, `*const Broken`,
-`*const [Odd]` and `Option(*const Broken)` all reach one. Such a type
-counts as erroneous, as one containing `!` does (see "Types"):
+an array whose length failed, a struct whose alignment failed, or a
+peripheral type with a failed offset or register type: as a field, an
+array element, a payload value, a type argument, or behind a pointer or
+a slice. `[u8; N]`, `Broken`, `Odd`, `*const Broken`, `*const [Odd]` and
+`Option(*const Broken)` all reach one. Such a type counts as erroneous,
+as one containing `!` does (see "Types"), and so does a peripheral whose
+type reaches a failed value or whose address failed:
 
 - **Type errors are still reported.** Code using the type is type checked
   to the end, and reports its own errors: with `p: *const Broken`,
@@ -1495,7 +1531,8 @@ counts as erroneous, as one containing `!` does (see "Types"):
   of a constant or a static, a `comptime` expression or block) is not
   lowered to MIR when its return type, a parameter or local, the type of
   one of its expressions, or the operand of a `size_of`, `align_of` or
-  `offset_of` in it reaches a failed value. It is then neither run at
+  `offset_of` in it reaches a failed value, or when it names an erroneous
+  peripheral. It is then neither run at
   compile time nor checked for the values known at compile time (see
   "Checks on values known at compile time"): `7 / 0` in a function taking
   a `*const Broken` reports nothing, nor does a constant that calls it.
@@ -1528,6 +1565,11 @@ const N: usize = f(0 as *const S);
 fn f(p: *const S) -> usize { 4 }
 struct S { x: [u8; N] }
 ```
+
+For the same reason, a register's offset whose computation names a
+pointer to its own peripheral type, as `read status: u32 at (0x4 as *mut
+Regs) as usize` in `Regs`, is a `ty::cycle`, whichever of the offset and
+the type's layout is computed first (see "Peripherals").
 
 ### Pointers in results (ADR 0030)
 
@@ -1682,10 +1724,10 @@ neither is any value of an enum with payloads, not even a variant without
 payload such as `Msg::Nop`, nor a constant or `comptime` value of its type
 (ADR 0039): so every arm of a `match` on one is checked.
 Nothing that reads memory is known: not `*p`, even through a constant
-pointer (it may be a device register), not a read of a static, not
-`&raw`. A pointer made from an integer is known by its address; a constant
-pointing into a static is not known, since its address exists only after
-linking.
+pointer (it may be a device register), not a read of a static or of a
+register, not `&raw`. A pointer made from an integer is known by its
+address; a constant pointing into a static is not known, since its
+address exists only after linking.
 
 These are errors when the operand is known, not only when it is a literal:
 
@@ -1724,10 +1766,9 @@ let mask: u32 = if BITS < 32 { (1 << BITS) - 1 } else { 0xFFFF_FFFF };
 These checks run when a body is lowered to MIR, after type checking, for
 every body that type checks (functions, and the initializers of constants
 and statics, `comptime` expressions and blocks) and reaches no failed
-array length or alignment (see "Failed lengths and alignments"), whatever
-errors other bodies have; `--emit=typeck` stops before them. A body in
-which they fail is not run at compile time: an evaluation that needs it
-reports nothing more.
+value (see "Failed lengths and alignments"), whatever errors other bodies
+have; `--emit=typeck` stops before them. A body in which they fail is not
+run at compile time: an evaluation that needs it reports nothing more.
 
 ### Conversions with `as` (ADR 0019)
 
@@ -1755,23 +1796,38 @@ reports nothing more.
   is an address and a length. Converting an integer to a pointer does not
   make it valid to dereference; alignment, existence and permissions are
   not checked (ADR 0019). Address 0 is an ordinary address.
+- A pointer to a peripheral type, `u: *mut Uart`, reaches one device:
+  `(*u).thr` is a register (see "Peripherals"), and `u[i]`, or `&raw mut
+  u[i]`, is `ty::peripheral-index`, since a peripheral type has no size,
+  so no stride; another device of the same type is reached through a
+  pointer to it.
 
-### Volatile accesses (ADR 0013, 0023, 0039)
+### Volatile accesses (ADR 0013, 0023, 0039, 0058)
+
+An access is volatile when it goes through a volatile pointer, and when
+it reaches a register of a peripheral, from the peripheral or through a
+pointer to its peripheral type, which is written without `volatile` (see
+"Peripherals"). A register access is one volatile load or store of the
+register's width, with the guarantee below, and needs none of the checks
+below: a register is a `u8`, a `u16` or a `u32`. Device registers are
+declared as peripherals; volatile pointers stay for memory shared with a
+device that is not a register (a DMA buffer, a frame buffer, memory
+another core writes) and for addresses known only at run time (ADR 0013,
+amended by 0058).
 
 Through a volatile pointer, every access is to a scalar (an integer,
 `bool`, enum without payloads or thin pointer; such an enum is accessed as
 its integer type, ADR 0035) and is **exactly one load or store of the
 scalar's width**, never split, merged, removed or reordered relative to
-other volatile accesses. Volatility carries through fields and indexing:
-`(*regs).chan[i].status` is one access of `status`'s width. `x += 1` is
-one load and one store, not atomic. Otherwise the program is rejected:
+other volatile accesses, register accesses included. Volatility carries
+through fields and indexing: `(*regs).chan[i].status` is one access of
+`status`'s width. `x += 1` is one load and one store, not atomic.
+Otherwise the program is rejected:
 
 - a whole struct, array or enum with payloads, or a slice stored in
   memory, cannot be accessed through a volatile pointer; through a
   volatile slice, `(*s)[i]` is one access of the element. An enum with
   payloads has no fields, so a volatile pointer to one reaches nothing;
-  device registers are described with structs, integers and enums without
-  payloads;
 - `u64` and `i64`, and enums without payloads on them, cannot, since
   riscv32 has no 64-bit access: use two `u32` halves in the order the
   device needs; an enum, which nothing converts to, needs an integer type
@@ -1807,13 +1863,14 @@ right side, and `assert` runs its message only when the condition is false
 (ADR 0031). In an assignment the value runs before the place. In
 `base[index]`, the base runs before the index, and the bounds check before
 the access. A `match` runs its scrutinee once, before any arm, and its
-patterns run no code (ADR 0037, 0040). A read
-through a pointer, and a read of a static (ADR 0030), happens exactly where
-it is written. A value that is not a place, used as the base of indexing
-or a field, is read where it is written too: in `({ x })[{ x[0] = 9; 0 }]`
-the block reads `x` before the index changes it. `e?` runs `e` where it is
-written, and when it returns from the function, nothing after it runs: in
-`f(a()?, b())`, `b()` does not run when `a()` fails (ADR 0046).
+patterns run no code (ADR 0037, 0040). A read through a pointer, a read
+of a static (ADR 0030) and a read of a register (ADR 0058) happen exactly
+where they are written. A value that is not a place, used as the base of
+indexing or a field, is read where it is written too: in
+`({ x })[{ x[0] = 9; 0 }]` the block reads `x` before the index changes
+it. `e?` runs `e` where it is written, and when it returns from the
+function, nothing after it runs: in `f(a()?, b())`, `b()` does not run
+when `a()` fails (ADR 0046).
 
 ## Modules and paths (ADR 0049)
 
@@ -1881,7 +1938,11 @@ fn base() -> usize {
 - Each module has **one namespace**, holding its items, its child modules
   and the names its `use` declarations bring in. Two of these with one
   name are `resolve::duplicate-item`. The same name in two modules names
-  two items.
+  two items. Peripheral types and peripherals are items like any other
+  (ADR 0058): a peripheral type named like a struct of its module, or a
+  peripheral named like its own type, is `resolve::duplicate-item`.
+  Register names belong to their peripheral type, as field names to their
+  struct.
 - The **built-in names**, the types `bool`, the integer types, `Option`
   and `Result`, and the functions `assert`, `len` and `slice`, are seen
   from every module, as single names, and no item, module or `use` may
@@ -1914,7 +1975,8 @@ fn base() -> usize {
 - Each segment must be visible from the module the path is written in
   (see "Visibility").
 - Paths go wherever an item is named: types (`uart::Config`,
-  `Option(uart::Config)`, `*const uart::regs::Block`), constants, statics,
+  `Option(uart::Config)`, `*const uart::regs::Block`, `*mut
+  uart::Uart16550`), constants, statics, peripherals (`uart::UART0.thr`),
   calls, struct literals (`uart::Config { baud: 115_200 }`), variants and
   patterns (`uart::Mode::Run`), and the type operand of `size_of`,
   `align_of` and `offset_of`. Locals, fields and the names declarations
@@ -2011,12 +2073,11 @@ pub fn config(baud: u32) -> Config {
   module's descendants; a `pub` item wherever its module is.
 - `pub` comes after the attributes and before the item's keywords: `pub
   fn`, `pub extern fn`, `pub static mut`, `pub extern static`, `pub
-  struct`, `pub enum`, `pub const`, `pub mod`, `pub use`, `pub panic fn`,
-  `#[export] pub fn`. On a `comptime` or `memory` block, which has no
-  name, and on the entry function, which nothing may call, it is
-  `parser::misplaced-pub`.
-  Before a field it is allowed (below); before anything else, such as a
-  variant, a parameter, a `let` or another `pub`, it is
+  struct`, `pub enum`, `pub const`, `pub peripheral`, `pub mod`, `pub
+  use`, `pub panic fn`, `#[export] pub fn`. On a `comptime` or `memory`
+  block, which has no name, and on the entry function, which nothing may
+  call, it is `parser::misplaced-pub`. Before a field or a register it is allowed (below); before anything
+  else, such as a variant, a parameter, a `let` or another `pub`, it is
   `parser::unexpected-token`.
 - A path is usable where **each of its segments** is visible: a `pub` item
   inside a private module is usable only where that module is. Naming an
@@ -2055,6 +2116,16 @@ pub fn config(baud: u32) -> Config {
   struct is built outside its module only by a function of that module.
 - Visibility changes no layout: private fields are laid out, copied and
   passed like any other, and `size_of` counts them.
+- **Registers** follow the rules of fields (ADR 0058): a register is
+  private to the module of its peripheral type unless declared `pub`
+  (`pub read lsr: u8 at 5`), and a `pub` one is visible wherever its
+  peripheral type is reachable, and only there. Where a register is not
+  visible, no place may name it, through a peripheral or through a
+  pointer (`ty::private-register`): a `pub` peripheral of a private
+  peripheral type is reachable, but its `pub` registers are not seen
+  through it, as the `pub` fields of a `pub static` of a private struct
+  are not. A driver module can keep its registers private and offer
+  functions.
 
 **Variants.**
 
@@ -2111,8 +2182,8 @@ pub fn config(baud: u32) -> Config {
   that an item can move between modules without changing its symbol. It
   takes no argument (`resolve::attribute-argument`), and given twice is
   `resolve::duplicate-attribute`. On any other item (`extern fn`,
-  `extern static`, struct, enum, constant, module, `use`, `comptime`
-  block) it is `resolve::misplaced-attribute`.
+  `extern static`, struct, enum, constant, peripheral type, peripheral,
+  module, `use`, `comptime` block) it is `resolve::misplaced-attribute`.
 - An **`extern fn` or `extern static`** always has its own name, in any
   module: it names a symbol defined outside the program.
 - The entry and panic functions follow the same rules; `_start` jumps to
@@ -2141,6 +2212,9 @@ pub fn config(baud: u32) -> Config {
   is emitted as an external symbol of the object file (ADR 0030). Byte
   strings and other constant data keep private names, and bodies run only
   at compile time are not emitted.
+- Peripheral types and peripherals have no symbol: nothing is emitted for
+  them, and a peripheral's address appears in the code that uses it
+  (ADR 0058).
 
 ## Memory maps (ADR 0057)
 
@@ -2330,6 +2404,310 @@ Object files given with `--link` may use the small-data sections
 link error, not data left uninitialized. No `__global_pointer$` is
 defined, so nothing is addressed relative to `gp`.
 
+## Peripherals (ADR 0058)
+
+```
+const UART_BASE: usize = 0x1000_0000;
+
+peripheral Uart16550 {
+    read rbr: u8 at 0x00,
+    write thr: u8 at 0x00,
+    read write ier: u8 at 0x01,
+    read lsr: u8 at 0x05,
+}
+
+peripheral UART0: Uart16550 at UART_BASE;
+peripheral UART1: Uart16550 at UART_BASE + 0x100;
+
+fn putc(u: *mut Uart16550, byte: u8) {
+    while (*u).lsr & 0x20 == 0 {}
+    (*u).thr = byte;
+}
+
+fn hello() {
+    UART0.ier |= 0x01;
+    UART0.thr = b'h';
+    putc(&raw mut UART1, b'i');
+}
+```
+
+A **peripheral type**, `peripheral NAME { registers }`, describes a
+device's registers, each at an offset, with a width and an access mode.
+A **peripheral**, `peripheral NAME: TYPE at ADDRESS;`, is an instance of
+a peripheral type at an address. Two instances of one design, as `UART0`
+and `UART1`, are two peripherals of one type, and a driver taking a
+pointer to the type serves both.
+
+**The items.**
+
+- Their grammar:
+
+  ```
+  peripheral_type = "peripheral" NAME "{" [ register { "," register } [ "," ] ] "}"
+  register        = [ "pub" ] access NAME ":" type "at" expr
+  access          = "read" | "write" | "read" "write"
+  peripheral      = "peripheral" NAME ":" type "at" expr ";"
+  ```
+
+  A syntax error in either is a `parser::unexpected-token`.
+- `peripheral` starts an item only where an item starts and a name
+  follows it: a `{` after the name makes a peripheral type, a `:` a
+  peripheral, and anything else is an error at that token. `read`,
+  `write` and `at` are recognized only inside the items, and a register's
+  name is the identifier just before `:`. So `read write: u8 at 0` is a
+  `read` register named `write`, while `read: u8 at 0`, a register named
+  `read` without an access mode, and `write read x: u8 at 0`, a `write`
+  register named `read` with `x` where `:` should be, are errors.
+  Elsewhere all four are ordinary
+  names, of variables, functions, fields or modules, and `read(x)` in a
+  body is a call.
+- Inside a function body, `peripheral` followed by a name is
+  `parser::local-peripheral`, for either item: no expression starts with
+  two names.
+- Both are items, in any module, in its one namespace (see "Modules and
+  paths"). A peripheral type is named like a struct, by a path, where a
+  type is written; a peripheral like a static, where a value is. Both are
+  private unless `pub`, and are brought in with `use`.
+- Attributes do not apply to either (`resolve::misplaced-attribute`, or
+  `resolve::unknown-attribute` for one that does not exist). Neither has
+  a symbol or storage: nothing is emitted for them (see "Symbols").
+
+**Registers.**
+
+- A register's **access mode** comes before its name: `read` (it is
+  read-only), `write` (write-only) or `read write`. There is no default.
+- Its **type** is `u8`, `u16` or `u32`, an unsigned integer as wide as
+  the register; any other type is `ty::register-type` (see "What is
+  checked" below).
+- Its **offset**, after `at`, is a `usize` computed at compile time, like
+  an array length (see "Compile-time execution"), in the scope of the
+  module holding the peripheral type: it may name that module's private
+  constants and call its functions.
+- A register is private to the module of its peripheral type unless
+  declared `pub`, as a field is (see "Visibility").
+- Two registers of one type cannot share a name
+  (`resolve::duplicate-register`, at the second, labeling the first),
+  whatever their modes: a `read` and a `write` register at one offset
+  take two names, as `rbr` and `thr`. Registers of two types may share a
+  name.
+- A peripheral type may have no register: `peripheral Empty {}`.
+
+**Peripherals.**
+
+- The type of a peripheral is a path naming a peripheral type. Another
+  type (a struct, an enum, a built-in type, or a pointer, array or slice
+  type, even a pointer to a peripheral type) is
+  `resolve::not-a-peripheral-type`; a name that names nothing, or an item
+  that is no type, stays `resolve::unknown-type`.
+- Its **address**, after `at`, is a `usize` computed at compile time in
+  the scope of its module, like an offset. It may be computed from
+  another peripheral's, as `(&raw const UART0 as usize) + 0x100`.
+- Every offset and address is computed, and every peripheral type and
+  peripheral checked, whether code uses them or not.
+
+**Layout.**
+
+- A peripheral type's **extent** is the end of the register that ends
+  last, `offset + width`, wherever it is declared, and 0 for an empty
+  type. It is computed exactly: a `u32` at `0xFFFF_FFFC` gives an extent
+  of `0x1_0000_0000`, which no `usize` holds. Its
+  **alignment** is the width of its widest register, and 1 for an empty
+  type. `Uart16550` above has extent 6 and alignment 1.
+- A peripheral covers `[address, address + extent)`; one of an empty type
+  covers no byte.
+- A register's offset must be a multiple of its width
+  (`ty::misaligned-register`), and a peripheral's address a multiple of
+  its type's alignment (`ty::misaligned-peripheral`), so that every
+  register access is aligned, as its one instruction assumes (ADR 0019,
+  0023).
+- Two registers of one type may share no byte (`ty::register-overlap`),
+  except when one is `read` and the other `write`: a read can then only
+  mean one of them and a write the other, as the 16550's `rbr` and `thr`
+  at offset 0. A `read write` register shares bytes with no other.
+- Two peripherals may share no byte (`ty::peripheral-overlap`), and a
+  peripheral must end at `0x1_0000_0000` or below
+  (`ty::peripheral-out-of-range`): unlike a region, it needs no address
+  one past its end, so its last byte may be the last of the address
+  space.
+- Registers that share bytes in one mode, as the 16550's divisor latch
+  over `rbr`, `thr` and `ier`, and devices that share addresses cannot be
+  declared. A second view of such registers is reached through a pointer
+  made with `as` (below), which no check sees.
+- Peripherals are not checked against the regions of the `memory` block:
+  one placed over a region is not detected, and writing its registers
+  writes that memory.
+
+**Accesses.** A register is reached from a peripheral, `UART0.thr`, or
+through a pointer to a peripheral type, `(*u).thr`. Either is a place of
+the register's type:
+
+- **Each read is one volatile load of the register's width at its
+  address, the device's plus its offset, and each write one volatile
+  store**, with the guarantee of "Volatile accesses": never split,
+  merged, widened, narrowed, duplicated, removed or reordered relative to
+  other volatile accesses, those through volatile pointers included, and
+  not ordered against ordinary accesses. Two reads of one register are two loads, and a read
+  of `rbr` then a write of `thr`, at one address, happen in that order.
+- Reading a `write` register is `ty::read-of-write-only`, and writing a
+  `read` register `ty::write-to-read-only`. A read is any use of the
+  register's value: an operand, an initializer, an argument, a condition,
+  a `match` scrutinee, or an expression statement, as `UART0.lsr;`. A
+  compound assignment, `UART0.ier |= 1`, reads then writes, one load then
+  one store, not atomic: it needs `read write`, and on another mode is
+  reported as the access that mode forbids.
+- Through a `*const` pointer to a peripheral type, registers are read;
+  writing one is `ty::write-through-const`, as through any `*const`
+  pointer, and writing a `read` register through one reports both
+  errors, each a fault of its own.
+- A name that is no register of the type is `ty::unknown-register`, whose
+  help lists the registers visible there; a register that is not visible
+  there is `ty::private-register`. `u.thr`, with `u` a pointer, is
+  `ty::no-fields`: dereference it first, `(*u).thr`.
+- `&raw` of a register is `ty::register-address`: the pointer would reach
+  the register without its access mode. Pass the device instead, as
+  `&raw mut UART0`.
+- A peripheral, or `*u`, read, written or passed as a whole (`let x: u8 =
+  UART0;`, `take(*u)`, `UART0 = 0`, `UART0 += 1`) is
+  `ty::peripheral-by-value`, once: a device is reached one register at a
+  time. Written whole through a `*const` pointer, `*c = 0` is that error
+  alone. `UART0[0]` is `ty::cannot-index`.
+
+**Pointers to peripheral types.** `&raw const UART0` and `&raw mut UART0`
+give a `*const Uart16550` and a `*mut Uart16550`, through which a driver
+serves any instance, as `putc` above does:
+
+- A peripheral is not `mut`, and `&raw mut` of one is allowed: what may
+  be written is its registers' business. `&raw mut *u` and `&raw const
+  *u` give the pointer back.
+- Accesses through such a pointer are volatile because they reach
+  registers, so the pointer is written without `volatile`: `*mut volatile
+  Uart16550` is `ty::volatile-peripheral`, wherever the type is written,
+  and is then taken as `*mut Uart16550`, so that nothing more is reported
+  where it is used.
+- They are thin pointers like any other: a `*mut` one is accepted where a
+  `*const` one is expected (see "Typing"), and they are compared, held in
+  variables, fields, statics and `Option`, and passed by value.
+- Pointer casts to and from them are allowed, as any pointer cast
+  (ADR 0019): `0x1000_0000 as *mut Uart16550` makes one without a
+  peripheral, through which registers are reached as through `&raw mut
+  UART0`, and `&raw mut UART0 as *mut u8` reaches the device's memory
+  without the registers' widths, access modes or volatility. The cast
+  says so where it is written.
+- Indexing one is `ty::peripheral-index` (see "Pointers").
+
+**At compile time.**
+
+- A register access is `eval::volatile-access`, as any volatile access
+  is, through a pointer made from an integer too.
+- `&raw const UART0` and `&raw mut UART0` are pointers made from an
+  integer, the peripheral's address (ADR 0030): `&raw mut UART0 as usize
+  == 0x1000_0000` holds in a `comptime` block, and a constant or a static
+  may hold one, as `static CONSOLE: *mut Uart16550 = &raw mut UART0;`,
+  emitted as that address.
+- An offset or an address whose computation needs itself, as `peripheral
+  A: T at &raw const A as usize;`, is `ty::cycle`, as any value computed
+  at compile time. So is an offset whose computation names a pointer to
+  its own peripheral type, as `read status: u32 at (0x4 as *mut Regs) as
+  usize` in `Regs`, whichever of the offset and the type's layout is
+  computed first, as for a struct's array length naming a pointer to the
+  struct (see "Failed lengths and alignments").
+
+**Failed values.** A register's offset, a register's type in error and a
+peripheral's address are failed values (see "Failed lengths and
+alignments"), each reported once, where it is written:
+
+- A register's type is in error when it is `!` (`ty::never-in-memory`,
+  with a help of its own), `[T]` (`ty::unsized`), a type reaching a
+  failed value, as a `[u8; N]` whose length failed, or no register type
+  (`ty::register-type`). A type already in error is not also
+  `ty::register-type`.
+- A peripheral type with a failed offset or register type reaches a
+  failed value, and so does a type containing a pointer to it; a
+  peripheral whose type reaches one, or whose address failed, is
+  erroneous. Code that names such a peripheral, or whose types reach such
+  a peripheral type, is not built (see "Failed lengths and alignments").
+- The checks of "Layout" that need a failed value are skipped: a
+  register whose offset or type failed takes part in no other check, and
+  neither does an erroneous peripheral. A misaligned register, and a
+  misaligned or out-of-range peripheral, still take part in the overlap
+  checks.
+- An offset or an address computed from an erroneous peripheral, as
+  `(&raw const BROKEN as usize) + 0x100` with `BROKEN`'s address failed,
+  fails in turn without an error of its own.
+
+A register type that is no register type and mentions a peripheral type,
+behind pointers or inside other types (`*mut B`, `B` itself, a struct
+holding a `*mut B`), stays silent only when that type's failure is
+explained by an error reported elsewhere, so that a program in error
+always reports one:
+
+- A peripheral type's failure is **explained** when it has an offset that
+  failed, or a register type in error in itself (`!`, `[T]`, a type
+  reaching a failed length or alignment) or that is no register type and
+  mentions no peripheral type (`u64`, `bool`, `*mut u32`, a struct), or,
+  transitively, a register whose type, no register type, reaches a type
+  whose failure is explained.
+- A register type reaching a type whose failure is explained stays
+  silent: with `peripheral B { read write s: u64 at 0 }`, `peripheral A {
+  read write r: *mut B at 0 }` and `peripheral C { read write t: *mut A at
+  0 }`, only the `u64` is reported, whatever the order of the
+  declarations.
+- One reaching only types whose failure nothing explains is
+  `ty::register-type`: a pointer to its own type (`*mut Regs` in `Regs`)
+  or that type itself, two types whose registers only point to each
+  other, a pointer to a type whose only failures are such registers, a
+  pointer to a peripheral type without failure, and a cycle through a
+  struct. Each of these types still reaches a failed value.
+
+**What is checked.** When names are resolved:
+
+| Code | Case |
+|------|------|
+| `parser::local-peripheral` | a peripheral type or a peripheral inside a function body |
+| `resolve::duplicate-register` | two registers with one name in a peripheral type |
+| `resolve::not-a-peripheral-type` | the type of a peripheral names a type that is no peripheral type |
+| `resolve::misplaced-attribute` | an attribute on a peripheral type or a peripheral |
+
+Names shared with other items of the module are `resolve::duplicate-item`
+(see "Modules and paths").
+
+Once the values are computed, during type checking, so whatever stage
+`--emit` asks for after it, with a check that needs a failed value
+skipped:
+
+| Code | Case |
+|------|------|
+| `ty::register-type` | a register whose type is not `u8`, `u16` or `u32`, at the type |
+| `ty::misaligned-register` | a register's offset that is not a multiple of its width, at the offset, labeling the type |
+| `ty::register-overlap` | two registers sharing a byte, unless one is `read` and the other `write`; once per pair, at the later register in the type, labeling the earlier |
+| `ty::misaligned-peripheral` | a peripheral's address that is not a multiple of its type's alignment, at the address, labeling the type |
+| `ty::peripheral-out-of-range` | a peripheral whose end, `address + extent`, is above `0x1_0000_0000` |
+| `ty::peripheral-overlap` | two peripherals sharing a byte; once per pair, at the later peripheral, labeling the earlier |
+
+"Later" for peripherals is as for the `memory` block: in the order of
+files, numbered depth first (see "Modules and paths"), then of positions
+in a file. Ranges and offsets are shown in hexadecimal.
+
+When code is type checked:
+
+| Code | Case |
+|------|------|
+| `ty::peripheral-by-value` | a peripheral type where a value would have it (see "Types"), or a peripheral or `*u` read, written or passed as a whole |
+| `ty::volatile-peripheral` | `volatile` on a pointer to a peripheral type |
+| `ty::peripheral-index` | indexing a pointer to a peripheral type |
+| `ty::unknown-register` | a name that is no register of the peripheral type |
+| `ty::private-register` | a register not visible where it is named |
+| `ty::write-to-read-only` | a write, or a compound assignment, to a `read` register |
+| `ty::read-of-write-only` | a read, or a compound assignment, of a `write` register |
+| `ty::register-address` | `&raw` of a register |
+
+**The code.** A register reached from a peripheral is accessed at a
+constant address, the peripheral's plus the register's offset, with no
+symbol, storage or indirection for the peripheral; one reached through a
+pointer, at the pointer plus the offset. Until M5, any code that can name
+a peripheral reaches it, as with a `static mut`; ownership of peripherals
+is M5's.
+
 ## `core` (ADR 0020, 0052)
 
 `core` is a module tree written in Erebos and shipped inside the
@@ -2514,8 +2892,17 @@ prints a compiler stage instead: `tokens`, `ast`, `hir`, `typeck`, `mir`,
   the offset of each payload value, its size and its alignment, then each
   `Option(T)` and `Result(T, E)` used, sorted by name, and list the bodies
   run at compile time as `comptime fn`, named by path, a variant's value
-  as `comptime fn Mode::Run` and the values of the `memory` block as
-  `comptime fn origin`, `size` and `stack_size`.
+  as `comptime fn Mode::Run`, the values of the `memory` block as
+  `comptime fn origin`, `size` and `stack_size`, a register's offset as
+  `comptime fn offset` and a peripheral's address as `comptime fn
+  address`.
+- Both list each peripheral type, by path, with its registers' types and
+  offsets, its extent and its alignment, and each peripheral with its
+  type and address (see "Peripherals"). `typeck` lists them between the
+  `memory` block and the structs, with each register's mode and the range
+  each peripheral covers, and leaves out those that reach a failed value;
+  `mir` lists them after the enums and before the statics, numbering the
+  registers as the projections that reach them name them (`(*_1).1`).
 
 See `CONTRIBUTING.md` for setup and running on QEMU.
 
@@ -2543,6 +2930,7 @@ Every error has a stable code, shown with the message.
 | `parser::local-mod` | `mod` inside a function body |
 | `parser::local-use` | `use` inside a function body |
 | `parser::local-memory` | a `memory` block inside a function body: `memory {` followed by `region` and a name, or by `code`, `data` or `stack` and `in` |
+| `parser::local-peripheral` | a peripheral type or a peripheral inside a function body: `peripheral` followed by a name |
 | `parser::misplaced-pub` | `pub` on a `comptime` block, a `memory` block or the entry function |
 | `parser::enum-without-type` | an enum without `: Type` |
 | `parser::variant-without-value` | a variant without `= value` |
@@ -2575,7 +2963,7 @@ Every error has a stable code, shown with the message.
 | `resolve::empty-enum` | an enum without variants |
 | `resolve::unknown-variant` | `E::V` where `E` has no variant `V`; a path followed by patterns in parentheses that names no variant |
 | `resolve::not-an-enum` | `X::V` where `X` names neither a module nor an enum: a struct, a constant, a variant, a built-in type or function, or `Option` or `Result`, which are no items and whose variants are written `.V` |
-| `resolve::not-a-constant` | a name or path in a pattern that is not a constant: a local variable, parameter, static, function, struct or enum |
+| `resolve::not-a-constant` | a name or path in a pattern that is not a constant: a local variable, parameter, static, peripheral, function, struct or enum |
 | `resolve::duplicate-binding` | one name bound twice in one pattern, or in one alternative of an or-pattern |
 | `resolve::inconsistent-binding` | a name not bound by every alternative of an or-pattern, or bound with `let mut` by only some |
 | `resolve::reserved-name` | an item, module or `use` named `_start`, `core`, with a name starting with `__`, or like a built-in function (`assert`, `len`, `slice`); a module of the root module named `llvm` or `rt`; a region named `INCLUDE` |
@@ -2592,9 +2980,11 @@ Every error has a stable code, shown with the message.
 | `resolve::duplicate-placement` | `code`, `data` or `stack` placed twice |
 | `resolve::missing-placement` | `code`, `data` or `stack` not placed |
 | `resolve::stack-with-code` | the stack placed in the code's region |
+| `resolve::duplicate-register` | two registers with one name in a peripheral type |
+| `resolve::not-a-peripheral-type` | the type of a peripheral names a type that is no peripheral type |
 | `resolve::outside-loop` | `break`/`continue` outside a loop |
 | `resolve::break-value-in-while` | `break value` in a `while` |
-| `resolve::return-in-comptime` | `return` or `?` in code run at compile time on its own: a `comptime` expression or block, the initializer of a constant or static, a variant's value, an array length, a repeat count, an `#[align(N)]` argument or a value of a `memory` block |
+| `resolve::return-in-comptime` | `return` or `?` in code run at compile time on its own: a `comptime` expression or block, the initializer of a constant or static, a variant's value, an array length, a repeat count, an `#[align(N)]` argument, a value of a `memory` block, a register's offset or a peripheral's address |
 | `ty::mismatched-types` | a value of the wrong type, or a `.V` where the expected type, or the position's type, is not an enum |
 | `ty::untyped-literal` | a literal or array literal with no expected type |
 | `ty::untyped-variant` | a `.V` with no expected type, as a `match` scrutinee, the operand of `as` or `?`, or an expression statement |
@@ -2626,7 +3016,7 @@ Every error has a stable code, shown with the message.
 | `ty::too-large` | a value larger than half the address space |
 | `ty::infinite-size` | structs and enums that contain themselves, directly, through each other or through `Option` and `Result` |
 | `ty::unsized` | `[T]` where a size is needed, or `*s` read or written whole |
-| `ty::never-in-memory` | `!` as a pointee, slice element, field, payload type, type argument of `Option` or `Result`, array element, the type of a static, `extern static`, `const` or `comptime` value, a layout query operand, or under `&raw` |
+| `ty::never-in-memory` | `!` as a pointee, slice element, field, payload type, type argument of `Option` or `Result`, array element, register type, the type of a static, `extern static`, `const` or `comptime` value, a layout query operand, or under `&raw` |
 | `ty::invalid-align` | `#[align(N)]` on a struct or static with `N` not a power of two, too large or below the natural alignment |
 | `ty::aligned-in-packed` | a packed struct containing a type with `#[align(N)]`, at any depth, such as an enum with such a payload |
 | `ty::not-comptime` | a run-time variable where a compile-time value is required |
@@ -2650,11 +3040,25 @@ Every error has a stable code, shown with the message.
 | `ty::region-overlap` | two regions sharing an address |
 | `ty::misaligned-code` | the code's region starting at an address that is not a multiple of 4 |
 | `ty::stack-size` | a stack of size 0, not a multiple of 16, or that does not fit in its region |
+| `ty::register-type` | a register whose type is not `u8`, `u16` or `u32` |
+| `ty::misaligned-register` | a register's offset that is not a multiple of its width |
+| `ty::register-overlap` | two registers of one peripheral type sharing a byte, unless one is `read` and the other `write` |
+| `ty::misaligned-peripheral` | a peripheral's address that is not a multiple of its type's alignment |
+| `ty::peripheral-out-of-range` | a peripheral whose end is above `0x1_0000_0000` |
+| `ty::peripheral-overlap` | two peripherals sharing a byte |
+| `ty::peripheral-by-value` | a peripheral type where a value would have it, or a peripheral or `*u` read, written or passed as a whole |
+| `ty::volatile-peripheral` | `volatile` on a pointer to a peripheral type |
+| `ty::peripheral-index` | indexing a pointer to a peripheral type |
+| `ty::unknown-register` | a name that is no register of the peripheral type |
+| `ty::private-register` | a register that is not visible here |
+| `ty::write-to-read-only` | a write, or a compound assignment, to a `read` register |
+| `ty::read-of-write-only` | a read, or a compound assignment, of a `write` register |
+| `ty::register-address` | `&raw` of a register |
 | `eval::panic` | compile-time code reached the panic function: a zero divisor, an index out of bounds, an enum value that is no variant in a `match` that no arm matches or under `?`, an explicit call |
 | `eval::assertion-failed` | `assert` with a false condition at compile time, with its message if it has one |
 | `eval::step-limit` | compile-time code ran more than 10,000,000 steps |
 | `eval::call-depth` | compile-time code nested more than 256 calls |
-| `eval::volatile-access` | a volatile access at compile time |
+| `eval::volatile-access` | a volatile access at compile time, through a volatile pointer or to a register |
 | `eval::extern-call` | a call to an `extern fn` at compile time |
 | `eval::invalid-access` | reading or writing through a pointer made from an integer, or outside an object |
 | `eval::static-mut` | reading or writing a `static mut` at compile time |
