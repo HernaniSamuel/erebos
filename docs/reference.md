@@ -2594,6 +2594,9 @@ serves any instance, as `putc` above does:
   without the registers' widths, access modes or volatility. The cast
   says so where it is written.
 - Indexing one is `ty::peripheral-index` (see "Pointers").
+- `slice(u, n)` of one is `ty::peripheral-by-value`, as `*mut [Uart16550]`
+  written is: a peripheral type is no slice element. It is reported once,
+  and `len` of the slice, or indexing it, adds no error.
 
 **At compile time.**
 

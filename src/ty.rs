@@ -2039,6 +2039,26 @@ impl Checker<'_, '_> {
                     );
                     Ty::Error
                 }
+                // `*mut [Uart]` written is reported in HIR lowering; this
+                // is the one way to make it from a type not written so.
+                Ty::Peripheral(_) => {
+                    let raw = if ptr.mutable {
+                        "&raw mut"
+                    } else {
+                        "&raw const"
+                    };
+                    self.q.diags.push(
+                        peripheral_by_value(*ptr.pointee)
+                            .label(
+                                pointer.span,
+                                format!("a `{ty}`, so its elements would be `{}`", ptr.pointee),
+                            )
+                            .help(format!(
+                                "a peripheral type has no size, so there is no slice of devices; each one is reached through its own `{ty}`, such as `{raw} P` (ADR 0058)"
+                            )),
+                    );
+                    Ty::Error
+                }
                 pointee => Ty::ptr(ptr.mutable, ptr.volatile, Ty::slice(pointee)),
             },
             Ty::Never => Ty::Never,

@@ -1,0 +1,21 @@
+// emit: typeck
+// A peripheral type is no slice element (ADR 0058): `slice(p, n)` with `p`
+// a pointer to one is `ty::peripheral-by-value`, as `*mut [Uart]` written
+// is, once, and what is done with the slice then causes no further error,
+// neither `len` nor indexing it nor a register of an element.
+peripheral Uart {
+    read data: u8 at 0,
+}
+
+peripheral UART0: Uart at 0x3000;
+
+fn length() -> usize {
+    len(slice(&raw mut UART0, 2))
+}
+
+fn register() -> u8 {
+    (*slice(&raw const UART0, 2))[1].data
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

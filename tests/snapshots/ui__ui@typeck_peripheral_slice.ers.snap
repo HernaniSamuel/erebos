@@ -1,0 +1,31 @@
+---
+source: tests/ui.rs
+assertion_line: 22
+expression: output
+input_file: tests/ui/typeck_peripheral_slice.ers
+---
+--- errors ---
+ty::peripheral-by-value
+
+  × `Uart` is a peripheral type, which no value has
+    ╭─[typeck_peripheral_slice.ers:13:15]
+ 12 │ fn length() -> usize {
+ 13 │     len(slice(&raw mut UART0, 2))
+    ·               ───────┬──────
+    ·                      ╰── a `*mut Uart`, so its elements would be `Uart`
+ 14 │ }
+    ╰────
+  help: a peripheral type has no size, so there is no slice of devices; each one is reached
+        through its own `*mut Uart`, such as `&raw mut P` (ADR 0058)
+ty::peripheral-by-value
+
+  × `Uart` is a peripheral type, which no value has
+    ╭─[typeck_peripheral_slice.ers:17:13]
+ 16 │ fn register() -> u8 {
+ 17 │     (*slice(&raw const UART0, 2))[1].data
+    ·             ────────┬───────
+    ·                     ╰── a `*const Uart`, so its elements would be `Uart`
+ 18 │ }
+    ╰────
+  help: a peripheral type has no size, so there is no slice of devices; each one is reached
+        through its own `*const Uart`, such as `&raw const P` (ADR 0058)
