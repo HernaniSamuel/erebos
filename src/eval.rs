@@ -830,6 +830,18 @@ impl Interp<'_, '_> {
                         ..current
                     }
                 }
+                // Accessed volatile, so never at compile time (ADR 0058).
+                // Its offset is known: the body has an expression of the
+                // peripheral type, whose layout was computed before the
+                // body was built, or the body would not exist.
+                (PlaceElem::Field(index), Ty::Peripheral(p)) => {
+                    let def = p.def();
+                    PlaceRef {
+                        ptr: current.ptr.add(def.offset(index)),
+                        volatile: true,
+                        ty: def.registers[index as usize].ty,
+                    }
+                }
                 // Reached by offset, as fields are (ADR 0039).
                 (PlaceElem::Tag, Ty::Enum(e)) => PlaceRef {
                     ty: Ty::Int(e.def().int),
@@ -1121,6 +1133,10 @@ impl Interp<'_, '_> {
                 alloc: self.static_alloc(*s),
                 offset: 0,
             })),
+            // A pointer made from an integer, its address (ADR 0030, 0058).
+            Operand::Const(Const::Peripheral(p)) => {
+                Ok(Scalar::Ptr(Pointer::Addr(p.def().address as u32)))
+            }
         }
     }
 

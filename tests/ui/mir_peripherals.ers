@@ -1,0 +1,36 @@
+// emit: mir
+// Peripherals in MIR (ADR 0058): a peripheral is a constant operand holding
+// its address, of type `*mut T`, stored in a temporary and dereferenced as
+// a static's address is; a register is a projection by index on the
+// peripheral type, which MIR lists with its registers' offsets, extent and
+// alignment. A compound assignment reads the register, then writes it.
+// Through a pointer, the register is the same projection on the pointer's
+// place. `&raw mut` and `&raw const` of a peripheral are its address.
+peripheral Uart {
+    read rbr: u8 at 0,
+    write thr: u8 at 0,
+    read write ier: u8 at 1,
+    read lsr: u8 at 5,
+}
+
+peripheral UART0: Uart at 0x1000_0000;
+
+fn from_peripheral() -> u8 {
+    UART0.thr = 0x68;
+    UART0.ier |= 1;
+    UART0.rbr
+}
+
+fn through_pointer(u: *mut Uart) -> u8 {
+    (*u).thr = 0x68;
+    (*u).ier |= 1;
+    (*u).rbr
+}
+
+fn addresses() -> *const Uart {
+    let u: *mut Uart = &raw mut UART0;
+    &raw const UART0
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

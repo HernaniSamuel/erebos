@@ -1,0 +1,70 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/eval_peripherals.ers
+---
+--- errors ---
+eval::volatile-access
+
+  × a volatile access cannot happen at compile time
+    ╭─[eval_peripherals.ers:25:17]
+ 24 │ 
+ 25 │ const LSR: u8 = UART0.lsr;
+    ·       ─┬─       ────┬────
+    ·        │            ╰── accessed here
+    ·        ╰── while evaluating the constant `LSR`
+ 26 │ 
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::volatile-access
+
+  × a volatile access cannot happen at compile time
+    ╭─[eval_peripherals.ers:29:5]
+ 26 │ 
+ 27 │ const VIA: u8 = {
+    ·       ─┬─
+    ·        ╰── while evaluating the constant `VIA`
+ 28 │     let u: *mut Uart = 0x1000_0000 as *mut Uart;
+ 29 │     (*u).lsr
+    ·     ────┬───
+    ·         ╰── accessed here
+ 30 │ };
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::volatile-access
+
+  × a volatile access cannot happen at compile time
+    ╭─[eval_peripherals.ers:33:5]
+ 31 │ 
+ 32 │ comptime {
+    · ────┬───
+    ·     ╰── while evaluating this `comptime` block
+ 33 │     UART0.thr = 1;
+    ·     ──────┬──────
+    ·           ╰── accessed here
+ 34 │ }
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+ty::cycle
+
+  × this value depends on its own value
+    ╭─[eval_peripherals.ers:44:26]
+ 43 │ 
+ 44 │ peripheral SELF: Uart at &raw const SELF as usize;
+    ·                          ────────────┬───────────
+    ·                                      ╰── needed while computing itself
+ 45 │ 
+    ╰────
+  help: break the cycle: a value cannot depend on itself (ADR 0028)
+eval::panic
+
+  × the evaluation called the panic function: division by zero
+    ╭─[eval_peripherals.ers:46:42]
+ 45 │ 
+ 46 │ peripheral BROKEN: Uart at 0x2000_0000 + 0 / zero();
+    ·                            ────────────┬───────────┬
+    ·                                        │           ╰── division by zero
+    ·                                        ╰── while evaluating this value
+ 47 │ peripheral NEXT: Timer at (&raw const BROKEN as usize) + 0x101;
+    ╰────
+  help: this code runs at compile time (ADR 0027)

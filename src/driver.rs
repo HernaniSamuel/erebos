@@ -444,8 +444,9 @@ fn read_module_file(file: &str, module: &str, program: &Program) -> Result<Strin
 enum FrontEnd {
     /// Stopped at the requested stage.
     Dump(String),
-    /// Ran to completion (or the requested stage comes after MIR).
-    Mir(mir::Mir),
+    /// Ran to completion (or the requested stage comes after MIR). Boxed:
+    /// the MIR is much larger than the other variants.
+    Mir(Box<mir::Mir>),
     /// A stage failed; the errors are in the diagnostics.
     Failed,
 }
@@ -553,7 +554,7 @@ fn front_end(
     if stop == Some(Stage::Mir) {
         return FrontEnd::Dump(mir.to_string());
     }
-    FrontEnd::Mir(mir)
+    FrontEnd::Mir(Box::new(mir))
 }
 
 #[cfg(test)]

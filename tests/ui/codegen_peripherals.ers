@@ -1,0 +1,83 @@
+// emit: llvm-ir
+// opt: both
+// ADR 0058: each register read is one volatile load of the register's
+// width at the peripheral's address plus the register's offset, and each
+// write one volatile store, from a peripheral and through a pointer to its
+// type alike, with or without `-O`. A compound assignment is one load then
+// one store; two reads of one register stay two; reading `rbr` then
+// writing `thr`, at one address, keeps that order; a register write and a
+// write through a volatile pointer keep their order, both ways round
+// (ADR 0023). A pointer made with `as` from an integer reaches registers
+// the same way. No global is emitted for a peripheral.
+peripheral Uart {
+    read rbr: u8 at 0,
+    write thr: u8 at 0,
+    read write ier: u8 at 1,
+    read lsr: u8 at 5,
+}
+
+peripheral Timer {
+    read write ctrl: u32 at 0,
+    read count: u16 at 4,
+    write reload: u16 at 6,
+}
+
+peripheral UART0: Uart at 0x1000_0000;
+peripheral TIMER0: Timer at 0x2000_0000;
+
+// Each width, from a peripheral: stores of `i8`, `i16` and `i32`, then
+// loads of `i8` at offset 5, `i16` at offset 4 and `i32` at offset 0.
+fn widths() -> u32 {
+    UART0.thr = 1;
+    TIMER0.reload = 2;
+    TIMER0.ctrl = 3;
+    let lsr: u8 = UART0.lsr;
+    let count: u16 = TIMER0.count;
+    TIMER0.ctrl + lsr as u32 + count as u32
+}
+
+// The same, through a pointer.
+fn widths_through(u: *mut Uart, t: *mut Timer) -> u32 {
+    (*u).thr = 1;
+    (*t).reload = 2;
+    (*t).ctrl = 3;
+    let lsr: u8 = (*u).lsr;
+    let count: u16 = (*t).count;
+    (*t).ctrl + lsr as u32 + count as u32
+}
+
+// One load, then one store.
+fn compound(u: *mut Uart) {
+    UART0.ier |= 1;
+    (*u).ier |= 1;
+}
+
+// Two loads, neither merged nor removed.
+fn twice() -> u8 {
+    let first: u8 = UART0.lsr;
+    let second: u8 = UART0.lsr;
+    first + second
+}
+
+// A load at the address, then a store at the same address.
+fn echo() {
+    UART0.thr = UART0.rbr;
+}
+
+// A store to the register, then one through the volatile pointer, then the
+// other way round.
+fn with_volatile(buffer: *mut volatile u8) {
+    UART0.thr = 1;
+    *buffer = 2;
+    *buffer = 3;
+    UART0.thr = 4;
+}
+
+// A pointer made from an integer.
+fn from_integer() {
+    let u: *mut Uart = 0x1000_1000 as *mut Uart;
+    (*u).thr = 5;
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

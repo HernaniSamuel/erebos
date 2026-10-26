@@ -1,0 +1,70 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_peripheral_offset_cycle.ers
+---
+--- errors ---
+ty::cycle
+
+  × this value depends on its own value
+    ╭─[typeck_peripheral_offset_cycle.ers:23:25]
+ 20 │ 
+ 21 │ peripheral Cast {
+    ·            ──┬─
+    ·              ╰── through the layout of `Cast`
+ 22 │     read write ctrl: u32 at 0,
+ 23 │     read status: u32 at (0x4 as *mut Cast) as usize,
+    ·                         ─────────────┬─────────────
+    ·                                      ╰── needed while computing itself
+ 24 │ }
+    ╰────
+  help: break the cycle: a value cannot depend on itself (ADR 0028)
+ty::cycle
+
+  × the layout of `CastEarly` depends on its own value
+    ╭─[typeck_peripheral_offset_cycle.ers:26:12]
+ 25 │ 
+ 26 │ peripheral CastEarly {
+    ·            ────┬────
+    ·                ╰── needed while computing itself
+ 27 │     read write ctrl: u32 at 0,
+ 28 │     read status: u32 at (0x4 as *mut CastEarly) as usize,
+    ·                         ────────────────┬───────────────
+    ·                                         ╰── through this value
+ 29 │ }
+    ╰────
+  help: break the cycle: a value cannot depend on itself (ADR 0028)
+ty::cycle
+
+  × this value depends on its own value
+    ╭─[typeck_peripheral_offset_cycle.ers:33:19]
+ 30 │     
+ 31 │     peripheral Read {
+    ·                ──┬─
+    ·                  ╰── through the layout of `Read`
+ 32 │         read a: u8 at 0,
+ 33 │ ╭─▶     read b: u8 at {
+ 34 │ │           let p: *mut Read = 0x10 as *mut Read;
+ 35 │ │           (*p).a as usize
+ 36 │ ├─▶     },
+    · ╰──── needed while computing itself
+ 37 │     }
+    ╰────
+  help: break the cycle: a value cannot depend on itself (ADR 0028)
+ty::cycle
+
+  × the layout of `ReadEarly` depends on its own value
+    ╭─[typeck_peripheral_offset_cycle.ers:39:12]
+ 38 │     
+ 39 │     peripheral ReadEarly {
+    ·                ────┬────
+    ·                    ╰── needed while computing itself
+ 40 │         read a: u8 at 0,
+ 41 │ ╭─▶     read b: u8 at {
+ 42 │ │           let p: *mut ReadEarly = 0x10 as *mut ReadEarly;
+ 43 │ │           (*p).a as usize
+ 44 │ ├─▶     },
+    · ╰──── through this value
+ 45 │     }
+    ╰────
+  help: break the cycle: a value cannot depend on itself (ADR 0028)

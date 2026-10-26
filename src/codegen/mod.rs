@@ -181,7 +181,13 @@ fn basic_type(context: &Context, ty: Ty) -> Option<BasicTypeEnum<'_>> {
         // A slice is an aggregate (ADR 0031).
         Ty::Ptr(_) if ty.slice_elem().is_some() => None,
         Ty::Ptr(_) => Some(context.ptr_type(AddressSpace::default()).into()),
-        Ty::Unit | Ty::Never | Ty::Array(..) | Ty::Slice(_) | Ty::Struct(_) | Ty::Enum(_) => None,
+        Ty::Unit
+        | Ty::Never
+        | Ty::Array(..)
+        | Ty::Slice(_)
+        | Ty::Struct(_)
+        | Ty::Enum(_)
+        | Ty::Peripheral(_) => None,
     }
 }
 
@@ -473,7 +479,8 @@ fn add_attribute(context: &Context, function: FunctionValue, loc: AttributeLoc, 
 #[derive(Clone, Copy)]
 struct Address<'ctx> {
     ptr: PointerValue<'ctx>,
-    /// The last pointer on the path to the place is volatile (ADR 0023).
+    /// The last pointer on the path to the place is volatile (ADR 0023),
+    /// or the place is a register (ADR 0058).
     volatile: bool,
     /// The path from that pointer goes through a field of a `#[packed]`
     /// struct, so the place may be misaligned (ADR 0022).
@@ -803,7 +810,7 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
     }
 
     /// The address of a place. A place is volatile when the last pointer on
-    /// its path is (ADR 0023).
+    /// its path is (ADR 0023), and a register always is (ADR 0058).
     fn address(&self, place: Place) -> Address<'ctx> {
         let Some(slot) = self.slots[place.local.0 as usize] else {
             // A local of type `()` occupies no memory; its address is any
@@ -853,6 +860,16 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                     ty = field.ty;
                     address.misaligned |= s.def().packed;
                     (byte_type, usize_type.const_int(field.offset, false))
+                }
+                // At its offset, accessed volatile whatever the pointer it is
+                // reached through (ADR 0058); its offset is aligned for it.
+                (PlaceElem::Field(index), Ty::Peripheral(p)) => {
+                    ty = p.def().registers[*index as usize].ty;
+                    address.volatile = true;
+                    (
+                        byte_type,
+                        usize_type.const_int(p.def().offset(*index), false),
+                    )
                 }
                 // At offset 0 of the enum (ADR 0039).
                 (PlaceElem::Tag, Ty::Enum(e)) => {
@@ -1199,6 +1216,12 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                 .into(),
             Operand::Const(Const::Unit) => unreachable!("`()` has no value to use"),
             Operand::Const(Const::Static(s)) => self.statics[s.def().id.0 as usize].into(),
+            // A constant pointer made from the integer: nothing is emitted
+            // for a peripheral (ADR 0058).
+            Operand::Const(Const::Peripheral(p)) => int_type(self.context, IntTy::Usize)
+                .const_int(p.def().address, false)
+                .const_to_pointer(self.context.ptr_type(AddressSpace::default()))
+                .into(),
         }
     }
 

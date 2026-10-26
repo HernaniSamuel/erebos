@@ -17,7 +17,7 @@ use std::ptr;
 use std::sync::OnceLock;
 
 pub use crate::int::IntTy;
-pub use crate::layout::Layout;
+pub use crate::layout::{Layout, PeripheralLayout};
 pub use crate::memory::{MemoryMap, Region};
 pub use crate::ops::{BinOp, UnOp};
 use crate::span::Span;
@@ -49,6 +49,11 @@ pub struct Mir {
     /// without payloads (ADR 0035), and an enum with payloads is a type of
     /// its own (ADR 0039).
     pub enums: Vec<Enum>,
+    /// Every peripheral type and every peripheral, for dumps: types and
+    /// operands refer to them directly, and nothing is emitted for them
+    /// (ADR 0058).
+    pub peripheral_types: Vec<PeripheralTypeRef>,
+    pub peripherals: Vec<PeripheralRef>,
     /// Read-only data computed at compile time, which constant locals are
     /// bound to (ADR 0029).
     pub data: Vec<ConstData>,
@@ -186,6 +191,11 @@ impl Mir {
 
         self.structs = unmarked(std::mem::take(&mut self.structs), &left_out.structs);
         self.enums = unmarked(std::mem::take(&mut self.enums), &left_out.enums);
+        self.peripheral_types = unmarked(
+            std::mem::take(&mut self.peripheral_types),
+            &left_out.peripheral_types,
+        );
+        self.peripherals = unmarked(std::mem::take(&mut self.peripherals), &left_out.peripherals);
 
         // Statics and data, renumbered.
         let mut statics = Vec::new();
@@ -263,6 +273,8 @@ pub struct LeftOut {
     /// Over the declared enums, which `Mir::enums` lists first; the
     /// `Option(T)` and `Result(T, E)` after them are kept.
     pub enums: Vec<bool>,
+    pub peripheral_types: Vec<bool>,
+    pub peripherals: Vec<bool>,
     /// Over the statics, then the byte strings.
     pub statics: Vec<bool>,
 }
@@ -374,6 +386,9 @@ impl Body {
                 (PlaceElem::Deref | PlaceElem::Offset(_), Ty::Ptr(ptr)) => *ptr.pointee,
                 (PlaceElem::Index(_) | PlaceElem::ConstIndex(_), Ty::Array(elem, _)) => *elem,
                 (PlaceElem::Field(index), Ty::Struct(s)) => s.def().fields()[*index as usize].ty,
+                (PlaceElem::Field(index), Ty::Peripheral(p)) => {
+                    p.def().registers[*index as usize].ty
+                }
                 (PlaceElem::Tag, Ty::Enum(e)) => Ty::Int(e.def().int),
                 (PlaceElem::Payload { variant, index }, Ty::Enum(e)) => {
                     e.def().payload(*variant, *index).ty
@@ -389,6 +404,7 @@ impl Body {
             Operand::Const(Const::Bool(_)) => Ty::Bool,
             Operand::Const(Const::Unit) => Ty::Unit,
             Operand::Const(Const::Static(s)) => s.def().address_ty(),
+            Operand::Const(Const::Peripheral(p)) => p.def().address_ty(),
         }
     }
 }
@@ -558,6 +574,9 @@ pub enum Ty {
     Struct(StructRef),
     /// An enum with payloads (ADR 0039).
     Enum(EnumRef),
+    /// A peripheral type (ADR 0058): only the pointee of a pointer, through
+    /// which its registers are reached. No value has it.
+    Peripheral(PeripheralTypeRef),
 }
 
 /// An enum, listed in dumps (ADR 0035): its integer type, and the value of
@@ -724,6 +743,139 @@ impl fmt::Debug for EnumRef {
     }
 }
 
+/// A peripheral type (ADR 0058): its registers, each reached by index
+/// through a pointer to it, and its layout. Leaked like struct definitions.
+/// Every access to a register is volatile.
+pub struct PeripheralTypeDef {
+    /// Its path, as the HIR shows it (ADR 0049).
+    pub name: String,
+    /// In declaration order. Their types are `u8`, `u16` or `u32` in a
+    /// program without errors.
+    pub registers: Vec<Register>,
+    /// Set once computed, which may be after the type is made: a struct's
+    /// field or a static may need the type before anything needs its
+    /// layout. Every body reaching a register is built after it is set.
+    layout: OnceLock<PeripheralLayout>,
+}
+
+/// A register of a peripheral type: its offset is in the type's layout.
+#[derive(Debug)]
+pub struct Register {
+    pub name: String,
+    pub ty: Ty,
+}
+
+impl PeripheralTypeDef {
+    /// Its layout, if computed already.
+    pub fn layout(&self) -> Option<&PeripheralLayout> {
+        self.layout.get()
+    }
+
+    /// The offset of register `index`, from the start of the peripheral.
+    pub fn offset(&self, index: u32) -> u64 {
+        let layout = self.layout().expect("the layout is set when MIR is used");
+        layout.offsets[index as usize]
+    }
+
+    pub fn set_layout(&self, layout: PeripheralLayout) {
+        self.layout
+            .set(layout)
+            .expect("the layout of a peripheral type is set once");
+    }
+}
+
+/// A peripheral type as a type; the same type exactly when the same
+/// definition, as structs are.
+#[derive(Clone, Copy)]
+pub struct PeripheralTypeRef(&'static PeripheralTypeDef);
+
+impl PeripheralTypeRef {
+    /// Defines a peripheral type; its layout is set later, with
+    /// `set_layout`.
+    pub fn new(name: String, registers: Vec<Register>) -> PeripheralTypeRef {
+        PeripheralTypeRef(Box::leak(Box::new(PeripheralTypeDef {
+            name,
+            registers,
+            layout: OnceLock::new(),
+        })))
+    }
+
+    pub fn def(self) -> &'static PeripheralTypeDef {
+        self.0
+    }
+}
+
+impl PartialEq for PeripheralTypeRef {
+    fn eq(&self, other: &Self) -> bool {
+        ptr::eq(self.0, other.0)
+    }
+}
+
+impl Eq for PeripheralTypeRef {}
+
+impl fmt::Debug for PeripheralTypeRef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0.name)
+    }
+}
+
+/// A peripheral (ADR 0058): a device of a peripheral type at an address,
+/// with no symbol and no storage. Operands hold its address.
+pub struct PeripheralDef {
+    /// Its path, as the HIR shows it (ADR 0049).
+    pub name: String,
+    pub address: u64,
+    pub ty: PeripheralTypeRef,
+    /// `*mut T`, with `T` its type.
+    address_ty: Ty,
+}
+
+impl PeripheralDef {
+    /// The type of its address: a peripheral is not `mut`, but what may be
+    /// written is its registers' business (ADR 0058).
+    pub fn address_ty(&self) -> Ty {
+        self.address_ty
+    }
+}
+
+/// A peripheral, as operands name it. Leaked like static definitions.
+#[derive(Clone, Copy)]
+pub struct PeripheralRef(&'static PeripheralDef);
+
+impl PeripheralRef {
+    pub fn new(name: String, address: u64, ty: PeripheralTypeRef) -> PeripheralRef {
+        let address_ty = Ty::Ptr(Ptr {
+            mutable: true,
+            volatile: false,
+            pointee: Box::leak(Box::new(Ty::Peripheral(ty))),
+        });
+        PeripheralRef(Box::leak(Box::new(PeripheralDef {
+            name,
+            address,
+            ty,
+            address_ty,
+        })))
+    }
+
+    pub fn def(self) -> &'static PeripheralDef {
+        self.0
+    }
+}
+
+impl PartialEq for PeripheralRef {
+    fn eq(&self, other: &Self) -> bool {
+        ptr::eq(self.0, other.0)
+    }
+}
+
+impl Eq for PeripheralRef {}
+
+impl fmt::Debug for PeripheralRef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0.name)
+    }
+}
+
 impl Ty {
     /// Arrays, structs, slices and enums with payloads: values made of
     /// other values, which are copied in memory rather than held in
@@ -788,6 +940,9 @@ impl Ty {
             Ty::Slice(_) => unreachable!("`[T]` is unsized, and no place has it (ADR 0031)"),
             Ty::Struct(s) => s.def().layout,
             Ty::Enum(e) => e.def().layout,
+            Ty::Peripheral(_) => {
+                unreachable!("a peripheral type has no size, and no value has it (ADR 0058)")
+            }
         }
     }
 }
@@ -822,7 +977,7 @@ pub enum Statement {
 
 /// A memory location: a local, followed by projections that step from it
 /// to another location. Accesses through a `volatile` pointer are volatile
-/// (ADR 0013).
+/// (ADR 0013), and so are accesses to a register (ADR 0058).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Place {
     pub local: Local,
@@ -844,7 +999,8 @@ pub enum PlaceElem {
     Index(Local),
     /// Element `i` of the array in the place, for an `i` known in bounds.
     ConstIndex(u64),
-    /// Field `i` of the struct in the place, in declaration order.
+    /// Field `i` of the struct in the place, or register `i` of the
+    /// peripheral type, in declaration order.
     Field(u32),
     /// The tag of the enum with payloads in the place, an integer at
     /// offset 0 (ADR 0039).
@@ -895,6 +1051,9 @@ pub enum Const {
     /// The address of a static (ADR 0030), through which it is read and
     /// written.
     Static(StaticRef),
+    /// The address of a peripheral, a pointer made from an integer, through
+    /// which its registers are reached (ADR 0058).
+    Peripheral(PeripheralRef),
 }
 
 #[derive(Clone, Debug)]
@@ -1032,6 +1191,7 @@ impl fmt::Display for Ty {
             Ty::Slice(elem) => write!(f, "[{elem}]"),
             Ty::Struct(s) => f.write_str(&s.def().name),
             Ty::Enum(e) => f.write_str(&e.def().name),
+            Ty::Peripheral(p) => f.write_str(&p.def().name),
         }
     }
 }
@@ -1079,6 +1239,7 @@ impl fmt::Display for Operand {
                 write!(f, "const {}", s.def().name)
             }
             Operand::Const(Const::Static(s)) => write!(f, "const static {}", s.def().name),
+            Operand::Const(Const::Peripheral(p)) => write!(f, "const peripheral {}", p.def().name),
         }
     }
 }
@@ -1254,6 +1415,42 @@ impl fmt::Display for Mir {
             )?;
         }
         if !self.structs.is_empty() || !self.enums.is_empty() {
+            writeln!(f)?;
+        }
+        // Registers are numbered as projections name them; offsets and
+        // addresses in hex, as datasheets give them.
+        for p in &self.peripheral_types {
+            let def = p.def();
+            let layout = def.layout().expect("the layout is set when MIR is used");
+            let registers: Vec<String> = (def.registers.iter())
+                .zip(&layout.offsets)
+                .enumerate()
+                .map(|(i, (register, offset))| {
+                    format!("{i} {}: {} at {offset:#x}", register.name, register.ty)
+                })
+                .collect();
+            let registers = if registers.is_empty() {
+                "{}".to_owned()
+            } else {
+                format!("{{ {} }}", registers.join(", "))
+            };
+            writeln!(
+                f,
+                "peripheral {} {registers} // extent {}, align {}",
+                def.name, layout.extent, layout.align
+            )?;
+        }
+        for p in &self.peripherals {
+            let def = p.def();
+            writeln!(
+                f,
+                "peripheral {}: {} at {:#x};",
+                def.name,
+                def.ty.def().name,
+                def.address
+            )?;
+        }
+        if !self.peripheral_types.is_empty() || !self.peripherals.is_empty() {
             writeln!(f)?;
         }
         // Byte strings show where they are used.

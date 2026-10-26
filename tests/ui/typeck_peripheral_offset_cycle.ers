@@ -1,0 +1,48 @@
+// An offset whose computation names its own peripheral type, through a
+// pointer to it, needs the type's layout, which needs the offset: it is
+// `ty::cycle` (ADR 0028, 0058), as a struct's field length naming a pointer
+// to the struct is, whichever is computed first. `Cast` and `Read` are
+// computed from their offsets, which `check_all` evaluates; `CastEarly` and
+// `ReadEarly` from their layouts, which a constant declared before them
+// asks for through a local of a pointer to them. The cycle is reported
+// once each, from the item computed first, and the constants and the
+// layout checks report nothing more. `Read`'s offset would read a register
+// at compile time, which is never reached.
+const CAST_FIRST: usize = {
+    let r: *mut CastEarly = 0x10 as *mut CastEarly;
+    0
+};
+
+const READ_FIRST: usize = {
+    let r: *mut ReadEarly = 0x10 as *mut ReadEarly;
+    0
+};
+
+peripheral Cast {
+    read write ctrl: u32 at 0,
+    read status: u32 at (0x4 as *mut Cast) as usize,
+}
+
+peripheral CastEarly {
+    read write ctrl: u32 at 0,
+    read status: u32 at (0x4 as *mut CastEarly) as usize,
+}
+
+peripheral Read {
+    read a: u8 at 0,
+    read b: u8 at {
+        let p: *mut Read = 0x10 as *mut Read;
+        (*p).a as usize
+    },
+}
+
+peripheral ReadEarly {
+    read a: u8 at 0,
+    read b: u8 at {
+        let p: *mut ReadEarly = 0x10 as *mut ReadEarly;
+        (*p).a as usize
+    },
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

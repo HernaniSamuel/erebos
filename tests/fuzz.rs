@@ -152,24 +152,7 @@ fn seeds() -> Vec<String> {
     paths
         .iter()
         .map(|path| fs::read_to_string(path).unwrap().replace("\r\n", "\n"))
-        .filter(|text| !declares_peripheral(text))
         .collect()
-}
-
-/// Whether `text` declares a peripheral type or a peripheral: a line that
-/// starts, after its indentation and an optional `pub`, with `peripheral`
-/// and a name (ADR 0058). Until M3.2's step 5 builds them into MIR, code
-/// that reaches a peripheral or a pointer to a peripheral type stops at a
-/// `todo!`, so such seeds are left out; step 5 removes this filter. A seed
-/// using `peripheral` only as a name is kept.
-fn declares_peripheral(text: &str) -> bool {
-    text.lines().any(|line| {
-        let line = line.trim_start();
-        let line = line.strip_prefix("pub ").unwrap_or(line);
-        line.strip_prefix("peripheral ")
-            .and_then(|rest| rest.trim_start().chars().next())
-            .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
-    })
 }
 
 /// Cuts at a character boundary at or before `i`.

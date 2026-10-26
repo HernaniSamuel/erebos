@@ -332,6 +332,7 @@ impl Builder<'_, '_> {
                 Operand::Copy(Place::local(self.const_local(ty, source, &value)))
             }
             Ty::Slice(_) => unreachable!("`[T]` is unsized, and no value has it (ADR 0031)"),
+            Ty::Peripheral(_) => unreachable!("no value has a peripheral type (ADR 0058)"),
         }
     }
 
@@ -426,7 +427,12 @@ impl Builder<'_, '_> {
                 self.const_operand(ty, DataSource::Comptime(inner.id), value)
             }
             hir::ExprKind::Variant(id, index, args) => self.variant(ty, *id, *index, args),
-            hir::ExprKind::Peripheral(_) => todo!("M3.2 step 5: peripherals in MIR"),
+            // A device is read one register at a time: the type checker
+            // rejects reading one whole (ADR 0058), and its registers are
+            // places reached through `place`.
+            hir::ExprKind::Peripheral(_) => {
+                unreachable!("a peripheral is only reached through its registers")
+            }
             // Resolved by type checking, as `E::V` is by name (ADR 0044).
             hir::ExprKind::ContextVariant(_, _, args) => {
                 let (id, index) = self.q.tables.variant(expr.id);
@@ -553,6 +559,15 @@ impl Builder<'_, '_> {
                 // The slice may be `*mut` or volatile, and the result not:
                 // both types have one representation, so it is a copy.
                 self.temp(ty, Rvalue::Use(slice))
+            }
+            // The peripheral's address, with the mutability asked for: a
+            // peripheral is not `mut`, and both pointers have one
+            // representation (ADR 0058).
+            hir::ExprKind::AddrOf { place, .. }
+                if let hir::ExprKind::Peripheral(id) = &place.kind =>
+            {
+                let p = self.q.mir_peripheral(*id);
+                self.temp(ty, Rvalue::Use(Operand::Const(Const::Peripheral(p))))
             }
             hir::ExprKind::AddrOf { mutable, place } => {
                 let place = self.place_then(place, false, true);
@@ -1793,6 +1808,7 @@ impl Builder<'_, '_> {
             Operand::Const(Const::Bool(_)) => Ty::Bool,
             Operand::Const(Const::Unit) => Ty::Unit,
             Operand::Const(Const::Static(s)) => s.def().address_ty(),
+            Operand::Const(Const::Peripheral(p)) => p.def().address_ty(),
         }
     }
 
@@ -1806,6 +1822,9 @@ impl Builder<'_, '_> {
                     (PlaceElem::Index(_) | PlaceElem::ConstIndex(_), Ty::Array(elem, _)) => *elem,
                     (PlaceElem::Field(index), Ty::Struct(s)) => {
                         s.def().fields()[*index as usize].ty
+                    }
+                    (PlaceElem::Field(index), Ty::Peripheral(p)) => {
+                        p.def().registers[*index as usize].ty
                     }
                     (PlaceElem::Tag, Ty::Enum(e)) => Ty::Int(e.def().int),
                     (PlaceElem::Payload { variant, index }, Ty::Enum(e)) => {
@@ -1830,8 +1849,9 @@ impl Builder<'_, '_> {
         }
     }
 
-    /// Lowers a place expression: a local, a static, a byte string,
-    /// `*pointer`, `base[index]` or `base.field`. Any other expression is
+    /// Lowers a place expression: a local, a static, a byte string, a
+    /// peripheral, `*pointer`, `base[index]`, `base.field` or
+    /// `base.register`. Any other expression is
     /// evaluated into a temporary, whose place is returned.
     fn place(&mut self, expr: &hir::Expr) -> Place {
         self.place_then(expr, false, false)
@@ -1854,6 +1874,17 @@ impl Builder<'_, '_> {
             hir::ExprKind::ByteString(bytes) => {
                 let s = self.q.mir_byte_string(expr.id, bytes);
                 self.static_place(s)
+            }
+            // Reached through its address, as a static is, so that its
+            // registers are reached as through any pointer to its type
+            // (ADR 0058).
+            hir::ExprKind::Peripheral(id) => {
+                let p = self.q.mir_peripheral(*id);
+                let address = Rvalue::Use(Operand::Const(Const::Peripheral(p)));
+                match self.temp(p.def().address_ty(), address) {
+                    Operand::Copy(place) => place.project(PlaceElem::Deref),
+                    Operand::Const(_) => unreachable!("temporaries are places"),
+                }
             }
             hir::ExprKind::Deref(pointer) => self
                 .pointer_place(pointer, later_writes)
@@ -1885,6 +1916,7 @@ impl Builder<'_, '_> {
                 if self.ty_of(base) == Ty::Never {
                     return base_place;
                 }
+                // A field, or a register of a peripheral type (ADR 0058).
                 base_place.project(PlaceElem::Field(self.q.tables.field(expr.id)))
             }
             // A value, not a place: it is used where it is evaluated

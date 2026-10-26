@@ -1,0 +1,53 @@
+// emit: mir
+// A body that names an erroneous peripheral, or whose expressions or locals
+// have a type reaching a peripheral type with a failed value, is not built
+// into MIR (ADR 0048, 0058): the failed values' own errors are the only
+// ones reported. `BROKEN`'s address fails to evaluate; `Failed`'s offset
+// fails, so `FAILED`, of that type, is erroneous too, and a pointer to
+// `Failed` reaches a failed value, in a parameter, a local and a cast.
+fn zero() -> usize {
+    0
+}
+
+peripheral Uart {
+    read rbr: u8 at 0,
+    write thr: u8 at 0,
+}
+
+peripheral Failed {
+    read write ctrl: u8 at 4 / zero(),
+}
+
+peripheral BROKEN: Uart at 0x1000_0000 / zero();
+peripheral FAILED: Failed at 0x2000_0000;
+
+fn write_broken() {
+    BROKEN.thr = 1;
+}
+
+fn read_broken() -> u8 {
+    BROKEN.rbr
+}
+
+fn address_of_broken() -> *mut Uart {
+    &raw mut BROKEN
+}
+
+fn write_failed() {
+    FAILED.ctrl = 1;
+}
+
+fn through_failed(f: *mut Failed) -> u8 {
+    (*f).ctrl
+}
+
+fn local_failed() {
+    let f: *mut Failed = 0x3000_0000 as *mut Failed;
+}
+
+fn cast_failed(address: usize) -> *mut u8 {
+    address as *mut Failed as *mut u8
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

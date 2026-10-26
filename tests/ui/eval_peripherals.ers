@@ -1,0 +1,51 @@
+// Peripherals at compile time (ADR 0058): a register access is volatile,
+// so it is `eval::volatile-access`, a read in a constant (`LSR`, and `VIA`
+// through a pointer made from an integer, whose address is not reported)
+// as a write in a `comptime` block. `&raw mut UART0` is a pointer made
+// from an integer, its address: the assertions pass, and a static holds
+// it. An address that needs itself is `ty::cycle`. An address computed from
+// a peripheral whose address failed fails without an error of its own:
+// `NEXT`, which would be misaligned and overlap `OTHER`, is not checked.
+fn zero() -> usize {
+    0
+}
+
+peripheral Uart {
+    read rbr: u8 at 0,
+    write thr: u8 at 0,
+    read lsr: u8 at 5,
+}
+
+peripheral Timer {
+    read write ctrl: u32 at 0,
+}
+
+peripheral UART0: Uart at 0x1000_0000;
+
+const LSR: u8 = UART0.lsr;
+
+const VIA: u8 = {
+    let u: *mut Uart = 0x1000_0000 as *mut Uart;
+    (*u).lsr
+};
+
+comptime {
+    UART0.thr = 1;
+}
+
+comptime {
+    assert(&raw mut UART0 as usize == 0x1000_0000);
+    assert(&raw const UART0 as usize == 0x1000_0000);
+    assert(CONSOLE as usize == 0x1000_0000);
+}
+
+static CONSOLE: *mut Uart = &raw mut UART0;
+
+peripheral SELF: Uart at &raw const SELF as usize;
+
+peripheral BROKEN: Uart at 0x2000_0000 + 0 / zero();
+peripheral NEXT: Timer at (&raw const BROKEN as usize) + 0x101;
+peripheral OTHER: Timer at 0x2000_0100;
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

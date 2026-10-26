@@ -1,0 +1,30 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/mir_peripheral_failed_values.ers
+---
+--- errors ---
+eval::panic
+
+  × the evaluation called the panic function: division by zero
+    ╭─[mir_peripheral_failed_values.ers:18:28]
+ 17 │ peripheral Failed {
+ 18 │     read write ctrl: u8 at 4 / zero(),
+    ·                            ─────┬────┬
+    ·                                 │    ╰── while evaluating this value
+    ·                                 ╰── division by zero
+ 19 │ }
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::panic
+
+  × the evaluation called the panic function: division by zero
+    ╭─[mir_peripheral_failed_values.ers:21:28]
+ 20 │ 
+ 21 │ peripheral BROKEN: Uart at 0x1000_0000 / zero();
+    ·                            ──────────┬─────────┬
+    ·                                      │         ╰── while evaluating this value
+    ·                                      ╰── division by zero
+ 22 │ peripheral FAILED: Failed at 0x2000_0000;
+    ╰────
+  help: this code runs at compile time (ADR 0027)

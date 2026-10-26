@@ -18,7 +18,7 @@ use crate::layout::{
 use crate::memory::{MemoryMap, Region};
 use crate::mir::{
     self, BodyId, ConstData, DataId, EnumRef, Field, LeftOut, Mir, PanicCause, PanicInfoAt,
-    PanicSite, Ptr, StaticRef, StructRef,
+    PanicSite, PeripheralRef, PeripheralTypeRef, Ptr, StaticRef, StructRef,
 };
 use crate::span::Span;
 use crate::target;
@@ -168,6 +168,10 @@ pub struct Queries<'h> {
     mir_structs: Vec<Option<StructRef>>,
     /// The MIR type of each enum with payloads.
     mir_enums: Vec<Option<EnumRef>>,
+    /// The MIR type of each peripheral type, and the MIR view of each
+    /// peripheral (ADR 0058).
+    mir_peripheral_types: Vec<Option<PeripheralTypeRef>>,
+    mir_peripherals: Vec<Option<PeripheralRef>>,
     /// The MIR of each function; `None` if it cannot be built.
     bodies: Vec<State<Option<Rc<mir::Body>>>>,
     /// The value of each constant; `None` if it failed, which was reported.
@@ -228,6 +232,8 @@ impl<'h> Queries<'h> {
 
             mir_structs: vec![None; hir.structs.len()],
             mir_enums: vec![None; hir.enums.len()],
+            mir_peripheral_types: vec![None; hir.peripheral_types.len()],
+            mir_peripherals: vec![None; hir.peripherals.len()],
             bodies: hir.fns.iter().map(|_| State::NotStarted).collect(),
             consts: hir.consts.iter().map(|_| State::NotStarted).collect(),
             statics: hir.statics.iter().map(|_| State::NotStarted).collect(),
@@ -910,18 +916,20 @@ impl<'h> Queries<'h> {
         self.finish(Item::PeripheralLayout(id));
         let layout = (!failed).then(|| layout::peripheral_layout(&registers));
         self.peripheral_layouts[id.0 as usize] = State::Done(layout.clone());
+        // Its MIR type, made while the layout was computed, gets it now.
+        if let (Some(p), Some(layout)) = (self.mir_peripheral_types[id.0 as usize], &layout) {
+            p.def().set_layout(layout.clone());
+        }
         layout
     }
 
     /// Whether the peripheral type `id` reaches a failed value (ADR 0058).
-    /// One whose layout is being computed does not, as a struct seen
-    /// already does not for `lacks_layout`: what computes it, such as an
-    /// offset naming a pointer to it, needs no layout of it.
+    /// One whose layout is being computed is asked for again, which reports
+    /// `ty::cycle`, as a struct's is (ADR 0028): an offset whose computation
+    /// names the type, as through a pointer to it, needs itself, whichever
+    /// of the layout and the offset is computed first.
     fn peripheral_type_failed(&mut self, id: PeripheralTypeId) -> bool {
-        match self.peripheral_layouts[id.0 as usize] {
-            State::InProgress => false,
-            _ => self.peripheral_layout(id).is_none(),
-        }
+        self.peripheral_layout(id).is_none()
     }
 
     /// Whether the failure of the peripheral type `id` is explained by an
@@ -1829,6 +1837,67 @@ impl<'h> Queries<'h> {
         e
     }
 
+    /// The MIR type of a peripheral type (ADR 0058), with its registers'
+    /// types. Its layout is set once it is computed, which may be after the
+    /// type exists, and is never asked for here: the type may be made for a
+    /// struct's field or a static's type while its layout is not computed,
+    /// or is being computed, and asking would start that computation, or
+    /// report a cycle, from wherever the type is first needed. Only a
+    /// register's offset needs the layout, and a body reaching a register
+    /// has an expression of the peripheral type, whose layout
+    /// `needs_missing_layout` computes before the body is built. `into_mir`
+    /// asks for every layout, so that code generation and dumps find them
+    /// all.
+    pub fn mir_peripheral_type(&mut self, id: PeripheralTypeId) -> PeripheralTypeRef {
+        if let Some(p) = self.mir_peripheral_types[id.0 as usize] {
+            return p;
+        }
+        let hir = self.hir;
+        let def = hir.peripheral_type(id);
+        // A register type is written as `u8`, `u16` or `u32`. Any other was
+        // reported, and leaves the layout failed; no body that is kept
+        // reaches it, so it stands as `()`, without being computed.
+        let registers = (def.registers.iter())
+            .map(|register| mir::Register {
+                name: register.name.clone(),
+                ty: match register.ty {
+                    hir::Ty::Int(int) if layout::register_width(register.ty).is_some() => {
+                        mir::Ty::Int(int)
+                    }
+                    _ => mir::Ty::Unit,
+                },
+            })
+            .collect();
+        let p = PeripheralTypeRef::new(def.path.clone(), registers);
+        self.mir_peripheral_types[id.0 as usize] = Some(p);
+        // Otherwise `peripheral_layout` sets it when it is computed.
+        if let State::Done(Some(layout)) = &self.peripheral_layouts[id.0 as usize] {
+            p.def().set_layout(layout.clone());
+        }
+        p
+    }
+
+    /// The MIR view of a peripheral (ADR 0058): its address, computed at
+    /// compile time, and its type. MIR is built only for bodies that name
+    /// no erroneous peripheral, so both exist.
+    pub fn mir_peripheral(&mut self, id: PeripheralId) -> PeripheralRef {
+        if let Some(p) = self.mir_peripherals[id.0 as usize] {
+            return p;
+        }
+        let hir = self.hir;
+        let def = hir.peripheral(id);
+        let hir::Ty::Peripheral(ty) = def.ty else {
+            unreachable!("MIR is only built for bodies naming no erroneous peripheral")
+        };
+        let address = self
+            .array_len(def.address.0)
+            .expect("MIR is only built for bodies naming no erroneous peripheral");
+        let ty = self.mir_peripheral_type(ty.id);
+        let p = PeripheralRef::new(def.path.clone(), address, ty);
+        self.mir_peripherals[id.0 as usize] = Some(p);
+        p
+    }
+
     /// The MIR view of a static.
     pub fn mir_static(&mut self, id: StaticId) -> StaticRef {
         if let Some(s) = self.mir_statics[id.0 as usize] {
@@ -1976,7 +2045,7 @@ impl<'h> Queries<'h> {
                 let ty = self.normalize(ty);
                 self.mir_ty(ty)
             }
-            hir::Ty::Peripheral(_) => todo!("M3.2 step 5: pointers to peripheral types in MIR"),
+            hir::Ty::Peripheral(p) => mir::Ty::Peripheral(self.mir_peripheral_type(p.id)),
             hir::Ty::Error => unreachable!("MIR is only built for well-typed programs"),
         }
     }
@@ -2142,13 +2211,20 @@ impl<'h> Queries<'h> {
     }
 
     /// What dumps leave out of the MIR that `into_mir` makes: the bodies,
-    /// structs, enums, statics and byte strings of `core` (ADR 0052).
+    /// structs, enums, peripheral types, peripherals, statics and byte
+    /// strings of `core` (ADR 0052).
     pub fn core_parts(&self) -> LeftOut {
         let hir = self.hir;
         LeftOut {
             bodies: hir.fns.iter().map(|f| hir.in_core(f.module)).collect(),
             structs: hir.structs.iter().map(|s| hir.in_core(s.module)).collect(),
             enums: hir.enums.iter().map(|e| hir.in_core(e.module)).collect(),
+            peripheral_types: (hir.peripheral_types.iter())
+                .map(|p| hir.in_core(p.module))
+                .collect(),
+            peripherals: (hir.peripherals.iter())
+                .map(|p| hir.in_core(p.module))
+                .collect(),
             statics: (hir.statics.iter().map(|s| hir.in_core(s.module)))
                 .chain(self.byte_strings_in_core.iter().copied())
                 .collect(),
@@ -2222,6 +2298,17 @@ impl<'h> Queries<'h> {
             align: 1,
             relocations: Vec::new(),
         }));
+        let peripheral_types = (0..self.hir.peripheral_types.len())
+            .map(|id| {
+                let id = PeripheralTypeId(id as u32);
+                self.peripheral_layout(id)
+                    .expect("every peripheral type of a program without errors has a layout");
+                self.mir_peripheral_type(id)
+            })
+            .collect();
+        let peripherals = (0..self.hir.peripherals.len())
+            .map(|id| self.mir_peripheral(PeripheralId(id as u32)))
+            .collect();
         let memory = self.hir.memory.as_ref().map(|_| {
             self.memory_map()
                 .expect("every value of a program without errors is computed")
@@ -2229,6 +2316,8 @@ impl<'h> Queries<'h> {
         Mir {
             structs,
             enums,
+            peripheral_types,
+            peripherals,
             data: self.data,
             statics,
             bodies: self
