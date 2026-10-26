@@ -14,9 +14,9 @@ use std::fmt::Write;
 
 use crate::diag::Diagnostic;
 use crate::hir::{
-    self, Arm, BinOp, Block, EnumId, EnumTy, Expr, ExprId, ExprKind, Fn, FnKind, Hir, IntTy,
-    LocalId, ModuleId, NeverPosition, Pattern, PatternId, PatternKind, Ptr, StaticId, Stmt, Ty,
-    UnOp, UnsizedPosition,
+    self, AccessMode, Arm, BinOp, Block, EnumId, EnumTy, Expr, ExprId, ExprKind, Fn, FnKind, Hir,
+    IntTy, LocalId, ModuleId, NeverPosition, Pattern, PatternId, PatternKind, PeripheralTy,
+    PeripheralTypeId, Ptr, StaticId, Stmt, Ty, UnOp, UnsizedPosition,
 };
 use crate::layout;
 use crate::query::Queries;
@@ -31,7 +31,8 @@ mod usefulness;
 /// checked so far.
 pub struct Tables {
     expr_types: Vec<Ty>,
-    /// The field index of each field access.
+    /// The field index of each field access, or the register index of
+    /// each register access (ADR 0058).
     fields: HashMap<ExprId, u32>,
     /// The slice type each pointer to an array is converted to, where it
     /// is (ADR 0031): unlike the other conversion (ADR 0024), it changes
@@ -60,7 +61,8 @@ impl Tables {
         self.expr_types[id.0 as usize]
     }
 
-    /// The index of the field that the field access `id` reads.
+    /// The index of the field that the field access `id` reads, or of the
+    /// register it reaches when its base is of a peripheral type.
     pub fn field(&self, id: ExprId) -> u32 {
         self.fields[&id]
     }
@@ -128,14 +130,11 @@ pub fn report_peripherals_by_value(q: &mut Queries) {
     for found in &hir.peripherals_by_value {
         let ty = found.ty;
         q.diags.push(
-            Diagnostic::error(
-                "ty::peripheral-by-value",
-                format!("`{ty}` is a peripheral type, which no value has"),
-            )
-            .label(found.span, format!("`{ty}` as {}", position(found.position)))
-            .help(format!(
-                "a peripheral type describes a device's registers, reached one at a time from a peripheral or through a pointer, such as `*mut {ty}` (ADR 0058)"
-            )),
+            peripheral_by_value(ty)
+                .label(found.span, format!("`{ty}` as {}", position(found.position)))
+                .help(format!(
+                    "a peripheral type describes a device's registers, reached one at a time from a peripheral or through a pointer, such as `*mut {ty}` (ADR 0058)"
+                )),
         );
     }
 }
@@ -207,6 +206,26 @@ fn whole_slice(ty: Ty, place: Span, accessed: &str) -> Diagnostic {
     unsized_ty(ty)
         .label(place, format!("what a slice points to, {accessed} whole"))
         .help("it can only be indexed, as in `(*s)[i]`, or passed to `&raw`; its length, known only at run time, is `len(s)` (ADR 0031)")
+}
+
+/// `ty::peripheral-by-value` for `ty`, a peripheral type (ADR 0058),
+/// without labels.
+fn peripheral_by_value(ty: Ty) -> Diagnostic {
+    Diagnostic::error(
+        "ty::peripheral-by-value",
+        format!("`{ty}` is a peripheral type, which no value has"),
+    )
+}
+
+/// `ty::peripheral-by-value` for `place`, a peripheral or what a pointer to
+/// the peripheral type `ty` points to, `accessed` whole: a device is reached
+/// one register at a time (ADR 0058).
+fn whole_peripheral(ty: Ty, place: Span, accessed: &str) -> Diagnostic {
+    peripheral_by_value(ty)
+        .label(place, format!("a device, {accessed} as a whole"))
+        .help(format!(
+            "its registers are read and written one at a time, as in `P.NAME` or `(*u).NAME`; a function is given the device as a `*mut {ty}`, such as `&raw mut P` (ADR 0058)"
+        ))
 }
 
 /// What `ty::never-in-memory` suggests instead.
@@ -367,6 +386,17 @@ struct PlaceInfo {
     /// Part of a constant's value, which has no address (ADR 0029): it
     /// can be read, but `&raw` of it is not a place.
     constant: bool,
+    /// The register the place is, or is part of (ADR 0058): its access
+    /// mode decides whether it may be read and written, and `&raw` of it
+    /// is an error.
+    register: Option<Register>,
+}
+
+/// The register `index` of the peripheral type `id`.
+#[derive(Clone, Copy)]
+struct Register {
+    id: PeripheralTypeId,
+    index: usize,
 }
 
 impl PlaceInfo {
@@ -377,6 +407,7 @@ impl PlaceInfo {
         via: None,
         misaligned: false,
         constant: false,
+        register: None,
     };
 
     /// The value of `base`, which is not a place expression, indexed or
@@ -388,6 +419,7 @@ impl PlaceInfo {
             via: None,
             misaligned: false,
             constant: matches!(base.kind, ExprKind::Const(_)),
+            register: None,
         }
     }
 
@@ -400,6 +432,7 @@ impl PlaceInfo {
             // Pointers are assumed aligned (ADR 0019).
             misaligned: false,
             constant: false,
+            register: None,
         }
     }
 }
@@ -830,27 +863,34 @@ impl Checker<'_, '_> {
             | ExprKind::Index(..)
             | ExprKind::Field(..)
             | ExprKind::Static(_)
+            | ExprKind::Peripheral(_)
             | ExprKind::ByteString(_) => {
-                let info = self
-                    .place_info(f, expr)
-                    .expect("dereferences, indexing, fields, statics and byte strings are places");
+                let info = self.place_info(f, expr).expect(
+                    "dereferences, indexing, fields, statics, peripherals and byte strings are places",
+                );
                 if let Ty::Slice(_) = info.ty {
                     self.q.diags.push(whole_slice(info.ty, expr.span, "read"));
                     return Ty::Error;
                 }
-                self.access(&info, expr.span);
+                if let Ty::Peripheral(_) = info.ty {
+                    self.q
+                        .diags
+                        .push(whole_peripheral(info.ty, expr.span, "read"));
+                    return Ty::Error;
+                }
+                self.access(&info, expr.span, AccessMode::Read);
                 info.ty
             }
             ExprKind::AddrOf { mutable, place } => self.addr_of(f, *mutable, place),
-            ExprKind::Peripheral(_) => todo!("M3.2 step 4: a peripheral as a place"),
             ExprKind::Try(operand, _) => self.try_(f, expr, operand),
             ExprKind::Assign(place, value) => {
-                let place_ty = self.place(f, place);
+                let place_ty = self.place(f, place, AccessMode::Write);
                 self.check(f, value, Some(place_ty));
                 Ty::Unit
             }
             ExprKind::CompoundAssign(op, place, value, _) => {
-                let place_ty = self.place(f, place);
+                // Read, then written (ADR 0023, 0058).
+                let place_ty = self.place(f, place, AccessMode::ReadWrite);
                 let allowed = if op.is_bitwise() {
                     Operands::IntOrBool
                 } else {
@@ -2474,10 +2514,17 @@ impl Checker<'_, '_> {
         }
     }
 
-    /// Checks a read or write of a place. A volatile access is exactly one
-    /// instruction (ADR 0023), so it cannot be wider than the target's
-    /// widest access, nor a whole aggregate.
-    fn access(&mut self, place: &PlaceInfo, span: Span) {
+    /// Checks a read or write of a place, as `kind` says: `ReadWrite` for a
+    /// compound assignment. A volatile access is exactly one instruction
+    /// (ADR 0023), so it cannot be wider than the target's widest access,
+    /// nor a whole aggregate. A register is volatile too, and must allow
+    /// the access (ADR 0058); its type was checked with its peripheral
+    /// type, so it gets no volatile checks of its own.
+    fn access(&mut self, place: &PlaceInfo, span: Span, kind: AccessMode) {
+        if let Some(register) = place.register {
+            self.register_access(register, span, kind);
+            return;
+        }
         let volatile = place.via.is_some_and(|ptr| ptr.volatile);
         if volatile && !place.ty.is_aggregate() && self.may_be_misaligned(place) {
             self.q.diags.push(
@@ -2557,8 +2604,48 @@ impl Checker<'_, '_> {
         }
     }
 
-    /// Types a place expression: a local, a static, a byte string,
-    /// `*pointer`, `base[index]` or `base.field`.
+    /// Checks that `register`, accessed at `span` as `kind` says, allows
+    /// it: a `write` register is never read and a `read` one never written,
+    /// and a compound assignment does both (ADR 0058).
+    fn register_access(&mut self, register: Register, span: Span, kind: AccessMode) {
+        let def = self.hir.peripheral_type(register.id);
+        let reg = &def.registers[register.index];
+        let reads = !matches!(kind, AccessMode::Write);
+        let writes = !matches!(kind, AccessMode::Read);
+        let label = match kind {
+            AccessMode::Read => "read here",
+            AccessMode::Write => "written here",
+            AccessMode::ReadWrite => "read and written by this compound assignment",
+        };
+        if reads && reg.access == AccessMode::Write {
+            self.q.diags.push(
+                Diagnostic::error(
+                    "ty::read-of-write-only",
+                    format!(
+                        "the register `{}` of `{}` is write-only",
+                        reg.name, def.path
+                    ),
+                )
+                .label(span, label)
+                .label(reg.span, "declared `write`")
+                .help("a `write` register can only be assigned with `=`, since a compound assignment reads it first; declare it `read write` if the device also lets it be read (ADR 0058)"),
+            );
+        }
+        if writes && reg.access == AccessMode::Read {
+            self.q.diags.push(
+                Diagnostic::error(
+                    "ty::write-to-read-only",
+                    format!("the register `{}` of `{}` is read-only", reg.name, def.path),
+                )
+                .label(span, label)
+                .label(reg.span, "declared `read`")
+                .help("a `read` register can only be read; declare it `read write` if the device also lets it be written (ADR 0058)"),
+            );
+        }
+    }
+
+    /// Types a place expression: a local, a static, a peripheral, a byte
+    /// string, `*pointer`, `base[index]`, `base.field` or `base.register`.
     /// Returns `None`, having typed nothing, if `expr` is not a place.
     fn place_info(&mut self, f: &Fn, expr: &Expr) -> Option<PlaceInfo> {
         let info = match &expr.kind {
@@ -2570,6 +2657,7 @@ impl Checker<'_, '_> {
                     via: None,
                     misaligned: false,
                     constant: false,
+                    register: None,
                 }
             }
             ExprKind::ByteString(bytes) => PlaceInfo {
@@ -2578,6 +2666,7 @@ impl Checker<'_, '_> {
                 via: None,
                 misaligned: false,
                 constant: false,
+                register: None,
             },
             ExprKind::Static(id) => {
                 let def = self.hir.static_(*id);
@@ -2587,9 +2676,19 @@ impl Checker<'_, '_> {
                     via: None,
                     misaligned: false,
                     constant: false,
+                    register: None,
                 }
             }
-            ExprKind::Peripheral(_) => todo!("M3.2 step 4: a peripheral as a place"),
+            // Not `mut`: what may be written is its registers' business, so
+            // `&raw mut` of it is allowed (ADR 0058).
+            ExprKind::Peripheral(id) => PlaceInfo {
+                ty: self.hir.peripheral(*id).ty,
+                immutable: None,
+                via: None,
+                misaligned: false,
+                constant: false,
+                register: None,
+            },
             ExprKind::Deref(pointer) => {
                 let ty = self.check(f, pointer, None);
                 let error = Diagnostic::error(
@@ -2637,7 +2736,7 @@ impl Checker<'_, '_> {
                     && let Ty::Slice(elem) = *ptr.pointee
                 {
                     if let Some(info) = base_place {
-                        self.access(&info, base.span);
+                        self.access(&info, base.span, AccessMode::Read);
                     }
                     // Indexing a pointer steps over whole pointees, and `[T]`
                     // has no size (ADR 0021, 0031).
@@ -2653,9 +2752,33 @@ impl Checker<'_, '_> {
                         )),
                     );
                     PlaceInfo::ERROR
-                } else {
+                } else if let Ty::Ptr(ptr) = ty
+                    && let Ty::Peripheral(_) = *ptr.pointee
+                {
                     if let Some(info) = base_place {
-                        self.access(&info, base.span);
+                        self.access(&info, base.span, AccessMode::Read);
+                    }
+                    // Indexing steps over whole pointees, and a peripheral
+                    // type has no size (ADR 0058).
+                    self.q.diags.push(
+                        Diagnostic::error(
+                            "ty::peripheral-index",
+                            format!("cannot index `{ty}`, a pointer to a peripheral type"),
+                        )
+                        .label(base.span, format!("`{}` has no size, so no stride", ptr.pointee))
+                        .help(format!(
+                            "a pointer to a peripheral type reaches one device, whose registers are reached as in `(*u).NAME`; for another device of type `{}`, use a pointer to it (ADR 0058)",
+                            ptr.pointee
+                        )),
+                    );
+                    PlaceInfo::ERROR
+                } else {
+                    // A peripheral is not read to be indexed: it is no
+                    // value, and no array either.
+                    if let Some(info) = base_place
+                        && !matches!(info.ty, Ty::Peripheral(_))
+                    {
+                        self.access(&info, base.span, AccessMode::Read);
                     }
                     if let Ty::Ptr(ptr) = ty
                         && self.q.layout_of(*ptr.pointee).is_none()
@@ -2695,7 +2818,8 @@ impl Checker<'_, '_> {
     }
 
     /// `base.name`, where `base` has type `ty` and place `base_place`, in
-    /// the body `f`, whose module must see the field (ADR 0050).
+    /// the body `f`, whose module must see the field (ADR 0050), or the
+    /// register if `ty` is a peripheral type (ADR 0058).
     fn field(
         &mut self,
         f: &Fn,
@@ -2715,12 +2839,13 @@ impl Checker<'_, '_> {
                 };
             }
             Ty::Error => return PlaceInfo::ERROR,
+            Ty::Peripheral(p) => return self.register(f, expr, p, base_place, name, name_span),
             other => {
                 let mut diag =
                     Diagnostic::error("ty::no-fields", format!("`{other}` has no fields"))
                         .label(name_span, "no such field");
                 if let Ty::Ptr(ptr) = other
-                    && let Ty::Struct(_) = *ptr.pointee
+                    && let Ty::Struct(_) | Ty::Peripheral(_) = *ptr.pointee
                 {
                     diag = diag.help(format!(
                         "dereference the pointer first: `(*p).{name}` (ADR 0021)"
@@ -2774,6 +2899,45 @@ impl Checker<'_, '_> {
         }
     }
 
+    /// `base.name`, where `base` is a place of the peripheral type `p`,
+    /// reached from a peripheral or through a pointer (ADR 0058): the
+    /// register `name`, which the module of `f` must see, as a field
+    /// (ADR 0050). The place is the register, of its type, with the
+    /// mutability of `base_place`: through a `*const` pointer it cannot be
+    /// written.
+    fn register(
+        &mut self,
+        f: &Fn,
+        expr: &Expr,
+        p: PeripheralTy,
+        base_place: PlaceInfo,
+        name: &str,
+        name_span: Span,
+    ) -> PlaceInfo {
+        let hir = self.hir;
+        let def = hir.peripheral_type(p.id);
+        let Some(index) = def.registers.iter().position(|reg| reg.name == name) else {
+            self.q
+                .diags
+                .push(unknown_register(hir, p.id, name, name_span, f.module));
+            return PlaceInfo::ERROR;
+        };
+        // A register that is not visible is still the one named, so nothing
+        // more is reported about it.
+        if !hir.register_visible(p.id, index, f.module) {
+            self.q
+                .diags
+                .push(private_register(hir, p.id, index, f.module, name_span));
+        }
+        self.q.tables.fields.insert(expr.id, index as u32);
+        PlaceInfo {
+            ty: self.norm(def.registers[index].ty),
+            misaligned: false,
+            register: Some(Register { id: p.id, index }),
+            ..base_place
+        }
+    }
+
     /// Checks `expr`, written where a place is needed and found not to be
     /// one, with no type expected. A `.V` is not checked: with no type
     /// expected it would also be `ty::untyped-variant`, and that it is no
@@ -2784,8 +2948,9 @@ impl Checker<'_, '_> {
         }
     }
 
-    /// Checks that `place` can be assigned to and returns its type.
-    fn place(&mut self, f: &Fn, place: &Expr) -> Ty {
+    /// Checks that `place` can be assigned to, by `=` or, with `kind`
+    /// `ReadWrite`, by a compound assignment, and returns its type.
+    fn place(&mut self, f: &Fn, place: &Expr, kind: AccessMode) -> Ty {
         let Some(info) = self.place_info(f, place) else {
             self.check_not_a_place(f, place);
             self.q.diags.push(
@@ -2798,6 +2963,16 @@ impl Checker<'_, '_> {
             self.q
                 .diags
                 .push(whole_slice(info.ty, place.span, "written"));
+            return Ty::Error;
+        }
+        if let Ty::Peripheral(_) = info.ty {
+            let accessed = match kind {
+                AccessMode::ReadWrite => "read and written",
+                _ => "written",
+            };
+            self.q
+                .diags
+                .push(whole_peripheral(info.ty, place.span, accessed));
             return Ty::Error;
         }
         match info.immutable {
@@ -2858,7 +3033,7 @@ impl Checker<'_, '_> {
             }
             None => {}
         }
-        self.access(&info, place.span);
+        self.access(&info, place.span, kind);
         info.ty
     }
 
@@ -2878,6 +3053,27 @@ impl Checker<'_, '_> {
             self.q.diags.push(not_a_place);
             return Ty::Error;
         };
+        // The pointer would reach the register without its access mode
+        // (ADR 0058).
+        if let Some(register) = info.register {
+            let def = self.hir.peripheral_type(register.id);
+            let reg = &def.registers[register.index];
+            self.q.diags.push(
+                Diagnostic::error(
+                    "ty::register-address",
+                    format!(
+                        "cannot take the address of the register `{}` of `{}`",
+                        reg.name, def.path
+                    ),
+                )
+                .label(place.span, "a register")
+                .help(format!(
+                    "a pointer to it would reach it without its access mode, `{}`; read or write it where it is named, or pass the whole device with a pointer to its peripheral, as `&raw mut P` (ADR 0058)",
+                    reg.access.words()
+                )),
+            );
+            return Ty::Error;
+        }
         // Its result would be a `*const !` (ADR 0034).
         if info.ty == Ty::Never {
             self.q.diags.push(never_in_memory(
@@ -3382,6 +3578,81 @@ fn private_field(
     }
 }
 
+/// `ty::unknown-register` for `name`, written at `span` in `module` on a
+/// place of the peripheral type `id`, which has no such register
+/// (ADR 0058). The help lists, once each, the registers visible there, as
+/// for fields (ADR 0050).
+fn unknown_register(
+    hir: &Hir,
+    id: PeripheralTypeId,
+    name: &str,
+    span: Span,
+    module: ModuleId,
+) -> Diagnostic {
+    let def = hir.peripheral_type(id);
+    let mut names: Vec<String> = Vec::new();
+    for (index, reg) in def.registers.iter().enumerate() {
+        let listed = format!("`{}`", reg.name);
+        if hir.register_visible(id, index, module) && !names.contains(&listed) {
+            names.push(listed);
+        }
+    }
+    let diag = Diagnostic::error(
+        "ty::unknown-register",
+        format!("`{}` has no register `{name}`", def.path),
+    )
+    .label(span, "unknown register");
+    if def.registers.is_empty() {
+        diag.help(format!("`{}` has no registers", def.path))
+    } else if names.is_empty() {
+        diag.help("none of its registers is visible here (ADR 0050, 0058)")
+    } else {
+        diag.help(format!("its registers are {}", names.join(", ")))
+    }
+}
+
+/// `ty::private-register` for the register `index` of the peripheral type
+/// `id`, named at `span` in `module`, which does not see it: a private
+/// register outside its type's module, or a `pub` one where the type
+/// cannot be named, whatever peripheral it is seen through (ADR 0050,
+/// 0058).
+fn private_register(
+    hir: &Hir,
+    id: PeripheralTypeId,
+    index: usize,
+    module: ModuleId,
+    span: Span,
+) -> Diagnostic {
+    let def = hir.peripheral_type(id);
+    let reg = &def.registers[index];
+    match reg.vis {
+        hir::Visibility::Private => Diagnostic::error(
+            "ty::private-register",
+            format!("the register `{}` of `{}` is private", reg.name, def.path),
+        )
+        .label(span, "not visible here")
+        .label(reg.span, "declared here without `pub`")
+        .help(format!(
+            "a private register is visible only in {} and the modules inside it; declare it `pub` to use it elsewhere, or offer functions that use it (ADR 0050, 0058)",
+            hir.module(def.module).describe()
+        )),
+        hir::Visibility::Pub => Diagnostic::error(
+            "ty::private-register",
+            format!(
+                "the register `{}` of `{}` is not visible here",
+                reg.name, def.path
+            ),
+        )
+        .label(span, "not visible here")
+        .label(def.name_span, format!("`{}` is declared here", def.path))
+        .help(format!(
+            "a `pub` register is visible wherever a path can name its peripheral type, whatever peripheral it is reached from, and none written in {} can name `{}`: offer the type with `pub` or `pub use` (ADR 0050, 0058)",
+            hir.module(module).describe(),
+            def.path
+        )),
+    }
+}
+
 /// `ty::unknown-variant` for `.name`, written at `span` in `module`, where
 /// a value of the enum `def` is expected (ADR 0044). The help lists its
 /// variants only where they may be named (ADR 0050).
@@ -3585,7 +3856,11 @@ fn expr_label(q: &Queries, f: &Fn, expr: &Expr) -> String {
         ExprKind::Comptime(_) => "comptime".to_owned(),
         ExprKind::Array(_) => "array".to_owned(),
         ExprKind::StructLit(s, _) => format!("struct {}", s.name),
-        ExprKind::Field(_, name, _) => format!("field {name}"),
+        // A register when the base is of a peripheral type (ADR 0058).
+        ExprKind::Field(base, name, _) => match q.tables.expr_ty(base.id) {
+            Ty::Peripheral(_) => format!("register {name}"),
+            _ => format!("field {name}"),
+        },
         ExprKind::SizeOf(ty) => format!("size_of({ty})"),
         ExprKind::AlignOf(ty) => format!("align_of({ty})"),
         ExprKind::OffsetOf(ty, name, _) => format!("offset_of({ty}, {name})"),

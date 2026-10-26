@@ -1,0 +1,92 @@
+// emit: typeck
+// The errors of register accesses (ADR 0058): a `read` register written,
+// by `=` or a compound assignment, is `ty::write-to-read-only`; a `write`
+// register read, or compound-assigned, `ty::read-of-write-only`. Writing
+// through a `*const` pointer stays `ty::write-through-const`, and a `read`
+// register written through one is both errors. A register not visible is
+// `ty::private-register`, a name that is no register
+// `ty::unknown-register`, `&raw` of a register `ty::register-address`,
+// and indexing a pointer to a peripheral type `ty::peripheral-index`. A
+// peripheral or a `*u` read or written as a whole is
+// `ty::peripheral-by-value`.
+mod dev {
+    peripheral Hidden {
+        pub read write data: u8 at 0,
+    }
+
+    // Reachable, but its type is not: its `pub` registers are not seen
+    // through it.
+    pub peripheral HIDDEN: Hidden at 0x3000_0000;
+
+    pub peripheral Regs {
+        pub read write ctrl: u8 at 0,
+        read write secret: u8 at 1,
+    }
+
+    pub peripheral REGS: Regs at 0x3000_1000;
+}
+
+peripheral Uart {
+    read rbr: u8 at 0,
+    write thr: u8 at 0,
+    read write ier: u8 at 1,
+}
+
+peripheral UART0: Uart at 0x1000_0000;
+
+// The access modes, from a peripheral and through a `*const` pointer.
+fn modes(c: *const Uart) {
+    UART0.rbr = 1;
+    UART0.rbr |= 1;
+    let x: u8 = UART0.thr;
+    let y: u8 = UART0.thr + 1;
+    UART0.thr;
+    UART0.thr += 1;
+    (*c).ier = 1;
+    (*c).rbr = 1;
+}
+
+// A private register of another module's peripheral type, and a `pub` one
+// seen through a `pub` peripheral of a private peripheral type.
+fn visibility() -> u8 {
+    dev::REGS.secret = 1;
+    dev::HIDDEN.data
+}
+
+fn unknown(u: *mut Uart) {
+    UART0.lcr = 3;
+    // A pointer has no registers of its own.
+    u.thr = 1;
+}
+
+// Through a `*const` pointer, only the register's address is reported.
+fn addresses(c: *const Uart) {
+    let a: *const u8 = &raw const UART0.rbr;
+    let b: *mut u8 = &raw mut UART0.ier;
+    let d: *mut u8 = &raw mut (*c).ier;
+}
+
+// A pointer to a peripheral type has no stride; a peripheral is no array.
+fn index(u: *mut Uart) {
+    u[1];
+    let p: *mut Uart = &raw mut u[1];
+    UART0[0];
+}
+
+fn take(u: *mut Uart) {}
+
+// A peripheral and `*u` read, passed, written and compound-assigned as a
+// whole; written whole through a `*const` pointer, only that is reported.
+fn wholes(u: *mut Uart, c: *const Uart) {
+    let x: u8 = UART0;
+    let y: u8 = *u;
+    take(UART0);
+    take(*u);
+    UART0 = 0;
+    *u = 0;
+    UART0 += 1;
+    *c = 0;
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

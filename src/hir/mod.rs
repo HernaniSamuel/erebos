@@ -308,6 +308,18 @@ impl Hir {
             Visibility::Pub => def.reachable_from(module),
         }
     }
+
+    /// Whether the register `index` of the peripheral type `id` is visible
+    /// from `module`, by the rule of fields: a private one where a private
+    /// item of the type's module would be, a `pub` one wherever the type is
+    /// reachable, whatever peripheral it is seen through (ADR 0050, 0058).
+    pub fn register_visible(&self, id: PeripheralTypeId, index: usize, module: ModuleId) -> bool {
+        let def = self.peripheral_type(id);
+        match def.registers[index].vis {
+            Visibility::Private => is_within(&self.modules, module, def.module),
+            Visibility::Pub => def.reachable_from(module),
+        }
+    }
 }
 
 /// Whether `inner` is `outer` or a module inside it, in the module tree

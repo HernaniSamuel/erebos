@@ -1,0 +1,438 @@
+---
+source: tests/ui.rs
+assertion_line: 22
+expression: output
+input_file: tests/ui/typeck_peripheral_access_errors.ers
+---
+--- errors ---
+ty::write-to-read-only
+
+  × the register `rbr` of `Uart` is read-only
+    ╭─[typeck_peripheral_access_errors.ers:39:5]
+ 29 │ peripheral Uart {
+ 30 │     read rbr: u8 at 0,
+    ·          ─┬─
+    ·           ╰── declared `read`
+ 31 │     write thr: u8 at 0,
+ 32 │     read write ier: u8 at 1,
+ 33 │ }
+ 34 │ 
+ 35 │ peripheral UART0: Uart at 0x1000_0000;
+ 36 │ 
+ 37 │ // The access modes, from a peripheral and through a `*const` pointer.
+ 38 │ fn modes(c: *const Uart) {
+ 39 │     UART0.rbr = 1;
+    ·     ────┬────
+    ·         ╰── written here
+ 40 │     UART0.rbr |= 1;
+    ╰────
+  help: a `read` register can only be read; declare it `read write` if the device also lets it be
+        written (ADR 0058)
+ty::write-to-read-only
+
+  × the register `rbr` of `Uart` is read-only
+    ╭─[typeck_peripheral_access_errors.ers:40:5]
+ 29 │ peripheral Uart {
+ 30 │     read rbr: u8 at 0,
+    ·          ─┬─
+    ·           ╰── declared `read`
+ 31 │     write thr: u8 at 0,
+ 32 │     read write ier: u8 at 1,
+ 33 │ }
+ 34 │ 
+ 35 │ peripheral UART0: Uart at 0x1000_0000;
+ 36 │ 
+ 37 │ // The access modes, from a peripheral and through a `*const` pointer.
+ 38 │ fn modes(c: *const Uart) {
+ 39 │     UART0.rbr = 1;
+ 40 │     UART0.rbr |= 1;
+    ·     ────┬────
+    ·         ╰── read and written by this compound assignment
+ 41 │     let x: u8 = UART0.thr;
+    ╰────
+  help: a `read` register can only be read; declare it `read write` if the device also lets it be
+        written (ADR 0058)
+ty::read-of-write-only
+
+  × the register `thr` of `Uart` is write-only
+    ╭─[typeck_peripheral_access_errors.ers:41:17]
+ 30 │     read rbr: u8 at 0,
+ 31 │     write thr: u8 at 0,
+    ·           ─┬─
+    ·            ╰── declared `write`
+ 32 │     read write ier: u8 at 1,
+ 33 │ }
+ 34 │ 
+ 35 │ peripheral UART0: Uart at 0x1000_0000;
+ 36 │ 
+ 37 │ // The access modes, from a peripheral and through a `*const` pointer.
+ 38 │ fn modes(c: *const Uart) {
+ 39 │     UART0.rbr = 1;
+ 40 │     UART0.rbr |= 1;
+ 41 │     let x: u8 = UART0.thr;
+    ·                 ────┬────
+    ·                     ╰── read here
+ 42 │     let y: u8 = UART0.thr + 1;
+    ╰────
+  help: a `write` register can only be assigned with `=`, since a compound assignment reads it
+        first; declare it `read write` if the device also lets it be read (ADR 0058)
+ty::read-of-write-only
+
+  × the register `thr` of `Uart` is write-only
+    ╭─[typeck_peripheral_access_errors.ers:42:17]
+ 30 │     read rbr: u8 at 0,
+ 31 │     write thr: u8 at 0,
+    ·           ─┬─
+    ·            ╰── declared `write`
+ 32 │     read write ier: u8 at 1,
+ 33 │ }
+ 34 │ 
+ 35 │ peripheral UART0: Uart at 0x1000_0000;
+ 36 │ 
+ 37 │ // The access modes, from a peripheral and through a `*const` pointer.
+ 38 │ fn modes(c: *const Uart) {
+ 39 │     UART0.rbr = 1;
+ 40 │     UART0.rbr |= 1;
+ 41 │     let x: u8 = UART0.thr;
+ 42 │     let y: u8 = UART0.thr + 1;
+    ·                 ────┬────
+    ·                     ╰── read here
+ 43 │     UART0.thr;
+    ╰────
+  help: a `write` register can only be assigned with `=`, since a compound assignment reads it
+        first; declare it `read write` if the device also lets it be read (ADR 0058)
+ty::read-of-write-only
+
+  × the register `thr` of `Uart` is write-only
+    ╭─[typeck_peripheral_access_errors.ers:43:5]
+ 30 │     read rbr: u8 at 0,
+ 31 │     write thr: u8 at 0,
+    ·           ─┬─
+    ·            ╰── declared `write`
+ 32 │     read write ier: u8 at 1,
+ 33 │ }
+ 34 │ 
+ 35 │ peripheral UART0: Uart at 0x1000_0000;
+ 36 │ 
+ 37 │ // The access modes, from a peripheral and through a `*const` pointer.
+ 38 │ fn modes(c: *const Uart) {
+ 39 │     UART0.rbr = 1;
+ 40 │     UART0.rbr |= 1;
+ 41 │     let x: u8 = UART0.thr;
+ 42 │     let y: u8 = UART0.thr + 1;
+ 43 │     UART0.thr;
+    ·     ────┬────
+    ·         ╰── read here
+ 44 │     UART0.thr += 1;
+    ╰────
+  help: a `write` register can only be assigned with `=`, since a compound assignment reads it
+        first; declare it `read write` if the device also lets it be read (ADR 0058)
+ty::read-of-write-only
+
+  × the register `thr` of `Uart` is write-only
+    ╭─[typeck_peripheral_access_errors.ers:44:5]
+ 30 │     read rbr: u8 at 0,
+ 31 │     write thr: u8 at 0,
+    ·           ─┬─
+    ·            ╰── declared `write`
+ 32 │     read write ier: u8 at 1,
+ 33 │ }
+ 34 │ 
+ 35 │ peripheral UART0: Uart at 0x1000_0000;
+ 36 │ 
+ 37 │ // The access modes, from a peripheral and through a `*const` pointer.
+ 38 │ fn modes(c: *const Uart) {
+ 39 │     UART0.rbr = 1;
+ 40 │     UART0.rbr |= 1;
+ 41 │     let x: u8 = UART0.thr;
+ 42 │     let y: u8 = UART0.thr + 1;
+ 43 │     UART0.thr;
+ 44 │     UART0.thr += 1;
+    ·     ────┬────
+    ·         ╰── read and written by this compound assignment
+ 45 │     (*c).ier = 1;
+    ╰────
+  help: a `write` register can only be assigned with `=`, since a compound assignment reads it
+        first; declare it `read write` if the device also lets it be read (ADR 0058)
+ty::write-through-const
+
+  × cannot write through a `*const` pointer
+    ╭─[typeck_peripheral_access_errors.ers:45:7]
+ 44 │     UART0.thr += 1;
+ 45 │     (*c).ier = 1;
+    ·       ┬
+    ·       ╰── has type `*const Uart`
+ 46 │     (*c).rbr = 1;
+    ╰────
+  help: only `*mut` pointers can be written through
+ty::write-to-read-only
+
+  × the register `rbr` of `Uart` is read-only
+    ╭─[typeck_peripheral_access_errors.ers:46:5]
+ 29 │ peripheral Uart {
+ 30 │     read rbr: u8 at 0,
+    ·          ─┬─
+    ·           ╰── declared `read`
+ 31 │     write thr: u8 at 0,
+ 32 │     read write ier: u8 at 1,
+ 33 │ }
+ 34 │ 
+ 35 │ peripheral UART0: Uart at 0x1000_0000;
+ 36 │ 
+ 37 │ // The access modes, from a peripheral and through a `*const` pointer.
+ 38 │ fn modes(c: *const Uart) {
+ 39 │     UART0.rbr = 1;
+ 40 │     UART0.rbr |= 1;
+ 41 │     let x: u8 = UART0.thr;
+ 42 │     let y: u8 = UART0.thr + 1;
+ 43 │     UART0.thr;
+ 44 │     UART0.thr += 1;
+ 45 │     (*c).ier = 1;
+ 46 │     (*c).rbr = 1;
+    ·     ────┬───
+    ·         ╰── written here
+ 47 │ }
+    ╰────
+  help: a `read` register can only be read; declare it `read write` if the device also lets it be
+        written (ADR 0058)
+ty::write-through-const
+
+  × cannot write through a `*const` pointer
+    ╭─[typeck_peripheral_access_errors.ers:46:7]
+ 45 │     (*c).ier = 1;
+ 46 │     (*c).rbr = 1;
+    ·       ┬
+    ·       ╰── has type `*const Uart`
+ 47 │ }
+    ╰────
+  help: only `*mut` pointers can be written through
+ty::private-register
+
+  × the register `secret` of `dev::Regs` is private
+    ╭─[typeck_peripheral_access_errors.ers:23:20]
+ 22 │         pub read write ctrl: u8 at 0,
+ 23 │         read write secret: u8 at 1,
+    ·                    ───┬──
+    ·                       ╰── declared here without `pub`
+ 24 │     }
+    ╰────
+    ╭─[typeck_peripheral_access_errors.ers:52:15]
+ 51 │ fn visibility() -> u8 {
+ 52 │     dev::REGS.secret = 1;
+    ·               ───┬──
+    ·                  ╰── not visible here
+ 53 │     dev::HIDDEN.data
+    ╰────
+  help: a private register is visible only in module `dev` and the modules inside it; declare it
+        `pub` to use it elsewhere, or offer functions that use it (ADR 0050, 0058)
+ty::private-register
+
+  × the register `data` of `dev::Hidden` is not visible here
+    ╭─[typeck_peripheral_access_errors.ers:13:16]
+ 12 │ mod dev {
+ 13 │     peripheral Hidden {
+    ·                ───┬──
+    ·                   ╰── `dev::Hidden` is declared here
+ 14 │         pub read write data: u8 at 0,
+    ╰────
+    ╭─[typeck_peripheral_access_errors.ers:53:17]
+ 52 │     dev::REGS.secret = 1;
+ 53 │     dev::HIDDEN.data
+    ·                 ──┬─
+    ·                   ╰── not visible here
+ 54 │ }
+    ╰────
+  help: a `pub` register is visible wherever a path can name its peripheral type, whatever
+        peripheral it is reached from, and none written in the root module can name `dev::Hidden`:
+        offer the type with `pub` or `pub use` (ADR 0050, 0058)
+ty::unknown-register
+
+  × `Uart` has no register `lcr`
+    ╭─[typeck_peripheral_access_errors.ers:57:11]
+ 56 │ fn unknown(u: *mut Uart) {
+ 57 │     UART0.lcr = 3;
+    ·           ─┬─
+    ·            ╰── unknown register
+ 58 │     // A pointer has no registers of its own.
+    ╰────
+  help: its registers are `rbr`, `thr`, `ier`
+ty::no-fields
+
+  × `*mut Uart` has no fields
+    ╭─[typeck_peripheral_access_errors.ers:59:7]
+ 58 │     // A pointer has no registers of its own.
+ 59 │     u.thr = 1;
+    ·       ─┬─
+    ·        ╰── no such field
+ 60 │ }
+    ╰────
+  help: dereference the pointer first: `(*p).thr` (ADR 0021)
+ty::register-address
+
+  × cannot take the address of the register `rbr` of `Uart`
+    ╭─[typeck_peripheral_access_errors.ers:64:35]
+ 63 │ fn addresses(c: *const Uart) {
+ 64 │     let a: *const u8 = &raw const UART0.rbr;
+    ·                                   ────┬────
+    ·                                       ╰── a register
+ 65 │     let b: *mut u8 = &raw mut UART0.ier;
+    ╰────
+  help: a pointer to it would reach it without its access mode, `read`; read or write it where it
+        is named, or pass the whole device with a pointer to its peripheral, as `&raw mut P` (ADR
+        0058)
+ty::register-address
+
+  × cannot take the address of the register `ier` of `Uart`
+    ╭─[typeck_peripheral_access_errors.ers:65:31]
+ 64 │     let a: *const u8 = &raw const UART0.rbr;
+ 65 │     let b: *mut u8 = &raw mut UART0.ier;
+    ·                               ────┬────
+    ·                                   ╰── a register
+ 66 │     let d: *mut u8 = &raw mut (*c).ier;
+    ╰────
+  help: a pointer to it would reach it without its access mode, `read write`; read or write it
+        where it is named, or pass the whole device with a pointer to its peripheral, as `&raw mut
+        P` (ADR 0058)
+ty::register-address
+
+  × cannot take the address of the register `ier` of `Uart`
+    ╭─[typeck_peripheral_access_errors.ers:66:31]
+ 65 │     let b: *mut u8 = &raw mut UART0.ier;
+ 66 │     let d: *mut u8 = &raw mut (*c).ier;
+    ·                               ────┬───
+    ·                                   ╰── a register
+ 67 │ }
+    ╰────
+  help: a pointer to it would reach it without its access mode, `read write`; read or write it
+        where it is named, or pass the whole device with a pointer to its peripheral, as `&raw mut
+        P` (ADR 0058)
+ty::peripheral-index
+
+  × cannot index `*mut Uart`, a pointer to a peripheral type
+    ╭─[typeck_peripheral_access_errors.ers:71:5]
+ 70 │ fn index(u: *mut Uart) {
+ 71 │     u[1];
+    ·     ┬
+    ·     ╰── `Uart` has no size, so no stride
+ 72 │     let p: *mut Uart = &raw mut u[1];
+    ╰────
+  help: a pointer to a peripheral type reaches one device, whose registers are reached as in
+        `(*u).NAME`; for another device of type `Uart`, use a pointer to it (ADR 0058)
+ty::peripheral-index
+
+  × cannot index `*mut Uart`, a pointer to a peripheral type
+    ╭─[typeck_peripheral_access_errors.ers:72:33]
+ 71 │     u[1];
+ 72 │     let p: *mut Uart = &raw mut u[1];
+    ·                                 ┬
+    ·                                 ╰── `Uart` has no size, so no stride
+ 73 │     UART0[0];
+    ╰────
+  help: a pointer to a peripheral type reaches one device, whose registers are reached as in
+        `(*u).NAME`; for another device of type `Uart`, use a pointer to it (ADR 0058)
+ty::cannot-index
+
+  × cannot index a value of type `Uart`
+    ╭─[typeck_peripheral_access_errors.ers:73:5]
+ 72 │     let p: *mut Uart = &raw mut u[1];
+ 73 │     UART0[0];
+    ·     ──┬──
+    ·       ╰── not an array or a pointer
+ 74 │ }
+    ╰────
+ty::peripheral-by-value
+
+  × `Uart` is a peripheral type, which no value has
+    ╭─[typeck_peripheral_access_errors.ers:81:17]
+ 80 │ fn wholes(u: *mut Uart, c: *const Uart) {
+ 81 │     let x: u8 = UART0;
+    ·                 ──┬──
+    ·                   ╰── a device, read as a whole
+ 82 │     let y: u8 = *u;
+    ╰────
+  help: its registers are read and written one at a time, as in `P.NAME` or `(*u).NAME`; a
+        function is given the device as a `*mut Uart`, such as `&raw mut P` (ADR 0058)
+ty::peripheral-by-value
+
+  × `Uart` is a peripheral type, which no value has
+    ╭─[typeck_peripheral_access_errors.ers:82:17]
+ 81 │     let x: u8 = UART0;
+ 82 │     let y: u8 = *u;
+    ·                 ─┬
+    ·                  ╰── a device, read as a whole
+ 83 │     take(UART0);
+    ╰────
+  help: its registers are read and written one at a time, as in `P.NAME` or `(*u).NAME`; a
+        function is given the device as a `*mut Uart`, such as `&raw mut P` (ADR 0058)
+ty::peripheral-by-value
+
+  × `Uart` is a peripheral type, which no value has
+    ╭─[typeck_peripheral_access_errors.ers:83:10]
+ 82 │     let y: u8 = *u;
+ 83 │     take(UART0);
+    ·          ──┬──
+    ·            ╰── a device, read as a whole
+ 84 │     take(*u);
+    ╰────
+  help: its registers are read and written one at a time, as in `P.NAME` or `(*u).NAME`; a
+        function is given the device as a `*mut Uart`, such as `&raw mut P` (ADR 0058)
+ty::peripheral-by-value
+
+  × `Uart` is a peripheral type, which no value has
+    ╭─[typeck_peripheral_access_errors.ers:84:10]
+ 83 │     take(UART0);
+ 84 │     take(*u);
+    ·          ─┬
+    ·           ╰── a device, read as a whole
+ 85 │     UART0 = 0;
+    ╰────
+  help: its registers are read and written one at a time, as in `P.NAME` or `(*u).NAME`; a
+        function is given the device as a `*mut Uart`, such as `&raw mut P` (ADR 0058)
+ty::peripheral-by-value
+
+  × `Uart` is a peripheral type, which no value has
+    ╭─[typeck_peripheral_access_errors.ers:85:5]
+ 84 │     take(*u);
+ 85 │     UART0 = 0;
+    ·     ──┬──
+    ·       ╰── a device, written as a whole
+ 86 │     *u = 0;
+    ╰────
+  help: its registers are read and written one at a time, as in `P.NAME` or `(*u).NAME`; a
+        function is given the device as a `*mut Uart`, such as `&raw mut P` (ADR 0058)
+ty::peripheral-by-value
+
+  × `Uart` is a peripheral type, which no value has
+    ╭─[typeck_peripheral_access_errors.ers:86:5]
+ 85 │     UART0 = 0;
+ 86 │     *u = 0;
+    ·     ─┬
+    ·      ╰── a device, written as a whole
+ 87 │     UART0 += 1;
+    ╰────
+  help: its registers are read and written one at a time, as in `P.NAME` or `(*u).NAME`; a
+        function is given the device as a `*mut Uart`, such as `&raw mut P` (ADR 0058)
+ty::peripheral-by-value
+
+  × `Uart` is a peripheral type, which no value has
+    ╭─[typeck_peripheral_access_errors.ers:87:5]
+ 86 │     *u = 0;
+ 87 │     UART0 += 1;
+    ·     ──┬──
+    ·       ╰── a device, read and written as a whole
+ 88 │     *c = 0;
+    ╰────
+  help: its registers are read and written one at a time, as in `P.NAME` or `(*u).NAME`; a
+        function is given the device as a `*mut Uart`, such as `&raw mut P` (ADR 0058)
+ty::peripheral-by-value
+
+  × `Uart` is a peripheral type, which no value has
+    ╭─[typeck_peripheral_access_errors.ers:88:5]
+ 87 │     UART0 += 1;
+ 88 │     *c = 0;
+    ·     ─┬
+    ·      ╰── a device, written as a whole
+ 89 │ }
+    ╰────
+  help: its registers are read and written one at a time, as in `P.NAME` or `(*u).NAME`; a
+        function is given the device as a `*mut Uart`, such as `&raw mut P` (ADR 0058)

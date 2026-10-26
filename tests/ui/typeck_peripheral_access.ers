@@ -1,0 +1,110 @@
+// emit: typeck
+// Register accesses (ADR 0058): a register, reached from a peripheral or
+// through a pointer to a peripheral type, is a place of its type, read
+// where its mode has `read` and written where it has `write`, a compound
+// assignment needing both. `&raw mut` and `&raw const` of a peripheral,
+// which is not `mut`, give a `*mut` and a `*const` pointer to its type,
+// through which a driver serves any instance, and `&raw mut *u` gives the
+// pointer back. A `pub` register is visible wherever its peripheral type is
+// reachable, through `use` too; a private one in its type's module and the
+// modules inside it. A pointer to a peripheral type is also made with `as`
+// from an integer, and converts with `as` to any other pointer.
+mod uart {
+    pub peripheral Uart16550 {
+        pub read rbr: u8 at 0,
+        pub write thr: u8 at 0,
+        pub read write ier: u8 at 1,
+        read lsr: u8 at 5,
+        pub read write scr: u8 at 7,
+    }
+
+    pub peripheral UART0: Uart16550 at 0x1000_0000;
+
+    // A private register, read from a module inside its type's module.
+    mod status {
+        pub fn ready(u: *const super::Uart16550) -> bool {
+            ((*u).lsr & 0x20) != 0
+        }
+    }
+
+    pub fn putc(u: *mut Uart16550, byte: u8) {
+        while !status::ready(u) {}
+        (*u).thr = byte;
+    }
+}
+
+use uart::Uart16550;
+
+peripheral Timer {
+    read write ctrl: u32 at 0,
+    read count: u16 at 4,
+    write reload: u16 at 6,
+    read write prescale: u8 at 8,
+}
+
+peripheral TIMER0: Timer at 0x2000_0000;
+
+// From a peripheral: each mode and width, and compound assignments of a
+// `read write` register.
+fn from_peripheral() -> u32 {
+    TIMER0.ctrl = 1;
+    TIMER0.ctrl |= 0x10;
+    TIMER0.prescale += 1;
+    TIMER0.reload = 100;
+    let count: u16 = TIMER0.count;
+    TIMER0.ctrl + count as u32
+}
+
+// Through `*mut` and `*const` pointers: a `*const` pointer reads.
+fn through_pointers(t: *mut Timer, c: *const Timer) -> u16 {
+    (*t).ctrl = 2;
+    (*t).ctrl <<= 1;
+    (*t).reload = (*c).count;
+    (*c).count + (*t).count
+}
+
+// The `pub` registers of a peripheral type of another module, brought in
+// with `use`, through a pointer and from that module's peripheral.
+fn other_module(u: *mut Uart16550) -> u8 {
+    (*u).thr = 0x41;
+    (*u).ier |= 1;
+    uart::UART0.scr = (*u).rbr;
+    uart::UART0.rbr
+}
+
+fn count(t: *const Timer) -> u16 {
+    (*t).count
+}
+
+// `&raw mut` and `&raw const` of a peripheral, passed to drivers and kept
+// in locals; `&raw mut *u` and `&raw const *u`.
+fn drivers() {
+    uart::putc(&raw mut uart::UART0, 0x68);
+    let n: u16 = count(&raw const TIMER0);
+    let p: *const Uart16550 = &raw const uart::UART0;
+    let u: *mut Timer = &raw mut TIMER0;
+    let same: *mut Timer = &raw mut *u;
+    let read_only: *const Timer = &raw const *u;
+    let bytes: *mut u8 = &raw mut TIMER0 as *mut u8;
+}
+
+// Reads in a condition, a `match` scrutinee and an expression statement.
+fn reads() -> u32 {
+    if TIMER0.count == 0 {
+        TIMER0.ctrl = 0;
+    }
+    TIMER0.count;
+    match TIMER0.prescale {
+        0 => 1,
+        _ => 2,
+    }
+}
+
+// A pointer made with `as` from an integer, without a peripheral.
+fn from_integer() {
+    let t: *mut Timer = 0x2000_1000 as *mut Timer;
+    (*t).ctrl = 1;
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }
