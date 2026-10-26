@@ -1,0 +1,37 @@
+// Syntax errors in peripheral types and peripherals (ADR 0058). Each item is
+// broken once, and parsing resumes at the next `peripheral` and a name.
+
+// A register without an access mode.
+peripheral NoMode {
+    rbr: u8 at 0,
+}
+
+// The access modes in the wrong order: `write read` is a `write` register
+// named `read`, and `x` stands where `:` should.
+peripheral WrongOrder {
+    write read x: u8 at 0,
+}
+
+// A register without `at`.
+peripheral NoAt {
+    read rbr: u8 0,
+}
+
+// A missing `,` between registers.
+peripheral NoComma {
+    read rbr: u8 at 0
+    write thr: u8 at 0,
+}
+
+// A peripheral without `at`.
+peripheral A: NoMode 0x1000_0000;
+
+// A peripheral without its `;`.
+peripheral B: NoMode at 0x1000_0000
+peripheral C: NoMode at 0x1000_1000;
+
+// A peripheral without a type.
+peripheral D;
+
+// The item after it is parsed: its error is reported.
+peripheral E: NoMode at;

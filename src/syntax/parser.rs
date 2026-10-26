@@ -5,10 +5,11 @@ use crate::builtin::{builtin_variant_help, is_builtin_enum};
 use crate::diag::{Diagnostic, Diagnostics};
 use crate::span::Span;
 use crate::syntax::ast::{
-    Arm, Attr, BinOp, Block, ComptimeDecl, ConstDecl, EnumDecl, Expr, ExprKind, FieldDecl,
-    FieldInit, File, FnDecl, FnKind, Ident, Item, Let, LogicalOp, MemoryDecl, ModDecl, Param, Path,
-    Pattern, PatternKind, Placement, PlacementKind, RegionDecl, StaticDecl, Stmt, StructDecl, Ty,
-    TyKind, UnOp, UseDecl, UseName, VariantDecl, Visibility,
+    AccessMode, Arm, Attr, BinOp, Block, ComptimeDecl, ConstDecl, EnumDecl, Expr, ExprKind,
+    FieldDecl, FieldInit, File, FnDecl, FnKind, Ident, Item, Let, LogicalOp, MemoryDecl, ModDecl,
+    Param, Path, Pattern, PatternKind, PeripheralDecl, PeripheralTypeDecl, Placement,
+    PlacementKind, RegionDecl, RegisterDecl, StaticDecl, Stmt, StructDecl, Ty, TyKind, UnOp,
+    UseDecl, UseName, VariantDecl, Visibility,
 };
 use crate::syntax::lexer;
 use crate::syntax::token::{Token, TokenKind};
@@ -27,6 +28,9 @@ pub fn parse(text: &str, tokens: &[Token], diags: &mut Diagnostics) -> File {
     };
     parser.file()
 }
+
+/// The help of the errors in a register of a peripheral type (ADR 0058).
+const REGISTER_HELP: &str = "a register is written `ACCESS NAME: TYPE at OFFSET`, optionally after `pub`, its access mode `read`, `write` or `read write`, in that order, and its name the identifier just before `:`; registers are separated by `,` (ADR 0058)";
 
 /// The error has already been reported; the caller only needs to recover.
 struct Reported;
@@ -75,8 +79,8 @@ impl Parser<'_> {
     }
 
     /// The text of the token at `pos`, if it is an identifier. The words of
-    /// a `memory` block are identifiers, recognized by their text where
-    /// they are keywords (ADR 0057).
+    /// a `memory` block and of peripherals are identifiers, recognized by
+    /// their text where they are keywords (ADR 0057, 0058).
     fn word_at(&self, pos: usize) -> Option<&str> {
         let token = self.tokens.get(pos)?;
         (token.kind == TokenKind::Ident).then(|| &self.text[token.span.range()])
@@ -106,6 +110,20 @@ impl Parser<'_> {
             Some("code" | "data" | "stack") => self.word_at(self.pos + 3) == Some("in"),
             _ => false,
         }
+    }
+
+    /// At `peripheral` followed by a name, which starts a peripheral type or
+    /// a peripheral where an item starts, and is reported inside a function
+    /// body, where no expression starts with two names (ADR 0058).
+    fn at_peripheral(&self) -> bool {
+        self.at_word("peripheral") && self.word_at(self.pos + 1).is_some()
+    }
+
+    /// At an access mode word of a register, `read` or `write`: one that the
+    /// register's name, the identifier just before `:`, does not follow
+    /// (ADR 0058). So `read write: u8` is a `read` register named `write`.
+    fn at_access_word(&self, word: &str) -> bool {
+        self.at_word(word) && self.peek_second() != TokenKind::Colon
     }
 
     fn bump(&mut self) -> Token {
@@ -214,7 +232,9 @@ impl Parser<'_> {
     /// one: the token after it is, and the item parses as well without
     /// it, so a misplaced `pub` that caused the error is not met again.
     /// Nor is a `memory {` deeper than the items: in a body it is an
-    /// expression, such as the struct literal `memory { data: 1 }`.
+    /// expression, such as the struct literal `memory { data: 1 }`; and
+    /// `peripheral` followed by a name is one only at the depth of the
+    /// items, as `memory {` (ADR 0058).
     fn recover_to_item(&mut self) {
         loop {
             let at_items = self.depth == self.module_depth.unwrap_or(0);
@@ -234,7 +254,7 @@ impl Parser<'_> {
                     | TokenKind::Use
                     | TokenKind::Pound
                     | TokenKind::Eof
-            ) || (at_items && self.at_memory());
+            ) || (at_items && (self.at_memory() || self.at_peripheral()));
             if closes_module || starts_item {
                 return;
             }
@@ -260,6 +280,9 @@ impl Parser<'_> {
         }
         if self.at_memory() {
             return Ok(Item::Memory(self.memory_decl(attrs, vis)?));
+        }
+        if self.at_peripheral() {
+            return self.peripheral_item(attrs, vis);
         }
         match self.peek().kind {
             TokenKind::Entry | TokenKind::Panic | TokenKind::Fn | TokenKind::Extern => {
@@ -787,8 +810,129 @@ impl Parser<'_> {
         }
     }
 
-    /// Consumes the identifier `word`, a word of a `memory` block
-    /// (ADR 0057), or reports it missing, with `help`.
+    /// A peripheral type, `peripheral NAME { registers }`, or a peripheral,
+    /// `peripheral NAME: Type at ADDRESS;`, told apart by the token after
+    /// the name (ADR 0058). At `peripheral` and a name.
+    fn peripheral_item(&mut self, attrs: Vec<Attr>, vis: Visibility) -> PResult<Item> {
+        const HELP: &str = "`peripheral NAME { registers }` declares a peripheral type, and `peripheral NAME: TYPE at ADDRESS;` a peripheral of that type (ADR 0058)";
+        let start = self.bump().span;
+        let name = self.ident()?;
+        if self.at(TokenKind::LBrace) {
+            let decl = self.peripheral_type_decl(attrs, vis, start, name)?;
+            return Ok(Item::PeripheralType(decl));
+        }
+        if self.at(TokenKind::Colon) {
+            let decl = self.peripheral_decl(attrs, vis, start, name)?;
+            return Ok(Item::Peripheral(decl));
+        }
+        Err(self.error_expected_help("`{` or `:`", HELP))
+    }
+
+    /// The registers of a peripheral type, `{ register, ... }`, with an
+    /// optional trailing comma (ADR 0058). At `{`; `start` is the span of
+    /// `peripheral`.
+    fn peripheral_type_decl(
+        &mut self,
+        attrs: Vec<Attr>,
+        vis: Visibility,
+        start: Span,
+        name: Ident,
+    ) -> PResult<PeripheralTypeDecl> {
+        self.bump();
+        let mut registers = Vec::new();
+        while !self.at(TokenKind::RBrace) {
+            registers.push(self.register()?);
+            if self.eat(TokenKind::Comma).is_none() {
+                if !self.at(TokenKind::RBrace) {
+                    return Err(self.error_expected_help("`,` or `}`", REGISTER_HELP));
+                }
+                break;
+            }
+        }
+        let close = self.bump();
+        Ok(PeripheralTypeDecl {
+            attrs,
+            vis,
+            name,
+            registers,
+            span: start.to(close.span),
+        })
+    }
+
+    /// `[pub] ACCESS NAME: Type at OFFSET` (ADR 0058). The access mode is
+    /// `read`, `write` or `read write`, each word one only when `:` does
+    /// not follow it, since the name is the identifier just before `:`.
+    fn register(&mut self) -> PResult<RegisterDecl> {
+        let start = self.peek().span;
+        // A register is private unless written `pub`, as a field (ADR 0050).
+        let vis = match self.eat(TokenKind::Pub) {
+            Some(_) => Visibility::Pub,
+            None => Visibility::Private,
+        };
+        let access = if self.at_access_word("read") {
+            self.bump();
+            if self.at_access_word("write") {
+                self.bump();
+                AccessMode::ReadWrite
+            } else {
+                AccessMode::Read
+            }
+        } else if self.at_access_word("write") {
+            self.bump();
+            AccessMode::Write
+        } else {
+            let what = "`read` or `write`";
+            if self.at(TokenKind::Eof) {
+                return Err(self.error_expected_help(what, REGISTER_HELP));
+            }
+            // The mode is missing before the token, which is likely the
+            // register's name: point at it rather than at the end of the
+            // line before.
+            let span = self.peek().span;
+            return Err(self.report_unexpected_help(what, span, REGISTER_HELP));
+        };
+        let name = self.ident()?;
+        self.expect_help(TokenKind::Colon, REGISTER_HELP)?;
+        let ty = self.ty()?;
+        self.expect_word("at", REGISTER_HELP)?;
+        let offset = self.nested_expr()?;
+        Ok(RegisterDecl {
+            vis,
+            access,
+            name,
+            ty,
+            span: start.to(offset.span),
+            offset,
+        })
+    }
+
+    /// `: Type at ADDRESS;` after a peripheral's name (ADR 0058). At `:`;
+    /// `start` is the span of `peripheral`.
+    fn peripheral_decl(
+        &mut self,
+        attrs: Vec<Attr>,
+        vis: Visibility,
+        start: Span,
+        name: Ident,
+    ) -> PResult<PeripheralDecl> {
+        const HELP: &str = "a peripheral is written `peripheral NAME: TYPE at ADDRESS;`, its type a peripheral type (ADR 0058)";
+        self.bump();
+        let ty = self.ty()?;
+        self.expect_word("at", HELP)?;
+        let address = self.expr()?;
+        let semi = self.expect_help(TokenKind::Semi, HELP)?;
+        Ok(PeripheralDecl {
+            attrs,
+            vis,
+            name,
+            ty,
+            address,
+            span: start.to(semi.span),
+        })
+    }
+
+    /// Consumes the identifier `word`, a word of a `memory` block or of a
+    /// peripheral (ADR 0057, 0058), or reports it missing, with `help`.
     fn expect_word(&mut self, word: &str, help: &str) -> PResult<Token> {
         if self.at_word(word) {
             Ok(self.bump())
@@ -1032,6 +1176,18 @@ impl Parser<'_> {
                         .help("move the `memory` block out of the function: it is an item, which describes the memory of the whole program (ADR 0057)"),
                     );
                     self.memory_decl(Vec::new(), Visibility::Private)?;
+                }
+                _ if self.at_peripheral() => {
+                    let token = self.peek();
+                    self.diags.push(
+                        Diagnostic::error(
+                            "parser::local-peripheral",
+                            "`peripheral` items cannot be declared inside a function",
+                        )
+                        .label(token.span, "inside a function")
+                        .help("move the peripheral type or peripheral out of the function: it is an item, which names a device for the whole program (ADR 0058)"),
+                    );
+                    self.peripheral_item(Vec::new(), Visibility::Private)?;
                 }
                 TokenKind::Mod => {
                     let token = self.peek();

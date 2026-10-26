@@ -1,0 +1,28 @@
+// emit: ast
+// Peripheral types and peripherals (ADR 0058): each access mode, `pub` and
+// private registers, two registers at one offset, a trailing comma, offsets
+// naming constants; an empty peripheral type; registers named `read`,
+// `write` and `at`, the name being the identifier just before `:`; and
+// `pub` peripherals whose type is a name or a path, and whose address names
+// a constant.
+const LSR: usize = 0x05;
+const UART0_BASE: usize = 0x1000_0000;
+
+pub peripheral Uart16550 {
+    pub read rbr: u8 at 0x00,
+    pub write thr: u8 at 0x00,
+    read write ier: u8 at 0x01,
+    read lsr: u8 at LSR,
+    pub read write scr: u8 at LSR + 2,
+}
+
+peripheral Empty {}
+
+peripheral Words {
+    read write: u8 at 0,
+    write read: u8 at 1,
+    read write at: u16 at 2
+}
+
+pub peripheral UART0: Uart16550 at UART0_BASE;
+pub peripheral NOTHING: crate::Empty at 0x2000_0000;

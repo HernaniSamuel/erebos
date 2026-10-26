@@ -579,6 +579,8 @@ impl<'a> Items<'a> {
                     self.memories.push((decl, module));
                     continue;
                 }
+                // Not lowered yet (M3.2, step 2).
+                ast::Item::PeripheralType(_) | ast::Item::Peripheral(_) => continue,
                 ast::Item::Mod(decl) => {
                     let id = ModuleId(self.modules.len() as u32);
                     self.modules.push(ModuleDef {

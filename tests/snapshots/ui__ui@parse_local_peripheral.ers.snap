@@ -1,0 +1,74 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/parse_local_peripheral.ers
+---
+--- errors ---
+parser::local-peripheral
+
+  × `peripheral` items cannot be declared inside a function
+   ╭─[parse_local_peripheral.ers:5:5]
+ 4 │ fn f() -> u32 {
+ 5 │     peripheral Uart {
+   ·     ─────┬────
+   ·          ╰── inside a function
+ 6 │         write thr: u8 at 0,
+   ╰────
+  help: move the peripheral type or peripheral out of the function: it is an item, which names a
+        device for the whole program (ADR 0058)
+parser::local-peripheral
+
+  × `peripheral` items cannot be declared inside a function
+   ╭─[parse_local_peripheral.ers:8:5]
+ 7 │     }
+ 8 │     peripheral UART0: Uart at 0x1000_0000;
+   ·     ─────┬────
+   ·          ╰── inside a function
+ 9 │     0
+   ╰────
+  help: move the peripheral type or peripheral out of the function: it is an item, which names a
+        device for the whole program (ADR 0058)
+parser::unexpected-token
+
+  × expected `,` or `}`, found identifier
+    ╭─[parse_local_peripheral.ers:15:22]
+ 14 │ peripheral Broken {
+ 15 │     read rbr: u8 at 0
+    ·                      ▲
+    ·                      ╰── expected `,` or `}`
+ 16 │     write thr: u8 at 0,
+    ╰────
+  help: a register is written `ACCESS NAME: TYPE at OFFSET`, optionally after `pub`, its access
+        mode `read`, `write` or `read write`, in that order, and its name the identifier just
+        before `:`; registers are separated by `,` (ADR 0058)
+parser::local-const
+
+  × `const` items cannot be declared inside a function
+    ╭─[parse_local_peripheral.ers:20:5]
+ 19 │ fn g() {
+ 20 │     const X: u32 = 1;
+    ·     ──┬──
+    ·       ╰── inside a function
+ 21 │ }
+    ╰────
+  help: compute the value at compile time with `let name: T = comptime ...;`, or move the `const`
+        out of the function (ADR 0029)
+parser::unexpected-token
+
+  × expected an expression, found `;`
+    ╭─[parse_local_peripheral.ers:28:18]
+ 27 │ fn h() {
+ 28 │     let x: u32 = ;
+    ·                  ┬
+    ·                  ╰── expected an expression
+ 29 │     peripheral UART1: Uart at 0x1000_1000;
+    ╰────
+parser::unexpected-token
+
+  × expected an expression, found `;`
+    ╭─[parse_local_peripheral.ers:32:27]
+ 31 │ 
+ 32 │ peripheral UART2: Uart at ;
+    ·                           ┬
+    ·                           ╰── expected an expression
+    ╰────

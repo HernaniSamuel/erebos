@@ -1,0 +1,465 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/parse_peripheral.ers
+---
+--- ast ---
+File {
+    items: [
+        Const(
+            ConstDecl {
+                attrs: [],
+                vis: Private,
+                name: Ident {
+                    name: "LSR",
+                    span: 407..410,
+                },
+                ty: Ty {
+                    kind: Named(
+                        Path {
+                            segments: [
+                                Ident {
+                                    name: "usize",
+                                    span: 412..417,
+                                },
+                            ],
+                            span: 412..417,
+                        },
+                    ),
+                    span: 412..417,
+                },
+                value: Expr {
+                    kind: Int(
+                        Some(
+                            5,
+                        ),
+                    ),
+                    span: 420..424,
+                },
+                span: 401..425,
+            },
+        ),
+        Const(
+            ConstDecl {
+                attrs: [],
+                vis: Private,
+                name: Ident {
+                    name: "UART0_BASE",
+                    span: 432..442,
+                },
+                ty: Ty {
+                    kind: Named(
+                        Path {
+                            segments: [
+                                Ident {
+                                    name: "usize",
+                                    span: 444..449,
+                                },
+                            ],
+                            span: 444..449,
+                        },
+                    ),
+                    span: 444..449,
+                },
+                value: Expr {
+                    kind: Int(
+                        Some(
+                            268435456,
+                        ),
+                    ),
+                    span: 452..463,
+                },
+                span: 426..464,
+            },
+        ),
+        PeripheralType(
+            PeripheralTypeDecl {
+                attrs: [],
+                vis: Pub,
+                name: Ident {
+                    name: "Uart16550",
+                    span: 481..490,
+                },
+                registers: [
+                    RegisterDecl {
+                        vis: Pub,
+                        access: Read,
+                        name: Ident {
+                            name: "rbr",
+                            span: 506..509,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Path {
+                                    segments: [
+                                        Ident {
+                                            name: "u8",
+                                            span: 511..513,
+                                        },
+                                    ],
+                                    span: 511..513,
+                                },
+                            ),
+                            span: 511..513,
+                        },
+                        offset: Expr {
+                            kind: Int(
+                                Some(
+                                    0,
+                                ),
+                            ),
+                            span: 517..521,
+                        },
+                        span: 497..521,
+                    },
+                    RegisterDecl {
+                        vis: Pub,
+                        access: Write,
+                        name: Ident {
+                            name: "thr",
+                            span: 537..540,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Path {
+                                    segments: [
+                                        Ident {
+                                            name: "u8",
+                                            span: 542..544,
+                                        },
+                                    ],
+                                    span: 542..544,
+                                },
+                            ),
+                            span: 542..544,
+                        },
+                        offset: Expr {
+                            kind: Int(
+                                Some(
+                                    0,
+                                ),
+                            ),
+                            span: 548..552,
+                        },
+                        span: 527..552,
+                    },
+                    RegisterDecl {
+                        vis: Private,
+                        access: ReadWrite,
+                        name: Ident {
+                            name: "ier",
+                            span: 569..572,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Path {
+                                    segments: [
+                                        Ident {
+                                            name: "u8",
+                                            span: 574..576,
+                                        },
+                                    ],
+                                    span: 574..576,
+                                },
+                            ),
+                            span: 574..576,
+                        },
+                        offset: Expr {
+                            kind: Int(
+                                Some(
+                                    1,
+                                ),
+                            ),
+                            span: 580..584,
+                        },
+                        span: 558..584,
+                    },
+                    RegisterDecl {
+                        vis: Private,
+                        access: Read,
+                        name: Ident {
+                            name: "lsr",
+                            span: 595..598,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Path {
+                                    segments: [
+                                        Ident {
+                                            name: "u8",
+                                            span: 600..602,
+                                        },
+                                    ],
+                                    span: 600..602,
+                                },
+                            ),
+                            span: 600..602,
+                        },
+                        offset: Expr {
+                            kind: Name(
+                                Path {
+                                    segments: [
+                                        Ident {
+                                            name: "LSR",
+                                            span: 606..609,
+                                        },
+                                    ],
+                                    span: 606..609,
+                                },
+                            ),
+                            span: 606..609,
+                        },
+                        span: 590..609,
+                    },
+                    RegisterDecl {
+                        vis: Pub,
+                        access: ReadWrite,
+                        name: Ident {
+                            name: "scr",
+                            span: 630..633,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Path {
+                                    segments: [
+                                        Ident {
+                                            name: "u8",
+                                            span: 635..637,
+                                        },
+                                    ],
+                                    span: 635..637,
+                                },
+                            ),
+                            span: 635..637,
+                        },
+                        offset: Expr {
+                            kind: Binary(
+                                Add,
+                                Expr {
+                                    kind: Name(
+                                        Path {
+                                            segments: [
+                                                Ident {
+                                                    name: "LSR",
+                                                    span: 641..644,
+                                                },
+                                            ],
+                                            span: 641..644,
+                                        },
+                                    ),
+                                    span: 641..644,
+                                },
+                                Expr {
+                                    kind: Int(
+                                        Some(
+                                            2,
+                                        ),
+                                    ),
+                                    span: 647..648,
+                                },
+                                645..646,
+                            ),
+                            span: 641..648,
+                        },
+                        span: 615..648,
+                    },
+                ],
+                span: 470..651,
+            },
+        ),
+        PeripheralType(
+            PeripheralTypeDecl {
+                attrs: [],
+                vis: Private,
+                name: Ident {
+                    name: "Empty",
+                    span: 664..669,
+                },
+                registers: [],
+                span: 653..672,
+            },
+        ),
+        PeripheralType(
+            PeripheralTypeDecl {
+                attrs: [],
+                vis: Private,
+                name: Ident {
+                    name: "Words",
+                    span: 685..690,
+                },
+                registers: [
+                    RegisterDecl {
+                        vis: Private,
+                        access: Read,
+                        name: Ident {
+                            name: "write",
+                            span: 702..707,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Path {
+                                    segments: [
+                                        Ident {
+                                            name: "u8",
+                                            span: 709..711,
+                                        },
+                                    ],
+                                    span: 709..711,
+                                },
+                            ),
+                            span: 709..711,
+                        },
+                        offset: Expr {
+                            kind: Int(
+                                Some(
+                                    0,
+                                ),
+                            ),
+                            span: 715..716,
+                        },
+                        span: 697..716,
+                    },
+                    RegisterDecl {
+                        vis: Private,
+                        access: Write,
+                        name: Ident {
+                            name: "read",
+                            span: 728..732,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Path {
+                                    segments: [
+                                        Ident {
+                                            name: "u8",
+                                            span: 734..736,
+                                        },
+                                    ],
+                                    span: 734..736,
+                                },
+                            ),
+                            span: 734..736,
+                        },
+                        offset: Expr {
+                            kind: Int(
+                                Some(
+                                    1,
+                                ),
+                            ),
+                            span: 740..741,
+                        },
+                        span: 722..741,
+                    },
+                    RegisterDecl {
+                        vis: Private,
+                        access: ReadWrite,
+                        name: Ident {
+                            name: "at",
+                            span: 758..760,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Path {
+                                    segments: [
+                                        Ident {
+                                            name: "u16",
+                                            span: 762..765,
+                                        },
+                                    ],
+                                    span: 762..765,
+                                },
+                            ),
+                            span: 762..765,
+                        },
+                        offset: Expr {
+                            kind: Int(
+                                Some(
+                                    2,
+                                ),
+                            ),
+                            span: 769..770,
+                        },
+                        span: 747..770,
+                    },
+                ],
+                span: 674..772,
+            },
+        ),
+        Peripheral(
+            PeripheralDecl {
+                attrs: [],
+                vis: Pub,
+                name: Ident {
+                    name: "UART0",
+                    span: 789..794,
+                },
+                ty: Ty {
+                    kind: Named(
+                        Path {
+                            segments: [
+                                Ident {
+                                    name: "Uart16550",
+                                    span: 796..805,
+                                },
+                            ],
+                            span: 796..805,
+                        },
+                    ),
+                    span: 796..805,
+                },
+                address: Expr {
+                    kind: Name(
+                        Path {
+                            segments: [
+                                Ident {
+                                    name: "UART0_BASE",
+                                    span: 809..819,
+                                },
+                            ],
+                            span: 809..819,
+                        },
+                    ),
+                    span: 809..819,
+                },
+                span: 778..820,
+            },
+        ),
+        Peripheral(
+            PeripheralDecl {
+                attrs: [],
+                vis: Pub,
+                name: Ident {
+                    name: "NOTHING",
+                    span: 836..843,
+                },
+                ty: Ty {
+                    kind: Named(
+                        Path {
+                            segments: [
+                                Ident {
+                                    name: "crate",
+                                    span: 845..850,
+                                },
+                                Ident {
+                                    name: "Empty",
+                                    span: 852..857,
+                                },
+                            ],
+                            span: 845..857,
+                        },
+                    ),
+                    span: 845..857,
+                },
+                address: Expr {
+                    kind: Int(
+                        Some(
+                            536870912,
+                        ),
+                    ),
+                    span: 861..872,
+                },
+                span: 825..873,
+            },
+        ),
+    ],
+}

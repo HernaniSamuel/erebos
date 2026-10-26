@@ -1,0 +1,51 @@
+// emit: typeck
+// `peripheral` starts an item only where an item starts and a name follows
+// it, and `read`, `write` and `at` are words only inside peripherals
+// (ADR 0058): elsewhere all four are names as any other. `peripheral { ... }`
+// at the start of a statement is a literal of the struct `peripheral`, and
+// `read(x)` and `write(x, y)` there are calls.
+struct peripheral {
+    read: u32,
+    write: u32,
+    at: u32,
+}
+
+mod at {
+    pub fn read(peripheral: u32) -> u32 {
+        peripheral
+    }
+
+    pub fn write(read: u32, write: u32) -> u32 {
+        read + write
+    }
+}
+
+fn read(at: u32) -> u32 {
+    at::read(at)
+}
+
+fn write(read: u32, at: u32) -> u32 {
+    at::write(read, at)
+}
+
+fn make() -> peripheral {
+    peripheral { read: 1, write: 2, at: 3 }
+}
+
+fn locals() -> u32 {
+    let peripheral: peripheral = make();
+    let read: u32 = peripheral.read;
+    let write: u32 = peripheral.write;
+    let at: u32 = peripheral.at;
+    peripheral { read: read, write: write, at: at }.at
+}
+
+fn calls() -> u32 {
+    let peripheral: u32 = locals();
+    read(peripheral);
+    write(peripheral, 1);
+    write(read(peripheral), peripheral)
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

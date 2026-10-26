@@ -20,6 +20,8 @@ pub enum Item {
     Mod(ModDecl),
     Use(UseDecl),
     Memory(MemoryDecl),
+    PeripheralType(PeripheralTypeDecl),
+    Peripheral(PeripheralDecl),
 }
 
 /// Whether an item is written with `pub` (ADR 0050).
@@ -141,6 +143,58 @@ pub enum PlacementKind {
     Code,
     Data,
     Stack { size: Expr },
+}
+
+/// `peripheral NAME { register, ... }`, the registers of a device
+/// (ADR 0058). Attributes do not apply to it; they are kept to be reported.
+#[derive(Debug)]
+pub struct PeripheralTypeDecl {
+    pub attrs: Vec<Attr>,
+    pub vis: Visibility,
+    pub name: Ident,
+    /// In source order.
+    pub registers: Vec<RegisterDecl>,
+    pub span: Span,
+}
+
+/// `[pub] ACCESS NAME: Type at OFFSET`, a register of a peripheral type,
+/// private to its module unless `pub` (ADR 0058).
+#[derive(Debug)]
+pub struct RegisterDecl {
+    pub vis: Visibility,
+    pub access: AccessMode,
+    pub name: Ident,
+    pub ty: Ty,
+    /// From the start of the peripheral, computed at compile time.
+    pub offset: Expr,
+    pub span: Span,
+}
+
+/// What a register allows, written before its name (ADR 0058).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AccessMode {
+    /// `read`: read-only.
+    Read,
+    /// `write`: write-only.
+    Write,
+    /// `read write`
+    ReadWrite,
+}
+
+/// `peripheral NAME: Type at ADDRESS;`, an instance of a peripheral type at
+/// an address (ADR 0058). Attributes do not apply to it; they are kept to
+/// be reported.
+#[derive(Debug)]
+pub struct PeripheralDecl {
+    pub attrs: Vec<Attr>,
+    pub vis: Visibility,
+    pub name: Ident,
+    /// Written as any type; that it names a peripheral type is checked
+    /// when names are resolved.
+    pub ty: Ty,
+    /// Computed at compile time.
+    pub address: Expr,
+    pub span: Span,
 }
 
 /// `struct Name { field: Type, ... }` (ADR 0021)

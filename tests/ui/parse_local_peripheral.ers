@@ -1,0 +1,32 @@
+// Peripheral types and peripherals are items, which name devices for the
+// whole program: inside a function both are reported, and the rest of the
+// body still parses (ADR 0058).
+fn f() -> u32 {
+    peripheral Uart {
+        write thr: u8 at 0,
+    }
+    peripheral UART0: Uart at 0x1000_0000;
+    0
+}
+
+// A broken peripheral type: the parser resumes at the next item, whose
+// error is reported.
+peripheral Broken {
+    read rbr: u8 at 0
+    write thr: u8 at 0,
+}
+
+fn g() {
+    const X: u32 = 1;
+}
+
+// A broken function whose body goes on with a peripheral: recovery skips
+// it with the rest of the body, since `peripheral` and a name start an item
+// only at the depth of the items: the errors reported are the `let`'s and
+// that of the item after the function.
+fn h() {
+    let x: u32 = ;
+    peripheral UART1: Uart at 0x1000_1000;
+}
+
+peripheral UART2: Uart at ;

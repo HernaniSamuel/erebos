@@ -1,0 +1,58 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/peripheral_names.ers
+---
+--- typeck ---
+struct peripheral { read: u32 at 0, write: u32 at 4, at: u32 at 8 } size 12, align 4
+fn at::read(peripheral: u32) -> u32
+    expr 0 local peripheral 491..501: u32
+fn at::write(read: u32, write: u32) -> u32
+    expr 1 binary + 566..578: u32
+    expr 2 local read 566..570: u32
+    expr 3 local write 573..578: u32
+fn read(at: u32) -> u32
+    expr 4 call 618..630: u32
+    expr 5 local at 627..629: u32
+fn write(read: u32, at: u32) -> u32
+    expr 6 call 676..695: u32
+    expr 7 local read 686..690: u32
+    expr 8 local at 692..694: u32
+fn make() -> peripheral
+    expr 9 struct peripheral 729..768: peripheral
+    expr 10 int 1 748..749: u32
+    expr 11 int 2 758..759: u32
+    expr 12 int 3 765..766: u32
+fn locals() -> u32
+    let peripheral: peripheral
+    let read: u32
+    let write: u32
+    let at: u32
+    expr 13 call 826..832: peripheral
+    expr 14 field read 854..869: u32
+    expr 15 local peripheral 854..864: peripheral
+    expr 16 field write 892..908: u32
+    expr 17 local peripheral 892..902: peripheral
+    expr 18 field at 928..941: u32
+    expr 19 local peripheral 928..938: peripheral
+    expr 20 field at 947..997: u32
+    expr 21 struct peripheral 947..994: peripheral
+    expr 22 local read 966..970: u32
+    expr 23 local write 979..984: u32
+    expr 24 local at 990..992: u32
+fn calls() -> u32
+    let peripheral: u32
+    expr 25 call 1047..1055: u32
+    expr 26 call 1061..1077: u32
+    expr 27 local peripheral 1066..1076: u32
+    expr 28 call 1083..1103: u32
+    expr 29 local peripheral 1089..1099: u32
+    expr 30 int 1 1101..1102: u32
+    expr 31 call 1109..1144: u32
+    expr 32 call 1115..1131: u32
+    expr 33 local peripheral 1120..1130: u32
+    expr 34 local peripheral 1133..1143: u32
+entry fn main() -> !
+    expr 35 loop 1171..1178: !
+panic fn on_panic() -> !
+    expr 36 loop 1208..1215: !
