@@ -1,12 +1,14 @@
 //! Bit-field structs (ADR 0059). MIR sees a value as its integer type: a
 //! field read is a shift and a mask of the whole value, a field write
 //! clears the field's bits and or's in the value, checked to fit, and a
-//! literal or's its fields together.
+//! literal or's its fields together. In a volatile place, a field write
+//! also gives every other field with a write effect the value whose write
+//! has no effect (ADR 0060).
 
 use crate::diag::Diagnostic;
 use crate::hir;
 use crate::layout;
-use crate::mir::{BinOp, Const, Operand, PanicCause, Rvalue, Ty};
+use crate::mir::{BinOp, Const, Operand, PanicCause, Place, Rvalue, Ty};
 use crate::query::{bit_count, max_value};
 use crate::span::Span;
 
@@ -82,8 +84,9 @@ impl Builder<'_, '_> {
 
     /// `base.f = value`, to the field `index` of the bit-field struct `id`
     /// named at `name`: the value and its check, then the place, one copy
-    /// of the whole value, the field changed in it, and one assignment back
-    /// (ADR 0059, "Evaluation order").
+    /// of the whole value, the field changed in it, in a volatile place the
+    /// other fields with write effects made neutral, and one assignment back
+    /// (ADR 0059, "Evaluation order"; ADR 0060).
     pub(super) fn assign_bit_field(
         &mut self,
         base: &hir::Expr,
@@ -102,6 +105,7 @@ impl Builder<'_, '_> {
         let place = self.place(base);
         let whole = self.temp(Ty::Int(bits.int), Rvalue::Use(Operand::Copy(place)));
         let whole = self.insert(whole, bits, value);
+        let whole = self.neutral_effects(place, whole, id, index);
         self.assign(place, Rvalue::Use(whole));
     }
 
@@ -109,7 +113,8 @@ impl Builder<'_, '_> {
     /// named at `name`, the operator at `op_span`: the value, then the
     /// place and one copy of the whole value, the new field value computed
     /// from it and checked at run time only, since it depends on the
-    /// field's value, then one assignment back (ADR 0059).
+    /// field's value, then, in a volatile place, the other fields with write
+    /// effects made neutral, and one assignment back (ADR 0059, 0060).
     #[expect(clippy::too_many_arguments, reason = "the parts of the assignment")]
     pub(super) fn compound_assign_bit_field(
         &mut self,
@@ -143,6 +148,7 @@ impl Builder<'_, '_> {
             self.check_fits(new, bits, name);
         }
         let whole = self.insert(whole, bits, new);
+        let whole = self.neutral_effects(place, whole, id, index);
         self.assign(place, Rvalue::Use(whole));
     }
 
@@ -290,6 +296,55 @@ impl Builder<'_, '_> {
         let kept = self.temp(int, Rvalue::Binary(BinOp::BitAnd, whole, keep));
         let part = self.placed(value, bits);
         self.temp(int, Rvalue::Binary(BinOp::BitOr, kept, part))
+    }
+
+    /// `whole`, in which the field `index` of the bit-field struct `id` was
+    /// changed, as it is written back to `place`: in a volatile place, a
+    /// register or one reached through a volatile pointer, every other field
+    /// with a write effect gets the value whose write has no effect, its
+    /// bits cleared for `write 1 ...` and set for `write 0 ...`, each with
+    /// one constant mask, left out when no field needs it. In ordinary
+    /// memory the effects mean nothing, and `whole` is written as it is
+    /// (ADR 0060, "Write effects").
+    fn neutral_effects(
+        &mut self,
+        place: Place,
+        whole: Operand,
+        id: hir::BitStructId,
+        index: u32,
+    ) -> Operand {
+        if !self.is_volatile(place) {
+            return whole;
+        }
+        let hir = self.q.hir;
+        let def = hir.bit_struct(id);
+        let (mut zeros, mut ones) = (0, 0);
+        for (other, field) in def.fields.iter().enumerate() {
+            let other = other as u32;
+            let Some((effect, _)) = field.write_effect else {
+                continue;
+            };
+            if other == index {
+                continue;
+            }
+            let mask = self.bits(id, other).mask();
+            if effect.bit == 1 {
+                zeros |= mask;
+            } else {
+                ones |= mask;
+            }
+        }
+        let int = def.ty.int;
+        let mut whole = whole;
+        if zeros != 0 {
+            let keep = Operand::Const(Const::Int(!zeros & int.mask(), int));
+            whole = self.temp(Ty::Int(int), Rvalue::Binary(BinOp::BitAnd, whole, keep));
+        }
+        if ones != 0 {
+            let set = Operand::Const(Const::Int(ones, int));
+            whole = self.temp(Ty::Int(int), Rvalue::Binary(BinOp::BitOr, whole, set));
+        }
+        whole
     }
 
     /// Checks that `value`, computed by `value_expr` and written to the

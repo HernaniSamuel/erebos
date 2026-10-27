@@ -1,0 +1,58 @@
+// emit: llvm-ir
+// opt: both
+// Registers with fields in LLVM IR (ADR 0060). A field assignment to a
+// register is one volatile load and one volatile store of the register's
+// width at its address, with nothing between them but the change of the
+// field and the two masks of the write effects: the bits of the other
+// `write 1 clears` fields cleared and those of the `write 0 sets` field
+// set, which `-O` folds into the field's change. A whole write of a literal
+// with `..` is one volatile store of a constant, the neutral values of the
+// fields with write effects included; a field read is one volatile load,
+// then the field taken from it; an enum register is loaded and stored
+// whole.
+struct Status: u32 {
+    pub enable: bool at 0 = false,
+    pub count: u8 at 8..=15 = 0,
+    pub overrun: bool at 16 write 1 clears,
+    pub done: bool at 17 write 1 clears,
+    pub start: bool at 20 write 0 sets,
+}
+
+enum Mode: u16 { Off = 0, On = 1, Auto = 0x100 }
+
+peripheral Timer {
+    read write status: Status at 0,
+    read write mode: Mode at 4,
+}
+
+peripheral TIMER0: Timer at 0x2000_0000;
+
+// One load of `i32` and one store, the masks between them.
+fn set_enable(on: bool) {
+    TIMER0.status.enable = on;
+}
+
+// The write-effect field assigned gets its value; the others the neutral
+// one.
+fn clear_overrun() {
+    TIMER0.status.overrun = true;
+}
+
+// One store of the constant 0x00100000: `start` set, the rest 0.
+fn reset() {
+    TIMER0.status = Status { .. };
+}
+
+// One load, a shift and a mask.
+fn count() -> u8 {
+    TIMER0.status.count
+}
+
+// A load and a store of `i16`.
+fn toggle_mode() {
+    let mode: Mode = TIMER0.mode;
+    TIMER0.mode = if mode == Mode::On { .Off } else { .On };
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

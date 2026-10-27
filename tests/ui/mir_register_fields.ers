@@ -1,0 +1,81 @@
+// emit: mir
+// Write effects in field assignments to volatile places (ADR 0060). A field
+// assignment or a compound assignment to a register, or through a volatile
+// pointer, copies the whole value once, changes the field, then clears the
+// bits of every other `write 1 ...` field and sets those of every other
+// `write 0 ...` field, each with one constant mask, before the one
+// assignment back. The field assigned keeps the value assigned, even when it
+// has a write effect itself; a type with effects of one kind needs one
+// mask, and one without effects none. In ordinary memory, a local, a field
+// assignment changes that field alone.
+struct Status: u32 {
+    pub enable: bool at 0 = false,
+    pub count: u8 at 8..=15 = 0,
+    pub overrun: bool at 16 write 1 clears,
+    pub done: bool at 17 write 1 clears,
+    pub start: bool at 20 write 0 sets,
+    pub level: u8 at 24..=27 write 0 sets,
+}
+
+struct Flags: u8 {
+    pub enable: bool at 0 = false,
+    pub pending: bool at 7 write 1 clears,
+}
+
+struct Lcr: u8 {
+    pub parity: bool at 3 = false,
+    pub dlab: bool at 7 = false,
+}
+
+peripheral Timer {
+    read write status: Status at 0,
+    read write flags: Flags at 4,
+    read write lcr: Lcr at 5,
+}
+
+peripheral TIMER0: Timer at 0x2000_0000;
+
+// A field without an effect: both masks.
+fn enable() {
+    TIMER0.status.enable = true;
+}
+
+// A field with a write effect keeps the value assigned; the other effect
+// fields get their masks.
+fn clear_overrun() {
+    TIMER0.status.overrun = true;
+}
+
+fn start() {
+    TIMER0.status.start = false;
+}
+
+// A compound assignment to a field without an effect, checked before the
+// masks.
+fn count() {
+    TIMER0.status.count += 1;
+}
+
+// Effects of one kind: one mask; none: no mask.
+fn others() {
+    TIMER0.flags.enable = true;
+    TIMER0.lcr.dlab = true;
+}
+
+// Through a volatile pointer, as to a register; through a pointer that is
+// not volatile, as to a local.
+fn through(v: *mut volatile Status, p: *mut Status) {
+    (*v).enable = true;
+    (*p).enable = true;
+}
+
+// In ordinary memory, no masks.
+fn local(s: Status) -> Status {
+    let mut t: Status = s;
+    t.enable = true;
+    t.count += 1;
+    t
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

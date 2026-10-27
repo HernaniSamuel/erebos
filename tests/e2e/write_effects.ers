@@ -1,0 +1,182 @@
+// Write effects at run time (ADR 0060). A static stands for a device: it is
+// reached through a pointer to a peripheral type, made with `as` from its
+// address, so that no QEMU device is needed, and through a volatile pointer
+// to a bit-field struct. Before each case the device's word is set as the
+// device would have it, then read back after the write. A field assignment
+// to a register, plain or compound, or through the volatile pointer,
+// writes the value with no effect to every other field with a write
+// effect: 0 to the `write 1 clears` fields, ones to the `write 0 sets`
+// ones; the field assigned gets the value assigned. A whole write of a
+// literal with `..` writes those neutral values to the fields it leaves
+// out; a whole write of a value read before writes it as it is; a field
+// assignment to a local copy changes only that field. An enum register
+// holding a value that is no variant is read and matched with a catch-all
+// arm.
+// expect-output: field 0x0F100501
+// expect-output: effect field 0x0F110000
+// expect-output: compound 0x0F100700
+// expect-output: literal 0x0F100001
+// expect-output: whole 0x00030500
+// expect-output: local 0x00030501 0x00030501
+// expect-output: volatile 0x0F100501 0x0F120000
+// expect-output: mode 2 no variant 0x00000100
+// expect-exit: 0
+
+struct Status: u32 {
+    pub enable: bool at 0 = false,
+    pub count: u8 at 8..=15 = 0,
+    pub overrun: bool at 16 write 1 clears,
+    pub done: bool at 17 write 1 clears,
+    pub start: bool at 20 write 0 sets,
+    pub level: u8 at 24..=27 write 0 sets,
+}
+
+enum Mode: u16 { Off = 0, On = 1, Auto = 0x100 }
+
+peripheral Timer {
+    read write status: Status at 0,
+    read write mode: Mode at 4,
+}
+
+// The device: `status` in the first word, `mode` in the low half of the
+// second.
+static mut DEVICE: [u32; 2] = [0; 2];
+
+// The device's word `index`, reached as the device's other agent would.
+fn word(index: usize) -> *mut volatile u32 {
+    &raw mut DEVICE[index] as *mut volatile u32
+}
+
+fn putc(byte: u8) {
+    let thr: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+    *thr = byte;
+}
+
+fn print(s: *const [u8]) {
+    let mut i: usize = 0;
+    while i < len(s) {
+        putc((*s)[i]);
+        i += 1;
+    }
+}
+
+fn print_u64(n: u64) {
+    if n >= 10 {
+        print_u64(n / 10);
+    }
+    putc(b'0' + (n % 10) as u8);
+}
+
+// ` 0x` and eight hex digits.
+fn print_hex(value: u32) {
+    print(&raw const b" 0x");
+    let mut shift: u32 = 32;
+    while shift > 0 {
+        shift -= 4;
+        let digit: u8 = ((value >> shift) & 0xF) as u8;
+        putc(if digit < 10 { b'0' + digit } else { b'A' + digit - 10 });
+    }
+}
+
+fn mode_name(m: Mode) -> *const [u8] {
+    match m {
+        .Off => &raw const b" off",
+        .On => &raw const b" on",
+        .Auto => &raw const b" auto",
+        _ => &raw const b" no variant",
+    }
+}
+
+fn exit(code: u32) -> ! {
+    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+    *finisher = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    loop {}
+}
+
+entry fn main() -> ! {
+    let timer: *mut Timer = &raw mut DEVICE as *mut Timer;
+    let status: *mut volatile u32 = word(0);
+
+    // `overrun` and `done` set, `count` 5: both flags are written 0, and
+    // `start` and `level` ones.
+    *status = 0x0003_0500;
+    (*timer).status.enable = true;
+    print(&raw const b"field");
+    print_hex(*status);
+    putc(b'\n');
+
+    // Assigned, `overrun` gets its 1; `done` gets its neutral 0.
+    *status = 0x0003_0000;
+    (*timer).status.overrun = true;
+    print(&raw const b"effect field");
+    print_hex(*status);
+    putc(b'\n');
+
+    *status = 0x0003_0500;
+    (*timer).status.count += 2;
+    print(&raw const b"compound");
+    print_hex(*status);
+    putc(b'\n');
+
+    // Every bit of the old value is gone; reserved bits are 0.
+    *status = 0xFFFF_FFFF;
+    (*timer).status = Status { enable: true, .. };
+    print(&raw const b"literal");
+    print_hex(*status);
+    putc(b'\n');
+
+    // Written back as read: both flags written 1.
+    *status = 0x0003_0500;
+    let read: Status = (*timer).status;
+    *status = 0;
+    (*timer).status = read;
+    print(&raw const b"whole");
+    print_hex(*status);
+    putc(b'\n');
+
+    *status = 0x0003_0500;
+    let mut copy: Status = (*timer).status;
+    copy.enable = true;
+    *status = 0;
+    (*timer).status = copy;
+    print(&raw const b"local");
+    print_hex(copy as u32);
+    print_hex(*status);
+    putc(b'\n');
+
+    let v: *mut volatile Status = status as *mut volatile Status;
+    *status = 0x0003_0500;
+    (*v).enable = true;
+    print(&raw const b"volatile");
+    print_hex(*status);
+    *status = 0x0003_0000;
+    (*v).done = true;
+    print_hex(*status);
+    putc(b'\n');
+
+    // 2 is no variant of `Mode`.
+    let second: *mut volatile u32 = word(1);
+    *second = 2;
+    let mode: Mode = (*timer).mode;
+    print(&raw const b"mode ");
+    print_u64(mode as u64);
+    print(mode_name(mode));
+    (*timer).mode = .Auto;
+    print_hex(*second);
+    putc(b'\n');
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(1)
+}
+
+// QEMU `virt`'s RAM in two regions of 64 MiB: the image in the first, and
+// in the second a 1 MiB stack at its start, then `.data` and `.bss`.
+memory {
+    region IMAGE { origin: 0x8000_0000, size: 0x0400_0000 }
+    region RAM { origin: 0x8400_0000, size: 0x0400_0000 }
+    code in IMAGE;
+    data in RAM;
+    stack in RAM { size: 0x0010_0000 }
+}

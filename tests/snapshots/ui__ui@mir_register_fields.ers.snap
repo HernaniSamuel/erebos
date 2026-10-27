@@ -1,0 +1,272 @@
+---
+source: tests/ui.rs
+assertion_line: 22
+expression: output
+input_file: tests/ui/mir_register_fields.ers
+---
+--- mir ---
+struct Status: u32 { enable: bool at 0, count: u8 at 8..=15, overrun: bool at 16, done: bool at 17, start: bool at 20, level: u8 at 24..=27 }
+struct Flags: u8 { enable: bool at 0, pending: bool at 7 }
+struct Lcr: u8 { parity: bool at 3, dlab: bool at 7 }
+
+peripheral Timer { 0 status: u32 at 0x0, 1 flags: u8 at 0x4, 2 lcr: u8 at 0x5 } // extent 6, align 4
+peripheral TIMER0: Timer at 0x20000000;
+
+fn enable() -> () {
+    let _0: ();
+    let _1: *mut Timer;
+    let _2: u32;
+    let _3: u32;
+    let _4: u32;
+    let _5: u32;
+    let _6: u32;
+
+    bb0: {
+        _1 = const peripheral TIMER0;
+        _2 = copy (*_1).0;
+        _3 = BitAnd(copy _2, const 4294967294_u32);
+        _4 = BitOr(copy _3, const 1_u32);
+        _5 = BitAnd(copy _4, const 4294770687_u32);
+        _6 = BitOr(copy _5, const 252706816_u32);
+        (*_1).0 = copy _6;
+        return;
+    }
+}
+
+fn clear_overrun() -> () {
+    let _0: ();
+    let _1: *mut Timer;
+    let _2: u32;
+    let _3: u32;
+    let _4: u32;
+    let _5: u32;
+    let _6: u32;
+
+    bb0: {
+        _1 = const peripheral TIMER0;
+        _2 = copy (*_1).0;
+        _3 = BitAnd(copy _2, const 4294901759_u32);
+        _4 = BitOr(copy _3, const 65536_u32);
+        _5 = BitAnd(copy _4, const 4294836223_u32);
+        _6 = BitOr(copy _5, const 252706816_u32);
+        (*_1).0 = copy _6;
+        return;
+    }
+}
+
+fn start() -> () {
+    let _0: ();
+    let _1: *mut Timer;
+    let _2: u32;
+    let _3: u32;
+    let _4: u32;
+    let _5: u32;
+    let _6: u32;
+
+    bb0: {
+        _1 = const peripheral TIMER0;
+        _2 = copy (*_1).0;
+        _3 = BitAnd(copy _2, const 4293918719_u32);
+        _4 = BitOr(copy _3, const 0_u32);
+        _5 = BitAnd(copy _4, const 4294770687_u32);
+        _6 = BitOr(copy _5, const 251658240_u32);
+        (*_1).0 = copy _6;
+        return;
+    }
+}
+
+fn count() -> () {
+    let _0: ();
+    let _1: *mut Timer;
+    let _2: u32;
+    let _3: u32;
+    let _4: u32;
+    let _5: u8;
+    let _6: u8;
+    let _7: u32;
+    let _8: u32;
+    let _9: u32;
+    let _10: u32;
+    let _11: u32;
+    let _12: u32;
+
+    bb0: {
+        _1 = const peripheral TIMER0;
+        _2 = copy (*_1).0;
+        _3 = Shr(copy _2, const 8_u32);
+        _4 = BitAnd(copy _3, const 255_u32);
+        _5 = copy _4 as u8;
+        _6 = Add(copy _5, const 1_u8);
+        _7 = BitAnd(copy _2, const 4294902015_u32);
+        _8 = copy _6 as u32;
+        _9 = Shl(copy _8, const 8_u32);
+        _10 = BitOr(copy _7, copy _9);
+        _11 = BitAnd(copy _10, const 4294770687_u32);
+        _12 = BitOr(copy _11, const 252706816_u32);
+        (*_1).0 = copy _12;
+        return;
+    }
+}
+
+fn others() -> () {
+    let _0: ();
+    let _1: *mut Timer;
+    let _2: u8;
+    let _3: u8;
+    let _4: u8;
+    let _5: u8;
+    let _6: *mut Timer;
+    let _7: u8;
+    let _8: u8;
+    let _9: u8;
+
+    bb0: {
+        _1 = const peripheral TIMER0;
+        _2 = copy (*_1).1;
+        _3 = BitAnd(copy _2, const 254_u8);
+        _4 = BitOr(copy _3, const 1_u8);
+        _5 = BitAnd(copy _4, const 127_u8);
+        (*_1).1 = copy _5;
+        _6 = const peripheral TIMER0;
+        _7 = copy (*_6).2;
+        _8 = BitAnd(copy _7, const 127_u8);
+        _9 = BitOr(copy _8, const 128_u8);
+        (*_6).2 = copy _9;
+        return;
+    }
+}
+
+fn through(_1: *mut volatile u32, _2: *mut u32) -> () {
+    let _0: ();
+    let _1: *mut volatile u32; // v
+    let _2: *mut u32; // p
+    let _3: u32;
+    let _4: u32;
+    let _5: u32;
+    let _6: u32;
+    let _7: u32;
+    let _8: u32;
+    let _9: u32;
+    let _10: u32;
+
+    bb0: {
+        _3 = copy (*_1);
+        _4 = BitAnd(copy _3, const 4294967294_u32);
+        _5 = BitOr(copy _4, const 1_u32);
+        _6 = BitAnd(copy _5, const 4294770687_u32);
+        _7 = BitOr(copy _6, const 252706816_u32);
+        (*_1) = copy _7;
+        _8 = copy (*_2);
+        _9 = BitAnd(copy _8, const 4294967294_u32);
+        _10 = BitOr(copy _9, const 1_u32);
+        (*_2) = copy _10;
+        return;
+    }
+}
+
+fn local(_1: u32) -> u32 {
+    let _0: u32;
+    let _1: u32; // s
+    let _2: u32; // t
+    let _3: u32;
+    let _4: u32;
+    let _5: u32;
+    let _6: u32;
+    let _7: u32;
+    let _8: u32;
+    let _9: u8;
+    let _10: u8;
+    let _11: u32;
+    let _12: u32;
+    let _13: u32;
+    let _14: u32;
+
+    bb0: {
+        _2 = copy _1;
+        _3 = copy _2;
+        _4 = BitAnd(copy _3, const 4294967294_u32);
+        _5 = BitOr(copy _4, const 1_u32);
+        _2 = copy _5;
+        _6 = copy _2;
+        _7 = Shr(copy _6, const 8_u32);
+        _8 = BitAnd(copy _7, const 255_u32);
+        _9 = copy _8 as u8;
+        _10 = Add(copy _9, const 1_u8);
+        _11 = BitAnd(copy _6, const 4294902015_u32);
+        _12 = copy _10 as u32;
+        _13 = Shl(copy _12, const 8_u32);
+        _14 = BitOr(copy _11, copy _13);
+        _2 = copy _14;
+        _0 = copy _2;
+        return;
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+comptime fn default() -> bool {
+    let _0: bool;
+
+    bb0: {
+        _0 = const false;
+        return;
+    }
+}
+
+comptime fn default() -> u8 {
+    let _0: u8;
+
+    bb0: {
+        _0 = const 0_u8;
+        return;
+    }
+}
+
+comptime fn default() -> bool {
+    let _0: bool;
+
+    bb0: {
+        _0 = const false;
+        return;
+    }
+}
+
+comptime fn default() -> bool {
+    let _0: bool;
+
+    bb0: {
+        _0 = const false;
+        return;
+    }
+}
+
+comptime fn default() -> bool {
+    let _0: bool;
+
+    bb0: {
+        _0 = const false;
+        return;
+    }
+}

@@ -1839,23 +1839,24 @@ impl Builder<'_, '_> {
         place
             .projection
             .iter()
-            .fold(self.locals[place.local.0 as usize].ty, |ty, elem| {
-                match (elem, ty) {
-                    (PlaceElem::Deref | PlaceElem::Offset(_), Ty::Ptr(ptr)) => *ptr.pointee,
-                    (PlaceElem::Index(_) | PlaceElem::ConstIndex(_), Ty::Array(elem, _)) => *elem,
-                    (PlaceElem::Field(index), Ty::Struct(s)) => {
-                        s.def().fields()[*index as usize].ty
-                    }
-                    (PlaceElem::Field(index), Ty::Peripheral(p)) => {
-                        p.def().registers[*index as usize].ty
-                    }
-                    (PlaceElem::Tag, Ty::Enum(e)) => Ty::Int(e.def().int),
-                    (PlaceElem::Payload { variant, index }, Ty::Enum(e)) => {
-                        e.def().payload(*variant, *index).ty
-                    }
-                    (elem, ty) => unreachable!("projection {elem:?} of `{ty}`"),
-                }
-            })
+            .fold(self.locals[place.local.0 as usize].ty, projected_ty)
+    }
+
+    /// Whether accesses to `place` are volatile, as code generation makes
+    /// them: when the last pointer on its path is volatile (ADR 0023), or
+    /// when it is a register (ADR 0058).
+    fn is_volatile(&self, place: Place) -> bool {
+        let mut ty = self.locals[place.local.0 as usize].ty;
+        let mut volatile = false;
+        for elem in place.projection {
+            match (elem, ty) {
+                (PlaceElem::Deref | PlaceElem::Offset(_), Ty::Ptr(ptr)) => volatile = ptr.volatile,
+                (PlaceElem::Field(_), Ty::Peripheral(_)) => volatile = true,
+                _ => {}
+            }
+            ty = projected_ty(ty, elem);
+        }
+        volatile
     }
 
     /// A place holding the value of a pointer expression. If code evaluated
@@ -2045,6 +2046,22 @@ impl Builder<'_, '_> {
 
 fn usize_const(value: u64) -> Operand {
     Operand::Const(Const::Int(value, hir::IntTy::Usize))
+}
+
+/// The type of the place one projection `elem` reaches from a place of
+/// type `ty`.
+fn projected_ty(ty: Ty, elem: &PlaceElem) -> Ty {
+    match (elem, ty) {
+        (PlaceElem::Deref | PlaceElem::Offset(_), Ty::Ptr(ptr)) => *ptr.pointee,
+        (PlaceElem::Index(_) | PlaceElem::ConstIndex(_), Ty::Array(elem, _)) => *elem,
+        (PlaceElem::Field(index), Ty::Struct(s)) => s.def().fields()[*index as usize].ty,
+        (PlaceElem::Field(index), Ty::Peripheral(p)) => p.def().registers[*index as usize].ty,
+        (PlaceElem::Tag, Ty::Enum(e)) => Ty::Int(e.def().int),
+        (PlaceElem::Payload { variant, index }, Ty::Enum(e)) => {
+            e.def().payload(*variant, *index).ty
+        }
+        (elem, ty) => unreachable!("projection {elem:?} of `{ty}`"),
+    }
 }
 
 /// Expressions whose evaluation cannot write to any place.

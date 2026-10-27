@@ -1,0 +1,228 @@
+---
+source: tests/ui.rs
+assertion_line: 22
+expression: output
+input_file: tests/ui/codegen_register_fields.ers
+---
+--- llvm-ir ---
+; ModuleID = 'erebos'
+source_filename = "erebos"
+target datalayout = "e-m:e-p:32:32-i64:64-n32-S128"
+target triple = "riscv32-unknown-none-elf"
+
+module asm "\09.section .text.start, \22ax\22, @progbits"
+module asm "\09.globl _start"
+module asm "\09.type _start, @function"
+module asm "_start:"
+module asm "\09la sp, __stack_end"
+module asm "\09la t0, __bss_start"
+module asm "\09la t1, __bss_end"
+module asm ".Lzero_bss:"
+module asm "\09bgeu t0, t1, .Lcopy_data"
+module asm "\09sw zero, 0(t0)"
+module asm "\09addi t0, t0, 4"
+module asm "\09j .Lzero_bss"
+module asm ".Lcopy_data:"
+module asm "\09la t0, __data_start"
+module asm "\09la t1, __data_end"
+module asm "\09la t2, __data_load"
+module asm ".Lcopy_word:"
+module asm "\09bgeu t0, t1, .Lenter"
+module asm "\09lw t3, 0(t2)"
+module asm "\09sw t3, 0(t0)"
+module asm "\09addi t0, t0, 4"
+module asm "\09addi t2, t2, 4"
+module asm "\09j .Lcopy_word"
+module asm ".Lenter:"
+module asm "\09j main"
+
+; Function Attrs: nounwind null_pointer_is_valid
+define void @set_enable(i1 zeroext %0) #0 {
+bb0:
+  %1 = getelementptr i8, ptr inttoptr (i32 536870912 to ptr), i32 0
+  %2 = load volatile i32, ptr %1, align 4
+  %3 = and i32 %2, -2
+  %4 = zext i1 %0 to i32
+  %5 = or i32 %3, %4
+  %6 = and i32 %5, -196609
+  %7 = or i32 %6, 1048576
+  %8 = getelementptr i8, ptr inttoptr (i32 536870912 to ptr), i32 0
+  store volatile i32 %7, ptr %8, align 4
+  ret void
+}
+
+; Function Attrs: nounwind null_pointer_is_valid
+define void @clear_overrun() #0 {
+bb0:
+  %0 = getelementptr i8, ptr inttoptr (i32 536870912 to ptr), i32 0
+  %1 = load volatile i32, ptr %0, align 4
+  %2 = and i32 %1, -65537
+  %3 = or i32 %2, 65536
+  %4 = and i32 %3, -131073
+  %5 = or i32 %4, 1048576
+  %6 = getelementptr i8, ptr inttoptr (i32 536870912 to ptr), i32 0
+  store volatile i32 %5, ptr %6, align 4
+  ret void
+}
+
+; Function Attrs: nounwind null_pointer_is_valid
+define void @reset() #0 {
+bb0:
+  %0 = getelementptr i8, ptr inttoptr (i32 536870912 to ptr), i32 0
+  store volatile i32 1048576, ptr %0, align 4
+  ret void
+}
+
+; Function Attrs: nounwind null_pointer_is_valid
+define zeroext i8 @count() #0 {
+bb0:
+  %0 = getelementptr i8, ptr inttoptr (i32 536870912 to ptr), i32 0
+  %1 = load volatile i32, ptr %0, align 4
+  %2 = lshr i32 %1, 8
+  %3 = and i32 %2, 255
+  %4 = trunc i32 %3 to i8
+  ret i8 %4
+}
+
+; Function Attrs: nounwind null_pointer_is_valid
+define void @toggle_mode() #0 {
+bb0:
+  %0 = getelementptr i8, ptr inttoptr (i32 536870912 to ptr), i32 4
+  %1 = load volatile i16, ptr %0, align 2
+  %2 = icmp eq i16 %1, 1
+  br i1 %2, label %bb1, label %bb2
+
+bb1:                                              ; preds = %bb0
+  br label %bb3
+
+bb2:                                              ; preds = %bb0
+  br label %bb3
+
+bb3:                                              ; preds = %bb2, %bb1
+  %_5.0 = phi i16 [ 0, %bb1 ], [ 1, %bb2 ]
+  %3 = getelementptr i8, ptr inttoptr (i32 536870912 to ptr), i32 4
+  store volatile i16 %_5.0, ptr %3, align 2
+  ret void
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @main() #1 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @on_panic() #1 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+attributes #0 = { nounwind null_pointer_is_valid }
+attributes #1 = { noreturn nounwind null_pointer_is_valid }
+--- llvm-ir -O ---
+; ModuleID = 'erebos'
+source_filename = "erebos"
+target datalayout = "e-m:e-p:32:32-i64:64-n32-S128"
+target triple = "riscv32-unknown-none-elf"
+
+module asm "\09.section .text.start, \22ax\22, @progbits"
+module asm "\09.globl _start"
+module asm "\09.type _start, @function"
+module asm "_start:"
+module asm "\09la sp, __stack_end"
+module asm "\09la t0, __bss_start"
+module asm "\09la t1, __bss_end"
+module asm ".Lzero_bss:"
+module asm "\09bgeu t0, t1, .Lcopy_data"
+module asm "\09sw zero, 0(t0)"
+module asm "\09addi t0, t0, 4"
+module asm "\09j .Lzero_bss"
+module asm ".Lcopy_data:"
+module asm "\09la t0, __data_start"
+module asm "\09la t1, __data_end"
+module asm "\09la t2, __data_load"
+module asm ".Lcopy_word:"
+module asm "\09bgeu t0, t1, .Lenter"
+module asm "\09lw t3, 0(t2)"
+module asm "\09sw t3, 0(t0)"
+module asm "\09addi t0, t0, 4"
+module asm "\09addi t2, t2, 4"
+module asm "\09j .Lcopy_word"
+module asm ".Lenter:"
+module asm "\09j main"
+
+; Function Attrs: nofree norecurse nounwind null_pointer_is_valid memory(readwrite, target_mem0: none, target_mem1: none)
+define void @set_enable(i1 zeroext %0) local_unnamed_addr #0 {
+bb0:
+  %1 = load volatile i32, ptr inttoptr (i32 536870912 to ptr), align 536870912
+  %2 = and i32 %1, -1245186
+  %3 = zext i1 %0 to i32
+  %4 = or disjoint i32 %2, %3
+  %5 = or disjoint i32 %4, 1048576
+  store volatile i32 %5, ptr inttoptr (i32 536870912 to ptr), align 536870912
+  ret void
+}
+
+; Function Attrs: nofree norecurse nounwind null_pointer_is_valid memory(readwrite, target_mem0: none, target_mem1: none)
+define void @clear_overrun() local_unnamed_addr #0 {
+bb0:
+  %0 = load volatile i32, ptr inttoptr (i32 536870912 to ptr), align 536870912
+  %1 = and i32 %0, -1245185
+  %2 = or disjoint i32 %1, 1114112
+  store volatile i32 %2, ptr inttoptr (i32 536870912 to ptr), align 536870912
+  ret void
+}
+
+; Function Attrs: nofree norecurse nounwind null_pointer_is_valid memory(readwrite, target_mem0: none, target_mem1: none)
+define void @reset() local_unnamed_addr #0 {
+bb0:
+  store volatile i32 1048576, ptr inttoptr (i32 536870912 to ptr), align 536870912
+  ret void
+}
+
+; Function Attrs: mustprogress nofree norecurse nounwind null_pointer_is_valid willreturn memory(readwrite, target_mem0: none, target_mem1: none)
+define zeroext i8 @count() local_unnamed_addr #1 {
+bb0:
+  %0 = load volatile i32, ptr inttoptr (i32 536870912 to ptr), align 536870912
+  %1 = lshr i32 %0, 8
+  %2 = trunc i32 %1 to i8
+  ret i8 %2
+}
+
+; Function Attrs: nofree norecurse nounwind null_pointer_is_valid memory(readwrite, target_mem0: none, target_mem1: none)
+define void @toggle_mode() local_unnamed_addr #0 {
+bb0:
+  %0 = load volatile i16, ptr inttoptr (i32 536870916 to ptr), align 4
+  %1 = icmp ne i16 %0, 1
+  %. = zext i1 %1 to i16
+  store volatile i16 %., ptr inttoptr (i32 536870916 to ptr), align 4
+  ret void
+}
+
+; Function Attrs: nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none)
+define void @main() local_unnamed_addr #2 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none)
+define void @on_panic() local_unnamed_addr #2 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+attributes #0 = { nofree norecurse nounwind null_pointer_is_valid memory(readwrite, target_mem0: none, target_mem1: none) }
+attributes #1 = { mustprogress nofree norecurse nounwind null_pointer_is_valid willreturn memory(readwrite, target_mem0: none, target_mem1: none) }
+attributes #2 = { nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none) }
