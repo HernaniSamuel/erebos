@@ -1,6 +1,6 @@
 # 0019. Conversions, pointer representation and pointer validity
 
-- Status: Accepted; amended by 0031 (only thin pointers are addresses)
+- Status: Accepted; amended by 0031 (only thin pointers are addresses), 0059 (a bit-field struct converts to integers, and from its own integer type)
 - Date: 2026-10-13
 
 ## Context

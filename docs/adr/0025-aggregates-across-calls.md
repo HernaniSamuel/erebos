@@ -1,6 +1,6 @@
 # 0025. Aggregates across calls on riscv32
 
-- Status: Accepted; amended by 0031 (slices across calls), 0039 (enums with payloads cross calls as aggregates)
+- Status: Accepted; amended by 0031 (slices across calls), 0039 (enums with payloads cross calls as aggregates), 0059 (a bit-field struct crosses calls as its integer type)
 - Date: 2026-10-14
 
 ## Context

@@ -1,6 +1,6 @@
 # 0017. Literal operands of `as` take the target type
 
-- Status: Accepted
+- Status: Accepted; amended by 0059 (a literal operand of `as` with a bit-field struct as its target takes the struct's integer type)
 - Date: 2026-10-12
 
 ## Context

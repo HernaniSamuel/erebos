@@ -1,6 +1,6 @@
 # 0050. Visibility
 
-- Status: Accepted; amended by 0054 (only `_` covers an enum that is not reachable)
+- Status: Accepted; amended by 0054 (only `_` covers an enum that is not reachable), 0059 (`..` may leave out an invisible field that has a default or a write effect)
 - Date: 2026-10-20
 
 ## Context

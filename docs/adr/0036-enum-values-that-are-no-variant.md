@@ -1,6 +1,6 @@
 # 0036. Enum values that are no variant
 
-- Status: Accepted; amended by 0039 (a value of an enum with payloads is any bytes), 0040 (values no arm matches, at any position), 0053 (the cause is `PanicReason::NoVariant`)
+- Status: Accepted; amended by 0039 (a value of an enum with payloads is any bytes), 0040 (values no arm matches, at any position), 0053 (the cause is `PanicReason::NoVariant`), 0059 (field reads are a source of values that are no variant besides memory)
 - Date: 2026-10-16
 
 ## Context

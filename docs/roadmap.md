@@ -121,15 +121,14 @@ Agreed as useful, not yet scheduled:
 - Several cores (harts) sharing memory. On microcontrollers concurrency is
   mostly interrupts, which M4 covers; several cores need atomics (the `A`
   extension) and a memory model of their own.
-- Ada-inspired types for hardware, to design together with `peripheral`
-  in M3 so that registers do not get two mechanisms for one job:
-  representation clauses (a field at given bit positions of a register,
-  an enum with explicit values), range types checked at run time through
-  the panic function (ADR 0007, 0014), and possibly a `newtype` that
-  keeps a distinct type with the same representation. Compatible with
-  ADR 0008 (no implicit conversions) and with the no-runtime rule. Fixed
-  point is out of scope for now. Needs a `Proposed` ADR reviewed before
-  any implementation.
+- Ada-inspired types for hardware. Representation clauses are bit-field
+  structs (ADR 0059), whose fields are checked against their bits at
+  run time through the panic function; what remains is range types
+  checked the same way (ADR 0007, 0014), which a bit field could then
+  have as its type, and possibly a `newtype` that keeps a distinct type
+  with the same representation. Compatible with ADR 0008 (no implicit
+  conversions) and with the no-runtime rule. Fixed point is out of scope
+  for now. Needs a `Proposed` ADR reviewed before any implementation.
 - Range-typed array indexes, as in Ada (`type Pin is range 0 .. 3`, an
   array indexed by `Pin`): when the index type is exactly the array's
   range, no bounds check is needed. A third way next to the checked and
@@ -181,16 +180,19 @@ ADRs:
 
 - **M3** (M3.2 to M3.4 for peripherals, M3.5 for the target):
   - `peripheral` blocks must express what an SVD file describes, so that
-    a `svd2erebos` can generate them: write-1-to-clear fields, reads
-    with side effects, reset values, register arrays, clusters and
-    `derivedFrom`. Access modes, offsets and widths are settled
-    (ADR 0058).
-  - Registers sharing an address in one mode, and peripherals sharing
-    addresses (ADR 0058): the 16550's divisor latch over RBR/THR and IER
-    when DLAB is set, SVD's `alternateRegister` and
-    `alternatePeripheral`. ADR 0058 rejects both overlaps; M3.3, whose
-    program configures the UART through its fields, or M3.4, checking
-    against SVD, decides whether to relax them.
+    a `svd2erebos` can generate them: register arrays, clusters and
+    `derivedFrom` (M3.4). Access modes, offsets and widths are settled
+    (ADR 0058); fields at bit positions, enums in fields and defaults
+    used as reset values (ADR 0059), the six `oneTo*`/`zeroTo*` write
+    effects and read effects (ADR 0060). Left to M3.4, checking against
+    the SVD of a real chip: access modes of fields (SVD's read-only
+    fields in a read-write register); the write effects without a
+    neutral value (`clear`, `set`, `modify`); the reset value of a
+    register without fields (ADR 0060).
+  - Registers sharing an address in one mode are declared in alternate
+    groups (ADR 0061). Peripherals sharing addresses, SVD's
+    `alternatePeripheral`, stay `ty::peripheral-overlap`; M3.4, checking
+    against SVD, decides whether to relax that.
     The SVD of a real riscv32 chip (ESP32-C3, GD32VF103 or CH32V) tests
     the design. Also whether `svd2erebos` is a separate tool or a file
     read at compile time, which bears on reproducible builds.

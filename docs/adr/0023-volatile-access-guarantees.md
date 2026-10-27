@@ -1,6 +1,6 @@
 # 0023. Volatile access guarantees
 
-- Status: Accepted; amended by 0031 (slices are aggregates for volatile accesses), 0035 (an enum is a scalar), 0039 (an enum with payloads is an aggregate), 0058 (a register reached from a peripheral is accessed volatile with no pointer on its path)
+- Status: Accepted; amended by 0031 (slices are aggregates for volatile accesses), 0035 (an enum is a scalar), 0039 (an enum with payloads is an aggregate), 0058 (a register reached from a peripheral is accessed volatile with no pointer on its path), 0059 (a bit-field struct is a scalar)
 - Date: 2026-10-14
 
 ## Context

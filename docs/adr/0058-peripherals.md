@@ -1,6 +1,6 @@
 # 0058. Peripherals
 
-- Status: Accepted
+- Status: Accepted; amended by 0060 (register types, fields reached through registers, read effects), 0061 (registers in alternate groups may share bytes)
 - Date: 2026-10-25
 - Amends: 0013 (volatility is no longer only a property of the pointer
   type: accesses through `*mut T` and `*const T` are volatile when `T` is

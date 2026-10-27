@@ -1,6 +1,6 @@
 # 0032. Checks on values known at compile time
 
-- Status: Accepted; amended by 0035 (enum variants are known), 0037 (arms a `match` never takes), 0039 (no value of an enum with payloads is known)
+- Status: Accepted; amended by 0035 (enum variants are known), 0037 (arms a `match` never takes), 0039 (no value of an enum with payloads is known), 0059 (a known value that does not fit its field is an error; no value of a bit-field struct is known)
 - Date: 2026-10-15
 - Amends: 0007 (shift amounts and divisors), 0021 (array indices)
 

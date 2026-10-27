@@ -1,6 +1,6 @@
 # 0022. Data layout and alignment control
 
-- Status: Accepted; amended by 0030 (the alignment of `.data` and `.bss`), 0031 (unsized types and the layout of slices), 0034 (`!` has no layout)
+- Status: Accepted; amended by 0030 (the alignment of `.data` and `.bss`), 0031 (unsized types and the layout of slices), 0034 (`!` has no layout), 0059 (a bit-field struct has its integer type's layout; its fields have no byte offset)
 - Date: 2026-10-14
 
 ## Context
