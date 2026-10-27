@@ -1,0 +1,64 @@
+---
+source: tests/ui.rs
+assertion_line: 22
+expression: output
+input_file: tests/ui/typeck_bit_field_width.ers
+---
+--- errors ---
+ty::bit-field-width
+
+  × the `bool` field `flag` has 2 bits
+    ╭─[typeck_bit_field_width.ers:14:19]
+ 13 │ struct Wide: u16 {
+ 14 │     flag: bool at 0..=1,
+    ·           ──┬─    ──┬──
+    ·             │       ╰── bits 0 to 1
+    ·             ╰── a `bool` takes exactly one bit
+ 15 │     byte: u8 at 2..=13,
+    ╰────
+  help: a `bool` field is one bit, `true` when it is 1: give it a single bit, as `at 7` (ADR 0059)
+ty::bit-field-width
+
+  × the field `byte` has 12 bits, more than `u8` holds
+    ╭─[typeck_bit_field_width.ers:15:17]
+ 14 │     flag: bool at 0..=1,
+ 15 │     byte: u8 at 2..=13,
+    ·           ─┬    ───┬──
+    ·            │       ╰── bits 2 to 13
+    ·            ╰── `u8` holds 8 bits
+ 16 │ }
+    ╰────
+  help: a field's type holds at least as many bits as the field has, so that a read of the field
+        is a value of its type: use a wider type or fewer bits (ADR 0059)
+ty::bit-field-width
+
+  × the field `small` has 12 bits, more than `Small` holds
+    ╭─[typeck_bit_field_width.ers:19:21]
+ 18 │ struct Wider: u16 {
+ 19 │     small: Small at 0..=11,
+    ·            ──┬──    ───┬──
+    ·              │         ╰── bits 0 to 11
+    ·              ╰── `Small` is stored as `u8`, which holds 8 bits
+ 20 │ }
+    ╰────
+  help: a field's type holds at least as many bits as the field has, so that a read of the field
+        is a value of its type: use a wider type or fewer bits (ADR 0059)
+ty::bit-field-width
+
+  × the variant `Four::Four` does not fit in the field `four`
+    ╭─[typeck_bit_field_width.ers:10:36]
+  9 │ enum Small: u8 { A = 0, B = 1 }
+ 10 │ enum Four: u8 { Zero = 0, One = 1, Four = 4 }
+    ·                                    ──┬─
+    ·                                      ╰── is 4, which needs 3 bits
+ 11 │ enum Fits: u8 { Zero = 0, Three = 3 }
+    ╰────
+    ╭─[typeck_bit_field_width.ers:23:19]
+ 22 │ struct Narrow: u8 {
+ 23 │     four: Four at 0..=1,
+    ·                   ──┬──
+    ·                     ╰── 2 bits, holding 0 to 3
+ 24 │ }
+    ╰────
+  help: every variant of an enum field fits in the field's bits, so that each can be written to it
+        (ADR 0059)

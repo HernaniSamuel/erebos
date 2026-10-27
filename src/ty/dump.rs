@@ -2,12 +2,16 @@
 
 use std::fmt::Write;
 
-use crate::hir::{self, EnumId, Expr, ExprKind, Fn, FnKind, Ty};
+use crate::hir::{
+    self, EnumId, Expr, ExprKind, Fn, FnKind, ReadEffect, Ty, WriteAction, WriteEffect,
+};
 use crate::query::Queries;
 
 /// Lists the memory map with its values (ADR 0057), peripheral types with
 /// their layouts and peripherals with their addresses (ADR 0058), struct
-/// layouts, enums with their values and, with payloads, their layouts,
+/// layouts, bit-field structs with their fields' bits, effects and
+/// defaults (ADR 0059), enums with their values and, with payloads, their
+/// layouts,
 /// `Option(T)` and `Result(T, E)` among them, then every function's locals
 /// and expression types, for `--emit=typeck`.
 pub fn dump(q: &mut Queries) -> String {
@@ -95,6 +99,47 @@ pub fn dump(q: &mut Queries) -> String {
             out,
             "{attrs}struct {} {fields} size {}, align {}",
             def.name, layout.layout.size, layout.layout.align
+        )
+        .unwrap();
+    }
+    // Those reaching a failed value, reported, and `core`'s are left out.
+    for (i, def) in hir.bit_structs.iter().enumerate() {
+        if hir.in_core(def.module) {
+            continue;
+        }
+        let id = hir::BitStructId(i as u32);
+        let Some(layout) = q.bit_layout(id).filter(|layout| !layout.failed()) else {
+            continue;
+        };
+        let fields: Vec<String> = (def.fields.iter().zip(&layout.fields))
+            .enumerate()
+            .map(|(index, (field, &bits))| {
+                let (low, high) = bits.expect("a struct that did not fail has every field's bits");
+                let ty = q.normalize(field.ty);
+                let mut out = if low == high {
+                    format!("{}: {ty} at {low}", field.name)
+                } else {
+                    format!("{}: {ty} at {low}..={high}", field.name)
+                };
+                if let Some((effect, _)) = field.read_effect {
+                    write!(out, " {}", read_effect_words(effect)).unwrap();
+                }
+                if let Some((effect, _)) = field.write_effect {
+                    write!(out, " {}", write_effect_words(effect)).unwrap();
+                }
+                if field.default.is_some() {
+                    let value = q.bit_default(id, index as u32);
+                    write!(out, " = {}", default_text(q, ty, value)).unwrap();
+                }
+                out
+            })
+            .collect();
+        writeln!(
+            out,
+            "struct {}: {} {{ {} }}",
+            def.path,
+            def.ty.int,
+            fields.join(", ")
         )
         .unwrap();
     }
@@ -212,6 +257,48 @@ pub fn dump(q: &mut Queries) -> String {
         });
     }
     out
+}
+
+/// A read effect as written (ADR 0060): "read clears".
+fn read_effect_words(effect: ReadEffect) -> &'static str {
+    match effect {
+        ReadEffect::Clears => "read clears",
+        ReadEffect::Sets => "read sets",
+        ReadEffect::Modifies => "read modifies",
+    }
+}
+
+/// A write effect as written (ADR 0060): "write 1 clears".
+fn write_effect_words(effect: WriteEffect) -> String {
+    let action = match effect.action {
+        WriteAction::Clears => "clears",
+        WriteAction::Sets => "sets",
+        WriteAction::Toggles => "toggles",
+    };
+    format!("write {} {action}", effect.bit)
+}
+
+/// The default `value` of a bit field of type `ty` (ADR 0059): `true`, an
+/// integer, or the variant it is, as `Mode::Run`; `?` if it failed, which
+/// was reported.
+fn default_text(q: &mut Queries, ty: Ty, value: Option<u64>) -> String {
+    let Some(value) = value else {
+        return "?".to_owned();
+    };
+    match ty {
+        Ty::Bool => (value != 0).to_string(),
+        Ty::Enum(e) => {
+            let def = q.enum_def(e.id);
+            (0..def.variants.len())
+                .find(|&index| q.discriminant(e.id, index as u32) == Some(value))
+                .map_or_else(
+                    || e.int.display_bits(value),
+                    |index| def.variant_path(index),
+                )
+        }
+        Ty::Int(int) => int.display_bits(value),
+        _ => value.to_string(),
+    }
 }
 
 fn expr_label(q: &Queries, f: &Fn, expr: &Expr) -> String {

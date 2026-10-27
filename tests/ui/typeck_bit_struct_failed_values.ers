@@ -1,0 +1,59 @@
+// A bit position that fails, a field type in error, and bits that are
+// reversed are failed values (ADR 0048, 0059): each reports its own error,
+// once, and the checks that need it are skipped. In `Broken`, `a`'s bit
+// fails to evaluate, so it is not checked against `b`, which it would
+// overlap; `b`'s type has a length that fails, and is not also
+// `ty::bit-field-type`; `c`'s bits are reversed, so they are not checked
+// against `d`, which they would overlap, nor its default, which does not
+// fit in three bits, against them. `Holder` holds a `Broken`, which reaches
+// a failed value: it reports nothing, and neither does `size`, a function
+// needing its size, which is not built, though its division by zero would
+// be known.
+//
+// A variant whose value fails on its own makes an enum field of its type a
+// failed value (ADR 0062): `Code::A` reports its own error, `Code::B`, which
+// does not fit in two bits, is still checked against `Coded::code`, and
+// `Coded` reaches a failed value, so `coded_size` and `coded_holder_size`,
+// needing the sizes of `Coded` and of a struct holding it, are not built
+// and report nothing, though their divisions by zero would be known.
+fn zero() -> u32 {
+    0
+}
+
+struct Broken: u8 {
+    a: bool at 4 / zero(),
+    b: [u8; 1 / 0] at 1,
+    c: u8 at 5..=3 = 200,
+    d: bool at 4,
+}
+
+struct Holder {
+    broken: Broken,
+    other: u8,
+}
+
+fn size() -> u8 {
+    1 / ((size_of(Holder) - 2) as u8)
+}
+
+enum Code: u8 { A = 1 / 0, B = 8 }
+
+struct Coded: u8 {
+    code: Code at 0..=1,
+}
+
+struct CodedHolder {
+    coded: Coded,
+    other: u8,
+}
+
+fn coded_size() -> u8 {
+    1 / ((size_of(Coded) - 1) as u8)
+}
+
+fn coded_holder_size() -> u8 {
+    1 / ((size_of(CodedHolder) - 2) as u8)
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

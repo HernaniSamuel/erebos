@@ -1,0 +1,79 @@
+---
+source: tests/ui.rs
+assertion_line: 22
+expression: output
+input_file: tests/ui/typeck_bit_struct_cycle.ers
+---
+--- errors ---
+ty::cycle
+
+  × the bit layout of `Sized` depends on its own value
+    ╭─[typeck_bit_struct_cycle.ers:16:8]
+ 15 │ // `typeck_bit_struct.ers`.
+ 16 │ struct Sized: u8 {
+    ·        ──┬──
+    ·          ╰── needed while computing itself
+ 17 │     a: bool at size_of(Sized) as u32,
+    ·                ──────────┬──────────
+    ·                          ╰── through the bits of the field `Sized::a`
+ 18 │ }
+    ╰────
+  help: break the cycle: a value cannot depend on itself (ADR 0028)
+ty::cycle
+
+  × the bit layout of `Held` depends on its own value
+    ╭─[typeck_bit_struct_cycle.ers:25:8]
+ 24 │ 
+ 25 │ struct Held: u8 {
+    ·        ──┬─
+    ·          ╰── needed while computing itself
+ 26 │     a: bool at size_of(Holder) as u32,
+    ·                ───────────┬──────────
+    ·                           ╰── through the bits of the field `Held::a`
+ 27 │ }
+    ╰────
+  help: break the cycle: a value cannot depend on itself (ADR 0028)
+ty::cycle
+
+  × this value depends on its own value
+    ╭─[typeck_bit_struct_cycle.ers:30:13]
+ 28 │ 
+ 29 │ struct Arrayed: u8 {
+    ·        ───┬───
+    ·           ╰── through the bit layout of `Arrayed`
+ 30 │     a: [u8; size_of(Arrayed)] at 0,
+    ·             ────────┬───────
+    ·                     ╰── needed while computing itself
+ 31 │ }
+    ╰────
+  help: break the cycle: a value cannot depend on itself (ADR 0028)
+ty::cycle
+
+  × the variant `Level::High` depends on its own value
+    ╭─[typeck_bit_struct_cycle.ers:33:27]
+ 32 │ 
+ 33 │ enum Level: u8 { Low = 0, High = size_of(Variant) as u8 + 3 }
+    ·                           ──┬─
+    ·                             ╰── needed while computing itself
+ 34 │ 
+ 35 │ struct Variant: u8 {
+    ·        ───┬───
+    ·           ╰── through the bit layout of `Variant`
+ 36 │     level: Level at 0..=1,
+    ╰────
+  help: break the cycle: a value cannot depend on itself (ADR 0028)
+ty::cycle
+
+  × the bit layout of `Ordered` depends on its own value
+    ╭─[typeck_bit_struct_cycle.ers:47:8]
+ 44 │ 
+ 45 │ enum Step: u8 { Low = 0, High = size_of(Ordered) as u8 + 3 }
+    ·                          ──┬─
+    ·                            ╰── through the variant `Step::High`
+ 46 │ 
+ 47 │ struct Ordered: u8 {
+    ·        ───┬───
+    ·           ╰── needed while computing itself
+ 48 │     step: Step at 0..=1,
+    ╰────
+  help: break the cycle: a value cannot depend on itself (ADR 0028)

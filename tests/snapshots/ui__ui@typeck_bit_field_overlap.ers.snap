@@ -1,0 +1,64 @@
+---
+source: tests/ui.rs
+assertion_line: 22
+expression: output
+input_file: tests/ui/typeck_bit_field_overlap.ers
+---
+--- errors ---
+ty::bit-field-overlap
+
+  × the fields `a` and `b` overlap
+   ╭─[typeck_bit_field_overlap.ers:8:16]
+ 6 │ struct Two: u8 {
+ 7 │     a: u8 at 0..=3,
+   ·              ──┬──
+   ·                ╰── bits 0 to 3
+ 8 │     b: bool at 3,
+   ·                ┬
+   ·                ╰── bit 3
+ 9 │ }
+   ╰────
+  help: they share bit 3; the fields of a bit-field struct share no bit (ADR 0059)
+ty::bit-field-overlap
+
+  × the fields `x` and `y` overlap
+    ╭─[typeck_bit_field_overlap.ers:13:14]
+ 11 │ struct Three: u16 {
+ 12 │     x: u8 at 0..=7,
+    ·              ──┬──
+    ·                ╰── bits 0 to 7
+ 13 │     y: u8 at 4..=11,
+    ·              ───┬──
+    ·                 ╰── bits 4 to 11
+ 14 │     z: bool at 6,
+    ╰────
+  help: they share bits 4 to 7; the fields of a bit-field struct share no bit (ADR 0059)
+ty::bit-field-overlap
+
+  × the fields `x` and `z` overlap
+    ╭─[typeck_bit_field_overlap.ers:14:16]
+ 11 │ struct Three: u16 {
+ 12 │     x: u8 at 0..=7,
+    ·              ──┬──
+    ·                ╰── bits 0 to 7
+ 13 │     y: u8 at 4..=11,
+ 14 │     z: bool at 6,
+    ·                ┬
+    ·                ╰── bit 6
+ 15 │ }
+    ╰────
+  help: they share bit 6; the fields of a bit-field struct share no bit (ADR 0059)
+ty::bit-field-overlap
+
+  × the fields `y` and `z` overlap
+    ╭─[typeck_bit_field_overlap.ers:14:16]
+ 12 │     x: u8 at 0..=7,
+ 13 │     y: u8 at 4..=11,
+    ·              ───┬──
+    ·                 ╰── bits 4 to 11
+ 14 │     z: bool at 6,
+    ·                ┬
+    ·                ╰── bit 6
+ 15 │ }
+    ╰────
+  help: they share bit 6; the fields of a bit-field struct share no bit (ADR 0059)

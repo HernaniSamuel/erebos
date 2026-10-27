@@ -1,0 +1,69 @@
+---
+source: tests/ui.rs
+assertion_line: 22
+expression: output
+input_file: tests/ui/typeck_bit_field_range.ers
+---
+--- errors ---
+ty::reversed-bit-range
+
+  × the bits of the field `reversed` are reversed
+    ╭─[typeck_bit_field_range.ers:9:21]
+  8 │ struct Byte: u8 {
+  9 │     reversed: u8 at 3..=1,
+    ·                     ──┬──
+    ·                       ╰── from bit 3 down to bit 1
+ 10 │     past: bool at 8,
+    ╰────
+  help: bits are written lowest first, as `1..=3`, both included (ADR 0059)
+ty::bit-field-outside
+
+  × the field `past` reaches past the last bit of `u8`
+    ╭─[typeck_bit_field_range.ers:10:19]
+  7 │ 
+  8 │ struct Byte: u8 {
+    ·              ─┬
+    ·               ╰── has bits 0 to 7
+  9 │     reversed: u8 at 3..=1,
+ 10 │     past: bool at 8,
+    ·                   ┬
+    ·                   ╰── bit 8
+ 11 │     across: u8 at 4..=8,
+    ╰────
+  help: a field's bits are bits of its struct's integer type, numbered from 0, the least
+        significant (ADR 0059)
+ty::bit-field-outside
+
+  × the field `across` reaches past the last bit of `u8`
+    ╭─[typeck_bit_field_range.ers:11:19]
+  7 │ 
+  8 │ struct Byte: u8 {
+    ·              ─┬
+    ·               ╰── has bits 0 to 7
+  9 │     reversed: u8 at 3..=1,
+ 10 │     past: bool at 8,
+ 11 │     across: u8 at 4..=8,
+    ·                   ──┬──
+    ·                     ╰── bits 4 to 8
+ 12 │     computed: bool at HIGH,
+    ╰────
+  help: a field's bits are bits of its struct's integer type, numbered from 0, the least
+        significant (ADR 0059)
+ty::bit-field-outside
+
+  × the field `computed` reaches past the last bit of `u8`
+    ╭─[typeck_bit_field_range.ers:12:23]
+  7 │ 
+  8 │ struct Byte: u8 {
+    ·              ─┬
+    ·               ╰── has bits 0 to 7
+  9 │     reversed: u8 at 3..=1,
+ 10 │     past: bool at 8,
+ 11 │     across: u8 at 4..=8,
+ 12 │     computed: bool at HIGH,
+    ·                       ──┬─
+    ·                         ╰── bit 9
+ 13 │ }
+    ╰────
+  help: a field's bits are bits of its struct's integer type, numbered from 0, the least
+        significant (ADR 0059)

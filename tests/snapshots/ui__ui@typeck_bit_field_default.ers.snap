@@ -1,0 +1,41 @@
+---
+source: tests/ui.rs
+assertion_line: 22
+expression: output
+input_file: tests/ui/typeck_bit_field_default.ers
+---
+--- errors ---
+ty::field-value-out-of-range
+
+  × the default of the field `count` does not fit in its bits
+   ╭─[typeck_bit_field_default.ers:7:26]
+ 6 │ struct Defaults: u8 {
+ 7 │     count: u8 at 0..=3 = 16,
+   ·                  ──┬──   ─┬
+   ·                    │      ╰── `16` needs 5 bits
+   ·                    ╰── 4 bits, holding 0 to 15
+ 8 │     divided: u8 at 4..=5 = 1 / 0,
+   ╰────
+  help: a value written to a field fits in its bits; a program that wants the low bits of a wider
+        value masks them itself (ADR 0059)
+ty::division-by-zero
+
+  × division by zero
+   ╭─[typeck_bit_field_default.ers:8:32]
+ 7 │     count: u8 at 0..=3 = 16,
+ 8 │     divided: u8 at 4..=5 = 1 / 0,
+   ·                                ┬
+   ·                                ╰── this divisor is zero
+ 9 │     flag: bool at 6 = 1,
+   ╰────
+  help: at run time this would call the panic function (ADR 0007)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_bit_field_default.ers:9:23]
+  8 │     divided: u8 at 4..=5 = 1 / 0,
+  9 │     flag: bool at 6 = 1,
+    ·                       ┬
+    ·                       ╰── expected `bool`, found an integer
+ 10 │     fits: u8 at 7 = 1,
+    ╰────

@@ -74,6 +74,50 @@ pub fn register_width(ty: Ty) -> Option<u64> {
     }
 }
 
+/// The most bits a bit field of type `ty` may have (ADR 0059): one for a
+/// `bool`, which takes exactly one; the width of `u8`, `u16`, `u32` and
+/// `u64`, and of the integer type of an enum without payloads on one of
+/// them, whose variants must also fit in the field's bits (`bits_needed`).
+/// `None` if `ty` is no bit field type.
+pub fn bit_field_holds(ty: Ty) -> Option<u32> {
+    match ty {
+        Ty::Bool => Some(1),
+        Ty::Int(int)
+        | Ty::Enum(EnumTy {
+            int,
+            payloads: false,
+            ..
+        }) if matches!(int, IntTy::U8 | IntTy::U16 | IntTy::U32 | IntTy::U64) => Some(int.bits()),
+        _ => None,
+    }
+}
+
+/// The fewest bits that hold `value`, an unsigned integer: a field of `n`
+/// bits holds the values from 0 to 2ⁿ − 1 (ADR 0059).
+pub fn bits_needed(value: u64) -> u32 {
+    u64::BITS - value.leading_zeros()
+}
+
+/// The bits of the fields of a bit-field struct (ADR 0059), computed and
+/// checked once: its layout is its integer type's.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BitLayout {
+    /// Each field's lowest and highest bit, in declaration order; `None`
+    /// for a field that is a failed value, which was reported: an end that
+    /// failed, bits reversed or past the integer type, a type in error or
+    /// no bit field type, or a width that does not suit the type or cannot
+    /// be checked against it, an enum variant's value having failed.
+    pub fields: Vec<Option<(u32, u32)>>,
+}
+
+impl BitLayout {
+    /// Whether the struct reaches a failed value (ADR 0048, 0059): a field
+    /// cannot be read or written as declared.
+    pub fn failed(&self) -> bool {
+        self.fields.iter().any(Option::is_none)
+    }
+}
+
 /// Lays out a peripheral type whose registers, in declaration order, have
 /// the offsets and widths in `registers` (ADR 0058).
 pub fn peripheral_layout(registers: &[(u64, u64)]) -> PeripheralLayout {
@@ -272,6 +316,45 @@ mod tests {
             assert_eq!(register_width(Ty::Int(int)), None);
         }
         assert_eq!(register_width(Ty::Bool), None);
+    }
+
+    #[test]
+    fn bit_fields_are_bools_unsigned_integers_or_enums_on_them() {
+        let enum_on = |int, payloads| {
+            Ty::Enum(EnumTy {
+                id: EnumId(0),
+                name: "E",
+                int,
+                payloads,
+            })
+        };
+        assert_eq!(bit_field_holds(Ty::Bool), Some(1));
+        assert_eq!(bit_field_holds(Ty::Int(IntTy::U8)), Some(8));
+        assert_eq!(bit_field_holds(Ty::Int(IntTy::U16)), Some(16));
+        assert_eq!(bit_field_holds(Ty::Int(IntTy::U32)), Some(32));
+        assert_eq!(bit_field_holds(Ty::Int(IntTy::U64)), Some(64));
+        assert_eq!(bit_field_holds(enum_on(IntTy::U8, false)), Some(8));
+        assert_eq!(bit_field_holds(enum_on(IntTy::U64, false)), Some(64));
+        for int in [IntTy::Usize, IntTy::I8, IntTy::I64, IntTy::Isize] {
+            assert_eq!(bit_field_holds(Ty::Int(int)), None);
+            assert_eq!(bit_field_holds(enum_on(int, false)), None);
+        }
+        assert_eq!(bit_field_holds(enum_on(IntTy::U8, true)), None);
+        let u8_ = Ty::Int(IntTy::U8);
+        assert_eq!(bit_field_holds(Ty::ptr(false, false, u8_)), None);
+        assert_eq!(bit_field_holds(Ty::array(u8_, 1)), None);
+        assert_eq!(bit_field_holds(Ty::Unit), None);
+    }
+
+    #[test]
+    fn values_need_their_highest_bit() {
+        assert_eq!(bits_needed(0), 0);
+        assert_eq!(bits_needed(1), 1);
+        assert_eq!(bits_needed(3), 2);
+        assert_eq!(bits_needed(4), 3);
+        assert_eq!(bits_needed(15), 4);
+        assert_eq!(bits_needed(16), 5);
+        assert_eq!(bits_needed(u64::MAX), 64);
     }
 
     #[test]

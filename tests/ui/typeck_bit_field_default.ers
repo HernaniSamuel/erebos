@@ -1,0 +1,14 @@
+// A field's default is a value of its type, computed at compile time, that
+// fits in its bits (ADR 0059). `16` in a four-bit field is
+// `ty::field-value-out-of-range`, `1 / 0` is reported once, where it is
+// computed, and a default of the wrong type is `ty::mismatched-types`.
+// Literals taking them are M3.3, step 5's `mir_bit_struct_failed_values.ers`.
+struct Defaults: u8 {
+    count: u8 at 0..=3 = 16,
+    divided: u8 at 4..=5 = 1 / 0,
+    flag: bool at 6 = 1,
+    fits: u8 at 7 = 1,
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

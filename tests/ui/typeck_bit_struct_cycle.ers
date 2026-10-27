@@ -1,0 +1,56 @@
+// The bits of a bit-field struct, meaning its bit positions, its field
+// types and the values of an enum field type's variants, may not need
+// those bits: `ty::cycle` (ADR 0028, 0059, 0062). `size_of` of a bit-field
+// struct asks whether it reaches a failed value, which needs its bits
+// (ADR 0048). `Sized`'s bit asks for its own size, `Held`'s for the size of
+// a struct holding it, and `Arrayed`'s field type has a length computed
+// from its size. `Variant`'s field type is an enum one of whose values asks
+// for `Variant`'s size: the cycle is found from the variant, as enums are
+// checked before bit-field structs, while `CONST_FIRST` makes it found
+// from `Ordered`'s bits for the same declarations. Either way the variant
+// and the struct both fail, with one error: the `comptime` blocks
+// asserting the variants' values report nothing, and neither variant is
+// checked against its two bits, which its value would not fit. Defaults
+// that use their struct's size are no cycle (ADR 0062); they are in
+// `typeck_bit_struct.ers`.
+struct Sized: u8 {
+    a: bool at size_of(Sized) as u32,
+}
+
+struct Holder {
+    held: Held,
+    other: u8,
+}
+
+struct Held: u8 {
+    a: bool at size_of(Holder) as u32,
+}
+
+struct Arrayed: u8 {
+    a: [u8; size_of(Arrayed)] at 0,
+}
+
+enum Level: u8 { Low = 0, High = size_of(Variant) as u8 + 3 }
+
+struct Variant: u8 {
+    level: Level at 0..=1,
+}
+
+comptime {
+    assert(Level::High as u8 == 0);
+}
+
+const CONST_FIRST: usize = size_of(Ordered);
+
+enum Step: u8 { Low = 0, High = size_of(Ordered) as u8 + 3 }
+
+struct Ordered: u8 {
+    step: Step at 0..=1,
+}
+
+comptime {
+    assert(Step::High as u8 == 0);
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

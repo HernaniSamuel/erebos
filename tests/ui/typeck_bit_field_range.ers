@@ -1,0 +1,20 @@
+// A field's bits are written lowest first (`ty::reversed-bit-range`) and
+// lie within its struct's integer type (`ty::bit-field-outside`), numbered
+// from 0 (ADR 0059). In a `u8` struct, `3..=1` is reversed, and `8` and
+// `4..=8` reach past bit 7; bits computed from constants are checked as
+// computed. Bit 31 of a `u32` struct is its last, and accepted.
+const HIGH: u32 = 9;
+
+struct Byte: u8 {
+    reversed: u8 at 3..=1,
+    past: bool at 8,
+    across: u8 at 4..=8,
+    computed: bool at HIGH,
+}
+
+struct Word: u32 {
+    pub last: bool at 31,
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

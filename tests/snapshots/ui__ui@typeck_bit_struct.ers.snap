@@ -1,0 +1,73 @@
+---
+source: tests/ui.rs
+assertion_line: 22
+expression: output
+input_file: tests/ui/typeck_bit_struct.ers
+---
+--- typeck ---
+struct Lcr: u8 { word_length: WordLength at 0..=1 = WordLength::Five, two_stop_bits: bool at 2 = false, parity: bool at 3 = false, even_parity: bool at 4 = false, break_control: bool at 6 = false, dlab: bool at 7 = false }
+struct Control: u32 { mode: Mode at 0..=1 = Mode::Periodic, enable: bool at 2 = true, prescale: u8 at 4..=11 = 63, count: u64 at 12..=23 = 4095, ready: bool at 24 read clears, overrun: bool at 25 read sets write 1 clears, start: bool at 26 write 0 sets, busy: bool at 27 read modifies write 1 toggles, reserved: u8 at 28..=31 }
+struct Defaults: u8 { single: bool at 0 = true, size: u8 at 1..=4 = 2 }
+enum WordLength: u8 { Five = 0, Six = 1, Seven = 2, Eight = 3 }
+enum Mode: u16 { Off = 0, OneShot = 1, Periodic = 2 }
+entry fn main() -> !
+    expr 23 loop 1735..1742: !
+panic fn on_panic() -> !
+    expr 24 loop 1772..1779: !
+comptime fn PRESCALE() -> u32
+    expr 25 int 4 1107..1108: u32
+comptime fn LIMIT() -> u8
+    expr 26 int 64 1128..1130: u8
+comptime fn SIZE() -> usize
+    expr 27 size_of(Defaults) 1571..1588: usize
+comptime fn WordLength::Five() -> u8
+    expr 28 int 0 732..733: u8
+comptime fn WordLength::Six() -> u8
+    expr 29 int 1 741..742: u8
+comptime fn WordLength::Seven() -> u8
+    expr 30 int 2 752..753: u8
+comptime fn WordLength::Eight() -> u8
+    expr 31 int 3 763..764: u8
+comptime fn Mode::Off() -> u16
+    expr 32 int 0 1053..1054: u16
+comptime fn Mode::OneShot() -> u16
+    expr 33 int 1 1066..1067: u16
+comptime fn Mode::Periodic() -> u16
+    expr 34 int 2 1080..1081: u16
+comptime fn default() -> WordLength
+    expr 0 variant .Five (WordLength::Five) 828..833: WordLength
+comptime fn default() -> bool
+    expr 1 bool false 870..875: bool
+comptime fn default() -> bool
+    expr 2 bool false 905..910: bool
+comptime fn default() -> bool
+    expr 3 bool false 945..950: bool
+comptime fn default() -> bool
+    expr 4 bool false 987..992: bool
+comptime fn default() -> bool
+    expr 5 bool false 1020..1025: bool
+comptime fn default() -> Mode
+    expr 6 variant .Periodic (Mode::Periodic) 1185..1194: Mode
+comptime fn default() -> bool
+    expr 7 bool true 1224..1228: bool
+comptime fn bits() -> u32
+    expr 8 const PRESCALE 1250..1258: u32
+comptime fn bits() -> u32
+    expr 9 binary + 1261..1273: u32
+    expr 10 const PRESCALE 1261..1269: u32
+    expr 11 int 7 1272..1273: u32
+comptime fn default() -> u8
+    expr 12 binary - 1276..1285: u8
+    expr 13 const LIMIT 1276..1281: u8
+    expr 14 int 1 1284..1285: u8
+comptime fn default() -> u64
+    expr 15 int 4095 1319..1324: u64
+comptime fn default() -> bool
+    expr 16 binary == 1641..1663: bool
+    expr 17 size_of(Defaults) 1641..1658: usize
+    expr 18 int 1 1662..1663: usize
+comptime fn default() -> u8
+    expr 19 binary + 1693..1707: u8
+    expr 20 as u8 1693..1703: u8
+    expr 21 const SIZE 1693..1697: usize
+    expr 22 int 1 1706..1707: u8

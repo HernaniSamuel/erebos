@@ -1,0 +1,26 @@
+// A bit field's type is a `bool`, a `u8`, `u16`, `u32` or `u64`, or an
+// enum without payloads on one of these four (ADR 0059):
+// `ty::bit-field-type` for each other type, at the type. A `u64` field of
+// eight bits in a `u8` struct is accepted: its type has room for its bits.
+struct Point { x: u8, y: u8 }
+
+enum Signed: i8 { Low = 0, High = 1 }
+enum Wide: usize { Low = 0, High = 1 }
+enum Message: u8 { Nop = 0, Data(u8) = 1 }
+
+struct Wrong: u32 {
+    signed: i8 at 0..=7,
+    address: usize at 8,
+    point: Point at 9,
+    pointer: *const u8 at 10,
+    signed_enum: Signed at 11,
+    wide_enum: Wide at 12,
+    payloads: Message at 13,
+}
+
+struct Roomy: u8 {
+    pub all: u64 at 0..=7,
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

@@ -1,0 +1,32 @@
+// A field's width suits its type (ADR 0059): a `bool` takes exactly one
+// bit; an integer type, and an enum's integer type, hold at least as many
+// bits as the field has; and every variant of an enum fits in the field's
+// bits. `ty::bit-field-width` for a `bool` of two bits, a `u8` of twelve
+// bits in a `u16` struct, an enum on `u8` of twelve bits whose variants
+// would fit, and an enum with a variant of value 4 in two bits. A `bool` at
+// `3..=3` and an enum whose variants fit, its largest exactly, are
+// accepted.
+enum Small: u8 { A = 0, B = 1 }
+enum Four: u8 { Zero = 0, One = 1, Four = 4 }
+enum Fits: u8 { Zero = 0, Three = 3 }
+
+struct Wide: u16 {
+    flag: bool at 0..=1,
+    byte: u8 at 2..=13,
+}
+
+struct Wider: u16 {
+    small: Small at 0..=11,
+}
+
+struct Narrow: u8 {
+    four: Four at 0..=1,
+}
+
+struct Accepted: u8 {
+    pub flag: bool at 3..=3,
+    pub fits: Fits at 0..=1,
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

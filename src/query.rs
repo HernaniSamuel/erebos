@@ -9,11 +9,12 @@ use std::rc::Rc;
 use crate::diag::{Diagnostic, Diagnostics};
 use crate::eval::{self, ConstValue, Origin};
 use crate::hir::{
-    self, ArrayLen, BuiltinEnum, Comptime, ConstId, EnumDef, EnumId, ExprId, ExprKind, FnId, Hir,
-    PatternKind, PeripheralId, PeripheralTypeId, StaticId, StructId, VariantValue,
+    self, ArrayLen, BitStructId, BuiltinEnum, Comptime, ConstId, EnumDef, EnumId, ExprId, ExprKind,
+    FnId, Hir, PatternKind, PeripheralId, PeripheralTypeId, StaticId, StructId, VariantValue,
 };
 use crate::layout::{
-    self, Composite, EnumLayout, Layout, MAX_ALIGN, MAX_SIZE, PeripheralLayout, StructLayout,
+    self, BitLayout, Composite, EnumLayout, Layout, MAX_ALIGN, MAX_SIZE, PeripheralLayout,
+    StructLayout,
 };
 use crate::mir::{
     self, BodyId, ConstData, DataId, EnumRef, Field, LeftOut, Mir, PanicCause, PanicInfoAt,
@@ -23,6 +24,7 @@ use crate::span::Span;
 use crate::target;
 use crate::ty::{self, Tables};
 
+mod bit_struct;
 mod hardware;
 
 /// Where a piece of constant data comes from.
@@ -64,7 +66,8 @@ enum Item {
     Const(ConstId),
     Static(StaticId),
     Comptime(ExprId),
-    /// A `usize` computed at compile time, such as an array length.
+    /// A `usize` computed at compile time, such as an array length, or an
+    /// end of a bit field's bits, a `u32` (ADR 0059).
     Value(FnId),
     /// The value of a variant (ADR 0035).
     Discriminant(EnumId, u32),
@@ -73,6 +76,10 @@ enum Item {
     EnumLayout(EnumId),
     /// The layout of a peripheral type (ADR 0058).
     PeripheralLayout(PeripheralTypeId),
+    /// The bits of the fields of a bit-field struct (ADR 0059).
+    BitLayout(BitStructId),
+    /// The default of a field, by index, of a bit-field struct (ADR 0059).
+    BitDefault(BitStructId, u32),
 }
 
 /// Which peripheral types `lacks_layout` counts as in error (ADR 0058).
@@ -158,6 +165,12 @@ pub struct Queries<'h> {
     /// reported elsewhere (`explain_peripherals`); computed for all of
     /// them at once, when first needed.
     peripherals_explained: Option<Vec<bool>>,
+    /// The bits of the fields of each bit-field struct (ADR 0059).
+    bit_layouts: Vec<State<Rc<BitLayout>>>,
+    /// The default of each field of each bit-field struct, as the bits of
+    /// its type; `None` without one, or if it failed or does not fit in its
+    /// field (reported).
+    bit_defaults: Vec<Vec<State<Option<u64>>>>,
     /// Each `Option(T)` and `Result(T, E)` made so far, numbered after the
     /// declared enums, with its type arguments (ADR 0045).
     instances: Vec<(BuiltinEnum, Vec<hir::Ty>, &'static EnumDef)>,
@@ -207,7 +220,8 @@ pub struct Queries<'h> {
     /// The value of each `comptime` expression.
     comptime: HashMap<ExprId, State<Option<ConstValue>>>,
     /// The value of each array length, repeat count and `#[align]`
-    /// argument computed at compile time.
+    /// argument computed at compile time, and of each end of a bit field's
+    /// bits (ADR 0059).
     values: HashMap<FnId, Option<u64>>,
     /// Read-only data computed at compile time, and what it came from.
     data: Vec<ConstData>,
@@ -229,6 +243,12 @@ impl<'h> Queries<'h> {
                 .map(|_| State::NotStarted)
                 .collect(),
             peripherals_explained: None,
+            bit_layouts: (hir.bit_structs.iter())
+                .map(|_| State::NotStarted)
+                .collect(),
+            bit_defaults: (hir.bit_structs.iter())
+                .map(|s| s.fields.iter().map(|_| State::NotStarted).collect())
+                .collect(),
             instances: Vec::new(),
             too_large_instances: Vec::new(),
 
@@ -318,6 +338,7 @@ impl<'h> Queries<'h> {
         }
         self.check_memory_map();
         self.check_peripherals();
+        self.check_bit_structs();
         for (id, f) in hir.fns() {
             let Some(body) = &f.body else {
                 continue;
@@ -671,6 +692,12 @@ impl<'h> Queries<'h> {
     /// The value of an array length, repeat count or `#[align]` argument,
     /// or `None` if it failed (reported).
     pub fn array_len(&mut self, len: ArrayLen) -> Option<u64> {
+        self.comptime_int(len, target::POINTER_BYTES)
+    }
+
+    /// The value of `len`, an integer of `bytes` bytes computed at compile
+    /// time, or `None` if it failed (reported).
+    fn comptime_int(&mut self, len: ArrayLen, bytes: u64) -> Option<u64> {
         let id = match len {
             ArrayLen::Known(len) => return Some(len),
             ArrayLen::Comptime(id) => id,
@@ -678,8 +705,9 @@ impl<'h> Queries<'h> {
         if let Some(value) = self.values.get(&id) {
             return *value;
         }
-        let span = self.hir.fn_(id).span;
-        let what = "this value".to_owned();
+        let f = self.hir.fn_(id);
+        let span = f.span;
+        let what = describe(self, f);
         if !self.start(Item::Value(id), span, what.clone()) {
             return None;
         }
@@ -688,7 +716,7 @@ impl<'h> Queries<'h> {
             eval::evaluate(self, body, origin)
         });
         self.finish(Item::Value(id));
-        let value = value.map(|value| value.int(crate::target::POINTER_BYTES as usize));
+        let value = value.map(|value| value.int(bytes as usize));
         self.values.insert(id, value);
         value
     }
@@ -1557,8 +1585,9 @@ impl<'h> Queries<'h> {
 
     /// Whether `ty` needs a struct or an enum with payloads without a
     /// layout, or a type that failed, as a payload of type `!` is
-    /// (ADR 0034, 0039), or reaches a peripheral type that reaches a failed
-    /// value (ADR 0058): all reported, so its uses report nothing more.
+    /// (ADR 0034, 0039), or reaches a peripheral type or a bit-field struct
+    /// that reaches a failed value (ADR 0058, 0059): all reported, so its
+    /// uses report nothing more.
     pub fn is_erroneous(&mut self, ty: hir::Ty) -> bool {
         self.lacks_layout(ty, &mut Vec::new(), PeripheralFailures::All)
     }
@@ -1568,8 +1597,9 @@ impl<'h> Queries<'h> {
     /// looked at already. The types of fields and payload values are not
     /// normalized, so an array length that failed is found here: `ty` is
     /// in error wherever `normalize` would make it `{error}`. So is a
-    /// struct whose `#[align(N)]` failed (ADR 0048), and a peripheral type
-    /// that `peripherals` counts (ADR 0058).
+    /// struct whose `#[align(N)]` failed (ADR 0048), a peripheral type
+    /// that `peripherals` counts (ADR 0058), and a bit-field struct that
+    /// reaches a failed value (ADR 0059).
     fn lacks_layout(
         &mut self,
         ty: hir::Ty,
@@ -1627,6 +1657,7 @@ impl<'h> Queries<'h> {
                 PeripheralFailures::Explained => self.peripheral_explained(p.id),
                 PeripheralFailures::Ignored => false,
             },
+            hir::Ty::BitStruct(s) => self.bit_struct_failed(s.id),
             // Reported, such as a field of type `!` (ADR 0034).
             hir::Ty::Error => true,
             _ => false,

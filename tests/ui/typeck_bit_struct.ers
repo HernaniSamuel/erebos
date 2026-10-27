@@ -1,0 +1,48 @@
+// emit: typeck
+// The bits, effects and defaults of bit-field structs, computed (ADR 0059,
+// 0060). `Lcr` is the 16550's line control register of ADR 0059, bit 5
+// left reserved; `Control`, on `u32`, has an enum field whose default is a
+// variant, a multi-bit integer field placed by constants with a default
+// computed from one, a `u64` field narrower than its type, fields with a
+// read effect, each write effect action, and both effects on one field.
+// `Defaults`' defaults use its own size, directly and through a constant,
+// which is no cycle: a default is no part of its struct's bits (ADR 0062).
+// No body mentions a bit-field struct: their values are type checked from
+// M3.3, step 4.
+enum WordLength: u8 { Five = 0, Six = 1, Seven = 2, Eight = 3 }
+
+struct Lcr: u8 {
+    pub word_length: WordLength at 0..=1 = .Five,
+    pub two_stop_bits: bool at 2 = false,
+    pub parity: bool at 3 = false,
+    pub even_parity: bool at 4 = false,
+    pub break_control: bool at 6 = false,
+    pub dlab: bool at 7 = false,
+}
+
+enum Mode: u16 { Off = 0, OneShot = 1, Periodic = 2 }
+
+const PRESCALE: u32 = 4;
+const LIMIT: u8 = 64;
+
+struct Control: u32 {
+    pub mode: Mode at 0..=1 = .Periodic,
+    pub enable: bool at 2 = true,
+    prescale: u8 at PRESCALE..=PRESCALE + 7 = LIMIT - 1,
+    pub count: u64 at 12..=23 = 0xFFF,
+    pub ready: bool at 24 read clears,
+    pub overrun: bool at 25 read sets write 1 clears,
+    pub start: bool at 26 write 0 sets,
+    pub busy: bool at 27 read modifies write 1 toggles,
+    pub reserved: u8 at 28..=31,
+}
+
+const SIZE: usize = size_of(Defaults);
+
+struct Defaults: u8 {
+    pub single: bool at 0 = size_of(Defaults) == 1,
+    pub size: u8 at 1..=4 = SIZE as u8 + 1,
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

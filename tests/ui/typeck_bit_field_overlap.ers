@@ -1,0 +1,23 @@
+// Fields may not share a bit (ADR 0059): `ty::bit-field-overlap`, once per
+// pair, at the later field, labeling the earlier. In `Two`, `b` shares
+// bit 3 with `a`; in `Three`, `y` and `z` share bits with `x` and with each
+// other, three errors. `Adjacent`'s fields touch without sharing a bit,
+// and are accepted.
+struct Two: u8 {
+    a: u8 at 0..=3,
+    b: bool at 3,
+}
+
+struct Three: u16 {
+    x: u8 at 0..=7,
+    y: u8 at 4..=11,
+    z: bool at 6,
+}
+
+struct Adjacent: u8 {
+    pub low: u8 at 0..=3,
+    pub high: u8 at 4..=7,
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

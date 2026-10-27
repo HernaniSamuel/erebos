@@ -1,0 +1,91 @@
+---
+source: tests/ui.rs
+assertion_line: 22
+expression: output
+input_file: tests/ui/typeck_bit_field_type.ers
+---
+--- errors ---
+ty::bit-field-type
+
+  × `i8` is not a bit field type
+    ╭─[typeck_bit_field_type.ers:12:13]
+ 11 │ struct Wrong: u32 {
+ 12 │     signed: i8 at 0..=7,
+    ·             ─┬
+    ·              ╰── the type of the field `signed`
+ 13 │     address: usize at 8,
+    ╰────
+  help: a bit field is a `bool`, a `u8`, `u16`, `u32` or `u64`, or an enum without payloads on one
+        of these four, whose value its bits hold as they are (ADR 0059)
+ty::bit-field-type
+
+  × `usize` is not a bit field type
+    ╭─[typeck_bit_field_type.ers:13:14]
+ 12 │     signed: i8 at 0..=7,
+ 13 │     address: usize at 8,
+    ·              ──┬──
+    ·                ╰── the type of the field `address`
+ 14 │     point: Point at 9,
+    ╰────
+  help: a bit field is a `bool`, a `u8`, `u16`, `u32` or `u64`, or an enum without payloads on one
+        of these four, whose value its bits hold as they are (ADR 0059)
+ty::bit-field-type
+
+  × `Point` is not a bit field type
+    ╭─[typeck_bit_field_type.ers:14:12]
+ 13 │     address: usize at 8,
+ 14 │     point: Point at 9,
+    ·            ──┬──
+    ·              ╰── the type of the field `point`
+ 15 │     pointer: *const u8 at 10,
+    ╰────
+  help: a bit field is a `bool`, a `u8`, `u16`, `u32` or `u64`, or an enum without payloads on one
+        of these four, whose value its bits hold as they are (ADR 0059)
+ty::bit-field-type
+
+  × `*const u8` is not a bit field type
+    ╭─[typeck_bit_field_type.ers:15:14]
+ 14 │     point: Point at 9,
+ 15 │     pointer: *const u8 at 10,
+    ·              ────┬────
+    ·                  ╰── the type of the field `pointer`
+ 16 │     signed_enum: Signed at 11,
+    ╰────
+  help: a bit field is a `bool`, a `u8`, `u16`, `u32` or `u64`, or an enum without payloads on one
+        of these four, whose value its bits hold as they are (ADR 0059)
+ty::bit-field-type
+
+  × `Signed` is not a bit field type
+    ╭─[typeck_bit_field_type.ers:16:18]
+ 15 │     pointer: *const u8 at 10,
+ 16 │     signed_enum: Signed at 11,
+    ·                  ───┬──
+    ·                     ╰── the type of the field `signed_enum`, an enum on `i8`
+ 17 │     wide_enum: Wide at 12,
+    ╰────
+  help: a bit field is a `bool`, a `u8`, `u16`, `u32` or `u64`, or an enum without payloads on one
+        of these four, whose value its bits hold as they are (ADR 0059)
+ty::bit-field-type
+
+  × `Wide` is not a bit field type
+    ╭─[typeck_bit_field_type.ers:17:16]
+ 16 │     signed_enum: Signed at 11,
+ 17 │     wide_enum: Wide at 12,
+    ·                ──┬─
+    ·                  ╰── the type of the field `wide_enum`, an enum on `usize`
+ 18 │     payloads: Message at 13,
+    ╰────
+  help: a bit field is a `bool`, a `u8`, `u16`, `u32` or `u64`, or an enum without payloads on one
+        of these four, whose value its bits hold as they are (ADR 0059)
+ty::bit-field-type
+
+  × `Message` is not a bit field type
+    ╭─[typeck_bit_field_type.ers:18:15]
+ 17 │     wide_enum: Wide at 12,
+ 18 │     payloads: Message at 13,
+    ·               ───┬───
+    ·                  ╰── the type of the field `payloads`, an enum with payloads
+ 19 │ }
+    ╰────
+  help: a bit field is a `bool`, a `u8`, `u16`, `u32` or `u64`, or an enum without payloads on one
+        of these four, whose value its bits hold as they are (ADR 0059)

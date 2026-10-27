@@ -1,0 +1,69 @@
+---
+source: tests/ui.rs
+assertion_line: 22
+expression: output
+input_file: tests/ui/typeck_bit_struct_failed_values.ers
+---
+--- errors ---
+eval::panic
+
+  × the evaluation called the panic function: division by zero
+    ╭─[typeck_bit_struct_failed_values.ers:24:16]
+ 23 │ struct Broken: u8 {
+ 24 │     a: bool at 4 / zero(),
+    ·                ─────┬────┬
+    ·                     │    ╰── while evaluating the bits of the field `Broken::a`
+    ·                     ╰── division by zero
+ 25 │     b: [u8; 1 / 0] at 1,
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+ty::division-by-zero
+
+  × division by zero
+    ╭─[typeck_bit_struct_failed_values.ers:25:17]
+ 24 │     a: bool at 4 / zero(),
+ 25 │     b: [u8; 1 / 0] at 1,
+    ·                 ┬
+    ·                 ╰── this divisor is zero
+ 26 │     c: u8 at 5..=3 = 200,
+    ╰────
+  help: at run time this would call the panic function (ADR 0007)
+ty::reversed-bit-range
+
+  × the bits of the field `c` are reversed
+    ╭─[typeck_bit_struct_failed_values.ers:26:14]
+ 25 │     b: [u8; 1 / 0] at 1,
+ 26 │     c: u8 at 5..=3 = 200,
+    ·              ──┬──
+    ·                ╰── from bit 5 down to bit 3
+ 27 │     d: bool at 4,
+    ╰────
+  help: bits are written lowest first, as `3..=5`, both included (ADR 0059)
+ty::division-by-zero
+
+  × division by zero
+    ╭─[typeck_bit_struct_failed_values.ers:39:25]
+ 38 │ 
+ 39 │ enum Code: u8 { A = 1 / 0, B = 8 }
+    ·                         ┬
+    ·                         ╰── this divisor is zero
+ 40 │ 
+    ╰────
+  help: at run time this would call the panic function (ADR 0007)
+ty::bit-field-width
+
+  × the variant `Code::B` does not fit in the field `code`
+    ╭─[typeck_bit_struct_failed_values.ers:42:19]
+ 38 │ 
+ 39 │ enum Code: u8 { A = 1 / 0, B = 8 }
+    ·                            ┬
+    ·                            ╰── is 8, which needs 4 bits
+ 40 │ 
+ 41 │ struct Coded: u8 {
+ 42 │     code: Code at 0..=1,
+    ·                   ──┬──
+    ·                     ╰── 2 bits, holding 0 to 3
+ 43 │ }
+    ╰────
+  help: every variant of an enum field fits in the field's bits, so that each can be written to it
+        (ADR 0059)
