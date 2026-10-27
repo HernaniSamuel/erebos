@@ -5,6 +5,7 @@ use crate::diag::Diagnostic;
 use crate::hir::{self, AccessMode, PeripheralId, PeripheralTypeId};
 use crate::layout::{self, Composite, PeripheralLayout};
 use crate::memory::{MemoryMap, Region};
+use crate::span::Span;
 use crate::target;
 
 use super::{Item, PeripheralFailures, Queries, State};
@@ -381,6 +382,35 @@ impl Queries<'_> {
         Some((address, self.peripheral_layout(ty.id)?))
     }
 
+    /// Whether the reads of the register `index` of the peripheral type `id`
+    /// have effects (ADR 0060): it declares a read effect, or its type does
+    /// (`type_read_effect`). `Some` with the span of the effect that makes
+    /// them so, the register's own first. The reads of a `write` register
+    /// never count, since it is never read: its read effect only documents
+    /// the device.
+    pub fn register_read_effect(&mut self, id: PeripheralTypeId, index: usize) -> Option<Span> {
+        let hir = self.hir;
+        let register = &hir.peripheral_type(id).registers[index];
+        if register.access == AccessMode::Write {
+            return None;
+        }
+        let ty = self.normalize(register.ty);
+        (register.read_effect.map(|(_, span)| span)).or_else(|| self.type_read_effect(ty))
+    }
+
+    /// Whether a read of a volatile place of type `ty`, normalized, has
+    /// effects (ADR 0060): `ty` is a bit-field struct with a field that
+    /// declares a read effect. `Some` with the span of the first such
+    /// effect. In ordinary memory effects mean nothing, so this is asked
+    /// only for volatile places.
+    pub fn type_read_effect(&self, ty: hir::Ty) -> Option<Span> {
+        let hir::Ty::BitStruct(s) = ty else {
+            return None;
+        };
+        (self.hir.bit_struct(s.id).fields.iter())
+            .find_map(|field| field.read_effect.map(|(_, span)| span))
+    }
+
     /// Checks every peripheral type and peripheral of the program, used or
     /// not, once their values are computed (ADR 0058): registers of a
     /// register type, at offsets aligned for their widths, sharing no byte
@@ -509,10 +539,16 @@ impl Queries<'_> {
             if width.is_none()
                 && !self.lacks_layout(register.ty, &mut Vec::new(), PeripheralFailures::Explained)
             {
+                let what = match ty {
+                    hir::Ty::BitStruct(s) => format!(", a bit-field struct on `{}`", s.int),
+                    hir::Ty::Enum(e) if e.payloads => ", an enum with payloads".to_owned(),
+                    hir::Ty::Enum(e) => format!(", an enum on `{}`", e.int),
+                    _ => String::new(),
+                };
                 self.diags.push(
                     Diagnostic::error("ty::register-type", format!("`{ty}` is not a register type"))
-                        .label(register.ty_span, format!("the type of the register `{}`", register.name))
-                        .help("a register is a `u8`, a `u16` or a `u32`: an unsigned integer as wide as the register, read and written in one access (ADR 0058)"),
+                        .label(register.ty_span, format!("the type of the register `{}`{what}", register.name))
+                        .help("a register is a `u8`, a `u16` or a `u32`, or a bit-field struct or an enum without payloads on one of them: as wide as that integer type, and read and written in one access (ADR 0058, 0060)"),
                 );
             }
             placed.push(self.array_len(register.offset.0).zip(width));

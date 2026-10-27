@@ -63,13 +63,20 @@ pub struct PeripheralLayout {
 pub const MAX_ALIGN: u64 = 1 << (target::POINTER_BITS - 1);
 
 /// The width in bytes of a register of type `ty`, if it is a register type
-/// (ADR 0058): `u8`, `u16` or `u32`, an unsigned integer as wide as the
-/// register and at most as wide as the target's widest single access
-/// (ADR 0023).
+/// (ADR 0058, 0060): `u8`, `u16` or `u32`, an unsigned integer as wide as
+/// the register and at most as wide as the target's widest single access
+/// (ADR 0023), or a bit-field struct or an enum without payloads stored as
+/// one of them, whose width is its integer's.
 pub fn register_width(ty: Ty) -> Option<u64> {
     const _: () = assert!(target::WIDEST_ACCESS_BITS >= 32);
     match ty {
-        Ty::Int(int @ (IntTy::U8 | IntTy::U16 | IntTy::U32)) => Some(int.bytes()),
+        Ty::Int(int)
+        | Ty::BitStruct(BitStructTy { int, .. })
+        | Ty::Enum(EnumTy {
+            int,
+            payloads: false,
+            ..
+        }) if matches!(int, IntTy::U8 | IntTy::U16 | IntTy::U32) => Some(int.bytes()),
         _ => None,
     }
 }
@@ -221,7 +228,7 @@ pub fn align_up(offset: u64, align: u64) -> Option<u64> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::hir::IntTy;
+    use crate::hir::{BitStructId, IntTy};
 
     fn scalar(ty: Ty) -> Option<Layout> {
         of(ty, &mut |_| {
@@ -316,6 +323,36 @@ mod tests {
             assert_eq!(register_width(Ty::Int(int)), None);
         }
         assert_eq!(register_width(Ty::Bool), None);
+    }
+
+    /// A bit-field struct or an enum without payloads is a register as wide
+    /// as its integer type, when that is one (ADR 0060).
+    #[test]
+    fn registers_are_bit_field_structs_or_enums_on_u8_u16_or_u32() {
+        let bits_on = |int| {
+            Ty::BitStruct(BitStructTy {
+                id: BitStructId(0),
+                name: "B",
+                int,
+            })
+        };
+        let enum_on = |int, payloads| {
+            Ty::Enum(EnumTy {
+                id: EnumId(0),
+                name: "E",
+                int,
+                payloads,
+            })
+        };
+        for (int, width) in [(IntTy::U8, 1), (IntTy::U16, 2), (IntTy::U32, 4)] {
+            assert_eq!(register_width(bits_on(int)), Some(width));
+            assert_eq!(register_width(enum_on(int, false)), Some(width));
+            assert_eq!(register_width(enum_on(int, true)), None);
+        }
+        assert_eq!(register_width(bits_on(IntTy::U64)), None);
+        for int in [IntTy::U64, IntTy::Usize, IntTy::I8, IntTy::I32] {
+            assert_eq!(register_width(enum_on(int, false)), None);
+        }
     }
 
     #[test]

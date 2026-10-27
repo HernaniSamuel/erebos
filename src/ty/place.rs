@@ -5,7 +5,7 @@
 use crate::diag::Diagnostic;
 use crate::hir::{
     self, AccessMode, BitStructTy, EnumTy, Expr, ExprKind, Fn, Hir, IntTy, ModuleId, PeripheralTy,
-    PeripheralTypeId, Ty,
+    PeripheralTypeId, Ty, WriteAction,
 };
 use crate::span::Span;
 use crate::target;
@@ -39,13 +39,15 @@ impl Checker<'_, '_> {
     /// compound assignment. A volatile access is exactly one instruction
     /// (ADR 0023), so it cannot be wider than the target's widest access,
     /// nor a whole aggregate. A register is volatile too, and must allow
-    /// the access (ADR 0058); its type was checked with its peripheral
+    /// the access (ADR 0058), an assignment to one of its fields reading it
+    /// as well (ADR 0060); its type was checked with its peripheral
     /// type, so it gets no volatile checks of its own. A bit field is
     /// accessed with the whole value of its bit-field struct, which the
     /// volatile checks see (ADR 0059).
     pub(super) fn access(&mut self, place: &PlaceInfo, span: Span, kind: AccessMode) {
         if let Some(register) = place.register {
-            self.register_access(register, span, kind);
+            let field_assignment = place.bit_field.is_some() && kind == AccessMode::Write;
+            self.register_access(register, span, kind, field_assignment);
             return;
         }
         let whole = PlaceInfo {
@@ -140,18 +142,32 @@ impl Checker<'_, '_> {
 
     /// Checks that `register`, accessed at `span` as `kind` says, allows
     /// it: a `write` register is never read and a `read` one never written,
-    /// and a compound assignment does both (ADR 0058).
-    fn register_access(&mut self, register: Register, span: Span, kind: AccessMode) {
+    /// and a compound assignment does both (ADR 0058), as does a
+    /// `field_assignment`, an assignment to one of its bit fields, which
+    /// reads the register to keep its other bits (ADR 0060).
+    fn register_access(
+        &mut self,
+        register: Register,
+        span: Span,
+        kind: AccessMode,
+        field_assignment: bool,
+    ) {
         let def = self.hir.peripheral_type(register.id);
         let reg = &def.registers[register.index];
-        let reads = !matches!(kind, AccessMode::Write);
+        let reads = field_assignment || !matches!(kind, AccessMode::Write);
         let writes = !matches!(kind, AccessMode::Read);
         let label = match kind {
             AccessMode::Read => "read here",
+            AccessMode::Write if field_assignment => "read and written by this field assignment",
             AccessMode::Write => "written here",
             AccessMode::ReadWrite => "read and written by this compound assignment",
         };
         if reads && reg.access == AccessMode::Write {
+            let help = if field_assignment {
+                "a field assignment reads the register to keep its other bits, and a `write` register is never read: assign it a whole value, as a literal with `..`; declare it `read write` if the device also lets it be read (ADR 0058, 0060)"
+            } else {
+                "a `write` register can only be assigned with `=`, since a compound assignment reads it first; declare it `read write` if the device also lets it be read (ADR 0058)"
+            };
             self.q.diags.push(
                 Diagnostic::error(
                     "ty::read-of-write-only",
@@ -162,7 +178,7 @@ impl Checker<'_, '_> {
                 )
                 .label(span, label)
                 .label(reg.span, "declared `write`")
-                .help("a `write` register can only be assigned with `=`, since a compound assignment reads it first; declare it `read write` if the device also lets it be read (ADR 0058)"),
+                .help(help),
             );
         }
         if writes && reg.access == AccessMode::Read {
@@ -618,7 +634,87 @@ impl Checker<'_, '_> {
             None => {}
         }
         self.access(&info, place.span, kind);
+        self.assignment_effects(place, &info, kind);
         info.ty
+    }
+
+    /// Checks the effects of assigning `place`, at `info`, as `kind` says,
+    /// in a volatile place: a register, or a place reached through a
+    /// volatile pointer (ADR 0060). In ordinary memory effects mean nothing.
+    /// A compound assignment, and an assignment to a bit field, which keeps
+    /// the other bits, read the place: `ty::read-with-effects` if its reads
+    /// have effects. A compound assignment to a bit field with a write effect
+    /// writes back the bits it read: `ty::compound-write-effect`.
+    fn assignment_effects(&mut self, place: &Expr, info: &PlaceInfo, kind: AccessMode) {
+        let field = self.q.tables.bit_field(place.id);
+        let compound = kind == AccessMode::ReadWrite;
+        let volatile = info.register.is_some() || info.via.is_some_and(|ptr| ptr.volatile);
+        if !volatile || !(compound || field.is_some()) {
+            return;
+        }
+        let hir = self.hir;
+        let read_by = if compound {
+            "read by this compound assignment"
+        } else {
+            "read by this field assignment"
+        };
+        // A register's reads, or those of the whole value through the
+        // pointer: a bit field is read with the whole bit-field struct.
+        let (effect, read) = match info.register {
+            Some(register) => {
+                let def = hir.peripheral_type(register.id);
+                let reg = &def.registers[register.index];
+                (
+                    self.q.register_read_effect(register.id, register.index),
+                    format!("the register `{}` of `{}`", reg.name, def.path),
+                )
+            }
+            None => {
+                let whole = info.bit_field.map_or(info.ty, Ty::BitStruct);
+                (
+                    self.q.type_read_effect(whole),
+                    format!("`{whole}` through a volatile pointer"),
+                )
+            }
+        };
+        if let Some(effect) = effect {
+            self.q.diags.push(
+                Diagnostic::error("ty::read-with-effects", format!("reading {read} has effects"))
+                    .label(place.span, read_by)
+                    .label(effect, "a read has effects")
+                    .help("the read would go unseen, and what it returned lost; read the value into a `let` first, which shows the read, then write the whole value meant (ADR 0060)"),
+            );
+        }
+        if compound && let Some((s, index)) = field {
+            let def = hir.bit_struct(s);
+            let field = &def.fields[index as usize];
+            if let Some((effect, effect_span)) = field.write_effect {
+                let action = match effect.action {
+                    WriteAction::Clears => "clears",
+                    WriteAction::Sets => "sets",
+                    WriteAction::Toggles => "toggles",
+                };
+                let bit = effect.bit;
+                let place_words = match info.register {
+                    Some(_) => "read and written back to the register",
+                    None => "read and written back through a volatile pointer",
+                };
+                self.q.diags.push(
+                    Diagnostic::error(
+                        "ty::compound-write-effect",
+                        format!(
+                            "cannot compound-assign the field `{}` of `{}`, which has a write effect",
+                            field.name, def.path
+                        ),
+                    )
+                    .label(place.span, place_words)
+                    .label(effect_span, "declared here")
+                    .help(format!(
+                        "every `{bit}` written to it {action} its bit, so writing back the bits read {action} each one read as `{bit}`; assign the field the bits meant with `=` (ADR 0060)"
+                    )),
+                );
+            }
+        }
     }
 
     /// A place inside a packed struct whose type needs alignment.

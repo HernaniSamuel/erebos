@@ -1,0 +1,102 @@
+// emit: typeck
+// The errors of registers with fields (ADR 0060). A field assignment reads
+// the register and writes it back, so on a `read` register it is
+// `ty::write-to-read-only` and on a `write` one `ty::read-of-write-only`,
+// as a field read from a `write` one is. A field assignment or a compound
+// assignment to a place whose reads have effects is
+// `ty::read-with-effects`: a register declaring a read effect, one whose
+// type has a field declaring one, and such a type through a volatile
+// pointer. A compound assignment to a field with a write effect in a
+// volatile place, a register or through a volatile pointer, is
+// `ty::compound-write-effect`; in a local it is accepted. Where several
+// apply, each is reported; but a `write` register's reads never have
+// effects, and `&raw` of a register's bit field is only
+// `ty::bit-field-address`.
+struct Lcr: u8 {
+    pub word_length: u8 at 0..=1 = 0,
+    pub dlab: bool at 7 = false,
+}
+
+struct Lsr: u8 {
+    pub data_ready: bool at 0,
+    pub overrun: bool at 1 read clears,
+    pub count: u8 at 4..=6,
+}
+
+struct Pending: u32 {
+    pub enable: bool at 0 = false,
+    pub mask: u8 at 8..=15 write 1 clears,
+    pub flip: bool at 16 write 0 toggles,
+}
+
+struct Fcr: u8 {
+    pub enable: bool at 0 = false,
+    pub level: u8 at 6..=7 = 0,
+}
+
+peripheral Uart {
+    read rbr: Lcr at 0,
+    write fcr: Fcr at 2,
+    read write iir: Lcr at 3 read modifies,
+    read write lsr: Lsr at 5,
+    read write data: u8 at 6 read modifies,
+    read status: Lcr at 7 read modifies,
+    write control: Fcr at 8 read modifies,
+}
+
+peripheral Timer {
+    read write pending: Pending at 0,
+    read write events: Pending at 4 read clears,
+    write clear: Pending at 8,
+}
+
+peripheral UART0: Uart at 0x1000_0000;
+
+peripheral TIMER0: Timer at 0x2000_0000;
+
+// Access modes: a field assignment to a `read` and to a `write` register,
+// a field read from a `write` one.
+fn modes() -> bool {
+    UART0.rbr.dlab = true;
+    UART0.fcr.enable = true;
+    UART0.fcr.enable
+}
+
+// Reads with effects: field and compound assignments to a register that
+// declares a read effect, to one whose type has a field that does, and
+// through a volatile pointer to such a type.
+fn read_effects(l: *mut volatile Lsr) {
+    UART0.iir.dlab = true;
+    UART0.iir.word_length += 1;
+    UART0.data += 1;
+    UART0.lsr.data_ready = false;
+    UART0.lsr.count += 1;
+    (*l).data_ready = false;
+    (*l).count += 1;
+}
+
+// Compound assignments to fields with write effects, in a register and
+// through a volatile pointer; in a local, accepted.
+fn write_effects(p: *mut volatile Pending, mut local: Pending) {
+    TIMER0.pending.mask |= 1 << 3;
+    TIMER0.pending.flip ^= true;
+    (*p).mask += 1;
+    local.mask |= 1 << 3;
+}
+
+// Several codes at once, each reported: a field assignment to a `read`
+// register whose reads have effects; a compound assignment to a
+// write-effect field of a register whose reads have effects, and of a
+// `write` register (`ty::read-of-write-only` too). A `write` register's
+// reads never count, and `&raw` of a register's bit field is that error
+// alone.
+fn several() {
+    UART0.status.dlab = true;
+    TIMER0.events.mask |= 1;
+    TIMER0.clear.mask |= 1;
+    UART0.control.enable = true;
+    let a: *const bool = &raw const UART0.lsr.overrun;
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

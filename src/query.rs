@@ -1304,14 +1304,20 @@ impl<'h> Queries<'h> {
         }
         let hir = self.hir;
         let def = hir.peripheral_type(id);
-        // A register type is written as `u8`, `u16` or `u32`. Any other was
-        // reported, and leaves the layout failed; no body that is kept
-        // reaches it, so it stands as `()`, without being computed.
+        // A register type is written as `u8`, `u16` or `u32`, or as a
+        // bit-field struct or an enum without payloads on one of them, which
+        // MIR sees as that integer (ADR 0060). Any other was reported, and
+        // leaves the layout failed; no body that is kept reaches it, so it
+        // stands as `()`, without being computed.
         let registers = (def.registers.iter())
             .map(|register| mir::Register {
                 name: register.name.clone(),
                 ty: match register.ty {
-                    hir::Ty::Int(int) if layout::register_width(register.ty).is_some() => {
+                    hir::Ty::Int(int)
+                    | hir::Ty::BitStruct(hir::BitStructTy { int, .. })
+                    | hir::Ty::Enum(hir::EnumTy { int, .. })
+                        if layout::register_width(register.ty).is_some() =>
+                    {
                         mir::Ty::Int(int)
                     }
                     _ => mir::Ty::Unit,

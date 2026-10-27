@@ -1,12 +1,24 @@
-// A register is a `u8`, a `u16` or a `u32` (ADR 0058): any other type is
-// `ty::register-type`, at the type, once per register. A register whose
-// type is wrong takes part in no other check: all of these are at offset 0
-// with `ok`, in `read write` mode, and none overlaps it, nor is `wide`
-// misaligned at 4. Register types that mention peripheral types are in
-// `typeck_peripheral_register_cycle.ers`.
+// A register is a `u8`, a `u16` or a `u32`, or a bit-field struct or an
+// enum without payloads on one of them (ADR 0058, 0060): any other type is
+// `ty::register-type`, at the type, once per register, its label naming
+// the integer type of a bit-field struct or an enum, or an enum's payloads.
+// A register whose type is wrong takes part in no other check: all of
+// these are at offset 0 with `ok`, in `read write` mode, and none overlaps
+// it, nor is `wide` misaligned at 4. An enum on `u8` (`mode`) and a
+// bit-field struct on `u16` (`bits`) are register types, accepted at
+// offsets of their own. Register types that mention peripheral types are
+// in `typeck_peripheral_register_cycle.ers`.
 enum Mode: u8 { Off = 0, On = 1 }
 
+enum Signed: i8 { Low = -1, High = 1 }
+
+enum Message: u8 { Empty = 0, Byte(u8) = 1 }
+
 struct Pair { a: u8, b: u8 }
+
+struct Bits: u16 { pub low: u8 at 0..=7 }
+
+struct WideBits: u64 { pub low: u32 at 0..=31 }
 
 peripheral Regs {
     read write ok: u8 at 0,
@@ -14,9 +26,13 @@ peripheral Regs {
     read write signed: i32 at 0,
     read write size: usize at 0,
     read write flag: bool at 0,
-    read write mode: Mode at 0,
+    read write mode: Mode at 1,
     read write pair: Pair at 0,
     read write pointer: *mut u32 at 0,
+    read write bits: Bits at 2,
+    read write wide_bits: WideBits at 0,
+    read write signed_enum: Signed at 0,
+    read write message: Message at 0,
 }
 
 entry fn main() -> ! { loop {} }

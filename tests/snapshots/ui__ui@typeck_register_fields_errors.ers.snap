@@ -1,0 +1,607 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_register_fields_errors.ers
+---
+--- errors ---
+ty::write-to-read-only
+
+  × the register `rbr` of `Uart` is read-only
+    ╭─[typeck_register_fields_errors.ers:60:5]
+ 37 │ peripheral Uart {
+ 38 │     read rbr: Lcr at 0,
+    ·          ─┬─
+    ·           ╰── declared `read`
+ 39 │     write fcr: Fcr at 2,
+ 40 │     read write iir: Lcr at 3 read modifies,
+ 41 │     read write lsr: Lsr at 5,
+ 42 │     read write data: u8 at 6 read modifies,
+ 43 │     read status: Lcr at 7 read modifies,
+ 44 │     write control: Fcr at 8 read modifies,
+ 45 │ }
+ 46 │ 
+ 47 │ peripheral Timer {
+ 48 │     read write pending: Pending at 0,
+ 49 │     read write events: Pending at 4 read clears,
+ 50 │     write clear: Pending at 8,
+ 51 │ }
+ 52 │ 
+ 53 │ peripheral UART0: Uart at 0x1000_0000;
+ 54 │ 
+ 55 │ peripheral TIMER0: Timer at 0x2000_0000;
+ 56 │ 
+ 57 │ // Access modes: a field assignment to a `read` and to a `write` register,
+ 58 │ // a field read from a `write` one.
+ 59 │ fn modes() -> bool {
+ 60 │     UART0.rbr.dlab = true;
+    ·     ───────┬──────
+    ·            ╰── read and written by this field assignment
+ 61 │     UART0.fcr.enable = true;
+    ╰────
+  help: a `read` register can only be read; declare it `read write` if the device also lets it be
+        written (ADR 0058)
+ty::read-of-write-only
+
+  × the register `fcr` of `Uart` is write-only
+    ╭─[typeck_register_fields_errors.ers:61:5]
+ 38 │     read rbr: Lcr at 0,
+ 39 │     write fcr: Fcr at 2,
+    ·           ─┬─
+    ·            ╰── declared `write`
+ 40 │     read write iir: Lcr at 3 read modifies,
+ 41 │     read write lsr: Lsr at 5,
+ 42 │     read write data: u8 at 6 read modifies,
+ 43 │     read status: Lcr at 7 read modifies,
+ 44 │     write control: Fcr at 8 read modifies,
+ 45 │ }
+ 46 │ 
+ 47 │ peripheral Timer {
+ 48 │     read write pending: Pending at 0,
+ 49 │     read write events: Pending at 4 read clears,
+ 50 │     write clear: Pending at 8,
+ 51 │ }
+ 52 │ 
+ 53 │ peripheral UART0: Uart at 0x1000_0000;
+ 54 │ 
+ 55 │ peripheral TIMER0: Timer at 0x2000_0000;
+ 56 │ 
+ 57 │ // Access modes: a field assignment to a `read` and to a `write` register,
+ 58 │ // a field read from a `write` one.
+ 59 │ fn modes() -> bool {
+ 60 │     UART0.rbr.dlab = true;
+ 61 │     UART0.fcr.enable = true;
+    ·     ────────┬───────
+    ·             ╰── read and written by this field assignment
+ 62 │     UART0.fcr.enable
+    ╰────
+  help: a field assignment reads the register to keep its other bits, and a `write` register is
+        never read: assign it a whole value, as a literal with `..`; declare it `read write` if
+        the device also lets it be read (ADR 0058, 0060)
+ty::read-of-write-only
+
+  × the register `fcr` of `Uart` is write-only
+    ╭─[typeck_register_fields_errors.ers:62:5]
+ 38 │     read rbr: Lcr at 0,
+ 39 │     write fcr: Fcr at 2,
+    ·           ─┬─
+    ·            ╰── declared `write`
+ 40 │     read write iir: Lcr at 3 read modifies,
+ 41 │     read write lsr: Lsr at 5,
+ 42 │     read write data: u8 at 6 read modifies,
+ 43 │     read status: Lcr at 7 read modifies,
+ 44 │     write control: Fcr at 8 read modifies,
+ 45 │ }
+ 46 │ 
+ 47 │ peripheral Timer {
+ 48 │     read write pending: Pending at 0,
+ 49 │     read write events: Pending at 4 read clears,
+ 50 │     write clear: Pending at 8,
+ 51 │ }
+ 52 │ 
+ 53 │ peripheral UART0: Uart at 0x1000_0000;
+ 54 │ 
+ 55 │ peripheral TIMER0: Timer at 0x2000_0000;
+ 56 │ 
+ 57 │ // Access modes: a field assignment to a `read` and to a `write` register,
+ 58 │ // a field read from a `write` one.
+ 59 │ fn modes() -> bool {
+ 60 │     UART0.rbr.dlab = true;
+ 61 │     UART0.fcr.enable = true;
+ 62 │     UART0.fcr.enable
+    ·     ────────┬───────
+    ·             ╰── read here
+ 63 │ }
+    ╰────
+  help: a `write` register can only be assigned with `=`, since a compound assignment reads it
+        first; declare it `read write` if the device also lets it be read (ADR 0058)
+ty::read-with-effects
+
+  × reading the register `iir` of `Uart` has effects
+    ╭─[typeck_register_fields_errors.ers:69:5]
+ 39 │     write fcr: Fcr at 2,
+ 40 │     read write iir: Lcr at 3 read modifies,
+    ·                              ──────┬──────
+    ·                                    ╰── a read has effects
+ 41 │     read write lsr: Lsr at 5,
+ 42 │     read write data: u8 at 6 read modifies,
+ 43 │     read status: Lcr at 7 read modifies,
+ 44 │     write control: Fcr at 8 read modifies,
+ 45 │ }
+ 46 │ 
+ 47 │ peripheral Timer {
+ 48 │     read write pending: Pending at 0,
+ 49 │     read write events: Pending at 4 read clears,
+ 50 │     write clear: Pending at 8,
+ 51 │ }
+ 52 │ 
+ 53 │ peripheral UART0: Uart at 0x1000_0000;
+ 54 │ 
+ 55 │ peripheral TIMER0: Timer at 0x2000_0000;
+ 56 │ 
+ 57 │ // Access modes: a field assignment to a `read` and to a `write` register,
+ 58 │ // a field read from a `write` one.
+ 59 │ fn modes() -> bool {
+ 60 │     UART0.rbr.dlab = true;
+ 61 │     UART0.fcr.enable = true;
+ 62 │     UART0.fcr.enable
+ 63 │ }
+ 64 │ 
+ 65 │ // Reads with effects: field and compound assignments to a register that
+ 66 │ // declares a read effect, to one whose type has a field that does, and
+ 67 │ // through a volatile pointer to such a type.
+ 68 │ fn read_effects(l: *mut volatile Lsr) {
+ 69 │     UART0.iir.dlab = true;
+    ·     ───────┬──────
+    ·            ╰── read by this field assignment
+ 70 │     UART0.iir.word_length += 1;
+    ╰────
+  help: the read would go unseen, and what it returned lost; read the value into a `let` first,
+        which shows the read, then write the whole value meant (ADR 0060)
+ty::read-with-effects
+
+  × reading the register `iir` of `Uart` has effects
+    ╭─[typeck_register_fields_errors.ers:70:5]
+ 39 │     write fcr: Fcr at 2,
+ 40 │     read write iir: Lcr at 3 read modifies,
+    ·                              ──────┬──────
+    ·                                    ╰── a read has effects
+ 41 │     read write lsr: Lsr at 5,
+ 42 │     read write data: u8 at 6 read modifies,
+ 43 │     read status: Lcr at 7 read modifies,
+ 44 │     write control: Fcr at 8 read modifies,
+ 45 │ }
+ 46 │ 
+ 47 │ peripheral Timer {
+ 48 │     read write pending: Pending at 0,
+ 49 │     read write events: Pending at 4 read clears,
+ 50 │     write clear: Pending at 8,
+ 51 │ }
+ 52 │ 
+ 53 │ peripheral UART0: Uart at 0x1000_0000;
+ 54 │ 
+ 55 │ peripheral TIMER0: Timer at 0x2000_0000;
+ 56 │ 
+ 57 │ // Access modes: a field assignment to a `read` and to a `write` register,
+ 58 │ // a field read from a `write` one.
+ 59 │ fn modes() -> bool {
+ 60 │     UART0.rbr.dlab = true;
+ 61 │     UART0.fcr.enable = true;
+ 62 │     UART0.fcr.enable
+ 63 │ }
+ 64 │ 
+ 65 │ // Reads with effects: field and compound assignments to a register that
+ 66 │ // declares a read effect, to one whose type has a field that does, and
+ 67 │ // through a volatile pointer to such a type.
+ 68 │ fn read_effects(l: *mut volatile Lsr) {
+ 69 │     UART0.iir.dlab = true;
+ 70 │     UART0.iir.word_length += 1;
+    ·     ──────────┬──────────
+    ·               ╰── read by this compound assignment
+ 71 │     UART0.data += 1;
+    ╰────
+  help: the read would go unseen, and what it returned lost; read the value into a `let` first,
+        which shows the read, then write the whole value meant (ADR 0060)
+ty::read-with-effects
+
+  × reading the register `data` of `Uart` has effects
+    ╭─[typeck_register_fields_errors.ers:71:5]
+ 41 │     read write lsr: Lsr at 5,
+ 42 │     read write data: u8 at 6 read modifies,
+    ·                              ──────┬──────
+    ·                                    ╰── a read has effects
+ 43 │     read status: Lcr at 7 read modifies,
+ 44 │     write control: Fcr at 8 read modifies,
+ 45 │ }
+ 46 │ 
+ 47 │ peripheral Timer {
+ 48 │     read write pending: Pending at 0,
+ 49 │     read write events: Pending at 4 read clears,
+ 50 │     write clear: Pending at 8,
+ 51 │ }
+ 52 │ 
+ 53 │ peripheral UART0: Uart at 0x1000_0000;
+ 54 │ 
+ 55 │ peripheral TIMER0: Timer at 0x2000_0000;
+ 56 │ 
+ 57 │ // Access modes: a field assignment to a `read` and to a `write` register,
+ 58 │ // a field read from a `write` one.
+ 59 │ fn modes() -> bool {
+ 60 │     UART0.rbr.dlab = true;
+ 61 │     UART0.fcr.enable = true;
+ 62 │     UART0.fcr.enable
+ 63 │ }
+ 64 │ 
+ 65 │ // Reads with effects: field and compound assignments to a register that
+ 66 │ // declares a read effect, to one whose type has a field that does, and
+ 67 │ // through a volatile pointer to such a type.
+ 68 │ fn read_effects(l: *mut volatile Lsr) {
+ 69 │     UART0.iir.dlab = true;
+ 70 │     UART0.iir.word_length += 1;
+ 71 │     UART0.data += 1;
+    ·     ─────┬────
+    ·          ╰── read by this compound assignment
+ 72 │     UART0.lsr.data_ready = false;
+    ╰────
+  help: the read would go unseen, and what it returned lost; read the value into a `let` first,
+        which shows the read, then write the whole value meant (ADR 0060)
+ty::read-with-effects
+
+  × reading the register `lsr` of `Uart` has effects
+    ╭─[typeck_register_fields_errors.ers:22:28]
+ 21 │     pub data_ready: bool at 0,
+ 22 │     pub overrun: bool at 1 read clears,
+    ·                            ─────┬─────
+    ·                                 ╰── a read has effects
+ 23 │     pub count: u8 at 4..=6,
+    ╰────
+    ╭─[typeck_register_fields_errors.ers:72:5]
+ 71 │     UART0.data += 1;
+ 72 │     UART0.lsr.data_ready = false;
+    ·     ──────────┬─────────
+    ·               ╰── read by this field assignment
+ 73 │     UART0.lsr.count += 1;
+    ╰────
+  help: the read would go unseen, and what it returned lost; read the value into a `let` first,
+        which shows the read, then write the whole value meant (ADR 0060)
+ty::read-with-effects
+
+  × reading the register `lsr` of `Uart` has effects
+    ╭─[typeck_register_fields_errors.ers:22:28]
+ 21 │     pub data_ready: bool at 0,
+ 22 │     pub overrun: bool at 1 read clears,
+    ·                            ─────┬─────
+    ·                                 ╰── a read has effects
+ 23 │     pub count: u8 at 4..=6,
+    ╰────
+    ╭─[typeck_register_fields_errors.ers:73:5]
+ 72 │     UART0.lsr.data_ready = false;
+ 73 │     UART0.lsr.count += 1;
+    ·     ───────┬───────
+    ·            ╰── read by this compound assignment
+ 74 │     (*l).data_ready = false;
+    ╰────
+  help: the read would go unseen, and what it returned lost; read the value into a `let` first,
+        which shows the read, then write the whole value meant (ADR 0060)
+ty::read-with-effects
+
+  × reading `Lsr` through a volatile pointer has effects
+    ╭─[typeck_register_fields_errors.ers:22:28]
+ 21 │     pub data_ready: bool at 0,
+ 22 │     pub overrun: bool at 1 read clears,
+    ·                            ─────┬─────
+    ·                                 ╰── a read has effects
+ 23 │     pub count: u8 at 4..=6,
+    ╰────
+    ╭─[typeck_register_fields_errors.ers:74:5]
+ 73 │     UART0.lsr.count += 1;
+ 74 │     (*l).data_ready = false;
+    ·     ───────┬───────
+    ·            ╰── read by this field assignment
+ 75 │     (*l).count += 1;
+    ╰────
+  help: the read would go unseen, and what it returned lost; read the value into a `let` first,
+        which shows the read, then write the whole value meant (ADR 0060)
+ty::read-with-effects
+
+  × reading `Lsr` through a volatile pointer has effects
+    ╭─[typeck_register_fields_errors.ers:22:28]
+ 21 │     pub data_ready: bool at 0,
+ 22 │     pub overrun: bool at 1 read clears,
+    ·                            ─────┬─────
+    ·                                 ╰── a read has effects
+ 23 │     pub count: u8 at 4..=6,
+    ╰────
+    ╭─[typeck_register_fields_errors.ers:75:5]
+ 74 │     (*l).data_ready = false;
+ 75 │     (*l).count += 1;
+    ·     ─────┬────
+    ·          ╰── read by this compound assignment
+ 76 │ }
+    ╰────
+  help: the read would go unseen, and what it returned lost; read the value into a `let` first,
+        which shows the read, then write the whole value meant (ADR 0060)
+ty::compound-write-effect
+
+  × cannot compound-assign the field `mask` of `Pending`, which has a write effect
+    ╭─[typeck_register_fields_errors.ers:28:28]
+ 27 │     pub enable: bool at 0 = false,
+ 28 │     pub mask: u8 at 8..=15 write 1 clears,
+    ·                            ───────┬──────
+    ·                                   ╰── declared here
+ 29 │     pub flip: bool at 16 write 0 toggles,
+    ╰────
+    ╭─[typeck_register_fields_errors.ers:81:5]
+ 80 │ fn write_effects(p: *mut volatile Pending, mut local: Pending) {
+ 81 │     TIMER0.pending.mask |= 1 << 3;
+    ·     ─────────┬─────────
+    ·              ╰── read and written back to the register
+ 82 │     TIMER0.pending.flip ^= true;
+    ╰────
+  help: every `1` written to it clears its bit, so writing back the bits read clears each one read
+        as `1`; assign the field the bits meant with `=` (ADR 0060)
+ty::compound-write-effect
+
+  × cannot compound-assign the field `flip` of `Pending`, which has a write effect
+    ╭─[typeck_register_fields_errors.ers:29:26]
+ 28 │     pub mask: u8 at 8..=15 write 1 clears,
+ 29 │     pub flip: bool at 16 write 0 toggles,
+    ·                          ───────┬───────
+    ·                                 ╰── declared here
+ 30 │ }
+    ╰────
+    ╭─[typeck_register_fields_errors.ers:82:5]
+ 81 │     TIMER0.pending.mask |= 1 << 3;
+ 82 │     TIMER0.pending.flip ^= true;
+    ·     ─────────┬─────────
+    ·              ╰── read and written back to the register
+ 83 │     (*p).mask += 1;
+    ╰────
+  help: every `0` written to it toggles its bit, so writing back the bits read toggles each one
+        read as `0`; assign the field the bits meant with `=` (ADR 0060)
+ty::compound-write-effect
+
+  × cannot compound-assign the field `mask` of `Pending`, which has a write effect
+    ╭─[typeck_register_fields_errors.ers:28:28]
+ 27 │     pub enable: bool at 0 = false,
+ 28 │     pub mask: u8 at 8..=15 write 1 clears,
+    ·                            ───────┬──────
+    ·                                   ╰── declared here
+ 29 │     pub flip: bool at 16 write 0 toggles,
+    ╰────
+    ╭─[typeck_register_fields_errors.ers:83:5]
+ 82 │     TIMER0.pending.flip ^= true;
+ 83 │     (*p).mask += 1;
+    ·     ────┬────
+    ·         ╰── read and written back through a volatile pointer
+ 84 │     local.mask |= 1 << 3;
+    ╰────
+  help: every `1` written to it clears its bit, so writing back the bits read clears each one read
+        as `1`; assign the field the bits meant with `=` (ADR 0060)
+ty::write-to-read-only
+
+  × the register `status` of `Uart` is read-only
+    ╭─[typeck_register_fields_errors.ers:43:10]
+ 42 │     read write data: u8 at 6 read modifies,
+ 43 │     read status: Lcr at 7 read modifies,
+    ·          ───┬──
+    ·             ╰── declared `read`
+ 44 │     write control: Fcr at 8 read modifies,
+    ╰────
+    ╭─[typeck_register_fields_errors.ers:94:5]
+ 93 │ fn several() {
+ 94 │     UART0.status.dlab = true;
+    ·     ────────┬────────
+    ·             ╰── read and written by this field assignment
+ 95 │     TIMER0.events.mask |= 1;
+    ╰────
+  help: a `read` register can only be read; declare it `read write` if the device also lets it be
+        written (ADR 0058)
+ty::read-with-effects
+
+  × reading the register `status` of `Uart` has effects
+    ╭─[typeck_register_fields_errors.ers:43:27]
+ 42 │     read write data: u8 at 6 read modifies,
+ 43 │     read status: Lcr at 7 read modifies,
+    ·                           ──────┬──────
+    ·                                 ╰── a read has effects
+ 44 │     write control: Fcr at 8 read modifies,
+    ╰────
+    ╭─[typeck_register_fields_errors.ers:94:5]
+ 93 │ fn several() {
+ 94 │     UART0.status.dlab = true;
+    ·     ────────┬────────
+    ·             ╰── read by this field assignment
+ 95 │     TIMER0.events.mask |= 1;
+    ╰────
+  help: the read would go unseen, and what it returned lost; read the value into a `let` first,
+        which shows the read, then write the whole value meant (ADR 0060)
+ty::read-with-effects
+
+  × reading the register `events` of `Timer` has effects
+    ╭─[typeck_register_fields_errors.ers:95:5]
+ 48 │     read write pending: Pending at 0,
+ 49 │     read write events: Pending at 4 read clears,
+    ·                                     ─────┬─────
+    ·                                          ╰── a read has effects
+ 50 │     write clear: Pending at 8,
+ 51 │ }
+ 52 │ 
+ 53 │ peripheral UART0: Uart at 0x1000_0000;
+ 54 │ 
+ 55 │ peripheral TIMER0: Timer at 0x2000_0000;
+ 56 │ 
+ 57 │ // Access modes: a field assignment to a `read` and to a `write` register,
+ 58 │ // a field read from a `write` one.
+ 59 │ fn modes() -> bool {
+ 60 │     UART0.rbr.dlab = true;
+ 61 │     UART0.fcr.enable = true;
+ 62 │     UART0.fcr.enable
+ 63 │ }
+ 64 │ 
+ 65 │ // Reads with effects: field and compound assignments to a register that
+ 66 │ // declares a read effect, to one whose type has a field that does, and
+ 67 │ // through a volatile pointer to such a type.
+ 68 │ fn read_effects(l: *mut volatile Lsr) {
+ 69 │     UART0.iir.dlab = true;
+ 70 │     UART0.iir.word_length += 1;
+ 71 │     UART0.data += 1;
+ 72 │     UART0.lsr.data_ready = false;
+ 73 │     UART0.lsr.count += 1;
+ 74 │     (*l).data_ready = false;
+ 75 │     (*l).count += 1;
+ 76 │ }
+ 77 │ 
+ 78 │ // Compound assignments to fields with write effects, in a register and
+ 79 │ // through a volatile pointer; in a local, accepted.
+ 80 │ fn write_effects(p: *mut volatile Pending, mut local: Pending) {
+ 81 │     TIMER0.pending.mask |= 1 << 3;
+ 82 │     TIMER0.pending.flip ^= true;
+ 83 │     (*p).mask += 1;
+ 84 │     local.mask |= 1 << 3;
+ 85 │ }
+ 86 │ 
+ 87 │ // Several codes at once, each reported: a field assignment to a `read`
+ 88 │ // register whose reads have effects; a compound assignment to a
+ 89 │ // write-effect field of a register whose reads have effects, and of a
+ 90 │ // `write` register (`ty::read-of-write-only` too). A `write` register's
+ 91 │ // reads never count, and `&raw` of a register's bit field is that error
+ 92 │ // alone.
+ 93 │ fn several() {
+ 94 │     UART0.status.dlab = true;
+ 95 │     TIMER0.events.mask |= 1;
+    ·     ─────────┬────────
+    ·              ╰── read by this compound assignment
+ 96 │     TIMER0.clear.mask |= 1;
+    ╰────
+  help: the read would go unseen, and what it returned lost; read the value into a `let` first,
+        which shows the read, then write the whole value meant (ADR 0060)
+ty::compound-write-effect
+
+  × cannot compound-assign the field `mask` of `Pending`, which has a write effect
+    ╭─[typeck_register_fields_errors.ers:28:28]
+ 27 │     pub enable: bool at 0 = false,
+ 28 │     pub mask: u8 at 8..=15 write 1 clears,
+    ·                            ───────┬──────
+    ·                                   ╰── declared here
+ 29 │     pub flip: bool at 16 write 0 toggles,
+    ╰────
+    ╭─[typeck_register_fields_errors.ers:95:5]
+ 94 │     UART0.status.dlab = true;
+ 95 │     TIMER0.events.mask |= 1;
+    ·     ─────────┬────────
+    ·              ╰── read and written back to the register
+ 96 │     TIMER0.clear.mask |= 1;
+    ╰────
+  help: every `1` written to it clears its bit, so writing back the bits read clears each one read
+        as `1`; assign the field the bits meant with `=` (ADR 0060)
+ty::read-of-write-only
+
+  × the register `clear` of `Timer` is write-only
+    ╭─[typeck_register_fields_errors.ers:96:5]
+ 49 │     read write events: Pending at 4 read clears,
+ 50 │     write clear: Pending at 8,
+    ·           ──┬──
+    ·             ╰── declared `write`
+ 51 │ }
+ 52 │ 
+ 53 │ peripheral UART0: Uart at 0x1000_0000;
+ 54 │ 
+ 55 │ peripheral TIMER0: Timer at 0x2000_0000;
+ 56 │ 
+ 57 │ // Access modes: a field assignment to a `read` and to a `write` register,
+ 58 │ // a field read from a `write` one.
+ 59 │ fn modes() -> bool {
+ 60 │     UART0.rbr.dlab = true;
+ 61 │     UART0.fcr.enable = true;
+ 62 │     UART0.fcr.enable
+ 63 │ }
+ 64 │ 
+ 65 │ // Reads with effects: field and compound assignments to a register that
+ 66 │ // declares a read effect, to one whose type has a field that does, and
+ 67 │ // through a volatile pointer to such a type.
+ 68 │ fn read_effects(l: *mut volatile Lsr) {
+ 69 │     UART0.iir.dlab = true;
+ 70 │     UART0.iir.word_length += 1;
+ 71 │     UART0.data += 1;
+ 72 │     UART0.lsr.data_ready = false;
+ 73 │     UART0.lsr.count += 1;
+ 74 │     (*l).data_ready = false;
+ 75 │     (*l).count += 1;
+ 76 │ }
+ 77 │ 
+ 78 │ // Compound assignments to fields with write effects, in a register and
+ 79 │ // through a volatile pointer; in a local, accepted.
+ 80 │ fn write_effects(p: *mut volatile Pending, mut local: Pending) {
+ 81 │     TIMER0.pending.mask |= 1 << 3;
+ 82 │     TIMER0.pending.flip ^= true;
+ 83 │     (*p).mask += 1;
+ 84 │     local.mask |= 1 << 3;
+ 85 │ }
+ 86 │ 
+ 87 │ // Several codes at once, each reported: a field assignment to a `read`
+ 88 │ // register whose reads have effects; a compound assignment to a
+ 89 │ // write-effect field of a register whose reads have effects, and of a
+ 90 │ // `write` register (`ty::read-of-write-only` too). A `write` register's
+ 91 │ // reads never count, and `&raw` of a register's bit field is that error
+ 92 │ // alone.
+ 93 │ fn several() {
+ 94 │     UART0.status.dlab = true;
+ 95 │     TIMER0.events.mask |= 1;
+ 96 │     TIMER0.clear.mask |= 1;
+    ·     ────────┬────────
+    ·             ╰── read and written by this compound assignment
+ 97 │     UART0.control.enable = true;
+    ╰────
+  help: a `write` register can only be assigned with `=`, since a compound assignment reads it
+        first; declare it `read write` if the device also lets it be read (ADR 0058)
+ty::compound-write-effect
+
+  × cannot compound-assign the field `mask` of `Pending`, which has a write effect
+    ╭─[typeck_register_fields_errors.ers:28:28]
+ 27 │     pub enable: bool at 0 = false,
+ 28 │     pub mask: u8 at 8..=15 write 1 clears,
+    ·                            ───────┬──────
+    ·                                   ╰── declared here
+ 29 │     pub flip: bool at 16 write 0 toggles,
+    ╰────
+    ╭─[typeck_register_fields_errors.ers:96:5]
+ 95 │     TIMER0.events.mask |= 1;
+ 96 │     TIMER0.clear.mask |= 1;
+    ·     ────────┬────────
+    ·             ╰── read and written back to the register
+ 97 │     UART0.control.enable = true;
+    ╰────
+  help: every `1` written to it clears its bit, so writing back the bits read clears each one read
+        as `1`; assign the field the bits meant with `=` (ADR 0060)
+ty::read-of-write-only
+
+  × the register `control` of `Uart` is write-only
+    ╭─[typeck_register_fields_errors.ers:44:11]
+ 43 │     read status: Lcr at 7 read modifies,
+ 44 │     write control: Fcr at 8 read modifies,
+    ·           ───┬───
+    ·              ╰── declared `write`
+ 45 │ }
+    ╰────
+    ╭─[typeck_register_fields_errors.ers:97:5]
+ 96 │     TIMER0.clear.mask |= 1;
+ 97 │     UART0.control.enable = true;
+    ·     ──────────┬─────────
+    ·               ╰── read and written by this field assignment
+ 98 │     let a: *const bool = &raw const UART0.lsr.overrun;
+    ╰────
+  help: a field assignment reads the register to keep its other bits, and a `write` register is
+        never read: assign it a whole value, as a literal with `..`; declare it `read write` if
+        the device also lets it be read (ADR 0058, 0060)
+ty::bit-field-address
+
+  × cannot take the address of a field of `Lsr`
+    ╭─[typeck_register_fields_errors.ers:98:37]
+ 97 │     UART0.control.enable = true;
+ 98 │     let a: *const bool = &raw const UART0.lsr.overrun;
+    ·                                     ────────┬────────
+    ·                                             ╰── a bit field, not a place in memory
+ 99 │ }
+    ╰────
+  help: a field of a bit-field struct is a range of bits of its `u8`; copy it into a `let` and
+        take that address, or take the address of the whole value (ADR 0059)

@@ -19,6 +19,14 @@
 // base failure is explained too: `Loop1` points to `B` and to `Loop2`,
 // which points back, and only `B`'s error is reported.
 // `typeck_peripheral_register_cycle.ers` shows failures nothing explains.
+//
+// A bit-field struct that reaches a failed value (ADR 0059), its bits
+// needing `N`, which fails, is a register type of its integer's width when
+// that is `u8`, `u16` or `u32` (ADR 0060): `Device`'s layout does not fail
+// with `bad8`, so a body reading `D0.bad8` is left out, reporting nothing
+// more, while one reading only `D0.ok` is built, which its known division
+// by zero shows. On `u64` it is no register type, but reaches a failed
+// value, so `WideDevice`'s `bad` stays silent, and so does its body.
 fn zero() -> usize {
     0
 }
@@ -79,11 +87,40 @@ peripheral Loop2 {
     read write back: *mut Loop1 at 0,
 }
 
+const N: u32 = 1 / 0;
+
+struct Bad8: u8 { pub a: u8 at 0..=N }
+
+struct Bad: u64 { pub a: u8 at 0..=N }
+
+peripheral Device {
+    read write bad8: Bad8 at 0,
+    read write ok: u8 at 1,
+}
+
+peripheral WideDevice {
+    read write bad: Bad at 0,
+}
+
 peripheral F0: Failed at 1;
 peripheral F1: Failed at 1;
 peripheral UART: Uart at 16;
 peripheral TYPED: Uart at SIXTEEN;
 peripheral ZERO: Uart at 16 + 0 / zero();
+peripheral D0: Device at 0x100;
+peripheral W0: WideDevice at 0x200;
+
+fn reads_bad8() -> u8 {
+    D0.bad8.a / 0
+}
+
+fn reads_ok() -> u8 {
+    D0.ok / 0
+}
+
+fn reads_bad() -> u8 {
+    W0.bad.a / 0
+}
 
 entry fn main() -> ! { loop {} }
 panic fn on_panic() -> ! { loop {} }

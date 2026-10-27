@@ -7,84 +7,117 @@ input_file: tests/ui/typeck_peripheral_register_type.ers
 ty::register-type
 
   × `u64` is not a register type
-    ╭─[typeck_peripheral_register_type.ers:13:22]
- 12 │     read write ok: u8 at 0,
- 13 │     read write wide: u64 at 4,
+    ╭─[typeck_peripheral_register_type.ers:25:22]
+ 24 │     read write ok: u8 at 0,
+ 25 │     read write wide: u64 at 4,
     ·                      ─┬─
     ·                       ╰── the type of the register `wide`
- 14 │     read write signed: i32 at 0,
+ 26 │     read write signed: i32 at 0,
     ╰────
-  help: a register is a `u8`, a `u16` or a `u32`: an unsigned integer as wide as the register,
-        read and written in one access (ADR 0058)
+  help: a register is a `u8`, a `u16` or a `u32`, or a bit-field struct or an enum without
+        payloads on one of them: as wide as that integer type, and read and written in one access
+        (ADR 0058, 0060)
 ty::register-type
 
   × `i32` is not a register type
-    ╭─[typeck_peripheral_register_type.ers:14:24]
- 13 │     read write wide: u64 at 4,
- 14 │     read write signed: i32 at 0,
+    ╭─[typeck_peripheral_register_type.ers:26:24]
+ 25 │     read write wide: u64 at 4,
+ 26 │     read write signed: i32 at 0,
     ·                        ─┬─
     ·                         ╰── the type of the register `signed`
- 15 │     read write size: usize at 0,
+ 27 │     read write size: usize at 0,
     ╰────
-  help: a register is a `u8`, a `u16` or a `u32`: an unsigned integer as wide as the register,
-        read and written in one access (ADR 0058)
+  help: a register is a `u8`, a `u16` or a `u32`, or a bit-field struct or an enum without
+        payloads on one of them: as wide as that integer type, and read and written in one access
+        (ADR 0058, 0060)
 ty::register-type
 
   × `usize` is not a register type
-    ╭─[typeck_peripheral_register_type.ers:15:22]
- 14 │     read write signed: i32 at 0,
- 15 │     read write size: usize at 0,
+    ╭─[typeck_peripheral_register_type.ers:27:22]
+ 26 │     read write signed: i32 at 0,
+ 27 │     read write size: usize at 0,
     ·                      ──┬──
     ·                        ╰── the type of the register `size`
- 16 │     read write flag: bool at 0,
+ 28 │     read write flag: bool at 0,
     ╰────
-  help: a register is a `u8`, a `u16` or a `u32`: an unsigned integer as wide as the register,
-        read and written in one access (ADR 0058)
+  help: a register is a `u8`, a `u16` or a `u32`, or a bit-field struct or an enum without
+        payloads on one of them: as wide as that integer type, and read and written in one access
+        (ADR 0058, 0060)
 ty::register-type
 
   × `bool` is not a register type
-    ╭─[typeck_peripheral_register_type.ers:16:22]
- 15 │     read write size: usize at 0,
- 16 │     read write flag: bool at 0,
+    ╭─[typeck_peripheral_register_type.ers:28:22]
+ 27 │     read write size: usize at 0,
+ 28 │     read write flag: bool at 0,
     ·                      ──┬─
     ·                        ╰── the type of the register `flag`
- 17 │     read write mode: Mode at 0,
+ 29 │     read write mode: Mode at 1,
     ╰────
-  help: a register is a `u8`, a `u16` or a `u32`: an unsigned integer as wide as the register,
-        read and written in one access (ADR 0058)
-ty::register-type
-
-  × `Mode` is not a register type
-    ╭─[typeck_peripheral_register_type.ers:17:22]
- 16 │     read write flag: bool at 0,
- 17 │     read write mode: Mode at 0,
-    ·                      ──┬─
-    ·                        ╰── the type of the register `mode`
- 18 │     read write pair: Pair at 0,
-    ╰────
-  help: a register is a `u8`, a `u16` or a `u32`: an unsigned integer as wide as the register,
-        read and written in one access (ADR 0058)
+  help: a register is a `u8`, a `u16` or a `u32`, or a bit-field struct or an enum without
+        payloads on one of them: as wide as that integer type, and read and written in one access
+        (ADR 0058, 0060)
 ty::register-type
 
   × `Pair` is not a register type
-    ╭─[typeck_peripheral_register_type.ers:18:22]
- 17 │     read write mode: Mode at 0,
- 18 │     read write pair: Pair at 0,
+    ╭─[typeck_peripheral_register_type.ers:30:22]
+ 29 │     read write mode: Mode at 1,
+ 30 │     read write pair: Pair at 0,
     ·                      ──┬─
     ·                        ╰── the type of the register `pair`
- 19 │     read write pointer: *mut u32 at 0,
+ 31 │     read write pointer: *mut u32 at 0,
     ╰────
-  help: a register is a `u8`, a `u16` or a `u32`: an unsigned integer as wide as the register,
-        read and written in one access (ADR 0058)
+  help: a register is a `u8`, a `u16` or a `u32`, or a bit-field struct or an enum without
+        payloads on one of them: as wide as that integer type, and read and written in one access
+        (ADR 0058, 0060)
 ty::register-type
 
   × `*mut u32` is not a register type
-    ╭─[typeck_peripheral_register_type.ers:19:25]
- 18 │     read write pair: Pair at 0,
- 19 │     read write pointer: *mut u32 at 0,
+    ╭─[typeck_peripheral_register_type.ers:31:25]
+ 30 │     read write pair: Pair at 0,
+ 31 │     read write pointer: *mut u32 at 0,
     ·                         ────┬───
     ·                             ╰── the type of the register `pointer`
- 20 │ }
+ 32 │     read write bits: Bits at 2,
     ╰────
-  help: a register is a `u8`, a `u16` or a `u32`: an unsigned integer as wide as the register,
-        read and written in one access (ADR 0058)
+  help: a register is a `u8`, a `u16` or a `u32`, or a bit-field struct or an enum without
+        payloads on one of them: as wide as that integer type, and read and written in one access
+        (ADR 0058, 0060)
+ty::register-type
+
+  × `WideBits` is not a register type
+    ╭─[typeck_peripheral_register_type.ers:33:27]
+ 32 │     read write bits: Bits at 2,
+ 33 │     read write wide_bits: WideBits at 0,
+    ·                           ────┬───
+    ·                               ╰── the type of the register `wide_bits`, a bit-field struct on `u64`
+ 34 │     read write signed_enum: Signed at 0,
+    ╰────
+  help: a register is a `u8`, a `u16` or a `u32`, or a bit-field struct or an enum without
+        payloads on one of them: as wide as that integer type, and read and written in one access
+        (ADR 0058, 0060)
+ty::register-type
+
+  × `Signed` is not a register type
+    ╭─[typeck_peripheral_register_type.ers:34:29]
+ 33 │     read write wide_bits: WideBits at 0,
+ 34 │     read write signed_enum: Signed at 0,
+    ·                             ───┬──
+    ·                                ╰── the type of the register `signed_enum`, an enum on `i8`
+ 35 │     read write message: Message at 0,
+    ╰────
+  help: a register is a `u8`, a `u16` or a `u32`, or a bit-field struct or an enum without
+        payloads on one of them: as wide as that integer type, and read and written in one access
+        (ADR 0058, 0060)
+ty::register-type
+
+  × `Message` is not a register type
+    ╭─[typeck_peripheral_register_type.ers:35:25]
+ 34 │     read write signed_enum: Signed at 0,
+ 35 │     read write message: Message at 0,
+    ·                         ───┬───
+    ·                            ╰── the type of the register `message`, an enum with payloads
+ 36 │ }
+    ╰────
+  help: a register is a `u8`, a `u16` or a `u32`, or a bit-field struct or an enum without
+        payloads on one of them: as wide as that integer type, and read and written in one access
+        (ADR 0058, 0060)

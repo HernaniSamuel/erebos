@@ -14,8 +14,9 @@ ty::register-type
     ·                         ╰── the type of the register `own`
  16 │     read write whole: Own at 8,
     ╰────
-  help: a register is a `u8`, a `u16` or a `u32`: an unsigned integer as wide as the register,
-        read and written in one access (ADR 0058)
+  help: a register is a `u8`, a `u16` or a `u32`, or a bit-field struct or an enum without
+        payloads on one of them: as wide as that integer type, and read and written in one access
+        (ADR 0058, 0060)
 ty::register-type
 
   × `Own` is not a register type
@@ -26,8 +27,9 @@ ty::register-type
     ·                        ╰── the type of the register `whole`
  17 │ }
     ╰────
-  help: a register is a `u8`, a `u16` or a `u32`: an unsigned integer as wide as the register,
-        read and written in one access (ADR 0058)
+  help: a register is a `u8`, a `u16` or a `u32`, or a bit-field struct or an enum without
+        payloads on one of them: as wide as that integer type, and read and written in one access
+        (ADR 0058, 0060)
 ty::register-type
 
   × `*mut Pong` is not a register type
@@ -38,8 +40,9 @@ ty::register-type
     ·                          ╰── the type of the register `pong`
  21 │ }
     ╰────
-  help: a register is a `u8`, a `u16` or a `u32`: an unsigned integer as wide as the register,
-        read and written in one access (ADR 0058)
+  help: a register is a `u8`, a `u16` or a `u32`, or a bit-field struct or an enum without
+        payloads on one of them: as wide as that integer type, and read and written in one access
+        (ADR 0058, 0060)
 ty::register-type
 
   × `*mut Ping` is not a register type
@@ -50,8 +53,9 @@ ty::register-type
     ·                          ╰── the type of the register `ping`
  25 │ }
     ╰────
-  help: a register is a `u8`, a `u16` or a `u32`: an unsigned integer as wide as the register,
-        read and written in one access (ADR 0058)
+  help: a register is a `u8`, a `u16` or a `u32`, or a bit-field struct or an enum without
+        payloads on one of them: as wide as that integer type, and read and written in one access
+        (ADR 0058, 0060)
 ty::register-type
 
   × `*mut Own` is not a register type
@@ -62,8 +66,9 @@ ty::register-type
     ·                         ╰── the type of the register `own`
  29 │ }
     ╰────
-  help: a register is a `u8`, a `u16` or a `u32`: an unsigned integer as wide as the register,
-        read and written in one access (ADR 0058)
+  help: a register is a `u8`, a `u16` or a `u32`, or a bit-field struct or an enum without
+        payloads on one of them: as wide as that integer type, and read and written in one access
+        (ADR 0058, 0060)
 ty::register-type
 
   × `Holder` is not a register type
@@ -74,5 +79,6 @@ ty::register-type
     ·                           ╰── the type of the register `holder`
  35 │ }
     ╰────
-  help: a register is a `u8`, a `u16` or a `u32`: an unsigned integer as wide as the register,
-        read and written in one access (ADR 0058)
+  help: a register is a `u8`, a `u16` or a `u32`, or a bit-field struct or an enum without
+        payloads on one of them: as wide as that integer type, and read and written in one access
+        (ADR 0058, 0060)
