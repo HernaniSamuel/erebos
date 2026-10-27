@@ -47,6 +47,7 @@ panic fn on_panic(info: *const PanicInfo) -> ! {
         PanicReason::IndexOutOfBounds => &raw const b"index out of bounds",
         PanicReason::AssertionFailed => &raw const b"assertion failed",
         PanicReason::NoVariant => &raw const b"enum value is no variant",
+        PanicReason::FieldOutOfRange => &raw const b"value does not fit its field",
     };
     print(reason);
     print(&raw const b" at ");

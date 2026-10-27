@@ -152,29 +152,7 @@ fn seeds() -> Vec<String> {
     paths
         .iter()
         .map(|path| fs::read_to_string(path).unwrap().replace("\r\n", "\n"))
-        .filter(|text| !declares_bit_struct(text))
         .collect()
-}
-
-/// Whether `text` declares a bit-field struct: a line that starts, after
-/// its indentation and an optional `pub`, with `struct`, a name and `:`
-/// (ADR 0059). Until M3.3's step 5 builds them into MIR, code that reaches
-/// a value of a bit-field struct stops at a `todo!` of the type checker or
-/// of MIR building, so such seeds are left out; step 5 removes this filter.
-/// A seed declaring only ordinary structs is kept.
-fn declares_bit_struct(text: &str) -> bool {
-    text.lines().any(|line| {
-        let line = line.trim_start();
-        let line = line.strip_prefix("pub ").unwrap_or(line);
-        let Some(rest) = line.strip_prefix("struct ") else {
-            return false;
-        };
-        let rest = rest.trim_start();
-        let name = rest
-            .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
-            .unwrap_or(rest.len());
-        name > 0 && rest[name..].trim_start().starts_with(':')
-    })
 }
 
 /// Cuts at a character boundary at or before `i`.

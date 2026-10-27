@@ -1,0 +1,25 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/eval_bit_struct.ers
+---
+--- errors ---
+eval::panic
+
+  × the evaluation called the panic function: value does not fit its field
+    ╭─[eval_bit_struct.ers:31:7]
+ 30 │     let mut m: Lcr = l;
+ 31 │     m.count = count;
+    ·       ──┬──
+    ·         ╰── value does not fit its field
+ 32 │     m.dlab = !m.dlab;
+    ╰────
+    ╭─[eval_bit_struct.ers:67:7]
+ 66 │ 
+ 67 │ const OVERFLOW: Lcr = changed(DEFAULTS, 8);
+    ·       ────┬───        ──────────┬─────────
+    ·           │                     ╰── called here
+    ·           ╰── while evaluating the constant `OVERFLOW`
+ 68 │ 
+    ╰────
+  help: this code runs at compile time (ADR 0027)

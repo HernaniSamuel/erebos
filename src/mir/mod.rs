@@ -45,6 +45,9 @@ impl Local {
 pub struct Mir {
     /// Every struct type, for dumps; types refer to them directly.
     pub structs: Vec<StructRef>,
+    /// Every bit-field struct, for dumps: MIR sees only its integer type,
+    /// and its fields as shifts and masks of it (ADR 0059).
+    pub bit_structs: Vec<BitStruct>,
     /// Every enum, for dumps: MIR sees only the integer type of an enum
     /// without payloads (ADR 0035), and an enum with payloads is a type of
     /// its own (ADR 0039).
@@ -190,6 +193,7 @@ impl Mir {
         self.bodies = kept;
 
         self.structs = unmarked(std::mem::take(&mut self.structs), &left_out.structs);
+        self.bit_structs = unmarked(std::mem::take(&mut self.bit_structs), &left_out.bit_structs);
         self.enums = unmarked(std::mem::take(&mut self.enums), &left_out.enums);
         self.peripheral_types = unmarked(
             std::mem::take(&mut self.peripheral_types),
@@ -270,6 +274,7 @@ fn unmarked<T>(list: Vec<T>, marks: &[bool]) -> Vec<T> {
 pub struct LeftOut {
     pub bodies: Vec<bool>,
     pub structs: Vec<bool>,
+    pub bit_structs: Vec<bool>,
     /// Over the declared enums, which `Mir::enums` lists first; the
     /// `Option(T)` and `Result(T, E)` after them are kept.
     pub enums: Vec<bool>,
@@ -589,6 +594,25 @@ pub struct Enum {
     pub variants: Vec<(String, u64)>,
     /// The MIR type of an enum with payloads.
     pub def: Option<EnumRef>,
+}
+
+/// A bit-field struct, listed in dumps (ADR 0059): its integer type, which
+/// is all MIR sees of it, and the bits of each field.
+#[derive(Clone, Debug)]
+pub struct BitStruct {
+    pub name: String,
+    pub int: IntTy,
+    pub fields: Vec<BitField>,
+}
+
+/// A field of a bit-field struct: its MIR type, and its lowest and highest
+/// bit.
+#[derive(Clone, Debug)]
+pub struct BitField {
+    pub name: String,
+    pub ty: Ty,
+    pub low: u32,
+    pub high: u32,
 }
 
 /// A struct type with its layout (ADR 0022), shared by every type naming
@@ -1152,6 +1176,9 @@ pub enum PanicCause {
     /// A `match` on an enum without a catch-all arm, on a value that is
     /// no variant (ADR 0036).
     NoVariant,
+    /// A value written to a field of a bit-field struct that does not fit
+    /// in its bits (ADR 0059).
+    FieldOutOfRange,
 }
 
 impl PanicCause {
@@ -1161,6 +1188,7 @@ impl PanicCause {
             PanicCause::IndexOutOfBounds => "index out of bounds",
             PanicCause::AssertionFailed(_) => "assertion failed",
             PanicCause::NoVariant => "enum value is no variant",
+            PanicCause::FieldOutOfRange => "value does not fit its field",
         }
     }
 
@@ -1171,6 +1199,7 @@ impl PanicCause {
             PanicCause::IndexOutOfBounds => "IndexOutOfBounds",
             PanicCause::AssertionFailed(_) => "AssertionFailed",
             PanicCause::NoVariant => "NoVariant",
+            PanicCause::FieldOutOfRange => "FieldOutOfRange",
         }
     }
 }
@@ -1365,6 +1394,26 @@ impl fmt::Display for Mir {
                 def.name, def.layout.size, def.layout.align
             )?;
         }
+        // A single bit as `at 7`, a range as `at 0..=1`, as written.
+        for s in &self.bit_structs {
+            let fields: Vec<String> = (s.fields.iter())
+                .map(|field| {
+                    let bits = if field.low == field.high {
+                        field.low.to_string()
+                    } else {
+                        format!("{}..={}", field.low, field.high)
+                    };
+                    format!("{}: {} at {bits}", field.name, field.ty)
+                })
+                .collect();
+            writeln!(
+                f,
+                "struct {}: {} {{ {} }}",
+                s.name,
+                s.int,
+                fields.join(", ")
+            )?;
+        }
         for e in &self.enums {
             // With payloads, its variants are numbered as projections name
             // them, with each payload value's type and offset (ADR 0039).
@@ -1414,7 +1463,7 @@ impl fmt::Display for Mir {
                 def.layout.align
             )?;
         }
-        if !self.structs.is_empty() || !self.enums.is_empty() {
+        if !self.structs.is_empty() || !self.bit_structs.is_empty() || !self.enums.is_empty() {
             writeln!(f)?;
         }
         // Registers are numbered as projections name them; offsets and

@@ -355,7 +355,7 @@ fn bits_text(low: u32, high: u32) -> String {
 }
 
 /// "1 bit", "4 bits".
-fn bit_count(n: u32) -> String {
+pub(crate) fn bit_count(n: u32) -> String {
     match n {
         1 => "1 bit".to_owned(),
         n => format!("{n} bits"),
@@ -363,6 +363,6 @@ fn bit_count(n: u32) -> String {
 }
 
 /// The largest value `width` bits hold, 2ⁿ − 1.
-fn max_value(width: u32) -> u64 {
+pub(crate) fn max_value(width: u32) -> u64 {
     u64::MAX >> (u64::BITS - width)
 }

@@ -52,6 +52,7 @@ fn reason(reason: core::PanicReason) -> *const [u8] {
         .IndexOutOfBounds => &raw const b"index out of bounds",
         .AssertionFailed => &raw const b"assertion failed",
         .NoVariant => &raw const b"enum value is no variant",
+        .FieldOutOfRange => &raw const b"value does not fit its field",
     }
 }
 

@@ -1,0 +1,45 @@
+// A value known at compile time that does not fit the field it is written
+// to is `ty::field-value-out-of-range`, in a literal and in an assignment
+// (ADR 0032, 0059); a compound assignment is not reported, being checked at
+// run time, nor is a value written in code that never runs. A known
+// variant always fits. No value of a bit-field struct is known: `L as u32`
+// and `(comptime { 40 as Lcr }) as u32` are shift amounts that are not known,
+// though both are 40.
+enum WordLength: u8 { Five = 0, Six = 1, Seven = 2, Eight = 3 }
+
+struct Lcr: u8 {
+    pub word_length: WordLength at 0..=1 = .Five,
+    pub count: u8 at 2..=5 = 0,
+    pub dlab: bool at 7 = false,
+}
+
+const L: Lcr = 40 as Lcr;
+const BIG: u8 = 16;
+
+fn literal() -> Lcr {
+    Lcr { count: 16, .. }
+}
+
+fn assign(l: Lcr) -> Lcr {
+    let mut m: Lcr = l;
+    m.count = BIG + 1;
+    m
+}
+
+fn fits(l: Lcr) -> Lcr {
+    let mut m: Lcr = l;
+    m.count += 16;
+    m.word_length = .Eight;
+    m.count = 15;
+    if false {
+        m.count = 99;
+    }
+    m
+}
+
+fn shifts(x: u32) -> u32 {
+    (x << (L as u32)) + (x << ((comptime { 40 as Lcr }) as u32))
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

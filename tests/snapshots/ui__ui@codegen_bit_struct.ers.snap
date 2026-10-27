@@ -1,0 +1,198 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/codegen_bit_struct.ers
+---
+--- llvm-ir ---
+; ModuleID = 'erebos'
+source_filename = "erebos"
+target datalayout = "e-m:e-p:32:32-i64:64-n32-S128"
+target triple = "riscv32-unknown-none-elf"
+
+module asm "\09.section .text.start, \22ax\22, @progbits"
+module asm "\09.globl _start"
+module asm "\09.type _start, @function"
+module asm "_start:"
+module asm "\09la sp, __stack_end"
+module asm "\09la t0, __bss_start"
+module asm "\09la t1, __bss_end"
+module asm ".Lzero_bss:"
+module asm "\09bgeu t0, t1, .Lcopy_data"
+module asm "\09sw zero, 0(t0)"
+module asm "\09addi t0, t0, 4"
+module asm "\09j .Lzero_bss"
+module asm ".Lcopy_data:"
+module asm "\09la t0, __data_start"
+module asm "\09la t1, __data_end"
+module asm "\09la t2, __data_load"
+module asm ".Lcopy_word:"
+module asm "\09bgeu t0, t1, .Lenter"
+module asm "\09lw t3, 0(t2)"
+module asm "\09sw t3, 0(t0)"
+module asm "\09addi t0, t0, 4"
+module asm "\09addi t2, t2, 4"
+module asm "\09j .Lcopy_word"
+module asm ".Lenter:"
+module asm "\09j main"
+
+; Function Attrs: nounwind null_pointer_is_valid
+define zeroext i8 @read(i8 zeroext %0) #0 {
+bb0:
+  %1 = lshr i8 %0, 2
+  %2 = and i8 %1, 15
+  ret i8 %2
+}
+
+; Function Attrs: nounwind null_pointer_is_valid
+define void @set_dlab(ptr %0) #0 {
+bb0:
+  %1 = load volatile i8, ptr %0, align 1
+  %2 = and i8 %1, 127
+  %3 = or i8 %2, -128
+  store volatile i8 %3, ptr %0, align 1
+  ret void
+}
+
+; Function Attrs: nounwind null_pointer_is_valid
+define void @set_count(ptr %0, i8 zeroext %1) #0 {
+bb0:
+  %2 = and i8 %1, 15
+  %3 = icmp ule i8 %2, 15
+  br i1 %3, label %bb1, label %bb2
+
+bb1:                                              ; preds = %bb0
+  %4 = load volatile i32, ptr %0, align 4
+  %5 = and i32 %4, -16
+  %6 = zext i8 %2 to i32
+  %7 = or i32 %5, %6
+  store volatile i32 %7, ptr %0, align 4
+  ret void
+
+bb2:                                              ; preds = %bb0
+  call void @on_panic()
+  unreachable
+}
+
+; Function Attrs: nounwind null_pointer_is_valid
+define i32 @pass(i8 zeroext %0, i32 %1) #0 {
+bb0:
+  %2 = zext i8 %0 to i16
+  %3 = and i32 %1, -16776961
+  %4 = zext i16 %2 to i32
+  %5 = shl i32 %4, 8
+  %6 = or i32 %3, %5
+  ret i32 %6
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @main() #1 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @on_panic() #1 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+attributes #0 = { nounwind null_pointer_is_valid }
+attributes #1 = { noreturn nounwind null_pointer_is_valid }
+--- llvm-ir -O ---
+; ModuleID = 'erebos'
+source_filename = "erebos"
+target datalayout = "e-m:e-p:32:32-i64:64-n32-S128"
+target triple = "riscv32-unknown-none-elf"
+
+module asm "\09.section .text.start, \22ax\22, @progbits"
+module asm "\09.globl _start"
+module asm "\09.type _start, @function"
+module asm "_start:"
+module asm "\09la sp, __stack_end"
+module asm "\09la t0, __bss_start"
+module asm "\09la t1, __bss_end"
+module asm ".Lzero_bss:"
+module asm "\09bgeu t0, t1, .Lcopy_data"
+module asm "\09sw zero, 0(t0)"
+module asm "\09addi t0, t0, 4"
+module asm "\09j .Lzero_bss"
+module asm ".Lcopy_data:"
+module asm "\09la t0, __data_start"
+module asm "\09la t1, __data_end"
+module asm "\09la t2, __data_load"
+module asm ".Lcopy_word:"
+module asm "\09bgeu t0, t1, .Lenter"
+module asm "\09lw t3, 0(t2)"
+module asm "\09sw t3, 0(t0)"
+module asm "\09addi t0, t0, 4"
+module asm "\09addi t2, t2, 4"
+module asm "\09j .Lcopy_word"
+module asm ".Lenter:"
+module asm "\09j main"
+
+; Function Attrs: mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(none)
+define zeroext range(i8 0, 16) i8 @read(i8 zeroext %0) local_unnamed_addr #0 {
+bb0:
+  %1 = lshr i8 %0, 2
+  %2 = and i8 %1, 15
+  ret i8 %2
+}
+
+; Function Attrs: nofree norecurse nounwind null_pointer_is_valid memory(argmem: readwrite, inaccessiblemem: readwrite)
+define void @set_dlab(ptr %0) local_unnamed_addr #1 {
+bb0:
+  %1 = load volatile i8, ptr %0, align 1
+  %2 = or i8 %1, -128
+  store volatile i8 %2, ptr %0, align 1
+  ret void
+}
+
+; Function Attrs: nofree norecurse nounwind null_pointer_is_valid memory(argmem: readwrite, inaccessiblemem: readwrite)
+define void @set_count(ptr %0, i8 zeroext %1) local_unnamed_addr #1 {
+bb0:
+  %2 = and i8 %1, 15
+  %3 = load volatile i32, ptr %0, align 4
+  %4 = and i32 %3, -16
+  %5 = zext nneg i8 %2 to i32
+  %6 = or disjoint i32 %4, %5
+  store volatile i32 %6, ptr %0, align 4
+  ret void
+}
+
+; Function Attrs: mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(none)
+define range(i32 0, -16711680) i32 @pass(i8 zeroext %0, i32 %1) local_unnamed_addr #0 {
+bb0:
+  %2 = and i32 %1, -16776961
+  %3 = zext i8 %0 to i32
+  %4 = shl nuw nsw i32 %3, 8
+  %5 = or disjoint i32 %2, %4
+  ret i32 %5
+}
+
+; Function Attrs: nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none)
+define void @main() local_unnamed_addr #2 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none)
+define void @on_panic() local_unnamed_addr #2 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+attributes #0 = { mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(none) }
+attributes #1 = { nofree norecurse nounwind null_pointer_is_valid memory(argmem: readwrite, inaccessiblemem: readwrite) }
+attributes #2 = { nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none) }

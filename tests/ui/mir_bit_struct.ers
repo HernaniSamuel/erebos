@@ -1,0 +1,85 @@
+// emit: mir
+// A bit-field struct is its integer type in MIR, and its fields shifts and
+// masks (ADR 0059). A field read copies the whole value, then shifts and
+// masks it, a `bool` field comparing its bit with 0. A field write runs the
+// value and its check, a comparison with the field's largest value that
+// calls the panic function, then copies the whole value once, clears the
+// field's bits, or's in the shifted value and assigns it back; a `bool`
+// field, a field as wide as its type and a value known to fit need no
+// check. A compound assignment computes the new field value from the
+// copy, then checks it. A literal or's in each value written, checked,
+// then as one constant the values written as constants and the fields
+// `..` leaves out: defaults, and the neutral values of fields with write
+// effects (all ones for `write 0 sets`, zeros for `write 1 clears`). `as`
+// is an integer cast both ways. Through a volatile pointer, a field write
+// is one copy of the whole value and one assignment.
+enum WordLength: u8 { Five = 0, Six = 1, Seven = 2, Eight = 3 }
+
+struct Lcr: u8 {
+    pub word_length: WordLength at 0..=1 = .Eight,
+    pub two_stop_bits: bool at 2 = false,
+    pub parity: bool at 3 = true,
+    pub count: u8 at 4..=6 = 0,
+    pub dlab: bool at 7 = false,
+}
+
+struct Control: u32 {
+    pub low: u8 at 0..=7 = 0,
+    pub start: bool at 8 write 0 sets,
+    pub clear: bool at 9 write 1 clears,
+    pub limit: u16 at 16..=31 = 0x1234,
+}
+
+fn read(l: Lcr) -> u8 {
+    l.count
+}
+
+fn read_bool(l: Lcr) -> bool {
+    l.dlab
+}
+
+fn write(l: Lcr, v: u8) -> Lcr {
+    let mut m: Lcr = l;
+    m.count = v;
+    m
+}
+
+fn write_unchecked(c: Control, flag: bool, byte: u8) -> Control {
+    let mut d: Control = c;
+    d.start = flag;
+    d.low = byte;
+    d
+}
+
+fn write_known(l: Lcr) -> Lcr {
+    let mut m: Lcr = l;
+    m.count = 7;
+    m.word_length = .Six;
+    m
+}
+
+fn compound(l: Lcr) -> Lcr {
+    let mut m: Lcr = l;
+    m.count += 1;
+    m
+}
+
+fn literal(v: u8) -> Lcr {
+    Lcr { count: v, dlab: true, .. }
+}
+
+fn rest() -> Control {
+    Control { .. }
+}
+
+fn casts(l: Lcr, x: u8) -> u32 {
+    let made: Lcr = x as Lcr;
+    made as u32 + l as u32
+}
+
+fn through(p: *mut volatile Lcr) {
+    (*p).dlab = true;
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

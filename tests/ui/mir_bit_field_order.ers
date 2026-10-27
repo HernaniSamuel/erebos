@@ -1,0 +1,32 @@
+// emit: mir
+// The evaluation order of field writes (ADR 0059, "Evaluation order"). With
+// `=`, the value runs, then its check, then the place: the index and its
+// bounds check, then the copy of the whole value and the write. With `+=`,
+// the value runs, then the place, then the copy, and the new field value
+// is checked after it, before the write. A literal's values run in the
+// order written, each followed by its check. Each check of a field value
+// is located at the field's name (ADR 0053).
+struct Counter: u16 {
+    pub count: u8 at 0..=3 = 0,
+    pub limit: u8 at 4..=9 = 0,
+    pub on: bool at 15 = false,
+}
+
+fn i() -> usize { 1 }
+fn v() -> u8 { 3 }
+fn w() -> u8 { 4 }
+
+fn assign(a: *mut [Counter; 2]) {
+    (*a)[i()].count = v();
+}
+
+fn compound(a: *mut [Counter; 2]) {
+    (*a)[i()].count += v();
+}
+
+fn literal() -> Counter {
+    Counter { limit: w(), count: v(), .. }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic(info: *const core::PanicInfo) -> ! { loop {} }

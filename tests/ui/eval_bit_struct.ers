@@ -1,0 +1,70 @@
+// Bit-field structs at compile time work as at run time (ADR 0029, 0059):
+// constants and `comptime` blocks build values with literals and `..`,
+// read and write fields, compound-assign them, and convert with `as` both
+// ways; the assertions on them hold and report nothing. Reserved bits are
+// 0 in a literal, kept by a field write and carried by `as`. A field write
+// whose value does not fit, computed by a call so that it is not known
+// while building, calls the panic function when evaluated: a failed check,
+// reported at the field's name.
+enum WordLength: u8 { Five = 0, Six = 1, Seven = 2, Eight = 3 }
+
+struct Lcr: u8 {
+    pub word_length: WordLength at 0..=1 = .Eight,
+    pub count: u8 at 2..=4 = 5,
+    pub dlab: bool at 7 = false,
+}
+
+struct Control: u32 {
+    pub low: u16 at 0..=11 = 0xABC,
+    pub start: bool at 12 write 0 sets,
+    pub clear: bool at 13 write 1 clears,
+    pub high: u8 at 24..=31,
+}
+
+const DEFAULTS: Lcr = Lcr { .. };
+const SOME: Lcr = Lcr { dlab: true, word_length: .Six, .. };
+const MADE: Lcr = 0x60 as Lcr;
+const CONTROL: Control = Control { high: 0x12, .. };
+
+fn changed(l: Lcr, count: u8) -> Lcr {
+    let mut m: Lcr = l;
+    m.count = count;
+    m.dlab = !m.dlab;
+    m
+}
+
+fn bumped(l: Lcr) -> Lcr {
+    let mut m: Lcr = l;
+    m.count += 1;
+    m.count -= 3;
+    m
+}
+
+comptime {
+    assert(DEFAULTS as u8 == 0x17);
+    assert(SOME as u8 == 0x95);
+    assert(SOME.dlab && SOME.count == 5);
+    assert(match SOME.word_length { .Six => true, _ => false });
+    assert(MADE as u8 == 0x60);
+    assert(!MADE.dlab && MADE.count == 0 && MADE as u32 == 0x60);
+    assert(changed(MADE, 7) as u8 == 0xFC);
+    assert(bumped(DEFAULTS).count == 3);
+    assert(CONTROL as u32 == 0x1200_1ABC);
+    assert(CONTROL.start && !CONTROL.clear && CONTROL.low == 0xABC);
+}
+
+const COUNT: u8 = comptime {
+    let mut l: Lcr = Lcr { count: 1, .. };
+    l.count *= 6;
+    l.word_length = .Five;
+    l.count
+};
+
+comptime {
+    assert(COUNT == 6);
+}
+
+const OVERFLOW: Lcr = changed(DEFAULTS, 8);
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

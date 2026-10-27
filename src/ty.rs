@@ -847,7 +847,7 @@ impl Checker<'_, '_> {
             ExprKind::BitStructLit(s, fields, _) => {
                 let hir = self.hir;
                 let def = hir.bit_struct(s.id);
-                for (index, value) in fields {
+                for (index, _, value) in fields {
                     let ty = self.norm(def.fields[*index as usize].ty);
                     self.check(f, value, Some(ty));
                 }

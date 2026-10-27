@@ -1,0 +1,55 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/mir_bit_field_known.ers
+---
+--- errors ---
+ty::field-value-out-of-range
+
+  × the value written to the field `count` does not fit in its bits
+    ╭─[mir_bit_field_known.ers:20:18]
+ 11 │     pub word_length: WordLength at 0..=1 = .Five,
+ 12 │     pub count: u8 at 2..=5 = 0,
+    ·                      ──┬──
+    ·                        ╰── 4 bits, holding 0 to 15
+ 13 │     pub dlab: bool at 7 = false,
+ 14 │ }
+ 15 │ 
+ 16 │ const L: Lcr = 40 as Lcr;
+ 17 │ const BIG: u8 = 16;
+ 18 │ 
+ 19 │ fn literal() -> Lcr {
+ 20 │     Lcr { count: 16, .. }
+    ·                  ─┬
+    ·                   ╰── `16` needs 5 bits
+ 21 │ }
+    ╰────
+  help: a value written to a field fits in its bits, and at run time this would call the panic
+        function; a program that wants the low bits of a wider value masks them itself (ADR 0059)
+ty::field-value-out-of-range
+
+  × the value written to the field `count` does not fit in its bits
+    ╭─[mir_bit_field_known.ers:25:15]
+ 11 │     pub word_length: WordLength at 0..=1 = .Five,
+ 12 │     pub count: u8 at 2..=5 = 0,
+    ·                      ──┬──
+    ·                        ╰── 4 bits, holding 0 to 15
+ 13 │     pub dlab: bool at 7 = false,
+ 14 │ }
+ 15 │ 
+ 16 │ const L: Lcr = 40 as Lcr;
+ 17 │ const BIG: u8 = 16;
+ 18 │ 
+ 19 │ fn literal() -> Lcr {
+ 20 │     Lcr { count: 16, .. }
+ 21 │ }
+ 22 │ 
+ 23 │ fn assign(l: Lcr) -> Lcr {
+ 24 │     let mut m: Lcr = l;
+ 25 │     m.count = BIG + 1;
+    ·               ───┬───
+    ·                  ╰── `17` needs 5 bits
+ 26 │     m
+    ╰────
+  help: a value written to a field fits in its bits, and at run time this would call the panic
+        function; a program that wants the low bits of a wider value masks them itself (ADR 0059)

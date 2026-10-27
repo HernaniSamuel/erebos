@@ -1,0 +1,231 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/mir_bit_field_order.ers
+---
+--- mir ---
+struct Counter: u16 { count: u8 at 0..=3, limit: u8 at 4..=9, on: bool at 15 }
+
+fn i() -> usize {
+    let _0: usize;
+
+    bb0: {
+        _0 = const 1_usize;
+        return;
+    }
+}
+
+fn v() -> u8 {
+    let _0: u8;
+
+    bb0: {
+        _0 = const 3_u8;
+        return;
+    }
+}
+
+fn w() -> u8 {
+    let _0: u8;
+
+    bb0: {
+        _0 = const 4_u8;
+        return;
+    }
+}
+
+fn assign(_1: *mut [u16; 2]) -> () {
+    let _0: ();
+    let _1: *mut [u16; 2]; // a
+    let _2: u8;
+    let _3: u8;
+    let _4: bool;
+    let _5: *mut [u16; 2];
+    let _6: usize;
+    let _7: usize;
+    let _8: bool;
+    let _9: u16;
+    let _10: u16;
+    let _11: u16;
+    let _12: u16;
+
+    bb0: {
+        _2 = call v();
+        _3 = copy _2;
+        _4 = Le(copy _3, const 15_u8);
+        if copy _4 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _5 = copy _1;
+        _6 = call i();
+        _7 = copy _6;
+        _8 = Lt(copy _7, const 2_usize);
+        if copy _8 -> [true: bb3, false: bb4];
+    }
+
+    bb2: {
+        panic(value does not fit its field, data0 at mir_bit_field_order.ers:20:15);
+    }
+
+    bb3: {
+        _9 = copy (*_5)[_7];
+        _10 = BitAnd(copy _9, const 65520_u16);
+        _11 = copy _3 as u16;
+        _12 = BitOr(copy _10, copy _11);
+        (*_5)[_7] = copy _12;
+        return;
+    }
+
+    bb4: {
+        panic(index out of bounds, data1 at mir_bit_field_order.ers:20:9);
+    }
+}
+
+fn compound(_1: *mut [u16; 2]) -> () {
+    let _0: ();
+    let _1: *mut [u16; 2]; // a
+    let _2: u8;
+    let _3: u8;
+    let _4: *mut [u16; 2];
+    let _5: usize;
+    let _6: usize;
+    let _7: bool;
+    let _8: u16;
+    let _9: u16;
+    let _10: u8;
+    let _11: u8;
+    let _12: bool;
+    let _13: u16;
+    let _14: u16;
+    let _15: u16;
+
+    bb0: {
+        _2 = call v();
+        _3 = copy _2;
+        _4 = copy _1;
+        _5 = call i();
+        _6 = copy _5;
+        _7 = Lt(copy _6, const 2_usize);
+        if copy _7 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _8 = copy (*_4)[_6];
+        _9 = BitAnd(copy _8, const 15_u16);
+        _10 = copy _9 as u8;
+        _11 = Add(copy _10, copy _3);
+        _12 = Le(copy _11, const 15_u8);
+        if copy _12 -> [true: bb3, false: bb4];
+    }
+
+    bb2: {
+        panic(index out of bounds, data2 at mir_bit_field_order.ers:24:9);
+    }
+
+    bb3: {
+        _13 = BitAnd(copy _8, const 65520_u16);
+        _14 = copy _11 as u16;
+        _15 = BitOr(copy _13, copy _14);
+        (*_4)[_6] = copy _15;
+        return;
+    }
+
+    bb4: {
+        panic(value does not fit its field, data3 at mir_bit_field_order.ers:24:15);
+    }
+}
+
+fn literal() -> u16 {
+    let _0: u16;
+    let _1: u8;
+    let _2: u8;
+    let _3: bool;
+    let _4: u16;
+    let _5: u16;
+    let _6: u8;
+    let _7: bool;
+    let _8: u16;
+    let _9: u16;
+
+    bb0: {
+        _1 = call w();
+        _2 = copy _1;
+        _3 = Le(copy _2, const 63_u8);
+        if copy _3 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _4 = copy _2 as u16;
+        _5 = Shl(copy _4, const 4_u32);
+        _6 = call v();
+        _7 = Le(copy _6, const 15_u8);
+        if copy _7 -> [true: bb3, false: bb4];
+    }
+
+    bb2: {
+        panic(value does not fit its field, data4 at mir_bit_field_order.ers:28:15);
+    }
+
+    bb3: {
+        _8 = copy _6 as u16;
+        _9 = BitOr(copy _5, copy _8);
+        _0 = copy _9;
+        return;
+    }
+
+    bb4: {
+        panic(value does not fit its field, data5 at mir_bit_field_order.ers:28:27);
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic(_1: *const core::PanicInfo) -> ! {
+    let _0: !;
+    let _1: *const core::PanicInfo; // info
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+comptime fn default() -> u8 {
+    let _0: u8;
+
+    bb0: {
+        _0 = const 0_u8;
+        return;
+    }
+}
+
+comptime fn default() -> u8 {
+    let _0: u8;
+
+    bb0: {
+        _0 = const 0_u8;
+        return;
+    }
+}
+
+comptime fn default() -> bool {
+    let _0: bool;
+
+    bb0: {
+        _0 = const false;
+        return;
+    }
+}

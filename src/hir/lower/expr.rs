@@ -182,12 +182,19 @@ impl Lowerer<'_> {
             }
             _ => {}
         }
-        let fields = (fields.into_iter())
-            .filter_map(|(index, value)| Some((index?, value)))
-            .collect();
         match of {
-            LitOf::Struct(id) => ExprKind::StructLit(self.struct_tys[id.0 as usize], fields),
+            LitOf::Struct(id) => {
+                let fields = (fields.into_iter())
+                    .filter_map(|(index, value)| Some((index?, value)))
+                    .collect();
+                ExprKind::StructLit(self.struct_tys[id.0 as usize], fields)
+            }
+            // With each field's name, where the check of its value is
+            // located (ADR 0053, 0059).
             LitOf::BitStruct(id) => {
+                let fields = (inits.iter().zip(fields))
+                    .filter_map(|(init, (index, value))| Some((index?, init.name.span, value)))
+                    .collect();
                 ExprKind::BitStructLit(self.bit_struct_tys[id.0 as usize], fields, rest)
             }
         }

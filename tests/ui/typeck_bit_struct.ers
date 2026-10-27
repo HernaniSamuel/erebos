@@ -7,8 +7,10 @@
 // read effect, each write effect action, and both effects on one field.
 // `Defaults`' defaults use its own size, directly and through a constant,
 // which is no cycle: a default is no part of its struct's bits (ADR 0062).
-// No body mentions a bit-field struct: their values are type checked from
-// M3.3, step 4.
+// `Named`'s default of `parity` reads a field of `NAMED`, a constant of its
+// own type, whose literal names `parity` and so does not take that
+// default; `dlab`'s, which it takes, does not need `parity`'s: no cycle,
+// and the default is `NAMED.dlab`, `true` (ADR 0062).
 enum WordLength: u8 { Five = 0, Six = 1, Seven = 2, Eight = 3 }
 
 struct Lcr: u8 {
@@ -42,6 +44,13 @@ const SIZE: usize = size_of(Defaults);
 struct Defaults: u8 {
     pub single: bool at 0 = size_of(Defaults) == 1,
     pub size: u8 at 1..=4 = SIZE as u8 + 1,
+}
+
+const NAMED: Named = Named { parity: false, .. };
+
+struct Named: u8 {
+    pub parity: bool at 3 = NAMED.dlab,
+    pub dlab: bool at 7 = true,
 }
 
 entry fn main() -> ! { loop {} }

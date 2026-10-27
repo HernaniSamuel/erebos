@@ -14,6 +14,7 @@ use crate::span::Span;
 
 use known::Known;
 
+mod bit_struct;
 mod known;
 
 /// The MIR of a function that passed type checking, or `None` if a value
@@ -493,9 +494,13 @@ impl Builder<'_, '_> {
                 }
                 Operand::Copy(value)
             }
-            // Its type stops `Queries::mir_ty` above until M3.3, step 5.
-            hir::ExprKind::BitStructLit(..) => {
-                unreachable!("a bit-field struct has no MIR type yet")
+            hir::ExprKind::BitStructLit(s, fields, rest) => self.bit_struct_lit(*s, fields, *rest),
+            // A bit field is no place in memory: the whole value is read,
+            // and the field taken from it (ADR 0059).
+            hir::ExprKind::Field(base, _, _)
+                if let Some((id, index)) = self.q.tables.bit_field(expr.id) =>
+            {
+                self.read_bit_field(base, id, index)
             }
             hir::ExprKind::Deref(_)
             | hir::ExprKind::Index(..)
@@ -608,11 +613,25 @@ impl Builder<'_, '_> {
                     self.temp(ty, Rvalue::Slice { ptr, len })
                 }
             }
+            hir::ExprKind::Assign(place, value)
+                if let hir::ExprKind::Field(base, _, name) = &place.kind
+                    && let Some((id, index)) = self.q.tables.bit_field(place.id) =>
+            {
+                self.assign_bit_field(base, id, index, *name, value);
+                Operand::Const(Const::Unit)
+            }
             hir::ExprKind::Assign(place, value) => {
                 // The value is evaluated before the place, as in Rust.
                 let value = self.expr(value);
                 let place = self.place(place);
                 self.assign(place, Rvalue::Use(value));
+                Operand::Const(Const::Unit)
+            }
+            hir::ExprKind::CompoundAssign(op, place, value, op_span)
+                if let hir::ExprKind::Field(base, _, name) = &place.kind
+                    && let Some((id, index)) = self.q.tables.bit_field(place.id) =>
+            {
+                self.compound_assign_bit_field(*op, base, id, index, *name, value, *op_span);
                 Operand::Const(Const::Unit)
             }
             hir::ExprKind::CompoundAssign(op, place, value_expr, op_span) => {
@@ -1914,7 +1933,8 @@ impl Builder<'_, '_> {
                     }
                 }
             }
-            hir::ExprKind::Field(base, _, _) => {
+            // A bit field is a value, read below (ADR 0059).
+            hir::ExprKind::Field(base, _, _) if self.q.tables.bit_field(expr.id).is_none() => {
                 let base_place = self.place_then(base, later_writes, address);
                 // A base of type `!` is never computed, and has no fields.
                 if self.ty_of(base) == Ty::Never {

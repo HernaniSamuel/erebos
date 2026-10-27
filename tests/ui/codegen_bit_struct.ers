@@ -1,0 +1,38 @@
+// emit: llvm-ir
+// opt: both
+// A bit-field struct is its integer type in LLVM IR (ADR 0059): a field
+// read is a shift and a mask; a field write through a volatile pointer is
+// one volatile load and one volatile store of the integer's width; a
+// value masked to the field's bits (`x & 0xF`) is written with no check
+// left at `-O`, which removes the comparison LLVM proves always true; and
+// a bit-field struct crosses calls as its integer, a `u8` one zero-extended.
+struct Lcr: u8 {
+    pub count: u8 at 2..=5 = 0,
+    pub dlab: bool at 7 = false,
+}
+
+struct Control: u32 {
+    pub count: u8 at 0..=3 = 0,
+    pub limit: u16 at 8..=23 = 0,
+}
+
+fn read(l: Lcr) -> u8 {
+    l.count
+}
+
+fn set_dlab(p: *mut volatile Lcr) {
+    (*p).dlab = true;
+}
+
+fn set_count(p: *mut volatile Control, x: u8) {
+    (*p).count = x & 0xF;
+}
+
+fn pass(l: Lcr, c: Control) -> Control {
+    let mut d: Control = c;
+    d.limit = l as u16;
+    d
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

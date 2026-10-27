@@ -1,6 +1,5 @@
 ---
 source: tests/ui.rs
-assertion_line: 22
 expression: output
 input_file: tests/ui/typeck_bit_struct_cycle.ers
 ---
@@ -8,72 +7,147 @@ input_file: tests/ui/typeck_bit_struct_cycle.ers
 ty::cycle
 
   × the bit layout of `Sized` depends on its own value
-    ╭─[typeck_bit_struct_cycle.ers:16:8]
- 15 │ // `typeck_bit_struct.ers`.
- 16 │ struct Sized: u8 {
+    ╭─[typeck_bit_struct_cycle.ers:33:8]
+ 32 │ // are not built (`failed`, though it divides by zero).
+ 33 │ struct Sized: u8 {
     ·        ──┬──
     ·          ╰── needed while computing itself
- 17 │     a: bool at size_of(Sized) as u32,
+ 34 │     a: bool at size_of(Sized) as u32,
     ·                ──────────┬──────────
     ·                          ╰── through the bits of the field `Sized::a`
- 18 │ }
+ 35 │ }
     ╰────
   help: break the cycle: a value cannot depend on itself (ADR 0028)
 ty::cycle
 
   × the bit layout of `Held` depends on its own value
-    ╭─[typeck_bit_struct_cycle.ers:25:8]
- 24 │ 
- 25 │ struct Held: u8 {
+    ╭─[typeck_bit_struct_cycle.ers:42:8]
+ 41 │ 
+ 42 │ struct Held: u8 {
     ·        ──┬─
     ·          ╰── needed while computing itself
- 26 │     a: bool at size_of(Holder) as u32,
+ 43 │     a: bool at size_of(Holder) as u32,
     ·                ───────────┬──────────
     ·                           ╰── through the bits of the field `Held::a`
- 27 │ }
+ 44 │ }
     ╰────
   help: break the cycle: a value cannot depend on itself (ADR 0028)
 ty::cycle
 
   × this value depends on its own value
-    ╭─[typeck_bit_struct_cycle.ers:30:13]
- 28 │ 
- 29 │ struct Arrayed: u8 {
+    ╭─[typeck_bit_struct_cycle.ers:47:13]
+ 45 │ 
+ 46 │ struct Arrayed: u8 {
     ·        ───┬───
     ·           ╰── through the bit layout of `Arrayed`
- 30 │     a: [u8; size_of(Arrayed)] at 0,
+ 47 │     a: [u8; size_of(Arrayed)] at 0,
     ·             ────────┬───────
     ·                     ╰── needed while computing itself
- 31 │ }
+ 48 │ }
     ╰────
   help: break the cycle: a value cannot depend on itself (ADR 0028)
 ty::cycle
 
   × the variant `Level::High` depends on its own value
-    ╭─[typeck_bit_struct_cycle.ers:33:27]
- 32 │ 
- 33 │ enum Level: u8 { Low = 0, High = size_of(Variant) as u8 + 3 }
+    ╭─[typeck_bit_struct_cycle.ers:50:27]
+ 49 │ 
+ 50 │ enum Level: u8 { Low = 0, High = size_of(Variant) as u8 + 3 }
     ·                           ──┬─
     ·                             ╰── needed while computing itself
- 34 │ 
- 35 │ struct Variant: u8 {
+ 51 │ 
+ 52 │ struct Variant: u8 {
     ·        ───┬───
     ·           ╰── through the bit layout of `Variant`
- 36 │     level: Level at 0..=1,
+ 53 │     level: Level at 0..=1,
     ╰────
   help: break the cycle: a value cannot depend on itself (ADR 0028)
 ty::cycle
 
   × the bit layout of `Ordered` depends on its own value
-    ╭─[typeck_bit_struct_cycle.ers:47:8]
- 44 │ 
- 45 │ enum Step: u8 { Low = 0, High = size_of(Ordered) as u8 + 3 }
+    ╭─[typeck_bit_struct_cycle.ers:64:8]
+ 61 │ 
+ 62 │ enum Step: u8 { Low = 0, High = size_of(Ordered) as u8 + 3 }
     ·                          ──┬─
     ·                            ╰── through the variant `Step::High`
- 46 │ 
- 47 │ struct Ordered: u8 {
+ 63 │ 
+ 64 │ struct Ordered: u8 {
     ·        ───┬───
     ·           ╰── needed while computing itself
- 48 │     step: Step at 0..=1,
+ 65 │     step: Step at 0..=1,
     ╰────
+  help: break the cycle: a value cannot depend on itself (ADR 0028)
+ty::cycle
+
+  × the bit layout of `Positioned` depends on its own value
+    ╭─[typeck_bit_struct_cycle.ers:74:8]
+ 73 │ 
+ 74 │ struct Positioned: u8 {
+    ·        ─────┬────
+    ·             ╰── needed while computing itself
+ 75 │     a: bool at L as u32,
+    ·                ────┬───
+    ·                    ╰── through the bits of the field `Positioned::a`
+ 76 │ }
+    ╰────
+  help: break the cycle: a value cannot depend on itself (ADR 0028)
+ty::cycle
+
+  × the constant `C` depends on its own value
+    ╭─[typeck_bit_struct_cycle.ers:78:7]
+ 77 │ 
+ 78 │ const C: Itself = Itself { .. };
+    ·       ┬
+    ·       ╰── needed while computing itself
+ 79 │ 
+ 80 │ struct Itself: u8 {
+ 81 │     parity: bool at 3 = C.dlab,
+    ·                         ───┬──
+    ·                            ╰── through the default of the field `Itself::parity`
+ 82 │     dlab: bool at 7 = false,
+    ╰────
+  help: break the cycle: a value cannot depend on itself (ADR 0028)
+ty::cycle
+
+  × the constant `CC` depends on its own value
+    ╭─[typeck_bit_struct_cycle.ers:85:7]
+ 84 │ 
+ 85 │ const CC: Crossed = Crossed { parity: false, .. };
+    ·       ─┬
+    ·        ╰── needed while computing itself
+ 86 │ const CD: Crossed = Crossed { .. };
+    ·       ─┬
+    ·        ╰── through the constant `CD`
+ 87 │ 
+ 88 │ struct Crossed: u8 {
+ 89 │     parity: bool at 3 = CC.dlab,
+    ·                         ───┬───
+    ·                            ╰── through the default of the field `Crossed::parity`
+ 90 │     dlab: bool at 7 = CD.parity,
+    ·                       ────┬────
+    ·                           ╰── through the default of the field `Crossed::dlab`
+ 91 │ }
+    ╰────
+  help: break the cycle: a value cannot depend on itself (ADR 0028)
+ty::cycle
+
+  × the constant `CB` depends on its own value
+     ╭─[typeck_bit_struct_cycle.ers:97:7]
+  93 │ struct B: u8 {
+  94 │     n: u8 at 0..=3 = size_of(Outer) as u8,
+     ·                      ──────────┬─────────
+     ·                                ╰── through the default of the field `B::n`
+  95 │ }
+  96 │ 
+  97 │ const CB: B = B { .. };
+     ·       ─┬
+     ·        ╰── needed while computing itself
+  98 │ 
+  99 │ struct Outer: u8 {
+     ·        ──┬──
+     ·          ╰── through the bit layout of `Outer`
+ 100 │     f: bool at CB.n as u32,
+     ·                ─────┬─────
+     ·                     ╰── through the bits of the field `Outer::f`
+ 101 │ }
+     ╰────
   help: break the cycle: a value cannot depend on itself (ADR 0028)

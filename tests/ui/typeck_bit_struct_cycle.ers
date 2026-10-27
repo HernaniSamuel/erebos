@@ -13,6 +13,23 @@
 // checked against its two bits, which its value would not fit. Defaults
 // that use their struct's size are no cycle (ADR 0062); they are in
 // `typeck_bit_struct.ers`.
+//
+// Constants of a bit-field struct type make the other cycles (ADR 0059,
+// 0062). `Positioned`'s bit is computed from a constant of its own type.
+// `Itself`'s default of `parity` reads `C`, whose literal takes that
+// default: the default needs its own value. `Crossed`'s default of
+// `parity` reads `CC`, whose literal names `parity` but takes the default
+// of `dlab`, which reads `CD`, whose literal takes `parity`'s. `Outer`'s
+// bit reads a field of `CB`, whose literal takes the default of `B::n`,
+// which needs `Outer`'s size: its bits need themselves through another
+// struct's default. Each cycle is one `ty::cycle`; the items in it fail
+// and report nothing more. `Positioned`'s cycle is found from its bits,
+// whose body has an expression of its type, `L`, and so needs its bits
+// before it is built (ADR 0048): `L` is not part of it. The other cycles
+// are headed by the constant that `check_all` evaluates first. Literals
+// taking a default that failed report nothing (`defaults`), and functions
+// with values of `Positioned` and `Outer`, which reach a failed value,
+// are not built (`failed`, though it divides by zero).
 struct Sized: u8 {
     a: bool at size_of(Sized) as u32,
 }
@@ -50,6 +67,49 @@ struct Ordered: u8 {
 
 comptime {
     assert(Step::High as u8 == 0);
+}
+
+const L: Positioned = 0 as Positioned;
+
+struct Positioned: u8 {
+    a: bool at L as u32,
+}
+
+const C: Itself = Itself { .. };
+
+struct Itself: u8 {
+    parity: bool at 3 = C.dlab,
+    dlab: bool at 7 = false,
+}
+
+const CC: Crossed = Crossed { parity: false, .. };
+const CD: Crossed = Crossed { .. };
+
+struct Crossed: u8 {
+    parity: bool at 3 = CC.dlab,
+    dlab: bool at 7 = CD.parity,
+}
+
+struct B: u8 {
+    n: u8 at 0..=3 = size_of(Outer) as u8,
+}
+
+const CB: B = B { .. };
+
+struct Outer: u8 {
+    f: bool at CB.n as u32,
+}
+
+fn defaults() -> bool {
+    let i: Itself = Itself { dlab: true, .. };
+    let c: Crossed = Crossed { parity: true, .. };
+    i.parity && c.dlab
+}
+
+fn failed() -> u8 {
+    let p: Positioned = L;
+    let o: Outer = Outer { f: true };
+    1 / 0
 }
 
 entry fn main() -> ! { loop {} }

@@ -1,0 +1,59 @@
+// Uses of failed values report nothing more (ADR 0048, 0059). `Broken`
+// reaches a failed value, its bit failing to evaluate: the functions, the
+// constant and the `comptime` block that use it are not built, and report
+// nothing, though `uses` writes a value known not to fit its field. The
+// defaults of `Defaults` are in error, each reported once where it is
+// computed: one does not fit its four bits, one divides by zero, and one
+// has the wrong type. Literals with `..` taking them report nothing more,
+// and their bodies are not used: the constant taking them, and the
+// `comptime` block reading it, report nothing either.
+struct Broken: u8 {
+    a: bool at 1 / 0,
+    count: u8 at 0..=3 = 0,
+}
+
+fn uses(b: Broken) -> u8 {
+    let mut c: Broken = Broken { a: false, count: 1 };
+    c.count = 16;
+    c.a = b.a;
+    b as u8 + c.count
+}
+
+fn made(x: u8) -> Broken {
+    x as Broken
+}
+
+const BROKEN: Broken = Broken { a: true, .. };
+
+comptime {
+    assert(BROKEN.count == 0);
+}
+
+struct Defaults: u8 {
+    count: u8 at 0..=3 = 16,
+    divided: u8 at 4..=5 = 1 / 0,
+    flag: bool at 6 = 1,
+    fits: bool at 7 = true,
+}
+
+fn out_of_range() -> Defaults {
+    Defaults { divided: 0, flag: false, .. }
+}
+
+fn failing() -> Defaults {
+    Defaults { count: 1, flag: false, .. }
+}
+
+fn wrong_type(d: Defaults) -> bool {
+    let e: Defaults = Defaults { count: 1, divided: 2, .. };
+    e.fits && d.fits
+}
+
+const TAKEN: Defaults = Defaults { .. };
+
+comptime {
+    assert(TAKEN.fits);
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

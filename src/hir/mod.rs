@@ -1252,10 +1252,11 @@ pub enum ExprKind {
     /// the order written, which is the order they are evaluated in.
     StructLit(StructTy, Vec<(u32, Expr)>),
     /// `Name { field: value, ... }` or `Name { field: value, .. }` of a
-    /// bit-field struct (ADR 0059), as `StructLit`, with the span of `..`
-    /// if written: the fields it leaves out take their defaults, or for a
-    /// field with a write effect the value whose write has no effect.
-    BitStructLit(BitStructTy, Vec<(u32, Expr)>, Option<Span>),
+    /// bit-field struct (ADR 0059), as `StructLit` with the span of each
+    /// field's name, where the check of its value is located, and the span
+    /// of `..` if written: the fields it leaves out take their defaults, or
+    /// for a field with a write effect the value whose write has no effect.
+    BitStructLit(BitStructTy, Vec<(u32, Span, Expr)>, Option<Span>),
     /// `base.field`; the type checker resolves the field.
     Field(Box<Expr>, String, Span),
     /// `assert(cond)` or `assert(cond, msg)`, built in (ADR 0029, 0031),
@@ -1433,8 +1434,13 @@ impl Expr {
             | ExprKind::Len(e)
             | ExprKind::Comptime(e)
             | ExprKind::Try(e, _) => e.walk(f),
-            ExprKind::StructLit(_, fields) | ExprKind::BitStructLit(_, fields, _) => {
+            ExprKind::StructLit(_, fields) => {
                 for (_, value) in fields {
+                    value.walk(f);
+                }
+            }
+            ExprKind::BitStructLit(_, fields, _) => {
+                for (_, _, value) in fields {
                     value.walk(f);
                 }
             }

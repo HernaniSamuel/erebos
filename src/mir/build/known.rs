@@ -43,6 +43,13 @@ impl Builder<'_, '_> {
     }
 
     fn compute_known(&mut self, expr: &hir::Expr) -> Known {
+        // No value of a bit-field struct is known, though MIR sees an
+        // integer (ADR 0059 amending 0032): not a literal, a constant, a
+        // `comptime` expression or a cast to one, and so neither a field
+        // read from one nor a cast from one.
+        if let hir::Ty::BitStruct(_) = self.q.tables.expr_ty(expr.id) {
+            return Known::Unknown;
+        }
         let ty = self.ty_of(expr);
         let mask = match ty {
             Ty::Int(int) => int.mask(),
@@ -276,7 +283,7 @@ impl Builder<'_, '_> {
     }
 
     /// Reports a failed check; the body is not used (ADR 0032).
-    fn report(&mut self, diag: Diagnostic) {
+    pub(super) fn report(&mut self, diag: Diagnostic) {
         self.q.diags.push(diag);
         self.failed = true;
     }

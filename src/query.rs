@@ -27,6 +27,8 @@ use crate::ty::{self, Tables};
 mod bit_struct;
 mod hardware;
 
+pub(crate) use bit_struct::{bit_count, max_value};
+
 /// Where a piece of constant data comes from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum DataSource {
@@ -1489,9 +1491,9 @@ impl<'h> Queries<'h> {
             hir::Ty::Enum(e) if e.payloads => mir::Ty::Enum(self.mir_enum(e.id)),
             // Stored as its integer type, which is all MIR sees (ADR 0035).
             hir::Ty::Enum(e) => mir::Ty::Int(e.int),
-            hir::Ty::BitStruct(_) => {
-                todo!("M3.3 step 5: a bit-field struct is its integer type in MIR")
-            }
+            // Stored as its integer type, which is all MIR sees: its fields
+            // are shifts and masks of it (ADR 0059).
+            hir::Ty::BitStruct(s) => mir::Ty::Int(s.int),
             hir::Ty::Applied(_) => {
                 let ty = self.normalize(ty);
                 self.mir_ty(ty)
@@ -1672,6 +1674,9 @@ impl<'h> Queries<'h> {
         LeftOut {
             bodies: hir.fns.iter().map(|f| hir.in_core(f.module)).collect(),
             structs: hir.structs.iter().map(|s| hir.in_core(s.module)).collect(),
+            bit_structs: (hir.bit_structs.iter())
+                .map(|s| hir.in_core(s.module))
+                .collect(),
             enums: hir.enums.iter().map(|e| hir.in_core(e.module)).collect(),
             peripheral_types: (hir.peripheral_types.iter())
                 .map(|p| hir.in_core(p.module))
@@ -1722,6 +1727,34 @@ impl<'h> Queries<'h> {
                 }
             })
             .collect();
+        let bit_structs = (0..self.hir.bit_structs.len())
+            .map(|id| {
+                let id = BitStructId(id as u32);
+                let layout = self
+                    .bit_layout(id)
+                    .expect("every bit-field struct of a program without errors has its bits");
+                let hir = self.hir;
+                let def = hir.bit_struct(id);
+                let fields = (def.fields.iter().zip(&layout.fields))
+                    .map(|(field, bits)| {
+                        let (low, high) =
+                            bits.expect("every field of a program without errors has its bits");
+                        let ty = self.normalize(field.ty);
+                        mir::BitField {
+                            name: field.name.clone(),
+                            ty: self.mir_ty(ty),
+                            low,
+                            high,
+                        }
+                    })
+                    .collect();
+                mir::BitStruct {
+                    name: def.path.clone(),
+                    int: def.ty.int,
+                    fields,
+                }
+            })
+            .collect();
         let mut statics: Vec<mir::Static> = (0..self.hir.statics.len())
             .map(|id| {
                 let id = StaticId(id as u32);
@@ -1769,6 +1802,7 @@ impl<'h> Queries<'h> {
         });
         Mir {
             structs,
+            bit_structs,
             enums,
             peripheral_types,
             peripherals,

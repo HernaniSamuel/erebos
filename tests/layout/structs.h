@@ -95,6 +95,7 @@ enum core__PanicReason : uint8_t {
     core__PanicReason_IndexOutOfBounds = 1,
     core__PanicReason_AssertionFailed = 2,
     core__PanicReason_NoVariant = 3,
+    core__PanicReason_FieldOutOfRange = 4,
 };
 struct core__PanicInfo {
     struct { const uint8_t *ptr; size_t len; } file;

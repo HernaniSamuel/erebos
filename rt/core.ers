@@ -37,6 +37,7 @@ pub enum PanicReason: u8 {
     IndexOutOfBounds = 1,
     AssertionFailed = 2,
     NoVariant = 3,
+    FieldOutOfRange = 4,
 }
 
 // The layout ADR 0053 gives, which `tests/layout` checks against C.
