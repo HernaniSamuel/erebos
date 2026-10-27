@@ -521,7 +521,8 @@ impl Queries<'_> {
 
     /// Checks the registers of the peripheral type `id` (ADR 0058): their
     /// types, the alignment of their offsets, and their overlaps, once per
-    /// pair, at the later register.
+    /// pair of one alternate group or both of none (ADR 0061), at the later
+    /// register.
     fn check_peripheral_type(&mut self, id: PeripheralTypeId) {
         let hir = self.hir;
         let def = hir.peripheral_type(id);
@@ -594,7 +595,12 @@ impl Queries<'_> {
                     (earlier.access, later.access),
                     (AccessMode::Read, AccessMode::Write) | (AccessMode::Write, AccessMode::Read)
                 );
-                if lo >= hi || apart {
+                // Registers of different alternate groups, or of a group and
+                // none, belong to different modes of the device, of which one
+                // is in use at a time (ADR 0061).
+                let other_mode = (earlier.group.as_ref()).map(|(group, _)| group)
+                    != (later.group.as_ref()).map(|(group, _)| group);
+                if lo >= hi || apart || other_mode {
                     continue;
                 }
                 self.diags.push(
@@ -620,7 +626,7 @@ impl Queries<'_> {
                         ),
                     )
                     .help(format!(
-                        "they share {}; two registers share a byte only when one is `read` and the other `write`, so that a read means one and a write the other (ADR 0058)",
+                        "they share {}; two registers of one mode share a byte only when one is `read` and the other `write`, so that a read means one and a write the other; registers of another mode of the device go in an alternate group, `in GROUP` after the offset, and are checked only against the registers of their group (ADR 0058, 0061)",
                         shared_bytes(lo, hi)
                     )),
                 );

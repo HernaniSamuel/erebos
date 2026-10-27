@@ -1,0 +1,20 @@
+// Overlaps with alternate groups (ADR 0061): two registers are checked for
+// overlap only when they are in the same group or both in none, and then
+// by ADR 0058's rule. `a` and `b` of the group `one` share the byte at 0:
+// `ty::register-overlap`, whose help names `in GROUP`. Accepted: `c` in
+// `one` and `d` in `two` at one offset, `e` in no group and `f` in `one`
+// overlapping in part, and the `read` `g` and the `write` `h` of `two` at
+// one offset.
+peripheral Modes {
+    read write a: u8 at 0 in one,
+    read write b: u16 at 0 in one,
+    read write c: u8 at 4 in one,
+    read write d: u8 at 4 in two,
+    read write e: u32 at 8,
+    read write f: u16 at 0xA in one,
+    read g: u8 at 0x10 in two,
+    write h: u8 at 0x10 in two,
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

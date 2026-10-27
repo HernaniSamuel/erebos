@@ -1,0 +1,20 @@
+// emit: mir
+// MIR lists a register's alternate group (ADR 0061) after its offset;
+// accesses to a grouped register are projections by index as to any other.
+peripheral Uart16550 {
+    read rbr: u8 at 0x00 read modifies,
+    write thr: u8 at 0x00,
+    read write ier: u8 at 0x01,
+    read write dll: u8 at 0x00 in dlab,
+    read write dlm: u8 at 0x01 in dlab,
+}
+
+peripheral UART0: Uart16550 at 0x1000_0000;
+
+fn divisor() -> u8 {
+    UART0.dll = 0x01;
+    UART0.dlm
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

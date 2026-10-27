@@ -1,0 +1,41 @@
+// emit: typeck
+// Alternate register groups (ADR 0061): the 16550's divisor latch, `dll`
+// and `dlm` in the group `dlab`, shares offsets 0 and 1 with `rbr`, `thr`
+// and `ier`, which are in no group, and is accepted. Accesses to grouped
+// registers are checked as any other. The dump shows each register's group
+// after its read effect. Grouped registers count in the extent and the
+// alignment: in `Wide`, the widest and last register is in a group, whose
+// name is also a register's, a label in no namespace.
+peripheral Uart16550 {
+    pub read rbr: u8 at 0x00 read modifies,
+    pub write thr: u8 at 0x00,
+    read write ier: u8 at 0x01,
+    read write lcr: u8 at 0x03,
+    read write dll: u8 at 0x00 in dlab,
+    read write dlm: u8 at 0x01 in dlab,
+}
+
+peripheral Wide {
+    read write ctrl: u8 at 0,
+    read wide: u32 at 4 read clears in ctrl,
+}
+
+peripheral UART0: Uart16550 at 0x1000_0000;
+
+fn set_divisor(divisor: u16) {
+    UART0.lcr = 0x80;
+    UART0.dll = divisor as u8;
+    UART0.dlm = (divisor >> 8) as u8;
+    UART0.lcr = 0x03;
+}
+
+fn divisor(u: *mut Uart16550) -> u16 {
+    (*u).dll as u16 | ((*u).dlm as u16) << 8
+}
+
+fn wide(w: *mut Wide) -> u32 {
+    (*w).wide
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

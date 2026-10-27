@@ -32,8 +32,10 @@ ty::register-overlap
     ·                 ╰── `read write`, covers [0x7, 0x9)
  12 │ }
     ╰────
-  help: they share the byte at 0x7; two registers share a byte only when one is `read` and the
-        other `write`, so that a read means one and a write the other (ADR 0058)
+  help: they share the byte at 0x7; two registers of one mode share a byte only when one is `read`
+        and the other `write`, so that a read means one and a write the other; registers of
+        another mode of the device go in an alternate group, `in GROUP` after the offset, and are
+        checked only against the registers of their group (ADR 0058, 0061)
 ty::register-overlap
 
   × the registers `word` and `low` overlap
@@ -48,8 +50,10 @@ ty::register-overlap
     ·                 ╰── `read write`, covers [0x7, 0x9)
  12 │ }
     ╰────
-  help: they share the byte at 0x8; two registers share a byte only when one is `read` and the
-        other `write`, so that a read means one and a write the other (ADR 0058)
+  help: they share the byte at 0x8; two registers of one mode share a byte only when one is `read`
+        and the other `write`, so that a read means one and a write the other; registers of
+        another mode of the device go in an alternate group, `in GROUP` after the offset, and are
+        checked only against the registers of their group (ADR 0058, 0061)
 ty::misaligned-register
 
   × the register `low` is at a misaligned offset

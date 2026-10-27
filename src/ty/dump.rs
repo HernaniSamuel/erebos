@@ -8,7 +8,8 @@ use crate::hir::{
 use crate::query::Queries;
 
 /// Lists the memory map with its values (ADR 0057), peripheral types with
-/// their layouts and their registers' read effects (ADR 0058, 0060) and
+/// their layouts and their registers' read effects and alternate groups
+/// (ADR 0058, 0060, 0061) and
 /// peripherals with their addresses (ADR 0058), struct
 /// layouts, bit-field structs with their fields' bits, effects and
 /// defaults (ADR 0059), enums with their values and, with payloads, their
@@ -39,7 +40,14 @@ pub fn dump(q: &mut Queries) -> String {
                     Some((effect, _)) => format!(" {}", read_effect_words(effect)),
                     None => String::new(),
                 };
-                format!("{access} {}: {ty} at {offset:#x}{effect}", register.name)
+                let group = match &register.group {
+                    Some((group, _)) => format!(" in {group}"),
+                    None => String::new(),
+                };
+                format!(
+                    "{access} {}: {ty} at {offset:#x}{effect}{group}",
+                    register.name
+                )
             })
             .collect();
         let registers = if registers.is_empty() {

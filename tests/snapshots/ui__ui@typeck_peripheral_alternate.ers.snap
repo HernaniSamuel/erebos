@@ -1,0 +1,50 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_peripheral_alternate.ers
+---
+--- typeck ---
+peripheral Uart16550 { read rbr: u8 at 0x0 read modifies, write thr: u8 at 0x0, read write ier: u8 at 0x1, read write lcr: u8 at 0x3, read write dll: u8 at 0x0 in dlab, read write dlm: u8 at 0x1 in dlab } extent 4, align 1
+peripheral Wide { read write ctrl: u8 at 0x0, read wide: u32 at 0x4 read clears in ctrl } extent 8, align 4
+peripheral UART0: Uart16550 at 0x10000000 covers [0x10000000, 0x10000004)
+fn set_divisor(divisor: u16) -> ()
+    expr 0 assign 938..954: ()
+    expr 1 register lcr 938..947: u8
+    expr 2 peripheral UART0 938..943: Uart16550
+    expr 3 int 128 950..954: u8
+    expr 4 assign 960..985: ()
+    expr 5 register dll 960..969: u8
+    expr 6 peripheral UART0 960..965: Uart16550
+    expr 7 as u8 972..985: u8
+    expr 8 local divisor 972..979: u16
+    expr 9 assign 991..1023: ()
+    expr 10 register dlm 991..1000: u8
+    expr 11 peripheral UART0 991..996: Uart16550
+    expr 12 as u8 1003..1023: u8
+    expr 13 binary >> 1003..1017: u16
+    expr 14 local divisor 1004..1011: u16
+    expr 15 int 8 1015..1016: u16
+    expr 16 assign 1029..1045: ()
+    expr 17 register lcr 1029..1038: u8
+    expr 18 peripheral UART0 1029..1034: Uart16550
+    expr 19 int 3 1041..1045: u8
+fn divisor(u: *mut Uart16550) -> u16
+    expr 20 binary | 1093..1133: u16
+    expr 21 as u16 1093..1108: u16
+    expr 22 register dll 1093..1101: u8
+    expr 23 deref 1093..1097: Uart16550
+    expr 24 local u 1095..1096: *mut Uart16550
+    expr 25 binary << 1111..1133: u16
+    expr 26 as u16 1111..1128: u16
+    expr 27 register dlm 1112..1120: u8
+    expr 28 deref 1112..1116: Uart16550
+    expr 29 local u 1114..1115: *mut Uart16550
+    expr 30 int 8 1132..1133: u16
+fn wide(w: *mut Wide) -> u32
+    expr 31 register wide 1172..1181: u32
+    expr 32 deref 1172..1176: Wide
+    expr 33 local w 1174..1175: *mut Wide
+entry fn main() -> !
+    expr 34 loop 1208..1215: !
+panic fn on_panic() -> !
+    expr 35 loop 1245..1252: !

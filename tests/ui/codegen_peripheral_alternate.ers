@@ -1,0 +1,28 @@
+// emit: llvm-ir
+// A register in an alternate group (ADR 0061) is built as any other: the
+// writes to `dll`, in `dlab`, and to `thr`, in no group, are volatile
+// stores of `i8` to the same address, `0x10000000`, in program order; so
+// are the write to `dlm` and the read of `ier` at `0x10000001`. Setting
+// DLAB before reaching `dll` is the program's business.
+peripheral Uart16550 {
+    read rbr: u8 at 0x00 read modifies,
+    write thr: u8 at 0x00,
+    read write ier: u8 at 0x01,
+    read write lcr: u8 at 0x03,
+    read write dll: u8 at 0x00 in dlab,
+    read write dlm: u8 at 0x01 in dlab,
+}
+
+peripheral UART0: Uart16550 at 0x1000_0000;
+
+fn configure() -> u8 {
+    UART0.lcr = 0x80;
+    UART0.dll = 0x01;
+    UART0.dlm = 0x00;
+    UART0.lcr = 0x03;
+    UART0.thr = 0x68;
+    UART0.ier
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

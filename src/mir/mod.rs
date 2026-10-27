@@ -787,6 +787,9 @@ pub struct PeripheralTypeDef {
 pub struct Register {
     pub name: String,
     pub ty: Ty,
+    /// Its alternate group (ADR 0061), for the dump only: accesses to it
+    /// are built as to any other register.
+    pub group: Option<String>,
 }
 
 impl PeripheralTypeDef {
@@ -1475,7 +1478,14 @@ impl fmt::Display for Mir {
                 .zip(&layout.offsets)
                 .enumerate()
                 .map(|(i, (register, offset))| {
-                    format!("{i} {}: {} at {offset:#x}", register.name, register.ty)
+                    let group = match &register.group {
+                        Some(group) => format!(" in {group}"),
+                        None => String::new(),
+                    };
+                    format!(
+                        "{i} {}: {} at {offset:#x}{group}",
+                        register.name, register.ty
+                    )
                 })
                 .collect();
             let registers = if registers.is_empty() {

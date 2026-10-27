@@ -1,0 +1,48 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/mir_peripheral_alternate.ers
+---
+--- mir ---
+peripheral Uart16550 { 0 rbr: u8 at 0x0, 1 thr: u8 at 0x0, 2 ier: u8 at 0x1, 3 dll: u8 at 0x0 in dlab, 4 dlm: u8 at 0x1 in dlab } // extent 2, align 1
+peripheral UART0: Uart16550 at 0x10000000;
+
+fn divisor() -> u8 {
+    let _0: u8;
+    let _1: *mut Uart16550;
+    let _2: *mut Uart16550;
+    let _3: u8;
+
+    bb0: {
+        _1 = const peripheral UART0;
+        (*_1).3 = const 1_u8;
+        _2 = const peripheral UART0;
+        _3 = copy (*_2).4;
+        _0 = copy _3;
+        return;
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}

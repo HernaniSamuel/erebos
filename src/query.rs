@@ -1322,6 +1322,7 @@ impl<'h> Queries<'h> {
                     }
                     _ => mir::Ty::Unit,
                 },
+                group: (register.group.as_ref()).map(|(group, _)| group.clone()),
             })
             .collect();
         let p = PeripheralTypeRef::new(def.path.clone(), registers);

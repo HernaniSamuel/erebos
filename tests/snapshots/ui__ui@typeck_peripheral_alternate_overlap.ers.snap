@@ -1,0 +1,23 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_peripheral_alternate_overlap.ers
+---
+--- errors ---
+ty::register-overlap
+
+  × the registers `a` and `b` overlap
+    ╭─[typeck_peripheral_alternate_overlap.ers:10:16]
+  8 │ peripheral Modes {
+  9 │     read write a: u8 at 0 in one,
+    ·                ┬
+    ·                ╰── `read write`, covers [0x0, 0x1)
+ 10 │     read write b: u16 at 0 in one,
+    ·                ┬
+    ·                ╰── `read write`, covers [0x0, 0x2)
+ 11 │     read write c: u8 at 4 in one,
+    ╰────
+  help: they share the byte at 0x0; two registers of one mode share a byte only when one is `read`
+        and the other `write`, so that a read means one and a write the other; registers of
+        another mode of the device go in an alternate group, `in GROUP` after the offset, and are
+        checked only against the registers of their group (ADR 0058, 0061)

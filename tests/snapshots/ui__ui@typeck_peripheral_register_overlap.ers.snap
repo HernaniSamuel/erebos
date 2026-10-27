@@ -17,8 +17,10 @@ ty::register-overlap
     ·          ╰── `read`, covers [0x0, 0x1)
  11 │     write c: u16 at 2,
     ╰────
-  help: they share the byte at 0x0; two registers share a byte only when one is `read` and the
-        other `write`, so that a read means one and a write the other (ADR 0058)
+  help: they share the byte at 0x0; two registers of one mode share a byte only when one is `read`
+        and the other `write`, so that a read means one and a write the other; registers of
+        another mode of the device go in an alternate group, `in GROUP` after the offset, and are
+        checked only against the registers of their group (ADR 0058, 0061)
 ty::register-overlap
 
   × the registers `c` and `d` overlap
@@ -32,8 +34,10 @@ ty::register-overlap
     ·           ╰── `write`, covers [0x2, 0x4)
  13 │     read write ctrl: u32 at 0x10,
     ╰────
-  help: they share 2 bytes from 0x2; two registers share a byte only when one is `read` and the
-        other `write`, so that a read means one and a write the other (ADR 0058)
+  help: they share 2 bytes from 0x2; two registers of one mode share a byte only when one is
+        `read` and the other `write`, so that a read means one and a write the other; registers of
+        another mode of the device go in an alternate group, `in GROUP` after the offset, and are
+        checked only against the registers of their group (ADR 0058, 0061)
 ty::register-overlap
 
   × the registers `ctrl` and `flag` overlap
@@ -47,8 +51,10 @@ ty::register-overlap
     ·                  ╰── `read write`, covers [0x12, 0x13)
  15 │     read write x: u8 at 0x20,
     ╰────
-  help: they share the byte at 0x12; two registers share a byte only when one is `read` and the
-        other `write`, so that a read means one and a write the other (ADR 0058)
+  help: they share the byte at 0x12; two registers of one mode share a byte only when one is
+        `read` and the other `write`, so that a read means one and a write the other; registers of
+        another mode of the device go in an alternate group, `in GROUP` after the offset, and are
+        checked only against the registers of their group (ADR 0058, 0061)
 ty::register-overlap
 
   × the registers `x` and `y` overlap
@@ -62,8 +68,10 @@ ty::register-overlap
     ·          ╰── `read`, covers [0x20, 0x21)
  17 │     read rbr: u8 at 0x30,
     ╰────
-  help: they share the byte at 0x20; two registers share a byte only when one is `read` and the
-        other `write`, so that a read means one and a write the other (ADR 0058)
+  help: they share the byte at 0x20; two registers of one mode share a byte only when one is
+        `read` and the other `write`, so that a read means one and a write the other; registers of
+        another mode of the device go in an alternate group, `in GROUP` after the offset, and are
+        checked only against the registers of their group (ADR 0058, 0061)
 ty::register-overlap
 
   × the registers `p` and `q` overlap
@@ -77,8 +85,10 @@ ty::register-overlap
     ·                ╰── `read write`, covers [0x51, 0x52)
  23 │     read write r: u32 at 0x50,
     ╰────
-  help: they share the byte at 0x51; two registers share a byte only when one is `read` and the
-        other `write`, so that a read means one and a write the other (ADR 0058)
+  help: they share the byte at 0x51; two registers of one mode share a byte only when one is
+        `read` and the other `write`, so that a read means one and a write the other; registers of
+        another mode of the device go in an alternate group, `in GROUP` after the offset, and are
+        checked only against the registers of their group (ADR 0058, 0061)
 ty::register-overlap
 
   × the registers `p` and `r` overlap
@@ -93,8 +103,10 @@ ty::register-overlap
     ·                ╰── `read write`, covers [0x50, 0x54)
  24 │ }
     ╰────
-  help: they share 2 bytes from 0x50; two registers share a byte only when one is `read` and the
-        other `write`, so that a read means one and a write the other (ADR 0058)
+  help: they share 2 bytes from 0x50; two registers of one mode share a byte only when one is
+        `read` and the other `write`, so that a read means one and a write the other; registers of
+        another mode of the device go in an alternate group, `in GROUP` after the offset, and are
+        checked only against the registers of their group (ADR 0058, 0061)
 ty::register-overlap
 
   × the registers `q` and `r` overlap
@@ -108,5 +120,7 @@ ty::register-overlap
     ·                ╰── `read write`, covers [0x50, 0x54)
  24 │ }
     ╰────
-  help: they share the byte at 0x51; two registers share a byte only when one is `read` and the
-        other `write`, so that a read means one and a write the other (ADR 0058)
+  help: they share the byte at 0x51; two registers of one mode share a byte only when one is
+        `read` and the other `write`, so that a read means one and a write the other; registers of
+        another mode of the device go in an alternate group, `in GROUP` after the offset, and are
+        checked only against the registers of their group (ADR 0058, 0061)
