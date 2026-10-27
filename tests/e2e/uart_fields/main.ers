@@ -1,0 +1,133 @@
+// The program of M3.3 (roadmap): the 16550 UART of QEMU `virt` configured
+// through its fields, declared in `board.ers` (ADR 0059, 0060, 0061).
+// With `lcr.dlab` set by a field assignment, the divisor is written to the
+// alternate registers `dll` and `dlm` and read back; `ier`, at `dlm`'s
+// offset, keeps its own value. `lcr` and `fcr` are written whole, with
+// literals whose `..` takes the reset values. A field assignment turns on
+// loopback, keeping `mcr`'s other bits: a byte sent is received. With the
+// FIFOs off, two bytes sent and none read are an overrun: `lsr` read into
+// a local shows it, and the next read finds it cleared by the first.
+// QEMU's loopback receives a byte when its write returns, so no wait is
+// needed before reading `lsr`. Each result is printed once loopback is
+// off.
+// expect-output: divisor 0x0180
+// expect-output: ier 0x00
+// expect-output: lcr 0x03 eight bits
+// expect-output: iir 0xC1 fifos on
+// expect-output: mcr 0x18 loopback
+// expect-output: loopback Z
+// expect-output: lsr 0x63 overrun
+// expect-output: lsr 0x61 no overrun
+// expect-output: rbr 2
+// expect-exit: 0
+mod board;
+
+use board::{Fcr, Ier, Iir, Lcr, Lsr, Mcr, UART0};
+
+fn print(s: *const [u8]) {
+    let mut i: usize = 0;
+    while i < len(s) {
+        board::putc((*s)[i]);
+        i += 1;
+    }
+}
+
+// ` 0x` and two hex digits per byte of `bytes`.
+fn print_hex(value: u32, bytes: u32) {
+    print(&raw const b" 0x");
+    let mut shift: u32 = bytes * 8;
+    while shift > 0 {
+        shift -= 4;
+        let digit: u8 = ((value >> shift) & 0xF) as u8;
+        board::putc(if digit < 10 { b'0' + digit } else { b'A' + digit - 10 });
+    }
+}
+
+entry fn main() -> ! {
+    // Interrupts off, as after reset.
+    UART0.ier = Ier { .. };
+
+    // 384, 300 baud from the 16550's usual 1.8432 MHz clock: both bytes
+    // differ from QEMU's reset divisor, 12.
+    UART0.lcr.dlab = true;
+    UART0.dll = 0x80;
+    UART0.dlm = 0x01;
+    let divisor: u16 = UART0.dll as u16 | (UART0.dlm as u16) << 8;
+    UART0.lcr.dlab = false;
+    let ier: Ier = UART0.ier;
+
+    // 8 data bits, 1 stop bit, no parity.
+    UART0.lcr = Lcr { word_length: .Eight, stop_bits: .One, parity: .None, .. };
+    let lcr: Lcr = UART0.lcr;
+
+    UART0.fcr = Fcr { enable: true, clear_rx: true, clear_tx: true, .. };
+    let iir: Iir = UART0.iir;
+
+    UART0.mcr.loopback = true;
+    let mcr: Mcr = UART0.mcr;
+    board::putc(b'Z');
+    while !UART0.lsr.data_ready {}
+    let echo: u8 = UART0.rbr;
+
+    UART0.fcr = Fcr { .. };
+    board::putc(b'1');
+    board::putc(b'2');
+    let first: Lsr = UART0.lsr;
+    let second: Lsr = UART0.lsr;
+    let kept: u8 = UART0.rbr;
+    UART0.mcr.loopback = false;
+
+    print(&raw const b"divisor");
+    print_hex(divisor as u32, 2);
+    print(&raw const b"\nier");
+    print_hex(ier as u32, 1);
+    print(&raw const b"\nlcr");
+    print_hex(lcr as u32, 1);
+    if lcr.word_length == .Eight {
+        print(&raw const b" eight bits");
+    }
+    print(&raw const b"\niir");
+    print_hex(iir as u32, 1);
+    if iir.fifos == 3 {
+        print(&raw const b" fifos on");
+    }
+    print(&raw const b"\nmcr");
+    print_hex(mcr as u32, 1);
+    if mcr.loopback {
+        print(&raw const b" loopback");
+    }
+    print(&raw const b"\nloopback ");
+    board::putc(echo);
+    print(&raw const b"\nlsr");
+    print_hex(first as u32, 1);
+    if first.overrun {
+        print(&raw const b" overrun");
+    } else {
+        print(&raw const b" no overrun");
+    }
+    print(&raw const b"\nlsr");
+    print_hex(second as u32, 1);
+    if second.overrun {
+        print(&raw const b" overrun");
+    } else {
+        print(&raw const b" no overrun");
+    }
+    print(&raw const b"\nrbr ");
+    board::putc(kept);
+    print(&raw const b"\n");
+    board::exit(0)
+}
+
+panic fn on_panic() -> ! {
+    board::exit(1)
+}
+
+// QEMU `virt`'s RAM in two regions of 64 MiB: the image in the first, and
+// in the second a 1 MiB stack at its start, then `.data` and `.bss`.
+memory {
+    region IMAGE { origin: 0x8000_0000, size: 0x0400_0000 }
+    region RAM { origin: 0x8400_0000, size: 0x0400_0000 }
+    code in IMAGE;
+    data in RAM;
+    stack in RAM { size: 0x0010_0000 }
+}

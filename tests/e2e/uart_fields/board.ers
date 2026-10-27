@@ -1,0 +1,121 @@
+// The devices of QEMU `virt` the program uses, declared with fields
+// (ADR 0059, 0060, 0061): the 16550 UART, whose registers are bit-field
+// structs whose defaults are the reset values the 16550's documentation
+// gives, and the test finisher (ADR 0010). QEMU's reset differs in `mcr`,
+// whose `out2` it sets: on QEMU, `UART0.mcr = Mcr { loopback: true, .. }`
+// would clear `out2`, which a field assignment keeps. The divisor latch,
+// `dll` and `dlm`, is in the alternate group `dlab`: the UART shows it at
+// offsets 0 and 1 while `lcr.dlab` is set, and `rbr`, `thr` and `ier`
+// otherwise.
+
+pub enum WordLength: u8 { Five = 0, Six = 1, Seven = 2, Eight = 3 }
+
+pub enum StopBits: u8 { One = 0, Two = 1 }
+
+// Bit 3 enables parity, bit 4 makes it even, bit 5 sticks it; with bit 3
+// clear there is none, whatever the others.
+pub enum Parity: u8 { None = 0, Odd = 1, Even = 3, Mark = 5, Space = 7 }
+
+pub enum Trigger: u8 { One = 0, Four = 1, Eight = 2, Fourteen = 3 }
+
+pub struct Ier: u8 {
+    pub rx_available: bool at 0 = false,
+    pub thr_empty: bool at 1 = false,
+    pub line_status: bool at 2 = false,
+    pub modem_status: bool at 3 = false,
+}
+
+// `no_interrupt` is 1 while no interrupt is pending; `fifos` is 3 while the
+// FIFOs are on.
+pub struct Iir: u8 {
+    pub no_interrupt: bool at 0,
+    pub id: u8 at 1..=3,
+    pub fifos: u8 at 6..=7,
+}
+
+// `clear_rx` and `clear_tx` empty a FIFO when written 1, and read as 0.
+pub struct Fcr: u8 {
+    pub enable: bool at 0 = false,
+    pub clear_rx: bool at 1 = false,
+    pub clear_tx: bool at 2 = false,
+    pub dma_mode: bool at 3 = false,
+    pub trigger: Trigger at 6..=7 = .One,
+}
+
+pub struct Lcr: u8 {
+    pub word_length: WordLength at 0..=1 = .Five,
+    pub stop_bits: StopBits at 2 = .One,
+    pub parity: Parity at 3..=5 = .None,
+    pub break_control: bool at 6 = false,
+    pub dlab: bool at 7 = false,
+}
+
+pub struct Mcr: u8 {
+    pub dtr: bool at 0 = false,
+    pub rts: bool at 1 = false,
+    pub out1: bool at 2 = false,
+    pub out2: bool at 3 = false,
+    pub loopback: bool at 4 = false,
+}
+
+// Reading the register clears the error bits.
+pub struct Lsr: u8 {
+    pub data_ready: bool at 0,
+    pub overrun: bool at 1 read clears,
+    pub parity_error: bool at 2 read clears,
+    pub framing_error: bool at 3 read clears,
+    pub break_interrupt: bool at 4 read clears,
+    pub thr_empty: bool at 5,
+    pub transmitter_empty: bool at 6,
+    pub fifo_error: bool at 7,
+}
+
+// `rbr`'s reads take a byte from the receiver, `iir`'s clear a pending
+// interrupt.
+pub peripheral Uart16550 {
+    pub read rbr: u8 at 0x00 read modifies,
+    pub write thr: u8 at 0x00,
+    pub read write ier: Ier at 0x01,
+    pub read iir: Iir at 0x02 read modifies,
+    pub write fcr: Fcr at 0x02,
+    pub read write lcr: Lcr at 0x03,
+    pub read write mcr: Mcr at 0x04,
+    pub read lsr: Lsr at 0x05,
+    pub read write scr: u8 at 0x07,
+    pub read write dll: u8 at 0x00 in dlab,
+    pub read write dlm: u8 at 0x01 in dlab,
+}
+
+// The test finisher stops QEMU with what its low half says, and the code
+// in its high half on a failure.
+pub enum Finish: u16 { Fail = 0x3333, Pass = 0x5555, Reset = 0x7777 }
+
+pub struct FinisherStatus: u32 {
+    pub finish: Finish at 0..=15,
+    pub code: u16 at 16..=31 = 0,
+}
+
+pub peripheral TestFinisher {
+    write status: FinisherStatus at 0x00,
+}
+
+pub peripheral UART0: Uart16550 at 0x1000_0000;
+pub peripheral FINISHER: TestFinisher at 0x0010_0000;
+
+// Writes a byte, once the UART can take one. Polling `lsr.thr_empty`
+// loses the error bits its reads clear (ADR 0060); a caller that wants
+// them reads `lsr` into a local.
+pub fn putc(byte: u8) {
+    while !UART0.lsr.thr_empty {}
+    UART0.thr = byte;
+}
+
+// Stops QEMU: 0 passes, any other code fails with it.
+pub fn exit(code: u16) -> ! {
+    FINISHER.status = if code == 0 {
+        FinisherStatus { finish: .Pass, .. }
+    } else {
+        FinisherStatus { finish: .Fail, code: code }
+    };
+    loop {}
+}
