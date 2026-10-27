@@ -322,6 +322,7 @@ impl Checker<'_, '_> {
             _ => return None,
         };
         self.q.tables.expr_types[expr.id.0 as usize] = info.ty;
+        super::values_of_bit_structs(info.ty);
         Some(info)
     }
 

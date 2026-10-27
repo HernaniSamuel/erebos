@@ -1,0 +1,42 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_bit_field_never_unsized.ers
+---
+--- errors ---
+ty::never-in-memory
+
+  × `!` is not a type of memory
+    ╭─[typeck_bit_field_never_unsized.ers:10:12]
+  9 │ struct Bits: u8 {
+ 10 │     never: ! at 0,
+    ·            ┬
+    ·            ╰── `!` as the type of a bit field
+ 11 │     bytes: [u8] at 1,
+    ╰────
+  help: `!` is the type of expressions that do not finish, so no memory holds one; a bit field is
+        a `bool`, an integer type or an enum without payloads (ADR 0059)
+ty::unsized
+
+  × `[u8]` has no size known at compile time
+    ╭─[typeck_bit_field_never_unsized.ers:11:12]
+ 10 │     never: ! at 0,
+ 11 │     bytes: [u8] at 1,
+    ·            ──┬─
+    ·              ╰── `[u8]` as the type of a bit field
+ 12 │     device: Device at 2,
+    ╰────
+  help: its length is known only at run time, so it exists only behind a pointer, as a slice:
+        `*const [T]` or `*mut [T]` (ADR 0031)
+ty::peripheral-by-value
+
+  × `Device` is a peripheral type, which no value has
+    ╭─[typeck_bit_field_never_unsized.ers:12:13]
+ 11 │     bytes: [u8] at 1,
+ 12 │     device: Device at 2,
+    ·             ───┬──
+    ·                ╰── `Device` as the type of a bit field
+ 13 │ }
+    ╰────
+  help: a peripheral type describes a device's registers, reached one at a time from a peripheral
+        or through a pointer, such as `*mut Device` (ADR 0058)

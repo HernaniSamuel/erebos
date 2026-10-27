@@ -4,10 +4,11 @@ use std::collections::HashMap;
 
 use crate::diag::{Diagnostic, Diagnostics};
 use crate::hir::{
-    self, BuiltinEnum, ConstId, CoreStart, EnumDef, EnumId, EnumTy, ExprId, FileDef, Fn, FnId,
-    FnKind, Hir, IntTy, Local, LocalId, ModuleDef, ModuleId, NeverInMemory, PeripheralByValue,
-    PeripheralId, PeripheralTy, PeripheralTypeDef, PeripheralTypeId, StaticDef, StaticId,
-    StructDef, StructId, StructTy, Ty, UnsizedType, Visibility, VolatilePeripheral,
+    self, BitStructDef, BitStructId, BitStructTy, BuiltinEnum, ConstId, CoreStart, EnumDef, EnumId,
+    EnumTy, ExprId, FileDef, Fn, FnId, FnKind, Hir, IntTy, Local, LocalId, ModuleDef, ModuleId,
+    NeverInMemory, PeripheralByValue, PeripheralId, PeripheralTy, PeripheralTypeDef,
+    PeripheralTypeId, StaticDef, StaticId, StructDef, StructId, StructTy, Ty, UnsizedType,
+    Visibility, VolatilePeripheral,
 };
 use crate::span::Span;
 use crate::syntax::ast;
@@ -49,6 +50,7 @@ pub fn lower(
         core_fn_base: 0,
         fns: Vec::new(),
         structs: Vec::new(),
+        bit_structs: Vec::new(),
         enums: Vec::new(),
         consts: Vec::new(),
         statics: Vec::new(),
@@ -88,6 +90,7 @@ pub fn lower(
         core_fn_base,
         fns: fn_decls,
         structs: struct_decls,
+        bit_structs: bit_struct_decls,
         enums: enum_decls,
         consts: const_decls,
         statics: static_decls,
@@ -110,6 +113,38 @@ pub fn lower(
             name: Box::leak(item_path(&modules, module, &decl.name.name).into_boxed_str()),
         })
         .collect();
+
+    // Bit-field structs too, each with the integer type it is stored as
+    // (ADR 0059).
+    let mut bit_struct_tys = Vec::new();
+    for (i, &(decl, module)) in bit_struct_decls.iter().enumerate() {
+        let int = match &decl.ty.kind {
+            ast::TyKind::Named(path)
+                if let Some(int) = path.as_single().and_then(|ty| IntTy::from_name(&ty.name))
+                    && matches!(int, IntTy::U8 | IntTy::U16 | IntTy::U32 | IntTy::U64) =>
+            {
+                int
+            }
+            _ => {
+                diags.push(
+                    Diagnostic::error(
+                        "resolve::bit-struct-type",
+                        "the type of a bit-field struct must be `u8`, `u16`, `u32` or `u64`",
+                    )
+                    .label(decl.ty.span, "not `u8`, `u16`, `u32` or `u64`")
+                    .help("a bit-field struct is stored as an unsigned integer type of a fixed width, whose bits its fields occupy (ADR 0059)"),
+                );
+                // Reported; any placeholder works since lowering errors
+                // stop the pipeline.
+                IntTy::U8
+            }
+        };
+        bit_struct_tys.push(BitStructTy {
+            id: BitStructId(i as u32),
+            name: Box::leak(item_path(&modules, module, &decl.name.name).into_boxed_str()),
+            int,
+        });
+    }
 
     // Enums too, each with the integer type it is stored as (ADR 0035), or
     // its tag's, and whether a variant carries a payload (ADR 0039).
@@ -167,6 +202,8 @@ pub fn lower(
         in_comptime: false,
         struct_tys,
         struct_decls: &struct_decls,
+        bit_struct_tys,
+        bit_struct_decls: &bit_struct_decls,
         enum_tys,
         enum_decls: &enum_decls,
         const_decls: &const_decls,
@@ -197,6 +234,7 @@ pub fn lower(
     // The program's items, then `core`'s, each part lowered whole, so that
     // the program's expression ids are those of the program alone.
     let mut structs = Vec::new();
+    let mut bit_structs = Vec::new();
     let mut fns = Vec::new();
     let mut consts = Vec::new();
     let mut statics = Vec::new();
@@ -226,6 +264,15 @@ pub fn lower(
         for &(decl, module) in &struct_decls[from.structs..to.structs] {
             lowerer.module = module;
             structs.push(lowerer.struct_decl(decl));
+        }
+        for (i, &(decl, module)) in bit_struct_decls
+            .iter()
+            .enumerate()
+            .take(to.bit_structs)
+            .skip(from.bit_structs)
+        {
+            lowerer.module = module;
+            bit_structs.push(lowerer.bit_struct_decl(decl, BitStructId(i as u32)));
         }
         for &(decl, module) in &fn_decls[from.fns..to.fns] {
             lowerer.module = module;
@@ -306,9 +353,12 @@ pub fn lower(
         &namespaces,
         &uses,
         core_root,
-        &mut structs,
-        &mut enums,
-        &mut peripheral_types,
+        Reachable {
+            structs: &mut structs,
+            bit_structs: &mut bit_structs,
+            enums: &mut enums,
+            peripheral_types: &mut peripheral_types,
+        },
     );
 
     for diag in duplicates {
@@ -338,6 +388,7 @@ pub fn lower(
     Some(Hir {
         modules,
         structs,
+        bit_structs,
         enums,
         fns,
         consts,
@@ -366,6 +417,7 @@ pub fn lower(
 #[derive(Clone, Copy, Default)]
 struct Counts {
     structs: usize,
+    bit_structs: usize,
     enums: usize,
     fns: usize,
     consts: usize,
@@ -376,24 +428,47 @@ struct Counts {
     peripherals: usize,
 }
 
-/// Fills in the `reachable` of every struct, enum and peripheral type: the
-/// modules where a path written would name it and be usable (ADR 0050,
-/// 0058). Any path can be written from the root module, through `crate`,
-/// and a segment is usable from a module if it is `pub` or that module is
-/// within the one holding it. So what is reachable from a module is what a walk of the namespaces
-/// from the root finds through the names visible from there, `use`s
-/// included. Every `use` is resolved by now; one that failed was reported.
-/// Every module of the program also writes paths from `core`'s root,
-/// `core_root`, and a module of `core` writes them from there only: `crate`
-/// is `core`'s root there, and `core` cannot name the program (ADR 0052).
+/// The items whose `reachable` `reachability` fills in: structs, bit-field
+/// structs, enums and peripheral types.
+struct Reachable<'r> {
+    structs: &'r mut [StructDef],
+    bit_structs: &'r mut [BitStructDef],
+    enums: &'r mut [EnumDef],
+    peripheral_types: &'r mut [PeripheralTypeDef],
+}
+
+impl Reachable<'_> {
+    /// The `reachable` of `def`, if it has one.
+    fn of(&mut self, def: Def) -> Option<&mut Vec<ModuleId>> {
+        Some(match def {
+            Def::Struct(id) => &mut self.structs[id.0 as usize].reachable,
+            Def::BitStruct(id) => &mut self.bit_structs[id.0 as usize].reachable,
+            Def::Enum(id) => &mut self.enums[id.0 as usize].reachable,
+            Def::PeripheralType(id) => &mut self.peripheral_types[id.0 as usize].reachable,
+            Def::Fn(_) | Def::Const(_) | Def::Static(_) | Def::Peripheral(_) | Def::Module(_) => {
+                return None;
+            }
+        })
+    }
+}
+
+/// Fills in the `reachable` of every struct, bit-field struct, enum and
+/// peripheral type: the modules where a path written would name it and be
+/// usable (ADR 0050, 0058, 0059). Any path can be written from the root
+/// module, through `crate`, and a segment is usable from a module if it is
+/// `pub` or that module is within the one holding it. So what is reachable
+/// from a module is what a walk of the namespaces from the root finds
+/// through the names visible from there, `use`s included. Every `use` is
+/// resolved by now; one that failed was reported. Every module of the
+/// program also writes paths from `core`'s root, `core_root`, and a module
+/// of `core` writes them from there only: `crate` is `core`'s root there,
+/// and `core` cannot name the program (ADR 0052).
 fn reachability(
     modules: &[ModuleDef],
     namespaces: &[HashMap<String, Entry>],
     uses: &[Use],
     core_root: ModuleId,
-    structs: &mut [StructDef],
-    enums: &mut [EnumDef],
-    peripheral_types: &mut [PeripheralTypeDef],
+    mut items: Reachable,
 ) {
     for from in 0..modules.len() {
         let from = ModuleId(from as u32);
@@ -418,22 +493,17 @@ fn reachability(
                         _ => continue,
                     },
                 };
+                if let Def::Module(id) = def
+                    && !seen[id.0 as usize]
+                {
+                    seen[id.0 as usize] = true;
+                    pending.push(id);
+                }
                 // `from` goes in id order, so each list stays in order; a
                 // second path to an item adds nothing.
-                let reachable = match def {
-                    Def::Module(id) => {
-                        if !seen[id.0 as usize] {
-                            seen[id.0 as usize] = true;
-                            pending.push(id);
-                        }
-                        continue;
-                    }
-                    Def::Struct(id) => &mut structs[id.0 as usize].reachable,
-                    Def::Enum(id) => &mut enums[id.0 as usize].reachable,
-                    Def::PeripheralType(id) => &mut peripheral_types[id.0 as usize].reachable,
-                    Def::Fn(_) | Def::Const(_) | Def::Static(_) | Def::Peripheral(_) => continue,
-                };
-                if reachable.last() != Some(&from) {
+                if let Some(reachable) = items.of(def)
+                    && reachable.last() != Some(&from)
+                {
                     reachable.push(from);
                 }
             }
@@ -446,6 +516,7 @@ fn reachability(
 enum Def {
     Fn(FnId),
     Struct(StructId),
+    BitStruct(BitStructId),
     Enum(EnumId),
     Const(ConstId),
     Static(StaticId),
@@ -460,6 +531,7 @@ impl Def {
         match self {
             Def::Fn(_) => "a function",
             Def::Struct(_) => "a struct",
+            Def::BitStruct(_) => "a bit-field struct",
             Def::Enum(_) => "an enum",
             Def::Const(_) => "a constant",
             Def::Static(_) => "a static",
@@ -530,6 +602,7 @@ struct Items<'a> {
     core_fn_base: u32,
     fns: Vec<(&'a ast::FnDecl, ModuleId)>,
     structs: Vec<(&'a ast::StructDecl, ModuleId)>,
+    bit_structs: Vec<(&'a ast::BitStructDecl, ModuleId)>,
     enums: Vec<(&'a ast::EnumDecl, ModuleId)>,
     consts: Vec<(&'a ast::ConstDecl, ModuleId)>,
     statics: Vec<(&'a ast::StaticDecl, ModuleId)>,
@@ -552,6 +625,7 @@ impl<'a> Items<'a> {
     fn counts(&self) -> Counts {
         Counts {
             structs: self.structs.len(),
+            bit_structs: self.bit_structs.len(),
             enums: self.enums.len(),
             fns: self.fns.len(),
             consts: self.consts.len(),
@@ -613,8 +687,11 @@ impl<'a> Items<'a> {
                     let id = StructId(self.structs.len() as u32 - 1);
                     (&decl.name, decl.vis, Def::Struct(id))
                 }
-                // Not lowered yet (M3.3, step 2).
-                ast::Item::BitStruct(_) => continue,
+                ast::Item::BitStruct(decl) => {
+                    self.bit_structs.push((decl, module));
+                    let id = BitStructId(self.bit_structs.len() as u32 - 1);
+                    (&decl.name, decl.vis, Def::BitStruct(id))
+                }
                 ast::Item::Enum(decl) => {
                     self.enums.push((decl, module));
                     let id = EnumId(self.enums.len() as u32 - 1);
@@ -1186,6 +1263,8 @@ struct Lowerer<'a> {
     values: Vec<Fn>,
     struct_tys: Vec<StructTy>,
     struct_decls: &'a [(&'a ast::StructDecl, ModuleId)],
+    bit_struct_tys: Vec<BitStructTy>,
+    bit_struct_decls: &'a [(&'a ast::BitStructDecl, ModuleId)],
     enum_tys: Vec<EnumTy>,
     enum_decls: &'a [(&'a ast::EnumDecl, ModuleId)],
     const_decls: &'a [(&'a ast::ConstDecl, ModuleId)],

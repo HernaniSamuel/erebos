@@ -1,0 +1,16 @@
+// emit: typeck
+// A bit field's type is a type of memory (ADR 0059): `!`, `[u8]` and a
+// peripheral type there are reported as in other fields (ADR 0031, 0034,
+// 0058), one error each.
+peripheral Device {
+    read write data: u8 at 0,
+}
+
+struct Bits: u8 {
+    never: ! at 0,
+    bytes: [u8] at 1,
+    device: Device at 2,
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

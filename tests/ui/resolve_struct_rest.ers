@@ -1,0 +1,47 @@
+// `..` in struct literals (ADR 0059), with errors of name resolution only,
+// so that no body is type checked: `..` leaving out fields of a bit-field
+// struct without a default or a write effect, one and two of them, and `..`
+// in a literal of an ordinary struct (`resolve::missing-default` each); a
+// literal without `..` leaving out fields that all have a default or a
+// write effect (`resolve::missing-fields`, whose help offers `..`) and one
+// leaving out a field without either (no such help). From another module,
+// a literal naming a private field, with `..`, one leaving out a private
+// field without a default with `..`, and one leaving out private fields
+// without `..` (`resolve::private-field` each).
+enum Mode: u8 { A = 0, B = 1 }
+
+struct Point { x: u32, y: u32 }
+
+struct Ctrl: u32 {
+    pub enable: bool at 0 = false,
+    pub mode: Mode at 1..=2 = .A,
+    pub count: u8 at 3..=6,
+    pub level: u8 at 8..=11,
+    pub done: bool at 7 write 1 clears,
+}
+
+mod dev {
+    pub struct Reg: u8 {
+        pub on: bool at 0,
+        level: u8 at 1..=3 = 0,
+        flag: bool at 4 write 1 clears,
+        raw: u8 at 5..=7,
+    }
+}
+
+fn rest() {
+    let one: Ctrl = Ctrl { enable: true, level: 1, .. };
+    let two: Ctrl = Ctrl { enable: true, .. };
+    let point: Point = Point { x: 1, .. };
+    let filled: Ctrl = Ctrl { count: 1, level: 2 };
+    let unfilled: Ctrl = Ctrl { enable: true, level: 2 };
+}
+
+fn private() {
+    let named: dev::Reg = dev::Reg { on: true, raw: 1, .. };
+    let left_out: dev::Reg = dev::Reg { on: true, .. };
+    let without_rest: dev::Reg = dev::Reg { on: true, raw: 0 };
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

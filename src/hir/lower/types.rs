@@ -137,6 +137,7 @@ impl Lowerer<'_> {
         }
         match self.lookup_path(path) {
             Named::Item(Def::Struct(id)) => Ty::Struct(self.struct_tys[id.0 as usize]),
+            Named::Item(Def::BitStruct(id)) => Ty::BitStruct(self.bit_struct_tys[id.0 as usize]),
             Named::Item(Def::Enum(id)) => Ty::Enum(self.enum_tys[id.0 as usize]),
             Named::Item(Def::PeripheralType(id)) => {
                 Ty::Peripheral(self.peripheral_tys[id.0 as usize])
@@ -197,7 +198,8 @@ impl Lowerer<'_> {
     }
 
     /// Whether `path` names a type that takes no type arguments: `bool`,
-    /// an integer type, a struct, an enum or a peripheral type. Anything
+    /// an integer type, a struct, a bit-field struct, an enum or a
+    /// peripheral type. Anything
     /// else is reported.
     fn names_type(&mut self, path: &ast::Path) -> bool {
         if let Some(name) = plain_name(path)
@@ -206,7 +208,9 @@ impl Lowerer<'_> {
             return true;
         }
         match self.lookup_path(path) {
-            Named::Item(Def::Struct(_) | Def::Enum(_) | Def::PeripheralType(_)) => true,
+            Named::Item(
+                Def::Struct(_) | Def::BitStruct(_) | Def::Enum(_) | Def::PeripheralType(_),
+            ) => true,
             named => {
                 self.not_a_type(path, named);
                 false

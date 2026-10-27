@@ -28,6 +28,7 @@ Hir {
         },
     ],
     structs: [],
+    bit_structs: [],
     enums: [],
     fns: [
         Fn {

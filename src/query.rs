@@ -98,6 +98,16 @@ fn describe(q: &Queries, f: &hir::Fn) -> String {
         Some(Comptime::Block) => "this `comptime` block".to_owned(),
         Some(Comptime::Value) => "this value".to_owned(),
         Some(Comptime::Discriminant(id, index)) => variant_name(q.enum_def(id), index),
+        Some(Comptime::Bits(id, index)) => {
+            let def = hir.bit_struct(id);
+            let field = &def.fields[index as usize].name;
+            format!("the bits of the field `{}::{field}`", def.path)
+        }
+        Some(Comptime::Default(id, index)) => {
+            let def = hir.bit_struct(id);
+            let field = &def.fields[index as usize].name;
+            format!("the default of the field `{}::{field}`", def.path)
+        }
         None => format!("the function `{}`", f.path),
     }
 }
@@ -1451,6 +1461,9 @@ impl<'h> Queries<'h> {
             hir::Ty::Enum(e) if e.payloads => mir::Ty::Enum(self.mir_enum(e.id)),
             // Stored as its integer type, which is all MIR sees (ADR 0035).
             hir::Ty::Enum(e) => mir::Ty::Int(e.int),
+            hir::Ty::BitStruct(_) => {
+                todo!("M3.3 step 5: a bit-field struct is its integer type in MIR")
+            }
             hir::Ty::Applied(_) => {
                 let ty = self.normalize(ty);
                 self.mir_ty(ty)

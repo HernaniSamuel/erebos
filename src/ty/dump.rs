@@ -246,6 +246,8 @@ fn expr_label(q: &Queries, f: &Fn, expr: &Expr) -> String {
         ExprKind::Comptime(_) => "comptime".to_owned(),
         ExprKind::Array(_) => "array".to_owned(),
         ExprKind::StructLit(s, _) => format!("struct {}", s.name),
+        ExprKind::BitStructLit(s, _, None) => format!("struct {}", s.name),
+        ExprKind::BitStructLit(s, _, Some(_)) => format!("struct {} ..", s.name),
         // A register when the base is of a peripheral type (ADR 0058).
         ExprKind::Field(base, name, _) => match q.tables.expr_ty(base.id) {
             Ty::Peripheral(_) => format!("register {name}"),

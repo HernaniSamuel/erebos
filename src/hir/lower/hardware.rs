@@ -171,7 +171,8 @@ impl Lowerer<'_> {
     /// A peripheral type (ADR 0058): it takes no attributes, and each
     /// register name is declared once; a register's type is a type of
     /// memory, and its offset a `usize` computed at compile time in the
-    /// type's module.
+    /// type's module. Its read effect and its group are carried as written
+    /// (ADR 0060, 0061).
     pub(super) fn peripheral_type_decl(
         &mut self,
         decl: &ast::PeripheralTypeDecl,
@@ -196,8 +197,6 @@ impl Lowerer<'_> {
             seen.entry(&register.name.name)
                 .or_insert(register.name.span);
         }
-        // A register's read effect and group are not lowered yet (M3.3,
-        // step 2).
         let registers = decl
             .registers
             .iter()
@@ -212,6 +211,9 @@ impl Lowerer<'_> {
                     self.comptime_usize(&register.offset, "offset"),
                     register.offset.span,
                 ),
+                read_effect: register.read_effect,
+                // A label, resolved nowhere (ADR 0061).
+                group: (register.group.as_ref()).map(|group| (group.name.clone(), group.span)),
             })
             .collect();
         PeripheralTypeDef {
@@ -256,6 +258,7 @@ impl Lowerer<'_> {
             ast::TyKind::Named(path) => match self.named_ty(path) {
                 ty @ (Ty::Peripheral(_) | Ty::Error) => return ty,
                 Ty::Struct(_) => "a struct",
+                Ty::BitStruct(_) => "a bit-field struct",
                 Ty::Enum(_) => "an enum",
                 _ => "a built-in type",
             },

@@ -1,0 +1,201 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/resolve_struct_rest.ers
+---
+--- errors ---
+resolve::missing-default
+
+  × the field `count` of `Ctrl` has no default
+    ╭─[resolve_struct_rest.ers:33:52]
+ 17 │     pub mode: Mode at 1..=2 = .A,
+ 18 │     pub count: u8 at 3..=6,
+    ·         ──┬──
+    ·           ╰── declared here without a default
+ 19 │     pub level: u8 at 8..=11,
+ 20 │     pub done: bool at 7 write 1 clears,
+ 21 │ }
+ 22 │ 
+ 23 │ mod dev {
+ 24 │     pub struct Reg: u8 {
+ 25 │         pub on: bool at 0,
+ 26 │         level: u8 at 1..=3 = 0,
+ 27 │         flag: bool at 4 write 1 clears,
+ 28 │         raw: u8 at 5..=7,
+ 29 │     }
+ 30 │ }
+ 31 │ 
+ 32 │ fn rest() {
+ 33 │     let one: Ctrl = Ctrl { enable: true, level: 1, .. };
+    ·                                                    ─┬
+    ·                                                     ╰── leaves out a field without a default
+ 34 │     let two: Ctrl = Ctrl { enable: true, .. };
+    ╰────
+  help: `..` gives each field it leaves out its default, written `= value` after the field's bits,
+        or for a field with a write effect the value whose write has no effect: name such a field
+        in the literal, or declare a default for it (ADR 0059)
+resolve::missing-default
+
+  × the fields `count` and `level` of `Ctrl` have no default
+    ╭─[resolve_struct_rest.ers:34:42]
+ 17 │     pub mode: Mode at 1..=2 = .A,
+ 18 │     pub count: u8 at 3..=6,
+    ·         ──┬──
+    ·           ╰── declared here without a default
+ 19 │     pub level: u8 at 8..=11,
+    ·         ──┬──
+    ·           ╰── declared here without a default
+ 20 │     pub done: bool at 7 write 1 clears,
+ 21 │ }
+ 22 │ 
+ 23 │ mod dev {
+ 24 │     pub struct Reg: u8 {
+ 25 │         pub on: bool at 0,
+ 26 │         level: u8 at 1..=3 = 0,
+ 27 │         flag: bool at 4 write 1 clears,
+ 28 │         raw: u8 at 5..=7,
+ 29 │     }
+ 30 │ }
+ 31 │ 
+ 32 │ fn rest() {
+ 33 │     let one: Ctrl = Ctrl { enable: true, level: 1, .. };
+ 34 │     let two: Ctrl = Ctrl { enable: true, .. };
+    ·                                          ─┬
+    ·                                           ╰── leaves out fields without a default
+ 35 │     let point: Point = Point { x: 1, .. };
+    ╰────
+  help: `..` gives each field it leaves out its default, written `= value` after the field's bits,
+        or for a field with a write effect the value whose write has no effect: name such a field
+        in the literal, or declare a default for it (ADR 0059)
+resolve::missing-default
+
+  × the fields of `Point` have no defaults
+    ╭─[resolve_struct_rest.ers:35:38]
+ 34 │     let two: Ctrl = Ctrl { enable: true, .. };
+ 35 │     let point: Point = Point { x: 1, .. };
+    ·                                      ─┬
+    ·                                       ╰── `Point` is not a bit-field struct
+ 36 │     let filled: Ctrl = Ctrl { count: 1, level: 2 };
+    ╰────
+  help: `..` gives the fields it leaves out their defaults, which only the fields of a bit-field
+        struct have (ADR 0059); a literal of `Point` gives every field (ADR 0021)
+resolve::missing-fields
+
+  × missing fields in `Ctrl`: `enable`, `mode`, `done`
+    ╭─[resolve_struct_rest.ers:36:24]
+ 35 │     let point: Point = Point { x: 1, .. };
+ 36 │     let filled: Ctrl = Ctrl { count: 1, level: 2 };
+    ·                        ─────────────┬─────────────
+    ·                                     ╰── every field must be given (ADR 0021)
+ 37 │     let unfilled: Ctrl = Ctrl { enable: true, level: 2 };
+    ╰────
+  help: each field left out has a default or a write effect: end the literal with `..` to give
+        each its default, or the value whose write has no effect (ADR 0059)
+resolve::missing-fields
+
+  × missing fields in `Ctrl`: `mode`, `count`, `done`
+    ╭─[resolve_struct_rest.ers:37:26]
+ 36 │     let filled: Ctrl = Ctrl { count: 1, level: 2 };
+ 37 │     let unfilled: Ctrl = Ctrl { enable: true, level: 2 };
+    ·                          ───────────────┬───────────────
+    ·                                         ╰── every field must be given (ADR 0021)
+ 38 │ }
+    ╰────
+resolve::private-field
+
+  × the field `raw` of `dev::Reg` is private
+    ╭─[resolve_struct_rest.ers:41:27]
+ 27 │         flag: bool at 4 write 1 clears,
+ 28 │         raw: u8 at 5..=7,
+    ·         ─┬─
+    ·          ╰── declared here without `pub`
+ 29 │     }
+ 30 │ }
+ 31 │ 
+ 32 │ fn rest() {
+ 33 │     let one: Ctrl = Ctrl { enable: true, level: 1, .. };
+ 34 │     let two: Ctrl = Ctrl { enable: true, .. };
+ 35 │     let point: Point = Point { x: 1, .. };
+ 36 │     let filled: Ctrl = Ctrl { count: 1, level: 2 };
+ 37 │     let unfilled: Ctrl = Ctrl { enable: true, level: 2 };
+ 38 │ }
+ 39 │ 
+ 40 │ fn private() {
+ 41 │     let named: dev::Reg = dev::Reg { on: true, raw: 1, .. };
+    ·                           ────┬───             ─┬─
+    ·                               │                 ╰── not visible here
+    ·                               ╰── cannot be built here
+ 42 │     let left_out: dev::Reg = dev::Reg { on: true, .. };
+    ╰────
+  help: a literal of a bit-field struct gives every field, or ends with `..`, which leaves out
+        only fields with a default or a write effect (ADR 0059); a private field is visible only
+        in module `dev` and the modules inside it: build the value with a function of that module,
+        or declare the field `pub` (ADR 0050)
+resolve::private-field
+
+  × the field `raw` of `dev::Reg` is private
+    ╭─[resolve_struct_rest.ers:42:30]
+ 27 │         flag: bool at 4 write 1 clears,
+ 28 │         raw: u8 at 5..=7,
+    ·         ─┬─
+    ·          ╰── declared here without `pub` or a default
+ 29 │     }
+ 30 │ }
+ 31 │ 
+ 32 │ fn rest() {
+ 33 │     let one: Ctrl = Ctrl { enable: true, level: 1, .. };
+ 34 │     let two: Ctrl = Ctrl { enable: true, .. };
+ 35 │     let point: Point = Point { x: 1, .. };
+ 36 │     let filled: Ctrl = Ctrl { count: 1, level: 2 };
+ 37 │     let unfilled: Ctrl = Ctrl { enable: true, level: 2 };
+ 38 │ }
+ 39 │ 
+ 40 │ fn private() {
+ 41 │     let named: dev::Reg = dev::Reg { on: true, raw: 1, .. };
+ 42 │     let left_out: dev::Reg = dev::Reg { on: true, .. };
+    ·                              ────┬───
+    ·                                  ╰── cannot be built here
+ 43 │     let without_rest: dev::Reg = dev::Reg { on: true, raw: 0 };
+    ╰────
+  help: a literal of a bit-field struct gives every field, or ends with `..`, which leaves out
+        only fields with a default or a write effect (ADR 0059); a private field is visible only
+        in module `dev` and the modules inside it: build the value with a function of that module,
+        or declare the field `pub` (ADR 0050)
+resolve::private-field
+
+  × the fields `level`, `flag` and `raw` of `dev::Reg` are private
+    ╭─[resolve_struct_rest.ers:43:34]
+ 25 │         pub on: bool at 0,
+ 26 │         level: u8 at 1..=3 = 0,
+    ·         ──┬──
+    ·           ╰── declared here without `pub`
+ 27 │         flag: bool at 4 write 1 clears,
+    ·         ──┬─
+    ·           ╰── declared here without `pub`
+ 28 │         raw: u8 at 5..=7,
+    ·         ─┬─
+    ·          ╰── declared here without `pub`
+ 29 │     }
+ 30 │ }
+ 31 │ 
+ 32 │ fn rest() {
+ 33 │     let one: Ctrl = Ctrl { enable: true, level: 1, .. };
+ 34 │     let two: Ctrl = Ctrl { enable: true, .. };
+ 35 │     let point: Point = Point { x: 1, .. };
+ 36 │     let filled: Ctrl = Ctrl { count: 1, level: 2 };
+ 37 │     let unfilled: Ctrl = Ctrl { enable: true, level: 2 };
+ 38 │ }
+ 39 │ 
+ 40 │ fn private() {
+ 41 │     let named: dev::Reg = dev::Reg { on: true, raw: 1, .. };
+ 42 │     let left_out: dev::Reg = dev::Reg { on: true, .. };
+ 43 │     let without_rest: dev::Reg = dev::Reg { on: true, raw: 0 };
+    ·                                  ────┬───             ─┬─
+    ·                                      │                 ╰── not visible here
+    ·                                      ╰── cannot be built here
+ 44 │ }
+    ╰────
+  help: a literal of a bit-field struct gives every field, or ends with `..`, which leaves out
+        only fields with a default or a write effect (ADR 0059); a private field is visible only
+        in module `dev` and the modules inside it: build the value with a function of that module,
+        or declare the field `pub` (ADR 0050)

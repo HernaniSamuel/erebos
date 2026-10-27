@@ -41,6 +41,7 @@ Hir {
         },
     ],
     structs: [],
+    bit_structs: [],
     enums: [],
     fns: [
         Fn {
@@ -372,6 +373,8 @@ Hir {
                         ),
                         518..519,
                     ),
+                    read_effect: None,
+                    group: None,
                 },
                 RegisterDef {
                     name: "thr",
@@ -388,6 +391,8 @@ Hir {
                         ),
                         550..551,
                     ),
+                    read_effect: None,
+                    group: None,
                 },
                 RegisterDef {
                     name: "ier",
@@ -404,6 +409,8 @@ Hir {
                         ),
                         583..584,
                     ),
+                    read_effect: None,
+                    group: None,
                 },
                 RegisterDef {
                     name: "lsr",
@@ -422,6 +429,8 @@ Hir {
                         ),
                         610..613,
                     ),
+                    read_effect: None,
+                    group: None,
                 },
             ],
         },

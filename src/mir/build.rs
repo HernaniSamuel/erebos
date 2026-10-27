@@ -493,6 +493,10 @@ impl Builder<'_, '_> {
                 }
                 Operand::Copy(value)
             }
+            // Its type stops `Queries::mir_ty` above until M3.3, step 5.
+            hir::ExprKind::BitStructLit(..) => {
+                unreachable!("a bit-field struct has no MIR type yet")
+            }
             hir::ExprKind::Deref(_)
             | hir::ExprKind::Index(..)
             | hir::ExprKind::Field(..)

@@ -1,0 +1,1601 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/resolve_bit_struct.ers
+---
+--- hir ---
+Hir {
+    modules: [
+        ModuleDef {
+            name: "",
+            path: "",
+            name_span: None,
+            parent: None,
+            vis: Pub,
+        },
+        ModuleDef {
+            name: "uart",
+            path: "uart",
+            name_span: Some(
+                570..574,
+            ),
+            parent: Some(
+                ModuleId(
+                    0,
+                ),
+            ),
+            vis: Private,
+        },
+        ModuleDef {
+            name: "driver",
+            path: "driver",
+            name_span: Some(
+                1580..1586,
+            ),
+            parent: Some(
+                ModuleId(
+                    0,
+                ),
+            ),
+            vis: Private,
+        },
+    ],
+    structs: [],
+    bit_structs: [
+        BitStructDef {
+            path: "uart::Lcr",
+            name_span: 751..754,
+            module: ModuleId(
+                1,
+            ),
+            vis: Pub,
+            reachable: [
+                ModuleId(
+                    0,
+                ),
+                ModuleId(
+                    1,
+                ),
+                ModuleId(
+                    2,
+                ),
+            ],
+            ty: BitStructTy {
+                id: BitStructId(
+                    0,
+                ),
+                name: "uart::Lcr",
+                int: U8,
+            },
+            int_span: 756..758,
+            fields: [
+                BitFieldDef {
+                    name: "word_length",
+                    span: 773..784,
+                    vis: Pub,
+                    ty: Enum(
+                        EnumTy {
+                            id: EnumId(
+                                0,
+                            ),
+                            name: "uart::WordLength",
+                            int: U8,
+                            payloads: false,
+                        },
+                    ),
+                    ty_span: 786..796,
+                    low: (
+                        Known(
+                            0,
+                        ),
+                        800..801,
+                    ),
+                    high: Some(
+                        (
+                            Known(
+                                1,
+                            ),
+                            804..805,
+                        ),
+                    ),
+                    read_effect: None,
+                    write_effect: None,
+                    default: Some(
+                        (
+                            FnId(
+                                25,
+                            ),
+                            808..814,
+                        ),
+                    ),
+                },
+                BitFieldDef {
+                    name: "stop_bits",
+                    span: 824..833,
+                    vis: Private,
+                    ty: Bool,
+                    ty_span: 835..839,
+                    low: (
+                        Comptime(
+                            FnId(
+                                26,
+                            ),
+                        ),
+                        843..847,
+                    ),
+                    high: None,
+                    read_effect: None,
+                    write_effect: None,
+                    default: Some(
+                        (
+                            FnId(
+                                27,
+                            ),
+                            850..855,
+                        ),
+                    ),
+                },
+                BitFieldDef {
+                    name: "parity",
+                    span: 865..871,
+                    vis: Private,
+                    ty: Bool,
+                    ty_span: 873..877,
+                    low: (
+                        Comptime(
+                            FnId(
+                                28,
+                            ),
+                        ),
+                        881..889,
+                    ),
+                    high: Some(
+                        (
+                            Comptime(
+                                FnId(
+                                    29,
+                                ),
+                            ),
+                            892..900,
+                        ),
+                    ),
+                    read_effect: None,
+                    write_effect: None,
+                    default: Some(
+                        (
+                            FnId(
+                                30,
+                            ),
+                            903..912,
+                        ),
+                    ),
+                },
+                BitFieldDef {
+                    name: "pending",
+                    span: 922..929,
+                    vis: Private,
+                    ty: Bool,
+                    ty_span: 931..935,
+                    low: (
+                        Known(
+                            5,
+                        ),
+                        939..940,
+                    ),
+                    high: None,
+                    read_effect: Some(
+                        (
+                            Clears,
+                            941..952,
+                        ),
+                    ),
+                    write_effect: Some(
+                        (
+                            WriteEffect {
+                                bit: 1,
+                                action: Clears,
+                            },
+                            953..967,
+                        ),
+                    ),
+                    default: None,
+                },
+                BitFieldDef {
+                    name: "dlab",
+                    span: 981..985,
+                    vis: Pub,
+                    ty: Bool,
+                    ty_span: 987..991,
+                    low: (
+                        Comptime(
+                            FnId(
+                                31,
+                            ),
+                        ),
+                        995..999,
+                    ),
+                    high: None,
+                    read_effect: None,
+                    write_effect: None,
+                    default: None,
+                },
+            ],
+        },
+    ],
+    enums: [
+        EnumDef {
+            name: "uart::WordLength",
+            name_span: Some(
+                676..686,
+            ),
+            module: ModuleId(
+                1,
+            ),
+            vis: Pub,
+            reachable: [
+                ModuleId(
+                    0,
+                ),
+                ModuleId(
+                    1,
+                ),
+                ModuleId(
+                    2,
+                ),
+            ],
+            ty: EnumTy {
+                id: EnumId(
+                    0,
+                ),
+                name: "uart::WordLength",
+                int: U8,
+                payloads: false,
+            },
+            variants: [
+                VariantDef {
+                    name: "Five",
+                    span: Some(
+                        693..697,
+                    ),
+                    payload: [],
+                    value: Comptime(
+                        FnId(
+                            7,
+                        ),
+                    ),
+                },
+                VariantDef {
+                    name: "Six",
+                    span: Some(
+                        703..706,
+                    ),
+                    payload: [],
+                    value: Comptime(
+                        FnId(
+                            8,
+                        ),
+                    ),
+                },
+                VariantDef {
+                    name: "Seven",
+                    span: Some(
+                        712..717,
+                    ),
+                    payload: [],
+                    value: Comptime(
+                        FnId(
+                            9,
+                        ),
+                    ),
+                },
+                VariantDef {
+                    name: "Eight",
+                    span: Some(
+                        723..728,
+                    ),
+                    payload: [],
+                    value: Comptime(
+                        FnId(
+                            10,
+                        ),
+                    ),
+                },
+            ],
+        },
+    ],
+    fns: [
+        Fn {
+            name: "reset",
+            path: "uart::reset",
+            symbol: Some(
+                "uart.reset",
+            ),
+            name_span: 1369..1374,
+            module: ModuleId(
+                1,
+            ),
+            vis: Private,
+            kind: Plain,
+            ret: BitStruct(
+                BitStructTy {
+                    id: BitStructId(
+                        0,
+                    ),
+                    name: "uart::Lcr",
+                    int: U8,
+                },
+            ),
+            ret_span: Some(
+                1380..1383,
+            ),
+            param_count: 0,
+            locals: [],
+            body: Some(
+                Block {
+                    stmts: [],
+                    tail: Some(
+                        Expr {
+                            id: ExprId(
+                                11,
+                            ),
+                            kind: BitStructLit(
+                                BitStructTy {
+                                    id: BitStructId(
+                                        0,
+                                    ),
+                                    name: "uart::Lcr",
+                                    int: U8,
+                                },
+                                [
+                                    (
+                                        0,
+                                        Expr {
+                                            id: ExprId(
+                                                12,
+                                            ),
+                                            kind: ContextVariant(
+                                                "Five",
+                                                1426..1430,
+                                                None,
+                                            ),
+                                            span: 1425..1430,
+                                        },
+                                    ),
+                                    (
+                                        1,
+                                        Expr {
+                                            id: ExprId(
+                                                13,
+                                            ),
+                                            kind: Bool(
+                                                false,
+                                            ),
+                                            span: 1455..1460,
+                                        },
+                                    ),
+                                    (
+                                        2,
+                                        Expr {
+                                            id: ExprId(
+                                                14,
+                                            ),
+                                            kind: Bool(
+                                                false,
+                                            ),
+                                            span: 1482..1487,
+                                        },
+                                    ),
+                                    (
+                                        3,
+                                        Expr {
+                                            id: ExprId(
+                                                15,
+                                            ),
+                                            kind: Bool(
+                                                false,
+                                            ),
+                                            span: 1510..1515,
+                                        },
+                                    ),
+                                    (
+                                        4,
+                                        Expr {
+                                            id: ExprId(
+                                                16,
+                                            ),
+                                            kind: Bool(
+                                                false,
+                                            ),
+                                            span: 1535..1540,
+                                        },
+                                    ),
+                                ],
+                                Some(
+                                    1554..1556,
+                                ),
+                            ),
+                            span: 1394..1566,
+                        },
+                    ),
+                    span: 1384..1572,
+                },
+            ),
+            span: 1366..1572,
+            runtime: false,
+            comptime: None,
+        },
+        Fn {
+            name: "configure",
+            path: "driver::configure",
+            symbol: Some(
+                "driver.configure",
+            ),
+            name_span: 1623..1632,
+            module: ModuleId(
+                2,
+            ),
+            vis: Private,
+            kind: Plain,
+            ret: BitStruct(
+                BitStructTy {
+                    id: BitStructId(
+                        0,
+                    ),
+                    name: "uart::Lcr",
+                    int: U8,
+                },
+            ),
+            ret_span: Some(
+                1648..1664,
+            ),
+            param_count: 1,
+            locals: [
+                Local {
+                    name: "dlab",
+                    ty: Bool,
+                    mutable: false,
+                    span: 1633..1637,
+                },
+                Local {
+                    name: "first",
+                    ty: BitStruct(
+                        BitStructTy {
+                            id: BitStructId(
+                                0,
+                            ),
+                            name: "uart::Lcr",
+                            int: U8,
+                        },
+                    ),
+                    mutable: false,
+                    span: 1679..1684,
+                },
+            ],
+            body: Some(
+                Block {
+                    stmts: [
+                        Let {
+                            local: LocalId(
+                                1,
+                            ),
+                            init: Expr {
+                                id: ExprId(
+                                    17,
+                                ),
+                                kind: BitStructLit(
+                                    BitStructTy {
+                                        id: BitStructId(
+                                            0,
+                                        ),
+                                        name: "uart::Lcr",
+                                        int: U8,
+                                    },
+                                    [
+                                        (
+                                            4,
+                                            Expr {
+                                                id: ExprId(
+                                                    18,
+                                                ),
+                                                kind: Local(
+                                                    LocalId(
+                                                        0,
+                                                    ),
+                                                ),
+                                                span: 1704..1708,
+                                            },
+                                        ),
+                                    ],
+                                    Some(
+                                        1710..1712,
+                                    ),
+                                ),
+                                span: 1692..1714,
+                            },
+                        },
+                    ],
+                    tail: Some(
+                        Expr {
+                            id: ExprId(
+                                19,
+                            ),
+                            kind: BitStructLit(
+                                BitStructTy {
+                                    id: BitStructId(
+                                        0,
+                                    ),
+                                    name: "uart::Lcr",
+                                    int: U8,
+                                },
+                                [
+                                    (
+                                        0,
+                                        Expr {
+                                            id: ExprId(
+                                                20,
+                                            ),
+                                            kind: ContextVariant(
+                                                "Six",
+                                                1757..1760,
+                                                None,
+                                            ),
+                                            span: 1756..1760,
+                                        },
+                                    ),
+                                    (
+                                        4,
+                                        Expr {
+                                            id: ExprId(
+                                                21,
+                                            ),
+                                            kind: Bool(
+                                                false,
+                                            ),
+                                            span: 1768..1773,
+                                        },
+                                    ),
+                                ],
+                                Some(
+                                    1775..1777,
+                                ),
+                            ),
+                            span: 1724..1779,
+                        },
+                    ),
+                    span: 1665..1785,
+                },
+            ),
+            span: 1620..1785,
+            runtime: false,
+            comptime: None,
+        },
+        Fn {
+            name: "main",
+            path: "main",
+            symbol: Some(
+                "main",
+            ),
+            name_span: 1798..1802,
+            module: ModuleId(
+                0,
+            ),
+            vis: Private,
+            kind: Entry,
+            ret: Never,
+            ret_span: Some(
+                1808..1809,
+            ),
+            param_count: 0,
+            locals: [],
+            body: Some(
+                Block {
+                    stmts: [],
+                    tail: Some(
+                        Expr {
+                            id: ExprId(
+                                22,
+                            ),
+                            kind: Loop(
+                                Block {
+                                    stmts: [],
+                                    tail: None,
+                                    span: 1817..1819,
+                                },
+                            ),
+                            span: 1812..1819,
+                        },
+                    ),
+                    span: 1810..1821,
+                },
+            ),
+            span: 1789..1821,
+            runtime: false,
+            comptime: None,
+        },
+        Fn {
+            name: "on_panic",
+            path: "on_panic",
+            symbol: Some(
+                "on_panic",
+            ),
+            name_span: 1831..1839,
+            module: ModuleId(
+                0,
+            ),
+            vis: Private,
+            kind: Panic,
+            ret: Never,
+            ret_span: Some(
+                1845..1846,
+            ),
+            param_count: 0,
+            locals: [],
+            body: Some(
+                Block {
+                    stmts: [],
+                    tail: Some(
+                        Expr {
+                            id: ExprId(
+                                23,
+                            ),
+                            kind: Loop(
+                                Block {
+                                    stmts: [],
+                                    tail: None,
+                                    span: 1854..1856,
+                                },
+                            ),
+                            span: 1849..1856,
+                        },
+                    ),
+                    span: 1847..1858,
+                },
+            ),
+            span: 1822..1858,
+            runtime: false,
+            comptime: None,
+        },
+        Fn {
+            name: "STOP",
+            path: "uart::STOP",
+            symbol: None,
+            name_span: 587..591,
+            module: ModuleId(
+                1,
+            ),
+            vis: Private,
+            kind: Plain,
+            ret: Int(
+                U32,
+            ),
+            ret_span: Some(
+                593..596,
+            ),
+            param_count: 0,
+            locals: [],
+            body: Some(
+                Block {
+                    stmts: [],
+                    tail: Some(
+                        Expr {
+                            id: ExprId(
+                                24,
+                            ),
+                            kind: Int(
+                                2,
+                            ),
+                            span: 599..600,
+                        },
+                    ),
+                    span: 599..600,
+                },
+            ),
+            span: 581..601,
+            runtime: false,
+            comptime: Some(
+                Const(
+                    ConstId(
+                        0,
+                    ),
+                ),
+            ),
+        },
+        Fn {
+            name: "DLAB",
+            path: "uart::DLAB",
+            symbol: None,
+            name_span: 612..616,
+            module: ModuleId(
+                1,
+            ),
+            vis: Private,
+            kind: Plain,
+            ret: Int(
+                U32,
+            ),
+            ret_span: Some(
+                618..621,
+            ),
+            param_count: 0,
+            locals: [],
+            body: Some(
+                Block {
+                    stmts: [],
+                    tail: Some(
+                        Expr {
+                            id: ExprId(
+                                25,
+                            ),
+                            kind: Int(
+                                7,
+                            ),
+                            span: 624..625,
+                        },
+                    ),
+                    span: 624..625,
+                },
+            ),
+            span: 606..626,
+            runtime: false,
+            comptime: Some(
+                Const(
+                    ConstId(
+                        1,
+                    ),
+                ),
+            ),
+        },
+        Fn {
+            name: "NO_PARITY",
+            path: "uart::NO_PARITY",
+            symbol: None,
+            name_span: 637..646,
+            module: ModuleId(
+                1,
+            ),
+            vis: Private,
+            kind: Plain,
+            ret: Bool,
+            ret_span: Some(
+                648..652,
+            ),
+            param_count: 0,
+            locals: [],
+            body: Some(
+                Block {
+                    stmts: [],
+                    tail: Some(
+                        Expr {
+                            id: ExprId(
+                                26,
+                            ),
+                            kind: Bool(
+                                false,
+                            ),
+                            span: 655..660,
+                        },
+                    ),
+                    span: 655..660,
+                },
+            ),
+            span: 631..661,
+            runtime: false,
+            comptime: Some(
+                Const(
+                    ConstId(
+                        2,
+                    ),
+                ),
+            ),
+        },
+        Fn {
+            name: "WordLength::Five",
+            path: "uart::WordLength::Five",
+            symbol: None,
+            name_span: 693..697,
+            module: ModuleId(
+                1,
+            ),
+            vis: Private,
+            kind: Plain,
+            ret: Int(
+                U8,
+            ),
+            ret_span: Some(
+                688..690,
+            ),
+            param_count: 0,
+            locals: [],
+            body: Some(
+                Block {
+                    stmts: [],
+                    tail: Some(
+                        Expr {
+                            id: ExprId(
+                                27,
+                            ),
+                            kind: Int(
+                                0,
+                            ),
+                            span: 700..701,
+                        },
+                    ),
+                    span: 700..701,
+                },
+            ),
+            span: 693..701,
+            runtime: false,
+            comptime: Some(
+                Discriminant(
+                    EnumId(
+                        0,
+                    ),
+                    0,
+                ),
+            ),
+        },
+        Fn {
+            name: "WordLength::Six",
+            path: "uart::WordLength::Six",
+            symbol: None,
+            name_span: 703..706,
+            module: ModuleId(
+                1,
+            ),
+            vis: Private,
+            kind: Plain,
+            ret: Int(
+                U8,
+            ),
+            ret_span: Some(
+                688..690,
+            ),
+            param_count: 0,
+            locals: [],
+            body: Some(
+                Block {
+                    stmts: [],
+                    tail: Some(
+                        Expr {
+                            id: ExprId(
+                                28,
+                            ),
+                            kind: Int(
+                                1,
+                            ),
+                            span: 709..710,
+                        },
+                    ),
+                    span: 709..710,
+                },
+            ),
+            span: 703..710,
+            runtime: false,
+            comptime: Some(
+                Discriminant(
+                    EnumId(
+                        0,
+                    ),
+                    1,
+                ),
+            ),
+        },
+        Fn {
+            name: "WordLength::Seven",
+            path: "uart::WordLength::Seven",
+            symbol: None,
+            name_span: 712..717,
+            module: ModuleId(
+                1,
+            ),
+            vis: Private,
+            kind: Plain,
+            ret: Int(
+                U8,
+            ),
+            ret_span: Some(
+                688..690,
+            ),
+            param_count: 0,
+            locals: [],
+            body: Some(
+                Block {
+                    stmts: [],
+                    tail: Some(
+                        Expr {
+                            id: ExprId(
+                                29,
+                            ),
+                            kind: Int(
+                                2,
+                            ),
+                            span: 720..721,
+                        },
+                    ),
+                    span: 720..721,
+                },
+            ),
+            span: 712..721,
+            runtime: false,
+            comptime: Some(
+                Discriminant(
+                    EnumId(
+                        0,
+                    ),
+                    2,
+                ),
+            ),
+        },
+        Fn {
+            name: "WordLength::Eight",
+            path: "uart::WordLength::Eight",
+            symbol: None,
+            name_span: 723..728,
+            module: ModuleId(
+                1,
+            ),
+            vis: Private,
+            kind: Plain,
+            ret: Int(
+                U8,
+            ),
+            ret_span: Some(
+                688..690,
+            ),
+            param_count: 0,
+            locals: [],
+            body: Some(
+                Block {
+                    stmts: [],
+                    tail: Some(
+                        Expr {
+                            id: ExprId(
+                                30,
+                            ),
+                            kind: Int(
+                                3,
+                            ),
+                            span: 731..732,
+                        },
+                    ),
+                    span: 731..732,
+                },
+            ),
+            span: 723..732,
+            runtime: false,
+            comptime: Some(
+                Discriminant(
+                    EnumId(
+                        0,
+                    ),
+                    3,
+                ),
+            ),
+        },
+        Fn {
+            name: "default",
+            path: "default",
+            symbol: None,
+            name_span: 808..814,
+            module: ModuleId(
+                1,
+            ),
+            vis: Private,
+            kind: Plain,
+            ret: Enum(
+                EnumTy {
+                    id: EnumId(
+                        0,
+                    ),
+                    name: "uart::WordLength",
+                    int: U8,
+                    payloads: false,
+                },
+            ),
+            ret_span: None,
+            param_count: 0,
+            locals: [],
+            body: Some(
+                Block {
+                    stmts: [],
+                    tail: Some(
+                        Expr {
+                            id: ExprId(
+                                0,
+                            ),
+                            kind: ContextVariant(
+                                "Eight",
+                                809..814,
+                                None,
+                            ),
+                            span: 808..814,
+                        },
+                    ),
+                    span: 808..814,
+                },
+            ),
+            span: 808..814,
+            runtime: false,
+            comptime: Some(
+                Default(
+                    BitStructId(
+                        0,
+                    ),
+                    0,
+                ),
+            ),
+        },
+        Fn {
+            name: "bits",
+            path: "bits",
+            symbol: None,
+            name_span: 843..847,
+            module: ModuleId(
+                1,
+            ),
+            vis: Private,
+            kind: Plain,
+            ret: Int(
+                U32,
+            ),
+            ret_span: None,
+            param_count: 0,
+            locals: [],
+            body: Some(
+                Block {
+                    stmts: [],
+                    tail: Some(
+                        Expr {
+                            id: ExprId(
+                                1,
+                            ),
+                            kind: Const(
+                                ConstId(
+                                    0,
+                                ),
+                            ),
+                            span: 843..847,
+                        },
+                    ),
+                    span: 843..847,
+                },
+            ),
+            span: 843..847,
+            runtime: false,
+            comptime: Some(
+                Bits(
+                    BitStructId(
+                        0,
+                    ),
+                    1,
+                ),
+            ),
+        },
+        Fn {
+            name: "default",
+            path: "default",
+            symbol: None,
+            name_span: 850..855,
+            module: ModuleId(
+                1,
+            ),
+            vis: Private,
+            kind: Plain,
+            ret: Bool,
+            ret_span: None,
+            param_count: 0,
+            locals: [],
+            body: Some(
+                Block {
+                    stmts: [],
+                    tail: Some(
+                        Expr {
+                            id: ExprId(
+                                2,
+                            ),
+                            kind: Bool(
+                                false,
+                            ),
+                            span: 850..855,
+                        },
+                    ),
+                    span: 850..855,
+                },
+            ),
+            span: 850..855,
+            runtime: false,
+            comptime: Some(
+                Default(
+                    BitStructId(
+                        0,
+                    ),
+                    1,
+                ),
+            ),
+        },
+        Fn {
+            name: "bits",
+            path: "bits",
+            symbol: None,
+            name_span: 881..889,
+            module: ModuleId(
+                1,
+            ),
+            vis: Private,
+            kind: Plain,
+            ret: Int(
+                U32,
+            ),
+            ret_span: None,
+            param_count: 0,
+            locals: [],
+            body: Some(
+                Block {
+                    stmts: [],
+                    tail: Some(
+                        Expr {
+                            id: ExprId(
+                                3,
+                            ),
+                            kind: Binary(
+                                Add,
+                                Expr {
+                                    id: ExprId(
+                                        4,
+                                    ),
+                                    kind: Const(
+                                        ConstId(
+                                            0,
+                                        ),
+                                    ),
+                                    span: 881..885,
+                                },
+                                Expr {
+                                    id: ExprId(
+                                        5,
+                                    ),
+                                    kind: Int(
+                                        1,
+                                    ),
+                                    span: 888..889,
+                                },
+                                886..887,
+                            ),
+                            span: 881..889,
+                        },
+                    ),
+                    span: 881..889,
+                },
+            ),
+            span: 881..889,
+            runtime: false,
+            comptime: Some(
+                Bits(
+                    BitStructId(
+                        0,
+                    ),
+                    2,
+                ),
+            ),
+        },
+        Fn {
+            name: "bits",
+            path: "bits",
+            symbol: None,
+            name_span: 892..900,
+            module: ModuleId(
+                1,
+            ),
+            vis: Private,
+            kind: Plain,
+            ret: Int(
+                U32,
+            ),
+            ret_span: None,
+            param_count: 0,
+            locals: [],
+            body: Some(
+                Block {
+                    stmts: [],
+                    tail: Some(
+                        Expr {
+                            id: ExprId(
+                                6,
+                            ),
+                            kind: Binary(
+                                Add,
+                                Expr {
+                                    id: ExprId(
+                                        7,
+                                    ),
+                                    kind: Const(
+                                        ConstId(
+                                            0,
+                                        ),
+                                    ),
+                                    span: 892..896,
+                                },
+                                Expr {
+                                    id: ExprId(
+                                        8,
+                                    ),
+                                    kind: Int(
+                                        1,
+                                    ),
+                                    span: 899..900,
+                                },
+                                897..898,
+                            ),
+                            span: 892..900,
+                        },
+                    ),
+                    span: 892..900,
+                },
+            ),
+            span: 892..900,
+            runtime: false,
+            comptime: Some(
+                Bits(
+                    BitStructId(
+                        0,
+                    ),
+                    2,
+                ),
+            ),
+        },
+        Fn {
+            name: "default",
+            path: "default",
+            symbol: None,
+            name_span: 903..912,
+            module: ModuleId(
+                1,
+            ),
+            vis: Private,
+            kind: Plain,
+            ret: Bool,
+            ret_span: None,
+            param_count: 0,
+            locals: [],
+            body: Some(
+                Block {
+                    stmts: [],
+                    tail: Some(
+                        Expr {
+                            id: ExprId(
+                                9,
+                            ),
+                            kind: Const(
+                                ConstId(
+                                    2,
+                                ),
+                            ),
+                            span: 903..912,
+                        },
+                    ),
+                    span: 903..912,
+                },
+            ),
+            span: 903..912,
+            runtime: false,
+            comptime: Some(
+                Default(
+                    BitStructId(
+                        0,
+                    ),
+                    2,
+                ),
+            ),
+        },
+        Fn {
+            name: "bits",
+            path: "bits",
+            symbol: None,
+            name_span: 995..999,
+            module: ModuleId(
+                1,
+            ),
+            vis: Private,
+            kind: Plain,
+            ret: Int(
+                U32,
+            ),
+            ret_span: None,
+            param_count: 0,
+            locals: [],
+            body: Some(
+                Block {
+                    stmts: [],
+                    tail: Some(
+                        Expr {
+                            id: ExprId(
+                                10,
+                            ),
+                            kind: Const(
+                                ConstId(
+                                    1,
+                                ),
+                            ),
+                            span: 995..999,
+                        },
+                    ),
+                    span: 995..999,
+                },
+            ),
+            span: 995..999,
+            runtime: false,
+            comptime: Some(
+                Bits(
+                    BitStructId(
+                        0,
+                    ),
+                    4,
+                ),
+            ),
+        },
+    ],
+    consts: [
+        ConstDef {
+            name: "STOP",
+            path: "uart::STOP",
+            name_span: 587..591,
+            module: ModuleId(
+                1,
+            ),
+            vis: Private,
+            ty: Int(
+                U32,
+            ),
+            init: FnId(
+                4,
+            ),
+        },
+        ConstDef {
+            name: "DLAB",
+            path: "uart::DLAB",
+            name_span: 612..616,
+            module: ModuleId(
+                1,
+            ),
+            vis: Private,
+            ty: Int(
+                U32,
+            ),
+            init: FnId(
+                5,
+            ),
+        },
+        ConstDef {
+            name: "NO_PARITY",
+            path: "uart::NO_PARITY",
+            name_span: 637..646,
+            module: ModuleId(
+                1,
+            ),
+            vis: Private,
+            ty: Bool,
+            init: FnId(
+                6,
+            ),
+        },
+    ],
+    statics: [],
+    comptime_blocks: [],
+    memory: None,
+    peripheral_types: [
+        PeripheralTypeDef {
+            path: "uart::Uart16550",
+            name_span: 1027..1036,
+            module: ModuleId(
+                1,
+            ),
+            vis: Pub,
+            reachable: [
+                ModuleId(
+                    0,
+                ),
+                ModuleId(
+                    1,
+                ),
+                ModuleId(
+                    2,
+                ),
+            ],
+            registers: [
+                RegisterDef {
+                    name: "rbr",
+                    span: 1056..1059,
+                    vis: Pub,
+                    access: Read,
+                    ty: Int(
+                        U8,
+                    ),
+                    ty_span: 1061..1063,
+                    offset: (
+                        Known(
+                            0,
+                        ),
+                        1067..1068,
+                    ),
+                    read_effect: Some(
+                        (
+                            Modifies,
+                            1069..1082,
+                        ),
+                    ),
+                    group: None,
+                },
+                RegisterDef {
+                    name: "thr",
+                    span: 1102..1105,
+                    vis: Pub,
+                    access: Write,
+                    ty: Int(
+                        U8,
+                    ),
+                    ty_span: 1107..1109,
+                    offset: (
+                        Known(
+                            0,
+                        ),
+                        1113..1114,
+                    ),
+                    read_effect: None,
+                    group: None,
+                },
+                RegisterDef {
+                    name: "ier",
+                    span: 1135..1138,
+                    vis: Private,
+                    access: ReadWrite,
+                    ty: Int(
+                        U8,
+                    ),
+                    ty_span: 1140..1142,
+                    offset: (
+                        Known(
+                            1,
+                        ),
+                        1146..1147,
+                    ),
+                    read_effect: None,
+                    group: None,
+                },
+                RegisterDef {
+                    name: "iir",
+                    span: 1162..1165,
+                    vis: Private,
+                    access: Read,
+                    ty: Int(
+                        U8,
+                    ),
+                    ty_span: 1167..1169,
+                    offset: (
+                        Known(
+                            2,
+                        ),
+                        1173..1174,
+                    ),
+                    read_effect: Some(
+                        (
+                            Sets,
+                            1175..1184,
+                        ),
+                    ),
+                    group: None,
+                },
+                RegisterDef {
+                    name: "lcr",
+                    span: 1205..1208,
+                    vis: Private,
+                    access: ReadWrite,
+                    ty: BitStruct(
+                        BitStructTy {
+                            id: BitStructId(
+                                0,
+                            ),
+                            name: "uart::Lcr",
+                            int: U8,
+                        },
+                    ),
+                    ty_span: 1210..1213,
+                    offset: (
+                        Known(
+                            3,
+                        ),
+                        1217..1218,
+                    ),
+                    read_effect: None,
+                    group: None,
+                },
+                RegisterDef {
+                    name: "lsr",
+                    span: 1233..1236,
+                    vis: Private,
+                    access: Read,
+                    ty: Int(
+                        U8,
+                    ),
+                    ty_span: 1238..1240,
+                    offset: (
+                        Known(
+                            5,
+                        ),
+                        1244..1245,
+                    ),
+                    read_effect: Some(
+                        (
+                            Clears,
+                            1246..1257,
+                        ),
+                    ),
+                    group: None,
+                },
+                RegisterDef {
+                    name: "dll",
+                    span: 1278..1281,
+                    vis: Private,
+                    access: ReadWrite,
+                    ty: Int(
+                        U8,
+                    ),
+                    ty_span: 1283..1285,
+                    offset: (
+                        Known(
+                            0,
+                        ),
+                        1289..1290,
+                    ),
+                    read_effect: None,
+                    group: Some(
+                        (
+                            "dlab",
+                            1294..1298,
+                        ),
+                    ),
+                },
+                RegisterDef {
+                    name: "dlm",
+                    span: 1319..1322,
+                    vis: Private,
+                    access: ReadWrite,
+                    ty: Int(
+                        U8,
+                    ),
+                    ty_span: 1324..1326,
+                    offset: (
+                        Known(
+                            1,
+                        ),
+                        1330..1331,
+                    ),
+                    read_effect: Some(
+                        (
+                            Modifies,
+                            1332..1345,
+                        ),
+                    ),
+                    group: Some(
+                        (
+                            "dlab",
+                            1349..1353,
+                        ),
+                    ),
+                },
+            ],
+        },
+    ],
+    peripherals: [],
+    never_in_memory: [],
+    unsized_types: [],
+    peripherals_by_value: [],
+    volatile_peripherals: [],
+    applications: [],
+    entry: FnId(
+        2,
+    ),
+    panic: FnId(
+        3,
+    ),
+    expr_count: 31,
+}

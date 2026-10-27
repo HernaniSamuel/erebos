@@ -5,9 +5,9 @@ use std::collections::HashMap;
 
 use crate::diag::Diagnostic;
 use crate::hir::{
-    ArrayLen, Block, Comptime, ConstDef, ConstId, EnumDef, EnumId, FieldDef, Fn, FnId, FnKind,
-    IntTy, ModuleDef, ModuleId, NeverPosition, PayloadDef, StaticDef, StaticId, StructDef, Ty,
-    UnsizedPosition, VariantDef, VariantValue, Visibility,
+    ArrayLen, BitFieldDef, BitStructDef, BitStructId, Block, Comptime, ConstDef, ConstId, EnumDef,
+    EnumId, FieldDef, Fn, FnId, FnKind, IntTy, ModuleDef, ModuleId, NeverPosition, PayloadDef,
+    StaticDef, StaticId, StructDef, Ty, UnsizedPosition, VariantDef, VariantValue, Visibility,
 };
 use crate::span::Span;
 use crate::syntax::ast;
@@ -16,20 +16,7 @@ use super::{Lowerer, visibility};
 
 impl Lowerer<'_> {
     pub(super) fn struct_decl(&mut self, decl: &ast::StructDecl) -> StructDef {
-        let mut seen: HashMap<&str, Span> = HashMap::new();
-        for field in &decl.fields {
-            if let Some(&first) = seen.get(field.name.name.as_str()) {
-                self.diags.push(
-                    Diagnostic::error(
-                        "resolve::duplicate-field",
-                        format!("the field `{}` is declared more than once", field.name.name),
-                    )
-                    .label(field.name.span, "declared again here")
-                    .label(first, "first declared here"),
-                );
-            }
-            seen.entry(&field.name.name).or_insert(field.name.span);
-        }
+        self.duplicate_fields(decl.fields.iter().map(|field| &field.name));
         let (packed, align) = self.struct_attrs(&decl.attrs);
         StructDef {
             packed,
@@ -50,6 +37,129 @@ impl Lowerer<'_> {
                     ty: self.memory_ty(&field.ty, NeverPosition::Field),
                 })
                 .collect(),
+        }
+    }
+
+    /// `resolve::duplicate-field` for each field name of `names`, in source
+    /// order, that an earlier one has (ADR 0021).
+    fn duplicate_fields<'d>(&mut self, names: impl Iterator<Item = &'d ast::Ident>) {
+        let mut seen: HashMap<&str, Span> = HashMap::new();
+        for name in names {
+            if let Some(&first) = seen.get(name.name.as_str()) {
+                self.diags.push(
+                    Diagnostic::error(
+                        "resolve::duplicate-field",
+                        format!("the field `{}` is declared more than once", name.name),
+                    )
+                    .label(name.span, "declared again here")
+                    .label(first, "first declared here"),
+                );
+            }
+            seen.entry(&name.name).or_insert(name.span);
+        }
+    }
+
+    /// A bit-field struct (ADR 0059): no attribute applies to it, it has at
+    /// least one field, each name once. A field's type is a type of memory;
+    /// its bits are `u32`s and its default a value of its type, all
+    /// computed at compile time in the struct's module; a field with a
+    /// write effect has no default (ADR 0060). Effects are carried as
+    /// written.
+    pub(super) fn bit_struct_decl(
+        &mut self,
+        decl: &ast::BitStructDecl,
+        id: BitStructId,
+    ) -> BitStructDef {
+        self.bit_struct_attrs(&decl.attrs);
+        self.duplicate_fields(decl.fields.iter().map(|field| &field.name));
+        let ty = self.bit_struct_tys[id.0 as usize];
+        if decl.fields.is_empty() {
+            self.diags.push(
+                Diagnostic::error(
+                    "resolve::empty-bit-struct",
+                    format!("`{}` has no fields", ty.name),
+                )
+                .label(decl.name.span, "a bit-field struct needs at least one field")
+                .help("a bit-field struct names bits of its integer type; without fields, use the integer type itself (ADR 0059)"),
+            );
+        }
+        let mut fields = Vec::with_capacity(decl.fields.len());
+        for (i, field) in decl.fields.iter().enumerate() {
+            if let (Some((_, effect)), Some(default)) = (field.write_effect, &field.default) {
+                self.diags.push(
+                    Diagnostic::error(
+                        "resolve::write-effect-default",
+                        format!(
+                            "the field `{}` has a write effect, so it has no default",
+                            field.name.name
+                        ),
+                    )
+                    .label(default.span, "a default")
+                    .label(effect, "the write effect")
+                    .help("`..` gives a field with a write effect the value whose write has no effect, all zeros for `write 1 ...` and all ones for `write 0 ...`, so that a literal never triggers an effect it does not name: remove the default (ADR 0059, 0060)"),
+                );
+            }
+            let field_ty = self.memory_ty(&field.ty, NeverPosition::BitField);
+            let bits = Comptime::Bits(id, i as u32);
+            let low = (
+                self.comptime_int(&field.low, "bits", IntTy::U32, bits),
+                field.low.span,
+            );
+            let high = field
+                .high
+                .as_ref()
+                .map(|high| (self.comptime_int(high, "bits", IntTy::U32, bits), high.span));
+            let default = field.default.as_ref().map(|default| {
+                let comptime = Comptime::Default(id, i as u32);
+                let body = self.comptime_value(default, "default", field_ty, comptime);
+                (body, default.span)
+            });
+            fields.push(BitFieldDef {
+                name: field.name.name.clone(),
+                span: field.name.span,
+                vis: visibility(field.vis),
+                ty: field_ty,
+                ty_span: field.ty.span,
+                low,
+                high,
+                read_effect: field.read_effect,
+                write_effect: field.write_effect,
+                default,
+            });
+        }
+        BitStructDef {
+            path: ty.name.to_owned(),
+            name_span: decl.name.span,
+            module: self.module,
+            vis: visibility(decl.vis),
+            // Filled in once every `use` is resolved, by `reachability`.
+            reachable: Vec::new(),
+            ty,
+            int_span: decl.ty.span,
+            fields,
+        }
+    }
+
+    /// No attribute applies to a bit-field struct: its layout is its
+    /// integer type's, which `#[packed]` and `#[align(N)]` would change
+    /// (ADR 0059).
+    fn bit_struct_attrs(&mut self, attrs: &[ast::Attr]) {
+        for attr in attrs {
+            match attr.name.name.as_str() {
+                "packed" | "align" => self.diags.push(
+                    Diagnostic::error(
+                        "resolve::misplaced-attribute",
+                        format!(
+                            "`#[{}]` does not apply to a bit-field struct",
+                            attr.name.name
+                        ),
+                    )
+                    .label(attr.span, "not allowed on a bit-field struct")
+                    .help("a bit-field struct has the size and alignment of its integer type, which it is stored as (ADR 0059)"),
+                ),
+                "export" => self.misplaced_attr(attr, "a bit-field struct"),
+                _ => self.unknown_attr(attr),
+            }
         }
     }
 
@@ -457,14 +567,40 @@ impl Lowerer<'_> {
     /// most are, or computed by a body of its own, named `name` in the
     /// dumps.
     pub(super) fn comptime_usize(&mut self, expr: &ast::Expr, name: &str) -> ArrayLen {
+        self.comptime_int(expr, name, IntTy::Usize, Comptime::Value)
+    }
+
+    /// A value of the integer type `int` needed at compile time (ADR 0029):
+    /// known for a literal, as most are, or computed by a body of its own
+    /// for `comptime`, named `name` in the dumps.
+    fn comptime_int(
+        &mut self,
+        expr: &ast::Expr,
+        name: &str,
+        int: IntTy,
+        comptime: Comptime,
+    ) -> ArrayLen {
         // A rejected literal was reported by the lexer. One too large for
-        // `usize` is lowered as any other length, so that type checking
+        // `int` is lowered as any other value, so that type checking
         // reports it as it does `const X: usize = 4294967296;`.
         if let ast::ExprKind::Int(value) = expr.kind
-            && value.is_none_or(|value| value <= IntTy::Usize.max())
+            && value.is_none_or(|value| value <= int.max())
         {
             return ArrayLen::Known(value.unwrap_or(0));
         }
+        ArrayLen::Comptime(self.comptime_value(expr, name, Ty::Int(int), comptime))
+    }
+
+    /// A body of its own computing `expr`, a value of type `ret` that the
+    /// program needs at compile time, for `comptime`, named `name` in the
+    /// dumps.
+    fn comptime_value(
+        &mut self,
+        expr: &ast::Expr,
+        name: &str,
+        ret: Ty,
+        comptime: Comptime,
+    ) -> FnId {
         let id = FnId(self.value_base + self.values.len() as u32);
         // Variables around it exist only at run time, and are reported as
         // such if used; its own are its body's.
@@ -487,7 +623,7 @@ impl Lowerer<'_> {
             module: self.module,
             vis: Visibility::Private,
             kind: FnKind::Plain,
-            ret: Ty::Int(IntTy::Usize),
+            ret,
             ret_span: None,
             param_count: 0,
             locals: body_locals,
@@ -498,9 +634,9 @@ impl Lowerer<'_> {
             }),
             span: expr.span,
             runtime: false,
-            comptime: Some(Comptime::Value),
+            comptime: Some(comptime),
         });
-        ArrayLen::Comptime(id)
+        id
     }
 
     /// Lowers code run at compile time on its own: no variables, loops or

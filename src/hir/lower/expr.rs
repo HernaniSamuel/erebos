@@ -5,8 +5,8 @@ use std::collections::HashMap;
 
 use crate::diag::Diagnostic;
 use crate::hir::{
-    Block, EnumId, Expr, ExprId, ExprKind, FnId, Local, LocalId, ModuleId, NeverPosition, Stmt, Ty,
-    UnsizedPosition,
+    BitStructId, Block, EnumId, Expr, ExprId, ExprKind, FnId, Local, LocalId, ModuleId,
+    NeverPosition, Stmt, StructId, Ty, UnsizedPosition,
 };
 use crate::span::Span;
 use crate::syntax::ast;
@@ -14,15 +14,20 @@ use crate::syntax::ast;
 use super::{Def, Lowerer, Named, plain_name, written};
 
 impl Lowerer<'_> {
-    /// `Name { field: value, ... }`: every field exactly once, in any order.
+    /// `Name { field: value, ... }`: every field exactly once, in any order;
+    /// or, for a bit-field struct, ending with `..` (`rest`), which gives
+    /// every field it leaves out its default, or for a field with a write
+    /// effect the value whose write has no effect (ADR 0059).
     fn struct_lit(
         &mut self,
         expr: &ast::Expr,
         path: &ast::Path,
         inits: &[ast::FieldInit],
+        rest: Option<Span>,
     ) -> ExprKind {
-        let id = match self.lookup_path(path) {
-            Named::Item(Def::Struct(id)) => Some(id),
+        let of = match self.lookup_path(path) {
+            Named::Item(Def::Struct(id)) => Some(LitOf::Struct(id)),
+            Named::Item(Def::BitStruct(id)) => Some(LitOf::BitStruct(id)),
             Named::Item(Def::Module(_)) => {
                 self.misused_module(path, "a struct");
                 None
@@ -44,11 +49,11 @@ impl Lowerer<'_> {
                 None
             }
         };
+        let decl = of.map(|of| self.lit_decl(of));
         let fields: Vec<(Option<u32>, Expr)> = inits
             .iter()
             .map(|init| {
-                let decl = id.map(|id| self.struct_decls[id.0 as usize].0);
-                let index = decl.and_then(|decl| {
+                let index = decl.as_ref().and_then(|decl| {
                     decl.fields
                         .iter()
                         .position(|f| f.name.name == init.name.name)
@@ -56,11 +61,10 @@ impl Lowerer<'_> {
                 (index.map(|i| i as u32), self.expr(&init.value))
             })
             .collect();
-        let Some(id) = id else {
+        let (Some(of), Some(decl)) = (of, decl) else {
             return ExprKind::Unit;
         };
-        let (decl, module) = self.struct_decls[id.0 as usize];
-        let name = self.struct_tys[id.0 as usize].name;
+        let name = decl.name;
         let mut given: Vec<Option<Span>> = vec![None; decl.fields.len()];
         for (init, (index, _)) in inits.iter().zip(&fields) {
             match index {
@@ -70,7 +74,7 @@ impl Lowerer<'_> {
                         format!("`{name}` has no field `{}`", init.name.name),
                     )
                     .label(init.name.span, "unknown field")
-                    .label(decl.name.span, format!("`{name}` is declared here")),
+                    .label(decl.name_span, format!("`{name}` is declared here")),
                 ),
                 Some(i) => match given[*i as usize] {
                     Some(first) => self.diags.push(
@@ -85,79 +89,124 @@ impl Lowerer<'_> {
                 },
             }
         }
-        // A literal gives every field (ADR 0021), so outside the visibility
-        // of a private field it cannot be written, whether it gives that
-        // field or not (ADR 0050); what it misses is not reported then.
-        // A private struct is named from outside its module only by a path
-        // already reported as private (ADR 0050); its fields are not
-        // reported again.
-        if !self.is_within(self.module, module) && decl.vis != ast::Visibility::Private {
-            // A field declared twice was reported; only its first counts.
-            let private: Vec<(&ast::FieldDecl, Option<Span>)> = decl
-                .fields
+        // Only a bit-field struct's fields have defaults (ADR 0059).
+        let bit_struct = matches!(of, LitOf::BitStruct(_));
+        if let Some(rest) = rest
+            && !bit_struct
+        {
+            self.diags.push(
+                Diagnostic::error(
+                    "resolve::missing-default",
+                    format!("the fields of `{name}` have no defaults"),
+                )
+                .label(rest, format!("`{name}` is not a bit-field struct"))
+                .help(format!(
+                    "`..` gives the fields it leaves out their defaults, which only the fields of a bit-field struct have (ADR 0059); a literal of `{name}` gives every field (ADR 0021)"
+                )),
+            );
+        }
+        // A field declared twice was reported; only its first counts.
+        let first = |i: usize| {
+            decl.fields[..i]
                 .iter()
-                .zip(&given)
+                .all(|earlier| earlier.name.name != decl.fields[i].name.name)
+        };
+        // Without `..`, a literal gives every field (ADR 0021), so outside
+        // the visibility of a private field it cannot be written, whether
+        // it gives that field or not (ADR 0050); what it misses is not
+        // reported then. With `..`, it may leave out a private field that
+        // has a default or a write effect (ADR 0059). A private struct is
+        // named from outside its module only by a path already reported as
+        // private (ADR 0050); its fields are not reported again.
+        if !self.is_within(self.module, decl.module) && decl.vis != ast::Visibility::Private {
+            let private: Vec<(&LitField, Option<Span>)> = (decl.fields.iter().zip(&given))
                 .enumerate()
-                .filter(|(i, (field, _))| {
+                .filter(|&(i, (field, given))| {
                     field.vis == ast::Visibility::Private
-                        && decl.fields[..*i]
-                            .iter()
-                            .all(|earlier| earlier.name.name != field.name.name)
+                        && first(i)
+                        && (rest.is_none() || given.is_some() || !field.fillable)
                 })
                 .map(|(_, (field, &given))| (field, given))
                 .collect();
             if !private.is_empty() {
-                self.private_fields(path, name, module, &private);
+                self.private_fields(path, name, decl.module, &private, bit_struct, rest);
                 return ExprKind::Unit;
             }
         }
-        // A field declared twice was reported; only its first counts.
-        let missing: Vec<&str> = decl
-            .fields
-            .iter()
-            .zip(&given)
+        let missing: Vec<&LitField> = (decl.fields.iter().zip(&given))
             .enumerate()
-            .filter(|(i, (field, given))| {
-                given.is_none()
-                    && decl.fields[..*i]
-                        .iter()
-                        .all(|earlier| earlier.name.name != field.name.name)
-            })
-            .map(|(_, (field, _))| field.name.name.as_str())
+            .filter(|&(i, (_, given))| given.is_none() && first(i))
+            .map(|(_, (field, _))| field)
             .collect();
-        if !missing.is_empty() {
-            let list = missing
-                .iter()
-                .map(|name| format!("`{name}`"))
-                .collect::<Vec<_>>()
-                .join(", ");
-            self.diags.push(
-                Diagnostic::error(
+        match rest {
+            None if !missing.is_empty() => {
+                let mut diag = Diagnostic::error(
                     "resolve::missing-fields",
-                    format!("missing fields in `{name}`: {list}"),
+                    format!("missing fields in `{name}`: {}", named(&missing).join(", ")),
                 )
-                .label(expr.span, "every field must be given (ADR 0021)"),
-            );
+                .label(expr.span, "every field must be given (ADR 0021)");
+                if bit_struct && missing.iter().all(|field| field.fillable) {
+                    diag = diag.help("each field left out has a default or a write effect: end the literal with `..` to give each its default, or the value whose write has no effect (ADR 0059)");
+                }
+                self.diags.push(diag);
+            }
+            Some(rest) if bit_struct => {
+                let unfilled: Vec<&LitField> = (missing.into_iter())
+                    .filter(|field| !field.fillable)
+                    .collect();
+                if !unfilled.is_empty() {
+                    let (message, left_out) = match unfilled.as_slice() {
+                        [field] => (
+                            format!("the field `{}` of `{name}` has no default", field.name.name),
+                            "leaves out a field without a default",
+                        ),
+                        _ => {
+                            let names = named(&unfilled);
+                            let (last, others) = names.split_last().expect("several fields");
+                            let message = format!(
+                                "the fields {} and {last} of `{name}` have no default",
+                                others.join(", ")
+                            );
+                            (message, "leaves out fields without a default")
+                        }
+                    };
+                    let mut diag = Diagnostic::error("resolve::missing-default", message)
+                        .label(rest, left_out);
+                    for field in &unfilled {
+                        diag = diag.label(field.name.span, "declared here without a default");
+                    }
+                    self.diags.push(diag.help(
+                        "`..` gives each field it leaves out its default, written `= value` after the field's bits, or for a field with a write effect the value whose write has no effect: name such a field in the literal, or declare a default for it (ADR 0059)",
+                    ));
+                }
+            }
+            _ => {}
         }
-        ExprKind::StructLit(
-            self.struct_tys[id.0 as usize],
-            fields
-                .into_iter()
-                .filter_map(|(index, value)| Some((index?, value)))
-                .collect(),
-        )
+        let fields = (fields.into_iter())
+            .filter_map(|(index, value)| Some((index?, value)))
+            .collect();
+        match of {
+            LitOf::Struct(id) => ExprKind::StructLit(self.struct_tys[id.0 as usize], fields),
+            LitOf::BitStruct(id) => {
+                ExprKind::BitStructLit(self.bit_struct_tys[id.0 as usize], fields, rest)
+            }
+        }
     }
 
     /// `resolve::private-field` for a literal, written at `path`, of the
-    /// struct `name` of `module`, outside the visibility of its fields
-    /// `private`, each with where the literal gives it, if it does
-    /// (ADR 0050).
+    /// struct or bit-field struct `name` of `module`, outside the
+    /// visibility of its fields `private`, each with where the literal
+    /// gives it, if it does (ADR 0050); `rest` is the literal's `..`, which
+    /// leaves out only the private fields of a bit-field struct that have
+    /// a default or a write effect (ADR 0059).
     fn private_fields(
         &mut self,
         path: &ast::Path,
         name: &str,
         module: ModuleId,
-        private: &[(&ast::FieldDecl, Option<Span>)],
+        private: &[(&LitField, Option<Span>)],
+        bit_struct: bool,
+        rest: Option<Span>,
     ) {
         let names: Vec<String> = private
             .iter()
@@ -177,12 +226,25 @@ impl Lowerer<'_> {
             if let Some(given) = given {
                 diag = diag.label(*given, "not visible here");
             }
-            diag = diag.label(field.name.span, "declared here without `pub`");
+            // Left out by `..`, it would need a default.
+            let declared = if bit_struct && rest.is_some() && given.is_none() {
+                "declared here without `pub` or a default"
+            } else {
+                "declared here without `pub`"
+            };
+            diag = diag.label(field.name.span, declared);
         }
-        self.diags.push(diag.help(format!(
-            "a struct literal gives every field (ADR 0021), and a private field is visible only in {} and the modules inside it: build the struct with a function of that module, or declare the field `pub` (ADR 0050)",
-            self.module_name(module)
-        )));
+        let module = self.module_name(module);
+        let help = if bit_struct {
+            format!(
+                "a literal of a bit-field struct gives every field, or ends with `..`, which leaves out only fields with a default or a write effect (ADR 0059); a private field is visible only in {module} and the modules inside it: build the value with a function of that module, or declare the field `pub` (ADR 0050)"
+            )
+        } else {
+            format!(
+                "a struct literal gives every field (ADR 0021), and a private field is visible only in {module} and the modules inside it: build the struct with a function of that module, or declare the field `pub` (ADR 0050)"
+            )
+        };
+        self.diags.push(diag.help(help));
     }
 
     pub(super) fn block(&mut self, block: &ast::Block) -> Block {
@@ -464,8 +526,9 @@ impl Lowerer<'_> {
             }
             ast::ExprKind::Unary(op, operand) => ExprKind::Unary(*op, self.boxed(operand)),
             ast::ExprKind::Deref(operand) => ExprKind::Deref(self.boxed(operand)),
-            // `..` is not lowered yet (M3.3, step 2).
-            ast::ExprKind::StructLit(path, fields, _) => self.struct_lit(expr, path, fields),
+            ast::ExprKind::StructLit(path, fields, rest) => {
+                self.struct_lit(expr, path, fields, *rest)
+            }
             ast::ExprKind::Field(base, field) => {
                 ExprKind::Field(self.boxed(base), field.name.clone(), field.span)
             }
@@ -629,6 +692,80 @@ impl Lowerer<'_> {
     fn boxed(&mut self, expr: &ast::Expr) -> Box<Expr> {
         Box::new(self.expr(expr))
     }
+}
+
+impl<'a> Lowerer<'a> {
+    /// The declaration of what a literal builds, as the literal checks it.
+    fn lit_decl(&self, of: LitOf) -> LitDecl<'a> {
+        match of {
+            LitOf::Struct(id) => {
+                let (decl, module) = self.struct_decls[id.0 as usize];
+                LitDecl {
+                    name: self.struct_tys[id.0 as usize].name,
+                    name_span: decl.name.span,
+                    module,
+                    vis: decl.vis,
+                    fields: (decl.fields.iter())
+                        .map(|field| LitField {
+                            name: &field.name,
+                            vis: field.vis,
+                            fillable: false,
+                        })
+                        .collect(),
+                }
+            }
+            LitOf::BitStruct(id) => {
+                let (decl, module) = self.bit_struct_decls[id.0 as usize];
+                LitDecl {
+                    name: self.bit_struct_tys[id.0 as usize].name,
+                    name_span: decl.name.span,
+                    module,
+                    vis: decl.vis,
+                    fields: (decl.fields.iter())
+                        .map(|field| LitField {
+                            name: &field.name,
+                            vis: field.vis,
+                            fillable: field.default.is_some() || field.write_effect.is_some(),
+                        })
+                        .collect(),
+                }
+            }
+        }
+    }
+}
+
+/// What a struct literal builds (ADR 0021, 0059).
+#[derive(Clone, Copy)]
+enum LitOf {
+    Struct(StructId),
+    BitStruct(BitStructId),
+}
+
+/// The declaration of what a struct literal builds, as the literal checks
+/// it.
+struct LitDecl<'d> {
+    /// Its path, as diagnostics show it.
+    name: &'static str,
+    name_span: Span,
+    module: ModuleId,
+    vis: ast::Visibility,
+    fields: Vec<LitField<'d>>,
+}
+
+/// A field of what a struct literal builds.
+struct LitField<'d> {
+    name: &'d ast::Ident,
+    vis: ast::Visibility,
+    /// Whether `..` may leave it out: a field of a bit-field struct with a
+    /// default or a write effect (ADR 0059).
+    fillable: bool,
+}
+
+/// The names of `fields`, as messages write them: "`a`".
+fn named(fields: &[&LitField]) -> Vec<String> {
+    (fields.iter())
+        .map(|field| format!("`{}`", field.name.name))
+        .collect()
 }
 
 /// What a call's path names: a function, or a variant built with its

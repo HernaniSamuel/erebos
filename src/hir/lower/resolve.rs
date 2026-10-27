@@ -327,6 +327,10 @@ impl Lowerer<'_> {
                 let (decl, module) = self.struct_decls[id.0 as usize];
                 item(decl.vis, module, &decl.name)
             }
+            Def::BitStruct(id) => {
+                let (decl, module) = self.bit_struct_decls[id.0 as usize];
+                item(decl.vis, module, &decl.name)
+            }
             Def::Enum(id) => {
                 let (decl, module) = self.enum_decls[id.0 as usize];
                 item(decl.vis, module, &decl.name)

@@ -1,0 +1,180 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/resolve_bit_struct_errors.ers
+---
+--- errors ---
+resolve::bit-struct-type
+
+  × the type of a bit-field struct must be `u8`, `u16`, `u32` or `u64`
+    ╭─[resolve_bit_struct_errors.ers:11:16]
+ 10 │ 
+ 11 │ struct Signed: i8 { a: bool at 0 }
+    ·                ─┬
+    ·                 ╰── not `u8`, `u16`, `u32` or `u64`
+ 12 │ struct Word: usize { a: bool at 0 }
+    ╰────
+  help: a bit-field struct is stored as an unsigned integer type of a fixed width, whose bits its
+        fields occupy (ADR 0059)
+resolve::bit-struct-type
+
+  × the type of a bit-field struct must be `u8`, `u16`, `u32` or `u64`
+    ╭─[resolve_bit_struct_errors.ers:12:14]
+ 11 │ struct Signed: i8 { a: bool at 0 }
+ 12 │ struct Word: usize { a: bool at 0 }
+    ·              ──┬──
+    ·                ╰── not `u8`, `u16`, `u32` or `u64`
+ 13 │ struct Flag: bool { a: bool at 0 }
+    ╰────
+  help: a bit-field struct is stored as an unsigned integer type of a fixed width, whose bits its
+        fields occupy (ADR 0059)
+resolve::bit-struct-type
+
+  × the type of a bit-field struct must be `u8`, `u16`, `u32` or `u64`
+    ╭─[resolve_bit_struct_errors.ers:13:14]
+ 12 │ struct Word: usize { a: bool at 0 }
+ 13 │ struct Flag: bool { a: bool at 0 }
+    ·              ──┬─
+    ·                ╰── not `u8`, `u16`, `u32` or `u64`
+ 14 │ struct OfStruct: Point { a: bool at 0 }
+    ╰────
+  help: a bit-field struct is stored as an unsigned integer type of a fixed width, whose bits its
+        fields occupy (ADR 0059)
+resolve::bit-struct-type
+
+  × the type of a bit-field struct must be `u8`, `u16`, `u32` or `u64`
+    ╭─[resolve_bit_struct_errors.ers:14:18]
+ 13 │ struct Flag: bool { a: bool at 0 }
+ 14 │ struct OfStruct: Point { a: bool at 0 }
+    ·                  ──┬──
+    ·                    ╰── not `u8`, `u16`, `u32` or `u64`
+ 15 │ struct OfEnum: Mode { a: bool at 0 }
+    ╰────
+  help: a bit-field struct is stored as an unsigned integer type of a fixed width, whose bits its
+        fields occupy (ADR 0059)
+resolve::bit-struct-type
+
+  × the type of a bit-field struct must be `u8`, `u16`, `u32` or `u64`
+    ╭─[resolve_bit_struct_errors.ers:15:16]
+ 14 │ struct OfStruct: Point { a: bool at 0 }
+ 15 │ struct OfEnum: Mode { a: bool at 0 }
+    ·                ──┬─
+    ·                  ╰── not `u8`, `u16`, `u32` or `u64`
+ 16 │ 
+    ╰────
+  help: a bit-field struct is stored as an unsigned integer type of a fixed width, whose bits its
+        fields occupy (ADR 0059)
+resolve::empty-bit-struct
+
+  × `Empty` has no fields
+    ╭─[resolve_bit_struct_errors.ers:17:8]
+ 16 │ 
+ 17 │ struct Empty: u8 {}
+    ·        ──┬──
+    ·          ╰── a bit-field struct needs at least one field
+ 18 │ 
+    ╰────
+  help: a bit-field struct names bits of its integer type; without fields, use the integer type
+        itself (ADR 0059)
+resolve::duplicate-field
+
+  × the field `a` is declared more than once
+    ╭─[resolve_bit_struct_errors.ers:22:5]
+ 19 │ struct Twice: u16 {
+ 20 │     a: bool at 0,
+    ·     ┬
+    ·     ╰── first declared here
+ 21 │     b: bool at 1,
+ 22 │     a: u8 at 2..=5,
+    ·     ┬
+    ·     ╰── declared again here
+ 23 │ }
+    ╰────
+resolve::misplaced-attribute
+
+  × `#[packed]` does not apply to a bit-field struct
+    ╭─[resolve_bit_struct_errors.ers:25:1]
+ 24 │ 
+ 25 │ #[packed]
+    · ────┬────
+    ·     ╰── not allowed on a bit-field struct
+ 26 │ struct Packed: u16 { a: bool at 0 }
+    ╰────
+  help: a bit-field struct has the size and alignment of its integer type, which it is stored as
+        (ADR 0059)
+resolve::misplaced-attribute
+
+  × `#[align]` does not apply to a bit-field struct
+    ╭─[resolve_bit_struct_errors.ers:28:1]
+ 27 │ 
+ 28 │ #[align(4)]
+    · ─────┬─────
+    ·      ╰── not allowed on a bit-field struct
+ 29 │ struct Aligned: u8 { a: bool at 0 }
+    ╰────
+  help: a bit-field struct has the size and alignment of its integer type, which it is stored as
+        (ADR 0059)
+resolve::misplaced-attribute
+
+  × `#[export]` applies only to functions and statics defined in the program
+    ╭─[resolve_bit_struct_errors.ers:31:1]
+ 30 │ 
+ 31 │ #[export]
+    · ────┬────
+    ·     ╰── not allowed on a bit-field struct
+ 32 │ struct Exported: u8 { a: bool at 0 }
+    ╰────
+  help: `#[export]` gives a function or static its own name as its symbol; an `extern` item always
+        has its own name (ADR 0051)
+resolve::write-effect-default
+
+  × the field `overrun` has a write effect, so it has no default
+    ╭─[resolve_bit_struct_errors.ers:36:45]
+ 35 │     pub enable: bool at 0 = false,
+ 36 │     pub overrun: bool at 3 write 1 clears = false,
+    ·                            ───────┬──────   ──┬──
+    ·                                   │           ╰── a default
+    ·                                   ╰── the write effect
+ 37 │ }
+    ╰────
+  help: `..` gives a field with a write effect the value whose write has no effect, all zeros for
+        `write 1 ...` and all ones for `write 0 ...`, so that a literal never triggers an effect
+        it does not name: remove the default (ADR 0059, 0060)
+resolve::duplicate-item
+
+  × `Lcr` is defined more than once
+    ╭─[resolve_bit_struct_errors.ers:40:8]
+ 38 │ 
+ 39 │ fn Lcr() {}
+    ·    ─┬─
+    ·     ╰── first defined here
+ 40 │ struct Lcr: u8 { dlab: bool at 7 }
+    ·        ─┬─
+    ·         ╰── redefined here
+ 41 │ 
+    ╰────
+  help: functions, structs, enums, constants, statics, peripheral types and peripherals share one
+        namespace (ADR 0029, 0030, 0035, 0058)
+resolve::not-a-peripheral-type
+
+  × the type of the peripheral `STATUS` is not a peripheral type
+    ╭─[resolve_bit_struct_errors.ers:42:20]
+ 41 │ 
+ 42 │ peripheral STATUS: Status at 0x1000_0000;
+    ·                    ───┬──
+    ·                       ╰── a bit-field struct, not a peripheral type
+ 43 │ 
+    ╰────
+  help: a peripheral places a device's registers at an address: its type is declared as
+        `peripheral NAME { registers }`, and a pointer to one is written in code, as `*mut NAME`
+        (ADR 0058)
+resolve::unknown-name
+
+  × cannot find `Status` in this scope
+    ╭─[resolve_bit_struct_errors.ers:45:5]
+ 44 │ fn value() -> u32 {
+ 45 │     Status
+    ·     ───┬──
+    ·        ╰── a bit-field struct, which is not a value
+ 46 │ }
+    ╰────

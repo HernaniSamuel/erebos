@@ -1,0 +1,49 @@
+// The checks of bit-field struct declarations made when names are resolved
+// (ADR 0059): a type after `:` other than `u8`, `u16`, `u32` or `u64`
+// (`i8`, `usize`, `bool`, a struct, an enum), a bit-field struct without
+// fields, a field declared twice, `#[packed]`, `#[align(4)]` and
+// `#[export]`, a default on a field with a write effect (ADR 0060), and a
+// bit-field struct named like another item. A bit-field struct is no
+// peripheral type and no value.
+struct Point { x: u32, y: u32 }
+enum Mode: u8 { Off = 0, On = 1 }
+
+struct Signed: i8 { a: bool at 0 }
+struct Word: usize { a: bool at 0 }
+struct Flag: bool { a: bool at 0 }
+struct OfStruct: Point { a: bool at 0 }
+struct OfEnum: Mode { a: bool at 0 }
+
+struct Empty: u8 {}
+
+struct Twice: u16 {
+    a: bool at 0,
+    b: bool at 1,
+    a: u8 at 2..=5,
+}
+
+#[packed]
+struct Packed: u16 { a: bool at 0 }
+
+#[align(4)]
+struct Aligned: u8 { a: bool at 0 }
+
+#[export]
+struct Exported: u8 { a: bool at 0 }
+
+struct Status: u32 {
+    pub enable: bool at 0 = false,
+    pub overrun: bool at 3 write 1 clears = false,
+}
+
+fn Lcr() {}
+struct Lcr: u8 { dlab: bool at 7 }
+
+peripheral STATUS: Status at 0x1000_0000;
+
+fn value() -> u32 {
+    Status
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

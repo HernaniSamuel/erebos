@@ -96,6 +96,7 @@ pub fn report_never_in_memory(q: &mut Queries) {
         let help = match never.position {
             NeverPosition::Static => NeverHelp::Static,
             NeverPosition::Register => NeverHelp::Register,
+            NeverPosition::BitField => NeverHelp::BitField,
             _ => NeverHelp::Unit,
         };
         q.diags.push(never_in_memory(
@@ -190,6 +191,7 @@ fn memory_position(position: NeverPosition) -> String {
         NeverPosition::Static => "the type of a static".to_owned(),
         NeverPosition::Const => "the type of a constant".to_owned(),
         NeverPosition::Register => "the type of a register".to_owned(),
+        NeverPosition::BitField => "the type of a bit field".to_owned(),
         NeverPosition::LayoutQuery(name) => format!("the operand of `{name}`"),
     }
 }
@@ -238,6 +240,8 @@ enum NeverHelp {
     Static,
     /// A register holds an integer of its width (ADR 0058).
     Register,
+    /// A bit field holds a value of a few bits (ADR 0059).
+    BitField,
 }
 
 fn never_in_memory(span: Span, what: &str, help: NeverHelp) -> Diagnostic {
@@ -247,6 +251,9 @@ fn never_in_memory(span: Span, what: &str, help: NeverHelp) -> Diagnostic {
             "use a type of non-zero size, such as `u8`, whose address is a real one (ADR 0022, 0034)"
         }
         NeverHelp::Register => "a register is a `u8`, a `u16` or a `u32` (ADR 0058)",
+        NeverHelp::BitField => {
+            "a bit field is a `bool`, an integer type or an enum without payloads (ADR 0059)"
+        }
     };
     Diagnostic::error("ty::never-in-memory", "`!` is not a type of memory")
         .label(span, format!("`!` as {what}"))
@@ -271,6 +278,14 @@ pub fn check_fn(q: &mut Queries, f: &Fn) -> usize {
     };
     checker.fn_(f);
     checker.elsewhere
+}
+
+/// Stops at an expression of type `ty` if `ty` is a bit-field struct, whose
+/// values are not type checked before M3.3, step 4.
+fn values_of_bit_structs(ty: Ty) {
+    if let Ty::BitStruct(_) = ty {
+        todo!("M3.3 step 4: type-check the values of a bit-field struct")
+    }
 }
 
 /// Whether a value of type `from` may be used where `to` is expected.
@@ -688,6 +703,7 @@ impl Checker<'_, '_> {
             }
         }
         self.q.tables.expr_types[expr.id.0 as usize] = ty;
+        values_of_bit_structs(ty);
         // Variables were checked where they are declared; any other
         // aggregate value needs a temporary of its size.
         if ty.is_aggregate()
@@ -797,6 +813,7 @@ impl Checker<'_, '_> {
                         self.field(f, expr, ty, PlaceInfo::ERROR, name, *name_span);
                     }
                     Ty::Error => {}
+                    Ty::BitStruct(_) => todo!("M3.3 step 4: `offset_of` of a bit field"),
                     other => {
                         let diag =
                             Diagnostic::error("ty::no-fields", format!("`{other}` has no fields"))
@@ -814,6 +831,9 @@ impl Checker<'_, '_> {
                     self.check(f, value, Some(ty));
                 }
                 Ty::Struct(*s)
+            }
+            ExprKind::BitStructLit(..) => {
+                todo!("M3.3 step 4: type-check a literal of a bit-field struct")
             }
             ExprKind::Call { callee, args } => self.call(f, expr, *callee, args),
             ExprKind::Unary(op, operand) => self.unary(f, expr, *op, operand, expected),
@@ -1019,6 +1039,9 @@ impl Checker<'_, '_> {
             Ty::Unit | Ty::Array(..) | Ty::Slice(_) | Ty::Struct(_) | Ty::Applied(_) => false,
             // A device, reached one register at a time (ADR 0058).
             Ty::Peripheral(_) => false,
+            // Compared field by field, or as an integer made with `as`
+            // (ADR 0059).
+            Ty::BitStruct(_) => false,
         };
         if !ok {
             let payloads = matches!(ty, Ty::Enum(EnumTy { payloads: true, .. }));

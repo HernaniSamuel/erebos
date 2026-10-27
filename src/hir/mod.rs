@@ -11,7 +11,7 @@ use std::fmt;
 pub use crate::int::IntTy;
 pub use crate::ops::{BinOp, LogicalOp, UnOp};
 use crate::span::Span;
-pub use crate::syntax::ast::AccessMode;
+pub use crate::syntax::ast::{AccessMode, ReadEffect, WriteAction, WriteEffect};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct FnId(pub u32);
@@ -36,6 +36,10 @@ pub struct StaticId(pub u32);
 /// A struct, indexing [`Hir::structs`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct StructId(pub u32);
+
+/// A bit-field struct, indexing [`Hir::bit_structs`] (ADR 0059).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct BitStructId(pub u32);
 
 /// An enum, indexing [`Hir::enums`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -79,6 +83,7 @@ pub struct Hir {
     /// `mod` is met, depth first (ADR 0049); then `core`'s tree, likewise.
     pub modules: Vec<ModuleDef>,
     pub structs: Vec<StructDef>,
+    pub bit_structs: Vec<BitStructDef>,
     pub enums: Vec<EnumDef>,
     /// The program's functions, then its bodies that run at compile time:
     /// one for each constant, each static with an initializer (not an
@@ -206,6 +211,7 @@ impl Hir {
         struct Hir<'a> {
             modules: &'a [ModuleDef],
             structs: Vec<&'a StructDef>,
+            bit_structs: Vec<&'a BitStructDef>,
             enums: Vec<&'a EnumDef>,
             fns: Vec<&'a Fn>,
             consts: Vec<&'a ConstDef>,
@@ -227,6 +233,9 @@ impl Hir {
         let program = Hir {
             modules: &self.modules[..core.module.0 as usize],
             structs: (self.structs.iter())
+                .filter(|s| !self.in_core(s.module))
+                .collect(),
+            bit_structs: (self.bit_structs.iter())
                 .filter(|s| !self.in_core(s.module))
                 .collect(),
             enums: (self.enums.iter())
@@ -280,6 +289,10 @@ impl Hir {
 
     pub fn struct_(&self, id: StructId) -> &StructDef {
         &self.structs[id.0 as usize]
+    }
+
+    pub fn bit_struct(&self, id: BitStructId) -> &BitStructDef {
+        &self.bit_structs[id.0 as usize]
     }
 
     pub fn const_(&self, id: ConstId) -> &ConstDef {
@@ -482,6 +495,11 @@ pub struct RegisterDef {
     pub ty_span: Span,
     /// From the start of its peripheral, with the span of its expression.
     pub offset: (ArrayLen, Span),
+    /// What a read of it does, with the span of its words (ADR 0060).
+    pub read_effect: Option<(ReadEffect, Span)>,
+    /// The alternate group named after `in`, with the span of its name: a
+    /// label of the peripheral type, which names no item (ADR 0061).
+    pub group: Option<(String, Span)>,
 }
 
 /// `peripheral NAME: Type at ADDRESS;` (ADR 0058): an instance of a
@@ -550,6 +568,8 @@ pub enum NeverPosition {
     Const,
     /// The type of a register of a peripheral type (ADR 0058).
     Register,
+    /// The type of a field of a bit-field struct (ADR 0059).
+    BitField,
     /// The operand of `size_of`, `align_of` or `offset_of`, named.
     LayoutQuery(&'static str),
 }
@@ -587,6 +607,12 @@ pub enum Comptime {
     /// The value of a variant, by index, of the enum's integer type
     /// (ADR 0035).
     Discriminant(EnumId, u32),
+    /// An end of the bits of a field, by index, of a bit-field struct, a
+    /// `u32` (ADR 0059).
+    Bits(BitStructId, u32),
+    /// The default of a field, by index, of a bit-field struct, of the
+    /// field's type (ADR 0059).
+    Default(BitStructId, u32),
     /// A `usize` the program needs at compile time: an array length, a
     /// repeat count, the argument of `#[align]`, a value of the `memory`
     /// block (ADR 0057), a register's offset or a peripheral's address
@@ -619,6 +645,63 @@ impl StructDef {
     pub fn reachable_from(&self, module: ModuleId) -> bool {
         self.reachable.contains(&module)
     }
+}
+
+/// `struct Name: Int { field: Type at BITS, ... }` (ADR 0059): fields at
+/// bits of an integer type, which it is stored as. Its values, the bits
+/// and the defaults of its fields, are computed at compile time in the
+/// scope of its module, as a peripheral type's are.
+#[derive(Debug)]
+pub struct BitStructDef {
+    /// Its path from the root module, as diagnostics and dumps show the
+    /// type (ADR 0049).
+    pub path: String,
+    pub name_span: Span,
+    pub module: ModuleId,
+    pub vis: Visibility,
+    /// The modules it is reachable from, in id order, as a struct's
+    /// (ADR 0050): its `pub` fields are visible there.
+    pub reachable: Vec<ModuleId>,
+    /// Its type, with the integer type written after `:`; `u8` when that
+    /// is no `u8`, `u16`, `u32` or `u64`, which was reported.
+    pub ty: BitStructTy,
+    /// The span of the type written after `:`.
+    pub int_span: Span,
+    /// In source order; a name declared twice was reported.
+    pub fields: Vec<BitFieldDef>,
+}
+
+impl BitStructDef {
+    /// Whether a path written in `module` can name it (ADR 0050).
+    pub fn reachable_from(&self, module: ModuleId) -> bool {
+        self.reachable.contains(&module)
+    }
+}
+
+/// `[pub] name: Type at BITS [READ_EFFECT] [WRITE_EFFECT] [= default]`, a
+/// field of a bit-field struct (ADR 0059, 0060).
+#[derive(Debug)]
+pub struct BitFieldDef {
+    pub name: String,
+    /// The span of its name.
+    pub span: Span,
+    /// Private unless written `pub`, as a struct's field (ADR 0050).
+    pub vis: Visibility,
+    pub ty: Ty,
+    pub ty_span: Span,
+    /// Its lowest bit, or its only one, with the span of its expression: a
+    /// `u32` known for a literal, or else computed by a body of its own
+    /// (`Comptime::Bits`).
+    pub low: (ArrayLen, Span),
+    /// Its highest bit, written after `..=`, likewise.
+    pub high: Option<(ArrayLen, Span)>,
+    /// With the span of its words.
+    pub read_effect: Option<(ReadEffect, Span)>,
+    /// With the span of its words.
+    pub write_effect: Option<(WriteEffect, Span)>,
+    /// The body computing its default, a value of its type
+    /// (`Comptime::Default`), with the span of the default's expression.
+    pub default: Option<(FnId, Span)>,
 }
 
 /// `enum Name: Type { Variant = value, ... }` (ADR 0035): named values of
@@ -888,6 +971,9 @@ pub enum Ty {
     /// pointer, which is then a slice (ADR 0031). Leaked likewise.
     Slice(&'static Ty),
     Struct(StructTy),
+    /// A bit-field struct (ADR 0059): a scalar, stored as its integer
+    /// type.
+    BitStruct(BitStructTy),
     Enum(EnumTy),
     /// `Option(T)` or `Result(T, E)` as written (ADR 0045); normalizing it
     /// makes it the enum it is for its arguments.
@@ -942,6 +1028,15 @@ impl fmt::Display for ArrayLen {
 pub struct StructTy {
     pub id: StructId,
     pub name: &'static str,
+}
+
+/// A bit-field struct type (ADR 0059), with the integer type it is stored
+/// as; its name is carried along like a struct's.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct BitStructTy {
+    pub id: BitStructId,
+    pub name: &'static str,
+    pub int: IntTy,
 }
 
 /// A peripheral type (ADR 0058), its name carried along like a struct's.
@@ -1061,6 +1156,7 @@ impl fmt::Display for Ty {
             Ty::Array(elem, len) => write!(f, "[{elem}; {len}]"),
             Ty::Slice(elem) => write!(f, "[{elem}]"),
             Ty::Struct(s) => f.write_str(s.name),
+            Ty::BitStruct(s) => f.write_str(s.name),
             Ty::Enum(e) => f.write_str(e.name),
             Ty::Peripheral(p) => f.write_str(p.name),
             Ty::Applied(applied) => {
@@ -1135,6 +1231,11 @@ pub enum ExprKind {
     /// `Name { field: value, ... }`: field indices with their values, in
     /// the order written, which is the order they are evaluated in.
     StructLit(StructTy, Vec<(u32, Expr)>),
+    /// `Name { field: value, ... }` or `Name { field: value, .. }` of a
+    /// bit-field struct (ADR 0059), as `StructLit`, with the span of `..`
+    /// if written: the fields it leaves out take their defaults, or for a
+    /// field with a write effect the value whose write has no effect.
+    BitStructLit(BitStructTy, Vec<(u32, Expr)>, Option<Span>),
     /// `base.field`; the type checker resolves the field.
     Field(Box<Expr>, String, Span),
     /// `assert(cond)` or `assert(cond, msg)`, built in (ADR 0029, 0031),
@@ -1312,7 +1413,7 @@ impl Expr {
             | ExprKind::Len(e)
             | ExprKind::Comptime(e)
             | ExprKind::Try(e, _) => e.walk(f),
-            ExprKind::StructLit(_, fields) => {
+            ExprKind::StructLit(_, fields) | ExprKind::BitStructLit(_, fields, _) => {
                 for (_, value) in fields {
                     value.walk(f);
                 }

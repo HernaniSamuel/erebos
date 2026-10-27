@@ -3,7 +3,7 @@
 //! and `query` applies them on demand, laying out structs and enums with
 //! payloads for type checking, MIR building and the evaluator.
 
-use crate::hir::{EnumId, EnumTy, IntTy, StructId, Ty};
+use crate::hir::{BitStructTy, EnumId, EnumTy, IntTy, StructId, Ty};
 use crate::target;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -109,11 +109,13 @@ pub fn of(ty: Ty, composite: &mut impl FnMut(Composite) -> Option<Layout>) -> Op
             id, payloads: true, ..
         }) => composite(Composite::Enum(id))?,
         // An enum without payloads is stored as its integer type
-        // (ADR 0035).
-        Ty::Int(int) | Ty::Enum(EnumTy { int, .. }) => Layout {
-            size: int.bytes(),
-            align: int.bytes(),
-        },
+        // (ADR 0035), and so is a bit-field struct (ADR 0059).
+        Ty::Int(int) | Ty::Enum(EnumTy { int, .. }) | Ty::BitStruct(BitStructTy { int, .. }) => {
+            Layout {
+                size: int.bytes(),
+                align: int.bytes(),
+            }
+        }
         // A slice is an address and a length (ADR 0031).
         Ty::Ptr(_) if ty.slice_elem().is_some() => Layout {
             size: 2 * target::POINTER_BYTES,

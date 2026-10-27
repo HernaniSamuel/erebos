@@ -1,0 +1,58 @@
+// emit: hir
+// Bit-field structs (ADR 0059): one in a module, with `pub` and private
+// fields, whose bits and defaults name constants of that module, used from
+// another module by a path and through `use`. A literal there may end with
+// `..`, which leaves out private fields that have a default or a write
+// effect, and may leave out no field at all. A bit written as a literal is
+// known; one computed, and each default, get a body of their own. A
+// peripheral type's registers carry their read effects and groups
+// (ADR 0060, 0061); a group names no item.
+mod uart {
+    const STOP: u32 = 2;
+    const DLAB: u32 = 7;
+    const NO_PARITY: bool = false;
+
+    pub enum WordLength: u8 { Five = 0, Six = 1, Seven = 2, Eight = 3 }
+
+    pub struct Lcr: u8 {
+        pub word_length: WordLength at 0..=1 = .Eight,
+        stop_bits: bool at STOP = false,
+        parity: bool at STOP + 1..=STOP + 1 = NO_PARITY,
+        pending: bool at 5 read clears write 1 clears,
+        pub dlab: bool at DLAB,
+    }
+
+    pub peripheral Uart16550 {
+        pub read rbr: u8 at 0 read modifies,
+        pub write thr: u8 at 0,
+        read write ier: u8 at 1,
+        read iir: u8 at 2 read sets,
+        read write lcr: Lcr at 3,
+        read lsr: u8 at 5 read clears,
+        read write dll: u8 at 0 in dlab,
+        read write dlm: u8 at 1 read modifies in dlab,
+    }
+
+    fn reset() -> Lcr {
+        Lcr {
+            word_length: .Five,
+            stop_bits: false,
+            parity: false,
+            pending: false,
+            dlab: false,
+            ..
+        }
+    }
+}
+
+mod driver {
+    use crate::uart::Lcr;
+
+    fn configure(dlab: bool) -> crate::uart::Lcr {
+        let first: Lcr = Lcr { dlab: dlab, .. };
+        crate::uart::Lcr { word_length: .Six, dlab: false, .. }
+    }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }
