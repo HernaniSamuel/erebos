@@ -1,0 +1,98 @@
+// emit: typeck
+// Values of bit-field structs (ADR 0059): literals with and without `..`,
+// `.V` and literals taking their field's type; field reads, a value of the
+// field's type, in conditions, arithmetic and a `match`; field assignments
+// and compound assignments to a local, to a field of a struct, through a
+// `*mut` and a `*mut volatile` pointer (a scalar, accessed as its
+// integer); `as` to integers of any width and from the struct's own integer
+// type, a literal operand taking that type; a bit-field struct as a
+// parameter, a return value, a struct field and an array element; and
+// `size_of` and `align_of`, its integer's. The dump labels each access to
+// a bit field `bit field`.
+enum WordLength: u8 { Five = 0, Six = 1, Seven = 2, Eight = 3 }
+
+struct Lcr: u8 {
+    pub word_length: WordLength at 0..=1 = .Five,
+    pub two_stop_bits: bool at 2 = false,
+    pub parity: bool at 3 = false,
+    pub break_control: bool at 6 = false,
+    pub dlab: bool at 7 = false,
+}
+
+struct Control: u32 {
+    pub count: u8 at 0..=3 = 0,
+    pub enable: bool at 4,
+    pub limit: u16 at 8..=23 = 0xFFFF,
+}
+
+struct Uart {
+    lcr: Lcr,
+    control: Control,
+}
+
+fn literals() -> Lcr {
+    let full: Lcr = Lcr {
+        word_length: .Eight,
+        two_stop_bits: false,
+        parity: true,
+        break_control: false,
+        dlab: false,
+    };
+    let rest: Lcr = Lcr { word_length: .Seven, dlab: true, .. };
+    let all: Lcr = Lcr { .. };
+    let control: Control = Control { count: 15, enable: true, .. };
+    rest
+}
+
+fn reads(l: Lcr, c: Control) -> u32 {
+    let mut total: u32 = c.count as u32 + c.limit as u32 * 2;
+    if l.dlab && !l.parity {
+        total = total + 1;
+    }
+    match l.word_length {
+        .Eight => total + 8,
+        _ => total,
+    }
+}
+
+fn writes(p: *mut Lcr, v: *mut volatile Control) {
+    let mut l: Lcr = Lcr { .. };
+    l.dlab = true;
+    l.word_length = .Six;
+    l.parity |= true;
+    let mut u: Uart = Uart { lcr: l, control: Control { enable: false, .. } };
+    u.lcr.break_control = true;
+    u.control.count += 1;
+    u.control.limit = 0x1234;
+    (*p).dlab = false;
+    (*p).two_stop_bits ^= true;
+    (*v).count = 3;
+    (*v).count -= 1;
+    (*v).enable = (*v).limit > 10;
+    *v = Control { enable: true, .. };
+}
+
+fn casts(l: Lcr, x: u8) -> u64 {
+    let byte: u8 = l as u8;
+    let word: u32 = l as u32;
+    let small: i8 = l as i8;
+    let made: Lcr = 0x83 as Lcr;
+    let from: Lcr = x as Lcr;
+    let control: Control = 0xFFFF_FFFF as Control;
+    let read: u8 = (0x83 as Lcr).word_length as u8;
+    made as u64 + from as u64 + control as u64 + byte as u64
+}
+
+fn pass(l: Lcr) -> Lcr {
+    let lines: [Lcr; 2] = [l, Lcr { dlab: true, .. }];
+    let mut copy: [Lcr; 2] = lines;
+    copy[1].dlab = false;
+    if lines[0].dlab { copy[0] } else { pass(copy[1]) }
+}
+
+fn sizes() -> usize {
+    size_of(Lcr) + align_of(Lcr) + size_of(Control) + align_of(Control) + size_of(Uart)
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

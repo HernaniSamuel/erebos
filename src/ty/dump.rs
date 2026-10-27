@@ -335,9 +335,11 @@ fn expr_label(q: &Queries, f: &Fn, expr: &Expr) -> String {
         ExprKind::StructLit(s, _) => format!("struct {}", s.name),
         ExprKind::BitStructLit(s, _, None) => format!("struct {}", s.name),
         ExprKind::BitStructLit(s, _, Some(_)) => format!("struct {} ..", s.name),
-        // A register when the base is of a peripheral type (ADR 0058).
+        // A register when the base is of a peripheral type (ADR 0058), a
+        // bit field when it is of a bit-field struct type (ADR 0059).
         ExprKind::Field(base, name, _) => match q.tables.expr_ty(base.id) {
             Ty::Peripheral(_) => format!("register {name}"),
+            _ if q.tables.bit_field(expr.id).is_some() => format!("bit field {name}"),
             _ => format!("field {name}"),
         },
         ExprKind::SizeOf(ty) => format!("size_of({ty})"),

@@ -1,0 +1,382 @@
+---
+source: tests/ui.rs
+assertion_line: 22
+expression: output
+input_file: tests/ui/typeck_bit_struct_errors.ers
+---
+--- errors ---
+ty::bit-field-address
+
+  × cannot take the address of a field of `regs::Lcr`
+    ╭─[typeck_bit_struct_errors.ers:36:37]
+ 35 │ fn addresses(mut l: Lcr) -> usize {
+ 36 │     let a: *const bool = &raw const l.dlab;
+    ·                                     ───┬──
+    ·                                        ╰── a bit field, not a place in memory
+ 37 │     let b: *mut bool = &raw mut l.parity;
+    ╰────
+  help: a field of a bit-field struct is a range of bits of its `u8`; copy it into a `let` and
+        take that address, or take the address of the whole value (ADR 0059)
+ty::bit-field-address
+
+  × cannot take the address of a field of `regs::Lcr`
+    ╭─[typeck_bit_struct_errors.ers:37:33]
+ 36 │     let a: *const bool = &raw const l.dlab;
+ 37 │     let b: *mut bool = &raw mut l.parity;
+    ·                                 ────┬───
+    ·                                     ╰── a bit field, not a place in memory
+ 38 │     offset_of(Lcr, dlab)
+    ╰────
+  help: a field of a bit-field struct is a range of bits of its `u8`; copy it into a `let` and
+        take that address, or take the address of the whole value (ADR 0059)
+ty::bit-field-offset
+
+  × the field `dlab` of `regs::Lcr` has no byte offset
+    ╭─[typeck_bit_struct_errors.ers:18:27]
+ 17 │     pub struct Lcr: u8 {
+ 18 │         pub dlab: bool at 7 = false,
+    ·                           ┬
+    ·                           ╰── its bits in `u8`
+ 19 │         pub parity: bool at 3 = false,
+    ╰────
+    ╭─[typeck_bit_struct_errors.ers:38:20]
+ 37 │     let b: *mut bool = &raw mut l.parity;
+ 38 │     offset_of(Lcr, dlab)
+    ·                    ──┬─
+    ·                      ╰── a bit field
+ 39 │ }
+    ╰────
+  help: a field of a bit-field struct is a range of bits of its `u8`, not a place in memory; the
+        struct's size and alignment are its integer's (ADR 0059)
+ty::private-field
+
+  × the field `divisor_latch` of `regs::Lcr` is private
+    ╭─[typeck_bit_struct_errors.ers:20:9]
+ 19 │         pub parity: bool at 3 = false,
+ 20 │         divisor_latch: u8 at 0..=1 = 0,
+    ·         ──────┬──────
+    ·               ╰── declared here without `pub`
+ 21 │     }
+    ╰────
+    ╭─[typeck_bit_struct_errors.ers:42:20]
+ 41 │ fn private_offset() -> usize {
+ 42 │     offset_of(Lcr, divisor_latch)
+    ·                    ──────┬──────
+    ·                          ╰── not visible here
+ 43 │ }
+    ╰────
+  help: a private field is visible only in module `regs` and the modules inside it; declare it
+        `pub` to use it elsewhere (ADR 0050)
+ty::bit-field-offset
+
+  × the field `divisor_latch` of `regs::Lcr` has no byte offset
+    ╭─[typeck_bit_struct_errors.ers:20:30]
+ 19 │         pub parity: bool at 3 = false,
+ 20 │         divisor_latch: u8 at 0..=1 = 0,
+    ·                              ──┬──
+    ·                                ╰── its bits in `u8`
+ 21 │     }
+    ╰────
+    ╭─[typeck_bit_struct_errors.ers:42:20]
+ 41 │ fn private_offset() -> usize {
+ 42 │     offset_of(Lcr, divisor_latch)
+    ·                    ──────┬──────
+    ·                          ╰── a bit field
+ 43 │ }
+    ╰────
+  help: a field of a bit-field struct is a range of bits of its `u8`, not a place in memory; the
+        struct's size and alignment are its integer's (ADR 0059)
+ty::invalid-cast
+
+  × cannot cast `u32` to `regs::Lcr`
+    ╭─[typeck_bit_struct_errors.ers:46:23]
+ 45 │ fn casts(l: Lcr, x: u32) {
+ 46 │     let a: Lcr = x as Lcr;
+    ·                       ─┬─
+    ·                        ╰── a bit-field struct converts only from its integer type, `u8`
+ 47 │     let b: Lcr = l as Lcr;
+    ╰────
+  help: convert the value to `u8` first, as in `x as u8 as regs::Lcr` (ADR 0019, 0059)
+ty::invalid-cast
+
+  × cannot cast `regs::Lcr` to `regs::Lcr`
+    ╭─[typeck_bit_struct_errors.ers:47:23]
+ 46 │     let a: Lcr = x as Lcr;
+ 47 │     let b: Lcr = l as Lcr;
+    ·                       ─┬─
+    ·                        ╰── a bit-field struct converts only from its integer type, `u8`
+ 48 │     let c: bool = l as bool;
+    ╰────
+  help: the value already is a `regs::Lcr`; a bit-field struct does not convert to itself (ADR
+        0059)
+ty::invalid-cast
+
+  × cannot cast `regs::Lcr` to `bool`
+    ╭─[typeck_bit_struct_errors.ers:48:24]
+ 47 │     let b: Lcr = l as Lcr;
+ 48 │     let c: bool = l as bool;
+    ·                        ──┬─
+    ·                          ╰── a bit-field struct converts only to integer types
+ 49 │     let d: *const u8 = l as *const u8;
+    ╰────
+  help: say what you mean with a comparison of its integer, such as `l as u8 != 0`, or read one of
+        its `bool` fields (ADR 0059)
+ty::invalid-cast
+
+  × cannot cast `regs::Lcr` to `*const u8`
+    ╭─[typeck_bit_struct_errors.ers:49:29]
+ 48 │     let c: bool = l as bool;
+ 49 │     let d: *const u8 = l as *const u8;
+    ·                             ────┬────
+    ·                                 ╰── a bit-field struct converts only to integer types
+ 50 │     let e: Other = l as Other;
+    ╰────
+ty::invalid-cast
+
+  × cannot cast `regs::Lcr` to `Other`
+    ╭─[typeck_bit_struct_errors.ers:50:25]
+ 49 │     let d: *const u8 = l as *const u8;
+ 50 │     let e: Other = l as Other;
+    ·                         ──┬──
+    ·                           ╰── a bit-field struct converts only from its integer type, `u8`
+ 51 │     let f: Lcr = 0x183 as Lcr;
+    ╰────
+  help: convert the value to `u8` first, as in `l as u8 as Other` (ADR 0019, 0059)
+ty::literal-out-of-range
+
+  × literal out of range for `u8`
+    ╭─[typeck_bit_struct_errors.ers:51:18]
+ 50 │     let e: Other = l as Other;
+ 51 │     let f: Lcr = 0x183 as Lcr;
+    ·                  ──┬──
+    ·                    ╰── `387` does not fit in `u8`
+ 52 │     let g: Lcr = true as Lcr;
+    ╰────
+ty::invalid-cast
+
+  × cannot cast `bool` to `regs::Lcr`
+    ╭─[typeck_bit_struct_errors.ers:52:26]
+ 51 │     let f: Lcr = 0x183 as Lcr;
+ 52 │     let g: Lcr = true as Lcr;
+    ·                          ─┬─
+    ·                           ╰── a bit-field struct converts only from its integer type, `u8`
+ 53 │ }
+    ╰────
+  help: convert the value to `u8` first, as in `x as u8 as regs::Lcr` (ADR 0019, 0059)
+ty::invalid-operand
+
+  × `==` needs integers, pointers, `bool` or enums, found `regs::Lcr`
+    ╭─[typeck_bit_struct_errors.ers:56:22]
+ 55 │ fn operators(l: Lcr, m: Lcr) -> u8 {
+ 56 │     let same: bool = l == m;
+    ·                      ───┬──
+    ·                         ╰── has type `regs::Lcr`
+ 57 │     let both: Lcr = l | m;
+    ╰────
+  help: operators do not apply to a bit-field struct: use them on its fields, or on its integer
+        made with `as`, as in `x as u8`, which its reserved bits are part of (ADR 0059)
+ty::invalid-operand
+
+  × `|` needs an integer or `bool`, found `regs::Lcr`
+    ╭─[typeck_bit_struct_errors.ers:57:21]
+ 56 │     let same: bool = l == m;
+ 57 │     let both: Lcr = l | m;
+    ·                     ──┬──
+    ·                       ╰── has type `regs::Lcr`
+ 58 │     match l {
+    ╰────
+  help: operators do not apply to a bit-field struct: use them on its fields, or on its integer
+        made with `as`, as in `x as u8`, which its reserved bits are part of (ADR 0059)
+ty::match-type
+
+  × cannot `match` on a value of type `regs::Lcr`
+    ╭─[typeck_bit_struct_errors.ers:58:11]
+ 57 │     let both: Lcr = l | m;
+ 58 │     match l {
+    ·           ┬
+    ·           ╰── has type `regs::Lcr`
+ 59 │         _ => 0,
+    ╰────
+  help: a `match` takes an integer, a `bool` or an enum (ADR 0037); match on one of its fields, or
+        on its integer made with `as`, as in `x as u8` (ADR 0059)
+ty::write-through-const
+
+  × cannot write through a `*const` pointer
+    ╭─[typeck_bit_struct_errors.ers:64:7]
+ 63 │ fn through_const(p: *const Lcr) {
+ 64 │     (*p).dlab = true;
+    ·       ┬
+    ·       ╰── has type `*const regs::Lcr`
+ 65 │ }
+    ╰────
+  help: only `*mut` pointers can be written through
+ty::assign-immutable
+
+  × cannot assign to `l`, which is not `mut`
+    ╭─[typeck_bit_struct_errors.ers:68:5]
+ 66 │ 
+ 67 │ fn immutable(l: Lcr) {
+    ·              ┬
+    ·              ╰── help: declare it `let mut l`
+ 68 │     l.dlab = true;
+    ·     ───┬──
+    ·        ╰── assigned here
+ 69 │     (0x83 as Lcr).dlab = true;
+    ╰────
+ty::not-assignable
+
+  × cannot assign to part of a temporary value
+    ╭─[typeck_bit_struct_errors.ers:69:5]
+ 68 │     l.dlab = true;
+ 69 │     (0x83 as Lcr).dlab = true;
+    ·     ──────┬──────
+    ·           ╰── this value lives in no variable
+ 70 │ }
+    ╰────
+  help: store it in a `let mut` first
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_bit_struct_errors.ers:73:30]
+ 72 │ fn wrong_types(mut l: Lcr) {
+ 73 │     let m: Lcr = Lcr { dlab: 1, parity: .On, .. };
+    ·                              ┬
+    ·                              ╰── expected `bool`, found an integer
+ 74 │     l.parity = 0;
+    ╰────
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_bit_struct_errors.ers:73:41]
+ 72 │ fn wrong_types(mut l: Lcr) {
+ 73 │     let m: Lcr = Lcr { dlab: 1, parity: .On, .. };
+    ·                                         ─┬─
+    ·                                          ╰── expected `bool`, found variant `.On`
+ 74 │     l.parity = 0;
+    ╰────
+  help: `.On` names a variant of the enum expected where it appears, and `bool` is not an enum
+        (ADR 0044)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_bit_struct_errors.ers:74:16]
+ 73 │     let m: Lcr = Lcr { dlab: 1, parity: .On, .. };
+ 74 │     l.parity = 0;
+    ·                ┬
+    ·                ╰── expected `bool`, found an integer
+ 75 │     l.dlab = l;
+    ╰────
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_bit_struct_errors.ers:75:14]
+ 74 │     l.parity = 0;
+ 75 │     l.dlab = l;
+    ·              ┬
+    ·              ╰── expected `bool`, found `regs::Lcr`
+ 76 │ }
+    ╰────
+ty::unknown-field
+
+  × `regs::Lcr` has no field `ready`
+    ╭─[typeck_bit_struct_errors.ers:79:21]
+ 78 │ fn places(l: Lcr) -> bool {
+ 79 │     let a: bool = l.ready;
+    ·                     ──┬──
+    ·                       ╰── unknown field
+ 80 │     let b: u8 = l.divisor_latch;
+    ╰────
+  help: its fields are `dlab`, `parity`
+ty::private-field
+
+  × the field `divisor_latch` of `regs::Lcr` is private
+    ╭─[typeck_bit_struct_errors.ers:20:9]
+ 19 │         pub parity: bool at 3 = false,
+ 20 │         divisor_latch: u8 at 0..=1 = 0,
+    ·         ──────┬──────
+    ·               ╰── declared here without `pub`
+ 21 │     }
+    ╰────
+    ╭─[typeck_bit_struct_errors.ers:80:19]
+ 79 │     let a: bool = l.ready;
+ 80 │     let b: u8 = l.divisor_latch;
+    ·                   ──────┬──────
+    ·                         ╰── not visible here
+ 81 │     l.dlab
+    ╰────
+  help: a private field is visible only in module `regs` and the modules inside it; declare it
+        `pub` to use it elsewhere (ADR 0050)
+ty::no-fields
+
+  × `*mut regs::Lcr` has no fields
+    ╭─[typeck_bit_struct_errors.ers:85:7]
+ 84 │ fn without_deref(p: *mut Lcr) -> bool {
+ 85 │     p.dlab
+    ·       ──┬─
+    ·         ╰── no such field
+ 86 │ }
+    ╰────
+  help: dereference the pointer first: `(*p).dlab` (ADR 0021)
+ty::volatile-too-wide
+
+  × a volatile `Wide` cannot be accessed in one instruction
+    ╭─[typeck_bit_struct_errors.ers:89:23]
+ 88 │ fn volatile_accesses(w: *mut volatile Wide, p: *mut volatile Packed) -> u32 {
+ 89 │     let whole: Wide = *w;
+    ·                       ─┬
+    ·                        ╰── the widest single access is 32 bits
+ 90 │     (*w).low = 1;
+    ╰────
+  help: a bit-field struct is accessed as its integer type, `u64`, with all its fields at once;
+        declare it on an integer type of at most 32 bits, or split its fields between two such
+        structs (ADR 0023, 0059)
+ty::volatile-too-wide
+
+  × a volatile `Wide` cannot be accessed in one instruction
+    ╭─[typeck_bit_struct_errors.ers:90:5]
+ 89 │     let whole: Wide = *w;
+ 90 │     (*w).low = 1;
+    ·     ────┬───
+    ·         ╰── the widest single access is 32 bits
+ 91 │     (*p).status = Status { ready: true, count: 0 };
+    ╰────
+  help: a bit-field struct is accessed as its integer type, `u64`, with all its fields at once;
+        declare it on an integer type of at most 32 bits, or split its fields between two such
+        structs (ADR 0023, 0059)
+ty::volatile-packed-field
+
+  × a volatile `Status` here may be misaligned
+    ╭─[typeck_bit_struct_errors.ers:91:5]
+ 90 │     (*w).low = 1;
+ 91 │     (*p).status = Status { ready: true, count: 0 };
+    ·     ─────┬─────
+    ·          ╰── reached through a field of a `#[packed]` struct
+ 92 │     let ready: bool = (*p).status.ready;
+    ╰────
+  help: it would be split into several accesses; register blocks use the default layout, with
+        explicit padding fields (ADR 0022, 0023)
+ty::volatile-packed-field
+
+  × a volatile `Status` here may be misaligned
+    ╭─[typeck_bit_struct_errors.ers:92:23]
+ 91 │     (*p).status = Status { ready: true, count: 0 };
+ 92 │     let ready: bool = (*p).status.ready;
+    ·                       ────────┬────────
+    ·                               ╰── reached through a field of a `#[packed]` struct
+ 93 │     (*w).high
+    ╰────
+  help: it would be split into several accesses; register blocks use the default layout, with
+        explicit padding fields (ADR 0022, 0023)
+ty::volatile-too-wide
+
+  × a volatile `Wide` cannot be accessed in one instruction
+    ╭─[typeck_bit_struct_errors.ers:93:5]
+ 92 │     let ready: bool = (*p).status.ready;
+ 93 │     (*w).high
+    ·     ────┬────
+    ·         ╰── the widest single access is 32 bits
+ 94 │ }
+    ╰────
+  help: a bit-field struct is accessed as its integer type, `u64`, with all its fields at once;
+        declare it on an integer type of at most 32 bits, or split its fields between two such
+        structs (ADR 0023, 0059)

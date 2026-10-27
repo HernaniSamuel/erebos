@@ -591,12 +591,15 @@ impl Checker<'_, '_> {
     }
 
     /// Integers and pointers convert to each other with `as` (ADR 0013),
-    /// and enums to integers (ADR 0035). A literal operand takes the target
-    /// type, or `usize` for a pointer target (ADR 0017).
+    /// enums to integers (ADR 0035), and bit-field structs to integers and
+    /// from their own integer types (ADR 0059). A literal operand takes the
+    /// target type, `usize` for a pointer target (ADR 0017), or a bit-field
+    /// struct's integer type (ADR 0059).
     pub(super) fn cast(&mut self, f: &Fn, operand: &Expr, target: Ty, target_span: Span) -> Ty {
         let literal_ty = match target {
             Ty::Int(_) => Some(target),
             Ty::Ptr(_) => Some(Ty::Int(IntTy::Usize)),
+            Ty::BitStruct(s) => Some(Ty::Int(s.int)),
             // Reported, such as `as *const !` (ADR 0034), or below, `as !`
             // and `as Mode`, which a literal has no type to take for.
             Ty::Error | Ty::Never | Ty::Enum(_) => Some(Ty::Error),
@@ -648,6 +651,68 @@ impl Checker<'_, '_> {
                         "decode the integer with a `match`, with an arm such as {variant} for each value (ADR 0035)"
                     )),
             );
+            return Ty::Error;
+        }
+        // Every value of its integer type is a value of a bit-field
+        // struct, and nothing else converts to one: a wider value is
+        // narrowed first, visibly (ADR 0059).
+        if let Ty::BitStruct(s) = target {
+            if matches!(from, Ty::Error | Ty::Never) || from == Ty::Int(s.int) {
+                return target;
+            }
+            let int = s.int;
+            let mut diag = Diagnostic::error(
+                "ty::invalid-cast",
+                format!("cannot cast `{from}` to `{target}`"),
+            )
+            .label(
+                target_span,
+                format!("a bit-field struct converts only from its integer type, `{int}`"),
+            );
+            match from {
+                // As an enum does not (ADR 0035).
+                _ if from == target => {
+                    diag = diag.help(format!(
+                        "the value already is a `{target}`; a bit-field struct does not convert to itself (ADR 0059)"
+                    ));
+                }
+                Ty::Int(_)
+                | Ty::Bool
+                | Ty::BitStruct(_)
+                | Ty::Enum(EnumTy {
+                    payloads: false, ..
+                }) => {
+                    let x = self.path_text(f, operand).unwrap_or_else(|| "x".to_owned());
+                    diag = diag.help(format!(
+                        "convert the value to `{int}` first, as in `{x} as {int} as {target}` (ADR 0019, 0059)"
+                    ));
+                }
+                _ => {}
+            }
+            self.q.diags.push(diag);
+            return Ty::Error;
+        }
+        // As its integer type would convert, to integers only (ADR 0059).
+        if let Ty::BitStruct(s) = from {
+            if matches!(target, Ty::Int(_) | Ty::Error) {
+                return target;
+            }
+            let mut diag = Diagnostic::error(
+                "ty::invalid-cast",
+                format!("cannot cast `{from}` to `{target}`"),
+            )
+            .label(
+                target_span,
+                "a bit-field struct converts only to integer types",
+            );
+            if target == Ty::Bool {
+                let x = self.path_text(f, operand).unwrap_or_else(|| "x".to_owned());
+                diag = diag.help(format!(
+                    "say what you mean with a comparison of its integer, such as `{x} as {} != 0`, or read one of its `bool` fields (ADR 0059)",
+                    s.int
+                ));
+            }
+            self.q.diags.push(diag);
             return Ty::Error;
         }
         if from == Ty::Bool {

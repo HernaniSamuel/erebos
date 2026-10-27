@@ -1,0 +1,227 @@
+---
+source: tests/ui.rs
+assertion_line: 22
+expression: output
+input_file: tests/ui/typeck_bit_struct_values.ers
+---
+--- typeck ---
+struct Uart { lcr: Lcr at 0, control: Control at 4 } size 8, align 4
+struct Lcr: u8 { word_length: WordLength at 0..=1 = WordLength::Five, two_stop_bits: bool at 2 = false, parity: bool at 3 = false, break_control: bool at 6 = false, dlab: bool at 7 = false }
+struct Control: u32 { count: u8 at 0..=3 = 0, enable: bool at 4, limit: u16 at 8..=23 = 65535 }
+enum WordLength: u8 { Five = 0, Six = 1, Seven = 2, Eight = 3 }
+fn literals() -> Lcr
+    let full: Lcr
+    let rest: Lcr
+    let all: Lcr
+    let control: Control
+    expr 7 struct Lcr 1210..1353: Lcr
+    expr 8 variant .Eight (WordLength::Eight) 1237..1243: WordLength
+    expr 9 bool false 1268..1273: bool
+    expr 10 bool true 1291..1295: bool
+    expr 11 bool false 1320..1325: bool
+    expr 12 bool false 1341..1346: bool
+    expr 13 struct Lcr .. 1375..1418: Lcr
+    expr 14 variant .Seven (WordLength::Seven) 1394..1400: WordLength
+    expr 15 bool true 1408..1412: bool
+    expr 16 struct Lcr .. 1439..1449: Lcr
+    expr 17 struct Control .. 1478..1517: Control
+    expr 18 int 15 1495..1497: u8
+    expr 19 bool true 1507..1511: bool
+    expr 20 local rest 1523..1527: Lcr
+fn reads(l: Lcr, c: Control) -> u32
+    let mut total: u32
+    expr 21 binary + 1594..1629: u32
+    expr 22 as u32 1594..1608: u32
+    expr 23 bit field count 1594..1601: u8
+    expr 24 local c 1594..1595: Control
+    expr 25 binary * 1611..1629: u32
+    expr 26 as u32 1611..1625: u32
+    expr 27 bit field limit 1611..1618: u16
+    expr 28 local c 1611..1612: Control
+    expr 29 int 2 1628..1629: u32
+    expr 30 if 1635..1692: ()
+    expr 31 logical && 1638..1657: bool
+    expr 32 bit field dlab 1638..1644: bool
+    expr 33 local l 1638..1639: Lcr
+    expr 34 not 1648..1657: bool
+    expr 35 bit field parity 1649..1657: bool
+    expr 36 local l 1649..1650: Lcr
+    expr 37 assign 1668..1685: ()
+    expr 38 local total 1668..1673: u32
+    expr 39 binary + 1676..1685: u32
+    expr 40 local total 1676..1681: u32
+    expr 41 int 1 1684..1685: u32
+    expr 42 match 1697..1773: u32
+    expr 43 bit field word_length 1703..1716: WordLength
+    expr 44 local l 1703..1704: Lcr
+    expr 45 binary + 1737..1746: u32
+    expr 46 local total 1737..1742: u32
+    expr 47 int 8 1745..1746: u32
+    expr 48 local total 1761..1766: u32
+fn writes(p: *mut Lcr, v: *mut volatile Control) -> ()
+    let mut l: Lcr
+    let mut u: Uart
+    expr 49 struct Lcr .. 1849..1859: Lcr
+    expr 50 assign 1865..1878: ()
+    expr 51 bit field dlab 1865..1871: bool
+    expr 52 local l 1865..1866: Lcr
+    expr 53 bool true 1874..1878: bool
+    expr 54 assign 1884..1904: ()
+    expr 55 bit field word_length 1884..1897: WordLength
+    expr 56 local l 1884..1885: Lcr
+    expr 57 variant .Six (WordLength::Six) 1900..1904: WordLength
+    expr 58 assign |= 1910..1926: ()
+    expr 59 bit field parity 1910..1918: bool
+    expr 60 local l 1910..1911: Lcr
+    expr 61 bool true 1922..1926: bool
+    expr 62 struct Uart 1950..2005: Uart
+    expr 63 local l 1962..1963: Lcr
+    expr 64 struct Control .. 1974..2003: Control
+    expr 65 bool false 1992..1997: bool
+    expr 66 assign 2011..2037: ()
+    expr 67 bit field break_control 2011..2030: bool
+    expr 68 field lcr 2011..2016: Lcr
+    expr 69 local u 2011..2012: Uart
+    expr 70 bool true 2033..2037: bool
+    expr 71 assign += 2043..2063: ()
+    expr 72 bit field count 2043..2058: u8
+    expr 73 field control 2043..2052: Control
+    expr 74 local u 2043..2044: Uart
+    expr 75 int 1 2062..2063: u8
+    expr 76 assign 2069..2093: ()
+    expr 77 bit field limit 2069..2084: u16
+    expr 78 field control 2069..2078: Control
+    expr 79 local u 2069..2070: Uart
+    expr 80 int 4660 2087..2093: u16
+    expr 81 assign 2099..2116: ()
+    expr 82 bit field dlab 2099..2108: bool
+    expr 83 deref 2099..2103: Lcr
+    expr 84 local p 2101..2102: *mut Lcr
+    expr 85 bool false 2111..2116: bool
+    expr 86 assign ^= 2122..2148: ()
+    expr 87 bit field two_stop_bits 2122..2140: bool
+    expr 88 deref 2122..2126: Lcr
+    expr 89 local p 2124..2125: *mut Lcr
+    expr 90 bool true 2144..2148: bool
+    expr 91 assign 2154..2168: ()
+    expr 92 bit field count 2154..2164: u8
+    expr 93 deref 2154..2158: Control
+    expr 94 local v 2156..2157: *mut volatile Control
+    expr 95 int 3 2167..2168: u8
+    expr 96 assign -= 2174..2189: ()
+    expr 97 bit field count 2174..2184: u8
+    expr 98 deref 2174..2178: Control
+    expr 99 local v 2176..2177: *mut volatile Control
+    expr 100 int 1 2188..2189: u8
+    expr 101 assign 2195..2224: ()
+    expr 102 bit field enable 2195..2206: bool
+    expr 103 deref 2195..2199: Control
+    expr 104 local v 2197..2198: *mut volatile Control
+    expr 105 binary > 2209..2224: bool
+    expr 106 bit field limit 2209..2219: u16
+    expr 107 deref 2209..2213: Control
+    expr 108 local v 2211..2212: *mut volatile Control
+    expr 109 int 10 2222..2224: u16
+    expr 110 assign 2230..2263: ()
+    expr 111 deref 2230..2232: Control
+    expr 112 local v 2231..2232: *mut volatile Control
+    expr 113 struct Control .. 2235..2263: Control
+    expr 114 bool true 2253..2257: bool
+fn casts(l: Lcr, x: u8) -> u64
+    let byte: u8
+    let word: u32
+    let small: i8
+    let made: Lcr
+    let from: Lcr
+    let control: Control
+    let read: u8
+    expr 115 as u8 2320..2327: u8
+    expr 116 local l 2320..2321: Lcr
+    expr 117 as u32 2349..2357: u32
+    expr 118 local l 2349..2350: Lcr
+    expr 119 as i8 2379..2386: i8
+    expr 120 local l 2379..2380: Lcr
+    expr 121 as Lcr 2408..2419: Lcr
+    expr 122 int 131 2408..2412: u8
+    expr 123 as Lcr 2441..2449: Lcr
+    expr 124 local x 2441..2442: u8
+    expr 125 as Control 2478..2500: Control
+    expr 126 int 4294967295 2478..2489: u32
+    expr 127 as u8 2521..2552: u8
+    expr 128 bit field word_length 2521..2546: WordLength
+    expr 129 as Lcr 2521..2534: Lcr
+    expr 130 int 131 2522..2526: u8
+    expr 131 binary + 2558..2614: u64
+    expr 132 binary + 2558..2600: u64
+    expr 133 binary + 2558..2583: u64
+    expr 134 as u64 2558..2569: u64
+    expr 135 local made 2558..2562: Lcr
+    expr 136 as u64 2572..2583: u64
+    expr 137 local from 2572..2576: Lcr
+    expr 138 as u64 2586..2600: u64
+    expr 139 local control 2586..2593: Control
+    expr 140 as u64 2603..2614: u64
+    expr 141 local byte 2603..2607: u8
+fn pass(l: Lcr) -> Lcr
+    let lines: [Lcr; 2]
+    let mut copy: [Lcr; 2]
+    expr 142 array 2669..2696: [Lcr; 2]
+    expr 143 local l 2670..2671: Lcr
+    expr 144 struct Lcr .. 2673..2695: Lcr
+    expr 145 bool true 2685..2689: bool
+    expr 146 local lines 2727..2732: [Lcr; 2]
+    expr 147 assign 2738..2758: ()
+    expr 148 bit field dlab 2738..2750: bool
+    expr 149 index 2738..2745: Lcr
+    expr 150 local copy 2738..2742: [Lcr; 2]
+    expr 151 int 1 2743..2744: usize
+    expr 152 bool false 2753..2758: bool
+    expr 153 if 2764..2815: Lcr
+    expr 154 bit field dlab 2767..2780: bool
+    expr 155 index 2767..2775: Lcr
+    expr 156 local lines 2767..2772: [Lcr; 2]
+    expr 157 int 0 2773..2774: usize
+    expr 158 index 2783..2790: Lcr
+    expr 159 local copy 2783..2787: [Lcr; 2]
+    expr 160 int 0 2788..2789: usize
+    expr 161 block 2798..2815: Lcr
+    expr 162 call 2800..2813: Lcr
+    expr 163 index 2805..2812: Lcr
+    expr 164 local copy 2805..2809: [Lcr; 2]
+    expr 165 int 1 2810..2811: usize
+fn sizes() -> usize
+    expr 166 binary + 2845..2928: usize
+    expr 167 binary + 2845..2912: usize
+    expr 168 binary + 2845..2892: usize
+    expr 169 binary + 2845..2873: usize
+    expr 170 size_of(Lcr) 2845..2857: usize
+    expr 171 align_of(Lcr) 2860..2873: usize
+    expr 172 size_of(Control) 2876..2892: usize
+    expr 173 align_of(Control) 2895..2912: usize
+    expr 174 size_of(Uart) 2915..2928: usize
+entry fn main() -> !
+    expr 175 loop 2955..2962: !
+panic fn on_panic() -> !
+    expr 176 loop 2992..2999: !
+comptime fn WordLength::Five() -> u8
+    expr 177 int 0 733..734: u8
+comptime fn WordLength::Six() -> u8
+    expr 178 int 1 742..743: u8
+comptime fn WordLength::Seven() -> u8
+    expr 179 int 2 753..754: u8
+comptime fn WordLength::Eight() -> u8
+    expr 180 int 3 764..765: u8
+comptime fn default() -> WordLength
+    expr 0 variant .Five (WordLength::Five) 829..834: WordLength
+comptime fn default() -> bool
+    expr 1 bool false 871..876: bool
+comptime fn default() -> bool
+    expr 2 bool false 906..911: bool
+comptime fn default() -> bool
+    expr 3 bool false 948..953: bool
+comptime fn default() -> bool
+    expr 4 bool false 981..986: bool
+comptime fn default() -> u8
+    expr 5 int 0 1042..1043: u8
+comptime fn default() -> u16
+    expr 6 int 65535 1103..1109: u16

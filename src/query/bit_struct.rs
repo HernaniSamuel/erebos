@@ -7,7 +7,6 @@ use crate::diag::Diagnostic;
 use crate::eval::{self, Origin};
 use crate::hir::{self, BitFieldDef, BitStructDef, BitStructId, IntTy};
 use crate::layout::{self, BitLayout};
-use crate::span::Span;
 
 use super::{Item, Queries, State, describe};
 
@@ -86,7 +85,7 @@ impl Queries<'_> {
             None => low,
         };
         let (low, high) = (low? as u32, high? as u32);
-        let span = bits_span(field);
+        let span = field.bits_span();
         if low > high {
             self.diags.push(
                 Diagnostic::error(
@@ -149,7 +148,7 @@ impl Queries<'_> {
             return true;
         };
         let width = high - low + 1;
-        let span = bits_span(field);
+        let span = field.bits_span();
         if width > holds {
             let diag = match ty {
                 hir::Ty::Bool => Diagnostic::error(
@@ -250,8 +249,8 @@ impl Queries<'_> {
                         "ty::bit-field-overlap",
                         format!("the fields `{}` and `{}` overlap", earlier.name, later.name),
                     )
-                    .label(bits_span(later), bits_text(later_lo, later_hi))
-                    .label(bits_span(earlier), bits_text(earlier_lo, earlier_hi))
+                    .label(later.bits_span(), bits_text(later_lo, later_hi))
+                    .label(earlier.bits_span(), bits_text(earlier_lo, earlier_hi))
                     .help(format!(
                         "they share {}; the fields of a bit-field struct share no bit (ADR 0059)",
                         bits_text(lo, hi)
@@ -336,20 +335,12 @@ impl Queries<'_> {
             )
             .label(span, format!("`{shown}` needs {}", bit_count(needed)))
             .label(
-                bits_span(field),
+                field.bits_span(),
                 format!("{}, holding 0 to {}", bit_count(width), max_value(width)),
             )
             .help("a value written to a field fits in its bits; a program that wants the low bits of a wider value masks them itself (ADR 0059)"),
         );
         false
-    }
-}
-
-/// The span of the bits of `field`, from its low end to its high one.
-fn bits_span(field: &BitFieldDef) -> Span {
-    match field.high {
-        Some((_, high)) => field.low.1.to(high),
-        None => field.low.1,
     }
 }
 

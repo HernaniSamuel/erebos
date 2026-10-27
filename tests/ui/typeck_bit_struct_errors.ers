@@ -1,0 +1,97 @@
+// emit: typeck
+// What type checking rejects in the values of bit-field structs (ADR 0059):
+// a bit field has no address (`ty::bit-field-address`) and no byte offset
+// (`ty::bit-field-offset`, also with `ty::private-field` for a private
+// one); `as` makes one only from its own integer type,
+// a literal operand taking that type, and turns one only into integers
+// (`ty::invalid-cast`); operators do not apply (`ty::invalid-operand`) and
+// a `match` does not take one (`ty::match-type`); a field is written as
+// its base is, so not through a `*const` pointer, a local that is not
+// `mut` or a temporary; values have their field's type; a field read as a
+// place is unknown or private as any struct's, and not reached through a
+// pointer without `*` (`ty::no-fields`) (a literal's are name resolution's, in
+// `resolve_struct_rest.ers`); through a volatile pointer it is a scalar of
+// its integer's width, so a `u64` one is too wide, also by field, and a
+// `u32` one in a `#[packed]` struct may be misaligned, also by field.
+mod regs {
+    pub struct Lcr: u8 {
+        pub dlab: bool at 7 = false,
+        pub parity: bool at 3 = false,
+        divisor_latch: u8 at 0..=1 = 0,
+    }
+}
+
+use regs::Lcr;
+
+struct Other: u8 { pub bit: bool at 0 }
+
+struct Wide: u64 { pub low: u32 at 0..=31, pub high: u32 at 32..=63 }
+
+struct Status: u32 { pub ready: bool at 0, pub count: u8 at 8..=15 }
+
+#[packed]
+struct Packed { tag: u8, status: Status }
+
+fn addresses(mut l: Lcr) -> usize {
+    let a: *const bool = &raw const l.dlab;
+    let b: *mut bool = &raw mut l.parity;
+    offset_of(Lcr, dlab)
+}
+
+fn private_offset() -> usize {
+    offset_of(Lcr, divisor_latch)
+}
+
+fn casts(l: Lcr, x: u32) {
+    let a: Lcr = x as Lcr;
+    let b: Lcr = l as Lcr;
+    let c: bool = l as bool;
+    let d: *const u8 = l as *const u8;
+    let e: Other = l as Other;
+    let f: Lcr = 0x183 as Lcr;
+    let g: Lcr = true as Lcr;
+}
+
+fn operators(l: Lcr, m: Lcr) -> u8 {
+    let same: bool = l == m;
+    let both: Lcr = l | m;
+    match l {
+        _ => 0,
+    }
+}
+
+fn through_const(p: *const Lcr) {
+    (*p).dlab = true;
+}
+
+fn immutable(l: Lcr) {
+    l.dlab = true;
+    (0x83 as Lcr).dlab = true;
+}
+
+fn wrong_types(mut l: Lcr) {
+    let m: Lcr = Lcr { dlab: 1, parity: .On, .. };
+    l.parity = 0;
+    l.dlab = l;
+}
+
+fn places(l: Lcr) -> bool {
+    let a: bool = l.ready;
+    let b: u8 = l.divisor_latch;
+    l.dlab
+}
+
+fn without_deref(p: *mut Lcr) -> bool {
+    p.dlab
+}
+
+fn volatile_accesses(w: *mut volatile Wide, p: *mut volatile Packed) -> u32 {
+    let whole: Wide = *w;
+    (*w).low = 1;
+    (*p).status = Status { ready: true, count: 0 };
+    let ready: bool = (*p).status.ready;
+    (*w).high
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

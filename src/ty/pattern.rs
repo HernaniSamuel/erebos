@@ -30,13 +30,21 @@ impl Checker<'_, '_> {
             Ty::Enum(_) if self.q.is_erroneous(ty) => Ty::Error,
             Ty::Enum(_) => ty,
             other => {
+                let help = match other {
+                    // Its fields are values to match on (ADR 0059).
+                    Ty::BitStruct(s) => format!(
+                        "a `match` takes an integer, a `bool` or an enum (ADR 0037); match on one of its fields, or on its integer made with `as`, as in `x as {}` (ADR 0059)",
+                        s.int
+                    ),
+                    _ => "a `match` takes an integer, a `bool` or an enum (ADR 0037)".to_owned(),
+                };
                 self.q.diags.push(
                     Diagnostic::error(
                         "ty::match-type",
                         format!("cannot `match` on a value of type `{other}`"),
                     )
                     .label(scrutinee.span, format!("has type `{other}`"))
-                    .help("a `match` takes an integer, a `bool` or an enum (ADR 0037)"),
+                    .help(help),
                 );
                 Ty::Error
             }

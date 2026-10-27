@@ -4,7 +4,7 @@
 
 use crate::diag::Diagnostic;
 use crate::hir::{
-    self, AccessMode, EnumTy, Expr, ExprKind, Fn, Hir, IntTy, ModuleId, PeripheralTy,
+    self, AccessMode, BitStructTy, EnumTy, Expr, ExprKind, Fn, Hir, IntTy, ModuleId, PeripheralTy,
     PeripheralTypeId, Ty,
 };
 use crate::span::Span;
@@ -40,12 +40,19 @@ impl Checker<'_, '_> {
     /// (ADR 0023), so it cannot be wider than the target's widest access,
     /// nor a whole aggregate. A register is volatile too, and must allow
     /// the access (ADR 0058); its type was checked with its peripheral
-    /// type, so it gets no volatile checks of its own.
+    /// type, so it gets no volatile checks of its own. A bit field is
+    /// accessed with the whole value of its bit-field struct, which the
+    /// volatile checks see (ADR 0059).
     pub(super) fn access(&mut self, place: &PlaceInfo, span: Span, kind: AccessMode) {
         if let Some(register) = place.register {
             self.register_access(register, span, kind);
             return;
         }
+        let whole = PlaceInfo {
+            ty: place.bit_field.map_or(place.ty, Ty::BitStruct),
+            ..*place
+        };
+        let place = &whole;
         let volatile = place.via.is_some_and(|ptr| ptr.volatile);
         if volatile && !place.ty.is_aggregate() && self.may_be_misaligned(place) {
             self.q.diags.push(
@@ -87,8 +94,8 @@ impl Checker<'_, '_> {
                 .help(help),
             );
         }
-        // An enum without payloads is accessed as its integer type
-        // (ADR 0023, 0035).
+        // An enum without payloads and a bit-field struct are accessed as
+        // their integer types (ADR 0023, 0035, 0059).
         if let (
             true,
             Ty::Int(int)
@@ -96,7 +103,8 @@ impl Checker<'_, '_> {
                 int,
                 payloads: false,
                 ..
-            }),
+            })
+            | Ty::BitStruct(BitStructTy { int, .. }),
         ) = (volatile, place.ty)
             && int.bits() > target::WIDEST_ACCESS_BITS
         {
@@ -106,6 +114,11 @@ impl Checker<'_, '_> {
             let help = match place.ty {
                 Ty::Enum(_) => format!(
                     "an enum is accessed as its integer type, `{int}`; declare it on an integer type of at most {half} bits if its values fit (ADR 0023, 0035)"
+                ),
+                // Its halves would not make one either: it converts only
+                // from its own integer type (ADR 0059).
+                Ty::BitStruct(_) => format!(
+                    "a bit-field struct is accessed as its integer type, `{int}`, with all its fields at once; declare it on an integer type of at most {half} bits, or split its fields between two such structs (ADR 0023, 0059)"
                 ),
                 _ => format!(
                     "access it as `u{half}` halves, in the order the device needs (ADR 0023)"
@@ -179,6 +192,7 @@ impl Checker<'_, '_> {
                     misaligned: false,
                     constant: false,
                     register: None,
+                    bit_field: None,
                 }
             }
             ExprKind::ByteString(bytes) => PlaceInfo {
@@ -188,6 +202,7 @@ impl Checker<'_, '_> {
                 misaligned: false,
                 constant: false,
                 register: None,
+                bit_field: None,
             },
             ExprKind::Static(id) => {
                 let def = self.hir.static_(*id);
@@ -198,6 +213,7 @@ impl Checker<'_, '_> {
                     misaligned: false,
                     constant: false,
                     register: None,
+                    bit_field: None,
                 }
             }
             // Not `mut`: what may be written is its registers' business, so
@@ -209,6 +225,7 @@ impl Checker<'_, '_> {
                 misaligned: false,
                 constant: false,
                 register: None,
+                bit_field: None,
             },
             ExprKind::Deref(pointer) => {
                 let ty = self.check(f, pointer, None);
@@ -322,7 +339,6 @@ impl Checker<'_, '_> {
             _ => return None,
         };
         self.q.tables.expr_types[expr.id.0 as usize] = info.ty;
-        super::values_of_bit_structs(info.ty);
         Some(info)
     }
 
@@ -354,6 +370,7 @@ impl Checker<'_, '_> {
         let hir = self.hir;
         let s = match ty {
             Ty::Struct(s) => s,
+            Ty::BitStruct(s) => return self.bit_field(f, expr, s, base_place, name, name_span),
             Ty::Never => {
                 return PlaceInfo {
                     ty: Ty::Never,
@@ -367,7 +384,7 @@ impl Checker<'_, '_> {
                     Diagnostic::error("ty::no-fields", format!("`{other}` has no fields"))
                         .label(name_span, "no such field");
                 if let Ty::Ptr(ptr) = other
-                    && let Ty::Struct(_) | Ty::Peripheral(_) = *ptr.pointee
+                    && let Ty::Struct(_) | Ty::BitStruct(_) | Ty::Peripheral(_) = *ptr.pointee
                 {
                     diag = diag.help(format!(
                         "dereference the pointer first: `(*p).{name}` (ADR 0021)"
@@ -382,43 +399,88 @@ impl Checker<'_, '_> {
             }
         };
         let def = hir.struct_(s.id);
-        let Some(index) = def.fields.iter().position(|field| field.name == name) else {
-            // Only the fields visible here are listed (ADR 0050).
-            let names: Vec<String> = def
-                .fields
-                .iter()
-                .enumerate()
-                .filter(|(i, _)| hir.field_visible(s.id, *i, f.module))
-                .map(|(_, field)| format!("`{}`", field.name))
-                .collect();
-            let mut diag = Diagnostic::error(
-                "ty::unknown-field",
-                format!("`{}` has no field `{name}`", s.name),
-            )
-            .label(name_span, "unknown field");
-            diag = if def.fields.is_empty() {
-                diag.help(format!("`{}` has no fields", s.name))
-            } else if names.is_empty() {
-                diag.help("none of its fields is visible here (ADR 0050)")
-            } else {
-                diag.help(format!("its fields are {}", names.join(", ")))
-            };
-            self.q.diags.push(diag);
+        let fields = Fields::of_struct(hir, s.id, f.module);
+        let Some(index) = self.named_field(&fields, name, name_span) else {
             return PlaceInfo::ERROR;
         };
-        // A field that is not visible is still the one named, so nothing
-        // more is reported about it.
-        if !hir.field_visible(s.id, index, f.module) {
-            self.q
-                .diags
-                .push(private_field(hir, s.id, index, f.module, name_span));
-        }
         self.q.tables.fields.insert(expr.id, index as u32);
         PlaceInfo {
             ty: self.norm(def.fields[index].ty),
             misaligned: base_place.misaligned || def.packed,
             ..base_place
         }
+    }
+
+    /// The index of the field `name` of `fields`, named at `name_span`:
+    /// `ty::unknown-field` if there is none, and `ty::private-field` if the
+    /// module the fields are named in does not see it (ADR 0050). A field
+    /// that is not visible is still the one named, so nothing more is
+    /// reported about it.
+    fn named_field(&mut self, fields: &Fields, name: &str, name_span: Span) -> Option<usize> {
+        let Some(index) = fields.fields.iter().position(|field| field.name == name) else {
+            self.q.diags.push(unknown_field(fields, name, name_span));
+            return None;
+        };
+        if !fields.fields[index].visible {
+            self.q
+                .diags
+                .push(private_field(self.hir, fields, index, name_span));
+        }
+        Some(index)
+    }
+
+    /// `base.name`, where `base` is a value of the bit-field struct `s` at
+    /// `base_place` (ADR 0059): the field `name`, which the module of `f`
+    /// must see, as any field (ADR 0050). The place is the field, of its
+    /// type, read and written with the whole value: it can be written
+    /// where `base_place` can, and has no address.
+    fn bit_field(
+        &mut self,
+        f: &Fn,
+        expr: &Expr,
+        s: BitStructTy,
+        base_place: PlaceInfo,
+        name: &str,
+        name_span: Span,
+    ) -> PlaceInfo {
+        let hir = self.hir;
+        let fields = Fields::of_bit_struct(hir, s.id, f.module);
+        let Some(index) = self.named_field(&fields, name, name_span) else {
+            return PlaceInfo::ERROR;
+        };
+        self.q
+            .tables
+            .bit_fields
+            .insert(expr.id, (s.id, index as u32));
+        PlaceInfo {
+            ty: self.norm(hir.bit_struct(s.id).fields[index].ty),
+            bit_field: Some(s),
+            ..base_place
+        }
+    }
+
+    /// `offset_of(S, name)` where `S` is the bit-field struct `s`: a bit
+    /// field has bits, not a byte offset (ADR 0059). An unknown or private
+    /// field is reported as for any `offset_of`.
+    pub(super) fn bit_field_offset(&mut self, f: &Fn, s: BitStructTy, name: &str, name_span: Span) {
+        let hir = self.hir;
+        let fields = Fields::of_bit_struct(hir, s.id, f.module);
+        let Some(index) = self.named_field(&fields, name, name_span) else {
+            return;
+        };
+        let field = &hir.bit_struct(s.id).fields[index];
+        self.q.diags.push(
+            Diagnostic::error(
+                "ty::bit-field-offset",
+                format!("the field `{name}` of `{}` has no byte offset", s.name),
+            )
+            .label(name_span, "a bit field")
+            .label(field.bits_span(), format!("its bits in `{}`", s.int))
+            .help(format!(
+                "a field of a bit-field struct is a range of bits of its `{}`, not a place in memory; the struct's size and alignment are its integer's (ADR 0059)",
+                s.int
+            )),
+        );
     }
 
     /// `base.name`, where `base` is a place of the peripheral type `p`,
@@ -575,6 +637,22 @@ impl Checker<'_, '_> {
             self.q.diags.push(not_a_place);
             return Ty::Error;
         };
+        // Bits have no address, in a register too, which is then not also
+        // reported: what is addressed is the bit field (ADR 0059).
+        if let Some(s) = info.bit_field {
+            self.q.diags.push(
+                Diagnostic::error(
+                    "ty::bit-field-address",
+                    format!("cannot take the address of a field of `{}`", s.name),
+                )
+                .label(place.span, "a bit field, not a place in memory")
+                .help(format!(
+                    "a field of a bit-field struct is a range of bits of its `{}`; copy it into a `let` and take that address, or take the address of the whole value (ADR 0059)",
+                    s.int
+                )),
+            );
+            return Ty::Error;
+        }
         // The pointer would reach the register without its access mode
         // (ADR 0058).
         if let Some(register) = info.register {
@@ -700,43 +778,113 @@ impl Checker<'_, '_> {
     }
 }
 
-/// `ty::private-field` for the field `index` of the struct `id`, named at
-/// `span` in `module`, which does not see it (ADR 0050): a private field
-/// outside its struct's module, or a `pub` one where the struct cannot be
-/// named.
-fn private_field(
-    hir: &Hir,
-    id: hir::StructId,
-    index: usize,
+/// The fields of a struct or a bit-field struct (ADR 0059), as a field
+/// access or `offset_of` written in `module` names them (ADR 0050).
+struct Fields<'h> {
+    /// The struct's path.
+    owner: &'h str,
+    owner_span: Span,
+    owner_module: ModuleId,
+    /// The module the fields are named in.
     module: ModuleId,
+    /// In declaration order.
+    fields: Vec<FieldView<'h>>,
+}
+
+struct FieldView<'h> {
+    name: &'h str,
     span: Span,
-) -> Diagnostic {
-    let def = hir.struct_(id);
-    let field = &def.fields[index];
+    vis: hir::Visibility,
+    /// Whether `Fields::module` sees it.
+    visible: bool,
+}
+
+impl<'h> Fields<'h> {
+    fn of_struct(hir: &'h Hir, id: hir::StructId, module: ModuleId) -> Fields<'h> {
+        let def = hir.struct_(id);
+        Fields {
+            owner: &def.name,
+            owner_span: def.name_span,
+            owner_module: def.module,
+            module,
+            fields: (def.fields.iter().enumerate())
+                .map(|(index, field)| FieldView {
+                    name: &field.name,
+                    span: field.span,
+                    vis: field.vis,
+                    visible: hir.field_visible(id, index, module),
+                })
+                .collect(),
+        }
+    }
+
+    fn of_bit_struct(hir: &'h Hir, id: hir::BitStructId, module: ModuleId) -> Fields<'h> {
+        let def = hir.bit_struct(id);
+        Fields {
+            owner: &def.path,
+            owner_span: def.name_span,
+            owner_module: def.module,
+            module,
+            fields: (def.fields.iter().enumerate())
+                .map(|(index, field)| FieldView {
+                    name: &field.name,
+                    span: field.span,
+                    vis: field.vis,
+                    visible: hir.bit_field_visible(id, index, module),
+                })
+                .collect(),
+        }
+    }
+}
+
+/// `ty::unknown-field` for `name`, written at `span`, which `fields` has
+/// not. Only the fields visible there are listed (ADR 0050).
+fn unknown_field(fields: &Fields, name: &str, span: Span) -> Diagnostic {
+    let owner = fields.owner;
+    let names: Vec<String> = (fields.fields.iter())
+        .filter(|field| field.visible)
+        .map(|field| format!("`{}`", field.name))
+        .collect();
+    let diag = Diagnostic::error(
+        "ty::unknown-field",
+        format!("`{owner}` has no field `{name}`"),
+    )
+    .label(span, "unknown field");
+    if fields.fields.is_empty() {
+        diag.help(format!("`{owner}` has no fields"))
+    } else if names.is_empty() {
+        diag.help("none of its fields is visible here (ADR 0050)")
+    } else {
+        diag.help(format!("its fields are {}", names.join(", ")))
+    }
+}
+
+/// `ty::private-field` for the field `index` of `fields`, named at `span`
+/// in a module that does not see it (ADR 0050): a private field outside
+/// its struct's module, or a `pub` one where the struct cannot be named.
+fn private_field(hir: &Hir, fields: &Fields, index: usize, span: Span) -> Diagnostic {
+    let owner = fields.owner;
+    let field = &fields.fields[index];
     match field.vis {
         hir::Visibility::Private => Diagnostic::error(
             "ty::private-field",
-            format!("the field `{}` of `{}` is private", field.name, def.name),
+            format!("the field `{}` of `{owner}` is private", field.name),
         )
         .label(span, "not visible here")
         .label(field.span, "declared here without `pub`")
         .help(format!(
             "a private field is visible only in {} and the modules inside it; declare it `pub` to use it elsewhere (ADR 0050)",
-            hir.module(def.module).describe()
+            hir.module(fields.owner_module).describe()
         )),
         hir::Visibility::Pub => Diagnostic::error(
             "ty::private-field",
-            format!(
-                "the field `{}` of `{}` is not visible here",
-                field.name, def.name
-            ),
+            format!("the field `{}` of `{owner}` is not visible here", field.name),
         )
         .label(span, "not visible here")
-        .label(def.name_span, format!("`{}` is declared here", def.name))
+        .label(fields.owner_span, format!("`{owner}` is declared here"))
         .help(format!(
-            "a `pub` field is visible wherever a path can name its struct, and none written in {} can name `{}`: offer the struct with `pub` or `pub use` (ADR 0050)",
-            hir.module(module).describe(),
-            def.name
+            "a `pub` field is visible wherever a path can name its struct, and none written in {} can name `{owner}`: offer the struct with `pub` or `pub use` (ADR 0050)",
+            hir.module(fields.module).describe(),
         )),
     }
 }

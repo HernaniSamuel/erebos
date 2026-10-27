@@ -13,9 +13,9 @@ use std::collections::HashMap;
 
 use crate::diag::Diagnostic;
 use crate::hir::{
-    self, AccessMode, BinOp, Block, EnumId, EnumTy, Expr, ExprId, ExprKind, Fn, FnKind, Hir, IntTy,
-    LocalId, ModuleId, NeverPosition, PatternId, PeripheralTypeId, Ptr, StaticId, Stmt, Ty,
-    UnsizedPosition,
+    self, AccessMode, BinOp, BitStructId, BitStructTy, Block, EnumId, EnumTy, Expr, ExprId,
+    ExprKind, Fn, FnKind, Hir, IntTy, LocalId, ModuleId, NeverPosition, PatternId,
+    PeripheralTypeId, Ptr, StaticId, Stmt, Ty, UnsizedPosition,
 };
 use crate::layout;
 use crate::query::Queries;
@@ -36,6 +36,9 @@ pub struct Tables {
     /// The field index of each field access, or the register index of
     /// each register access (ADR 0058).
     fields: HashMap<ExprId, u32>,
+    /// The bit-field struct and the field index of each access to a bit
+    /// field, read or written (ADR 0059).
+    bit_fields: HashMap<ExprId, (BitStructId, u32)>,
     /// The slice type each pointer to an array is converted to, where it
     /// is (ADR 0031): unlike the other conversion (ADR 0024), it changes
     /// the representation.
@@ -53,6 +56,7 @@ impl Tables {
             // never read.
             expr_types: vec![Ty::Error; expr_count as usize],
             fields: HashMap::new(),
+            bit_fields: HashMap::new(),
             coercions: HashMap::new(),
             variants: HashMap::new(),
             pattern_variants: HashMap::new(),
@@ -67,6 +71,13 @@ impl Tables {
     /// register it reaches when its base is of a peripheral type.
     pub fn field(&self, id: ExprId) -> u32 {
         self.fields[&id]
+    }
+
+    /// The bit-field struct and the index of the field that the field
+    /// access `id` reads or writes, if its base is of a bit-field struct
+    /// type (ADR 0059).
+    pub fn bit_field(&self, id: ExprId) -> Option<(BitStructId, u32)> {
+        self.bit_fields.get(&id).copied()
     }
 
     /// The slice type that the value of `id`, a pointer to an array, is
@@ -280,14 +291,6 @@ pub fn check_fn(q: &mut Queries, f: &Fn) -> usize {
     checker.elsewhere
 }
 
-/// Stops at an expression of type `ty` if `ty` is a bit-field struct, whose
-/// values are not type checked before M3.3, step 4.
-fn values_of_bit_structs(ty: Ty) {
-    if let Ty::BitStruct(_) = ty {
-        todo!("M3.3 step 4: type-check the values of a bit-field struct")
-    }
-}
-
 /// Whether a value of type `from` may be used where `to` is expected.
 /// `!` has no values, so it fits anywhere; `{error}` was already reported.
 /// The conversions are from `*mut T` to `*const T` (ADR 0024), and from a
@@ -407,6 +410,10 @@ struct PlaceInfo {
     /// mode decides whether it may be read and written, and `&raw` of it
     /// is an error.
     register: Option<Register>,
+    /// The place is a bit field of a value of this bit-field struct type
+    /// (ADR 0059): it has no address, and is read and written with the
+    /// whole value, which volatile accesses are checked as.
+    bit_field: Option<BitStructTy>,
 }
 
 /// The register `index` of the peripheral type `id`.
@@ -425,6 +432,7 @@ impl PlaceInfo {
         misaligned: false,
         constant: false,
         register: None,
+        bit_field: None,
     };
 
     /// The value of `base`, which is not a place expression, indexed or
@@ -437,6 +445,7 @@ impl PlaceInfo {
             misaligned: false,
             constant: matches!(base.kind, ExprKind::Const(_)),
             register: None,
+            bit_field: None,
         }
     }
 
@@ -450,6 +459,7 @@ impl PlaceInfo {
             misaligned: false,
             constant: false,
             register: None,
+            bit_field: None,
         }
     }
 }
@@ -703,7 +713,6 @@ impl Checker<'_, '_> {
             }
         }
         self.q.tables.expr_types[expr.id.0 as usize] = ty;
-        values_of_bit_structs(ty);
         // Variables were checked where they are declared; any other
         // aggregate value needs a temporary of its size.
         if ty.is_aggregate()
@@ -813,7 +822,7 @@ impl Checker<'_, '_> {
                         self.field(f, expr, ty, PlaceInfo::ERROR, name, *name_span);
                     }
                     Ty::Error => {}
-                    Ty::BitStruct(_) => todo!("M3.3 step 4: `offset_of` of a bit field"),
+                    Ty::BitStruct(s) => self.bit_field_offset(f, s, name, *name_span),
                     other => {
                         let diag =
                             Diagnostic::error("ty::no-fields", format!("`{other}` has no fields"))
@@ -832,8 +841,17 @@ impl Checker<'_, '_> {
                 }
                 Ty::Struct(*s)
             }
-            ExprKind::BitStructLit(..) => {
-                todo!("M3.3 step 4: type-check a literal of a bit-field struct")
+            // Each value is one of its field's type, so a literal and `.V`
+            // take that type (ADR 0059); the fields left out by `..` were
+            // filled in by name resolution.
+            ExprKind::BitStructLit(s, fields, _) => {
+                let hir = self.hir;
+                let def = hir.bit_struct(s.id);
+                for (index, value) in fields {
+                    let ty = self.norm(def.fields[*index as usize].ty);
+                    self.check(f, value, Some(ty));
+                }
+                Ty::BitStruct(*s)
             }
             ExprKind::Call { callee, args } => self.call(f, expr, *callee, args),
             ExprKind::Unary(op, operand) => self.unary(f, expr, *op, operand, expected),
@@ -1074,6 +1092,12 @@ impl Checker<'_, '_> {
                     diag = diag.help(format!(
                         "an enum only compares with `==` and `!=`; for anything else, convert it to its integer first, as in `x as {}` (ADR 0035)",
                         e.int
+                    ));
+                }
+                Ty::BitStruct(s) => {
+                    diag = diag.help(format!(
+                        "operators do not apply to a bit-field struct: use them on its fields, or on its integer made with `as`, as in `x as {}`, which its reserved bits are part of (ADR 0059)",
+                        s.int
                     ));
                 }
                 _ => {}

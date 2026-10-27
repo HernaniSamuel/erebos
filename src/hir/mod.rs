@@ -322,6 +322,16 @@ impl Hir {
         }
     }
 
+    /// Whether the field `index` of the bit-field struct `id` is visible
+    /// from `module`, by the rule of a struct's fields (ADR 0050, 0059).
+    pub fn bit_field_visible(&self, id: BitStructId, index: usize, module: ModuleId) -> bool {
+        let def = self.bit_struct(id);
+        match def.fields[index].vis {
+            Visibility::Private => is_within(&self.modules, module, def.module),
+            Visibility::Pub => def.reachable_from(module),
+        }
+    }
+
     /// Whether the register `index` of the peripheral type `id` is visible
     /// from `module`, by the rule of fields: a private one where a private
     /// item of the type's module would be, a `pub` one wherever the type is
@@ -702,6 +712,16 @@ pub struct BitFieldDef {
     /// The body computing its default, a value of its type
     /// (`Comptime::Default`), with the span of the default's expression.
     pub default: Option<(FnId, Span)>,
+}
+
+impl BitFieldDef {
+    /// The span of its bits, from its low end to its high one.
+    pub fn bits_span(&self) -> Span {
+        match self.high {
+            Some((_, high)) => self.low.1.to(high),
+            None => self.low.1,
+        }
+    }
 }
 
 /// `enum Name: Type { Variant = value, ... }` (ADR 0035): named values of
