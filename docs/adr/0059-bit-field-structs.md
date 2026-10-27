@@ -1,6 +1,6 @@
 # 0059. Bit-field structs
 
-- Status: Accepted
+- Status: Accepted; amended by 0062 (`ty::cycle` applies to the struct's bits needing those bits and to a default needing its own value; a variant value that fails leaves its field a failed value)
 - Date: 2026-10-26
 - Amends: 0017 (a literal operand of `as` with a bit-field struct as its
   target takes the struct's integer type), 0019 (a bit-field struct

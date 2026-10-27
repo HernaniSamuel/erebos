@@ -88,6 +88,7 @@ Do not write one for local implementation details that the code already explains
 | 0056 | [`rt` is reserved in the root module](0056-rt-is-reserved-in-the-root-module.md) | Accepted |
 | 0057 | [Memory maps](0057-memory-maps.md) | Accepted |
 | 0058 | [Peripherals](0058-peripherals.md) | Accepted, amended by 0060, 0061 |
-| 0059 | [Bit-field structs](0059-bit-field-structs.md) | Accepted |
+| 0059 | [Bit-field structs](0059-bit-field-structs.md) | Accepted, amended by 0062 |
 | 0060 | [Register fields](0060-register-fields.md) | Accepted |
 | 0061 | [Alternate registers](0061-alternate-registers.md) | Accepted |
+| 0062 | [Bit-field defaults are no part of the bit layout](0062-bit-field-defaults-are-no-part-of-the-bit-layout.md) | Accepted |
