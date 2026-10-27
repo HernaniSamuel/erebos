@@ -51,6 +51,13 @@ struct WithPayloads { a: u8, p: Pay8, b: u16, q: Pay16, c: u8, r: Pay32 }
 // placed at its alignment (ADR 0047).
 struct WithOptions { a: Option(u8), b: Option(u32), c: Option(u64), d: Option(()), e: Result(u32, Mode), f: Option([u32; 0]) }
 
+// A bit-field struct has its integer type's layout (ADR 0059): its C twin
+// is that integer type, `uint8_t`, `uint16_t` or `uint32_t`.
+struct Bits8: u8 { pub ready: bool at 0, pub count: u8 at 1..=7 }
+struct Bits16: u16 { pub low: u8 at 0..=3, pub done: bool at 15 }
+struct Bits32: u32 { pub low: u16 at 0..=11, pub high: u8 at 24..=31 }
+struct WithBits { tag: u8, half: Bits16, byte: Bits8, word: Bits32, last: u8, bytes: [Bits8; 3], end: Bits16 }
+
 // Visibility changes no layout (ADR 0050): private fields are laid out like
 // `pub` ones. A struct of a module is shown by its path, `regs::Block`, and
 // its twin is named with `__` for `::`, `regs__Block`.

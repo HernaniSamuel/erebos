@@ -69,3 +69,7 @@ union Duo {
 };
 
 union Duo opaque_duo(union Duo d) { return d; }
+
+/* The twin of the program's bit-field struct `Line` is its integer type
+ * (ADR 0059). */
+uint8_t opaque_line(uint8_t l) { return l; }

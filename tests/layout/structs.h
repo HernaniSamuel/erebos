@@ -82,6 +82,10 @@ struct Message {
     uint16_t end;
 };
 
+/* A bit-field struct is its integer type (ADR 0059): its twin is
+ * `uint8_t`, `uint16_t` or `uint32_t`. */
+struct WithBits { uint8_t tag; uint16_t half; uint8_t byte; uint32_t word; uint8_t last; uint8_t bytes[3]; uint16_t end; };
+
 /* `regs::Block`, of the module `regs`, with private and `pub` fields
  * (ADR 0050); `::` is `__` in C. */
 struct regs__Block { uint32_t ctrl; uint8_t status; uint16_t data; uint8_t reserved[3]; uint64_t last; };

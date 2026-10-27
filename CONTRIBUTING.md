@@ -94,7 +94,8 @@ cargo test
   and has clang check that every size, alignment and offset agrees
   (ADR 0022). It needs clang: `EREBOS_CLANG`, or the one in the LLVM
   archive (`C:\llvm-22\bin\clang.exe`). A struct added to one file needs
-  its twin in the other.
+  its twin in the other; a bit-field struct needs none, its twin being its
+  integer type (ADR 0059), checked in the structs that hold it.
 - **ELF checks** (`tests/elf.rs`) build a program and read its sections,
   symbols and program headers with `llvm-readelf`: where each kind of
   static goes, the symbols `_start` uses to initialize `.data` and

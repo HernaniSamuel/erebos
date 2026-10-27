@@ -3,7 +3,9 @@
 //! in `tests/layout/structs.h` on the same target. The twin of an enum with
 //! payloads is a union of structs that each start with the tag (ADR 0039);
 //! that of an `Option(T)` or `Result(T, E)` (ADR 0045), or of an item of a
-//! module (ADR 0049), is named as `c_name` names it.
+//! module (ADR 0049), is named as `c_name` names it. A bit-field struct
+//! has no twin of its own: it is its integer type (ADR 0059), and is
+//! checked as a field of the structs that hold it.
 //!
 //! The compiler's layouts come from `--emit=typeck`; each becomes a
 //! `_Static_assert` on `sizeof`, `_Alignof` and `offsetof`, and clang checks
@@ -46,6 +48,12 @@ fn struct_layouts_match_c() {
             continue;
         };
         let (name, rest) = rest.split_once(' ').unwrap();
+        // A bit-field struct, `struct Bits8: u8 { ready: bool at 0, ... }`,
+        // is its integer type (ADR 0059), whose twin is `uint8_t`: it is
+        // checked through the structs that hold it.
+        if name.ends_with(':') {
+            continue;
+        }
         let name = c_name(name);
         let (fields, sizes) = rest.rsplit_once("} ").unwrap();
         let (size, align) = sizes

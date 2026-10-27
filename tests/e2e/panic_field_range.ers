@@ -1,0 +1,96 @@
+// A field written with a value that does not fit it, computed at run time,
+// calls a panic function that takes the panic information (ADR 0053,
+// 0059): it prints the reason, the file, the line and the column of the
+// field's name in the assignment that failed. The value that fits before
+// it is written.
+// expect-output: 31
+// expect-output: value does not fit its field at panic_field_range.ers:18:7
+// expect-exit: 1
+
+struct Lcr: u8 {
+    pub word_length: u8 at 0..=1 = 3,
+    pub count: u8 at 2..=4 = 0,
+    pub dlab: bool at 7 = false,
+}
+
+fn with_count(l: Lcr, count: u8) -> Lcr {
+    let mut m: Lcr = l;
+    m.count = count;
+    m
+}
+
+entry fn main() -> ! {
+    print_u32(with_count(Lcr { .. }, 7) as u32);
+    print(&raw const b"\n");
+    print_u32(with_count(Lcr { .. }, 8) as u32);
+    exit(0)
+}
+
+const UART: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+const FINISHER: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+
+fn print(s: *const [u8]) {
+    let mut i: usize = 0;
+    while i < len(s) {
+        *UART = (*s)[i];
+        i += 1;
+    }
+}
+
+fn print_u32(value: u32) {
+    let mut digits: [u8; 10] = [0; 10];
+    let mut n: usize = 0;
+    let mut rest: u32 = value;
+    loop {
+        digits[9 - n] = b'0' + (rest % 10) as u8;
+        n += 1;
+        rest /= 10;
+        if rest == 0 {
+            break;
+        }
+    }
+    print(slice(&raw const digits[10 - n], n));
+}
+
+fn exit(code: u32) -> ! {
+    *FINISHER = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    loop {}
+}
+
+fn reason(reason: core::PanicReason) -> *const [u8] {
+    match reason {
+        .DivisionByZero => &raw const b"division by zero",
+        .IndexOutOfBounds => &raw const b"index out of bounds",
+        .AssertionFailed => &raw const b"assertion failed",
+        .NoVariant => &raw const b"enum value is no variant",
+        .FieldOutOfRange => &raw const b"value does not fit its field",
+    }
+}
+
+// Prints `<reason>[: <message>] at <file>:<line>:<column>`; the message of
+// these checks is empty (ADR 0053).
+panic fn on_panic(info: *const core::PanicInfo) -> ! {
+    print(reason((*info).reason));
+    if len((*info).message) > 0 {
+        print(&raw const b": ");
+        print((*info).message);
+    }
+    print(&raw const b" at ");
+    print((*info).file);
+    print(&raw const b":");
+    print_u32((*info).line);
+    print(&raw const b":");
+    print_u32((*info).column);
+    print(&raw const b"\n");
+    exit(1)
+}
+
+// QEMU `virt`'s RAM in two regions of 64 MiB: the image in the first, and
+// in the second a 1 MiB stack at its start, then `.data` and `.bss`.
+memory {
+    region IMAGE { origin: 0x8000_0000, size: 0x0400_0000 }
+    region RAM { origin: 0x8400_0000, size: 0x0400_0000 }
+    code in IMAGE;
+    data in RAM;
+    stack in RAM { size: 0x0010_0000 }
+}

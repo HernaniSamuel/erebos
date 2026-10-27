@@ -839,6 +839,104 @@ fn try_hash(from: u32) -> u64 {
     h
 }
 
+// Bit-field structs (ADR 0059): values made with `as` from integers C
+// hides, their fields read, written and compound-assigned, a full-width
+// field wrapping, literals with `..` taking defaults and the neutral values
+// of write effects, an enum field holding a value that is no variant,
+// matched with a catch-all arm and written to another field, reserved bits
+// kept, and bit-field structs inside an ordinary struct; one passed
+// through C as its integer type, and one built by a `comptime` expression
+// and used at run time.
+enum Parity: u8 { None = 0, Odd = 1, Even = 3 }
+
+// Bits 5 and 6 are reserved.
+struct Line: u8 {
+    pub size: u8 at 0..=1 = 3,
+    pub stop: bool at 2,
+    pub parity: Parity at 3..=4 = .None,
+    pub dlab: bool at 7 = false,
+}
+
+struct Counter: u16 {
+    pub low: u8 at 0..=4,
+    pub high: u16 at 5..=15,
+}
+
+// Bit 23 is reserved.
+struct Frame: u32 {
+    pub low: u16 at 0..=11,
+    pub flag: bool at 12 write 0 sets,
+    pub clear: bool at 13 write 1 clears,
+    pub mode: Parity at 14..=15 = .Odd,
+    pub count: u8 at 16..=22 = 100,
+    pub top: u8 at 24..=31 = 0xA5,
+}
+
+struct Framed { tag: u8, line: Line, frame: Frame }
+
+extern fn opaque_line(l: Line) -> Line;
+
+fn parity_value(p: Parity) -> u64 {
+    match p {
+        .None => 1,
+        .Odd => 2,
+        .Even => 3,
+        _ => 4,
+    }
+}
+
+fn line_hash(l: Line) -> u64 {
+    let mut h: u64 = mix(l as u64, l.size as u64);
+    h = mix(h, l.stop as u64);
+    h = mix(h, l.parity as u64);
+    h = mix(h, parity_value(l.parity));
+    mix(h, l.dlab as u64)
+}
+
+fn bit_structs(x: u8, y: u32) -> u64 {
+    let l: Line = x as Line;
+    let mut h: u64 = line_hash(l);
+    let mut m: Line = l;
+    m.size = x & 3;
+    m.dlab = !m.dlab;
+    m.parity = .Even;
+    h = mix(h, line_hash(m));
+    let mut n: Line = Line { stop: x > 100, size: x % 4, .. };
+    n.parity = l.parity;
+    h = mix(h, line_hash(n));
+    let mut c: Counter = y as u16 as Counter;
+    c.high /= 3;
+    c.low ^= 0x1F;
+    c.low >>= 1;
+    h = mix(h, c as u64);
+    h = mix(h, c.high as u64 + c.low as u64);
+    let mut f: Frame = y as Frame;
+    h = mix(h, f.low as u64);
+    h = mix(h, f.count as u64);
+    h = mix(h, f.top as u64);
+    h = mix(h, parity_value(f.mode));
+    f.low ^= 0xFFF;
+    f.top += 1;
+    f.count >>= 1;
+    f.flag = !f.flag;
+    f.clear = f.flag;
+    h = mix(h, f as u64);
+    let g: Frame = Frame { low: (y & 0xFFF) as u16, .. };
+    h = mix(h, g as u64);
+    let mut framed: Framed = Framed { tag: x, line: n, frame: g };
+    framed.frame.count = framed.line.size + 1;
+    framed.line.dlab = true;
+    h = mix(h, framed.frame as u64);
+    mix(h, framed.line as u64 + framed.tag as u64)
+}
+
+fn frame(x: u8, y: u32) -> Frame {
+    let mut f: Frame = Frame { top: x, low: 0, .. };
+    f.low = (y >> 20) as u16;
+    f.mode = if x > 128 { Parity::Even } else { Parity::None };
+    f
+}
+
 struct Uart { thr: u8 }
 
 fn putc(byte: u8) {
@@ -990,6 +1088,13 @@ entry fn main() -> ! {
     failures += check(112, option_hash(comptime checked_mul10(429_496_730)), option_hash(checked_mul10(opaque_u32(429_496_730))));
     failures += check(113, comptime try_hash(0), try_hash(opaque_u32(0)));
     failures += check(114, comptime try_hash(13), try_hash(opaque_u32(13)));
+    failures += check(115, comptime bit_structs(0x9E, 0x1234_5678), bit_structs(opaque_u8(0x9E), opaque_u32(0x1234_5678)));
+    failures += check(116, comptime bit_structs(0x50, 0xFFFF_FFFF), bit_structs(opaque_u8(0x50), opaque_u32(0xFFFF_FFFF)));
+    failures += check(117, comptime bit_structs(0, 0), bit_structs(opaque_u8(0), opaque_u32(0)));
+    failures += check(118, comptime line_hash(0xD5 as Line), line_hash(opaque_line(opaque_u8(0xD5) as Line)));
+    // Built by a `comptime` expression and read at run time.
+    failures += check(119, (comptime frame(200, 0xABC0_0000)) as u64, frame(opaque_u8(200), opaque_u32(0xABC0_0000)) as u64);
+    failures += check(120, (comptime frame(7, 0x1230_0000)).low as u64, frame(opaque_u8(7), opaque_u32(0x1230_0000)).low as u64);
     if failures == 0 {
         putc(b'd'); putc(b'i'); putc(b'f'); putc(b'f'); putc(b'e'); putc(b'r'); putc(b'e');
         putc(b'n'); putc(b't'); putc(b'i'); putc(b'a'); putc(b'l'); putc(b' '); putc(b'o');
