@@ -110,6 +110,8 @@ File {
                             ),
                             span: 517..521,
                         },
+                        read_effect: None,
+                        group: None,
                         span: 497..521,
                     },
                     RegisterDecl {
@@ -141,6 +143,8 @@ File {
                             ),
                             span: 548..552,
                         },
+                        read_effect: None,
+                        group: None,
                         span: 527..552,
                     },
                     RegisterDecl {
@@ -172,6 +176,8 @@ File {
                             ),
                             span: 580..584,
                         },
+                        read_effect: None,
+                        group: None,
                         span: 558..584,
                     },
                     RegisterDecl {
@@ -209,6 +215,8 @@ File {
                             ),
                             span: 606..609,
                         },
+                        read_effect: None,
+                        group: None,
                         span: 590..609,
                     },
                     RegisterDecl {
@@ -261,6 +269,8 @@ File {
                             ),
                             span: 641..648,
                         },
+                        read_effect: None,
+                        group: None,
                         span: 615..648,
                     },
                 ],
@@ -317,6 +327,8 @@ File {
                             ),
                             span: 715..716,
                         },
+                        read_effect: None,
+                        group: None,
                         span: 697..716,
                     },
                     RegisterDecl {
@@ -348,6 +360,8 @@ File {
                             ),
                             span: 740..741,
                         },
+                        read_effect: None,
+                        group: None,
                         span: 722..741,
                     },
                     RegisterDecl {
@@ -379,6 +393,8 @@ File {
                             ),
                             span: 769..770,
                         },
+                        read_effect: None,
+                        group: None,
                         span: 747..770,
                     },
                 ],

@@ -464,7 +464,8 @@ impl Lowerer<'_> {
             }
             ast::ExprKind::Unary(op, operand) => ExprKind::Unary(*op, self.boxed(operand)),
             ast::ExprKind::Deref(operand) => ExprKind::Deref(self.boxed(operand)),
-            ast::ExprKind::StructLit(path, fields) => self.struct_lit(expr, path, fields),
+            // `..` is not lowered yet (M3.3, step 2).
+            ast::ExprKind::StructLit(path, fields, _) => self.struct_lit(expr, path, fields),
             ast::ExprKind::Field(base, field) => {
                 ExprKind::Field(self.boxed(base), field.name.clone(), field.span)
             }

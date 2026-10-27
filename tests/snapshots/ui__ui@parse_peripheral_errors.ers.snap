@@ -45,17 +45,17 @@ parser::unexpected-token
         before `:`; registers are separated by `,` (ADR 0058)
 parser::unexpected-token
 
-  × expected `,` or `}`, found identifier
+  × expected `read`, `in`, `,` or `}`, found identifier
     ╭─[parse_peripheral_errors.ers:22:22]
  21 │ peripheral NoComma {
  22 │     read rbr: u8 at 0
     ·                      ▲
-    ·                      ╰── expected `,` or `}`
+    ·                      ╰── expected `read`, `in`, `,` or `}`
  23 │     write thr: u8 at 0,
     ╰────
-  help: a register is written `ACCESS NAME: TYPE at OFFSET`, optionally after `pub`, its access
-        mode `read`, `write` or `read write`, in that order, and its name the identifier just
-        before `:`; registers are separated by `,` (ADR 0058)
+  help: after its offset, a register may declare what a read does, `read clears`, `read sets` or
+        `read modifies`, then an alternate group, `in GROUP`, in that order; registers are
+        separated by `,` (ADR 0060, 0061)
 parser::unexpected-token
 
   × expected `at`, found integer literal

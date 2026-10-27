@@ -69,6 +69,10 @@ pub enum TokenKind {
     Comma,
     Semi,
     Dot,
+    /// `..`, which ends a struct literal that leaves out fields (ADR 0059).
+    DotDot,
+    /// `..=`, between the ends of a bit field's bits (ADR 0059).
+    DotDotEq,
     /// `?`, after an `Option` or a `Result`, which passes its failure on
     /// (ADR 0046).
     Question,
@@ -202,6 +206,8 @@ impl TokenKind {
             TokenKind::Comma => "`,`",
             TokenKind::Semi => "`;`",
             TokenKind::Dot => "`.`",
+            TokenKind::DotDot => "`..`",
+            TokenKind::DotDotEq => "`..=`",
             TokenKind::Question => "`?`",
             TokenKind::Pound => "`#`",
             TokenKind::Bang => "`!`",

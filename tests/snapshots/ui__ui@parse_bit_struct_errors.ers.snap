@@ -1,0 +1,269 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/parse_bit_struct_errors.ers
+---
+--- errors ---
+parser::unexpected-token
+
+  × expected `at`, found `,`
+   ╭─[parse_bit_struct_errors.ers:7:12]
+ 6 │ struct NoAt: u8 {
+ 7 │     a: bool,
+   ·            ┬
+   ·            ╰── expected `at`
+ 8 │ }
+   ╰────
+  help: a bit field is written `NAME: TYPE at BITS`, optionally after `pub`, then optionally a
+        read effect, `read clears`, `read sets` or `read modifies`, a write effect, `write 0` or
+        `write 1` followed by `clears`, `sets` or `toggles`, and a default, `= VALUE`, in that
+        order; fields are separated by `,` (ADR 0059, 0060)
+parser::unexpected-token
+
+  × expected `..=`, found `..`
+    ╭─[parse_bit_struct_errors.ers:12:15]
+ 11 │ struct NoEnd: u8 {
+ 12 │     a: u8 at 0..,
+    ·               ─┬
+    ·                ╰── expected `..=`
+ 13 │ }
+    ╰────
+  help: a bit field's bits are one bit, as `at 7`, or a range with both ends included, lowest
+        first, as `at 0..=1` (ADR 0059)
+parser::unexpected-token
+
+  × expected an expression, found `,`
+    ╭─[parse_bit_struct_errors.ers:17:18]
+ 16 │ struct NoHigh: u8 {
+ 17 │     a: u8 at 0..=,
+    ·                  ┬
+    ·                  ╰── expected an expression
+ 18 │ }
+    ╰────
+parser::unexpected-token
+
+  × expected `..=`, found `..`
+    ╭─[parse_bit_struct_errors.ers:22:15]
+ 21 │ struct HalfOpen: u8 {
+ 22 │     a: u8 at 0..2,
+    ·               ─┬
+    ·                ╰── expected `..=`
+ 23 │ }
+    ╰────
+  help: a bit field's bits are one bit, as `at 7`, or a range with both ends included, lowest
+        first, as `at 0..=1` (ADR 0059)
+parser::unexpected-token
+
+  × expected `0` or `1`, found integer literal
+    ╭─[parse_bit_struct_errors.ers:27:24]
+ 26 │ struct WriteTwo: u8 {
+ 27 │     a: bool at 0 write 2 clears,
+    ·                        ┬
+    ·                        ╰── expected `0` or `1`
+ 28 │ }
+    ╰────
+  help: a bit field is written `NAME: TYPE at BITS`, optionally after `pub`, then optionally a
+        read effect, `read clears`, `read sets` or `read modifies`, a write effect, `write 0` or
+        `write 1` followed by `clears`, `sets` or `toggles`, and a default, `= VALUE`, in that
+        order; fields are separated by `,` (ADR 0059, 0060)
+parser::unexpected-token
+
+  × expected `clears`, `sets` or `toggles`, found identifier
+    ╭─[parse_bit_struct_errors.ers:32:26]
+ 31 │ struct Erases: u8 {
+ 32 │     a: bool at 0 write 1 erases,
+    ·                          ───┬──
+    ·                             ╰── expected `clears`, `sets` or `toggles`
+ 33 │ }
+    ╰────
+  help: a bit field is written `NAME: TYPE at BITS`, optionally after `pub`, then optionally a
+        read effect, `read clears`, `read sets` or `read modifies`, a write effect, `write 0` or
+        `write 1` followed by `clears`, `sets` or `toggles`, and a default, `= VALUE`, in that
+        order; fields are separated by `,` (ADR 0059, 0060)
+parser::unexpected-token
+
+  × expected `clears`, `sets` or `modifies`, found identifier
+    ╭─[parse_bit_struct_errors.ers:37:23]
+ 36 │ struct ReadToggles: u8 {
+ 37 │     a: bool at 0 read toggles,
+    ·                       ───┬───
+    ·                          ╰── expected `clears`, `sets` or `modifies`
+ 38 │ }
+    ╰────
+  help: a bit field is written `NAME: TYPE at BITS`, optionally after `pub`, then optionally a
+        read effect, `read clears`, `read sets` or `read modifies`, a write effect, `write 0` or
+        `write 1` followed by `clears`, `sets` or `toggles`, and a default, `= VALUE`, in that
+        order; fields are separated by `,` (ADR 0059, 0060)
+parser::unexpected-token
+
+  × expected `write`, `=`, `,` or `}`, found identifier
+    ╭─[parse_bit_struct_errors.ers:42:30]
+ 41 │ struct TwoReads: u8 {
+ 42 │     a: bool at 0 read clears read sets,
+    ·                              ──┬─
+    ·                                ╰── expected `write`, `=`, `,` or `}`
+ 43 │ }
+    ╰────
+  help: a bit field is written `NAME: TYPE at BITS`, optionally after `pub`, then optionally a
+        read effect, `read clears`, `read sets` or `read modifies`, a write effect, `write 0` or
+        `write 1` followed by `clears`, `sets` or `toggles`, and a default, `= VALUE`, in that
+        order; fields are separated by `,` (ADR 0059, 0060)
+parser::unexpected-token
+
+  × expected `=`, `,` or `}`, found identifier
+    ╭─[parse_bit_struct_errors.ers:47:33]
+ 46 │ struct TwoWrites: u8 {
+ 47 │     a: bool at 0 write 1 clears write 0 sets,
+    ·                                 ──┬──
+    ·                                   ╰── expected `=`, `,` or `}`
+ 48 │ }
+    ╰────
+  help: a bit field is written `NAME: TYPE at BITS`, optionally after `pub`, then optionally a
+        read effect, `read clears`, `read sets` or `read modifies`, a write effect, `write 0` or
+        `write 1` followed by `clears`, `sets` or `toggles`, and a default, `= VALUE`, in that
+        order; fields are separated by `,` (ADR 0059, 0060)
+parser::unexpected-token
+
+  × expected `,` or `}`, found identifier
+    ╭─[parse_bit_struct_errors.ers:52:26]
+ 51 │ struct EffectAfterDefault: u8 {
+ 52 │     a: bool at 0 = false read clears,
+    ·                          ──┬─
+    ·                            ╰── expected `,` or `}`
+ 53 │ }
+    ╰────
+  help: a bit field is written `NAME: TYPE at BITS`, optionally after `pub`, then optionally a
+        read effect, `read clears`, `read sets` or `read modifies`, a write effect, `write 0` or
+        `write 1` followed by `clears`, `sets` or `toggles`, and a default, `= VALUE`, in that
+        order; fields are separated by `,` (ADR 0059, 0060)
+parser::unexpected-token
+
+  × expected `}`, found `,`
+    ╭─[parse_bit_struct_errors.ers:57:11]
+ 56 │ fn rest_first() {
+ 57 │     S { .., a: 1 };
+    ·           ┬
+    ·           ╰── expected `}`
+ 58 │ }
+    ╰────
+  help: `..` ends a struct literal and gives the fields it leaves out their defaults; it comes
+        after a `,` when fields come before it, as in `Lcr { dlab: true, .. }` (ADR 0059)
+parser::unexpected-token
+
+  × expected `,` or `}`, found `..`
+    ╭─[parse_bit_struct_errors.ers:62:14]
+ 61 │ fn rest_without_comma() {
+ 62 │     S { a: 1 .. };
+    ·              ─┬
+    ·               ╰── expected `,` or `}`
+ 63 │ }
+    ╰────
+  help: `..` ends a struct literal and gives the fields it leaves out their defaults; it comes
+        after a `,` when fields come before it, as in `Lcr { dlab: true, .. }` (ADR 0059)
+parser::unexpected-token
+
+  × expected `,` or `}`, found identifier
+    ╭─[parse_bit_struct_errors.ers:67:13]
+ 66 │ struct OrdinaryAt {
+ 67 │     a: bool at 0,
+    ·             ─┬
+    ·              ╰── expected `,` or `}`
+ 68 │ }
+    ╰────
+  help: only the fields of a bit-field struct have bits, `at BITS`, and defaults, `= VALUE`; a
+        bit-field struct names its integer type after its name, as in `struct Lcr: u8 { ... }`
+        (ADR 0059)
+parser::unexpected-token
+
+  × expected `,` or `}`, found `=`
+    ╭─[parse_bit_struct_errors.ers:72:13]
+ 71 │ struct OrdinaryDefault {
+ 72 │     a: bool = false,
+    ·             ┬
+    ·             ╰── expected `,` or `}`
+ 73 │ }
+    ╰────
+  help: only the fields of a bit-field struct have bits, `at BITS`, and defaults, `= VALUE`; a
+        bit-field struct names its integer type after its name, as in `struct Lcr: u8 { ... }`
+        (ADR 0059)
+parser::unexpected-token
+
+  × expected `in`, `,` or `}`, found identifier
+    ╭─[parse_bit_struct_errors.ers:77:33]
+ 76 │ peripheral TwoRegisterReads {
+ 77 │     read a: u8 at 0 read clears read sets,
+    ·                                 ──┬─
+    ·                                   ╰── expected `in`, `,` or `}`
+ 78 │ }
+    ╰────
+  help: after its offset, a register may declare what a read does, `read clears`, `read sets` or
+        `read modifies`, then an alternate group, `in GROUP`, in that order; registers are
+        separated by `,` (ADR 0060, 0061)
+parser::unexpected-token
+
+  × expected `read`, `in`, `,` or `}`, found identifier
+    ╭─[parse_bit_struct_errors.ers:83:20]
+ 82 │ peripheral NoCommaBeforeRead {
+ 83 │     read a: u8 at 0
+    ·                    ▲
+    ·                    ╰── expected `read`, `in`, `,` or `}`
+ 84 │     read b: u8 at 1,
+    ╰────
+  help: after its offset, a register may declare what a read does, `read clears`, `read sets` or
+        `read modifies`, then an alternate group, `in GROUP`, in that order; registers are
+        separated by `,` (ADR 0060, 0061)
+parser::unexpected-token
+
+  × expected `read`, `in`, `,` or `}`, found identifier
+    ╭─[parse_bit_struct_errors.ers:89:20]
+ 88 │ peripheral NoCommaBeforeReadWrite {
+ 89 │     read a: u8 at 0
+    ·                    ▲
+    ·                    ╰── expected `read`, `in`, `,` or `}`
+ 90 │     read write b: u8 at 1,
+    ╰────
+  help: after its offset, a register may declare what a read does, `read clears`, `read sets` or
+        `read modifies`, then an alternate group, `in GROUP`, in that order; registers are
+        separated by `,` (ADR 0060, 0061)
+parser::unexpected-token
+
+  × expected `..=`, `read`, `write`, `=`, `,` or `}`, found identifier
+    ╭─[parse_bit_struct_errors.ers:95:17]
+ 94 │ struct NoCommaBeforeReadField: u8 {
+ 95 │     a: bool at 0
+    ·                 ▲
+    ·                 ╰── expected `..=`, `read`, `write`, `=`, `,` or `}`
+ 96 │     read: bool at 1,
+    ╰────
+  help: a bit field is written `NAME: TYPE at BITS`, optionally after `pub`, then optionally a
+        read effect, `read clears`, `read sets` or `read modifies`, a write effect, `write 0` or
+        `write 1` followed by `clears`, `sets` or `toggles`, and a default, `= VALUE`, in that
+        order; fields are separated by `,` (ADR 0059, 0060)
+parser::unexpected-token
+
+  × expected `..=`, `read`, `write`, `=`, `,` or `}`, found identifier
+     ╭─[parse_bit_struct_errors.ers:101:17]
+ 100 │ struct NoCommaBeforeWriteField: u8 {
+ 101 │     a: bool at 0
+     ·                 ▲
+     ·                 ╰── expected `..=`, `read`, `write`, `=`, `,` or `}`
+ 102 │     write: bool at 1,
+     ╰────
+  help: a bit field is written `NAME: TYPE at BITS`, optionally after `pub`, then optionally a
+        read effect, `read clears`, `read sets` or `read modifies`, a write effect, `write 0` or
+        `write 1` followed by `clears`, `sets` or `toggles`, and a default, `= VALUE`, in that
+        order; fields are separated by `,` (ADR 0059, 0060)
+parser::unexpected-token
+
+  × expected `0` or `1`, found `,`
+     ╭─[parse_bit_struct_errors.ers:107:23]
+ 106 │ struct Last: u8 {
+ 107 │     a: bool at 0 write,
+     ·                       ┬
+     ·                       ╰── expected `0` or `1`
+ 108 │ }
+     ╰────
+  help: a bit field is written `NAME: TYPE at BITS`, optionally after `pub`, then optionally a
+        read effect, `read clears`, `read sets` or `read modifies`, a write effect, `write 0` or
+        `write 1` followed by `clears`, `sets` or `toggles`, and a default, `= VALUE`, in that
+        order; fields are separated by `,` (ADR 0059, 0060)

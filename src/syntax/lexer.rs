@@ -70,6 +70,7 @@ impl Lexer<'_> {
                 ':' => TokenKind::Colon,
                 ',' => TokenKind::Comma,
                 ';' => TokenKind::Semi,
+                '.' if self.eat('.') => self.with_eq(TokenKind::DotDot, TokenKind::DotDotEq),
                 '.' => TokenKind::Dot,
                 '?' => TokenKind::Question,
                 '#' => TokenKind::Pound,
@@ -539,6 +540,22 @@ mod tests {
             kinds,
             [
                 Ident, LParen, RParen, Question, Question, Ident, Question, Dot, Ident, Eof
+            ]
+        );
+    }
+
+    #[test]
+    fn ranges_and_rests() {
+        use TokenKind::*;
+        // An integer literal never holds a `.`, so `0..=1` is three tokens
+        // (ADR 0059).
+        let (kinds, diags) = kinds("0..=1 7..=x .. ... a.b .V");
+        assert!(!diags.has_errors());
+        assert_eq!(
+            kinds,
+            [
+                Int, DotDotEq, Int, Int, DotDotEq, Ident, DotDot, DotDot, Dot, Ident, Dot, Ident,
+                Dot, Ident, Eof
             ]
         );
     }

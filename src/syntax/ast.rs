@@ -13,6 +13,7 @@ pub struct File {
 pub enum Item {
     Fn(FnDecl),
     Struct(StructDecl),
+    BitStruct(BitStructDecl),
     Enum(EnumDecl),
     Const(ConstDecl),
     Static(StaticDecl),
@@ -157,8 +158,9 @@ pub struct PeripheralTypeDecl {
     pub span: Span,
 }
 
-/// `[pub] ACCESS NAME: Type at OFFSET`, a register of a peripheral type,
-/// private to its module unless `pub` (ADR 0058).
+/// `[pub] ACCESS NAME: Type at OFFSET [READ_EFFECT] [in GROUP]`, a register
+/// of a peripheral type, private to its module unless `pub` (ADR 0058,
+/// 0060, 0061).
 #[derive(Debug)]
 pub struct RegisterDecl {
     pub vis: Visibility,
@@ -167,6 +169,12 @@ pub struct RegisterDecl {
     pub ty: Ty,
     /// From the start of the peripheral, computed at compile time.
     pub offset: Expr,
+    /// What a read of the register does, with the span of its words
+    /// (ADR 0060).
+    pub read_effect: Option<(ReadEffect, Span)>,
+    /// The alternate group named after `in`, a label of the peripheral
+    /// type that names no item (ADR 0061).
+    pub group: Option<Ident>,
     pub span: Span,
 }
 
@@ -192,6 +200,32 @@ impl AccessMode {
     }
 }
 
+/// `read clears`, `read sets` or `read modifies`: a read of a register or
+/// of a bit field changes the device (ADR 0060).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ReadEffect {
+    Clears,
+    Sets,
+    Modifies,
+}
+
+/// `write BIT clears`, `write BIT sets` or `write BIT toggles`: writing
+/// `bit` to a bit field changes the device's bits (ADR 0060).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WriteEffect {
+    /// 0 or 1: the parser accepts no other.
+    pub bit: u8,
+    pub action: WriteAction,
+}
+
+/// What a write effect does to the bits written with its bit (ADR 0060).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WriteAction {
+    Clears,
+    Sets,
+    Toggles,
+}
+
 /// `peripheral NAME: Type at ADDRESS;`, an instance of a peripheral type at
 /// an address (ADR 0058). Attributes do not apply to it; they are kept to
 /// be reported.
@@ -215,6 +249,41 @@ pub struct StructDecl {
     pub vis: Visibility,
     pub name: Ident,
     pub fields: Vec<FieldDecl>,
+    pub span: Span,
+}
+
+/// `struct Name: Type { field: Type at BITS, ... }`, a struct stored in the
+/// integer type written after `:`, each field at its bits (ADR 0059).
+#[derive(Debug)]
+pub struct BitStructDecl {
+    pub attrs: Vec<Attr>,
+    pub vis: Visibility,
+    pub name: Ident,
+    /// The type written after `:`; that it is an integer type is checked
+    /// when names are resolved.
+    pub ty: Ty,
+    pub fields: Vec<BitFieldDecl>,
+    pub span: Span,
+}
+
+/// `[pub] name: Type at BITS [READ_EFFECT] [WRITE_EFFECT] [= default]`, a
+/// field of a bit-field struct, private to its module unless `pub`
+/// (ADR 0059, 0060).
+#[derive(Debug)]
+pub struct BitFieldDecl {
+    pub vis: Visibility,
+    pub name: Ident,
+    pub ty: Ty,
+    /// The lowest bit, or the only one; computed at compile time.
+    pub low: Expr,
+    /// The highest bit, written after `..=`; computed at compile time.
+    pub high: Option<Expr>,
+    /// With the span of its words.
+    pub read_effect: Option<(ReadEffect, Span)>,
+    /// With the span of its words.
+    pub write_effect: Option<(WriteEffect, Span)>,
+    /// The value written after `=`, computed at compile time.
+    pub default: Option<Expr>,
     pub span: Span,
 }
 
@@ -419,8 +488,9 @@ pub enum ExprKind {
     /// `Enum::Variant(args)` (ADR 0039). What the path names is resolved
     /// later.
     Call(Path, Vec<Expr>),
-    /// `Name { field: value, ... }`, fields in the order written.
-    StructLit(Path, Vec<FieldInit>),
+    /// `Name { field: value, ... }`, fields in the order written, and the
+    /// span of a final `..`, which leaves the other fields out (ADR 0059).
+    StructLit(Path, Vec<FieldInit>, Option<Span>),
     /// `base.field`
     Field(Box<Expr>, Ident),
     /// `size_of(T)` (ADR 0022)

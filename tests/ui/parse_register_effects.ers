@@ -1,0 +1,21 @@
+// emit: ast
+// Registers with a read effect after their offset (ADR 0060), an alternate
+// group after `in` (ADR 0061), or both, in that order; and `in`, `clears`
+// and `modifies` as names of registers and groups, recognized as words only
+// where the grammar puts them.
+const LSR: usize = 0x05;
+
+peripheral Uart16550 {
+    pub read rbr: u8 at 0x00 read modifies,
+    pub write thr: u8 at 0x00,
+    read lsr: u8 at LSR read clears,
+    read write scr: u8 at LSR + 2 read sets,
+    read write dll: u8 at 0x00 in dlab,
+    read write dlm: u8 at 0x01 read modifies in dlab
+}
+
+peripheral Names {
+    read write in: u8 at 0 in in,
+    read clears: u8 at 1 read clears in clears,
+    read modifies: u8 at 2 read modifies in modifies,
+}

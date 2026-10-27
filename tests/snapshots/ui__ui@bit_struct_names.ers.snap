@@ -1,0 +1,39 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/bit_struct_names.ers
+---
+--- typeck ---
+struct in { clears: u32 at 0, sets: u32 at 4, toggles: u32 at 8, modifies: u32 at 12 } size 16, align 4
+fn modifies::clears(sets: u32) -> u32
+    expr 0 local sets 362..366: u32
+fn toggles(in: u32) -> u32
+    expr 1 call 409..429: u32
+    expr 2 local in 426..428: u32
+fn sets() -> u32
+    let clears: u32
+    let in: in
+    let modifies: u32
+    expr 3 int 1 474..475: u32
+    expr 4 struct in 494..549: in
+    expr 5 local clears 507..513: u32
+    expr 6 int 2 521..522: u32
+    expr 7 int 3 533..534: u32
+    expr 8 int 4 546..547: u32
+    expr 9 field modifies 575..586: u32
+    expr 10 local in 575..577: in
+    expr 11 call 592..644: u32
+    expr 12 binary + 600..643: u32
+    expr 13 binary + 600..632: u32
+    expr 14 binary + 600..619: u32
+    expr 15 field clears 600..609: u32
+    expr 16 local in 600..602: in
+    expr 17 field sets 612..619: u32
+    expr 18 local in 612..614: in
+    expr 19 field toggles 622..632: u32
+    expr 20 local in 622..624: in
+    expr 21 local modifies 635..643: u32
+entry fn main() -> !
+    expr 22 loop 671..678: !
+panic fn on_panic() -> !
+    expr 23 loop 708..715: !

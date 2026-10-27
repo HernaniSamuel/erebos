@@ -5,11 +5,12 @@ use crate::builtin::{builtin_variant_help, is_builtin_enum};
 use crate::diag::{Diagnostic, Diagnostics};
 use crate::span::Span;
 use crate::syntax::ast::{
-    AccessMode, Arm, Attr, BinOp, Block, ComptimeDecl, ConstDecl, EnumDecl, Expr, ExprKind,
-    FieldDecl, FieldInit, File, FnDecl, FnKind, Ident, Item, Let, LogicalOp, MemoryDecl, ModDecl,
-    Param, Path, Pattern, PatternKind, PeripheralDecl, PeripheralTypeDecl, Placement,
-    PlacementKind, RegionDecl, RegisterDecl, StaticDecl, Stmt, StructDecl, Ty, TyKind, UnOp,
-    UseDecl, UseName, VariantDecl, Visibility,
+    AccessMode, Arm, Attr, BinOp, BitFieldDecl, BitStructDecl, Block, ComptimeDecl, ConstDecl,
+    EnumDecl, Expr, ExprKind, FieldDecl, FieldInit, File, FnDecl, FnKind, Ident, Item, Let,
+    LogicalOp, MemoryDecl, ModDecl, Param, Path, Pattern, PatternKind, PeripheralDecl,
+    PeripheralTypeDecl, Placement, PlacementKind, ReadEffect, RegionDecl, RegisterDecl, StaticDecl,
+    Stmt, StructDecl, Ty, TyKind, UnOp, UseDecl, UseName, VariantDecl, Visibility, WriteAction,
+    WriteEffect,
 };
 use crate::syntax::lexer;
 use crate::syntax::token::{Token, TokenKind};
@@ -31,6 +32,19 @@ pub fn parse(text: &str, tokens: &[Token], diags: &mut Diagnostics) -> File {
 
 /// The help of the errors in a register of a peripheral type (ADR 0058).
 const REGISTER_HELP: &str = "a register is written `ACCESS NAME: TYPE at OFFSET`, optionally after `pub`, its access mode `read`, `write` or `read write`, in that order, and its name the identifier just before `:`; registers are separated by `,` (ADR 0058)";
+
+/// The help of the errors after a register's offset (ADR 0060, 0061).
+const REGISTER_END_HELP: &str = "after its offset, a register may declare what a read does, `read clears`, `read sets` or `read modifies`, then an alternate group, `in GROUP`, in that order; registers are separated by `,` (ADR 0060, 0061)";
+
+/// The help of the errors in a field of a bit-field struct (ADR 0059,
+/// 0060).
+const BIT_FIELD_HELP: &str = "a bit field is written `NAME: TYPE at BITS`, optionally after `pub`, then optionally a read effect, `read clears`, `read sets` or `read modifies`, a write effect, `write 0` or `write 1` followed by `clears`, `sets` or `toggles`, and a default, `= VALUE`, in that order; fields are separated by `,` (ADR 0059, 0060)";
+
+/// The help of the errors in the bits of a bit field (ADR 0059).
+const BITS_HELP: &str = "a bit field's bits are one bit, as `at 7`, or a range with both ends included, lowest first, as `at 0..=1` (ADR 0059)";
+
+/// The help of the errors at a `..` in a struct literal (ADR 0059).
+const REST_HELP: &str = "`..` ends a struct literal and gives the fields it leaves out their defaults; it comes after a `,` when fields come before it, as in `Lcr { dlab: true, .. }` (ADR 0059)";
 
 /// The error has already been reported; the caller only needs to recover.
 struct Reported;
@@ -124,6 +138,23 @@ impl Parser<'_> {
     /// (ADR 0058). So `read write: u8` is a `read` register named `write`.
     fn at_access_word(&self, word: &str) -> bool {
         self.at_word(word) && self.peek_second() != TokenKind::Colon
+    }
+
+    /// At a `read` that starts a read effect, after a register's offset or
+    /// a bit field's bits (ADR 0060): one that does not start the next
+    /// register or field, written after a missing `,`. Those are `read:`
+    /// (a field named `read`), `read NAME:` (a `read` register) and
+    /// `read write` (a `read write` register), so that the missing `,` is
+    /// reported, not a missing effect word.
+    fn at_read_effect(&self) -> bool {
+        let third = self
+            .tokens
+            .get(self.pos + 2)
+            .map_or(TokenKind::Eof, |token| token.kind);
+        self.at_word("read")
+            && self.peek_second() != TokenKind::Colon
+            && third != TokenKind::Colon
+            && self.word_at(self.pos + 1) != Some("write")
     }
 
     fn bump(&mut self) -> Token {
@@ -288,7 +319,7 @@ impl Parser<'_> {
             TokenKind::Entry | TokenKind::Panic | TokenKind::Fn | TokenKind::Extern => {
                 Ok(Item::Fn(self.fn_decl(attrs, vis)?))
             }
-            TokenKind::Struct => Ok(Item::Struct(self.struct_decl(attrs, vis)?)),
+            TokenKind::Struct => self.struct_item(attrs, vis),
             TokenKind::Enum => Ok(Item::Enum(self.enum_decl(attrs, vis)?)),
             TokenKind::Const => Ok(Item::Const(self.const_decl(attrs, vis)?)),
             TokenKind::Mod => Ok(Item::Mod(self.mod_decl(attrs, vis)?)),
@@ -576,19 +607,43 @@ impl Parser<'_> {
         })
     }
 
-    fn struct_decl(&mut self, attrs: Vec<Attr>, vis: Visibility) -> PResult<StructDecl> {
+    /// A struct, `struct NAME { ... }`, or a bit-field struct,
+    /// `struct NAME: TYPE { ... }`, told apart by the token after the name
+    /// (ADR 0059). At `struct`.
+    fn struct_item(&mut self, attrs: Vec<Attr>, vis: Visibility) -> PResult<Item> {
         let start = self.bump().span;
         let name = self.ident()?;
+        if self.at(TokenKind::Colon) {
+            let decl = self.bit_struct_decl(attrs, vis, start, name)?;
+            return Ok(Item::BitStruct(decl));
+        }
+        Ok(Item::Struct(self.struct_decl(attrs, vis, start, name)?))
+    }
+
+    /// The fields of a struct, `{ field: Type, ... }` (ADR 0021). `start` is
+    /// the span of `struct`.
+    fn struct_decl(
+        &mut self,
+        attrs: Vec<Attr>,
+        vis: Visibility,
+        start: Span,
+        name: Ident,
+    ) -> PResult<StructDecl> {
         self.expect(TokenKind::LBrace)?;
         let fields = self.brace_list(|p| {
-            // A field is private unless written `pub` (ADR 0050).
-            let vis = match p.eat(TokenKind::Pub) {
-                Some(_) => Visibility::Pub,
-                None => Visibility::Private,
-            };
+            let vis = p.field_visibility();
             let name = p.ident()?;
             p.expect(TokenKind::Colon)?;
             let ty = p.ty()?;
+            // Bits and defaults are a bit-field struct's (ADR 0059).
+            if p.at_word("at") || p.at(TokenKind::Eq) {
+                let span = p.peek().span;
+                return Err(p.report_unexpected_help(
+                    "`,` or `}`",
+                    span,
+                    "only the fields of a bit-field struct have bits, `at BITS`, and defaults, `= VALUE`; a bit-field struct names its integer type after its name, as in `struct Lcr: u8 { ... }` (ADR 0059)",
+                ));
+            }
             Ok(FieldDecl { vis, name, ty })
         })?;
         Ok(StructDecl {
@@ -598,6 +653,163 @@ impl Parser<'_> {
             fields,
             span: start.to(self.tokens[self.pos - 1].span),
         })
+    }
+
+    /// A field is private unless written `pub` (ADR 0050).
+    fn field_visibility(&mut self) -> Visibility {
+        match self.eat(TokenKind::Pub) {
+            Some(_) => Visibility::Pub,
+            None => Visibility::Private,
+        }
+    }
+
+    /// `: Type { field, ... }` after a bit-field struct's name, with an
+    /// optional trailing comma (ADR 0059). At `:`; `start` is the span of
+    /// `struct`.
+    fn bit_struct_decl(
+        &mut self,
+        attrs: Vec<Attr>,
+        vis: Visibility,
+        start: Span,
+        name: Ident,
+    ) -> PResult<BitStructDecl> {
+        self.bump();
+        let ty = self.ty()?;
+        self.expect(TokenKind::LBrace)?;
+        let mut fields = Vec::new();
+        // Each field checks the token after it.
+        while !self.at(TokenKind::RBrace) {
+            fields.push(self.bit_field()?);
+            if self.eat(TokenKind::Comma).is_none() {
+                break;
+            }
+        }
+        let close = self.expect(TokenKind::RBrace)?;
+        Ok(BitStructDecl {
+            attrs,
+            vis,
+            name,
+            ty,
+            fields,
+            span: start.to(close.span),
+        })
+    }
+
+    /// `[pub] NAME: Type at BITS [READ_EFFECT] [WRITE_EFFECT] [= default]`
+    /// (ADR 0059, 0060), which `,` or `}` must follow; they are left to the
+    /// caller.
+    fn bit_field(&mut self) -> PResult<BitFieldDecl> {
+        let start = self.peek().span;
+        let vis = self.field_visibility();
+        let name = self.ident()?;
+        self.expect_help(TokenKind::Colon, BIT_FIELD_HELP)?;
+        let ty = self.ty()?;
+        self.expect_word("at", BIT_FIELD_HELP)?;
+        let low = self.bit_end()?;
+        let high = if self.eat(TokenKind::DotDotEq).is_some() {
+            Some(self.bit_end()?)
+        } else if self.at(TokenKind::DotDot) {
+            // `at 0..1` would read as half-open, as a range in Rust.
+            let span = self.peek().span;
+            return Err(self.report_unexpected_help("`..=`", span, BITS_HELP));
+        } else {
+            None
+        };
+        let read_effect = self.read_effect(BIT_FIELD_HELP)?;
+        let write_effect = self.write_effect()?;
+        let default = match self.eat(TokenKind::Eq) {
+            Some(_) => Some(self.nested_expr()?),
+            None => None,
+        };
+        if !self.at(TokenKind::Comma) && !self.at(TokenKind::RBrace) {
+            // What may still come, in the order of the grammar.
+            let what = match (&high, &read_effect, &write_effect, &default) {
+                (_, _, _, Some(_)) => "`,` or `}`",
+                (_, _, Some(_), None) => "`=`, `,` or `}`",
+                (_, Some(_), None, None) => "`write`, `=`, `,` or `}`",
+                (Some(_), None, None, None) => "`read`, `write`, `=`, `,` or `}`",
+                (None, None, None, None) => "`..=`, `read`, `write`, `=`, `,` or `}`",
+            };
+            return Err(self.error_expected_help(what, BIT_FIELD_HELP));
+        }
+        Ok(BitFieldDecl {
+            vis,
+            name,
+            ty,
+            low,
+            high,
+            read_effect,
+            write_effect,
+            default,
+            span: start.to(self.tokens[self.pos - 1].span),
+        })
+    }
+
+    /// An end of a bit field's bits: an expression without assignment, so
+    /// that a `=` after it starts the default (ADR 0059).
+    fn bit_end(&mut self) -> PResult<Expr> {
+        self.expr_bp(ASSIGN_BP.0 + 1)
+    }
+
+    /// `read clears`, `read sets` or `read modifies`, if at a `read` that
+    /// starts one (ADR 0060); `help` is the help of the declaration it is
+    /// in.
+    fn read_effect(&mut self, help: &str) -> PResult<Option<(ReadEffect, Span)>> {
+        if !self.at_read_effect() {
+            return Ok(None);
+        }
+        let read = self.bump();
+        let effect = match self.word_at(self.pos) {
+            Some("clears") => ReadEffect::Clears,
+            Some("sets") => ReadEffect::Sets,
+            Some("modifies") => ReadEffect::Modifies,
+            _ => return Err(self.error_expected_help("`clears`, `sets` or `modifies`", help)),
+        };
+        let word = self.bump();
+        Ok(Some((effect, read.span.to(word.span))))
+    }
+
+    /// `write BIT clears`, `write BIT sets` or `write BIT toggles`, if at
+    /// `write`, the bit an integer literal of value 0 or 1 (ADR 0060). A
+    /// `write` followed by `:` is the next field, named `write`, after a
+    /// missing `,`, which is reported instead.
+    fn write_effect(&mut self) -> PResult<Option<(WriteEffect, Span)>> {
+        if !self.at_word("write") || self.peek_second() == TokenKind::Colon {
+            return Ok(None);
+        }
+        let write = self.bump();
+        let token = self.peek();
+        let bit = match token.kind {
+            TokenKind::Int => match lexer::int_value(&self.text[token.span.range()]) {
+                Ok(bit @ (0 | 1)) => bit as u8,
+                Ok(_) => {
+                    return Err(self.report_unexpected_help(
+                        "`0` or `1`",
+                        token.span,
+                        BIT_FIELD_HELP,
+                    ));
+                }
+                // The lexer reported it.
+                Err(_) => return Err(Reported),
+            },
+            _ => return Err(self.error_expected_help("`0` or `1`", BIT_FIELD_HELP)),
+        };
+        self.bump();
+        let action = match self.word_at(self.pos) {
+            Some("clears") => WriteAction::Clears,
+            Some("sets") => WriteAction::Sets,
+            Some("toggles") => WriteAction::Toggles,
+            _ => {
+                return Err(
+                    self.error_expected_help("`clears`, `sets` or `toggles`", BIT_FIELD_HELP)
+                );
+            }
+        };
+        let word = self.bump();
+        Ok(Some((
+            WriteEffect { bit, action },
+            write.span.to(word.span),
+        )))
     }
 
     /// `enum Name: Type { Variant = value, Variant(T, ...) = value, ... }`.
@@ -840,12 +1052,10 @@ impl Parser<'_> {
     ) -> PResult<PeripheralTypeDecl> {
         self.bump();
         let mut registers = Vec::new();
+        // Each register checks the token after it.
         while !self.at(TokenKind::RBrace) {
             registers.push(self.register()?);
             if self.eat(TokenKind::Comma).is_none() {
-                if !self.at(TokenKind::RBrace) {
-                    return Err(self.error_expected_help("`,` or `}`", REGISTER_HELP));
-                }
                 break;
             }
         }
@@ -859,9 +1069,11 @@ impl Parser<'_> {
         })
     }
 
-    /// `[pub] ACCESS NAME: Type at OFFSET` (ADR 0058). The access mode is
-    /// `read`, `write` or `read write`, each word one only when `:` does
-    /// not follow it, since the name is the identifier just before `:`.
+    /// `[pub] ACCESS NAME: Type at OFFSET [READ_EFFECT] [in GROUP]`
+    /// (ADR 0058, 0060, 0061). The access mode is `read`, `write` or
+    /// `read write`, each word one only when `:` does not follow it, since
+    /// the name is the identifier just before `:`. It must be followed by
+    /// `,` or `}`, which are left to the caller.
     fn register(&mut self) -> PResult<RegisterDecl> {
         let start = self.peek().span;
         // A register is private unless written `pub`, as a field (ADR 0050).
@@ -896,13 +1108,31 @@ impl Parser<'_> {
         let ty = self.ty()?;
         self.expect_word("at", REGISTER_HELP)?;
         let offset = self.nested_expr()?;
+        let read_effect = self.read_effect(REGISTER_END_HELP)?;
+        let group = if self.at_word("in") {
+            self.bump();
+            Some(self.ident()?)
+        } else {
+            None
+        };
+        if !self.at(TokenKind::Comma) && !self.at(TokenKind::RBrace) {
+            // What may still come, in the order of the grammar.
+            let what = match (&read_effect, &group) {
+                (_, Some(_)) => "`,` or `}`",
+                (Some(_), None) => "`in`, `,` or `}`",
+                (None, None) => "`read`, `in`, `,` or `}`",
+            };
+            return Err(self.error_expected_help(what, REGISTER_END_HELP));
+        }
         Ok(RegisterDecl {
             vis,
             access,
             name,
             ty,
-            span: start.to(offset.span),
             offset,
+            read_effect,
+            group,
+            span: start.to(self.tokens[self.pos - 1].span),
         })
     }
 
@@ -1553,16 +1783,11 @@ impl Parser<'_> {
                 // Whatever the path names: `uart::Config { .. }` is a
                 // struct of a module (ADR 0049).
                 if !self.no_struct && self.eat(TokenKind::LBrace).is_some() {
-                    let fields = self.brace_list(|p| {
-                        let name = p.ident()?;
-                        p.expect(TokenKind::Colon)?;
-                        let value = p.nested_expr()?;
-                        Ok(FieldInit { name, value })
-                    })?;
+                    let (fields, rest) = self.struct_lit_fields()?;
                     let end = self.tokens[self.pos - 1].span;
                     return Ok(Expr {
                         span: token.span.to(end),
-                        kind: ExprKind::StructLit(path, fields),
+                        kind: ExprKind::StructLit(path, fields, rest),
                     });
                 }
                 return Ok(Expr {
@@ -1631,6 +1856,35 @@ impl Parser<'_> {
 }
 
 impl Parser<'_> {
+    /// The fields of a struct literal, `field: value, ...}` after its `{`,
+    /// with an optional trailing comma or a final `..` (ADR 0059), whose
+    /// span is the second value; consumes the `}`.
+    fn struct_lit_fields(&mut self) -> PResult<(Vec<FieldInit>, Option<Span>)> {
+        let mut fields = Vec::new();
+        let mut rest = None;
+        while !self.at(TokenKind::RBrace) {
+            if let Some(dots) = self.eat(TokenKind::DotDot) {
+                rest = Some(dots.span);
+                if !self.at(TokenKind::RBrace) {
+                    return Err(self.error_expected_help("`}`", REST_HELP));
+                }
+                break;
+            }
+            let name = self.ident()?;
+            self.expect(TokenKind::Colon)?;
+            let value = self.nested_expr()?;
+            fields.push(FieldInit { name, value });
+            if self.eat(TokenKind::Comma).is_none() {
+                if self.at(TokenKind::DotDot) {
+                    return Err(self.error_expected_help("`,` or `}`", REST_HELP));
+                }
+                break;
+            }
+        }
+        self.expect(TokenKind::RBrace)?;
+        Ok((fields, rest))
+    }
+
     /// Whether the next token ends an expression, so `break`/`return` have
     /// no value.
     fn at_expr_end(&self) -> bool {

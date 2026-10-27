@@ -1,0 +1,30 @@
+// emit: typeck
+// `clears`, `sets`, `toggles`, `modifies` and `in` are words only in bit
+// fields and registers (ADR 0060, 0061): elsewhere they are names as any
+// other, of locals, functions, fields and a module.
+struct in {
+    clears: u32,
+    sets: u32,
+    toggles: u32,
+    modifies: u32,
+}
+
+mod modifies {
+    pub fn clears(sets: u32) -> u32 {
+        sets
+    }
+}
+
+fn toggles(in: u32) -> u32 {
+    modifies::clears(in)
+}
+
+fn sets() -> u32 {
+    let clears: u32 = 1;
+    let in: in = in { clears: clears, sets: 2, toggles: 3, modifies: 4 };
+    let modifies: u32 = in.modifies;
+    toggles(in.clears + in.sets + in.toggles + modifies)
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

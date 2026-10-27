@@ -196,6 +196,8 @@ impl Lowerer<'_> {
             seen.entry(&register.name.name)
                 .or_insert(register.name.span);
         }
+        // A register's read effect and group are not lowered yet (M3.3,
+        // step 2).
         let registers = decl
             .registers
             .iter()

@@ -613,6 +613,8 @@ impl<'a> Items<'a> {
                     let id = StructId(self.structs.len() as u32 - 1);
                     (&decl.name, decl.vis, Def::Struct(id))
                 }
+                // Not lowered yet (M3.3, step 2).
+                ast::Item::BitStruct(_) => continue,
                 ast::Item::Enum(decl) => {
                     self.enums.push((decl, module));
                     let id = EnumId(self.enums.len() as u32 - 1);

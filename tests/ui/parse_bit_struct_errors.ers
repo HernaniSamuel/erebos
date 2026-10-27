@@ -1,0 +1,108 @@
+// Syntax errors in bit-field structs, struct literals with `..` (ADR 0059)
+// and register effects (ADR 0060). Each item is broken once, and parsing
+// resumes at the next item.
+
+// A bit field without `at`.
+struct NoAt: u8 {
+    a: bool,
+}
+
+// `at 0..` without its end.
+struct NoEnd: u8 {
+    a: u8 at 0..,
+}
+
+// `..=` without its end.
+struct NoHigh: u8 {
+    a: u8 at 0..=,
+}
+
+// A half-open range is no bits.
+struct HalfOpen: u8 {
+    a: u8 at 0..2,
+}
+
+// A write effect writes 0 or 1.
+struct WriteTwo: u8 {
+    a: bool at 0 write 2 clears,
+}
+
+// A write effect that is none of the three.
+struct Erases: u8 {
+    a: bool at 0 write 1 erases,
+}
+
+// `toggles` is a write effect, not a read effect.
+struct ReadToggles: u8 {
+    a: bool at 0 read toggles,
+}
+
+// Two read effects.
+struct TwoReads: u8 {
+    a: bool at 0 read clears read sets,
+}
+
+// Two write effects.
+struct TwoWrites: u8 {
+    a: bool at 0 write 1 clears write 0 sets,
+}
+
+// An effect after the default.
+struct EffectAfterDefault: u8 {
+    a: bool at 0 = false read clears,
+}
+
+// `..` before a field.
+fn rest_first() {
+    S { .., a: 1 };
+}
+
+// `..` after a field without the comma.
+fn rest_without_comma() {
+    S { a: 1 .. };
+}
+
+// Bits in an ordinary struct.
+struct OrdinaryAt {
+    a: bool at 0,
+}
+
+// A default in an ordinary struct.
+struct OrdinaryDefault {
+    a: bool = false,
+}
+
+// A register with two read effects.
+peripheral TwoRegisterReads {
+    read a: u8 at 0 read clears read sets,
+}
+
+// A missing `,` before a register that starts with `read`: reported as
+// the missing `,`, not as a read effect missing its word.
+peripheral NoCommaBeforeRead {
+    read a: u8 at 0
+    read b: u8 at 1,
+}
+
+// The same before a `read write` register.
+peripheral NoCommaBeforeReadWrite {
+    read a: u8 at 0
+    read write b: u8 at 1,
+}
+
+// The same before a bit field named `read`.
+struct NoCommaBeforeReadField: u8 {
+    a: bool at 0
+    read: bool at 1,
+}
+
+// The same before a bit field named `write`.
+struct NoCommaBeforeWriteField: u8 {
+    a: bool at 0
+    write: bool at 1,
+}
+
+// The item after it is parsed: its error is reported.
+struct Last: u8 {
+    a: bool at 0 write,
+}

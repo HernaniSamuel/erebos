@@ -1,0 +1,52 @@
+// emit: ast
+// Bit-field structs (ADR 0059) with the effects of ADR 0060: on `u8` and
+// `u32`, `pub` and private fields, single bits and ranges, bits naming
+// constants and a binary expression, whose `=` starts the default;
+// defaults that are a literal, `.V` and a constant; each read effect, the
+// six write effects, `write 0x1 clears`, a field with both effects, a
+// trailing comma, and fields named `read`, `write` and `at`. An empty
+// bit-field struct parses (names are checked later). Literals end with
+// `..`, alone and after fields.
+const BASE: u32 = 6;
+const LOW: u32 = 0;
+const HIGH: u32 = 1;
+const OFF: bool = false;
+
+enum WordLength: u8 { Five = 0, Six = 1, Seven = 2, Eight = 3 }
+
+pub struct Lcr: u8 {
+    pub word_length: WordLength at 0..=1 = .Five,
+    pub two_stop_bits: bool at 2 = false,
+    parity: bool at LOW..=HIGH,
+    pub break_control: bool at BASE = OFF,
+    pub dlab: bool at BASE + 1 = false
+}
+
+struct Status: u32 {
+    pub overrun: bool at 0 read clears,
+    pub framing: bool at 1 read sets,
+    pub fifo: bool at 2 read modifies,
+    pub a: bool at 3 write 1 clears,
+    pub b: bool at 4 write 1 sets,
+    pub c: bool at 5 write 1 toggles,
+    pub d: bool at 6 write 0 clears,
+    pub e: bool at 7 write 0 sets,
+    pub f: bool at 8 write 0 toggles,
+    pub g: bool at 9 write 0x1 clears,
+    pub both: bool at 10 read clears write 1 clears,
+    count: u8 at 16..=23 = 0,
+}
+
+struct Words: u8 {
+    read: bool at 0,
+    write: bool at 1 write 1 clears,
+    at: bool at 2 read clears = true,
+}
+
+struct Empty: u16 {}
+
+fn literals() -> Lcr {
+    let all: Lcr = Lcr { .. };
+    let one: Lcr = Lcr { dlab: true, .. };
+    Lcr { word_length: .Eight, parity: true, .. }
+}
