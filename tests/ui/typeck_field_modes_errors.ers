@@ -1,0 +1,67 @@
+// emit: typeck
+// Field access modes in volatile places (ADR 0065). A volatile place is a
+// register or a place reached through a volatile pointer. A field assignment
+// or a compound assignment to a `read` field is `ty::write-to-read-only`; a
+// read of a `write` field, or a compound assignment to one, is
+// `ty::read-of-write-only`. The register's own mode is checked too: when it
+// forbids the access with the same code, one diagnostic labels both (a field
+// assignment to a `read` field of a `read` register, a read of a `write`
+// field of a `write` register); with another code, each is reported (a field
+// assignment to a `read` field of a `write` register, a compound assignment
+// to a `write` field of a `read` register).
+struct Status: u32 {
+    pub read busy: bool at 0 = false,
+    pub write start: bool at 1 = false,
+    pub mode: u8 at 4..=5 = 0,
+    pub write clear: bool at 8 write 1 clears,
+    pub read done: bool at 9 write 1 clears,
+    pub write m: u8 at 12..=15 = 0,
+}
+
+peripheral Device {
+    read write rw: Status at 0,
+    read ro: Status at 4,
+    write wo: Status at 8,
+    read write plain: u32 at 12,
+}
+
+peripheral DEV: Device at 0x1000_0000;
+
+// Rejected through a register of each mode: one diagnostic for each access.
+fn in_a_register() {
+    DEV.rw.busy = true;
+    DEV.rw.busy |= true;
+    DEV.rw.start |= true;
+    let a: bool = DEV.rw.start;
+}
+
+// Both causes at once, the same code: one diagnostic labeling the register
+// and the field.
+fn same_code() {
+    DEV.ro.busy = true;
+    let a: bool = DEV.wo.start;
+}
+
+// Different codes: each is reported.
+fn different_codes() {
+    DEV.wo.busy = true;
+    DEV.ro.start |= true;
+}
+
+// Through a volatile pointer.
+fn through_a_pointer(p: *mut volatile Status) {
+    (*p).busy = true;
+    (*p).busy |= true;
+    (*p).start |= true;
+    let a: bool = (*p).start;
+}
+
+// Indexing a field is no read of it: only `ty::cannot-index`, as through a
+// register.
+fn indexed(p: *mut volatile Status) {
+    let a: u8 = (*p).m[0];
+    let b: u8 = DEV.rw.m[0];
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

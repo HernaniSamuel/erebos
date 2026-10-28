@@ -44,11 +44,37 @@ impl Checker<'_, '_> {
     /// type, so it gets no volatile checks of its own. A bit field is
     /// accessed with the whole value of its bit-field struct, which the
     /// volatile checks see (ADR 0059).
-    pub(super) fn access(&mut self, place: &PlaceInfo, span: Span, kind: AccessMode) {
+    ///
+    /// `expr` is the place expression: in a volatile place, the access mode
+    /// of the bit field it names is checked too (ADR 0065).
+    pub(super) fn access(&mut self, place: &PlaceInfo, expr: &Expr, kind: AccessMode) {
+        let volatile = place.register.is_some() || place.via.is_some_and(|ptr| ptr.volatile);
+        let field = if volatile {
+            self.field_mode(expr, kind)
+        } else {
+            None
+        };
+        self.access_place(place, expr.span, kind, field);
+    }
+
+    /// `access` with the mode of the bit field already decided: `None` for
+    /// the base of an index, which is read to be indexed, not as the field
+    /// (ADR 0065).
+    fn access_place(
+        &mut self,
+        place: &PlaceInfo,
+        span: Span,
+        kind: AccessMode,
+        field: Option<FieldMode>,
+    ) {
         if let Some(register) = place.register {
             let field_assignment = place.bit_field.is_some() && kind == AccessMode::Write;
-            self.register_access(register, span, kind, field_assignment);
+            self.register_access(register, span, kind, field_assignment, field);
             return;
+        }
+        if let Some(field) = field {
+            let diag = field.diagnostic(span, kind);
+            self.q.diags.push(diag);
         }
         let whole = PlaceInfo {
             ty: place.bit_field.map_or(place.ty, Ty::BitStruct),
@@ -177,12 +203,17 @@ impl Checker<'_, '_> {
     /// and a compound assignment does both (ADR 0058), as does a
     /// `field_assignment`, an assignment to one of its bit fields, which
     /// reads the register to keep its other bits (ADR 0060).
+    ///
+    /// `field` is the bit field accessed, if its mode forbids the access
+    /// (ADR 0065): when the register forbids it with the same code, one
+    /// diagnostic labels both.
     fn register_access(
         &mut self,
         register: Register,
         span: Span,
         kind: AccessMode,
         field_assignment: bool,
+        mut field: Option<FieldMode>,
     ) {
         let def = self.hir.peripheral_type(register.id);
         let reg = &def.entries[register.index];
@@ -195,35 +226,92 @@ impl Checker<'_, '_> {
             AccessMode::ReadWrite => "read and written by this compound assignment",
         };
         if reads && reg.access() == Some(AccessMode::Write) {
+            let both = field.take_if(|f| f.code == "ty::read-of-write-only");
             let help = if field_assignment {
                 "a field assignment reads the register to keep its other bits, and a `write` register is never read: assign it a whole value, as a literal with `..`; declare it `read write` if the device also lets it be read (ADR 0058, 0060)"
             } else {
                 "a `write` register can only be assigned with `=`, since a compound assignment reads it first; declare it `read write` if the device also lets it be read (ADR 0058)"
             };
-            self.q.diags.push(
-                Diagnostic::error(
-                    "ty::read-of-write-only",
-                    format!(
+            let mut diag = Diagnostic::error(
+                "ty::read-of-write-only",
+                match &both {
+                    Some(f) => format!(
+                        "the register `{}` of `{}` and its field `{}` are write-only",
+                        reg.name, def.path, f.name
+                    ),
+                    None => format!(
                         "the register `{}` of `{}` is write-only",
                         reg.name, def.path
                     ),
-                )
-                .label(span, label)
-                .label(reg.span, "declared `write`")
-                .help(help),
-            );
+                },
+            )
+            .label(span, label)
+            .label(reg.span, "declared `write`");
+            let mut help = help.to_string();
+            if let Some(f) = both {
+                diag = diag.label(f.span, "the field is declared `write` too");
+                help.push_str(
+                    "; the field is `write` too, so fixing one cause leaves the other (ADR 0065)",
+                );
+            }
+            self.q.diags.push(diag.help(help));
         }
         if writes && reg.access() == Some(AccessMode::Read) {
-            self.q.diags.push(
-                Diagnostic::error(
-                    "ty::write-to-read-only",
-                    format!("the register `{}` of `{}` is read-only", reg.name, def.path),
-                )
-                .label(span, label)
-                .label(reg.span, "declared `read`")
-                .help("a `read` register can only be read; declare it `read write` if the device also lets it be written (ADR 0058)"),
+            let both = field.take_if(|f| f.code == "ty::write-to-read-only");
+            let mut diag = Diagnostic::error(
+                "ty::write-to-read-only",
+                match &both {
+                    Some(f) => format!(
+                        "the register `{}` of `{}` and its field `{}` are read-only",
+                        reg.name, def.path, f.name
+                    ),
+                    None => format!("the register `{}` of `{}` is read-only", reg.name, def.path),
+                },
+            )
+            .label(span, label)
+            .label(reg.span, "declared `read`");
+            let mut help = String::from(
+                "a `read` register can only be read; declare it `read write` if the device also lets it be written (ADR 0058)",
             );
+            if let Some(f) = both {
+                diag = diag.label(f.span, "the field is declared `read` too");
+                help.push_str(
+                    "; the field is `read` too, so fixing one cause leaves the other (ADR 0065)",
+                );
+            }
+            self.q.diags.push(diag.help(help));
         }
+        if let Some(field) = field {
+            let diag = field.diagnostic(span, kind);
+            self.q.diags.push(diag);
+        }
+    }
+
+    /// The mode of the bit field `expr` names, if it forbids accessing it
+    /// as `kind` says (ADR 0065): a `read` field is not written, a `write`
+    /// one not read, a compound assignment doing both. Only asked for
+    /// volatile places.
+    fn field_mode(&self, expr: &Expr, kind: AccessMode) -> Option<FieldMode> {
+        let (s, index) = self.q.tables.bit_field(expr.id)?;
+        let def = self.hir.bit_struct(s);
+        let field = &def.fields[index as usize];
+        let (mode, span) = field.access?;
+        let code = match (mode, kind) {
+            (AccessMode::Read, AccessMode::Write | AccessMode::ReadWrite) => {
+                "ty::write-to-read-only"
+            }
+            (AccessMode::Write, AccessMode::Read | AccessMode::ReadWrite) => {
+                "ty::read-of-write-only"
+            }
+            _ => return None,
+        };
+        Some(FieldMode {
+            code,
+            name: field.name.clone(),
+            owner: def.path.clone(),
+            mode,
+            span,
+        })
     }
 
     /// Types a place expression: a local, a static, a peripheral, a byte
@@ -332,7 +420,7 @@ impl Checker<'_, '_> {
                     && let Ty::Slice(elem) = *ptr.pointee
                 {
                     if let Some(info) = base_place {
-                        self.access(&info, base.span, AccessMode::Read);
+                        self.access_place(&info, base.span, AccessMode::Read, None);
                     }
                     // Indexing a pointer steps over whole pointees, and `[T]`
                     // has no size (ADR 0021, 0031).
@@ -352,7 +440,7 @@ impl Checker<'_, '_> {
                     && let Ty::Peripheral(_) = *ptr.pointee
                 {
                     if let Some(info) = base_place {
-                        self.access(&info, base.span, AccessMode::Read);
+                        self.access_place(&info, base.span, AccessMode::Read, None);
                     }
                     // Indexing steps over whole pointees, and a peripheral
                     // type has no size (ADR 0058).
@@ -377,7 +465,7 @@ impl Checker<'_, '_> {
                         && !matches!(info.ty, Ty::Peripheral(_))
                         && info.register.is_none()
                     {
-                        self.access(&info, base.span, AccessMode::Read);
+                        self.access_place(&info, base.span, AccessMode::Read, None);
                     }
                     if let Ty::Ptr(ptr) = ty
                         && self.q.layout_of(*ptr.pointee).is_none()
@@ -711,7 +799,7 @@ impl Checker<'_, '_> {
             }
             None => {}
         }
-        self.access(&info, place.span, kind);
+        self.access(&info, place, kind);
         self.assignment_effects(place, &info, kind);
         info.ty
     }
@@ -1165,4 +1253,49 @@ fn private_register(
 fn mutable_static(def: &hir::StaticDef) -> String {
     let external = if def.init.is_none() { "extern " } else { "" };
     format!("{external}static mut {}", def.name)
+}
+
+/// A bit field whose mode forbids an access (ADR 0065).
+struct FieldMode {
+    /// `ty::write-to-read-only` or `ty::read-of-write-only`.
+    code: &'static str,
+    name: String,
+    /// The path of its bit-field struct.
+    owner: String,
+    mode: AccessMode,
+    /// The word that declares the mode.
+    span: Span,
+}
+
+impl FieldMode {
+    /// The diagnostic for an access at `span`, as `kind` says, when the
+    /// register (if any) does not forbid it with the same code.
+    fn diagnostic(&self, span: Span, kind: AccessMode) -> Diagnostic {
+        let (message, label, help) = if self.mode == AccessMode::Read {
+            (
+                "read-only",
+                match kind {
+                    AccessMode::ReadWrite => "written back by this compound assignment",
+                    _ => "written here",
+                },
+                "a `read` field is ignored by the hardware when written, so it is only read; assign the other fields, which keeps its bits as read, or write a whole value (ADR 0065)",
+            )
+        } else {
+            (
+                "write-only",
+                match kind {
+                    AccessMode::ReadWrite => "read by this compound assignment",
+                    _ => "read here",
+                },
+                "a `write` field gives nothing meaningful when read, so it is only written with `=`, and a compound assignment reads it first (ADR 0065)",
+            )
+        };
+        Diagnostic::error(
+            self.code,
+            format!("the field `{}` of `{}` is {message}", self.name, self.owner),
+        )
+        .label(span, label)
+        .label(self.span, format!("declared `{}`", self.mode.words()))
+        .help(help)
+    }
 }

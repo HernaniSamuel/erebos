@@ -1,0 +1,338 @@
+---
+source: tests/ui.rs
+assertion_line: 22
+expression: output
+input_file: tests/ui/typeck_field_modes_errors.ers
+---
+--- errors ---
+ty::write-to-read-only
+
+  × the field `busy` of `Status` is read-only
+    ╭─[typeck_field_modes_errors.ers:13:9]
+ 12 │ struct Status: u32 {
+ 13 │     pub read busy: bool at 0 = false,
+    ·         ──┬─
+    ·           ╰── declared `read`
+ 14 │     pub write start: bool at 1 = false,
+    ╰────
+    ╭─[typeck_field_modes_errors.ers:32:5]
+ 31 │ fn in_a_register() {
+ 32 │     DEV.rw.busy = true;
+    ·     ─────┬─────
+    ·          ╰── written here
+ 33 │     DEV.rw.busy |= true;
+    ╰────
+  help: a `read` field is ignored by the hardware when written, so it is only read; assign the
+        other fields, which keeps its bits as read, or write a whole value (ADR 0065)
+ty::write-to-read-only
+
+  × the field `busy` of `Status` is read-only
+    ╭─[typeck_field_modes_errors.ers:13:9]
+ 12 │ struct Status: u32 {
+ 13 │     pub read busy: bool at 0 = false,
+    ·         ──┬─
+    ·           ╰── declared `read`
+ 14 │     pub write start: bool at 1 = false,
+    ╰────
+    ╭─[typeck_field_modes_errors.ers:33:5]
+ 32 │     DEV.rw.busy = true;
+ 33 │     DEV.rw.busy |= true;
+    ·     ─────┬─────
+    ·          ╰── written back by this compound assignment
+ 34 │     DEV.rw.start |= true;
+    ╰────
+  help: a `read` field is ignored by the hardware when written, so it is only read; assign the
+        other fields, which keeps its bits as read, or write a whole value (ADR 0065)
+ty::read-of-write-only
+
+  × the field `start` of `Status` is write-only
+    ╭─[typeck_field_modes_errors.ers:14:9]
+ 13 │     pub read busy: bool at 0 = false,
+ 14 │     pub write start: bool at 1 = false,
+    ·         ──┬──
+    ·           ╰── declared `write`
+ 15 │     pub mode: u8 at 4..=5 = 0,
+    ╰────
+    ╭─[typeck_field_modes_errors.ers:34:5]
+ 33 │     DEV.rw.busy |= true;
+ 34 │     DEV.rw.start |= true;
+    ·     ──────┬─────
+    ·           ╰── read by this compound assignment
+ 35 │     let a: bool = DEV.rw.start;
+    ╰────
+  help: a `write` field gives nothing meaningful when read, so it is only written with `=`, and a
+        compound assignment reads it first (ADR 0065)
+ty::read-of-write-only
+
+  × the field `start` of `Status` is write-only
+    ╭─[typeck_field_modes_errors.ers:14:9]
+ 13 │     pub read busy: bool at 0 = false,
+ 14 │     pub write start: bool at 1 = false,
+    ·         ──┬──
+    ·           ╰── declared `write`
+ 15 │     pub mode: u8 at 4..=5 = 0,
+    ╰────
+    ╭─[typeck_field_modes_errors.ers:35:19]
+ 34 │     DEV.rw.start |= true;
+ 35 │     let a: bool = DEV.rw.start;
+    ·                   ──────┬─────
+    ·                         ╰── read here
+ 36 │ }
+    ╰────
+  help: a `write` field gives nothing meaningful when read, so it is only written with `=`, and a
+        compound assignment reads it first (ADR 0065)
+ty::write-to-read-only
+
+  × the register `ro` of `Device` and its field `busy` are read-only
+    ╭─[typeck_field_modes_errors.ers:13:9]
+ 12 │ struct Status: u32 {
+ 13 │     pub read busy: bool at 0 = false,
+    ·         ──┬─
+    ·           ╰── the field is declared `read` too
+ 14 │     pub write start: bool at 1 = false,
+ 15 │     pub mode: u8 at 4..=5 = 0,
+ 16 │     pub write clear: bool at 8 write 1 clears,
+ 17 │     pub read done: bool at 9 write 1 clears,
+ 18 │     pub write m: u8 at 12..=15 = 0,
+ 19 │ }
+ 20 │ 
+ 21 │ peripheral Device {
+ 22 │     read write rw: Status at 0,
+ 23 │     read ro: Status at 4,
+    ·          ─┬
+    ·           ╰── declared `read`
+ 24 │     write wo: Status at 8,
+    ╰────
+    ╭─[typeck_field_modes_errors.ers:41:5]
+ 40 │ fn same_code() {
+ 41 │     DEV.ro.busy = true;
+    ·     ─────┬─────
+    ·          ╰── read and written by this field assignment
+ 42 │     let a: bool = DEV.wo.start;
+    ╰────
+  help: a `read` register can only be read; declare it `read write` if the device also lets it be
+        written (ADR 0058); the field is `read` too, so fixing one cause leaves the other (ADR
+        0065)
+ty::read-of-write-only
+
+  × the register `wo` of `Device` and its field `start` are write-only
+    ╭─[typeck_field_modes_errors.ers:14:9]
+ 13 │     pub read busy: bool at 0 = false,
+ 14 │     pub write start: bool at 1 = false,
+    ·         ──┬──
+    ·           ╰── the field is declared `write` too
+ 15 │     pub mode: u8 at 4..=5 = 0,
+ 16 │     pub write clear: bool at 8 write 1 clears,
+ 17 │     pub read done: bool at 9 write 1 clears,
+ 18 │     pub write m: u8 at 12..=15 = 0,
+ 19 │ }
+ 20 │ 
+ 21 │ peripheral Device {
+ 22 │     read write rw: Status at 0,
+ 23 │     read ro: Status at 4,
+ 24 │     write wo: Status at 8,
+    ·           ─┬
+    ·            ╰── declared `write`
+ 25 │     read write plain: u32 at 12,
+    ╰────
+    ╭─[typeck_field_modes_errors.ers:42:19]
+ 41 │     DEV.ro.busy = true;
+ 42 │     let a: bool = DEV.wo.start;
+    ·                   ──────┬─────
+    ·                         ╰── read here
+ 43 │ }
+    ╰────
+  help: a `write` register can only be assigned with `=`, since a compound assignment reads it
+        first; declare it `read write` if the device also lets it be read (ADR 0058); the field is
+        `write` too, so fixing one cause leaves the other (ADR 0065)
+ty::read-of-write-only
+
+  × the register `wo` of `Device` is write-only
+    ╭─[typeck_field_modes_errors.ers:47:5]
+ 23 │     read ro: Status at 4,
+ 24 │     write wo: Status at 8,
+    ·           ─┬
+    ·            ╰── declared `write`
+ 25 │     read write plain: u32 at 12,
+ 26 │ }
+ 27 │ 
+ 28 │ peripheral DEV: Device at 0x1000_0000;
+ 29 │ 
+ 30 │ // Rejected through a register of each mode: one diagnostic for each access.
+ 31 │ fn in_a_register() {
+ 32 │     DEV.rw.busy = true;
+ 33 │     DEV.rw.busy |= true;
+ 34 │     DEV.rw.start |= true;
+ 35 │     let a: bool = DEV.rw.start;
+ 36 │ }
+ 37 │ 
+ 38 │ // Both causes at once, the same code: one diagnostic labeling the register
+ 39 │ // and the field.
+ 40 │ fn same_code() {
+ 41 │     DEV.ro.busy = true;
+ 42 │     let a: bool = DEV.wo.start;
+ 43 │ }
+ 44 │ 
+ 45 │ // Different codes: each is reported.
+ 46 │ fn different_codes() {
+ 47 │     DEV.wo.busy = true;
+    ·     ─────┬─────
+    ·          ╰── read and written by this field assignment
+ 48 │     DEV.ro.start |= true;
+    ╰────
+  help: a field assignment reads the register to keep its other bits, and a `write` register is
+        never read: assign it a whole value, as a literal with `..`; declare it `read write` if
+        the device also lets it be read (ADR 0058, 0060)
+ty::write-to-read-only
+
+  × the field `busy` of `Status` is read-only
+    ╭─[typeck_field_modes_errors.ers:13:9]
+ 12 │ struct Status: u32 {
+ 13 │     pub read busy: bool at 0 = false,
+    ·         ──┬─
+    ·           ╰── declared `read`
+ 14 │     pub write start: bool at 1 = false,
+    ╰────
+    ╭─[typeck_field_modes_errors.ers:47:5]
+ 46 │ fn different_codes() {
+ 47 │     DEV.wo.busy = true;
+    ·     ─────┬─────
+    ·          ╰── written here
+ 48 │     DEV.ro.start |= true;
+    ╰────
+  help: a `read` field is ignored by the hardware when written, so it is only read; assign the
+        other fields, which keeps its bits as read, or write a whole value (ADR 0065)
+ty::write-to-read-only
+
+  × the register `ro` of `Device` is read-only
+    ╭─[typeck_field_modes_errors.ers:23:10]
+ 22 │     read write rw: Status at 0,
+ 23 │     read ro: Status at 4,
+    ·          ─┬
+    ·           ╰── declared `read`
+ 24 │     write wo: Status at 8,
+    ╰────
+    ╭─[typeck_field_modes_errors.ers:48:5]
+ 47 │     DEV.wo.busy = true;
+ 48 │     DEV.ro.start |= true;
+    ·     ──────┬─────
+    ·           ╰── read and written by this compound assignment
+ 49 │ }
+    ╰────
+  help: a `read` register can only be read; declare it `read write` if the device also lets it be
+        written (ADR 0058)
+ty::read-of-write-only
+
+  × the field `start` of `Status` is write-only
+    ╭─[typeck_field_modes_errors.ers:14:9]
+ 13 │     pub read busy: bool at 0 = false,
+ 14 │     pub write start: bool at 1 = false,
+    ·         ──┬──
+    ·           ╰── declared `write`
+ 15 │     pub mode: u8 at 4..=5 = 0,
+    ╰────
+    ╭─[typeck_field_modes_errors.ers:48:5]
+ 47 │     DEV.wo.busy = true;
+ 48 │     DEV.ro.start |= true;
+    ·     ──────┬─────
+    ·           ╰── read by this compound assignment
+ 49 │ }
+    ╰────
+  help: a `write` field gives nothing meaningful when read, so it is only written with `=`, and a
+        compound assignment reads it first (ADR 0065)
+ty::write-to-read-only
+
+  × the field `busy` of `Status` is read-only
+    ╭─[typeck_field_modes_errors.ers:13:9]
+ 12 │ struct Status: u32 {
+ 13 │     pub read busy: bool at 0 = false,
+    ·         ──┬─
+    ·           ╰── declared `read`
+ 14 │     pub write start: bool at 1 = false,
+    ╰────
+    ╭─[typeck_field_modes_errors.ers:53:5]
+ 52 │ fn through_a_pointer(p: *mut volatile Status) {
+ 53 │     (*p).busy = true;
+    ·     ────┬────
+    ·         ╰── written here
+ 54 │     (*p).busy |= true;
+    ╰────
+  help: a `read` field is ignored by the hardware when written, so it is only read; assign the
+        other fields, which keeps its bits as read, or write a whole value (ADR 0065)
+ty::write-to-read-only
+
+  × the field `busy` of `Status` is read-only
+    ╭─[typeck_field_modes_errors.ers:13:9]
+ 12 │ struct Status: u32 {
+ 13 │     pub read busy: bool at 0 = false,
+    ·         ──┬─
+    ·           ╰── declared `read`
+ 14 │     pub write start: bool at 1 = false,
+    ╰────
+    ╭─[typeck_field_modes_errors.ers:54:5]
+ 53 │     (*p).busy = true;
+ 54 │     (*p).busy |= true;
+    ·     ────┬────
+    ·         ╰── written back by this compound assignment
+ 55 │     (*p).start |= true;
+    ╰────
+  help: a `read` field is ignored by the hardware when written, so it is only read; assign the
+        other fields, which keeps its bits as read, or write a whole value (ADR 0065)
+ty::read-of-write-only
+
+  × the field `start` of `Status` is write-only
+    ╭─[typeck_field_modes_errors.ers:14:9]
+ 13 │     pub read busy: bool at 0 = false,
+ 14 │     pub write start: bool at 1 = false,
+    ·         ──┬──
+    ·           ╰── declared `write`
+ 15 │     pub mode: u8 at 4..=5 = 0,
+    ╰────
+    ╭─[typeck_field_modes_errors.ers:55:5]
+ 54 │     (*p).busy |= true;
+ 55 │     (*p).start |= true;
+    ·     ─────┬────
+    ·          ╰── read by this compound assignment
+ 56 │     let a: bool = (*p).start;
+    ╰────
+  help: a `write` field gives nothing meaningful when read, so it is only written with `=`, and a
+        compound assignment reads it first (ADR 0065)
+ty::read-of-write-only
+
+  × the field `start` of `Status` is write-only
+    ╭─[typeck_field_modes_errors.ers:14:9]
+ 13 │     pub read busy: bool at 0 = false,
+ 14 │     pub write start: bool at 1 = false,
+    ·         ──┬──
+    ·           ╰── declared `write`
+ 15 │     pub mode: u8 at 4..=5 = 0,
+    ╰────
+    ╭─[typeck_field_modes_errors.ers:56:19]
+ 55 │     (*p).start |= true;
+ 56 │     let a: bool = (*p).start;
+    ·                   ─────┬────
+    ·                        ╰── read here
+ 57 │ }
+    ╰────
+  help: a `write` field gives nothing meaningful when read, so it is only written with `=`, and a
+        compound assignment reads it first (ADR 0065)
+ty::cannot-index
+
+  × cannot index a value of type `u8`
+    ╭─[typeck_field_modes_errors.ers:62:17]
+ 61 │ fn indexed(p: *mut volatile Status) {
+ 62 │     let a: u8 = (*p).m[0];
+    ·                 ───┬──
+    ·                    ╰── not an array or a pointer
+ 63 │     let b: u8 = DEV.rw.m[0];
+    ╰────
+ty::cannot-index
+
+  × cannot index a value of type `u8`
+    ╭─[typeck_field_modes_errors.ers:63:17]
+ 62 │     let a: u8 = (*p).m[0];
+ 63 │     let b: u8 = DEV.rw.m[0];
+    ·                 ────┬───
+    ·                     ╰── not an array or a pointer
+ 64 │ }
+    ╰────

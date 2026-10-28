@@ -622,6 +622,9 @@ pub struct BitField {
     pub ty: Ty,
     pub low: u32,
     pub high: u32,
+    /// `read` or `write` if the field declares a mode, for the dump only
+    /// (ADR 0065): MIR builds every access as to any other field.
+    pub access: Option<&'static str>,
 }
 
 /// A struct type with its layout (ADR 0022), shared by every type naming
@@ -1446,7 +1449,10 @@ impl fmt::Display for Mir {
                     } else {
                         format!("{}..={}", field.low, field.high)
                     };
-                    format!("{}: {} at {bits}", field.name, field.ty)
+                    let mode = field
+                        .access
+                        .map_or(String::new(), |mode| format!("{mode} "));
+                    format!("{mode}{}: {} at {bits}", field.name, field.ty)
                 })
                 .collect();
             writeln!(

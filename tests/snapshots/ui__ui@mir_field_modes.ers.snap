@@ -1,0 +1,110 @@
+---
+source: tests/ui.rs
+assertion_line: 22
+expression: output
+input_file: tests/ui/mir_field_modes.ers
+---
+--- mir ---
+struct Status: u32 { read busy: bool at 0, write start: bool at 1, mode: u8 at 4..=5, write clear: bool at 8, read done: bool at 9 }
+
+peripheral Device { 0 status: u32 at 0x0 } // extent 4, align 4
+peripheral DEV: Device at 0x10000000;
+
+fn set_mode() -> () {
+    let _0: ();
+    let _1: *mut Device;
+    let _2: u32;
+    let _3: u32;
+    let _4: u32;
+    let _5: u32;
+
+    bb0: {
+        _1 = const peripheral DEV;
+        _2 = copy (*_1).0;
+        _3 = BitAnd(copy _2, const 4294967247_u32);
+        _4 = BitOr(copy _3, const 32_u32);
+        _5 = BitAnd(copy _4, const 4294966527_u32);
+        (*_1).0 = copy _5;
+        return;
+    }
+}
+
+fn clear() -> () {
+    let _0: ();
+    let _1: *mut Device;
+    let _2: u32;
+    let _3: u32;
+    let _4: u32;
+    let _5: u32;
+
+    bb0: {
+        _1 = const peripheral DEV;
+        _2 = copy (*_1).0;
+        _3 = BitAnd(copy _2, const 4294967039_u32);
+        _4 = BitOr(copy _3, const 256_u32);
+        _5 = BitAnd(copy _4, const 4294966783_u32);
+        (*_1).0 = copy _5;
+        return;
+    }
+}
+
+fn start() -> () {
+    let _0: ();
+    let _1: *mut Device;
+    let _2: u32;
+    let _3: u32;
+    let _4: u32;
+    let _5: u32;
+
+    bb0: {
+        _1 = const peripheral DEV;
+        _2 = copy (*_1).0;
+        _3 = BitAnd(copy _2, const 4294967293_u32);
+        _4 = BitOr(copy _3, const 2_u32);
+        _5 = BitAnd(copy _4, const 4294966527_u32);
+        (*_1).0 = copy _5;
+        return;
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+comptime fn default() -> bool {
+    let _0: bool;
+
+    bb0: {
+        _0 = const false;
+        return;
+    }
+}
+
+comptime fn default() -> u8 {
+    let _0: u8;
+
+    bb0: {
+        _0 = const 0_u8;
+        return;
+    }
+}

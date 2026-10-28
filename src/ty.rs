@@ -936,7 +936,7 @@ impl Checker<'_, '_> {
                         .push(whole_peripheral(info.ty, expr.span, "read"));
                     return Ty::Error;
                 }
-                self.access(&info, expr.span, AccessMode::Read);
+                self.access(&info, expr, AccessMode::Read);
                 info.ty
             }
             ExprKind::AddrOf { mutable, place } => self.addr_of(f, *mutable, place),

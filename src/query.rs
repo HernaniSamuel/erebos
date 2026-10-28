@@ -1780,6 +1780,7 @@ impl<'h> Queries<'h> {
                             ty: self.mir_ty(ty),
                             low,
                             high,
+                            access: field.access.map(|(mode, _)| mode.words()),
                         }
                     })
                     .collect();

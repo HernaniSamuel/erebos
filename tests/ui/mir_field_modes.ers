@@ -1,0 +1,40 @@
+// emit: mir
+// Field modes in field assignments to volatile places (ADR 0065). A field
+// assignment copies the whole value once, changes the field and writes the
+// value back, so the bits of `read` and `write` fields without a write
+// effect stay as they were read, as any other bits do. A `write` field with
+// `write 1 clears` is written 0 by a field assignment to another field, and
+// clears nothing, whatever its mode; a `read` field with `write 1 clears` is
+// too. The dump lists the modes.
+struct Status: u32 {
+    pub read busy: bool at 0,
+    pub write start: bool at 1 = false,
+    pub mode: u8 at 4..=5 = 0,
+    pub write clear: bool at 8 write 1 clears,
+    pub read done: bool at 9 write 1 clears,
+}
+
+peripheral Device {
+    read write status: Status at 0,
+}
+
+peripheral DEV: Device at 0x1000_0000;
+
+// Another field: `busy` and `start` keep their bits, `clear` and `done` are
+// written 0.
+fn set_mode() {
+    DEV.status.mode = 2;
+}
+
+// A `write` field with an effect, assigned: it keeps the value assigned.
+fn clear() {
+    DEV.status.clear = true;
+}
+
+// A `write` field without one, assigned.
+fn start() {
+    DEV.status.start = true;
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

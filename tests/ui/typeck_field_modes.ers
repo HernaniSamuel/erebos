@@ -1,0 +1,61 @@
+// emit: typeck
+// Accesses that field modes allow (ADR 0065); `typeck_field_modes_errors.ers`
+// has those they reject. Modes are checked in volatile places only: a
+// register, or a place reached through a volatile pointer.
+struct Status: u32 {
+    pub read busy: bool at 0 = false,
+    pub write start: bool at 1 = false,
+    pub mode: u8 at 4..=5 = 0,
+    pub write clear: bool at 8 write 1 clears,
+    pub read done: bool at 9 write 1 clears,
+}
+
+peripheral Device {
+    read write rw: Status at 0,
+    read ro: Status at 4,
+    write wo: Status at 8,
+    read write plain: u32 at 12,
+}
+
+peripheral DEV: Device at 0x1000_0000;
+
+// Accepted: the same accesses to a local and a static, which have no modes
+// (ADR 0065); a `write` field written and a `read` field read, in a register
+// and through a pointer; a field without a mode; a `read` field with a write
+// effect and a `write` field in a `read` register, which no access reaches.
+static mut SHADOW: Status = Status { busy: false, start: false, mode: 0, clear: false, done: false };
+
+fn ordinary(mut local: Status) {
+    local.busy = true;
+    local.busy |= true;
+    local.start |= true;
+    let a: bool = local.start;
+    SHADOW.busy = true;
+    SHADOW.start |= true;
+    let b: bool = SHADOW.start;
+}
+
+fn allowed(p: *mut volatile Status) {
+    DEV.rw.start = true;
+    let a: bool = DEV.rw.busy;
+    DEV.rw.mode = 1;
+    DEV.rw.mode += 1;
+    DEV.rw.clear = true;
+    let b: bool = DEV.rw.done;
+    let c: bool = DEV.ro.busy;
+    let d: u8 = DEV.ro.mode;
+    (*p).start = true;
+    let e: bool = (*p).busy;
+    (*p).mode += 1;
+    DEV.plain += 1;
+}
+
+// A literal naming a `read` field written whole to the register, and `..`
+// filling one: the value is the program's (ADR 0065).
+fn whole() {
+    DEV.rw = Status { busy: true, start: false, mode: 0, clear: false, done: false };
+    DEV.wo = Status { start: true, .. };
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

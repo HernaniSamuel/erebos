@@ -1,0 +1,124 @@
+---
+source: tests/ui.rs
+assertion_line: 22
+expression: output
+input_file: tests/ui/typeck_field_modes.ers
+---
+--- typeck ---
+peripheral Device { read write rw: Status at 0x0, read ro: Status at 0x4, write wo: Status at 0x8, read write plain: u32 at 0xc } extent 16, align 4
+peripheral DEV: Device at 0x10000000 covers [0x10000000, 0x10000010)
+struct Status: u32 { read busy: bool at 0 = false, write start: bool at 1 = false, mode: u8 at 4..=5 = 0, write clear: bool at 8 write 1 clears, read done: bool at 9 write 1 clears }
+fn ordinary(local: Status) -> ()
+    let a: bool
+    let b: bool
+    expr 3 assign 1081..1098: ()
+    expr 4 bit field busy 1081..1091: bool
+    expr 5 local local 1081..1086: Status
+    expr 6 bool true 1094..1098: bool
+    expr 7 assign |= 1104..1122: ()
+    expr 8 bit field busy 1104..1114: bool
+    expr 9 local local 1104..1109: Status
+    expr 10 bool true 1118..1122: bool
+    expr 11 assign |= 1128..1147: ()
+    expr 12 bit field start 1128..1139: bool
+    expr 13 local local 1128..1133: Status
+    expr 14 bool true 1143..1147: bool
+    expr 15 bit field start 1167..1178: bool
+    expr 16 local local 1167..1172: Status
+    expr 17 assign 1184..1202: ()
+    expr 18 bit field busy 1184..1195: bool
+    expr 19 static SHADOW 1184..1190: Status
+    expr 20 bool true 1198..1202: bool
+    expr 21 assign |= 1208..1228: ()
+    expr 22 bit field start 1208..1220: bool
+    expr 23 static SHADOW 1208..1214: Status
+    expr 24 bool true 1224..1228: bool
+    expr 25 bit field start 1248..1260: bool
+    expr 26 static SHADOW 1248..1254: Status
+fn allowed(p: *mut volatile Status) -> ()
+    let a: bool
+    let b: bool
+    let c: bool
+    let d: u8
+    let e: bool
+    expr 27 assign 1307..1326: ()
+    expr 28 bit field start 1307..1319: bool
+    expr 29 register rw 1307..1313: Status
+    expr 30 peripheral DEV 1307..1310: Device
+    expr 31 bool true 1322..1326: bool
+    expr 32 bit field busy 1346..1357: bool
+    expr 33 register rw 1346..1352: Status
+    expr 34 peripheral DEV 1346..1349: Device
+    expr 35 assign 1363..1378: ()
+    expr 36 bit field mode 1363..1374: u8
+    expr 37 register rw 1363..1369: Status
+    expr 38 peripheral DEV 1363..1366: Device
+    expr 39 int 1 1377..1378: u8
+    expr 40 assign += 1384..1400: ()
+    expr 41 bit field mode 1384..1395: u8
+    expr 42 register rw 1384..1390: Status
+    expr 43 peripheral DEV 1384..1387: Device
+    expr 44 int 1 1399..1400: u8
+    expr 45 assign 1406..1425: ()
+    expr 46 bit field clear 1406..1418: bool
+    expr 47 register rw 1406..1412: Status
+    expr 48 peripheral DEV 1406..1409: Device
+    expr 49 bool true 1421..1425: bool
+    expr 50 bit field done 1445..1456: bool
+    expr 51 register rw 1445..1451: Status
+    expr 52 peripheral DEV 1445..1448: Device
+    expr 53 bit field busy 1476..1487: bool
+    expr 54 register ro 1476..1482: Status
+    expr 55 peripheral DEV 1476..1479: Device
+    expr 56 bit field mode 1505..1516: u8
+    expr 57 register ro 1505..1511: Status
+    expr 58 peripheral DEV 1505..1508: Device
+    expr 59 assign 1522..1539: ()
+    expr 60 bit field start 1522..1532: bool
+    expr 61 deref 1522..1526: Status
+    expr 62 local p 1524..1525: *mut volatile Status
+    expr 63 bool true 1535..1539: bool
+    expr 64 bit field busy 1559..1568: bool
+    expr 65 deref 1559..1563: Status
+    expr 66 local p 1561..1562: *mut volatile Status
+    expr 67 assign += 1574..1588: ()
+    expr 68 bit field mode 1574..1583: u8
+    expr 69 deref 1574..1578: Status
+    expr 70 local p 1576..1577: *mut volatile Status
+    expr 71 int 1 1587..1588: u8
+    expr 72 assign += 1594..1608: ()
+    expr 73 register plain 1594..1603: u32
+    expr 74 peripheral DEV 1594..1597: Device
+    expr 75 int 1 1607..1608: u32
+fn whole() -> ()
+    expr 76 assign 1760..1840: ()
+    expr 77 register rw 1760..1766: Status
+    expr 78 peripheral DEV 1760..1763: Device
+    expr 79 struct Status 1769..1840: Status
+    expr 80 bool true 1784..1788: bool
+    expr 81 bool false 1797..1802: bool
+    expr 82 int 0 1810..1811: u8
+    expr 83 bool false 1820..1825: bool
+    expr 84 bool false 1833..1838: bool
+    expr 85 assign 1846..1881: ()
+    expr 86 register wo 1846..1852: Status
+    expr 87 peripheral DEV 1846..1849: Device
+    expr 88 struct Status .. 1855..1881: Status
+    expr 89 bool true 1871..1875: bool
+entry fn main() -> !
+    expr 90 loop 1909..1916: !
+panic fn on_panic() -> !
+    expr 91 loop 1946..1953: !
+comptime fn SHADOW() -> Status
+    expr 92 struct Status 969..1041: Status
+    expr 93 bool false 984..989: bool
+    expr 94 bool false 998..1003: bool
+    expr 95 int 0 1011..1012: u8
+    expr 96 bool false 1021..1026: bool
+    expr 97 bool false 1034..1039: bool
+comptime fn default() -> bool
+    expr 0 bool false 278..283: bool
+comptime fn default() -> bool
+    expr 1 bool false 318..323: bool
+comptime fn default() -> u8
+    expr 2 int 0 353..354: u8

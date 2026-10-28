@@ -144,10 +144,14 @@ pub fn dump(q: &mut Queries) -> String {
             .map(|(index, (field, &bits))| {
                 let (low, high) = bits.expect("a struct that did not fail has every field's bits");
                 let ty = q.normalize(field.ty);
+                // The mode goes before the name, as written (ADR 0065).
+                let mode = field
+                    .access
+                    .map_or(String::new(), |(mode, _)| format!("{} ", mode.words()));
                 let mut out = if low == high {
-                    format!("{}: {ty} at {low}", field.name)
+                    format!("{mode}{}: {ty} at {low}", field.name)
                 } else {
-                    format!("{}: {ty} at {low}..={high}", field.name)
+                    format!("{mode}{}: {ty} at {low}..={high}", field.name)
                 };
                 if let Some((effect, _)) = field.read_effect {
                     write!(out, " {}", read_effect_words(effect)).unwrap();
