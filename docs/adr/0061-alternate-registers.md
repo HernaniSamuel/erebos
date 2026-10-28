@@ -1,6 +1,6 @@
 # 0061. Alternate registers
 
-- Status: Accepted
+- Status: Accepted; amended by 0064 (a cluster may be in an alternate group)
 - Date: 2026-10-26
 - Amends: 0058 (registers in different alternate groups may share
   bytes)

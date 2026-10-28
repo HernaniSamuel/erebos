@@ -58,7 +58,8 @@ updated, and a program on QEMU.
 | **M3.1** ✅ Memory maps | `memory { ... }` blocks: regions, where code, data and the stack go, the linker script generated from them; the stack with a declared size at the start of its region; region overflows as diagnostics (ADR 0057) | a program laid out as on a small board, checking where its code, data and stack are |
 | **M3.2** ✅ Peripherals | `peripheral` blocks: registers at offsets, with widths and access modes (read-only, write-only, read-write), accessed as MMIO; a write to a read-only register is a compile error; the UART declared in the language | hello world through a UART and a test finisher declared as peripherals |
 | **M3.3** ✅ Register fields | fields at bit positions of a register (representation clauses, as in Ada), enums in fields, write-1-to-clear fields, reads with side effects, reset values | the UART configured through its fields |
-| **M3.4** Register arrays and SVD | register arrays, clusters and `derivedFrom`; the design checked against the SVD of a real riscv32 chip; whether `svd2erebos` is a tool of its own | a peripheral generated from SVD, run on QEMU |
+| **M3.4a** Register arrays and clusters | register arrays and clusters (ADR 0064), access modes of fields (ADR 0065), peripherals over others (ADR 0066), from the design checked against the SVD of three real riscv32 chips (ADR 0067) | the PLIC's priorities, enable words and contexts, and the eight virtio-mmio transports through one driver |
+| **M3.4b** SVD | `svd2erebos`: whether it is a tool of its own, how it names items and treats what has no declaration; a real chip's SVD generated and compiled | a peripheral generated from SVD, run on QEMU |
 | **M3.5** Second target | ARM Cortex-M on QEMU; what depends on the target becomes a per-target description (pointer width, widest access, ABI, startup, linker script, LLVM setup, runtime functions) | the e2e programs on both targets |
 
 Decisions already agreed for the later steps:
@@ -178,24 +179,30 @@ Agreed as useful, not yet scheduled:
 Questions accepted ADRs leave to a later step, to settle in that step's
 ADRs:
 
-- **M3** (M3.2 to M3.4 for peripherals, M3.5 for the target):
+- **M3** (M3.2 to M3.4b for peripherals, M3.5 for the target):
   - `peripheral` blocks must express what an SVD file describes, so that
-    a `svd2erebos` can generate them: register arrays, clusters and
-    `derivedFrom` (M3.4). Access modes, offsets and widths are settled
-    (ADR 0058); fields at bit positions, enums in fields and defaults
-    used as reset values (ADR 0059), the six `oneTo*`/`zeroTo*` write
-    effects and read effects (ADR 0060). Left to M3.4, checking against
-    the SVD of a real chip: access modes of fields (SVD's read-only
-    fields in a read-write register); the write effects without a
-    neutral value (`clear`, `set`, `modify`); the reset value of a
-    register without fields (ADR 0060).
-  - Registers sharing an address in one mode are declared in alternate
-    groups (ADR 0061). Peripherals sharing addresses, SVD's
-    `alternatePeripheral`, stay `ty::peripheral-overlap`; M3.4, checking
-    against SVD, decides whether to relax that.
-    The SVD of a real riscv32 chip (ESP32-C3, GD32VF103 or CH32V) tests
-    the design. Also whether `svd2erebos` is a separate tool or a file
-    read at compile time, which bears on reproducible builds.
+    a `svd2erebos` can generate them. Access modes, offsets and widths
+    are settled (ADR 0058); fields at bit positions, enums in fields and
+    defaults used as reset values (ADR 0059), the six `oneTo*`/`zeroTo*`
+    write effects and read effects (ADR 0060); alternate registers
+    (ADR 0061); register arrays and clusters (ADR 0064), field access
+    modes (ADR 0065) and peripherals over others (ADR 0066). The SVD
+    files of the ESP32-C3, GD32VF103 and CH32V003 were surveyed
+    (ADR 0067): `derivedFrom` is several peripherals of one type, and
+    the write effects without a neutral value (`clear`, `set`,
+    `modify`), the reset value of a register without fields, arrays of
+    bit fields and arrays of peripherals are not added, none of the
+    three using them.
+  - M3.4b: whether `svd2erebos` is a separate tool or a file read at
+    compile time, which bears on reproducible builds (and, as a tool,
+    the dependency it takes to read XML); how it names items, and names
+    that, lowercased, are words of Erebos (`CONTINUE`, `IN`); what it does
+    with what has no declaration (ADR 0067: the effects without a neutral
+    value, access values that are no SVD value, as the GD32VF103's
+    `write` and the CH32V003's `read/clear`); how it finds peripherals
+    sharing bytes without `alternatePeripheral`, which are `over`
+    (ADR 0066, 0067): computed from the file, or named to it; which real chip's SVD the tests generate and
+    compile, given its size and license (the ESP32-C3's is Apache 2.0).
   - A second target, so that riscv32 assumptions are found before they
     spread: ARM Cortex-M on QEMU (`mps2-an385` or `lm3s6965evb`) is
     32-bit like riscv32, so `usize` keeps its width, and is where most
@@ -456,4 +463,4 @@ Documentation owed:
   calling convention and layout. Left to M3.4: access modes of fields,
   the write effects without a neutral value, a register's reset value
   without fields, and peripherals sharing addresses.
-- **Next: M3.4** (register arrays and SVD).
+- **Next: M3.4a** (register arrays and clusters), then M3.4b (SVD).

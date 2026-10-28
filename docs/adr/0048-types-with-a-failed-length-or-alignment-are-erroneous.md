@@ -1,6 +1,6 @@
 # 0048. Types with a failed length or alignment are erroneous
 
-- Status: Accepted; amended by 0055 (repeat counts and dead arms under failed values), 0058 (register offsets, register types in error and peripheral addresses are failed values), 0059 (bit positions and bit field types in error are failed values)
+- Status: Accepted; amended by 0055 (repeat counts and dead arms under failed values), 0058 (register offsets, register types in error and peripheral addresses are failed values), 0059 (bit positions and bit field types in error are failed values), 0064 (steps, lengths of register and cluster arrays, and cluster types reaching a failed value are failed values; the peripheral types of a `ty::infinite-size` cycle reach one)
 - Date: 2026-10-19
 
 ## Context

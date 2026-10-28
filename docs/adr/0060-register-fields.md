@@ -1,6 +1,6 @@
 # 0060. Register fields
 
-- Status: Accepted
+- Status: Accepted; amended by 0064 (arrays of register types as register types; `step` in the register grammar), 0065 (fields follow their own access modes in volatile places)
 - Date: 2026-10-26
 - Amends: 0058 (a register's type may also be a bit-field struct or an
   enum without payloads on `u8`, `u16` or `u32`; a register's fields are

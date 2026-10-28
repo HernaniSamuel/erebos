@@ -77,7 +77,7 @@ Do not write one for local implementation details that the code already explains
 | 0045 | [`Option(T)` and `Result(T, E)`](0045-option-and-result.md) | Accepted, amended by 0047 |
 | 0046 | [The `?` operator](0046-the-question-mark-operator.md) | Accepted |
 | 0047 | [Zero-sized payloads have an offset](0047-zero-sized-payloads-have-an-offset.md) | Accepted |
-| 0048 | [Types with a failed length or alignment are erroneous](0048-types-with-a-failed-length-or-alignment-are-erroneous.md) | Accepted, amended by 0055, 0058, 0059 |
+| 0048 | [Types with a failed length or alignment are erroneous](0048-types-with-a-failed-length-or-alignment-are-erroneous.md) | Accepted, amended by 0055, 0058, 0059, 0064 |
 | 0049 | [Modules and paths](0049-modules-and-paths.md) | Accepted |
 | 0050 | [Visibility](0050-visibility.md) | Accepted, amended by 0054, 0059 |
 | 0051 | [Symbol names](0051-symbol-names.md) | Accepted |
@@ -87,9 +87,13 @@ Do not write one for local implementation details that the code already explains
 | 0055 | [Repeat counts and dead arms under failed values](0055-repeat-counts-and-dead-arms-under-failed-values.md) | Accepted |
 | 0056 | [`rt` is reserved in the root module](0056-rt-is-reserved-in-the-root-module.md) | Accepted |
 | 0057 | [Memory maps](0057-memory-maps.md) | Accepted |
-| 0058 | [Peripherals](0058-peripherals.md) | Accepted, amended by 0060, 0061 |
-| 0059 | [Bit-field structs](0059-bit-field-structs.md) | Accepted, amended by 0062 |
-| 0060 | [Register fields](0060-register-fields.md) | Accepted |
-| 0061 | [Alternate registers](0061-alternate-registers.md) | Accepted |
+| 0058 | [Peripherals](0058-peripherals.md) | Accepted, amended by 0060, 0061, 0064, 0066 |
+| 0059 | [Bit-field structs](0059-bit-field-structs.md) | Accepted, amended by 0062, 0065 |
+| 0060 | [Register fields](0060-register-fields.md) | Accepted, amended by 0064, 0065 |
+| 0061 | [Alternate registers](0061-alternate-registers.md) | Accepted, amended by 0064 |
 | 0062 | [Bit-field defaults are no part of the bit layout](0062-bit-field-defaults-are-no-part-of-the-bit-layout.md) | Accepted |
 | 0063 | [Architecture rules checked by tests](0063-architecture-rules-checked-by-tests.md) | Accepted |
+| 0064 | [Register arrays and clusters](0064-register-arrays-and-clusters.md) | Accepted |
+| 0065 | [Field access modes](0065-field-access-modes.md) | Accepted |
+| 0066 | [Peripherals over others](0066-peripherals-over-others.md) | Accepted |
+| 0067 | [Peripherals checked against SVD](0067-peripherals-checked-against-svd.md) | Accepted |

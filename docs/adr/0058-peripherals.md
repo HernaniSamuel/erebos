@@ -1,6 +1,6 @@
 # 0058. Peripherals
 
-- Status: Accepted; amended by 0060 (register types, fields reached through registers, read effects), 0061 (registers in alternate groups may share bytes)
+- Status: Accepted; amended by 0060 (register types, fields reached through registers, read effects), 0061 (registers in alternate groups may share bytes), 0064 (register arrays and clusters in a peripheral type, their layout, overlaps and accesses; `&raw` of a cluster; arrays of a peripheral type as a cluster's type only), 0066 (a peripheral `over` another is not checked for overlap with it)
 - Date: 2026-10-25
 - Amends: 0013 (volatility is no longer only a property of the pointer
   type: accesses through `*mut T` and `*const T` are volatile when `T` is
