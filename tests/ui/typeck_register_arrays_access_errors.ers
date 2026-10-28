@@ -1,0 +1,85 @@
+// Accesses to register arrays and clusters that are wrong (ADR 0064):
+// a write to an element of a `read` array, a read of a `write` one, a field
+// assignment to an element whose array has a read effect, an index that is
+// not a `usize`; an array or a cluster used as a value
+// (`ty::peripheral-by-value`), also through a pointer; `&raw` of a register
+// array, a cluster array taken whole and an element of a register array
+// (`ty::register-address`); `&raw mut` of a cluster through a `*const`
+// pointer; a private cluster and a private register of a public cluster
+// from another module; an unknown entry; and a single cluster and a
+// register indexed (`ty::cannot-index`).
+mod dev {
+    pub struct Ctl: u32 {
+        pub enable: bool at 0 = false,
+    }
+
+    pub peripheral Context {
+        pub read write threshold: u32 at 0,
+        read write secret: u32 at 4,
+    }
+
+    pub peripheral Plic {
+        pub read data: [u32; 4] at 0,
+        pub write command: [u32; 4] at 0x10,
+        pub read write ctl: [Ctl; 4] at 0x20 read modifies,
+        pub ctx: [Context; 2] at 0x1000 step 0x100,
+        pub one: Context at 0x2000,
+        hidden: Context at 0x3000,
+        pub read write reg: u32 at 0x4000,
+        pub write w: u32 at 0x4004,
+    }
+}
+
+peripheral PLIC: dev::Plic at 0x0C00_0000;
+
+fn modes(i: usize, v: u32) -> u32 {
+    PLIC.data[i] = v;
+    PLIC.data[1] += 1;
+    PLIC.command[i] = v;
+    PLIC.command[i] += 1;
+    PLIC.ctl[i].enable = true;
+    PLIC.command[i]
+}
+
+fn indexes(i: u32, b: bool) -> u32 {
+    PLIC.data[i] + PLIC.ctx[b].threshold
+}
+
+fn wholes(p: *mut dev::Plic, c: *mut dev::Context) -> u32 {
+    let a: u32 = PLIC.data;
+    PLIC.command = 0;
+    let b: u32 = PLIC.ctx;
+    let d: u32 = PLIC.ctx[0];
+    PLIC.ctx[1] = PLIC.ctx[0];
+    let e: u32 = PLIC.one;
+    PLIC.one = 1;
+    let f: u32 = (*p).data;
+    (*p).ctx[0] = (*p).ctx[1];
+    (*c).threshold
+}
+
+fn addresses(p: *const dev::Plic) {
+    let a: *const u32 = &raw const PLIC.data;
+    let b: *mut u32 = &raw mut PLIC.command;
+    let c: *const u32 = &raw const PLIC.ctx;
+    let d: *const u32 = &raw const PLIC.data[0];
+    let e: *mut dev::Context = &raw mut PLIC.ctx[0];
+    let f: *mut dev::Context = &raw mut (*p).one;
+    let g: *mut dev::Context = &raw mut (*p).ctx[1];
+    let h: *const dev::Context = &raw const (*p).ctx[1];
+    let i: *const u32 = &raw const PLIC.reg;
+}
+
+fn visibility() -> u32 {
+    let a: u32 = PLIC.hidden.threshold;
+    let b: u32 = PLIC.ctx[0].secret;
+    let c: *const dev::Context = &raw const PLIC.hidden;
+    PLIC.missing[0] + PLIC.ctx[0].missing
+}
+
+fn not_arrays() -> u32 {
+    PLIC.one[0].threshold + PLIC.reg[0] + PLIC.one.threshold[1] + PLIC.w[0]
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

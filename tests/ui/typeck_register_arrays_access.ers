@@ -1,0 +1,77 @@
+// emit: typeck
+// Accesses to register arrays and clusters (ADR 0064): `P.a[i]` is a
+// register of the element type, with the array's mode, read effect and
+// group, from a peripheral and through a pointer; a field assignment to an
+// element works as to a register. `P.c.r` and `P.c[i].r` reach the
+// registers of a cluster, nested too. `&raw` of a cluster or of a cluster
+// array's element is a pointer to the cluster's type, which a driver of that
+// type takes; so is the `&raw const` of a single cluster.
+struct Ctl: u32 {
+    pub enable: bool at 0 = false,
+    pub level: u8 at 4..=6 = 0,
+}
+
+peripheral Inner {
+    pub read write word: [u32; 3] at 0,
+    pub read write ctl: [Ctl; 2] at 0x10,
+}
+
+peripheral Context {
+    pub read write threshold: u32 at 0,
+    pub read write claim: u32 at 4 read modifies,
+    pub inner: Inner at 0x100,
+}
+
+peripheral Plic {
+    pub read write priority: [u32; 96] at 0,
+    pub read pending: [u32; 3] at 0x1000,
+    pub write ack: [u32; 2] at 0x2000 step 8,
+    pub ctx: [Context; 2] at 0x20_0000 step 0x1000,
+    pub first: Context at 0x40_0000,
+}
+
+peripheral PLIC: Plic at 0x0C00_0000;
+
+fn serve(c: *mut Context) -> u32 {
+    (*c).threshold = 3;
+    (*c).threshold += 1;
+    (*c).inner.word[1] = 9;
+    (*c).inner.ctl[0].enable = true;
+    (*c).claim
+}
+
+fn view(c: *const Context) -> u32 {
+    (*c).threshold + (*c).inner.word[2]
+}
+
+fn registers(i: usize, v: u32) -> u32 {
+    PLIC.priority[i] = v;
+    PLIC.priority[0] += 1;
+    PLIC.ack[i] = v;
+    let pending: u32 = PLIC.pending[i];
+    PLIC.ctx[i].threshold = pending;
+    PLIC.ctx[1].inner.word[i] = v;
+    PLIC.ctx[i].inner.ctl[i].level = 5;
+    PLIC.ctx[i].inner.ctl[0].enable = false;
+    PLIC.first.threshold = 1;
+    PLIC.first.inner.ctl[1].level += 1;
+    PLIC.ctx[i].claim + PLIC.priority[i] + PLIC.first.inner.word[0]
+}
+
+fn through(p: *mut Plic, q: *const Plic, i: usize) -> u32 {
+    (*p).priority[i] = 1;
+    (*p).ctx[i].inner.word[0] = 2;
+    (*q).priority[i] + (*q).ctx[1].threshold + (*q).first.claim
+}
+
+fn pointers(i: usize) -> u32 {
+    let a: *mut Context = &raw mut PLIC.ctx[i];
+    let b: *const Context = &raw const PLIC.ctx[1];
+    let c: *const Context = &raw const PLIC.first;
+    let d: *mut Context = &raw mut PLIC.first;
+    let e: *mut Inner = &raw mut PLIC.ctx[i].inner;
+    serve(a) + view(b) + view(c) + serve(d) + (*e).word[0]
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

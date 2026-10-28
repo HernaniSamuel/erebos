@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 
+use crate::diag::Diagnostic;
 use crate::eval::ConstValue;
 use crate::hir;
 use crate::mir::{
@@ -1887,6 +1888,9 @@ impl Builder<'_, '_> {
     /// address is taken, so a value computed at compile time is copied
     /// into a local first: its data has no address (ADR 0029).
     fn place_then(&mut self, expr: &hir::Expr, later_writes: bool, address: bool) -> Place {
+        if self.q.tables.is_entry_access(expr.id) {
+            return self.unbuilt_entry(expr);
+        }
         match &expr.kind {
             hir::ExprKind::Local(local) => self.local(*local),
             // Reached through its address, so that every access happens
@@ -1959,6 +1963,29 @@ impl Builder<'_, '_> {
                 }
             }
         }
+    }
+
+    /// The stand-in for a register array, a cluster or an index into one,
+    /// which MIR building does not handle until M3.4a step 5 (ADR 0064): a
+    /// temporary error, so that no program using one is accepted, and a
+    /// fresh local of the expression's type, so that building goes on.
+    fn unbuilt_entry(&mut self, expr: &hir::Expr) -> Place {
+        self.q.diags.push(
+            Diagnostic::error(
+                "mir::register-array-access",
+                "an access to a register array or a cluster cannot be built yet",
+            )
+            .label(
+                expr.span,
+                "register arrays and clusters are not built into MIR yet",
+            )
+            .help("this is temporary: M3.4a step 5 builds them (ADR 0064)"),
+        );
+        // The body is not used: the evaluator must not run it, for a local of
+        // a peripheral type has no size.
+        self.failed = true;
+        let ty = self.ty_of(expr);
+        Place::local(self.new_local(ty, None))
     }
 
     /// Whether a value held at `place` must be copied before it is used as

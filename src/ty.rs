@@ -9,7 +9,7 @@
 //! is the "typed HIR" that MIR building consumes. Functions are checked one
 //! at a time, on demand (ADR 0028).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::diag::Diagnostic;
 use crate::hir::{
@@ -36,6 +36,11 @@ pub struct Tables {
     /// The field index of each field access, or the register index of
     /// each register access (ADR 0058).
     fields: HashMap<ExprId, u32>,
+    /// The field accesses that name a register array, a cluster or a cluster
+    /// array, and the indexes into a register array or a cluster array
+    /// (ADR 0064). MIR building finds them here: they step by the entry's
+    /// step, not by the size of an element.
+    entry_accesses: HashSet<ExprId>,
     /// The bit-field struct and the field index of each access to a bit
     /// field, read or written (ADR 0059).
     bit_fields: HashMap<ExprId, (BitStructId, u32)>,
@@ -56,6 +61,7 @@ impl Tables {
             // never read.
             expr_types: vec![Ty::Error; expr_count as usize],
             fields: HashMap::new(),
+            entry_accesses: HashSet::new(),
             bit_fields: HashMap::new(),
             coercions: HashMap::new(),
             variants: HashMap::new(),
@@ -71,6 +77,13 @@ impl Tables {
     /// register it reaches when its base is of a peripheral type.
     pub fn field(&self, id: ExprId) -> u32 {
         self.fields[&id]
+    }
+
+    /// Whether `id` is a field access that names a register array, a cluster
+    /// or a cluster array of a peripheral type, or an index into a register
+    /// array or a cluster array (ADR 0064).
+    pub fn is_entry_access(&self, id: ExprId) -> bool {
+        self.entry_accesses.contains(&id)
     }
 
     /// The bit-field struct and the index of the field that the field
@@ -910,6 +923,11 @@ impl Checker<'_, '_> {
                 );
                 if let Ty::Slice(_) = info.ty {
                     self.q.diags.push(whole_slice(info.ty, expr.span, "read"));
+                    return Ty::Error;
+                }
+                if let (Some(register), Ty::Array(..)) = (info.register, info.ty) {
+                    let diag = self.whole_entry(register, expr.span, "read");
+                    self.q.diags.push(diag);
                     return Ty::Error;
                 }
                 if let Ty::Peripheral(_) = info.ty {

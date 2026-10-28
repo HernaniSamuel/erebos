@@ -140,6 +140,38 @@ impl Checker<'_, '_> {
         }
     }
 
+    /// `ty::peripheral-by-value` for the register array or cluster array
+    /// `register`, `accessed` whole at `span`: its elements are reached one
+    /// at a time (ADR 0064).
+    pub(super) fn whole_entry(&self, register: Register, span: Span, accessed: &str) -> Diagnostic {
+        let def = self.hir.peripheral_type(register.id);
+        let entry = &def.entries[register.index];
+        let (what, help) = if entry.is_cluster() {
+            (
+                "cluster array",
+                format!(
+                    "index it and name a register of the element, as in `P.{0}[i].NAME`, or take the address of an element, `&raw mut P.{0}[i]` (ADR 0064)",
+                    entry.name
+                ),
+            )
+        } else {
+            (
+                "register array",
+                format!(
+                    "index it to reach one register, as in `P.{}[i]` (ADR 0064)",
+                    entry.name
+                ),
+            )
+        };
+        Diagnostic::error(
+            "ty::peripheral-by-value",
+            format!("the {what} `{}` of `{}` is no value", entry.name, def.path),
+        )
+        .label(span, format!("an array, {accessed} as a whole"))
+        .label(entry.span, format!("declared as a {what}"))
+        .help(help)
+    }
+
     /// Checks that `register`, accessed at `span` as `kind` says, allows
     /// it: a `write` register is never read and a `read` one never written,
     /// and a compound assignment does both (ADR 0058), as does a
@@ -267,10 +299,20 @@ impl Checker<'_, '_> {
                 self.check(f, index, Some(Ty::Int(IntTy::Usize)));
                 if let Ty::Array(elem, _) = ty {
                     let base_place = base_place.unwrap_or_else(|| PlaceInfo::temporary(ty, base));
-                    PlaceInfo {
+                    let mut info = PlaceInfo {
                         ty: *elem,
                         ..base_place
+                    };
+                    // An array that is a register is an entry of a peripheral
+                    // type (ADR 0064). Its element is a register, or, for a
+                    // cluster array, a cluster, which is no register.
+                    if base_place.register.is_some() {
+                        self.q.tables.entry_accesses.insert(expr.id);
+                        if matches!(*elem, Ty::Peripheral(_)) {
+                            info.register = None;
+                        }
                     }
+                    info
                 } else if let (Ty::Slice(elem), Some(base_place)) = (ty, base_place) {
                     // `(*s)[i]`, checked against the length (ADR 0031): the
                     // element is reached through the slice, so it is
@@ -329,8 +371,11 @@ impl Checker<'_, '_> {
                 } else {
                     // A peripheral is not read to be indexed: it is no
                     // value, and no array either.
+                    // Nor is a register, which holds an integer: it is not
+                    // read to be reported as no array.
                     if let Some(info) = base_place
                         && !matches!(info.ty, Ty::Peripheral(_))
+                        && info.register.is_none()
                     {
                         self.access(&info, base.span, AccessMode::Read);
                     }
@@ -504,7 +549,10 @@ impl Checker<'_, '_> {
     /// register `name`, which the module of `f` must see, as a field
     /// (ADR 0050). The place is the register, of its type, with the
     /// mutability of `base_place`: through a `*const` pointer it cannot be
-    /// written.
+    /// written. A register array is the place of its array type with the
+    /// register set, reached only through an index; a cluster is a place of
+    /// its peripheral type with none, or of an array of it with one
+    /// (ADR 0064).
     fn register(
         &mut self,
         f: &Fn,
@@ -529,32 +577,30 @@ impl Checker<'_, '_> {
                 .diags
                 .push(private_register(hir, p.id, index, f.module, name_span));
         }
-        let ty = self.norm(def.entries[index].ty);
-        // Register arrays and clusters are reached through an index or a
-        // register of theirs, typed by step 4. Until then the place is
-        // `{error}`. Where the type has no layout, which only a reported
-        // error causes, nothing more is said; where it has one, the access
-        // is reported here, so that no program is accepted with it.
-        if def.entries[index].is_cluster()
-            || matches!(ty, Ty::Array(elem, _) if matches!(elem, Ty::Int(_) | Ty::BitStruct(_) | Ty::Enum(_)))
-        {
-            if self.q.peripheral_layout(p.id).is_some() {
-                self.q.diags.push(
-                    Diagnostic::error(
-                        "ty::register-array-access",
-                        format!("`{name}` is a register array or a cluster, which cannot be accessed yet"),
-                    )
-                    .label(name_span, "accesses to register arrays and clusters are not type checked yet")
-                    .help("this is temporary: M3.4a step 4 types them (ADR 0064)"),
-                );
-            }
+        let entry = &def.entries[index];
+        let ty = self.norm(entry.ty);
+        self.q.tables.fields.insert(expr.id, index as u32);
+        let array = matches!(ty, Ty::Array(..));
+        if entry.is_cluster() || array {
+            self.q.tables.entry_accesses.insert(expr.id);
+        }
+        // A cluster is a place of its peripheral type, whose registers are
+        // reached through it, or an array of them. An array of registers or of
+        // clusters still names the entry, so that it is neither read whole
+        // nor has its address taken, until indexed (ADR 0064). A single
+        // cluster's address may be taken: it names no register.
+        let register = if entry.is_cluster() && !array {
+            None
+        } else {
+            Some(Register { id: p.id, index })
+        };
+        if entry.is_cluster() && ty == Ty::Error {
             return PlaceInfo::ERROR;
         }
-        self.q.tables.fields.insert(expr.id, index as u32);
         PlaceInfo {
             ty,
             misaligned: false,
-            register: Some(Register { id: p.id, index }),
+            register,
             ..base_place
         }
     }
@@ -584,6 +630,17 @@ impl Checker<'_, '_> {
             self.q
                 .diags
                 .push(whole_slice(info.ty, place.span, "written"));
+            return Ty::Error;
+        }
+        // A register array or a cluster array is reached through an index
+        // (ADR 0064).
+        if let (Some(register), Ty::Array(..)) = (info.register, info.ty) {
+            let accessed = match kind {
+                AccessMode::ReadWrite => "read and written",
+                _ => "written",
+            };
+            let diag = self.whole_entry(register, place.span, accessed);
+            self.q.diags.push(diag);
             return Ty::Error;
         }
         if let Ty::Peripheral(_) = info.ty {
@@ -767,11 +824,36 @@ impl Checker<'_, '_> {
             return Ty::Error;
         }
         // The pointer would reach the register without its access mode
-        // (ADR 0058).
+        // (ADR 0058). An array of them has a step no pointer holds
+        // (ADR 0064).
         if let Some(register) = info.register {
             let def = self.hir.peripheral_type(register.id);
             let reg = &def.entries[register.index];
-            self.q.diags.push(
+            let diag = if let Ty::Array(..) = info.ty {
+                let (what, help) = if reg.is_cluster() {
+                    (
+                        "cluster array",
+                        format!(
+                            "a pointer to the whole array would not hold its step; take the address of one element, `&raw mut P.{}[i]`, which a driver of its type serves (ADR 0064)",
+                            reg.name
+                        ),
+                    )
+                } else {
+                    (
+                        "register array",
+                        "no pointer type holds the step of an array, and a pointer to an element would reach the register without its access mode; read or write the elements where they are named (ADR 0064)".to_string(),
+                    )
+                };
+                Diagnostic::error(
+                    "ty::register-address",
+                    format!(
+                        "cannot take the address of the {what} `{}` of `{}`",
+                        reg.name, def.path
+                    ),
+                )
+                .label(place.span, format!("a {what}"))
+                .help(help)
+            } else {
                 Diagnostic::error(
                     "ty::register-address",
                     format!(
@@ -783,8 +865,9 @@ impl Checker<'_, '_> {
                 .help(format!(
                     "a pointer to it would reach it without its access mode, `{}`; read or write it where it is named, or pass the whole device with a pointer to its peripheral, as `&raw mut P` (ADR 0058)",
                     reg.access().map_or("", AccessMode::words)
-                )),
-            );
+                ))
+            };
+            self.q.diags.push(diag);
             return Ty::Error;
         }
         // Its result would be a `*const !` (ADR 0034).

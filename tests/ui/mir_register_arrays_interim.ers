@@ -1,0 +1,37 @@
+// emit: mir
+// Until M3.4a step 5 builds accesses to register arrays and clusters into
+// MIR, each is reported as `mir::register-array-access`, once per access
+// (the chain `PLIC.ctx[i].threshold` once, at the index), and no program using
+// one is accepted. Step 5 replaces this test with the real MIR.
+peripheral Context {
+    read write threshold: u32 at 0,
+}
+
+peripheral Plic {
+    read write priority: [u32; 4] at 0,
+    ctx: [Context; 2] at 0x100 step 0x10,
+    first: Context at 0x200,
+}
+
+peripheral PLIC: Plic at 0x0C00_0000;
+
+const A: *const Context = &raw const PLIC.ctx[1];
+
+const B: *const Context = &raw const PLIC.first;
+
+const C: u32 = PLIC.priority[1];
+
+const D: u32 = nested_read();
+
+fn nested_read() -> u32 { PLIC.ctx[0].threshold }
+
+fn element(i: usize) -> u32 { PLIC.priority[i] }
+
+fn nested(i: usize) { PLIC.ctx[i].threshold = 1; }
+
+fn single() -> u32 { PLIC.first.threshold }
+
+fn address(i: usize) -> *mut Context { &raw mut PLIC.ctx[i] }
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

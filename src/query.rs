@@ -1324,7 +1324,8 @@ impl<'h> Queries<'h> {
         // stands as `()`, without being computed. Register arrays and
         // clusters have a layout now but stand as `()` too, until step 5 of
         // M3.4a gives them their MIR types: no body reaches them, since
-        // every access to one is `ty::register-array-access` until step 4.
+        // every access to one is `mir::register-array-access`, reported in
+        // `Builder::place_then` until step 5, which marks the body failed.
         let registers = (def.entries.iter())
             .map(|register| mir::Register {
                 name: register.name.clone(),

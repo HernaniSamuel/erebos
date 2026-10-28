@@ -1,0 +1,560 @@
+---
+source: tests/ui.rs
+assertion_line: 22
+expression: output
+input_file: tests/ui/typeck_register_arrays_access_errors.ers
+---
+--- errors ---
+ty::write-to-read-only
+
+  × the register `data` of `dev::Plic` is read-only
+    ╭─[typeck_register_arrays_access_errors.ers:36:5]
+ 21 │     pub peripheral Plic {
+ 22 │         pub read data: [u32; 4] at 0,
+    ·                  ──┬─
+    ·                    ╰── declared `read`
+ 23 │         pub write command: [u32; 4] at 0x10,
+ 24 │         pub read write ctl: [Ctl; 4] at 0x20 read modifies,
+ 25 │         pub ctx: [Context; 2] at 0x1000 step 0x100,
+ 26 │         pub one: Context at 0x2000,
+ 27 │         hidden: Context at 0x3000,
+ 28 │         pub read write reg: u32 at 0x4000,
+ 29 │         pub write w: u32 at 0x4004,
+ 30 │     }
+ 31 │ }
+ 32 │ 
+ 33 │ peripheral PLIC: dev::Plic at 0x0C00_0000;
+ 34 │ 
+ 35 │ fn modes(i: usize, v: u32) -> u32 {
+ 36 │     PLIC.data[i] = v;
+    ·     ──────┬─────
+    ·           ╰── written here
+ 37 │     PLIC.data[1] += 1;
+    ╰────
+  help: a `read` register can only be read; declare it `read write` if the device also lets it be
+        written (ADR 0058)
+ty::write-to-read-only
+
+  × the register `data` of `dev::Plic` is read-only
+    ╭─[typeck_register_arrays_access_errors.ers:37:5]
+ 21 │     pub peripheral Plic {
+ 22 │         pub read data: [u32; 4] at 0,
+    ·                  ──┬─
+    ·                    ╰── declared `read`
+ 23 │         pub write command: [u32; 4] at 0x10,
+ 24 │         pub read write ctl: [Ctl; 4] at 0x20 read modifies,
+ 25 │         pub ctx: [Context; 2] at 0x1000 step 0x100,
+ 26 │         pub one: Context at 0x2000,
+ 27 │         hidden: Context at 0x3000,
+ 28 │         pub read write reg: u32 at 0x4000,
+ 29 │         pub write w: u32 at 0x4004,
+ 30 │     }
+ 31 │ }
+ 32 │ 
+ 33 │ peripheral PLIC: dev::Plic at 0x0C00_0000;
+ 34 │ 
+ 35 │ fn modes(i: usize, v: u32) -> u32 {
+ 36 │     PLIC.data[i] = v;
+ 37 │     PLIC.data[1] += 1;
+    ·     ──────┬─────
+    ·           ╰── read and written by this compound assignment
+ 38 │     PLIC.command[i] = v;
+    ╰────
+  help: a `read` register can only be read; declare it `read write` if the device also lets it be
+        written (ADR 0058)
+ty::read-of-write-only
+
+  × the register `command` of `dev::Plic` is write-only
+    ╭─[typeck_register_arrays_access_errors.ers:39:5]
+ 22 │         pub read data: [u32; 4] at 0,
+ 23 │         pub write command: [u32; 4] at 0x10,
+    ·                   ───┬───
+    ·                      ╰── declared `write`
+ 24 │         pub read write ctl: [Ctl; 4] at 0x20 read modifies,
+ 25 │         pub ctx: [Context; 2] at 0x1000 step 0x100,
+ 26 │         pub one: Context at 0x2000,
+ 27 │         hidden: Context at 0x3000,
+ 28 │         pub read write reg: u32 at 0x4000,
+ 29 │         pub write w: u32 at 0x4004,
+ 30 │     }
+ 31 │ }
+ 32 │ 
+ 33 │ peripheral PLIC: dev::Plic at 0x0C00_0000;
+ 34 │ 
+ 35 │ fn modes(i: usize, v: u32) -> u32 {
+ 36 │     PLIC.data[i] = v;
+ 37 │     PLIC.data[1] += 1;
+ 38 │     PLIC.command[i] = v;
+ 39 │     PLIC.command[i] += 1;
+    ·     ───────┬───────
+    ·            ╰── read and written by this compound assignment
+ 40 │     PLIC.ctl[i].enable = true;
+    ╰────
+  help: a `write` register can only be assigned with `=`, since a compound assignment reads it
+        first; declare it `read write` if the device also lets it be read (ADR 0058)
+ty::read-with-effects
+
+  × reading the register `ctl` of `dev::Plic` has effects
+    ╭─[typeck_register_arrays_access_errors.ers:40:5]
+ 23 │         pub write command: [u32; 4] at 0x10,
+ 24 │         pub read write ctl: [Ctl; 4] at 0x20 read modifies,
+    ·                                              ──────┬──────
+    ·                                                    ╰── a read has effects
+ 25 │         pub ctx: [Context; 2] at 0x1000 step 0x100,
+ 26 │         pub one: Context at 0x2000,
+ 27 │         hidden: Context at 0x3000,
+ 28 │         pub read write reg: u32 at 0x4000,
+ 29 │         pub write w: u32 at 0x4004,
+ 30 │     }
+ 31 │ }
+ 32 │ 
+ 33 │ peripheral PLIC: dev::Plic at 0x0C00_0000;
+ 34 │ 
+ 35 │ fn modes(i: usize, v: u32) -> u32 {
+ 36 │     PLIC.data[i] = v;
+ 37 │     PLIC.data[1] += 1;
+ 38 │     PLIC.command[i] = v;
+ 39 │     PLIC.command[i] += 1;
+ 40 │     PLIC.ctl[i].enable = true;
+    ·     ─────────┬────────
+    ·              ╰── read by this field assignment
+ 41 │     PLIC.command[i]
+    ╰────
+  help: the read would go unseen, and what it returned lost; read the value into a `let` first,
+        which shows the read, then write the whole value meant (ADR 0060)
+ty::read-of-write-only
+
+  × the register `command` of `dev::Plic` is write-only
+    ╭─[typeck_register_arrays_access_errors.ers:41:5]
+ 22 │         pub read data: [u32; 4] at 0,
+ 23 │         pub write command: [u32; 4] at 0x10,
+    ·                   ───┬───
+    ·                      ╰── declared `write`
+ 24 │         pub read write ctl: [Ctl; 4] at 0x20 read modifies,
+ 25 │         pub ctx: [Context; 2] at 0x1000 step 0x100,
+ 26 │         pub one: Context at 0x2000,
+ 27 │         hidden: Context at 0x3000,
+ 28 │         pub read write reg: u32 at 0x4000,
+ 29 │         pub write w: u32 at 0x4004,
+ 30 │     }
+ 31 │ }
+ 32 │ 
+ 33 │ peripheral PLIC: dev::Plic at 0x0C00_0000;
+ 34 │ 
+ 35 │ fn modes(i: usize, v: u32) -> u32 {
+ 36 │     PLIC.data[i] = v;
+ 37 │     PLIC.data[1] += 1;
+ 38 │     PLIC.command[i] = v;
+ 39 │     PLIC.command[i] += 1;
+ 40 │     PLIC.ctl[i].enable = true;
+ 41 │     PLIC.command[i]
+    ·     ───────┬───────
+    ·            ╰── read here
+ 42 │ }
+    ╰────
+  help: a `write` register can only be assigned with `=`, since a compound assignment reads it
+        first; declare it `read write` if the device also lets it be read (ADR 0058)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_register_arrays_access_errors.ers:45:15]
+ 44 │ fn indexes(i: u32, b: bool) -> u32 {
+ 45 │     PLIC.data[i] + PLIC.ctx[b].threshold
+    ·               ┬
+    ·               ╰── expected `usize`, found `u32`
+ 46 │ }
+    ╰────
+  help: integer types never convert implicitly; use `as usize` (ADR 0008)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[typeck_register_arrays_access_errors.ers:45:29]
+ 44 │ fn indexes(i: u32, b: bool) -> u32 {
+ 45 │     PLIC.data[i] + PLIC.ctx[b].threshold
+    ·                             ┬
+    ·                             ╰── expected `usize`, found `bool`
+ 46 │ }
+    ╰────
+ty::peripheral-by-value
+
+  × the register array `data` of `dev::Plic` is no value
+    ╭─[typeck_register_arrays_access_errors.ers:22:18]
+ 21 │     pub peripheral Plic {
+ 22 │         pub read data: [u32; 4] at 0,
+    ·                  ──┬─
+    ·                    ╰── declared as a register array
+ 23 │         pub write command: [u32; 4] at 0x10,
+    ╰────
+    ╭─[typeck_register_arrays_access_errors.ers:49:18]
+ 48 │ fn wholes(p: *mut dev::Plic, c: *mut dev::Context) -> u32 {
+ 49 │     let a: u32 = PLIC.data;
+    ·                  ────┬────
+    ·                      ╰── an array, read as a whole
+ 50 │     PLIC.command = 0;
+    ╰────
+  help: index it to reach one register, as in `P.data[i]` (ADR 0064)
+ty::peripheral-by-value
+
+  × the register array `command` of `dev::Plic` is no value
+    ╭─[typeck_register_arrays_access_errors.ers:23:19]
+ 22 │         pub read data: [u32; 4] at 0,
+ 23 │         pub write command: [u32; 4] at 0x10,
+    ·                   ───┬───
+    ·                      ╰── declared as a register array
+ 24 │         pub read write ctl: [Ctl; 4] at 0x20 read modifies,
+    ╰────
+    ╭─[typeck_register_arrays_access_errors.ers:50:5]
+ 49 │     let a: u32 = PLIC.data;
+ 50 │     PLIC.command = 0;
+    ·     ──────┬─────
+    ·           ╰── an array, written as a whole
+ 51 │     let b: u32 = PLIC.ctx;
+    ╰────
+  help: index it to reach one register, as in `P.command[i]` (ADR 0064)
+ty::peripheral-by-value
+
+  × the cluster array `ctx` of `dev::Plic` is no value
+    ╭─[typeck_register_arrays_access_errors.ers:51:18]
+ 24 │         pub read write ctl: [Ctl; 4] at 0x20 read modifies,
+ 25 │         pub ctx: [Context; 2] at 0x1000 step 0x100,
+    ·             ─┬─
+    ·              ╰── declared as a cluster array
+ 26 │         pub one: Context at 0x2000,
+ 27 │         hidden: Context at 0x3000,
+ 28 │         pub read write reg: u32 at 0x4000,
+ 29 │         pub write w: u32 at 0x4004,
+ 30 │     }
+ 31 │ }
+ 32 │ 
+ 33 │ peripheral PLIC: dev::Plic at 0x0C00_0000;
+ 34 │ 
+ 35 │ fn modes(i: usize, v: u32) -> u32 {
+ 36 │     PLIC.data[i] = v;
+ 37 │     PLIC.data[1] += 1;
+ 38 │     PLIC.command[i] = v;
+ 39 │     PLIC.command[i] += 1;
+ 40 │     PLIC.ctl[i].enable = true;
+ 41 │     PLIC.command[i]
+ 42 │ }
+ 43 │ 
+ 44 │ fn indexes(i: u32, b: bool) -> u32 {
+ 45 │     PLIC.data[i] + PLIC.ctx[b].threshold
+ 46 │ }
+ 47 │ 
+ 48 │ fn wholes(p: *mut dev::Plic, c: *mut dev::Context) -> u32 {
+ 49 │     let a: u32 = PLIC.data;
+ 50 │     PLIC.command = 0;
+ 51 │     let b: u32 = PLIC.ctx;
+    ·                  ────┬───
+    ·                      ╰── an array, read as a whole
+ 52 │     let d: u32 = PLIC.ctx[0];
+    ╰────
+  help: index it and name a register of the element, as in `P.ctx[i].NAME`, or take the address of
+        an element, `&raw mut P.ctx[i]` (ADR 0064)
+ty::peripheral-by-value
+
+  × `dev::Context` is a peripheral type, which no value has
+    ╭─[typeck_register_arrays_access_errors.ers:52:18]
+ 51 │     let b: u32 = PLIC.ctx;
+ 52 │     let d: u32 = PLIC.ctx[0];
+    ·                  ─────┬─────
+    ·                       ╰── a device, read as a whole
+ 53 │     PLIC.ctx[1] = PLIC.ctx[0];
+    ╰────
+  help: its registers are read and written one at a time, as in `P.NAME` or `(*u).NAME`; a
+        function is given the device as a `*mut dev::Context`, such as `&raw mut P` (ADR 0058)
+ty::peripheral-by-value
+
+  × `dev::Context` is a peripheral type, which no value has
+    ╭─[typeck_register_arrays_access_errors.ers:53:5]
+ 52 │     let d: u32 = PLIC.ctx[0];
+ 53 │     PLIC.ctx[1] = PLIC.ctx[0];
+    ·     ─────┬─────
+    ·          ╰── a device, written as a whole
+ 54 │     let e: u32 = PLIC.one;
+    ╰────
+  help: its registers are read and written one at a time, as in `P.NAME` or `(*u).NAME`; a
+        function is given the device as a `*mut dev::Context`, such as `&raw mut P` (ADR 0058)
+ty::peripheral-by-value
+
+  × `dev::Context` is a peripheral type, which no value has
+    ╭─[typeck_register_arrays_access_errors.ers:53:19]
+ 52 │     let d: u32 = PLIC.ctx[0];
+ 53 │     PLIC.ctx[1] = PLIC.ctx[0];
+    ·                   ─────┬─────
+    ·                        ╰── a device, read as a whole
+ 54 │     let e: u32 = PLIC.one;
+    ╰────
+  help: its registers are read and written one at a time, as in `P.NAME` or `(*u).NAME`; a
+        function is given the device as a `*mut dev::Context`, such as `&raw mut P` (ADR 0058)
+ty::peripheral-by-value
+
+  × `dev::Context` is a peripheral type, which no value has
+    ╭─[typeck_register_arrays_access_errors.ers:54:18]
+ 53 │     PLIC.ctx[1] = PLIC.ctx[0];
+ 54 │     let e: u32 = PLIC.one;
+    ·                  ────┬───
+    ·                      ╰── a device, read as a whole
+ 55 │     PLIC.one = 1;
+    ╰────
+  help: its registers are read and written one at a time, as in `P.NAME` or `(*u).NAME`; a
+        function is given the device as a `*mut dev::Context`, such as `&raw mut P` (ADR 0058)
+ty::peripheral-by-value
+
+  × `dev::Context` is a peripheral type, which no value has
+    ╭─[typeck_register_arrays_access_errors.ers:55:5]
+ 54 │     let e: u32 = PLIC.one;
+ 55 │     PLIC.one = 1;
+    ·     ────┬───
+    ·         ╰── a device, written as a whole
+ 56 │     let f: u32 = (*p).data;
+    ╰────
+  help: its registers are read and written one at a time, as in `P.NAME` or `(*u).NAME`; a
+        function is given the device as a `*mut dev::Context`, such as `&raw mut P` (ADR 0058)
+ty::peripheral-by-value
+
+  × the register array `data` of `dev::Plic` is no value
+    ╭─[typeck_register_arrays_access_errors.ers:22:18]
+ 21 │     pub peripheral Plic {
+ 22 │         pub read data: [u32; 4] at 0,
+    ·                  ──┬─
+    ·                    ╰── declared as a register array
+ 23 │         pub write command: [u32; 4] at 0x10,
+    ╰────
+    ╭─[typeck_register_arrays_access_errors.ers:56:18]
+ 55 │     PLIC.one = 1;
+ 56 │     let f: u32 = (*p).data;
+    ·                  ────┬────
+    ·                      ╰── an array, read as a whole
+ 57 │     (*p).ctx[0] = (*p).ctx[1];
+    ╰────
+  help: index it to reach one register, as in `P.data[i]` (ADR 0064)
+ty::peripheral-by-value
+
+  × `dev::Context` is a peripheral type, which no value has
+    ╭─[typeck_register_arrays_access_errors.ers:57:5]
+ 56 │     let f: u32 = (*p).data;
+ 57 │     (*p).ctx[0] = (*p).ctx[1];
+    ·     ─────┬─────
+    ·          ╰── a device, written as a whole
+ 58 │     (*c).threshold
+    ╰────
+  help: its registers are read and written one at a time, as in `P.NAME` or `(*u).NAME`; a
+        function is given the device as a `*mut dev::Context`, such as `&raw mut P` (ADR 0058)
+ty::peripheral-by-value
+
+  × `dev::Context` is a peripheral type, which no value has
+    ╭─[typeck_register_arrays_access_errors.ers:57:19]
+ 56 │     let f: u32 = (*p).data;
+ 57 │     (*p).ctx[0] = (*p).ctx[1];
+    ·                   ─────┬─────
+    ·                        ╰── a device, read as a whole
+ 58 │     (*c).threshold
+    ╰────
+  help: its registers are read and written one at a time, as in `P.NAME` or `(*u).NAME`; a
+        function is given the device as a `*mut dev::Context`, such as `&raw mut P` (ADR 0058)
+ty::register-address
+
+  × cannot take the address of the register array `data` of `dev::Plic`
+    ╭─[typeck_register_arrays_access_errors.ers:62:36]
+ 61 │ fn addresses(p: *const dev::Plic) {
+ 62 │     let a: *const u32 = &raw const PLIC.data;
+    ·                                    ────┬────
+    ·                                        ╰── a register array
+ 63 │     let b: *mut u32 = &raw mut PLIC.command;
+    ╰────
+  help: no pointer type holds the step of an array, and a pointer to an element would reach the
+        register without its access mode; read or write the elements where they are named (ADR
+        0064)
+ty::register-address
+
+  × cannot take the address of the register array `command` of `dev::Plic`
+    ╭─[typeck_register_arrays_access_errors.ers:63:32]
+ 62 │     let a: *const u32 = &raw const PLIC.data;
+ 63 │     let b: *mut u32 = &raw mut PLIC.command;
+    ·                                ──────┬─────
+    ·                                      ╰── a register array
+ 64 │     let c: *const u32 = &raw const PLIC.ctx;
+    ╰────
+  help: no pointer type holds the step of an array, and a pointer to an element would reach the
+        register without its access mode; read or write the elements where they are named (ADR
+        0064)
+ty::register-address
+
+  × cannot take the address of the cluster array `ctx` of `dev::Plic`
+    ╭─[typeck_register_arrays_access_errors.ers:64:36]
+ 63 │     let b: *mut u32 = &raw mut PLIC.command;
+ 64 │     let c: *const u32 = &raw const PLIC.ctx;
+    ·                                    ────┬───
+    ·                                        ╰── a cluster array
+ 65 │     let d: *const u32 = &raw const PLIC.data[0];
+    ╰────
+  help: a pointer to the whole array would not hold its step; take the address of one element,
+        `&raw mut P.ctx[i]`, which a driver of its type serves (ADR 0064)
+ty::register-address
+
+  × cannot take the address of the register `data` of `dev::Plic`
+    ╭─[typeck_register_arrays_access_errors.ers:65:36]
+ 64 │     let c: *const u32 = &raw const PLIC.ctx;
+ 65 │     let d: *const u32 = &raw const PLIC.data[0];
+    ·                                    ──────┬─────
+    ·                                          ╰── a register
+ 66 │     let e: *mut dev::Context = &raw mut PLIC.ctx[0];
+    ╰────
+  help: a pointer to it would reach it without its access mode, `read`; read or write it where it
+        is named, or pass the whole device with a pointer to its peripheral, as `&raw mut P` (ADR
+        0058)
+ty::address-of-immutable
+
+  × cannot take a `*mut` address through a `*const` pointer
+    ╭─[typeck_register_arrays_access_errors.ers:67:43]
+ 66 │     let e: *mut dev::Context = &raw mut PLIC.ctx[0];
+ 67 │     let f: *mut dev::Context = &raw mut (*p).one;
+    ·                                           ┬
+    ·                                           ╰── has type `*const dev::Plic`
+ 68 │     let g: *mut dev::Context = &raw mut (*p).ctx[1];
+    ╰────
+  help: use `&raw const`, or a `*mut` pointer
+ty::address-of-immutable
+
+  × cannot take a `*mut` address through a `*const` pointer
+    ╭─[typeck_register_arrays_access_errors.ers:68:43]
+ 67 │     let f: *mut dev::Context = &raw mut (*p).one;
+ 68 │     let g: *mut dev::Context = &raw mut (*p).ctx[1];
+    ·                                           ┬
+    ·                                           ╰── has type `*const dev::Plic`
+ 69 │     let h: *const dev::Context = &raw const (*p).ctx[1];
+    ╰────
+  help: use `&raw const`, or a `*mut` pointer
+ty::register-address
+
+  × cannot take the address of the register `reg` of `dev::Plic`
+    ╭─[typeck_register_arrays_access_errors.ers:70:36]
+ 69 │     let h: *const dev::Context = &raw const (*p).ctx[1];
+ 70 │     let i: *const u32 = &raw const PLIC.reg;
+    ·                                    ────┬───
+    ·                                        ╰── a register
+ 71 │ }
+    ╰────
+  help: a pointer to it would reach it without its access mode, `read write`; read or write it
+        where it is named, or pass the whole device with a pointer to its peripheral, as `&raw mut
+        P` (ADR 0058)
+ty::private-register
+
+  × the register `hidden` of `dev::Plic` is private
+    ╭─[typeck_register_arrays_access_errors.ers:27:9]
+ 26 │         pub one: Context at 0x2000,
+ 27 │         hidden: Context at 0x3000,
+    ·         ───┬──
+    ·            ╰── declared here without `pub`
+ 28 │         pub read write reg: u32 at 0x4000,
+    ╰────
+    ╭─[typeck_register_arrays_access_errors.ers:74:23]
+ 73 │ fn visibility() -> u32 {
+ 74 │     let a: u32 = PLIC.hidden.threshold;
+    ·                       ───┬──
+    ·                          ╰── not visible here
+ 75 │     let b: u32 = PLIC.ctx[0].secret;
+    ╰────
+  help: a private register is visible only in module `dev` and the modules inside it; declare it
+        `pub` to use it elsewhere, or offer functions that use it (ADR 0050, 0058)
+ty::private-register
+
+  × the register `secret` of `dev::Context` is private
+    ╭─[typeck_register_arrays_access_errors.ers:18:20]
+ 17 │         pub read write threshold: u32 at 0,
+ 18 │         read write secret: u32 at 4,
+    ·                    ───┬──
+    ·                       ╰── declared here without `pub`
+ 19 │     }
+    ╰────
+    ╭─[typeck_register_arrays_access_errors.ers:75:30]
+ 74 │     let a: u32 = PLIC.hidden.threshold;
+ 75 │     let b: u32 = PLIC.ctx[0].secret;
+    ·                              ───┬──
+    ·                                 ╰── not visible here
+ 76 │     let c: *const dev::Context = &raw const PLIC.hidden;
+    ╰────
+  help: a private register is visible only in module `dev` and the modules inside it; declare it
+        `pub` to use it elsewhere, or offer functions that use it (ADR 0050, 0058)
+ty::private-register
+
+  × the register `hidden` of `dev::Plic` is private
+    ╭─[typeck_register_arrays_access_errors.ers:27:9]
+ 26 │         pub one: Context at 0x2000,
+ 27 │         hidden: Context at 0x3000,
+    ·         ───┬──
+    ·            ╰── declared here without `pub`
+ 28 │         pub read write reg: u32 at 0x4000,
+    ╰────
+    ╭─[typeck_register_arrays_access_errors.ers:76:50]
+ 75 │     let b: u32 = PLIC.ctx[0].secret;
+ 76 │     let c: *const dev::Context = &raw const PLIC.hidden;
+    ·                                                  ───┬──
+    ·                                                     ╰── not visible here
+ 77 │     PLIC.missing[0] + PLIC.ctx[0].missing
+    ╰────
+  help: a private register is visible only in module `dev` and the modules inside it; declare it
+        `pub` to use it elsewhere, or offer functions that use it (ADR 0050, 0058)
+ty::unknown-register
+
+  × `dev::Plic` has no register `missing`
+    ╭─[typeck_register_arrays_access_errors.ers:77:10]
+ 76 │     let c: *const dev::Context = &raw const PLIC.hidden;
+ 77 │     PLIC.missing[0] + PLIC.ctx[0].missing
+    ·          ───┬───
+    ·             ╰── unknown register
+ 78 │ }
+    ╰────
+  help: its registers are `data`, `command`, `ctl`, `ctx`, `one`, `reg`, `w`
+ty::unknown-register
+
+  × `dev::Context` has no register `missing`
+    ╭─[typeck_register_arrays_access_errors.ers:77:35]
+ 76 │     let c: *const dev::Context = &raw const PLIC.hidden;
+ 77 │     PLIC.missing[0] + PLIC.ctx[0].missing
+    ·                                   ───┬───
+    ·                                      ╰── unknown register
+ 78 │ }
+    ╰────
+  help: its registers are `threshold`
+ty::cannot-index
+
+  × cannot index a value of type `dev::Context`
+    ╭─[typeck_register_arrays_access_errors.ers:81:5]
+ 80 │ fn not_arrays() -> u32 {
+ 81 │     PLIC.one[0].threshold + PLIC.reg[0] + PLIC.one.threshold[1] + PLIC.w[0]
+    ·     ────┬───
+    ·         ╰── not an array or a pointer
+ 82 │ }
+    ╰────
+ty::cannot-index
+
+  × cannot index a value of type `u32`
+    ╭─[typeck_register_arrays_access_errors.ers:81:29]
+ 80 │ fn not_arrays() -> u32 {
+ 81 │     PLIC.one[0].threshold + PLIC.reg[0] + PLIC.one.threshold[1] + PLIC.w[0]
+    ·                             ────┬───
+    ·                                 ╰── not an array or a pointer
+ 82 │ }
+    ╰────
+ty::cannot-index
+
+  × cannot index a value of type `u32`
+    ╭─[typeck_register_arrays_access_errors.ers:81:43]
+ 80 │ fn not_arrays() -> u32 {
+ 81 │     PLIC.one[0].threshold + PLIC.reg[0] + PLIC.one.threshold[1] + PLIC.w[0]
+    ·                                           ─────────┬────────
+    ·                                                    ╰── not an array or a pointer
+ 82 │ }
+    ╰────
+ty::cannot-index
+
+  × cannot index a value of type `u32`
+    ╭─[typeck_register_arrays_access_errors.ers:81:67]
+ 80 │ fn not_arrays() -> u32 {
+ 81 │     PLIC.one[0].threshold + PLIC.reg[0] + PLIC.one.threshold[1] + PLIC.w[0]
+    ·                                                                   ───┬──
+    ·                                                                      ╰── not an array or a pointer
+ 82 │ }
+    ╰────
