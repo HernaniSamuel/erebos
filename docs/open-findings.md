@@ -24,6 +24,16 @@ The findings M2 left open were worked off on 2026-10-21; these remain.
 - `Mir::peripherals` and the masks `LeftOut::peripheral_types` and
   `LeftOut::peripherals` (`src/mir/mod.rs`) have no doc comments of
   their own. (M3.2)
+- The doc comment of `dump` in `src/ty/dump.rs` is wrapped unevenly
+  after editing. (M3.3)
+- The word of a write effect's action (`clears`, `sets`, `toggles`) is
+  mapped twice, in `src/ty/place.rs` (help of
+  `ty::compound-write-effect`) and in `write_effect_words`
+  (`src/ty/dump.rs`); one helper could serve both. (M3.3)
+- `Builder::is_volatile` (`src/mir/build.rs`) repeats codegen's rule for
+  volatile accesses (`address` in `src/codegen/mod.rs`); nothing points
+  from codegen's copy to it, so one could change alone and build neutral
+  masks for plain accesses or drop them for volatile ones. (M3.3)
 
 ## Diagnostics
 
@@ -57,6 +67,18 @@ The findings M2 left open were worked off on 2026-10-21; these remain.
   `ty::bit-field-address`, `ty::read-with-effects` and
   `ty::compound-write-effect` twice, in "Peripherals" and under
   "Diagnostics", as the M3.2 codes already are. (M3.3)
+- `docs/reference.md`: "Values required at compile time" leaves out bit
+  positions and bit-field defaults. (M3.3)
+- `docs/reference.md`: "Building" does not name the compile-time bodies
+  `comptime fn bits() -> u32` and `comptime fn default() -> T` the dumps
+  print. (M3.3)
+- `docs/reference.md`: the line about 180 is too long, and 18 and 2077
+  stop short, after editing. (M3.3)
+- `docs/reference.md`: "Alternate groups" says `dll` may share bytes
+  with `ier`, which its example does not declare. (M3.3)
+- `.claude/plans/M3.3.md`, step 11's `Decisions`: the line-endings entry
+  says the two docs are CRLF in the repository; only the working copies
+  are. (M3.3)
 
 ## Tests
 
