@@ -1,0 +1,48 @@
+// A register array's or a cluster array's element at compile time
+// (ADR 0064, 0058): `&raw const PLIC.ctx[1]` in a constant is a pointer made
+// from the element's address, `base + offset + i * step`, as the assertions
+// at compile time show, with a constant and a run-time index (`ctx(2)` is
+// out of bounds, `eval::panic`), and so is `&raw const` of a single cluster
+// in a static. A register read
+// through it, or directly, is `eval::volatile-access`, as any register access.
+peripheral Context {
+    read write threshold: u32 at 0,
+}
+
+peripheral Plic {
+    read write priority: [u32; 4] at 0,
+    ctx: [Context; 2] at 0x1000 step 0x100,
+    first: Context at 0x2000,
+}
+
+peripheral PLIC: Plic at 0x0C00_0000;
+
+const SECOND: *const Context = &raw const PLIC.ctx[1];
+
+static FIRST: *const Context = &raw const PLIC.first;
+
+comptime {
+    assert(SECOND as usize == 0x0C00_1100);
+    assert(FIRST as usize == 0x0C00_2000);
+}
+
+fn ctx(i: usize) -> *const Context {
+    &raw const PLIC.ctx[i]
+}
+
+const RUN_TIME: *const Context = ctx(1);
+
+const OUT_OF_BOUNDS: *const Context = ctx(2);
+
+comptime {
+    assert(RUN_TIME as usize == 0x0C00_1100);
+}
+
+const THROUGH: u32 = (*SECOND).threshold;
+
+const DIRECT: u32 = PLIC.priority[1];
+
+const NESTED: u32 = PLIC.ctx[0].threshold;
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

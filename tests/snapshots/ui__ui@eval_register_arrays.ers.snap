@@ -1,0 +1,61 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/eval_register_arrays.ers
+---
+--- errors ---
+eval::panic
+
+  × the evaluation called the panic function: index out of bounds
+    ╭─[eval_register_arrays.ers:30:5]
+ 29 │ fn ctx(i: usize) -> *const Context {
+ 30 │     &raw const PLIC.ctx[i]
+    ·     ───────────┬──────────
+    ·                ╰── index out of bounds
+ 31 │ }
+ 32 │ 
+ 33 │ const RUN_TIME: *const Context = ctx(1);
+ 34 │ 
+ 35 │ const OUT_OF_BOUNDS: *const Context = ctx(2);
+    ·       ──────┬──────                   ───┬──
+    ·             │                            ╰── called here
+    ·             ╰── while evaluating the constant `OUT_OF_BOUNDS`
+ 36 │ 
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::volatile-access
+
+  × a volatile access cannot happen at compile time
+    ╭─[eval_register_arrays.ers:41:22]
+ 40 │ 
+ 41 │ const THROUGH: u32 = (*SECOND).threshold;
+    ·       ───┬───        ─────────┬─────────
+    ·          │                    ╰── accessed here
+    ·          ╰── while evaluating the constant `THROUGH`
+ 42 │ 
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::volatile-access
+
+  × a volatile access cannot happen at compile time
+    ╭─[eval_register_arrays.ers:43:21]
+ 42 │ 
+ 43 │ const DIRECT: u32 = PLIC.priority[1];
+    ·       ───┬──        ────────┬───────
+    ·          │                  ╰── accessed here
+    ·          ╰── while evaluating the constant `DIRECT`
+ 44 │ 
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::volatile-access
+
+  × a volatile access cannot happen at compile time
+    ╭─[eval_register_arrays.ers:45:21]
+ 44 │ 
+ 45 │ const NESTED: u32 = PLIC.ctx[0].threshold;
+    ·       ───┬──        ──────────┬──────────
+    ·          │                    ╰── accessed here
+    ·          ╰── while evaluating the constant `NESTED`
+ 46 │ 
+    ╰────
+  help: this code runs at compile time (ADR 0027)

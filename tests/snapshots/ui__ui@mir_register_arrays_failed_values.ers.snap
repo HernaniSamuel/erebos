@@ -1,0 +1,54 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/mir_register_arrays_failed_values.ers
+---
+--- errors ---
+eval::panic
+
+  × the evaluation called the panic function: division by zero
+    ╭─[mir_register_arrays_failed_values.ers:14:38]
+ 13 │ peripheral BadStep {
+ 14 │     read write r: [u32; 4] at 0 step 4 / zero(),
+    ·                                      ─────┬────┬
+    ·                                           │    ╰── while evaluating this value
+    ·                                           ╰── division by zero
+ 15 │     ctx: [Context; 2] at 0x100 step 0x10,
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::panic
+
+  × the evaluation called the panic function: division by zero
+    ╭─[mir_register_arrays_failed_values.ers:19:25]
+ 18 │ peripheral BadLen {
+ 19 │     read write r: [u32; 4 / zero()] at 0,
+    ·                         ─────┬────┬
+    ·                              │    ╰── while evaluating this value
+    ·                              ╰── division by zero
+ 20 │ }
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::panic
+
+  × the evaluation called the panic function: division by zero
+    ╭─[mir_register_arrays_failed_values.ers:23:19]
+ 22 │ peripheral BadCluster {
+ 23 │     c: Context at 4 / zero(),
+    ·                   ─────┬────┬
+    ·                        │    ╰── while evaluating this value
+    ·                        ╰── division by zero
+ 24 │ }
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::panic
+
+  × the evaluation called the panic function: division by zero
+    ╭─[mir_register_arrays_failed_values.ers:27:26]
+ 26 │ peripheral Failing {
+ 27 │     read write r: u32 at 0 / zero(),
+    ·                          ─────┬────┬
+    ·                               │    ╰── while evaluating this value
+    ·                               ╰── division by zero
+ 28 │ }
+    ╰────
+  help: this code runs at compile time (ADR 0027)

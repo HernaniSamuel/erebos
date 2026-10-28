@@ -1,0 +1,62 @@
+// emit: mir
+// A body reaching a peripheral type with a failed step, length or cluster
+// type is not built into MIR (ADR 0064, 0048): the failed values' own errors
+// are the only ones reported, and the compiler does not panic.
+fn zero() -> usize {
+    0
+}
+
+peripheral Context {
+    read write threshold: u32 at 0,
+}
+
+peripheral BadStep {
+    read write r: [u32; 4] at 0 step 4 / zero(),
+    ctx: [Context; 2] at 0x100 step 0x10,
+}
+
+peripheral BadLen {
+    read write r: [u32; 4 / zero()] at 0,
+}
+
+peripheral BadCluster {
+    c: Context at 4 / zero(),
+}
+
+peripheral Failing {
+    read write r: u32 at 0 / zero(),
+}
+
+peripheral Holder {
+    c: Failing at 0,
+    cs: [Failing; 2] at 0x10 step 4,
+}
+
+peripheral STEP: BadStep at 0x1000_0000;
+peripheral LEN: BadLen at 0x2000_0000;
+peripheral CLUSTER: BadCluster at 0x3000_0000;
+peripheral HOLDER: Holder at 0x4000_0000;
+
+fn step(i: usize) -> u32 {
+    STEP.r[i] = 1;
+    STEP.ctx[i].threshold
+}
+
+fn length(i: usize) -> u32 {
+    LEN.r[i]
+}
+
+fn cluster() -> u32 {
+    CLUSTER.c.threshold
+}
+
+fn holder(i: usize) -> u32 {
+    HOLDER.c.r + HOLDER.cs[i].r
+}
+
+fn pointer(p: *mut BadStep, i: usize) -> u32 {
+    (*p).ctx[i].threshold
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

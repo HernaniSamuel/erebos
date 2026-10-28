@@ -2,7 +2,6 @@
 
 use std::collections::HashMap;
 
-use crate::diag::Diagnostic;
 use crate::eval::ConstValue;
 use crate::hir;
 use crate::mir::{
@@ -1853,7 +1852,10 @@ impl Builder<'_, '_> {
         for elem in place.projection {
             match (elem, ty) {
                 (PlaceElem::Deref | PlaceElem::Offset(_), Ty::Ptr(ptr)) => volatile = ptr.volatile,
-                (PlaceElem::Field(_), Ty::Peripheral(_)) => volatile = true,
+                (
+                    PlaceElem::Field(_) | PlaceElem::Element(..) | PlaceElem::ConstElement(..),
+                    Ty::Peripheral(_),
+                ) => volatile = true,
                 _ => {}
             }
             ty = projected_ty(ty, elem);
@@ -1888,9 +1890,6 @@ impl Builder<'_, '_> {
     /// address is taken, so a value computed at compile time is copied
     /// into a local first: its data has no address (ADR 0029).
     fn place_then(&mut self, expr: &hir::Expr, later_writes: bool, address: bool) -> Place {
-        if self.q.tables.is_entry_access(expr.id) {
-            return self.unbuilt_entry(expr);
-        }
         match &expr.kind {
             hir::ExprKind::Local(local) => self.local(*local),
             // Reached through its address, so that every access happens
@@ -1918,6 +1917,28 @@ impl Builder<'_, '_> {
             hir::ExprKind::Deref(pointer) => self
                 .pointer_place(pointer, later_writes)
                 .project(PlaceElem::Deref),
+            // An element of a register array or a cluster array: reached
+            // from the peripheral type that holds the entry, by the entry's
+            // step, which only the layout knows (ADR 0064). The index runs
+            // after the place it indexes and before the access (ADR 0018).
+            hir::ExprKind::Index(array, index, open)
+                if self.q.tables.is_entry_access(expr.id)
+                    && let hir::ExprKind::Field(owner, _, _) = &array.kind
+                    && let Ty::Peripheral(p) = self.ty_of(owner) =>
+            {
+                let entry = self.q.tables.field(array.id);
+                let later_writes = later_writes || !is_simple(index);
+                let owner = self.place_then(owner, later_writes, address);
+                let len = p.def().length(entry);
+                let elem = match self.array_index(index, len, *open) {
+                    PlaceElem::Index(local) => PlaceElem::Element(entry, local),
+                    PlaceElem::ConstIndex(value) => PlaceElem::ConstElement(entry, value),
+                    // `array_index` returns only the two above; this arm keeps
+                    // the match total without a panic.
+                    other => other,
+                };
+                owner.project(elem)
+            }
             hir::ExprKind::Index(base, index, open) => {
                 let later_writes = later_writes || !is_simple(index);
                 match self.ty_of(base) {
@@ -1963,29 +1984,6 @@ impl Builder<'_, '_> {
                 }
             }
         }
-    }
-
-    /// The stand-in for a register array, a cluster or an index into one,
-    /// which MIR building does not handle until M3.4a step 5 (ADR 0064): a
-    /// temporary error, so that no program using one is accepted, and a
-    /// fresh local of the expression's type, so that building goes on.
-    fn unbuilt_entry(&mut self, expr: &hir::Expr) -> Place {
-        self.q.diags.push(
-            Diagnostic::error(
-                "mir::register-array-access",
-                "an access to a register array or a cluster cannot be built yet",
-            )
-            .label(
-                expr.span,
-                "register arrays and clusters are not built into MIR yet",
-            )
-            .help("this is temporary: M3.4a step 5 builds them (ADR 0064)"),
-        );
-        // The body is not used: the evaluator must not run it, for a local of
-        // a peripheral type has no size.
-        self.failed = true;
-        let ty = self.ty_of(expr);
-        Place::local(self.new_local(ty, None))
     }
 
     /// Whether a value held at `place` must be copied before it is used as
@@ -2083,7 +2081,12 @@ fn projected_ty(ty: Ty, elem: &PlaceElem) -> Ty {
         (PlaceElem::Deref | PlaceElem::Offset(_), Ty::Ptr(ptr)) => *ptr.pointee,
         (PlaceElem::Index(_) | PlaceElem::ConstIndex(_), Ty::Array(elem, _)) => *elem,
         (PlaceElem::Field(index), Ty::Struct(s)) => s.def().fields()[*index as usize].ty,
-        (PlaceElem::Field(index), Ty::Peripheral(p)) => p.def().registers[*index as usize].ty,
+        (
+            PlaceElem::Field(index)
+            | PlaceElem::Element(index, _)
+            | PlaceElem::ConstElement(index, _),
+            Ty::Peripheral(p),
+        ) => p.def().registers[*index as usize].ty,
         (PlaceElem::Tag, Ty::Enum(e)) => Ty::Int(e.def().int),
         (PlaceElem::Payload { variant, index }, Ty::Enum(e)) => {
             e.def().payload(*variant, *index).ty

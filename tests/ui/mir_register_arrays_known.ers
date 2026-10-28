@@ -1,0 +1,41 @@
+// emit: mir
+// An index known at compile time and not below the length of a register
+// array or a cluster array is `ty::index-out-of-bounds` (ADR 0064, 0032). One
+// below it is not, and neither is one under a branch never taken.
+peripheral Context {
+    read write threshold: u32 at 0,
+}
+
+peripheral Plic {
+    read write priority: [u32; 4] at 0,
+    ctx: [Context; 2] at 0x100 step 0x10,
+}
+
+peripheral PLIC: Plic at 0x0C00_0000;
+
+const N: usize = 4;
+
+fn register_array() -> u32 {
+    PLIC.priority[4] = 1;
+    PLIC.priority[N]
+}
+
+fn cluster_array() -> u32 {
+    PLIC.ctx[2].threshold = 1;
+    PLIC.ctx[1 + 1].threshold
+}
+
+fn in_bounds() -> u32 {
+    PLIC.priority[3] + PLIC.ctx[1].threshold
+}
+
+fn never_taken() -> u32 {
+    if false {
+        PLIC.priority[10]
+    } else {
+        0
+    }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

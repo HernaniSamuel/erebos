@@ -397,9 +397,12 @@ impl Body {
                 (PlaceElem::Deref | PlaceElem::Offset(_), Ty::Ptr(ptr)) => *ptr.pointee,
                 (PlaceElem::Index(_) | PlaceElem::ConstIndex(_), Ty::Array(elem, _)) => *elem,
                 (PlaceElem::Field(index), Ty::Struct(s)) => s.def().fields()[*index as usize].ty,
-                (PlaceElem::Field(index), Ty::Peripheral(p)) => {
-                    p.def().registers[*index as usize].ty
-                }
+                (
+                    PlaceElem::Field(index)
+                    | PlaceElem::Element(index, _)
+                    | PlaceElem::ConstElement(index, _),
+                    Ty::Peripheral(p),
+                ) => p.def().registers[*index as usize].ty,
                 (PlaceElem::Tag, Ty::Enum(e)) => Ty::Int(e.def().int),
                 (PlaceElem::Payload { variant, index }, Ty::Enum(e)) => {
                     e.def().payload(*variant, *index).ty
@@ -779,8 +782,9 @@ impl fmt::Debug for EnumRef {
 pub struct PeripheralTypeDef {
     /// Its path, as the HIR shows it (ADR 0049).
     pub name: String,
-    /// In declaration order. Their types are `u8`, `u16` or `u32` in a
-    /// program without errors.
+    /// Its entries in declaration order. Their types are `u8`, `u16` or
+    /// `u32` for registers, and peripheral types for clusters, in a program
+    /// without errors.
     pub registers: Vec<Register>,
     /// Set once computed, which may be after the type is made: a struct's
     /// field or a static may need the type before anything needs its
@@ -788,10 +792,14 @@ pub struct PeripheralTypeDef {
     layout: OnceLock<PeripheralLayout>,
 }
 
-/// A register of a peripheral type: its offset is in the type's layout.
+/// An entry of a peripheral type, a register or a cluster: its offset is in
+/// the type's layout, and so are the length and the step of an entry that is
+/// an array.
 #[derive(Debug)]
 pub struct Register {
     pub name: String,
+    /// The type of the entry's element (ADR 0064): of the one register or
+    /// cluster, or of each of an array's; a cluster's is its peripheral type.
     pub ty: Ty,
     /// Its alternate group (ADR 0061), for the dump only: accesses to it
     /// are built as to any other register.
@@ -806,8 +814,24 @@ impl PeripheralTypeDef {
 
     /// The offset of register `index`, from the start of the peripheral.
     pub fn offset(&self, index: u32) -> u64 {
-        let layout = self.layout().expect("the layout is set when MIR is used");
-        layout.offsets[index as usize]
+        self.laid_out().offsets[index as usize]
+    }
+
+    /// The number of elements of entry `index`, which is an array
+    /// (ADR 0064); 0 for an entry that is no array.
+    pub fn length(&self, index: u32) -> u64 {
+        self.laid_out().arrays[index as usize].map_or(0, |(len, _)| len)
+    }
+
+    /// The distance between the elements of entry `index`, which is an
+    /// array (ADR 0064): its `step`, or the width of a register. 0 for an
+    /// entry that is no array.
+    pub fn step(&self, index: u32) -> u64 {
+        self.laid_out().arrays[index as usize].map_or(0, |(_, step)| step)
+    }
+
+    fn laid_out(&self) -> &PeripheralLayout {
+        self.layout().expect("the layout is set when MIR is used")
     }
 
     pub fn set_layout(&self, layout: PeripheralLayout) {
@@ -1035,6 +1059,14 @@ pub enum PlaceElem {
     /// Field `i` of the struct in the place, or register `i` of the
     /// peripheral type, in declaration order.
     Field(u32),
+    /// Element `i` of entry `entry` of the peripheral type in the place, an
+    /// entry that is a register array or a cluster array (ADR 0064), with
+    /// `i` the `usize` in the local: at the entry's offset plus `i` times its
+    /// step, which is not its element's size. MIR building has already
+    /// checked the bounds. Its type is the element's.
+    Element(u32, Local),
+    /// Element `i` of entry `entry`, for an `i` known in bounds.
+    ConstElement(u32, u64),
     /// The tag of the enum with payloads in the place, an integer at
     /// offset 0 (ADR 0039).
     Tag,
@@ -1256,6 +1288,8 @@ impl fmt::Display for Place {
                 PlaceElem::Index(index) => format!("{text}[{index}]"),
                 PlaceElem::ConstIndex(index) => format!("{text}[{index}]"),
                 PlaceElem::Field(index) => format!("{text}.{index}"),
+                PlaceElem::Element(entry, index) => format!("{text}.{entry}[{index}]"),
+                PlaceElem::ConstElement(entry, index) => format!("{text}.{entry}[{index}]"),
                 PlaceElem::Tag => format!("{text}.tag"),
                 PlaceElem::Payload { variant, index } => format!("({text} as {variant}).{index}"),
             };
@@ -1476,22 +1510,24 @@ impl fmt::Display for Mir {
             writeln!(f)?;
         }
         // Registers are numbered as projections name them; offsets and
-        // addresses in hex, as datasheets give them.
+        // addresses in hex, as datasheets give them. An entry that is an
+        // array shows its length and its step.
         for p in &self.peripheral_types {
             let def = p.def();
             let layout = def.layout().expect("the layout is set when MIR is used");
             let registers: Vec<String> = (def.registers.iter())
-                .zip(&layout.offsets)
+                .zip(layout.offsets.iter().zip(&layout.arrays))
                 .enumerate()
-                .map(|(i, (register, offset))| {
+                .map(|(i, (register, (offset, array)))| {
                     let group = match &register.group {
                         Some(group) => format!(" in {group}"),
                         None => String::new(),
                     };
-                    format!(
-                        "{i} {}: {} at {offset:#x}{group}",
-                        register.name, register.ty
-                    )
+                    let ty = match array {
+                        Some((len, step)) => format!("[{}; {len}] step {step:#x}", register.ty),
+                        None => register.ty.to_string(),
+                    };
+                    format!("{i} {}: {ty} at {offset:#x}{group}", register.name)
                 })
                 .collect();
             let registers = if registers.is_empty() {

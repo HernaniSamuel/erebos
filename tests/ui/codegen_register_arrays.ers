@@ -1,0 +1,57 @@
+// emit: llvm-ir
+// opt: both
+// Accesses to register arrays and clusters (ADR 0064): one volatile load or
+// store of the register's width at `base + offset + i * step`, with the
+// step and not the element's size, in `usize` arithmetic that wraps
+// (ADR 0007). A known index folds into the offset. A cluster array's
+// register, and a register array inside a cluster, add the cluster's
+// offset. A bounds check is left at `-O` only where the index is not proved
+// below the length: `i & 3` into an array of 4 needs none.
+peripheral Context {
+    read write threshold: u32 at 0,
+    read write words: [u16; 3] at 0x10 step 4,
+}
+
+peripheral Plic {
+    read write priority: [u32; 96] at 0,
+    read write narrow: [u8; 4] at 0x400 step 8,
+    ctx: [Context; 2] at 0x1000 step 0x100,
+    first: Context at 0x2000,
+}
+
+peripheral PLIC: Plic at 0x0C00_0000;
+
+// A step equal to the width, larger than it, and a known index.
+fn steps(i: usize, v: u32) -> u32 {
+    PLIC.priority[i] = v;
+    PLIC.narrow[i] = v as u8;
+    PLIC.priority[5] = 1;
+    PLIC.narrow[2] as u32 + PLIC.priority[i]
+}
+
+// Nested: a register in a cluster array's element, and a register array in
+// a cluster in an array, and in a single cluster.
+fn nested(i: usize, j: usize, v: u32) -> u32 {
+    PLIC.ctx[i].threshold = v;
+    PLIC.ctx[i].words[j] = v as u16;
+    PLIC.first.words[j] as u32 + PLIC.ctx[1].threshold
+}
+
+// Through a pointer to the cluster's type.
+fn driver(c: *mut Context, j: usize) {
+    (*c).threshold = 1;
+    (*c).words[j] = 2;
+}
+
+fn address(i: usize) {
+    driver(&raw mut PLIC.ctx[i], i);
+}
+
+// The index is masked below the length: no check at `-O`.
+fn masked(i: usize) -> u32 {
+    let a: usize = i & 3;
+    PLIC.narrow[a] as u32
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

@@ -842,6 +842,32 @@ impl Interp<'_, '_> {
                         ty: def.registers[index as usize].ty,
                     }
                 }
+                // An element of a register array or a cluster array: at the
+                // entry's offset plus the index times its step, which wraps
+                // (ADR 0007, 0064). Accessed volatile as any register.
+                (PlaceElem::Element(entry, index), Ty::Peripheral(p)) => {
+                    let index = self.local_int(index, span)?;
+                    let def = p.def();
+                    let offset = def.offset(entry);
+                    PlaceRef {
+                        ptr: current
+                            .ptr
+                            .add(offset.wrapping_add(index.wrapping_mul(def.step(entry)))),
+                        volatile: true,
+                        ty: def.registers[entry as usize].ty,
+                    }
+                }
+                (PlaceElem::ConstElement(entry, index), Ty::Peripheral(p)) => {
+                    let def = p.def();
+                    let offset = def.offset(entry);
+                    PlaceRef {
+                        ptr: current
+                            .ptr
+                            .add(offset.wrapping_add(index.wrapping_mul(def.step(entry)))),
+                        volatile: true,
+                        ty: def.registers[entry as usize].ty,
+                    }
+                }
                 // Reached by offset, as fields are (ADR 0039).
                 (PlaceElem::Tag, Ty::Enum(e)) => PlaceRef {
                     ty: Ty::Int(e.def().int),

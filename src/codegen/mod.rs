@@ -875,6 +875,36 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                         usize_type.const_int(p.def().offset(*index), false),
                     )
                 }
+                // An element of a register array or a cluster array
+                // (ADR 0064): `offset + i * step`, in `usize` arithmetic that
+                // wraps (ADR 0007). The step is the distance between
+                // elements, not the element's size, so the index steps over
+                // `[step x i8]`; a step is a `usize`, so it fits the `u32` of
+                // the array type.
+                (PlaceElem::Element(entry, index), Ty::Peripheral(p)) => {
+                    ty = p.def().registers[*entry as usize].ty;
+                    address.volatile = true;
+                    address.ptr = self.step_over(
+                        byte_type,
+                        address.ptr,
+                        usize_type.const_int(p.def().offset(*entry), false),
+                    );
+                    let index = self.read(Place::local(*index)).into_int_value();
+                    let stride = self
+                        .context
+                        .i8_type()
+                        .array_type(p.def().step(*entry) as u32);
+                    (stride.into(), index)
+                }
+                (PlaceElem::ConstElement(entry, index), Ty::Peripheral(p)) => {
+                    ty = p.def().registers[*entry as usize].ty;
+                    address.volatile = true;
+                    let def = p.def();
+                    let offset = def
+                        .offset(*entry)
+                        .wrapping_add(index.wrapping_mul(def.step(*entry)));
+                    (byte_type, usize_type.const_int(offset, false))
+                }
                 // At offset 0 of the enum (ADR 0039).
                 (PlaceElem::Tag, Ty::Enum(e)) => {
                     ty = Ty::Int(e.def().int);
@@ -887,15 +917,22 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                 }
                 (elem, ty) => unreachable!("projection {elem:?} of `{ty}`"),
             };
-            // Not `inbounds`: the arithmetic wraps and is never undefined
-            // (ADR 0021).
-            // SAFETY: the element type is sized and the index is an integer,
-            // as LLVM requires of a `getelementptr`.
-            let element = unsafe { self.builder.build_gep(step, address.ptr, &[index], "") }
-                .expect("builder is positioned");
-            address.ptr = element;
+            address.ptr = self.step_over(step, address.ptr, index);
         }
         address
+    }
+
+    /// `ptr` moved over `index` values of type `step`. Not `inbounds`: the
+    /// arithmetic wraps and is never undefined (ADR 0021).
+    fn step_over(
+        &self,
+        step: BasicTypeEnum<'ctx>,
+        ptr: PointerValue<'ctx>,
+        index: IntValue<'ctx>,
+    ) -> PointerValue<'ctx> {
+        // SAFETY: the element type is sized and the index is an integer, as
+        // LLVM requires of a `getelementptr`.
+        unsafe { self.builder.build_gep(step, ptr, &[index], "") }.expect("builder is positioned")
     }
 
     /// The address a pointer stored at `address` points to. Pointers are

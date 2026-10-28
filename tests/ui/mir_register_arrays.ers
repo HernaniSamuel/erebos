@@ -1,0 +1,81 @@
+// emit: mir
+// Accesses to register arrays and clusters (ADR 0064) in MIR: the peripheral
+// type lists each entry that is an array with its length and its step, and
+// an element is a projection of the peripheral type by entry and index
+// (`.0[_5]`), whose address is `offset + i * step`. A run-time index is
+// checked against the length at the `[` and runs after the place it indexes
+// and before the access; a known index is not checked. A cluster's registers
+// are fields of the cluster's type, and `&raw` of a cluster or an element is
+// the address of its first byte.
+fn v() -> u32 {
+    7
+}
+
+fn i() -> usize {
+    1
+}
+
+peripheral Context {
+    read write threshold: u32 at 0,
+    read claim: u32 at 4 read modifies,
+}
+
+peripheral Plic {
+    read write priority: [u32; 96] at 0,
+    read write wide: [u16; 4] at 0x200 step 8,
+    ctx: [Context; 2] at 0x1000 step 0x100,
+    first: Context at 0x2000,
+}
+
+peripheral PLIC: Plic at 0x0C00_0000;
+
+struct Mode: u32 {
+    on: bool at 0 = false,
+    level: u8 at 4..=6 = 0,
+}
+
+peripheral Modes {
+    read write m: [Mode; 2] at 0,
+}
+
+peripheral MODES: Modes at 0x1000_0000;
+
+// Read and written with a run-time index, checked once each.
+fn element(k: usize) -> u32 {
+    PLIC.priority[k] = 3;
+    PLIC.priority[k] + PLIC.wide[k] as u32
+}
+
+// A known index needs no check.
+fn known() -> u32 {
+    PLIC.priority[95] = 1;
+    PLIC.wide[3] as u32
+}
+
+// A field assignment to an element of a register array of a bit-field
+// struct: the element is read, one field changed, and written back.
+fn field(k: usize) {
+    MODES.m[k].on = true;
+}
+
+// A register of a cluster array's element, and of a single cluster.
+fn nested(k: usize) -> u32 {
+    PLIC.ctx[k].threshold = 1;
+    PLIC.first.threshold + PLIC.ctx[1].claim
+}
+
+// `&raw mut` of an element and of a single cluster.
+fn address(k: usize) -> *mut Context {
+    let first: *mut Context = &raw mut PLIC.first;
+    first;
+    &raw mut PLIC.ctx[k]
+}
+
+// The index `i()` runs after `PLIC` and before the access, and the value
+// `v()` before the place.
+fn order() {
+    PLIC.ctx[i()].threshold = v();
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

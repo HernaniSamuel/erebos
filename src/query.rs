@@ -1321,25 +1321,36 @@ impl<'h> Queries<'h> {
         // bit-field struct or an enum without payloads on one of them, which
         // MIR sees as that integer (ADR 0060). Any other was reported, and
         // leaves the layout failed; no body that is kept reaches it, so it
-        // stands as `()`, without being computed. Register arrays and
-        // clusters have a layout now but stand as `()` too, until step 5 of
-        // M3.4a gives them their MIR types: no body reaches them, since
-        // every access to one is `mir::register-array-access`, reported in
-        // `Builder::place_then` until step 5, which marks the body failed.
+        // stands as `()`, without being computed. An entry that is an array
+        // has the type of its element, and its length and step are in the
+        // layout; a cluster's is its peripheral type (ADR 0064), except in a
+        // cycle of clusters, which was reported and has no layout, where it
+        // stands as `()` so that making the type ends.
+        let cycle = self.in_cluster_cycle(id);
         let registers = (def.entries.iter())
-            .map(|register| mir::Register {
-                name: register.name.clone(),
-                ty: match register.ty {
-                    hir::Ty::Int(int)
-                    | hir::Ty::BitStruct(hir::BitStructTy { int, .. })
-                    | hir::Ty::Enum(hir::EnumTy { int, .. })
-                        if layout::register_width(register.ty).is_some() =>
-                    {
-                        mir::Ty::Int(int)
-                    }
-                    _ => mir::Ty::Unit,
-                },
-                group: (register.group.as_ref()).map(|(group, _)| group.clone()),
+            .map(|register| {
+                let elem = match register.ty {
+                    hir::Ty::Array(elem, _) => *elem,
+                    ty => ty,
+                };
+                let elem = self.normalize(elem);
+                mir::Register {
+                    name: register.name.clone(),
+                    ty: match elem {
+                        hir::Ty::Int(int)
+                        | hir::Ty::BitStruct(hir::BitStructTy { int, .. })
+                        | hir::Ty::Enum(hir::EnumTy { int, .. })
+                            if !register.is_cluster() && layout::register_width(elem).is_some() =>
+                        {
+                            mir::Ty::Int(int)
+                        }
+                        hir::Ty::Peripheral(p) if register.is_cluster() && !cycle => {
+                            mir::Ty::Peripheral(self.mir_peripheral_type(p.id))
+                        }
+                        _ => mir::Ty::Unit,
+                    },
+                    group: (register.group.as_ref()).map(|(group, _)| group.clone()),
+                }
             })
             .collect();
         let p = PeripheralTypeRef::new(def.path.clone(), registers);

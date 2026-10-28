@@ -380,7 +380,7 @@ impl Queries<'_> {
     /// directly or through other types (ADR 0064). Found from the
     /// declarations alone: whatever the lengths and steps are, a cluster
     /// holds its type.
-    fn in_cluster_cycle(&self, id: PeripheralTypeId) -> bool {
+    pub(super) fn in_cluster_cycle(&self, id: PeripheralTypeId) -> bool {
         let hir = self.hir;
         let mut seen = vec![false; hir.peripheral_types.len()];
         let mut pending = vec![id];
