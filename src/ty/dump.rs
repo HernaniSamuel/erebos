@@ -27,7 +27,7 @@ pub fn dump(q: &mut Queries) -> String {
         let Some(layout) = q.peripheral_layout(hir::PeripheralTypeId(i as u32)) else {
             continue;
         };
-        let registers: Vec<String> = (def.registers.iter())
+        let registers: Vec<String> = (def.entries.iter())
             .zip(&layout.offsets)
             .map(|(register, offset)| {
                 let ty = q.normalize(register.ty);
@@ -35,8 +35,11 @@ pub fn dump(q: &mut Queries) -> String {
                     hir::Visibility::Pub => "pub ",
                     hir::Visibility::Private => "",
                 };
-                let access = register.access.words();
-                let effect = match register.read_effect {
+                // A cluster has neither (ADR 0064).
+                let access = register
+                    .access()
+                    .map_or(String::new(), |access| format!("{} ", access.words()));
+                let effect = match register.read_effect() {
                     Some((effect, _)) => format!(" {}", read_effect_words(effect)),
                     None => String::new(),
                 };
@@ -45,7 +48,7 @@ pub fn dump(q: &mut Queries) -> String {
                     None => String::new(),
                 };
                 format!(
-                    "{vis}{access} {}: {ty} at {offset:#x}{effect}{group}",
+                    "{vis}{access}{}: {ty} at {offset:#x}{effect}{group}",
                     register.name
                 )
             })

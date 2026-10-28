@@ -338,7 +338,7 @@ impl Hir {
     /// reachable, whatever peripheral it is seen through (ADR 0050, 0058).
     pub fn register_visible(&self, id: PeripheralTypeId, index: usize, module: ModuleId) -> bool {
         let def = self.peripheral_type(id);
-        match def.registers[index].vis {
+        match def.entries[index].vis {
             Visibility::Private => is_within(&self.modules, module, def.module),
             Visibility::Pub => def.reachable_from(module),
         }
@@ -481,8 +481,9 @@ pub struct PeripheralTypeDef {
     /// The modules it is reachable from, in id order, as a struct's
     /// (ADR 0050): its `pub` registers are visible there.
     pub reachable: Vec<ModuleId>,
-    /// In source order; a name declared twice was reported.
-    pub registers: Vec<RegisterDef>,
+    /// Registers, register arrays and clusters, in source order; a name
+    /// declared twice was reported (ADR 0064).
+    pub entries: Vec<EntryDef>,
 }
 
 impl PeripheralTypeDef {
@@ -492,24 +493,68 @@ impl PeripheralTypeDef {
     }
 }
 
-/// `[pub] ACCESS NAME: Type at OFFSET`, a register (ADR 0058).
+/// An entry of a peripheral type (ADR 0058, 0064): a register, which is a
+/// register array when its type is an array, or a cluster, which is a
+/// cluster array when its type is an array.
 #[derive(Debug)]
-pub struct RegisterDef {
+pub struct EntryDef {
     pub name: String,
     /// The span of its name.
     pub span: Span,
     /// Private unless written `pub`, as a field (ADR 0050, 0058).
     pub vis: Visibility,
-    pub access: AccessMode,
+    pub kind: EntryKind,
+    /// A register's type, or an array of one; a cluster's type, a
+    /// `Ty::Peripheral`, or an array of one. `{error}` when what is written
+    /// is no such type, which was reported.
     pub ty: Ty,
     pub ty_span: Span,
     /// From the start of its peripheral, with the span of its expression.
     pub offset: (ArrayLen, Span),
-    /// What a read of it does, with the span of its words (ADR 0060).
-    pub read_effect: Option<(ReadEffect, Span)>,
+    /// The distance between the elements of an entry that is an array, with
+    /// the span of its expression; written on no other (ADR 0064).
+    pub step: Option<(ArrayLen, Span)>,
     /// The alternate group named after `in`, with the span of its name: a
     /// label of the peripheral type, which names no item (ADR 0061).
     pub group: Option<(String, Span)>,
+}
+
+/// What an entry of a peripheral type is (ADR 0064).
+#[derive(Debug)]
+pub enum EntryKind {
+    /// `[pub] ACCESS NAME: Type at OFFSET [step STEP] [READ_EFFECT]`.
+    Register {
+        access: AccessMode,
+        /// What a read of it does, with the span of its words (ADR 0060).
+        read_effect: Option<(ReadEffect, Span)>,
+    },
+    /// `[pub] NAME: Type at OFFSET [step STEP]`: it has no access mode or
+    /// read effect, its registers have theirs.
+    Cluster,
+}
+
+impl EntryDef {
+    /// The register's access mode; `None` for a cluster.
+    pub fn access(&self) -> Option<AccessMode> {
+        match self.kind {
+            EntryKind::Register { access, .. } => Some(access),
+            EntryKind::Cluster => None,
+        }
+    }
+
+    /// The register's read effect, with the span of its words; `None` for a
+    /// cluster.
+    pub fn read_effect(&self) -> Option<(ReadEffect, Span)> {
+        match self.kind {
+            EntryKind::Register { read_effect, .. } => read_effect,
+            EntryKind::Cluster => None,
+        }
+    }
+
+    /// Whether it is a cluster or a cluster array.
+    pub fn is_cluster(&self) -> bool {
+        matches!(self.kind, EntryKind::Cluster)
+    }
 }
 
 /// `peripheral NAME: Type at ADDRESS;` (ADR 0058): an instance of a
@@ -529,6 +574,10 @@ pub struct PeripheralDef {
     pub ty_span: Span,
     /// With the span of its expression.
     pub address: (ArrayLen, Span),
+    /// The peripheral named after `over`, whose device this one is another
+    /// view of, with the span of its path (ADR 0066); `None` without it,
+    /// or when the path names no peripheral, which was reported.
+    pub over: Option<(PeripheralId, Span)>,
 }
 
 /// A peripheral type written where a value would have it (ADR 0058), at
@@ -709,6 +758,9 @@ pub struct BitFieldDef {
     pub read_effect: Option<(ReadEffect, Span)>,
     /// With the span of its words.
     pub write_effect: Option<(WriteEffect, Span)>,
+    /// `read` or `write` written before its name, with the span of the
+    /// word; never `ReadWrite` (ADR 0065).
+    pub access: Option<(AccessMode, Span)>,
     /// The body computing its default, a value of its type
     /// (`Comptime::Default`), with the span of the default's expression.
     pub default: Option<(FnId, Span)>,

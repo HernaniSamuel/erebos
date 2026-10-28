@@ -332,9 +332,14 @@ pub fn lower(
             lowerer.module = module;
             peripheral_types.push(lowerer.peripheral_type_decl(decl));
         }
-        for &(decl, module) in &peripheral_decls[from.peripherals..to.peripherals] {
+        for (i, &(decl, module)) in peripheral_decls
+            .iter()
+            .enumerate()
+            .take(to.peripherals)
+            .skip(from.peripherals)
+        {
             lowerer.module = module;
-            peripherals.push(lowerer.peripheral_decl(decl));
+            peripherals.push(lowerer.peripheral_decl(decl, PeripheralId(i as u32)));
         }
     }
     debug_assert_eq!(fns.len() as u32, lowerer.value_base);

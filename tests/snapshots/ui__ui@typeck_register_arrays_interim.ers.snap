@@ -1,0 +1,45 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_register_arrays_interim.ers
+---
+--- errors ---
+ty::register-type
+
+  × `[u32; 2]` is not a register type
+   ╭─[typeck_register_arrays_interim.ers:7:19]
+ 6 │ peripheral Uart {
+ 7 │     read write r: [u32; 2] at 0,
+   ·                   ────┬───
+   ·                       ╰── the type of the register `r`
+ 8 │     read write wide: [u64; 2] at 0x10,
+   ╰────
+  help: a register is a `u8`, a `u16` or a `u32`, or a bit-field struct or an enum without
+        payloads on one of them: as wide as that integer type, and read and written in one access
+        (ADR 0058, 0060)
+ty::register-type
+
+  × `[u64; 2]` is not a register type
+   ╭─[typeck_register_arrays_interim.ers:8:22]
+ 7 │     read write r: [u32; 2] at 0,
+ 8 │     read write wide: [u64; 2] at 0x10,
+   ·                      ────┬───
+   ·                          ╰── the type of the register `wide`
+ 9 │     sub: Block at 0x20,
+   ╰────
+  help: a register is a `u8`, a `u16` or a `u32`, or a bit-field struct or an enum without
+        payloads on one of them: as wide as that integer type, and read and written in one access
+        (ADR 0058, 0060)
+ty::register-type
+
+  × `Block` is not a register type
+    ╭─[typeck_register_arrays_interim.ers:9:10]
+  8 │     read write wide: [u64; 2] at 0x10,
+  9 │     sub: Block at 0x20,
+    ·          ──┬──
+    ·            ╰── the type of the register `sub`
+ 10 │ }
+    ╰────
+  help: a register is a `u8`, a `u16` or a `u32`, or a bit-field struct or an enum without
+        payloads on one of them: as wide as that integer type, and read and written in one access
+        (ADR 0058, 0060)

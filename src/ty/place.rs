@@ -153,7 +153,7 @@ impl Checker<'_, '_> {
         field_assignment: bool,
     ) {
         let def = self.hir.peripheral_type(register.id);
-        let reg = &def.registers[register.index];
+        let reg = &def.entries[register.index];
         let reads = field_assignment || !matches!(kind, AccessMode::Write);
         let writes = !matches!(kind, AccessMode::Read);
         let label = match kind {
@@ -162,7 +162,7 @@ impl Checker<'_, '_> {
             AccessMode::Write => "written here",
             AccessMode::ReadWrite => "read and written by this compound assignment",
         };
-        if reads && reg.access == AccessMode::Write {
+        if reads && reg.access() == Some(AccessMode::Write) {
             let help = if field_assignment {
                 "a field assignment reads the register to keep its other bits, and a `write` register is never read: assign it a whole value, as a literal with `..`; declare it `read write` if the device also lets it be read (ADR 0058, 0060)"
             } else {
@@ -181,7 +181,7 @@ impl Checker<'_, '_> {
                 .help(help),
             );
         }
-        if writes && reg.access == AccessMode::Read {
+        if writes && reg.access() == Some(AccessMode::Read) {
             self.q.diags.push(
                 Diagnostic::error(
                     "ty::write-to-read-only",
@@ -516,7 +516,7 @@ impl Checker<'_, '_> {
     ) -> PlaceInfo {
         let hir = self.hir;
         let def = hir.peripheral_type(p.id);
-        let Some(index) = def.registers.iter().position(|reg| reg.name == name) else {
+        let Some(index) = def.entries.iter().position(|reg| reg.name == name) else {
             self.q
                 .diags
                 .push(unknown_register(hir, p.id, name, name_span, f.module));
@@ -529,9 +529,20 @@ impl Checker<'_, '_> {
                 .diags
                 .push(private_register(hir, p.id, index, f.module, name_span));
         }
+        let ty = self.norm(def.entries[index].ty);
+        // Register arrays and clusters are reached through an index or a
+        // register of theirs, typed by step 4. Until then the place is
+        // `{error}` with no diagnostic of its own: the layout reports every
+        // such type (`ty::register-type`, or the error of a failed value),
+        // so no program is accepted.
+        if def.entries[index].is_cluster()
+            || matches!(ty, Ty::Array(elem, _) if matches!(elem, Ty::Int(_) | Ty::BitStruct(_) | Ty::Enum(_)))
+        {
+            return PlaceInfo::ERROR;
+        }
         self.q.tables.fields.insert(expr.id, index as u32);
         PlaceInfo {
-            ty: self.norm(def.registers[index].ty),
+            ty,
             misaligned: false,
             register: Some(Register { id: p.id, index }),
             ..base_place
@@ -663,7 +674,7 @@ impl Checker<'_, '_> {
         let (effect, read) = match info.register {
             Some(register) => {
                 let def = hir.peripheral_type(register.id);
-                let reg = &def.registers[register.index];
+                let reg = &def.entries[register.index];
                 (
                     self.q.register_read_effect(register.id, register.index),
                     format!("the register `{}` of `{}`", reg.name, def.path),
@@ -749,7 +760,7 @@ impl Checker<'_, '_> {
         // (ADR 0058).
         if let Some(register) = info.register {
             let def = self.hir.peripheral_type(register.id);
-            let reg = &def.registers[register.index];
+            let reg = &def.entries[register.index];
             self.q.diags.push(
                 Diagnostic::error(
                     "ty::register-address",
@@ -761,7 +772,7 @@ impl Checker<'_, '_> {
                 .label(place.span, "a register")
                 .help(format!(
                     "a pointer to it would reach it without its access mode, `{}`; read or write it where it is named, or pass the whole device with a pointer to its peripheral, as `&raw mut P` (ADR 0058)",
-                    reg.access.words()
+                    reg.access().map_or("", AccessMode::words)
                 )),
             );
             return Ty::Error;
@@ -994,7 +1005,7 @@ fn unknown_register(
 ) -> Diagnostic {
     let def = hir.peripheral_type(id);
     let mut names: Vec<String> = Vec::new();
-    for (index, reg) in def.registers.iter().enumerate() {
+    for (index, reg) in def.entries.iter().enumerate() {
         let listed = format!("`{}`", reg.name);
         if hir.register_visible(id, index, module) && !names.contains(&listed) {
             names.push(listed);
@@ -1005,7 +1016,7 @@ fn unknown_register(
         format!("`{}` has no register `{name}`", def.path),
     )
     .label(span, "unknown register");
-    if def.registers.is_empty() {
+    if def.entries.is_empty() {
         diag.help(format!("`{}` has no registers", def.path))
     } else if names.is_empty() {
         diag.help("none of its registers is visible here (ADR 0050, 0058)")
@@ -1027,7 +1038,7 @@ fn private_register(
     span: Span,
 ) -> Diagnostic {
     let def = hir.peripheral_type(id);
-    let reg = &def.registers[index];
+    let reg = &def.entries[index];
     match reg.vis {
         hir::Visibility::Private => Diagnostic::error(
             "ty::private-register",

@@ -124,6 +124,7 @@ impl Lowerer<'_> {
                 high,
                 read_effect: field.read_effect,
                 write_effect: field.write_effect,
+                access: field.access,
                 default,
             });
         }

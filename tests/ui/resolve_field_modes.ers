@@ -1,0 +1,15 @@
+// emit: hir
+// A bit field's access mode in the HIR (ADR 0065): `read` and `write`
+// before the name, `pub` or private, with effects and defaults; a field
+// without one has none, and a field named `read` has none either.
+struct Status: u32 {
+    pub read ready: bool at 0,
+    pub write start: bool at 1,
+    read error: bool at 2 read clears,
+    write reset: bool at 3 write 1 sets,
+    mode: u8 at 4..=5 = 0,
+    read: bool at 6,
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

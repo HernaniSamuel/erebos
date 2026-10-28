@@ -1,0 +1,921 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/resolve_register_arrays.ers
+---
+--- hir ---
+Hir {
+    modules: [
+        ModuleDef {
+            name: "",
+            path: "",
+            name_span: None,
+            parent: None,
+            vis: Pub,
+        },
+        ModuleDef {
+            name: "plic",
+            path: "plic",
+            name_span: Some(
+                573..577,
+            ),
+            parent: Some(
+                ModuleId(
+                    0,
+                ),
+            ),
+            vis: Private,
+        },
+        ModuleDef {
+            name: "board",
+            path: "board",
+            name_span: Some(
+                1248..1253,
+            ),
+            parent: Some(
+                ModuleId(
+                    0,
+                ),
+            ),
+            vis: Private,
+        },
+        ModuleDef {
+            name: "views",
+            path: "views",
+            name_span: Some(
+                1663..1668,
+            ),
+            parent: Some(
+                ModuleId(
+                    0,
+                ),
+            ),
+            vis: Private,
+        },
+    ],
+    structs: [],
+    bit_structs: [],
+    enums: [],
+    fns: [
+        Fn {
+            name: "main",
+            path: "main",
+            symbol: Some(
+                "main",
+            ),
+            name_span: 1797..1801,
+            module: ModuleId(
+                0,
+            ),
+            vis: Private,
+            kind: Entry,
+            ret: Never,
+            ret_span: Some(
+                1807..1808,
+            ),
+            param_count: 0,
+            locals: [],
+            body: Some(
+                Block {
+                    stmts: [],
+                    tail: Some(
+                        Expr {
+                            id: ExprId(
+                                0,
+                            ),
+                            kind: Loop(
+                                Block {
+                                    stmts: [],
+                                    tail: None,
+                                    span: 1816..1818,
+                                },
+                            ),
+                            span: 1811..1818,
+                        },
+                    ),
+                    span: 1809..1820,
+                },
+            ),
+            span: 1788..1820,
+            runtime: false,
+            comptime: None,
+        },
+        Fn {
+            name: "on_panic",
+            path: "on_panic",
+            symbol: Some(
+                "on_panic",
+            ),
+            name_span: 1830..1838,
+            module: ModuleId(
+                0,
+            ),
+            vis: Private,
+            kind: Panic,
+            ret: Never,
+            ret_span: Some(
+                1844..1845,
+            ),
+            param_count: 0,
+            locals: [],
+            body: Some(
+                Block {
+                    stmts: [],
+                    tail: Some(
+                        Expr {
+                            id: ExprId(
+                                1,
+                            ),
+                            kind: Loop(
+                                Block {
+                                    stmts: [],
+                                    tail: None,
+                                    span: 1853..1855,
+                                },
+                            ),
+                            span: 1848..1855,
+                        },
+                    ),
+                    span: 1846..1857,
+                },
+            ),
+            span: 1821..1857,
+            runtime: false,
+            comptime: None,
+        },
+        Fn {
+            name: "SOURCES",
+            path: "plic::SOURCES",
+            symbol: None,
+            name_span: 590..597,
+            module: ModuleId(
+                1,
+            ),
+            vis: Private,
+            kind: Plain,
+            ret: Int(
+                Usize,
+            ),
+            ret_span: Some(
+                599..604,
+            ),
+            param_count: 0,
+            locals: [],
+            body: Some(
+                Block {
+                    stmts: [],
+                    tail: Some(
+                        Expr {
+                            id: ExprId(
+                                2,
+                            ),
+                            kind: Int(
+                                96,
+                            ),
+                            span: 607..609,
+                        },
+                    ),
+                    span: 607..609,
+                },
+            ),
+            span: 584..610,
+            runtime: false,
+            comptime: Some(
+                Const(
+                    ConstId(
+                        0,
+                    ),
+                ),
+            ),
+        },
+        Fn {
+            name: "CONTEXT_STEP",
+            path: "plic::CONTEXT_STEP",
+            symbol: None,
+            name_span: 621..633,
+            module: ModuleId(
+                1,
+            ),
+            vis: Private,
+            kind: Plain,
+            ret: Int(
+                Usize,
+            ),
+            ret_span: Some(
+                635..640,
+            ),
+            param_count: 0,
+            locals: [],
+            body: Some(
+                Block {
+                    stmts: [],
+                    tail: Some(
+                        Expr {
+                            id: ExprId(
+                                3,
+                            ),
+                            kind: Int(
+                                4096,
+                            ),
+                            span: 643..649,
+                        },
+                    ),
+                    span: 643..649,
+                },
+            ),
+            span: 615..650,
+            runtime: false,
+            comptime: Some(
+                Const(
+                    ConstId(
+                        1,
+                    ),
+                ),
+            ),
+        },
+        Fn {
+            name: "length",
+            path: "length",
+            symbol: None,
+            name_span: 940..947,
+            module: ModuleId(
+                1,
+            ),
+            vis: Private,
+            kind: Plain,
+            ret: Int(
+                Usize,
+            ),
+            ret_span: None,
+            param_count: 0,
+            locals: [],
+            body: Some(
+                Block {
+                    stmts: [],
+                    tail: Some(
+                        Expr {
+                            id: ExprId(
+                                4,
+                            ),
+                            kind: Const(
+                                ConstId(
+                                    0,
+                                ),
+                            ),
+                            span: 940..947,
+                        },
+                    ),
+                    span: 940..947,
+                },
+            ),
+            span: 940..947,
+            runtime: false,
+            comptime: Some(
+                Value,
+            ),
+        },
+        Fn {
+            name: "step",
+            path: "step",
+            symbol: None,
+            name_span: 1116..1128,
+            module: ModuleId(
+                1,
+            ),
+            vis: Private,
+            kind: Plain,
+            ret: Int(
+                Usize,
+            ),
+            ret_span: None,
+            param_count: 0,
+            locals: [],
+            body: Some(
+                Block {
+                    stmts: [],
+                    tail: Some(
+                        Expr {
+                            id: ExprId(
+                                5,
+                            ),
+                            kind: Const(
+                                ConstId(
+                                    1,
+                                ),
+                            ),
+                            span: 1116..1128,
+                        },
+                    ),
+                    span: 1116..1128,
+                },
+            ),
+            span: 1116..1128,
+            runtime: false,
+            comptime: Some(
+                Value,
+            ),
+        },
+    ],
+    consts: [
+        ConstDef {
+            name: "SOURCES",
+            path: "plic::SOURCES",
+            name_span: 590..597,
+            module: ModuleId(
+                1,
+            ),
+            vis: Private,
+            ty: Int(
+                Usize,
+            ),
+            init: FnId(
+                2,
+            ),
+        },
+        ConstDef {
+            name: "CONTEXT_STEP",
+            path: "plic::CONTEXT_STEP",
+            name_span: 621..633,
+            module: ModuleId(
+                1,
+            ),
+            vis: Private,
+            ty: Int(
+                Usize,
+            ),
+            init: FnId(
+                3,
+            ),
+        },
+    ],
+    statics: [],
+    comptime_blocks: [],
+    memory: None,
+    peripheral_types: [
+        PeripheralTypeDef {
+            path: "plic::Context",
+            name_span: 671..678,
+            module: ModuleId(
+                1,
+            ),
+            vis: Pub,
+            reachable: [
+                ModuleId(
+                    0,
+                ),
+                ModuleId(
+                    1,
+                ),
+                ModuleId(
+                    2,
+                ),
+                ModuleId(
+                    3,
+                ),
+            ],
+            entries: [
+                EntryDef {
+                    name: "threshold",
+                    span: 704..713,
+                    vis: Pub,
+                    kind: Register {
+                        access: ReadWrite,
+                        read_effect: None,
+                    },
+                    ty: Int(
+                        U32,
+                    ),
+                    ty_span: 715..718,
+                    offset: (
+                        Known(
+                            0,
+                        ),
+                        722..726,
+                    ),
+                    step: None,
+                    group: None,
+                },
+                EntryDef {
+                    name: "claim",
+                    span: 751..756,
+                    vis: Pub,
+                    kind: Register {
+                        access: ReadWrite,
+                        read_effect: Some(
+                            (
+                                Modifies,
+                                770..783,
+                            ),
+                        ),
+                    },
+                    ty: Int(
+                        U32,
+                    ),
+                    ty_span: 758..761,
+                    offset: (
+                        Known(
+                            4,
+                        ),
+                        765..769,
+                    ),
+                    step: None,
+                    group: None,
+                },
+            ],
+        },
+        PeripheralTypeDef {
+            path: "plic::Enables",
+            name_span: 811..818,
+            module: ModuleId(
+                1,
+            ),
+            vis: Pub,
+            reachable: [
+                ModuleId(
+                    0,
+                ),
+                ModuleId(
+                    1,
+                ),
+                ModuleId(
+                    2,
+                ),
+                ModuleId(
+                    3,
+                ),
+            ],
+            entries: [
+                EntryDef {
+                    name: "word",
+                    span: 844..848,
+                    vis: Pub,
+                    kind: Register {
+                        access: ReadWrite,
+                        read_effect: None,
+                    },
+                    ty: Array(
+                        Int(
+                            U32,
+                        ),
+                        Known(
+                            3,
+                        ),
+                    ),
+                    ty_span: 850..858,
+                    offset: (
+                        Known(
+                            0,
+                        ),
+                        862..866,
+                    ),
+                    step: None,
+                    group: None,
+                },
+            ],
+        },
+        PeripheralTypeDef {
+            path: "plic::Plic",
+            name_span: 894..898,
+            module: ModuleId(
+                1,
+            ),
+            vis: Pub,
+            reachable: [
+                ModuleId(
+                    0,
+                ),
+                ModuleId(
+                    1,
+                ),
+                ModuleId(
+                    2,
+                ),
+                ModuleId(
+                    3,
+                ),
+            ],
+            entries: [
+                EntryDef {
+                    name: "priority",
+                    span: 924..932,
+                    vis: Pub,
+                    kind: Register {
+                        access: ReadWrite,
+                        read_effect: None,
+                    },
+                    ty: Array(
+                        Int(
+                            U32,
+                        ),
+                        Comptime(
+                            FnId(
+                                19,
+                            ),
+                        ),
+                    ),
+                    ty_span: 934..948,
+                    offset: (
+                        Known(
+                            0,
+                        ),
+                        952..958,
+                    ),
+                    step: None,
+                    group: None,
+                },
+                EntryDef {
+                    name: "pending",
+                    span: 977..984,
+                    vis: Pub,
+                    kind: Register {
+                        access: Read,
+                        read_effect: None,
+                    },
+                    ty: Array(
+                        Int(
+                            U32,
+                        ),
+                        Known(
+                            3,
+                        ),
+                    ),
+                    ty_span: 986..994,
+                    offset: (
+                        Known(
+                            4096,
+                        ),
+                        998..1004,
+                    ),
+                    step: Some(
+                        (
+                            Known(
+                                4,
+                            ),
+                            1010..1011,
+                        ),
+                    ),
+                    group: None,
+                },
+                EntryDef {
+                    name: "enables",
+                    span: 1025..1032,
+                    vis: Pub,
+                    kind: Cluster,
+                    ty: Array(
+                        Peripheral(
+                            PeripheralTy {
+                                id: PeripheralTypeId(
+                                    1,
+                                ),
+                                name: "plic::Enables",
+                            },
+                        ),
+                        Known(
+                            2,
+                        ),
+                    ),
+                    ty_span: 1034..1046,
+                    offset: (
+                        Known(
+                            8192,
+                        ),
+                        1050..1056,
+                    ),
+                    step: Some(
+                        (
+                            Known(
+                                128,
+                            ),
+                            1062..1066,
+                        ),
+                    ),
+                    group: None,
+                },
+                EntryDef {
+                    name: "ctx",
+                    span: 1080..1083,
+                    vis: Pub,
+                    kind: Cluster,
+                    ty: Array(
+                        Peripheral(
+                            PeripheralTy {
+                                id: PeripheralTypeId(
+                                    0,
+                                ),
+                                name: "plic::Context",
+                            },
+                        ),
+                        Known(
+                            2,
+                        ),
+                    ),
+                    ty_span: 1085..1097,
+                    offset: (
+                        Known(
+                            2097152,
+                        ),
+                        1101..1110,
+                    ),
+                    step: Some(
+                        (
+                            Comptime(
+                                FnId(
+                                    20,
+                                ),
+                            ),
+                            1116..1128,
+                        ),
+                    ),
+                    group: None,
+                },
+                EntryDef {
+                    name: "first",
+                    span: 1142..1147,
+                    vis: Pub,
+                    kind: Cluster,
+                    ty: Peripheral(
+                        PeripheralTy {
+                            id: PeripheralTypeId(
+                                0,
+                            ),
+                            name: "plic::Context",
+                        },
+                    ),
+                    ty_span: 1149..1156,
+                    offset: (
+                        Known(
+                            3145728,
+                        ),
+                        1160..1169,
+                    ),
+                    step: None,
+                    group: Some(
+                        (
+                            "alternate",
+                            1173..1182,
+                        ),
+                    ),
+                },
+                EntryDef {
+                    name: "hidden",
+                    span: 1192..1198,
+                    vis: Private,
+                    kind: Cluster,
+                    ty: Peripheral(
+                        PeripheralTy {
+                            id: PeripheralTypeId(
+                                0,
+                            ),
+                            name: "plic::Context",
+                        },
+                    ),
+                    ty_span: 1200..1220,
+                    offset: (
+                        Known(
+                            4194304,
+                        ),
+                        1224..1233,
+                    ),
+                    step: None,
+                    group: None,
+                },
+            ],
+        },
+        PeripheralTypeDef {
+            path: "board::Board",
+            name_span: 1508..1513,
+            module: ModuleId(
+                2,
+            ),
+            vis: Pub,
+            reachable: [
+                ModuleId(
+                    0,
+                ),
+                ModuleId(
+                    1,
+                ),
+                ModuleId(
+                    2,
+                ),
+                ModuleId(
+                    3,
+                ),
+            ],
+            entries: [
+                EntryDef {
+                    name: "by_path",
+                    span: 1524..1531,
+                    vis: Private,
+                    kind: Cluster,
+                    ty: Peripheral(
+                        PeripheralTy {
+                            id: PeripheralTypeId(
+                                0,
+                            ),
+                            name: "plic::Context",
+                        },
+                    ),
+                    ty_span: 1533..1553,
+                    offset: (
+                        Known(
+                            0,
+                        ),
+                        1557..1561,
+                    ),
+                    step: None,
+                    group: None,
+                },
+                EntryDef {
+                    name: "by_use",
+                    span: 1571..1577,
+                    vis: Private,
+                    kind: Cluster,
+                    ty: Peripheral(
+                        PeripheralTy {
+                            id: PeripheralTypeId(
+                                0,
+                            ),
+                            name: "plic::Context",
+                        },
+                    ),
+                    ty_span: 1579..1586,
+                    offset: (
+                        Known(
+                            16,
+                        ),
+                        1590..1594,
+                    ),
+                    step: None,
+                    group: None,
+                },
+                EntryDef {
+                    name: "by_use_array",
+                    span: 1604..1616,
+                    vis: Private,
+                    kind: Cluster,
+                    ty: Array(
+                        Peripheral(
+                            PeripheralTy {
+                                id: PeripheralTypeId(
+                                    0,
+                                ),
+                                name: "plic::Context",
+                            },
+                        ),
+                        Known(
+                            2,
+                        ),
+                    ),
+                    ty_span: 1618..1630,
+                    offset: (
+                        Known(
+                            32,
+                        ),
+                        1634..1638,
+                    ),
+                    step: Some(
+                        (
+                            Known(
+                                16,
+                            ),
+                            1644..1648,
+                        ),
+                    ),
+                    group: None,
+                },
+            ],
+        },
+    ],
+    peripherals: [
+        PeripheralDef {
+            path: "board::PLIC",
+            name_span: 1314..1318,
+            module: ModuleId(
+                2,
+            ),
+            vis: Pub,
+            ty: Peripheral(
+                PeripheralTy {
+                    id: PeripheralTypeId(
+                        2,
+                    ),
+                    name: "plic::Plic",
+                },
+            ),
+            ty_span: 1320..1324,
+            address: (
+                Known(
+                    201326592,
+                ),
+                1328..1339,
+            ),
+            over: None,
+        },
+        PeripheralDef {
+            path: "board::PLIC_M0",
+            name_span: 1360..1367,
+            module: ModuleId(
+                2,
+            ),
+            vis: Pub,
+            ty: Peripheral(
+                PeripheralTy {
+                    id: PeripheralTypeId(
+                        0,
+                    ),
+                    name: "plic::Context",
+                },
+            ),
+            ty_span: 1369..1376,
+            address: (
+                Known(
+                    203423744,
+                ),
+                1380..1391,
+            ),
+            over: Some(
+                (
+                    PeripheralId(
+                        0,
+                    ),
+                    1397..1401,
+                ),
+            ),
+        },
+        PeripheralDef {
+            path: "board::PLIC_ALIAS",
+            name_span: 1418..1428,
+            module: ModuleId(
+                2,
+            ),
+            vis: Private,
+            ty: Peripheral(
+                PeripheralTy {
+                    id: PeripheralTypeId(
+                        2,
+                    ),
+                    name: "plic::Plic",
+                },
+            ),
+            ty_span: 1430..1447,
+            address: (
+                Known(
+                    201326592,
+                ),
+                1451..1462,
+            ),
+            over: Some(
+                (
+                    PeripheralId(
+                        0,
+                    ),
+                    1468..1486,
+                ),
+            ),
+        },
+        PeripheralDef {
+            path: "views::VIEW",
+            name_span: 1745..1749,
+            module: ModuleId(
+                3,
+            ),
+            vis: Private,
+            ty: Peripheral(
+                PeripheralTy {
+                    id: PeripheralTypeId(
+                        0,
+                    ),
+                    name: "plic::Context",
+                },
+            ),
+            ty_span: 1751..1758,
+            address: (
+                Known(
+                    203427840,
+                ),
+                1762..1773,
+            ),
+            over: Some(
+                (
+                    PeripheralId(
+                        0,
+                    ),
+                    1779..1783,
+                ),
+            ),
+        },
+    ],
+    never_in_memory: [],
+    unsized_types: [],
+    peripherals_by_value: [],
+    volatile_peripherals: [],
+    applications: [],
+    entry: FnId(
+        0,
+    ),
+    panic: FnId(
+        1,
+    ),
+    expr_count: 6,
+}

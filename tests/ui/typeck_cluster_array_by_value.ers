@@ -1,0 +1,14 @@
+// emit: typeck
+// An array of a peripheral type is a type only as a cluster's (ADR 0064):
+// anywhere else it is `ty::peripheral-by-value`, reported by the type
+// checker as for a peripheral type itself, not while the HIR is lowered.
+peripheral Block {
+    read write data: u32 at 0,
+}
+
+fn pointer(p: *const [Block; 2]) {}
+
+fn by_value(a: [Block; 2]) {}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

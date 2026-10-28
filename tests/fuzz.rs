@@ -152,7 +152,47 @@ fn seeds() -> Vec<String> {
     paths
         .iter()
         .map(|path| fs::read_to_string(path).unwrap().replace("\r\n", "\n"))
+        .filter(|text| !declares_register_array_or_cluster(text))
         .collect()
+}
+
+/// Whether `text` declares a peripheral type with a register array or a
+/// cluster (ADR 0064): in the braces after `peripheral NAME`, an entry that,
+/// after an optional `pub`, is a name followed by `:` (a cluster) or has an
+/// array for its type (`: [`). Until M3.4a's step 5 builds their accesses
+/// into MIR, code that reaches one has a layout error or an `{error}` place,
+/// not yet checked as a whole, so such seeds are left out; step 5 removes this
+/// filter. A comment or a string holding the same words leaves a seed out too,
+/// which is harmless.
+fn declares_register_array_or_cluster(text: &str) -> bool {
+    let mut rest = text;
+    while let Some(at) = rest.find("peripheral ") {
+        rest = &rest[at + "peripheral ".len()..];
+        let name = rest.trim_start();
+        let end = name
+            .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+            .unwrap_or(name.len());
+        // A peripheral, `NAME: Type at ...;`, has no braces after its name.
+        let Some(body) = name[end..].trim_start().strip_prefix('{') else {
+            continue;
+        };
+        let body = &body[..body.find('}').unwrap_or(body.len())];
+        for entry in body.split(',') {
+            let entry = entry.trim_start();
+            let entry = entry.strip_prefix("pub ").unwrap_or(entry).trim_start();
+            let word = entry
+                .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+                .unwrap_or(entry.len());
+            let colon = entry[word..].trim_start().strip_prefix(':');
+            if word > 0 && colon.is_some() {
+                return true;
+            }
+            if entry.contains(": [") {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 /// Cuts at a character boundary at or before `i`.

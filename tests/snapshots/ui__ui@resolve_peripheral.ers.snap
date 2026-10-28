@@ -357,12 +357,15 @@ Hir {
                     2,
                 ),
             ],
-            registers: [
-                RegisterDef {
+            entries: [
+                EntryDef {
                     name: "rbr",
                     span: 507..510,
                     vis: Pub,
-                    access: Read,
+                    kind: Register {
+                        access: Read,
+                        read_effect: None,
+                    },
                     ty: Int(
                         U8,
                     ),
@@ -373,14 +376,17 @@ Hir {
                         ),
                         518..519,
                     ),
-                    read_effect: None,
+                    step: None,
                     group: None,
                 },
-                RegisterDef {
+                EntryDef {
                     name: "thr",
                     span: 539..542,
                     vis: Pub,
-                    access: Write,
+                    kind: Register {
+                        access: Write,
+                        read_effect: None,
+                    },
                     ty: Int(
                         U8,
                     ),
@@ -391,14 +397,17 @@ Hir {
                         ),
                         550..551,
                     ),
-                    read_effect: None,
+                    step: None,
                     group: None,
                 },
-                RegisterDef {
+                EntryDef {
                     name: "ier",
                     span: 572..575,
                     vis: Private,
-                    access: ReadWrite,
+                    kind: Register {
+                        access: ReadWrite,
+                        read_effect: None,
+                    },
                     ty: Int(
                         U8,
                     ),
@@ -409,14 +418,17 @@ Hir {
                         ),
                         583..584,
                     ),
-                    read_effect: None,
+                    step: None,
                     group: None,
                 },
-                RegisterDef {
+                EntryDef {
                     name: "lsr",
                     span: 599..602,
                     vis: Private,
-                    access: Read,
+                    kind: Register {
+                        access: Read,
+                        read_effect: None,
+                    },
                     ty: Int(
                         U8,
                     ),
@@ -429,7 +441,7 @@ Hir {
                         ),
                         610..613,
                     ),
-                    read_effect: None,
+                    step: None,
                     group: None,
                 },
             ],
@@ -458,6 +470,7 @@ Hir {
                 ),
                 765..776,
             ),
+            over: None,
         },
         PeripheralDef {
             path: "board::UART1",
@@ -483,6 +496,7 @@ Hir {
                 ),
                 813..823,
             ),
+            over: None,
         },
     ],
     never_in_memory: [],

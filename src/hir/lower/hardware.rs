@@ -4,13 +4,13 @@ use std::collections::HashMap;
 
 use crate::diag::{Diagnostic, Diagnostics};
 use crate::hir::{
-    IntTy, MemoryMap, NeverPosition, PeripheralDef, PeripheralTypeDef, Placement, RegionDef,
-    RegisterDef, Ty,
+    ArrayLen, EntryDef, EntryKind, IntTy, MemoryMap, NeverPosition, PeripheralDef, PeripheralId,
+    PeripheralTypeDef, Placement, RegionDef, Ty,
 };
 use crate::span::Span;
 use crate::syntax::ast;
 
-use super::{Lowerer, visibility};
+use super::{Def, Lowerer, Named, visibility, written};
 
 impl Lowerer<'_> {
     /// A `memory` block (ADR 0057), checked on its own: each region name
@@ -168,60 +168,43 @@ impl Lowerer<'_> {
         })
     }
 
-    /// A peripheral type (ADR 0058): it takes no attributes, and each
-    /// register name is declared once; a register's type is a type of
-    /// memory, and its offset a `usize` computed at compile time in the
-    /// type's module. Its read effect and its group are carried as written
-    /// (ADR 0060, 0061).
+    /// A peripheral type (ADR 0058, 0064): it takes no attributes, and each
+    /// entry name, of a register, register array or cluster, is declared
+    /// once; a register's type is a type of memory or an array of one, a
+    /// cluster's a peripheral type or an array of one, and offsets, steps
+    /// and array lengths are `usize`s computed at compile time in the
+    /// type's module. A register's read effect and an entry's group are
+    /// carried as written (ADR 0060, 0061).
     pub(super) fn peripheral_type_decl(
         &mut self,
         decl: &ast::PeripheralTypeDecl,
     ) -> PeripheralTypeDef {
         self.no_attrs(&decl.attrs, "a peripheral type");
         let mut seen: HashMap<&str, Span> = HashMap::new();
-        // Clusters are checked for their type only; step 2 gives them a place
-        // in the HIR, with their steps, and counts them in the names.
-        let mut registers_decl = Vec::new();
         for entry in &decl.entries {
-            match entry {
-                ast::EntryDecl::Register(register) => registers_decl.push(register),
-                ast::EntryDecl::Cluster(cluster) => self.cluster_ty(cluster),
-            }
-        }
-        for &register in &registers_decl {
-            if let Some(&first) = seen.get(register.name.name.as_str()) {
+            let name = match entry {
+                ast::EntryDecl::Register(register) => &register.name,
+                ast::EntryDecl::Cluster(cluster) => &cluster.name,
+            };
+            if let Some(&first) = seen.get(name.name.as_str()) {
                 self.diags.push(
                     Diagnostic::error(
                         "resolve::duplicate-register",
-                        format!(
-                            "the register `{}` is declared more than once",
-                            register.name.name
-                        ),
+                        format!("the entry `{}` is declared more than once", name.name),
                     )
-                    .label(register.name.span, "declared again here")
+                    .label(name.span, "declared again here")
                     .label(first, "first declared here")
-                    .help("each register of a peripheral type has a name of its own; two registers at one offset, as a `read` one and a `write` one, take two names (ADR 0058)"),
+                    .help("each entry of a peripheral type, register, register array or cluster, has a name of its own; two registers at one offset, as a `read` one and a `write` one, take two names (ADR 0058, 0064)"),
                 );
             }
-            seen.entry(&register.name.name)
-                .or_insert(register.name.span);
+            seen.entry(&name.name).or_insert(name.span);
         }
-        let registers = registers_decl
+        let entries = decl
+            .entries
             .iter()
-            .map(|&register| RegisterDef {
-                name: register.name.name.clone(),
-                span: register.name.span,
-                vis: visibility(register.vis),
-                access: register.access,
-                ty: self.memory_ty(&register.ty, NeverPosition::Register),
-                ty_span: register.ty.span,
-                offset: (
-                    self.comptime_usize(&register.offset, "offset"),
-                    register.offset.span,
-                ),
-                read_effect: register.read_effect,
-                // A label, resolved nowhere (ADR 0061).
-                group: (register.group.as_ref()).map(|group| (group.name.clone(), group.span)),
+            .map(|entry| match entry {
+                ast::EntryDecl::Register(register) => self.register_entry(register),
+                ast::EntryDecl::Cluster(cluster) => self.cluster_entry(cluster),
             })
             .collect();
         PeripheralTypeDef {
@@ -231,39 +214,155 @@ impl Lowerer<'_> {
             vis: visibility(decl.vis),
             // Filled in once every `use` is resolved, by `reachability`.
             reachable: Vec::new(),
-            registers,
+            entries,
+        }
+    }
+
+    /// A register (ADR 0058, 0060, 0064). Its `step` is for a register
+    /// array only: on a register of any other type it is
+    /// `resolve::misplaced-step`.
+    fn register_entry(&mut self, register: &ast::RegisterDecl) -> EntryDef {
+        let ty = self.register_ty(&register.ty);
+        let offset = (
+            self.comptime_usize(&register.offset, "offset"),
+            register.offset.span,
+        );
+        let step = self.entry_step(register.step.as_ref());
+        if let (Some(step), false) = (&register.step, is_array(&register.ty)) {
+            self.misplaced_step(step, &register.ty, "a register", &register.name);
+        }
+        EntryDef {
+            name: register.name.name.clone(),
+            span: register.name.span,
+            vis: visibility(register.vis),
+            kind: EntryKind::Register {
+                access: register.access,
+                read_effect: register.read_effect,
+            },
+            ty,
+            ty_span: register.ty.span,
+            offset,
+            step,
+            // A label, resolved nowhere (ADR 0061).
+            group: (register.group.as_ref()).map(|group| (group.name.clone(), group.span)),
+        }
+    }
+
+    /// A cluster (ADR 0064). A cluster array needs a `step`
+    /// (`resolve::missing-step`), and a single cluster takes none
+    /// (`resolve::misplaced-step`); a cluster whose type is no peripheral
+    /// type, reported, has neither error.
+    fn cluster_entry(&mut self, cluster: &ast::ClusterDecl) -> EntryDef {
+        let (ty, judged) = self.cluster_ty(cluster);
+        let offset = (
+            self.comptime_usize(&cluster.offset, "offset"),
+            cluster.offset.span,
+        );
+        let step = self.entry_step(cluster.step.as_ref());
+        if judged {
+            match (&cluster.step, is_array(&cluster.ty)) {
+                (None, true) => self.diags.push(
+                    Diagnostic::error(
+                        "resolve::missing-step",
+                        format!("the cluster array `{}` has no `step`", cluster.name.name),
+                    )
+                    .label(cluster.ty.span, "an array of clusters")
+                    .label(cluster.offset.span, "`step DISTANCE` goes after the offset")
+                    .help("the distance between the elements of a cluster array is written: a peripheral type's extent grows when a register is added at its end, and a distance taken from it would move every element but the first (ADR 0064)"),
+                ),
+                (Some(step), false) => {
+                    self.misplaced_step(step, &cluster.ty, "a cluster", &cluster.name);
+                }
+                _ => {}
+            }
+        }
+        EntryDef {
+            name: cluster.name.name.clone(),
+            span: cluster.name.span,
+            vis: visibility(cluster.vis),
+            kind: EntryKind::Cluster,
+            ty,
+            ty_span: cluster.ty.span,
+            offset,
+            step,
+            group: (cluster.group.as_ref()).map(|group| (group.name.clone(), group.span)),
+        }
+    }
+
+    /// An entry's `step`, a `usize` computed at compile time, with the span
+    /// of its expression.
+    fn entry_step(&mut self, step: Option<&ast::Expr>) -> Option<(ArrayLen, Span)> {
+        step.map(|step| (self.comptime_usize(step, "step"), step.span))
+    }
+
+    /// `resolve::misplaced-step`: `step` written on `what`, `name`, whose
+    /// type `ty` is no array.
+    fn misplaced_step(&mut self, step: &ast::Expr, ty: &ast::Ty, what: &str, name: &ast::Ident) {
+        self.diags.push(
+            Diagnostic::error(
+                "resolve::misplaced-step",
+                format!("`{}` has a `step` but is not an array", name.name),
+            )
+            .label(step.span, "a `step`")
+            .label(ty.span, format!("{what} that is no array"))
+            .help("`step` is the distance between the elements of a register array or a cluster array: remove it, or make the type an array (ADR 0064)"),
+        );
+    }
+
+    /// The type of a register: a type of memory, or an array of one. A
+    /// peripheral type is allowed at the end of the arrays, as it is as the
+    /// type of a register, where the type checker rejects it with the
+    /// other types that are no register type (ADR 0058, 0064).
+    fn register_ty(&mut self, ty: &ast::Ty) -> Ty {
+        match &ty.kind {
+            ast::TyKind::Array { elem, len } => {
+                let elem = self.register_ty(elem);
+                let len = self.array_len(len);
+                match elem {
+                    Ty::Error => Ty::Error,
+                    elem => Ty::array_of(elem, len),
+                }
+            }
+            _ => self.memory_ty(ty, NeverPosition::Register),
         }
     }
 
     /// The type of a cluster (ADR 0064) must be a peripheral type or an
-    /// array of one: any other is `resolve::not-a-peripheral-type`. One
-    /// that a register may have, or an array of one, is most likely a
-    /// register written without its access mode, which the help says. Its
-    /// parts, the array lengths, the offset, the step and the group, are
-    /// lowered by step 2; a cluster of a peripheral type is skipped here.
-    fn cluster_ty(&mut self, cluster: &ast::ClusterDecl) {
-        let mut inner = &cluster.ty;
-        while let ast::TyKind::Array { elem, .. } = &inner.kind {
-            inner = elem;
-        }
-        let (what, register) = match &inner.kind {
+    /// array of one: any other is `resolve::not-a-peripheral-type`, lowered
+    /// as `{error}`, and then the entry's only error. One that a register
+    /// may have, or an array of one, is most likely a register written
+    /// without its access mode, which the help says. Returns the type and
+    /// whether it was judged to be one (`{error}` already reported, as for
+    /// an unknown name, counts). The array of a peripheral type is not
+    /// recorded for the by-value check of the type checker, which a pointee
+    /// `*const [P; 2]` still gets: the cluster is where the array is a type.
+    fn cluster_ty(&mut self, cluster: &ast::ClusterDecl) -> (Ty, bool) {
+        let (elem, len) = match &cluster.ty.kind {
+            ast::TyKind::Array { elem, len } => (&**elem, Some(&**len)),
+            _ => (&cluster.ty, None),
+        };
+        let (what, register) = match &elem.kind {
             ast::TyKind::Named(path) => match self.named_ty(path) {
-                Ty::Peripheral(_) | Ty::Error => return,
+                ty @ (Ty::Peripheral(_) | Ty::Error) => {
+                    return (self.cluster_array(ty, len), true);
+                }
                 Ty::Struct(_) => ("a struct", false),
                 Ty::BitStruct(b) => ("a bit-field struct", register_int(b.int)),
                 Ty::Enum(e) => ("an enum", !e.payloads && register_int(e.int)),
                 Ty::Int(int) => ("a built-in type", register_int(int)),
                 _ => ("a built-in type", false),
             },
-            ast::TyKind::Applied(path, args) => match self.applied_ty(inner, path, args) {
-                Ty::Error => return,
+            ast::TyKind::Applied(path, args) => match self.applied_ty(elem, path, args) {
+                Ty::Error => return (self.cluster_array(Ty::Error, len), true),
                 _ => ("an enum", false),
             },
             ast::TyKind::Ptr { .. } => ("a pointer type", false),
-            // Arrays were stripped above; only a slice is left.
-            ast::TyKind::Array { .. } | ast::TyKind::Slice(_) => ("a slice type", false),
+            ast::TyKind::Array { .. } => ("arrays", false),
+            ast::TyKind::Slice(_) => ("a slice type", false),
             ast::TyKind::Never | ast::TyKind::Unit => ("a built-in type", false),
         };
+        // Judged bad; the length is still computed, for its own errors.
+        self.cluster_array(Ty::Error, len);
         let mut diag = Diagnostic::error(
             "resolve::not-a-peripheral-type",
             format!(
@@ -273,7 +372,7 @@ impl Lowerer<'_> {
         )
         .label(
             cluster.ty.span,
-            if matches!(cluster.ty.kind, ast::TyKind::Array { .. }) {
+            if len.is_some() {
                 format!("an array of {what}, not of a peripheral type")
             } else {
                 format!("{what}, not a peripheral type")
@@ -288,14 +387,37 @@ impl Lowerer<'_> {
             diag.help("a cluster places the registers of a peripheral type at an offset: its type is a peripheral type, declared as `peripheral NAME { registers }`, or an array of one (ADR 0064)")
         };
         self.diags.push(diag);
+        (Ty::Error, false)
+    }
+
+    /// `elem`, or the array of `len` elements of it when the cluster's type
+    /// is written as one: `{error}` if `elem` is.
+    fn cluster_array(&mut self, elem: Ty, len: Option<&ast::Expr>) -> Ty {
+        let Some(len) = len else {
+            return elem;
+        };
+        let len = self.array_len(len);
+        match elem {
+            Ty::Error => Ty::Error,
+            elem => Ty::array_of(elem, len),
+        }
     }
 
     /// A peripheral (ADR 0058): it takes no attributes, its type names a
     /// peripheral type, and its address is a `usize` computed at compile
     /// time in its module.
-    pub(super) fn peripheral_decl(&mut self, decl: &ast::PeripheralDecl) -> PeripheralDef {
+    pub(super) fn peripheral_decl(
+        &mut self,
+        decl: &ast::PeripheralDecl,
+        id: PeripheralId,
+    ) -> PeripheralDef {
         self.no_attrs(&decl.attrs, "a peripheral");
         let ty = self.peripheral_of(decl);
+        let address = (
+            self.comptime_usize(&decl.address, "address"),
+            decl.address.span,
+        );
+        let over = (decl.over.as_ref()).and_then(|path| self.over_of(path, id));
         PeripheralDef {
             path: self.path_of(self.module, &decl.name.name),
             name_span: decl.name.span,
@@ -303,12 +425,51 @@ impl Lowerer<'_> {
             vis: visibility(decl.vis),
             ty,
             ty_span: decl.ty.span,
-            address: (
-                self.comptime_usize(&decl.address, "address"),
-                decl.address.span,
-            ),
-            // Step 2 resolves `over` (decl.over), with its errors.
+            address,
+            over,
         }
+    }
+
+    /// The peripheral `path` names after `over` (ADR 0066), which must be
+    /// one other than the peripheral `id` being declared. A name of nothing
+    /// is `resolve::unknown-name`, as where a value is named; of anything
+    /// else `resolve::not-a-peripheral`; `id` itself `resolve::over-itself`.
+    fn over_of(&mut self, path: &ast::Path, id: PeripheralId) -> Option<(PeripheralId, Span)> {
+        let not_a_peripheral = |what: &str| {
+            Diagnostic::error(
+                "resolve::not-a-peripheral",
+                format!("`{}` is not a peripheral", written(path)),
+            )
+            .label(path.span, format!("{what}, not a peripheral"))
+            .help("`over` names the peripheral whose device this one is another view of, as in `peripheral RNG: Rng at 0x6002_6000 over APB_CTRL;` (ADR 0066)")
+        };
+        let diag = match self.lookup_path(path) {
+            Named::Item(Def::Peripheral(over)) if over == id => Diagnostic::error(
+                "resolve::over-itself",
+                format!("the peripheral `{}` is declared over itself", written(path)),
+            )
+            .label(path.span, "names the peripheral being declared")
+            .help("`over` names another peripheral, whose device this one is another view of; a peripheral is not checked for overlap with itself (ADR 0066)"),
+            Named::Item(Def::Peripheral(over)) => return Some((over, path.span)),
+            Named::Failed => return None,
+            Named::Item(Def::Module(_)) => {
+                self.misused_module(path, "a peripheral");
+                return None;
+            }
+            Named::Item(def) => not_a_peripheral(def.what()),
+            Named::Variant(..) => not_a_peripheral("a variant"),
+            Named::Missing(module) => {
+                let message = if path.segments.len() == 1 {
+                    format!("cannot find `{}` in this scope", written(path))
+                } else {
+                    format!("cannot find `{}`", written(path))
+                };
+                let diag = Diagnostic::error("resolve::unknown-name", message);
+                self.missing(diag, path, module, "not found")
+            }
+        };
+        self.diags.push(diag);
+        None
     }
 
     /// The type of the peripheral `decl`: a peripheral type, or `{error}`
@@ -348,6 +509,11 @@ impl Lowerer<'_> {
         );
         Ty::Error
     }
+}
+
+/// Whether the written type `ty` is an array.
+fn is_array(ty: &ast::Ty) -> bool {
+    matches!(ty.kind, ast::TyKind::Array { .. })
 }
 
 /// Whether a register may be an integer of type `int` (ADR 0058).

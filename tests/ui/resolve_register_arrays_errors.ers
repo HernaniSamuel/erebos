@@ -1,0 +1,49 @@
+// emit: hir
+// What names resolution rejects of register arrays, clusters and `over`
+// (ADR 0064, 0066): a cluster array without `step`, `step` on a register
+// that is no array and on a single cluster, a cluster of type `u32` and of
+// a struct (the only error of the entry), two entries named alike, `over`
+// naming a constant, a struct and a peripheral type, a peripheral over
+// itself, `over` naming nothing, a private peripheral of another module and
+// a module. An array of a peripheral type as a pointee is the type
+// checker's, in `typeck_cluster_array_by_value.ers`.
+struct Pair { a: u32 }
+
+const K: usize = 4;
+
+peripheral Block {
+    read write data: u32 at 0,
+}
+
+peripheral Bad {
+    no_step: [Block; 2] at 0x00,
+    single: Block at 0x20 step 4,
+    plain: [Block; 2] at 0x30 step 8,
+    read write reg: u32 at 0x40 step 4,
+    read write regs: [u32; 2] at 0x44 step 4,
+    word: u32 at 0x50,
+    words: [u32; 2] at 0x54,
+    pair: Pair at 0x60 step 4,
+    read write dup: u32 at 0x70,
+    dup: Block at 0x80,
+    read write dup: u32 at 0x90,
+}
+
+peripheral A: Block at 0x1000;
+peripheral B: Block at 0x2000 over K;
+peripheral C: Block at 0x3000 over Pair;
+peripheral D: Block at 0x4000 over Block;
+peripheral E: Block at 0x5000 over E;
+peripheral F: Block at 0x6000 over Missing;
+peripheral G: Block at 0x7000 over other::Hidden;
+peripheral H: Block at 0x8000 over other::Shown;
+peripheral I: Block at 0x9000 over other;
+peripheral J: Block at 0xA000 over A;
+
+mod other {
+    peripheral Hidden: super::Block at 0xB000;
+    pub peripheral Shown: super::Block at 0xC000;
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

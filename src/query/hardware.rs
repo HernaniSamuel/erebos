@@ -223,9 +223,9 @@ impl Queries<'_> {
             return None;
         }
         self.peripheral_layouts[id.0 as usize] = State::InProgress;
-        let mut registers = Vec::with_capacity(def.registers.len());
+        let mut registers = Vec::with_capacity(def.entries.len());
         let mut failed = false;
-        for register in &def.registers {
+        for register in &def.entries {
             let offset = self.array_len(register.offset.0);
             let ty = self.normalize(register.ty);
             match (offset, layout::register_width(ty)) {
@@ -286,7 +286,7 @@ impl Queries<'_> {
                 if self.peripherals_explained.as_ref().expect("set above")[id] {
                     continue;
                 }
-                let reaches = def.registers.iter().any(|register| {
+                let reaches = def.entries.iter().any(|register| {
                     let ty = self.normalize(register.ty);
                     layout::register_width(ty).is_none()
                         && self.lacks_layout(
@@ -315,7 +315,7 @@ impl Queries<'_> {
     /// on the type's own declaration.
     fn peripheral_base_failure(&mut self, id: PeripheralTypeId) -> bool {
         let hir = self.hir;
-        hir.peripheral_type(id).registers.iter().any(|register| {
+        hir.peripheral_type(id).entries.iter().any(|register| {
             if self.array_len(register.offset.0).is_none() {
                 return true;
             }
@@ -390,12 +390,12 @@ impl Queries<'_> {
     /// the device.
     pub fn register_read_effect(&mut self, id: PeripheralTypeId, index: usize) -> Option<Span> {
         let hir = self.hir;
-        let register = &hir.peripheral_type(id).registers[index];
-        if register.access == AccessMode::Write {
+        let register = &hir.peripheral_type(id).entries[index];
+        if register.access() == Some(AccessMode::Write) {
             return None;
         }
         let ty = self.normalize(register.ty);
-        (register.read_effect.map(|(_, span)| span)).or_else(|| self.type_read_effect(ty))
+        (register.read_effect().map(|(_, span)| span)).or_else(|| self.type_read_effect(ty))
     }
 
     /// Whether a read of a volatile place of type `ty`, normalized, has
@@ -528,8 +528,8 @@ impl Queries<'_> {
         let def = hir.peripheral_type(id);
         // Each register's offset and width, `None` when its offset failed
         // or its type is wrong, both reported.
-        let mut placed: Vec<Option<(u64, u64)>> = Vec::with_capacity(def.registers.len());
-        for register in &def.registers {
+        let mut placed: Vec<Option<(u64, u64)>> = Vec::with_capacity(def.entries.len());
+        for register in &def.entries {
             let ty = self.normalize(register.ty);
             let width = layout::register_width(ty);
             // A type in error was reported, and so was what explains the
@@ -555,7 +555,7 @@ impl Queries<'_> {
             placed.push(self.array_len(register.offset.0).zip(width));
         }
 
-        for (register, &placed) in def.registers.iter().zip(&placed) {
+        for (register, &placed) in def.entries.iter().zip(&placed) {
             let Some((offset, width)) = placed else {
                 continue;
             };
@@ -589,11 +589,12 @@ impl Queries<'_> {
                 let earlier_hi = earlier_lo + earlier_width;
                 let lo = later_lo.max(earlier_lo);
                 let hi = later_hi.min(earlier_hi);
-                let (later, earlier) = (&def.registers[later], &def.registers[earlier]);
+                let (later, earlier) = (&def.entries[later], &def.entries[earlier]);
                 // A read can only mean one and a write the other.
                 let apart = matches!(
-                    (earlier.access, later.access),
-                    (AccessMode::Read, AccessMode::Write) | (AccessMode::Write, AccessMode::Read)
+                    (earlier.access(), later.access()),
+                    (Some(AccessMode::Read), Some(AccessMode::Write))
+                        | (Some(AccessMode::Write), Some(AccessMode::Read))
                 );
                 // Registers of different alternate groups, or of a group and
                 // none, belong to different modes of the device, of which one
@@ -615,14 +616,14 @@ impl Queries<'_> {
                         later.span,
                         format!(
                             "`{}`, covers [{later_lo:#x}, {later_hi:#x})",
-                            later.access.words()
+                            later.access().map_or("", AccessMode::words)
                         ),
                     )
                     .label(
                         earlier.span,
                         format!(
                             "`{}`, covers [{earlier_lo:#x}, {earlier_hi:#x})",
-                            earlier.access.words()
+                            earlier.access().map_or("", AccessMode::words)
                         ),
                     )
                     .help(format!(

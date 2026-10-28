@@ -100,6 +100,7 @@ Hir {
                     ),
                     read_effect: None,
                     write_effect: None,
+                    access: None,
                     default: Some(
                         (
                             FnId(
@@ -126,6 +127,7 @@ Hir {
                     high: None,
                     read_effect: None,
                     write_effect: None,
+                    access: None,
                     default: Some(
                         (
                             FnId(
@@ -161,6 +163,7 @@ Hir {
                     ),
                     read_effect: None,
                     write_effect: None,
+                    access: None,
                     default: Some(
                         (
                             FnId(
@@ -198,6 +201,7 @@ Hir {
                             953..967,
                         ),
                     ),
+                    access: None,
                     default: None,
                 },
                 BitFieldDef {
@@ -217,6 +221,7 @@ Hir {
                     high: None,
                     read_effect: None,
                     write_effect: None,
+                    access: None,
                     default: None,
                 },
             ],
@@ -1409,12 +1414,20 @@ Hir {
                     2,
                 ),
             ],
-            registers: [
-                RegisterDef {
+            entries: [
+                EntryDef {
                     name: "rbr",
                     span: 1056..1059,
                     vis: Pub,
-                    access: Read,
+                    kind: Register {
+                        access: Read,
+                        read_effect: Some(
+                            (
+                                Modifies,
+                                1069..1082,
+                            ),
+                        ),
+                    },
                     ty: Int(
                         U8,
                     ),
@@ -1425,19 +1438,17 @@ Hir {
                         ),
                         1067..1068,
                     ),
-                    read_effect: Some(
-                        (
-                            Modifies,
-                            1069..1082,
-                        ),
-                    ),
+                    step: None,
                     group: None,
                 },
-                RegisterDef {
+                EntryDef {
                     name: "thr",
                     span: 1102..1105,
                     vis: Pub,
-                    access: Write,
+                    kind: Register {
+                        access: Write,
+                        read_effect: None,
+                    },
                     ty: Int(
                         U8,
                     ),
@@ -1448,14 +1459,17 @@ Hir {
                         ),
                         1113..1114,
                     ),
-                    read_effect: None,
+                    step: None,
                     group: None,
                 },
-                RegisterDef {
+                EntryDef {
                     name: "ier",
                     span: 1135..1138,
                     vis: Private,
-                    access: ReadWrite,
+                    kind: Register {
+                        access: ReadWrite,
+                        read_effect: None,
+                    },
                     ty: Int(
                         U8,
                     ),
@@ -1466,14 +1480,22 @@ Hir {
                         ),
                         1146..1147,
                     ),
-                    read_effect: None,
+                    step: None,
                     group: None,
                 },
-                RegisterDef {
+                EntryDef {
                     name: "iir",
                     span: 1162..1165,
                     vis: Private,
-                    access: Read,
+                    kind: Register {
+                        access: Read,
+                        read_effect: Some(
+                            (
+                                Sets,
+                                1175..1184,
+                            ),
+                        ),
+                    },
                     ty: Int(
                         U8,
                     ),
@@ -1484,19 +1506,17 @@ Hir {
                         ),
                         1173..1174,
                     ),
-                    read_effect: Some(
-                        (
-                            Sets,
-                            1175..1184,
-                        ),
-                    ),
+                    step: None,
                     group: None,
                 },
-                RegisterDef {
+                EntryDef {
                     name: "lcr",
                     span: 1205..1208,
                     vis: Private,
-                    access: ReadWrite,
+                    kind: Register {
+                        access: ReadWrite,
+                        read_effect: None,
+                    },
                     ty: BitStruct(
                         BitStructTy {
                             id: BitStructId(
@@ -1513,14 +1533,22 @@ Hir {
                         ),
                         1217..1218,
                     ),
-                    read_effect: None,
+                    step: None,
                     group: None,
                 },
-                RegisterDef {
+                EntryDef {
                     name: "lsr",
                     span: 1233..1236,
                     vis: Private,
-                    access: Read,
+                    kind: Register {
+                        access: Read,
+                        read_effect: Some(
+                            (
+                                Clears,
+                                1246..1257,
+                            ),
+                        ),
+                    },
                     ty: Int(
                         U8,
                     ),
@@ -1531,19 +1559,17 @@ Hir {
                         ),
                         1244..1245,
                     ),
-                    read_effect: Some(
-                        (
-                            Clears,
-                            1246..1257,
-                        ),
-                    ),
+                    step: None,
                     group: None,
                 },
-                RegisterDef {
+                EntryDef {
                     name: "dll",
                     span: 1278..1281,
                     vis: Private,
-                    access: ReadWrite,
+                    kind: Register {
+                        access: ReadWrite,
+                        read_effect: None,
+                    },
                     ty: Int(
                         U8,
                     ),
@@ -1554,7 +1580,7 @@ Hir {
                         ),
                         1289..1290,
                     ),
-                    read_effect: None,
+                    step: None,
                     group: Some(
                         (
                             "dlab",
@@ -1562,11 +1588,19 @@ Hir {
                         ),
                     ),
                 },
-                RegisterDef {
+                EntryDef {
                     name: "dlm",
                     span: 1319..1322,
                     vis: Private,
-                    access: ReadWrite,
+                    kind: Register {
+                        access: ReadWrite,
+                        read_effect: Some(
+                            (
+                                Modifies,
+                                1332..1345,
+                            ),
+                        ),
+                    },
                     ty: Int(
                         U8,
                     ),
@@ -1577,12 +1611,7 @@ Hir {
                         ),
                         1330..1331,
                     ),
-                    read_effect: Some(
-                        (
-                            Modifies,
-                            1332..1345,
-                        ),
-                    ),
+                    step: None,
                     group: Some(
                         (
                             "dlab",

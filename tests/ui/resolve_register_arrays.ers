@@ -1,0 +1,55 @@
+// emit: hir
+// Register arrays and clusters in the HIR (ADR 0064, 0066): entries of a
+// peripheral type are registers, register arrays and clusters, with a
+// `step` where one is written, `pub` and private; a cluster's type is
+// named from another module by a path, and by `use`; lengths, offsets and
+// steps name constants of the type's module, and a literal is known.
+// Peripherals name another with `over`, by a name, by a path and through
+// `use` of a peripheral of another module; clusters name their type by a
+// path from another module and through `use`.
+mod plic {
+    const SOURCES: usize = 96;
+    const CONTEXT_STEP: usize = 0x1000;
+
+    pub peripheral Context {
+        pub read write threshold: u32 at 0x00,
+        pub read write claim: u32 at 0x04 read modifies,
+    }
+
+    pub peripheral Enables {
+        pub read write word: [u32; 3] at 0x00,
+    }
+
+    pub peripheral Plic {
+        pub read write priority: [u32; SOURCES] at 0x0000,
+        pub read pending: [u32; 3] at 0x1000 step 4,
+        pub enables: [Enables; 2] at 0x2000 step 0x80,
+        pub ctx: [Context; 2] at 0x20_0000 step CONTEXT_STEP,
+        pub first: Context at 0x30_0000 in alternate,
+        hidden: crate::plic::Context at 0x40_0000,
+    }
+}
+
+mod board {
+    use crate::plic::{Context, Plic};
+
+    pub peripheral PLIC: Plic at 0x0C00_0000;
+    pub peripheral PLIC_M0: Context at 0x0C20_0000 over PLIC;
+    peripheral PLIC_ALIAS: crate::plic::Plic at 0x0C00_0000 over crate::board::PLIC;
+
+    pub peripheral Board {
+        by_path: crate::plic::Context at 0x00,
+        by_use: Context at 0x10,
+        by_use_array: [Context; 2] at 0x20 step 0x10,
+    }
+}
+
+mod views {
+    use crate::board::PLIC;
+    use crate::plic::Context;
+
+    peripheral VIEW: Context at 0x0C20_1000 over PLIC;
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

@@ -1,0 +1,206 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/resolve_register_arrays_errors.ers
+---
+--- errors ---
+resolve::missing-step
+
+  × the cluster array `no_step` has no `step`
+    ╭─[resolve_register_arrays_errors.ers:19:14]
+ 18 │ peripheral Bad {
+ 19 │     no_step: [Block; 2] at 0x00,
+    ·              ─────┬────    ──┬─
+    ·                   │          ╰── `step DISTANCE` goes after the offset
+    ·                   ╰── an array of clusters
+ 20 │     single: Block at 0x20 step 4,
+    ╰────
+  help: the distance between the elements of a cluster array is written: a peripheral type's
+        extent grows when a register is added at its end, and a distance taken from it would move
+        every element but the first (ADR 0064)
+resolve::misplaced-step
+
+  × `single` has a `step` but is not an array
+    ╭─[resolve_register_arrays_errors.ers:20:32]
+ 19 │     no_step: [Block; 2] at 0x00,
+ 20 │     single: Block at 0x20 step 4,
+    ·             ──┬──              ┬
+    ·               │                ╰── a `step`
+    ·               ╰── a cluster that is no array
+ 21 │     plain: [Block; 2] at 0x30 step 8,
+    ╰────
+  help: `step` is the distance between the elements of a register array or a cluster array: remove
+        it, or make the type an array (ADR 0064)
+resolve::misplaced-step
+
+  × `reg` has a `step` but is not an array
+    ╭─[resolve_register_arrays_errors.ers:22:38]
+ 21 │     plain: [Block; 2] at 0x30 step 8,
+ 22 │     read write reg: u32 at 0x40 step 4,
+    ·                     ─┬─              ┬
+    ·                      │               ╰── a `step`
+    ·                      ╰── a register that is no array
+ 23 │     read write regs: [u32; 2] at 0x44 step 4,
+    ╰────
+  help: `step` is the distance between the elements of a register array or a cluster array: remove
+        it, or make the type an array (ADR 0064)
+resolve::not-a-peripheral-type
+
+  × the type of the cluster `word` is not a peripheral type
+    ╭─[resolve_register_arrays_errors.ers:24:11]
+ 23 │     read write regs: [u32; 2] at 0x44 step 4,
+ 24 │     word: u32 at 0x50,
+    ·           ─┬─
+    ·            ╰── a built-in type, not a peripheral type
+ 25 │     words: [u32; 2] at 0x54,
+    ╰────
+  help: an entry with no access mode is a cluster, whose type is a peripheral type; a register
+        starts with its access mode, `read`, `write` or `read write`, as in `read word: ...
+        at ...` (ADR 0064)
+resolve::not-a-peripheral-type
+
+  × the type of the cluster `words` is not a peripheral type
+    ╭─[resolve_register_arrays_errors.ers:25:12]
+ 24 │     word: u32 at 0x50,
+ 25 │     words: [u32; 2] at 0x54,
+    ·            ────┬───
+    ·                ╰── an array of a built-in type, not of a peripheral type
+ 26 │     pair: Pair at 0x60 step 4,
+    ╰────
+  help: an entry with no access mode is a cluster, whose type is a peripheral type; a register
+        starts with its access mode, `read`, `write` or `read write`, as in `read words: ...
+        at ...` (ADR 0064)
+resolve::not-a-peripheral-type
+
+  × the type of the cluster `pair` is not a peripheral type
+    ╭─[resolve_register_arrays_errors.ers:26:11]
+ 25 │     words: [u32; 2] at 0x54,
+ 26 │     pair: Pair at 0x60 step 4,
+    ·           ──┬─
+    ·             ╰── a struct, not a peripheral type
+ 27 │     read write dup: u32 at 0x70,
+    ╰────
+  help: a cluster places the registers of a peripheral type at an offset: its type is a peripheral
+        type, declared as `peripheral NAME { registers }`, or an array of one (ADR 0064)
+resolve::duplicate-register
+
+  × the entry `dup` is declared more than once
+    ╭─[resolve_register_arrays_errors.ers:28:5]
+ 26 │     pair: Pair at 0x60 step 4,
+ 27 │     read write dup: u32 at 0x70,
+    ·                ─┬─
+    ·                 ╰── first declared here
+ 28 │     dup: Block at 0x80,
+    ·     ─┬─
+    ·      ╰── declared again here
+ 29 │     read write dup: u32 at 0x90,
+    ╰────
+  help: each entry of a peripheral type, register, register array or cluster, has a name of its
+        own; two registers at one offset, as a `read` one and a `write` one, take two names (ADR
+        0058, 0064)
+resolve::duplicate-register
+
+  × the entry `dup` is declared more than once
+    ╭─[resolve_register_arrays_errors.ers:29:16]
+ 26 │     pair: Pair at 0x60 step 4,
+ 27 │     read write dup: u32 at 0x70,
+    ·                ─┬─
+    ·                 ╰── first declared here
+ 28 │     dup: Block at 0x80,
+ 29 │     read write dup: u32 at 0x90,
+    ·                ─┬─
+    ·                 ╰── declared again here
+ 30 │ }
+    ╰────
+  help: each entry of a peripheral type, register, register array or cluster, has a name of its
+        own; two registers at one offset, as a `read` one and a `write` one, take two names (ADR
+        0058, 0064)
+resolve::not-a-peripheral
+
+  × `K` is not a peripheral
+    ╭─[resolve_register_arrays_errors.ers:33:36]
+ 32 │ peripheral A: Block at 0x1000;
+ 33 │ peripheral B: Block at 0x2000 over K;
+    ·                                    ┬
+    ·                                    ╰── a constant, not a peripheral
+ 34 │ peripheral C: Block at 0x3000 over Pair;
+    ╰────
+  help: `over` names the peripheral whose device this one is another view of, as in `peripheral
+        RNG: Rng at 0x6002_6000 over APB_CTRL;` (ADR 0066)
+resolve::not-a-peripheral
+
+  × `Pair` is not a peripheral
+    ╭─[resolve_register_arrays_errors.ers:34:36]
+ 33 │ peripheral B: Block at 0x2000 over K;
+ 34 │ peripheral C: Block at 0x3000 over Pair;
+    ·                                    ──┬─
+    ·                                      ╰── a struct, not a peripheral
+ 35 │ peripheral D: Block at 0x4000 over Block;
+    ╰────
+  help: `over` names the peripheral whose device this one is another view of, as in `peripheral
+        RNG: Rng at 0x6002_6000 over APB_CTRL;` (ADR 0066)
+resolve::not-a-peripheral
+
+  × `Block` is not a peripheral
+    ╭─[resolve_register_arrays_errors.ers:35:36]
+ 34 │ peripheral C: Block at 0x3000 over Pair;
+ 35 │ peripheral D: Block at 0x4000 over Block;
+    ·                                    ──┬──
+    ·                                      ╰── a peripheral type, not a peripheral
+ 36 │ peripheral E: Block at 0x5000 over E;
+    ╰────
+  help: `over` names the peripheral whose device this one is another view of, as in `peripheral
+        RNG: Rng at 0x6002_6000 over APB_CTRL;` (ADR 0066)
+resolve::over-itself
+
+  × the peripheral `E` is declared over itself
+    ╭─[resolve_register_arrays_errors.ers:36:36]
+ 35 │ peripheral D: Block at 0x4000 over Block;
+ 36 │ peripheral E: Block at 0x5000 over E;
+    ·                                    ┬
+    ·                                    ╰── names the peripheral being declared
+ 37 │ peripheral F: Block at 0x6000 over Missing;
+    ╰────
+  help: `over` names another peripheral, whose device this one is another view of; a peripheral is
+        not checked for overlap with itself (ADR 0066)
+resolve::unknown-name
+
+  × cannot find `Missing` in this scope
+    ╭─[resolve_register_arrays_errors.ers:37:36]
+ 36 │ peripheral E: Block at 0x5000 over E;
+ 37 │ peripheral F: Block at 0x6000 over Missing;
+    ·                                    ───┬───
+    ·                                       ╰── not found
+ 38 │ peripheral G: Block at 0x7000 over other::Hidden;
+    ╰────
+resolve::private-item
+
+  × `other::Hidden` is private
+    ╭─[resolve_register_arrays_errors.ers:38:43]
+ 37 │ peripheral F: Block at 0x6000 over Missing;
+ 38 │ peripheral G: Block at 0x7000 over other::Hidden;
+    ·                                           ───┬──
+    ·                                              ╰── not visible here
+ 39 │ peripheral H: Block at 0x8000 over other::Shown;
+ 40 │ peripheral I: Block at 0x9000 over other;
+ 41 │ peripheral J: Block at 0xA000 over A;
+ 42 │ 
+ 43 │ mod other {
+ 44 │     peripheral Hidden: super::Block at 0xB000;
+    ·                ───┬──
+    ·                   ╰── declared here without `pub`
+ 45 │     pub peripheral Shown: super::Block at 0xC000;
+    ╰────
+  help: a private item of module `other` is visible only there and in the modules inside it;
+        declare it `pub` to use it elsewhere (ADR 0050)
+resolve::misused-module
+
+  × `other` is a module, not a peripheral
+    ╭─[resolve_register_arrays_errors.ers:40:36]
+ 39 │ peripheral H: Block at 0x8000 over other::Shown;
+ 40 │ peripheral I: Block at 0x9000 over other;
+    ·                                    ──┬──
+    ·                                      ╰── a module
+ 41 │ peripheral J: Block at 0xA000 over A;
+    ╰────
+  help: a module holds items, each named by a path through it, as in `other::name` (ADR 0049)

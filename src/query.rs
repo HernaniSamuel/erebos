@@ -1309,7 +1309,7 @@ impl<'h> Queries<'h> {
         // MIR sees as that integer (ADR 0060). Any other was reported, and
         // leaves the layout failed; no body that is kept reaches it, so it
         // stands as `()`, without being computed.
-        let registers = (def.registers.iter())
+        let registers = (def.entries.iter())
             .map(|register| mir::Register {
                 name: register.name.clone(),
                 ty: match register.ty {

@@ -1,0 +1,25 @@
+// emit: typeck
+// Until M3.4a step 4 types accesses to register arrays, an array of
+// registers is reported by the layout as `ty::register-type`, and an access
+// to one, or to a cluster, is `{error}` with nothing more, never a panic nor an accepted
+// program. Step 3 replaces this test with the real checks.
+peripheral Uart {
+    read write r: [u32; 2] at 0,
+    read write wide: [u64; 2] at 0x10,
+    sub: Block at 0x20,
+}
+
+peripheral Block {
+    read write data: u32 at 0,
+}
+
+peripheral UART: Uart at 0x1000_0000;
+
+fn narrow() -> u32 { UART.r[0] }
+
+fn wide() -> u64 { UART.wide[0] }
+
+fn cluster() -> u32 { UART.sub.data }
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

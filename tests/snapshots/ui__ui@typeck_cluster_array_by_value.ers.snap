@@ -1,0 +1,30 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_cluster_array_by_value.ers
+---
+--- errors ---
+ty::peripheral-by-value
+
+  × `Block` is a peripheral type, which no value has
+    ╭─[typeck_cluster_array_by_value.ers:9:23]
+  8 │ 
+  9 │ fn pointer(p: *const [Block; 2]) {}
+    ·                       ──┬──
+    ·                         ╰── `Block` as an array element
+ 10 │ 
+    ╰────
+  help: a peripheral type describes a device's registers, reached one at a time from a peripheral
+        or through a pointer, such as `*mut Block` (ADR 0058)
+ty::peripheral-by-value
+
+  × `Block` is a peripheral type, which no value has
+    ╭─[typeck_cluster_array_by_value.ers:11:17]
+ 10 │ 
+ 11 │ fn by_value(a: [Block; 2]) {}
+    ·                 ──┬──
+    ·                   ╰── `Block` as an array element
+ 12 │ 
+    ╰────
+  help: a peripheral type describes a device's registers, reached one at a time from a peripheral
+        or through a pointer, such as `*mut Block` (ADR 0058)

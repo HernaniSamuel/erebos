@@ -1,0 +1,351 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/resolve_field_modes.ers
+---
+--- hir ---
+Hir {
+    modules: [
+        ModuleDef {
+            name: "",
+            path: "",
+            name_span: None,
+            parent: None,
+            vis: Pub,
+        },
+    ],
+    structs: [],
+    bit_structs: [
+        BitStructDef {
+            path: "Status",
+            name_span: 231..237,
+            module: ModuleId(
+                0,
+            ),
+            vis: Private,
+            reachable: [
+                ModuleId(
+                    0,
+                ),
+            ],
+            ty: BitStructTy {
+                id: BitStructId(
+                    0,
+                ),
+                name: "Status",
+                int: U32,
+            },
+            int_span: 239..242,
+            fields: [
+                BitFieldDef {
+                    name: "ready",
+                    span: 258..263,
+                    vis: Pub,
+                    ty: Bool,
+                    ty_span: 265..269,
+                    low: (
+                        Known(
+                            0,
+                        ),
+                        273..274,
+                    ),
+                    high: None,
+                    read_effect: None,
+                    write_effect: None,
+                    access: Some(
+                        (
+                            Read,
+                            253..257,
+                        ),
+                    ),
+                    default: None,
+                },
+                BitFieldDef {
+                    name: "start",
+                    span: 290..295,
+                    vis: Pub,
+                    ty: Bool,
+                    ty_span: 297..301,
+                    low: (
+                        Known(
+                            1,
+                        ),
+                        305..306,
+                    ),
+                    high: None,
+                    read_effect: None,
+                    write_effect: None,
+                    access: Some(
+                        (
+                            Write,
+                            284..289,
+                        ),
+                    ),
+                    default: None,
+                },
+                BitFieldDef {
+                    name: "error",
+                    span: 317..322,
+                    vis: Private,
+                    ty: Bool,
+                    ty_span: 324..328,
+                    low: (
+                        Known(
+                            2,
+                        ),
+                        332..333,
+                    ),
+                    high: None,
+                    read_effect: Some(
+                        (
+                            Clears,
+                            334..345,
+                        ),
+                    ),
+                    write_effect: None,
+                    access: Some(
+                        (
+                            Read,
+                            312..316,
+                        ),
+                    ),
+                    default: None,
+                },
+                BitFieldDef {
+                    name: "reset",
+                    span: 357..362,
+                    vis: Private,
+                    ty: Bool,
+                    ty_span: 364..368,
+                    low: (
+                        Known(
+                            3,
+                        ),
+                        372..373,
+                    ),
+                    high: None,
+                    read_effect: None,
+                    write_effect: Some(
+                        (
+                            WriteEffect {
+                                bit: 1,
+                                action: Sets,
+                            },
+                            374..386,
+                        ),
+                    ),
+                    access: Some(
+                        (
+                            Write,
+                            351..356,
+                        ),
+                    ),
+                    default: None,
+                },
+                BitFieldDef {
+                    name: "mode",
+                    span: 392..396,
+                    vis: Private,
+                    ty: Int(
+                        U8,
+                    ),
+                    ty_span: 398..400,
+                    low: (
+                        Known(
+                            4,
+                        ),
+                        404..405,
+                    ),
+                    high: Some(
+                        (
+                            Known(
+                                5,
+                            ),
+                            408..409,
+                        ),
+                    ),
+                    read_effect: None,
+                    write_effect: None,
+                    access: None,
+                    default: Some(
+                        (
+                            FnId(
+                                17,
+                            ),
+                            412..413,
+                        ),
+                    ),
+                },
+                BitFieldDef {
+                    name: "read",
+                    span: 419..423,
+                    vis: Private,
+                    ty: Bool,
+                    ty_span: 425..429,
+                    low: (
+                        Known(
+                            6,
+                        ),
+                        433..434,
+                    ),
+                    high: None,
+                    read_effect: None,
+                    write_effect: None,
+                    access: None,
+                    default: None,
+                },
+            ],
+        },
+    ],
+    enums: [],
+    fns: [
+        Fn {
+            name: "main",
+            path: "main",
+            symbol: Some(
+                "main",
+            ),
+            name_span: 448..452,
+            module: ModuleId(
+                0,
+            ),
+            vis: Private,
+            kind: Entry,
+            ret: Never,
+            ret_span: Some(
+                458..459,
+            ),
+            param_count: 0,
+            locals: [],
+            body: Some(
+                Block {
+                    stmts: [],
+                    tail: Some(
+                        Expr {
+                            id: ExprId(
+                                1,
+                            ),
+                            kind: Loop(
+                                Block {
+                                    stmts: [],
+                                    tail: None,
+                                    span: 467..469,
+                                },
+                            ),
+                            span: 462..469,
+                        },
+                    ),
+                    span: 460..471,
+                },
+            ),
+            span: 439..471,
+            runtime: false,
+            comptime: None,
+        },
+        Fn {
+            name: "on_panic",
+            path: "on_panic",
+            symbol: Some(
+                "on_panic",
+            ),
+            name_span: 481..489,
+            module: ModuleId(
+                0,
+            ),
+            vis: Private,
+            kind: Panic,
+            ret: Never,
+            ret_span: Some(
+                495..496,
+            ),
+            param_count: 0,
+            locals: [],
+            body: Some(
+                Block {
+                    stmts: [],
+                    tail: Some(
+                        Expr {
+                            id: ExprId(
+                                2,
+                            ),
+                            kind: Loop(
+                                Block {
+                                    stmts: [],
+                                    tail: None,
+                                    span: 504..506,
+                                },
+                            ),
+                            span: 499..506,
+                        },
+                    ),
+                    span: 497..508,
+                },
+            ),
+            span: 472..508,
+            runtime: false,
+            comptime: None,
+        },
+        Fn {
+            name: "default",
+            path: "default",
+            symbol: None,
+            name_span: 412..413,
+            module: ModuleId(
+                0,
+            ),
+            vis: Private,
+            kind: Plain,
+            ret: Int(
+                U8,
+            ),
+            ret_span: None,
+            param_count: 0,
+            locals: [],
+            body: Some(
+                Block {
+                    stmts: [],
+                    tail: Some(
+                        Expr {
+                            id: ExprId(
+                                0,
+                            ),
+                            kind: Int(
+                                0,
+                            ),
+                            span: 412..413,
+                        },
+                    ),
+                    span: 412..413,
+                },
+            ),
+            span: 412..413,
+            runtime: false,
+            comptime: Some(
+                Default(
+                    BitStructId(
+                        0,
+                    ),
+                    4,
+                ),
+            ),
+        },
+    ],
+    consts: [],
+    statics: [],
+    comptime_blocks: [],
+    memory: None,
+    peripheral_types: [],
+    peripherals: [],
+    never_in_memory: [],
+    unsized_types: [],
+    peripherals_by_value: [],
+    volatile_peripherals: [],
+    applications: [],
+    entry: FnId(
+        0,
+    ),
+    panic: FnId(
+        1,
+    ),
+    expr_count: 3,
+}
