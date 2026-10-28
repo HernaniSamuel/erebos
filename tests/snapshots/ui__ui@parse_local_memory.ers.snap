@@ -116,3 +116,23 @@ parser::unexpected-token
     ·             ╰── expected identifier
  51 │ }
     ╰────
+parser::unexpected-token
+
+  × expected an expression, found `)`
+    ╭─[parse_local_memory.ers:57:20]
+ 56 │ // reported.
+ 57 │ const C: u32 = (1 +) + memory { region: 1 }.region;
+    ·                    ┬
+    ·                    ╰── expected an expression
+ 58 │ 
+    ╰────
+parser::unexpected-token
+
+  × expected identifier, found `;`
+    ╭─[parse_local_memory.ers:60:14]
+ 59 │ memory {
+ 60 │     stack in ;
+    ·              ┬
+    ·              ╰── expected identifier
+ 61 │ }
+    ╰────

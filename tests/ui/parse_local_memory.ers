@@ -49,3 +49,13 @@ fn k() -> u32 {
 memory {
     data in ;
 }
+
+// A broken constant whose initializer goes on with a struct literal named
+// `memory`, outside braces and after an operator: recovery skips it with
+// the rest of the initializer, so only the error of the block after it is
+// reported.
+const C: u32 = (1 +) + memory { region: 1 }.region;
+
+memory {
+    stack in ;
+}

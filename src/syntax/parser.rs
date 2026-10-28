@@ -265,10 +265,13 @@ impl Parser<'_> {
     /// Nor is a `memory {` deeper than the items: in a body it is an
     /// expression, such as the struct literal `memory { data: 1 }`; and
     /// `peripheral` followed by a name is one only at the depth of the
-    /// items, as `memory {` (ADR 0058).
+    /// items, as `memory {` (ADR 0058). `depth` counts only braces, so at
+    /// that depth either is one only where an item may start (see
+    /// `at_item_start`): not in a constant's initializer, after an
+    /// operator on the same line.
     fn recover_to_item(&mut self) {
         loop {
-            let at_items = self.depth == self.module_depth.unwrap_or(0);
+            let at_items = self.depth == self.module_depth.unwrap_or(0) && self.at_item_start();
             let closes_module = self.at(TokenKind::RBrace) && self.module_depth == Some(self.depth);
             let starts_item = matches!(
                 self.peek().kind,
@@ -291,6 +294,20 @@ impl Parser<'_> {
             }
             self.bump();
         }
+    }
+
+    /// Whether the next token is where an item may start: the first of the
+    /// file, the first on its line, or after `;`, `}` or `pub`.
+    fn at_item_start(&self) -> bool {
+        let Some(prev) = self.pos.checked_sub(1).map(|i| self.tokens[i]) else {
+            return true;
+        };
+        let gap = &self.text[prev.span.hi as usize..self.peek().span.lo as usize];
+        gap.contains('\n')
+            || matches!(
+                prev.kind,
+                TokenKind::Semi | TokenKind::RBrace | TokenKind::Pub
+            )
     }
 
     fn item(&mut self) -> PResult<Item> {
