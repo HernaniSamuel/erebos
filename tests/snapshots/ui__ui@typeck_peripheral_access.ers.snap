@@ -1,11 +1,10 @@
 ---
 source: tests/ui.rs
-assertion_line: 22
 expression: output
 input_file: tests/ui/typeck_peripheral_access.ers
 ---
 --- typeck ---
-peripheral uart::Uart16550 { read rbr: u8 at 0x0, write thr: u8 at 0x0, read write ier: u8 at 0x1, read lsr: u8 at 0x5, read write scr: u8 at 0x7 } extent 8, align 1
+peripheral uart::Uart16550 { pub read rbr: u8 at 0x0, pub write thr: u8 at 0x0, pub read write ier: u8 at 0x1, read lsr: u8 at 0x5, pub read write scr: u8 at 0x7 } extent 8, align 1
 peripheral Timer { read write ctrl: u32 at 0x0, read count: u16 at 0x4, write reload: u16 at 0x6, read write prescale: u8 at 0x8 } extent 9, align 4
 peripheral uart::UART0: uart::Uart16550 at 0x10000000 covers [0x10000000, 0x10000008)
 peripheral TIMER0: Timer at 0x20000000 covers [0x20000000, 0x20000009)

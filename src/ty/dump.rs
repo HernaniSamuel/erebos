@@ -31,6 +31,10 @@ pub fn dump(q: &mut Queries) -> String {
             .zip(&layout.offsets)
             .map(|(register, offset)| {
                 let ty = q.normalize(register.ty);
+                let vis = match register.vis {
+                    hir::Visibility::Pub => "pub ",
+                    hir::Visibility::Private => "",
+                };
                 let access = register.access.words();
                 let effect = match register.read_effect {
                     Some((effect, _)) => format!(" {}", read_effect_words(effect)),
@@ -41,7 +45,7 @@ pub fn dump(q: &mut Queries) -> String {
                     None => String::new(),
                 };
                 format!(
-                    "{access} {}: {ty} at {offset:#x}{effect}{group}",
+                    "{vis}{access} {}: {ty} at {offset:#x}{effect}{group}",
                     register.name
                 )
             })
