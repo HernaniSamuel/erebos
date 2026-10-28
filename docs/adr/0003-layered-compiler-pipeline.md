@@ -1,6 +1,8 @@
 # 0003. Layered compiler pipeline
 
-- Status: Accepted; amended by 0028 (on-demand scheduling), 0033 (the pipeline diagram)
+- Status: Accepted; amended by 0028 (on-demand scheduling), 0033 (the pipeline diagram),
+  0063 (the shared vocabulary; `miette` only in `diag`; the layer rules
+  checked by `tests/architecture.rs`)
 - Date: 2026-10-12
 
 ## Context

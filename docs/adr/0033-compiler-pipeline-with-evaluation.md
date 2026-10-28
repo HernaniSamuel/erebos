@@ -1,6 +1,7 @@
 # 0033. The compiler pipeline with compile-time evaluation
 
-- Status: Accepted
+- Status: Accepted; amended by 0063 (the evaluator names HIR items by
+  their ids only; `query` reaches every layer of the front end)
 - Date: 2026-10-15
 - Amends: 0003 (the pipeline diagram and its layer rule), 0028 (MIR
   building, not only type checking, asks for values)

@@ -32,7 +32,7 @@ Do not write one for local implementation details that the code already explains
 |------|------------------------------------------------------------------|----------|
 | 0001 | [Record architecture decisions](0001-record-architecture-decisions.md) | Accepted |
 | 0002 | [Bare-metal-only scope](0002-bare-metal-only-scope.md)           | Accepted |
-| 0003 | [Layered compiler pipeline](0003-layered-compiler-pipeline.md)   | Accepted, amended by 0028, 0033 |
+| 0003 | [Layered compiler pipeline](0003-layered-compiler-pipeline.md)   | Accepted, amended by 0028, 0033, 0063 |
 | 0004 | [Hand-written lexer and parser](0004-hand-written-lexer-and-parser.md) | Accepted |
 | 0005 | [LLVM backend via inkwell](0005-llvm-backend-via-inkwell.md)     | Accepted |
 | 0006 | [C ABI as the only ABI](0006-c-abi-as-the-only-abi.md)           | Accepted |
@@ -62,7 +62,7 @@ Do not write one for local implementation details that the code already explains
 | 0030 | [Statics and startup initialization](0030-statics-and-startup-initialization.md) | Accepted, amended by 0034, 0051, 0057 |
 | 0031 | [Byte strings and slices](0031-byte-strings-and-slices.md) | Accepted, amended by 0053 |
 | 0032 | [Checks on values known at compile time](0032-checks-on-values-known-at-compile-time.md) | Accepted, amended by 0035, 0037, 0039, 0059 |
-| 0033 | [The compiler pipeline with compile-time evaluation](0033-compiler-pipeline-with-evaluation.md) | Accepted |
+| 0033 | [The compiler pipeline with compile-time evaluation](0033-compiler-pipeline-with-evaluation.md) | Accepted, amended by 0063 |
 | 0034 | [`!` is not a type of memory](0034-never-is-not-a-type-of-memory.md) | Accepted, amended by 0039 |
 | 0035 | [Enums with explicit discriminants](0035-enums-with-explicit-discriminants.md) | Accepted, amended by 0038, 0039, 0044, 0049, 0059 |
 | 0036 | [Enum values that are no variant](0036-enum-values-that-are-no-variant.md) | Accepted, amended by 0039, 0040, 0053, 0059 |
@@ -92,3 +92,4 @@ Do not write one for local implementation details that the code already explains
 | 0060 | [Register fields](0060-register-fields.md) | Accepted |
 | 0061 | [Alternate registers](0061-alternate-registers.md) | Accepted |
 | 0062 | [Bit-field defaults are no part of the bit layout](0062-bit-field-defaults-are-no-part-of-the-bit-layout.md) | Accepted |
+| 0063 | [Architecture rules checked by tests](0063-architecture-rules-checked-by-tests.md) | Accepted |
