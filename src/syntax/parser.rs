@@ -1100,8 +1100,22 @@ impl Parser<'_> {
             // The mode is missing before the token, which is likely the
             // register's name: point at it rather than at the end of the
             // line before.
-            let span = self.peek().span;
-            return Err(self.report_unexpected_help(what, span, REGISTER_HELP));
+            let found = self.peek();
+            if found.kind == TokenKind::Ident && self.peek_second() == TokenKind::Colon {
+                // Named as such, so that `read: u8` does not read as a
+                // `read` that is not one.
+                let name = &self.text[found.span.range()];
+                self.diags.push(
+                    Diagnostic::error(
+                        "parser::unexpected-token",
+                        format!("expected {what}, found the register's name `{name}`"),
+                    )
+                    .label(found.span, "the register's name, just before `:`")
+                    .help(REGISTER_HELP),
+                );
+                return Err(Reported);
+            }
+            return Err(self.report_unexpected_help(what, found.span, REGISTER_HELP));
         };
         let name = self.ident()?;
         self.expect_help(TokenKind::Colon, REGISTER_HELP)?;

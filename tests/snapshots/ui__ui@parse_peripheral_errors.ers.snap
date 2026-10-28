@@ -6,12 +6,12 @@ input_file: tests/ui/parse_peripheral_errors.ers
 --- errors ---
 parser::unexpected-token
 
-  × expected `read` or `write`, found identifier
+  × expected `read` or `write`, found the register's name `rbr`
    ╭─[parse_peripheral_errors.ers:6:5]
  5 │ peripheral NoMode {
  6 │     rbr: u8 at 0,
    ·     ─┬─
-   ·      ╰── expected `read` or `write`
+   ·      ╰── the register's name, just before `:`
  7 │ }
    ╰────
   help: a register is written `ACCESS NAME: TYPE at OFFSET`, optionally after `pub`, its access
@@ -19,12 +19,12 @@ parser::unexpected-token
         before `:`; registers are separated by `,` (ADR 0058)
 parser::unexpected-token
 
-  × expected `:`, found identifier
-    ╭─[parse_peripheral_errors.ers:12:16]
- 11 │ peripheral WrongOrder {
- 12 │     write read x: u8 at 0,
-    ·                ┬
-    ·                ╰── expected `:`
+  × expected `read` or `write`, found the register's name `read`
+    ╭─[parse_peripheral_errors.ers:12:5]
+ 11 │ peripheral NamedRead {
+ 12 │     read: u8 at 0,
+    ·     ──┬─
+    ·       ╰── the register's name, just before `:`
  13 │ }
     ╰────
   help: a register is written `ACCESS NAME: TYPE at OFFSET`, optionally after `pub`, its access
@@ -32,13 +32,26 @@ parser::unexpected-token
         before `:`; registers are separated by `,` (ADR 0058)
 parser::unexpected-token
 
+  × expected `:`, found identifier
+    ╭─[parse_peripheral_errors.ers:18:16]
+ 17 │ peripheral WrongOrder {
+ 18 │     write read x: u8 at 0,
+    ·                ┬
+    ·                ╰── expected `:`
+ 19 │ }
+    ╰────
+  help: a register is written `ACCESS NAME: TYPE at OFFSET`, optionally after `pub`, its access
+        mode `read`, `write` or `read write`, in that order, and its name the identifier just
+        before `:`; registers are separated by `,` (ADR 0058)
+parser::unexpected-token
+
   × expected `at`, found integer literal
-    ╭─[parse_peripheral_errors.ers:17:18]
- 16 │ peripheral NoAt {
- 17 │     read rbr: u8 0,
+    ╭─[parse_peripheral_errors.ers:23:18]
+ 22 │ peripheral NoAt {
+ 23 │     read rbr: u8 0,
     ·                  ┬
     ·                  ╰── expected `at`
- 18 │ }
+ 24 │ }
     ╰────
   help: a register is written `ACCESS NAME: TYPE at OFFSET`, optionally after `pub`, its access
         mode `read`, `write` or `read write`, in that order, and its name the identifier just
@@ -46,12 +59,12 @@ parser::unexpected-token
 parser::unexpected-token
 
   × expected `read`, `in`, `,` or `}`, found identifier
-    ╭─[parse_peripheral_errors.ers:22:22]
- 21 │ peripheral NoComma {
- 22 │     read rbr: u8 at 0
+    ╭─[parse_peripheral_errors.ers:28:22]
+ 27 │ peripheral NoComma {
+ 28 │     read rbr: u8 at 0
     ·                      ▲
     ·                      ╰── expected `read`, `in`, `,` or `}`
- 23 │     write thr: u8 at 0,
+ 29 │     write thr: u8 at 0,
     ╰────
   help: after its offset, a register may declare what a read does, `read clears`, `read sets` or
         `read modifies`, then an alternate group, `in GROUP`, in that order; registers are
@@ -59,45 +72,45 @@ parser::unexpected-token
 parser::unexpected-token
 
   × expected `at`, found integer literal
-    ╭─[parse_peripheral_errors.ers:27:22]
- 26 │ // A peripheral without `at`.
- 27 │ peripheral A: NoMode 0x1000_0000;
+    ╭─[parse_peripheral_errors.ers:33:22]
+ 32 │ // A peripheral without `at`.
+ 33 │ peripheral A: NoMode 0x1000_0000;
     ·                      ─────┬─────
     ·                           ╰── expected `at`
- 28 │ 
+ 34 │ 
     ╰────
   help: a peripheral is written `peripheral NAME: TYPE at ADDRESS;`, its type a peripheral type
         (ADR 0058)
 parser::unexpected-token
 
   × expected `;`, found identifier
-    ╭─[parse_peripheral_errors.ers:30:36]
- 29 │ // A peripheral without its `;`.
- 30 │ peripheral B: NoMode at 0x1000_0000
+    ╭─[parse_peripheral_errors.ers:36:36]
+ 35 │ // A peripheral without its `;`.
+ 36 │ peripheral B: NoMode at 0x1000_0000
     ·                                    ▲
     ·                                    ╰── expected `;`
- 31 │ peripheral C: NoMode at 0x1000_1000;
+ 37 │ peripheral C: NoMode at 0x1000_1000;
     ╰────
   help: a peripheral is written `peripheral NAME: TYPE at ADDRESS;`, its type a peripheral type
         (ADR 0058)
 parser::unexpected-token
 
   × expected `{` or `:`, found `;`
-    ╭─[parse_peripheral_errors.ers:34:13]
- 33 │ // A peripheral without a type.
- 34 │ peripheral D;
+    ╭─[parse_peripheral_errors.ers:40:13]
+ 39 │ // A peripheral without a type.
+ 40 │ peripheral D;
     ·             ┬
     ·             ╰── expected `{` or `:`
- 35 │ 
+ 41 │ 
     ╰────
   help: `peripheral NAME { registers }` declares a peripheral type, and `peripheral NAME: TYPE at
         ADDRESS;` a peripheral of that type (ADR 0058)
 parser::unexpected-token
 
   × expected an expression, found `;`
-    ╭─[parse_peripheral_errors.ers:37:24]
- 36 │ // The item after it is parsed: its error is reported.
- 37 │ peripheral E: NoMode at;
+    ╭─[parse_peripheral_errors.ers:43:24]
+ 42 │ // The item after it is parsed: its error is reported.
+ 43 │ peripheral E: NoMode at;
     ·                        ┬
     ·                        ╰── expected an expression
     ╰────

@@ -6,6 +6,12 @@ peripheral NoMode {
     rbr: u8 at 0,
 }
 
+// A register named `read`, without an access mode: the word just before
+// `:` is the name, not the mode.
+peripheral NamedRead {
+    read: u8 at 0,
+}
+
 // The access modes in the wrong order: `write read` is a `write` register
 // named `read`, and `x` stands where `:` should.
 peripheral WrongOrder {
