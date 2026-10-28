@@ -57,7 +57,7 @@ updated, and a program on QEMU.
 |------|----------|-----------------|
 | **M3.1** ✅ Memory maps | `memory { ... }` blocks: regions, where code, data and the stack go, the linker script generated from them; the stack with a declared size at the start of its region; region overflows as diagnostics (ADR 0057) | a program laid out as on a small board, checking where its code, data and stack are |
 | **M3.2** ✅ Peripherals | `peripheral` blocks: registers at offsets, with widths and access modes (read-only, write-only, read-write), accessed as MMIO; a write to a read-only register is a compile error; the UART declared in the language | hello world through a UART and a test finisher declared as peripherals |
-| **M3.3** Register fields | fields at bit positions of a register (representation clauses, as in Ada), enums in fields, write-1-to-clear fields, reads with side effects, reset values | the UART configured through its fields |
+| **M3.3** ✅ Register fields | fields at bit positions of a register (representation clauses, as in Ada), enums in fields, write-1-to-clear fields, reads with side effects, reset values | the UART configured through its fields |
 | **M3.4** Register arrays and SVD | register arrays, clusters and `derivedFrom`; the design checked against the SVD of a real riscv32 chip; whether `svd2erebos` is a tool of its own | a peripheral generated from SVD, run on QEMU |
 | **M3.5** Second target | ARM Cortex-M on QEMU; what depends on the target becomes a per-target description (pointer width, widest access, ABI, startup, linker script, LLVM setup, runtime functions) | the e2e programs on both targets |
 
@@ -428,4 +428,32 @@ Documentation owed:
   levels through a 16550 UART and the test finisher declared as
   peripherals, its driver reaching the UART through a pointer held in a
   static; the hello world test writes them through peripherals too.
-- **Next: M3.3** (register fields).
+- **M3.3 done.** Registers have fields (ADR 0059 to 0062). A bit-field
+  struct, `struct Lcr: u8 { ... }`, is a value stored as its integer
+  type (`u8`, `u16`, `u32` or `u64`), whose fields sit at bit positions
+  written as a datasheet gives them (`dlab: bool at 7`, `word_length:
+  WordLength at 0..=1`); fields are `bool`, integers or enums, may have
+  defaults, and a literal ends with `..` to take them. A value written to
+  a field must fit its bits, checked at compile time when known and
+  otherwise by a panic (`FieldOutOfRange`). `as` converts a bit-field
+  struct to integers and back from its own integer type, and it is a
+  scalar in calls and volatile accesses. A register may have such a
+  struct, or an enum, as its type; a field assignment is one read and one
+  write of the register. A field may declare a write effect (`write 1
+  clears`, six combinations), and then a field assignment to a register
+  writes the other effect fields with the value that has no effect, and
+  a compound assignment to it is an error; a register or a field may
+  declare a read effect (`read clears`, `read sets`, `read modifies`),
+  and then a read-modify-write of it is an error, the program reading
+  into a local instead. A field's default is its reset value. Registers
+  of another mode of the device, such as the 16550's divisor latch, go
+  in an alternate group (`in dlab`) and are checked for overlap against
+  their group only. The milestone program configures the 16550 on QEMU
+  through its fields at both optimization levels: it sets DLAB and writes
+  the divisor, builds the line control and FIFO control registers with
+  literals, turns on loopback, and reads a received byte and an overrun
+  that a read clears. Bit-field structs were also run against clang's
+  calling convention and layout. Left to M3.4: access modes of fields,
+  the write effects without a neutral value, a register's reset value
+  without fields, and peripherals sharing addresses.
+- **Next: M3.4** (register arrays and SVD).

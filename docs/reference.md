@@ -1,4 +1,4 @@
-# Erebos language reference (M3.2)
+# Erebos language reference (M3.3)
 
 This describes the language as the compiler implements it today. The
 reasoning behind each rule lives in the ADRs (`docs/adr/`), cited as
@@ -10,11 +10,12 @@ one of them.
 A program is a **root file** (`.ers`), the one given to `erebos build`,
 plus the files of the modules it declares (ADR 0049), plus the module
 `core`, shipped inside the compiler (ADR 0052). Each file is a list of
-items, in any order: functions, external functions, structs, enums,
-constants, statics, external statics, `comptime` blocks, modules (`mod`),
-`use` declarations, the `memory` block, peripheral types and peripherals
-(see "Peripherals"). The root file is the **root
-module**, and the modules it declares, inline or in their own files, form
+items, in any order: functions, external functions, structs, bit-field
+structs (see "Bit-field structs"), enums, constants, statics, external
+statics, `comptime` blocks, modules (`mod`), `use` declarations, the
+`memory` block, peripheral types and peripherals (see "Peripherals"). The
+root file is the **root module**, and the modules it declares, inline or
+in their own files, form
 a tree under it; each module has its own namespace (see "Modules and
 paths"). Items may refer to each other whatever their order and their
 files (ADR 0028). The program must contain exactly one **entry function**
@@ -47,8 +48,9 @@ panic fn on_panic() -> ! {
   parameters, must return `!`, and cannot be called.
 - `panic fn` runs when an operation cannot produce a result, such as
   division by zero, an index out of bounds, a failed `assert`, or an enum
-  value that is no variant, met by a `match` that no arm matches or by `?`
-  (ADR 0014, 0036, 0040, 0046). It must return `!`, and may be called
+  value that is no variant, met by a `match` that no arm matches or by `?`,
+  or a value that does not fit the bit field it is written to
+  (ADR 0014, 0036, 0040, 0046, 0059). It must return `!`, and may be called
   explicitly. It takes **no parameter, or one of type
   `*const core::PanicInfo`**, through which it learns why and where the
   program panicked (ADR 0053, see "Panic information"):
@@ -76,9 +78,17 @@ not part of the target: each program declares it in its `memory` block.
   (`region`, `origin`, `size`, `code`, `data`, `stack`, `in`), are no
   keywords: they are recognized only in their place (see "Memory maps"),
   and are ordinary names elsewhere. Nor are `peripheral`, which starts an
-  item only where an item starts and a name follows it, and the words
+  item only where an item starts and a name follows it; the words
   `read`, `write` and `at`, recognized only inside the two `peripheral`
-  items (see "Peripherals").
+  items and, `at` before a field's bits and `read` and `write` starting
+  its effects, in a bit-field struct; `clears`, `sets`, `toggles` and
+  `modifies`, recognized only in an effect; and `in` after a register's
+  offset (see "Bit-field structs" and "Peripherals").
+- **`..`** ends a literal of a bit-field struct, giving the fields it
+  leaves out their defaults, and **`..=`** joins the two ends of a bit
+  field's bits (see "Bit-field structs"); neither has another use, and
+  there are no range expressions. `0..=1` is three tokens, and `...` is
+  `..` followed by `.`.
 - **`_`** is a token of its own, the wildcard pattern of `match`, and
   nothing else (ADR 0037): no variable, parameter, item, field or variant
   can be named `_` (`let _: u32` and `const _: u32` are
@@ -121,6 +131,7 @@ not part of the target: each program declares it in its `memory` block.
 | `[T; N]` | an array of `N` values of type `T`; `N` is a `usize` computed at compile time (ADR 0021, 0029), so a literal too large for `usize` is `ty::literal-out-of-range`, as it is in `#[align(N)]` |
 | `*const [T]`, `*mut [T]` | slices: the address of `T` values and how many there are (ADR 0031); `volatile` as for any pointer |
 | `Name`, `uart::Name` | a struct declared with `struct Name { ... }`, named by a path (ADR 0021, 0049) |
+| `Name`, `uart::Name` | a bit-field struct declared with `struct Name: u8 { ... }`: fields at bit positions of its integer type, `u8`, `u16`, `u32` or `u64`, in which it is stored; a scalar (ADR 0059, see "Bit-field structs") |
 | `Name`, `uart::Name` | an enum declared with `enum Name: u8 { ... }`: without payloads, stored as its integer type (ADR 0035); with payloads, a tag and the payload values of its variant (ADR 0039) |
 | `Option(T)`, `Result(T, E)` | built-in enums with payloads: a `T` or nothing, and a `T` or an error `E` (ADR 0045, see "`Option` and `Result`") |
 | `Name`, `uart::Name` | a peripheral type declared with `peripheral Name { ... }`: a device's registers, the type of a peripheral and the pointee of pointers, but never the type of a value (ADR 0058, see "Peripherals") |
@@ -128,7 +139,8 @@ not part of the target: each program declares it in its `memory` block.
 Every `let`, parameter and return type is written explicitly; there is no
 inference (ADR 0008). `-> ()` may be omitted (ADR 0015). Arrays, structs
 and enums with payloads are **aggregates**, and so are slices where a rule
-depends on it.
+depends on it. A bit-field struct is not: it is a **scalar**, stored,
+passed and accessed as its integer type (ADR 0059).
 
 The names of the built-in types, `bool`, the integer types, `Option` and
 `Result`, are no item's: a struct, enum, function, constant, static,
@@ -158,14 +170,14 @@ field of type `*mut Uart` are fine. As a register's type it is
 **`!` is not a type of memory** (ADR 0034, 0039). No value of type `!`
 exists, so it is an error (`ty::never-in-memory`) as the pointee of a
 pointer (`*const !`), the element of an array or slice type (`[!; 0]`,
-`*const [!]`), a field type, a payload type, a register's type, the type
-of a `static`, `extern static`, `const` or `comptime` value, an operand of
-`size_of`, `align_of` or `offset_of`, and under `&raw` (`&raw const x`
-with `x: !`). Each `!` written there is reported once, also where nothing
-uses it, and the type containing it causes no further error. `!` stays
-valid as the type of an expression, as a return type (`-> !`) and in a
-`let` whose initializer never finishes (`let x: ! = loop {};`). An array
-literal or repeat with an element of type `!` (`[loop {}; 3]`) has type
+`*const [!]`), a field type (a bit field's too), a payload type, a
+register's type, the type of a `static`, `extern static`, `const` or
+`comptime` value, an operand of `size_of`, `align_of` or `offset_of`, and
+under `&raw` (`&raw const x` with `x: !`). Each `!` written there is
+reported once, also where nothing uses it, and the type containing it
+causes no further error. `!` stays valid as the type of an expression,
+as a return type (`-> !`) and in a `let` whose initializer never
+finishes (`let x: ! = loop {};`). An array literal or repeat with an element of type `!` (`[loop {}; 3]`) has type
 `!`; its other elements are checked against the expected element type, or
 the first element whose type is not `!`. Use `()` for a type without data.
 
@@ -207,8 +219,9 @@ no arrays by value, wraps them in a struct. A slice passes like the C
 struct `struct { const T *ptr; size_t len; }`: in a register pair, and
 returned in `a0`, `a1` (ADR 0031). An enum with payloads passes by its
 size and alignment, as its C twin, a union, does (see "Enums"); it is
-never of size 0, since its tag has a size. Enums without payloads are not
-aggregates: they pass as their integer type.
+never of size 0, since its tag has a size. Enums without payloads and
+bit-field structs are not aggregates: they pass as their integer type
+(see "Bit-field structs").
 
 ### External functions (ADR 0026)
 
@@ -255,10 +268,14 @@ buf[i] = buf[0];
 ```
 
 - A struct literal gives every field exactly once, in any order; the
-  values run in the order written.
+  values run in the order written. Only a literal of a bit-field struct
+  may leave fields out, with `..` (see "Bit-field structs"); `..` in a
+  literal of an ordinary struct is `resolve::missing-default`, its fields
+  having no defaults.
 - A field is private to the struct's module unless declared `pub`
   (`pub x: i32`): outside, it cannot be named, and the struct cannot be
-  built with a literal (ADR 0050, see "Visibility").
+  built with a literal (ADR 0050, see "Visibility"), except that a literal
+  of a bit-field struct may leave out invisible fields with `..`.
 - `[a, b, c]` lists every element. `[v; N]` evaluates `v` exactly once,
   even for `N` of 0, and copies it into every element.
 - `s.field` and `a[i]` are places when `s` and `a` are: reading or writing
@@ -292,7 +309,9 @@ yet `&raw mut UART0` is allowed: what may be written is its registers'
 business (ADR 0058). The result is never a volatile pointer; one to a
 peripheral type, as `&raw mut UART0` gives, is accessed volatile through
 its pointee (see "Peripherals"). A register has no address
-(`ty::register-address`). A plain `&` is reserved for references (M5).
+(`ty::register-address`), and neither has a bit field, a field of a
+bit-field struct, which is no place in memory (`ty::bit-field-address`,
+see "Bit-field structs"). A plain `&` is reserved for references (M5).
 
 A constant has no address, and neither does any element or field of it:
 `&raw const T`, `&raw const T[1]` and `&raw const S.f` are
@@ -307,6 +326,218 @@ constant. Such a part cannot be assigned, nor have a `*mut` address
 taken.
 
 `&raw const p[i]` is how a pointer is offset by `i` elements.
+
+## Bit-field structs (ADR 0059, 0062)
+
+```
+enum WordLength: u8 { Five = 0, Six = 1, Seven = 2, Eight = 3 }
+
+struct Lcr: u8 {
+    pub word_length: WordLength at 0..=1 = .Five,
+    pub two_stop_bits: bool at 2 = false,
+    pub parity: bool at 3 = false,
+    pub break_control: bool at 6 = false,
+    pub dlab: bool at 7 = false,
+}
+
+let mut l: Lcr = Lcr { word_length: .Eight, .. };
+l.dlab = true;
+let bits: u8 = l as u8;      // 0x83
+let m: Lcr = 0x03 as Lcr;
+```
+
+A **bit-field struct** is a struct whose name is followed by `:` and an
+**integer type**, `u8`, `u16`, `u32` or `u64`, in which it is stored. Each
+field gives the **bits** it occupies after `at`, and may give a
+**default** after `=`; effects (see "Peripherals") come between the two:
+
+```
+bit_struct = "struct" NAME ":" type "{" [ bit_field { "," bit_field } [ "," ] ] "}"
+bit_field  = [ "pub" ] NAME ":" type "at" bits [ read_effect ] [ write_effect ] [ "=" expr ]
+bits       = end [ "..=" end ]
+```
+
+An `end` is an expression without assignment, so the `=` after the bits
+always starts the default: `at 7 = false` is bit 7 with the default
+`false`. A syntax error, such as a field without `at`, `at 0..1` (a
+half-open range is no bits) or `at` or `=` in an ordinary struct's field,
+is `parser::unexpected-token`.
+
+**Bits and field types.**
+
+- Bits are numbered from 0, the least significant. `at 7` is bit 7 alone;
+  `at 0..=1` is bits 0 to 1, both included, lowest first. Both ends are
+  `u32` values computed at compile time, in the scope of the struct's
+  module (see "Compile-time execution"), so constants name them. Bits no
+  field covers are **reserved**.
+- A field's type is `bool`, `u8`, `u16`, `u32`, `u64` or an enum without
+  payloads on one of those four. Any other type is `ty::bit-field-type`
+  (a type already in error is not also reported). A `bool` takes exactly
+  one bit; an integer type, and an enum's integer type, need at least as
+  many bits as the field has, so that a read of the field is a value of
+  its type (`ty::bit-field-width`, also for a `bool` of several bits);
+  and every variant of an enum must fit in the field's bits
+  (`ty::bit-field-width`, once per variant).
+- `at 3..=1` is `ty::reversed-bit-range`, and a field reaching past the
+  last bit of the integer type `ty::bit-field-outside`. Fields may not
+  share a bit: `ty::bit-field-overlap`, once per pair, at the later field,
+  labeling the earlier. Overlapping fields are no failed value: each can
+  still be read and written.
+- Fields are private to the struct's module unless `pub`. A bit-field
+  struct needs a field (`resolve::empty-bit-struct`), and a type after
+  `:` other than the four integers is `resolve::bit-struct-type`. Two
+  fields with one name are `resolve::duplicate-field`. `#[packed]` and
+  `#[align(N)]` are `resolve::misplaced-attribute`: the layout is the
+  integer's.
+- A bit position or a field type that needs the struct's own bits is
+  `ty::cycle`: `at L as u32` with `const L: Lcr`, `size_of(Lcr)` in its
+  bit positions or field types (also through a struct holding an `Lcr`),
+  or an enum field type with a variant computed from `size_of(Lcr)`.
+  A default may use its own struct's size, layout and bits
+  (`= size_of(Lcr) == 1`); it is `ty::cycle` only when it needs its own
+  value, as through a literal that takes it (ADR 0062).
+
+**Values and literals.**
+
+- A bit-field struct is a type of values, like any struct: a local, a
+  parameter, a return value, a field, an element, a payload, a constant
+  or a static may have it. It is a **scalar**, not an aggregate: stored,
+  passed and accessed as its integer type.
+- A literal names every field once, or ends with `..`, after a comma when
+  fields come before it, which gives every field it leaves out its
+  **default**. `..` is allowed where it leaves out no field. The values
+  run in the order written. Reserved bits are 0 in a value built by a
+  literal.
+- A field left out without a default is `resolve::missing-default`, and
+  so is `..` in a literal of an ordinary struct. A literal without `..`
+  that leaves fields out is `resolve::missing-fields`, whose help offers
+  `..` when every field left out has a default or a write effect.
+- A **default** is a value of the field's type computed at compile time,
+  once, in the scope of the struct's module. One that fails to evaluate,
+  has the wrong type or does not fit in its field
+  (`ty::field-value-out-of-range`) is reported once, at the default: a
+  literal that takes it reports nothing more, and the body holding that
+  literal is not built. It is no failed value of the type. A field with a
+  write effect has no default (`resolve::write-effect-default`): `..`
+  gives it the value whose write has no effect (see "Peripherals").
+- **Visibility.** `..` may leave out a field that is not visible where
+  the literal is written, when it has a default or a write effect. A
+  literal that names an invisible field, or leaves one out with neither,
+  is `resolve::private-field` (ADR 0050).
+- `l.f` reads the field: its bits as the field's type, an integer
+  zero-extended, a `bool` that is `true` when the bit is 1, an enum
+  whose value is those bits. `l.f = v` writes the field, and the other
+  fields and the reserved bits keep their values; `l.f += 1` reads the
+  field and writes it. A read of a field of a value that is not a place,
+  as `(0x83 as Lcr).word_length`, is fine; a write to one is
+  `ty::not-assignable`. Unknown and private fields are
+  `ty::unknown-field` and `ty::private-field`, as for any struct.
+- **A bit field is not a place in memory**: `&raw const l.f` and `&raw mut
+  l.f` are `ty::bit-field-address`, also when `l` is a register (not also
+  `ty::register-address`), and `offset_of(Lcr, f)` is
+  `ty::bit-field-offset`. `&raw` of the whole value is a pointer to its
+  integer's bytes, as for any value.
+- `==`, `!=`, arithmetic and bitwise operators do not apply
+  (`ty::invalid-operand`); a program compares fields, or integers made
+  with `as`, which shows that reserved bits take part. A `match` on a
+  bit-field struct is `ty::match-type`; a `match` on one of its fields is
+  a `match` on that field's type.
+- **Enum fields.** An enum field holds whatever its bits hold, so a field
+  read is a source of values that are no variant besides memory
+  (ADR 0035, 0036; see "Enums"): `(0x83 as Lcr).word_length` is whatever
+  bits 0 and 1 of `0x83` are. Such a value is defined as for memory: a
+  `match` without a catch-all arm calls the panic function on it. A field
+  whose every bit pattern is a variant never gives one.
+
+**Values that do not fit.** A field of `n` bits holds the values from 0 to
+2ⁿ − 1, and a value written to it must fit.
+
+- A value known at compile time (see "Checks on values known at compile
+  time") that does not fit is `ty::field-value-out-of-range`, in a
+  literal, an assignment or a default; a known enum variant always fits.
+  A compound assignment is never reported at compile time: the value it
+  writes back depends on the field's value.
+- Any other value is checked when it is written: if it does not fit, the
+  program calls the panic function, with the reason `FieldOutOfRange`
+  located at the field's name in the literal or the assignment (see
+  "Panic information"). An enum value that is no variant can fail the
+  check too. A `bool`, and an integer whose type has exactly the field's
+  bits, always fit and have no check; with `-O`, LLVM removes checks it
+  proves redundant, as for `x & 0xF`.
+- A compound assignment checks the value it writes back: `l.count += 1`
+  on a field holding its maximum panics instead of wrapping into the
+  neighbouring bits. A program that wants the low bits of a wider value
+  masks them itself.
+
+**Conversions.** `as` converts a bit-field struct to any integer type, as
+its integer type would (`l as u32` is its bits zero-extended), and an
+integer to a bit-field struct only from its own integer type: `0x83 as
+Lcr`, `x as Lcr` with `x: u8`. A literal operand takes that integer type.
+Every integer is a value of the struct, reserved bits kept. From any
+other type, another integer type included, it is `ty::invalid-cast`; so is
+`l as Lcr`, and a conversion to `bool`, a pointer, an enum or another
+bit-field struct. See "Conversions with `as`".
+
+**Layout, calls and volatile accesses.**
+
+- A bit-field struct has the size and alignment of its integer type, and
+  its fields have no byte offset. Its C twin is that integer type. A
+  field of an ordinary struct may have it, laid out as that integer.
+- It passes and returns as its integer type, zero-extended (ADR 0006,
+  0025).
+- Through a volatile pointer it is a scalar, accessed in one load or store
+  of its integer's width. One on `u64` is `ty::volatile-too-wide`, and
+  one of more than a byte reached through a `#[packed]` struct
+  `ty::volatile-packed-field`. Reading a field, `(*p).dlab`, is one load
+  of the whole value; writing one, `(*p).dlab = true`, is one load and one
+  store, not atomic (see "Volatile accesses").
+
+**Evaluation order.** `l.f = v` runs the value, its check, then whatever
+the place needs (a pointer, an index and its bounds check), then the read
+of the whole value, then the write. `l.f op= v` runs the value, the place,
+the read of the whole value, the new field value and its check, then the
+write: on a volatile place, a value that does not fit calls the panic
+function after the load and before the store. A literal runs its field
+values in the order written, each followed by its check; the defaults need
+no code. In MIR a bit-field struct is its integer: a field read is a
+shift and a mask, a write a mask and an or.
+
+**At compile time.** Bit-field structs work in constants, statics,
+`comptime` blocks and expressions as any value. **No value of a
+bit-field struct is known at compile time**, in the sense of "Checks on
+values known at compile time": not a literal, a constant of the type, nor
+`0x83 as Lcr`, and neither is a field read from one nor an integer made
+from one with `as`. So `x << (L as u32)` with `const L: Lcr` is checked as
+a shift amount that is not known. A field write that does not fit, at
+compile time, fails the evaluation (`eval::panic`, "value does not fit
+its field").
+
+**Failed values.** A bit position, and a field's type, that are reported
+in error are failed values (ADR 0048, see "Failed lengths and
+alignments"), and so is a field whose bits are reversed
+(`ty::reversed-bit-range`) or reach past the integer
+(`ty::bit-field-outside`), or whose width does not suit its type
+(`ty::bit-field-width`), or an enum field with a variant whose value
+failed. A bit-field struct with a failed value **reaches a failed
+value**: its own error is the only one reported, and a body whose locals
+or expressions have the type is not built into MIR. An overlap and a
+default in error are no failed values.
+
+**What is checked.** When names are resolved: `resolve::bit-struct-type`,
+`resolve::empty-bit-struct`, `resolve::duplicate-field`,
+`resolve::misplaced-attribute`, `resolve::write-effect-default`,
+`resolve::missing-fields`, `resolve::missing-default` and
+`resolve::private-field`, as above. Once the values are computed, during
+type checking, with the checks that need a failed value skipped, for
+every bit-field struct of the program, used or not:
+`ty::bit-field-type`, `ty::reversed-bit-range`, `ty::bit-field-outside`,
+`ty::bit-field-width`, `ty::bit-field-overlap`,
+`ty::field-value-out-of-range` for defaults and `ty::cycle`. When code is
+type checked and built: `ty::bit-field-address`, `ty::bit-field-offset`,
+`ty::invalid-cast`, `ty::invalid-operand`, `ty::match-type` and
+`ty::field-value-out-of-range` for known values written to a field. The
+`typeck` and `mir` dumps list each bit-field struct after the structs
+(see "Building").
 
 ## Statics (ADR 0030)
 
@@ -748,6 +979,9 @@ Since nothing converts to an enum, a program that only writes variants
 never holds a value that is no variant, but memory written by other means
 can: a pointer cast, a volatile read of a device register, an
 `extern static`, the result of an `extern fn`, code outside the program.
+A read of an enum field of a bit-field struct is a second source (ADR 0059):
+the field holds whatever its bits hold, so a value made from an integer
+with `as` can give one without memory.
 
 - Reading, writing and copying such a value are defined, at run time and
   at compile time. For an enum without payloads, so are comparing it with
@@ -1349,6 +1583,7 @@ fn two_digits(a: u8, b: u8) -> Result(u32, ParseError) {
 | slices (`*const [T]`, `*mut [T]`) | 8 | 4 |
 | `[T; N]` | `N * size(T)` | `align(T)` |
 | an enum without payloads on the integer type `T` (ADR 0035) | `size(T)` | `align(T)` |
+| a bit-field struct on the integer type `T` (ADR 0059) | `size(T)` | `align(T)` |
 | an enum with payloads (ADR 0039), `Option(T)` and `Result(T, E)` (ADR 0045) | the largest variant's size, rounded up to the alignment | the largest variant's alignment |
 | `()` | 0 | 1 |
 
@@ -1356,7 +1591,11 @@ fn two_digits(a: u8, b: u8) -> Result(u32, ParseError) {
 "Types"); a peripheral type's registers are placed at their offsets, and
 it has an extent and an alignment instead (see "Peripherals"). Each
 variant of an enum with payloads is laid out as a struct of its tag and its
-payload values (see "Enums").
+payload values (see "Enums"). A bit-field struct's fields have no byte
+offset (`offset_of` of one is `ty::bit-field-offset`); the struct itself
+may be a field of an ordinary struct, laid out as its integer, and its C
+twin is that integer type (`tests/c_layout.rs` checks a struct holding
+them).
 
 A struct's fields are laid out **in declaration order**, never reordered:
 each at the next offset that is a multiple of its alignment. The struct's
@@ -1497,10 +1736,16 @@ address are failed values too (ADR 0058): an offset or an address whose
 evaluation fails or that is no `usize`, and a register type that is `!`,
 `[T]`, reaches a failed value, or is `ty::register-type` (see
 "Peripherals", which also says when a register type reaching a failed
-value is reported).
+value is reported). So are the bit positions and field types of a
+bit-field struct in error, and fields whose bits are reversed, outside
+the integer or too narrow or wide for their type (ADR 0059, 0062; see
+"Bit-field structs"). A register whose bit-field struct type fails keeps
+its width: its peripheral type does not fail with it, and only bodies
+using that register are left out.
 
 A type **reaches** a failed value when it is, or contains at any depth,
-an array whose length failed, a struct whose alignment failed, or a
+an array whose length failed, a struct whose alignment failed, a
+bit-field struct with a failed value, or a
 peripheral type with a failed offset or register type: as a field, an
 array element, a payload value, a type argument, or behind a pointer or
 a slice. `[u8; N]`, `Broken`, `Odd`, `*const Broken`, `*const [Odd]` and
@@ -1675,8 +1920,9 @@ So `flags & MASK == 0` means `(flags & MASK) == 0`, `*p.x` means `*(p.x)`,
   accept a `*mut T` and a `*const T` in either order.
 - A literal takes the type expected where it appears; with no expected type
   it is an error. In `x + 1` the `1` takes the type of `x`. A literal
-  operand of `as` takes the target type, or `usize` for a pointer target
-  (ADR 0017). An array literal takes its element type from the expected
+  operand of `as` takes the target type, `usize` for a pointer target, or
+  the struct's integer type for a bit-field struct target (ADR 0017,
+  0059). An array literal takes its element type from the expected
   type or from its first element with a type of its own.
 - A variant named by the expected type, `.V` or `.V(args)`, takes its enum
   where a literal takes its type, from the same expected type: the
@@ -1727,7 +1973,10 @@ Nothing that reads memory is known: not `*p`, even through a constant
 pointer (it may be a device register), not a read of a static or of a
 register, not `&raw`. A pointer made from an integer is known by its
 address; a constant pointing into a static is not known, since its
-address exists only after linking.
+address exists only after linking. A bit-field struct is a scalar but its
+values are not known either (ADR 0059): not a literal of one, a constant
+or `comptime` value of its type, `0x83 as Lcr`, a field read from one, nor
+an integer made from one with `as`.
 
 These are errors when the operand is known, not only when it is a literal:
 
@@ -1736,6 +1985,7 @@ These are errors when the operand is known, not only when it is a literal:
 | a shift amount outside 0 to the width of the shifted type minus 1, taken with its own type's sign (a negative amount is out of range) | `ty::shift-out-of-range` |
 | a divisor of `/` or `%` that is zero | `ty::division-by-zero` |
 | an array index not below the array's length | `ty::index-out-of-bounds` |
+| a value written to a bit field, by a literal or an assignment (not a compound assignment), that does not fit in the field's bits | `ty::field-value-out-of-range` |
 
 The compound assignments (`<<=`, `>>=`, `/=`, `%=`) are checked too. When
 the operand is not a literal, the diagnostic shows its value
@@ -1782,6 +2032,14 @@ run at compile time: an evaluation that needs it reports nothing more.
   `bool` nor to a pointer.
 - An enum with payloads converts to nothing (ADR 0039): its variant is
   read with a `match`.
+- A bit-field struct converts to any integer type, as its integer type
+  would, and an integer type converts to it only from its own: `0x83 as
+  Lcr` and `x as Lcr` with `x: u8` (ADR 0059). A literal operand takes
+  that integer type. Reserved bits keep what the integer holds. From
+  another integer type, from itself (`l as Lcr`), from `bool` or an enum,
+  or to `bool`, a pointer, an enum or another bit-field struct, it is
+  `ty::invalid-cast`: narrow or widen first, as `x as u8 as Lcr`. See
+  "Bit-field structs".
 - Thin pointers convert only to and from `usize`; pointer-to-pointer casts
   may change mutability, volatility and pointee. Casts involving slices
   follow the table in "Slices".
@@ -1816,8 +2074,9 @@ another core writes) and for addresses known only at run time (ADR 0013,
 amended by 0058).
 
 Through a volatile pointer, every access is to a scalar (an integer,
-`bool`, enum without payloads or thin pointer; such an enum is accessed as
-its integer type, ADR 0035) and is **exactly one load or store of the
+`bool`, enum without payloads, bit-field struct or thin pointer; such an
+enum or struct is accessed as its integer type, ADR 0035, 0059) and is
+**exactly one load or store of the
 scalar's width**, never split, merged, removed or reordered relative to
 other volatile accesses, register accesses included. Volatility carries
 through fields and indexing: `(*regs).chan[i].status` is one access of
@@ -1828,12 +2087,19 @@ Otherwise the program is rejected:
   memory, cannot be accessed through a volatile pointer; through a
   volatile slice, `(*s)[i]` is one access of the element. An enum with
   payloads has no fields, so a volatile pointer to one reaches nothing;
-- `u64` and `i64`, and enums without payloads on them, cannot, since
-  riscv32 has no 64-bit access: use two `u32` halves in the order the
-  device needs; an enum, which nothing converts to, needs an integer type
-  of at most 32 bits;
+- `u64` and `i64`, and enums without payloads and bit-field structs on
+  them, cannot, since riscv32 has no 64-bit access: use two `u32` halves
+  in the order the device needs; an enum, which nothing converts to, needs
+  an integer type of at most 32 bits, and so does a bit-field struct,
+  which only its integer converts to (`ty::volatile-too-wide`);
 - a field reached through a packed struct cannot be, if its type needs
-  alignment.
+  alignment, a bit-field struct on `u16` or `u32` included.
+
+A field of a bit-field struct is read through a volatile pointer with one
+load of the whole value, and written with one load and one store of it:
+`(*p).dlab = true` is a read-modify-write, not atomic. Whether other
+fields are written with a neutral value is a matter of write effects (see
+"Peripherals").
 
 Volatile accesses are not ordered against ordinary ones, and no fences are
 emitted: until M4, handing memory to a device (DMA) cannot be written with
@@ -1860,7 +2126,11 @@ a guarantee.
 Operands, arguments, payload values, array elements and struct literal
 fields run left to right, in the order written; `&&`/`||` may skip their
 right side, and `assert` runs its message only when the condition is false
-(ADR 0031). In an assignment the value runs before the place. In
+(ADR 0031). In an assignment the value runs before the place. In an
+assignment to a bit field, `l.f = v`, the value and its check run first,
+then the place, then the read of the whole value, then the write; in
+`l.f op= v` the check of the new field value comes after the read (ADR
+0059, see "Bit-field structs"). In
 `base[index]`, the base runs before the index, and the bounds check before
 the access. A `match` runs its scrutinee once, before any arm, and its
 patterns run no code (ADR 0037, 0040). A read through a pointer, a read
@@ -2114,6 +2384,10 @@ pub fn config(baud: u32) -> Config {
   completed there. The error names every private field, and
   `resolve::missing-fields` is not reported for that literal. Such a
   struct is built outside its module only by a function of that module.
+  The exception is a bit-field struct (ADR 0059): `..` may leave out a
+  field that is not visible, when it has a default or a write effect. A
+  literal that names an invisible field, or leaves one out with neither,
+  is still `resolve::private-field`.
 - Visibility changes no layout: private fields are laid out, copied and
   passed like any other, and `size_of` counts them.
 - **Registers** follow the rules of fields (ADR 0058): a register is
@@ -2444,7 +2718,7 @@ pointer to the type serves both.
 
   ```
   peripheral_type = "peripheral" NAME "{" [ register { "," register } [ "," ] ] "}"
-  register        = [ "pub" ] access NAME ":" type "at" expr
+  register        = [ "pub" ] access NAME ":" type "at" expr [ read_effect ] [ "in" NAME ]
   access          = "read" | "write" | "read" "write"
   peripheral      = "peripheral" NAME ":" type "at" expr ";"
   ```
@@ -2457,8 +2731,10 @@ pointer to the type serves both.
   name is the identifier just before `:`. So `read write: u8 at 0` is a
   `read` register named `write`, while `read: u8 at 0`, a register named
   `read` without an access mode, and `write read x: u8 at 0`, a `write`
-  register named `read` with `x` where `:` should be, are errors.
-  Elsewhere all four are ordinary
+  register named `read` with `x` where `:` should be, are errors. After
+  a register's offset, `read` starts a read effect and `in` a group
+  (below), and `clears`, `sets`, `toggles` and `modifies` are words only in
+  an effect. Elsewhere all of them are ordinary
   names, of variables, functions, fields or modules, and `read(x)` in a
   body is a call.
 - Inside a function body, `peripheral` followed by a name is
@@ -2477,8 +2753,11 @@ pointer to the type serves both.
 - A register's **access mode** comes before its name: `read` (it is
   read-only), `write` (write-only) or `read write`. There is no default.
 - Its **type** is `u8`, `u16` or `u32`, an unsigned integer as wide as
-  the register; any other type is `ty::register-type` (see "What is
-  checked" below).
+  the register; a bit-field struct (see "Bit-field structs") whose integer
+  type is one of those; or an enum without payloads whose integer type is
+  one of those (ADR 0060). Its width is that integer type's. Any other
+  type, as a `u64` bit-field struct, an enum on `i8` or an enum with
+  payloads, is `ty::register-type` (see "What is checked" below).
 - Its **offset**, after `at`, is a `usize` computed at compile time, like
   an array length (see "Compile-time execution"), in the scope of the
   module holding the peripheral type: it may name that module's private
@@ -2523,16 +2802,16 @@ pointer to the type serves both.
 - Two registers of one type may share no byte (`ty::register-overlap`),
   except when one is `read` and the other `write`: a read can then only
   mean one of them and a write the other, as the 16550's `rbr` and `thr`
-  at offset 0. A `read write` register shares bytes with no other.
+  at offset 0. A `read write` register shares bytes with no other. This
+  applies to two registers in the same alternate group, or both in none
+  (see "Alternate groups" below).
 - Two peripherals may share no byte (`ty::peripheral-overlap`), and a
   peripheral must end at `0x1_0000_0000` or below
   (`ty::peripheral-out-of-range`): unlike a region, it needs no address
   one past its end, so its last byte may be the last of the address
   space.
-- Registers that share bytes in one mode, as the 16550's divisor latch
-  over `rbr`, `thr` and `ier`, and devices that share addresses cannot be
-  declared. A second view of such registers is reached through a pointer
-  made with `as` (below), which no check sees.
+- Devices that share addresses (SVD's `alternatePeripheral`) cannot be
+  declared: two peripherals sharing a byte are `ty::peripheral-overlap`.
 - Peripherals are not checked against the regions of the `memory` block:
   one placed over a region is not detected, and writing its registers
   writes that memory.
@@ -2571,6 +2850,153 @@ the register's type:
   `ty::peripheral-by-value`, once: a device is reached one register at a
   time. Written whole through a `*const` pointer, `*c = 0` is that error
   alone. `UART0[0]` is `ty::cannot-index`.
+
+**Registers with fields (ADR 0060).**
+
+```
+struct Lsr: u8 {
+    pub data_ready: bool at 0,
+    pub overrun: bool at 1 read clears,
+    pub thr_empty: bool at 5,
+}
+
+peripheral Uart16550 {
+    pub read rbr: u8 at 0x00 read modifies,
+    pub write thr: u8 at 0x00,
+    read write lcr: Lcr at 0x03,
+    read lsr: Lsr at 0x05,
+    read write dll: u8 at 0x00 in dlab,
+    read write dlm: u8 at 0x01 in dlab,
+}
+
+fn setup() {
+    UART0.lcr = Lcr { word_length: .Eight, .. };   // one store
+    UART0.lcr.dlab = true;                         // one load, one store
+    UART0.dll = 0x80;
+    UART0.lcr.dlab = false;
+    let status: Lsr = UART0.lsr;                   // one load
+    if status.overrun { }
+}
+```
+
+- `UART0.lcr` read is one load, giving an `Lcr`; `UART0.lcr = v` is one
+  store of `v`'s bits, reserved bits included. `UART0.lsr.data_ready`
+  reads the register, one load, and gives the field. A register whose type
+  is an enum is read and written whole; a value read that is no variant is
+  defined (see "Enums").
+- **A field assignment**, `UART0.lcr.dlab = true`, or a compound
+  assignment to a field, is one load of the register, then one store, with
+  nothing between them but the change of the field (and the neutral values
+  of write effects, below): the value and its check run first, as for any
+  bit field (see "Bit-field structs"). It is not atomic. It reads and
+  writes, so it needs a `read write` register: on a `read` one it is
+  `ty::write-to-read-only`, and on a `write` one `ty::read-of-write-only`,
+  labeled as read by the field assignment. A field read from a `write`
+  register is `ty::read-of-write-only` too.
+- Fields have no access modes of their own: every field is read and
+  written as its register allows.
+- `&raw` of a register's bit field is `ty::bit-field-address` alone.
+
+**Write effects.** A field of a bit-field struct may declare what a write
+does to it, after its bits and its read effect, if any:
+
+```
+write_effect = "write" INTEGER ( "clears" | "sets" | "toggles" )
+
+struct Status: u32 {
+    pub enable: bool at 0 = false,
+    pub overrun: bool at 3 write 1 clears,
+    pub done: bool at 4 write 1 clears,
+}
+```
+
+`write 1 clears` is SVD's `oneToClear`, `write 0 sets` its `zeroToSet`, and
+so on for the six combinations. The bit written is an integer literal of
+value 0 or 1 (`write 0x1 clears` is `write 1 clears`); another value is
+`parser::unexpected-token`. A field has at most one write effect, and no
+default (`resolve::write-effect-default`).
+
+- **In a field assignment to a volatile place, every other field with a
+  write effect is written with the value that has no effect**: all zeros
+  for `write 1 ...`, all ones for `write 0 ...`. A volatile place is a
+  register, or a place reached through a volatile pointer. The assigned
+  field gets the value assigned, even if it has an effect itself;
+  reserved bits and fields without a write effect keep the value read.
+  ```
+  TIMER.status.enable = true;     // overrun and done written 0: unchanged
+  TIMER.status.overrun = true;    // clears overrun alone
+  let s: Status = TIMER.status;
+  TIMER.status = s;               // clears every flag that was set
+  ```
+- Writing a whole value writes it as it is. A literal built with `..`
+  gives every field with a write effect that it leaves out the value that
+  has no effect, so it clears, sets or toggles nothing it does not name.
+  This holds wherever the literal goes, a register or a local.
+- A **compound assignment to a field with a write effect** in a volatile
+  place is `ty::compound-write-effect`: it would write back every bit it
+  read.
+- In ordinary memory, a local or a static, effects mean nothing: a field
+  assignment changes that field alone.
+
+**Read effects.** A register, after its offset, or a field, after its
+bits, may declare what a read does:
+
+```
+read_effect = "read" ( "clears" | "sets" | "modifies" )
+```
+
+`read clears` and `read sets` are SVD's `readAction` `clear` and `set`;
+`read modifies` is any other change. For the compiler all three mean that
+**a read has effects**. A register's reads have effects when it declares a
+read effect, or when its type is a bit-field struct with a field that does;
+so do reads through a volatile pointer of a place whose type is such a
+struct. A field and a register each have at most one. Read effects mean
+nothing in ordinary memory, and one on a `write` register is accepted as
+documentation: the reads of a `write` register never count as having
+effects.
+
+- **Such a place is never read without the read being written**: a field
+  assignment or a compound assignment to it, or to one of its fields
+  (also a compound assignment to a whole register that declares the
+  effect), is `ty::read-with-effects`. The program reads the register into
+  a local, which shows the read, and writes what it means. Explicit reads
+  are unchanged: each is one volatile load, so `UART0.lsr.thr_empty` reads
+  the register, and its effects happen where it is written. A program
+  polling it loses the error bits that read cleared; one that wants them
+  reads `lsr` into a local.
+- When several apply, each is reported: a field assignment to a `read`
+  register whose reads have effects is `ty::write-to-read-only` and
+  `ty::read-with-effects`, and a compound assignment to a write-effect
+  field of a register whose reads have effects is
+  `ty::compound-write-effect` and `ty::read-with-effects`. On a `write`
+  register with a read effect, a field assignment is
+  `ty::read-of-write-only` alone.
+
+**Reset values.** A field's default (see "Bit-field structs") is its reset
+value: `Fcr { enable: true, .. }` writes the register as it is after
+reset but for `enable`, and for the fields with write effects, which have
+no default and are written with the value that has no effect. A register's
+reset value is not declared apart from its fields' defaults; an integer
+register has none.
+
+**Alternate groups (ADR 0061).** A register may name an **alternate
+group** after its offset and its read effect: `read write dll: u8 at 0x00
+in dlab`. The group's name is a label of the peripheral type, as SVD's
+`alternateGroup`: it names no item, is not resolved, is in no namespace,
+and may coincide with a register's name. A register without `in` is in no
+group.
+
+- **Two registers are checked for overlap only when they are in the same
+  group, or both in none**, with the rule above. So `dll` may share bytes
+  with `rbr`, `thr` and `ier`, and two registers of `dlab` may not share
+  one with each other. The help of `ty::register-overlap` names `in GROUP`.
+- Accesses to a register in a group are checked and built as any other:
+  the compiler does not know which mode the device is in, and setting DLAB
+  before reaching `dll` is the program's business, as it is in C.
+  Misalignment, the peripheral type's extent and its alignment count every
+  register, grouped or not. A group where nothing overlaps only documents
+  a mode.
+- The `typeck` and `mir` dumps show a register's group and read effect.
 
 **Pointers to peripheral types.** `&raw const UART0` and `&raw mut UART0`
 give a `*const Uart16550` and a `*mut Uart16550`, through which a driver
@@ -2680,9 +3106,9 @@ skipped:
 
 | Code | Case |
 |------|------|
-| `ty::register-type` | a register whose type is not `u8`, `u16` or `u32`, at the type |
+| `ty::register-type` | a register whose type is not `u8`, `u16` or `u32`, or a bit-field struct or an enum without payloads on one of them, at the type |
 | `ty::misaligned-register` | a register's offset that is not a multiple of its width, at the offset, labeling the type |
-| `ty::register-overlap` | two registers sharing a byte, unless one is `read` and the other `write`; once per pair, at the later register in the type, labeling the earlier |
+| `ty::register-overlap` | two registers of one alternate group, or both of none, sharing a byte, unless one is `read` and the other `write`; once per pair, at the later register in the type, labeling the earlier |
 | `ty::misaligned-peripheral` | a peripheral's address that is not a multiple of its type's alignment, at the address, labeling the type |
 | `ty::peripheral-out-of-range` | a peripheral whose end, `address + extent`, is above `0x1_0000_0000` |
 | `ty::peripheral-overlap` | two peripherals sharing a byte; once per pair, at the later peripheral, labeling the earlier |
@@ -2700,9 +3126,12 @@ When code is type checked:
 | `ty::peripheral-index` | indexing a pointer to a peripheral type |
 | `ty::unknown-register` | a name that is no register of the peripheral type |
 | `ty::private-register` | a register not visible where it is named |
-| `ty::write-to-read-only` | a write, or a compound assignment, to a `read` register |
-| `ty::read-of-write-only` | a read, or a compound assignment, of a `write` register |
+| `ty::write-to-read-only` | a write, a compound assignment or a field assignment to a `read` register |
+| `ty::read-of-write-only` | a read, a compound assignment or a field assignment of a `write` register, or a field read from one |
 | `ty::register-address` | `&raw` of a register |
+| `ty::bit-field-address` | `&raw` of a bit field, a register's too |
+| `ty::read-with-effects` | a field assignment or a compound assignment to a place whose reads have effects, or to one of its fields |
+| `ty::compound-write-effect` | a compound assignment to a field with a write effect in a volatile place |
 
 **The code.** A register reached from a peripheral is accessed at a
 constant address, the peripheral's plus the register's offset, with no
@@ -2761,6 +3190,7 @@ panic fn on_panic(info: *const PanicInfo) -> ! {
         PanicReason::IndexOutOfBounds => &raw const b"index out of bounds",
         PanicReason::AssertionFailed => &raw const b"assertion failed",
         PanicReason::NoVariant => &raw const b"enum value is no variant",
+        PanicReason::FieldOutOfRange => &raw const b"value does not fit its field",
     };
     print(reason);
     print(&raw const b" at ");
@@ -2804,6 +3234,7 @@ pub enum PanicReason: u8 {
     IndexOutOfBounds = 1,
     AssertionFailed = 2,
     NoVariant = 3,
+    FieldOutOfRange = 4,
 }
 ```
 
@@ -2831,6 +3262,7 @@ clang's.
   | `AssertionFailed` | `assert(c)`, `assert(c, msg)` (ADR 0029, 0031) | `assert` |
   | `NoVariant` | a `match` without a catch-all arm (ADR 0036, 0042) | `match` |
   | `NoVariant` | `e?` (ADR 0046) | the `?` |
+  | `FieldOutOfRange` | a value written to a bit field that does not fit its bits, by a literal, an assignment or a compound assignment (ADR 0059) | the field's name |
 
 - **`reason`** is the cause of the check.
 - **`message`** is the message of `assert(c, msg)`, computed only when the
@@ -2890,7 +3322,8 @@ prints a compiler stage instead: `tokens`, `ast`, `hir`, `typeck`, `mir`,
   symbols (see "Symbols"); the `hir` dump starts with the module tree.
 - `typeck` and `mir` start with the `memory` block, as written but with
   its values computed and its placements in the order `code`, `data`,
-  `stack`, then every struct's layout and every enum with its integer
+  `stack`, then every struct's layout, every bit-field struct (see
+  below) and every enum with its integer
   type and the values of its variants, an enum with payloads also with
   the offset of each payload value, its size and its alignment, then each
   `Option(T)` and `Result(T, E)` used, sorted by name, and list the bodies
@@ -2906,6 +3339,18 @@ prints a compiler stage instead: `tokens`, `ast`, `hir`, `typeck`, `mir`,
   each peripheral covers, and leaves out those that reach a failed value;
   `mir` lists them after the enums and before the statics, numbering the
   registers as the projections that reach them name them (`(*_1).1`).
+  Each register also shows its alternate group; `typeck` shows its read
+  effect too, in the order of the syntax (`read wide: u32 at 0x4 read
+  clears in ctrl`), while `mir` shows only the group, after the offset
+  (`3 dll: u8 at 0x0 in dlab`).
+- Both list each bit-field struct, after the structs and before the
+  enums: `typeck` as `struct Lcr: u8 { dlab: bool at 7 = false, ... }`,
+  with each field's type, bits, effects and default (the variant's path
+  for an enum), leaving out those that reach a failed value; `mir` with
+  each field's type, an enum's shown as its integer, and its bits, as
+  `struct Lcr: u8 { dlab: bool at 7 }`, without defaults or effects. A bit
+  field access is labeled `bit field NAME` in `typeck`, and a literal
+  `struct Lcr` or `struct Lcr ..` when it ends with `..`.
 
 See `CONTRIBUTING.md` for setup and running on QEMU.
 
@@ -2924,7 +3369,7 @@ Every error has a stable code, shown with the message.
 | `lexer::invalid-byte` | malformed byte literal, or a character or escape not allowed in a byte literal or byte string |
 | `lexer::unterminated-byte` | byte literal without closing `'` |
 | `lexer::unterminated-byte-string` | `b"` without its closing `"` on the same line |
-| `parser::unexpected-token` | a token where it cannot appear, such as `_` as a name or a value, `pub` before a variant, or a `use` of a path made only of `crate`, `super` or `core` |
+| `parser::unexpected-token` | a token where it cannot appear, such as `_` as a name or a value, `pub` before a variant, or a `use` of a path made only of `crate`, `super` or `core`; in a bit-field struct, a field without `at`, half-open bits (`at 0..1`), a second effect of a kind, an effect word that is none, `write 2 clears`; in an ordinary struct, `at` or `=` after a field's type; a `..` that is not last in a literal |
 | `parser::unclosed-block` | `{` without its `}` |
 | `parser::let-without-type` | `let` without `: Type`, also in a pattern |
 | `parser::chained-comparison` | `a < b < c` |
@@ -2955,12 +3400,16 @@ Every error has a stable code, shown with the message.
 | `resolve::use-cycle` | `use` declarations that can only be resolved through themselves |
 | `resolve::private-item` | naming an item that is not visible here |
 | `resolve::private-reexport` | `pub use` of an item that is not `pub` |
-| `resolve::private-field` | a struct literal of a struct with a field that is not visible here |
+| `resolve::private-field` | a struct literal of a struct with a field that is not visible here, unless `..` leaves it out and it has a default or a write effect |
 | `resolve::duplicate-param` | two parameters with one name |
 | `resolve::mut-extern-param` | a `mut` parameter in an `extern fn` |
 | `resolve::duplicate-field` | a field declared, or given in a literal, twice |
 | `resolve::unknown-field` | a struct literal names a field the struct does not have |
-| `resolve::missing-fields` | a struct literal leaves fields out |
+| `resolve::missing-fields` | a struct literal leaves fields out; its help offers `..` when every field left out of a bit-field struct has a default or a write effect |
+| `resolve::missing-default` | `..` in a literal that leaves out a visible field without a default or a write effect, or `..` in a literal of an ordinary struct |
+| `resolve::bit-struct-type` | a bit-field struct whose type after `:` is not `u8`, `u16`, `u32` or `u64` |
+| `resolve::empty-bit-struct` | a bit-field struct without fields |
+| `resolve::write-effect-default` | a default on a field with a write effect |
 | `resolve::enum-type` | an enum whose type after `:` is not an integer type |
 | `resolve::duplicate-variant` | two variants with one name |
 | `resolve::empty-enum` | an enum without variants |
@@ -2971,7 +3420,7 @@ Every error has a stable code, shown with the message.
 | `resolve::inconsistent-binding` | a name not bound by every alternative of an or-pattern, or bound with `let mut` by only some |
 | `resolve::reserved-name` | an item, module or `use` named `_start`, `core`, with a name starting with `__`, or like a built-in function (`assert`, `len`, `slice`); a module of the root module named `llvm` or `rt`; a region named `INCLUDE` |
 | `resolve::unknown-attribute` | an attribute that does not exist |
-| `resolve::misplaced-attribute` | an attribute on an item it does not apply to |
+| `resolve::misplaced-attribute` | an attribute on an item it does not apply to, as `#[packed]` or `#[align(N)]` on a bit-field struct |
 | `resolve::attribute-argument` | an attribute with a missing or extra argument |
 | `resolve::duplicate-attribute` | an attribute given twice |
 | `resolve::conflicting-attributes` | `#[packed]` with `#[align(N)]` |
@@ -2993,11 +3442,11 @@ Every error has a stable code, shown with the message.
 | `ty::untyped-variant` | a `.V` with no expected type, as a `match` scrutinee, the operand of `as` or `?`, or an expression statement |
 | `ty::unknown-variant` | a `.V` where the expected enum, or the position's enum, has no variant of that name |
 | `ty::literal-out-of-range` | literal does not fit its type |
-| `ty::invalid-operand` | operator applied to a type it does not accept, such as a comparison of slices or of enums with payloads |
+| `ty::invalid-operand` | operator applied to a type it does not accept, such as a comparison of slices or of enums with payloads, or any operator on bit-field structs |
 | `ty::negate-unsigned` | unary `-` on an unsigned value |
 | `ty::shift-out-of-range` | shift amount known at compile time outside 0 to the width minus 1 |
 | `ty::division-by-zero` | divisor known at compile time to be zero |
-| `ty::invalid-cast` | `as` between types that do not convert, a slice cast the table refuses, any cast to `!` or to an enum, or from an enum with payloads |
+| `ty::invalid-cast` | `as` between types that do not convert, a slice cast the table refuses, any cast to `!` or to an enum, or from an enum with payloads; to a bit-field struct from anything but its integer type (itself included), or from one to anything but an integer type |
 | `ty::pointer-cast-width` | thin pointer cast to or from an integer type other than `usize` |
 | `ty::deref-non-pointer` | `*` on a value that is not a pointer |
 | `ty::cannot-index` | indexing a value that is not an array or a pointer |
@@ -3013,9 +3462,9 @@ Every error has a stable code, shown with the message.
 | `ty::not-a-place` | `&raw` of a value that is not a place, or of a constant or any element or field of it |
 | `ty::address-of-immutable` | `&raw mut` of a place that cannot be written |
 | `ty::packed-field-address` | `&raw` of a possibly misaligned place inside a packed struct |
-| `ty::volatile-too-wide` | volatile access wider than the target's widest access |
+| `ty::volatile-too-wide` | volatile access wider than the target's widest access, a bit-field struct on `u64` included |
 | `ty::volatile-aggregate` | volatile access to a whole struct, array or enum with payloads, or to a slice stored in memory |
-| `ty::volatile-packed-field` | volatile access to a possibly misaligned place inside a packed struct |
+| `ty::volatile-packed-field` | volatile access to a possibly misaligned place inside a packed struct, a bit-field struct on `u16` or `u32` included |
 | `ty::too-large` | a value larger than half the address space |
 | `ty::infinite-size` | structs and enums that contain themselves, directly, through each other or through `Option` and `Result` |
 | `ty::unsized` | `[T]` where a size is needed, or `*s` read or written whole |
@@ -3023,9 +3472,9 @@ Every error has a stable code, shown with the message.
 | `ty::invalid-align` | `#[align(N)]` on a struct or static with `N` not a power of two, too large or below the natural alignment |
 | `ty::aligned-in-packed` | a packed struct containing a type with `#[align(N)]`, at any depth, such as an enum with such a payload |
 | `ty::not-comptime` | a run-time variable where a compile-time value is required |
-| `ty::cycle` | an item or variant whose value or layout needs itself, including a `match` that needs the values of an enum (a variant pattern, `E::V` or `.V`, or a constant pattern at a position of its type, or no arm on it) in a function that runs while one of them is computed |
+| `ty::cycle` | an item or variant whose value or layout needs itself, a bit-field struct whose bits (positions, field types, the variants of an enum field type) need themselves, or a default that needs its own value, including a `match` that needs the values of an enum (a variant pattern, `E::V` or `.V`, or a constant pattern at a position of its type, or no arm on it) in a function that runs while one of them is computed |
 | `ty::duplicate-discriminant` | two variants of an enum with one value |
-| `ty::match-type` | a `match` on a type other than an integer, `bool` or enum |
+| `ty::match-type` | a `match` on a type other than an integer, `bool` or enum, a bit-field struct included |
 | `ty::constant-pattern-type` | a constant pattern of a type other than an integer, `bool` or an enum without payloads |
 | `ty::wrong-payload-count` | a variant, written `E::V` or `.V`, built or matched with a number of values other than its payload's, or one without payload written with parentheses |
 | `ty::non-exhaustive-match` | a `match` whose arms leave values unmatched |
@@ -3043,9 +3492,9 @@ Every error has a stable code, shown with the message.
 | `ty::region-overlap` | two regions sharing an address |
 | `ty::misaligned-code` | the code's region starting at an address that is not a multiple of 4 |
 | `ty::stack-size` | a stack of size 0, not a multiple of 16, or that does not fit in its region |
-| `ty::register-type` | a register whose type is not `u8`, `u16` or `u32` |
+| `ty::register-type` | a register whose type is not `u8`, `u16` or `u32`, or a bit-field struct or an enum without payloads on one of them |
 | `ty::misaligned-register` | a register's offset that is not a multiple of its width |
-| `ty::register-overlap` | two registers of one peripheral type sharing a byte, unless one is `read` and the other `write` |
+| `ty::register-overlap` | two registers of one alternate group, or both of none, sharing a byte, unless one is `read` and the other `write` |
 | `ty::misaligned-peripheral` | a peripheral's address that is not a multiple of its type's alignment |
 | `ty::peripheral-out-of-range` | a peripheral whose end is above `0x1_0000_0000` |
 | `ty::peripheral-overlap` | two peripherals sharing a byte |
@@ -3054,10 +3503,20 @@ Every error has a stable code, shown with the message.
 | `ty::peripheral-index` | indexing a pointer to a peripheral type |
 | `ty::unknown-register` | a name that is no register of the peripheral type |
 | `ty::private-register` | a register that is not visible here |
-| `ty::write-to-read-only` | a write, or a compound assignment, to a `read` register |
-| `ty::read-of-write-only` | a read, or a compound assignment, of a `write` register |
+| `ty::write-to-read-only` | a write, a compound assignment or a field assignment to a `read` register |
+| `ty::read-of-write-only` | a read, a compound assignment or a field assignment of a `write` register, or a field read from one |
 | `ty::register-address` | `&raw` of a register |
-| `eval::panic` | compile-time code reached the panic function: a zero divisor, an index out of bounds, an enum value that is no variant in a `match` that no arm matches or under `?`, an explicit call |
+| `ty::bit-field-address` | `&raw` of a bit field, a register's too |
+| `ty::read-with-effects` | a field assignment or a compound assignment to a place whose reads have effects, or to one of its fields |
+| `ty::compound-write-effect` | a compound assignment to a field with a write effect in a volatile place |
+| `ty::bit-field-type` | a bit field whose type is not `bool`, `u8`, `u16`, `u32`, `u64` or an enum without payloads on one of these four |
+| `ty::reversed-bit-range` | bits written `at a..=b` with `a > b` |
+| `ty::bit-field-outside` | a bit field reaching past the last bit of its struct's integer type |
+| `ty::bit-field-width` | a `bool` field of more than one bit, an integer field wider than its type or than its enum's integer type, or an enum variant that does not fit in its field |
+| `ty::bit-field-overlap` | two bit fields sharing a bit; once per pair, at the later field |
+| `ty::bit-field-offset` | `offset_of` of a bit field |
+| `ty::field-value-out-of-range` | a value, known at compile time, written to a bit field by a literal or an assignment, or a default, that does not fit in the field's bits |
+| `eval::panic` | compile-time code reached the panic function: a zero divisor, an index out of bounds, an enum value that is no variant in a `match` that no arm matches or under `?`, a value that does not fit the bit field it is written to, an explicit call |
 | `eval::assertion-failed` | `assert` with a false condition at compile time, with its message if it has one |
 | `eval::step-limit` | compile-time code ran more than 10,000,000 steps |
 | `eval::call-depth` | compile-time code nested more than 256 calls |

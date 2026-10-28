@@ -50,6 +50,13 @@ The findings M2 left open were worked off on 2026-10-21; these remain.
   unclear; "is such a pointer" is meant. (M3.2)
 - `docs/reference.md`: lines about 2079 and 2549 are too long, and 16
   and 2461 stop short, after editing. (M3.2)
+- `docs/reference.md`: the example of "Registers with fields" in
+  "Peripherals" uses `Lcr` and `UART0` that the section declares
+  elsewhere ("Bit-field structs", the example above it), so it does not
+  compile on its own; and the diagnostics table lists
+  `ty::bit-field-address`, `ty::read-with-effects` and
+  `ty::compound-write-effect` twice, in "Peripherals" and under
+  "Diagnostics", as the M3.2 codes already are. (M3.3)
 
 ## Tests
 
