@@ -1,0 +1,3 @@
+// A peripheral type cut off by the end of the file, where a register's
+// access mode should come: the error points after the `{` (ADR 0058).
+peripheral Uart {

@@ -1,0 +1,18 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/parse_memory_eof.ers
+---
+--- errors ---
+parser::unexpected-token
+
+  × expected `region`, `code`, `data`, `stack` or `}`, found end of file
+   ╭─[parse_memory_eof.ers:3:9]
+ 2 │ // placement should come: the error points after the `{` (ADR 0057).
+ 3 │ memory {
+   ·         ▲
+   ·         ╰── expected `region`, `code`, `data`, `stack` or `}`
+   ╰────
+  help: a `memory` block holds regions, `region NAME { origin: ADDRESS, size: BYTES }`, and
+        placements, `code in NAME;`, `data in NAME;` and `stack in NAME { size: BYTES }` (ADR
+        0057)

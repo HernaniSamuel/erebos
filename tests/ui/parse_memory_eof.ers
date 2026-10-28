@@ -1,0 +1,3 @@
+// A memory block cut off by the end of the file, where a region or a
+// placement should come: the error points after the `{` (ADR 0057).
+memory {

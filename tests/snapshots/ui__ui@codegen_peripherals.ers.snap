@@ -35,6 +35,8 @@ module asm "\09j .Lcopy_word"
 module asm ".Lenter:"
 module asm "\09j main"
 
+@CONSOLE = constant [4 x i8] c"\00\00\00\10", align 4
+
 ; Function Attrs: nounwind null_pointer_is_valid
 define i32 @widths() #0 {
 bb0:
@@ -136,6 +138,15 @@ bb0:
   ret void
 }
 
+; Function Attrs: nounwind null_pointer_is_valid
+define void @through_static() #0 {
+bb0:
+  %0 = load ptr, ptr @CONSOLE, align 4
+  %1 = getelementptr i8, ptr %0, i32 0
+  store volatile i8 6, ptr %1, align 1
+  ret void
+}
+
 ; Function Attrs: noreturn nounwind null_pointer_is_valid
 define void @main() #1 {
 bb0:
@@ -187,6 +198,8 @@ module asm "\09addi t2, t2, 4"
 module asm "\09j .Lcopy_word"
 module asm ".Lenter:"
 module asm "\09j main"
+
+@CONSOLE = local_unnamed_addr constant [4 x i8] c"\00\00\00\10", align 4
 
 ; Function Attrs: nofree norecurse nounwind null_pointer_is_valid memory(readwrite, target_mem0: none, target_mem1: none)
 define i32 @widths() local_unnamed_addr #0 {
@@ -267,6 +280,13 @@ bb0:
 define void @from_integer() local_unnamed_addr #0 {
 bb0:
   store volatile i8 5, ptr inttoptr (i32 268439552 to ptr), align 4096
+  ret void
+}
+
+; Function Attrs: nofree norecurse nounwind null_pointer_is_valid memory(readwrite, target_mem0: none, target_mem1: none)
+define void @through_static() local_unnamed_addr #0 {
+bb0:
+  store volatile i8 6, ptr inttoptr (i32 268435456 to ptr), align 268435456
   ret void
 }
 

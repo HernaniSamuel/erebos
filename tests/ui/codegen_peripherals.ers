@@ -8,7 +8,8 @@
 // writing `thr`, at one address, keeps that order; a register write and a
 // write through a volatile pointer keep their order, both ways round
 // (ADR 0023). A pointer made with `as` from an integer reaches registers
-// the same way. No global is emitted for a peripheral.
+// the same way. No global is emitted for a peripheral; a static holding
+// one's address is initialized with the address as a pointer constant.
 peripheral Uart {
     read rbr: u8 at 0,
     write thr: u8 at 0,
@@ -77,6 +78,13 @@ fn with_volatile(buffer: *mut volatile u8) {
 fn from_integer() {
     let u: *mut Uart = 0x1000_1000 as *mut Uart;
     (*u).thr = 5;
+}
+
+// A peripheral's address in a static's initializer.
+static CONSOLE: *mut Uart = &raw mut UART0;
+
+fn through_static() {
+    (*CONSOLE).thr = 6;
 }
 
 entry fn main() -> ! { loop {} }

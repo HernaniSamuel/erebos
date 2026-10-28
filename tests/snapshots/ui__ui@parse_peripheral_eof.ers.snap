@@ -1,0 +1,18 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/parse_peripheral_eof.ers
+---
+--- errors ---
+parser::unexpected-token
+
+  × expected `read` or `write`, found end of file
+   ╭─[parse_peripheral_eof.ers:3:18]
+ 2 │ // access mode should come: the error points after the `{` (ADR 0058).
+ 3 │ peripheral Uart {
+   ·                  ▲
+   ·                  ╰── expected `read` or `write`
+   ╰────
+  help: a register is written `ACCESS NAME: TYPE at OFFSET`, optionally after `pub`, its access
+        mode `read`, `write` or `read write`, in that order, and its name the identifier just
+        before `:`; registers are separated by `,` (ADR 0058)

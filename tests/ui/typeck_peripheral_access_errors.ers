@@ -24,7 +24,18 @@ mod dev {
     }
 
     pub peripheral REGS: Regs at 0x3000_1000;
+
+    // Its only register is private: none is seen outside `dev`.
+    pub peripheral Sealed {
+        read write key: u8 at 0,
+    }
+
+    pub peripheral SEALED: Sealed at 0x3000_2000;
 }
+
+peripheral Empty {}
+
+peripheral EMPTY: Empty at 0x3000_3000;
 
 peripheral Uart {
     read rbr: u8 at 0,
@@ -57,6 +68,9 @@ fn unknown(u: *mut Uart) {
     UART0.lcr = 3;
     // A pointer has no registers of its own.
     u.thr = 1;
+    // The help says what is there instead: no register visible, or none.
+    dev::SEALED.lock = 1;
+    EMPTY.data = 1;
 }
 
 // Through a `*const` pointer, only the register's address is reported.

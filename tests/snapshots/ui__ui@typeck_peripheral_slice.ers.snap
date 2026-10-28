@@ -1,6 +1,5 @@
 ---
 source: tests/ui.rs
-assertion_line: 22
 expression: output
 input_file: tests/ui/typeck_peripheral_slice.ers
 ---
