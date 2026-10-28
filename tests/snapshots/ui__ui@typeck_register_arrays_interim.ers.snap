@@ -6,40 +6,36 @@ input_file: tests/ui/typeck_register_arrays_interim.ers
 --- errors ---
 ty::register-type
 
-  × `[u32; 2]` is not a register type
-   ╭─[typeck_register_arrays_interim.ers:7:19]
- 6 │ peripheral Uart {
- 7 │     read write r: [u32; 2] at 0,
-   ·                   ────┬───
-   ·                       ╰── the type of the register `r`
- 8 │     read write wide: [u64; 2] at 0x10,
-   ╰────
-  help: a register is a `u8`, a `u16` or a `u32`, or a bit-field struct or an enum without
-        payloads on one of them: as wide as that integer type, and read and written in one access
-        (ADR 0058, 0060)
-ty::register-type
-
-  × `[u64; 2]` is not a register type
-   ╭─[typeck_register_arrays_interim.ers:8:22]
- 7 │     read write r: [u32; 2] at 0,
- 8 │     read write wide: [u64; 2] at 0x10,
-   ·                      ────┬───
-   ·                          ╰── the type of the register `wide`
- 9 │     sub: Block at 0x20,
-   ╰────
-  help: a register is a `u8`, a `u16` or a `u32`, or a bit-field struct or an enum without
-        payloads on one of them: as wide as that integer type, and read and written in one access
-        (ADR 0058, 0060)
-ty::register-type
-
-  × `Block` is not a register type
-    ╭─[typeck_register_arrays_interim.ers:9:10]
-  8 │     read write wide: [u64; 2] at 0x10,
-  9 │     sub: Block at 0x20,
-    ·          ──┬──
-    ·            ╰── the type of the register `sub`
- 10 │ }
+  × `u64` is not a register type
+    ╭─[typeck_register_arrays_interim.ers:13:22]
+ 12 │ peripheral Bad {
+ 13 │     read write wide: [u64; 2] at 0x10,
+    ·                      ────┬───
+    ·                          ╰── the element type of the register array `wide`
+ 14 │ }
     ╰────
   help: a register is a `u8`, a `u16` or a `u32`, or a bit-field struct or an enum without
         payloads on one of them: as wide as that integer type, and read and written in one access
         (ADR 0058, 0060)
+ty::register-array-access
+
+  × `r` is a register array or a cluster, which cannot be accessed yet
+    ╭─[typeck_register_arrays_interim.ers:23:27]
+ 22 │ 
+ 23 │ fn narrow() -> u32 { UART.r[0] }
+    ·                           ┬
+    ·                           ╰── accesses to register arrays and clusters are not type checked yet
+ 24 │ 
+    ╰────
+  help: this is temporary: M3.4a step 4 types them (ADR 0064)
+ty::register-array-access
+
+  × `sub` is a register array or a cluster, which cannot be accessed yet
+    ╭─[typeck_register_arrays_interim.ers:27:28]
+ 26 │ 
+ 27 │ fn cluster() -> u32 { UART.sub.data }
+    ·                            ─┬─
+    ·                             ╰── accesses to register arrays and clusters are not type checked yet
+ 28 │ 
+    ╰────
+  help: this is temporary: M3.4a step 4 types them (ADR 0064)

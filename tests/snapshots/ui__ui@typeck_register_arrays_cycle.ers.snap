@@ -1,0 +1,38 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_register_arrays_cycle.ers
+---
+--- errors ---
+ty::infinite-size
+
+  × `Direct` contains itself
+    ╭─[typeck_register_arrays_cycle.ers:10:12]
+  9 │ // no error of its own.
+ 10 │ peripheral Direct {
+    ·            ───┬──
+    ·               ╰── would have infinite size
+ 11 │     read write ok: u8 at 0,
+    ╰────
+  help: a cluster places the registers of its type inside this one, so a type cannot hold itself:
+        remove a cluster of the cycle, since a register cannot hold a pointer to its own type (ADR
+        0064)
+ty::infinite-size
+
+  × these peripheral types contain each other: Ping -> Pong -> Ping
+    ╭─[typeck_register_arrays_cycle.ers:16:12]
+ 15 │ 
+ 16 │ peripheral Ping {
+    ·            ──┬─
+    ·              ╰── would have infinite size
+ 17 │     pong: [Pong; 2] at 0 step 8,
+ 18 │ }
+ 19 │ 
+ 20 │ peripheral Pong {
+    ·            ──┬─
+    ·              ╰── part of the cycle
+ 21 │     ping: Ping at 0,
+    ╰────
+  help: a cluster places the registers of its type inside this one, so a type cannot hold itself:
+        remove a cluster of the cycle, since a register cannot hold a pointer to its own type (ADR
+        0064)

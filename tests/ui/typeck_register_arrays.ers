@@ -1,0 +1,82 @@
+// emit: typeck
+// Register arrays and clusters laid out (ADR 0064). `Plic` is the PLIC of
+// the ADR: priorities 4 bytes apart (the default step), enable words in a
+// cluster array 0x80 apart, contexts 0x1000 apart. `Wide` has a step
+// larger than its registers' width, `Woven` two arrays interleaved that
+// never meet. `Aligned` has an array of 0 elements whose `u32` raises the
+// type's alignment to 4 (its extent stays 1), and `Nothing` a cluster array
+// of an empty type, whose step of 0 is accepted since its elements occupy
+// nothing. `Nested` has a cluster without an array and clusters in
+// clusters. `Top` has an extent of exactly 2^32, accepted for a peripheral
+// at 0.
+peripheral Plic {
+    pub read write priority: [u32; 96] at 0x0000,
+    pub read pending: [u32; 3] at 0x1000,
+    pub enables: [PlicEnables; 2] at 0x2000 step 0x80,
+    pub ctx: [PlicContext; 2] at 0x20_0000 step 0x1000,
+}
+
+peripheral PlicEnables {
+    pub read write word: [u32; 3] at 0x00,
+}
+
+peripheral PlicContext {
+    pub read write threshold: u32 at 0x00,
+    pub read write claim: u32 at 0x04 read modifies,
+}
+
+peripheral Wide {
+    read write a: [u8; 4] at 1 step 16,
+    read write b: [u16; 3] at 0x40 step 0x10,
+}
+
+peripheral Woven {
+    read write a: [u32; 4] at 0 step 8,
+    read write b: [u32; 4] at 4 step 8,
+}
+
+peripheral Aligned {
+    read write byte: u8 at 0,
+    read write none: [u32; 0] at 0x100,
+}
+
+peripheral Empty {}
+
+peripheral Nothing {
+    read write r: u8 at 0,
+    gaps: [Empty; 3] at 8 step 0,
+}
+
+peripheral Nested {
+    read write first: u8 at 0,
+    one: Inner at 8,
+    many: [Outer; 2] at 0x40 step 0x20,
+}
+
+peripheral Inner {
+    read write reg: u16 at 2,
+    deep: Leaf at 4,
+}
+
+peripheral Leaf {
+    read write value: u32 at 0,
+}
+
+peripheral Outer {
+    inner: [Leaf; 2] at 0 step 8,
+    read write tag: u8 at 0x10,
+}
+
+peripheral Top {
+    read write ends: [u32; 2] at 0x7FFF_FFFC step 0x8000_0000,
+}
+
+// An extent past 2^32 is shown as such in the dump (no error: no peripheral).
+peripheral Wild {
+    read write a: [u8; 0xFFFF_FFFF] at 0 step 0xFFFF_FFFF,
+}
+
+peripheral TOP: Top at 0;
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

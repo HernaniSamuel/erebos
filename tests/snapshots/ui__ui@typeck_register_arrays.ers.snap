@@ -1,0 +1,25 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_register_arrays.ers
+---
+--- typeck ---
+peripheral Plic { pub read write priority: [u32; 96] at 0x0 step 0x4, pub read pending: [u32; 3] at 0x1000 step 0x4, pub enables: [PlicEnables; 2] at 0x2000 step 0x80, pub ctx: [PlicContext; 2] at 0x200000 step 0x1000 } extent 2101256, align 4
+peripheral PlicEnables { pub read write word: [u32; 3] at 0x0 step 0x4 } extent 12, align 4
+peripheral PlicContext { pub read write threshold: u32 at 0x0, pub read write claim: u32 at 0x4 read modifies } extent 8, align 4
+peripheral Wide { read write a: [u8; 4] at 0x1 step 0x10, read write b: [u16; 3] at 0x40 step 0x10 } extent 98, align 2
+peripheral Woven { read write a: [u32; 4] at 0x0 step 0x8, read write b: [u32; 4] at 0x4 step 0x8 } extent 32, align 4
+peripheral Aligned { read write byte: u8 at 0x0, read write none: [u32; 0] at 0x100 step 0x4 } extent 1, align 4
+peripheral Empty {} extent 0, align 1
+peripheral Nothing { read write r: u8 at 0x0, gaps: [Empty; 3] at 0x8 step 0x0 } extent 1, align 1
+peripheral Nested { read write first: u8 at 0x0, one: Inner at 0x8, many: [Outer; 2] at 0x40 step 0x20 } extent 113, align 4
+peripheral Inner { read write reg: u16 at 0x2, deep: Leaf at 0x4 } extent 8, align 4
+peripheral Leaf { read write value: u32 at 0x0 } extent 4, align 4
+peripheral Outer { inner: [Leaf; 2] at 0x0 step 0x8, read write tag: u8 at 0x10 } extent 17, align 4
+peripheral Top { read write ends: [u32; 2] at 0x7ffffffc step 0x80000000 } extent 4294967296, align 4
+peripheral Wild { read write a: [u8; 4294967295] at 0x0 step 0xffffffff } extent past 2³², align 1
+peripheral TOP: Top at 0x0 covers [0x0, 0x100000000)
+entry fn main() -> !
+    expr 0 loop 2138..2145: !
+panic fn on_panic() -> !
+    expr 1 loop 2175..2182: !

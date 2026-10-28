@@ -1,0 +1,130 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_register_arrays_overlap.ers
+---
+--- errors ---
+ty::register-overlap
+
+  × the registers `a` and `b` overlap
+    ╭─[typeck_register_arrays_overlap.ers:17:16]
+ 15 │ peripheral Inside {
+ 16 │     read write a: [u32; 8] at 0,
+    ·                ┬
+    ·                ╰── `read write` array of 8, covers [0x0, 0x20)
+ 17 │     read write b: u32 at 0x10,
+    ·                ┬
+    ·                ╰── `read write`, covers [0x10, 0x14)
+ 18 │ }
+    ╰────
+  help: they share 4 bytes from 0x10; two registers of one mode share a byte only when one is
+        `read` and the other `write`, so that a read means one and a write the other; registers of
+        another mode of the device go in an alternate group, `in GROUP` after the offset, and are
+        checked only against the registers of their group (ADR 0058, 0061)
+ty::register-overlap
+
+  × the registers `a` and `b` overlap
+    ╭─[typeck_register_arrays_overlap.ers:22:16]
+ 20 │ peripheral Interleaved {
+ 21 │     read write a: [u32; 100] at 0 step 4,
+    ·                ┬
+    ·                ╰── `read write` array of 100, covers [0x0, 0x190)
+ 22 │     read write b: [u32; 100] at 36 step 8,
+    ·                ┬
+    ·                ╰── `read write` array of 100, covers [0x24, 0x340)
+ 23 │ }
+    ╰────
+  help: they share 4 bytes from 0x24; two registers of one mode share a byte only when one is
+        `read` and the other `write`, so that a read means one and a write the other; registers of
+        another mode of the device go in an alternate group, `in GROUP` after the offset, and are
+        checked only against the registers of their group (ADR 0058, 0061)
+ty::register-overlap
+
+  × the entries `pair` and `between` overlap
+    ╭─[typeck_register_arrays_overlap.ers:32:16]
+ 30 │ peripheral Gap {
+ 31 │     pair: Pair at 0x100,
+    ·     ──┬─
+    ·       ╰── a cluster, covers [0x100, 0x10c)
+ 32 │     read write between: u32 at 0x104,
+    ·                ───┬───
+    ·                   ╰── `read write`, covers [0x104, 0x108)
+ 33 │ }
+    ╰────
+  help: they share 4 bytes from 0x104; two entries share a byte only when both are registers, one
+        `read` and the other `write`, so that a read means one and a write the other; a cluster
+        has no mode, and occupies its whole extent, the gaps between its registers included;
+        entries of another mode of the device go in an alternate group, `in GROUP` after the
+        offset, and are checked only against the entries of their group (ADR 0058, 0061, 0064)
+ty::register-overlap
+
+  × the entries `r` and `blocks` overlap
+    ╭─[typeck_register_arrays_overlap.ers:47:5]
+ 45 │ peripheral Mixed {
+ 46 │     write r: u32 at 0x120,
+    ·           ┬
+    ·           ╰── `write`, covers [0x120, 0x124)
+ 47 │     blocks: [Solo; 4] at 0x100 step 0x10,
+    ·     ───┬──
+    ·        ╰── a cluster array of 4, covers [0x100, 0x134)
+ 48 │ }
+    ╰────
+  help: they share 4 bytes from 0x120; two entries share a byte only when both are registers, one
+        `read` and the other `write`, so that a read means one and a write the other; a cluster
+        has no mode, and occupies its whole extent, the gaps between its registers included;
+        entries of another mode of the device go in an alternate group, `in GROUP` after the
+        offset, and are checked only against the entries of their group (ADR 0058, 0061, 0064)
+ty::register-overlap
+
+  × the entries `one` and `two` overlap
+    ╭─[typeck_register_arrays_overlap.ers:57:5]
+ 55 │ peripheral Clusters {
+ 56 │     one: Pair at 0 in alt,
+    ·     ─┬─
+    ·      ╰── a cluster, covers [0x0, 0xc)
+ 57 │     two: Pair at 4 in alt,
+    ·     ─┬─
+    ·      ╰── a cluster, covers [0x4, 0x10)
+ 58 │ }
+    ╰────
+  help: they share 8 bytes from 0x4; two entries share a byte only when both are registers, one
+        `read` and the other `write`, so that a read means one and a write the other; a cluster
+        has no mode, and occupies its whole extent, the gaps between its registers included;
+        entries of another mode of the device go in an alternate group, `in GROUP` after the
+        offset, and are checked only against the entries of their group (ADR 0058, 0061, 0064)
+ty::register-overlap
+
+  × the entries `r` and `w` overlap
+    ╭─[typeck_register_arrays_overlap.ers:71:5]
+ 69 │ peripheral Saturated {
+ 70 │     read write r: u32 at 0x10,
+    ·                ┬
+    ·                ╰── `read write`, covers [0x10, 0x14)
+ 71 │     w: Wild at 0,
+    ·     ┬
+    ·     ╰── a cluster, covers [0x0, past 2³²)
+ 72 │     v: Wild at 0x100,
+    ╰────
+  help: they share 4 bytes from 0x10; two entries share a byte only when both are registers, one
+        `read` and the other `write`, so that a read means one and a write the other; a cluster
+        has no mode, and occupies its whole extent, the gaps between its registers included;
+        entries of another mode of the device go in an alternate group, `in GROUP` after the
+        offset, and are checked only against the entries of their group (ADR 0058, 0061, 0064)
+ty::register-overlap
+
+  × the entries `w` and `v` overlap
+    ╭─[typeck_register_arrays_overlap.ers:72:5]
+ 70 │     read write r: u32 at 0x10,
+ 71 │     w: Wild at 0,
+    ·     ┬
+    ·     ╰── a cluster, covers [0x0, past 2³²)
+ 72 │     v: Wild at 0x100,
+    ·     ┬
+    ·     ╰── a cluster, covers [0x100, past 2³²)
+ 73 │ }
+    ╰────
+  help: they share the bytes from 0x100 on; two entries share a byte only when both are registers,
+        one `read` and the other `write`, so that a read means one and a write the other; a
+        cluster has no mode, and occupies its whole extent, the gaps between its registers
+        included; entries of another mode of the device go in an alternate group, `in GROUP` after
+        the offset, and are checked only against the entries of their group (ADR 0058, 0061, 0064)

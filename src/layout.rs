@@ -44,19 +44,120 @@ pub struct EnumLayout {
     pub over_aligned: bool,
 }
 
-/// The layout of a peripheral type (ADR 0058): where its registers are, and
-/// what a peripheral of it covers and must be aligned to. No value has a
+/// The layout of a peripheral type (ADR 0058, 0064): where its entries are,
+/// and what a peripheral of it covers and must be aligned to. No value has a
 /// peripheral type, so it has no size.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PeripheralLayout {
-    /// The offset of each register, in declaration order.
+    /// The offset of each entry, in declaration order: of its first element.
     pub offsets: Vec<u64>,
-    /// The end of its last register, `max(offset + width)`, and 0 with no
-    /// register. Computed exactly: a `u32` at `0xFFFF_FFFC` gives 2³²,
-    /// which is no `usize`.
+    /// For each entry, in declaration order, its length and the distance in
+    /// bytes between its elements if it is an array, `None` if not.
+    pub arrays: Vec<Option<(u64, u64)>>,
+    /// The end of the last byte any entry occupies, and 0 with none.
+    /// Computed exactly up to 2³² (a `u32` at `0xFFFF_FFFC` gives 2³², which
+    /// is no `usize`) and saturated above: [`PAST_ADDRESS_SPACE`] stands for
+    /// any extent past 2³² (ADR 0064), so that nested arrays never overflow.
     pub extent: u64,
-    /// The width of its widest register, and 1 with no register.
+    /// The largest alignment of its entries' elements, and 1 with no entry:
+    /// every entry counts, an array of 0 elements too.
     pub align: u64,
+}
+
+/// The extent of a peripheral type that is past 2³², whatever it is: an
+/// extent is only compared with 2³² (ADR 0064), so this is the first value
+/// that is not one that fits.
+pub const PAST_ADDRESS_SPACE: u64 = (1 << target::POINTER_BITS) + 1;
+
+/// Where an entry of a peripheral type is and what its elements are like,
+/// for laying the type out (ADR 0064).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct EntryPlace {
+    /// Of the first element.
+    pub offset: u64,
+    /// The length and the step if the entry is an array.
+    pub array: Option<(u64, u64)>,
+    /// What one element occupies: a register's width, a cluster's extent.
+    pub size: u64,
+    /// A register's width, a cluster type's alignment.
+    pub align: u64,
+}
+
+impl EntryPlace {
+    /// The number of elements.
+    pub fn len(&self) -> u64 {
+        self.array.map_or(1, |(len, _)| len)
+    }
+
+    /// Whether it has no element.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// The distance between elements: the step of an array, the size of a
+    /// single element, and at least 1, so that it divides.
+    fn distance(&self) -> u64 {
+        self.array.map_or(self.size, |(_, step)| step).max(1)
+    }
+
+    /// The end of the last byte any element occupies, exactly: one past the
+    /// last element's last byte, where nothing is occupied the offset.
+    pub fn exact_end(&self) -> u128 {
+        if self.is_empty() {
+            return u128::from(self.offset);
+        }
+        let step = self.array.map_or(0, |(_, step)| step);
+        u128::from(self.offset)
+            + u128::from(self.len() - 1) * u128::from(step)
+            + u128::from(self.size)
+    }
+
+    /// The end of the last byte any element occupies, at most
+    /// [`PAST_ADDRESS_SPACE`]; 0 where nothing is occupied.
+    pub fn end(&self) -> u64 {
+        if self.is_empty() || self.size == 0 {
+            return 0;
+        }
+        u64::try_from(self.exact_end())
+            .map_or(PAST_ADDRESS_SPACE, |end| end.min(PAST_ADDRESS_SPACE))
+    }
+}
+
+/// The first bytes two entries share, if they do (ADR 0064): the range
+/// `[lo, hi)` shared by the lowest elements that meet. Both entries must have
+/// elements that occupy bytes and do not overlap each other (a step of at
+/// least their size). It walks the elements of the entry with fewer
+/// elements and finds by division the elements of the other they may meet,
+/// so it costs at most the smaller length; only elements starting below
+/// [`PAST_ADDRESS_SPACE`] are looked at, since nothing past the address
+/// space is ever placed.
+pub fn first_shared(a: &EntryPlace, b: &EntryPlace) -> Option<(u128, u128)> {
+    let (few, many) = if a.len() <= b.len() { (a, b) } else { (b, a) };
+    let step = i128::from(few.distance());
+    let (size, many_size) = (i128::from(few.size), i128::from(many.size));
+    let (many_offset, many_step) = (i128::from(many.offset), i128::from(many.distance()));
+    let reach = i128::from(PAST_ADDRESS_SPACE) - i128::from(few.offset);
+    if reach <= 0 {
+        return None;
+    }
+    let walked = i128::from(few.len()).min(reach / step + 1);
+    for i in 0..walked {
+        let start = i128::from(few.offset) + i * step;
+        let end = start + size;
+        // The elements `j` of `many` with `offset + j * step` below `end`
+        // and `offset + j * step + size` above `start`.
+        let first = (start - many_offset - many_size).div_euclid(many_step) + 1;
+        let last = (end - many_offset - 1).div_euclid(many_step);
+        let j = first.max(0);
+        if j <= last.min(i128::from(many.len()) - 1) {
+            let there = many_offset + j * many_step;
+            return Some((
+                start.max(there).unsigned_abs(),
+                end.min(there + many_size).unsigned_abs(),
+            ));
+        }
+    }
+    None
 }
 
 /// The largest alignment `#[align(N)]` accepts: the address space itself.
@@ -125,19 +226,14 @@ impl BitLayout {
     }
 }
 
-/// Lays out a peripheral type whose registers, in declaration order, have
-/// the offsets and widths in `registers` (ADR 0058).
-pub fn peripheral_layout(registers: &[(u64, u64)]) -> PeripheralLayout {
+/// Lays out a peripheral type whose entries, in declaration order, are
+/// placed as `entries` say (ADR 0058, 0064).
+pub fn peripheral_layout(entries: &[EntryPlace]) -> PeripheralLayout {
     PeripheralLayout {
-        offsets: registers.iter().map(|&(offset, _)| offset).collect(),
-        extent: (registers.iter())
-            .map(|&(offset, width)| offset + width)
-            .max()
-            .unwrap_or(0),
-        align: (registers.iter())
-            .map(|&(_, width)| width)
-            .max()
-            .unwrap_or(1),
+        offsets: entries.iter().map(|entry| entry.offset).collect(),
+        arrays: entries.iter().map(|entry| entry.array).collect(),
+        extent: entries.iter().map(EntryPlace::end).max().unwrap_or(0),
+        align: entries.iter().map(|entry| entry.align).max().unwrap_or(1),
     }
 }
 
@@ -297,21 +393,98 @@ mod tests {
         assert_eq!(enum_layout(int(1), &[vec![bytes(u64::MAX)]]), None);
     }
 
+    fn register(offset: u64, width: u64) -> EntryPlace {
+        EntryPlace {
+            offset,
+            array: None,
+            size: width,
+            align: width,
+        }
+    }
+
+    fn array(offset: u64, len: u64, step: u64, size: u64, align: u64) -> EntryPlace {
+        EntryPlace {
+            offset,
+            array: Some((len, step)),
+            size,
+            align,
+        }
+    }
+
     /// The 16550 UART of ADR 0058, an empty peripheral type, and a register
     /// ending at 2³².
     #[test]
     fn peripheral_types_reach_to_their_last_register() {
-        let uart = peripheral_layout(&[(0, 1), (0, 1), (1, 1), (5, 1)]);
+        let uart = peripheral_layout(&[
+            register(0, 1),
+            register(0, 1),
+            register(1, 1),
+            register(5, 1),
+        ]);
         assert_eq!(uart.offsets, [0, 0, 1, 5]);
         assert_eq!((uart.extent, uart.align), (6, 1));
         let empty = peripheral_layout(&[]);
         assert_eq!((empty.extent, empty.align), (0, 1));
         // The widest register aligns it, the last to end gives its extent,
         // in whatever order they are declared.
-        let mixed = peripheral_layout(&[(8, 1), (0, 4), (2, 2)]);
+        let mixed = peripheral_layout(&[register(8, 1), register(0, 4), register(2, 2)]);
         assert_eq!((mixed.extent, mixed.align), (9, 4));
-        let top = peripheral_layout(&[(0, 1), (0xFFFF_FFFC, 4)]);
+        let top = peripheral_layout(&[register(0, 1), register(0xFFFF_FFFC, 4)]);
         assert_eq!((top.extent, top.align), (1 << 32, 4));
+    }
+
+    /// Arrays reach to their last element, an empty one occupies nothing but
+    /// still aligns the type, and an extent past 2³² saturates (ADR 0064).
+    #[test]
+    fn arrays_reach_to_their_last_element() {
+        let plic = peripheral_layout(&[array(0, 96, 4, 4, 4), array(0x20_0000, 2, 0x1000, 8, 4)]);
+        assert_eq!(plic.arrays, [Some((96, 4)), Some((2, 0x1000))]);
+        assert_eq!((plic.extent, plic.align), (0x20_1008, 4));
+        // 0 elements: no bytes, but the alignment of the element counts.
+        let empty = peripheral_layout(&[register(0, 1), array(0x100, 0, 4, 4, 4)]);
+        assert_eq!((empty.extent, empty.align), (1, 4));
+        // Elements of size 0 occupy nothing either.
+        let nothing = peripheral_layout(&[array(0x10, 5, 0, 0, 2)]);
+        assert_eq!((nothing.extent, nothing.align), (0, 2));
+        // Exactly 2³² is exact, a byte more and anything beyond is one value.
+        let exact = peripheral_layout(&[array(0, 2, 0x8000_0000, 0x8000_0000, 4)]);
+        assert_eq!(exact.extent, 1 << 32);
+        let past = peripheral_layout(&[array(1, 2, 0x8000_0000, 0x8000_0000, 4)]);
+        assert_eq!(past.extent, PAST_ADDRESS_SPACE);
+        let huge = peripheral_layout(&[array(u64::MAX, u64::MAX, u64::MAX, u64::MAX, 1)]);
+        assert_eq!(huge.extent, PAST_ADDRESS_SPACE);
+    }
+
+    #[test]
+    fn entries_share_the_first_bytes_where_their_elements_meet() {
+        // Two interleaved arrays never meet; moved so that the first's tenth
+        // element is the second's first, they do.
+        let a = array(0, 4, 8, 4, 4);
+        let b = array(4, 4, 8, 4, 4);
+        assert_eq!(first_shared(&a, &b), None);
+        let a = array(0, 100, 4, 4, 4);
+        let b = array(36, 100, 8, 4, 4);
+        assert_eq!(first_shared(&a, &b), Some((36, 40)));
+        // A register in a gap of a cluster's range, and an array's range.
+        let cluster = array(0x100, 2, 0x100, 0x20, 4);
+        assert_eq!(first_shared(&cluster, &register(0x1FC, 4)), None);
+        assert_eq!(
+            first_shared(&register(0x11C, 4), &cluster),
+            Some((0x11C, 0x120))
+        );
+        assert_eq!(
+            first_shared(&register(0x20, 1), &register(0x20, 1)),
+            Some((0x20, 0x21))
+        );
+        assert_eq!(first_shared(&register(0x20, 1), &register(0x21, 1)), None);
+        // An empty array shares nothing; the shorter array is the one walked.
+        assert_eq!(first_shared(&array(0, 0, 4, 4, 4), &register(0, 4)), None);
+        let long = array(4, 1 << 20, 8, 4, 4);
+        let long_too = array(0, 1 << 20, 8, 4, 4);
+        assert_eq!(first_shared(&long, &long_too), None);
+        // Past the address space nothing is looked at.
+        let far = array(1 << 40, u64::MAX, 4, 4, 4);
+        assert_eq!(first_shared(&far, &far), None);
     }
 
     #[test]

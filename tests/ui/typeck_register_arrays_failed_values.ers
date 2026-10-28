@@ -1,0 +1,40 @@
+// A step and a length that fail, and a cluster's type reaching a failed
+// value, are failed values (ADR 0048, 0064): each is reported once, the checks that need them are
+// skipped, and a peripheral of such a type reports nothing more, as for a
+// register's offset. In `BadStep`, `a`'s step fails to evaluate, so the
+// array takes part in no overlap check, though `b` would meet it. In
+// `BadLength` the length of `a` fails. `Reaches` holds a cluster of
+// `BadStep`, a type reaching a failed value: its failure is explained, so
+// nothing more is reported for it (nor for its `*mut BadStep`), and the
+// peripherals `P0` to `P2`, which overlap as written, are left out of the
+// checks. (A cluster whose type is no peripheral type is reported when names
+// are resolved, and stops there.)
+fn zero() -> usize {
+    0
+}
+
+peripheral BadStep {
+    read write a: [u32; 4] at 0 step 4 / zero(),
+    read write b: u32 at 4,
+}
+
+peripheral BadLength {
+    read write a: [u32; 4 / zero()] at 0,
+    read write b: u32 at 0,
+}
+
+peripheral Reaches {
+    inner: BadStep at 0,
+    read write pointer: *mut BadStep at 0x10,
+}
+
+peripheral P0: BadStep at 0x1000;
+peripheral P1: BadLength at 0x1000;
+peripheral P2: Reaches at 0x1000;
+
+fn use_it() -> u32 {
+    1 / 0
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

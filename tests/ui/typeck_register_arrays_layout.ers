@@ -1,0 +1,86 @@
+// Faults in the layout of register arrays and clusters (ADR 0064), one
+// error each: `Offset` has an array whose offset is not a multiple of its
+// element's width; `Step6` a step of 6 for a `u32`, which is not a multiple
+// of 4; `ClusterStep` a cluster array whose step is not a multiple of the
+// cluster's alignment, and `ClusterSmall` one smaller than its extent;
+// `Zero` a step of 0 for a `u32`; `Dims` an array of arrays; `Held` a
+// register of a peripheral type, and `HeldArray` of an array of one.
+// `Step2` has a step of 2 for a `u32`, misaligned and too small: two
+// errors. Neither is a failed value, so `step2_division` is still checked
+// and its known division by zero reported. `Far` has a register array
+// ending past 2^32, so that its peripheral is `ty::peripheral-out-of-range`;
+// `Huge` has nested arrays whose extent passes 2^64, reported as past 2^32
+// without overflowing (their steps are too small, as no `usize` step is
+// large enough for them).
+peripheral Offset {
+    read write a: [u32; 4] at 2,
+}
+
+peripheral ClusterOffset {
+    one: Block at 2,
+    many: [Block; 2] at 0x16 step 12,
+}
+
+peripheral Step6 {
+    read write a: [u32; 4] at 0 step 6,
+}
+
+peripheral Block {
+    read write a: u32 at 0,
+    read write b: u8 at 8,
+}
+
+peripheral ClusterStep {
+    blocks: [Block; 3] at 0 step 14,
+}
+
+peripheral ClusterSmall {
+    blocks: [Block; 3] at 0 step 8,
+}
+
+peripheral Zero {
+    read write a: [u32; 4] at 0 step 0,
+}
+
+peripheral Dims {
+    read write a: [[u32; 3]; 2] at 0,
+}
+
+peripheral Held {
+    read write a: Block at 0,
+}
+
+peripheral HeldArray {
+    read write a: [Block; 2] at 0 step 16,
+}
+
+peripheral Step2 {
+    read write a: [u32; 4] at 0 step 2,
+}
+
+fn step2_division(p: *mut Step2) -> u32 {
+    1 / 0
+}
+
+peripheral Far {
+    read write a: [u32; 2] at 0x7FFF_FFFC step 0x8000_0004,
+}
+
+peripheral FAR: Far at 0;
+
+peripheral Wild {
+    read write a: [u8; 0xFFFF_FFFF] at 0 step 0xFFFF_FFFF,
+}
+
+peripheral Mid {
+    inner: [Wild; 0xFFFF_FFFF] at 0 step 0xFFFF_FFFF,
+}
+
+peripheral Huge {
+    outer: [Mid; 0xFFFF_FFFF] at 0 step 0xFFFF_FFFF,
+}
+
+peripheral HUGE: Huge at 0;
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

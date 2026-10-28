@@ -404,6 +404,19 @@ impl<'h> Queries<'h> {
             });
             return true;
         };
+        // Peripheral types laid out inside each other, with no evaluation
+        // between: containment through clusters (ADR 0064).
+        let peripherals: Option<Vec<PeripheralTypeId>> = self.in_progress[at..]
+            .iter()
+            .map(|p| match p.item {
+                Item::PeripheralLayout(id) => Some(id),
+                _ => None,
+            })
+            .collect();
+        if let Some(types) = peripherals {
+            self.report_peripheral_cycle(&types);
+            return false;
+        }
         // Structs and enums with payloads laid out inside each other, with
         // no evaluation between: containment by value (ADR 0021, 0039).
         let types: Option<Vec<Composite>> = self.in_progress[at..]
@@ -1308,7 +1321,10 @@ impl<'h> Queries<'h> {
         // bit-field struct or an enum without payloads on one of them, which
         // MIR sees as that integer (ADR 0060). Any other was reported, and
         // leaves the layout failed; no body that is kept reaches it, so it
-        // stands as `()`, without being computed.
+        // stands as `()`, without being computed. Register arrays and
+        // clusters have a layout now but stand as `()` too, until step 5 of
+        // M3.4a gives them their MIR types: no body reaches them, since
+        // every access to one is `ty::register-array-access` until step 4.
         let registers = (def.entries.iter())
             .map(|register| mir::Register {
                 name: register.name.clone(),

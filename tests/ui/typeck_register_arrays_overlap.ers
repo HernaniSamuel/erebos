@@ -1,0 +1,76 @@
+// Overlaps of entries (ADR 0064): the elements of an array occupy the
+// bytes `offset + i * step` on, and a cluster element its whole extent,
+// gaps between its registers included. `Inside` has a register inside an
+// array's range; `Interleaved` has two arrays that meet where the tenth
+// element of the first is the first of the second; `Gap` a register in a
+// gap of a cluster's registers (an overlap: a cluster occupies its whole
+// extent, gaps included);
+// `Modes` has a `read` array and a `write` array sharing bytes, and an
+// array in another group (all accepted); `Mixed` a `write` register against
+// a cluster array with a `read` register inside (an overlap: a cluster has
+// no mode); `Saturated` clusters whose extent is past 2^32, shown as such; `Grouped` a
+// cluster in a group over registers of none (accepted); `Clusters` two
+// clusters of one group meeting; `Woven` two interleaved arrays of 2^20
+// elements each, checked in normal time.
+peripheral Inside {
+    read write a: [u32; 8] at 0,
+    read write b: u32 at 0x10,
+}
+
+peripheral Interleaved {
+    read write a: [u32; 100] at 0 step 4,
+    read write b: [u32; 100] at 36 step 8,
+}
+
+peripheral Pair {
+    read write first: u32 at 0,
+    read write third: u32 at 8,
+}
+
+peripheral Gap {
+    pair: Pair at 0x100,
+    read write between: u32 at 0x104,
+}
+
+peripheral Modes {
+    read data: [u32; 4] at 0,
+    write data_in: [u32; 4] at 0,
+    read write other: [u32; 4] at 0 in alt,
+}
+
+peripheral Solo {
+    read value: u32 at 0,
+}
+
+peripheral Mixed {
+    write r: u32 at 0x120,
+    blocks: [Solo; 4] at 0x100 step 0x10,
+}
+
+peripheral Grouped {
+    read write a: u32 at 0,
+    pair: Pair at 0 in alt,
+}
+
+peripheral Clusters {
+    one: Pair at 0 in alt,
+    two: Pair at 4 in alt,
+}
+
+peripheral Woven {
+    read write a: [u32; 0x10_0000] at 0 step 8,
+    read write b: [u32; 0x10_0000] at 4 step 8,
+}
+
+peripheral Wild {
+    read write a: [u8; 0xFFFF_FFFF] at 0 step 0xFFFF_FFFF,
+}
+
+peripheral Saturated {
+    read write r: u32 at 0x10,
+    w: Wild at 0,
+    v: Wild at 0x100,
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

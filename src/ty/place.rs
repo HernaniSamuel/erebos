@@ -532,12 +532,22 @@ impl Checker<'_, '_> {
         let ty = self.norm(def.entries[index].ty);
         // Register arrays and clusters are reached through an index or a
         // register of theirs, typed by step 4. Until then the place is
-        // `{error}` with no diagnostic of its own: the layout reports every
-        // such type (`ty::register-type`, or the error of a failed value),
-        // so no program is accepted.
+        // `{error}`. Where the type has no layout, which only a reported
+        // error causes, nothing more is said; where it has one, the access
+        // is reported here, so that no program is accepted with it.
         if def.entries[index].is_cluster()
             || matches!(ty, Ty::Array(elem, _) if matches!(elem, Ty::Int(_) | Ty::BitStruct(_) | Ty::Enum(_)))
         {
+            if self.q.peripheral_layout(p.id).is_some() {
+                self.q.diags.push(
+                    Diagnostic::error(
+                        "ty::register-array-access",
+                        format!("`{name}` is a register array or a cluster, which cannot be accessed yet"),
+                    )
+                    .label(name_span, "accesses to register arrays and clusters are not type checked yet")
+                    .help("this is temporary: M3.4a step 4 types them (ADR 0064)"),
+                );
+            }
             return PlaceInfo::ERROR;
         }
         self.q.tables.fields.insert(expr.id, index as u32);

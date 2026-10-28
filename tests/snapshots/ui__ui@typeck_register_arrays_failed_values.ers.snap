@@ -1,0 +1,41 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_register_arrays_failed_values.ers
+---
+--- errors ---
+eval::panic
+
+  × the evaluation called the panic function: division by zero
+    ╭─[typeck_register_arrays_failed_values.ers:17:38]
+ 16 │ peripheral BadStep {
+ 17 │     read write a: [u32; 4] at 0 step 4 / zero(),
+    ·                                      ─────┬────┬
+    ·                                           │    ╰── while evaluating this value
+    ·                                           ╰── division by zero
+ 18 │     read write b: u32 at 4,
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::panic
+
+  × the evaluation called the panic function: division by zero
+    ╭─[typeck_register_arrays_failed_values.ers:22:25]
+ 21 │ peripheral BadLength {
+ 22 │     read write a: [u32; 4 / zero()] at 0,
+    ·                         ─────┬────┬
+    ·                              │    ╰── while evaluating this value
+    ·                              ╰── division by zero
+ 23 │     read write b: u32 at 0,
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+ty::division-by-zero
+
+  × division by zero
+    ╭─[typeck_register_arrays_failed_values.ers:36:9]
+ 35 │ fn use_it() -> u32 {
+ 36 │     1 / 0
+    ·         ┬
+    ·         ╰── this divisor is zero
+ 37 │ }
+    ╰────
+  help: at run time this would call the panic function (ADR 0007)

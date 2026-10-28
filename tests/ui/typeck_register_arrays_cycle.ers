@@ -1,0 +1,36 @@
+// A peripheral type that contains itself through clusters is
+// `ty::infinite-size` (ADR 0064), naming every type of the cycle, with a
+// help of its own. `Direct` contains itself, `Ping` and `Pong` each other;
+// each is reported once, wherever the layout is asked for first. Every type
+// of a cycle reaches a failed value: a peripheral of one is checked no
+// further, a function reading a register of one is left out, and a
+// register of type `*mut Direct` reports nothing more. `Outside` only
+// holds a cluster of a type in a cycle: it reaches the failed value, with
+// no error of its own.
+peripheral Direct {
+    read write ok: u8 at 0,
+    again: Direct at 8,
+    read write pointer: *mut Direct at 4,
+}
+
+peripheral Ping {
+    pong: [Pong; 2] at 0 step 8,
+}
+
+peripheral Pong {
+    ping: Ping at 0,
+}
+
+peripheral Outside {
+    direct: Direct at 0,
+}
+
+peripheral DIRECT: Direct at 0x1000;
+peripheral OUTSIDE: Outside at 0x2000;
+
+fn read_it() -> u8 {
+    DIRECT.ok
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

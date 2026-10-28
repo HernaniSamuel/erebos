@@ -3,6 +3,7 @@
 use std::fmt::Write;
 
 use crate::hir::{self, EnumId, Expr, ExprKind, Fn, FnKind, ReadEffect, Ty, WriteEffect};
+use crate::layout::PAST_ADDRESS_SPACE;
 use crate::query::Queries;
 
 /// Lists the memory map with its values (ADR 0057), peripheral types with
@@ -28,8 +29,8 @@ pub fn dump(q: &mut Queries) -> String {
             continue;
         };
         let registers: Vec<String> = (def.entries.iter())
-            .zip(&layout.offsets)
-            .map(|(register, offset)| {
+            .zip(layout.offsets.iter().zip(&layout.arrays))
+            .map(|(register, (offset, array))| {
                 let ty = q.normalize(register.ty);
                 let vis = match register.vis {
                     hir::Visibility::Pub => "pub ",
@@ -47,8 +48,13 @@ pub fn dump(q: &mut Queries) -> String {
                     Some((group, _)) => format!(" in {group}"),
                     None => String::new(),
                 };
+                // An array's elements are a step apart (ADR 0064).
+                let step = match array {
+                    Some((_, step)) => format!(" step {step:#x}"),
+                    None => String::new(),
+                };
                 format!(
-                    "{vis}{access}{}: {ty} at {offset:#x}{effect}{group}",
+                    "{vis}{access}{}: {ty} at {offset:#x}{step}{effect}{group}",
                     register.name
                 )
             })
@@ -58,10 +64,16 @@ pub fn dump(q: &mut Queries) -> String {
         } else {
             format!("{{ {} }}", registers.join(", "))
         };
+        // An extent past 2³² is saturated (ADR 0064).
+        let extent = if layout.extent >= PAST_ADDRESS_SPACE {
+            "past 2³²".to_owned()
+        } else {
+            layout.extent.to_string()
+        };
         writeln!(
             out,
-            "peripheral {} {registers} extent {}, align {}",
-            def.path, layout.extent, layout.align
+            "peripheral {} {registers} extent {extent}, align {}",
+            def.path, layout.align
         )
         .unwrap();
     }

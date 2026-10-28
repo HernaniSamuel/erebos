@@ -1,0 +1,250 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_register_arrays_layout.ers
+---
+--- errors ---
+ty::misaligned-register
+
+  × the register `a` is at a misaligned offset
+    ╭─[typeck_register_arrays_layout.ers:16:31]
+ 15 │ peripheral Offset {
+ 16 │     read write a: [u32; 4] at 2,
+    ·                   ────┬───    ┬
+    ·                       │       ╰── 0x2 is not a multiple of 4
+    ·                       ╰── `u32` is 4 bytes wide
+ 17 │ }
+    ╰────
+  help: a register's offset is a multiple of its width, so that each access to it, one
+        instruction, is aligned (ADR 0023, 0058)
+ty::misaligned-register
+
+  × the cluster `one` is at a misaligned offset
+    ╭─[typeck_register_arrays_layout.ers:20:19]
+ 19 │ peripheral ClusterOffset {
+ 20 │     one: Block at 2,
+    ·          ──┬──    ┬
+    ·            │      ╰── 0x2 is not a multiple of 4
+    ·            ╰── `Block` has alignment 4
+ 21 │     many: [Block; 2] at 0x16 step 12,
+    ╰────
+  help: a cluster's offset is a multiple of its type's alignment, so that every register of it is
+        accessed aligned once the peripheral is (ADR 0058, 0064)
+ty::misaligned-register
+
+  × the cluster `many` is at a misaligned offset
+    ╭─[typeck_register_arrays_layout.ers:21:25]
+ 20 │     one: Block at 2,
+ 21 │     many: [Block; 2] at 0x16 step 12,
+    ·           ─────┬────    ──┬─
+    ·                │          ╰── 0x16 is not a multiple of 4
+    ·                ╰── `Block` has alignment 4
+ 22 │ }
+    ╰────
+  help: a cluster's offset is a multiple of its type's alignment, so that every register of it is
+        accessed aligned once the peripheral is (ADR 0058, 0064)
+ty::misaligned-step
+
+  × the step of the register array `a` is misaligned
+    ╭─[typeck_register_arrays_layout.ers:25:38]
+ 24 │ peripheral Step6 {
+ 25 │     read write a: [u32; 4] at 0 step 6,
+    ·                   ────┬───           ┬
+    ·                       │              ╰── 0x6 is not a multiple of 4
+    ·                       ╰── `u32` is 4 bytes wide
+ 26 │ }
+    ╰────
+  help: the distance between the elements of an array is a multiple of the alignment of its
+        element, so that every element is accessed aligned once the first is (ADR 0064)
+ty::misaligned-step
+
+  × the step of the cluster array `blocks` is misaligned
+    ╭─[typeck_register_arrays_layout.ers:34:34]
+ 33 │ peripheral ClusterStep {
+ 34 │     blocks: [Block; 3] at 0 step 14,
+    ·             ─────┬────           ─┬
+    ·                  │                ╰── 0xe is not a multiple of 4
+    ·                  ╰── `Block` has alignment 4
+ 35 │ }
+    ╰────
+  help: the distance between the elements of an array is a multiple of the alignment of its
+        element, so that every element is accessed aligned once the first is (ADR 0064)
+ty::step-too-small
+
+  × the step of the cluster array `blocks` is smaller than its elements
+    ╭─[typeck_register_arrays_layout.ers:38:34]
+ 37 │ peripheral ClusterSmall {
+ 38 │     blocks: [Block; 3] at 0 step 8,
+    ·             ─────┬────           ┬
+    ·                  │               ╰── 0x8 is less than 9
+    ·                  ╰── each element of `Block` takes 9 bytes
+ 39 │ }
+    ╰────
+  help: the elements of an array do not overlap: the step is at least the size of an element, and
+        0 only for elements that occupy nothing (ADR 0064)
+ty::step-too-small
+
+  × the step of the register array `a` is smaller than its elements
+    ╭─[typeck_register_arrays_layout.ers:42:38]
+ 41 │ peripheral Zero {
+ 42 │     read write a: [u32; 4] at 0 step 0,
+    ·                   ────┬───           ┬
+    ·                       │              ╰── 0x0 is less than 4
+    ·                       ╰── each element of `u32` takes 4 bytes
+ 43 │ }
+    ╰────
+  help: the elements of an array do not overlap: the step is at least the size of an element, and
+        0 only for elements that occupy nothing (ADR 0064)
+ty::register-type
+
+  × `[u32; 3]` is not a register type
+    ╭─[typeck_register_arrays_layout.ers:46:19]
+ 45 │ peripheral Dims {
+ 46 │     read write a: [[u32; 3]; 2] at 0,
+    ·                   ──────┬──────
+    ·                         ╰── the element type of the register array `a`
+ 47 │ }
+    ╰────
+  help: a register repeated in two dimensions is a register array in a cluster array: declare the
+        inner array in a peripheral type of its own, and the outer one as a cluster array of it,
+        with the distance between its elements as its `step` (ADR 0064)
+ty::register-type
+
+  × `Block` is not a register type
+    ╭─[typeck_register_arrays_layout.ers:50:19]
+ 49 │ peripheral Held {
+ 50 │     read write a: Block at 0,
+    ·                   ──┬──
+    ·                     ╰── the type of the register `a`
+ 51 │ }
+    ╰────
+  help: a cluster has no access mode: write `NAME: Type at OFFSET`, with a peripheral type,
+        without `read` or `write`; a register is a `u8`, a `u16` or a `u32`, or a bit-field struct
+        or an enum without payloads on one of them (ADR 0058, 0060, 0064)
+ty::register-type
+
+  × `Block` is not a register type
+    ╭─[typeck_register_arrays_layout.ers:54:19]
+ 53 │ peripheral HeldArray {
+ 54 │     read write a: [Block; 2] at 0 step 16,
+    ·                   ─────┬────
+    ·                        ╰── the element type of the register array `a`
+ 55 │ }
+    ╰────
+  help: a cluster has no access mode: write `NAME: Type at OFFSET`, with a peripheral type,
+        without `read` or `write`; a register is a `u8`, a `u16` or a `u32`, or a bit-field struct
+        or an enum without payloads on one of them (ADR 0058, 0060, 0064)
+ty::misaligned-step
+
+  × the step of the register array `a` is misaligned
+    ╭─[typeck_register_arrays_layout.ers:58:38]
+ 57 │ peripheral Step2 {
+ 58 │     read write a: [u32; 4] at 0 step 2,
+    ·                   ────┬───           ┬
+    ·                       │              ╰── 0x2 is not a multiple of 4
+    ·                       ╰── `u32` is 4 bytes wide
+ 59 │ }
+    ╰────
+  help: the distance between the elements of an array is a multiple of the alignment of its
+        element, so that every element is accessed aligned once the first is (ADR 0064)
+ty::step-too-small
+
+  × the step of the register array `a` is smaller than its elements
+    ╭─[typeck_register_arrays_layout.ers:58:38]
+ 57 │ peripheral Step2 {
+ 58 │     read write a: [u32; 4] at 0 step 2,
+    ·                   ────┬───           ┬
+    ·                       │              ╰── 0x2 is less than 4
+    ·                       ╰── each element of `u32` takes 4 bytes
+ 59 │ }
+    ╰────
+  help: the elements of an array do not overlap: the step is at least the size of an element, and
+        0 only for elements that occupy nothing (ADR 0064)
+ty::division-by-zero
+
+  × division by zero
+    ╭─[typeck_register_arrays_layout.ers:62:9]
+ 61 │ fn step2_division(p: *mut Step2) -> u32 {
+ 62 │     1 / 0
+    ·         ┬
+    ·         ╰── this divisor is zero
+ 63 │ }
+    ╰────
+  help: at run time this would call the panic function (ADR 0007)
+ty::peripheral-out-of-range
+
+  × the peripheral `FAR` ends past the address space
+    ╭─[typeck_register_arrays_layout.ers:69:12]
+ 68 │ 
+ 69 │ peripheral FAR: Far at 0;
+    ·            ─┬─
+    ·             ╰── covers [0x0, past 2³²)
+ 70 │ 
+    ╰────
+  help: a peripheral covers `[address, address + extent)`, its type's extent being the end of the
+        last byte of its entries, and ends at 2³² (0x100000000) or below (ADR 0058, 0064)
+ty::step-too-small
+
+  × the step of the cluster array `inner` is smaller than its elements
+    ╭─[typeck_register_arrays_layout.ers:76:42]
+ 75 │ peripheral Mid {
+ 76 │     inner: [Wild; 0xFFFF_FFFF] at 0 step 0xFFFF_FFFF,
+    ·            ─────────┬─────────           ─────┬─────
+    ·                     │                         ╰── 0xffffffff is less than the size of an element, which is more than 2³² bytes
+    ·                     ╰── each element of `Wild` takes more than 2³² bytes
+ 77 │ }
+    ╰────
+  help: the elements of an array do not overlap: the step is at least the size of an element, and
+        0 only for elements that occupy nothing (ADR 0064)
+ty::step-too-small
+
+  × the step of the cluster array `outer` is smaller than its elements
+    ╭─[typeck_register_arrays_layout.ers:80:41]
+ 79 │ peripheral Huge {
+ 80 │     outer: [Mid; 0xFFFF_FFFF] at 0 step 0xFFFF_FFFF,
+    ·            ─────────┬────────           ─────┬─────
+    ·                     │                        ╰── 0xffffffff is less than the size of an element, which is more than 2³² bytes
+    ·                     ╰── each element of `Mid` takes more than 2³² bytes
+ 81 │ }
+    ╰────
+  help: the elements of an array do not overlap: the step is at least the size of an element, and
+        0 only for elements that occupy nothing (ADR 0064)
+ty::peripheral-out-of-range
+
+  × the peripheral `HUGE` ends past the address space
+    ╭─[typeck_register_arrays_layout.ers:83:12]
+ 82 │ 
+ 83 │ peripheral HUGE: Huge at 0;
+    ·            ──┬─
+    ·              ╰── covers [0x0, past 2³²)
+ 84 │ 
+    ╰────
+  help: a peripheral covers `[address, address + extent)`, its type's extent being the end of the
+        last byte of its entries, and ends at 2³² (0x100000000) or below (ADR 0058, 0064)
+ty::peripheral-overlap
+
+  × the peripherals `FAR` and `HUGE` overlap
+    ╭─[typeck_register_arrays_layout.ers:83:12]
+ 68 │ 
+ 69 │ peripheral FAR: Far at 0;
+    ·            ─┬─
+    ·             ╰── covers [0x0, past 2³²)
+ 70 │ 
+ 71 │ peripheral Wild {
+ 72 │     read write a: [u8; 0xFFFF_FFFF] at 0 step 0xFFFF_FFFF,
+ 73 │ }
+ 74 │ 
+ 75 │ peripheral Mid {
+ 76 │     inner: [Wild; 0xFFFF_FFFF] at 0 step 0xFFFF_FFFF,
+ 77 │ }
+ 78 │ 
+ 79 │ peripheral Huge {
+ 80 │     outer: [Mid; 0xFFFF_FFFF] at 0 step 0xFFFF_FFFF,
+ 81 │ }
+ 82 │ 
+ 83 │ peripheral HUGE: Huge at 0;
+    ·            ──┬─
+    ·              ╰── covers [0x0, past 2³²)
+ 84 │ 
+    ╰────
+  help: they share the bytes from 0x0 on; two peripherals cannot share a byte (ADR 0058)

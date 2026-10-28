@@ -27,9 +27,9 @@ ty::register-type
     ·                        ╰── the type of the register `whole`
  17 │ }
     ╰────
-  help: a register is a `u8`, a `u16` or a `u32`, or a bit-field struct or an enum without
-        payloads on one of them: as wide as that integer type, and read and written in one access
-        (ADR 0058, 0060)
+  help: a cluster has no access mode: write `NAME: Type at OFFSET`, with a peripheral type,
+        without `read` or `write`; a register is a `u8`, a `u16` or a `u32`, or a bit-field struct
+        or an enum without payloads on one of them (ADR 0058, 0060, 0064)
 ty::register-type
 
   × `*mut Pong` is not a register type
