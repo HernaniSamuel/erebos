@@ -14,10 +14,11 @@ parser::unexpected-token
    ·            ╰── expected `at`
  8 │ }
    ╰────
-  help: a bit field is written `NAME: TYPE at BITS`, optionally after `pub`, then optionally a
-        read effect, `read clears`, `read sets` or `read modifies`, a write effect, `write 0` or
-        `write 1` followed by `clears`, `sets` or `toggles`, and a default, `= VALUE`, in that
-        order; fields are separated by `,` (ADR 0059, 0060)
+  help: a bit field is written `NAME: TYPE at BITS`, optionally after `pub` and before the name
+        `read` or `write`, then optionally a read effect, `read clears`, `read sets` or `read
+        modifies`, a write effect, `write 0` or `write 1` followed by `clears`, `sets` or
+        `toggles`, and a default, `= VALUE`, in that order; fields are separated by `,` (ADR 0059,
+        0060, 0065)
 parser::unexpected-token
 
   × expected `..=`, found `..`
@@ -62,10 +63,11 @@ parser::unexpected-token
     ·                        ╰── expected `0` or `1`
  28 │ }
     ╰────
-  help: a bit field is written `NAME: TYPE at BITS`, optionally after `pub`, then optionally a
-        read effect, `read clears`, `read sets` or `read modifies`, a write effect, `write 0` or
-        `write 1` followed by `clears`, `sets` or `toggles`, and a default, `= VALUE`, in that
-        order; fields are separated by `,` (ADR 0059, 0060)
+  help: a bit field is written `NAME: TYPE at BITS`, optionally after `pub` and before the name
+        `read` or `write`, then optionally a read effect, `read clears`, `read sets` or `read
+        modifies`, a write effect, `write 0` or `write 1` followed by `clears`, `sets` or
+        `toggles`, and a default, `= VALUE`, in that order; fields are separated by `,` (ADR 0059,
+        0060, 0065)
 parser::unexpected-token
 
   × expected `clears`, `sets` or `toggles`, found identifier
@@ -76,10 +78,11 @@ parser::unexpected-token
     ·                             ╰── expected `clears`, `sets` or `toggles`
  33 │ }
     ╰────
-  help: a bit field is written `NAME: TYPE at BITS`, optionally after `pub`, then optionally a
-        read effect, `read clears`, `read sets` or `read modifies`, a write effect, `write 0` or
-        `write 1` followed by `clears`, `sets` or `toggles`, and a default, `= VALUE`, in that
-        order; fields are separated by `,` (ADR 0059, 0060)
+  help: a bit field is written `NAME: TYPE at BITS`, optionally after `pub` and before the name
+        `read` or `write`, then optionally a read effect, `read clears`, `read sets` or `read
+        modifies`, a write effect, `write 0` or `write 1` followed by `clears`, `sets` or
+        `toggles`, and a default, `= VALUE`, in that order; fields are separated by `,` (ADR 0059,
+        0060, 0065)
 parser::unexpected-token
 
   × expected `clears`, `sets` or `modifies`, found identifier
@@ -90,10 +93,11 @@ parser::unexpected-token
     ·                          ╰── expected `clears`, `sets` or `modifies`
  38 │ }
     ╰────
-  help: a bit field is written `NAME: TYPE at BITS`, optionally after `pub`, then optionally a
-        read effect, `read clears`, `read sets` or `read modifies`, a write effect, `write 0` or
-        `write 1` followed by `clears`, `sets` or `toggles`, and a default, `= VALUE`, in that
-        order; fields are separated by `,` (ADR 0059, 0060)
+  help: a bit field is written `NAME: TYPE at BITS`, optionally after `pub` and before the name
+        `read` or `write`, then optionally a read effect, `read clears`, `read sets` or `read
+        modifies`, a write effect, `write 0` or `write 1` followed by `clears`, `sets` or
+        `toggles`, and a default, `= VALUE`, in that order; fields are separated by `,` (ADR 0059,
+        0060, 0065)
 parser::unexpected-token
 
   × expected `write`, `=`, `,` or `}`, found identifier
@@ -104,10 +108,11 @@ parser::unexpected-token
     ·                                ╰── expected `write`, `=`, `,` or `}`
  43 │ }
     ╰────
-  help: a bit field is written `NAME: TYPE at BITS`, optionally after `pub`, then optionally a
-        read effect, `read clears`, `read sets` or `read modifies`, a write effect, `write 0` or
-        `write 1` followed by `clears`, `sets` or `toggles`, and a default, `= VALUE`, in that
-        order; fields are separated by `,` (ADR 0059, 0060)
+  help: a bit field is written `NAME: TYPE at BITS`, optionally after `pub` and before the name
+        `read` or `write`, then optionally a read effect, `read clears`, `read sets` or `read
+        modifies`, a write effect, `write 0` or `write 1` followed by `clears`, `sets` or
+        `toggles`, and a default, `= VALUE`, in that order; fields are separated by `,` (ADR 0059,
+        0060, 0065)
 parser::unexpected-token
 
   × expected `=`, `,` or `}`, found identifier
@@ -118,10 +123,11 @@ parser::unexpected-token
     ·                                   ╰── expected `=`, `,` or `}`
  48 │ }
     ╰────
-  help: a bit field is written `NAME: TYPE at BITS`, optionally after `pub`, then optionally a
-        read effect, `read clears`, `read sets` or `read modifies`, a write effect, `write 0` or
-        `write 1` followed by `clears`, `sets` or `toggles`, and a default, `= VALUE`, in that
-        order; fields are separated by `,` (ADR 0059, 0060)
+  help: a bit field is written `NAME: TYPE at BITS`, optionally after `pub` and before the name
+        `read` or `write`, then optionally a read effect, `read clears`, `read sets` or `read
+        modifies`, a write effect, `write 0` or `write 1` followed by `clears`, `sets` or
+        `toggles`, and a default, `= VALUE`, in that order; fields are separated by `,` (ADR 0059,
+        0060, 0065)
 parser::unexpected-token
 
   × expected `,` or `}`, found identifier
@@ -132,10 +138,11 @@ parser::unexpected-token
     ·                            ╰── expected `,` or `}`
  53 │ }
     ╰────
-  help: a bit field is written `NAME: TYPE at BITS`, optionally after `pub`, then optionally a
-        read effect, `read clears`, `read sets` or `read modifies`, a write effect, `write 0` or
-        `write 1` followed by `clears`, `sets` or `toggles`, and a default, `= VALUE`, in that
-        order; fields are separated by `,` (ADR 0059, 0060)
+  help: a bit field is written `NAME: TYPE at BITS`, optionally after `pub` and before the name
+        `read` or `write`, then optionally a read effect, `read clears`, `read sets` or `read
+        modifies`, a write effect, `write 0` or `write 1` followed by `clears`, `sets` or
+        `toggles`, and a default, `= VALUE`, in that order; fields are separated by `,` (ADR 0059,
+        0060, 0065)
 parser::unexpected-token
 
   × expected `}`, found `,`
@@ -196,35 +203,38 @@ parser::unexpected-token
     ·                                   ╰── expected `in`, `,` or `}`
  78 │ }
     ╰────
-  help: after its offset, a register may declare what a read does, `read clears`, `read sets` or
-        `read modifies`, then an alternate group, `in GROUP`, in that order; registers are
-        separated by `,` (ADR 0060, 0061)
+  help: after its offset, a register may declare the distance between the elements of a register
+        array, `step STEP`, what a read does, `read clears`, `read sets` or `read modifies`, then
+        an alternate group, `in GROUP`, in that order; entries are separated by `,` (ADR 0060,
+        0061, 0064)
 parser::unexpected-token
 
-  × expected `read`, `in`, `,` or `}`, found identifier
+  × expected `step`, `read`, `in`, `,` or `}`, found identifier
     ╭─[parse_bit_struct_errors.ers:83:20]
  82 │ peripheral NoCommaBeforeRead {
  83 │     read a: u8 at 0
     ·                    ▲
-    ·                    ╰── expected `read`, `in`, `,` or `}`
+    ·                    ╰── expected `step`, `read`, `in`, `,` or `}`
  84 │     read b: u8 at 1,
     ╰────
-  help: after its offset, a register may declare what a read does, `read clears`, `read sets` or
-        `read modifies`, then an alternate group, `in GROUP`, in that order; registers are
-        separated by `,` (ADR 0060, 0061)
+  help: after its offset, a register may declare the distance between the elements of a register
+        array, `step STEP`, what a read does, `read clears`, `read sets` or `read modifies`, then
+        an alternate group, `in GROUP`, in that order; entries are separated by `,` (ADR 0060,
+        0061, 0064)
 parser::unexpected-token
 
-  × expected `read`, `in`, `,` or `}`, found identifier
+  × expected `step`, `read`, `in`, `,` or `}`, found identifier
     ╭─[parse_bit_struct_errors.ers:89:20]
  88 │ peripheral NoCommaBeforeReadWrite {
  89 │     read a: u8 at 0
     ·                    ▲
-    ·                    ╰── expected `read`, `in`, `,` or `}`
+    ·                    ╰── expected `step`, `read`, `in`, `,` or `}`
  90 │     read write b: u8 at 1,
     ╰────
-  help: after its offset, a register may declare what a read does, `read clears`, `read sets` or
-        `read modifies`, then an alternate group, `in GROUP`, in that order; registers are
-        separated by `,` (ADR 0060, 0061)
+  help: after its offset, a register may declare the distance between the elements of a register
+        array, `step STEP`, what a read does, `read clears`, `read sets` or `read modifies`, then
+        an alternate group, `in GROUP`, in that order; entries are separated by `,` (ADR 0060,
+        0061, 0064)
 parser::unexpected-token
 
   × expected `..=`, `read`, `write`, `=`, `,` or `}`, found identifier
@@ -235,10 +245,11 @@ parser::unexpected-token
     ·                 ╰── expected `..=`, `read`, `write`, `=`, `,` or `}`
  96 │     read: bool at 1,
     ╰────
-  help: a bit field is written `NAME: TYPE at BITS`, optionally after `pub`, then optionally a
-        read effect, `read clears`, `read sets` or `read modifies`, a write effect, `write 0` or
-        `write 1` followed by `clears`, `sets` or `toggles`, and a default, `= VALUE`, in that
-        order; fields are separated by `,` (ADR 0059, 0060)
+  help: a bit field is written `NAME: TYPE at BITS`, optionally after `pub` and before the name
+        `read` or `write`, then optionally a read effect, `read clears`, `read sets` or `read
+        modifies`, a write effect, `write 0` or `write 1` followed by `clears`, `sets` or
+        `toggles`, and a default, `= VALUE`, in that order; fields are separated by `,` (ADR 0059,
+        0060, 0065)
 parser::unexpected-token
 
   × expected `..=`, `read`, `write`, `=`, `,` or `}`, found identifier
@@ -249,10 +260,11 @@ parser::unexpected-token
      ·                 ╰── expected `..=`, `read`, `write`, `=`, `,` or `}`
  102 │     write: bool at 1,
      ╰────
-  help: a bit field is written `NAME: TYPE at BITS`, optionally after `pub`, then optionally a
-        read effect, `read clears`, `read sets` or `read modifies`, a write effect, `write 0` or
-        `write 1` followed by `clears`, `sets` or `toggles`, and a default, `= VALUE`, in that
-        order; fields are separated by `,` (ADR 0059, 0060)
+  help: a bit field is written `NAME: TYPE at BITS`, optionally after `pub` and before the name
+        `read` or `write`, then optionally a read effect, `read clears`, `read sets` or `read
+        modifies`, a write effect, `write 0` or `write 1` followed by `clears`, `sets` or
+        `toggles`, and a default, `= VALUE`, in that order; fields are separated by `,` (ADR 0059,
+        0060, 0065)
 parser::unexpected-token
 
   × expected `0` or `1`, found `,`
@@ -263,7 +275,8 @@ parser::unexpected-token
      ·                       ╰── expected `0` or `1`
  108 │ }
      ╰────
-  help: a bit field is written `NAME: TYPE at BITS`, optionally after `pub`, then optionally a
-        read effect, `read clears`, `read sets` or `read modifies`, a write effect, `write 0` or
-        `write 1` followed by `clears`, `sets` or `toggles`, and a default, `= VALUE`, in that
-        order; fields are separated by `,` (ADR 0059, 0060)
+  help: a bit field is written `NAME: TYPE at BITS`, optionally after `pub` and before the name
+        `read` or `write`, then optionally a read effect, `read clears`, `read sets` or `read
+        modifies`, a write effect, `write 0` or `write 1` followed by `clears`, `sets` or
+        `toggles`, and a default, `= VALUE`, in that order; fields are separated by `,` (ADR 0059,
+        0060, 0065)

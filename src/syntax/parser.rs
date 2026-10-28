@@ -5,12 +5,12 @@ use crate::builtin::{builtin_variant_help, is_builtin_enum};
 use crate::diag::{Diagnostic, Diagnostics};
 use crate::span::Span;
 use crate::syntax::ast::{
-    AccessMode, Arm, Attr, BinOp, BitFieldDecl, BitStructDecl, Block, ComptimeDecl, ConstDecl,
-    EnumDecl, Expr, ExprKind, FieldDecl, FieldInit, File, FnDecl, FnKind, Ident, Item, Let,
-    LogicalOp, MemoryDecl, ModDecl, Param, Path, Pattern, PatternKind, PeripheralDecl,
-    PeripheralTypeDecl, Placement, PlacementKind, ReadEffect, RegionDecl, RegisterDecl, StaticDecl,
-    Stmt, StructDecl, Ty, TyKind, UnOp, UseDecl, UseName, VariantDecl, Visibility, WriteAction,
-    WriteEffect,
+    AccessMode, Arm, Attr, BinOp, BitFieldDecl, BitStructDecl, Block, ClusterDecl, ComptimeDecl,
+    ConstDecl, EntryDecl, EnumDecl, Expr, ExprKind, FieldDecl, FieldInit, File, FnDecl, FnKind,
+    Ident, Item, Let, LogicalOp, MemoryDecl, ModDecl, Param, Path, Pattern, PatternKind,
+    PeripheralDecl, PeripheralTypeDecl, Placement, PlacementKind, ReadEffect, RegionDecl,
+    RegisterDecl, StaticDecl, Stmt, StructDecl, Ty, TyKind, UnOp, UseDecl, UseName, VariantDecl,
+    Visibility, WriteAction, WriteEffect,
 };
 use crate::syntax::lexer;
 use crate::syntax::token::{Token, TokenKind};
@@ -31,14 +31,17 @@ pub fn parse(text: &str, tokens: &[Token], diags: &mut Diagnostics) -> File {
 }
 
 /// The help of the errors in a register of a peripheral type (ADR 0058).
-const REGISTER_HELP: &str = "a register is written `ACCESS NAME: TYPE at OFFSET`, optionally after `pub`, its access mode `read`, `write` or `read write`, in that order, and its name the identifier just before `:`; registers are separated by `,` (ADR 0058)";
+const REGISTER_HELP: &str = "a register is written `ACCESS NAME: TYPE at OFFSET`, optionally after `pub`, its access mode `read`, `write` or `read write`, in that order, and its name the identifier just before `:`; an entry with no access mode, `NAME: TYPE at OFFSET`, is a cluster; entries are separated by `,` (ADR 0058, 0064)";
 
 /// The help of the errors after a register's offset (ADR 0060, 0061).
-const REGISTER_END_HELP: &str = "after its offset, a register may declare what a read does, `read clears`, `read sets` or `read modifies`, then an alternate group, `in GROUP`, in that order; registers are separated by `,` (ADR 0060, 0061)";
+const REGISTER_END_HELP: &str = "after its offset, a register may declare the distance between the elements of a register array, `step STEP`, what a read does, `read clears`, `read sets` or `read modifies`, then an alternate group, `in GROUP`, in that order; entries are separated by `,` (ADR 0060, 0061, 0064)";
+
+/// The help of the errors in a cluster (ADR 0064).
+const CLUSTER_HELP: &str = "a cluster is written `NAME: TYPE at OFFSET`, optionally after `pub`, then optionally `step STEP` for an array of them and an alternate group, `in GROUP`, in that order; entries are separated by `,` (ADR 0064)";
 
 /// The help of the errors in a field of a bit-field struct (ADR 0059,
 /// 0060).
-const BIT_FIELD_HELP: &str = "a bit field is written `NAME: TYPE at BITS`, optionally after `pub`, then optionally a read effect, `read clears`, `read sets` or `read modifies`, a write effect, `write 0` or `write 1` followed by `clears`, `sets` or `toggles`, and a default, `= VALUE`, in that order; fields are separated by `,` (ADR 0059, 0060)";
+const BIT_FIELD_HELP: &str = "a bit field is written `NAME: TYPE at BITS`, optionally after `pub` and before the name `read` or `write`, then optionally a read effect, `read clears`, `read sets` or `read modifies`, a write effect, `write 0` or `write 1` followed by `clears`, `sets` or `toggles`, and a default, `= VALUE`, in that order; fields are separated by `,` (ADR 0059, 0060, 0065)";
 
 /// The help of the errors in the bits of a bit field (ADR 0059).
 const BITS_HELP: &str = "a bit field's bits are one bit, as `at 7`, or a range with both ends included, lowest first, as `at 0..=1` (ADR 0059)";
@@ -718,6 +721,26 @@ impl Parser<'_> {
     fn bit_field(&mut self) -> PResult<BitFieldDecl> {
         let start = self.peek().span;
         let vis = self.field_visibility();
+        let access = if self.at_access_word("read") || self.at_access_word("write") {
+            let mode = if self.at_word("read") {
+                AccessMode::Read
+            } else {
+                AccessMode::Write
+            };
+            let word = self.bump();
+            // `read write` is what no word says: the field is not both.
+            if mode == AccessMode::Read && self.at_access_word("write") {
+                let span = self.peek().span;
+                return Err(self.report_unexpected_help(
+                    "the field's name",
+                    span,
+                    "a field is `read` or `write`, and has neither word when it is both; the name is the identifier just before `:` (ADR 0065)",
+                ));
+            }
+            Some((mode, word.span))
+        } else {
+            None
+        };
         let name = self.ident()?;
         self.expect_help(TokenKind::Colon, BIT_FIELD_HELP)?;
         let ty = self.ty()?;
@@ -751,6 +774,7 @@ impl Parser<'_> {
         }
         Ok(BitFieldDecl {
             vis,
+            access,
             name,
             ty,
             low,
@@ -788,10 +812,18 @@ impl Parser<'_> {
 
     /// `write BIT clears`, `write BIT sets` or `write BIT toggles`, if at
     /// `write`, the bit an integer literal of value 0 or 1 (ADR 0060). A
-    /// `write` followed by `:` is the next field, named `write`, after a
+    /// `write` followed by `:` is the next field, named `write`, and one
+    /// followed by a name and `:` a `write` field (ADR 0065), after a
     /// missing `,`, which is reported instead.
     fn write_effect(&mut self) -> PResult<Option<(WriteEffect, Span)>> {
-        if !self.at_word("write") || self.peek_second() == TokenKind::Colon {
+        let third = self
+            .tokens
+            .get(self.pos + 2)
+            .map_or(TokenKind::Eof, |token| token.kind);
+        if !self.at_word("write")
+            || self.peek_second() == TokenKind::Colon
+            || (self.peek_second() == TokenKind::Ident && third == TokenKind::Colon)
+        {
             return Ok(None);
         }
         let write = self.bump();
@@ -1057,8 +1089,8 @@ impl Parser<'_> {
         Err(self.error_expected_help("`{` or `:`", HELP))
     }
 
-    /// The registers of a peripheral type, `{ register, ... }`, with an
-    /// optional trailing comma (ADR 0058). At `{`; `start` is the span of
+    /// The entries of a peripheral type, `{ entry, ... }`, with an optional
+    /// trailing comma (ADR 0058, 0064). At `{`; `start` is the span of
     /// `peripheral`.
     fn peripheral_type_decl(
         &mut self,
@@ -1068,10 +1100,10 @@ impl Parser<'_> {
         name: Ident,
     ) -> PResult<PeripheralTypeDecl> {
         self.bump();
-        let mut registers = Vec::new();
-        // Each register checks the token after it.
+        let mut entries = Vec::new();
+        // Each entry checks the token after it.
         while !self.at(TokenKind::RBrace) {
-            registers.push(self.register()?);
+            entries.push(self.entry()?);
             if self.eat(TokenKind::Comma).is_none() {
                 break;
             }
@@ -1081,23 +1113,88 @@ impl Parser<'_> {
             attrs,
             vis,
             name,
-            registers,
+            entries,
             span: start.to(close.span),
         })
     }
 
-    /// `[pub] ACCESS NAME: Type at OFFSET [READ_EFFECT] [in GROUP]`
-    /// (ADR 0058, 0060, 0061). The access mode is `read`, `write` or
-    /// `read write`, each word one only when `:` does not follow it, since
-    /// the name is the identifier just before `:`. It must be followed by
-    /// `,` or `}`, which are left to the caller.
-    fn register(&mut self) -> PResult<RegisterDecl> {
+    /// A register or a cluster (ADR 0064): after an optional `pub`, an
+    /// entry whose first word is followed by `:` is a cluster of that name,
+    /// so that `read: T` is a cluster named `read`; any other starts with an
+    /// access mode, a register. It must be followed by `,` or `}`, which are
+    /// left to the caller.
+    fn entry(&mut self) -> PResult<EntryDecl> {
         let start = self.peek().span;
-        // A register is private unless written `pub`, as a field (ADR 0050).
+        // An entry is private unless written `pub`, as a field (ADR 0050).
         let vis = match self.eat(TokenKind::Pub) {
             Some(_) => Visibility::Pub,
             None => Visibility::Private,
         };
+        if self.at(TokenKind::Ident) && self.peek_second() == TokenKind::Colon {
+            return self.cluster(start, vis).map(EntryDecl::Cluster);
+        }
+        self.register(start, vis).map(EntryDecl::Register)
+    }
+
+    /// `NAME: Type at OFFSET [step STEP] [in GROUP]` (ADR 0064), after an
+    /// optional `pub`, at the name; `start` is the span of the entry's first
+    /// token.
+    fn cluster(&mut self, start: Span, vis: Visibility) -> PResult<ClusterDecl> {
+        let name = self.ident()?;
+        self.bump();
+        let ty = self.ty()?;
+        self.expect_word("at", CLUSTER_HELP)?;
+        let offset = self.nested_expr()?;
+        let step = self.step()?;
+        let group = self.group()?;
+        if !self.at(TokenKind::Comma) && !self.at(TokenKind::RBrace) {
+            // What may still come, in the order of the grammar.
+            let what = match (&step, &group) {
+                (_, Some(_)) => "`,` or `}`",
+                (Some(_), None) => "`in`, `,` or `}`",
+                (None, None) => "`step`, `in`, `,` or `}`",
+            };
+            return Err(self.error_expected_help(what, CLUSTER_HELP));
+        }
+        Ok(ClusterDecl {
+            vis,
+            name,
+            ty,
+            offset,
+            step,
+            group,
+            span: start.to(self.tokens[self.pos - 1].span),
+        })
+    }
+
+    /// `step STEP` after an entry's offset, if at the word `step` (ADR 0064).
+    /// A `step` followed by `:` is the next entry, a cluster named `step`,
+    /// after a missing `,`, which is reported instead.
+    fn step(&mut self) -> PResult<Option<Expr>> {
+        if !self.at_word("step") || self.peek_second() == TokenKind::Colon {
+            return Ok(None);
+        }
+        self.bump();
+        Ok(Some(self.nested_expr()?))
+    }
+
+    /// `in GROUP` after an entry, if at the word `in` (ADR 0061).
+    fn group(&mut self) -> PResult<Option<Ident>> {
+        // An `in` followed by `:` is the next entry, a cluster named `in`,
+        // after a missing `,`, which is reported instead.
+        if !self.at_word("in") || self.peek_second() == TokenKind::Colon {
+            return Ok(None);
+        }
+        self.bump();
+        Ok(Some(self.ident()?))
+    }
+
+    /// `ACCESS NAME: Type at OFFSET [step STEP] [READ_EFFECT] [in GROUP]`
+    /// (ADR 0058, 0060, 0061, 0064), after an optional `pub`; `start` is the
+    /// span of the entry's first token. The access mode is `read`, `write`
+    /// or `read write`, each word one only when `:` does not follow it,
+    /// since the name is the identifier just before `:`.
+    fn register(&mut self, start: Span, vis: Visibility) -> PResult<RegisterDecl> {
         let access = if self.at_access_word("read") {
             self.bump();
             if self.at_access_word("write") {
@@ -1114,24 +1211,9 @@ impl Parser<'_> {
             if self.at(TokenKind::Eof) {
                 return Err(self.error_expected_help(what, REGISTER_HELP));
             }
-            // The mode is missing before the token, which is likely the
-            // register's name: point at it rather than at the end of the
-            // line before.
+            // The token is no mode: point at it rather than at the end of
+            // the line before. A name before `:` is a cluster (`entry`).
             let found = self.peek();
-            if found.kind == TokenKind::Ident && self.peek_second() == TokenKind::Colon {
-                // Named as such, so that `read: u8` does not read as a
-                // `read` that is not one.
-                let name = &self.text[found.span.range()];
-                self.diags.push(
-                    Diagnostic::error(
-                        "parser::unexpected-token",
-                        format!("expected {what}, found the register's name `{name}`"),
-                    )
-                    .label(found.span, "the register's name, just before `:`")
-                    .help(REGISTER_HELP),
-                );
-                return Err(Reported);
-            }
             return Err(self.report_unexpected_help(what, found.span, REGISTER_HELP));
         };
         let name = self.ident()?;
@@ -1139,19 +1221,16 @@ impl Parser<'_> {
         let ty = self.ty()?;
         self.expect_word("at", REGISTER_HELP)?;
         let offset = self.nested_expr()?;
+        let step = self.step()?;
         let read_effect = self.read_effect(REGISTER_END_HELP)?;
-        let group = if self.at_word("in") {
-            self.bump();
-            Some(self.ident()?)
-        } else {
-            None
-        };
+        let group = self.group()?;
         if !self.at(TokenKind::Comma) && !self.at(TokenKind::RBrace) {
             // What may still come, in the order of the grammar.
-            let what = match (&read_effect, &group) {
-                (_, Some(_)) => "`,` or `}`",
-                (Some(_), None) => "`in`, `,` or `}`",
-                (None, None) => "`read`, `in`, `,` or `}`",
+            let what = match (&step, &read_effect, &group) {
+                (_, _, Some(_)) => "`,` or `}`",
+                (_, Some(_), None) => "`in`, `,` or `}`",
+                (Some(_), None, None) => "`read`, `in`, `,` or `}`",
+                (None, None, None) => "`step`, `read`, `in`, `,` or `}`",
             };
             return Err(self.error_expected_help(what, REGISTER_END_HELP));
         }
@@ -1161,13 +1240,15 @@ impl Parser<'_> {
             name,
             ty,
             offset,
+            step,
             read_effect,
             group,
             span: start.to(self.tokens[self.pos - 1].span),
         })
     }
 
-    /// `: Type at ADDRESS;` after a peripheral's name (ADR 0058). At `:`;
+    /// `: Type at ADDRESS [over PATH];` after a peripheral's name
+    /// (ADR 0058, 0066). At `:`;
     /// `start` is the span of `peripheral`.
     fn peripheral_decl(
         &mut self,
@@ -1176,18 +1257,35 @@ impl Parser<'_> {
         start: Span,
         name: Ident,
     ) -> PResult<PeripheralDecl> {
-        const HELP: &str = "a peripheral is written `peripheral NAME: TYPE at ADDRESS;`, its type a peripheral type (ADR 0058)";
+        const HELP: &str = "a peripheral is written `peripheral NAME: TYPE at ADDRESS;`, its type a peripheral type, and optionally `over PERIPHERAL` before the `;` when it is another view of the device of that peripheral (ADR 0058, 0066)";
         self.bump();
         let ty = self.ty()?;
         self.expect_word("at", HELP)?;
         let address = self.expr()?;
-        let semi = self.expect_help(TokenKind::Semi, HELP)?;
+        let over = if self.at_word("over") {
+            self.bump();
+            Some(self.path()?)
+        } else {
+            None
+        };
+        let semi = match self.eat(TokenKind::Semi) {
+            Some(semi) => semi,
+            None => {
+                let what = if over.is_some() {
+                    "`;`"
+                } else {
+                    "`over` or `;`"
+                };
+                return Err(self.error_expected_help(what, HELP));
+            }
+        };
         Ok(PeripheralDecl {
             attrs,
             vis,
             name,
             ty,
             address,
+            over,
             span: start.to(semi.span),
         })
     }

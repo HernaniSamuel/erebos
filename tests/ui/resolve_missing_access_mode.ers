@@ -1,0 +1,30 @@
+// emit: hir
+// An entry without an access mode is a cluster (ADR 0064), whose type must
+// be a peripheral type or an array of one: another type is
+// `resolve::not-a-peripheral-type`, and when a register may have it, the
+// help names the access mode. A struct is no register type: no such help.
+struct Regs { data: u32 }
+
+enum Mode: u8 { A = 0, B = 1 }
+
+struct Flags: u8 { a: bool at 0 }
+
+struct Wide: u64 { a: bool at 0 }
+
+enum WideMode: u64 { A = 0 }
+
+peripheral NoMode {
+    rbr: u8 at 0,
+    read: u8 at 1,
+    flags: Flags at 2,
+    mode: Mode at 3,
+    pair: [u32; 2] at 4,
+    wide: u64 at 12,
+    wide_flags: Wide at 24,
+    wide_mode: WideMode at 32,
+    regs: Regs at 16,
+    pointer: *mut u8 at 20,
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

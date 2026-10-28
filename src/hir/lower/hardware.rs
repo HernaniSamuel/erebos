@@ -4,8 +4,8 @@ use std::collections::HashMap;
 
 use crate::diag::{Diagnostic, Diagnostics};
 use crate::hir::{
-    MemoryMap, NeverPosition, PeripheralDef, PeripheralTypeDef, Placement, RegionDef, RegisterDef,
-    Ty,
+    IntTy, MemoryMap, NeverPosition, PeripheralDef, PeripheralTypeDef, Placement, RegionDef,
+    RegisterDef, Ty,
 };
 use crate::span::Span;
 use crate::syntax::ast;
@@ -179,7 +179,16 @@ impl Lowerer<'_> {
     ) -> PeripheralTypeDef {
         self.no_attrs(&decl.attrs, "a peripheral type");
         let mut seen: HashMap<&str, Span> = HashMap::new();
-        for register in &decl.registers {
+        // Clusters are checked for their type only; step 2 gives them a place
+        // in the HIR, with their steps, and counts them in the names.
+        let mut registers_decl = Vec::new();
+        for entry in &decl.entries {
+            match entry {
+                ast::EntryDecl::Register(register) => registers_decl.push(register),
+                ast::EntryDecl::Cluster(cluster) => self.cluster_ty(cluster),
+            }
+        }
+        for &register in &registers_decl {
             if let Some(&first) = seen.get(register.name.name.as_str()) {
                 self.diags.push(
                     Diagnostic::error(
@@ -197,10 +206,9 @@ impl Lowerer<'_> {
             seen.entry(&register.name.name)
                 .or_insert(register.name.span);
         }
-        let registers = decl
-            .registers
+        let registers = registers_decl
             .iter()
-            .map(|register| RegisterDef {
+            .map(|&register| RegisterDef {
                 name: register.name.name.clone(),
                 span: register.name.span,
                 vis: visibility(register.vis),
@@ -227,6 +235,61 @@ impl Lowerer<'_> {
         }
     }
 
+    /// The type of a cluster (ADR 0064) must be a peripheral type or an
+    /// array of one: any other is `resolve::not-a-peripheral-type`. One
+    /// that a register may have, or an array of one, is most likely a
+    /// register written without its access mode, which the help says. Its
+    /// parts, the array lengths, the offset, the step and the group, are
+    /// lowered by step 2; a cluster of a peripheral type is skipped here.
+    fn cluster_ty(&mut self, cluster: &ast::ClusterDecl) {
+        let mut inner = &cluster.ty;
+        while let ast::TyKind::Array { elem, .. } = &inner.kind {
+            inner = elem;
+        }
+        let (what, register) = match &inner.kind {
+            ast::TyKind::Named(path) => match self.named_ty(path) {
+                Ty::Peripheral(_) | Ty::Error => return,
+                Ty::Struct(_) => ("a struct", false),
+                Ty::BitStruct(b) => ("a bit-field struct", register_int(b.int)),
+                Ty::Enum(e) => ("an enum", !e.payloads && register_int(e.int)),
+                Ty::Int(int) => ("a built-in type", register_int(int)),
+                _ => ("a built-in type", false),
+            },
+            ast::TyKind::Applied(path, args) => match self.applied_ty(inner, path, args) {
+                Ty::Error => return,
+                _ => ("an enum", false),
+            },
+            ast::TyKind::Ptr { .. } => ("a pointer type", false),
+            // Arrays were stripped above; only a slice is left.
+            ast::TyKind::Array { .. } | ast::TyKind::Slice(_) => ("a slice type", false),
+            ast::TyKind::Never | ast::TyKind::Unit => ("a built-in type", false),
+        };
+        let mut diag = Diagnostic::error(
+            "resolve::not-a-peripheral-type",
+            format!(
+                "the type of the cluster `{}` is not a peripheral type",
+                cluster.name.name
+            ),
+        )
+        .label(
+            cluster.ty.span,
+            if matches!(cluster.ty.kind, ast::TyKind::Array { .. }) {
+                format!("an array of {what}, not of a peripheral type")
+            } else {
+                format!("{what}, not a peripheral type")
+            },
+        );
+        diag = if register {
+            diag.help(format!(
+                "an entry with no access mode is a cluster, whose type is a peripheral type; a register starts with its access mode, `read`, `write` or `read write`, as in `read {}: ... at ...` (ADR 0064)",
+                cluster.name.name
+            ))
+        } else {
+            diag.help("a cluster places the registers of a peripheral type at an offset: its type is a peripheral type, declared as `peripheral NAME { registers }`, or an array of one (ADR 0064)")
+        };
+        self.diags.push(diag);
+    }
+
     /// A peripheral (ADR 0058): it takes no attributes, its type names a
     /// peripheral type, and its address is a `usize` computed at compile
     /// time in its module.
@@ -244,6 +307,7 @@ impl Lowerer<'_> {
                 self.comptime_usize(&decl.address, "address"),
                 decl.address.span,
             ),
+            // Step 2 resolves `over` (decl.over), with its errors.
         }
     }
 
@@ -284,6 +348,11 @@ impl Lowerer<'_> {
         );
         Ty::Error
     }
+}
+
+/// Whether a register may be an integer of type `int` (ADR 0058).
+fn register_int(int: IntTy) -> bool {
+    matches!(int, IntTy::U8 | IntTy::U16 | IntTy::U32)
 }
 
 /// The program's memory map, out of its `memory` blocks, each with its

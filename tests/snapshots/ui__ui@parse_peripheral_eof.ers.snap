@@ -15,4 +15,5 @@ parser::unexpected-token
    ╰────
   help: a register is written `ACCESS NAME: TYPE at OFFSET`, optionally after `pub`, its access
         mode `read`, `write` or `read write`, in that order, and its name the identifier just
-        before `:`; registers are separated by `,` (ADR 0058)
+        before `:`; an entry with no access mode, `NAME: TYPE at OFFSET`, is a cluster; entries
+        are separated by `,` (ADR 0058, 0064)

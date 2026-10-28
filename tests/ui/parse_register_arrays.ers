@@ -1,0 +1,41 @@
+// emit: ast
+// Register arrays, clusters and `over` (ADR 0064, 0066): register arrays
+// with and without `step`, with a read effect and a group after the step;
+// clusters and cluster arrays, `pub` and private, with a group; a cluster
+// named `read`, `write`, `step` and `in`, and a register named `step`; a
+// step naming a constant; and peripherals `over` a name and a path.
+const STEP: usize = 0x80;
+
+peripheral Plic {
+    pub read write priority: [u32; 96] at 0x0000,
+    pub read pending: [u32; 3] at 0x1000 step 4,
+    pub read write wide: [u32; 4] at 0x1100 step 8 read clears in alt,
+    pub read write status: [u8; 2] at 0x1200 read modifies in alt,
+    pub enables: [PlicEnables; 2] at 0x2000 step STEP,
+    pub ctx: [PlicContext; 2] at 0x20_0000 step 0x1000 in alt,
+    single: PlicContext at 0x30_0000,
+    pub nested: PlicContext at 0x30_1000 in alt,
+}
+
+peripheral Names {
+    read: PlicContext at 0,
+    write: PlicContext at 0x10,
+    step: PlicContext at 0x20,
+    in: PlicContext at 0x30 step 4,
+    read write step: u32 at 0x40,
+    read step: u32 at 0x44 step 4,
+}
+
+peripheral PlicEnables {
+    pub read write word: [u32; 3] at 0x00,
+}
+
+peripheral PlicContext {
+    pub read write threshold: u32 at 0x00,
+    pub read write claim: u32 at 0x04 read modifies,
+}
+
+peripheral APB_CTRL: Plic at 0x6002_6000;
+peripheral RNG: Plic at 0x6002_6000 over APB_CTRL;
+pub peripheral VIEW: Plic at 0x6002_7000 over crate::APB_CTRL;
+peripheral OTHER: Plic at 0x6002_8000 over super::inner::DEVICE;

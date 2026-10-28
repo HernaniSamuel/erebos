@@ -248,6 +248,7 @@ File {
                 fields: [
                     BitFieldDecl {
                         vis: Pub,
+                        access: None,
                         name: Ident {
                             name: "word_length",
                             span: 731..742,
@@ -302,6 +303,7 @@ File {
                     },
                     BitFieldDecl {
                         vis: Pub,
+                        access: None,
                         name: Ident {
                             name: "two_stop_bits",
                             span: 781..794,
@@ -343,6 +345,7 @@ File {
                     },
                     BitFieldDecl {
                         vis: Private,
+                        access: None,
                         name: Ident {
                             name: "parity",
                             span: 819..825,
@@ -398,6 +401,7 @@ File {
                     },
                     BitFieldDecl {
                         vis: Pub,
+                        access: None,
                         name: Ident {
                             name: "break_control",
                             span: 855..868,
@@ -453,6 +457,7 @@ File {
                     },
                     BitFieldDecl {
                         vis: Pub,
+                        access: None,
                         name: Ident {
                             name: "dlab",
                             span: 898..902,
@@ -542,6 +547,7 @@ File {
                 fields: [
                     BitFieldDecl {
                         vis: Pub,
+                        access: None,
                         name: Ident {
                             name: "overrun",
                             span: 961..968,
@@ -581,6 +587,7 @@ File {
                     },
                     BitFieldDecl {
                         vis: Pub,
+                        access: None,
                         name: Ident {
                             name: "framing",
                             span: 1001..1008,
@@ -620,6 +627,7 @@ File {
                     },
                     BitFieldDecl {
                         vis: Pub,
+                        access: None,
                         name: Ident {
                             name: "fifo",
                             span: 1039..1043,
@@ -659,6 +667,7 @@ File {
                     },
                     BitFieldDecl {
                         vis: Pub,
+                        access: None,
                         name: Ident {
                             name: "a",
                             span: 1078..1079,
@@ -701,6 +710,7 @@ File {
                     },
                     BitFieldDecl {
                         vis: Pub,
+                        access: None,
                         name: Ident {
                             name: "b",
                             span: 1115..1116,
@@ -743,6 +753,7 @@ File {
                     },
                     BitFieldDecl {
                         vis: Pub,
+                        access: None,
                         name: Ident {
                             name: "c",
                             span: 1150..1151,
@@ -785,6 +796,7 @@ File {
                     },
                     BitFieldDecl {
                         vis: Pub,
+                        access: None,
                         name: Ident {
                             name: "d",
                             span: 1188..1189,
@@ -827,6 +839,7 @@ File {
                     },
                     BitFieldDecl {
                         vis: Pub,
+                        access: None,
                         name: Ident {
                             name: "e",
                             span: 1225..1226,
@@ -869,6 +882,7 @@ File {
                     },
                     BitFieldDecl {
                         vis: Pub,
+                        access: None,
                         name: Ident {
                             name: "f",
                             span: 1260..1261,
@@ -911,6 +925,7 @@ File {
                     },
                     BitFieldDecl {
                         vis: Pub,
+                        access: None,
                         name: Ident {
                             name: "g",
                             span: 1298..1299,
@@ -953,6 +968,7 @@ File {
                     },
                     BitFieldDecl {
                         vis: Pub,
+                        access: None,
                         name: Ident {
                             name: "both",
                             span: 1337..1341,
@@ -1000,6 +1016,7 @@ File {
                     },
                     BitFieldDecl {
                         vis: Private,
+                        access: None,
                         name: Ident {
                             name: "count",
                             span: 1386..1391,
@@ -1079,6 +1096,7 @@ File {
                 fields: [
                     BitFieldDecl {
                         vis: Private,
+                        access: None,
                         name: Ident {
                             name: "read",
                             span: 1438..1442,
@@ -1113,6 +1131,7 @@ File {
                     },
                     BitFieldDecl {
                         vis: Private,
+                        access: None,
                         name: Ident {
                             name: "write",
                             span: 1459..1464,
@@ -1155,6 +1174,7 @@ File {
                     },
                     BitFieldDecl {
                         vis: Private,
+                        access: None,
                         name: Ident {
                             name: "at",
                             span: 1496..1498,

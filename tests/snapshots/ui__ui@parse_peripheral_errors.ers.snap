@@ -6,135 +6,115 @@ input_file: tests/ui/parse_peripheral_errors.ers
 --- errors ---
 parser::unexpected-token
 
-  × expected `read` or `write`, found the register's name `rbr`
-   ╭─[parse_peripheral_errors.ers:6:5]
- 5 │ peripheral NoMode {
- 6 │     rbr: u8 at 0,
-   ·     ─┬─
-   ·      ╰── the register's name, just before `:`
- 7 │ }
-   ╰────
-  help: a register is written `ACCESS NAME: TYPE at OFFSET`, optionally after `pub`, its access
-        mode `read`, `write` or `read write`, in that order, and its name the identifier just
-        before `:`; registers are separated by `,` (ADR 0058)
-parser::unexpected-token
-
-  × expected `read` or `write`, found the register's name `read`
-    ╭─[parse_peripheral_errors.ers:12:5]
- 11 │ peripheral NamedRead {
- 12 │     read: u8 at 0,
-    ·     ──┬─
-    ·       ╰── the register's name, just before `:`
- 13 │ }
+  × expected `:`, found identifier
+    ╭─[parse_peripheral_errors.ers:13:16]
+ 12 │ peripheral WrongOrder {
+ 13 │     write read x: u8 at 0,
+    ·                ┬
+    ·                ╰── expected `:`
+ 14 │ }
     ╰────
   help: a register is written `ACCESS NAME: TYPE at OFFSET`, optionally after `pub`, its access
         mode `read`, `write` or `read write`, in that order, and its name the identifier just
-        before `:`; registers are separated by `,` (ADR 0058)
+        before `:`; an entry with no access mode, `NAME: TYPE at OFFSET`, is a cluster; entries
+        are separated by `,` (ADR 0058, 0064)
 parser::unexpected-token
 
-  × expected `:`, found identifier
-    ╭─[parse_peripheral_errors.ers:18:16]
- 17 │ peripheral WrongOrder {
- 18 │     write read x: u8 at 0,
-    ·                ┬
-    ·                ╰── expected `:`
+  × expected `at`, found integer literal
+    ╭─[parse_peripheral_errors.ers:18:18]
+ 17 │ peripheral NoAt {
+ 18 │     read rbr: u8 0,
+    ·                  ┬
+    ·                  ╰── expected `at`
  19 │ }
     ╰────
   help: a register is written `ACCESS NAME: TYPE at OFFSET`, optionally after `pub`, its access
         mode `read`, `write` or `read write`, in that order, and its name the identifier just
-        before `:`; registers are separated by `,` (ADR 0058)
+        before `:`; an entry with no access mode, `NAME: TYPE at OFFSET`, is a cluster; entries
+        are separated by `,` (ADR 0058, 0064)
 parser::unexpected-token
 
-  × expected `at`, found integer literal
-    ╭─[parse_peripheral_errors.ers:23:18]
- 22 │ peripheral NoAt {
- 23 │     read rbr: u8 0,
-    ·                  ┬
-    ·                  ╰── expected `at`
- 24 │ }
-    ╰────
-  help: a register is written `ACCESS NAME: TYPE at OFFSET`, optionally after `pub`, its access
-        mode `read`, `write` or `read write`, in that order, and its name the identifier just
-        before `:`; registers are separated by `,` (ADR 0058)
-parser::unexpected-token
-
-  × expected `read`, `in`, `,` or `}`, found identifier
-    ╭─[parse_peripheral_errors.ers:28:22]
- 27 │ peripheral NoComma {
- 28 │     read rbr: u8 at 0
+  × expected `step`, `read`, `in`, `,` or `}`, found identifier
+    ╭─[parse_peripheral_errors.ers:23:22]
+ 22 │ peripheral NoComma {
+ 23 │     read rbr: u8 at 0
     ·                      ▲
-    ·                      ╰── expected `read`, `in`, `,` or `}`
- 29 │     write thr: u8 at 0,
+    ·                      ╰── expected `step`, `read`, `in`, `,` or `}`
+ 24 │     write thr: u8 at 0,
     ╰────
-  help: after its offset, a register may declare what a read does, `read clears`, `read sets` or
-        `read modifies`, then an alternate group, `in GROUP`, in that order; registers are
-        separated by `,` (ADR 0060, 0061)
+  help: after its offset, a register may declare the distance between the elements of a register
+        array, `step STEP`, what a read does, `read clears`, `read sets` or `read modifies`, then
+        an alternate group, `in GROUP`, in that order; entries are separated by `,` (ADR 0060,
+        0061, 0064)
 parser::unexpected-token
 
   × expected `at`, found integer literal
-    ╭─[parse_peripheral_errors.ers:33:22]
- 32 │ // A peripheral without `at`.
- 33 │ peripheral A: NoMode 0x1000_0000;
+    ╭─[parse_peripheral_errors.ers:28:22]
+ 27 │ // A peripheral without `at`.
+ 28 │ peripheral A: NoMode 0x1000_0000;
     ·                      ─────┬─────
     ·                           ╰── expected `at`
- 34 │ 
+ 29 │ 
     ╰────
-  help: a peripheral is written `peripheral NAME: TYPE at ADDRESS;`, its type a peripheral type
-        (ADR 0058)
+  help: a peripheral is written `peripheral NAME: TYPE at ADDRESS;`, its type a peripheral type,
+        and optionally `over PERIPHERAL` before the `;` when it is another view of the device of
+        that peripheral (ADR 0058, 0066)
 parser::unexpected-token
 
-  × expected `;`, found identifier
-    ╭─[parse_peripheral_errors.ers:36:36]
- 35 │ // A peripheral without its `;`.
- 36 │ peripheral B: NoMode at 0x1000_0000
+  × expected `over` or `;`, found identifier
+    ╭─[parse_peripheral_errors.ers:31:36]
+ 30 │ // A peripheral without its `;`.
+ 31 │ peripheral B: NoMode at 0x1000_0000
     ·                                    ▲
-    ·                                    ╰── expected `;`
- 37 │ peripheral C: NoMode at 0x1000_1000;
+    ·                                    ╰── expected `over` or `;`
+ 32 │ peripheral C: NoMode at 0x1000_1000;
     ╰────
-  help: a peripheral is written `peripheral NAME: TYPE at ADDRESS;`, its type a peripheral type
-        (ADR 0058)
+  help: a peripheral is written `peripheral NAME: TYPE at ADDRESS;`, its type a peripheral type,
+        and optionally `over PERIPHERAL` before the `;` when it is another view of the device of
+        that peripheral (ADR 0058, 0066)
 parser::unexpected-token
 
   × expected `{` or `:`, found `;`
-    ╭─[parse_peripheral_errors.ers:40:13]
- 39 │ // A peripheral without a type.
- 40 │ peripheral D;
+    ╭─[parse_peripheral_errors.ers:35:13]
+ 34 │ // A peripheral without a type.
+ 35 │ peripheral D;
     ·             ┬
     ·             ╰── expected `{` or `:`
- 41 │ 
+ 36 │ 
     ╰────
   help: `peripheral NAME { registers }` declares a peripheral type, and `peripheral NAME: TYPE at
         ADDRESS;` a peripheral of that type (ADR 0058)
 parser::unexpected-token
 
   × expected an expression, found `;`
-    ╭─[parse_peripheral_errors.ers:43:24]
- 42 │ // The item after it is parsed: its error is reported.
- 43 │ peripheral E: NoMode at;
+    ╭─[parse_peripheral_errors.ers:38:24]
+ 37 │ // The item after it is parsed: its error is reported.
+ 38 │ peripheral E: NoMode at;
     ·                        ┬
     ·                        ╰── expected an expression
- 44 │ 
+ 39 │ 
     ╰────
 parser::unexpected-token
 
   × expected an expression, found `)`
-    ╭─[parse_peripheral_errors.ers:48:22]
- 47 │ // and its error is reported.
- 48 │ const K: usize = (1 +); pub peripheral Q {
+    ╭─[parse_peripheral_errors.ers:43:22]
+ 42 │ // and its error is reported.
+ 43 │ const K: usize = (1 +); pub peripheral Q {
     ·                      ┬
     ·                      ╰── expected an expression
- 49 │     rbr: u8 at 0,
+ 44 │     read rbr: u8 0,
     ╰────
 parser::unexpected-token
 
-  × expected `read` or `write`, found the register's name `rbr`
-    ╭─[parse_peripheral_errors.ers:49:5]
- 48 │ const K: usize = (1 +); pub peripheral Q {
- 49 │     rbr: u8 at 0,
-    ·     ─┬─
-    ·      ╰── the register's name, just before `:`
- 50 │ }
+  × expected `at`, found integer literal
+    ╭─[parse_peripheral_errors.ers:44:18]
+ 43 │ const K: usize = (1 +); pub peripheral Q {
+ 44 │     read rbr: u8 0,
+    ·                  ┬
+    ·                  ╰── expected `at`
+ 45 │ }
     ╰────
   help: a register is written `ACCESS NAME: TYPE at OFFSET`, optionally after `pub`, its access
         mode `read`, `write` or `read write`, in that order, and its name the identifier just
-        before `:`; registers are separated by `,` (ADR 0058)
+        before `:`; an entry with no access mode, `NAME: TYPE at OFFSET`, is a cluster; entries
+        are separated by `,` (ADR 0058, 0064)

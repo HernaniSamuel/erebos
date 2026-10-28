@@ -1,0 +1,131 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/resolve_missing_access_mode.ers
+---
+--- errors ---
+resolve::not-a-peripheral-type
+
+  × the type of the cluster `rbr` is not a peripheral type
+    ╭─[resolve_missing_access_mode.ers:17:10]
+ 16 │ peripheral NoMode {
+ 17 │     rbr: u8 at 0,
+    ·          ─┬
+    ·           ╰── a built-in type, not a peripheral type
+ 18 │     read: u8 at 1,
+    ╰────
+  help: an entry with no access mode is a cluster, whose type is a peripheral type; a register
+        starts with its access mode, `read`, `write` or `read write`, as in `read rbr: ... at ...`
+        (ADR 0064)
+resolve::not-a-peripheral-type
+
+  × the type of the cluster `read` is not a peripheral type
+    ╭─[resolve_missing_access_mode.ers:18:11]
+ 17 │     rbr: u8 at 0,
+ 18 │     read: u8 at 1,
+    ·           ─┬
+    ·            ╰── a built-in type, not a peripheral type
+ 19 │     flags: Flags at 2,
+    ╰────
+  help: an entry with no access mode is a cluster, whose type is a peripheral type; a register
+        starts with its access mode, `read`, `write` or `read write`, as in `read read: ...
+        at ...` (ADR 0064)
+resolve::not-a-peripheral-type
+
+  × the type of the cluster `flags` is not a peripheral type
+    ╭─[resolve_missing_access_mode.ers:19:12]
+ 18 │     read: u8 at 1,
+ 19 │     flags: Flags at 2,
+    ·            ──┬──
+    ·              ╰── a bit-field struct, not a peripheral type
+ 20 │     mode: Mode at 3,
+    ╰────
+  help: an entry with no access mode is a cluster, whose type is a peripheral type; a register
+        starts with its access mode, `read`, `write` or `read write`, as in `read flags: ...
+        at ...` (ADR 0064)
+resolve::not-a-peripheral-type
+
+  × the type of the cluster `mode` is not a peripheral type
+    ╭─[resolve_missing_access_mode.ers:20:11]
+ 19 │     flags: Flags at 2,
+ 20 │     mode: Mode at 3,
+    ·           ──┬─
+    ·             ╰── an enum, not a peripheral type
+ 21 │     pair: [u32; 2] at 4,
+    ╰────
+  help: an entry with no access mode is a cluster, whose type is a peripheral type; a register
+        starts with its access mode, `read`, `write` or `read write`, as in `read mode: ...
+        at ...` (ADR 0064)
+resolve::not-a-peripheral-type
+
+  × the type of the cluster `pair` is not a peripheral type
+    ╭─[resolve_missing_access_mode.ers:21:11]
+ 20 │     mode: Mode at 3,
+ 21 │     pair: [u32; 2] at 4,
+    ·           ────┬───
+    ·               ╰── an array of a built-in type, not of a peripheral type
+ 22 │     wide: u64 at 12,
+    ╰────
+  help: an entry with no access mode is a cluster, whose type is a peripheral type; a register
+        starts with its access mode, `read`, `write` or `read write`, as in `read pair: ...
+        at ...` (ADR 0064)
+resolve::not-a-peripheral-type
+
+  × the type of the cluster `wide` is not a peripheral type
+    ╭─[resolve_missing_access_mode.ers:22:11]
+ 21 │     pair: [u32; 2] at 4,
+ 22 │     wide: u64 at 12,
+    ·           ─┬─
+    ·            ╰── a built-in type, not a peripheral type
+ 23 │     wide_flags: Wide at 24,
+    ╰────
+  help: a cluster places the registers of a peripheral type at an offset: its type is a peripheral
+        type, declared as `peripheral NAME { registers }`, or an array of one (ADR 0064)
+resolve::not-a-peripheral-type
+
+  × the type of the cluster `wide_flags` is not a peripheral type
+    ╭─[resolve_missing_access_mode.ers:23:17]
+ 22 │     wide: u64 at 12,
+ 23 │     wide_flags: Wide at 24,
+    ·                 ──┬─
+    ·                   ╰── a bit-field struct, not a peripheral type
+ 24 │     wide_mode: WideMode at 32,
+    ╰────
+  help: a cluster places the registers of a peripheral type at an offset: its type is a peripheral
+        type, declared as `peripheral NAME { registers }`, or an array of one (ADR 0064)
+resolve::not-a-peripheral-type
+
+  × the type of the cluster `wide_mode` is not a peripheral type
+    ╭─[resolve_missing_access_mode.ers:24:16]
+ 23 │     wide_flags: Wide at 24,
+ 24 │     wide_mode: WideMode at 32,
+    ·                ────┬───
+    ·                    ╰── an enum, not a peripheral type
+ 25 │     regs: Regs at 16,
+    ╰────
+  help: a cluster places the registers of a peripheral type at an offset: its type is a peripheral
+        type, declared as `peripheral NAME { registers }`, or an array of one (ADR 0064)
+resolve::not-a-peripheral-type
+
+  × the type of the cluster `regs` is not a peripheral type
+    ╭─[resolve_missing_access_mode.ers:25:11]
+ 24 │     wide_mode: WideMode at 32,
+ 25 │     regs: Regs at 16,
+    ·           ──┬─
+    ·             ╰── a struct, not a peripheral type
+ 26 │     pointer: *mut u8 at 20,
+    ╰────
+  help: a cluster places the registers of a peripheral type at an offset: its type is a peripheral
+        type, declared as `peripheral NAME { registers }`, or an array of one (ADR 0064)
+resolve::not-a-peripheral-type
+
+  × the type of the cluster `pointer` is not a peripheral type
+    ╭─[resolve_missing_access_mode.ers:26:14]
+ 25 │     regs: Regs at 16,
+ 26 │     pointer: *mut u8 at 20,
+    ·              ───┬───
+    ·                 ╰── a pointer type, not a peripheral type
+ 27 │ }
+    ╰────
+  help: a cluster places the registers of a peripheral type at an offset: its type is a peripheral
+        type, declared as `peripheral NAME { registers }`, or an array of one (ADR 0064)

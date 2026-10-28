@@ -47,262 +47,280 @@ File {
                     name: "Uart16550",
                     span: 310..319,
                 },
-                registers: [
-                    RegisterDecl {
-                        vis: Pub,
-                        access: Read,
-                        name: Ident {
-                            name: "rbr",
-                            span: 335..338,
-                        },
-                        ty: Ty {
-                            kind: Named(
-                                Path {
-                                    segments: [
-                                        Ident {
-                                            name: "u8",
-                                            span: 340..342,
-                                        },
-                                    ],
-                                    span: 340..342,
-                                },
-                            ),
-                            span: 340..342,
-                        },
-                        offset: Expr {
-                            kind: Int(
-                                Some(
-                                    0,
+                entries: [
+                    Register(
+                        RegisterDecl {
+                            vis: Pub,
+                            access: Read,
+                            name: Ident {
+                                name: "rbr",
+                                span: 335..338,
+                            },
+                            ty: Ty {
+                                kind: Named(
+                                    Path {
+                                        segments: [
+                                            Ident {
+                                                name: "u8",
+                                                span: 340..342,
+                                            },
+                                        ],
+                                        span: 340..342,
+                                    },
                                 ),
-                            ),
-                            span: 346..350,
-                        },
-                        read_effect: Some(
-                            (
-                                Modifies,
-                                351..364,
-                            ),
-                        ),
-                        group: None,
-                        span: 326..364,
-                    },
-                    RegisterDecl {
-                        vis: Pub,
-                        access: Write,
-                        name: Ident {
-                            name: "thr",
-                            span: 380..383,
-                        },
-                        ty: Ty {
-                            kind: Named(
-                                Path {
-                                    segments: [
-                                        Ident {
-                                            name: "u8",
-                                            span: 385..387,
-                                        },
-                                    ],
-                                    span: 385..387,
-                                },
-                            ),
-                            span: 385..387,
-                        },
-                        offset: Expr {
-                            kind: Int(
-                                Some(
-                                    0,
-                                ),
-                            ),
-                            span: 391..395,
-                        },
-                        read_effect: None,
-                        group: None,
-                        span: 370..395,
-                    },
-                    RegisterDecl {
-                        vis: Private,
-                        access: Read,
-                        name: Ident {
-                            name: "lsr",
-                            span: 406..409,
-                        },
-                        ty: Ty {
-                            kind: Named(
-                                Path {
-                                    segments: [
-                                        Ident {
-                                            name: "u8",
-                                            span: 411..413,
-                                        },
-                                    ],
-                                    span: 411..413,
-                                },
-                            ),
-                            span: 411..413,
-                        },
-                        offset: Expr {
-                            kind: Name(
-                                Path {
-                                    segments: [
-                                        Ident {
-                                            name: "LSR",
-                                            span: 417..420,
-                                        },
-                                    ],
-                                    span: 417..420,
-                                },
-                            ),
-                            span: 417..420,
-                        },
-                        read_effect: Some(
-                            (
-                                Clears,
-                                421..432,
-                            ),
-                        ),
-                        group: None,
-                        span: 401..432,
-                    },
-                    RegisterDecl {
-                        vis: Private,
-                        access: ReadWrite,
-                        name: Ident {
-                            name: "scr",
-                            span: 449..452,
-                        },
-                        ty: Ty {
-                            kind: Named(
-                                Path {
-                                    segments: [
-                                        Ident {
-                                            name: "u8",
-                                            span: 454..456,
-                                        },
-                                    ],
-                                    span: 454..456,
-                                },
-                            ),
-                            span: 454..456,
-                        },
-                        offset: Expr {
-                            kind: Binary(
-                                Add,
-                                Expr {
-                                    kind: Name(
-                                        Path {
-                                            segments: [
-                                                Ident {
-                                                    name: "LSR",
-                                                    span: 460..463,
-                                                },
-                                            ],
-                                            span: 460..463,
-                                        },
+                                span: 340..342,
+                            },
+                            offset: Expr {
+                                kind: Int(
+                                    Some(
+                                        0,
                                     ),
-                                    span: 460..463,
-                                },
-                                Expr {
-                                    kind: Int(
-                                        Some(
-                                            2,
+                                ),
+                                span: 346..350,
+                            },
+                            step: None,
+                            read_effect: Some(
+                                (
+                                    Modifies,
+                                    351..364,
+                                ),
+                            ),
+                            group: None,
+                            span: 326..364,
+                        },
+                    ),
+                    Register(
+                        RegisterDecl {
+                            vis: Pub,
+                            access: Write,
+                            name: Ident {
+                                name: "thr",
+                                span: 380..383,
+                            },
+                            ty: Ty {
+                                kind: Named(
+                                    Path {
+                                        segments: [
+                                            Ident {
+                                                name: "u8",
+                                                span: 385..387,
+                                            },
+                                        ],
+                                        span: 385..387,
+                                    },
+                                ),
+                                span: 385..387,
+                            },
+                            offset: Expr {
+                                kind: Int(
+                                    Some(
+                                        0,
+                                    ),
+                                ),
+                                span: 391..395,
+                            },
+                            step: None,
+                            read_effect: None,
+                            group: None,
+                            span: 370..395,
+                        },
+                    ),
+                    Register(
+                        RegisterDecl {
+                            vis: Private,
+                            access: Read,
+                            name: Ident {
+                                name: "lsr",
+                                span: 406..409,
+                            },
+                            ty: Ty {
+                                kind: Named(
+                                    Path {
+                                        segments: [
+                                            Ident {
+                                                name: "u8",
+                                                span: 411..413,
+                                            },
+                                        ],
+                                        span: 411..413,
+                                    },
+                                ),
+                                span: 411..413,
+                            },
+                            offset: Expr {
+                                kind: Name(
+                                    Path {
+                                        segments: [
+                                            Ident {
+                                                name: "LSR",
+                                                span: 417..420,
+                                            },
+                                        ],
+                                        span: 417..420,
+                                    },
+                                ),
+                                span: 417..420,
+                            },
+                            step: None,
+                            read_effect: Some(
+                                (
+                                    Clears,
+                                    421..432,
+                                ),
+                            ),
+                            group: None,
+                            span: 401..432,
+                        },
+                    ),
+                    Register(
+                        RegisterDecl {
+                            vis: Private,
+                            access: ReadWrite,
+                            name: Ident {
+                                name: "scr",
+                                span: 449..452,
+                            },
+                            ty: Ty {
+                                kind: Named(
+                                    Path {
+                                        segments: [
+                                            Ident {
+                                                name: "u8",
+                                                span: 454..456,
+                                            },
+                                        ],
+                                        span: 454..456,
+                                    },
+                                ),
+                                span: 454..456,
+                            },
+                            offset: Expr {
+                                kind: Binary(
+                                    Add,
+                                    Expr {
+                                        kind: Name(
+                                            Path {
+                                                segments: [
+                                                    Ident {
+                                                        name: "LSR",
+                                                        span: 460..463,
+                                                    },
+                                                ],
+                                                span: 460..463,
+                                            },
                                         ),
+                                        span: 460..463,
+                                    },
+                                    Expr {
+                                        kind: Int(
+                                            Some(
+                                                2,
+                                            ),
+                                        ),
+                                        span: 466..467,
+                                    },
+                                    464..465,
+                                ),
+                                span: 460..467,
+                            },
+                            step: None,
+                            read_effect: Some(
+                                (
+                                    Sets,
+                                    468..477,
+                                ),
+                            ),
+                            group: None,
+                            span: 438..477,
+                        },
+                    ),
+                    Register(
+                        RegisterDecl {
+                            vis: Private,
+                            access: ReadWrite,
+                            name: Ident {
+                                name: "dll",
+                                span: 494..497,
+                            },
+                            ty: Ty {
+                                kind: Named(
+                                    Path {
+                                        segments: [
+                                            Ident {
+                                                name: "u8",
+                                                span: 499..501,
+                                            },
+                                        ],
+                                        span: 499..501,
+                                    },
+                                ),
+                                span: 499..501,
+                            },
+                            offset: Expr {
+                                kind: Int(
+                                    Some(
+                                        0,
                                     ),
-                                    span: 466..467,
-                                },
-                                464..465,
-                            ),
-                            span: 460..467,
-                        },
-                        read_effect: Some(
-                            (
-                                Sets,
-                                468..477,
-                            ),
-                        ),
-                        group: None,
-                        span: 438..477,
-                    },
-                    RegisterDecl {
-                        vis: Private,
-                        access: ReadWrite,
-                        name: Ident {
-                            name: "dll",
-                            span: 494..497,
-                        },
-                        ty: Ty {
-                            kind: Named(
-                                Path {
-                                    segments: [
-                                        Ident {
-                                            name: "u8",
-                                            span: 499..501,
-                                        },
-                                    ],
-                                    span: 499..501,
+                                ),
+                                span: 505..509,
+                            },
+                            step: None,
+                            read_effect: None,
+                            group: Some(
+                                Ident {
+                                    name: "dlab",
+                                    span: 513..517,
                                 },
                             ),
-                            span: 499..501,
+                            span: 483..517,
                         },
-                        offset: Expr {
-                            kind: Int(
-                                Some(
-                                    0,
+                    ),
+                    Register(
+                        RegisterDecl {
+                            vis: Private,
+                            access: ReadWrite,
+                            name: Ident {
+                                name: "dlm",
+                                span: 534..537,
+                            },
+                            ty: Ty {
+                                kind: Named(
+                                    Path {
+                                        segments: [
+                                            Ident {
+                                                name: "u8",
+                                                span: 539..541,
+                                            },
+                                        ],
+                                        span: 539..541,
+                                    },
+                                ),
+                                span: 539..541,
+                            },
+                            offset: Expr {
+                                kind: Int(
+                                    Some(
+                                        1,
+                                    ),
+                                ),
+                                span: 545..549,
+                            },
+                            step: None,
+                            read_effect: Some(
+                                (
+                                    Modifies,
+                                    550..563,
                                 ),
                             ),
-                            span: 505..509,
-                        },
-                        read_effect: None,
-                        group: Some(
-                            Ident {
-                                name: "dlab",
-                                span: 513..517,
-                            },
-                        ),
-                        span: 483..517,
-                    },
-                    RegisterDecl {
-                        vis: Private,
-                        access: ReadWrite,
-                        name: Ident {
-                            name: "dlm",
-                            span: 534..537,
-                        },
-                        ty: Ty {
-                            kind: Named(
-                                Path {
-                                    segments: [
-                                        Ident {
-                                            name: "u8",
-                                            span: 539..541,
-                                        },
-                                    ],
-                                    span: 539..541,
+                            group: Some(
+                                Ident {
+                                    name: "dlab",
+                                    span: 567..571,
                                 },
                             ),
-                            span: 539..541,
+                            span: 523..571,
                         },
-                        offset: Expr {
-                            kind: Int(
-                                Some(
-                                    1,
-                                ),
-                            ),
-                            span: 545..549,
-                        },
-                        read_effect: Some(
-                            (
-                                Modifies,
-                                550..563,
-                            ),
-                        ),
-                        group: Some(
-                            Ident {
-                                name: "dlab",
-                                span: 567..571,
-                            },
-                        ),
-                        span: 523..571,
-                    },
+                    ),
                 ],
                 span: 299..573,
             },
@@ -315,131 +333,140 @@ File {
                     name: "Names",
                     span: 586..591,
                 },
-                registers: [
-                    RegisterDecl {
-                        vis: Private,
-                        access: ReadWrite,
-                        name: Ident {
-                            name: "in",
-                            span: 609..611,
-                        },
-                        ty: Ty {
-                            kind: Named(
-                                Path {
-                                    segments: [
-                                        Ident {
-                                            name: "u8",
-                                            span: 613..615,
-                                        },
-                                    ],
-                                    span: 613..615,
-                                },
-                            ),
-                            span: 613..615,
-                        },
-                        offset: Expr {
-                            kind: Int(
-                                Some(
-                                    0,
-                                ),
-                            ),
-                            span: 619..620,
-                        },
-                        read_effect: None,
-                        group: Some(
-                            Ident {
+                entries: [
+                    Register(
+                        RegisterDecl {
+                            vis: Private,
+                            access: ReadWrite,
+                            name: Ident {
                                 name: "in",
-                                span: 624..626,
+                                span: 609..611,
                             },
-                        ),
-                        span: 598..626,
-                    },
-                    RegisterDecl {
-                        vis: Private,
-                        access: Read,
-                        name: Ident {
-                            name: "clears",
-                            span: 637..643,
-                        },
-                        ty: Ty {
-                            kind: Named(
-                                Path {
-                                    segments: [
-                                        Ident {
-                                            name: "u8",
-                                            span: 645..647,
-                                        },
-                                    ],
-                                    span: 645..647,
+                            ty: Ty {
+                                kind: Named(
+                                    Path {
+                                        segments: [
+                                            Ident {
+                                                name: "u8",
+                                                span: 613..615,
+                                            },
+                                        ],
+                                        span: 613..615,
+                                    },
+                                ),
+                                span: 613..615,
+                            },
+                            offset: Expr {
+                                kind: Int(
+                                    Some(
+                                        0,
+                                    ),
+                                ),
+                                span: 619..620,
+                            },
+                            step: None,
+                            read_effect: None,
+                            group: Some(
+                                Ident {
+                                    name: "in",
+                                    span: 624..626,
                                 },
                             ),
-                            span: 645..647,
+                            span: 598..626,
                         },
-                        offset: Expr {
-                            kind: Int(
-                                Some(
-                                    1,
-                                ),
-                            ),
-                            span: 651..652,
-                        },
-                        read_effect: Some(
-                            (
-                                Clears,
-                                653..664,
-                            ),
-                        ),
-                        group: Some(
-                            Ident {
+                    ),
+                    Register(
+                        RegisterDecl {
+                            vis: Private,
+                            access: Read,
+                            name: Ident {
                                 name: "clears",
-                                span: 668..674,
+                                span: 637..643,
                             },
-                        ),
-                        span: 632..674,
-                    },
-                    RegisterDecl {
-                        vis: Private,
-                        access: Read,
-                        name: Ident {
-                            name: "modifies",
-                            span: 685..693,
-                        },
-                        ty: Ty {
-                            kind: Named(
-                                Path {
-                                    segments: [
-                                        Ident {
-                                            name: "u8",
-                                            span: 695..697,
-                                        },
-                                    ],
-                                    span: 695..697,
-                                },
-                            ),
-                            span: 695..697,
-                        },
-                        offset: Expr {
-                            kind: Int(
-                                Some(
-                                    2,
+                            ty: Ty {
+                                kind: Named(
+                                    Path {
+                                        segments: [
+                                            Ident {
+                                                name: "u8",
+                                                span: 645..647,
+                                            },
+                                        ],
+                                        span: 645..647,
+                                    },
+                                ),
+                                span: 645..647,
+                            },
+                            offset: Expr {
+                                kind: Int(
+                                    Some(
+                                        1,
+                                    ),
+                                ),
+                                span: 651..652,
+                            },
+                            step: None,
+                            read_effect: Some(
+                                (
+                                    Clears,
+                                    653..664,
                                 ),
                             ),
-                            span: 701..702,
-                        },
-                        read_effect: Some(
-                            (
-                                Modifies,
-                                703..716,
+                            group: Some(
+                                Ident {
+                                    name: "clears",
+                                    span: 668..674,
+                                },
                             ),
-                        ),
-                        group: Some(
-                            Ident {
+                            span: 632..674,
+                        },
+                    ),
+                    Register(
+                        RegisterDecl {
+                            vis: Private,
+                            access: Read,
+                            name: Ident {
                                 name: "modifies",
-                                span: 720..728,
+                                span: 685..693,
                             },
-                        ),
-                        span: 680..728,
-                    },
+                            ty: Ty {
+                                kind: Named(
+                                    Path {
+                                        segments: [
+                                            Ident {
+                                                name: "u8",
+                                                span: 695..697,
+                                            },
+                                        ],
+                                        span: 695..697,
+                                    },
+                                ),
+                                span: 695..697,
+                            },
+                            offset: Expr {
+                                kind: Int(
+                                    Some(
+                                        2,
+                                    ),
+                                ),
+                                span: 701..702,
+                            },
+                            step: None,
+                            read_effect: Some(
+                                (
+                                    Modifies,
+                                    703..716,
+                                ),
+                            ),
+                            group: Some(
+                                Ident {
+                                    name: "modifies",
+                                    span: 720..728,
+                                },
+                            ),
+                            span: 680..728,
+                        },
+                    ),
                 ],
                 span: 575..731,
             },

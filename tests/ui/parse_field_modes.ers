@@ -1,0 +1,24 @@
+// emit: ast
+// Bit fields with an access mode (ADR 0065): `read` and `write` fields,
+// `pub` and private, with read and write effects and defaults; fields
+// named `read`, `write` and `step`, the word being a mode only when `:`
+// does not follow it; and `read write` as a read-only field named `write`.
+struct Status: u32 {
+    pub read ready: bool at 0,
+    pub write start: bool at 1,
+    read error: bool at 2 read clears,
+    write reset: bool at 3 write 1 sets = false,
+    pub read both: bool at 4 read clears write 1 clears,
+    write count: u8 at 8..=15 = 0,
+}
+
+struct Names: u8 {
+    read: bool at 0,
+    write: bool at 1,
+    step: bool at 2,
+    pub read: bool at 3,
+    read write: bool at 4,
+    write read: bool at 5,
+    write step: bool at 6,
+    pub write write: bool at 7,
+}

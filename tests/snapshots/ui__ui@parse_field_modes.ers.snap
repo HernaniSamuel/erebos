@@ -1,0 +1,655 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/parse_field_modes.ers
+---
+--- ast ---
+File {
+    items: [
+        BitStruct(
+            BitStructDecl {
+                attrs: [],
+                vis: Private,
+                name: Ident {
+                    name: "Status",
+                    span: 313..319,
+                },
+                ty: Ty {
+                    kind: Named(
+                        Path {
+                            segments: [
+                                Ident {
+                                    name: "u32",
+                                    span: 321..324,
+                                },
+                            ],
+                            span: 321..324,
+                        },
+                    ),
+                    span: 321..324,
+                },
+                fields: [
+                    BitFieldDecl {
+                        vis: Pub,
+                        access: Some(
+                            (
+                                Read,
+                                335..339,
+                            ),
+                        ),
+                        name: Ident {
+                            name: "ready",
+                            span: 340..345,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Path {
+                                    segments: [
+                                        Ident {
+                                            name: "bool",
+                                            span: 347..351,
+                                        },
+                                    ],
+                                    span: 347..351,
+                                },
+                            ),
+                            span: 347..351,
+                        },
+                        low: Expr {
+                            kind: Int(
+                                Some(
+                                    0,
+                                ),
+                            ),
+                            span: 355..356,
+                        },
+                        high: None,
+                        read_effect: None,
+                        write_effect: None,
+                        default: None,
+                        span: 331..356,
+                    },
+                    BitFieldDecl {
+                        vis: Pub,
+                        access: Some(
+                            (
+                                Write,
+                                366..371,
+                            ),
+                        ),
+                        name: Ident {
+                            name: "start",
+                            span: 372..377,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Path {
+                                    segments: [
+                                        Ident {
+                                            name: "bool",
+                                            span: 379..383,
+                                        },
+                                    ],
+                                    span: 379..383,
+                                },
+                            ),
+                            span: 379..383,
+                        },
+                        low: Expr {
+                            kind: Int(
+                                Some(
+                                    1,
+                                ),
+                            ),
+                            span: 387..388,
+                        },
+                        high: None,
+                        read_effect: None,
+                        write_effect: None,
+                        default: None,
+                        span: 362..388,
+                    },
+                    BitFieldDecl {
+                        vis: Private,
+                        access: Some(
+                            (
+                                Read,
+                                394..398,
+                            ),
+                        ),
+                        name: Ident {
+                            name: "error",
+                            span: 399..404,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Path {
+                                    segments: [
+                                        Ident {
+                                            name: "bool",
+                                            span: 406..410,
+                                        },
+                                    ],
+                                    span: 406..410,
+                                },
+                            ),
+                            span: 406..410,
+                        },
+                        low: Expr {
+                            kind: Int(
+                                Some(
+                                    2,
+                                ),
+                            ),
+                            span: 414..415,
+                        },
+                        high: None,
+                        read_effect: Some(
+                            (
+                                Clears,
+                                416..427,
+                            ),
+                        ),
+                        write_effect: None,
+                        default: None,
+                        span: 394..427,
+                    },
+                    BitFieldDecl {
+                        vis: Private,
+                        access: Some(
+                            (
+                                Write,
+                                433..438,
+                            ),
+                        ),
+                        name: Ident {
+                            name: "reset",
+                            span: 439..444,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Path {
+                                    segments: [
+                                        Ident {
+                                            name: "bool",
+                                            span: 446..450,
+                                        },
+                                    ],
+                                    span: 446..450,
+                                },
+                            ),
+                            span: 446..450,
+                        },
+                        low: Expr {
+                            kind: Int(
+                                Some(
+                                    3,
+                                ),
+                            ),
+                            span: 454..455,
+                        },
+                        high: None,
+                        read_effect: None,
+                        write_effect: Some(
+                            (
+                                WriteEffect {
+                                    bit: 1,
+                                    action: Sets,
+                                },
+                                456..468,
+                            ),
+                        ),
+                        default: Some(
+                            Expr {
+                                kind: Bool(
+                                    false,
+                                ),
+                                span: 471..476,
+                            },
+                        ),
+                        span: 433..476,
+                    },
+                    BitFieldDecl {
+                        vis: Pub,
+                        access: Some(
+                            (
+                                Read,
+                                486..490,
+                            ),
+                        ),
+                        name: Ident {
+                            name: "both",
+                            span: 491..495,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Path {
+                                    segments: [
+                                        Ident {
+                                            name: "bool",
+                                            span: 497..501,
+                                        },
+                                    ],
+                                    span: 497..501,
+                                },
+                            ),
+                            span: 497..501,
+                        },
+                        low: Expr {
+                            kind: Int(
+                                Some(
+                                    4,
+                                ),
+                            ),
+                            span: 505..506,
+                        },
+                        high: None,
+                        read_effect: Some(
+                            (
+                                Clears,
+                                507..518,
+                            ),
+                        ),
+                        write_effect: Some(
+                            (
+                                WriteEffect {
+                                    bit: 1,
+                                    action: Clears,
+                                },
+                                519..533,
+                            ),
+                        ),
+                        default: None,
+                        span: 482..533,
+                    },
+                    BitFieldDecl {
+                        vis: Private,
+                        access: Some(
+                            (
+                                Write,
+                                539..544,
+                            ),
+                        ),
+                        name: Ident {
+                            name: "count",
+                            span: 545..550,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Path {
+                                    segments: [
+                                        Ident {
+                                            name: "u8",
+                                            span: 552..554,
+                                        },
+                                    ],
+                                    span: 552..554,
+                                },
+                            ),
+                            span: 552..554,
+                        },
+                        low: Expr {
+                            kind: Int(
+                                Some(
+                                    8,
+                                ),
+                            ),
+                            span: 558..559,
+                        },
+                        high: Some(
+                            Expr {
+                                kind: Int(
+                                    Some(
+                                        15,
+                                    ),
+                                ),
+                                span: 562..564,
+                            },
+                        ),
+                        read_effect: None,
+                        write_effect: None,
+                        default: Some(
+                            Expr {
+                                kind: Int(
+                                    Some(
+                                        0,
+                                    ),
+                                ),
+                                span: 567..568,
+                            },
+                        ),
+                        span: 539..568,
+                    },
+                ],
+                span: 306..571,
+            },
+        ),
+        BitStruct(
+            BitStructDecl {
+                attrs: [],
+                vis: Private,
+                name: Ident {
+                    name: "Names",
+                    span: 580..585,
+                },
+                ty: Ty {
+                    kind: Named(
+                        Path {
+                            segments: [
+                                Ident {
+                                    name: "u8",
+                                    span: 587..589,
+                                },
+                            ],
+                            span: 587..589,
+                        },
+                    ),
+                    span: 587..589,
+                },
+                fields: [
+                    BitFieldDecl {
+                        vis: Private,
+                        access: None,
+                        name: Ident {
+                            name: "read",
+                            span: 596..600,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Path {
+                                    segments: [
+                                        Ident {
+                                            name: "bool",
+                                            span: 602..606,
+                                        },
+                                    ],
+                                    span: 602..606,
+                                },
+                            ),
+                            span: 602..606,
+                        },
+                        low: Expr {
+                            kind: Int(
+                                Some(
+                                    0,
+                                ),
+                            ),
+                            span: 610..611,
+                        },
+                        high: None,
+                        read_effect: None,
+                        write_effect: None,
+                        default: None,
+                        span: 596..611,
+                    },
+                    BitFieldDecl {
+                        vis: Private,
+                        access: None,
+                        name: Ident {
+                            name: "write",
+                            span: 617..622,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Path {
+                                    segments: [
+                                        Ident {
+                                            name: "bool",
+                                            span: 624..628,
+                                        },
+                                    ],
+                                    span: 624..628,
+                                },
+                            ),
+                            span: 624..628,
+                        },
+                        low: Expr {
+                            kind: Int(
+                                Some(
+                                    1,
+                                ),
+                            ),
+                            span: 632..633,
+                        },
+                        high: None,
+                        read_effect: None,
+                        write_effect: None,
+                        default: None,
+                        span: 617..633,
+                    },
+                    BitFieldDecl {
+                        vis: Private,
+                        access: None,
+                        name: Ident {
+                            name: "step",
+                            span: 639..643,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Path {
+                                    segments: [
+                                        Ident {
+                                            name: "bool",
+                                            span: 645..649,
+                                        },
+                                    ],
+                                    span: 645..649,
+                                },
+                            ),
+                            span: 645..649,
+                        },
+                        low: Expr {
+                            kind: Int(
+                                Some(
+                                    2,
+                                ),
+                            ),
+                            span: 653..654,
+                        },
+                        high: None,
+                        read_effect: None,
+                        write_effect: None,
+                        default: None,
+                        span: 639..654,
+                    },
+                    BitFieldDecl {
+                        vis: Pub,
+                        access: None,
+                        name: Ident {
+                            name: "read",
+                            span: 664..668,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Path {
+                                    segments: [
+                                        Ident {
+                                            name: "bool",
+                                            span: 670..674,
+                                        },
+                                    ],
+                                    span: 670..674,
+                                },
+                            ),
+                            span: 670..674,
+                        },
+                        low: Expr {
+                            kind: Int(
+                                Some(
+                                    3,
+                                ),
+                            ),
+                            span: 678..679,
+                        },
+                        high: None,
+                        read_effect: None,
+                        write_effect: None,
+                        default: None,
+                        span: 660..679,
+                    },
+                    BitFieldDecl {
+                        vis: Private,
+                        access: Some(
+                            (
+                                Read,
+                                685..689,
+                            ),
+                        ),
+                        name: Ident {
+                            name: "write",
+                            span: 690..695,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Path {
+                                    segments: [
+                                        Ident {
+                                            name: "bool",
+                                            span: 697..701,
+                                        },
+                                    ],
+                                    span: 697..701,
+                                },
+                            ),
+                            span: 697..701,
+                        },
+                        low: Expr {
+                            kind: Int(
+                                Some(
+                                    4,
+                                ),
+                            ),
+                            span: 705..706,
+                        },
+                        high: None,
+                        read_effect: None,
+                        write_effect: None,
+                        default: None,
+                        span: 685..706,
+                    },
+                    BitFieldDecl {
+                        vis: Private,
+                        access: Some(
+                            (
+                                Write,
+                                712..717,
+                            ),
+                        ),
+                        name: Ident {
+                            name: "read",
+                            span: 718..722,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Path {
+                                    segments: [
+                                        Ident {
+                                            name: "bool",
+                                            span: 724..728,
+                                        },
+                                    ],
+                                    span: 724..728,
+                                },
+                            ),
+                            span: 724..728,
+                        },
+                        low: Expr {
+                            kind: Int(
+                                Some(
+                                    5,
+                                ),
+                            ),
+                            span: 732..733,
+                        },
+                        high: None,
+                        read_effect: None,
+                        write_effect: None,
+                        default: None,
+                        span: 712..733,
+                    },
+                    BitFieldDecl {
+                        vis: Private,
+                        access: Some(
+                            (
+                                Write,
+                                739..744,
+                            ),
+                        ),
+                        name: Ident {
+                            name: "step",
+                            span: 745..749,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Path {
+                                    segments: [
+                                        Ident {
+                                            name: "bool",
+                                            span: 751..755,
+                                        },
+                                    ],
+                                    span: 751..755,
+                                },
+                            ),
+                            span: 751..755,
+                        },
+                        low: Expr {
+                            kind: Int(
+                                Some(
+                                    6,
+                                ),
+                            ),
+                            span: 759..760,
+                        },
+                        high: None,
+                        read_effect: None,
+                        write_effect: None,
+                        default: None,
+                        span: 739..760,
+                    },
+                    BitFieldDecl {
+                        vis: Pub,
+                        access: Some(
+                            (
+                                Write,
+                                770..775,
+                            ),
+                        ),
+                        name: Ident {
+                            name: "write",
+                            span: 776..781,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Path {
+                                    segments: [
+                                        Ident {
+                                            name: "bool",
+                                            span: 783..787,
+                                        },
+                                    ],
+                                    span: 783..787,
+                                },
+                            ),
+                            span: 783..787,
+                        },
+                        low: Expr {
+                            kind: Int(
+                                Some(
+                                    7,
+                                ),
+                            ),
+                            span: 791..792,
+                        },
+                        high: None,
+                        read_effect: None,
+                        write_effect: None,
+                        default: None,
+                        span: 766..792,
+                    },
+                ],
+                span: 573..795,
+            },
+        ),
+    ],
+}

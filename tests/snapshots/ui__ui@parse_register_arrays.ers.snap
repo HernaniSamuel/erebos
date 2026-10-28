@@ -1,0 +1,1055 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/parse_register_arrays.ers
+---
+--- ast ---
+File {
+    items: [
+        Const(
+            ConstDecl {
+                attrs: [],
+                vis: Private,
+                name: Ident {
+                    name: "STEP",
+                    span: 386..390,
+                },
+                ty: Ty {
+                    kind: Named(
+                        Path {
+                            segments: [
+                                Ident {
+                                    name: "usize",
+                                    span: 392..397,
+                                },
+                            ],
+                            span: 392..397,
+                        },
+                    ),
+                    span: 392..397,
+                },
+                value: Expr {
+                    kind: Int(
+                        Some(
+                            128,
+                        ),
+                    ),
+                    span: 400..404,
+                },
+                span: 380..405,
+            },
+        ),
+        PeripheralType(
+            PeripheralTypeDecl {
+                attrs: [],
+                vis: Private,
+                name: Ident {
+                    name: "Plic",
+                    span: 418..422,
+                },
+                entries: [
+                    Register(
+                        RegisterDecl {
+                            vis: Pub,
+                            access: ReadWrite,
+                            name: Ident {
+                                name: "priority",
+                                span: 444..452,
+                            },
+                            ty: Ty {
+                                kind: Array {
+                                    elem: Ty {
+                                        kind: Named(
+                                            Path {
+                                                segments: [
+                                                    Ident {
+                                                        name: "u32",
+                                                        span: 455..458,
+                                                    },
+                                                ],
+                                                span: 455..458,
+                                            },
+                                        ),
+                                        span: 455..458,
+                                    },
+                                    len: Expr {
+                                        kind: Int(
+                                            Some(
+                                                96,
+                                            ),
+                                        ),
+                                        span: 460..462,
+                                    },
+                                },
+                                span: 454..463,
+                            },
+                            offset: Expr {
+                                kind: Int(
+                                    Some(
+                                        0,
+                                    ),
+                                ),
+                                span: 467..473,
+                            },
+                            step: None,
+                            read_effect: None,
+                            group: None,
+                            span: 429..473,
+                        },
+                    ),
+                    Register(
+                        RegisterDecl {
+                            vis: Pub,
+                            access: Read,
+                            name: Ident {
+                                name: "pending",
+                                span: 488..495,
+                            },
+                            ty: Ty {
+                                kind: Array {
+                                    elem: Ty {
+                                        kind: Named(
+                                            Path {
+                                                segments: [
+                                                    Ident {
+                                                        name: "u32",
+                                                        span: 498..501,
+                                                    },
+                                                ],
+                                                span: 498..501,
+                                            },
+                                        ),
+                                        span: 498..501,
+                                    },
+                                    len: Expr {
+                                        kind: Int(
+                                            Some(
+                                                3,
+                                            ),
+                                        ),
+                                        span: 503..504,
+                                    },
+                                },
+                                span: 497..505,
+                            },
+                            offset: Expr {
+                                kind: Int(
+                                    Some(
+                                        4096,
+                                    ),
+                                ),
+                                span: 509..515,
+                            },
+                            step: Some(
+                                Expr {
+                                    kind: Int(
+                                        Some(
+                                            4,
+                                        ),
+                                    ),
+                                    span: 521..522,
+                                },
+                            ),
+                            read_effect: None,
+                            group: None,
+                            span: 479..522,
+                        },
+                    ),
+                    Register(
+                        RegisterDecl {
+                            vis: Pub,
+                            access: ReadWrite,
+                            name: Ident {
+                                name: "wide",
+                                span: 543..547,
+                            },
+                            ty: Ty {
+                                kind: Array {
+                                    elem: Ty {
+                                        kind: Named(
+                                            Path {
+                                                segments: [
+                                                    Ident {
+                                                        name: "u32",
+                                                        span: 550..553,
+                                                    },
+                                                ],
+                                                span: 550..553,
+                                            },
+                                        ),
+                                        span: 550..553,
+                                    },
+                                    len: Expr {
+                                        kind: Int(
+                                            Some(
+                                                4,
+                                            ),
+                                        ),
+                                        span: 555..556,
+                                    },
+                                },
+                                span: 549..557,
+                            },
+                            offset: Expr {
+                                kind: Int(
+                                    Some(
+                                        4352,
+                                    ),
+                                ),
+                                span: 561..567,
+                            },
+                            step: Some(
+                                Expr {
+                                    kind: Int(
+                                        Some(
+                                            8,
+                                        ),
+                                    ),
+                                    span: 573..574,
+                                },
+                            ),
+                            read_effect: Some(
+                                (
+                                    Clears,
+                                    575..586,
+                                ),
+                            ),
+                            group: Some(
+                                Ident {
+                                    name: "alt",
+                                    span: 590..593,
+                                },
+                            ),
+                            span: 528..593,
+                        },
+                    ),
+                    Register(
+                        RegisterDecl {
+                            vis: Pub,
+                            access: ReadWrite,
+                            name: Ident {
+                                name: "status",
+                                span: 614..620,
+                            },
+                            ty: Ty {
+                                kind: Array {
+                                    elem: Ty {
+                                        kind: Named(
+                                            Path {
+                                                segments: [
+                                                    Ident {
+                                                        name: "u8",
+                                                        span: 623..625,
+                                                    },
+                                                ],
+                                                span: 623..625,
+                                            },
+                                        ),
+                                        span: 623..625,
+                                    },
+                                    len: Expr {
+                                        kind: Int(
+                                            Some(
+                                                2,
+                                            ),
+                                        ),
+                                        span: 627..628,
+                                    },
+                                },
+                                span: 622..629,
+                            },
+                            offset: Expr {
+                                kind: Int(
+                                    Some(
+                                        4608,
+                                    ),
+                                ),
+                                span: 633..639,
+                            },
+                            step: None,
+                            read_effect: Some(
+                                (
+                                    Modifies,
+                                    640..653,
+                                ),
+                            ),
+                            group: Some(
+                                Ident {
+                                    name: "alt",
+                                    span: 657..660,
+                                },
+                            ),
+                            span: 599..660,
+                        },
+                    ),
+                    Cluster(
+                        ClusterDecl {
+                            vis: Pub,
+                            name: Ident {
+                                name: "enables",
+                                span: 670..677,
+                            },
+                            ty: Ty {
+                                kind: Array {
+                                    elem: Ty {
+                                        kind: Named(
+                                            Path {
+                                                segments: [
+                                                    Ident {
+                                                        name: "PlicEnables",
+                                                        span: 680..691,
+                                                    },
+                                                ],
+                                                span: 680..691,
+                                            },
+                                        ),
+                                        span: 680..691,
+                                    },
+                                    len: Expr {
+                                        kind: Int(
+                                            Some(
+                                                2,
+                                            ),
+                                        ),
+                                        span: 693..694,
+                                    },
+                                },
+                                span: 679..695,
+                            },
+                            offset: Expr {
+                                kind: Int(
+                                    Some(
+                                        8192,
+                                    ),
+                                ),
+                                span: 699..705,
+                            },
+                            step: Some(
+                                Expr {
+                                    kind: Name(
+                                        Path {
+                                            segments: [
+                                                Ident {
+                                                    name: "STEP",
+                                                    span: 711..715,
+                                                },
+                                            ],
+                                            span: 711..715,
+                                        },
+                                    ),
+                                    span: 711..715,
+                                },
+                            ),
+                            group: None,
+                            span: 666..715,
+                        },
+                    ),
+                    Cluster(
+                        ClusterDecl {
+                            vis: Pub,
+                            name: Ident {
+                                name: "ctx",
+                                span: 725..728,
+                            },
+                            ty: Ty {
+                                kind: Array {
+                                    elem: Ty {
+                                        kind: Named(
+                                            Path {
+                                                segments: [
+                                                    Ident {
+                                                        name: "PlicContext",
+                                                        span: 731..742,
+                                                    },
+                                                ],
+                                                span: 731..742,
+                                            },
+                                        ),
+                                        span: 731..742,
+                                    },
+                                    len: Expr {
+                                        kind: Int(
+                                            Some(
+                                                2,
+                                            ),
+                                        ),
+                                        span: 744..745,
+                                    },
+                                },
+                                span: 730..746,
+                            },
+                            offset: Expr {
+                                kind: Int(
+                                    Some(
+                                        2097152,
+                                    ),
+                                ),
+                                span: 750..759,
+                            },
+                            step: Some(
+                                Expr {
+                                    kind: Int(
+                                        Some(
+                                            4096,
+                                        ),
+                                    ),
+                                    span: 765..771,
+                                },
+                            ),
+                            group: Some(
+                                Ident {
+                                    name: "alt",
+                                    span: 775..778,
+                                },
+                            ),
+                            span: 721..778,
+                        },
+                    ),
+                    Cluster(
+                        ClusterDecl {
+                            vis: Private,
+                            name: Ident {
+                                name: "single",
+                                span: 784..790,
+                            },
+                            ty: Ty {
+                                kind: Named(
+                                    Path {
+                                        segments: [
+                                            Ident {
+                                                name: "PlicContext",
+                                                span: 792..803,
+                                            },
+                                        ],
+                                        span: 792..803,
+                                    },
+                                ),
+                                span: 792..803,
+                            },
+                            offset: Expr {
+                                kind: Int(
+                                    Some(
+                                        3145728,
+                                    ),
+                                ),
+                                span: 807..816,
+                            },
+                            step: None,
+                            group: None,
+                            span: 784..816,
+                        },
+                    ),
+                    Cluster(
+                        ClusterDecl {
+                            vis: Pub,
+                            name: Ident {
+                                name: "nested",
+                                span: 826..832,
+                            },
+                            ty: Ty {
+                                kind: Named(
+                                    Path {
+                                        segments: [
+                                            Ident {
+                                                name: "PlicContext",
+                                                span: 834..845,
+                                            },
+                                        ],
+                                        span: 834..845,
+                                    },
+                                ),
+                                span: 834..845,
+                            },
+                            offset: Expr {
+                                kind: Int(
+                                    Some(
+                                        3149824,
+                                    ),
+                                ),
+                                span: 849..858,
+                            },
+                            step: None,
+                            group: Some(
+                                Ident {
+                                    name: "alt",
+                                    span: 862..865,
+                                },
+                            ),
+                            span: 822..865,
+                        },
+                    ),
+                ],
+                span: 407..868,
+            },
+        ),
+        PeripheralType(
+            PeripheralTypeDecl {
+                attrs: [],
+                vis: Private,
+                name: Ident {
+                    name: "Names",
+                    span: 881..886,
+                },
+                entries: [
+                    Cluster(
+                        ClusterDecl {
+                            vis: Private,
+                            name: Ident {
+                                name: "read",
+                                span: 893..897,
+                            },
+                            ty: Ty {
+                                kind: Named(
+                                    Path {
+                                        segments: [
+                                            Ident {
+                                                name: "PlicContext",
+                                                span: 899..910,
+                                            },
+                                        ],
+                                        span: 899..910,
+                                    },
+                                ),
+                                span: 899..910,
+                            },
+                            offset: Expr {
+                                kind: Int(
+                                    Some(
+                                        0,
+                                    ),
+                                ),
+                                span: 914..915,
+                            },
+                            step: None,
+                            group: None,
+                            span: 893..915,
+                        },
+                    ),
+                    Cluster(
+                        ClusterDecl {
+                            vis: Private,
+                            name: Ident {
+                                name: "write",
+                                span: 921..926,
+                            },
+                            ty: Ty {
+                                kind: Named(
+                                    Path {
+                                        segments: [
+                                            Ident {
+                                                name: "PlicContext",
+                                                span: 928..939,
+                                            },
+                                        ],
+                                        span: 928..939,
+                                    },
+                                ),
+                                span: 928..939,
+                            },
+                            offset: Expr {
+                                kind: Int(
+                                    Some(
+                                        16,
+                                    ),
+                                ),
+                                span: 943..947,
+                            },
+                            step: None,
+                            group: None,
+                            span: 921..947,
+                        },
+                    ),
+                    Cluster(
+                        ClusterDecl {
+                            vis: Private,
+                            name: Ident {
+                                name: "step",
+                                span: 953..957,
+                            },
+                            ty: Ty {
+                                kind: Named(
+                                    Path {
+                                        segments: [
+                                            Ident {
+                                                name: "PlicContext",
+                                                span: 959..970,
+                                            },
+                                        ],
+                                        span: 959..970,
+                                    },
+                                ),
+                                span: 959..970,
+                            },
+                            offset: Expr {
+                                kind: Int(
+                                    Some(
+                                        32,
+                                    ),
+                                ),
+                                span: 974..978,
+                            },
+                            step: None,
+                            group: None,
+                            span: 953..978,
+                        },
+                    ),
+                    Cluster(
+                        ClusterDecl {
+                            vis: Private,
+                            name: Ident {
+                                name: "in",
+                                span: 984..986,
+                            },
+                            ty: Ty {
+                                kind: Named(
+                                    Path {
+                                        segments: [
+                                            Ident {
+                                                name: "PlicContext",
+                                                span: 988..999,
+                                            },
+                                        ],
+                                        span: 988..999,
+                                    },
+                                ),
+                                span: 988..999,
+                            },
+                            offset: Expr {
+                                kind: Int(
+                                    Some(
+                                        48,
+                                    ),
+                                ),
+                                span: 1003..1007,
+                            },
+                            step: Some(
+                                Expr {
+                                    kind: Int(
+                                        Some(
+                                            4,
+                                        ),
+                                    ),
+                                    span: 1013..1014,
+                                },
+                            ),
+                            group: None,
+                            span: 984..1014,
+                        },
+                    ),
+                    Register(
+                        RegisterDecl {
+                            vis: Private,
+                            access: ReadWrite,
+                            name: Ident {
+                                name: "step",
+                                span: 1031..1035,
+                            },
+                            ty: Ty {
+                                kind: Named(
+                                    Path {
+                                        segments: [
+                                            Ident {
+                                                name: "u32",
+                                                span: 1037..1040,
+                                            },
+                                        ],
+                                        span: 1037..1040,
+                                    },
+                                ),
+                                span: 1037..1040,
+                            },
+                            offset: Expr {
+                                kind: Int(
+                                    Some(
+                                        64,
+                                    ),
+                                ),
+                                span: 1044..1048,
+                            },
+                            step: None,
+                            read_effect: None,
+                            group: None,
+                            span: 1020..1048,
+                        },
+                    ),
+                    Register(
+                        RegisterDecl {
+                            vis: Private,
+                            access: Read,
+                            name: Ident {
+                                name: "step",
+                                span: 1059..1063,
+                            },
+                            ty: Ty {
+                                kind: Named(
+                                    Path {
+                                        segments: [
+                                            Ident {
+                                                name: "u32",
+                                                span: 1065..1068,
+                                            },
+                                        ],
+                                        span: 1065..1068,
+                                    },
+                                ),
+                                span: 1065..1068,
+                            },
+                            offset: Expr {
+                                kind: Int(
+                                    Some(
+                                        68,
+                                    ),
+                                ),
+                                span: 1072..1076,
+                            },
+                            step: Some(
+                                Expr {
+                                    kind: Int(
+                                        Some(
+                                            4,
+                                        ),
+                                    ),
+                                    span: 1082..1083,
+                                },
+                            ),
+                            read_effect: None,
+                            group: None,
+                            span: 1054..1083,
+                        },
+                    ),
+                ],
+                span: 870..1086,
+            },
+        ),
+        PeripheralType(
+            PeripheralTypeDecl {
+                attrs: [],
+                vis: Private,
+                name: Ident {
+                    name: "PlicEnables",
+                    span: 1099..1110,
+                },
+                entries: [
+                    Register(
+                        RegisterDecl {
+                            vis: Pub,
+                            access: ReadWrite,
+                            name: Ident {
+                                name: "word",
+                                span: 1132..1136,
+                            },
+                            ty: Ty {
+                                kind: Array {
+                                    elem: Ty {
+                                        kind: Named(
+                                            Path {
+                                                segments: [
+                                                    Ident {
+                                                        name: "u32",
+                                                        span: 1139..1142,
+                                                    },
+                                                ],
+                                                span: 1139..1142,
+                                            },
+                                        ),
+                                        span: 1139..1142,
+                                    },
+                                    len: Expr {
+                                        kind: Int(
+                                            Some(
+                                                3,
+                                            ),
+                                        ),
+                                        span: 1144..1145,
+                                    },
+                                },
+                                span: 1138..1146,
+                            },
+                            offset: Expr {
+                                kind: Int(
+                                    Some(
+                                        0,
+                                    ),
+                                ),
+                                span: 1150..1154,
+                            },
+                            step: None,
+                            read_effect: None,
+                            group: None,
+                            span: 1117..1154,
+                        },
+                    ),
+                ],
+                span: 1088..1157,
+            },
+        ),
+        PeripheralType(
+            PeripheralTypeDecl {
+                attrs: [],
+                vis: Private,
+                name: Ident {
+                    name: "PlicContext",
+                    span: 1170..1181,
+                },
+                entries: [
+                    Register(
+                        RegisterDecl {
+                            vis: Pub,
+                            access: ReadWrite,
+                            name: Ident {
+                                name: "threshold",
+                                span: 1203..1212,
+                            },
+                            ty: Ty {
+                                kind: Named(
+                                    Path {
+                                        segments: [
+                                            Ident {
+                                                name: "u32",
+                                                span: 1214..1217,
+                                            },
+                                        ],
+                                        span: 1214..1217,
+                                    },
+                                ),
+                                span: 1214..1217,
+                            },
+                            offset: Expr {
+                                kind: Int(
+                                    Some(
+                                        0,
+                                    ),
+                                ),
+                                span: 1221..1225,
+                            },
+                            step: None,
+                            read_effect: None,
+                            group: None,
+                            span: 1188..1225,
+                        },
+                    ),
+                    Register(
+                        RegisterDecl {
+                            vis: Pub,
+                            access: ReadWrite,
+                            name: Ident {
+                                name: "claim",
+                                span: 1246..1251,
+                            },
+                            ty: Ty {
+                                kind: Named(
+                                    Path {
+                                        segments: [
+                                            Ident {
+                                                name: "u32",
+                                                span: 1253..1256,
+                                            },
+                                        ],
+                                        span: 1253..1256,
+                                    },
+                                ),
+                                span: 1253..1256,
+                            },
+                            offset: Expr {
+                                kind: Int(
+                                    Some(
+                                        4,
+                                    ),
+                                ),
+                                span: 1260..1264,
+                            },
+                            step: None,
+                            read_effect: Some(
+                                (
+                                    Modifies,
+                                    1265..1278,
+                                ),
+                            ),
+                            group: None,
+                            span: 1231..1278,
+                        },
+                    ),
+                ],
+                span: 1159..1281,
+            },
+        ),
+        Peripheral(
+            PeripheralDecl {
+                attrs: [],
+                vis: Private,
+                name: Ident {
+                    name: "APB_CTRL",
+                    span: 1294..1302,
+                },
+                ty: Ty {
+                    kind: Named(
+                        Path {
+                            segments: [
+                                Ident {
+                                    name: "Plic",
+                                    span: 1304..1308,
+                                },
+                            ],
+                            span: 1304..1308,
+                        },
+                    ),
+                    span: 1304..1308,
+                },
+                address: Expr {
+                    kind: Int(
+                        Some(
+                            1610768384,
+                        ),
+                    ),
+                    span: 1312..1323,
+                },
+                over: None,
+                span: 1283..1324,
+            },
+        ),
+        Peripheral(
+            PeripheralDecl {
+                attrs: [],
+                vis: Private,
+                name: Ident {
+                    name: "RNG",
+                    span: 1336..1339,
+                },
+                ty: Ty {
+                    kind: Named(
+                        Path {
+                            segments: [
+                                Ident {
+                                    name: "Plic",
+                                    span: 1341..1345,
+                                },
+                            ],
+                            span: 1341..1345,
+                        },
+                    ),
+                    span: 1341..1345,
+                },
+                address: Expr {
+                    kind: Int(
+                        Some(
+                            1610768384,
+                        ),
+                    ),
+                    span: 1349..1360,
+                },
+                over: Some(
+                    Path {
+                        segments: [
+                            Ident {
+                                name: "APB_CTRL",
+                                span: 1366..1374,
+                            },
+                        ],
+                        span: 1366..1374,
+                    },
+                ),
+                span: 1325..1375,
+            },
+        ),
+        Peripheral(
+            PeripheralDecl {
+                attrs: [],
+                vis: Pub,
+                name: Ident {
+                    name: "VIEW",
+                    span: 1391..1395,
+                },
+                ty: Ty {
+                    kind: Named(
+                        Path {
+                            segments: [
+                                Ident {
+                                    name: "Plic",
+                                    span: 1397..1401,
+                                },
+                            ],
+                            span: 1397..1401,
+                        },
+                    ),
+                    span: 1397..1401,
+                },
+                address: Expr {
+                    kind: Int(
+                        Some(
+                            1610772480,
+                        ),
+                    ),
+                    span: 1405..1416,
+                },
+                over: Some(
+                    Path {
+                        segments: [
+                            Ident {
+                                name: "crate",
+                                span: 1422..1427,
+                            },
+                            Ident {
+                                name: "APB_CTRL",
+                                span: 1429..1437,
+                            },
+                        ],
+                        span: 1422..1437,
+                    },
+                ),
+                span: 1380..1438,
+            },
+        ),
+        Peripheral(
+            PeripheralDecl {
+                attrs: [],
+                vis: Private,
+                name: Ident {
+                    name: "OTHER",
+                    span: 1450..1455,
+                },
+                ty: Ty {
+                    kind: Named(
+                        Path {
+                            segments: [
+                                Ident {
+                                    name: "Plic",
+                                    span: 1457..1461,
+                                },
+                            ],
+                            span: 1457..1461,
+                        },
+                    ),
+                    span: 1457..1461,
+                },
+                address: Expr {
+                    kind: Int(
+                        Some(
+                            1610776576,
+                        ),
+                    ),
+                    span: 1465..1476,
+                },
+                over: Some(
+                    Path {
+                        segments: [
+                            Ident {
+                                name: "super",
+                                span: 1482..1487,
+                            },
+                            Ident {
+                                name: "inner",
+                                span: 1489..1494,
+                            },
+                            Ident {
+                                name: "DEVICE",
+                                span: 1496..1502,
+                            },
+                        ],
+                        span: 1482..1502,
+                    },
+                ),
+                span: 1439..1503,
+            },
+        ),
+    ],
+}

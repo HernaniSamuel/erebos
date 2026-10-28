@@ -1,0 +1,32 @@
+// emit: typeck
+// `step` and `over` are words only where a peripheral type's entry and a
+// peripheral have them (ADR 0064, 0066): elsewhere they are ordinary names.
+mod step {
+    pub fn over(step: u32) -> u32 { step + 1 }
+}
+
+mod over {
+    pub const step: u32 = 2;
+}
+
+struct S { step: u32, over: u32 }
+
+peripheral Dev {
+    read write step: u32 at 0,
+    read write over: u32 at 4,
+}
+
+peripheral DEV: Dev at 0x1000_0000;
+
+fn pass(over: u32) -> u32 { over }
+
+entry fn main() -> ! {
+    let step: u32 = 1;
+    let over: u32 = step::over(step);
+    let s: S = S { step: over, over: over::step };
+    let a: u32 = step + s.step + s.over;
+    DEV.step = a;
+    DEV.over = pass(DEV.step);
+    loop {}
+}
+panic fn on_panic() -> ! { loop {} }

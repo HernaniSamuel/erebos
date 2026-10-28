@@ -1,0 +1,48 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/register_array_names.ers
+---
+--- typeck ---
+peripheral Dev { read write step: u32 at 0x0, read write over: u32 at 0x4 } extent 8, align 4
+peripheral DEV: Dev at 0x10000000 covers [0x10000000, 0x10000008)
+struct S { step: u32 at 0, over: u32 at 4 } size 8, align 4
+fn step::over(step: u32) -> u32
+    expr 0 binary + 214..222: u32
+    expr 1 local step 214..218: u32
+    expr 2 int 1 221..222: u32
+fn pass(over: u32) -> u32
+    expr 3 local over 453..457: u32
+entry fn main() -> !
+    let step: u32
+    let over: u32
+    let s: S
+    let a: u32
+    expr 4 int 1 504..505: u32
+    expr 5 call 527..543: u32
+    expr 6 local step 538..542: u32
+    expr 7 struct S 560..594: S
+    expr 8 local over 570..574: u32
+    expr 9 const over::step 582..592: u32
+    expr 10 binary + 613..635: u32
+    expr 11 binary + 613..626: u32
+    expr 12 local step 613..617: u32
+    expr 13 field step 620..626: u32
+    expr 14 local s 620..621: S
+    expr 15 field over 629..635: u32
+    expr 16 local s 629..630: S
+    expr 17 assign 641..653: ()
+    expr 18 register step 641..649: u32
+    expr 19 peripheral DEV 641..644: Dev
+    expr 20 local a 652..653: u32
+    expr 21 assign 659..684: ()
+    expr 22 register over 659..667: u32
+    expr 23 peripheral DEV 659..662: Dev
+    expr 24 call 670..684: u32
+    expr 25 register step 675..683: u32
+    expr 26 peripheral DEV 675..678: Dev
+    expr 27 loop 690..697: !
+panic fn on_panic() -> !
+    expr 28 loop 727..734: !
+comptime fn over::step() -> u32
+    expr 29 int 2 265..266: u32

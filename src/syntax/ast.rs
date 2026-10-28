@@ -146,21 +146,29 @@ pub enum PlacementKind {
     Stack { size: Expr },
 }
 
-/// `peripheral NAME { register, ... }`, the registers of a device
-/// (ADR 0058). Attributes do not apply to it; they are kept to be reported.
+/// `peripheral NAME { entry, ... }`, the registers and clusters of a device
+/// (ADR 0058, 0064). Attributes do not apply to it; they are kept to be
+/// reported.
 #[derive(Debug)]
 pub struct PeripheralTypeDecl {
     pub attrs: Vec<Attr>,
     pub vis: Visibility,
     pub name: Ident,
     /// In source order.
-    pub registers: Vec<RegisterDecl>,
+    pub entries: Vec<EntryDecl>,
     pub span: Span,
 }
 
-/// `[pub] ACCESS NAME: Type at OFFSET [READ_EFFECT] [in GROUP]`, a register
-/// of a peripheral type, private to its module unless `pub` (ADR 0058,
-/// 0060, 0061).
+/// An entry of a peripheral type (ADR 0064).
+#[derive(Debug)]
+pub enum EntryDecl {
+    Register(RegisterDecl),
+    Cluster(ClusterDecl),
+}
+
+/// `[pub] ACCESS NAME: Type at OFFSET [step STEP] [READ_EFFECT] [in GROUP]`,
+/// a register of a peripheral type, private to its module unless `pub`
+/// (ADR 0058, 0060, 0061, 0064).
 #[derive(Debug)]
 pub struct RegisterDecl {
     pub vis: Visibility,
@@ -169,11 +177,34 @@ pub struct RegisterDecl {
     pub ty: Ty,
     /// From the start of the peripheral, computed at compile time.
     pub offset: Expr,
+    /// The distance between the elements of a register array, computed at
+    /// compile time (ADR 0064).
+    pub step: Option<Expr>,
     /// What a read of the register does, with the span of its words
     /// (ADR 0060).
     pub read_effect: Option<(ReadEffect, Span)>,
     /// The alternate group named after `in`, a label of the peripheral
     /// type that names no item (ADR 0061).
+    pub group: Option<Ident>,
+    pub span: Span,
+}
+
+/// `[pub] NAME: Type at OFFSET [step STEP] [in GROUP]`, a cluster of a
+/// peripheral type: registers of a peripheral type placed at an offset, or
+/// an array of them, private to its module unless `pub` (ADR 0064).
+#[derive(Debug)]
+pub struct ClusterDecl {
+    pub vis: Visibility,
+    pub name: Ident,
+    /// Written as any type; that it is a peripheral type or an array of one
+    /// is checked when names are resolved.
+    pub ty: Ty,
+    /// From the start of the peripheral type, computed at compile time.
+    pub offset: Expr,
+    /// The distance between the elements of a cluster array, computed at
+    /// compile time.
+    pub step: Option<Expr>,
+    /// The alternate group named after `in` (ADR 0061).
     pub group: Option<Ident>,
     pub span: Span,
 }
@@ -237,8 +268,8 @@ impl WriteAction {
     }
 }
 
-/// `peripheral NAME: Type at ADDRESS;`, an instance of a peripheral type at
-/// an address (ADR 0058). Attributes do not apply to it; they are kept to
+/// `peripheral NAME: Type at ADDRESS [over PATH];`, an instance of a
+/// peripheral type at an address (ADR 0058, 0066). Attributes do not apply to it; they are kept to
 /// be reported.
 #[derive(Debug)]
 pub struct PeripheralDecl {
@@ -250,6 +281,10 @@ pub struct PeripheralDecl {
     pub ty: Ty,
     /// Computed at compile time.
     pub address: Expr,
+    /// The peripheral named after `over`, whose device this one is another
+    /// view of (ADR 0066); that it is a peripheral is checked when names
+    /// are resolved.
+    pub over: Option<Path>,
     pub span: Span,
 }
 
@@ -277,12 +312,15 @@ pub struct BitStructDecl {
     pub span: Span,
 }
 
-/// `[pub] name: Type at BITS [READ_EFFECT] [WRITE_EFFECT] [= default]`, a
-/// field of a bit-field struct, private to its module unless `pub`
-/// (ADR 0059, 0060).
+/// `[pub] [read | write] name: Type at BITS [READ_EFFECT] [WRITE_EFFECT]
+/// [= default]`, a field of a bit-field struct, private to its module
+/// unless `pub` (ADR 0059, 0060, 0065).
 #[derive(Debug)]
 pub struct BitFieldDecl {
     pub vis: Visibility,
+    /// `read` or `write` written before the name, with its span; never
+    /// `ReadWrite` (ADR 0065).
+    pub access: Option<(AccessMode, Span)>,
     pub name: Ident,
     pub ty: Ty,
     /// The lowest bit, or the only one; computed at compile time.

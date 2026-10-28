@@ -1,15 +1,10 @@
 // Syntax errors in peripheral types and peripherals (ADR 0058). Each item is
 // broken once, and parsing resumes at the next `peripheral` and a name.
 
-// A register without an access mode.
+// An entry without an access mode is a cluster (ADR 0064): it parses, and
+// `resolve_missing_access_mode.ers` shows how it is reported.
 peripheral NoMode {
     rbr: u8 at 0,
-}
-
-// A register named `read`, without an access mode: the word just before
-// `:` is the name, not the mode.
-peripheral NamedRead {
-    read: u8 at 0,
 }
 
 // The access modes in the wrong order: `write read` is a `write` register
@@ -46,5 +41,5 @@ peripheral E: NoMode at;
 // where only the `pub` shows that an item starts: recovery resumes at it,
 // and its error is reported.
 const K: usize = (1 +); pub peripheral Q {
-    rbr: u8 at 0,
+    read rbr: u8 0,
 }

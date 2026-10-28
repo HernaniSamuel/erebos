@@ -1,0 +1,52 @@
+// Syntax errors in the access modes of bit fields (ADR 0065). Each item is
+// broken once, and parsing resumes at the next item.
+
+// `read write` is what no word says.
+struct Both: u8 {
+    read write x: bool at 0,
+}
+
+// The mode comes before the name, not after it.
+struct After: u8 {
+    x read: bool at 0,
+}
+
+// A mode after `pub` and its order: `read pub`.
+struct Order: u8 {
+    read pub x: bool at 0,
+}
+
+// A missing `,` before a `write` field: it is the next field, not a write
+// effect, and the error is at the comma's place.
+struct NoCommaWrite: u8 {
+    a: bool at 0
+    write start: bool at 1,
+}
+
+// A missing `,` before a `read` field.
+struct NoCommaRead: u8 {
+    a: bool at 0
+    read ready: bool at 1,
+}
+
+// A missing `,` before a `write` field after an effect.
+struct NoCommaAfterEffect: u8 {
+    a: bool at 0 read clears
+    write start: bool at 1,
+}
+
+// A missing `,` before a field named `write`, with and without a mode.
+struct NoCommaNamed: u8 {
+    a: bool at 0
+    write: bool at 1,
+}
+struct NoCommaNamedRead: u8 {
+    a: bool at 0
+    read write: bool at 1,
+}
+
+// A write effect after the field's mode is still a write effect.
+struct Effect: u8 {
+    write a: bool at 0 write 1 clears
+    b: bool at 1,
+}

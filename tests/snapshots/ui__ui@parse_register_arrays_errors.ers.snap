@@ -1,0 +1,262 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/parse_register_arrays_errors.ers
+---
+--- errors ---
+parser::unexpected-token
+
+  × expected an expression, found `,`
+   ╭─[parse_register_arrays_errors.ers:6:31]
+ 5 │ peripheral NoStepValue {
+ 6 │     read a: [u32; 2] at 0 step,
+   ·                               ┬
+   ·                               ╰── expected an expression
+ 7 │ }
+   ╰────
+parser::unexpected-token
+
+  × expected `in`, `,` or `}`, found identifier
+    ╭─[parse_register_arrays_errors.ers:11:39]
+ 10 │ peripheral StepAfterEffect {
+ 11 │     read a: [u32; 2] at 0 read clears step 4,
+    ·                                       ──┬─
+    ·                                         ╰── expected `in`, `,` or `}`
+ 12 │ }
+    ╰────
+  help: after its offset, a register may declare the distance between the elements of a register
+        array, `step STEP`, what a read does, `read clears`, `read sets` or `read modifies`, then
+        an alternate group, `in GROUP`, in that order; entries are separated by `,` (ADR 0060,
+        0061, 0064)
+parser::unexpected-token
+
+  × expected `,` or `}`, found identifier
+    ╭─[parse_register_arrays_errors.ers:16:34]
+ 15 │ peripheral StepAfterGroup {
+ 16 │     read a: [u32; 2] at 0 in alt step 4,
+    ·                                  ──┬─
+    ·                                    ╰── expected `,` or `}`
+ 17 │ }
+    ╰────
+  help: after its offset, a register may declare the distance between the elements of a register
+        array, `step STEP`, what a read does, `read clears`, `read sets` or `read modifies`, then
+        an alternate group, `in GROUP`, in that order; entries are separated by `,` (ADR 0060,
+        0061, 0064)
+parser::unexpected-token
+
+  × expected `read`, `in`, `,` or `}`, found identifier
+    ╭─[parse_register_arrays_errors.ers:21:34]
+ 20 │ peripheral StepTwice {
+ 21 │     read a: [u32; 2] at 0 step 4 step 8,
+    ·                                  ──┬─
+    ·                                    ╰── expected `read`, `in`, `,` or `}`
+ 22 │ }
+    ╰────
+  help: after its offset, a register may declare the distance between the elements of a register
+        array, `step STEP`, what a read does, `read clears`, `read sets` or `read modifies`, then
+        an alternate group, `in GROUP`, in that order; entries are separated by `,` (ADR 0060,
+        0061, 0064)
+parser::unexpected-token
+
+  × expected `step`, `in`, `,` or `}`, found identifier
+    ╭─[parse_register_arrays_errors.ers:26:19]
+ 25 │ peripheral ClusterEffect {
+ 26 │     c: Inner at 0 read clears,
+    ·                   ──┬─
+    ·                     ╰── expected `step`, `in`, `,` or `}`
+ 27 │ }
+    ╰────
+  help: a cluster is written `NAME: TYPE at OFFSET`, optionally after `pub`, then optionally `step
+        STEP` for an array of them and an alternate group, `in GROUP`, in that order; entries are
+        separated by `,` (ADR 0064)
+parser::unexpected-token
+
+  × expected `,` or `}`, found identifier
+    ╭─[parse_register_arrays_errors.ers:31:26]
+ 30 │ peripheral ClusterStepAfterGroup {
+ 31 │     c: Inner at 0 in alt step 4,
+    ·                          ──┬─
+    ·                            ╰── expected `,` or `}`
+ 32 │ }
+    ╰────
+  help: a cluster is written `NAME: TYPE at OFFSET`, optionally after `pub`, then optionally `step
+        STEP` for an array of them and an alternate group, `in GROUP`, in that order; entries are
+        separated by `,` (ADR 0064)
+parser::unexpected-token
+
+  × expected `read` or `write`, found identifier
+    ╭─[parse_register_arrays_errors.ers:37:5]
+ 36 │ peripheral Misspelled {
+ 37 │     reed a: u32 at 0,
+    ·     ──┬─
+    ·       ╰── expected `read` or `write`
+ 38 │ }
+    ╰────
+  help: a register is written `ACCESS NAME: TYPE at OFFSET`, optionally after `pub`, its access
+        mode `read`, `write` or `read write`, in that order, and its name the identifier just
+        before `:`; an entry with no access mode, `NAME: TYPE at OFFSET`, is a cluster; entries
+        are separated by `,` (ADR 0058, 0064)
+parser::unexpected-token
+
+  × expected `at`, found integer literal
+    ╭─[parse_register_arrays_errors.ers:42:14]
+ 41 │ peripheral ClusterNoAt {
+ 42 │     c: Inner 0,
+    ·              ┬
+    ·              ╰── expected `at`
+ 43 │ }
+    ╰────
+  help: a cluster is written `NAME: TYPE at OFFSET`, optionally after `pub`, then optionally `step
+        STEP` for an array of them and an alternate group, `in GROUP`, in that order; entries are
+        separated by `,` (ADR 0064)
+parser::unexpected-token
+
+  × expected `read`, `in`, `,` or `}`, found identifier
+    ╭─[parse_register_arrays_errors.ers:48:33]
+ 47 │ peripheral NoCommaRegister {
+ 48 │     read a: [u32; 2] at 0 step 4
+    ·                                 ▲
+    ·                                 ╰── expected `read`, `in`, `,` or `}`
+ 49 │     read b: u32 at 8,
+    ╰────
+  help: after its offset, a register may declare the distance between the elements of a register
+        array, `step STEP`, what a read does, `read clears`, `read sets` or `read modifies`, then
+        an alternate group, `in GROUP`, in that order; entries are separated by `,` (ADR 0060,
+        0061, 0064)
+parser::unexpected-token
+
+  × expected `read`, `in`, `,` or `}`, found identifier
+    ╭─[parse_register_arrays_errors.ers:52:33]
+ 51 │ peripheral NoCommaCluster {
+ 52 │     read a: [u32; 2] at 0 step 4
+    ·                                 ▲
+    ·                                 ╰── expected `read`, `in`, `,` or `}`
+ 53 │     c: Inner at 8,
+    ╰────
+  help: after its offset, a register may declare the distance between the elements of a register
+        array, `step STEP`, what a read does, `read clears`, `read sets` or `read modifies`, then
+        an alternate group, `in GROUP`, in that order; entries are separated by `,` (ADR 0060,
+        0061, 0064)
+parser::unexpected-token
+
+  × expected `read`, `in`, `,` or `}`, found identifier
+    ╭─[parse_register_arrays_errors.ers:56:33]
+ 55 │ peripheral NoCommaStep {
+ 56 │     read a: [u32; 2] at 0 step 4
+    ·                                 ▲
+    ·                                 ╰── expected `read`, `in`, `,` or `}`
+ 57 │     step: Inner at 8,
+    ╰────
+  help: after its offset, a register may declare the distance between the elements of a register
+        array, `step STEP`, what a read does, `read clears`, `read sets` or `read modifies`, then
+        an alternate group, `in GROUP`, in that order; entries are separated by `,` (ADR 0060,
+        0061, 0064)
+parser::unexpected-token
+
+  × expected `step`, `read`, `in`, `,` or `}`, found identifier
+    ╭─[parse_register_arrays_errors.ers:63:21]
+ 62 │ peripheral NoCommaBeforeStepCluster {
+ 63 │     read a: u32 at 0
+    ·                     ▲
+    ·                     ╰── expected `step`, `read`, `in`, `,` or `}`
+ 64 │     step: Inner at 8,
+    ╰────
+  help: after its offset, a register may declare the distance between the elements of a register
+        array, `step STEP`, what a read does, `read clears`, `read sets` or `read modifies`, then
+        an alternate group, `in GROUP`, in that order; entries are separated by `,` (ADR 0060,
+        0061, 0064)
+parser::unexpected-token
+
+  × expected `step`, `read`, `in`, `,` or `}`, found identifier
+    ╭─[parse_register_arrays_errors.ers:70:21]
+ 69 │ peripheral NoCommaBeforeInCluster {
+ 70 │     read a: u32 at 0
+    ·                     ▲
+    ·                     ╰── expected `step`, `read`, `in`, `,` or `}`
+ 71 │     in: Inner at 8,
+    ╰────
+  help: after its offset, a register may declare the distance between the elements of a register
+        array, `step STEP`, what a read does, `read clears`, `read sets` or `read modifies`, then
+        an alternate group, `in GROUP`, in that order; entries are separated by `,` (ADR 0060,
+        0061, 0064)
+parser::unexpected-token
+
+  × expected `step`, `in`, `,` or `}`, found identifier
+    ╭─[parse_register_arrays_errors.ers:74:18]
+ 73 │ peripheral NoCommaBeforeInAfterCluster {
+ 74 │     c: Inner at 0
+    ·                  ▲
+    ·                  ╰── expected `step`, `in`, `,` or `}`
+ 75 │     in: Inner at 8,
+    ╰────
+  help: a cluster is written `NAME: TYPE at OFFSET`, optionally after `pub`, then optionally `step
+        STEP` for an array of them and an alternate group, `in GROUP`, in that order; entries are
+        separated by `,` (ADR 0064)
+parser::unexpected-token
+
+  × expected `in`, `,` or `}`, found identifier
+    ╭─[parse_register_arrays_errors.ers:80:30]
+ 79 │ peripheral NoCommaAfterClusterStep {
+ 80 │     c: [Inner; 2] at 0 step 4
+    ·                              ▲
+    ·                              ╰── expected `in`, `,` or `}`
+ 81 │     d: Inner at 8,
+    ╰────
+  help: a cluster is written `NAME: TYPE at OFFSET`, optionally after `pub`, then optionally `step
+        STEP` for an array of them and an alternate group, `in GROUP`, in that order; entries are
+        separated by `,` (ADR 0064)
+parser::unexpected-token
+
+  × expected identifier, found `;`
+    ╭─[parse_register_arrays_errors.ers:86:35]
+ 85 │ peripheral A: Inner at 0x1000;
+ 86 │ peripheral B: Inner at 0x2000 over;
+    ·                                   ┬
+    ·                                   ╰── expected identifier
+ 87 │ 
+    ╰────
+parser::unexpected-token
+
+  × expected an item, found identifier
+    ╭─[parse_register_arrays_errors.ers:90:1]
+ 89 │ peripheral C: Inner at 0x3000;
+ 90 │ over A;
+    · ──┬─
+    ·   ╰── expected an item
+ 91 │ peripheral D: Inner at 0x4000 over A;
+    ╰────
+parser::unexpected-token
+
+  × expected `;`, found identifier
+    ╭─[parse_register_arrays_errors.ers:94:38]
+ 93 │ // `over` twice.
+ 94 │ peripheral E: Inner at 0x5000 over A over A;
+    ·                                      ──┬─
+    ·                                        ╰── expected `;`
+ 95 │ 
+    ╰────
+  help: a peripheral is written `peripheral NAME: TYPE at ADDRESS;`, its type a peripheral type,
+        and optionally `over PERIPHERAL` before the `;` when it is another view of the device of
+        that peripheral (ADR 0058, 0066)
+parser::unexpected-token
+
+  × expected `;`, found identifier
+    ╭─[parse_register_arrays_errors.ers:97:37]
+ 96 │ // `over` where the `;` is missing.
+ 97 │ peripheral F: Inner at 0x6000 over A
+    ·                                     ▲
+    ·                                     ╰── expected `;`
+ 98 │ peripheral G: Inner at 0x7000;
+    ╰────
+  help: a peripheral is written `peripheral NAME: TYPE at ADDRESS;`, its type a peripheral type,
+        and optionally `over PERIPHERAL` before the `;` when it is another view of the device of
+        that peripheral (ADR 0058, 0066)
+parser::unexpected-token
+
+  × expected an expression, found `;`
+     ╭─[parse_register_arrays_errors.ers:101:23]
+ 100 │ // Recovery: the item after is parsed, and its error is reported.
+ 101 │ peripheral H: Inner at;
+     ·                       ┬
+     ·                       ╰── expected an expression
+     ╰────

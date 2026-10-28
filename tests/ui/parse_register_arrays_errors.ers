@@ -1,0 +1,101 @@
+// Syntax errors in register arrays, clusters and `over` (ADR 0064, 0066).
+// Each item is broken once, and parsing resumes at the next item.
+
+// `step` without its value.
+peripheral NoStepValue {
+    read a: [u32; 2] at 0 step,
+}
+
+// `step` after the read effect: it comes before it.
+peripheral StepAfterEffect {
+    read a: [u32; 2] at 0 read clears step 4,
+}
+
+// `step` after the group.
+peripheral StepAfterGroup {
+    read a: [u32; 2] at 0 in alt step 4,
+}
+
+// `step` twice.
+peripheral StepTwice {
+    read a: [u32; 2] at 0 step 4 step 8,
+}
+
+// A cluster with a read effect: it has none.
+peripheral ClusterEffect {
+    c: Inner at 0 read clears,
+}
+
+// A cluster with `step` after its group.
+peripheral ClusterStepAfterGroup {
+    c: Inner at 0 in alt step 4,
+}
+
+// An access mode word misspelled: `reed` is no mode, and no cluster either,
+// since `:` does not follow it.
+peripheral Misspelled {
+    reed a: u32 at 0,
+}
+
+// A cluster without `at`.
+peripheral ClusterNoAt {
+    c: Inner 0,
+}
+
+// A missing `,` after a step: the next entry is a register, a cluster
+// and a cluster named `step`.
+peripheral NoCommaRegister {
+    read a: [u32; 2] at 0 step 4
+    read b: u32 at 8,
+}
+peripheral NoCommaCluster {
+    read a: [u32; 2] at 0 step 4
+    c: Inner at 8,
+}
+peripheral NoCommaStep {
+    read a: [u32; 2] at 0 step 4
+    step: Inner at 8,
+}
+
+// A missing `,` after an offset, before a cluster named `step`: the cluster
+// is the next entry, not a step.
+peripheral NoCommaBeforeStepCluster {
+    read a: u32 at 0
+    step: Inner at 8,
+}
+
+// A missing `,` before a cluster named `in`, after a register and after a
+// cluster: the cluster is the next entry, not a group.
+peripheral NoCommaBeforeInCluster {
+    read a: u32 at 0
+    in: Inner at 8,
+}
+peripheral NoCommaBeforeInAfterCluster {
+    c: Inner at 0
+    in: Inner at 8,
+}
+
+// A missing `,` after a cluster's step.
+peripheral NoCommaAfterClusterStep {
+    c: [Inner; 2] at 0 step 4
+    d: Inner at 8,
+}
+
+// `over` without a path.
+peripheral A: Inner at 0x1000;
+peripheral B: Inner at 0x2000 over;
+
+// `over` after the `;`: an item that is not one.
+peripheral C: Inner at 0x3000;
+over A;
+peripheral D: Inner at 0x4000 over A;
+
+// `over` twice.
+peripheral E: Inner at 0x5000 over A over A;
+
+// `over` where the `;` is missing.
+peripheral F: Inner at 0x6000 over A
+peripheral G: Inner at 0x7000;
+
+// Recovery: the item after is parsed, and its error is reported.
+peripheral H: Inner at;
