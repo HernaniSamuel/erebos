@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "SubagentStop": [
+      {
+        "matcher": "implementer",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"$CLAUDE_PROJECT_DIR/.claude/hooks/implementer-gate.sh\"",
+            "timeout": 900,
+            "statusMessage": "Running the quality gate"
+          }
+        ]
+      }
+    ]
+  }
+}

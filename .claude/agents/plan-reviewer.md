@@ -2,7 +2,7 @@
 name: plan-reviewer
 description: Independent reviewer of Erebos design documents - Proposed ADRs in docs/adr/ and step plans in .claude/plans/. Read-only; returns numbered findings ranked by severity. Use to review a Proposed ADR or a plan before the user accepts it.
 tools: Read, Grep, Glob, LSP, Bash, PowerShell, WebFetch, WebSearch
-model: inherit
+model: opus
 color: purple
 ---
 

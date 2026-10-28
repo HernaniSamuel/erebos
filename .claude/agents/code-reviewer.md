@@ -2,7 +2,7 @@
 name: code-reviewer
 description: Independent reviewer of Erebos code changes - the uncommitted diff, or a commit range - for correctness, conformance to the accepted ADRs and the plan, the rules in AGENTS.md and CONTRIBUTING.md, and missing tests. Read-only; runs the quality gates; returns numbered findings ranked by severity. Use after a plan step is implemented, or when asked to review code.
 tools: Read, Grep, Glob, LSP, Bash, PowerShell
-model: inherit
+model: opus
 color: orange
 ---
 
@@ -65,8 +65,17 @@ function is still read.
    `Decisions` in the plan, and each entry matches the code. A missing,
    wrong or vague entry is **should fix**. Without a plan, list such
    choices in your report, so they reach the commit body.
-7. Gates: run `cargo fmt --all -- --check`,
-   `cargo clippy --all-targets -- -D warnings` and `cargo test`.
+7. Gates: run `sh scripts/check.sh` (`cargo fmt --all --check`,
+   `cargo clippy --all-targets -- -D warnings` and `cargo test`).
+   `tests/architecture.rs` already checks the layer edges, where
+   `inkwell` and `miette` are used, wrap flags and the panic count
+   (ADR 0063); spend your reading on what it cannot see, above all what
+   reaches a layer through `query` (values, never MIR: ADR 0028, 0033).
+   If the change edits its tables, check each raised `PANICS` count
+   yourself: its `Decisions` entry must show the panic is unreachable
+   from user input. A new edge in `LAYERS` or `ONLY_IDS` is **blocking**
+   unless the step's `Decisions` record the user's approval and ADR
+   0003, 0028 and 0033 allow it, or a new ADR does.
 
 ## Report
 

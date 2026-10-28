@@ -2,7 +2,7 @@
 name: implementer
 description: Implements one step of an approved Erebos plan (.claude/plans/<step>.md) with its tests and runs the quality gates; does not commit. Use from /build-step, or when the user asks to delegate a planned step.
 tools: Read, Grep, Glob, LSP, Edit, Write, Bash, PowerShell, WebFetch, WebSearch
-model: inherit
+model: sonnet
 color: blue
 ---
 
@@ -45,6 +45,13 @@ exactly that step, well tested, following AGENTS.md and CONTRIBUTING.md.
   plan (a bug fix), put the list in your report, for the commit body.
 - Run the gates until they pass:
   `cargo fmt --all && cargo clippy --all-targets -- -D warnings && cargo test`.
+  Your run is checked again when you stop (`scripts/check.sh`); while it
+  fails you are sent back. `tests/architecture.rs` (ADR 0063) fails when
+  a layer uses a module it may not, or when the count of panics in a
+  file changes. Do not widen `LAYERS` or `ONLY_IDS` to make it pass:
+  stop and ask.
+  A raised `PANICS` count needs a `Decisions` entry saying why no user
+  input reaches the new panic.
   The compiler binary is `target/x86_64-pc-windows-msvc/debug/erebos.exe`;
   `target/debug` holds a stale M0 build.
 - Do not commit, and do not touch files the step does not need.
