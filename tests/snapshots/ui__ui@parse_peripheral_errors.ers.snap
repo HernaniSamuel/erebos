@@ -113,4 +113,28 @@ parser::unexpected-token
  43 │ peripheral E: NoMode at;
     ·                        ┬
     ·                        ╰── expected an expression
+ 44 │ 
     ╰────
+parser::unexpected-token
+
+  × expected an expression, found `)`
+    ╭─[parse_peripheral_errors.ers:48:22]
+ 47 │ // and its error is reported.
+ 48 │ const K: usize = (1 +); pub peripheral Q {
+    ·                      ┬
+    ·                      ╰── expected an expression
+ 49 │     rbr: u8 at 0,
+    ╰────
+parser::unexpected-token
+
+  × expected `read` or `write`, found the register's name `rbr`
+    ╭─[parse_peripheral_errors.ers:49:5]
+ 48 │ const K: usize = (1 +); pub peripheral Q {
+ 49 │     rbr: u8 at 0,
+    ·     ─┬─
+    ·      ╰── the register's name, just before `:`
+ 50 │ }
+    ╰────
+  help: a register is written `ACCESS NAME: TYPE at OFFSET`, optionally after `pub`, its access
+        mode `read`, `write` or `read write`, in that order, and its name the identifier just
+        before `:`; registers are separated by `,` (ADR 0058)

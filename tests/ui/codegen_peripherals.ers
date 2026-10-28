@@ -9,7 +9,7 @@
 // write through a volatile pointer keep their order, both ways round
 // (ADR 0023). A pointer made with `as` from an integer reaches registers
 // the same way. No global is emitted for a peripheral; a static holding
-// one's address is initialized with the address as a pointer constant.
+// one's address holds the address's bytes.
 peripheral Uart {
     read rbr: u8 at 0,
     write thr: u8 at 0,

@@ -59,3 +59,10 @@ const C: u32 = (1 +) + memory { region: 1 }.region;
 memory {
     stack in ;
 }
+
+// A constant missing its `;`: the block on the next line is still where an
+// item starts, so recovery resumes at it and its error is reported.
+const D: u32 = 1
+memory {
+    code in ;
+}

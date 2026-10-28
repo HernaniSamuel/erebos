@@ -136,3 +136,23 @@ parser::unexpected-token
     ·              ╰── expected identifier
  61 │ }
     ╰────
+parser::unexpected-token
+
+  × expected `;`, found identifier
+    ╭─[parse_local_memory.ers:65:17]
+ 64 │ // item starts, so recovery resumes at it and its error is reported.
+ 65 │ const D: u32 = 1
+    ·                 ▲
+    ·                 ╰── expected `;`
+ 66 │ memory {
+    ╰────
+parser::unexpected-token
+
+  × expected identifier, found `;`
+    ╭─[parse_local_memory.ers:67:13]
+ 66 │ memory {
+ 67 │     code in ;
+    ·             ┬
+    ·             ╰── expected identifier
+ 68 │ }
+    ╰────

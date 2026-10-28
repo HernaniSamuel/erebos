@@ -41,3 +41,10 @@ peripheral D;
 
 // The item after it is parsed: its error is reported.
 peripheral E: NoMode at;
+
+// A broken constant, then a peripheral type after `pub` on the same line,
+// where only the `pub` shows that an item starts: recovery resumes at it,
+// and its error is reported.
+const K: usize = (1 +); pub peripheral Q {
+    rbr: u8 at 0,
+}
