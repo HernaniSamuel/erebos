@@ -52,10 +52,11 @@ pub struct Mir {
     /// without payloads (ADR 0035), and an enum with payloads is a type of
     /// its own (ADR 0039).
     pub enums: Vec<Enum>,
-    /// Every peripheral type and every peripheral, for dumps: types and
-    /// operands refer to them directly, and nothing is emitted for them
-    /// (ADR 0058).
+    /// Every peripheral type, for dumps: types refer to them directly, and
+    /// nothing is emitted for them (ADR 0058).
     pub peripheral_types: Vec<PeripheralTypeRef>,
+    /// Every peripheral, for dumps: operands refer to them directly, and
+    /// nothing is emitted for them but their addresses (ADR 0058).
     pub peripherals: Vec<PeripheralRef>,
     /// Read-only data computed at compile time, which constant locals are
     /// bound to (ADR 0029).
@@ -272,13 +273,18 @@ fn unmarked<T>(list: Vec<T>, marks: &[bool]) -> Vec<T> {
 /// What dumps leave out of the MIR: the parts of `core` (ADR 0052), each
 /// list a mask over the MIR's list of its kind.
 pub struct LeftOut {
+    /// Over the bodies.
     pub bodies: Vec<bool>,
+    /// Over the structs.
     pub structs: Vec<bool>,
+    /// Over the bit-field structs.
     pub bit_structs: Vec<bool>,
     /// Over the declared enums, which `Mir::enums` lists first; the
     /// `Option(T)` and `Result(T, E)` after them are kept.
     pub enums: Vec<bool>,
+    /// Over the peripheral types.
     pub peripheral_types: Vec<bool>,
+    /// Over the peripherals.
     pub peripherals: Vec<bool>,
     /// Over the statics, then the byte strings.
     pub statics: Vec<bool>,

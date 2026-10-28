@@ -39,8 +39,11 @@ impl Lowerer<'_> {
         Ty::Error
     }
 
-    /// A written type, at `position`, where `[T]` has no size. One
-    /// containing `{error}` is `{error}` as a whole.
+    /// A written type, at `position`. Each of these is recorded for the
+    /// type checker: `[T]`, which has no size there, and a peripheral
+    /// type outside a pointee or a register, are `{error}`; `volatile`
+    /// written on a pointer to a peripheral type is dropped (ADR 0031,
+    /// 0058). One containing `{error}` is `{error}` as a whole.
     pub(super) fn ty(&mut self, ty: &ast::Ty, position: UnsizedPosition) -> Ty {
         match &ty.kind {
             ast::TyKind::Never => Ty::Never,

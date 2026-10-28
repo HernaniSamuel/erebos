@@ -5,7 +5,7 @@
 use crate::diag::Diagnostic;
 use crate::hir::{
     self, AccessMode, BitStructTy, EnumTy, Expr, ExprKind, Fn, Hir, IntTy, ModuleId, PeripheralTy,
-    PeripheralTypeId, Ty, WriteAction,
+    PeripheralTypeId, Ty,
 };
 use crate::span::Span;
 use crate::target;
@@ -689,11 +689,7 @@ impl Checker<'_, '_> {
             let def = hir.bit_struct(s);
             let field = &def.fields[index as usize];
             if let Some((effect, effect_span)) = field.write_effect {
-                let action = match effect.action {
-                    WriteAction::Clears => "clears",
-                    WriteAction::Sets => "sets",
-                    WriteAction::Toggles => "toggles",
-                };
+                let action = effect.action.word();
                 let bit = effect.bit;
                 let place_words = match info.register {
                     Some(_) => "read and written back to the register",

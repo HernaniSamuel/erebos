@@ -226,6 +226,17 @@ pub enum WriteAction {
     Toggles,
 }
 
+impl WriteAction {
+    /// As written: `clears`, `sets` or `toggles`.
+    pub fn word(self) -> &'static str {
+        match self {
+            WriteAction::Clears => "clears",
+            WriteAction::Sets => "sets",
+            WriteAction::Toggles => "toggles",
+        }
+    }
+}
+
 /// `peripheral NAME: Type at ADDRESS;`, an instance of a peripheral type at
 /// an address (ADR 0058). Attributes do not apply to it; they are kept to
 /// be reported.

@@ -810,7 +810,11 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
     }
 
     /// The address of a place. A place is volatile when the last pointer on
-    /// its path is (ADR 0023), and a register always is (ADR 0058).
+    /// its path is (ADR 0023), and a register always is (ADR 0058). MIR
+    /// building repeats this rule in `Builder::is_volatile`
+    /// (`src/mir/build.rs`), to give a field written in a volatile place,
+    /// and only there, the masks that keep the other fields' write effects
+    /// from acting (ADR 0060); the two change together.
     fn address(&self, place: Place) -> Address<'ctx> {
         let Some(slot) = self.slots[place.local.0 as usize] else {
             // A local of type `()` occupies no memory; its address is any

@@ -1843,7 +1843,8 @@ impl Builder<'_, '_> {
     }
 
     /// Whether accesses to `place` are volatile, as code generation makes
-    /// them: when the last pointer on its path is volatile (ADR 0023), or
+    /// them in `address` (`src/codegen/mod.rs`), which must agree: when
+    /// the last pointer on its path is volatile (ADR 0023), or
     /// when it is a register (ADR 0058).
     fn is_volatile(&self, place: Place) -> bool {
         let mut ty = self.locals[place.local.0 as usize].ty;

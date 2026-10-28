@@ -2,20 +2,16 @@
 
 use std::fmt::Write;
 
-use crate::hir::{
-    self, EnumId, Expr, ExprKind, Fn, FnKind, ReadEffect, Ty, WriteAction, WriteEffect,
-};
+use crate::hir::{self, EnumId, Expr, ExprKind, Fn, FnKind, ReadEffect, Ty, WriteEffect};
 use crate::query::Queries;
 
 /// Lists the memory map with its values (ADR 0057), peripheral types with
 /// their layouts and their registers' read effects and alternate groups
-/// (ADR 0058, 0060, 0061) and
-/// peripherals with their addresses (ADR 0058), struct
-/// layouts, bit-field structs with their fields' bits, effects and
+/// (ADR 0058, 0060, 0061) and peripherals with their addresses (ADR 0058),
+/// struct layouts, bit-field structs with their fields' bits, effects and
 /// defaults (ADR 0059), enums with their values and, with payloads, their
-/// layouts,
-/// `Option(T)` and `Result(T, E)` among them, then every function's locals
-/// and expression types, for `--emit=typeck`.
+/// layouts, `Option(T)` and `Result(T, E)` among them, then every
+/// function's locals and expression types, for `--emit=typeck`.
 pub fn dump(q: &mut Queries) -> String {
     let hir = q.hir;
     let mut out = String::new();
@@ -283,12 +279,7 @@ fn read_effect_words(effect: ReadEffect) -> &'static str {
 
 /// A write effect as written (ADR 0060): "write 1 clears".
 fn write_effect_words(effect: WriteEffect) -> String {
-    let action = match effect.action {
-        WriteAction::Clears => "clears",
-        WriteAction::Sets => "sets",
-        WriteAction::Toggles => "toggles",
-    };
-    format!("write {} {action}", effect.bit)
+    format!("write {} {}", effect.bit, effect.action.word())
 }
 
 /// The default `value` of a bit field of type `ty` (ADR 0059): `true`, an
