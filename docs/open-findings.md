@@ -5,7 +5,8 @@ Minor findings the reviews left open, worked off between steps. The
 each was found; this file lists what is still open, each entry ending
 with the step that found it. Remove an entry when it is fixed.
 
-The findings M2 left open were worked off on 2026-10-21; these remain.
+The findings M2 left open were worked off on 2026-10-21, and those of
+M3.1 to M3.3 on 2026-10-28; these remain.
 
 ## Code
 
@@ -15,70 +16,6 @@ The findings M2 left open were worked off on 2026-10-21; these remain.
   program is lowered, and the number of values only after, so keeping
   them stable means renumbering after lowering; left until a snapshot
   needs it. (M2.6)
-- The `reachability` doc comment in `src/hir/lower.rs` has one line of
-  about 98 columns. (M3.2)
-- The doc comment of `Lowerer::ty` (`src/hir/lower.rs`) names only `[T]`
-  where it has no size; it also turns a peripheral type outside a
-  pointee or a register into `{error}`, records it, and drops `volatile`
-  from a pointer to a peripheral type. (M3.2)
-- `Mir::peripherals` and the masks `LeftOut::peripheral_types` and
-  `LeftOut::peripherals` (`src/mir/mod.rs`) have no doc comments of
-  their own. (M3.2)
-- The doc comment of `dump` in `src/ty/dump.rs` is wrapped unevenly
-  after editing. (M3.3)
-- The word of a write effect's action (`clears`, `sets`, `toggles`) is
-  mapped twice, in `src/ty/place.rs` (help of
-  `ty::compound-write-effect`) and in `write_effect_words`
-  (`src/ty/dump.rs`); one helper could serve both. (M3.3)
-- `Builder::is_volatile` (`src/mir/build.rs`) repeats codegen's rule for
-  volatile accesses (`address` in `src/codegen/mod.rs`); nothing points
-  from codegen's copy to it, so one could change alone and build neutral
-  masks for plain accesses or drop them for volatile ones. (M3.3)
-
-## Diagnostics
-
-- `recover_to_item` stops at a `memory {` at the depth of the items, and
-  counts only braces: after an error in a constant's initializer, a
-  `memory { region: 1 }` struct literal later in it, outside braces, is
-  parsed as a block and gives one more error. (M3.1 work-off)
-- A register with its name left out, `read: u8 at 0`, reports "expected
-  `read` or `write`, found identifier" labeling the word `read`, which
-  reads as contradictory (`src/syntax/parser.rs`, `register`); no test
-  shows it. (M3.2)
-- The `typeck` dump leaves out register visibility. (M3.2)
-
-## Docs
-
-- The `ty::no-fields` row of the diagnostics table in
-  `docs/reference.md` says "a value that is not a struct"; a peripheral
-  type is not one either, and its registers are accessed as fields.
-  (M3.2)
-- "Building" in `docs/reference.md` says the `typeck` dump leaves out
-  peripheral types and peripherals reaching a failed value, which cannot
-  be seen: with errors no dump is printed. (M3.2)
-- `docs/reference.md`, about line 1447: "`&raw mut UART0` is one" is
-  unclear; "is such a pointer" is meant. (M3.2)
-- `docs/reference.md`: lines about 2079 and 2549 are too long, and 16
-  and 2461 stop short, after editing. (M3.2)
-- `docs/reference.md`: the example of "Registers with fields" in
-  "Peripherals" uses `Lcr` and `UART0` that the section declares
-  elsewhere ("Bit-field structs", the example above it), so it does not
-  compile on its own; and the diagnostics table lists
-  `ty::bit-field-address`, `ty::read-with-effects` and
-  `ty::compound-write-effect` twice, in "Peripherals" and under
-  "Diagnostics", as the M3.2 codes already are. (M3.3)
-- `docs/reference.md`: "Values required at compile time" leaves out bit
-  positions and bit-field defaults. (M3.3)
-- `docs/reference.md`: "Building" does not name the compile-time bodies
-  `comptime fn bits() -> u32` and `comptime fn default() -> T` the dumps
-  print. (M3.3)
-- `docs/reference.md`: the line about 180 is too long, and 18 and 2077
-  stop short, after editing. (M3.3)
-- `docs/reference.md`: "Alternate groups" says `dll` may share bytes
-  with `ier`, which its example does not declare. (M3.3)
-- `.claude/plans/M3.3.md`, step 11's `Decisions`: the line-endings entry
-  says the two docs are CRLF in the repository; only the working copies
-  are. (M3.3)
 
 ## Tests
 
@@ -87,13 +24,3 @@ The findings M2 left open were worked off on 2026-10-21; these remain.
   say so); one that can fail needs the harness to fill RAM before the
   program starts, and the range `_start` zeroes is checked by
   `tests/elf.rs`. (M3.1)
-- The end-of-file fallback for a missing access mode (`peripheral X {`
-  at the end of the file) has no test, as for `memory_decl`. (M3.2)
-- Two of the three helps of `ty::unknown-register` have no snapshot:
-  "none of its registers is visible here" and "`T` has no registers".
-  (M3.2)
-- No snapshot shows a static's initializer holding a peripheral's
-  address in the LLVM IR; `tests/e2e/peripherals/` covers it at run
-  time. (M3.2)
-- `tests/snapshots/ui__ui@typeck_peripheral_slice.ers.snap` has an
-  `assertion_line` header, which almost no other snapshot has. (M3.2)

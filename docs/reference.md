@@ -15,13 +15,13 @@ structs (see "Bit-field structs"), enums, constants, statics, external
 statics, `comptime` blocks, modules (`mod`), `use` declarations, the
 `memory` block, peripheral types and peripherals (see "Peripherals"). The
 root file is the **root module**, and the modules it declares, inline or
-in their own files, form
-a tree under it; each module has its own namespace (see "Modules and
-paths"). Items may refer to each other whatever their order and their
-files (ADR 0028). The program must contain exactly one **entry function**
-and one **panic function**, in any of its modules, and, to be built into
-an executable, exactly one **`memory` block**, which gives the board's
-memory and what each part of it holds (ADR 0057, see "Memory maps"):
+in their own files, form a tree under it; each module has its own
+namespace (see "Modules and paths"). Items may refer to each other
+whatever their order and their files (ADR 0028). The program must contain
+exactly one **entry function** and one **panic function**, in any of its
+modules, and, to be built into an executable, exactly one **`memory`
+block**, which gives the board's memory and what each part of it holds
+(ADR 0057, see "Memory maps"):
 
 ```
 const KIB: usize = 1024;
@@ -175,11 +175,12 @@ register's type, the type of a `static`, `extern static`, `const` or
 `comptime` value, an operand of `size_of`, `align_of` or `offset_of`, and
 under `&raw` (`&raw const x` with `x: !`). Each `!` written there is
 reported once, also where nothing uses it, and the type containing it
-causes no further error. `!` stays valid as the type of an expression,
-as a return type (`-> !`) and in a `let` whose initializer never
-finishes (`let x: ! = loop {};`). An array literal or repeat with an element of type `!` (`[loop {}; 3]`) has type
-`!`; its other elements are checked against the expected element type, or
-the first element whose type is not `!`. Use `()` for a type without data.
+causes no further error. `!` stays valid as the type of an expression, as
+a return type (`-> !`) and in a `let` whose initializer never finishes
+(`let x: ! = loop {};`). An array literal or repeat with an element of
+type `!` (`[loop {}; 3]`) has type `!`; its other elements are checked
+against the expected element type, or the first element whose type is not
+`!`. Use `()` for a type without data.
 
 ## Functions
 
@@ -1114,21 +1115,19 @@ an enclosing position, whose type that variant's declaration gives.
   `ty::mismatched-types`; a constant is one of the errors below.
 - **A bare name is always a constant.** The leading `.` tells a `.V`
   pattern from it, so no name in a pattern changes meaning. It must name a
-  `const` item; a
-  name that names nothing is `resolve::unknown-name`, and one that names a
-  local variable, a parameter or an item that is not a constant (a
-  static, function, struct or enum) is `resolve::not-a-constant`; a module
-  is `resolve::misused-module`. A local
-  variable shadows a constant of the same name here as anywhere, so it is
-  then `resolve::not-a-constant` too; to compare with the constant, write
-  `let x: T => if x == NAME { ... }`.
+  `const` item; a name that names nothing is `resolve::unknown-name`, and
+  one that names a local variable, a parameter or an item that is not a
+  constant (a static, function, struct or enum) is
+  `resolve::not-a-constant`; a module is `resolve::misused-module`. A
+  local variable shadows a constant of the same name here as anywhere, so
+  it is then `resolve::not-a-constant` too; to compare with the constant,
+  write `let x: T => if x == NAME { ... }`.
 - **A path** of several segments, such as `uart::LIMIT`, names a variant
   or a constant, as in an expression; one whose last segment names another
   item is `resolve::not-a-constant`, and one whose last segment names
   nothing `resolve::unknown-name`, or `resolve::unknown-variant` after an
-  enum. A path followed by patterns in
-  parentheses that names no variant, as `uart::LIMIT(p)`, is
-  `resolve::unknown-variant`.
+  enum. A path followed by patterns in parentheses that names no variant,
+  as `uart::LIMIT(p)`, is `resolve::unknown-variant`.
 - **Only constants of an integer type, `bool` or an enum without payloads
   are patterns.** A constant of any other type, such as an enum with
   payloads, a struct or a pointer, is `ty::constant-pattern-type`,
@@ -1237,13 +1236,13 @@ written, depth first:
   with one case per value, as in `0x10 | 0x11` or `Mode::Off | Mode::Run`.
 
 A test that fails never goes back into an earlier or-pattern: the
-positions of a pattern are disjoint, and patterns read no memory, so
-which of its alternatives passed does not change whether a later
-position matches. A test at an enum position fails on a
-value that is no variant, as on any variant it does not name. A chain
-without a catch-all arm ends in the call to the panic function, even at a
-variant whose arms test only `bool` and integer positions, which no value
-reaches; nothing tells LLVM that a tag or a payload value holds a variant.
+positions of a pattern are disjoint, and patterns read no memory, so which
+of its alternatives passed does not change whether a later position
+matches. A test at an enum position fails on a value that is no variant,
+as on any variant it does not name. A chain without a catch-all arm ends
+in the call to the panic function, even at a variant whose arms test only
+`bool` and integer positions, which no value reaches; nothing tells LLVM
+that a tag or a payload value holds a variant.
 
 Each pattern written is tested in one place: the positions after an
 or-pattern are generated once, every alternative that passes jumping to
@@ -1672,8 +1671,10 @@ fn f() -> u32 {
   (`[v; N]`), the argument of `#[align(N)]`, the values of a `memory`
   block (see "Memory maps"), and the offsets of registers and addresses
   of peripherals (see "Peripherals") are `usize` expressions, such as
-  `[u8; 2 * SECTOR]`. Two array types are the same when their
-  lengths have the same value; diagnostics show the value.
+  `[u8; 2 * SECTOR]`; the bit positions of bit fields are `u32`
+  expressions, and their defaults values of the field's type (see
+  "Bit-field structs"). Two array types are the same when their lengths
+  have the same value; diagnostics show the value.
 
 What runs at compile time follows the target exactly (32-bit `usize`,
 wrapping arithmetic, the layouts above), and cannot:
@@ -1683,8 +1684,8 @@ wrapping arithmetic, the layouts above), and cannot:
 - access memory through a volatile pointer, or a register however it is
   reached (`eval::volatile-access`), call an `extern fn`, or read or write
   through a pointer made from an integer (computing an address from one,
-  as in `&raw mut (*UART).ctrl`, is fine; `&raw mut UART0` is one, see
-  "Peripherals");
+  as in `&raw mut (*UART).ctrl`, is fine; `&raw mut UART0` is such a
+  pointer, see "Peripherals");
 - read or write a `static mut` (`eval::static-mut`), whose value is only
   known at run time, or an `extern static` (`eval::extern-static`), defined
   outside the program; taking the address of either is fine;
@@ -1743,15 +1744,15 @@ the integer or too narrow or wide for their type (ADR 0059, 0062; see
 its width: its peripheral type does not fail with it, and only bodies
 using that register are left out.
 
-A type **reaches** a failed value when it is, or contains at any depth,
-an array whose length failed, a struct whose alignment failed, a
-bit-field struct with a failed value, or a
-peripheral type with a failed offset or register type: as a field, an
-array element, a payload value, a type argument, or behind a pointer or
-a slice. `[u8; N]`, `Broken`, `Odd`, `*const Broken`, `*const [Odd]` and
-`Option(*const Broken)` all reach one. Such a type counts as erroneous,
-as one containing `!` does (see "Types"), and so does a peripheral whose
-type reaches a failed value or whose address failed:
+A type **reaches** a failed value when it is, or contains at any depth, an
+array whose length failed, a struct whose alignment failed, a bit-field
+struct with a failed value, or a peripheral type with a failed offset or
+register type: as a field, an array element, a payload value, a type
+argument, or behind a pointer or a slice. `[u8; N]`, `Broken`, `Odd`,
+`*const Broken`, `*const [Odd]` and `Option(*const Broken)` all reach one.
+Such a type counts as erroneous, as one containing `!` does (see "Types"),
+and so does a peripheral whose type reaches a failed value or whose
+address failed:
 
 - **Type errors are still reported.** Code using the type is type checked
   to the end, and reports its own errors: with `p: *const Broken`,
@@ -1777,11 +1778,11 @@ type reaches a failed value or whose address failed:
   lowered to MIR when its return type, a parameter or local, the type of
   one of its expressions, or the operand of a `size_of`, `align_of` or
   `offset_of` in it reaches a failed value, or when it names an erroneous
-  peripheral. It is then neither run at
-  compile time nor checked for the values known at compile time (see
-  "Checks on values known at compile time"): `7 / 0` in a function taking
-  a `*const Broken` reports nothing, nor does a constant that calls it.
-  Such errors appear once the failed value is fixed.
+  peripheral. It is then neither run at compile time nor checked for the
+  values known at compile time (see "Checks on values known at compile
+  time"): `7 / 0` in a function taking a `*const Broken` reports nothing,
+  nor does a constant that calls it. Such errors appear once the failed
+  value is fixed.
 - **Errors that hold whatever the value are kept.** A type containing one
   that reaches a failed value is still checked, with a failed length
   counted as 0 and a failed alignment as the struct's natural one, the
@@ -1908,16 +1909,16 @@ So `flags & MASK == 0` means `(flags & MASK) == 0`, `*p.x` means `*(p.x)`,
 - Both operands of an arithmetic, bitwise or comparison operator have the
   same type; nothing converts implicitly (ADR 0008), with two exceptions:
   where a `*const T` is expected, a `*mut T` with the same `T` and
-  volatility is accepted, since it only loses permission to write
-  (ADR 0024); and where a slice is expected, a pointer to an array of its
+  volatility is accepted, since it only loses permission to write (ADR
+  0024); and where a slice is expected, a pointer to an array of its
   elements is accepted, with the array's length (ADR 0031, see "Slices").
   These apply wherever an expected type is known, such as a `let`, an
   argument (including an `assert` message), an assignment, `return`,
   `break` values, struct fields, payload values, array elements, `if`
   branches, `match` arms, the tail of a block and the operand of
-  `comptime`. Only the
-  outermost pointer converts, volatility never changes, and comparisons
-  accept a `*mut T` and a `*const T` in either order.
+  `comptime`. Only the outermost pointer converts, volatility never
+  changes, and comparisons accept a `*mut T` and a `*const T` in either
+  order.
 - A literal takes the type expected where it appears; with no expected type
   it is an error. In `x + 1` the `1` takes the type of `x`. A literal
   operand of `as` takes the target type, `usize` for a pointer target, or
@@ -1929,12 +1930,12 @@ So `flags & MASK == 0` means `(flags & MASK) == 0`, `*p.x` means `*(p.x)`,
   initializer of a `let`, a constant or a static, the right side of an
   assignment, an argument, a payload value, a struct literal's field, an
   array element and a repeat operand, `return`'s value, the tail of a
-  function or a block, `comptime`'s operand, the branches of an `if`,
-  the arms of a `match` and the values of `break` where these have an
-  expected type, and otherwise from a sibling: an
-  earlier `if` branch, `match` arm or `break` of the same loop, another
-  array element, the other operand of a binary operator. Unlike a literal,
-  it takes nothing from `as` (ADR 0044, see "Enums").
+  function or a block, `comptime`'s operand, the branches of an `if`, the
+  arms of a `match` and the values of `break` where these have an expected
+  type, and otherwise from a sibling: an earlier `if` branch, `match` arm
+  or `break` of the same loop, another array element, the other operand of
+  a binary operator. Unlike a literal, it takes nothing from `as` (ADR
+  0044, see "Enums").
 - `+ - * / %` and unary `-` need integers; unary `-` needs a signed one.
 - `& | ^ !` work on integers (bitwise) and `bool` (logical, without
   short-circuit).
@@ -1962,21 +1963,20 @@ So `flags & MASK == 0` means `(flags & MASK) == 0`, `*p.x` means `*(p.x)`,
 
 An expression is **known at compile time** when it is built only from
 literals, `const` items, variants of enums without payloads (ADR 0035),
-written `E::V` or `.V` (ADR 0044),
-`comptime` expressions, `size_of`, `align_of`, `offset_of`, unary `-` and
-`!`, binary operators, `as` and parentheses. So `Mode::Run as u32` is
-known; an `if` or a `match` is not. Aggregates are never known, and
-neither is any value of an enum with payloads, not even a variant without
-payload such as `Msg::Nop`, nor a constant or `comptime` value of its type
-(ADR 0039): so every arm of a `match` on one is checked.
-Nothing that reads memory is known: not `*p`, even through a constant
-pointer (it may be a device register), not a read of a static or of a
-register, not `&raw`. A pointer made from an integer is known by its
-address; a constant pointing into a static is not known, since its
-address exists only after linking. A bit-field struct is a scalar but its
-values are not known either (ADR 0059): not a literal of one, a constant
-or `comptime` value of its type, `0x83 as Lcr`, a field read from one, nor
-an integer made from one with `as`.
+written `E::V` or `.V` (ADR 0044), `comptime` expressions, `size_of`,
+`align_of`, `offset_of`, unary `-` and `!`, binary operators, `as` and
+parentheses. So `Mode::Run as u32` is known; an `if` or a `match` is not.
+Aggregates are never known, and neither is any value of an enum with
+payloads, not even a variant without payload such as `Msg::Nop`, nor a
+constant or `comptime` value of its type (ADR 0039): so every arm of a
+`match` on one is checked. Nothing that reads memory is known: not `*p`,
+even through a constant pointer (it may be a device register), not a read
+of a static or of a register, not `&raw`. A pointer made from an integer
+is known by its address; a constant pointing into a static is not known,
+since its address exists only after linking. A bit-field struct is a
+scalar but its values are not known either (ADR 0059): not a literal of
+one, a constant or `comptime` value of its type, `0x83 as Lcr`, a field
+read from one, nor an integer made from one with `as`.
 
 These are errors when the operand is known, not only when it is a literal:
 
@@ -2076,12 +2076,11 @@ amended by 0058).
 Through a volatile pointer, every access is to a scalar (an integer,
 `bool`, enum without payloads, bit-field struct or thin pointer; such an
 enum or struct is accessed as its integer type, ADR 0035, 0059) and is
-**exactly one load or store of the
-scalar's width**, never split, merged, removed or reordered relative to
-other volatile accesses, register accesses included. Volatility carries
-through fields and indexing: `(*regs).chan[i].status` is one access of
-`status`'s width. `x += 1` is one load and one store, not atomic.
-Otherwise the program is rejected:
+**exactly one load or store of the scalar's width**, never split, merged,
+removed or reordered relative to other volatile accesses, register
+accesses included. Volatility carries through fields and indexing:
+`(*regs).chan[i].status` is one access of `status`'s width. `x += 1` is
+one load and one store, not atomic. Otherwise the program is rejected:
 
 - a whole struct, array or enum with payloads, or a slice stored in
   memory, cannot be accessed through a volatile pointer; through a
@@ -2128,19 +2127,18 @@ fields run left to right, in the order written; `&&`/`||` may skip their
 right side, and `assert` runs its message only when the condition is false
 (ADR 0031). In an assignment the value runs before the place. In an
 assignment to a bit field, `l.f = v`, the value and its check run first,
-then the place, then the read of the whole value, then the write; in
-`l.f op= v` the check of the new field value comes after the read (ADR
-0059, see "Bit-field structs"). In
-`base[index]`, the base runs before the index, and the bounds check before
-the access. A `match` runs its scrutinee once, before any arm, and its
-patterns run no code (ADR 0037, 0040). A read through a pointer, a read
-of a static (ADR 0030) and a read of a register (ADR 0058) happen exactly
-where they are written. A value that is not a place, used as the base of
-indexing or a field, is read where it is written too: in
-`({ x })[{ x[0] = 9; 0 }]` the block reads `x` before the index changes
-it. `e?` runs `e` where it is written, and when it returns from the
-function, nothing after it runs: in `f(a()?, b())`, `b()` does not run
-when `a()` fails (ADR 0046).
+then the place, then the read of the whole value, then the write; in `l.f
+op= v` the check of the new field value comes after the read (ADR 0059,
+see "Bit-field structs"). In `base[index]`, the base runs before the
+index, and the bounds check before the access. A `match` runs its
+scrutinee once, before any arm, and its patterns run no code (ADR 0037,
+0040). A read through a pointer, a read of a static (ADR 0030) and a read
+of a register (ADR 0058) happen exactly where they are written. A value
+that is not a place, used as the base of indexing or a field, is read
+where it is written too: in `({ x })[{ x[0] = 9; 0 }]` the block reads `x`
+before the index changes it. `e?` runs `e` where it is written, and when
+it returns from the function, nothing after it runs: in `f(a()?, b())`,
+`b()` does not run when `a()` fails (ADR 0046).
 
 ## Modules and paths (ADR 0049)
 
@@ -2346,9 +2344,9 @@ pub fn config(baud: u32) -> Config {
   struct`, `pub enum`, `pub const`, `pub peripheral`, `pub mod`, `pub
   use`, `pub panic fn`, `#[export] pub fn`. On a `comptime` or `memory`
   block, which has no name, and on the entry function, which nothing may
-  call, it is `parser::misplaced-pub`. Before a field or a register it is allowed (below); before anything
-  else, such as a variant, a parameter, a `let` or another `pub`, it is
-  `parser::unexpected-token`.
+  call, it is `parser::misplaced-pub`. Before a field or a register it is
+  allowed (below); before anything else, such as a variant, a parameter, a
+  `let` or another `pub`, it is `parser::unexpected-token`.
 - A path is usable where **each of its segments** is visible: a `pub` item
   inside a private module is usable only where that module is. Naming an
   item that is not visible is `resolve::private-item`, pointing at the use
@@ -2724,19 +2722,18 @@ pointer to the type serves both.
   ```
 
   A syntax error in either is a `parser::unexpected-token`.
-- `peripheral` starts an item only where an item starts and a name
-  follows it: a `{` after the name makes a peripheral type, a `:` a
-  peripheral, and anything else is an error at that token. `read`,
-  `write` and `at` are recognized only inside the items, and a register's
-  name is the identifier just before `:`. So `read write: u8 at 0` is a
-  `read` register named `write`, while `read: u8 at 0`, a register named
-  `read` without an access mode, and `write read x: u8 at 0`, a `write`
-  register named `read` with `x` where `:` should be, are errors. After
-  a register's offset, `read` starts a read effect and `in` a group
-  (below), and `clears`, `sets`, `toggles` and `modifies` are words only in
-  an effect. Elsewhere all of them are ordinary
-  names, of variables, functions, fields or modules, and `read(x)` in a
-  body is a call.
+- `peripheral` starts an item only where an item starts and a name follows
+  it: a `{` after the name makes a peripheral type, a `:` a peripheral,
+  and anything else is an error at that token. `read`, `write` and `at`
+  are recognized only inside the items, and a register's name is the
+  identifier just before `:`. So `read write: u8 at 0` is a `read`
+  register named `write`, while `read: u8 at 0`, a register named `read`
+  without an access mode, and `write read x: u8 at 0`, a `write` register
+  named `read` with `x` where `:` should be, are errors. After a
+  register's offset, `read` starts a read effect and `in` a group (below),
+  and `clears`, `sets`, `toggles` and `modifies` are words only in an
+  effect. Elsewhere all of them are ordinary names, of variables,
+  functions, fields or modules, and `read(x)` in a body is a call.
 - Inside a function body, `peripheral` followed by a name is
   `parser::local-peripheral`, for either item: no expression starts with
   two names.
@@ -2789,9 +2786,9 @@ pointer to the type serves both.
 - A peripheral type's **extent** is the end of the register that ends
   last, `offset + width`, wherever it is declared, and 0 for an empty
   type. It is computed exactly: a `u32` at `0xFFFF_FFFC` gives an extent
-  of `0x1_0000_0000`, which no `usize` holds. Its
-  **alignment** is the width of its widest register, and 1 for an empty
-  type. `Uart16550` above has extent 6 and alignment 1.
+  of `0x1_0000_0000`, which no `usize` holds. Its **alignment** is the
+  width of its widest register, and 1 for an empty type. `Uart16550` above
+  has extent 6 and alignment 1.
 - A peripheral covers `[address, address + extent)`; one of an empty type
   covers no byte.
 - A register's offset must be a multiple of its width
@@ -2820,13 +2817,14 @@ pointer to the type serves both.
 through a pointer to a peripheral type, `(*u).thr`. Either is a place of
 the register's type:
 
-- **Each read is one volatile load of the register's width at its
-  address, the device's plus its offset, and each write one volatile
-  store**, with the guarantee of "Volatile accesses": never split,
-  merged, widened, narrowed, duplicated, removed or reordered relative to
-  other volatile accesses, those through volatile pointers included, and
-  not ordered against ordinary accesses. Two reads of one register are two loads, and a read
-  of `rbr` then a write of `thr`, at one address, happen in that order.
+- **Each read is one volatile load of the register's width at its address,
+  the device's plus its offset, and each write one volatile store**, with
+  the guarantee of "Volatile accesses": never split, merged, widened,
+  narrowed, duplicated, removed or reordered relative to other volatile
+  accesses, those through volatile pointers included, and not ordered
+  against ordinary accesses. Two reads of one register are two loads, and
+  a read of `rbr` then a write of `thr`, at one address, happen in that
+  order.
 - Reading a `write` register is `ty::read-of-write-only`, and writing a
   `read` register `ty::write-to-read-only`. A read is any use of the
   register's value: an operand, an initializer, an argument, a condition,
@@ -2851,7 +2849,8 @@ the register's type:
   time. Written whole through a `*const` pointer, `*c = 0` is that error
   alone. `UART0[0]` is `ty::cannot-index`.
 
-**Registers with fields (ADR 0060).**
+**Registers with fields (ADR 0060).** With `WordLength` and `Lcr` as in
+"Bit-field structs":
 
 ```
 struct Lsr: u8 {
@@ -2868,6 +2867,8 @@ peripheral Uart16550 {
     read write dll: u8 at 0x00 in dlab,
     read write dlm: u8 at 0x01 in dlab,
 }
+
+peripheral UART0: Uart16550 at 0x1000_0000;
 
 fn setup() {
     UART0.lcr = Lcr { word_length: .Eight, .. };   // one store
@@ -2988,8 +2989,8 @@ group.
 
 - **Two registers are checked for overlap only when they are in the same
   group, or both in none**, with the rule above. So `dll` may share bytes
-  with `rbr`, `thr` and `ier`, and two registers of `dlab` may not share
-  one with each other. The help of `ty::register-overlap` names `in GROUP`.
+  with `rbr` and `thr`, and two registers of `dlab` may not share one
+  with each other. The help of `ty::register-overlap` names `in GROUP`.
 - Accesses to a register in a group are checked and built as any other:
   the compiler does not know which mode the device is in, and setting DLAB
   before reaching `dll` is the program's business, as it is in C.
@@ -3322,35 +3323,33 @@ prints a compiler stage instead: `tokens`, `ast`, `hir`, `typeck`, `mir`,
   symbols (see "Symbols"); the `hir` dump starts with the module tree.
 - `typeck` and `mir` start with the `memory` block, as written but with
   its values computed and its placements in the order `code`, `data`,
-  `stack`, then every struct's layout, every bit-field struct (see
-  below) and every enum with its integer
-  type and the values of its variants, an enum with payloads also with
-  the offset of each payload value, its size and its alignment, then each
-  `Option(T)` and `Result(T, E)` used, sorted by name, and list the bodies
-  run at compile time as `comptime fn`, named by path, a variant's value
-  as `comptime fn Mode::Run`, the values of the `memory` block as
-  `comptime fn origin`, `size` and `stack_size`, a register's offset as
-  `comptime fn offset` and a peripheral's address as `comptime fn
-  address`.
+  `stack`, then every struct's layout, every bit-field struct (see below)
+  and every enum with its integer type and the values of its variants, an
+  enum with payloads also with the offset of each payload value, its size
+  and its alignment, then each `Option(T)` and `Result(T, E)` used, sorted
+  by name, and list the bodies run at compile time as `comptime fn`, named
+  by path, a variant's value as `comptime fn Mode::Run`, the values of the
+  `memory` block as `comptime fn origin`, `size` and `stack_size`, a
+  register's offset as `comptime fn offset`, a peripheral's address as
+  `comptime fn address`, a bit position of a bit field as `comptime fn
+  bits` and a bit field's default as `comptime fn default`.
 - Both list each peripheral type, by path, with its registers' types and
-  offsets, its extent and its alignment, and each peripheral with its
-  type and address (see "Peripherals"). `typeck` lists them between the
-  `memory` block and the structs, with each register's mode and the range
-  each peripheral covers, and leaves out those that reach a failed value;
-  `mir` lists them after the enums and before the statics, numbering the
-  registers as the projections that reach them name them (`(*_1).1`).
-  Each register also shows its alternate group; `typeck` shows its read
-  effect too, in the order of the syntax (`read wide: u32 at 0x4 read
-  clears in ctrl`), while `mir` shows only the group, after the offset
-  (`3 dll: u8 at 0x0 in dlab`).
-- Both list each bit-field struct, after the structs and before the
-  enums: `typeck` as `struct Lcr: u8 { dlab: bool at 7 = false, ... }`,
-  with each field's type, bits, effects and default (the variant's path
-  for an enum), leaving out those that reach a failed value; `mir` with
-  each field's type, an enum's shown as its integer, and its bits, as
-  `struct Lcr: u8 { dlab: bool at 7 }`, without defaults or effects. A bit
-  field access is labeled `bit field NAME` in `typeck`, and a literal
-  `struct Lcr` or `struct Lcr ..` when it ends with `..`.
+  offsets, its extent and its alignment, and each peripheral with its type
+  and address (see "Peripherals"). `typeck` lists them between the
+  `memory` block and the structs, with each register's visibility and mode
+  and the range each peripheral covers; `mir` lists them after the enums
+  and before the statics, numbering the registers as the projections that
+  reach them name them (`(*_1).1`). Each register also shows its alternate
+  group; `typeck` shows its read effect too, in the order of the syntax
+  (`read wide: u32 at 0x4 read clears in ctrl`), while `mir` shows only
+  the group, after the offset (`3 dll: u8 at 0x0 in dlab`).
+- Both list each bit-field struct, after the structs and before the enums:
+  `typeck` as `struct Lcr: u8 { dlab: bool at 7 = false, ... }`, with each
+  field's type, bits, effects and default (the variant's path for an
+  enum); `mir` with each field's type, an enum's shown as its integer, and
+  its bits, as `struct Lcr: u8 { dlab: bool at 7 }`, without defaults or
+  effects. A bit field access is labeled `bit field NAME` in `typeck`, and
+  a literal `struct Lcr` or `struct Lcr ..` when it ends with `..`.
 
 See `CONTRIBUTING.md` for setup and running on QEMU.
 
@@ -3452,7 +3451,7 @@ Every error has a stable code, shown with the message.
 | `ty::cannot-index` | indexing a value that is not an array or a pointer |
 | `ty::index-out-of-bounds` | index known at compile time not below the array's length |
 | `ty::slice-pointer-index` | indexing a slice pointer directly (`s[i]`); write `(*s)[i]` |
-| `ty::no-fields` | field access on a value that is not a struct |
+| `ty::no-fields` | field access on a value with neither fields nor registers |
 | `ty::unknown-field` | field access to a field the struct does not have |
 | `ty::private-field` | a place or `offset_of` naming a field that is not visible here |
 | `ty::private-variant` | `.V` naming a variant of an enum that is not reachable here |
