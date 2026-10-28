@@ -9,5 +9,16 @@ authors = ["Hernani Samuel Diniz"]
 inkwell = { version = "0.10", default-features = false, features = ["llvm22-1", "target-riscv"] }
 miette = { version = "7.6", features = ["fancy-no-backtrace"] }
 
+[lints.clippy]
+# Leftovers of a debugging session or of unfinished work.
+dbg_macro = "warn"
+todo = "warn"
+unimplemented = "warn"
+# The compiler reports through diagnostics; only the command line prints.
+print_stdout = "warn"
+print_stderr = "warn"
+# Every lint that is turned off says why.
+allow_attributes_without_reason = "warn"
+
 [dev-dependencies]
 insta = { version = "1.49.0", features = ["glob"] }

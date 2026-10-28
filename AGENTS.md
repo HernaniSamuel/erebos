@@ -26,7 +26,10 @@ become language constructs. The compiler is written in Rust and uses LLVM via
 - Respect layer boundaries (ADR 0003, 0028): a compiler layer only consumes
   the output of the layer directly before it. The one edge back: type
   checking and MIR building ask the compile-time evaluator for values, and
-  get values, never MIR. Codegen sees only MIR and evaluated data.
+  get values, never MIR. Codegen sees only MIR and evaluated data. The
+  evaluator names HIR items only by their ids, and `query` schedules all
+  of it (ADR 0063). `tests/architecture.rs` checks the modules each
+  layer may name; do not widen its tables to make it pass, ask.
 - No type inference and no implicit conversions (ADR 0008).
 - Integer `+ - *` wrap; never emit `nsw`/`nuw` (ADR 0007).
 - Only the target C ABI exists (ADR 0006). Aggregates cross calls by value,
@@ -78,4 +81,6 @@ rt/             The `core` module in Erebos, built into every program (ADR 0020,
 tests/ui/       Snapshot tests per compiler stage
 tests/e2e/      Programs run on QEMU, with expected output and exit code
 tests/layout/   Structs whose layout is checked against clang
+tests/architecture.rs Layer edges, wrap flags and panic counts (ADR 0063)
+scripts/check.sh The quality gate as one command
 ```

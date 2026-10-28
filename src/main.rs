@@ -1,6 +1,12 @@
 //! Command-line interface. Argument parsing is done by hand: the surface is
 //! too small to justify a dependency.
 
+#![expect(
+    clippy::print_stdout,
+    clippy::print_stderr,
+    reason = "the command line prints dumps and diagnostics"
+)]
+
 use std::io::{self, IsTerminal};
 use std::path::PathBuf;
 use std::process::ExitCode;

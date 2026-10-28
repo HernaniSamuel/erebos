@@ -53,6 +53,10 @@ cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 
+`sh scripts/check.sh` runs the same gates, checking the formatting
+instead of applying it; agents are held to it when they finish
+(`.claude/settings.json`).
+
 ## Tests
 
 - **Per-layer snapshot tests** (`insta`) for tokens, AST, HIR, MIR and
@@ -111,6 +115,11 @@ cargo test
 - **Fuzzing** (`tests/fuzz.rs`) mutates the test programs and requires the
   compiler to answer every input with output or diagnostics, never a panic.
   The seed is fixed; set `EREBOS_FUZZ_ITERATIONS` to run more inputs.
+- **Architecture** (`tests/architecture.rs`, ADR 0063) checks that each
+  layer uses only the modules it may, that `inkwell` and `miette` stay in
+  `codegen` and `diag`, that unoptimized IR has no `nsw`/`nuw`, and that
+  the panics per file of `src/` match its `PANICS` table. Raising a count
+  needs a reason in the step's `Decisions`; lower it when panics go.
 - Every bug fix comes with a test that fails without the fix.
 - Every new diagnostic comes with a snapshot of its rendered output.
 
