@@ -1,0 +1,25 @@
+# cargo-mutants: breaks the compiler on purpose and checks that a test fails.
+# Run it on a diff, not on the whole crate: see scripts/mutants-diff.sh.
+
+# Every test target except `e2e` (28 s of QEMU runs, longer than all the
+# others together). The snapshot tests catch what the e2e tests would for
+# nearly every mutant; run `cargo test` for the rest.
+additional_cargo_test_args = [
+    "--lib",
+    "--test", "architecture",
+    "--test", "c_layout",
+    "--test", "elf",
+    "--test", "fuzz",
+    "--test", "match_cost",
+    "--test", "reproducible",
+    "--test", "ui",
+]
+
+# Code whose behaviour is only its text, so a mutant there says nothing.
+exclude_re = [
+    "impl Display",
+    "impl fmt::Display",
+    "impl Debug",
+    "impl fmt::Debug",
+    "-> String with String::new\\(\\)", # help and message text
+]

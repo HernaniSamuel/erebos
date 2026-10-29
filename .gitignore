@@ -1,1 +1,4 @@
 /target
+
+# Output of cargo-mutants.
+/mutants.out*
