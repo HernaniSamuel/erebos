@@ -97,3 +97,5 @@ Do not write one for local implementation details that the code already explains
 | 0065 | [Field access modes](0065-field-access-modes.md) | Accepted |
 | 0066 | [Peripherals over others](0066-peripherals-over-others.md) | Accepted |
 | 0067 | [Peripherals checked against SVD](0067-peripherals-checked-against-svd.md) | Accepted |
+| 0068 | [Generated programs checked against independent oracles](0068-generated-programs-checked-against-oracles.md) | Accepted |
+| 0069 | [Programs with an injected error are rejected](0069-programs-with-an-injected-error-are-rejected.md) | Accepted |
