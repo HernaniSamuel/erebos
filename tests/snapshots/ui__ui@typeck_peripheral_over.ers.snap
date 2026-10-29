@@ -1,0 +1,22 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_peripheral_over.ers
+---
+--- typeck ---
+peripheral ApbCtrl { read write rnd_data: u32 at 0xb0 } extent 180, align 4
+peripheral Rng { read data: u32 at 0xb0 } extent 180, align 4
+peripheral Device { read write a: u32 at 0x0, read write b: u32 at 0x4 } extent 8, align 4
+peripheral View { read write x: u32 at 0x0 } extent 4, align 4
+peripheral APB_CTRL: ApbCtrl at 0x60026000 covers [0x60026000, 0x600260b4)
+peripheral RNG: Rng at 0x60026000 over APB_CTRL covers [0x60026000, 0x600260b4)
+peripheral DEVICE: Device at 0x40000000 covers [0x40000000, 0x40000008)
+peripheral VIEW_A: View at 0x40000000 over DEVICE covers [0x40000000, 0x40000004)
+peripheral VIEW_B: View at 0x40000000 over DEVICE covers [0x40000000, 0x40000004)
+peripheral X: View at 0x60000000 over Y covers [0x60000000, 0x60000004)
+peripheral Y: Device at 0x60000000 covers [0x60000000, 0x60000008)
+peripheral FAR: View at 0x50000000 over DEVICE covers [0x50000000, 0x50000004)
+entry fn main() -> !
+    expr 0 loop 1105..1112: !
+panic fn on_panic() -> !
+    expr 1 loop 1142..1149: !

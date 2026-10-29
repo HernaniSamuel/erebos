@@ -29,7 +29,9 @@ ty::peripheral-overlap
     ·              ╰── covers [0xfffffff0, 0x100000000)
  20 │ peripheral WHOLE: Top at 0;
     ╰────
-  help: they share 8 bytes from 0xfffffff8; two peripherals cannot share a byte (ADR 0058)
+  help: they share 8 bytes from 0xfffffff8; two peripherals cannot share a byte (ADR 0058); for a
+        second view of one device, write `over crate::PAST` after the address of `EXACT` (ADR
+        0066)
 ty::peripheral-overlap
 
   × the peripherals `PAST` and `WHOLE` overlap
@@ -44,7 +46,9 @@ ty::peripheral-overlap
     ·              ╰── covers [0x0, 0x100000000)
  21 │ 
     ╰────
-  help: they share 8 bytes from 0xfffffff8; two peripherals cannot share a byte (ADR 0058)
+  help: they share 8 bytes from 0xfffffff8; two peripherals cannot share a byte (ADR 0058); for a
+        second view of one device, write `over crate::PAST` after the address of `WHOLE` (ADR
+        0066)
 ty::peripheral-overlap
 
   × the peripherals `EXACT` and `WHOLE` overlap
@@ -58,4 +62,6 @@ ty::peripheral-overlap
     ·              ╰── covers [0x0, 0x100000000)
  21 │ 
     ╰────
-  help: they share 16 bytes from 0xfffffff0; two peripherals cannot share a byte (ADR 0058)
+  help: they share 16 bytes from 0xfffffff0; two peripherals cannot share a byte (ADR 0058); for a
+        second view of one device, write `over crate::EXACT` after the address of `WHOLE` (ADR
+        0066)

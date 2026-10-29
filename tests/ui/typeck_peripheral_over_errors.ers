@@ -1,0 +1,21 @@
+// `over` only silences the pair it names (ADR 0066). In the chain `C over B
+// over A`, `C` is checked against `A` and meets it: one
+// `ty::peripheral-overlap`, with the help naming `over`. `P` and `Q` meet
+// without `over`, and `T`, which names nothing, meets both `R` and `S`
+// (`S` over `R`): one each, two for `T`.
+peripheral Block {
+    read write r: u32 at 0,
+}
+peripheral A: Block at 0x4000_0000;
+peripheral B: Block at 0x4000_0000 over A;
+peripheral C: Block at 0x4000_0000 over B;
+
+peripheral P: Block at 0x4000_1000;
+peripheral Q: Block at 0x4000_1000;
+
+peripheral R: Block at 0x4000_2000;
+peripheral S: Block at 0x4000_2000 over R;
+peripheral T: Block at 0x4000_2000;
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

@@ -17,7 +17,9 @@ ty::peripheral-overlap
     ·              ╰── covers [0x10000004, 0x1000000c)
  22 │ peripheral UART2: Uart at 0x1000_000C;
     ╰────
-  help: they share 4 bytes from 0x10000004; two peripherals cannot share a byte (ADR 0058)
+  help: they share 4 bytes from 0x10000004; two peripherals cannot share a byte (ADR 0058); for a
+        second view of one device, write `over crate::UART0` after the address of `UART1` (ADR
+        0066)
 ty::peripheral-overlap
 
   × the peripherals `UART2` and `LAST` overlap
@@ -31,4 +33,6 @@ ty::peripheral-overlap
     ·              ╰── covers [0x10000013, 0x10000014)
  24 │ peripheral NOTHING: Empty at 0x1000_0002;
     ╰────
-  help: they share the byte at 0x10000013; two peripherals cannot share a byte (ADR 0058)
+  help: they share the byte at 0x10000013; two peripherals cannot share a byte (ADR 0058); for a
+        second view of one device, write `over crate::UART2` after the address of `LAST` (ADR
+        0066)

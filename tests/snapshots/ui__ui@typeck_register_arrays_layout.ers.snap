@@ -247,4 +247,5 @@ ty::peripheral-overlap
     ·              ╰── covers [0x0, past 2³²)
  84 │ 
     ╰────
-  help: they share the bytes from 0x0 on; two peripherals cannot share a byte (ADR 0058)
+  help: they share the bytes from 0x0 on; two peripherals cannot share a byte (ADR 0058); for a
+        second view of one device, write `over crate::FAR` after the address of `HUGE` (ADR 0066)

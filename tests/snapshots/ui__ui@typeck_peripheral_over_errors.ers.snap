@@ -1,0 +1,68 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/typeck_peripheral_over_errors.ers
+---
+--- errors ---
+ty::peripheral-overlap
+
+  × the peripherals `A` and `C` overlap
+    ╭─[typeck_peripheral_over_errors.ers:11:12]
+  8 │ }
+  9 │ peripheral A: Block at 0x4000_0000;
+    ·            ┬
+    ·            ╰── covers [0x40000000, 0x40000004)
+ 10 │ peripheral B: Block at 0x4000_0000 over A;
+ 11 │ peripheral C: Block at 0x4000_0000 over B;
+    ·            ┬
+    ·            ╰── covers [0x40000000, 0x40000004)
+ 12 │ 
+    ╰────
+  help: they share 4 bytes from 0x40000000; two peripherals cannot share a byte (ADR 0058); for a
+        second view of one device, write `over crate::A` after the address of `C` (ADR 0066)
+ty::peripheral-overlap
+
+  × the peripherals `P` and `Q` overlap
+    ╭─[typeck_peripheral_over_errors.ers:14:12]
+ 12 │ 
+ 13 │ peripheral P: Block at 0x4000_1000;
+    ·            ┬
+    ·            ╰── covers [0x40001000, 0x40001004)
+ 14 │ peripheral Q: Block at 0x4000_1000;
+    ·            ┬
+    ·            ╰── covers [0x40001000, 0x40001004)
+ 15 │ 
+    ╰────
+  help: they share 4 bytes from 0x40001000; two peripherals cannot share a byte (ADR 0058); for a
+        second view of one device, write `over crate::P` after the address of `Q` (ADR 0066)
+ty::peripheral-overlap
+
+  × the peripherals `R` and `T` overlap
+    ╭─[typeck_peripheral_over_errors.ers:18:12]
+ 15 │ 
+ 16 │ peripheral R: Block at 0x4000_2000;
+    ·            ┬
+    ·            ╰── covers [0x40002000, 0x40002004)
+ 17 │ peripheral S: Block at 0x4000_2000 over R;
+ 18 │ peripheral T: Block at 0x4000_2000;
+    ·            ┬
+    ·            ╰── covers [0x40002000, 0x40002004)
+ 19 │ 
+    ╰────
+  help: they share 4 bytes from 0x40002000; two peripherals cannot share a byte (ADR 0058); for a
+        second view of one device, write `over crate::R` after the address of `T` (ADR 0066)
+ty::peripheral-overlap
+
+  × the peripherals `S` and `T` overlap
+    ╭─[typeck_peripheral_over_errors.ers:18:12]
+ 16 │ peripheral R: Block at 0x4000_2000;
+ 17 │ peripheral S: Block at 0x4000_2000 over R;
+    ·            ┬
+    ·            ╰── covers [0x40002000, 0x40002004)
+ 18 │ peripheral T: Block at 0x4000_2000;
+    ·            ┬
+    ·            ╰── covers [0x40002000, 0x40002004)
+ 19 │ 
+    ╰────
+  help: they share 4 bytes from 0x40002000; two peripherals cannot share a byte (ADR 0058); for a
+        second view of one device, write `over crate::R` after the address of `T` (ADR 0066)

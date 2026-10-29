@@ -20,4 +20,6 @@ ty::peripheral-overlap
    ·               ╰── covers [0x10000000, 0x10000006)
  9 │ 
    ╰────
-  help: they share 2 bytes from 0x10000004; two peripherals cannot share a byte (ADR 0058)
+  help: they share 2 bytes from 0x10000004; two peripherals cannot share a byte (ADR 0058); for a
+        second view of one device, write `over crate::CONSOLE` after the address of `board::UART`
+        (ADR 0066)

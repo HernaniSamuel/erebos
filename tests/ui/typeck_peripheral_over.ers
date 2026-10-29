@@ -1,0 +1,35 @@
+// emit: typeck
+// Peripherals over others (ADR 0066): two peripherals are not checked for
+// overlap when one names the other with `over`, or both name the same one.
+// The ESP32-C3's `RNG` is a second view of `APB_CTRL`'s register
+// `RND_DATA`; `VIEW_A` and `VIEW_B` are two views of `DEVICE`, and meet each
+// other; `FAR` is over a peripheral it does not overlap, which is accepted.
+// The dump shows the peripheral named.
+peripheral ApbCtrl {
+    read write rnd_data: u32 at 0xB0,
+}
+peripheral Rng {
+    read data: u32 at 0xB0,
+}
+peripheral APB_CTRL: ApbCtrl at 0x6002_6000;
+peripheral RNG: Rng at 0x6002_6000 over APB_CTRL;
+
+peripheral Device {
+    read write a: u32 at 0,
+    read write b: u32 at 4,
+}
+peripheral View {
+    read write x: u32 at 0,
+}
+peripheral DEVICE: Device at 0x4000_0000;
+peripheral VIEW_A: View at 0x4000_0000 over DEVICE;
+peripheral VIEW_B: View at 0x4000_0000 over DEVICE;
+
+// Naming one declared later is the same link.
+peripheral X: View at 0x6000_0000 over Y;
+peripheral Y: Device at 0x6000_0000;
+
+peripheral FAR: View at 0x5000_0000 over DEVICE;
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

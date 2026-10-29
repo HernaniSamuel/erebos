@@ -600,6 +600,20 @@ impl Queries<'_> {
                 if lo >= hi {
                     continue;
                 }
+                // One names the other, or both name the same one (ADR 0066):
+                // views of one device. A chain is checked past its links.
+                let over = |i: usize| hir.peripherals[i].over.map(|(id, _)| id.0 as usize);
+                if over(later) == Some(earlier)
+                    || over(earlier) == Some(later)
+                    || over(later).is_some() && over(later) == over(earlier)
+                {
+                    continue;
+                }
+                // The first view of the device: the earlier one's own `over`
+                // target if it has one, else the earlier one. Written from
+                // the crate root, which resolves from any module.
+                let first = over(earlier).unwrap_or(earlier);
+                let first_path = &hir.peripherals[first].path;
                 let (later, earlier) = (&hir.peripherals[later], &hir.peripherals[earlier]);
                 self.diags.push(
                     Diagnostic::error(
@@ -621,12 +635,14 @@ impl Queries<'_> {
                         ),
                     )
                     .help(format!(
-                        "they share {}; two peripherals cannot share a byte (ADR 0058)",
+                        "they share {}; two peripherals cannot share a byte (ADR 0058); for a second view of one device, write `over crate::{}` after the address of `{}` (ADR 0066)",
                         if saturated(later_lo, later_hi) || saturated(earlier_lo, earlier_hi) {
                             format!("the bytes from {lo:#x} on")
                         } else {
                             shared_bytes(lo.into(), hi.into())
-                        }
+                        },
+                        first_path,
+                        later.path
                     )),
                 );
             }

@@ -84,9 +84,13 @@ pub fn dump(q: &mut Queries) -> String {
         let Some((address, layout)) = q.placed_peripheral(hir::PeripheralId(i as u32)) else {
             continue;
         };
+        let over = match def.over {
+            Some((id, _)) => format!(" over {}", hir.peripheral(id).path),
+            None => String::new(),
+        };
         writeln!(
             out,
-            "peripheral {}: {} at {address:#x} covers [{address:#x}, {:#x})",
+            "peripheral {}: {} at {address:#x}{over} covers [{address:#x}, {:#x})",
             def.path,
             def.ty,
             address + layout.extent
