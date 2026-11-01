@@ -1,0 +1,73 @@
+// The devices of QEMU `virt` the program uses, declared with register arrays
+// and clusters (ADR 0064, 0066): the 16550 UART and the test finisher (ADR
+// 0010), the PLIC and the eight virtio-mmio transports. The PLIC is the one
+// of ADR 0064: a priority per source and three words of pending bits, a
+// block of three enable words per context (`enables`, a cluster array whose
+// type holds a register array), and a threshold and a claim register per
+// context (`ctx`). QEMU's hart 0 has two contexts, machine and supervisor
+// mode. `PLIC_M0` is the machine mode context alone, a second view of
+// bytes the PLIC already covers (ADR 0066), served by the same driver as
+// `PLIC.ctx[i]`. The virtio-mmio transports are one type, eight times
+// `0x1000` bytes apart from `0x1000_1000`: one driver serves them all.
+
+pub peripheral Uart16550 {
+    pub read rbr: u8 at 0x00,
+    pub write thr: u8 at 0x00,
+    read lsr: u8 at 0x05,
+}
+
+pub peripheral TestFinisher {
+    write status: u32 at 0x00,
+}
+
+pub peripheral Plic {
+    pub read write priority: [u32; 96] at 0x0000,
+    pub read pending: [u32; 3] at 0x1000,
+    pub enables: [PlicEnables; 2] at 0x2000 step 0x80,
+    pub ctx: [PlicContext; 2] at 0x20_0000 step 0x1000,
+}
+
+pub peripheral PlicEnables {
+    pub read write word: [u32; 3] at 0x00,
+}
+
+// Reading `claim` takes the interrupt it names: the read has an effect.
+pub peripheral PlicContext {
+    pub read write threshold: u32 at 0x00,
+    pub read write claim: u32 at 0x04 read modifies,
+}
+
+// The transport's identification, the registers any driver reads first.
+pub peripheral VirtioMmio {
+    pub read magic_value: u32 at 0x000,
+    pub read version: u32 at 0x004,
+    pub read device_id: u32 at 0x008,
+    pub read vendor_id: u32 at 0x00C,
+}
+
+pub peripheral UART0: Uart16550 at 0x1000_0000;
+pub peripheral FINISHER: TestFinisher at 0x0010_0000;
+pub peripheral PLIC: Plic at 0x0C00_0000;
+pub peripheral PLIC_M0: PlicContext at 0x0C20_0000 over PLIC;
+pub peripheral VIRTIO0: VirtioMmio at 0x1000_1000;
+pub peripheral VIRTIO1: VirtioMmio at 0x1000_2000;
+pub peripheral VIRTIO2: VirtioMmio at 0x1000_3000;
+pub peripheral VIRTIO3: VirtioMmio at 0x1000_4000;
+pub peripheral VIRTIO4: VirtioMmio at 0x1000_5000;
+pub peripheral VIRTIO5: VirtioMmio at 0x1000_6000;
+pub peripheral VIRTIO6: VirtioMmio at 0x1000_7000;
+pub peripheral VIRTIO7: VirtioMmio at 0x1000_8000;
+
+// Bit 5 of `lsr`: the transmit holding register is empty.
+const THR_EMPTY: u8 = 0x20;
+
+pub fn putc(byte: u8) {
+    while UART0.lsr & THR_EMPTY == 0 {}
+    UART0.thr = byte;
+}
+
+// Stops QEMU: 0 passes, any other code fails with it.
+pub fn exit(code: u32) -> ! {
+    FINISHER.status = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    loop {}
+}
