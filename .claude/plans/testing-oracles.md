@@ -130,7 +130,7 @@ built first.
     snapshot changed, and `cargo test --test e2e` passes.
 
 ## 3. test(generated): check generated programs against both oracles
-- Status: todo
+- Status: done
 - Implements: ADR 0068, sections 2 and 3
 - Changes: `tests/common/generator.rs` (`main` with the run-time and
   `comptime` calls), `tests/generated.rs` (build unoptimized and `-O`,
@@ -141,6 +141,57 @@ built first.
   that the test adds seconds (the measure goes in `Decisions`); a test
   that a program whose `comptime` result is changed by hand is reported
   as a disagreement, so that the oracle is shown to be able to fail.
+- Decisions:
+  - Default count `DEFAULT_PROGRAMS = 20`, seed 0. Measured: about 0.35 s
+    per program (two builds, two QEMU boots), so `generated_programs_agree`
+    with its two tests takes about 7 s in total (40 programs took 14 s;
+    300 programs from seed 1000 took 104 s). Twenty keeps it to seconds;
+    the long runs use the two variables.
+  - `main`, `on_panic` and the `memory` block are all written by
+    `Gen::main` in the generator (the plan said the `memory` block is added
+    "where the program is built"); one place gives the whole text, and the
+    block is harmless to the `--emit=mir` test of step 1. The UART and
+    the test finisher are `peripheral`s as in `tests/e2e/hello.ers`.
+  - The `comptime` side is a module-level `const CT_<f>_<k>: u64 = comptime
+    f<f>(...);` (ADR 0068 says a `const`), the run-time side is
+    `f<f>(opaque_<ty>(lit), ...)` inside `main`. A `bool` argument is
+    `true`/`false` at compile time and `opaque_u8(0|1) == 1` at run time.
+  - Each function is called with two sets of literals (`k` = 0, 1). A
+    literal is, in eight, 0, 1, the type's maximum, minimum, -1 (maximum -1
+    for unsigned), a small value in -10..10 or a random value of the width
+    (twice). Edge values come first because that is where integer
+    operations differ.
+  - `main` stops at the first disagreement: `if bad == 0 { bad = check(n,
+    ct, rt); }`. `check` prints `#n <comptime> <run time>` and returns `n`
+    (the function's number from 1, since exit code 0 is success); the exit
+    code is `n`, through the finisher's `(n << 16) | 0x3333`. `on_panic`
+    exits 99, so a generated program that panics fails with `exit code
+    Some(99)`.
+  - The test compares through `qemu::check` with `Expectation {
+    "generated ok\n", exit 0 }`, so a disagreement is reported with the
+    output and exit code, plus any CPU exception.
+  - `run_both` builds in `target/.../tmp/generated/<name>/` and deletes
+    the directory on success; on failure the `.ers`, both ELFs and the
+    QEMU logs stay, and the message gives the directory and the command
+    that runs the seed again.
+  - The C object of `OPAQUE_C` is compiled once per level in a
+    `OnceLock`, shared by both tests, which run in parallel: a per-program
+    object would have raced on the same file name.
+  - The program waits `WAIT` = 10 s (the value of `qemu::EXIT_TIMEOUT`, but
+    named here since it is this test's choice).
+  - `a_changed_comptime_result_is_a_disagreement` takes seed 1, rewrites
+    the initializer of `CT_0_0` to `(<it>) ^ 1`, which always differs, and
+    demands a failure at both levels: exit code 1 (the first function) and
+    the `#1` line of the output.
+  - A bad number in `EREBOS_GENERATED_PROGRAMS` or `EREBOS_GENERATED_SEED`
+    panics with its name instead of falling back to the default.
+  - Found by running it: seed 1093 (`EREBOS_GENERATED_SEED=1093
+    EREBOS_GENERATED_PROGRAMS=1`) disagrees only with `-O` (function `f2`,
+    `#3`: comptime and unoptimized agree, the `-O` build gives a different
+    value). Out of this step's scope (the compiler is not changed); it is
+    a find for the planner, to turn into its own `tests/ui` or `tests/e2e`
+    program once reduced. One in 300 programs from seed 1000 failed; the
+    seeds 0 to 39 and 0 to 299 of the generator test pass.
 
 ## 4. test(rejected): inject errors into valid programs
 - Status: todo

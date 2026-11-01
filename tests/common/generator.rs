@@ -435,22 +435,7 @@ pub fn generate(seed: u64) -> Program {
         source.push_str(&text);
         functions.push(function);
     }
-    // The two functions every program needs. `main` of ADR 0068, section 2,
-    // replaces this skeleton in a later step.
-    source.push_str(
-        "
-entry fn main() -> ! {
-    loop {}
-}
-",
-    );
-    source.push_str(
-        "
-panic fn on_panic() -> ! {
-    loop {}
-}
-",
-    );
+    source.push_str(&g.main(&functions));
     Program {
         seed,
         source,
@@ -511,6 +496,144 @@ impl Gen {
     fn fresh(&mut self, prefix: &str) -> String {
         self.counter += 1;
         format!("{prefix}{}", self.counter)
+    }
+
+    /// A literal of `ty` for an argument: an edge value or a random one.
+    fn input(&mut self, ty: Ty) -> String {
+        if ty == Ty::Bool {
+            return if self.rng.chance(1, 2) {
+                "true"
+            } else {
+                "false"
+            }
+            .into();
+        }
+        let bits = ty.bits();
+        let value: i128 = match self.rng.below(8) {
+            0 => 0,
+            1 => 1,
+            2 => ty.max(),
+            3 => ty.min(),
+            4 => {
+                if ty.signed() {
+                    -1
+                } else {
+                    ty.max() - 1
+                }
+            }
+            5 => (self.rng.below(20) as i128 - 10).max(ty.min()),
+            _ => {
+                let raw = self.rng.next() as i128 & ((1i128 << bits) - 1);
+                if ty.signed() && raw > ty.max() {
+                    raw - (1i128 << bits)
+                } else {
+                    raw
+                }
+            }
+        };
+        value.to_string()
+    }
+
+    /// The consts, `main` and `on_panic` of ADR 0068, section 2, and the
+    /// `memory` block QEMU needs. Each function is called with two sets of
+    /// literals, at compile time in `const CT_<f>_<k>: u64 = comptime ...;`
+    /// and at run time with the same values through the `opaque_*`
+    /// functions of `OPAQUE_C`. `main` stops with `generated ok` and exit
+    /// code 0, or with the number (from 1) of the first function whose two
+    /// results differ, after printing `#<number> <comptime> <run time>`.
+    fn main(&mut self, functions: &[Function]) -> String {
+        let mut consts = String::new();
+        let mut body = String::new();
+        for (i, function) in functions.iter().enumerate() {
+            for k in 0..2 {
+                let mut compile_time = Vec::new();
+                let mut run_time = Vec::new();
+                for ty in &function.params {
+                    let lit = self.input(*ty);
+                    run_time.push(match ty {
+                        Ty::Bool => format!("opaque_u8({}) == 1", u8::from(lit == "true")),
+                        _ => format!("opaque_{}({lit})", ty.name()),
+                    });
+                    compile_time.push(lit);
+                }
+                let _ = writeln!(
+                    consts,
+                    "const CT_{i}_{k}: u64 = comptime {}({});",
+                    function.name,
+                    compile_time.join(", ")
+                );
+                let _ = writeln!(
+                    body,
+                    "    if bad == 0 {{ bad = check({}, CT_{i}_{k}, {}({})); }}",
+                    i + 1,
+                    function.name,
+                    run_time.join(", ")
+                );
+            }
+        }
+        format!(
+            "
+{consts}
+peripheral Uart {{
+    write thr: u8 at 0,
+}}
+
+peripheral TestFinisher {{
+    write status: u32 at 0,
+}}
+
+peripheral UART0: Uart at 0x1000_0000;
+peripheral FINISHER: TestFinisher at 0x0010_0000;
+
+fn print_u64(n: u64) {{
+    if n >= 10 {{
+        print_u64(n / 10);
+    }}
+    UART0.thr = b'0' + (n % 10) as u8;
+}}
+
+fn check(id: u32, at_compile_time: u64, at_run_time: u64) -> u32 {{
+    if at_compile_time == at_run_time {{
+        return 0;
+    }}
+    UART0.thr = b'#';
+    print_u64(id as u64);
+    UART0.thr = b' ';
+    print_u64(at_compile_time);
+    UART0.thr = b' ';
+    print_u64(at_run_time);
+    UART0.thr = b'\\n';
+    id
+}}
+
+entry fn main() -> ! {{
+    let mut bad: u32 = 0;
+{body}    if bad == 0 {{
+        UART0.thr = b'g'; UART0.thr = b'e'; UART0.thr = b'n'; UART0.thr = b'e';
+        UART0.thr = b'r'; UART0.thr = b'a'; UART0.thr = b't'; UART0.thr = b'e';
+        UART0.thr = b'd'; UART0.thr = b' '; UART0.thr = b'o'; UART0.thr = b'k';
+        UART0.thr = b'\\n';
+        FINISHER.status = 0x5555;
+    }} else {{
+        FINISHER.status = (bad << 16) | 0x3333;
+    }}
+    loop {{}}
+}}
+
+panic fn on_panic() -> ! {{
+    FINISHER.status = (99 << 16) | 0x3333;
+    loop {{}}
+}}
+
+memory {{
+    region IMAGE {{ origin: 0x8000_0000, size: 0x0400_0000 }}
+    region RAM {{ origin: 0x8400_0000, size: 0x0400_0000 }}
+    code in IMAGE;
+    data in RAM;
+    stack in RAM {{ size: 0x0010_0000 }}
+}}
+"
+        )
     }
 
     fn use_feature(&mut self, feature: Feature) {
