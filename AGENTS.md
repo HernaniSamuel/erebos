@@ -81,6 +81,9 @@ rt/             The `core` module in Erebos, built into every program (ADR 0020,
 tests/ui/       Snapshot tests per compiler stage
 tests/e2e/      Programs run on QEMU, with expected output and exit code
 tests/layout/   Structs whose layout is checked against clang
+tests/common/   Helpers shared by the tests: QEMU harness, program generator
+tests/generated.rs Generated programs run against two oracles (ADR 0068)
+tests/rejected.rs Programs with an injected error must be rejected (ADR 0069)
 tests/architecture.rs Layer edges, wrap flags and panic counts (ADR 0063)
 scripts/check.sh The quality gate as one command
 ```

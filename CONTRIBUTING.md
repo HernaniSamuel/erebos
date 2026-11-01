@@ -120,6 +120,28 @@ instead of applying it; agents are held to it when they finish
   `codegen` and `diag`, that unoptimized IR has no `nsw`/`nuw`, and that
   the panics per file of `src/` match its `PANICS` table. Raising a count
   needs a reason in the step's `Decisions`; lower it when panics go.
+- **Generated programs** (`tests/generated.rs`, ADR 0068) generate valid
+  integer programs from a seed (`tests/common/generator.rs`), call each
+  function at compile time (the evaluator) and at run time (LLVM on QEMU),
+  unoptimized and with `-O`, and require that the results agree. It finds
+  wrong code generation and wrong constant evaluation, which no test with
+  a hand-written expected value covers for all inputs. It needs QEMU like
+  the end-to-end tests. `EREBOS_GENERATED_PROGRAMS` sets how many programs
+  run (default 20) and `EREBOS_GENERATED_SEED` the seed of the first
+  (default 0). A failure prints the seed: run it again with
+  `EREBOS_GENERATED_SEED=<seed> EREBOS_GENERATED_PROGRAMS=1`.
+- **Rejected programs** (`tests/rejected.rs`, ADR 0069) insert a snippet
+  that breaks one rule of the language into a valid program of `tests/ui`
+  or `tests/e2e`, and require the compiler to report the code of that
+  rule. It finds rules that a context hides: an error that is reported in
+  one program and missed, or reported as another code, in another. It
+  needs no QEMU. `EREBOS_REJECTED_PROGRAMS` sets how many base programs
+  receive every snippet (default 40) and `EREBOS_REJECTED_SEED` the seed
+  of the choice of programs and places (default 0); a failure prints both.
+  Every code of the diagnostics table of `docs/reference.md` needs a
+  snippet in the catalog of that file, or an entry of its exempt list with
+  the reason: a new diagnostic code fails `every_code_has_a_rule` until
+  it has one.
 - Every bug fix comes with a test that fails without the fix.
 - Every new diagnostic comes with a snapshot of its rendered output.
 

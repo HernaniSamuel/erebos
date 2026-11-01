@@ -329,10 +329,26 @@ built first.
     test in the mutants run, now that it costs 11 s.
 
 ## 6. docs: document the generated and rejected tests
-- Status: todo
+- Status: done
 - Changes: `CONTRIBUTING.md` (Tests), `AGENTS.md` (project layout),
   `docs/adr/README.md` and the two ADRs set to `Accepted` by the user,
   not by this step.
+- Tests: none; the step changes only documentation.
+- Decisions:
+  - `docs/adr/README.md` already lists 0068 and 0069 as `Accepted`
+    (commit e79b979), so it and the ADRs are not touched.
+  - The two tests get one bullet each in the Tests list of
+    `CONTRIBUTING.md`, after the architecture bullet and before the bug
+    fix rule. Each says what it finds, whether it needs QEMU, its two
+    environment variables with defaults (20 programs and 40 base
+    programs, seed 0), and how to reproduce a failure. The rejected bullet
+    also states the rule that a new diagnostic code needs a snippet or an
+    exempt reason, since `every_code_has_a_rule` will otherwise fail it
+    for a contributor who has not read the test.
+  - `AGENTS.md` project layout gets `tests/common/`, `tests/generated.rs`
+    and `tests/rejected.rs` as one line each, in the style of the others.
+  - `docs/reference.md` is not changed: it describes the language, not
+    the tests.
 
 ## Decisions made while planning
 
