@@ -362,3 +362,31 @@ built first.
   compiler already has.
 - The e2e harness moves to `tests/common` (step 2) instead of being
   copied, so that a change to how a program runs on QEMU is made once.
+
+## Left open
+
+Minor findings that the reviews left open, found on 2026-11-01.
+
+- Seed 1093 of `generated_programs_agree` disagrees only with `-O`
+  (function `f2`, reported as `#3`; `comptime` and the unoptimized
+  build agree). The compiler is out of scope here; it needs a reduced
+  program as a `tests/ui` or `tests/e2e` test and a fix. Found in
+  steps 3 and 6 (final review).
+- `injected_errors_are_rejected` (about 11 s) and the generated test are
+  not in the `additional_cargo_test_args` of `.cargo/mutants.toml`, so
+  mutation runs do not use them. Found in steps 4 and 5.
+- ADR 0068 section 1 says a divisor is a parameter; the generator uses
+  `(e | 1)` (step 1 Decisions). The ADR text and the code differ; a note
+  in the ADR's Consequences would close it. Found in the final review.
+- `tests/e2e.rs`: the `build failed` format string has a literal line
+  break instead of `\n`. Found in step 2.
+- `tests/generated.rs`: `program.source[start..].find(";\n").unwrap()`
+  has no `expect` message; `WAIT` copies `qemu::EXIT_TIMEOUT` and can
+  drift from it. Found in step 3.
+- `tests/rejected.rs`: `read_dir(...).unwrap()` in the base finder
+  panics without saying why when `tests/ui` is missing; two multi-line
+  string literals stand for `"\n## Diagnostics\n"`. Found in steps 4
+  and 5.
+- `CONTRIBUTING.md`: "the catalog of that file" in the rejected-programs
+  bullet is ambiguous; say "the `CATALOG` of `tests/rejected.rs`".
+  Found in step 6.

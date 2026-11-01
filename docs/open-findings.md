@@ -24,3 +24,10 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   say so); one that can fail needs the harness to fill RAM before the
   program starts, and the range `_start` zeroes is checked by
   `tests/elf.rs`. (M3.1)
+- Seed 1093 of `generated_programs_agree` disagrees only with `-O` (function `f2`):
+  reduce it to a `tests/ui` or `tests/e2e` program and fix it. (testing-oracles)
+- The rejected and generated tests are not in `.cargo/mutants.toml`;
+  the divisor of ADR 0068 section 1 differs from the generator (`(e | 1)`);
+  small cleanups in `tests/e2e.rs`, `tests/generated.rs`, `tests/rejected.rs`
+  and `CONTRIBUTING.md` are listed in `.claude/plans/testing-oracles.md`,
+  `## Left open`. (testing-oracles)
