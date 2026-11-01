@@ -973,6 +973,44 @@ const CATALOG: &[Snippet] = &[
         "struct InjB: u8 {\n    f: bool at 0 write 1 clears,\n}\nperipheral InjP {\n    read write r: InjB at 0,\n}\n\
          fn injected_f(p: *mut InjP) {\n    (*p).r.f |= true;\n}"
     ),
+    // Register arrays, clusters and `over`.
+    s!(
+        "resolve::missing-step",
+        Hir,
+        Items,
+        "peripheral InjB {\n    read a: u32 at 0,\n}\nperipheral InjP {\n    c: [InjB; 2] at 0,\n}"
+    ),
+    s!(
+        "resolve::misplaced-step",
+        Hir,
+        Items,
+        "peripheral InjP {\n    read a: u32 at 0 step 4,\n}"
+    ),
+    s!(
+        "resolve::not-a-peripheral",
+        Hir,
+        Items,
+        "const INJ_C: u32 = 1;\nperipheral InjP {\n    read a: u32 at 0,\n}\n\
+         peripheral INJ_P: InjP at 0x1000 over INJ_C;"
+    ),
+    s!(
+        "resolve::over-itself",
+        Hir,
+        Items,
+        "peripheral InjP {\n    read a: u32 at 0,\n}\nperipheral INJ_P: InjP at 0x1000 over INJ_P;"
+    ),
+    s!(
+        "ty::misaligned-step",
+        Typeck,
+        Items,
+        "peripheral InjP {\n    read a: [u32; 2] at 0 step 6,\n}"
+    ),
+    s!(
+        "ty::step-too-small",
+        Typeck,
+        Items,
+        "peripheral InjP {\n    read a: [u32; 2] at 0 step 0,\n}"
+    ),
 ];
 
 /// The valid programs to inject into: every root file of `tests/ui` and

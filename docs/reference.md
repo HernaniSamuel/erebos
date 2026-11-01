@@ -1,4 +1,4 @@
-# Erebos language reference (M3.3)
+# Erebos language reference (M3.4a)
 
 This describes the language as the compiler implements it today. The
 reasoning behind each rule lives in the ADRs (`docs/adr/`), cited as
@@ -80,10 +80,12 @@ not part of the target: each program declares it in its `memory` block.
   and are ordinary names elsewhere. Nor are `peripheral`, which starts an
   item only where an item starts and a name follows it; the words
   `read`, `write` and `at`, recognized only inside the two `peripheral`
-  items and, `at` before a field's bits and `read` and `write` starting
-  its effects, in a bit-field struct; `clears`, `sets`, `toggles` and
-  `modifies`, recognized only in an effect; and `in` after a register's
-  offset (see "Bit-field structs" and "Peripherals").
+  items and, `at` before a field's bits, `read` and `write` before a
+  field's name and starting its effects, in a bit-field struct; `step`
+  after an entry's offset and `over` after a peripheral's address;
+  `clears`, `sets`, `toggles` and `modifies`, recognized only in an
+  effect; and `in` after an entry's offset (see "Bit-field structs" and
+  "Peripherals").
 - **`..`** ends a literal of a bit-field struct, giving the fields it
   leaves out their defaults, and **`..=`** joins the two ends of a bit
   field's bits (see "Bit-field structs"); neither has another use, and
@@ -165,7 +167,11 @@ operand of `size_of`, `align_of` or `offset_of`, or the target of a cast
 (`0 as Uart`), it is `ty::peripheral-by-value`, reported once, and the
 type containing it causes no further error. `Option(*mut Uart)` and a
 field of type `*mut Uart` are fine. As a register's type it is
-`ty::register-type` (see "Peripherals").
+`ty::register-type` (see "Peripherals"). The one place a peripheral type
+is a type besides these is a cluster's type in another peripheral type,
+alone or as the element of one array, `[Context; 2]` (ADR 0064): an array
+of a peripheral type anywhere else, `*const [Context; 2]` included, is
+`ty::peripheral-by-value`.
 
 **`!` is not a type of memory** (ADR 0034, 0039). No value of type `!`
 exists, so it is an error (`ty::never-in-memory`) as the pointee of a
@@ -310,7 +316,10 @@ yet `&raw mut UART0` is allowed: what may be written is its registers'
 business (ADR 0058). The result is never a volatile pointer; one to a
 peripheral type, as `&raw mut UART0` gives, is accessed volatile through
 its pointee (see "Peripherals"). A register has no address
-(`ty::register-address`), and neither has a bit field, a field of a
+(`ty::register-address`), nor has a register array, an element of one or
+a cluster array taken whole; a cluster, single or an element of a cluster
+array, has one: `&raw mut PLIC.ctx[1]` is a pointer to the cluster's
+peripheral type (ADR 0064). Nor has a bit field, a field of a
 bit-field struct, which is no place in memory (`ty::bit-field-address`,
 see "Bit-field structs"). A plain `&` is reserved for references (M5).
 
@@ -350,19 +359,31 @@ let m: Lcr = 0x03 as Lcr;
 A **bit-field struct** is a struct whose name is followed by `:` and an
 **integer type**, `u8`, `u16`, `u32` or `u64`, in which it is stored. Each
 field gives the **bits** it occupies after `at`, and may give a
-**default** after `=`; effects (see "Peripherals") come between the two:
+**default** after `=`; effects (see "Peripherals") come between the two.
+A field may also declare an **access mode** before its name (ADR 0065):
 
 ```
 bit_struct = "struct" NAME ":" type "{" [ bit_field { "," bit_field } [ "," ] ] "}"
-bit_field  = [ "pub" ] NAME ":" type "at" bits [ read_effect ] [ write_effect ] [ "=" expr ]
+bit_field  = [ "pub" ] [ "read" | "write" ] NAME ":" type "at" bits [ read_effect ] [ write_effect ] [ "=" expr ]
 bits       = end [ "..=" end ]
 ```
 
 An `end` is an expression without assignment, so the `=` after the bits
 always starts the default: `at 7 = false` is bit 7 with the default
 `false`. A syntax error, such as a field without `at`, `at 0..1` (a
-half-open range is no bits) or `at` or `=` in an ordinary struct's field,
-is `parser::unexpected-token`.
+half-open range is no bits), `at` or `=` in an ordinary struct's field,
+`read write` before a field's name (a field has one mode word at most) or
+a mode after the name, is `parser::unexpected-token`.
+
+**Field access modes (ADR 0065).** `read` makes a field **read-only** and
+`write` **write-only**; a field without a mode is read and written as its
+register allows. The words are recognized by position only: `read: bool
+at 0` is a field named `read`, and `read write: bool at 0` a read-only
+field named `write`. A mode checks accesses only in a volatile place, a
+register or a place reached through a volatile pointer (see "Peripherals");
+in a local, a static or a value, modes mean nothing, and a field is read
+and written whatever its mode. A literal may name a `read` field and `..`
+gives it its default. The `typeck` and `mir` dumps show a field's mode.
 
 **Bits and field types.**
 
@@ -535,8 +556,10 @@ every bit-field struct of the program, used or not:
 `ty::bit-field-width`, `ty::bit-field-overlap`,
 `ty::field-value-out-of-range` for defaults and `ty::cycle`. When code is
 type checked and built: `ty::bit-field-address`, `ty::bit-field-offset`,
-`ty::invalid-cast`, `ty::invalid-operand`, `ty::match-type` and
-`ty::field-value-out-of-range` for known values written to a field. The
+`ty::invalid-cast`, `ty::invalid-operand`, `ty::match-type`,
+`ty::field-value-out-of-range` for known values written to a field, and,
+in a volatile place, `ty::write-to-read-only` and `ty::read-of-write-only`
+for a field's access mode (see "Peripherals"). The
 `typeck` and `mir` dumps list each bit-field struct after the structs
 (see "Building").
 
@@ -1587,8 +1610,9 @@ fn two_digits(a: u8, b: u8) -> Result(u32, ParseError) {
 | `()` | 0 | 1 |
 
 `[T]`, `!` and peripheral types have no layout a program can ask for (see
-"Types"); a peripheral type's registers are placed at their offsets, and
-it has an extent and an alignment instead (see "Peripherals"). Each
+"Types"); a peripheral type's registers, register arrays and clusters are
+placed at their offsets, and it has an extent and an alignment instead
+(see "Peripherals"). Each
 variant of an enum with payloads is laid out as a struct of its tag and its
 payload values (see "Enums"). A bit-field struct's fields have no byte
 offset (`offset_of` of one is `ty::bit-field-offset`); the struct itself
@@ -1737,7 +1761,9 @@ address are failed values too (ADR 0058): an offset or an address whose
 evaluation fails or that is no `usize`, and a register type that is `!`,
 `[T]`, reaches a failed value, or is `ty::register-type` (see
 "Peripherals", which also says when a register type reaching a failed
-value is reported). So are the bit positions and field types of a
+value is reported). So are the `step` and the array length of a register
+array or a cluster array in error, and a cluster whose type reaches a
+failed value (ADR 0064). So are the bit positions and field types of a
 bit-field struct in error, and fields whose bits are reversed, outside
 the integer or too narrow or wide for their type (ADR 0059, 0062; see
 "Bit-field structs"). A register whose bit-field struct type fails keeps
@@ -1750,6 +1776,8 @@ struct with a failed value, or a peripheral type with a failed offset or
 register type: as a field, an array element, a payload value, a type
 argument, or behind a pointer or a slice. `[u8; N]`, `Broken`, `Odd`,
 `*const Broken`, `*const [Odd]` and `Option(*const Broken)` all reach one.
+So does a peripheral type that contains itself through clusters, whose
+`ty::infinite-size` explains it (see "Peripherals").
 Such a type counts as erroneous, as one containing `!` does (see "Types"),
 and so does a peripheral whose type reaches a failed value or whose
 address failed:
@@ -1984,7 +2012,7 @@ These are errors when the operand is known, not only when it is a literal:
 |-------|------|
 | a shift amount outside 0 to the width of the shifted type minus 1, taken with its own type's sign (a negative amount is out of range) | `ty::shift-out-of-range` |
 | a divisor of `/` or `%` that is zero | `ty::division-by-zero` |
-| an array index not below the array's length | `ty::index-out-of-bounds` |
+| an array index not below the array's length, a register array's or a cluster array's included | `ty::index-out-of-bounds` |
 | a value written to a bit field, by a literal or an assignment (not a compound assignment), that does not fit in the field's bits | `ty::field-value-out-of-range` |
 
 The compound assignments (`<<=`, `>>=`, `/=`, `%=`) are checked too. When
@@ -2058,7 +2086,8 @@ run at compile time: an evaluation that needs it reports nothing more.
   `(*u).thr` is a register (see "Peripherals"), and `u[i]`, or `&raw mut
   u[i]`, is `ty::peripheral-index`, since a peripheral type has no size,
   so no stride; another device of the same type is reached through a
-  pointer to it.
+  pointer to it. A cluster array is indexed at its entry, where its step
+  is known: `(*u).ctx[i]`, not through a pointer to its element.
 
 ### Volatile accesses (ADR 0013, 0023, 0039, 0058)
 
@@ -2130,7 +2159,8 @@ assignment to a bit field, `l.f = v`, the value and its check run first,
 then the place, then the read of the whole value, then the write; in `l.f
 op= v` the check of the new field value comes after the read (ADR 0059,
 see "Bit-field structs"). In `base[index]`, the base runs before the
-index, and the bounds check before the access. A `match` runs its
+index, and the bounds check before the access; so it is for the index of a
+register array or a cluster array (ADR 0064). A `match` runs its
 scrutinee once, before any arm, and its patterns run no code (ADR 0037,
 0040). A read through a pointer, a read of a static (ADR 0030) and a read
 of a register (ADR 0058) happen exactly where they are written. A value
@@ -2209,8 +2239,8 @@ fn base() -> usize {
   two items. Peripheral types and peripherals are items like any other
   (ADR 0058): a peripheral type named like a struct of its module, or a
   peripheral named like its own type, is `resolve::duplicate-item`.
-  Register names belong to their peripheral type, as field names to their
-  struct.
+  The names of a peripheral type's entries (registers, register arrays and
+  clusters) belong to it, as field names to their struct.
 - The **built-in names**, the types `bool`, the integer types, `Option`
   and `Result`, and the functions `assert`, `len` and `slice`, are seen
   from every module, as single names, and no item, module or `use` may
@@ -2388,7 +2418,8 @@ pub fn config(baud: u32) -> Config {
   is still `resolve::private-field`.
 - Visibility changes no layout: private fields are laid out, copied and
   passed like any other, and `size_of` counts them.
-- **Registers** follow the rules of fields (ADR 0058): a register is
+- **Registers** follow the rules of fields (ADR 0058, 0064): a register,
+  a register array or a cluster is
   private to the module of its peripheral type unless declared `pub`
   (`pub read lsr: u8 at 5`), and a `pub` one is visible wherever its
   peripheral type is reachable, and only there. Where a register is not
@@ -2715,25 +2746,38 @@ pointer to the type serves both.
 - Their grammar:
 
   ```
-  peripheral_type = "peripheral" NAME "{" [ register { "," register } [ "," ] ] "}"
-  register        = [ "pub" ] access NAME ":" type "at" expr [ read_effect ] [ "in" NAME ]
+  peripheral_type = "peripheral" NAME "{" [ entry { "," entry } [ "," ] ] "}"
+  entry           = register | cluster
+  register        = [ "pub" ] access NAME ":" type "at" expr [ "step" expr ] [ read_effect ] [ "in" NAME ]
+  cluster         = [ "pub" ] NAME ":" type "at" expr [ "step" expr ] [ "in" NAME ]
   access          = "read" | "write" | "read" "write"
-  peripheral      = "peripheral" NAME ":" type "at" expr ";"
+  peripheral      = "peripheral" NAME ":" type "at" expr [ "over" path ] ";"
   ```
 
   A syntax error in either is a `parser::unexpected-token`.
 - `peripheral` starts an item only where an item starts and a name follows
   it: a `{` after the name makes a peripheral type, a `:` a peripheral,
-  and anything else is an error at that token. `read`, `write` and `at`
-  are recognized only inside the items, and a register's name is the
-  identifier just before `:`. So `read write: u8 at 0` is a `read`
-  register named `write`, while `read: u8 at 0`, a register named `read`
-  without an access mode, and `write read x: u8 at 0`, a `write` register
-  named `read` with `x` where `:` should be, are errors. After a
-  register's offset, `read` starts a read effect and `in` a group (below),
-  and `clears`, `sets`, `toggles` and `modifies` are words only in an
-  effect. Elsewhere all of them are ordinary names, of variables,
-  functions, fields or modules, and `read(x)` in a body is a call.
+  and anything else is an error at that token. `read`, `write`, `at`,
+  `step` and `over` are recognized only inside the items. An entry starts,
+  after an optional `pub`, with a name followed by `:`, which makes it a
+  cluster of that name (it may be named `read`), or otherwise with its
+  access mode, which makes it a register whose name is the identifier
+  just before `:`. So `read write: u8 at 0` is a `read` register named
+  `write`, `read: Context at 0` a cluster named `read`, and `write read
+  x: u8 at 0`, a `write` register named `read` with `x` where `:` should
+  be, is an error. A register written without its access mode, `rbr: u8
+  at 0`, is a cluster, and a cluster of a type that is no peripheral type
+  is `resolve::not-a-peripheral-type`, whose help names the missing access
+  mode when the type is one a register may have (see "Clusters"). After an
+  entry's offset, `step` starts a step, then `read` a read effect (a
+  register only; a cluster takes none) and `in` a group (below), in that
+  order, and `clears`, `sets`, `toggles` and `modifies` are words only in
+  an effect. After a peripheral's address, `over` and a path name the
+  peripheral it is a view of. Elsewhere all of them are ordinary names, of
+  variables, functions, fields or modules, and `read(x)` in a body is a
+  call. A `step` is the word after the offset only when no `:` follows it,
+  and so is `in`, so that a cluster named `step` or `in` after a missing
+  comma is the next entry, and the comma is the error reported.
 - Inside a function body, `peripheral` followed by a name is
   `parser::local-peripheral`, for either item: no expression starts with
   two names.
@@ -2748,25 +2792,29 @@ pointer to the type serves both.
 **Registers.**
 
 - A register's **access mode** comes before its name: `read` (it is
-  read-only), `write` (write-only) or `read write`. There is no default.
+  read-only), `write` (write-only) or `read write`. There is no default:
+  an entry without one is a cluster (see "Register arrays and clusters").
 - Its **type** is `u8`, `u16` or `u32`, an unsigned integer as wide as
   the register; a bit-field struct (see "Bit-field structs") whose integer
   type is one of those; or an enum without payloads whose integer type is
   one of those (ADR 0060). Its width is that integer type's. Any other
   type, as a `u64` bit-field struct, an enum on `i8` or an enum with
-  payloads, is `ty::register-type` (see "What is checked" below).
+  payloads, is `ty::register-type` (see "What is checked" below). An
+  array of such a type is a register array (see "Register arrays"); a
+  peripheral type, or an array of one, is `ty::register-type` too, its
+  help saying that a cluster has no access mode.
 - Its **offset**, after `at`, is a `usize` computed at compile time, like
   an array length (see "Compile-time execution"), in the scope of the
   module holding the peripheral type: it may name that module's private
   constants and call its functions.
 - A register is private to the module of its peripheral type unless
   declared `pub`, as a field is (see "Visibility").
-- Two registers of one type cannot share a name
-  (`resolve::duplicate-register`, at the second, labeling the first),
-  whatever their modes: a `read` and a `write` register at one offset
-  take two names, as `rbr` and `thr`. Registers of two types may share a
-  name.
-- A peripheral type may have no register: `peripheral Empty {}`.
+- Two entries of one type (registers, register arrays and clusters) cannot
+  share a name (`resolve::duplicate-register`, at the second, labeling the
+  first), whatever their modes: a `read` and a `write` register at one
+  offset take two names, as `rbr` and `thr`. Entries of two types may
+  share a name.
+- A peripheral type may have no entry: `peripheral Empty {}`.
 
 **Peripherals.**
 
@@ -2778,37 +2826,52 @@ pointer to the type serves both.
 - Its **address**, after `at`, is a `usize` computed at compile time in
   the scope of its module, like an offset. It may be computed from
   another peripheral's, as `(&raw const UART0 as usize) + 0x100`.
+- Its `over`, after the address, names another peripheral it is a second
+  view of (see "Peripherals over others").
 - Every offset and address is computed, and every peripheral type and
   peripheral checked, whether code uses them or not.
 
 **Layout.**
 
-- A peripheral type's **extent** is the end of the register that ends
-  last, `offset + width`, wherever it is declared, and 0 for an empty
-  type. It is computed exactly: a `u32` at `0xFFFF_FFFC` gives an extent
-  of `0x1_0000_0000`, which no `usize` holds. Its **alignment** is the
-  width of its widest register, and 1 for an empty type. `Uart16550` above
-  has extent 6 and alignment 1.
+- An entry's **elements** are its one register or cluster, or the `N`
+  elements of an array, element `i` at `offset + i * step`. An element
+  **occupies** `[start, start + size)`, `size` being a register's width or
+  a cluster's extent; an array of 0 elements occupies nothing.
+- A peripheral type's **extent** is the end of the last byte any of its
+  entries occupies, `offset + width` for a register, wherever it is
+  declared, and 0 for an empty type. It is computed exactly: a `u32` at
+  `0xFFFF_FFFC` gives an extent of `0x1_0000_0000`, which no `usize` holds.
+  Since an extent is only compared with `0x1_0000_0000`, it **saturates**
+  above that, where nested arrays could pass 2⁶⁴, and a diagnostic shows
+  such an extent as past 2³². Its **alignment** is the largest of its
+  registers' widths and its clusters' alignments, and 1 for an empty type;
+  every entry counts, an array of 0 elements too. `Uart16550` above has
+  extent 6 and alignment 1.
 - A peripheral covers `[address, address + extent)`; one of an empty type
   covers no byte.
-- A register's offset must be a multiple of its width
+- An entry's offset must be a multiple of its element's alignment, a
+  register's width or a cluster type's alignment
   (`ty::misaligned-register`), and a peripheral's address a multiple of
   its type's alignment (`ty::misaligned-peripheral`), so that every
   register access is aligned, as its one instruction assumes (ADR 0019,
-  0023).
-- Two registers of one type may share no byte (`ty::register-overlap`),
-  except when one is `read` and the other `write`: a read can then only
-  mean one of them and a write the other, as the 16550's `rbr` and `thr`
-  at offset 0. A `read write` register shares bytes with no other. This
-  applies to two registers in the same alternate group, or both in none
-  (see "Alternate groups" below).
+  0023). A step must be a multiple of it too (`ty::misaligned-step`).
+- Two entries of one type may share no byte (`ty::register-overlap`),
+  except when both are registers or register arrays, one `read` and the
+  other `write`: a read can then only mean one of them and a write the
+  other, as the 16550's `rbr` and `thr` at offset 0. A `read write`
+  register shares bytes with no other, and a cluster, which has no access
+  mode, with none. This applies to two entries in the same alternate
+  group, or both in none (see "Alternate groups" below). A cluster
+  element occupies its extent, the gaps between its registers included, so
+  a register inside a cluster's range is an overlap even where the
+  cluster has no register there. Entries whose elements occupy nothing
+  take part in no overlap check, nor do those whose step is too small.
 - Two peripherals may share no byte (`ty::peripheral-overlap`), and a
   peripheral must end at `0x1_0000_0000` or below
   (`ty::peripheral-out-of-range`): unlike a region, it needs no address
   one past its end, so its last byte may be the last of the address
-  space.
-- Devices that share addresses (SVD's `alternatePeripheral`) cannot be
-  declared: two peripherals sharing a byte are `ty::peripheral-overlap`.
+  space. A peripheral that is `over` another is not checked for overlap
+  with it (see "Peripherals over others").
 - Peripherals are not checked against the regions of the `memory` block:
   one placed over a region is not detected, and writing its registers
   writes that memory.
@@ -2836,8 +2899,8 @@ the register's type:
   writing one is `ty::write-through-const`, as through any `*const`
   pointer, and writing a `read` register through one reports both
   errors, each a fault of its own.
-- A name that is no register of the type is `ty::unknown-register`, whose
-  help lists the registers visible there; a register that is not visible
+- A name that is no entry of the type is `ty::unknown-register`, whose
+  help lists the entries visible there; an entry that is not visible
   there is `ty::private-register`. `u.thr`, with `u` a pointer, is
   `ty::no-fields`: dereference it first, `(*u).thr`.
 - `&raw` of a register is `ty::register-address`: the pointer would reach
@@ -2848,6 +2911,133 @@ the register's type:
   `ty::peripheral-by-value`, once: a device is reached one register at a
   time. Written whole through a `*const` pointer, `*c = 0` is that error
   alone. `UART0[0]` is `ty::cannot-index`.
+
+**Register arrays and clusters (ADR 0064).** A device often repeats a
+register, or a block of registers, at a fixed distance. With the PLIC of
+QEMU's `virt`:
+
+```
+peripheral Plic {
+    pub read write priority: [u32; 96] at 0x0000,
+    pub read pending: [u32; 3] at 0x1000,
+    pub enables: [PlicEnables; 2] at 0x2000 step 0x80,
+    pub ctx: [PlicContext; 2] at 0x20_0000 step 0x1000,
+}
+
+peripheral PlicEnables {
+    pub read write word: [u32; 3] at 0x00,
+}
+
+peripheral PlicContext {
+    pub read write threshold: u32 at 0x00,
+    pub read write claim: u32 at 0x04 read modifies,
+}
+
+peripheral PLIC: Plic at 0x0C00_0000;
+
+fn route(c: *mut PlicContext, level: u32) {
+    (*c).threshold = level;
+}
+
+fn setup(source: usize) {
+    PLIC.priority[source] = 1;                 // one store at 0x0C00_0000 + 4 * source
+    PLIC.enables[0].word[source / 32] |= 1 << (source as u32 % 32);
+    route(&raw mut PLIC.ctx[1], 0);            // one driver for every context
+    let claimed: u32 = PLIC.ctx[0].claim;      // one load
+}
+```
+
+- A register whose type is an array, `[T; N]` with `T` a register type, is
+  a **register array**: `N` registers of type `T`, the first at the
+  register's offset and each next one `step` bytes further. `N` is an array
+  length. `step`, after the offset, is a `usize` computed at compile time
+  in the same scope; left out, it is the register's width. The distance
+  need not be the width: `a: [u32; 4] at 0 step 8` is four registers 8
+  bytes apart. Every element has the array's access mode, read effect and
+  group, and is read and written as a register of type `T` declared with
+  them.
+- An array of arrays, `[[u32; 3]; 2]`, is no register type
+  (`ty::register-type`, whose help names clusters): a register repeated in
+  two dimensions is a register array in a cluster array, as `enables`
+  above.
+- An entry **without an access mode** is a **cluster**. Its type is a
+  peripheral type, `PlicContext`, or an array of one, `[PlicContext; 2]`
+  (a **cluster array**), and it places that type's registers at its
+  offset. It may be `pub`, and be in an alternate group; it has no read
+  effect of its own, its registers have theirs. The cluster's type is a
+  type declared on its own, so a driver of `PlicContext` serves every
+  context through a pointer to it, as it would a peripheral of that type.
+  Clusters nest: a cluster's type may hold clusters.
+- **A cluster array needs `step`** (`resolve::missing-step`): a peripheral
+  type's extent grows when a register is added at its end, and a step taken
+  from it would move every element but the first without a word changing at
+  the cluster. A single cluster takes no `step`, and neither does a
+  register that is no array (`resolve::misplaced-step`).
+- Any other type of a cluster is `resolve::not-a-peripheral-type`, as for a
+  peripheral, and is the entry's only error (not also a missing or
+  misplaced step). When the type is one a register may have (`u8`, `u16`
+  or `u32`, a bit-field struct or an enum without payloads on one of them,
+  or an array of one), the entry is most likely a register written without
+  its access mode, and the help says that a register starts with `read`,
+  `write` or `read write`. A `u64`, a struct or a pointer type gets a help
+  on what a cluster's type is.
+- Only one array level is a cluster array: `[[Context; 2]; 2]` is
+  `resolve::not-a-peripheral-type`.
+- A peripheral type that contains itself through clusters, directly or
+  through others, is `ty::infinite-size`, naming every type of the cycle,
+  with a help of its own: the cycle is broken by removing a cluster, since
+  a register cannot hold a pointer. Every type of the cycle has no layout
+  and reaches a failed value (see "Failed values" below).
+- **Steps.** The elements of one array may not overlap: a step smaller than
+  the element's size is `ty::step-too-small`, whatever the length, as the
+  declaration states the step. A step of 0 is therefore accepted only for
+  elements of size 0, an empty cluster type. A step of 2 for a `u32` is
+  both misaligned and too small, and both are reported: each is a fault of
+  its own. Neither is a failed value: the type keeps its layout, so the
+  bodies using it are still checked and built.
+
+*Accesses to them.*
+
+- **`P.a[i]`**, with `a` a register array, is the place of element `i`, a
+  register of type `T`, read and written as above (access mode, read
+  effect, group, fields); `i` is a `usize`. **`P.c.r`** and **`P.c[i].r`**,
+  with `c` a cluster or a cluster array, are the register `r` of a
+  cluster element, `PLIC.ctx[1].threshold`, and the same holds through a
+  pointer, `(*u).ctx[1].threshold`. Visibility is checked at each step:
+  `ctx` where `Plic`'s entries are visible, `threshold` where
+  `PlicContext`'s are.
+- **The index is checked.** One not below the array's length calls the
+  panic function with the reason `IndexOutOfBounds`, located at the `[`
+  (see "Panic information"); one known at compile time is
+  `ty::index-out-of-bounds`. The index runs after the place it indexes
+  and before the access, as for arrays: in `PLIC.ctx[i()].threshold =
+  v()`, `v()` runs first (the value of an assignment runs before its
+  place), then `i()`, the bounds check, and the store. There is no
+  unchecked access to a register array. With `-O`, LLVM removes a check it
+  proves redundant, as for `i & 3` indexing an array of 4.
+- **The address** of element `i` is the peripheral's, plus the entry's
+  offset, plus `i * step`, computed with wrapping `usize` arithmetic; a
+  register's access through it is one volatile load or store, as any.
+- **`&raw const P.c` and `&raw mut P.c[i]`** give a `*const PlicContext` or
+  a `*mut PlicContext` to the element's address. Through a `*const`
+  pointer, `&raw mut` of a cluster is `ty::address-of-immutable`, as for
+  any place reached through one. `&raw` of a register array or of a cluster
+  array taken whole, or of an element of a register array, is
+  `ty::register-address`: no pointer type holds an array's step.
+- **An entry that is an array is reached only through an index, and a
+  cluster only through a register or `&raw`.** `P.a`, `P.c`, and a cluster
+  array's element `P.c[i]`, read or written as a whole, are
+  `ty::peripheral-by-value`, once. Indexing an entry that is no array, a
+  single cluster `P.c[0]` or a register `P.r[0]`, is `ty::cannot-index`
+  (a `write` register indexed is not also read). An index that is not a
+  `usize` is `ty::mismatched-types`.
+- Indexing a pointer to a peripheral type stays `ty::peripheral-index`: a
+  cluster array is indexed at the entry, where its step is known.
+- **At compile time**, a register access through any of these is
+  `eval::volatile-access`. `&raw` of a cluster element in a constant, a
+  static's initializer or a `comptime` block is a pointer made from an
+  integer, as `&raw` of a peripheral is: `&raw const PLIC.ctx[1] as usize`
+  is `0x0C20_1000`. An index out of bounds there is `eval::panic`.
 
 **Registers with fields (ADR 0060).** With `WordLength` and `Lcr` as in
 "Bit-field structs":
@@ -2894,9 +3084,68 @@ fn setup() {
   `ty::write-to-read-only`, and on a `write` one `ty::read-of-write-only`,
   labeled as read by the field assignment. A field read from a `write`
   register is `ty::read-of-write-only` too.
-- Fields have no access modes of their own: every field is read and
-  written as its register allows.
+- A field without an access mode is read and written as its register
+  allows; one with a mode follows it too (below).
 - `&raw` of a register's bit field is `ty::bit-field-address` alone.
+
+**Field access modes (ADR 0065).** A bit field may be `read` (read-only) or
+`write` (write-only) (see "Bit-field structs"):
+
+```
+struct Status: u32 {
+    pub read busy: bool at 0,
+    pub write start: bool at 1,
+    pub mode: u8 at 4..=5 = 0,
+    pub write clear: bool at 8 write 1 clears,
+}
+
+peripheral Device {
+    read write status: Status at 0x0,
+}
+
+peripheral DEV: Device at 0x1000_0000;
+
+fn go() {
+    DEV.status.mode = 1;          // fine: one load, one store
+    DEV.status.start = true;      // fine: a write-only field is written
+    let b: bool = DEV.status.busy;                   // fine
+    let mut s: Status = DEV.status;
+    s.busy = true;                // fine: a local, modes mean nothing
+}
+```
+
+- **In a volatile place, a register or a place reached through a volatile
+  pointer, a field's mode is checked as a register's is.** A field
+  assignment or a compound assignment to a `read` field is
+  `ty::write-to-read-only`: `DEV.status.busy = true`. A read of a `write`
+  field, `DEV.status.start`, or a compound assignment to one, is
+  `ty::read-of-write-only`. A `write` field assigned with `=` and a `read`
+  field read are never reported. In ordinary memory, a local or a static,
+  modes mean nothing, as effects do not.
+- **The register's own mode is checked too.** When both forbid the access
+  with the same code, as a field assignment to a `read` field of a `read`
+  register, it is one diagnostic labeling the register and the field: fixing
+  one cause leaves the other, and its help says so. When they forbid it
+  with different codes, each is reported: a field assignment to a `read`
+  field of a `write` register is `ty::read-of-write-only` for the register
+  (the assignment reads it) and `ty::write-to-read-only` for the field, and
+  a compound assignment to a `write` field of a `read` register is
+  `ty::write-to-read-only` for the register and `ty::read-of-write-only` for
+  the field. A field assignment to a `write` field of a `write` register
+  is still `ty::read-of-write-only` for the register, which reads itself to
+  keep the other bits.
+- A field assignment to another field keeps the bits of `read` and `write`
+  fields without a write effect as read, as reserved bits are kept: the
+  hardware ignores the write of a read-only field, and what a write-only
+  field reads back is written back. **A field with a write effect gets the
+  value that has no effect, whatever its mode**: `DEV.status.mode = 1`
+  writes `clear` as 0.
+- A whole read gives every field and a whole write writes every field: a
+  literal may name a `read` field, and `..` gives it its default. A mode
+  combines with effects without a check (a `read` field with a write
+  effect, a `write` field with a read effect), and a field may have a mode
+  its register lacks (a `write` field in a `read` register, which no access
+  reaches): both are accepted and document the device.
 
 **Write effects.** A field of a bit-field struct may declare what a write
 does to it, after its bits and its read effect, if any:
@@ -2998,6 +3247,46 @@ group.
   register, grouped or not. A group where nothing overlaps only documents
   a mode.
 - The `typeck` and `mir` dumps show a register's group and read effect.
+- A cluster may be in a group too, after its offset and its step:
+  `pub ctx: [Context; 2] at 0x100 step 0x40 in dlab`. It is checked for
+  overlap against the entries of its group, or of none, like a register,
+  with a cluster's mode being none (see "Layout").
+
+**Peripherals over others (ADR 0066).** A peripheral may name, after its
+address, the peripheral it overlaps, as SVD's `alternatePeripheral` does,
+or as a cluster's type declared as a peripheral of its own over the device
+that holds it:
+
+```
+peripheral APB_CTRL: ApbCtrl at 0x6002_6000;
+peripheral RNG: Rng at 0x6002_6000 over APB_CTRL;
+
+peripheral PLIC: Plic at 0x0C00_0000;
+peripheral PLIC_M0: PlicContext at 0x0C20_0000 over PLIC;
+```
+
+- `over` names a peripheral by a path (see "Modules and paths"), resolved
+  and checked for visibility as any path; it may name a peripheral
+  declared later. A path naming nothing is `resolve::unknown-name` or
+  `resolve::unknown-path`, a peripheral not visible
+  `resolve::private-item`, a module `resolve::misused-module`, and a name
+  of anything else (a constant, a struct, a peripheral type, a variant)
+  `resolve::not-a-peripheral`. A peripheral naming itself is
+  `resolve::over-itself`.
+- **Two peripherals are not checked for overlap when one names the other,
+  or both name the same one**: the second view and the first, and two
+  alternative views of one device. Any other pair is checked as before, so
+  with `C over B` and `B over A`, `C` is checked against `A`. A peripheral
+  `over` another that it does not overlap is accepted: the word then
+  documents a view.
+- Nothing else changes: each peripheral's alignment and range are checked,
+  and accesses are built as to any peripheral. The compiler does not know
+  which view the device shows, as for alternate groups. An `over` written
+  by mistake hides a real overlap with the peripheral it names.
+- The help of `ty::peripheral-overlap` names `over` for a second view of a
+  device. The `typeck` dump shows the peripheral named (`peripheral RNG:
+  Rng at 0x60026000 over APB_CTRL covers ...`); the `mir` dump does not,
+  since `over` changes no access.
 
 **Pointers to peripheral types.** `&raw const UART0` and `&raw mut UART0`
 give a `*const Uart16550` and a `*mut Uart16550`, through which a driver
@@ -3042,23 +3331,28 @@ serves any instance, as `putc` above does:
   computed first, as for a struct's array length naming a pointer to the
   struct (see "Failed lengths and alignments").
 
-**Failed values.** A register's offset, a register's type in error and a
-peripheral's address are failed values (see "Failed lengths and
-alignments"), each reported once, where it is written:
+**Failed values.** An entry's offset, a register's type in error, the
+`step` and the length of a register array or a cluster array in error, a
+cluster whose type reaches a failed value, and a peripheral's address are
+failed values (see "Failed lengths and alignments"), each reported once,
+where it is written:
 
 - A register's type is in error when it is `!` (`ty::never-in-memory`,
   with a help of its own), `[T]` (`ty::unsized`), a type reaching a
   failed value, as a `[u8; N]` whose length failed, or no register type
   (`ty::register-type`). A type already in error is not also
   `ty::register-type`.
-- A peripheral type with a failed offset or register type reaches a
-  failed value, and so does a type containing a pointer to it; a
-  peripheral whose type reaches one, or whose address failed, is
-  erroneous. Code that names such a peripheral, or whose types reach such
-  a peripheral type, is not built (see "Failed lengths and alignments").
-- The checks of "Layout" that need a failed value are skipped: a
-  register whose offset or type failed takes part in no other check, and
-  neither does an erroneous peripheral. A misaligned register, and a
+- A peripheral type with a failed offset, step, length or register type, a
+  cluster that reaches a failed value, or one in a `ty::infinite-size`
+  cycle, which has no layout, reaches a failed value, and so does a type
+  containing a pointer to it; a peripheral whose type reaches one, or whose
+  address failed, is erroneous. Code that names such a peripheral, or whose
+  types reach such a peripheral type, is not built (see "Failed lengths and
+  alignments"). A misaligned or too-small `step` is no failed value: the
+  type keeps its layout.
+- The checks of "Layout" that need a failed value are skipped: an entry
+  whose offset, step, length or type failed takes part in no other check,
+  and neither does an erroneous peripheral. A misaligned register, and a
   misaligned or out-of-range peripheral, still take part in the overlap
   checks.
 - An offset or an address computed from an erroneous peripheral, as
@@ -3071,12 +3365,16 @@ holding a `*mut B`), stays silent only when that type's failure is
 explained by an error reported elsewhere, so that a program in error
 always reports one:
 
-- A peripheral type's failure is **explained** when it has an offset that
-  failed, or a register type in error in itself (`!`, `[T]`, a type
-  reaching a failed length or alignment) or that is no register type and
-  mentions no peripheral type (`u64`, `bool`, `*mut u32`, a struct), or,
-  transitively, a register whose type, no register type, reaches a type
-  whose failure is explained.
+- A peripheral type's failure is **explained** when it has an offset, a
+  step or a length that failed, a cluster array without `step`, a cluster
+  whose type is in error, is in a `ty::infinite-size` cycle (which is its
+  explanation, whatever the other values are), or has a register type in
+  error in itself (`!`, `[T]`, a type reaching a failed length or
+  alignment) or that is no register type and mentions no peripheral type
+  (`u64`, `bool`, `*mut u32`, a struct), or, transitively, a register whose
+  type, no register type, reaches a type whose failure is explained. So
+  `read write r: *mut A at 0` with `A` in a cluster cycle reports nothing
+  more.
 - A register type reaching a type whose failure is explained stays
   silent: with `peripheral B { read write s: u64 at 0 }`, `peripheral A {
   read write r: *mut B at 0 }` and `peripheral C { read write t: *mut A at
@@ -3094,11 +3392,17 @@ always reports one:
 | Code | Case |
 |------|------|
 | `parser::local-peripheral` | a peripheral type or a peripheral inside a function body |
-| `resolve::duplicate-register` | two registers with one name in a peripheral type |
-| `resolve::not-a-peripheral-type` | the type of a peripheral names a type that is no peripheral type |
+| `resolve::duplicate-register` | two entries with one name in a peripheral type |
+| `resolve::not-a-peripheral-type` | the type of a peripheral, or of a cluster, names a type that is no peripheral type (a cluster's may be an array of one); the help of a cluster names the access mode when the type is a register's |
+| `resolve::missing-step` | a cluster array without `step` |
+| `resolve::misplaced-step` | `step` on a register or a cluster that is no array |
+| `resolve::not-a-peripheral` | `over` naming something that is no peripheral |
+| `resolve::over-itself` | a peripheral naming itself after `over` |
 | `resolve::misplaced-attribute` | an attribute on a peripheral type or a peripheral |
 
-Names shared with other items of the module are `resolve::duplicate-item`
+A name of nothing after `over` is `resolve::unknown-name` or
+`resolve::unknown-path`, and a peripheral not visible
+`resolve::private-item`, as for any path. Names shared with other items of the module are `resolve::duplicate-item`
 (see "Modules and paths").
 
 Once the values are computed, during type checking, so whatever stage
@@ -3107,12 +3411,15 @@ skipped:
 
 | Code | Case |
 |------|------|
-| `ty::register-type` | a register whose type is not `u8`, `u16` or `u32`, or a bit-field struct or an enum without payloads on one of them, at the type |
-| `ty::misaligned-register` | a register's offset that is not a multiple of its width, at the offset, labeling the type |
-| `ty::register-overlap` | two registers of one alternate group, or both of none, sharing a byte, unless one is `read` and the other `write`; once per pair, at the later register in the type, labeling the earlier |
+| `ty::register-type` | a register whose type is not `u8`, `u16` or `u32`, or a bit-field struct or an enum without payloads on one of them, or an array of such a type, at the type; an array of arrays, with a help naming clusters; a peripheral type or an array of one, with a help saying a cluster has no access mode |
+| `ty::misaligned-register` | an entry's offset that is not a multiple of its element's alignment (a register's width, a cluster type's alignment), at the offset, labeling the type |
+| `ty::misaligned-step` | a `step` that is not a multiple of the element's alignment, at the step |
+| `ty::step-too-small` | a `step` smaller than the element's size, whatever the length, at the step |
+| `ty::register-overlap` | two entries of one alternate group, or both of none, sharing a byte, unless both are registers or register arrays, one `read` and the other `write`; once per pair, at the later entry in the type, naming the first shared byte and labeling the earlier |
+| `ty::infinite-size` | a peripheral type that contains itself through clusters, naming every type of the cycle |
 | `ty::misaligned-peripheral` | a peripheral's address that is not a multiple of its type's alignment, at the address, labeling the type |
 | `ty::peripheral-out-of-range` | a peripheral whose end, `address + extent`, is above `0x1_0000_0000` |
-| `ty::peripheral-overlap` | two peripherals sharing a byte; once per pair, at the later peripheral, labeling the earlier |
+| `ty::peripheral-overlap` | two peripherals sharing a byte, unless one is `over` the other or both are `over` the same one; once per pair, at the later peripheral, labeling the earlier |
 
 "Later" for peripherals is as for the `memory` block: in the order of
 files, numbered depth first (see "Modules and paths"), then of positions
@@ -3122,22 +3429,26 @@ When code is type checked:
 
 | Code | Case |
 |------|------|
-| `ty::peripheral-by-value` | a peripheral type where a value would have it (see "Types"), or a peripheral or `*u` read, written or passed as a whole |
+| `ty::peripheral-by-value` | a peripheral type where a value would have it (see "Types"), an array of one anywhere but as a cluster's type, or a peripheral, `*u`, register array, cluster or cluster array's element read, written or passed as a whole |
 | `ty::volatile-peripheral` | `volatile` on a pointer to a peripheral type |
 | `ty::peripheral-index` | indexing a pointer to a peripheral type |
-| `ty::unknown-register` | a name that is no register of the peripheral type |
-| `ty::private-register` | a register not visible where it is named |
-| `ty::write-to-read-only` | a write, a compound assignment or a field assignment to a `read` register |
-| `ty::read-of-write-only` | a read, a compound assignment or a field assignment of a `write` register, or a field read from one |
-| `ty::register-address` | `&raw` of a register |
+| `ty::cannot-index` | an index of an entry that is no array (and of any value that is no array or pointer) |
+| `ty::unknown-register` | a name that is no entry of the peripheral type |
+| `ty::private-register` | an entry not visible where it is named |
+| `ty::write-to-read-only` | a write, a compound assignment or a field assignment to a `read` register; a field assignment or a compound assignment to a `read` field in a volatile place |
+| `ty::read-of-write-only` | a read, a compound assignment or a field assignment of a `write` register, or a field read from one; a read of a `write` field, or a compound assignment to one, in a volatile place |
+| `ty::register-address` | `&raw` of a register, of a register array or a cluster array taken whole, or of an element of a register array |
 | `ty::bit-field-address` | `&raw` of a bit field, a register's too |
 | `ty::read-with-effects` | a field assignment or a compound assignment to a place whose reads have effects, or to one of its fields |
 | `ty::compound-write-effect` | a compound assignment to a field with a write effect in a volatile place |
+| `ty::index-out-of-bounds` | an index known at compile time not below the length of a register array or a cluster array |
 
 **The code.** A register reached from a peripheral is accessed at a
 constant address, the peripheral's plus the register's offset, with no
 symbol, storage or indirection for the peripheral; one reached through a
-pointer, at the pointer plus the offset. Until M5, any code that can name
+pointer, at the pointer plus the offset. An element of a register array or
+a cluster array is at that address plus `i * step`, `i` being checked
+against the length first (see "Register arrays and clusters"). Until M5, any code that can name
 a peripheral reaches it, as with a `static mut`; ownership of peripherals
 is M5's.
 
@@ -3259,7 +3570,7 @@ clang's.
   | Reason | Checked by | Located at |
   |--------|------------|------------|
   | `DivisionByZero` | `a / b`, `a % b`, `a /= b`, `a %= b` (ADR 0007) | the operator |
-  | `IndexOutOfBounds` | `a[i]`, `(*s)[i]` (ADR 0021, 0031) | the `[` |
+  | `IndexOutOfBounds` | `a[i]`, `(*s)[i]` (ADR 0021, 0031), `P.a[i]` and `P.c[i]` with `a` a register array and `c` a cluster array (ADR 0064) | the `[` |
   | `AssertionFailed` | `assert(c)`, `assert(c, msg)` (ADR 0029, 0031) | `assert` |
   | `NoVariant` | a `match` without a catch-all arm (ADR 0036, 0042) | `match` |
   | `NoVariant` | `e?` (ADR 0046) | the `?` |
@@ -3333,23 +3644,32 @@ prints a compiler stage instead: `tokens`, `ast`, `hir`, `typeck`, `mir`,
   register's offset as `comptime fn offset`, a peripheral's address as
   `comptime fn address`, a bit position of a bit field as `comptime fn
   bits` and a bit field's default as `comptime fn default`.
-- Both list each peripheral type, by path, with its registers' types and
+- Both list each peripheral type, by path, with its entries' types and
   offsets, its extent and its alignment, and each peripheral with its type
   and address (see "Peripherals"). `typeck` lists them between the
-  `memory` block and the structs, with each register's visibility and mode
+  `memory` block and the structs, with each entry's visibility and mode
   and the range each peripheral covers; `mir` lists them after the enums
-  and before the statics, numbering the registers as the projections that
-  reach them name them (`(*_1).1`). Each register also shows its alternate
-  group; `typeck` shows its read effect too, in the order of the syntax
-  (`read wide: u32 at 0x4 read clears in ctrl`), while `mir` shows only
-  the group, after the offset (`3 dll: u8 at 0x0 in dlab`).
+  and before the statics, numbering the entries as the projections that
+  reach them name them (`(*_1).1`). Each entry also shows its alternate
+  group; `typeck` shows a register's read effect too, in the order of the
+  syntax (`read wide: u32 at 0x4 read clears in ctrl`), while `mir` shows
+  only the group, after the offset (`3 dll: u8 at 0x0 in dlab`). An entry
+  that is an array shows its type with its length and its step: `typeck`
+  after the offset, with the step in force (the width by default), as in
+  `pub read write priority: [u32; 96] at 0x0 step 0x4`, and `mir` before
+  it, as in `0 priority: [u32; 96] step 0x4 at 0x0`; a cluster shows no
+  mode (`pub ctx: [PlicContext; 2] at 0x200000 step 0x1000`). A type
+  whose extent passes 2³² shows `extent past 2³²` in `typeck`. A
+  peripheral `over` another shows it in `typeck` after the address (`peripheral
+  RNG: Rng at 0x60026000 over APB_CTRL covers [...)`), and not in `mir`.
 - Both list each bit-field struct, after the structs and before the enums:
   `typeck` as `struct Lcr: u8 { dlab: bool at 7 = false, ... }`, with each
-  field's type, bits, effects and default (the variant's path for an
-  enum); `mir` with each field's type, an enum's shown as its integer, and
-  its bits, as `struct Lcr: u8 { dlab: bool at 7 }`, without defaults or
-  effects. A bit field access is labeled `bit field NAME` in `typeck`, and
-  a literal `struct Lcr` or `struct Lcr ..` when it ends with `..`.
+  field's mode (`read busy: bool at 0`), type, bits, effects and default
+  (the variant's path for an enum); `mir` with each field's mode and type,
+  an enum's shown as its integer, and its bits, as `struct Lcr: u8 { dlab:
+  bool at 7 }`, without defaults or effects. A bit field access is labeled
+  `bit field NAME` in `typeck`, and a literal `struct Lcr` or `struct Lcr
+  ..` when it ends with `..`.
 
 See `CONTRIBUTING.md` for setup and running on QEMU.
 
@@ -3368,7 +3688,7 @@ Every error has a stable code, shown with the message.
 | `lexer::invalid-byte` | malformed byte literal, or a character or escape not allowed in a byte literal or byte string |
 | `lexer::unterminated-byte` | byte literal without closing `'` |
 | `lexer::unterminated-byte-string` | `b"` without its closing `"` on the same line |
-| `parser::unexpected-token` | a token where it cannot appear, such as `_` as a name or a value, `pub` before a variant, or a `use` of a path made only of `crate`, `super` or `core`; in a bit-field struct, a field without `at`, half-open bits (`at 0..1`), a second effect of a kind, an effect word that is none, `write 2 clears`; in an ordinary struct, `at` or `=` after a field's type; a `..` that is not last in a literal |
+| `parser::unexpected-token` | a token where it cannot appear, such as `_` as a name or a value, `pub` before a variant, or a `use` of a path made only of `crate`, `super` or `core`; in a bit-field struct, a field without `at`, half-open bits (`at 0..1`), a second effect of a kind, an effect word that is none, `write 2 clears`; in an ordinary struct, `at` or `=` after a field's type; a `..` that is not last in a literal; in a peripheral type, an entry that starts with neither an access mode nor a name followed by `:`, a `step` without its value or after the read effect or the group, a read effect on a cluster, `over` without a path or after the `;`; `read write` on a bit field, or a mode after its name |
 | `parser::unclosed-block` | `{` without its `}` |
 | `parser::let-without-type` | `let` without `: Type`, also in a pattern |
 | `parser::chained-comparison` | `a < b < c` |
@@ -3431,8 +3751,12 @@ Every error has a stable code, shown with the message.
 | `resolve::duplicate-placement` | `code`, `data` or `stack` placed twice |
 | `resolve::missing-placement` | `code`, `data` or `stack` not placed |
 | `resolve::stack-with-code` | the stack placed in the code's region |
-| `resolve::duplicate-register` | two registers with one name in a peripheral type |
-| `resolve::not-a-peripheral-type` | the type of a peripheral names a type that is no peripheral type |
+| `resolve::duplicate-register` | two entries (registers, register arrays or clusters) with one name in a peripheral type |
+| `resolve::not-a-peripheral-type` | the type of a peripheral, or of a cluster, names a type that is no peripheral type (a cluster's may be an array of one); the help of a cluster names the access mode when the type is a register's |
+| `resolve::missing-step` | a cluster array without `step` |
+| `resolve::misplaced-step` | `step` on a register or a cluster that is no array |
+| `resolve::not-a-peripheral` | `over` naming something that is no peripheral |
+| `resolve::over-itself` | a peripheral naming itself after `over` |
 | `resolve::outside-loop` | `break`/`continue` outside a loop |
 | `resolve::break-value-in-while` | `break value` in a `while` |
 | `resolve::return-in-comptime` | `return` or `?` in code run at compile time on its own: a `comptime` expression or block, the initializer of a constant or static, a variant's value, an array length, a repeat count, an `#[align(N)]` argument, a value of a `memory` block, a register's offset or a peripheral's address |
@@ -3448,8 +3772,8 @@ Every error has a stable code, shown with the message.
 | `ty::invalid-cast` | `as` between types that do not convert, a slice cast the table refuses, any cast to `!` or to an enum, or from an enum with payloads; to a bit-field struct from anything but its integer type (itself included), or from one to anything but an integer type |
 | `ty::pointer-cast-width` | thin pointer cast to or from an integer type other than `usize` |
 | `ty::deref-non-pointer` | `*` on a value that is not a pointer |
-| `ty::cannot-index` | indexing a value that is not an array or a pointer |
-| `ty::index-out-of-bounds` | index known at compile time not below the array's length |
+| `ty::cannot-index` | indexing a value that is not an array or a pointer, a register or a single cluster included |
+| `ty::index-out-of-bounds` | index known at compile time not below the array's length, a register array's or a cluster array's included |
 | `ty::slice-pointer-index` | indexing a slice pointer directly (`s[i]`); write `(*s)[i]` |
 | `ty::no-fields` | field access on a value with neither fields nor registers |
 | `ty::unknown-field` | field access to a field the struct does not have |
@@ -3465,7 +3789,7 @@ Every error has a stable code, shown with the message.
 | `ty::volatile-aggregate` | volatile access to a whole struct, array or enum with payloads, or to a slice stored in memory |
 | `ty::volatile-packed-field` | volatile access to a possibly misaligned place inside a packed struct, a bit-field struct on `u16` or `u32` included |
 | `ty::too-large` | a value larger than half the address space |
-| `ty::infinite-size` | structs and enums that contain themselves, directly, through each other or through `Option` and `Result` |
+| `ty::infinite-size` | structs and enums that contain themselves, directly, through each other or through `Option` and `Result`; peripheral types that contain themselves through clusters |
 | `ty::unsized` | `[T]` where a size is needed, or `*s` read or written whole |
 | `ty::never-in-memory` | `!` as a pointee, slice element, field, payload type, type argument of `Option` or `Result`, array element, register type, the type of a static, `extern static`, `const` or `comptime` value, a layout query operand, or under `&raw` |
 | `ty::invalid-align` | `#[align(N)]` on a struct or static with `N` not a power of two, too large or below the natural alignment |
@@ -3491,20 +3815,22 @@ Every error has a stable code, shown with the message.
 | `ty::region-overlap` | two regions sharing an address |
 | `ty::misaligned-code` | the code's region starting at an address that is not a multiple of 4 |
 | `ty::stack-size` | a stack of size 0, not a multiple of 16, or that does not fit in its region |
-| `ty::register-type` | a register whose type is not `u8`, `u16` or `u32`, or a bit-field struct or an enum without payloads on one of them |
-| `ty::misaligned-register` | a register's offset that is not a multiple of its width |
-| `ty::register-overlap` | two registers of one alternate group, or both of none, sharing a byte, unless one is `read` and the other `write` |
+| `ty::register-type` | a register whose type is not `u8`, `u16` or `u32`, or a bit-field struct or an enum without payloads on one of them, or an array of such a type; an array of arrays, a peripheral type or an array of one |
+| `ty::misaligned-register` | an entry's offset that is not a multiple of its element's alignment |
+| `ty::misaligned-step` | a `step` that is not a multiple of the element's alignment |
+| `ty::step-too-small` | a `step` smaller than the element's size |
+| `ty::register-overlap` | two entries of one alternate group, or both of none, sharing a byte, unless both are registers or register arrays, one `read` and the other `write` |
 | `ty::misaligned-peripheral` | a peripheral's address that is not a multiple of its type's alignment |
 | `ty::peripheral-out-of-range` | a peripheral whose end is above `0x1_0000_0000` |
-| `ty::peripheral-overlap` | two peripherals sharing a byte |
-| `ty::peripheral-by-value` | a peripheral type where a value would have it, or a peripheral or `*u` read, written or passed as a whole |
+| `ty::peripheral-overlap` | two peripherals sharing a byte, unless one is `over` the other or both are `over` the same one |
+| `ty::peripheral-by-value` | a peripheral type where a value would have it, an array of one anywhere but as a cluster's type, or a peripheral, `*u`, register array, cluster or cluster array's element read, written or passed as a whole |
 | `ty::volatile-peripheral` | `volatile` on a pointer to a peripheral type |
 | `ty::peripheral-index` | indexing a pointer to a peripheral type |
-| `ty::unknown-register` | a name that is no register of the peripheral type |
-| `ty::private-register` | a register that is not visible here |
-| `ty::write-to-read-only` | a write, a compound assignment or a field assignment to a `read` register |
-| `ty::read-of-write-only` | a read, a compound assignment or a field assignment of a `write` register, or a field read from one |
-| `ty::register-address` | `&raw` of a register |
+| `ty::unknown-register` | a name that is no entry of the peripheral type |
+| `ty::private-register` | an entry that is not visible here |
+| `ty::write-to-read-only` | a write, a compound assignment or a field assignment to a `read` register; a field assignment or a compound assignment to a `read` field in a volatile place |
+| `ty::read-of-write-only` | a read, a compound assignment or a field assignment of a `write` register, or a field read from one; a read of a `write` field, or a compound assignment to one, in a volatile place |
+| `ty::register-address` | `&raw` of a register, of a register array or a cluster array taken whole, or of an element of a register array |
 | `ty::bit-field-address` | `&raw` of a bit field, a register's too |
 | `ty::read-with-effects` | a field assignment or a compound assignment to a place whose reads have effects, or to one of its fields |
 | `ty::compound-write-effect` | a compound assignment to a field with a write effect in a volatile place |

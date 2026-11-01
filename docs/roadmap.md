@@ -58,7 +58,7 @@ updated, and a program on QEMU.
 | **M3.1** ✅ Memory maps | `memory { ... }` blocks: regions, where code, data and the stack go, the linker script generated from them; the stack with a declared size at the start of its region; region overflows as diagnostics (ADR 0057) | a program laid out as on a small board, checking where its code, data and stack are |
 | **M3.2** ✅ Peripherals | `peripheral` blocks: registers at offsets, with widths and access modes (read-only, write-only, read-write), accessed as MMIO; a write to a read-only register is a compile error; the UART declared in the language | hello world through a UART and a test finisher declared as peripherals |
 | **M3.3** ✅ Register fields | fields at bit positions of a register (representation clauses, as in Ada), enums in fields, write-1-to-clear fields, reads with side effects, reset values | the UART configured through its fields |
-| **M3.4a** Register arrays and clusters | register arrays and clusters (ADR 0064), access modes of fields (ADR 0065), peripherals over others (ADR 0066), from the design checked against the SVD of three real riscv32 chips (ADR 0067) | the PLIC's priorities, enable words and contexts, and the eight virtio-mmio transports through one driver |
+| **M3.4a** ✅ Register arrays and clusters | register arrays and clusters (ADR 0064), access modes of fields (ADR 0065), peripherals over others (ADR 0066), from the design checked against the SVD of three real riscv32 chips (ADR 0067) | the PLIC's priorities, enable words and contexts, and the eight virtio-mmio transports through one driver |
 | **M3.4b** SVD | `svd2erebos`: whether it is a tool of its own, how it names items and treats what has no declaration; a real chip's SVD generated and compiled | a peripheral generated from SVD, run on QEMU |
 | **M3.5** Second target | ARM Cortex-M on QEMU; what depends on the target becomes a per-target description (pointer width, widest access, ABI, startup, linker script, LLVM setup, runtime functions) | the e2e programs on both targets |
 
@@ -463,4 +463,29 @@ Documentation owed:
   calling convention and layout. Left to M3.4: access modes of fields,
   the write effects without a neutral value, a register's reset value
   without fields, and peripherals sharing addresses.
-- **Next: M3.4a** (register arrays and clusters), then M3.4b (SVD).
+- **M3.4a done.** A peripheral type holds register arrays and clusters
+  (ADR 0064, 0067). A register whose type is an array, `priority: [u32;
+  96] at 0x0`, is `N` registers, `step` bytes apart (the width by
+  default); an entry without an access mode is a cluster, whose type is a
+  peripheral type or an array of one (which needs its `step`), so one
+  driver serves every context of the PLIC through a pointer to the
+  cluster's type, `&raw mut PLIC.ctx[1]`. An index into either is checked
+  against the length, by a panic at run time and a compile error when
+  known, and costs one comparison that `-O` removes where it is proved.
+  The compiler checks steps (too small, misaligned), the overlap of
+  entries element by element, and a type that contains itself through
+  clusters, and treats failed steps, lengths and cluster types as failed
+  values (ADR 0048). A bit field may declare an access mode, `read` or
+  `write`, checked in volatile places beside its register's (ADR 0065).
+  A peripheral may name another it overlaps, `peripheral RNG: Rng at ...
+  over APB_CTRL;`, and the two are not checked for overlap (ADR 0066).
+  The milestone program runs on QEMU at both optimization levels: it
+  writes and reads the PLIC's priorities in a loop with a run-time index,
+  sets an enable word and the thresholds of both contexts through one
+  driver, reads a context a second time through a peripheral `over` the
+  PLIC, and prints the magic value, version, device and vendor of the
+  eight virtio-mmio transports through one driver; a second program
+  checks that an index past a register array calls the panic function.
+  Left to M3.4b: `svd2erebos`, and what it does with what has no
+  declaration (ADR 0067).
+- **Next: M3.4b** (SVD).
