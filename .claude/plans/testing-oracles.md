@@ -260,13 +260,73 @@ built first.
     catches mutants of the checks, so the planner may want it there.
 
 ## 5. test(rejected): every code has a snippet or a reason
-- Status: todo
+- Status: done
 - Implements: ADR 0069, section 3
 - Changes: `tests/rejected.rs` reads the codes of the check tables of
   `docs/reference.md`; the catalog gets the snippets for the other
   codes it can have, and the exempt list the reasons for the rest.
 - Tests: `every_code_has_a_rule`; the test fails for a code added to the
   reference's table and to neither list.
+- Decisions:
+  - "The check tables" is the one table of the section "Diagnostics" of
+    `docs/reference.md`, which lists every code (the other tables repeat
+    codes of it). `reference_codes` reads the rows that start with
+    ``| ` `` between `## Diagnostics` and the next `## `, and takes each
+    backticked name of the first cell, so a row of two codes
+    (`resolve::missing-entry`, `resolve::multiple-entries`) gives two.
+    The test also demands more than 100 codes, so that a changed heading
+    cannot make it pass on an empty list.
+  - The rule is a function `rule_problems(codes, catalog, exempt)` so that
+    the test of the test (`a_code_without_a_rule_is_reported`) can run it on
+    small lists: it reports a code in neither list, a code in both, a
+    snippet or an exempt name that is not a code of the reference (a typo,
+    or a code removed), and an exempt group with no reason.
+  - `EXEMPT` is `&[Exempt { codes, reason }]`, a reason per group, since
+    most reasons are shared (the program's one `memory` block, `entry fn`,
+    the `eval_*` programs). Reasons name the `tests/ui` program that
+    covers the code when there is one.
+  - The catalog went from 4 to about 140 snippets, one per code, written
+    with a macro `s!(code, Stage, Place, text)`; rustfmt expands it, so the
+    file is long. Stage is the first one that reports the code: `Ast` for
+    lexer and parser codes, `Hir` for `resolve::`, `Typeck` for `ty::` and
+    `Mir` for `eval::` (and the four of step 4). A base is skipped for a
+    snippet only when it does not compile to that stage, as in step 4.
+  - Statement snippets use only literals and their own `injected_*` names.
+    A snippet whose error depends on its surroundings is an item: the
+    errors of `break`, `?`, a peripheral, a pointer or a bit field need a
+    function or a type of their own, so they are `Items` with a function
+    (`fn injected_f`) that is never called. `parser::unclosed-block` is the
+    item `fn injected_f() {`, since a `{` in the middle of a function is
+    closed by the function's own `}`.
+  - `resolve::multiple-entries`, `multiple-panics`, `duplicate-memory` and
+    the other `memory` rules are injected as items with a second `entry
+    fn`, `panic fn` or `memory` block at the end: it is wrong for every
+    base, whether or not it has one. The memory snippets use addresses
+    (`0x9000_0000`) no base uses, and names `INJ*`.
+  - The `eval::` snippets are constants initialized by a `comptime` block
+    (items), except `eval::assertion-failed`, a statement. `eval::step-limit`
+    has no snippet: 10,000,000 steps in each of the injections would take
+    seconds in a debug build.
+  - Exempt (with reasons in the test): `resolve::missing-entry` and
+    `missing-panic` (an absence, which text cannot add), `resolve::call-entry`
+    (the entry's name is the program's), `ty::special-fn-params`,
+    `panic-param`, `entry-returns`, `panic-returns` (they are about the
+    program's one entry or panic function; a second one stops at
+    `multiple-*`), the five `ty::` rules of the `memory` block (a second
+    block stops at `duplicate-memory` in a base that has one),
+    `eval::step-limit`, `eval::pointer-compare`, `dangling-pointer`,
+    `uninit-read`, `pointer-out-of-bounds` (a whole program each),
+    `codegen::llvm` (environment) and `link::no-memory-map` and
+    `link::region-overflow` (found when building, and depending on the
+    whole program).
+  - `DEFAULT_PROGRAMS` goes from 150 to 40: with the full catalog 150
+    programs took 31 s and 40 take 11 s. Every program still receives every
+    snippet; only the number of places and bases drawn falls. 1000 programs
+    (every base that compiles) took 130 s and gave no failure, so the
+    snippets are right in every position the finder allows.
+  - The second test of step 4's decisions, "not added to
+    `additional_cargo_test_args`", still holds: the planner may want the
+    test in the mutants run, now that it costs 11 s.
 
 ## 6. docs: document the generated and rejected tests
 - Status: todo
