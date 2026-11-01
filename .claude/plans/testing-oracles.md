@@ -194,7 +194,7 @@ built first.
     seeds 0 to 39 and 0 to 299 of the generator test pass.
 
 ## 4. test(rejected): inject errors into valid programs
-- Status: todo
+- Status: done
 - Implements: ADR 0069, sections 1 and 2
 - Changes: `tests/rejected.rs`; the catalog starts with the codes of
   the table "Checks on values known at compile time" of
@@ -203,6 +203,61 @@ built first.
   into a program the compiler is known to accept without checking
   (a deliberately broken catalog entry in the test) is reported, so that
   the test is shown to be able to fail.
+- Decisions:
+  - Besides the two tests the plan names, `statement_boundaries_are_inside_functions`
+    checks the place finder on a small text (strings, characters and
+    comments with braces, dead code, a constant condition), since a wrong
+    place would show as a false alarm of the main test.
+  - The catalog is `CATALOG: &[Snippet { code, stage, place, text }]`; the
+    ADR's "statements or declaration" is `Place::Statements` or
+    `Place::Items`. The four codes of the reference table: shift (`1 << 32`
+    into a `u32`), division (`7 / 0`), index (an array of 2 indexed by 2),
+    and the field one, which is `Items`: a `struct InjReg: u8` with a 4-bit
+    field, and a function that writes 16 in a literal. All use names
+    `injected_*` / `Inj*`, which no base program has, and stage `Mir`
+    (where these checks run).
+  - Bases are every `tests/ui/*.ers`, `tests/ui/*/main.ers` and the same of
+    `tests/e2e`, in sorted order; a directory program is injected only in
+    its `main.ers`, compiled from its own path so its modules resolve.
+    A base is used for a snippet only if it compiles to the snippet's stage
+    without a diagnostic (compiled once per stage, per base).
+  - From the seed (the `Rng` of the generator, `tests/common`), the bases are
+    shuffled and the first `programs` that took an injection are used;
+    each gets every snippet, at a place picked by the `Rng`. The variables
+    are `EREBOS_REJECTED_PROGRAMS` (default 150) and `EREBOS_REJECTED_SEED`
+    (default 0). Of the 478 bases about 210 compile to MIR, so a run of
+    1000 takes all of them (840 injections, 5 s); the default takes 3 s.
+    Bad numbers panic with the variable's name, as in `tests/generated.rs`.
+  - Places are found by text, with no parser (the test may not use `src/`
+    parsing): the line after the `{` that opens a function body, and after
+    each line ending in `;` inside one. Dead code and unchecked code are
+    avoided, since the reference says the checks do not look at them and
+    the first version gave 7 false alarms in 228 injections (after
+    `return`/`break`, after `let x: ! = loop {}`, after a call to a `-> !`
+    function, inside `while BITS < 32`). The rule: a block is dead after a
+    line of it with `return`, `break`, `continue`, `loop`, `: !` or a call to
+    a function of the program declared `-> !`; a block whose header names
+    `true`, `false` or a name in capitals is skipped with all it holds.
+    Conservative on purpose: it drops some valid places (a block with a
+    `return` in one line is dead for the rest of that block) rather than
+    report a false alarm. With it, seeds 0 to 5 over all bases gave no
+    false alarm. A remaining case would be an `if` whose two multi-line
+    branches both return, followed by a statement; none exists in the bases.
+  - A failure prints `file:line` of the inserted snippet, the code and the
+    snippet, and for a wrong code the diagnostics; it gives the two
+    variables to run it again. No file is kept (the injected text is the
+    base plus the snippet at that line).
+  - `a_broken_catalog_entry_is_reported` runs the same `run` function on
+    `tests/e2e/hello.ers` with two broken entries: valid text under the code
+    of an error (reported as "was accepted"), and an error under another
+    code (reported as "was not reported"). Failing both ways shows the
+    test can fail for a skipped rule and for a wrong one.
+  - `injected_errors_are_rejected` also demands at least
+    `min(programs, catalog length)` injections, so that a wrong base path or
+    an empty set of bases cannot pass.
+  - Not added to `additional_cargo_test_args` of `.cargo/mutants.toml`: it
+    would be the one change outside the step's files; the test is fast and
+    catches mutants of the checks, so the planner may want it there.
 
 ## 5. test(rejected): every code has a snippet or a reason
 - Status: todo
