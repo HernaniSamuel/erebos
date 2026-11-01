@@ -16,6 +16,12 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   program is lowered, and the number of values only after, so keeping
   them stable means renumbering after lowering; left until a snapshot
   needs it. (M2.6)
+- The `ty::step-too-small` label in `src/query/hardware.rs` reads "each
+  element of `u8` takes 1 bytes"; the plural is wrong for 1. (M3.4a)
+- The overlap check of ADR 0064 costs about the shorter length per pair of
+  entries, so a user-written `[T; 0x7FFF_FFFF]` stalls the compiler for
+  minutes; the ADR accepts it, but `docs/reference.md` does not say so.
+  (M3.4a)
 
 ## Tests
 
@@ -31,3 +37,16 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   small cleanups in `tests/e2e.rs`, `tests/generated.rs`, `tests/rejected.rs`
   and `CONTRIBUTING.md` are listed in `.claude/plans/testing-oracles.md`,
   `## Left open`. (testing-oracles)
+- The header of `tests/e2e/plic_virtio/board.ers` says `PLIC_M0` is served
+  by the same driver as `PLIC.ctx[i]`; `main.ers` reads it directly.
+  (M3.4a)
+- `tests/e2e/register_index_out_of_bounds.ers` covers a read past a
+  register array only; a write has no run-time test. (M3.4a)
+
+## Docs
+
+- `docs/reference.md`: two paragraphs of the M3.4a text are wrapped wider
+  than 75 columns ("A name of nothing after `over`..." and the line
+  "against the length first (see ..."), and the bullet "A `step` is the
+  word after the offset only when no `:` follows it, and so is `in`"
+  needs an example. (M3.4a)
