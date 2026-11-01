@@ -24,7 +24,7 @@ them; the harness that builds and runs a program on QEMU, now private to
 built first.
 
 ## 1. test(generated): generate valid integer programs
-- Status: todo
+- Status: done
 - Implements: ADR 0068, section 1
 - Changes: `tests/common/generator.rs` (seeded xorshift64, the programs
   of section 1, one `.c` file with the opaque inputs), `tests/generated.rs`
@@ -34,6 +34,74 @@ built first.
   operator, integer type and construct of section 1 appears in at
   least one program of the run, so that the test cannot pass without
   using them.
+- Decisions:
+  - `Program::uses` is a bit set of a `Feature` enum, built from the
+    features that travel with each expression (`Ex::uses`) and recorded
+    only for text that ends up in the program, since the generator drops
+    expressions it made. The coverage assertion reads that set instead of
+    searching the text, where ` + ` or `loop` could match by chance; a
+    check that `Feature::ALL` has `Feature::COUNT` entries keeps a new
+    variant from escaping the demand.
+  - The shift-amount, cast and observation `as u64` forms count for the
+    features they exercise (`ShiftByLiteral`, `ShiftByValue`, `Cast`,
+    `CastBool`); the cast that folds a value into the hash `h` counts for
+    none, since every program has it.
+  - A divisor is `(e | 1)`, never zero, instead of a parameter whose
+    inputs are chosen not to be zero (ADR 0068, section 1): the
+    inputs are chosen by `main`, in step 3, and a divisor computed from
+    them can be zero for inputs nobody picked. The `| 1` is not counted as
+    a use of `|`. For signed `e` it is `-1` for some inputs, so `MIN / -1`
+    and `MIN % -1` are reached.
+  - A shift amount is a literal in `0..bits` or an unknown value of any
+    integer type, signed ones included, which the target masks (reference,
+    "Integer semantics"); a negative or large amount is where the two
+    oracles could differ, so it is generated.
+  - Where no type is expected (operand of `as`, left operand of a
+    comparison, `match` scrutinee, shift amount, the value folded into
+    `h`), an expression that reads a variable is asked for, with a typed
+    leftmost position (the left of a binary operator, the first branch of
+    an `if`, the first arm of a `match`): `(1 + x) as u8` and
+    `(if c { 1 } else { x }) as u8` are `ty::untyped-literal`, and so is
+    `(5 + 6) as u8`. Found by running the first version, which gave the
+    latter two.
+  - Bool operators are `!`, `==` and `!=` (and comparisons); `&&`, `||`
+    and `& | ^` on `bool` are not generated, since ADR 0068 lists
+    neither.
+  - Not generated: `continue`, `break` with a value, `match` on `bool`
+    and a call from one function to another; ADR 0068, section 1, does
+    not list them.
+  - Every expression is parenthesized (`if` and `match` too), so the text
+    does not depend on operator precedence and the generator does not
+    track it.
+  - A program has 2 to 4 functions of 2 to 4 parameters, the first of
+    them an integer, a `bool` one in one case out of six; each starts
+    with `let mut h: u64 = 0` and ends with `h`, with `h = h * 1_000_003
+    + (e as u64)` for each value it observes. The parameters and the
+    top-level variables are all folded in at the end, so that no
+    computation is dead.
+  - Loops: a counter `u8` bound 1 to 4, in a `while c < N` or in
+    `loop { if c >= N { break; } ... }`, nested at most twice (`BLOCK_DEPTH`),
+    so a function runs at most 16 iterations of a body.
+  - The program ends with a skeleton `entry fn main() -> ! { loop {} }`
+    and `panic fn on_panic()`, since the compiler demands them
+    (`resolve::missing-entry`); step 3 replaces `main` with the real one.
+    It has no `memory` block: `--emit=mir` does not need one, and step 3
+    adds it where the program is built.
+  - The opaque inputs are `OPAQUE_C`, a constant with the identity
+    functions for the ten integer types (`usize` as `uint32_t`, `isize`
+    as `int32_t`, as in `comptime_differential.c`); the program declares
+    the `extern`s. `bool` arguments are made in step 3 from
+    `opaque_u8(v) == 1`, as the differential test does.
+  - `Rng` is the xorshift64 of `tests/fuzz.rs`, seeded through a step of
+    splitmix64, so that seeds 0, 1, 2, ... give unrelated programs
+    (xorshift's first outputs of nearby seeds are alike).
+  - `generator` is declared in `tests/common/mod.rs` with `allow(dead_code)`
+    like the other helpers there, since every test that has `mod common`
+    compiles it and only `tests/generated.rs` uses it.
+  - 300 seeds, as the plan says "a few hundred": it takes about 2 s; a run
+    of 5000 seeds, made by hand once, found no invalid program. The test
+    also demands that the seeds give mostly different programs (more than
+    nine in ten), so that a seed that is ignored fails.
 
 ## 2. refactor(test): share the harness that runs a program on QEMU
 - Status: todo

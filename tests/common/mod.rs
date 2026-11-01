@@ -41,3 +41,7 @@ pub const CLANG_TARGET: &[&str] = &[
     "-mabi=ilp32",
     "-ffreestanding",
 ];
+
+/// The generator of valid integer programs (ADR 0068).
+#[allow(dead_code, reason = "only tests/generated.rs uses it")]
+pub mod generator;
