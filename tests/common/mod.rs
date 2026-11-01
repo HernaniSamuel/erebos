@@ -42,6 +42,10 @@ pub const CLANG_TARGET: &[&str] = &[
     "-ffreestanding",
 ];
 
+/// Running a program on QEMU (ADR 0010).
+#[allow(dead_code, reason = "only some tests run programs")]
+pub mod qemu;
+
 /// The generator of valid integer programs (ADR 0068).
 #[allow(dead_code, reason = "only tests/generated.rs uses it")]
 pub mod generator;

@@ -104,13 +104,30 @@ built first.
     nine in ten), so that a seed that is ignored fails.
 
 ## 2. refactor(test): share the harness that runs a program on QEMU
-- Status: todo
+- Status: done
 - Implements: ADR 0068, section 2 (what it needs)
 - Changes: `tests/e2e.rs` (`run`, `compile_c`, `qemu_path`, the
   expectation reader) to `tests/common/`; `tests/e2e.rs` keeps its
   test and its output unchanged.
 - Tests: `cargo test --test e2e` as before, with no snapshot or
   expectation changed.
+- Decisions:
+  - The harness is `tests/common/qemu.rs`, declared in `common/mod.rs`
+    with `allow(dead_code)` like the other helpers (not every test runs
+    programs). It moved `Expectation`/`expectation`, `compile_c`,
+    `qemu_path` (private) and the two timeouts, unchanged in text.
+  - `run` is split instead of moved whole: what is specific to `tests/e2e`
+    (program naming from its directory, `.opt` file names, the work
+    directory, the build) stays in `e2e.rs::run`; the boot became
+    `qemu::boot(name, elf, log, wait) -> Run { status, output, events }`
+    and the verdict `qemu::check(name, expected, run)`. Step 3 can call
+    `boot` with its own wait and compare outputs itself, without header
+    comments or the e2e naming.
+  - `boot` removes the old log itself, so every caller gets a fresh one.
+  - `EXIT_TIMEOUT` and `RUN_FOREVER_CHECK` are `pub` in `qemu` because
+    `check` names the first in its message and `e2e` picks the wait.
+  - Error texts are byte-for-byte those of before; no expectation or
+    snapshot changed, and `cargo test --test e2e` passes.
 
 ## 3. test(generated): check generated programs against both oracles
 - Status: todo
