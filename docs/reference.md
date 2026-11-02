@@ -1987,6 +1987,15 @@ So `flags & MASK == 0` means `(flags & MASK) == 0`, `*p.x` means `*(p.x)`,
   compile time to be zero is a compile-time error). For signed types,
   `MIN / -1` is `MIN` and `MIN % -1` is `0`.
 
+Known issue, not in Erebos: with `-O` on riscv32 with the M extension,
+LLVM's RISC-V backend (seen in 22.1 and in 23.1.3, and from plain C with
+clang) can drop the high word of an `i64` product. It needs two or more
+`i64` multiplications by a large constant such as `-(2^k - 1)`, with `k`
+from 34 to 60, in one basic block; the emitted IR is valid and has no
+`nsw`, `nuw` or `inbounds`, and `-O0` is correct. Until LLVM fixes it, the
+result of such a program built with `-O` may differ from the same program
+built without it, and from `comptime`. See `docs/open-findings.md`.
+
 ### Checks on values known at compile time (ADR 0032, 0039)
 
 An expression is **known at compile time** when it is built only from

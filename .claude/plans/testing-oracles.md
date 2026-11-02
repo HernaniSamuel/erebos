@@ -369,9 +369,12 @@ Minor findings that the reviews left open, found on 2026-11-01.
 
 - Seed 1093 of `generated_programs_agree` disagrees only with `-O`
   (function `f2`, reported as `#3`; `comptime` and the unoptimized
-  build agree). The compiler is out of scope here; it needs a reduced
-  program as a `tests/ui` or `tests/e2e` test and a fix. Found in
-  steps 3 and 6 (final review).
+  build agree). Found in steps 3 and 6 (final review). Looked into on
+  2026-11-01: it is an LLVM RISC-V backend bug (a dropped high word of an
+  `i64` product, two or more multiplications by a constant `-(2^k - 1)` in
+  one block), not Erebos's; seeds 723, 891 and 2485 are the same or alike.
+  Not worked around, documented in `docs/reference.md` ("Integer
+  semantics") and `docs/open-findings.md`, which has the reproducer.
 - `injected_errors_are_rejected` (about 11 s) and the generated test are
   not in the `additional_cargo_test_args` of `.cargo/mutants.toml`, so
   mutation runs do not use them. Found in steps 4 and 5.

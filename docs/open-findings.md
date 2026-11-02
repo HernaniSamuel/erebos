@@ -30,8 +30,23 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   say so); one that can fail needs the harness to fill RAM before the
   program starts, and the range `_start` zeroes is checked by
   `tests/elf.rs`. (M3.1)
-- Seed 1093 of `generated_programs_agree` disagrees only with `-O` (function `f2`):
-  reduce it to a `tests/ui` or `tests/e2e` program and fix it. (testing-oracles)
+- Seeds 723, 891, 1093 and 2485 of `generated_programs_agree` disagree
+  only with `-O`. It is an LLVM bug, not Erebos's: the RISC-V backend
+  (RV32 with M, `-O1` or higher; LLVM 22.1 and 23.1.3, and plain C with
+  clang) drops the high word of an `i64` product when two or more
+  multiplications by a constant like `-(2^k - 1)`, `k` from 34 to 60, are
+  in one basic block. The emitted IR is valid (no `nsw`, `nuw`,
+  `inbounds`). Confirmed for 723, 1093 and 2485; 891 (`mul i64 x,
+  -9223372036854775709`) is probably the same, its reduction was
+  inconclusive. The default run (20 seeds) does not reach them. A
+  reproducer in IR:
+  `define i64 @f(i64 %b, i64 %b2) { %m = mul i64 %b, -4503599627370495;
+  %m2 = mul i64 %b2, -4503599627370495; %r = xor i64 %m, %m2; ret i64 %r }`
+  (one instruction per line); compile it for `riscv32 -march=rv32imac -O2`
+  and `a1` is never written. Documented in `docs/reference.md`, "Integer
+  semantics"; not worked around (the other options were a split `mul` in
+  codegen or other optimization flags). Remove this entry when a fixed LLVM
+  is in use. (testing-oracles)
 - The rejected and generated tests are not in `.cargo/mutants.toml`;
   the divisor of ADR 0068 section 1 differs from the generator (`(e | 1)`);
   small cleanups in `tests/e2e.rs`, `tests/generated.rs`, `tests/rejected.rs`
