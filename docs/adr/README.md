@@ -99,6 +99,6 @@ Do not write one for local implementation details that the code already explains
 | 0067 | [Peripherals checked against SVD](0067-peripherals-checked-against-svd.md) | Accepted |
 | 0068 | [Generated programs checked against independent oracles](0068-generated-programs-checked-against-oracles.md) | Accepted |
 | 0069 | [Programs with an injected error are rejected](0069-programs-with-an-injected-error-are-rejected.md) | Accepted |
-| 0070 | [Peripherals generated from SVD](0070-peripherals-generated-from-svd.md) | Accepted |
+| 0070 | [Peripherals generated from SVD](0070-peripherals-generated-from-svd.md) | Accepted, corrected 2026-11-02 |
 | 0071 | [Names generated from SVD](0071-names-generated-from-svd.md) | Accepted |
 | 0072 | [SVD constructs, and what has no declaration](0072-svd-constructs-and-what-has-no-declaration.md) | Accepted |

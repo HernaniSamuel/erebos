@@ -1,6 +1,6 @@
 # 0070. Peripherals generated from SVD
 
-- Status: Accepted
+- Status: Accepted; corrected on 2026-11-02 (`roxmltree` depends on `memchr`)
 - Date: 2026-11-02
 - Amends: 0063 (the tables gain the module `svd`, which uses `syntax`
   and which `driver` uses, and the external crate `roxmltree`, used only
@@ -78,6 +78,11 @@ build depends on its `.ers` files alone, as before.
 The XML is read with **`roxmltree`** (0.21.2): a read-only tree, with no
 dependencies of its own, under MIT or Apache-2.0, which gives the byte
 range of every node, so that diagnostics point into the SVD file.
+
+**Note, 2026-11-02:** version 0.21.2 does depend on one crate, `memchr`
+(MIT or Apache-2.0), contrary to "no dependencies of its own" above. It
+was already in `Cargo.lock` through the dev-dependency `insta`, and is
+now also a dependency of the crate itself.
 
 ### Where it lives
 

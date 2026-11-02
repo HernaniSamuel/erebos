@@ -34,6 +34,8 @@ const LAYERS: &[(&str, &[&str])] = &[
     ("builtin", &[]),
     ("target", &[]),
     ("syntax", &[]),
+    // The SVD reader and generator, which no layer uses (ADR 0070).
+    ("svd", &["syntax"]),
     ("hir", &["syntax"]),
     ("layout", &["hir"]),
     ("memory", &[]),
@@ -62,7 +64,11 @@ const LAYERS: &[(&str, &[&str])] = &[
 const ONLY_IDS: &[(&str, &str)] = &[("eval", "hir")];
 
 /// External crates, and the only module that may use each.
-const EXTERNAL: &[(&str, &str)] = &[("inkwell", "codegen"), ("miette", "diag")];
+const EXTERNAL: &[(&str, &str)] = &[
+    ("inkwell", "codegen"),
+    ("miette", "diag"),
+    ("roxmltree", "svd"),
+];
 
 /// Names no module may use: the raw LLVM API, which `inkwell` re-exports,
 /// would bypass the checks on codegen (`LLVMBuildNSWAdd`).

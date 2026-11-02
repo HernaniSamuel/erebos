@@ -15,6 +15,7 @@ pub mod mir;
 pub mod ops;
 pub mod query;
 pub mod span;
+pub mod svd;
 pub mod syntax;
 pub mod target;
 pub mod ty;
