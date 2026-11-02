@@ -193,16 +193,13 @@ ADRs:
     `modify`), the reset value of a register without fields, arrays of
     bit fields and arrays of peripherals are not added, none of the
     three using them.
-  - M3.4b: whether `svd2erebos` is a separate tool or a file read at
-    compile time, which bears on reproducible builds (and, as a tool,
-    the dependency it takes to read XML); how it names items, and names
-    that, lowercased, are words of Erebos (`CONTINUE`, `IN`); what it does
-    with what has no declaration (ADR 0067: the effects without a neutral
-    value, access values that are no SVD value, as the GD32VF103's
-    `write` and the CH32V003's `read/clear`); how it finds peripherals
-    sharing bytes without `alternatePeripheral`, which are `over`
-    (ADR 0066, 0067): computed from the file, or named to it; which real chip's SVD the tests generate and
-    compile, given its size and license (the ESP32-C3's is Apache 2.0).
+  - M3.4b: settled by ADR 0070 (`erebos svd`, a subcommand writing
+    Erebos source, the compiler never reading SVD; XML read with
+    `roxmltree`; the ESP32-C3's file and a hand-written one of QEMU
+    `virt` in the tests), 0071 (names, keywords and names that meet) and
+    0072 (each construct; what has no declaration declared as close as
+    possible, with a comment and a warning; access values that are no
+    SVD value read as absent; `over` computed from the file).
   - A second target, so that riscv32 assumptions are found before they
     spread: ARM Cortex-M on QEMU (`mps2-an385` or `lm3s6965evb`) is
     32-bit like riscv32, so `usize` keeps its width, and is where most

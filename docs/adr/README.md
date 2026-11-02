@@ -92,10 +92,13 @@ Do not write one for local implementation details that the code already explains
 | 0060 | [Register fields](0060-register-fields.md) | Accepted, amended by 0064, 0065 |
 | 0061 | [Alternate registers](0061-alternate-registers.md) | Accepted, amended by 0064 |
 | 0062 | [Bit-field defaults are no part of the bit layout](0062-bit-field-defaults-are-no-part-of-the-bit-layout.md) | Accepted |
-| 0063 | [Architecture rules checked by tests](0063-architecture-rules-checked-by-tests.md) | Accepted |
+| 0063 | [Architecture rules checked by tests](0063-architecture-rules-checked-by-tests.md) | Accepted, amended by 0070 |
 | 0064 | [Register arrays and clusters](0064-register-arrays-and-clusters.md) | Accepted |
 | 0065 | [Field access modes](0065-field-access-modes.md) | Accepted |
 | 0066 | [Peripherals over others](0066-peripherals-over-others.md) | Accepted |
 | 0067 | [Peripherals checked against SVD](0067-peripherals-checked-against-svd.md) | Accepted |
 | 0068 | [Generated programs checked against independent oracles](0068-generated-programs-checked-against-oracles.md) | Accepted |
 | 0069 | [Programs with an injected error are rejected](0069-programs-with-an-injected-error-are-rejected.md) | Accepted |
+| 0070 | [Peripherals generated from SVD](0070-peripherals-generated-from-svd.md) | Accepted |
+| 0071 | [Names generated from SVD](0071-names-generated-from-svd.md) | Accepted |
+| 0072 | [SVD constructs, and what has no declaration](0072-svd-constructs-and-what-has-no-declaration.md) | Accepted |

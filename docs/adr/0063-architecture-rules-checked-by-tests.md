@@ -1,6 +1,6 @@
 # 0063. Architecture rules checked by tests
 
-- Status: Accepted
+- Status: Accepted; amended by 0070 (the module `svd`, which uses `syntax` and which `driver` uses; the external crate `roxmltree`, used only in `svd`)
 - Date: 2026-10-28
 - Amends: 0003 (the shared vocabulary grows beyond spans and diagnostics,
   to `int`, `ops`, `builtin` and `target`; `miette` is used only in
