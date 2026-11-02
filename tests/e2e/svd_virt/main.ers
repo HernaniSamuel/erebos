@@ -1,0 +1,162 @@
+// The program of M3.4b (roadmap): QEMU `virt`'s devices as `erebos svd`
+// generates them from `virt.svd` (ADR 0070 to 0072), `virt.ers` being its
+// output, kept. The UART's divisor latch is opened with a field assignment
+// (`lcr.dlab`), the divisor written through `dll` and `dlm` (the alternate
+// group `dlab`) and read back, and `lcr` written whole with a literal that
+// names `.Eight` and takes the other fields' defaults with `..`. A message
+// is sent through `thr` while `lsr.thre` is polled. The PLIC's priorities of
+// sources 1 to 4 are written in a loop with a run-time index and read back;
+// the threshold of context 0 is set through a driver taking a pointer to the
+// type of the cluster `ctx`, which `&raw mut PLIC.ctx[0]` serves, and read
+// through `PLIC_M0`, a view of the same bytes the generator wrote `over
+// PLIC` by itself. The magic value of each virtio-mmio transport is read
+// through one driver taking a `*const Virtio`, from a table of pointers. The
+// program stops through the test finisher with `.Pass`.
+// expect-output: divisor 0x0180
+// expect-output: lcr 0x03
+// expect-output: hello from svd
+// expect-output: priorities 1 2 3 4
+// expect-output: threshold 3 m0 3
+// expect-output: virtio0 magic 0x74726976
+// expect-output: virtio1 magic 0x74726976
+// expect-output: virtio2 magic 0x74726976
+// expect-output: virtio3 magic 0x74726976
+// expect-output: virtio4 magic 0x74726976
+// expect-output: virtio5 magic 0x74726976
+// expect-output: virtio6 magic 0x74726976
+// expect-output: virtio7 magic 0x74726976
+// expect-exit: 0
+mod virt;
+
+use virt::plic::ctx::Ctx;
+use virt::test::Finisher;
+use virt::uart0::Lcr;
+use virt::virtio::Virtio;
+use virt::{PLIC, PLIC_M0, TEST, UART0};
+
+static TRANSPORTS: [*const Virtio; 8] = [
+    &raw const virt::VIRTIO0,
+    &raw const virt::VIRTIO1,
+    &raw const virt::VIRTIO2,
+    &raw const virt::VIRTIO3,
+    &raw const virt::VIRTIO4,
+    &raw const virt::VIRTIO5,
+    &raw const virt::VIRTIO6,
+    &raw const virt::VIRTIO7,
+];
+
+// Writes a byte, once the UART can take one.
+fn putc(byte: u8) {
+    while !UART0.lsr.thre {}
+    UART0.thr = byte;
+}
+
+fn print(s: *const [u8]) {
+    let mut i: usize = 0;
+    while i < len(s) {
+        putc((*s)[i]);
+        i += 1;
+    }
+}
+
+// `value` in decimal; the program prints nothing larger than 9.
+fn print_digit(value: u32) {
+    putc(b'0' + value as u8);
+}
+
+// ` 0x` and two hex digits per byte of `bytes`.
+fn print_hex(value: u32, bytes: u32) {
+    print(&raw const b" 0x");
+    let mut shift: u32 = bytes * 8;
+    while shift > 0 {
+        shift -= 4;
+        let digit: u8 = ((value >> shift) & 0xF) as u8;
+        putc(if digit < 10 { b'0' + digit } else { b'A' + digit - 10 });
+    }
+}
+
+// The driver of one PLIC context, whichever it is.
+fn set_threshold(context: *mut Ctx, value: u32) {
+    (*context).threshold = value;
+}
+
+// The driver of one virtio-mmio transport, whichever it is.
+fn describe(index: usize, transport: *const Virtio) {
+    print(&raw const b"virtio");
+    print_digit(index as u32);
+    print(&raw const b" magic");
+    print_hex((*transport).magic_value, 4);
+    print(&raw const b"\n");
+}
+
+// Stops QEMU: 0 passes, any other code fails with it.
+fn exit(code: u16) -> ! {
+    TEST.finisher = if code == 0 {
+        Finisher { status: .Pass, .. }
+    } else {
+        Finisher { status: .Fail, code: code }
+    };
+    loop {}
+}
+
+entry fn main() -> ! {
+    // 384, 300 baud from the 16550's usual 1.8432 MHz clock: both bytes
+    // differ from QEMU's reset divisor, 12.
+    UART0.lcr.dlab = true;
+    UART0.dll = 0x80;
+    UART0.dlm = 0x01;
+    let divisor: u16 = UART0.dll as u16 | (UART0.dlm as u16) << 8;
+
+    // 8 data bits, one stop bit, no parity, the latch closed.
+    UART0.lcr = Lcr { wls: .Eight, .. };
+    let lcr: Lcr = UART0.lcr;
+
+    print(&raw const b"divisor");
+    print_hex(divisor as u32, 2);
+    print(&raw const b"\nlcr");
+    print_hex(lcr as u32, 1);
+    print(&raw const b"\nhello from svd\n");
+
+    // Sources 1 to 4, priorities 1 to 4.
+    let mut source: usize = 1;
+    while source <= 4 {
+        PLIC.priority[source] = source as u32;
+        source += 1;
+    }
+    print(&raw const b"priorities");
+    source = 1;
+    while source <= 4 {
+        putc(b' ');
+        print_digit(PLIC.priority[source]);
+        source += 1;
+    }
+
+    // Threshold 3 for context 0, read through both views of its bytes.
+    set_threshold(&raw mut PLIC.ctx[0], 3);
+    print(&raw const b"\nthreshold ");
+    print_digit(PLIC.ctx[0].threshold);
+    print(&raw const b" m0 ");
+    print_digit(PLIC_M0.threshold);
+    print(&raw const b"\n");
+
+    let mut transport: usize = 0;
+    while transport < 8 {
+        describe(transport, TRANSPORTS[transport]);
+        transport += 1;
+    }
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(1)
+}
+
+// QEMU `virt`'s RAM in two regions of 64 MiB: the image in the first, and
+// in the second a 1 MiB stack at its start, then `.data` and `.bss`.
+memory {
+    region IMAGE { origin: 0x8000_0000, size: 0x0400_0000 }
+    region RAM { origin: 0x8400_0000, size: 0x0400_0000 }
+    code in IMAGE;
+    data in RAM;
+    stack in RAM { size: 0x0010_0000 }
+}

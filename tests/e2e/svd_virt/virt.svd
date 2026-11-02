@@ -1,0 +1,238 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The devices of QEMU `virt` the program of this directory uses, at their
+  addresses (ADR 0010, 0070): the 16550 UART, the test finisher, the PLIC and
+  the eight virtio-mmio transports. Written by hand from QEMU's sources, not
+  taken from a vendor. `virt.ers` is generated from it with
+  `erebos svd tests/e2e/svd_virt/virt.svd` and kept, and `tests/svd.rs`
+  requires that they agree.
+-->
+<device>
+  <name>QEMU_VIRT</name>
+  <version>1.0</version>
+  <description>The devices of QEMU's virt machine for RISC-V that the e2e program uses.</description>
+  <size>32</size>
+  <access>read-write</access>
+  <peripherals>
+    <peripheral>
+      <name>UART0</name>
+      <description>The 16550 UART: the console of the machine.</description>
+      <baseAddress>0x10000000</baseAddress>
+      <size>8</size>
+      <registers>
+        <register>
+          <name>RBR</name>
+          <description>Receiver buffer: the byte received, when the divisor latch is closed.</description>
+          <addressOffset>0x0</addressOffset>
+          <access>read-only</access>
+        </register>
+        <register>
+          <name>THR</name>
+          <description>Transmitter holding register: the byte to send, when the divisor latch is closed.</description>
+          <addressOffset>0x0</addressOffset>
+          <access>write-only</access>
+        </register>
+        <register>
+          <name>DLL</name>
+          <description>Divisor latch, low byte: at the offset of RBR and THR while LCR.DLAB is set.</description>
+          <alternateGroup>DLAB</alternateGroup>
+          <addressOffset>0x0</addressOffset>
+        </register>
+        <register>
+          <name>DLM</name>
+          <description>Divisor latch, high byte: at the offset of IER while LCR.DLAB is set.</description>
+          <alternateGroup>DLAB</alternateGroup>
+          <addressOffset>0x1</addressOffset>
+        </register>
+        <register>
+          <name>IER</name>
+          <description>Interrupt enable: one bit per cause of interrupt, all off at reset.</description>
+          <addressOffset>0x1</addressOffset>
+        </register>
+        <register>
+          <name>LCR</name>
+          <description>Line control: the format of a word and the divisor latch.</description>
+          <addressOffset>0x3</addressOffset>
+          <resetValue>0x0</resetValue>
+          <fields>
+            <field>
+              <name>WLS</name>
+              <description>Word length.</description>
+              <bitRange>[1:0]</bitRange>
+              <enumeratedValues>
+                <enumeratedValue><name>FIVE</name><description>5 bits.</description><value>0</value></enumeratedValue>
+                <enumeratedValue><name>SIX</name><description>6 bits.</description><value>1</value></enumeratedValue>
+                <enumeratedValue><name>SEVEN</name><description>7 bits.</description><value>2</value></enumeratedValue>
+                <enumeratedValue><name>EIGHT</name><description>8 bits.</description><value>3</value></enumeratedValue>
+              </enumeratedValues>
+            </field>
+            <field>
+              <name>STB</name>
+              <description>Two stop bits instead of one.</description>
+              <bitOffset>2</bitOffset>
+              <bitWidth>1</bitWidth>
+            </field>
+            <field>
+              <name>PEN</name>
+              <description>Parity enabled.</description>
+              <bitOffset>3</bitOffset>
+              <bitWidth>1</bitWidth>
+            </field>
+            <field>
+              <name>DLAB</name>
+              <description>Divisor latch access: DLL and DLM replace RBR, THR and IER.</description>
+              <bitOffset>7</bitOffset>
+              <bitWidth>1</bitWidth>
+            </field>
+          </fields>
+        </register>
+        <register>
+          <name>LSR</name>
+          <description>Line status.</description>
+          <addressOffset>0x5</addressOffset>
+          <access>read-only</access>
+          <fields>
+            <field>
+              <name>DR</name>
+              <description>Data ready: a byte waits in RBR.</description>
+              <bitOffset>0</bitOffset>
+              <bitWidth>1</bitWidth>
+            </field>
+            <field>
+              <name>OE</name>
+              <description>Overrun error: a byte was lost. Reading the register clears it.</description>
+              <bitOffset>1</bitOffset>
+              <bitWidth>1</bitWidth>
+              <readAction>clear</readAction>
+            </field>
+            <field>
+              <name>THRE</name>
+              <description>THR is empty: it takes a byte.</description>
+              <bitOffset>5</bitOffset>
+              <bitWidth>1</bitWidth>
+            </field>
+          </fields>
+        </register>
+      </registers>
+    </peripheral>
+    <peripheral>
+      <name>TEST</name>
+      <description>The test finisher: writing to it stops QEMU.</description>
+      <baseAddress>0x00100000</baseAddress>
+      <registers>
+        <register>
+          <name>FINISHER</name>
+          <description>What to stop with.</description>
+          <addressOffset>0x0</addressOffset>
+          <access>write-only</access>
+          <resetValue>0x0</resetValue>
+          <resetMask>0xFFFF0000</resetMask>
+          <fields>
+            <field>
+              <name>STATUS</name>
+              <description>How the machine stops.</description>
+              <bitRange>[15:0]</bitRange>
+              <enumeratedValues>
+                <enumeratedValue><name>FAIL</name><description>Stops with failure, the exit code being CODE.</description><value>0x3333</value></enumeratedValue>
+                <enumeratedValue><name>PASS</name><description>Stops with success.</description><value>0x5555</value></enumeratedValue>
+              </enumeratedValues>
+            </field>
+            <field>
+              <name>CODE</name>
+              <description>The exit code of a failure.</description>
+              <bitRange>[31:16]</bitRange>
+            </field>
+          </fields>
+        </register>
+      </registers>
+    </peripheral>
+    <peripheral>
+      <name>PLIC</name>
+      <description>The platform-level interrupt controller.</description>
+      <baseAddress>0x0C000000</baseAddress>
+      <registers>
+        <register>
+          <dim>96</dim>
+          <dimIncrement>4</dimIncrement>
+          <name>PRIORITY[%s]</name>
+          <description>The priority of each source; QEMU keeps 3 bits.</description>
+          <addressOffset>0x0</addressOffset>
+        </register>
+        <register>
+          <dim>3</dim>
+          <dimIncrement>4</dimIncrement>
+          <name>PENDING[%s]</name>
+          <description>Pending bits, 32 sources a word.</description>
+          <addressOffset>0x1000</addressOffset>
+          <access>read-only</access>
+        </register>
+        <cluster>
+          <dim>2</dim>
+          <dimIncrement>0x1000</dimIncrement>
+          <name>CTX[%s]</name>
+          <description>One context of hart 0: machine mode, then supervisor mode.</description>
+          <addressOffset>0x200000</addressOffset>
+          <register>
+            <name>THRESHOLD</name>
+            <description>The lowest priority the context takes.</description>
+            <addressOffset>0x0</addressOffset>
+          </register>
+          <register>
+            <name>CLAIM</name>
+            <description>Reading it takes the interrupt it names.</description>
+            <addressOffset>0x4</addressOffset>
+            <readAction>modify</readAction>
+          </register>
+        </cluster>
+      </registers>
+    </peripheral>
+    <peripheral>
+      <name>PLIC_M0</name>
+      <description>The machine mode context of the PLIC alone: a second view of bytes PLIC covers.</description>
+      <baseAddress>0x0C200000</baseAddress>
+      <registers>
+        <register>
+          <name>THRESHOLD</name>
+          <description>The lowest priority the context takes.</description>
+          <addressOffset>0x0</addressOffset>
+        </register>
+        <register>
+          <name>CLAIM</name>
+          <description>Reading it takes the interrupt it names.</description>
+          <addressOffset>0x4</addressOffset>
+          <readAction>modify</readAction>
+        </register>
+      </registers>
+    </peripheral>
+    <peripheral>
+      <dim>8</dim>
+      <dimIncrement>0x1000</dimIncrement>
+      <name>VIRTIO%s</name>
+      <description>A virtio-mmio transport: eight of them, one type.</description>
+      <baseAddress>0x10001000</baseAddress>
+      <access>read-only</access>
+      <registers>
+        <register>
+          <name>MAGIC_VALUE</name>
+          <description>"virt" in ASCII.</description>
+          <addressOffset>0x0</addressOffset>
+        </register>
+        <register>
+          <name>VERSION</name>
+          <description>The version of the transport: 1 is the legacy one.</description>
+          <addressOffset>0x4</addressOffset>
+        </register>
+        <register>
+          <name>DEVICE_ID</name>
+          <description>The kind of device attached, 0 for none.</description>
+          <addressOffset>0x8</addressOffset>
+        </register>
+        <register>
+          <name>VENDOR_ID</name>
+          <description>"QEMU" in ASCII.</description>
+          <addressOffset>0xC</addressOffset>
+        </register>
+      </registers>
+    </peripheral>
+  </peripherals>
+</device>

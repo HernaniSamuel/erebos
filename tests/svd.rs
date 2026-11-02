@@ -254,6 +254,35 @@ fn summary(module: &str, diags: &[diag::Diagnostic], sources: &SourceMap) -> Str
     out
 }
 
+// ---- QEMU `virt`
+
+/// `virt.ers`, the module the e2e program of `tests/e2e/svd_virt/` declares,
+/// is what the generator writes from `virt.svd` today: it is kept in the
+/// repository, so a change to the generator that alters it shows in the diff.
+#[test]
+fn virt_ers_is_what_the_generator_writes_from_virt_svd() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/e2e/svd_virt");
+    let name = "virt.svd";
+    let (generated, diags, sources) = svd::generate(name, &read(&dir.join(name)));
+    let diags = diags.into_vec();
+    let Some(module) = generated else {
+        panic!(
+            "{name} was not generated:\n{}",
+            diag::render(&diags, &sources, false)
+        );
+    };
+    assert!(
+        diags.is_empty(),
+        "{name} gave diagnostics:\n{}",
+        diag::render(&diags, &sources, false)
+    );
+    assert!(
+        module == read(&dir.join("virt.ers")),
+        "tests/e2e/svd_virt/virt.ers is not what the generator writes from {name}; \
+         regenerate it with `erebos svd tests/e2e/svd_virt/virt.svd`"
+    );
+}
+
 // ---- the command
 
 /// A directory of its own for one test of the command, empty.
