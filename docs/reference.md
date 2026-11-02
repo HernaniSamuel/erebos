@@ -1,4 +1,4 @@
-# Erebos language reference (M3.4a)
+# Erebos language reference (M3.4b)
 
 This describes the language as the compiler implements it today. The
 reasoning behind each rule lives in the ADRs (`docs/adr/`), cited as
@@ -3461,6 +3461,370 @@ against the length first (see "Register arrays and clusters"). Until M5, any cod
 a peripheral reaches it, as with a `static mut`; ownership of peripherals
 is M5's.
 
+## Peripherals from SVD (ADR 0070 to 0072)
+
+```
+erebos svd <input.svd> [-o <output.ers>]
+```
+
+`erebos svd` reads an SVD file, the XML vendors publish to describe a chip,
+and writes an Erebos source file: a module the program declares, as `mod
+esp32c3;`, kept with the program's sources and built as any other. **The
+compiler never reads SVD**: `erebos build` depends on `.ers` files alone, so
+a build is still a function of its sources, and a chip's peripherals can be
+read, reviewed and edited as Erebos. The generator is the module `svd` of the
+compiler's crate; it is no stage of the compiler, and `erebos build` never
+runs it.
+
+**The command.**
+
+- `-o` names the output. Left out, it is in the input's directory, named
+  after the input's file name without its last extension, made a module's
+  name by the steps of "How names are converted" below, with the extension
+  `.ers`: `esp32-c3.svd` gives `esp32_c3.ers`, `32bit.svd` `_32bit.ers`,
+  `match.svd` `match_.ers`, `a.b.svd` `a_b.ers`, and a file without
+  extension `plain` gives `plain.ers`. An input whose name leaves nothing
+  for an identifier (`@@.svd`) is an error asking for `-o`.
+- An existing output is replaced. An output that is the input (the same
+  file, whatever the spelling of the path) is an error, reported before
+  anything is read. **Nothing is written when an error is reported.**
+- Warnings are printed to standard error and the module is written: the
+  exit status is a failure for an error only. A bad command line (an option
+  `svd` does not take, such as `-O`, or no input) exits with status 2.
+- **The output is a function of the input's bytes and its file name**: no
+  date, no directory, `\n` line endings, and an order fixed by the SVD file.
+  Generating twice gives the same bytes, and a new version of a vendor's file
+  shows as a diff of the generated module. The format (below) is the
+  generator's, not the language's: it may change from one version of the
+  compiler to the next, and a kept module is then generated again.
+- The file must be UTF-8 (`svd::xml` otherwise, without a span). Elements are
+  known by their local name, namespaces ignored; a DTD is refused.
+
+**The header.** The module starts with three comment lines: the generator and
+the input's file name, `Device: NAME, version V.` (without the version when
+the device has none), and that edits are lost when it is generated again.
+The device's `licenseText`, when it has one, follows as a comment, each line
+with its white space at the end removed (and blank lines at either end of
+the text dropped). Text of the SVD file in a comment has its line breaks and
+other control characters replaced by spaces, so that it never leaves the
+comment.
+
+**The format.** Four spaces of indentation per module. Items and entries are
+in the syntax of "Peripherals", every optional part in the grammar's order
+(`step`, read effect, `in`; for a field its mode, bits, read effect, write
+effect, default). Offsets, addresses and steps are in hexadecimal, `0x` then
+upper-case digits, in groups of four from the right separated by `_` when
+there are more than four (`0x6000_0000`, `0x20`; zero is `0x0`). Bit
+positions are decimal, and so are integer defaults below 10 (hexadecimal
+from 10, as offsets are). An element's `description` is a `//` comment above
+each item it makes, its white space collapsed and the text wrapped at 79
+columns (a word longer than a line is alone on its line); an item with a
+comment is set apart from its neighbors by a blank line.
+
+### Where items go, and how they are named (ADR 0071)
+
+The module holds, in the order of the SVD file, **a module per peripheral
+type**, then **the peripherals**, all `pub`. A peripheral type's module holds
+the type, then, in the order of its registers, the bit-field struct of each
+register that has fields and the enums of its fields, then **a module per
+cluster type**, which holds the cluster's type and its registers' items in
+the same way. A path from one generated module to another goes through
+`super`, so the file works wherever the program declares it.
+
+**How names are converted.** An item is named from the `name` of one SVD
+element, in these steps:
+
+1. **The index.** An item that is one element of a repeated SVD element (a
+   peripheral, register, cluster or field with `dim`, written one per
+   index) has `%s`, or `[%s]`, replaced by its index as `dimIndex` writes
+   it: `CH%s_CONF0` with index 2 is `CH2_CONF0`. Any other item (an array, or
+   a type, module or enum shared by every index) has `[%s]` and `%s`
+   removed: `PRIORITY[%s]` is `PRIORITY`.
+2. **The characters.** Each character that is not an ASCII letter, digit or
+   `_` is replaced by `_`; each run of `_` is made one, and `_` at either end
+   removed.
+3. **The case**, by the kind of item. **Pascal case** splits a name at `_`
+   and writes each part with its first character upper and the rest lower
+   (`RND_DATA` is `RndData`); **lower case** lowers every letter.
+4. **A leading digit** gets a `_` before it.
+5. **Names Erebos gives a meaning**: a name that is a keyword of the lexer,
+   `core`, or a built-in type (`bool`, `u8` to `u64`, `i8` to `i64`,
+   `usize`, `isize`, `Option`, `Result`) gets a `_` after it: `continue`
+   is `continue_`. The keywords are the lexer's table itself. Words that are
+   names by position only (`read`, `write`, `at`, `step`, `in`, `over`) stay
+   as they are: `GPIO`'s `IN` is the register `in`.
+6. **Names that meet.** Two items of one scope with one name after
+   conversion: the later one, in the order the file is written, gets `_`
+   after it, as many times as it takes. The scopes are the module (the file's
+   modules and peripherals together, as the language has one namespace for
+   them, and a module's type, structs and enums), a peripheral type's entries,
+   a struct's fields and an enum's variants. Groups (`in dlab`) are labels
+   in no scope.
+
+| Item | Case | Example |
+|---|---|---|
+| peripheral | as in the SVD | `UART0`, `TIMG0` |
+| peripheral type | Pascal case of the peripheral it is declared for | `Uart0` |
+| its module | lower case of that peripheral | `uart0` |
+| register, cluster, field | lower case | `rxfifo_rst`, `ch2_conf0` |
+| register array, cluster array | lower case | `priority` |
+| cluster type, and its module | Pascal case, lower case | `Ch`, `ch` |
+| a register's bit-field struct | Pascal case of the register | `Conf0` |
+| a field's enum | the struct's name, then Pascal case of the field | `LcrWls` |
+| an enum's variant | Pascal case of the enumerated value | `Eight` |
+| an alternate group | lower case | `in dlab` |
+
+A register's struct that meets the peripheral type it is declared next to is
+renamed, as the struct of `RTC_CNTL`'s register `RTC_CNTL` is `RtcCntl_`. A
+peripheral type is shared by the peripherals derived from the one it is
+named for. One SVD element repeated by a list or an array is one register
+type, and one field repeated by `dim` is one enum.
+
+Steps 2 and 4 change what the SVD wrote, and a name meeting another is
+renamed: either is the warning `svd::renamed`, pointing at the `<name>` of
+the element (at the register, for an alternate group), and labeling the other
+item when two meet. Step 5 is not warned. A name with nothing left after
+step 2 is the error `svd::invalid-name`, but for an enumerated value, which
+is then no variant.
+
+### What each construct becomes (ADR 0072)
+
+| SVD | Erebos |
+|---|---|
+| `peripheral` | `peripheral NAME: TYPE at baseAddress;`, with a type of its own in a module |
+| `dim` on a peripheral | one peripheral per index, `dimIncrement` apart, all of one type |
+| `derivedFrom` on a peripheral | its base's registers and what the base states, then its own; one that states no `registers` and none of `size`, `access`, `resetValue`, `resetMask` shares its base's type |
+| `alternatePeripheral` | `over` that peripheral; a list is `over` its first element |
+| `register` | `access NAME: TYPE at addressOffset`, the type being the unsigned integer of its `size`, or its bit-field struct when it has fields |
+| `dim` on a register, `[%s]` name | a register array, `step dimIncrement` written when it is not the register's width |
+| `dim` on a register, `%s` name, or a `dimIndex` other than `0` to `dim - 1` | one register per index (`dimIndex` as `2-3`, `A-C` or `A,B,C`, or `0` to `dim - 1`), at `addressOffset + i * dimIncrement` |
+| `alternateGroup` | `in` that group in lower case |
+| `alternateRegister`, `alternateCluster` | `in` the entry's own name: a group of its own (the one it names is not looked up); a register with both is in the `alternateGroup` |
+| `readAction` on a register or a field | `read clears` (`clear`), `read sets` (`set`), `read modifies` (`modify`, `modifyExternal`) |
+| `cluster` | a cluster of a peripheral type of its own, in a module, its registers' offsets counted from it; `dim` with `[%s]` is a cluster array with its `step`, with `%s` one cluster per index |
+| `field` | `NAME: TYPE at BITS`, bits from `bitOffset` and `bitWidth`, `lsb` and `msb`, or `bitRange` (the first of the three the field states), `at 3` for one bit and `at 0..=7` for more |
+| `dim` on a field | one field per index, `dimIncrement` bits apart, sharing one enum |
+| a field's type | its enum when it has one; otherwise `bool` for one bit, and the smallest of `u8`, `u16`, `u32`, `u64` that holds the bits |
+| `modifiedWriteValues` (field's, or its register's) | the field's write effect: `oneToClear` is `write 1 clears`, and so for the six |
+| `resetValue` and `resetMask` | the field's default: `true`, `false`, an integer or `.Variant`; none when it has a write effect, when the mask leaves one of its bits unknown, or when its enum has no variant of that value |
+| `enumeratedValues` | an enum on the field's integer type, a variant per `enumeratedValue` that has a `value`, in the file's order |
+| `enumeratedValues` with `derivedFrom` | the enum written for the set it names, when the merged values equal the base's and the integer type is the same; otherwise a set of its own |
+
+`size`, `access`, `resetValue` and `resetMask` are inherited from the device,
+the peripheral and the clusters to their registers, as SVD has it, a register
+stating its own over theirs; a `resetMask` stated nowhere covers every bit
+of the register, and the bits of either above the register's size are not
+read. A register without a `resetValue` at any level has no reset value,
+and its fields no default; nothing is lost, so nothing is warned. A
+register's **mode** is its `access`, inherited; when no element states one, it
+is taken from its fields: `read` when there is at least one field and every
+one is `read-only`, `write` when every one is `write-only` or `writeOnce`,
+`read write` otherwise (a field that states no access counts for neither). A field's mode is written only where it differs from the
+register's (`read-only` is `read`, `write-only` is `write`; `read-write`
+takes no word).
+
+**`derivedFrom`.** A name without `.` names an element of the same kind with
+the same parent (a sibling peripheral, a register or cluster of the same
+peripheral or cluster, a field of the same register); a set of enumerated
+values is named by its own `name`, among the sets of every field of the same
+register. A name with `.` is a path from the device
+(`PERIPHERAL.REGISTER.FIELD`, through clusters by their names, and
+`PERIPHERAL.REGISTER.FIELD.SET` for a set). The derived element is the base's children and what the
+base states itself, then the derived element's own over them; what the base
+inherits from its parents is not copied, the derived element inherits from
+its own parents. A child of the derived element with the `name` of one of the
+base's replaces it, where the base had it; the others are added after. A name
+that finds nothing is `svd::unknown-reference`, and elements deriving from
+each other `svd::derived-cycle`.
+
+**Not read.** `addressUnitBits` and `width` (every offset counts bytes),
+`addressBlock`, `groupName`, `headerStructName`, `prependToName`,
+`appendToName`, `dataType`, `cpu` and `interrupt`: the generator writes no
+interrupts (they are M4's). An `alternateRegister` or `alternateCluster`
+naming nothing is no error.
+
+### What has no declaration
+
+What Erebos cannot declare is **declared as close as the language allows,
+with a comment `// svd: ...` above the item saying what was left out, and
+the warning `svd::not-declared` at the SVD element**. The whole file is
+generated, and what it lost is shown both in the code and when it is
+generated. A note that wraps repeats `// svd: ` on each line, so that a
+search finds them all. They follow the item's description. Each case:
+
+- **A register whose `size` is not 8, 16 or 32** is left out: no entry, no
+  struct, only a block of comments with its description and why. (An array
+  or a list of it too.)
+- **`writeOnce` and `read-writeOnce`**, on a register or a field, are `write`
+  and `read write`: that it can be written once is not declared.
+- **A reset value that is not 0 on a register without fields**, and a
+  **`modifiedWriteValues` other than `modify` on a register without
+  fields**: there is no field to carry them. A register with fields has them
+  carried by the fields.
+- **`writeConstraint` and `protection`**, on a register, and `writeConstraint`
+  on a field, at their own elements.
+- **`modifiedWriteValues` `clear` and `set`** on a field, also when it is the
+  register's that gives them: the field has no write effect (the language
+  has none without a neutral value). A field assignment to another field of
+  the register triggers it. An explicit `modify` is SVD's default, read as an
+  absent one: no comment, no warning.
+- **A reset value that is no variant of the field's enum**: the field has no
+  default.
+- **An enumerated value with don't-care bits** (`#1x0`), **one whose value
+  another variant has**, and **one whose name has nothing left after step 2**
+  are left out of the enum, the comment standing where the variant would be.
+  An enum left with no variant is not written, and the field is an integer.
+  An `enumeratedValue` without a `name`, or only with `isDefault`, is no
+  variant, and nothing is warned.
+- **Two sets of enumerated values on one field**, or two of any `usage`: a
+  field has one type, so it is an integer (`bool` for one bit), with the
+  comment and the warning at the field, labeling each set.
+
+**Values that are no SVD value.** An `access`, `readAction`,
+`modifiedWriteValues` or `usage` whose value SVD does not define (the
+GD32VF103's `access` `write`, the CH32V003's `read/clear`) is read as
+absent, with the warning `svd::invalid-value` at it and a comment at the
+item: the rules above apply as if the element were not there. So a field
+with `access` `write` takes its register's mode, and a register with one,
+when no parent states an access, the mode its fields imply. The generator
+does not guess what the vendor meant. An `isDefault` that is not `true`,
+`false`, `1` or `0` is warned too and read as `false`, without a comment.
+
+**Peripherals that share bytes.** The generator computes the extent of each
+peripheral type as the compiler does, and examines the peripherals in the
+order of the file. Let `S` be the earlier peripherals a peripheral `P` shares
+a byte with. When `S` is empty, `P` has no `over`. Otherwise, the
+candidates are the peripherals of the file other than `P` such that every
+peripheral of `S` is the candidate or is written `over` it; when there is
+one, `P` is written `over` **the first candidate in the order of the file**,
+with the comment `// svd: the SVD does not say that it is over ...: found from
+the bytes it shares with ...`, and no warning. A candidate need not share a
+byte with `P`. When no candidate exists, as a peripheral covering two that do
+not overlap each other, **`P` is written without `over`**, the warning
+`svd::overlap` names the peripherals of `S`, and the generated module does
+not compile: the compiler reports `ty::peripheral-overlap` there, as it
+would for the same peripherals written by hand. An `over` the SVD states
+(`alternatePeripheral`) is written as it is, and looks for no bytes. In the
+ESP32-C3's file `APB_CTRL` comes first, so `RNG` is `over APB_CTRL`.
+
+**What the generator does not check.** It does not repeat the compiler's
+checks, but for the extents `over` needs: a field past its register's bits,
+two fields sharing a bit, a misaligned offset, a step smaller than its
+register, two registers at one offset or an address at or past 2³² generate
+without an error, and are reported when the generated module is compiled,
+at the generated code.
+
+**Limits.** A hostile file must not overflow the stack or fill the memory, so
+the reader limits: elements stand at most 32 levels deep (the peripheral
+being 1; real files reach 6); at most 32 elements wait on a `derivedFrom` at
+once; `derivedFrom` copies at most 262 144 elements in all; and a list (the
+elements of a `dim` that is not an array, and a `dimIndex`) has at most
+65 536 indices. The first three are `svd::too-large`, the last
+`svd::invalid-dim`. A file of `n` equal names gets an output of `n²` bytes,
+as step 6 of the names asks for ("as many times as it takes"), which no limit
+here bounds.
+
+### An example
+
+`tests/e2e/svd_virt/virt.svd` describes the devices of QEMU `virt` the e2e
+program of that directory uses, and `virt.ers` is what `erebos svd` writes
+from it, kept so that its changes are reviewed (a test requires that the two
+agree). The 16550's line control register, in the SVD:
+
+```
+<register>
+  <name>LCR</name>
+  <description>Line control: the format of a word and the divisor latch.</description>
+  <addressOffset>0x3</addressOffset>
+  <resetValue>0x0</resetValue>
+  <fields>
+    <field>
+      <name>WLS</name>
+      <description>Word length.</description>
+      <bitRange>[1:0]</bitRange>
+      <enumeratedValues>
+        <enumeratedValue><name>FIVE</name><description>5 bits.</description><value>0</value></enumeratedValue>
+        <!-- SIX, SEVEN -->
+        <enumeratedValue><name>EIGHT</name><description>8 bits.</description><value>3</value></enumeratedValue>
+      </enumeratedValues>
+    </field>
+    <field>
+      <name>DLAB</name>
+      <description>Divisor latch access: DLL and DLM replace RBR, THR and IER.</description>
+      <bitOffset>7</bitOffset>
+      <bitWidth>1</bitWidth>
+    </field>
+  </fields>
+</register>
+```
+
+and the module, where the device's `size` 32 and `access` `read-write` and
+the peripheral's `size` 8 are inherited (the register's mode, `read write`,
+is the device's):
+
+```
+pub mod uart0 {
+    // The 16550 UART: the console of the machine.
+    pub peripheral Uart0 {
+        // Line control: the format of a word and the divisor latch.
+        pub read write lcr: Lcr at 0x3,
+        // ...
+    }
+
+    pub struct Lcr: u8 {
+        // Word length.
+        pub wls: LcrWls at 0..=1 = .Five,
+
+        // Divisor latch access: DLL and DLM replace RBR, THR and IER.
+        pub dlab: bool at 7 = false,
+    }
+
+    pub enum LcrWls: u8 {
+        // 5 bits.
+        Five = 0,
+
+        // 8 bits.
+        Eight = 3,
+    }
+}
+```
+
+(The file has the four variants and two more fields.) The PLIC's `PRIORITY[%s]`
+is a register array, `CTX[%s]` a cluster array with its own module, and
+`PLIC_M0`, which the SVD does not say is over `PLIC`, is found from the bytes
+it shares:
+
+```
+pub mod plic {
+    pub peripheral Plic {
+        // The priority of each source; QEMU keeps 3 bits.
+        pub read write priority: [u32; 96] at 0x0,
+        // ...
+        // One context of hart 0: machine mode, then supervisor mode.
+        pub ctx: [ctx::Ctx; 2] at 0x20_0000 step 0x1000,
+    }
+
+    pub mod ctx {
+        // One context of hart 0: machine mode, then supervisor mode.
+        pub peripheral Ctx {
+            // The lowest priority the context takes.
+            pub read write threshold: u32 at 0x0,
+            // ...
+        }
+    }
+}
+
+// The machine mode context of the PLIC alone: a second view of bytes PLIC
+// covers.
+// svd: the SVD does not say that it is over `PLIC`: found from the bytes it
+// svd: shares with `PLIC`.
+pub peripheral PLIC_M0: plic_m0::PlicM0 at 0xC20_0000 over PLIC;
+```
+
+The program declares the module with `mod virt;`, brings in `virt::uart0::Lcr`
+and writes `UART0.lcr = Lcr { wls: .Eight, .. };`, the `..` taking the defaults
+the reset value gave.
+
 ## `core` (ADR 0020, 0052)
 
 `core` is a module tree written in Erebos and shipped inside the
@@ -3680,6 +4044,14 @@ prints a compiler stage instead: `tokens`, `ast`, `hir`, `typeck`, `mir`,
   `bit field NAME` in `typeck`, and a literal `struct Lcr` or `struct Lcr
   ..` when it ends with `..`.
 
+```
+erebos svd <input.svd> [-o <output.ers>]
+```
+
+writes the Erebos module of an SVD file, and no executable (see "Peripherals
+from SVD"). It exits with status 1 for an error of the generator and 2 for a
+bad command line, as `build` does.
+
 See `CONTRIBUTING.md` for setup and running on QEMU.
 
 ## Diagnostics
@@ -3869,3 +4241,26 @@ Every error has a stable code, shown with the message.
 | `codegen::llvm` | LLVM rejected the target; an environment problem |
 | `link::no-memory-map` | building an executable, or printing its linker script, for a program without a `memory` block |
 | `link::region-overflow` | what is placed in a region does not fit in it, found by the linker |
+
+**Diagnostics of `erebos svd`.** The generator reports through the same
+diagnostics, with spans into the SVD file. A diagnostic has a severity, an
+error or a **warning**: an error stops the generation and nothing is written;
+a warning is shown and the module is written. **Only the generator emits
+warnings**; the compiler reports errors alone. The codes of the generator are
+below, the four warnings marked.
+
+| Code | Meaning |
+|------|---------|
+| `svd::xml` | a file that is not well-formed XML, with a DTD, or not UTF-8 (without a span, then) |
+| `svd::not-svd` | a root element other than `device`, or no `peripherals` |
+| `svd::missing-element` | an element SVD requires and no parent supplies: the device's `name`, a peripheral's `name` or `baseAddress`, a register's `name`, `addressOffset` or `size`, a cluster's `name` or `addressOffset`, a field's `name` or bits, an enumerated value with neither `value` nor `isDefault` |
+| `svd::invalid-number` | a number SVD's syntax does not allow (decimal, `0x`, `#` for binary), one that does not fit where 32 bits are needed, a `bitRange` that is not `[msb:lsb]`, a `bitWidth` of 0, an `msb` below the `lsb` |
+| `svd::invalid-dim` | a `dim` of 0 or without `dimIncrement`, a `dimIndex` that is no list or range, goes down or has another length than `dim`, a `[%s]` or `%s` missing from a repeated name, a list of more than 65 536 indices |
+| `svd::unknown-reference` | a `derivedFrom` naming no element of its kind, or an `alternatePeripheral` naming no peripheral |
+| `svd::derived-cycle` | elements deriving from each other |
+| `svd::too-large` | a file that passes a limit of the reader: elements more than 32 levels deep (nested or through `derivedFrom`), more than 32 elements waiting on a `derivedFrom`, or more than 262 144 elements copied by `derivedFrom` |
+| `svd::invalid-name` | a name with nothing left after its characters are replaced, an empty one included; not for an enumerated value |
+| `svd::renamed` (warning) | an item renamed because its SVD name has characters no identifier has or starts with a digit, or because another of its scope has its name |
+| `svd::not-declared` (warning) | an SVD construct the generated item does not declare: a register of a size other than 8, 16 or 32, `writeOnce`, a reset value or `modifiedWriteValues` on a register without fields, `writeConstraint`, `protection`, `modifiedWriteValues` `clear` or `set`, a reset value that is no variant, an enumerated value with don't-care bits, a duplicate value or no name, two sets on a field |
+| `svd::invalid-value` (warning) | an `access`, `readAction`, `modifiedWriteValues`, `usage` or `isDefault` whose value SVD does not define, read as absent (as `false` for `isDefault`) |
+| `svd::overlap` (warning) | a peripheral sharing bytes with earlier ones that one `over` cannot name |

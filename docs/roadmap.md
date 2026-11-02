@@ -59,7 +59,7 @@ updated, and a program on QEMU.
 | **M3.2** ✅ Peripherals | `peripheral` blocks: registers at offsets, with widths and access modes (read-only, write-only, read-write), accessed as MMIO; a write to a read-only register is a compile error; the UART declared in the language | hello world through a UART and a test finisher declared as peripherals |
 | **M3.3** ✅ Register fields | fields at bit positions of a register (representation clauses, as in Ada), enums in fields, write-1-to-clear fields, reads with side effects, reset values | the UART configured through its fields |
 | **M3.4a** ✅ Register arrays and clusters | register arrays and clusters (ADR 0064), access modes of fields (ADR 0065), peripherals over others (ADR 0066), from the design checked against the SVD of three real riscv32 chips (ADR 0067) | the PLIC's priorities, enable words and contexts, and the eight virtio-mmio transports through one driver |
-| **M3.4b** SVD | `svd2erebos`: whether it is a tool of its own, how it names items and treats what has no declaration; a real chip's SVD generated and compiled | a peripheral generated from SVD, run on QEMU |
+| **M3.4b** ✅ SVD | `erebos svd`, a subcommand writing Erebos source from an SVD file (ADR 0070), how it names items (ADR 0071) and treats what has no declaration (ADR 0072); the ESP32-C3's SVD generated and compiled | a peripheral generated from SVD, run on QEMU |
 | **M3.5** Second target | ARM Cortex-M on QEMU; what depends on the target becomes a per-target description (pointer width, widest access, ABI, startup, linker script, LLVM setup, runtime functions) | the e2e programs on both targets |
 
 Decisions already agreed for the later steps:
@@ -485,4 +485,35 @@ Documentation owed:
   checks that an index past a register array calls the panic function.
   Left to M3.4b: `svd2erebos`, and what it does with what has no
   declaration (ADR 0067).
-- **Next: M3.4b** (SVD).
+- **M3.4b done.** `erebos svd <input.svd> [-o <output.ers>]` writes an
+  Erebos module from an SVD file (ADR 0070 to 0072); the compiler never
+  reads SVD, so a build is still a function of its `.ers` files. The
+  generator is the module `svd`, reading the XML with `roxmltree`, and
+  reports through `diag`, which gained warnings (the compiler emits none).
+  It writes a module per peripheral type, then the peripherals, with
+  registers, register arrays and lists, clusters, bit-field structs,
+  fields with their modes, effects and defaults, and enums; names are
+  converted to Erebos's (keywords and names that meet get a `_`, with a
+  warning when a name changed); `derivedFrom`, `dim` and the properties
+  SVD inherits are resolved; what has no declaration is declared as close
+  as the language allows, with a `// svd:` comment and a warning; an
+  `access` value that is no SVD value is read as absent and warned; and
+  peripherals that share bytes are written `over` the first candidate, with
+  a comment, or warned (`svd::overlap`) when no `over` can say it. The
+  output is a function of the file's bytes and name. The ESP32-C3's SVD
+  (version 18, 1.37 MB, Apache 2.0, in `tests/svd/chips/`) is generated
+  whole and built into executables at both optimization levels, not run
+  since the official QEMU has no such machine: 34 peripheral types, 37
+  peripherals, 1 429 registers, 3 507 fields, no error, two warnings; small
+  hand-written files of `tests/svd/` cover the constructs it lacks, each
+  generated, type checked and snapshotted. The milestone program runs on
+  QEMU at both optimization levels: the devices of QEMU `virt`, described
+  in a hand-written SVD (`tests/e2e/svd_virt/virt.svd`) and generated into
+  `virt.ers`, kept and compared by a test, are configured and used through
+  their fields, a register array with a run-time index, a cluster array
+  served by a driver, a peripheral found `over` the PLIC, and eight
+  transports through one driver. The reader limits what a hostile file can
+  cost (nesting, `derivedFrom` chains and copies, lists), reported as
+  `svd::too-large`. Interrupts, which the generator does not write, are
+  M4's.
+- **Next: M3.5** (the second target).

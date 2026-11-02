@@ -77,10 +77,12 @@ docs/reference.md The language as implemented (keep in sync with the compiler)
 docs/open-findings.md Minor findings left open, to work off between steps
 .claude/plans/  Implementation plan per roadmap step, with the decisions taken while building it
 src/            Compiler (single crate; modules per layer, see ADR 0003)
+src/svd/        `erebos svd`, the generator of Erebos source from SVD (ADR 0070 to 0072); no layer of the compiler
 rt/             The `core` module in Erebos, built into every program (ADR 0020, 0052)
 tests/ui/       Snapshot tests per compiler stage
 tests/e2e/      Programs run on QEMU, with expected output and exit code
 tests/layout/   Structs whose layout is checked against clang
+tests/svd/      SVD files that `tests/svd.rs` generates, snapshots and type checks, and `chips/`: the ESP32-C3's, built into executables
 tests/common/   Helpers shared by the tests: QEMU harness, program generator
 tests/generated.rs Generated programs run against two oracles (ADR 0068)
 tests/rejected.rs Programs with an injected error must be rejected (ADR 0069)
