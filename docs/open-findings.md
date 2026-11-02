@@ -22,6 +22,33 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   entries, so a user-written `[T; 0x7FFF_FFFF]` stalls the compiler for
   minutes; the ADR accepts it, but `docs/reference.md` does not say so.
   (M3.4a)
+- `src/query.rs` (around lines 374-385) and `src/ty/pattern.rs` (lines
+  65-67 and 325) use `diags.len()` before and after a call to decide `ok`
+  and to count diagnostics reported elsewhere. `len` counts warnings too,
+  so the first warning a compiler layer emits would mark a function as
+  failed; count errors only when adding it. (M3.4b)
+- The SVD reader looks siblings up linearly (`lookup` builds a vector of
+  every peripheral id for each `derivedFrom`), so many derived peripherals
+  cost quadratic time (20 000 take 11 s in a debug build); a map from name
+  to id per parent would fix it. The generator is quadratic in the number
+  of peripherals too (each is compared with every earlier one): 65 536
+  stacked peripherals in a 300-byte file take minutes, with bounded output
+  and memory; a cap on peripheral lists would bound the time. (M3.4b)
+- ADR 0071 makes the generator's output quadratic in the number of equal
+  names ("`_` as many times as it takes"); there is no cap. (M3.4b)
+- `src/svd/names.rs`, `suffix`: the `is_reserved` branch cannot fire and
+  `Converted.changed` is never read; `src/svd/fields.rs` (around line 643)
+  falls back to an integer or `bool` without a word if a planned enum is
+  missing (only input that already gives `svd::invalid-name` reaches it).
+  (M3.4b)
+- `erebos svd tests/svd/chips/esp32c3.svd` prints about 83 KB of warnings:
+  the `svd::renamed` warning of `RTC_CNTL` has labels 1 600 lines apart and
+  miette draws every line between them. Options: leave it, put the other
+  item's position in the message, or print far-apart labels as separate
+  snippets in `render`. (M3.4b)
+- The `svd::renamed` and `svd::invalid-name` warnings for an alternate
+  group, and `svd::not-declared` and `svd::overlap`, label the whole
+  element, since the model has no span for `alternateGroup`. (M3.4b)
 
 ## Tests
 
@@ -57,6 +84,12 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   (M3.4a)
 - `tests/e2e/register_index_out_of_bounds.ers` covers a read past a
   register array only; a write has no run-time test. (M3.4a)
+- `src/diag.rs`, the test `a_warning_renders_with_the_warning_glyph`: an
+  `assert!(out.contains("something is odd"))` repeats the stricter
+  `"⚠ something is odd"` assertion two lines above. (M3.4b)
+- `tests/e2e/svd_virt/virt.svd`: the Decisions of step 6 name the access of
+  each register except `DLL`, `DLM` and `IER`, which inherit the device's
+  `read-write`. (M3.4b)
 
 ## Docs
 
@@ -65,3 +98,15 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   "against the length first (see ..."), and the bullet "A `step` is the
   word after the offset only when no `:` follows it, and so is `in`"
   needs an example. (M3.4a)
+- ADR 0071 (lines about 84 and 129) says `svd::renamed` is reported "at its
+  SVD element"; it is now reported at the element's `<name>`. Proposed fix:
+  "at the `<name>` of its SVD element (at the register, for an alternate
+  group), labeling the other". An accepted ADR, so the user's call.
+  (M3.4b)
+- ADR 0072 says a field with two sets and one bit is "an integer"; the code
+  writes a `bool`, as its field-type rule ("otherwise `bool` for one bit")
+  supports; the sentence should say so. (M3.4b)
+- `docs/reference.md`, "Peripherals from SVD": the excerpts of the example
+  omit some blank lines that `virt.ers` has, and two hand-wrapped
+  paragraphs (the end of the register-mode paragraph and the `derivedFrom`
+  paragraph) run past the file's width. (M3.4b)
