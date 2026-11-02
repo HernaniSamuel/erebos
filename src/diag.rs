@@ -12,10 +12,19 @@ use miette::{
 
 use crate::span::{FileId, SourceFile, SourceMap, Span};
 
+/// How serious a diagnostic is. Only an error stops a run; a warning is
+/// reported and the run goes on (ADR 0070).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Severity {
+    Error,
+    Warning,
+}
+
 #[derive(Clone, Debug)]
 pub struct Diagnostic {
     /// Stable identifier, e.g. `parser::expected-token`.
     pub code: &'static str,
+    pub severity: Severity,
     pub message: String,
     /// The first label is the primary one.
     pub labels: Vec<Label>,
@@ -30,8 +39,17 @@ pub struct Label {
 
 impl Diagnostic {
     pub fn error(code: &'static str, message: impl Into<String>) -> Self {
+        Diagnostic::new(Severity::Error, code, message)
+    }
+
+    pub fn warning(code: &'static str, message: impl Into<String>) -> Self {
+        Diagnostic::new(Severity::Warning, code, message)
+    }
+
+    fn new(severity: Severity, code: &'static str, message: impl Into<String>) -> Self {
         Diagnostic {
             code,
+            severity,
             message: message.into(),
             labels: Vec::new(),
             help: None,
@@ -62,10 +80,14 @@ impl Diagnostics {
         self.list.push(diag);
     }
 
+    /// Whether any diagnostic is an error; warnings do not count.
     pub fn has_errors(&self) -> bool {
-        !self.list.is_empty()
+        self.list
+            .iter()
+            .any(|diag| diag.severity == Severity::Error)
     }
 
+    /// The number of diagnostics, errors and warnings both.
     pub fn len(&self) -> usize {
         self.list.len()
     }
@@ -215,6 +237,14 @@ impl miette::Diagnostic for WithSource<'_> {
         Some(Box::new(self.diag.code))
     }
 
+    /// `miette` draws a warning with its own glyph (and color).
+    fn severity(&self) -> Option<miette::Severity> {
+        Some(match self.diag.severity {
+            Severity::Error => miette::Severity::Error,
+            Severity::Warning => miette::Severity::Warning,
+        })
+    }
+
     fn help<'a>(&'a self) -> Option<Box<dyn fmt::Display + 'a>> {
         self.diag
             .help
@@ -283,6 +313,47 @@ mod tests {
         assert!(out.contains("here"), "{out}");
         assert!(out.contains("try something else"), "{out}");
         assert!(out.contains("test.ers:1:4"), "{out}");
+    }
+
+    #[test]
+    fn warnings_are_not_errors() {
+        let mut diags = Diagnostics::default();
+        diags.push(Diagnostic::warning("test::warn", "careful"));
+        assert!(!diags.has_errors());
+        assert_eq!(diags.len(), 1);
+        assert!(!diags.is_empty());
+
+        diags.push(Diagnostic::error("test::error", "wrong"));
+        assert!(diags.has_errors());
+        assert_eq!(diags.len(), 2);
+
+        let mut only_errors = Diagnostics::default();
+        only_errors.push(Diagnostic::error("test::error", "wrong"));
+        assert!(only_errors.has_errors());
+    }
+
+    #[test]
+    fn a_warning_renders_with_the_warning_glyph() {
+        let mut sources = SourceMap::default();
+        let file = sources.add("test.ers", "fn main() {}\n");
+        let warning = Diagnostic::warning("test::example", "something is odd")
+            .label(Span::new(file, 3, 7), "here")
+            .help("try something else");
+        let error = Diagnostic::error("test::example", "something is odd")
+            .label(Span::new(file, 3, 7), "here");
+
+        let out = render(&[warning], &sources, false);
+
+        assert!(out.contains("test::example"), "{out}");
+        assert!(out.contains("⚠ something is odd"), "{out}");
+        assert!(!out.contains('×'), "{out}");
+        assert!(out.contains("something is odd"), "{out}");
+        assert!(out.contains("here"), "{out}");
+        assert!(out.contains("try something else"), "{out}");
+        assert!(out.contains("test.ers:1:4"), "{out}");
+        let out = render(&[error], &sources, false);
+        assert!(out.contains("× something is odd"), "{out}");
+        assert!(!out.contains('⚠'), "{out}");
     }
 
     /// Each label is shown in its own file, with that file's lines, even
