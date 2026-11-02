@@ -231,389 +231,331 @@ pub peripheral CORE: core_::Core at 0x5003_0000;
 svd::renamed
 
   ⚠ the cluster `IN` is named `in_`: its scope has the name taken
-    ╭─[names.svd:29:9]
- 14 │             <register><name>MATCH</name><addressOffset>0x04</addressOffset></register>
- 15 │             <register><name>IN</name><addressOffset>0x08</addressOffset></register>
-    ·             ───────────────────────────────────┬───────────────────────────────────
-    ·                                                ╰── has the name
- 16 │             <register><name>READ</name><addressOffset>0x0C</addressOffset></register>
- 17 │             <register><name>WRITE</name><addressOffset>0x10</addressOffset></register>
- 18 │             <register><name>STEP</name><addressOffset>0x14</addressOffset></register>
- 19 │             <register><name>AT</name><addressOffset>0x18</addressOffset></register>
- 20 │             <register><name>OVER</name><addressOffset>0x1C</addressOffset></register>
- 21 │             <register><name>CORE</name><addressOffset>0x20</addressOffset></register>
- 22 │             <register><name>U8</name><addressOffset>0x24</addressOffset></register>
- 23 │             <register><name>BOOL</name><addressOffset>0x28</addressOffset></register>
- 24 │             <cluster>
- 25 │               <name>LOOP</name>
- 26 │               <addressOffset>0x100</addressOffset>
- 27 │               <register><name>CONTINUE</name><addressOffset>0x0</addressOffset></register>
- 28 │             </cluster>
- 29 │ ╭─▶         <cluster>
- 30 │ │             <name>IN</name>
- 31 │ │             <addressOffset>0x200</addressOffset>
- 32 │ │             <register><name>READ</name><addressOffset>0x0</addressOffset></register>
- 33 │ ├─▶         </cluster>
-    · ╰──── renamed, with `_` after it
- 34 │             <cluster>
+    ╭─[names.svd:30:11]
+ 14 │         <register><name>MATCH</name><addressOffset>0x04</addressOffset></register>
+ 15 │         <register><name>IN</name><addressOffset>0x08</addressOffset></register>
+    ·                   ───────┬───────
+    ·                          ╰── has the name
+ 16 │         <register><name>READ</name><addressOffset>0x0C</addressOffset></register>
+ 17 │         <register><name>WRITE</name><addressOffset>0x10</addressOffset></register>
+ 18 │         <register><name>STEP</name><addressOffset>0x14</addressOffset></register>
+ 19 │         <register><name>AT</name><addressOffset>0x18</addressOffset></register>
+ 20 │         <register><name>OVER</name><addressOffset>0x1C</addressOffset></register>
+ 21 │         <register><name>CORE</name><addressOffset>0x20</addressOffset></register>
+ 22 │         <register><name>U8</name><addressOffset>0x24</addressOffset></register>
+ 23 │         <register><name>BOOL</name><addressOffset>0x28</addressOffset></register>
+ 24 │         <cluster>
+ 25 │           <name>LOOP</name>
+ 26 │           <addressOffset>0x100</addressOffset>
+ 27 │           <register><name>CONTINUE</name><addressOffset>0x0</addressOffset></register>
+ 28 │         </cluster>
+ 29 │         <cluster>
+ 30 │           <name>IN</name>
+    ·           ───────┬───────
+    ·                  ╰── renamed, with `_` after it
+ 31 │           <addressOffset>0x200</addressOffset>
     ╰────
 svd::renamed
 
   ⚠ the cluster `READ` is named `read_`: its scope has the name taken
-    ╭─[names.svd:16:9]
+    ╭─[names.svd:16:19]
  15 │         <register><name>IN</name><addressOffset>0x08</addressOffset></register>
  16 │         <register><name>READ</name><addressOffset>0x0C</addressOffset></register>
-    ·         ────────────────────────────────────┬────────────────────────────────────
-    ·                                             ╰── has the name
+    ·                   ────────┬────────
+    ·                           ╰── has the name
  17 │         <register><name>WRITE</name><addressOffset>0x10</addressOffset></register>
     ╰────
-    ╭─[names.svd:34:9]
- 33 │             </cluster>
- 34 │ ╭─▶         <cluster>
- 35 │ │             <name>READ</name>
- 36 │ │             <addressOffset>0x300</addressOffset>
- 37 │ │             <register><name>WRITE</name><addressOffset>0x0</addressOffset></register>
- 38 │ ├─▶         </cluster>
-    · ╰──── renamed, with `_` after it
- 39 │           </registers>
+    ╭─[names.svd:35:11]
+ 34 │         <cluster>
+ 35 │           <name>READ</name>
+    ·           ────────┬────────
+    ·                   ╰── renamed, with `_` after it
+ 36 │           <addressOffset>0x300</addressOffset>
     ╰────
 svd::renamed
 
   ⚠ the peripheral `match` is named `match__`: its scope has the name taken
-    ╭─[names.svd:41:5]
- 40 │          </peripheral>
- 41 │ ╭──▶     <peripheral>
- 42 │ ││         <name>match</name>
- 43 │ ││         <description>A peripheral keeps its case, and `match` is a keyword.</description>
- 44 │ ││         <baseAddress>0x40001000</baseAddress>
- 45 │ ││         <registers>
- 46 │ ││           <register><name>R</name><addressOffset>0x0</addressOffset></register>
- 47 │ ││         </registers>
- 48 │ ├──▶     </peripheral>
-    · ╰───── renamed, with `_` after it
-    · ╰───── has the name
- 49 │          <peripheral>
+    ╭─[names.svd:42:7]
+ 41 │     <peripheral>
+ 42 │       <name>match</name>
+    ·       ─────────┬────────┬
+    ·                │        ╰── has the name
+    ·                ╰── renamed, with `_` after it
+ 43 │       <description>A peripheral keeps its case, and `match` is a keyword.</description>
     ╰────
 svd::renamed
 
   ⚠ the register `foo` is named `foo_`: its scope has the name taken
-    ╭─[names.svd:55:9]
+    ╭─[names.svd:55:19]
  53 │       <registers>
  54 │         <register><name>FOO</name><addressOffset>0x00</addressOffset></register>
-    ·         ────────────────────────────────────┬───────────────────────────────────
-    ·                                             ╰── has the name
+    ·                   ────────┬───────
+    ·                           ╰── has the name
  55 │         <register><name>foo</name><addressOffset>0x04</addressOffset></register>
-    ·         ────────────────────────────────────┬───────────────────────────────────
-    ·                                             ╰── renamed, with `_` after it
+    ·                   ────────┬───────
+    ·                           ╰── renamed, with `_` after it
  56 │         <register><name>Foo</name><addressOffset>0x08</addressOffset></register>
     ╰────
 svd::renamed
 
   ⚠ the register `Foo` is named `foo__`: its scope has the name taken
-    ╭─[names.svd:56:9]
+    ╭─[names.svd:56:19]
  53 │       <registers>
  54 │         <register><name>FOO</name><addressOffset>0x00</addressOffset></register>
-    ·         ────────────────────────────────────┬───────────────────────────────────
-    ·                                             ╰── has the name
+    ·                   ────────┬───────
+    ·                           ╰── has the name
  55 │         <register><name>foo</name><addressOffset>0x04</addressOffset></register>
  56 │         <register><name>Foo</name><addressOffset>0x08</addressOffset></register>
-    ·         ────────────────────────────────────┬───────────────────────────────────
-    ·                                             ╰── renamed, with `_` after it
+    ·                   ────────┬───────
+    ·                           ╰── renamed, with `_` after it
  57 │         <register><name>BAR_</name><addressOffset>0x0C</addressOffset></register>
     ╰────
 svd::renamed
 
   ⚠ the register `BAR_` is named `bar`
-    ╭─[names.svd:57:9]
+    ╭─[names.svd:57:19]
  56 │         <register><name>Foo</name><addressOffset>0x08</addressOffset></register>
  57 │         <register><name>BAR_</name><addressOffset>0x0C</addressOffset></register>
-    ·         ────────────────────────────────────┬────────────────────────────────────
-    ·                                             ╰── its name has characters no identifier has, or starts with a digit
+    ·                   ────────┬────────
+    ·                           ╰── its name has characters no identifier has, or starts with a digit
  58 │         <register><name>bar</name><addressOffset>0x10</addressOffset></register>
     ╰────
 svd::renamed
 
   ⚠ the register `bar` is named `bar_`: its scope has the name taken
-    ╭─[names.svd:58:9]
+    ╭─[names.svd:58:19]
  56 │         <register><name>Foo</name><addressOffset>0x08</addressOffset></register>
  57 │         <register><name>BAR_</name><addressOffset>0x0C</addressOffset></register>
-    ·         ────────────────────────────────────┬────────────────────────────────────
-    ·                                             ╰── has the name
+    ·                   ────────┬────────
+    ·                           ╰── has the name
  58 │         <register><name>bar</name><addressOffset>0x10</addressOffset></register>
-    ·         ────────────────────────────────────┬───────────────────────────────────
-    ·                                             ╰── renamed, with `_` after it
+    ·                   ────────┬───────
+    ·                           ╰── renamed, with `_` after it
  59 │         <cluster>
     ╰────
 svd::renamed
 
   ⚠ the cluster `sub` is named `sub_`: its scope has the name taken
-    ╭─[names.svd:64:9]
- 58 │             <register><name>bar</name><addressOffset>0x10</addressOffset></register>
- 59 │ ╭─▶         <cluster>
- 60 │ │             <name>SUB</name>
- 61 │ │             <addressOffset>0x100</addressOffset>
- 62 │ │             <register><name>CTRL</name><addressOffset>0x0</addressOffset></register>
- 63 │ ├─▶         </cluster>
-    · ╰──── has the name
- 64 │ ╭─▶         <cluster>
- 65 │ │             <name>sub</name>
- 66 │ │             <addressOffset>0x200</addressOffset>
- 67 │ │             <register><name>CTRL</name><addressOffset>0x0</addressOffset></register>
- 68 │ ├─▶         </cluster>
-    · ╰──── renamed, with `_` after it
- 69 │           </registers>
+    ╭─[names.svd:65:11]
+ 59 │         <cluster>
+ 60 │           <name>SUB</name>
+    ·           ────────┬───────
+    ·                   ╰── has the name
+ 61 │           <addressOffset>0x100</addressOffset>
+ 62 │           <register><name>CTRL</name><addressOffset>0x0</addressOffset></register>
+ 63 │         </cluster>
+ 64 │         <cluster>
+ 65 │           <name>sub</name>
+    ·           ────────┬───────
+    ·                   ╰── renamed, with `_` after it
+ 66 │           <addressOffset>0x200</addressOffset>
     ╰────
 svd::renamed
 
   ⚠ the register `A.B` is named `a_b`
-    ╭─[names.svd:76:9]
+    ╭─[names.svd:76:19]
  75 │       <registers>
  76 │         <register><name>A.B</name><addressOffset>0x00</addressOffset></register>
-    ·         ────────────────────────────────────┬───────────────────────────────────
-    ·                                             ╰── its name has characters no identifier has, or starts with a digit
+    ·                   ────────┬───────
+    ·                           ╰── its name has characters no identifier has, or starts with a digit
  77 │         <register><name>C-D</name><addressOffset>0x04</addressOffset></register>
     ╰────
 svd::renamed
 
   ⚠ the register `C-D` is named `c_d`
-    ╭─[names.svd:77:9]
+    ╭─[names.svd:77:19]
  76 │         <register><name>A.B</name><addressOffset>0x00</addressOffset></register>
  77 │         <register><name>C-D</name><addressOffset>0x04</addressOffset></register>
-    ·         ────────────────────────────────────┬───────────────────────────────────
-    ·                                             ╰── its name has characters no identifier has, or starts with a digit
+    ·                   ────────┬───────
+    ·                           ╰── its name has characters no identifier has, or starts with a digit
  78 │         <register><name>E  F</name><addressOffset>0x08</addressOffset></register>
     ╰────
 svd::renamed
 
   ⚠ the register `E  F` is named `e_f`
-    ╭─[names.svd:78:9]
+    ╭─[names.svd:78:19]
  77 │         <register><name>C-D</name><addressOffset>0x04</addressOffset></register>
  78 │         <register><name>E  F</name><addressOffset>0x08</addressOffset></register>
-    ·         ────────────────────────────────────┬────────────────────────────────────
-    ·                                             ╰── its name has characters no identifier has, or starts with a digit
+    ·                   ────────┬────────
+    ·                           ╰── its name has characters no identifier has, or starts with a digit
  79 │         <register><name>2FA</name><addressOffset>0x0C</addressOffset></register>
     ╰────
 svd::renamed
 
   ⚠ the register `2FA` is named `_2fa`
-    ╭─[names.svd:79:9]
+    ╭─[names.svd:79:19]
  78 │         <register><name>E  F</name><addressOffset>0x08</addressOffset></register>
  79 │         <register><name>2FA</name><addressOffset>0x0C</addressOffset></register>
-    ·         ────────────────────────────────────┬───────────────────────────────────
-    ·                                             ╰── its name has characters no identifier has, or starts with a digit
+    ·                   ────────┬───────
+    ·                           ╰── its name has characters no identifier has, or starts with a digit
  80 │         <cluster>
     ╰────
 svd::renamed
 
   ⚠ the cluster `7.UP` is named `_7_up`
-    ╭─[names.svd:80:9]
- 79 │             <register><name>2FA</name><addressOffset>0x0C</addressOffset></register>
- 80 │ ╭─▶         <cluster>
- 81 │ │             <name>7.UP</name>
- 82 │ │             <addressOffset>0x100</addressOffset>
- 83 │ │             <register><name>R</name><addressOffset>0x0</addressOffset></register>
- 84 │ ├─▶         </cluster>
-    · ╰──── its name has characters no identifier has, or starts with a digit
- 85 │           </registers>
+    ╭─[names.svd:81:11]
+ 80 │         <cluster>
+ 81 │           <name>7.UP</name>
+    ·           ────────┬────────
+    ·                   ╰── its name has characters no identifier has, or starts with a digit
+ 82 │           <addressOffset>0x100</addressOffset>
     ╰────
 svd::renamed
 
   ⚠ the register `%s_LEADING` is named `_0_leading`
-     ╭─[names.svd:106:9]
- 105 │             </register>
- 106 │ ╭─▶         <register>
- 107 │ │             <dim>2</dim>
- 108 │ │             <dimIncrement>4</dimIncrement>
- 109 │ │             <name>%s_LEADING</name>
- 110 │ │             <addressOffset>0x20</addressOffset>
- 111 │ ├─▶         </register>
-     · ╰──── its name has characters no identifier has, or starts with a digit
- 112 │             <register>
+     ╭─[names.svd:109:11]
+ 108 │           <dimIncrement>4</dimIncrement>
+ 109 │           <name>%s_LEADING</name>
+     ·           ───────────┬───────────
+     ·                      ╰── its name has characters no identifier has, or starts with a digit
+ 110 │           <addressOffset>0x20</addressOffset>
      ╰────
 svd::renamed
 
   ⚠ the register `%s_LEADING` is named `_1_leading`
-     ╭─[names.svd:106:9]
- 105 │             </register>
- 106 │ ╭─▶         <register>
- 107 │ │             <dim>2</dim>
- 108 │ │             <dimIncrement>4</dimIncrement>
- 109 │ │             <name>%s_LEADING</name>
- 110 │ │             <addressOffset>0x20</addressOffset>
- 111 │ ├─▶         </register>
-     · ╰──── its name has characters no identifier has, or starts with a digit
- 112 │             <register>
+     ╭─[names.svd:109:11]
+ 108 │           <dimIncrement>4</dimIncrement>
+ 109 │           <name>%s_LEADING</name>
+     ·           ───────────┬───────────
+     ·                      ╰── its name has characters no identifier has, or starts with a digit
+ 110 │           <addressOffset>0x20</addressOffset>
      ╰────
 svd::renamed
 
   ⚠ the register `DUP0` is named `dup0_`: its scope has the name taken
-     ╭─[names.svd:118:9]
- 111 │             </register>
- 112 │ ╭─▶         <register>
- 113 │ │             <dim>2</dim>
- 114 │ │             <dimIncrement>4</dimIncrement>
- 115 │ │             <name>DUP%s</name>
- 116 │ │             <addressOffset>0x30</addressOffset>
- 117 │ ├─▶         </register>
-     · ╰──── has the name
- 118 │ ╭─▶         <register>
- 119 │ │             <name>DUP0</name>
- 120 │ │             <description>Meets the first element of DUP%s.</description>
- 121 │ │             <addressOffset>0x40</addressOffset>
- 122 │ ├─▶         </register>
-     · ╰──── renamed, with `_` after it
- 123 │           </registers>
+     ╭─[names.svd:119:11]
+ 114 │           <dimIncrement>4</dimIncrement>
+ 115 │           <name>DUP%s</name>
+     ·           ─────────┬────────
+     ·                    ╰── has the name
+ 116 │           <addressOffset>0x30</addressOffset>
+ 117 │         </register>
+ 118 │         <register>
+ 119 │           <name>DUP0</name>
+     ·           ────────┬────────
+     ·                   ╰── renamed, with `_` after it
+ 120 │           <description>Meets the first element of DUP%s.</description>
      ╰────
 svd::renamed
 
   ⚠ the peripheral `uart` is named `uart_`: its scope has the name taken
-     ╭─[names.svd:135:5]
- 124 │         </peripheral>
- 125 │ ╭─▶     <peripheral>
- 126 │ │         <dim>2</dim>
- 127 │ │         <dimIncrement>0x1000</dimIncrement>
- 128 │ │         <name>UART%s</name>
- 129 │ │         <description>A peripheral type and its module from a name with `%s`.</description>
- 130 │ │         <baseAddress>0x50000000</baseAddress>
- 131 │ │         <registers>
- 132 │ │           <register><name>CONF</name><addressOffset>0x0</addressOffset></register>
- 133 │ │         </registers>
- 134 │ ├─▶     </peripheral>
-     · ╰──── has the name
- 135 │ ╭─▶     <peripheral>
- 136 │ │         <name>uart</name>
- 137 │ │         <description>Named as the module of UART%s: renamed.</description>
- 138 │ │         <baseAddress>0x50010000</baseAddress>
- 139 │ │         <registers>
- 140 │ │           <register><name>CONF</name><addressOffset>0x0</addressOffset></register>
- 141 │ │         </registers>
- 142 │ ├─▶     </peripheral>
-     · ╰──── renamed, with `_` after it
- 143 │         <peripheral>
+     ╭─[names.svd:136:7]
+ 127 │       <dimIncrement>0x1000</dimIncrement>
+ 128 │       <name>UART%s</name>
+     ·       ─────────┬─────────
+     ·                ╰── has the name
+ 129 │       <description>A peripheral type and its module from a name with `%s`.</description>
+ 130 │       <baseAddress>0x50000000</baseAddress>
+ 131 │       <registers>
+ 132 │         <register><name>CONF</name><addressOffset>0x0</addressOffset></register>
+ 133 │       </registers>
+ 134 │     </peripheral>
+ 135 │     <peripheral>
+ 136 │       <name>uart</name>
+     ·       ────────┬────────
+     ·               ╰── renamed, with `_` after it
+ 137 │       <description>Named as the module of UART%s: renamed.</description>
      ╰────
 svd::renamed
 
   ⚠ the peripheral `uart` is named `uart__`: its scope has the name taken
-     ╭─[names.svd:135:5]
- 124 │         </peripheral>
- 125 │ ╭─▶     <peripheral>
- 126 │ │         <dim>2</dim>
- 127 │ │         <dimIncrement>0x1000</dimIncrement>
- 128 │ │         <name>UART%s</name>
- 129 │ │         <description>A peripheral type and its module from a name with `%s`.</description>
- 130 │ │         <baseAddress>0x50000000</baseAddress>
- 131 │ │         <registers>
- 132 │ │           <register><name>CONF</name><addressOffset>0x0</addressOffset></register>
- 133 │ │         </registers>
- 134 │ ├─▶     </peripheral>
-     · ╰──── has the name
- 135 │ ╭─▶     <peripheral>
- 136 │ │         <name>uart</name>
- 137 │ │         <description>Named as the module of UART%s: renamed.</description>
- 138 │ │         <baseAddress>0x50010000</baseAddress>
- 139 │ │         <registers>
- 140 │ │           <register><name>CONF</name><addressOffset>0x0</addressOffset></register>
- 141 │ │         </registers>
- 142 │ ├─▶     </peripheral>
-     · ╰──── renamed, with `_` after it
- 143 │         <peripheral>
+     ╭─[names.svd:136:7]
+ 127 │       <dimIncrement>0x1000</dimIncrement>
+ 128 │       <name>UART%s</name>
+     ·       ─────────┬─────────
+     ·                ╰── has the name
+ 129 │       <description>A peripheral type and its module from a name with `%s`.</description>
+ 130 │       <baseAddress>0x50000000</baseAddress>
+ 131 │       <registers>
+ 132 │         <register><name>CONF</name><addressOffset>0x0</addressOffset></register>
+ 133 │       </registers>
+ 134 │     </peripheral>
+ 135 │     <peripheral>
+ 136 │       <name>uart</name>
+     ·       ────────┬────────
+     ·               ╰── renamed, with `_` after it
+ 137 │       <description>Named as the module of UART%s: renamed.</description>
      ╰────
 svd::renamed
 
   ⚠ the peripheral `3DES` is named `_3DES`
-     ╭─[names.svd:143:5]
- 142 │         </peripheral>
- 143 │ ╭─▶     <peripheral>
- 144 │ │         <name>3DES</name>
- 145 │ │         <description>A peripheral that starts with a digit.</description>
- 146 │ │         <baseAddress>0x50020000</baseAddress>
- 147 │ │         <registers>
- 148 │ │           <register><name>R</name><addressOffset>0x0</addressOffset></register>
- 149 │ │         </registers>
- 150 │ ├─▶     </peripheral>
-     · ╰──── its name has characters no identifier has, or starts with a digit
- 151 │         <peripheral>
+     ╭─[names.svd:144:7]
+ 143 │     <peripheral>
+ 144 │       <name>3DES</name>
+     ·       ────────┬────────
+     ·               ╰── its name has characters no identifier has, or starts with a digit
+ 145 │       <description>A peripheral that starts with a digit.</description>
      ╰────
 svd::renamed
 
   ⚠ the field `A.B` is named `a_b`
-     ╭─[names.svd:168:13]
+     ╭─[names.svd:168:20]
  167 │             <field><name>MATCH</name><bitOffset>7</bitOffset><bitWidth>1</bitWidth></field>
  168 │             <field><name>A.B</name><bitOffset>8</bitOffset><bitWidth>1</bitWidth></field>
-     ·             ──────────────────────────────────────┬──────────────────────────────────────
-     ·                                                   ╰── its name has characters no identifier has, or starts with a digit
+     ·                    ────────┬───────
+     ·                            ╰── its name has characters no identifier has, or starts with a digit
  169 │             <field><name>a_b</name><description>Meets A.B once its name is converted.</description><bitOffset>9</bitOffset><bitWidth>1</bitWidth></field>
      ╰────
 svd::renamed
 
   ⚠ the field `a_b` is named `a_b_`: its scope has the name taken
-     ╭─[names.svd:169:13]
+     ╭─[names.svd:169:20]
  167 │             <field><name>MATCH</name><bitOffset>7</bitOffset><bitWidth>1</bitWidth></field>
  168 │             <field><name>A.B</name><bitOffset>8</bitOffset><bitWidth>1</bitWidth></field>
-     ·             ──────────────────────────────────────┬──────────────────────────────────────
-     ·                                                   ╰── has the name
+     ·                    ────────┬───────
+     ·                            ╰── has the name
  169 │             <field><name>a_b</name><description>Meets A.B once its name is converted.</description><bitOffset>9</bitOffset><bitWidth>1</bitWidth></field>
-     ·             ──────────────────────────────────────────────────────────────────────┬──────────────────────────────────────────────────────────────────────
-     ·                                                                                   ╰── renamed, with `_` after it
+     ·                    ────────┬───────
+     ·                            ╰── renamed, with `_` after it
  170 │             <field>
      ╰────
 svd::renamed
 
   ⚠ the enumerated value `1MHZ` is named `_1mhz`
-     ╭─[names.svd:179:17]
+     ╭─[names.svd:179:34]
  178 │                 <enumeratedValue><name>NONE</name><value>4</value></enumeratedValue>
  179 │                 <enumeratedValue><name>1MHZ</name><value>5</value></enumeratedValue>
-     ·                 ──────────────────────────────────┬─────────────────────────────────
-     ·                                                   ╰── its name has characters no identifier has, or starts with a digit
+     ·                                  ────────┬────────
+     ·                                          ╰── its name has characters no identifier has, or starts with a digit
  180 │                 <enumeratedValue><name>A.B</name><value>6</value></enumeratedValue>
      ╰────
 svd::renamed
 
   ⚠ the enumerated value `A.B` is named `AB`
-     ╭─[names.svd:180:17]
+     ╭─[names.svd:180:34]
  179 │                 <enumeratedValue><name>1MHZ</name><value>5</value></enumeratedValue>
  180 │                 <enumeratedValue><name>A.B</name><value>6</value></enumeratedValue>
-     ·                 ─────────────────────────────────┬─────────────────────────────────
-     ·                                                  ╰── its name has characters no identifier has, or starts with a digit
+     ·                                  ────────┬───────
+     ·                                          ╰── its name has characters no identifier has, or starts with a digit
  181 │                 <enumeratedValue><name>a_b</name><value>7</value></enumeratedValue>
      ╰────
 svd::renamed
 
   ⚠ the enumerated value `a_b` is named `AB_`: its scope has the name taken
-     ╭─[names.svd:181:17]
+     ╭─[names.svd:181:34]
  179 │                 <enumeratedValue><name>1MHZ</name><value>5</value></enumeratedValue>
  180 │                 <enumeratedValue><name>A.B</name><value>6</value></enumeratedValue>
-     ·                 ─────────────────────────────────┬─────────────────────────────────
-     ·                                                  ╰── has the name
+     ·                                  ────────┬───────
+     ·                                          ╰── has the name
  181 │                 <enumeratedValue><name>a_b</name><value>7</value></enumeratedValue>
-     ·                 ─────────────────────────────────┬─────────────────────────────────
-     ·                                                  ╰── renamed, with `_` after it
+     ·                                  ────────┬───────
+     ·                                          ╰── renamed, with `_` after it
  182 │               </enumeratedValues>
      ╰────
 svd::renamed
 
   ⚠ the register `RTC_CNTL` is named `RtcCntl_`: its scope has the name taken
-     ╭─[names.svd:193:9]
- 187 │          </peripheral>
- 188 │ ╭──▶     <peripheral>
- 189 │ │          <name>RTC_CNTL</name>
- 190 │ │          <description>A register named as its peripheral: its struct meets the peripheral type.</description>
- 191 │ │          <baseAddress>0x50050000</baseAddress>
- 192 │ │          <registers>
- 193 │ │╭─▶         <register>
- 194 │ ││             <name>RTC_CNTL</name>
- 195 │ ││             <addressOffset>0x0</addressOffset>
- 196 │ ││             <fields>
- 197 │ ││               <field>
- 198 │ ││                 <name>MODE</name>
- 199 │ ││                 <bitOffset>0</bitOffset><bitWidth>2</bitWidth>
- 200 │ ││                 <enumeratedValues><enumeratedValue><name>OFF</name><value>0</value></enumeratedValue><enumeratedValue><name>ON</name><value>1</value></enumeratedValue></enumeratedValues>
- 201 │ ││               </field>
- 202 │ ││             </fields>
- 203 │ │├─▶         </register>
-     · │╰──── renamed, with `_` after it
- 204 │ │          </registers>
- 205 │ ├──▶     </peripheral>
-     · ╰───── has the name
- 206 │          <peripheral>
+     ╭─[names.svd:194:11]
+ 188 │     <peripheral>
+ 189 │       <name>RTC_CNTL</name>
+     ·       ──────────┬──────────
+     ·                 ╰── has the name
+ 190 │       <description>A register named as its peripheral: its struct meets the peripheral type.</description>
+ 191 │       <baseAddress>0x50050000</baseAddress>
+ 192 │       <registers>
+ 193 │         <register>
+ 194 │           <name>RTC_CNTL</name>
+     ·           ──────────┬──────────
+     ·                     ╰── renamed, with `_` after it
+ 195 │           <addressOffset>0x0</addressOffset>
      ╰────

@@ -120,7 +120,7 @@ impl<'a> Writer<'a, '_> {
             }
             let of = Of {
                 svd: &p.name,
-                span: p.span,
+                span: p.name_span,
                 what: "peripheral",
                 report_changes: false,
             };
@@ -136,7 +136,7 @@ impl<'a> Writer<'a, '_> {
             self.first.push(self.names.len());
             let of = Of {
                 svd: &p.name,
-                span: p.span,
+                span: p.name_span,
                 what: "peripheral",
                 report_changes: true,
             };
@@ -477,7 +477,7 @@ impl<'a> Writer<'a, '_> {
         for element in self.entry_elements(cluster.repeat.as_ref()) {
             let of = Of {
                 svd: &cluster.name,
-                span: cluster.span,
+                span: cluster.name_span,
                 what: "cluster",
                 report_changes: true,
             };
@@ -597,7 +597,7 @@ impl<'a> Writer<'a, '_> {
         for element in self.entry_elements(r.repeat.as_ref()) {
             let of = Of {
                 svd: &r.name,
-                span: r.span,
+                span: r.name_span,
                 what: "register",
                 report_changes: true,
             };

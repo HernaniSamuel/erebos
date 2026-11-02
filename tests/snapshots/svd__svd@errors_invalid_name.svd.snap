@@ -7,60 +7,55 @@ input_file: tests/svd/errors_invalid_name.svd
 svd::invalid-name
 
   × the name `...` of this peripheral leaves nothing for an identifier
-    ╭─[errors_invalid_name.svd:8:5]
-  7 │       <peripherals>
-  8 │ ╭─▶     <peripheral>
-  9 │ │         <name>...</name>
- 10 │ │         <baseAddress>0x40000000</baseAddress>
- 11 │ │         <registers>
- 12 │ │           <register><name>R</name><addressOffset>0x0</addressOffset></register>
- 13 │ │         </registers>
- 14 │ ├─▶     </peripheral>
-    · ╰──── this name has no ASCII letter, digit or `_`
- 15 │         <peripheral>
+    ╭─[errors_invalid_name.svd:9:7]
+  8 │     <peripheral>
+  9 │       <name>...</name>
+    ·       ────────┬───────
+    ·               ╰── this name has no ASCII letter, digit or `_`
+ 10 │       <baseAddress>0x40000000</baseAddress>
     ╰────
   help: an identifier is made of ASCII letters, digits and `_`: rename it
 svd::invalid-name
 
   × the name `-` of this register leaves nothing for an identifier
-    ╭─[errors_invalid_name.svd:19:9]
+    ╭─[errors_invalid_name.svd:19:19]
  18 │       <registers>
  19 │         <register><name>-</name><addressOffset>0x0</addressOffset></register>
-    ·         ──────────────────────────────────┬──────────────────────────────────
-    ·                                           ╰── this name has no ASCII letter, digit or `_`
+    ·                   ───────┬──────
+    ·                          ╰── this name has no ASCII letter, digit or `_`
  20 │         <register><name> </name><addressOffset>0x4</addressOffset></register>
     ╰────
   help: an identifier is made of ASCII letters, digits and `_`: rename it
 svd::invalid-name
 
   × this register has an empty name
-    ╭─[errors_invalid_name.svd:20:9]
+    ╭─[errors_invalid_name.svd:20:19]
  19 │         <register><name>-</name><addressOffset>0x0</addressOffset></register>
  20 │         <register><name> </name><addressOffset>0x4</addressOffset></register>
-    ·         ──────────────────────────────────┬──────────────────────────────────
-    ·                                           ╰── this name has no ASCII letter, digit or `_`
+    ·                   ───────┬──────
+    ·                          ╰── this name has no ASCII letter, digit or `_`
  21 │         <register>
     ╰────
   help: an identifier is made of ASCII letters, digits and `_`: rename it
 svd::invalid-name
 
   × the name `-` of this field leaves nothing for an identifier
-    ╭─[errors_invalid_name.svd:25:13]
+    ╭─[errors_invalid_name.svd:25:20]
  24 │           <fields>
  25 │             <field><name>-</name><bitOffset>0</bitOffset><bitWidth>1</bitWidth></field>
-    ·             ─────────────────────────────────────┬─────────────────────────────────────
-    ·                                                  ╰── this name has no ASCII letter, digit or `_`
+    ·                    ───────┬──────
+    ·                           ╰── this name has no ASCII letter, digit or `_`
  26 │             <field><name> </name><bitOffset>1</bitOffset><bitWidth>1</bitWidth></field>
     ╰────
   help: an identifier is made of ASCII letters, digits and `_`: rename it
 svd::invalid-name
 
   × this field has an empty name
-    ╭─[errors_invalid_name.svd:26:13]
+    ╭─[errors_invalid_name.svd:26:20]
  25 │             <field><name>-</name><bitOffset>0</bitOffset><bitWidth>1</bitWidth></field>
  26 │             <field><name> </name><bitOffset>1</bitOffset><bitWidth>1</bitWidth></field>
-    ·             ─────────────────────────────────────┬─────────────────────────────────────
-    ·                                                  ╰── this name has no ASCII letter, digit or `_`
+    ·                    ───────┬──────
+    ·                           ╰── this name has no ASCII letter, digit or `_`
  27 │             <field><name>OK</name><bitOffset>2</bitOffset><bitWidth>1</bitWidth></field>
     ╰────
   help: an identifier is made of ASCII letters, digits and `_`: rename it
@@ -78,14 +73,11 @@ svd::invalid-name
 svd::invalid-name
 
   × the name `_` of this cluster leaves nothing for an identifier
-    ╭─[errors_invalid_name.svd:31:9]
- 30 │             <register><name>G</name><alternateGroup>__</alternateGroup><addressOffset>0x20</addressOffset></register>
- 31 │ ╭─▶         <cluster>
- 32 │ │             <name>_</name>
- 33 │ │             <addressOffset>0x100</addressOffset>
- 34 │ │             <register><name>X</name><addressOffset>0x0</addressOffset></register>
- 35 │ ├─▶         </cluster>
-    · ╰──── this name has no ASCII letter, digit or `_`
- 36 │           </registers>
+    ╭─[errors_invalid_name.svd:32:11]
+ 31 │         <cluster>
+ 32 │           <name>_</name>
+    ·           ───────┬──────
+    ·                  ╰── this name has no ASCII letter, digit or `_`
+ 33 │           <addressOffset>0x100</addressOffset>
     ╰────
   help: an identifier is made of ASCII letters, digits and `_`: rename it

@@ -304,21 +304,21 @@ svd::not-declared
 svd::renamed
 
   ⚠ the enumerated value `0` is named `_0`
-     ╭─[enums.svd:122:17]
+     ╭─[enums.svd:122:34]
  121 │               <enumeratedValues>
  122 │                 <enumeratedValue><name>0</name><value>0</value></enumeratedValue>
-     ·                 ────────────────────────────────┬────────────────────────────────
-     ·                                                 ╰── its name has characters no identifier has, or starts with a digit
+     ·                                  ───────┬──────
+     ·                                         ╰── its name has characters no identifier has, or starts with a digit
  123 │                 <enumeratedValue><name>1MHZ</name><value>1</value></enumeratedValue>
      ╰────
 svd::renamed
 
   ⚠ the enumerated value `1MHZ` is named `_1mhz`
-     ╭─[enums.svd:123:17]
+     ╭─[enums.svd:123:34]
  122 │                 <enumeratedValue><name>0</name><value>0</value></enumeratedValue>
  123 │                 <enumeratedValue><name>1MHZ</name><value>1</value></enumeratedValue>
-     ·                 ──────────────────────────────────┬─────────────────────────────────
-     ·                                                   ╰── its name has characters no identifier has, or starts with a digit
+     ·                                  ────────┬────────
+     ·                                          ╰── its name has characters no identifier has, or starts with a digit
  124 │                 <enumeratedValue><name>-</name><value>2</value></enumeratedValue>
      ╰────
 svd::not-declared

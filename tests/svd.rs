@@ -16,6 +16,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 use erebos::driver::{self, OptLevel, Stage};
+use erebos::span::SourceMap;
 use erebos::{diag, svd};
 
 /// The root file a generated module is declared in: a program needs an entry
@@ -132,6 +133,125 @@ fn error_codes(rendered: &str) -> BTreeSet<String> {
         })
         .map(str::to_owned)
         .collect()
+}
+
+// ---- the ESP32-C3
+
+/// The ESP32-C3's SVD file (ADR 0070), whole, is generated and the module is
+/// built, with a program that reaches a few registers, into a riscv32
+/// executable at both optimization levels. The executable is not run: the
+/// official QEMU has no ESP32-C3 machine. The snapshot is a summary of what
+/// was written and the warnings; the generated text is not kept.
+#[test]
+fn the_esp32c3_is_generated_and_built() {
+    let chips = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/svd/chips");
+    let name = "esp32c3.svd";
+    let text = read(&chips.join(name));
+    let (generated, diags, sources) = svd::generate(name, &text);
+    let diags = diags.into_vec();
+    let Some(module) = generated else {
+        panic!(
+            "{name} was not generated:\n{}",
+            diag::render(&diags, &sources, false)
+        );
+    };
+
+    let dir = Path::new(env!("CARGO_TARGET_TMPDIR"))
+        .join("svd_chips")
+        .join("esp32c3");
+    fs::create_dir_all(&dir).unwrap();
+    fs::write(dir.join("generated.ers"), &module).unwrap();
+    let root = dir.join("esp32c3_main.ers");
+    fs::write(&root, read(&chips.join("esp32c3_main.ers"))).unwrap();
+    for (opt, elf) in [
+        (OptLevel::None, "esp32c3.elf"),
+        (OptLevel::Speed, "esp32c3.opt.elf"),
+    ] {
+        driver::build(&root, &dir.join(elf), &[], opt, false).unwrap_or_else(|rendered| {
+            panic!("the generated module does not build with {opt:?}:\n{rendered}")
+        });
+    }
+
+    // What the program and the file's survey (ADR 0067, 0071) rely on.
+    for (what, line) in [
+        (
+            "RNG over APB_CTRL",
+            "pub peripheral RNG: rng::Rng at 0x6002_6000 over APB_CTRL;",
+        ),
+        (
+            "AES's register CONTINUE",
+            "pub write continue_: Continue at 0xA8,",
+        ),
+        ("AES's field CONTINUE", "pub continue_: bool at 0 = false,"),
+        (
+            "SHA's register CONTINUE",
+            "pub write continue_: Continue at 0x14,",
+        ),
+        ("SHA's field CONTINUE", "pub continue_: u32 at 1..=31 = 0,"),
+    ] {
+        assert!(
+            module.lines().any(|l| l.trim() == line),
+            "{what}: no line `{line}` in the generated module"
+        );
+    }
+
+    insta::assert_snapshot!(summary(&module, &diags, &sources));
+}
+
+/// The device, the number of things written, and the warnings: each with its
+/// code and message, then a line per label with its position in the SVD file
+/// and its text. Not `diag::render`: it shows every line between two labels
+/// of one warning, and the ESP32-C3's `RTC_CNTL` warning has two labels
+/// 1 700 lines apart (a snapshot of 83 KB).
+fn summary(module: &str, diags: &[diag::Diagnostic], sources: &SourceMap) -> String {
+    let device = module
+        .lines()
+        .find_map(|line| line.strip_prefix("// Device: "))
+        .map(|device| device.trim_end_matches('.'))
+        .expect("the header names the device");
+
+    // What the module declares, from its layout: items at the margin or one
+    // level in, entries two levels in.
+    let (mut types, mut peripherals, mut registers, mut fields) = (0, 0, 0, 0);
+    let mut inside = "";
+    for line in module.lines() {
+        if line.starts_with("pub peripheral ") {
+            peripherals += 1;
+        } else if let Some(item) = line.strip_prefix("    pub ") {
+            inside = item.split(' ').next().unwrap_or("");
+            types += usize::from(inside == "peripheral");
+        } else if line.starts_with("        pub ") {
+            match inside {
+                "peripheral" => registers += 1,
+                "struct" => fields += 1,
+                _ => {}
+            }
+        }
+    }
+
+    let mut out = format!(
+        "device: {device}\n\
+         peripheral types: {types}\n\
+         peripherals: {peripherals}\n\
+         registers: {registers}\n\
+         fields: {fields}\n\
+         warnings: {}\n",
+        diags.len()
+    );
+    for diag in diags {
+        out.push_str(&format!("{}: {}\n", diag.code, diag.message));
+        for label in &diag.labels {
+            let file = sources.file(label.span.file);
+            let before = &file.text[..label.span.lo as usize];
+            let line = before.matches('\n').count() + 1;
+            let column = before.rsplit('\n').next().unwrap_or("").chars().count() + 1;
+            out.push_str(&format!(
+                "  {}:{line}:{column}: {}\n",
+                file.name, label.message
+            ));
+        }
+    }
+    out
 }
 
 // ---- the command

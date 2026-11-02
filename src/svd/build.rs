@@ -50,6 +50,7 @@ impl Builder<'_, '_> {
         };
         Some(Peripheral {
             span: p.c.span,
+            name_span: p.c.name_span,
             name,
             description: p.c.description.clone(),
             base_address: base_address?,
@@ -80,6 +81,7 @@ impl Builder<'_, '_> {
         let items = self.items(&c.c.children, c.props.over(inherited));
         Some(Cluster {
             span: c.c.span,
+            name_span: c.c.name_span,
             name,
             description: c.c.description.clone(),
             offset: offset?,
@@ -115,6 +117,7 @@ impl Builder<'_, '_> {
         };
         Some(Register {
             span: r.c.span,
+            name_span: r.c.name_span,
             name,
             description: r.c.description.clone(),
             offset: offset?,
@@ -163,6 +166,7 @@ impl Builder<'_, '_> {
                 .collect();
         Some(Field {
             span: f.c.span,
+            name_span: f.c.name_span,
             name,
             description: f.c.description.clone(),
             repeat: repeat.ok()?,
@@ -190,6 +194,7 @@ impl Builder<'_, '_> {
                 .iter()
                 .map(|v| EnumValue {
                     span: v.span,
+                    name_span: v.name_span,
                     name: v.name.clone(),
                     description: v.description.clone(),
                     value: v.value.clone(),

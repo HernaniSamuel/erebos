@@ -78,6 +78,8 @@ pub struct Device {
 #[derive(Clone, Debug)]
 pub struct Peripheral {
     pub span: Span,
+    /// The `name` element, which the diagnostics about the name point at.
+    pub name_span: Span,
     /// The SVD `name`, `%s` included when the peripheral has a `dim`.
     pub name: String,
     pub description: Option<String>,
@@ -108,6 +110,8 @@ pub enum Item {
 #[derive(Clone, Debug)]
 pub struct Cluster {
     pub span: Span,
+    /// The `name` element, which the diagnostics about the name point at.
+    pub name_span: Span,
     pub name: String,
     pub description: Option<String>,
     /// From the start of the peripheral (or of the cluster it is in).
@@ -122,6 +126,8 @@ pub struct Cluster {
 #[derive(Clone, Debug)]
 pub struct Register {
     pub span: Span,
+    /// The `name` element, which the diagnostics about the name point at.
+    pub name_span: Span,
     pub name: String,
     pub description: Option<String>,
     pub offset: u64,
@@ -151,6 +157,8 @@ pub struct Register {
 #[derive(Clone, Debug)]
 pub struct Field {
     pub span: Span,
+    /// The `name` element, which the diagnostics about the name point at.
+    pub name_span: Span,
     pub name: String,
     pub description: Option<String>,
     /// One field per index (a [`Repeat::List`]), at `bits.offset + position
@@ -200,6 +208,8 @@ pub struct SetId(pub usize);
 #[derive(Clone, Debug)]
 pub struct EnumValue {
     pub span: Span,
+    /// The `name` element, which the diagnostics about the name point at.
+    pub name_span: Span,
     /// `None` for an `enumeratedValue` without a `name`.
     pub name: Option<String>,
     pub description: Option<String>,

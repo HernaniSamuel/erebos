@@ -302,7 +302,7 @@ impl<'a> Writer<'a, '_> {
     ) -> Option<ClusterPlan<'a>> {
         let of = Of {
             svd: &cluster.name,
-            span: cluster.span,
+            span: cluster.name_span,
             what: "cluster",
             report_changes: false,
         };
@@ -332,7 +332,7 @@ impl<'a> Writer<'a, '_> {
         }
         let of = Of {
             svd: &r.name,
-            span: r.span,
+            span: r.name_span,
             what: "register",
             report_changes: false,
         };
@@ -362,7 +362,7 @@ impl<'a> Writer<'a, '_> {
         for (index, delta) in elements(f.repeat.as_ref()) {
             let of = Of {
                 svd: &f.name,
-                span: f.span,
+                span: f.name_span,
                 what: "field",
                 report_changes: true,
             };
@@ -440,7 +440,7 @@ impl<'a> Writer<'a, '_> {
                 Class::Variant { name, value: n } => {
                     let of = Of {
                         svd: name,
-                        span: value.span,
+                        span: value.name_span,
                         what: "enumerated value",
                         report_changes: true,
                     };
@@ -494,7 +494,7 @@ impl<'a> Writer<'a, '_> {
         let converted = names::suffix(struct_name, &f.name);
         let of = Of {
             svd: &f.name,
-            span: f.span,
+            span: f.name_span,
             what: "enum of field",
             report_changes: false,
         };
@@ -867,6 +867,7 @@ mod tests {
         let file = sources.add("x.svd", "x");
         EnumValue {
             span: Span::new(file, 0, 1),
+            name_span: Span::new(file, 0, 1),
             name: name.map(str::to_owned),
             description: None,
             value,

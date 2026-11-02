@@ -53,6 +53,13 @@ impl Parser<'_, '_> {
         Some((text_of(c), self.span(c)))
     }
 
+    /// The span of the `name` of an element, or of the element when it has
+    /// none: what the diagnostics about a name point at, instead of a whole
+    /// peripheral.
+    fn name_span(&self, node: Node) -> Span {
+        self.span(child(node, "name").unwrap_or(node))
+    }
+
     /// A child whose text is a name or a description, as written.
     pub fn string(&self, node: Node, tag: &str) -> Option<String> {
         child(node, tag).map(text_of)
@@ -256,6 +263,7 @@ impl Parser<'_, '_> {
         });
         Common {
             span: self.span(node),
+            name_span: self.name_span(node),
             name,
             description: self.string(node, "description"),
             derived_from,
@@ -524,6 +532,7 @@ impl Parser<'_, '_> {
         }
         Value {
             span: self.span(node),
+            name_span: self.name_span(node),
             name: self
                 .string(node, "name")
                 .map(|name| name.trim().to_owned())

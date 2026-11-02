@@ -1,0 +1,15 @@
+---
+source: tests/svd.rs
+expression: "summary(&module, &diags, &sources)"
+---
+device: ESP32-C3, version 18
+peripheral types: 34
+peripherals: 37
+registers: 1429
+fields: 3507
+warnings: 2
+svd::renamed: the field `_1P8_READY` is named `_1p8_ready`
+  esp32c3.svd:18594:15: its name has characters no identifier has, or starts with a digit
+svd::renamed: the register `RTC_CNTL` is named `RtcCntl_`: its scope has the name taken
+  esp32c3.svd:18721:11: renamed, with `_` after it
+  esp32c3.svd:17045:7: has the name

@@ -1,0 +1,61 @@
+// The program that builds the ESP32-C3's generated module (`esp32c3.svd`,
+// ADR 0070): it reaches a few registers so that every shape of access is
+// built into MIR and code, and every peripheral type and peripheral is
+// checked. It is built for riscv32 and not run, since the official QEMU has
+// no ESP32-C3 machine. `tests/svd.rs` writes the module beside it as
+// `generated.ers`.
+mod generated;
+
+use generated::uart0::Uart0;
+use generated::{aes, sha};
+use generated::{AES, DMA, RNG, SHA, UART0, UART1};
+
+// A field of a register reached through a pointer to the peripheral type:
+// `UART0` and `UART1` are two peripherals of the one type `Uart0`.
+fn rx_byte(uart: *mut Uart0) -> u8 {
+    (*uart).fifo.rxfifo_rd_byte
+}
+
+entry fn main() -> ! {
+    // An element of a register array, with a run-time index.
+    let mut i: usize = 0;
+    while i < 4 {
+        AES.iv_mem[i] = i as u32;
+        i += 1;
+    }
+    let last: u32 = AES.iv_mem[i - 1];
+
+    // Elements of a register list: registers of their own, `int_raw_ch0` to
+    // `int_raw_ch2`, one type between them. A field read and a field
+    // assignment.
+    let done: bool = DMA.int_raw_ch2.in_done;
+    DMA.int_raw_ch1.out_eof = done;
+
+    // `RNG` is a view of `APB_CTRL`'s bytes (`over`).
+    AES.key_0.key_0 = RNG.data + last;
+
+    // A whole write of a literal of a bit-field struct: `..` gives the
+    // fields it leaves out their defaults. `continue_` is the name of the
+    // SVD's `CONTINUE`, a keyword.
+    AES.continue_ = aes::Continue { continue_: true, .. };
+    SHA.continue_ = sha::Continue { .. };
+
+    // One driver for the two UARTs.
+    let byte: u8 = rx_byte(&raw mut UART0) + rx_byte(&raw mut UART1);
+    UART0.fifo.rxfifo_rd_byte = byte;
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    loop {}
+}
+
+// The ESP32-C3's memory in two regions: the image in the first, and in the
+// second a stack at its start, then `.data` and `.bss`.
+memory {
+    region IMAGE { origin: 0x4200_0000, size: 0x0080_0000 }
+    region RAM { origin: 0x3FC8_0000, size: 0x0005_0000 }
+    code in IMAGE;
+    data in RAM;
+    stack in RAM { size: 0x0001_0000 }
+}

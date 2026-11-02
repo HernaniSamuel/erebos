@@ -40,6 +40,8 @@ pub(super) struct Named {
 #[derive(Clone, Debug)]
 pub(super) struct Common {
     pub span: Span,
+    /// The `name` element, or the element itself when it has none.
+    pub name_span: Span,
     /// Only a set of enumerated values may have none.
     pub name: Option<String>,
     pub description: Option<String>,
@@ -148,6 +150,8 @@ pub(super) struct Set {
 #[derive(Clone, Debug)]
 pub(super) struct Value {
     pub span: Span,
+    /// The `name` element, or the element itself when it has none.
+    pub name_span: Span,
     pub name: Option<String>,
     pub description: Option<String>,
     pub value: Option<EnumNumber>,
