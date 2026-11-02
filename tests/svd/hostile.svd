@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Text of the SVD file in the descriptions, notes and names of fields and enumerated values must stay in its comment: the generated module type checks, so none of it became source. -->
+<device>
+  <name>HOSTILE</name>
+  <version>1.0</version>
+  <size>32</size>
+  <access>read-write</access>
+  <peripherals>
+    <peripheral>
+      <name>DEV</name>
+      <baseAddress>0x40000000</baseAddress>
+      <registers>
+        <register>
+          <name>CTRL</name>
+          <addressOffset>0x00</addressOffset>
+          <fields>
+            <field>
+              <name>MODE&#10;}&#10;pub fn evil() {}&#10;</name>
+              <description>Line one.&#10;}&#10;pub fn evil() {}&#x2028;pub fn evil2() {}&#x85;pub fn evil3() {}</description>
+              <bitOffset>0</bitOffset><bitWidth>2</bitWidth>
+              <writeConstraint><writeAsRead>true</writeAsRead></writeConstraint>
+              <enumeratedValues>
+                <name>E&#10;}&#10;pub fn evil() {}</name>
+                <description>A set.&#10;}&#10;pub fn evil() {}</description>
+                <usage>sometimes&#10;}&#10;pub fn evil() {}</usage>
+                <enumeratedValue>
+                  <name>OK</name>
+                  <description>A value.&#10;}&#10;pub fn evil() {}&#x2028;pub fn evil2() {}</description>
+                  <value>0</value>
+                </enumeratedValue>
+                <enumeratedValue>
+                  <name>X&#10;}&#10;pub fn evil() {}&#10;</name>
+                  <description>Left out.&#10;pub fn evil() {}</description>
+                  <value>#1x</value>
+                </enumeratedValue>
+                <enumeratedValue>
+                  <name>-&#10;}&#10;pub fn evil() {}</name>
+                  <value>1</value>
+                </enumeratedValue>
+                <enumeratedValue>
+                  <name>DUP&#10;}&#10;pub fn evil() {}</name>
+                  <value>0</value>
+                </enumeratedValue>
+              </enumeratedValues>
+            </field>
+            <field>
+              <name>TWO</name>
+              <bitOffset>2</bitOffset><bitWidth>2</bitWidth>
+              <access>writeOnce&#10;}&#10;pub fn evil() {}</access>
+              <enumeratedValues><name>A</name><enumeratedValue><name>A</name><value>0</value></enumeratedValue></enumeratedValues>
+              <enumeratedValues><name>B&#10;}&#10;pub fn evil() {}</name><enumeratedValue><name>B</name><value>1</value></enumeratedValue></enumeratedValues>
+            </field>
+          </fields>
+        </register>
+      </registers>
+    </peripheral>
+  </peripherals>
+</device>

@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Defaults (ADR 0072): the reset value at the field's bits, none with a write effect or an unknown bit, an enum field whose reset value is a variant and one where it is not. -->
+<device>
+  <name>DEFAULTS</name>
+  <version>1.0</version>
+  <size>32</size>
+  <access>read-write</access>
+  <peripherals>
+    <peripheral>
+      <name>DEV</name>
+      <baseAddress>0x40000000</baseAddress>
+      <registers>
+        <register>
+          <name>RESET</name>
+          <description>Reset value 0x1FEA05: a bool, small and large integers, enums, a write effect.</description>
+          <addressOffset>0x00</addressOffset>
+          <resetValue>0x001FEA05</resetValue>
+          <fields>
+            <field><name>FLAG</name><description>Bit 0 is 1.</description><bitOffset>0</bitOffset><bitWidth>1</bitWidth></field>
+            <field><name>SMALL</name><description>Bits 1 and 2 hold 2.</description><bitOffset>1</bitOffset><bitWidth>2</bitWidth></field>
+            <field><name>OFF</name><description>Bit 3 is 0.</description><bitOffset>3</bitOffset><bitWidth>1</bitWidth></field>
+            <field><name>LARGE</name><description>Bits 4 to 11 hold 0xA0.</description><bitOffset>4</bitOffset><bitWidth>8</bitWidth></field>
+            <field>
+              <name>MODE</name>
+              <description>Bits 12 and 13 hold 2: a variant.</description>
+              <bitOffset>12</bitOffset><bitWidth>2</bitWidth>
+              <enumeratedValues>
+                <enumeratedValue><name>A</name><value>0</value></enumeratedValue>
+                <enumeratedValue><name>B</name><value>1</value></enumeratedValue>
+                <enumeratedValue><name>C</name><value>2</value></enumeratedValue>
+              </enumeratedValues>
+            </field>
+            <field>
+              <name>ODD</name>
+              <description>Bits 14 and 15 hold 3, and no variant has that value: no default, warned.</description>
+              <bitOffset>14</bitOffset><bitWidth>2</bitWidth>
+              <enumeratedValues>
+                <enumeratedValue><name>A</name><value>0</value></enumeratedValue>
+                <enumeratedValue><name>B</name><value>1</value></enumeratedValue>
+              </enumeratedValues>
+            </field>
+            <field><name>FLAG_CLEAR</name><description>Bit 16 is 1, but a write effect has no default.</description><bitOffset>16</bitOffset><bitWidth>1</bitWidth><modifiedWriteValues>oneToClear</modifiedWriteValues></field>
+            <field><name>HIGH</name><description>Bits 17 to 20 hold 0xF.</description><bitOffset>17</bitOffset><bitWidth>4</bitWidth></field>
+          </fields>
+        </register>
+        <register>
+          <name>MASKED</name>
+          <description>Reset value 0xFF, and a mask that knows bits 0 to 3 and 8 to 11 only.</description>
+          <addressOffset>0x04</addressOffset>
+          <resetValue>0xFF</resetValue>
+          <resetMask>0x0F0F</resetMask>
+          <fields>
+            <field><name>KNOWN</name><bitOffset>0</bitOffset><bitWidth>4</bitWidth></field>
+            <field><name>UNKNOWN</name><description>Bits 4 to 7 are out of the mask: no default.</description><bitOffset>4</bitOffset><bitWidth>4</bitWidth></field>
+            <field><name>ZERO</name><description>Bits 8 to 11 are known, and 0.</description><bitOffset>8</bitOffset><bitWidth>4</bitWidth></field>
+          </fields>
+        </register>
+        <register>
+          <name>PARTLY</name>
+          <description>A field with some of its bits out of the mask has no default.</description>
+          <addressOffset>0x08</addressOffset>
+          <resetValue>0xFF</resetValue>
+          <resetMask>0x0F</resetMask>
+          <fields>
+            <field><name>MIDDLE</name><bitOffset>2</bitOffset><bitWidth>4</bitWidth></field>
+          </fields>
+        </register>
+        <register>
+          <name>NO_RESET</name>
+          <description>No resetValue at any level: its fields have no default.</description>
+          <addressOffset>0x0C</addressOffset>
+          <fields>
+            <field><name>FLAG</name><bitOffset>0</bitOffset><bitWidth>1</bitWidth></field>
+            <field><name>NUMBER</name><bitOffset>1</bitOffset><bitWidth>3</bitWidth></field>
+          </fields>
+        </register>
+        <register>
+          <name>SMALL</name>
+          <description>An 8-bit register: the reset value is cut to its size.</description>
+          <addressOffset>0x10</addressOffset>
+          <size>8</size>
+          <resetValue>0x1FF</resetValue>
+          <fields>
+            <field><name>LOW</name><bitOffset>0</bitOffset><bitWidth>4</bitWidth></field>
+            <field><name>HIGH</name><bitOffset>4</bitOffset><bitWidth>4</bitWidth></field>
+          </fields>
+        </register>
+      </registers>
+    </peripheral>
+    <peripheral>
+      <name>INHERITING</name>
+      <description>The reset value comes from the peripheral, and a register states its own over it.</description>
+      <baseAddress>0x40001000</baseAddress>
+      <resetValue>0x5</resetValue>
+      <registers>
+        <register>
+          <name>R</name>
+          <addressOffset>0x00</addressOffset>
+          <fields>
+            <field><name>A</name><bitOffset>0</bitOffset><bitWidth>3</bitWidth></field>
+          </fields>
+        </register>
+        <register>
+          <name>OWN</name>
+          <addressOffset>0x04</addressOffset>
+          <resetValue>0x2</resetValue>
+          <fields>
+            <field><name>A</name><bitOffset>0</bitOffset><bitWidth>3</bitWidth></field>
+          </fields>
+        </register>
+      </registers>
+    </peripheral>
+  </peripherals>
+</device>

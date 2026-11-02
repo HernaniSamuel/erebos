@@ -13,7 +13,7 @@ pub mod dev {
         // States `write`: read as absent, so the mode is the one its fields
         // imply.
         // svd: `write` is no SVD value of `access`; read as absent
-        pub read write_access: u32 at 0x0,
+        pub read write_access: WriteAccess at 0x0,
 
         // States `read/clear`, with no field: read write.
         // svd: `read/clear` is no SVD value of `access`; read as absent
@@ -27,6 +27,36 @@ pub mod dev {
         // svd: `clearOnRead` is no SVD value of `readAction`; read as absent
         // svd: `flip` is no SVD value of `modifiedWriteValues`; read as absent
         pub read write bad_action: u32 at 0xC,
+
+        // Fields stating `write` and `read/clear`: read as absent, so the
+        // field takes its register's mode.
+        pub read write field_values: FieldValues at 0x10,
+    }
+
+    pub struct WriteAccess: u32 {
+        pub a: bool at 0,
+    }
+
+    pub struct FieldValues: u32 {
+        // States `write`.
+        // svd: `write` is no SVD value of `access`; read as absent
+        pub w: bool at 0,
+
+        // States `read/clear`.
+        // svd: `read/clear` is no SVD value of `access`; read as absent
+        pub rc: bool at 1,
+
+        pub read ok: bool at 2,
+
+        // Effects no SVD defines, and a set with a usage no SVD defines.
+        // svd: `clearOnRead` is no SVD value of `readAction`; read as absent
+        // svd: `flip` is no SVD value of `modifiedWriteValues`; read as absent
+        pub bad: FieldValuesBad at 3..=4,
+    }
+
+    // svd: `sometimes` is no SVD value of `usage`; read as absent
+    pub enum FieldValuesBad: u8 {
+        A = 0,
     }
 }
 
@@ -77,3 +107,59 @@ svd::invalid-value
     ╰────
   help: SVD defines: `oneToClear`, `oneToSet`, `oneToToggle`, `zeroToClear`, `zeroToSet`,
         `zeroToToggle`, `clear`, `set`, `modify`
+svd::invalid-value
+
+  ⚠ `write` is no SVD value of `access`; read as absent
+    ╭─[access_values.svd:43:122]
+ 42 │           <fields>
+ 43 │             <field><name>W</name><description>States `write`.</description><bitOffset>0</bitOffset><bitWidth>1</bitWidth><access>write</access></field>
+    ·                                                                                                                          ───────────┬──────────
+    ·                                                                                                                                     ╰── not an SVD value
+ 44 │             <field><name>RC</name><description>States `read/clear`.</description><bitOffset>1</bitOffset><bitWidth>1</bitWidth><access>read/clear</access></field>
+    ╰────
+  help: SVD defines: `read-only`, `write-only`, `read-write`, `writeOnce`, `read-writeOnce`
+svd::invalid-value
+
+  ⚠ `read/clear` is no SVD value of `access`; read as absent
+    ╭─[access_values.svd:44:128]
+ 43 │             <field><name>W</name><description>States `write`.</description><bitOffset>0</bitOffset><bitWidth>1</bitWidth><access>write</access></field>
+ 44 │             <field><name>RC</name><description>States `read/clear`.</description><bitOffset>1</bitOffset><bitWidth>1</bitWidth><access>read/clear</access></field>
+    ·                                                                                                                                ─────────────┬─────────────
+    ·                                                                                                                                             ╰── not an SVD value
+ 45 │             <field><name>OK</name><bitOffset>2</bitOffset><bitWidth>1</bitWidth><access>read-only</access></field>
+    ╰────
+  help: SVD defines: `read-only`, `write-only`, `read-write`, `writeOnce`, `read-writeOnce`
+svd::invalid-value
+
+  ⚠ `clearOnRead` is no SVD value of `readAction`; read as absent
+    ╭─[access_values.svd:46:171]
+ 45 │             <field><name>OK</name><bitOffset>2</bitOffset><bitWidth>1</bitWidth><access>read-only</access></field>
+ 46 │             <field><name>BAD</name><description>Effects no SVD defines, and a set with a usage no SVD defines.</description><bitOffset>3</bitOffset><bitWidth>2</bitWidth><readAction>clearOnRead</readAction><modifiedWriteValues>flip</modifiedWriteValues>
+    ·                                                                                                                                                                           ──────────────────┬─────────────────
+    ·                                                                                                                                                                                             ╰── not an SVD value
+ 47 │               <enumeratedValues><name>E</name><usage>sometimes</usage><enumeratedValue><name>A</name><value>0</value></enumeratedValue></enumeratedValues>
+    ╰────
+  help: SVD defines: `clear`, `set`, `modify`, `modifyExternal`
+svd::invalid-value
+
+  ⚠ `flip` is no SVD value of `modifiedWriteValues`; read as absent
+    ╭─[access_values.svd:46:207]
+ 45 │             <field><name>OK</name><bitOffset>2</bitOffset><bitWidth>1</bitWidth><access>read-only</access></field>
+ 46 │             <field><name>BAD</name><description>Effects no SVD defines, and a set with a usage no SVD defines.</description><bitOffset>3</bitOffset><bitWidth>2</bitWidth><readAction>clearOnRead</readAction><modifiedWriteValues>flip</modifiedWriteValues>
+    ·                                                                                                                                                                                                               ───────────────────────┬───────────────────────
+    ·                                                                                                                                                                                                                                      ╰── not an SVD value
+ 47 │               <enumeratedValues><name>E</name><usage>sometimes</usage><enumeratedValue><name>A</name><value>0</value></enumeratedValue></enumeratedValues>
+    ╰────
+  help: SVD defines: `oneToClear`, `oneToSet`, `oneToToggle`, `zeroToClear`, `zeroToSet`,
+        `zeroToToggle`, `clear`, `set`, `modify`
+svd::invalid-value
+
+  ⚠ `sometimes` is no SVD value of `usage`; read as absent
+    ╭─[access_values.svd:47:47]
+ 46 │             <field><name>BAD</name><description>Effects no SVD defines, and a set with a usage no SVD defines.</description><bitOffset>3</bitOffset><bitWidth>2</bitWidth><readAction>clearOnRead</readAction><modifiedWriteValues>flip</modifiedWriteValues>
+ 47 │               <enumeratedValues><name>E</name><usage>sometimes</usage><enumeratedValue><name>A</name><value>0</value></enumeratedValue></enumeratedValues>
+    ·                                               ────────────┬───────────
+    ·                                                           ╰── not an SVD value
+ 48 │             </field>
+    ╰────
+  help: SVD defines: `read`, `write`, `read-write`

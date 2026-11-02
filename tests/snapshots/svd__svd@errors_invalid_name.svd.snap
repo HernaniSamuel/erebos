@@ -39,31 +39,53 @@ svd::invalid-name
  20 │         <register><name> </name><addressOffset>0x4</addressOffset></register>
     ·         ──────────────────────────────────┬──────────────────────────────────
     ·                                           ╰── this name has no ASCII letter, digit or `_`
- 21 │         <register><name>G</name><alternateGroup>__</alternateGroup><addressOffset>0x20</addressOffset></register>
+ 21 │         <register>
+    ╰────
+  help: an identifier is made of ASCII letters, digits and `_`: rename it
+svd::invalid-name
+
+  × the name `-` of this field leaves nothing for an identifier
+    ╭─[errors_invalid_name.svd:25:13]
+ 24 │           <fields>
+ 25 │             <field><name>-</name><bitOffset>0</bitOffset><bitWidth>1</bitWidth></field>
+    ·             ─────────────────────────────────────┬─────────────────────────────────────
+    ·                                                  ╰── this name has no ASCII letter, digit or `_`
+ 26 │             <field><name> </name><bitOffset>1</bitOffset><bitWidth>1</bitWidth></field>
+    ╰────
+  help: an identifier is made of ASCII letters, digits and `_`: rename it
+svd::invalid-name
+
+  × this field has an empty name
+    ╭─[errors_invalid_name.svd:26:13]
+ 25 │             <field><name>-</name><bitOffset>0</bitOffset><bitWidth>1</bitWidth></field>
+ 26 │             <field><name> </name><bitOffset>1</bitOffset><bitWidth>1</bitWidth></field>
+    ·             ─────────────────────────────────────┬─────────────────────────────────────
+    ·                                                  ╰── this name has no ASCII letter, digit or `_`
+ 27 │             <field><name>OK</name><bitOffset>2</bitOffset><bitWidth>1</bitWidth></field>
     ╰────
   help: an identifier is made of ASCII letters, digits and `_`: rename it
 svd::invalid-name
 
   × the name `__` of this alternate group leaves nothing for an identifier
-    ╭─[errors_invalid_name.svd:21:9]
- 20 │         <register><name> </name><addressOffset>0x4</addressOffset></register>
- 21 │         <register><name>G</name><alternateGroup>__</alternateGroup><addressOffset>0x20</addressOffset></register>
+    ╭─[errors_invalid_name.svd:30:9]
+ 29 │         </register>
+ 30 │         <register><name>G</name><alternateGroup>__</alternateGroup><addressOffset>0x20</addressOffset></register>
     ·         ────────────────────────────────────────────────────┬────────────────────────────────────────────────────
     ·                                                             ╰── this name has no ASCII letter, digit or `_`
- 22 │         <cluster>
+ 31 │         <cluster>
     ╰────
   help: an identifier is made of ASCII letters, digits and `_`: rename it
 svd::invalid-name
 
   × the name `_` of this cluster leaves nothing for an identifier
-    ╭─[errors_invalid_name.svd:22:9]
- 21 │             <register><name>G</name><alternateGroup>__</alternateGroup><addressOffset>0x20</addressOffset></register>
- 22 │ ╭─▶         <cluster>
- 23 │ │             <name>_</name>
- 24 │ │             <addressOffset>0x100</addressOffset>
- 25 │ │             <register><name>X</name><addressOffset>0x0</addressOffset></register>
- 26 │ ├─▶         </cluster>
+    ╭─[errors_invalid_name.svd:31:9]
+ 30 │             <register><name>G</name><alternateGroup>__</alternateGroup><addressOffset>0x20</addressOffset></register>
+ 31 │ ╭─▶         <cluster>
+ 32 │ │             <name>_</name>
+ 33 │ │             <addressOffset>0x100</addressOffset>
+ 34 │ │             <register><name>X</name><addressOffset>0x0</addressOffset></register>
+ 35 │ ├─▶         </cluster>
     · ╰──── this name has no ASCII letter, digit or `_`
- 27 │           </registers>
+ 36 │           </registers>
     ╰────
   help: an identifier is made of ASCII letters, digits and `_`: rename it

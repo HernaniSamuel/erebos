@@ -101,4 +101,4 @@ Do not write one for local implementation details that the code already explains
 | 0069 | [Programs with an injected error are rejected](0069-programs-with-an-injected-error-are-rejected.md) | Accepted |
 | 0070 | [Peripherals generated from SVD](0070-peripherals-generated-from-svd.md) | Accepted, corrected 2026-11-02 |
 | 0071 | [Names generated from SVD](0071-names-generated-from-svd.md) | Accepted |
-| 0072 | [SVD constructs, and what has no declaration](0072-svd-constructs-and-what-has-no-declaration.md) | Accepted |
+| 0072 | [SVD constructs, and what has no declaration](0072-svd-constructs-and-what-has-no-declaration.md) | Accepted, amended 2026-11-02 |

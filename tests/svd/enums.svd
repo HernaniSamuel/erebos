@@ -1,0 +1,232 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Enumerated values (ADR 0072): enums, isDefault, values left out, two sets on a field, names, dim, and derivedFrom reusing an enum or not. -->
+<device>
+  <name>ENUMS</name>
+  <version>1.0</version>
+  <size>32</size>
+  <access>read-write</access>
+  <peripherals>
+    <peripheral>
+      <name>ENUMS</name>
+      <description>The enums.</description>
+      <baseAddress>0x40000000</baseAddress>
+      <registers>
+        <register>
+          <name>LCR</name>
+          <description>A register with a field per case.</description>
+          <addressOffset>0x00</addressOffset>
+          <fields>
+            <field>
+              <name>WLS</name>
+              <description>The word length.</description>
+              <bitOffset>0</bitOffset><bitWidth>2</bitWidth>
+              <enumeratedValues>
+                <name>WLS_VALUES</name>
+                <description>The lengths a word has.</description>
+                <usage>read-write</usage>
+                <enumeratedValue><name>FIVE</name><description>Five bits.</description><value>0</value></enumeratedValue>
+                <enumeratedValue><name>SIX</name><description>Six bits.</description><value>1</value></enumeratedValue>
+                <enumeratedValue><name>SEVEN</name><value>2</value></enumeratedValue>
+                <enumeratedValue><name>EIGHT</name><value>3</value></enumeratedValue>
+              </enumeratedValues>
+            </field>
+            <field>
+              <name>STB</name>
+              <description>One bit with an enum: an enum, not a bool.</description>
+              <bitOffset>2</bitOffset><bitWidth>1</bitWidth>
+              <enumeratedValues>
+                <enumeratedValue><name>ONE</name><value>0</value></enumeratedValue>
+                <enumeratedValue><name>TWO</name><value>1</value></enumeratedValue>
+              </enumeratedValues>
+            </field>
+            <field>
+              <name>PARITY</name>
+              <description>An isDefault value is no variant.</description>
+              <bitOffset>3</bitOffset><bitWidth>2</bitWidth>
+              <enumeratedValues>
+                <enumeratedValue><name>NONE</name><value>0</value></enumeratedValue>
+                <enumeratedValue><name>ODD</name><value>1</value></enumeratedValue>
+                <enumeratedValue><name>EVEN</name><value>3</value></enumeratedValue>
+                <enumeratedValue><name>RESERVED</name><description>Every other value.</description><isDefault>true</isDefault></enumeratedValue>
+              </enumeratedValues>
+            </field>
+            <field>
+              <name>DC</name>
+              <description>A value with don't-care bits is left out.</description>
+              <bitOffset>5</bitOffset><bitWidth>3</bitWidth>
+              <enumeratedValues>
+                <enumeratedValue><name>A</name><value>0</value></enumeratedValue>
+                <enumeratedValue><name>B</name><value>1</value></enumeratedValue>
+                <enumeratedValue><name>MANY</name><value>#1x0</value></enumeratedValue>
+              </enumeratedValues>
+            </field>
+            <field>
+              <name>DUP</name>
+              <description>A value another variant has is left out.</description>
+              <bitOffset>8</bitOffset><bitWidth>2</bitWidth>
+              <enumeratedValues>
+                <enumeratedValue><name>A</name><value>0</value></enumeratedValue>
+                <enumeratedValue><name>B</name><value>1</value></enumeratedValue>
+                <enumeratedValue><name>C</name><value>1</value></enumeratedValue>
+              </enumeratedValues>
+            </field>
+            <field>
+              <name>EMPTY</name>
+              <description>No variant is left: the field is an integer.</description>
+              <bitOffset>10</bitOffset><bitWidth>2</bitWidth>
+              <enumeratedValues>
+                <name>EMPTY_SET</name>
+                <enumeratedValue><name>OTHERS</name><isDefault>true</isDefault></enumeratedValue>
+                <enumeratedValue><value>3</value></enumeratedValue>
+                <enumeratedValue><name>WIDE</name><value>#1x</value></enumeratedValue>
+              </enumeratedValues>
+            </field>
+            <field>
+              <name>RW</name>
+              <description>Two sets, for reads and for writes: no declaration.</description>
+              <bitOffset>12</bitOffset><bitWidth>2</bitWidth>
+              <enumeratedValues>
+                <name>RW_READ</name>
+                <usage>read</usage>
+                <enumeratedValue><name>IDLE</name><value>0</value></enumeratedValue>
+                <enumeratedValue><name>BUSY</name><value>1</value></enumeratedValue>
+              </enumeratedValues>
+              <enumeratedValues>
+                <name>RW_WRITE</name>
+                <usage>write</usage>
+                <enumeratedValue><name>GO</name><value>1</value></enumeratedValue>
+              </enumeratedValues>
+            </field>
+            <field>
+              <name>NOUSAGE</name>
+              <description>Two sets without a usage: also no declaration, and a bool for one bit.</description>
+              <bitOffset>14</bitOffset><bitWidth>1</bitWidth>
+              <enumeratedValues><name>FIRST</name><enumeratedValue><name>A</name><value>0</value></enumeratedValue></enumeratedValues>
+              <enumeratedValues><name>SECOND</name><enumeratedValue><name>B</name><value>1</value></enumeratedValue></enumeratedValues>
+            </field>
+            <field>
+              <name>NAMELESS</name>
+              <description>A value without a name is no variant, and nothing is warned.</description>
+              <bitOffset>16</bitOffset><bitWidth>2</bitWidth>
+              <enumeratedValues>
+                <enumeratedValue><name>A</name><value>0</value></enumeratedValue>
+                <enumeratedValue><name>B</name><value>1</value></enumeratedValue>
+                <enumeratedValue><value>3</value></enumeratedValue>
+              </enumeratedValues>
+            </field>
+            <field>
+              <name>FREQ</name>
+              <description>Names with a leading digit, a digit alone, and nothing for an identifier.</description>
+              <bitOffset>18</bitOffset><bitWidth>3</bitWidth>
+              <enumeratedValues>
+                <enumeratedValue><name>0</name><value>0</value></enumeratedValue>
+                <enumeratedValue><name>1MHZ</name><value>1</value></enumeratedValue>
+                <enumeratedValue><name>-</name><value>2</value></enumeratedValue>
+                <enumeratedValue><name> </name><value>3</value></enumeratedValue>
+                <enumeratedValue><name>OK</name><value>4</value></enumeratedValue>
+              </enumeratedValues>
+            </field>
+            <field>
+              <dim>2</dim><dimIncrement>1</dimIncrement>
+              <name>TX%s</name>
+              <description>A field with dim and enumerated values: one enum, shared.</description>
+              <bitOffset>21</bitOffset><bitWidth>1</bitWidth>
+              <enumeratedValues>
+                <enumeratedValue><name>OFF</name><value>0</value></enumeratedValue>
+                <enumeratedValue><name>ON</name><value>1</value></enumeratedValue>
+              </enumeratedValues>
+            </field>
+            <field>
+              <name>SAME</name>
+              <description>Derived from the set WLS_VALUES of a sibling field: the same enum.</description>
+              <bitOffset>23</bitOffset><bitWidth>2</bitWidth>
+              <enumeratedValues derivedFrom="WLS_VALUES"/>
+            </field>
+            <field>
+              <name>RESTATED</name>
+              <description>Derived, and states a value the base has, as it has it: still the same enum.</description>
+              <bitOffset>25</bitOffset><bitWidth>2</bitWidth>
+              <enumeratedValues derivedFrom="WLS_VALUES">
+                <enumeratedValue><name>SIX</name><value>1</value></enumeratedValue>
+              </enumeratedValues>
+            </field>
+            <field>
+              <name>WIDER</name>
+              <description>Derived, and adds a value: a set of its own, an enum of its own.</description>
+              <bitOffset>27</bitOffset><bitWidth>3</bitWidth>
+              <enumeratedValues derivedFrom="WLS_VALUES">
+                <enumeratedValue><name>NINE</name><value>4</value></enumeratedValue>
+              </enumeratedValues>
+            </field>
+          </fields>
+        </register>
+        <cluster>
+          <name>CL</name>
+          <description>A cluster: its register names the enum of the peripheral type, through super.</description>
+          <addressOffset>0x100</addressOffset>
+          <register>
+            <name>REG</name>
+            <addressOffset>0x0</addressOffset>
+            <fields>
+              <field>
+                <name>F</name>
+                <bitOffset>0</bitOffset><bitWidth>2</bitWidth>
+                <enumeratedValues derivedFrom="ENUMS.LCR.WLS.WLS_VALUES"/>
+              </field>
+              <field>
+                <name>OWN</name>
+                <bitOffset>2</bitOffset><bitWidth>1</bitWidth>
+                <enumeratedValues>
+                  <enumeratedValue><name>NO</name><value>0</value></enumeratedValue>
+                  <enumeratedValue><name>YES</name><value>1</value></enumeratedValue>
+                </enumeratedValues>
+              </field>
+            </fields>
+          </register>
+        </cluster>
+      </registers>
+    </peripheral>
+    <peripheral derivedFrom="ENUMS">
+      <name>ENUMS2</name>
+      <description>Shares the type of ENUMS: its sets are not written.</description>
+      <baseAddress>0x40001000</baseAddress>
+    </peripheral>
+    <peripheral>
+      <name>OTHER</name>
+      <description>A type of its own, whose sets derive from the ones of ENUMS.</description>
+      <baseAddress>0x40002000</baseAddress>
+      <registers>
+        <register>
+          <name>X</name>
+          <addressOffset>0x0</addressOffset>
+          <fields>
+            <field>
+              <name>REUSED</name>
+              <description>The enum of ENUMS, through its module.</description>
+              <bitOffset>0</bitOffset><bitWidth>2</bitWidth>
+              <enumeratedValues derivedFrom="ENUMS.LCR.WLS.WLS_VALUES"/>
+            </field>
+            <field>
+              <name>WIDE</name>
+              <description>The same set on another integer type: an enum of its own.</description>
+              <bitOffset>2</bitOffset><bitWidth>9</bitWidth>
+              <enumeratedValues derivedFrom="ENUMS.LCR.WLS.WLS_VALUES"/>
+            </field>
+            <field>
+              <name>NONE</name>
+              <description>The set was not written as an enum: an integer.</description>
+              <bitOffset>11</bitOffset><bitWidth>2</bitWidth>
+              <enumeratedValues derivedFrom="ENUMS.LCR.EMPTY.EMPTY_SET"/>
+            </field>
+            <field>
+              <name>SHARED</name>
+              <description>A set of a peripheral that shares the type of ENUMS: not in the model, so an enum of its own.</description>
+              <bitOffset>13</bitOffset><bitWidth>2</bitWidth>
+              <enumeratedValues derivedFrom="ENUMS2.LCR.WLS.WLS_VALUES"/>
+            </field>
+          </fields>
+        </register>
+      </registers>
+    </peripheral>
+  </peripherals>
+</device>

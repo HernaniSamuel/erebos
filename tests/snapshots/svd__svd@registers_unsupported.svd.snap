@@ -48,6 +48,17 @@ pub mod dev {
         // svd: fields declare one
         // svd: `protection` is not declared
         pub write several: u32 at 0x1C,
+
+        // A field with a write constraint.
+        pub read write field_constraint: FieldConstraint at 0x20,
+    }
+
+    pub struct FieldConstraint: u32 {
+        // Writes are limited to a range.
+        // svd: `writeConstraint` is not declared
+        pub limited: u8 at 0..=3,
+
+        pub free: bool at 4,
     }
 }
 
@@ -150,7 +161,7 @@ svd::not-declared
  64 │ │             <protection>p</protection>
  65 │ ├─▶         </register>
     · ╰──── not declared
- 66 │           </registers>
+ 66 │             <register>
     ╰────
 svd::not-declared
 
@@ -167,7 +178,7 @@ svd::not-declared
  64 │ │             <protection>p</protection>
  65 │ ├─▶         </register>
     · ╰──── not declared
- 66 │           </registers>
+ 66 │             <register>
     ╰────
 svd::not-declared
 
@@ -178,4 +189,14 @@ svd::not-declared
     ·           ─────────────┬────────────
     ·                        ╰── not declared
  65 │         </register>
+    ╰────
+svd::not-declared
+
+  ⚠ field `LIMITED`: `writeConstraint` is not declared
+    ╭─[registers_unsupported.svd:76:15]
+ 75 │               <bitOffset>0</bitOffset><bitWidth>4</bitWidth>
+ 76 │               <writeConstraint><range><minimum>1</minimum><maximum>9</maximum></range></writeConstraint>
+    ·               ─────────────────────────────────────────────┬────────────────────────────────────────────
+    ·                                                            ╰── not declared
+ 77 │             </field>
     ╰────

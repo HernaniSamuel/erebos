@@ -134,6 +134,58 @@ pub mod _3des {
     }
 }
 
+pub mod field_words {
+    // Fields named as words of Erebos, and enums whose variants are.
+    pub peripheral FieldWords {
+        pub read write ctrl: Ctrl at 0x0,
+    }
+
+    pub struct Ctrl: u32 {
+        pub continue_: bool at 0,
+        pub in: bool at 1,
+        pub read: bool at 2,
+        pub write: bool at 3,
+        pub step: bool at 4,
+        pub u8_: bool at 5,
+        pub option: bool at 6,
+        pub match_: bool at 7,
+        pub a_b: bool at 8,
+
+        // Meets A.B once its name is converted.
+        pub a_b_: bool at 9,
+
+        pub kind: CtrlKind at 10..=12,
+    }
+
+    pub enum CtrlKind: u8 {
+        Option_ = 0,
+        Result_ = 1,
+        Bool = 2,
+        U8 = 3,
+        None = 4,
+        _1mhz = 5,
+        AB = 6,
+        AB_ = 7,
+    }
+}
+
+pub mod rtc_cntl {
+    // A register named as its peripheral: its struct meets the peripheral
+    // type.
+    pub peripheral RtcCntl {
+        pub read write rtc_cntl: RtcCntl_ at 0x0,
+    }
+
+    pub struct RtcCntl_: u32 {
+        pub mode: RtcCntl_Mode at 0..=1,
+    }
+
+    pub enum RtcCntl_Mode: u8 {
+        Off = 0,
+        On = 1,
+    }
+}
+
 pub mod core_ {
     pub peripheral Core {
         pub read write r: u32 at 0x0,
@@ -167,6 +219,12 @@ pub peripheral uart__: uart_::Uart at 0x5001_0000;
 
 // A peripheral that starts with a digit.
 pub peripheral _3DES: _3des::_3des at 0x5002_0000;
+
+// Fields named as words of Erebos, and enums whose variants are.
+pub peripheral FIELD_WORDS: field_words::FieldWords at 0x5004_0000;
+
+// A register named as its peripheral: its struct meets the peripheral type.
+pub peripheral RTC_CNTL: rtc_cntl::RtcCntl at 0x5005_0000;
 
 pub peripheral CORE: core_::Core at 0x5003_0000;
 --- diagnostics ---
@@ -475,4 +533,87 @@ svd::renamed
  150 │ ├─▶     </peripheral>
      · ╰──── its name has characters no identifier has, or starts with a digit
  151 │         <peripheral>
+     ╰────
+svd::renamed
+
+  ⚠ the field `A.B` is named `a_b`
+     ╭─[names.svd:168:13]
+ 167 │             <field><name>MATCH</name><bitOffset>7</bitOffset><bitWidth>1</bitWidth></field>
+ 168 │             <field><name>A.B</name><bitOffset>8</bitOffset><bitWidth>1</bitWidth></field>
+     ·             ──────────────────────────────────────┬──────────────────────────────────────
+     ·                                                   ╰── its name has characters no identifier has, or starts with a digit
+ 169 │             <field><name>a_b</name><description>Meets A.B once its name is converted.</description><bitOffset>9</bitOffset><bitWidth>1</bitWidth></field>
+     ╰────
+svd::renamed
+
+  ⚠ the field `a_b` is named `a_b_`: its scope has the name taken
+     ╭─[names.svd:169:13]
+ 167 │             <field><name>MATCH</name><bitOffset>7</bitOffset><bitWidth>1</bitWidth></field>
+ 168 │             <field><name>A.B</name><bitOffset>8</bitOffset><bitWidth>1</bitWidth></field>
+     ·             ──────────────────────────────────────┬──────────────────────────────────────
+     ·                                                   ╰── has the name
+ 169 │             <field><name>a_b</name><description>Meets A.B once its name is converted.</description><bitOffset>9</bitOffset><bitWidth>1</bitWidth></field>
+     ·             ──────────────────────────────────────────────────────────────────────┬──────────────────────────────────────────────────────────────────────
+     ·                                                                                   ╰── renamed, with `_` after it
+ 170 │             <field>
+     ╰────
+svd::renamed
+
+  ⚠ the enumerated value `1MHZ` is named `_1mhz`
+     ╭─[names.svd:179:17]
+ 178 │                 <enumeratedValue><name>NONE</name><value>4</value></enumeratedValue>
+ 179 │                 <enumeratedValue><name>1MHZ</name><value>5</value></enumeratedValue>
+     ·                 ──────────────────────────────────┬─────────────────────────────────
+     ·                                                   ╰── its name has characters no identifier has, or starts with a digit
+ 180 │                 <enumeratedValue><name>A.B</name><value>6</value></enumeratedValue>
+     ╰────
+svd::renamed
+
+  ⚠ the enumerated value `A.B` is named `AB`
+     ╭─[names.svd:180:17]
+ 179 │                 <enumeratedValue><name>1MHZ</name><value>5</value></enumeratedValue>
+ 180 │                 <enumeratedValue><name>A.B</name><value>6</value></enumeratedValue>
+     ·                 ─────────────────────────────────┬─────────────────────────────────
+     ·                                                  ╰── its name has characters no identifier has, or starts with a digit
+ 181 │                 <enumeratedValue><name>a_b</name><value>7</value></enumeratedValue>
+     ╰────
+svd::renamed
+
+  ⚠ the enumerated value `a_b` is named `AB_`: its scope has the name taken
+     ╭─[names.svd:181:17]
+ 179 │                 <enumeratedValue><name>1MHZ</name><value>5</value></enumeratedValue>
+ 180 │                 <enumeratedValue><name>A.B</name><value>6</value></enumeratedValue>
+     ·                 ─────────────────────────────────┬─────────────────────────────────
+     ·                                                  ╰── has the name
+ 181 │                 <enumeratedValue><name>a_b</name><value>7</value></enumeratedValue>
+     ·                 ─────────────────────────────────┬─────────────────────────────────
+     ·                                                  ╰── renamed, with `_` after it
+ 182 │               </enumeratedValues>
+     ╰────
+svd::renamed
+
+  ⚠ the register `RTC_CNTL` is named `RtcCntl_`: its scope has the name taken
+     ╭─[names.svd:193:9]
+ 187 │          </peripheral>
+ 188 │ ╭──▶     <peripheral>
+ 189 │ │          <name>RTC_CNTL</name>
+ 190 │ │          <description>A register named as its peripheral: its struct meets the peripheral type.</description>
+ 191 │ │          <baseAddress>0x50050000</baseAddress>
+ 192 │ │          <registers>
+ 193 │ │╭─▶         <register>
+ 194 │ ││             <name>RTC_CNTL</name>
+ 195 │ ││             <addressOffset>0x0</addressOffset>
+ 196 │ ││             <fields>
+ 197 │ ││               <field>
+ 198 │ ││                 <name>MODE</name>
+ 199 │ ││                 <bitOffset>0</bitOffset><bitWidth>2</bitWidth>
+ 200 │ ││                 <enumeratedValues><enumeratedValue><name>OFF</name><value>0</value></enumeratedValue><enumeratedValue><name>ON</name><value>1</value></enumeratedValue></enumeratedValues>
+ 201 │ ││               </field>
+ 202 │ ││             </fields>
+ 203 │ │├─▶         </register>
+     · │╰──── renamed, with `_` after it
+ 204 │ │          </registers>
+ 205 │ ├──▶     </peripheral>
+     · ╰───── has the name
+ 206 │          <peripheral>
      ╰────

@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fields (ADR 0072): bits in each form, types by width, modes where they differ, writeOnce, dim, derivedFrom. -->
+<device>
+  <name>FIELDS</name>
+  <version>1.0</version>
+  <size>32</size>
+  <peripherals>
+    <peripheral>
+      <name>BITS</name>
+      <description>Bits in each of SVD's three forms.</description>
+      <baseAddress>0x40000000</baseAddress>
+      <access>read-write</access>
+      <registers>
+        <register>
+          <name>FORMS</name>
+          <description>One field per form, and one that states two.</description>
+          <addressOffset>0x00</addressOffset>
+          <fields>
+            <field><name>OFFSET_WIDTH</name><description>From bitOffset and bitWidth.</description><bitOffset>0</bitOffset><bitWidth>4</bitWidth></field>
+            <field><name>LSB_MSB</name><description>From lsb and msb.</description><lsb>4</lsb><msb>7</msb></field>
+            <field><name>RANGE</name><description>From bitRange.</description><bitRange>[11:8]</bitRange></field>
+            <field><name>ONE_BIT_RANGE</name><bitRange>[12:12]</bitRange></field>
+            <field><name>TWO_FORMS</name><description>States bitOffset and bitWidth, then lsb and msb: the first form is taken.</description><bitOffset>13</bitOffset><bitWidth>2</bitWidth><lsb>20</lsb><msb>25</msb></field>
+          </fields>
+        </register>
+        <register>
+          <name>NARROW</name>
+          <description>A bool, and widths up to 9 bits.</description>
+          <addressOffset>0x04</addressOffset>
+          <fields>
+            <field><name>W1</name><bitOffset>0</bitOffset><bitWidth>1</bitWidth></field>
+            <field><name>W2</name><bitOffset>1</bitOffset><bitWidth>2</bitWidth></field>
+            <field><name>W8</name><bitOffset>3</bitOffset><bitWidth>8</bitWidth></field>
+            <field><name>W9</name><bitOffset>11</bitOffset><bitWidth>9</bitWidth></field>
+          </fields>
+        </register>
+        <register>
+          <name>W16</name>
+          <addressOffset>0x08</addressOffset>
+          <fields>
+            <field><name>V</name><bitOffset>0</bitOffset><bitWidth>16</bitWidth></field>
+          </fields>
+        </register>
+        <register>
+          <name>W17</name>
+          <addressOffset>0x0C</addressOffset>
+          <fields>
+            <field><name>V</name><bitOffset>0</bitOffset><bitWidth>17</bitWidth></field>
+          </fields>
+        </register>
+        <register>
+          <name>W32</name>
+          <addressOffset>0x10</addressOffset>
+          <fields>
+            <field><name>V</name><bitOffset>0</bitOffset><bitWidth>32</bitWidth></field>
+          </fields>
+        </register>
+        <register>
+          <name>SMALL</name>
+          <description>A register of 8 bits has a struct of 8 bits.</description>
+          <addressOffset>0x14</addressOffset>
+          <size>8</size>
+          <fields>
+            <field><name>LOW</name><bitOffset>0</bitOffset><bitWidth>4</bitWidth></field>
+            <field><name>HIGH</name><bitOffset>4</bitOffset><bitWidth>4</bitWidth></field>
+          </fields>
+        </register>
+      </registers>
+    </peripheral>
+    <peripheral>
+      <name>MODES</name>
+      <description>Field modes, written where they differ from the register's.</description>
+      <baseAddress>0x40001000</baseAddress>
+      <registers>
+        <register>
+          <name>RW</name>
+          <addressOffset>0x00</addressOffset>
+          <access>read-write</access>
+          <fields>
+            <field><name>RO</name><bitOffset>0</bitOffset><bitWidth>1</bitWidth><access>read-only</access></field>
+            <field><name>WO</name><bitOffset>1</bitOffset><bitWidth>1</bitWidth><access>write-only</access></field>
+            <field><name>RW</name><bitOffset>2</bitOffset><bitWidth>1</bitWidth><access>read-write</access></field>
+            <field><name>NONE</name><bitOffset>3</bitOffset><bitWidth>1</bitWidth></field>
+          </fields>
+        </register>
+        <register>
+          <name>R</name>
+          <addressOffset>0x04</addressOffset>
+          <access>read-only</access>
+          <fields>
+            <field><name>RO</name><bitOffset>0</bitOffset><bitWidth>1</bitWidth><access>read-only</access></field>
+            <field><name>WO</name><bitOffset>1</bitOffset><bitWidth>1</bitWidth><access>write-only</access></field>
+            <field><name>RW</name><bitOffset>2</bitOffset><bitWidth>1</bitWidth><access>read-write</access></field>
+            <field><name>NONE</name><bitOffset>3</bitOffset><bitWidth>1</bitWidth></field>
+          </fields>
+        </register>
+        <register>
+          <name>W</name>
+          <addressOffset>0x08</addressOffset>
+          <access>write-only</access>
+          <fields>
+            <field><name>RO</name><bitOffset>0</bitOffset><bitWidth>1</bitWidth><access>read-only</access></field>
+            <field><name>WO</name><bitOffset>1</bitOffset><bitWidth>1</bitWidth><access>write-only</access></field>
+            <field><name>RW</name><bitOffset>2</bitOffset><bitWidth>1</bitWidth><access>read-write</access></field>
+            <field><name>NONE</name><bitOffset>3</bitOffset><bitWidth>1</bitWidth></field>
+          </fields>
+        </register>
+        <register>
+          <name>ONCE</name>
+          <description>Fields writable once: declared without "once", and warned.</description>
+          <addressOffset>0x0C</addressOffset>
+          <access>read-write</access>
+          <fields>
+            <field><name>W_ONCE</name><description>Writable once.</description><bitOffset>0</bitOffset><bitWidth>1</bitWidth><access>writeOnce</access></field>
+            <field><name>RW_ONCE</name><description>Readable, and writable once.</description><bitOffset>1</bitOffset><bitWidth>1</bitWidth><access>read-writeOnce</access></field>
+          </fields>
+        </register>
+        <register>
+          <name>ONCE_ONLY</name>
+          <description>The fields give the register its mode: write-only and writeOnce are both write.</description>
+          <addressOffset>0x10</addressOffset>
+          <fields>
+            <field><name>A</name><bitOffset>0</bitOffset><bitWidth>1</bitWidth><access>writeOnce</access></field>
+            <field><name>B</name><bitOffset>1</bitOffset><bitWidth>1</bitWidth><access>write-only</access></field>
+          </fields>
+        </register>
+      </registers>
+    </peripheral>
+    <peripheral>
+      <name>REPEATED</name>
+      <description>Fields with dim, and a field derived from another.</description>
+      <baseAddress>0x40002000</baseAddress>
+      <access>read-write</access>
+      <registers>
+        <register>
+          <name>CH</name>
+          <addressOffset>0x00</addressOffset>
+          <fields>
+            <field><dim>3</dim><dimIncrement>2</dimIncrement><name>CH%s_MODE</name><description>The mode of a channel.</description><bitOffset>0</bitOffset><bitWidth>2</bitWidth></field>
+            <field><dim>2</dim><dimIncrement>1</dimIncrement><dimIndex>A,B</dimIndex><name>FLAG%s</name><bitOffset>8</bitOffset><bitWidth>1</bitWidth><access>read-only</access></field>
+            <field><dim>2</dim><dimIncrement>4</dimIncrement><dimIndex>2-3</dimIndex><name>NIBBLE[%s]</name><bitOffset>12</bitOffset><bitWidth>4</bitWidth></field>
+          </fields>
+        </register>
+        <register>
+          <name>DERIVED</name>
+          <addressOffset>0x04</addressOffset>
+          <fields>
+            <field><name>BASE</name><description>The field the next one is derived from.</description><bitOffset>0</bitOffset><bitWidth>2</bitWidth><access>read-only</access></field>
+            <field derivedFrom="BASE"><name>COPY</name><bitOffset>4</bitOffset><bitWidth>2</bitWidth></field>
+          </fields>
+        </register>
+      </registers>
+    </peripheral>
+  </peripherals>
+</device>

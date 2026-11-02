@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Effects (ADR 0072): the six write effects, those without a declaration, an explicit modify, one inherited from the register, and each readAction. -->
+<device>
+  <name>EFFECTS</name>
+  <version>1.0</version>
+  <size>32</size>
+  <access>read-write</access>
+  <peripherals>
+    <peripheral>
+      <name>WRITES</name>
+      <baseAddress>0x40000000</baseAddress>
+      <registers>
+        <register>
+          <name>SIX</name>
+          <description>The six write effects that have a value without effect.</description>
+          <addressOffset>0x00</addressOffset>
+          <fields>
+            <field><name>ONE_CLEARS</name><bitOffset>0</bitOffset><bitWidth>1</bitWidth><modifiedWriteValues>oneToClear</modifiedWriteValues></field>
+            <field><name>ONE_SETS</name><bitOffset>1</bitOffset><bitWidth>1</bitWidth><modifiedWriteValues>oneToSet</modifiedWriteValues></field>
+            <field><name>ONE_TOGGLES</name><bitOffset>2</bitOffset><bitWidth>1</bitWidth><modifiedWriteValues>oneToToggle</modifiedWriteValues></field>
+            <field><name>ZERO_CLEARS</name><bitOffset>3</bitOffset><bitWidth>1</bitWidth><modifiedWriteValues>zeroToClear</modifiedWriteValues></field>
+            <field><name>ZERO_SETS</name><bitOffset>4</bitOffset><bitWidth>1</bitWidth><modifiedWriteValues>zeroToSet</modifiedWriteValues></field>
+            <field><name>ZERO_TOGGLES</name><bitOffset>5</bitOffset><bitWidth>1</bitWidth><modifiedWriteValues>zeroToToggle</modifiedWriteValues></field>
+          </fields>
+        </register>
+        <register>
+          <name>NEUTRAL_LESS</name>
+          <description>Write effects that have no value without effect: declared without them, and warned.</description>
+          <addressOffset>0x04</addressOffset>
+          <fields>
+            <field><name>CLEARS</name><description>Any write clears it.</description><bitOffset>0</bitOffset><bitWidth>1</bitWidth><modifiedWriteValues>clear</modifiedWriteValues></field>
+            <field><name>SETS</name><bitOffset>1</bitOffset><bitWidth>1</bitWidth><modifiedWriteValues>set</modifiedWriteValues></field>
+            <field><name>MODIFIES</name><description>The default, stated: nothing is lost.</description><bitOffset>2</bitOffset><bitWidth>1</bitWidth><modifiedWriteValues>modify</modifiedWriteValues></field>
+            <field><name>PLAIN</name><bitOffset>3</bitOffset><bitWidth>1</bitWidth></field>
+          </fields>
+        </register>
+        <register>
+          <name>INHERITED</name>
+          <description>The register states oneToClear, which its fields take unless they state their own.</description>
+          <addressOffset>0x08</addressOffset>
+          <modifiedWriteValues>oneToClear</modifiedWriteValues>
+          <fields>
+            <field><name>TAKES_IT</name><bitOffset>0</bitOffset><bitWidth>1</bitWidth></field>
+            <field><name>OWN</name><bitOffset>1</bitOffset><bitWidth>1</bitWidth><modifiedWriteValues>zeroToSet</modifiedWriteValues></field>
+            <field><name>MODIFY</name><description>States modify over the register's effect.</description><bitOffset>2</bitOffset><bitWidth>1</bitWidth><modifiedWriteValues>modify</modifiedWriteValues></field>
+          </fields>
+        </register>
+        <register>
+          <name>INHERITED_CLEAR</name>
+          <description>The register states clear, which has no declaration: its field without an effect of its own takes it, and is warned.</description>
+          <addressOffset>0x0C</addressOffset>
+          <modifiedWriteValues>clear</modifiedWriteValues>
+          <fields>
+            <field><name>A</name><bitOffset>0</bitOffset><bitWidth>1</bitWidth></field>
+            <field><name>B</name><bitOffset>1</bitOffset><bitWidth>1</bitWidth><modifiedWriteValues>oneToSet</modifiedWriteValues></field>
+          </fields>
+        </register>
+      </registers>
+    </peripheral>
+    <peripheral>
+      <name>READS</name>
+      <baseAddress>0x40001000</baseAddress>
+      <registers>
+        <register>
+          <name>FIELDS</name>
+          <description>The read actions of fields.</description>
+          <addressOffset>0x00</addressOffset>
+          <fields>
+            <field><name>CLEARS</name><bitOffset>0</bitOffset><bitWidth>1</bitWidth><readAction>clear</readAction></field>
+            <field><name>SETS</name><bitOffset>1</bitOffset><bitWidth>1</bitWidth><readAction>set</readAction></field>
+            <field><name>MODIFIES</name><bitOffset>2</bitOffset><bitWidth>1</bitWidth><readAction>modify</readAction></field>
+            <field><name>EXTERNAL</name><bitOffset>3</bitOffset><bitWidth>1</bitWidth><readAction>modifyExternal</readAction></field>
+            <field><name>BOTH</name><description>A read action and a write effect.</description><bitOffset>4</bitOffset><bitWidth>1</bitWidth><readAction>clear</readAction><modifiedWriteValues>oneToClear</modifiedWriteValues></field>
+          </fields>
+        </register>
+        <register><name>CLEARS</name><addressOffset>0x04</addressOffset><readAction>clear</readAction></register>
+        <register><name>SETS</name><addressOffset>0x08</addressOffset><readAction>set</readAction></register>
+        <register><name>MODIFIES</name><addressOffset>0x0C</addressOffset><readAction>modify</readAction></register>
+        <register><name>EXTERNAL</name><addressOffset>0x10</addressOffset><readAction>modifyExternal</readAction></register>
+      </registers>
+    </peripheral>
+  </peripherals>
+</device>

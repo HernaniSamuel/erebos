@@ -60,6 +60,27 @@ pub(super) fn identifier(text: &str, case: Case) -> Option<Converted> {
     Some(Converted { name, changed })
 }
 
+/// The name of a field's enum (ADR 0071): the struct's name, then Pascal case
+/// of the field's name (steps 1 to 3, the field standing for the whole
+/// element). The name starts with the struct's, so a leading digit of the
+/// field's is no leading digit, and it is not a rename. `None` when nothing is
+/// left of the field's name.
+pub(super) fn suffix(struct_name: &str, field: &str) -> Option<Converted> {
+    let text = with_index(field, Index::Whole);
+    let characters = characters(&text);
+    if characters.is_empty() {
+        return None;
+    }
+    let mut name = format!("{struct_name}{}", apply_case(&characters, Case::Pascal));
+    if is_reserved(&name) {
+        name.push('_');
+    }
+    Some(Converted {
+        name,
+        changed: characters != text,
+    })
+}
+
 /// The name as a module of a program: what `erebos svd` names its output
 /// after (ADR 0070). `None` when nothing is left of it.
 pub(super) fn module_name(stem: &str) -> Option<String> {

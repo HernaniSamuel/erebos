@@ -149,6 +149,61 @@
       </registers>
     </peripheral>
     <peripheral>
+      <name>FIELD_WORDS</name>
+      <description>Fields named as words of Erebos, and enums whose variants are.</description>
+      <baseAddress>0x50040000</baseAddress>
+      <registers>
+        <register>
+          <name>CTRL</name>
+          <addressOffset>0x0</addressOffset>
+          <fields>
+            <field><name>CONTINUE</name><bitOffset>0</bitOffset><bitWidth>1</bitWidth></field>
+            <field><name>IN</name><bitOffset>1</bitOffset><bitWidth>1</bitWidth></field>
+            <field><name>READ</name><bitOffset>2</bitOffset><bitWidth>1</bitWidth></field>
+            <field><name>WRITE</name><bitOffset>3</bitOffset><bitWidth>1</bitWidth></field>
+            <field><name>STEP</name><bitOffset>4</bitOffset><bitWidth>1</bitWidth></field>
+            <field><name>U8</name><bitOffset>5</bitOffset><bitWidth>1</bitWidth></field>
+            <field><name>OPTION</name><bitOffset>6</bitOffset><bitWidth>1</bitWidth></field>
+            <field><name>MATCH</name><bitOffset>7</bitOffset><bitWidth>1</bitWidth></field>
+            <field><name>A.B</name><bitOffset>8</bitOffset><bitWidth>1</bitWidth></field>
+            <field><name>a_b</name><description>Meets A.B once its name is converted.</description><bitOffset>9</bitOffset><bitWidth>1</bitWidth></field>
+            <field>
+              <name>KIND</name>
+              <bitOffset>10</bitOffset><bitWidth>3</bitWidth>
+              <enumeratedValues>
+                <enumeratedValue><name>OPTION</name><value>0</value></enumeratedValue>
+                <enumeratedValue><name>RESULT</name><value>1</value></enumeratedValue>
+                <enumeratedValue><name>BOOL</name><value>2</value></enumeratedValue>
+                <enumeratedValue><name>U8</name><value>3</value></enumeratedValue>
+                <enumeratedValue><name>NONE</name><value>4</value></enumeratedValue>
+                <enumeratedValue><name>1MHZ</name><value>5</value></enumeratedValue>
+                <enumeratedValue><name>A.B</name><value>6</value></enumeratedValue>
+                <enumeratedValue><name>a_b</name><value>7</value></enumeratedValue>
+              </enumeratedValues>
+            </field>
+          </fields>
+        </register>
+      </registers>
+    </peripheral>
+    <peripheral>
+      <name>RTC_CNTL</name>
+      <description>A register named as its peripheral: its struct meets the peripheral type.</description>
+      <baseAddress>0x50050000</baseAddress>
+      <registers>
+        <register>
+          <name>RTC_CNTL</name>
+          <addressOffset>0x0</addressOffset>
+          <fields>
+            <field>
+              <name>MODE</name>
+              <bitOffset>0</bitOffset><bitWidth>2</bitWidth>
+              <enumeratedValues><enumeratedValue><name>OFF</name><value>0</value></enumeratedValue><enumeratedValue><name>ON</name><value>1</value></enumeratedValue></enumeratedValues>
+            </field>
+          </fields>
+        </register>
+      </registers>
+    </peripheral>
+    <peripheral>
       <name>CORE</name>
       <baseAddress>0x50030000</baseAddress>
       <registers>

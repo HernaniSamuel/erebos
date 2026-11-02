@@ -25,16 +25,36 @@ pub mod modes {
 pub mod from_fields {
     // No element states an access: the mode comes from the fields.
     pub peripheral FromFields {
-        pub read all_read_only: u32 at 0x0,
-        pub write all_write_only: u32 at 0x4,
+        pub read all_read_only: AllReadOnly at 0x0,
+        pub write all_write_only: AllWriteOnly at 0x4,
 
         // One read-only field and one write-only field.
-        pub read write mixed: u32 at 0x8,
+        pub read write mixed: Mixed at 0x8,
 
-        pub read write one_field_without_access: u32 at 0xC,
+        pub read write one_field_without_access: OneFieldWithoutAccess at 0xC,
 
         // With no field, read write.
         pub read write no_fields: u32 at 0x10,
+    }
+
+    pub struct AllReadOnly: u32 {
+        pub a: bool at 0,
+        pub b: u8 at 1..=3,
+    }
+
+    pub struct AllWriteOnly: u32 {
+        pub a: bool at 0,
+        pub b: u8 at 1..=3,
+    }
+
+    pub struct Mixed: u32 {
+        pub read a: bool at 0,
+        pub write b: u8 at 1..=3,
+    }
+
+    pub struct OneFieldWithoutAccess: u32 {
+        pub read a: bool at 0,
+        pub b: u8 at 1..=3,
     }
 }
 

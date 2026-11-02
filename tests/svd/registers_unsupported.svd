@@ -63,6 +63,21 @@
           <resetValue>0x1</resetValue>
           <protection>p</protection>
         </register>
+        <register>
+          <name>FIELD_CONSTRAINT</name>
+          <description>A field with a write constraint.</description>
+          <addressOffset>0x20</addressOffset>
+          <access>read-write</access>
+          <fields>
+            <field>
+              <name>LIMITED</name>
+              <description>Writes are limited to a range.</description>
+              <bitOffset>0</bitOffset><bitWidth>4</bitWidth>
+              <writeConstraint><range><minimum>1</minimum><maximum>9</maximum></range></writeConstraint>
+            </field>
+            <field><name>FREE</name><bitOffset>4</bitOffset><bitWidth>1</bitWidth></field>
+          </fields>
+        </register>
       </registers>
     </peripheral>
   </peripherals>

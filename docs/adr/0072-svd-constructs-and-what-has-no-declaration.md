@@ -1,6 +1,6 @@
 # 0072. SVD constructs, and what has no declaration
 
-- Status: Accepted
+- Status: Accepted; amended on 2026-11-02 (a derived set with values of its own)
 - Date: 2026-11-02
 
 ## Context
@@ -207,6 +207,13 @@ is as above.
   of its own, or an integer field. A base enum whose variants do not fit
   the derived field's bits is the compiler's `ty::bit-field-width` (see
   Consequences).
+
+  **Note, 2026-11-02:** "the enum written for the set it names" holds
+  only when the derived set's values, merged with the base's as
+  `derivedFrom` copies and merges them, equal the base set's values: the
+  same names and values, in the same order. A derived set that adds,
+  replaces or reorders a value is a set of its own, an enum of its own or
+  an integer field, with nothing left out and no new warning.
 
 ### Values that are no SVD value
 

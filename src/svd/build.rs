@@ -182,6 +182,7 @@ impl Builder<'_, '_> {
             span: s.c.span,
             id: SetId(i),
             name: s.c.name.clone(),
+            description: s.c.description.clone(),
             usage: s.usage,
             derived_from: s.base.map(SetId),
             values: s

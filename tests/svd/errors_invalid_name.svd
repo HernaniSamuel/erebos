@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Names with nothing left for an identifier: a peripheral, a register, a cluster, and a group. -->
+<!-- Names with nothing left for an identifier: a peripheral, a register, a field, a cluster, and a group. -->
 <device>
   <name>ERRORS</name>
   <size>32</size>
@@ -18,6 +18,15 @@
       <registers>
         <register><name>-</name><addressOffset>0x0</addressOffset></register>
         <register><name> </name><addressOffset>0x4</addressOffset></register>
+        <register>
+          <name>FIELDS</name>
+          <addressOffset>0x30</addressOffset>
+          <fields>
+            <field><name>-</name><bitOffset>0</bitOffset><bitWidth>1</bitWidth></field>
+            <field><name> </name><bitOffset>1</bitOffset><bitWidth>1</bitWidth></field>
+            <field><name>OK</name><bitOffset>2</bitOffset><bitWidth>1</bitWidth></field>
+          </fields>
+        </register>
         <register><name>G</name><alternateGroup>__</alternateGroup><addressOffset>0x20</addressOffset></register>
         <cluster>
           <name>_</name>

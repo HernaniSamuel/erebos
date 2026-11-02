@@ -9,17 +9,23 @@
 //! need before anything is written), the peripherals that are `over` others,
 //! and the text.
 
+use std::collections::HashMap;
+use std::rc::Rc;
+
 use crate::diag::Diagnostic;
 use crate::span::Span;
 
-use super::names::{self, Case, Index, Scope};
+use super::fields::{self, Entry, EnumRef, StructPlan, TypePlan};
+use super::names::{self, Case, Converted, Index, Scope};
 use super::over::{self, Over, Placed};
 use super::read::Reader;
 use super::text::{comment, hex};
-use super::{Access, Cluster, Device, Item, Peripheral, ReadAction, Register, Repeat, WriteEffect};
+use super::{
+    Access, Cluster, Device, Item, Peripheral, ReadAction, Register, Repeat, SetId, WriteEffect,
+};
 
 /// Spaces per module.
-const INDENT: usize = 4;
+pub(super) const INDENT: usize = 4;
 
 /// The generated file of `device`, read from the file called `file_name`.
 /// Errors (`svd::invalid-name`) and warnings go through `rd`; the text is
@@ -34,9 +40,13 @@ pub(super) fn write(file_name: &str, device: &Device, rd: &mut Reader) -> String
         first: Vec::new(),
         names: Vec::new(),
         overs: Vec::new(),
+        sets: fields::written_sets(&device.peripherals),
+        enums: HashMap::new(),
+        plans: device.peripherals.iter().map(|_| None).collect(),
     };
     writer.name_peripherals();
     writer.find_overs();
+    writer.plan_types();
     writer.file(file_name)
 }
 
@@ -52,17 +62,9 @@ struct Instance {
     address: u64,
 }
 
-/// The names of a cluster's module and type.
-struct ClusterNames {
-    module: String,
-    ty: String,
-    /// The module's scope, with the type's name taken.
-    scope: Scope,
-}
-
-struct Writer<'a, 'r> {
+pub(super) struct Writer<'a, 'r> {
     device: &'a Device,
-    rd: &'a mut Reader<'r>,
+    pub(super) rd: &'a mut Reader<'r>,
     /// By peripheral: the names of its type, when it has one of its own and
     /// a name.
     types: Vec<Option<TypeNames>>,
@@ -78,21 +80,28 @@ struct Writer<'a, 'r> {
     names: Vec<String>,
     /// By position among all the instances: its `over`.
     overs: Vec<Over>,
+    /// For each set written as an enum, the set whose enum it is.
+    pub(super) sets: HashMap<SetId, SetId>,
+    /// The enums planned, by the set they are written for.
+    pub(super) enums: HashMap<SetId, Rc<EnumRef>>,
+    /// By peripheral: the structs and enums of its type, until the module is
+    /// written.
+    plans: Vec<Option<TypePlan<'a>>>,
 }
 
 /// An SVD element whose name is converted.
 #[derive(Clone, Copy)]
-struct Of<'a> {
-    svd: &'a str,
-    span: Span,
+pub(super) struct Of<'a> {
+    pub svd: &'a str,
+    pub span: Span,
     /// What it is, for the diagnostics.
-    what: &'a str,
+    pub what: &'a str,
     /// Whether a change of its characters is reported: the item that stands
     /// for the element asks, and not its module or type.
-    report_changes: bool,
+    pub report_changes: bool,
 }
 
-impl Writer<'_, '_> {
+impl<'a> Writer<'a, '_> {
     // ---- names
 
     /// The names of the modules and types, then of the peripherals: the
@@ -148,14 +157,31 @@ impl Writer<'_, '_> {
     /// `svd::invalid-name` when nothing is left of it; the warning
     /// `svd::renamed` when its characters or a leading digit changed and
     /// when another item of the scope has the name.
-    fn name(&mut self, scope: &mut Scope, of: Of, index: Index, case: Case) -> Option<String> {
+    pub(super) fn name(
+        &mut self,
+        scope: &mut Scope,
+        of: Of,
+        index: Index,
+        case: Case,
+    ) -> Option<String> {
+        self.claim(scope, of, names::convert(of.svd, index, case))
+    }
+
+    /// Takes the converted name of an element in `scope`; `None` converted is
+    /// the error `svd::invalid-name`.
+    pub(super) fn claim(
+        &mut self,
+        scope: &mut Scope,
+        of: Of,
+        converted: Option<Converted>,
+    ) -> Option<String> {
         let Of {
             svd,
             span,
             what,
             report_changes,
         } = of;
-        let Some(converted) = names::convert(svd, index, case) else {
+        let Some(converted) = converted else {
             let message = if svd.is_empty() {
                 format!("this {what} has an empty name")
             } else {
@@ -192,6 +218,22 @@ impl Writer<'_, '_> {
             );
         }
         Some(name)
+    }
+
+    /// The structs and enums of every peripheral type that has a name, once
+    /// every name of the file is known (a set may derive from a later type's).
+    fn plan_types(&mut self) {
+        let device = self.device;
+        for (i, p) in device.peripherals.iter().enumerate() {
+            let Some(module) = self.types[i].as_ref().map(|names| names.module.clone()) else {
+                continue;
+            };
+            let Some(mut scope) = self.scopes[i].take() else {
+                continue;
+            };
+            let plan = self.plan_type(&[module], &p.items, &mut scope);
+            self.plans[i] = Some(plan);
+        }
     }
 
     // ---- peripherals over others
@@ -266,13 +308,13 @@ impl Writer<'_, '_> {
         let mut lines = header(file_name, device);
         let mut blocks: Vec<Vec<String>> = Vec::new();
         for (i, p) in device.peripherals.iter().enumerate() {
-            let (Some(names), Some(mut scope)) = (&self.types[i], self.scopes[i].take()) else {
+            let (Some(names), Some(plan)) = (&self.types[i], self.plans[i].take()) else {
                 continue;
             };
             let (module, ty) = (names.module.clone(), names.ty.clone());
             let mut docs = describe(INDENT, p.description.as_deref());
             docs.extend(svd_lines(INDENT, &p.notes));
-            let mut body = self.type_block(1, &ty, docs, &p.items, &mut scope);
+            let mut body = self.type_block(1, &ty, docs, &p.items, &plan);
             let mut block = vec![format!("pub mod {module} {{")];
             block.append(&mut body);
             block.push("}".to_owned());
@@ -350,38 +392,35 @@ impl Writer<'_, '_> {
         lines
     }
 
-    /// A peripheral type and the modules of its clusters, at `depth`
-    /// modules in, as lines. `docs` are the comment lines of its item;
-    /// `scope` holds the names taken in its module.
+    /// A peripheral type, the structs and enums of its registers and the
+    /// modules of its clusters, at `depth` modules in, as lines. `docs` are
+    /// the comment lines of its item; `plan` holds the names of the structs,
+    /// enums and cluster modules.
     fn type_block(
         &mut self,
         depth: usize,
         ty: &str,
         docs: Vec<String>,
         items: &[Item],
-        scope: &mut Scope,
+        plan: &TypePlan<'_>,
     ) -> Vec<String> {
         let margin = " ".repeat(depth * INDENT);
-        // The names of the clusters' modules first (ADR 0071's order is the
-        // type, the structs of the registers, then the clusters' modules).
-        let plans: Vec<Option<ClusterNames>> = items
-            .iter()
-            .map(|item| match item {
-                Item::Cluster(cluster) => self.plan_cluster(cluster, scope),
-                Item::Register(_) => None,
-            })
-            .collect();
         let mut entries = Scope::default();
         let mut blocks: Vec<Vec<String>> = Vec::new();
-        for (item, plan) in items.iter().zip(&plans) {
-            match (item, plan) {
-                (Item::Register(register), _) => {
-                    blocks.extend(self.register(depth + 1, register, &mut entries));
+        for (item, entry) in items.iter().zip(&plan.entries) {
+            match (item, entry) {
+                (Item::Register(register), Entry::Register(structure)) => {
+                    blocks.extend(self.register(
+                        depth + 1,
+                        register,
+                        structure.as_ref(),
+                        &mut entries,
+                    ));
                 }
-                (Item::Cluster(cluster), Some(plan)) => {
-                    blocks.extend(self.cluster(depth + 1, cluster, plan, &mut entries));
+                (Item::Cluster(cluster), Entry::Cluster(Some(cluster_plan))) => {
+                    blocks.extend(self.cluster(depth + 1, cluster, cluster_plan, &mut entries));
                 }
-                (Item::Cluster(_), None) => {}
+                _ => {}
             }
         }
         let body = join(blocks, false);
@@ -393,38 +432,33 @@ impl Writer<'_, '_> {
             lines.extend(body);
             lines.push(format!("{margin}}}"));
         }
-        for (item, plan) in items.iter().zip(plans) {
-            let (Item::Cluster(cluster), Some(mut plan)) = (item, plan) else {
+        for (item, entry) in items.iter().zip(&plan.entries) {
+            if let (Item::Register(register), Entry::Register(Some(structure))) = (item, entry) {
+                for block in self.struct_blocks(depth, register, structure) {
+                    lines.push(String::new());
+                    lines.extend(block);
+                }
+            }
+        }
+        for (item, entry) in items.iter().zip(&plan.entries) {
+            let (Item::Cluster(cluster), Entry::Cluster(Some(cluster_plan))) = (item, entry) else {
                 continue;
             };
             let mut docs = describe((depth + 1) * INDENT, cluster.description.as_deref());
             docs.extend(svd_lines((depth + 1) * INDENT, &cluster.notes));
-            let inner = self.type_block(depth + 1, &plan.ty, docs, &cluster.items, &mut plan.scope);
+            let inner = self.type_block(
+                depth + 1,
+                &cluster_plan.ty,
+                docs,
+                &cluster.items,
+                &cluster_plan.inner,
+            );
             lines.push(String::new());
-            lines.push(format!("{margin}pub mod {} {{", plan.module));
+            lines.push(format!("{margin}pub mod {} {{", cluster_plan.module));
             lines.extend(inner);
             lines.push(format!("{margin}}}"));
         }
         lines
-    }
-
-    /// The names of a cluster's module (in `scope`, the module it is in) and
-    /// of its type; `None` when its name is no identifier.
-    fn plan_cluster(&mut self, cluster: &Cluster, scope: &mut Scope) -> Option<ClusterNames> {
-        let of = Of {
-            svd: &cluster.name,
-            span: cluster.span,
-            what: "cluster",
-            report_changes: false,
-        };
-        let module = self.name(scope, of, Index::Whole, Case::Lower);
-        let mut inner = Scope::default();
-        let ty = self.name(&mut inner, of, Index::Whole, Case::Pascal);
-        Some(ClusterNames {
-            module: module?,
-            ty: ty?,
-            scope: inner,
-        })
     }
 
     /// The entries a cluster is: one, or one per element of a list.
@@ -432,7 +466,7 @@ impl Writer<'_, '_> {
         &mut self,
         depth: usize,
         cluster: &Cluster,
-        plan: &ClusterNames,
+        plan: &fields::ClusterPlan<'_>,
         entries: &mut Scope,
     ) -> Vec<Vec<String>> {
         let margin = " ".repeat(depth * INDENT);
@@ -474,7 +508,13 @@ impl Writer<'_, '_> {
 
     /// The entries a register is: one, one per element of a list, or none
     /// when it is left out.
-    fn register(&mut self, depth: usize, r: &Register, entries: &mut Scope) -> Vec<Vec<String>> {
+    fn register(
+        &mut self,
+        depth: usize,
+        r: &Register,
+        structure: Option<&StructPlan<'_>>,
+        entries: &mut Scope,
+    ) -> Vec<Vec<String>> {
         let margin = " ".repeat(depth * INDENT);
         let mut docs = describe(depth * INDENT, r.description.as_deref());
         docs.extend(svd_lines(depth * INDENT, &r.notes));
@@ -494,7 +534,7 @@ impl Writer<'_, '_> {
             docs.extend(svd_lines(depth * INDENT, &svd));
             return vec![docs];
         };
-        let ty = format!("u{}", bytes * 8);
+        let ty = structure.map_or_else(|| format!("u{}", bytes * 8), |s| s.name.clone());
 
         let (mode, once) = register_mode(r);
         if let Some(once) = once {
@@ -605,7 +645,13 @@ impl Writer<'_, '_> {
 
     /// Reports what has no declaration: the warning `svd::not-declared`, and
     /// `what` as a `// svd:` comment.
-    fn not_declared(&mut self, svd: &mut Vec<String>, span: Span, subject: &str, what: String) {
+    pub(super) fn not_declared(
+        &mut self,
+        svd: &mut Vec<String>,
+        span: Span,
+        subject: &str,
+        what: String,
+    ) {
         self.rd.warning(
             Diagnostic::warning("svd::not-declared", format!("{subject}: {what}"))
                 .label(span, "not declared"),
@@ -661,7 +707,7 @@ impl Element {
 
 /// The elements a peripheral is written as: each with its index and its
 /// distance from the first. A peripheral is never an array (ADR 0072).
-fn elements(repeat: Option<&Repeat>) -> Vec<(Option<String>, u64)> {
+pub(super) fn elements(repeat: Option<&Repeat>) -> Vec<(Option<String>, u64)> {
     match repeat {
         Some(Repeat::List { indices, step }) => indices
             .iter()
@@ -680,7 +726,7 @@ fn elements(repeat: Option<&Repeat>) -> Vec<(Option<String>, u64)> {
 /// A register's mode (ADR 0072): its `access`, or taken from its fields
 /// when no element states one. `writeOnce` and `read-writeOnce` are `write`
 /// and `read write`, and the second value says that "once" is not declared.
-fn register_mode(r: &Register) -> (&'static str, Option<String>) {
+pub(super) fn register_mode(r: &Register) -> (&'static str, Option<String>) {
     let once = |declared: &str, state: &str| {
         Some(format!(
             "access `{state}` is declared as `{declared}`; that it can be written once is not \
@@ -712,7 +758,7 @@ fn register_mode(r: &Register) -> (&'static str, Option<String>) {
 }
 
 /// `modifiedWriteValues` as SVD spells it.
-fn effect_name(effect: WriteEffect) -> &'static str {
+pub(super) fn effect_name(effect: WriteEffect) -> &'static str {
     match effect {
         WriteEffect::OneToClear => "oneToClear",
         WriteEffect::OneToSet => "oneToSet",
@@ -727,13 +773,13 @@ fn effect_name(effect: WriteEffect) -> &'static str {
 }
 
 /// The comment of an element's `description`, `indent` spaces in.
-fn describe(indent: usize, description: Option<&str>) -> Vec<String> {
+pub(super) fn describe(indent: usize, description: Option<&str>) -> Vec<String> {
     description.map_or_else(Vec::new, |text| comment(indent, "// ", text))
 }
 
 /// `// svd:` comments, one per text: the values the reader read as absent,
 /// and what has no declaration.
-fn svd_lines(indent: usize, lines: &[String]) -> Vec<String> {
+pub(super) fn svd_lines(indent: usize, lines: &[String]) -> Vec<String> {
     lines
         .iter()
         .flat_map(|text| comment(indent, "// svd: ", text))
@@ -742,7 +788,7 @@ fn svd_lines(indent: usize, lines: &[String]) -> Vec<String> {
 
 /// Blocks of lines as one. A block with a comment is set apart by a blank
 /// line from the blocks around it; for modules (`always`), every block is.
-fn join(blocks: Vec<Vec<String>>, always: bool) -> Vec<String> {
+pub(super) fn join(blocks: Vec<Vec<String>>, always: bool) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     let mut previous_commented = false;
     for block in blocks {

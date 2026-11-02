@@ -15,6 +15,7 @@
 
 mod build;
 mod derive;
+mod fields;
 mod names;
 mod number;
 mod over;
@@ -181,6 +182,7 @@ pub struct EnumSet {
     /// `derivedFrom` points to is [`EnumSet::derived_from`].
     pub id: SetId,
     pub name: Option<String>,
+    pub description: Option<String>,
     pub usage: Option<Usage>,
     /// The set this one derives from, whose values were copied into
     /// `values` and merged with the ones the set states itself; a copy of a

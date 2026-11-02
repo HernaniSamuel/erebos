@@ -35,6 +35,19 @@
           <readAction>clearOnRead</readAction>
           <modifiedWriteValues>flip</modifiedWriteValues>
         </register>
+        <register>
+          <name>FIELD_VALUES</name>
+          <description>Fields stating `write` and `read/clear`: read as absent, so the field takes its register's mode.</description>
+          <addressOffset>0x10</addressOffset>
+          <fields>
+            <field><name>W</name><description>States `write`.</description><bitOffset>0</bitOffset><bitWidth>1</bitWidth><access>write</access></field>
+            <field><name>RC</name><description>States `read/clear`.</description><bitOffset>1</bitOffset><bitWidth>1</bitWidth><access>read/clear</access></field>
+            <field><name>OK</name><bitOffset>2</bitOffset><bitWidth>1</bitWidth><access>read-only</access></field>
+            <field><name>BAD</name><description>Effects no SVD defines, and a set with a usage no SVD defines.</description><bitOffset>3</bitOffset><bitWidth>2</bitWidth><readAction>clearOnRead</readAction><modifiedWriteValues>flip</modifiedWriteValues>
+              <enumeratedValues><name>E</name><usage>sometimes</usage><enumeratedValue><name>A</name><value>0</value></enumeratedValue></enumeratedValues>
+            </field>
+          </fields>
+        </register>
       </registers>
     </peripheral>
   </peripherals>
