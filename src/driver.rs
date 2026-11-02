@@ -13,7 +13,7 @@ use crate::link::LinkError;
 use crate::query::Queries;
 use crate::span::SourceMap;
 use crate::syntax::{ast, lexer, parser};
-use crate::{codegen, hir, link, mir, target, ty};
+use crate::{codegen, hir, link, mir, svd, target, ty};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Stage {
@@ -162,6 +162,75 @@ pub fn build(
     let _ = fs::remove_file(&object);
     let _ = fs::remove_file(&script);
     result
+}
+
+/// What `erebos svd` did: where it wrote the module, and the warnings it
+/// reported, rendered (empty when there were none).
+pub struct SvdOutput {
+    pub output: PathBuf,
+    pub warnings: String,
+}
+
+/// Generates the Erebos module for the SVD file `input` (ADR 0070) and
+/// writes it at `output`, or, when it is left out, in the input's directory
+/// under a name made from the input's (see [`svd::default_output_name`]). An
+/// existing file is replaced. Nothing is written when an error is reported,
+/// and an output that is the input is refused before anything is read. On
+/// failure, returns the rendered diagnostics or error message.
+pub fn svd(input: &Path, output: Option<&Path>, color: bool) -> Result<SvdOutput, String> {
+    let file_name = input
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .ok_or_else(|| format!("error: `{}` is no file name", input.display()))?;
+    let output = match output {
+        Some(output) => output.to_path_buf(),
+        None => {
+            let name = svd::default_output_name(&file_name).ok_or_else(|| {
+                format!(
+                    "error: cannot make a module name from `{file_name}`: name the output \
+                     with `-o`"
+                )
+            })?;
+            input.with_file_name(name)
+        }
+    };
+    if same_file(input, &output) {
+        return Err(format!(
+            "error: the output `{}` is the input file; name another with `-o`",
+            output.display()
+        ));
+    }
+    let bytes =
+        fs::read(input).map_err(|e| format!("error: cannot read `{}`: {e}", input.display()))?;
+    let mut diags = Diagnostics::default();
+    let Some(text) = svd::utf8(&bytes, &mut diags) else {
+        return Err(diag::render(
+            &diags.into_vec(),
+            &SourceMap::default(),
+            color,
+        ));
+    };
+    let (generated, diags, sources) = svd::generate(&file_name, text);
+    let rendered = diag::render(&diags.into_vec(), &sources, color);
+    let Some(generated) = generated else {
+        return Err(rendered);
+    };
+    fs::write(&output, generated)
+        .map_err(|e| format!("error: cannot write `{}`: {e}", output.display()))?;
+    Ok(SvdOutput {
+        output,
+        warnings: rendered,
+    })
+}
+
+/// Whether two paths name one file: the same path, or one that the file
+/// system resolves to the other's file (a link, another spelling, another
+/// case on a system that ignores it).
+fn same_file(a: &Path, b: &Path) -> bool {
+    match (fs::canonicalize(a), fs::canonicalize(b)) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => a == b,
+    }
 }
 
 /// What `build` reports when `ld.lld` fails with the error output

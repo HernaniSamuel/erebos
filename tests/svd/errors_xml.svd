@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Not well-formed XML: nothing is generated. -->
+<device>
+  <name>BROKEN</name>
+  <peripherals>
+    <peripheral>
+      <name>A</name>
+    </peripherl>
+  </peripherals>
+</device>

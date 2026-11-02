@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Clusters: single, array, list, nested, arrays inside arrays, alternateCluster, derivedFrom. -->
+<device>
+  <name>CLUSTERS</name>
+  <size>32</size>
+  <access>read-write</access>
+  <peripherals>
+    <peripheral>
+      <name>CL</name>
+      <description>A peripheral of clusters.</description>
+      <baseAddress>0x0C000000</baseAddress>
+      <registers>
+        <cluster>
+          <name>SINGLE</name>
+          <description>One cluster.</description>
+          <addressOffset>0x000</addressOffset>
+          <register><name>CTRL</name><addressOffset>0x0</addressOffset></register>
+          <register><name>STATUS</name><addressOffset>0x4</addressOffset><access>read-only</access></register>
+        </cluster>
+        <cluster>
+          <dim>2</dim>
+          <dimIncrement>0x40</dimIncrement>
+          <name>CTX[%s]</name>
+          <description>A cluster array: its step is always written.</description>
+          <addressOffset>0x100</addressOffset>
+          <register><name>THRESHOLD</name><addressOffset>0x0</addressOffset></register>
+          <register><name>CLAIM</name><addressOffset>0x4</addressOffset><readAction>modify</readAction></register>
+        </cluster>
+        <cluster>
+          <dim>2</dim>
+          <dimIncrement>0x20</dimIncrement>
+          <dimIndex>A,B</dimIndex>
+          <name>LANE%s</name>
+          <description>A list of clusters, one entry each and one type for both.</description>
+          <addressOffset>0x200</addressOffset>
+          <register><name>CTRL</name><description>Named as the register of SINGLE, in a module of its own.</description><addressOffset>0x0</addressOffset></register>
+        </cluster>
+        <cluster>
+          <dim>2</dim>
+          <dimIncrement>0x100</dimIncrement>
+          <name>GROUP[%s]</name>
+          <description>A register array inside a cluster array.</description>
+          <addressOffset>0x400</addressOffset>
+          <register>
+            <dim>3</dim>
+            <dimIncrement>4</dimIncrement>
+            <name>ITEM[%s]</name>
+            <addressOffset>0x0</addressOffset>
+          </register>
+        </cluster>
+        <cluster>
+          <name>VIEW_A</name>
+          <addressOffset>0x600</addressOffset>
+          <register><name>X</name><addressOffset>0x0</addressOffset></register>
+        </cluster>
+        <cluster>
+          <name>VIEW_B</name>
+          <description>Shares VIEW_A's bytes: in a group of its own.</description>
+          <alternateCluster>VIEW_A</alternateCluster>
+          <addressOffset>0x600</addressOffset>
+          <register><name>Y</name><addressOffset>0x0</addressOffset></register>
+        </cluster>
+        <cluster derivedFrom="SINGLE">
+          <name>COPY</name>
+          <description>Derived from SINGLE: a cluster of its own.</description>
+          <addressOffset>0x700</addressOffset>
+        </cluster>
+        <cluster>
+          <name>OUTER</name>
+          <addressOffset>0x800</addressOffset>
+          <cluster>
+            <name>INNER</name>
+            <addressOffset>0x10</addressOffset>
+            <register><name>DEEP</name><addressOffset>0x0</addressOffset></register>
+          </cluster>
+          <register><name>SHALLOW</name><addressOffset>0x0</addressOffset></register>
+        </cluster>
+        <register>
+          <name>BASE_REG</name>
+          <addressOffset>0x900</addressOffset>
+        </register>
+        <register derivedFrom="BASE_REG">
+          <name>DERIVED_REG</name>
+          <description>Derived from BASE_REG, at its own offset.</description>
+          <addressOffset>0x904</addressOffset>
+          <access>read-only</access>
+        </register>
+      </registers>
+    </peripheral>
+  </peripherals>
+</device>

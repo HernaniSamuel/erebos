@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The header (a name and a version over several lines stay in their comment), and descriptions that collapse, wrap, hold a long word, and are not ASCII. -->
+<device>
+  <name>HEADER
+mod evil;
+    // not source</name>
+  <version>2.5
+beta; mod worse;</version>
+  <licenseText>
+  Copyright (c) 2026 Example Corp.   
+  Licensed under the Apache License, Version 2.0 (the "License");  
+
+     you may not use this file except in compliance with the License.
+	Tabs and &amp; entities stay.
+
+</licenseText>
+  <size>32</size>
+  <access>read-write</access>
+  <peripherals>
+    <peripheral>
+      <name>DEV</name>
+      <description>
+        A description over several lines,
+        with   extra   white space   that
+        collapses into single spaces.
+      </description>
+      <baseAddress>0x40000000</baseAddress>
+      <registers>
+        <register>
+          <name>LONG_TEXT</name>
+          <description>A description long enough to wrap: the quick brown fox jumps over the lazy dog, and then it does so again and again until the line has to break at the 79th column of the generated text.</description>
+          <addressOffset>0x00</addressOffset>
+        </register>
+        <register>
+          <name>LONG_WORD</name>
+          <description>Before xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx after, with a word longer than a line standing alone.</description>
+          <addressOffset>0x04</addressOffset>
+        </register>
+        <register>
+          <name>NON_ASCII</name>
+          <description>Températures en °C: la précision est de ±0,5 — 温度センサー.</description>
+          <addressOffset>0x08</addressOffset>
+        </register>
+        <register>
+          <name>EMPTY_TEXT</name>
+          <description>   </description>
+          <addressOffset>0x0C</addressOffset>
+        </register>
+      </registers>
+    </peripheral>
+  </peripherals>
+</device>

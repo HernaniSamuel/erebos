@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Values that are no SVD value, as the GD32VF103's `write` and the CH32V003's `read/clear`: read as absent, with a warning and a comment. -->
+<device>
+  <name>ACCESS_VALUES</name>
+  <size>32</size>
+  <peripherals>
+    <peripheral>
+      <name>DEV</name>
+      <baseAddress>0x40000000</baseAddress>
+      <registers>
+        <register>
+          <name>WRITE_ACCESS</name>
+          <description>States `write`: read as absent, so the mode is the one its fields imply.</description>
+          <addressOffset>0x00</addressOffset>
+          <access>write</access>
+          <fields>
+            <field><name>A</name><bitOffset>0</bitOffset><bitWidth>1</bitWidth><access>read-only</access></field>
+          </fields>
+        </register>
+        <register>
+          <name>READ_CLEAR_ACCESS</name>
+          <description>States `read/clear`, with no field: read write.</description>
+          <addressOffset>0x04</addressOffset>
+          <access>read/clear</access>
+        </register>
+        <register>
+          <name>INHERITING</name>
+          <description>States no access: read write, as every register of the file without a mode of its fields.</description>
+          <addressOffset>0x08</addressOffset>
+        </register>
+        <register>
+          <name>BAD_ACTION</name>
+          <description>A readAction and a modifiedWriteValues no SVD defines.</description>
+          <addressOffset>0x0C</addressOffset>
+          <readAction>clearOnRead</readAction>
+          <modifiedWriteValues>flip</modifiedWriteValues>
+        </register>
+      </registers>
+    </peripheral>
+  </peripherals>
+</device>

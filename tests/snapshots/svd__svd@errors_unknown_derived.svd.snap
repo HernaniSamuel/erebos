@@ -1,0 +1,18 @@
+---
+source: tests/svd.rs
+expression: run(path)
+input_file: tests/svd/errors_unknown_derived.svd
+---
+--- not generated ---
+svd::unknown-reference
+
+  × `NOWHERE` names no peripheral
+   ╭─[errors_unknown_derived.svd:8:30]
+ 7 │   <peripherals>
+ 8 │     <peripheral derivedFrom="NOWHERE">
+   ·                              ───┬───
+   ·                                 ╰── no peripheral of this name
+ 9 │       <name>A</name>
+   ╰────
+  help: a name without `.` is looked up among the elements of the same kind with the same parent;
+        `.` makes it a path from the device

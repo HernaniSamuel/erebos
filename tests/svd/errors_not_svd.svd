@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A root that is no `device`. -->
+<chip>
+  <name>NOT_SVD</name>
+</chip>

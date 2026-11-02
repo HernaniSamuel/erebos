@@ -10,17 +10,57 @@
 //! rules (ADR 0072): properties inherited from device to register,
 //! `derivedFrom` resolved (children copied and merged), `dim` read into
 //! an array or a list. Names are the SVD's, `%s` and `[%s]` included.
+//!
+//! The writer turns that model into Erebos source: [`generate`].
 
 mod build;
 mod derive;
+mod names;
 mod number;
+mod over;
 mod parse;
 mod raw;
 mod read;
+mod text;
+mod write;
 
-use crate::span::Span;
+use crate::diag::Diagnostics;
+use crate::span::{SourceMap, Span};
 
 pub use read::{read, utf8};
+
+/// The name `erebos svd` gives its output when none is asked for: the
+/// input's file name without its last extension, if it has one, made a
+/// module's name by ADR 0071's steps, with the extension `.ers` (ADR 0070).
+/// `None` when nothing is left of the name for an identifier.
+pub fn default_output_name(input_file_name: &str) -> Option<String> {
+    let stem = std::path::Path::new(input_file_name)
+        .file_stem()?
+        .to_string_lossy();
+    names::module_name(&stem).map(|name| format!("{name}.ers"))
+}
+
+/// The Erebos module generated from the SVD file called `name`, whose text
+/// is `text` (ADR 0070): `None` when an error was reported. The file is
+/// added to the returned source map, which the diagnostics point into; its
+/// name is the one the generated file's header gives. Warnings are among the
+/// diagnostics, and leave the text. A file that is not UTF-8 is reported by
+/// [`utf8`] before it gets here.
+pub fn generate(name: &str, text: &str) -> (Option<String>, Diagnostics, SourceMap) {
+    let mut sources = SourceMap::default();
+    let mut diags = Diagnostics::default();
+    let file = sources.add(name, text);
+    let output = read(file, text, &mut diags).map(|device| {
+        let mut rd = read::Reader::new(&mut diags);
+        let output = write::write(name, &device, &mut rd);
+        (output, rd.failed())
+    });
+    let output = match output {
+        Some((output, false)) => Some(output),
+        _ => None,
+    };
+    (output, diags, sources)
+}
 
 /// A device: the file's `device` element.
 #[derive(Clone, Debug)]

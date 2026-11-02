@@ -54,7 +54,9 @@ const LAYERS: &[(&str, &[&str])] = &[
     ("link", &["mir"]),
     (
         "driver",
-        &["syntax", "hir", "ty", "query", "mir", "codegen", "link"],
+        &[
+            "syntax", "hir", "ty", "query", "mir", "codegen", "link", "svd",
+        ],
     ),
 ];
 

@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Register modes (stated, inherited from the peripheral, taken from the fields), sizes, and a reset value. -->
+<device>
+  <name>REGS</name>
+  <version>1.0</version>
+  <size>32</size>
+  <peripherals>
+    <peripheral>
+      <name>MODES</name>
+      <description>Modes stated by the register, inherited from the peripheral, and taken from the fields.</description>
+      <baseAddress>0x40000000</baseAddress>
+      <access>read-only</access>
+      <registers>
+        <register>
+          <name>STATED_WO</name>
+          <description>States write-only over its peripheral's read-only.</description>
+          <addressOffset>0x00</addressOffset>
+          <access>write-only</access>
+        </register>
+        <register>
+          <name>STATED_RW</name>
+          <addressOffset>0x04</addressOffset>
+          <access>read-write</access>
+        </register>
+        <register>
+          <name>INHERITED</name>
+          <description>Takes read-only from the peripheral.</description>
+          <addressOffset>0x08</addressOffset>
+        </register>
+      </registers>
+    </peripheral>
+    <peripheral>
+      <name>FROM_FIELDS</name>
+      <description>No element states an access: the mode comes from the fields.</description>
+      <baseAddress>0x40001000</baseAddress>
+      <registers>
+        <register>
+          <name>ALL_READ_ONLY</name>
+          <addressOffset>0x00</addressOffset>
+          <fields>
+            <field><name>A</name><bitOffset>0</bitOffset><bitWidth>1</bitWidth><access>read-only</access></field>
+            <field><name>B</name><bitOffset>1</bitOffset><bitWidth>3</bitWidth><access>read-only</access></field>
+          </fields>
+        </register>
+        <register>
+          <name>ALL_WRITE_ONLY</name>
+          <addressOffset>0x04</addressOffset>
+          <fields>
+            <field><name>A</name><bitOffset>0</bitOffset><bitWidth>1</bitWidth><access>write-only</access></field>
+            <field><name>B</name><bitOffset>1</bitOffset><bitWidth>3</bitWidth><access>write-only</access></field>
+          </fields>
+        </register>
+        <register>
+          <name>MIXED</name>
+          <description>One read-only field and one write-only field.</description>
+          <addressOffset>0x08</addressOffset>
+          <fields>
+            <field><name>A</name><bitOffset>0</bitOffset><bitWidth>1</bitWidth><access>read-only</access></field>
+            <field><name>B</name><bitOffset>1</bitOffset><bitWidth>3</bitWidth><access>write-only</access></field>
+          </fields>
+        </register>
+        <register>
+          <name>ONE_FIELD_WITHOUT_ACCESS</name>
+          <addressOffset>0x0C</addressOffset>
+          <fields>
+            <field><name>A</name><bitOffset>0</bitOffset><bitWidth>1</bitWidth><access>read-only</access></field>
+            <field><name>B</name><bitOffset>1</bitOffset><bitWidth>3</bitWidth></field>
+          </fields>
+        </register>
+        <register>
+          <name>NO_FIELDS</name>
+          <description>With no field, read write.</description>
+          <addressOffset>0x10</addressOffset>
+        </register>
+      </registers>
+    </peripheral>
+    <peripheral>
+      <name>SIZES</name>
+      <baseAddress>0x40002000</baseAddress>
+      <registers>
+        <register>
+          <name>R8</name>
+          <addressOffset>0x00</addressOffset>
+          <size>8</size>
+        </register>
+        <register>
+          <name>R16</name>
+          <addressOffset>0x02</addressOffset>
+          <size>16</size>
+        </register>
+        <register>
+          <name>R32</name>
+          <description>Takes the device's 32 bits.</description>
+          <addressOffset>0x04</addressOffset>
+        </register>
+        <register>
+          <name>R64</name>
+          <description>64 bits: left out and warned.</description>
+          <addressOffset>0x08</addressOffset>
+          <size>64</size>
+        </register>
+        <register>
+          <name>RESET_ZERO</name>
+          <addressOffset>0x10</addressOffset>
+          <resetValue>0</resetValue>
+        </register>
+        <register>
+          <name>RESET_NONZERO</name>
+          <description>A reset value, and no field to give a default: warned.</description>
+          <addressOffset>0x14</addressOffset>
+          <resetValue>0x12</resetValue>
+        </register>
+      </registers>
+    </peripheral>
+  </peripherals>
+</device>

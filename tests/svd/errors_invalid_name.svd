@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Names with nothing left for an identifier: a peripheral, a register, a cluster, and a group. -->
+<device>
+  <name>ERRORS</name>
+  <size>32</size>
+  <access>read-write</access>
+  <peripherals>
+    <peripheral>
+      <name>...</name>
+      <baseAddress>0x40000000</baseAddress>
+      <registers>
+        <register><name>R</name><addressOffset>0x0</addressOffset></register>
+      </registers>
+    </peripheral>
+    <peripheral>
+      <name>B</name>
+      <baseAddress>0x40001000</baseAddress>
+      <registers>
+        <register><name>-</name><addressOffset>0x0</addressOffset></register>
+        <register><name> </name><addressOffset>0x4</addressOffset></register>
+        <register><name>G</name><alternateGroup>__</alternateGroup><addressOffset>0x20</addressOffset></register>
+        <cluster>
+          <name>_</name>
+          <addressOffset>0x100</addressOffset>
+          <register><name>X</name><addressOffset>0x0</addressOffset></register>
+        </cluster>
+      </registers>
+    </peripheral>
+  </peripherals>
+</device>

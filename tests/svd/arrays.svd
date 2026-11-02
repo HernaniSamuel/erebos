@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Register arrays and lists: dim with [%s] and with %s. -->
+<device>
+  <name>ARRAYS</name>
+  <size>32</size>
+  <access>read-write</access>
+  <peripherals>
+    <peripheral>
+      <name>ARR</name>
+      <baseAddress>0x50000000</baseAddress>
+      <registers>
+        <register>
+          <dim>4</dim>
+          <dimIncrement>4</dimIncrement>
+          <name>TIGHT[%s]</name>
+          <description>An array whose step is the register's width: no `step`.</description>
+          <addressOffset>0x00</addressOffset>
+        </register>
+        <register>
+          <dim>3</dim>
+          <dimIncrement>0x10</dimIncrement>
+          <name>SPREAD[%s]</name>
+          <description>An array whose step is larger than the width.</description>
+          <addressOffset>0x20</addressOffset>
+        </register>
+        <register>
+          <dim>2</dim>
+          <dimIncrement>8</dimIncrement>
+          <name>BYTES[%s]</name>
+          <addressOffset>0x60</addressOffset>
+          <size>8</size>
+          <access>read-only</access>
+          <readAction>clear</readAction>
+        </register>
+        <register>
+          <dim>2</dim>
+          <dimIncrement>8</dimIncrement>
+          <dimIndex>2-3</dimIndex>
+          <name>RANGE%s</name>
+          <description>A list from a range of indices.</description>
+          <addressOffset>0x80</addressOffset>
+        </register>
+        <register>
+          <dim>2</dim>
+          <dimIncrement>4</dimIncrement>
+          <dimIndex>A,B</dimIndex>
+          <name>CH%s_CONF</name>
+          <addressOffset>0xA0</addressOffset>
+        </register>
+        <register>
+          <dim>2</dim>
+          <dimIncrement>4</dimIncrement>
+          <name>PLAIN%s</name>
+          <description>A list from 0 to dim - 1.</description>
+          <addressOffset>0xB0</addressOffset>
+        </register>
+        <register>
+          <dim>2</dim>
+          <dimIncrement>4</dimIncrement>
+          <dimIndex>2-3</dimIndex>
+          <name>SHIFTED[%s]</name>
+          <description>An array name whose dimIndex does not start at 0: a list.</description>
+          <addressOffset>0xC0</addressOffset>
+        </register>
+        <register>
+          <dim>2</dim>
+          <dimIncrement>4</dimIncrement>
+          <dimIndex>0,1</dimIndex>
+          <name>SEQUENCE[%s]</name>
+          <description>A dimIndex that is 0 to dim - 1: still an array.</description>
+          <addressOffset>0xD0</addressOffset>
+        </register>
+      </registers>
+    </peripheral>
+  </peripherals>
+</device>

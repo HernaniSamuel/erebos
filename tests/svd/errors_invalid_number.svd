@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A number SVD does not write. -->
+<device>
+  <name>ERRORS</name>
+  <size>32</size>
+  <access>read-write</access>
+  <peripherals>
+    <peripheral>
+      <name>A</name>
+      <baseAddress>0x40000000</baseAddress>
+      <registers>
+        <register><name>R</name><addressOffset>12h</addressOffset></register>
+      </registers>
+    </peripheral>
+  </peripherals>
+</device>

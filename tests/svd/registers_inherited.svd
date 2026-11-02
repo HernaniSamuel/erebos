@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- size and access inherited from the device, the peripheral and the cluster; a register stating its own. -->
+<device>
+  <name>INHERITED</name>
+  <size>16</size>
+  <access>read-only</access>
+  <peripherals>
+    <peripheral>
+      <name>FROM_DEVICE</name>
+      <baseAddress>0x40000000</baseAddress>
+      <registers>
+        <register><name>A</name><addressOffset>0x0</addressOffset></register>
+        <register><name>B</name><addressOffset>0x4</addressOffset><size>32</size><access>read-write</access></register>
+      </registers>
+    </peripheral>
+    <peripheral>
+      <name>FROM_PERIPHERAL</name>
+      <baseAddress>0x40001000</baseAddress>
+      <size>8</size>
+      <access>write-only</access>
+      <registers>
+        <register><name>A</name><addressOffset>0x0</addressOffset></register>
+        <register><name>B</name><addressOffset>0x4</addressOffset><size>32</size><access>read-write</access></register>
+      </registers>
+    </peripheral>
+    <peripheral>
+      <name>FROM_CLUSTER</name>
+      <baseAddress>0x40002000</baseAddress>
+      <registers>
+        <cluster>
+          <name>C</name>
+          <addressOffset>0x0</addressOffset>
+          <size>8</size>
+          <access>write-only</access>
+          <register><name>X</name><addressOffset>0x0</addressOffset></register>
+          <register><name>Y</name><addressOffset>0x2</addressOffset><size>16</size></register>
+          <register><name>Z</name><addressOffset>0x4</addressOffset><access>read-write</access></register>
+        </cluster>
+        <register><name>OUTSIDE</name><addressOffset>0x10</addressOffset></register>
+      </registers>
+    </peripheral>
+  </peripherals>
+</device>

@@ -15,9 +15,9 @@ use super::parse::{self, Parser};
 use super::raw::Tree;
 use super::{Device, build, derive};
 
-/// The diagnostics of one reading. An element copied for a derived one is
-/// built where it stands, so the same mistake can be found more than once;
-/// it is reported once.
+/// The diagnostics of one reading, and of the writing that follows. An element
+/// copied for a derived one is built and written where it stands, so the same
+/// mistake can be found more than once; it is reported once.
 pub(super) struct Reader<'a> {
     diags: &'a mut Diagnostics,
     errors: usize,
@@ -25,7 +25,7 @@ pub(super) struct Reader<'a> {
 }
 
 impl<'a> Reader<'a> {
-    fn new(diags: &'a mut Diagnostics) -> Self {
+    pub(super) fn new(diags: &'a mut Diagnostics) -> Self {
         Reader {
             diags,
             errors: 0,
@@ -51,7 +51,7 @@ impl<'a> Reader<'a> {
         self.seen.insert((diag.code, at, diag.message.clone()))
     }
 
-    fn failed(&self) -> bool {
+    pub(super) fn failed(&self) -> bool {
         self.errors > 0
     }
 }

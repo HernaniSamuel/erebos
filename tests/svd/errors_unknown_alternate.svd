@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- An alternatePeripheral naming nothing. -->
+<device>
+  <name>ERRORS</name>
+  <size>32</size>
+  <access>read-write</access>
+  <peripherals>
+    <peripheral>
+      <name>A</name>
+      <alternatePeripheral>NOWHERE</alternatePeripheral>
+      <baseAddress>0x40000000</baseAddress>
+      <registers>
+        <register><name>R</name><addressOffset>0x0</addressOffset></register>
+      </registers>
+    </peripheral>
+  </peripherals>
+</device>

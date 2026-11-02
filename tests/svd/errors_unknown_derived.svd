@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A derivedFrom naming nothing. -->
+<device>
+  <name>ERRORS</name>
+  <size>32</size>
+  <access>read-write</access>
+  <peripherals>
+    <peripheral derivedFrom="NOWHERE">
+      <name>A</name>
+      <baseAddress>0x40000000</baseAddress>
+    </peripheral>
+  </peripherals>
+</device>

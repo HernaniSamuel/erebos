@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- expect-error: ty::peripheral-overlap -->
+<!-- C covers A and B, which do not overlap each other: no one `over` names them both. -->
+<device>
+  <name>OVERLAP</name>
+  <size>32</size>
+  <access>read-write</access>
+  <peripherals>
+    <peripheral>
+      <name>A</name>
+      <baseAddress>0x40000000</baseAddress>
+      <registers>
+        <register><name>R0</name><addressOffset>0x0</addressOffset></register>
+      </registers>
+    </peripheral>
+    <peripheral>
+      <name>B</name>
+      <baseAddress>0x40000008</baseAddress>
+      <registers>
+        <register><name>R0</name><addressOffset>0x0</addressOffset></register>
+      </registers>
+    </peripheral>
+    <peripheral>
+      <name>C</name>
+      <baseAddress>0x40000000</baseAddress>
+      <registers>
+        <register><name>R0</name><addressOffset>0x0</addressOffset></register>
+        <register><name>R2</name><addressOffset>0x8</addressOffset></register>
+      </registers>
+    </peripheral>
+  </peripherals>
+</device>

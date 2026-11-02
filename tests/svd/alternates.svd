@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Alternate groups and registers sharing an offset. -->
+<device>
+  <name>ALTERNATES</name>
+  <size>32</size>
+  <access>read-write</access>
+  <peripherals>
+    <peripheral>
+      <name>TIMER</name>
+      <baseAddress>0x40000000</baseAddress>
+      <registers>
+        <register>
+          <name>CH0CTL0_Output</name>
+          <description>The channel control register in output compare mode.</description>
+          <alternateRegister>CH0CTL0_Input</alternateRegister>
+          <addressOffset>0x18</addressOffset>
+        </register>
+        <register>
+          <name>CH0CTL0_Input</name>
+          <description>The same register in input capture mode.</description>
+          <addressOffset>0x18</addressOffset>
+        </register>
+        <register>
+          <name>BOTH</name>
+          <description>States both: the group wins.</description>
+          <alternateGroup>MODE_B</alternateGroup>
+          <alternateRegister>OTHER</alternateRegister>
+          <addressOffset>0x20</addressOffset>
+        </register>
+        <register>
+          <name>NEUTRAL</name>
+          <addressOffset>0x20</addressOffset>
+        </register>
+        <register>
+          <name>CONT</name>
+          <description>A group named like a keyword.</description>
+          <alternateGroup>CONTINUE</alternateGroup>
+          <addressOffset>0x24</addressOffset>
+        </register>
+        <register>
+          <name>CONT_PLAIN</name>
+          <addressOffset>0x24</addressOffset>
+        </register>
+      </registers>
+    </peripheral>
+    <peripheral>
+      <name>UART</name>
+      <baseAddress>0x10000000</baseAddress>
+      <size>8</size>
+      <registers>
+        <register>
+          <name>RBR</name>
+          <description>Read at offset 0: no group, since a read and a write register may share it.</description>
+          <addressOffset>0x0</addressOffset>
+          <access>read-only</access>
+          <readAction>modify</readAction>
+        </register>
+        <register>
+          <name>THR</name>
+          <addressOffset>0x0</addressOffset>
+          <access>write-only</access>
+        </register>
+        <register>
+          <name>DLL</name>
+          <alternateGroup>DLAB</alternateGroup>
+          <addressOffset>0x0</addressOffset>
+        </register>
+        <register>
+          <name>DLM</name>
+          <alternateGroup>DLAB</alternateGroup>
+          <addressOffset>0x1</addressOffset>
+        </register>
+        <register>
+          <name>IER</name>
+          <addressOffset>0x1</addressOffset>
+          <alternateGroup>DLAB_OFF</alternateGroup>
+        </register>
+      </registers>
+    </peripheral>
+  </peripherals>
+</device>

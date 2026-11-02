@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- What a register has and Erebos does not declare: each is warned, with its comment. -->
+<device>
+  <name>UNSUPPORTED</name>
+  <size>32</size>
+  <peripherals>
+    <peripheral>
+      <name>DEV</name>
+      <baseAddress>0x40000000</baseAddress>
+      <registers>
+        <register>
+          <name>ONCE_W</name>
+          <description>Writable once.</description>
+          <addressOffset>0x00</addressOffset>
+          <access>writeOnce</access>
+        </register>
+        <register>
+          <name>ONCE_RW</name>
+          <description>Readable, and writable once.</description>
+          <addressOffset>0x04</addressOffset>
+          <access>read-writeOnce</access>
+        </register>
+        <register>
+          <name>WRITE_EFFECT</name>
+          <description>A write effect, and no field to carry it.</description>
+          <addressOffset>0x08</addressOffset>
+          <access>read-write</access>
+          <modifiedWriteValues>oneToClear</modifiedWriteValues>
+        </register>
+        <register>
+          <name>EXPLICIT_MODIFY</name>
+          <description>The default write effect, stated: nothing is lost.</description>
+          <addressOffset>0x0C</addressOffset>
+          <access>read-write</access>
+          <modifiedWriteValues>modify</modifiedWriteValues>
+        </register>
+        <register>
+          <name>RESET</name>
+          <description>A reset value, and no field.</description>
+          <addressOffset>0x10</addressOffset>
+          <access>read-write</access>
+          <resetValue>0xDEADBEEF</resetValue>
+        </register>
+        <register>
+          <name>CONSTRAINED</name>
+          <description>A write constraint.</description>
+          <addressOffset>0x14</addressOffset>
+          <access>read-write</access>
+          <writeConstraint><writeAsRead>true</writeAsRead></writeConstraint>
+        </register>
+        <register>
+          <name>PROTECTED</name>
+          <description>A protection.</description>
+          <addressOffset>0x18</addressOffset>
+          <access>read-write</access>
+          <protection>s</protection>
+        </register>
+        <register>
+          <name>SEVERAL</name>
+          <description>Writable once, with a reset value and a protection.</description>
+          <addressOffset>0x1C</addressOffset>
+          <access>writeOnce</access>
+          <resetValue>0x1</resetValue>
+          <protection>p</protection>
+        </register>
+      </registers>
+    </peripheral>
+  </peripherals>
+</device>

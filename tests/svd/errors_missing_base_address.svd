@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A peripheral without a baseAddress. -->
+<device>
+  <name>ERRORS</name>
+  <size>32</size>
+  <access>read-write</access>
+  <peripherals>
+    <peripheral>
+      <name>A</name>
+      <registers>
+        <register><name>R</name><addressOffset>0x0</addressOffset></register>
+      </registers>
+    </peripheral>
+  </peripherals>
+</device>

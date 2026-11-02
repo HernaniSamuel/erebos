@@ -1,0 +1,17 @@
+---
+source: tests/svd.rs
+expression: run(path)
+input_file: tests/svd/errors_invalid_number.svd
+---
+--- not generated ---
+svd::invalid-number
+
+  × `12h` is no number SVD allows in `addressOffset`
+    ╭─[errors_invalid_number.svd:12:33]
+ 11 │       <registers>
+ 12 │         <register><name>R</name><addressOffset>12h</addressOffset></register>
+    ·                                 ─────────────────┬────────────────
+    ·                                                  ╰── not a number
+ 13 │       </registers>
+    ╰────
+  help: write decimal digits, `0x` then hexadecimal digits, or `#` then binary digits

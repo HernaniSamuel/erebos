@@ -1,0 +1,30 @@
+---
+source: tests/svd.rs
+expression: run(path)
+input_file: tests/svd/errors_invalid_dim.svd
+---
+--- not generated ---
+svd::invalid-dim
+
+  × the register `R%s` has a `dim` and no `dimIncrement`
+    ╭─[errors_invalid_dim.svd:12:9]
+ 11 │       <registers>
+ 12 │         <register><dim>4</dim><name>R%s</name><addressOffset>0x0</addressOffset></register>
+    ·         ─────────────────────────────────────────┬─────────────────────────────────────────┬
+    ·                                                  │                                         ╰── the `dim`
+    ·                                                  ╰── repeated, with no step
+ 13 │         <register><dim>4</dim><dimIncrement>4</dimIncrement><dimIndex>1,2</dimIndex><name>S%s</name><addressOffset>0x20</addressOffset></register>
+    ╰────
+  help: state the distance between two elements in `dimIncrement`
+svd::invalid-dim
+
+  × the `dimIndex` of register `S%s` has 2 indices, and `dim` is 4
+    ╭─[errors_invalid_dim.svd:13:9]
+ 12 │         <register><dim>4</dim><name>R%s</name><addressOffset>0x0</addressOffset></register>
+ 13 │         <register><dim>4</dim><dimIncrement>4</dimIncrement><dimIndex>1,2</dimIndex><name>S%s</name><addressOffset>0x20</addressOffset></register>
+    ·         ─────────────────────────────────────────────────────────────────────┬────────────────────────────────────────────────────────────────────┬
+    ·                                                                              │                                                                    ╰── the `dim`
+    ·                                                                              ╰── repeated
+ 14 │       </registers>
+    ╰────
+  help: write a range (`0-3`, `A-C`) or a list (`A,B,C`) of `dim` indices
