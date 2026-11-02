@@ -17,7 +17,7 @@ use crate::span::Span;
 
 use super::fields::{self, Entry, EnumRef, StructPlan, TypePlan};
 use super::names::{self, Case, Converted, Index, Scope};
-use super::over::{self, Over, Placed};
+use super::over::{self, Over, Placed, Shares};
 use super::read::Reader;
 use super::text::{comment, hex};
 use super::{
@@ -275,7 +275,7 @@ impl<'a> Writer<'a, '_> {
                 placed[position].span,
                 "shares bytes with earlier peripherals",
             );
-            for &s in shares {
+            for &s in &shares.shown {
                 diag = diag.label(
                     placed[s].span,
                     format!("shares bytes with `{}`", self.names[position]),
@@ -288,12 +288,17 @@ impl<'a> Writer<'a, '_> {
         }
     }
 
-    /// The names of the peripherals at these positions, quoted and listed.
-    fn quoted(&self, positions: &[usize]) -> String {
-        let names: Vec<String> = positions
+    /// The names of the peripherals of these shares, quoted and listed; when
+    /// some are not kept, the first ones and "and N more".
+    fn quoted(&self, shares: &Shares) -> String {
+        let names: Vec<String> = shares
+            .shown
             .iter()
             .map(|&position| format!("`{}`", self.names[position]))
             .collect();
+        if shares.hidden() > 0 {
+            return format!("{} and {} more", names.join(", "), shares.hidden());
+        }
         match names.as_slice() {
             [] => String::new(),
             [only] => only.clone(),

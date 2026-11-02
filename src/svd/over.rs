@@ -64,6 +64,34 @@ pub(super) struct Placed {
     pub explicit: Option<usize>,
 }
 
+/// How many of the peripherals a peripheral shares bytes with the generator
+/// names, in its comment and in the labels of its warning. A file of `n`
+/// peripherals at one address would otherwise get an output of `n²` names; the
+/// real files share bytes with one or two. The rest are counted.
+pub(super) const SHOWN: usize = 8;
+
+/// The earlier peripherals a peripheral shares a byte with: the first
+/// [`SHOWN`] of them, in the order of the file, and how many there are.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(super) struct Shares {
+    pub shown: Vec<usize>,
+    pub total: usize,
+}
+
+impl Shares {
+    fn push(&mut self, position: usize) {
+        if self.shown.len() < SHOWN {
+            self.shown.push(position);
+        }
+        self.total += 1;
+    }
+
+    /// How many are not in [`Shares::shown`].
+    pub fn hidden(&self) -> usize {
+        self.total - self.shown.len()
+    }
+}
+
 /// What the generator writes after a peripheral's address.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum Over {
@@ -72,10 +100,10 @@ pub(super) enum Over {
     /// The SVD states it.
     Stated(usize),
     /// Found from the bytes it shares with these earlier peripherals.
-    Found { target: usize, shares: Vec<usize> },
+    Found { target: usize, shares: Shares },
     /// It shares bytes with these earlier peripherals, which no one `over`
     /// names: written without one.
-    Unresolved(Vec<usize>),
+    Unresolved(Shares),
 }
 
 impl Over {
@@ -98,30 +126,44 @@ fn share_a_byte(a: &Placed, b: &Placed) -> bool {
 /// other than `P`, such that every peripheral of `S` is the candidate or is
 /// `over` it; `P` is `over` the first of them in the order of the file. A
 /// candidate has to be the first peripheral of `S` or the one it is `over`,
-/// since it is or is `over` the candidate, so only those two are looked at.
+/// since it is or is `over` the candidate, so only those two are looked at,
+/// and `S` is walked once without being kept: only [`SHOWN`] of it is.
 pub(super) fn find(placed: &[Placed]) -> Vec<Over> {
     let mut overs: Vec<Over> = Vec::with_capacity(placed.len());
     for (p, this) in placed.iter().enumerate() {
         let over = match this.explicit {
             Some(target) => Over::Stated(target),
             None => {
-                let shares: Vec<usize> = (0..p)
-                    .filter(|&earlier| share_a_byte(&placed[earlier], this))
-                    .collect();
-                match shares.first() {
-                    None => Over::No,
-                    Some(&first) => {
-                        let fits = |candidate: usize| {
-                            candidate != p
-                                && shares.iter().all(|&s| {
-                                    s == candidate || overs[s].target() == Some(candidate)
-                                })
-                        };
-                        let candidates = [Some(first), overs[first].target()];
-                        match candidates.into_iter().flatten().filter(|&c| fits(c)).min() {
-                            Some(target) => Over::Found { target, shares },
-                            None => Over::Unresolved(shares),
+                let mut shares = Shares::default();
+                // The first of `S` and the one it is `over`, and whether every
+                // peripheral of `S` seen so far is that one or is `over` it.
+                let mut candidates: [Option<usize>; 2] = [None, None];
+                let mut fits = [true, true];
+                for (earlier, other) in placed[..p].iter().enumerate() {
+                    if !share_a_byte(other, this) {
+                        continue;
+                    }
+                    if shares.total == 0 {
+                        candidates = [Some(earlier), overs[earlier].target()];
+                    }
+                    for (candidate, fit) in candidates.iter().zip(fits.iter_mut()) {
+                        if let Some(c) = *candidate {
+                            *fit &= earlier == c || overs[earlier].target() == Some(c);
                         }
+                    }
+                    shares.push(earlier);
+                }
+                if shares.total == 0 {
+                    Over::No
+                } else {
+                    let target = candidates
+                        .iter()
+                        .zip(fits)
+                        .filter_map(|(c, fit)| c.filter(|&c| fit && c != p))
+                        .min();
+                    match target {
+                        Some(target) => Over::Found { target, shares },
+                        None => Over::Unresolved(shares),
                     }
                 }
             }
@@ -135,6 +177,13 @@ pub(super) fn find(placed: &[Placed]) -> Vec<Over> {
 mod tests {
     use super::*;
     use crate::span::SourceMap;
+
+    fn shares(positions: &[usize]) -> Shares {
+        Shares {
+            shown: positions.to_vec(),
+            total: positions.len(),
+        }
+    }
 
     fn placed(ranges: &[(u128, u128, Option<usize>)]) -> Vec<Placed> {
         let mut sources = SourceMap::default();
@@ -163,7 +212,7 @@ mod tests {
             overs[1],
             Over::Found {
                 target: 0,
-                shares: vec![0]
+                shares: shares(&[0])
             }
         );
     }
@@ -196,7 +245,7 @@ mod tests {
             overs[2],
             Over::Found {
                 target: 0,
-                shares: vec![1]
+                shares: shares(&[1])
             }
         );
     }
@@ -204,12 +253,43 @@ mod tests {
     #[test]
     fn one_covering_two_that_do_not_overlap_is_unresolved() {
         let overs = find(&placed(&[(0, 4, None), (8, 12, None), (0, 12, None)]));
-        assert_eq!(overs[2], Over::Unresolved(vec![0, 1]));
+        assert_eq!(overs[2], Over::Unresolved(shares(&[0, 1])));
     }
 
     #[test]
     fn an_empty_peripheral_shares_nothing() {
         let overs = find(&placed(&[(0, 8, None), (4, 4, None)]));
         assert_eq!(overs[1], Over::No);
+    }
+
+    #[test]
+    fn only_the_first_few_shares_are_kept_and_the_rest_counted() {
+        // Every peripheral covers the same bytes: the last shares with all
+        // the others, and is over the first.
+        let count = SHOWN + 5;
+        let overs = find(&placed(&vec![(0, 4, None); count + 1]));
+        let Over::Found { target, shares } = &overs[count] else {
+            panic!("{:?}", overs[count]);
+        };
+        assert_eq!(*target, 0);
+        assert_eq!(shares.shown, (0..SHOWN).collect::<Vec<_>>());
+        assert_eq!(shares.total, count);
+        assert_eq!(shares.hidden(), count - SHOWN);
+    }
+
+    #[test]
+    fn unresolved_shares_are_bounded_too() {
+        // One covering many that do not overlap each other.
+        let count = SHOWN + 3;
+        let mut ranges: Vec<_> = (0..count as u128)
+            .map(|i| (i * 8, i * 8 + 4, None))
+            .collect();
+        ranges.push((0, count as u128 * 8, None));
+        let overs = find(&placed(&ranges));
+        let Over::Unresolved(shares) = &overs[count] else {
+            panic!("{:?}", overs[count]);
+        };
+        assert_eq!(shares.shown.len(), SHOWN);
+        assert_eq!(shares.total, count);
     }
 }

@@ -3722,7 +3722,11 @@ elements of a `dim` that is not an array, and a `dimIndex`) has at most
 65 536 indices. The first three are `svd::too-large`, the last
 `svd::invalid-dim`. A file of `n` equal names gets an output of `n²` bytes,
 as step 6 of the names asks for ("as many times as it takes"), which no limit
-here bounds.
+here bounds. A peripheral that shares bytes with many earlier ones (a list of
+`n` at one address) names the first 8 in its `// svd:` comment and in the
+labels of `svd::overlap`, and then "and N more", so that its output stays
+linear in `n`; finding them still compares every pair, in time quadratic in
+the number of peripherals (at most 65 536 for a list).
 
 ### An example
 

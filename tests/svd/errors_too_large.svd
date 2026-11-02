@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Clusters nested deeper than the 32 levels elements may stand. -->
+<device>
+  <name>ERRORS</name>
+  <size>32</size>
+  <access>read-write</access>
+  <peripherals>
+    <peripheral>
+      <name>DEEP</name>
+      <baseAddress>0x40000000</baseAddress>
+      <registers>
+<cluster><name>C0</name><addressOffset>0x0</addressOffset>
+<cluster><name>C1</name><addressOffset>0x0</addressOffset>
+<cluster><name>C2</name><addressOffset>0x0</addressOffset>
+<cluster><name>C3</name><addressOffset>0x0</addressOffset>
+<cluster><name>C4</name><addressOffset>0x0</addressOffset>
+<cluster><name>C5</name><addressOffset>0x0</addressOffset>
+<cluster><name>C6</name><addressOffset>0x0</addressOffset>
+<cluster><name>C7</name><addressOffset>0x0</addressOffset>
+<cluster><name>C8</name><addressOffset>0x0</addressOffset>
+<cluster><name>C9</name><addressOffset>0x0</addressOffset>
+<cluster><name>C10</name><addressOffset>0x0</addressOffset>
+<cluster><name>C11</name><addressOffset>0x0</addressOffset>
+<cluster><name>C12</name><addressOffset>0x0</addressOffset>
+<cluster><name>C13</name><addressOffset>0x0</addressOffset>
+<cluster><name>C14</name><addressOffset>0x0</addressOffset>
+<cluster><name>C15</name><addressOffset>0x0</addressOffset>
+<cluster><name>C16</name><addressOffset>0x0</addressOffset>
+<cluster><name>C17</name><addressOffset>0x0</addressOffset>
+<cluster><name>C18</name><addressOffset>0x0</addressOffset>
+<cluster><name>C19</name><addressOffset>0x0</addressOffset>
+<cluster><name>C20</name><addressOffset>0x0</addressOffset>
+<cluster><name>C21</name><addressOffset>0x0</addressOffset>
+<cluster><name>C22</name><addressOffset>0x0</addressOffset>
+<cluster><name>C23</name><addressOffset>0x0</addressOffset>
+<cluster><name>C24</name><addressOffset>0x0</addressOffset>
+<cluster><name>C25</name><addressOffset>0x0</addressOffset>
+<cluster><name>C26</name><addressOffset>0x0</addressOffset>
+<cluster><name>C27</name><addressOffset>0x0</addressOffset>
+<cluster><name>C28</name><addressOffset>0x0</addressOffset>
+<cluster><name>C29</name><addressOffset>0x0</addressOffset>
+<register><name>R</name><addressOffset>0x0</addressOffset></register>
+</cluster>
+</cluster>
+</cluster>
+</cluster>
+</cluster>
+</cluster>
+</cluster>
+</cluster>
+</cluster>
+</cluster>
+</cluster>
+</cluster>
+</cluster>
+</cluster>
+</cluster>
+</cluster>
+</cluster>
+</cluster>
+</cluster>
+</cluster>
+</cluster>
+</cluster>
+</cluster>
+</cluster>
+</cluster>
+</cluster>
+</cluster>
+</cluster>
+</cluster>
+</cluster>
+      </registers>
+    </peripheral>
+  </peripherals>
+</device>

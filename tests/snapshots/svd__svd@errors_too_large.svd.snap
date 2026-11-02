@@ -1,0 +1,19 @@
+---
+source: tests/svd.rs
+expression: run(path)
+input_file: tests/svd/errors_too_large.svd
+---
+--- not generated ---
+svd::too-large
+
+  × clusters are nested too deep: elements stand at most 32 levels deep
+    ╭─[errors_too_large.svd:40:1]
+ 39 │     <cluster><name>C27</name><addressOffset>0x0</addressOffset>
+ 40 │ ╭─▶ <cluster><name>C28</name><addressOffset>0x0</addressOffset>
+ 41 │ │   <cluster><name>C29</name><addressOffset>0x0</addressOffset>
+ 42 │ │   <register><name>R</name><addressOffset>0x0</addressOffset></register>
+ 43 │ │   </cluster>
+ 44 │ ├─▶ </cluster>
+    · ╰──── this cluster is too deep
+ 45 │     </cluster>
+    ╰────

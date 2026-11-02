@@ -456,3 +456,33 @@ fn the_command_line_is_checked() {
     assert_eq!(run.status.code(), Some(1));
     assert!(stderr(&run).contains("name the output"), "{}", stderr(&run));
 }
+
+/// `n` peripherals of one register at one address, as one list: each shares
+/// bytes with every earlier one.
+fn stacked(n: u32) -> String {
+    format!(
+        "<device><name>D</name><size>32</size><access>read-write</access><peripherals>\
+         <peripheral><name>P%s</name><dim>{n}</dim><dimIncrement>0</dimIncrement>\
+         <baseAddress>0x40000000</baseAddress><registers><register><name>R</name>\
+         <addressOffset>0</addressOffset></register></registers></peripheral>\
+         </peripherals></device>"
+    )
+}
+
+#[test]
+fn peripherals_stacked_on_one_address_get_an_output_linear_in_their_number() {
+    // Each of the 4 096 would name every earlier one (80 MB of comments).
+    let n = 4096;
+    let (generated, diags, _) = svd::generate("stacked.svd", &stacked(n));
+    assert!(diags.into_vec().is_empty());
+    let module = generated.unwrap();
+    assert!(module.len() < n as usize * 512, "{} bytes", module.len());
+    // The comments wrap: read them as one line.
+    let text = module.replace("\n// svd: ", " ");
+    let last = format!(
+        "found from the bytes it shares with `P0`, `P1`, `P2`, `P3`, `P4`, `P5`, `P6`, `P7` \
+         and {} more.",
+        n - 1 - 8
+    );
+    assert!(text.contains(&last), "the last one counts the rest");
+}
