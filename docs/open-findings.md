@@ -49,6 +49,14 @@ M3.1 to M3.3 on 2026-10-28; these remain.
 - The `svd::renamed` and `svd::invalid-name` warnings for an alternate
   group, and `svd::not-declared` and `svd::overlap`, label the whole
   element, since the model has no span for `alternateGroup`. (M3.4b)
+- `src/link.rs` (line 16): the comment of `UNLOADED` cites
+  `attributes_section`, which does not exist (the match is inside
+  `unloaded(arch)`); `src/codegen/mod.rs` (`lower`, line 109) has
+  redundant parentheses in `(mir.bodies()).map(...)`. (M3.5)
+- `div64_false_links_with_core` (`src/codegen/mod.rs`) checks only that the
+  build and link succeed, not the values, and writes to a fixed directory
+  (`erebos-codegen-div64`) that two concurrent test processes would share.
+  (M3.5)
 
 ## Tests
 
@@ -90,6 +98,19 @@ M3.1 to M3.3 on 2026-10-28; these remain.
 - `tests/e2e/svd_virt/virt.svd`: the Decisions of step 6 name the access of
   each register except `DLL`, `DLM` and `IER`, which inherit the device's
   `read-write`. (M3.4b)
+- `tests/e2e.rs`: two string literals of the harness tests hold a real line
+  break instead of `\n`; `tests/e2e/panic_location/main.ers` has `use
+  board::exit;` out of order among its imports. (M3.5)
+- `tests/ui/target_thumbv7m_aggregate_abi.ers` pins only three call forms
+  of the caller at `-O0` and none at `-O`; `byval align 8`, the copied
+  over-aligned `byval`, `i8`/`i16` returns and `[N x i64]` of other sizes
+  are checked only by `aapcs_c` on QEMU. (M3.5)
+- `tests/e2e/aapcs_c.ers` and `.c` (about 1300 and 950 lines) were written
+  by a script that is not kept; a change to ADR 0075's table means editing
+  53 regular blocks by hand. Keep the generator as a documented script.
+  The step 7 Decisions of the plan also say `x72_1` skips `r1` (only
+  `x72_0` does) and that the script is both kept out and the author of the
+  comments. (M3.5)
 
 ## Docs
 
@@ -110,3 +131,12 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   omit some blank lines that `virt.ers` has, and two hand-wrapped
   paragraphs (the end of the register-mode paragraph and the `derivedFrom`
   paragraph) run past the file's width. (M3.4b)
+- ADR 0075 does not say that a C callee compiled by clang does not realign
+  an over-aligned `byval` parameter (the C twin of the 80-byte
+  `#[align(16)]` row of `aapcs_c` checks only bytes). One sentence; an
+  accepted ADR, so the user's call. (M3.5)
+- `docs/reference.md` (line 2721): "Two places depend on the target" lists
+  three; line 2745 says the reset entry "sits alone" before the thumbv7m
+  parenthesis. `docs/roadmap.md` (lines 67 to 69 and 203 to 216) still
+  speaks of M3.5 in the future. `CONTRIBUTING.md` says the ELF tests'
+  checks run for every target; three of them stay on riscv32. (M3.5)
