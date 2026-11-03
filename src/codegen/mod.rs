@@ -143,6 +143,8 @@ fn lower<'ctx>(
         data: &data,
         statics: &statics,
         panic: mir.panic.0 as usize,
+        module: &module,
+        div64: target.div64,
     };
     for (((_, body), function), abi) in mir.bodies().zip(&fns).zip(&abis) {
         // An `extern fn` stays a declaration for the linker to resolve.
@@ -521,6 +523,11 @@ struct FnCodegen<'a, 'ctx> {
     statics: &'a [PointerValue<'ctx>],
     /// The panic function, which failed checks call (ADR 0014).
     panic: usize,
+    /// The module, where the 64-bit division functions are found when the
+    /// target needs them (ADR 0076).
+    module: &'a Module<'ctx>,
+    /// Whether LLVM's 64-bit division may be emitted (ADR 0076).
+    div64: bool,
     builder: Builder<'ctx>,
     blocks: Vec<LlvmBlock<'ctx>>,
     slots: Vec<Option<PointerValue<'ctx>>>,
@@ -542,6 +549,8 @@ struct Shared<'a, 'ctx> {
     statics: &'a [PointerValue<'ctx>],
     /// The panic function, which failed checks call (ADR 0014).
     panic: usize,
+    module: &'a Module<'ctx>,
+    div64: bool,
 }
 
 impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
@@ -558,6 +567,8 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
             data,
             statics,
             panic,
+            module,
+            div64,
         } = *shared;
         let blocks = body
             .blocks()
@@ -581,6 +592,8 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
             data,
             statics,
             panic,
+            module,
+            div64,
             builder: context.create_builder(),
             blocks,
             slots: Vec::new(),
@@ -1131,8 +1144,15 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                     // MIR guarantees a nonzero divisor and no `MIN / -1`
                     // (ADR 0007), where LLVM's division is undefined.
                     BinOp::Div | BinOp::Rem => {
-                        let signed = self.int_of(lhs).is_signed();
+                        let ty = self.int_of(lhs);
+                        let signed = ty.is_signed();
                         match (op, signed) {
+                            // Where LLVM would call a function with a
+                            // convention C cannot write, `core`'s is called
+                            // instead (ADR 0076).
+                            _ if ty.bits() == 64 && !self.div64 => {
+                                Ok(self.divide64(*op, signed, l, r))
+                            }
                             (BinOp::Div, true) => b.build_int_signed_div(l, r, ""),
                             (BinOp::Div, false) => b.build_int_unsigned_div(l, r, ""),
                             (_, true) => b.build_int_signed_rem(l, r, ""),
@@ -1160,6 +1180,44 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
             Rvalue::Slice { .. } => unreachable!("a slice is written to its place whole"),
         };
         built.expect("builder is positioned").into()
+    }
+
+    /// `lhs / rhs` or `lhs % rhs` on 64-bit integers as a call to `core`'s
+    /// function of that name, with the C ABI (ADR 0076). The function is the
+    /// module's, found by its symbol (ADR 0051); when the module has none,
+    /// as in a dump that leaves `core` out (ADR 0052), it is declared with
+    /// the same signature, for the linker to resolve.
+    fn divide64(
+        &self,
+        op: BinOp,
+        signed: bool,
+        lhs: IntValue<'ctx>,
+        rhs: IntValue<'ctx>,
+    ) -> IntValue<'ctx> {
+        let symbol = match (op, signed) {
+            (BinOp::Div, false) => "__udivdi3",
+            (BinOp::Div, true) => "__divdi3",
+            (_, false) => "__umoddi3",
+            (_, true) => "__moddi3",
+        };
+        let function = self.module.get_function(symbol).unwrap_or_else(|| {
+            let i64 = self.context.i64_type();
+            let function = self.module.add_function(
+                symbol,
+                i64.fn_type(&[i64.into(), i64.into()], false),
+                None,
+            );
+            add_attribute(self.context, function, AttributeLoc::Function, "nounwind");
+            function
+        });
+        let call = self
+            .builder
+            .build_call(function, &[lhs.into(), rhs.into()], "")
+            .expect("builder is positioned");
+        match call.try_as_basic_value() {
+            ValueKind::Basic(value) => value.into_int_value(),
+            _ => unreachable!("the division functions return a value"),
+        }
     }
 
     /// Integers compare by their signedness; `bool` and pointers compare as
@@ -1375,4 +1433,111 @@ fn riscv32_start_stub(entry: &str) -> String {
          .Lenter:\n\
          \tj {entry}\n"
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use super::OptLevel;
+    use crate::driver::{self, Stage};
+    use crate::target::{RISCV32IMAC, Target};
+
+    /// riscv32's description, but for LLVM's 64-bit division: the code path
+    /// of a target whose `div64` is false (ADR 0076), which no target
+    /// reaches before thumbv7m.
+    fn without_div64() -> &'static Target {
+        Box::leak(Box::new(Target {
+            div64: false,
+            ..RISCV32IMAC
+        }))
+    }
+
+    /// The four 64-bit operations, and the 32-bit ones, which stay LLVM's.
+    const DIVISIONS: &str = "\
+fn udiv(a: u64, b: u64) -> u64 { a / b }
+fn urem(a: u64, b: u64) -> u64 { a % b }
+fn sdiv(a: i64, b: i64) -> i64 { a / b }
+fn srem(a: i64, b: i64) -> i64 { a % b }
+fn udiv32(a: u32, b: u32) -> u32 { a / b }
+fn srem32(a: i32, b: i32) -> i32 { a % b }
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }
+";
+
+    fn ir(target: &'static Target, opt: OptLevel) -> String {
+        driver::dump(
+            Path::new("main.ers"),
+            DIVISIONS,
+            Stage::LlvmIr,
+            target,
+            opt,
+            false,
+        )
+        .expect("the program compiles")
+    }
+
+    fn calls(ir: &str, symbol: &str) -> usize {
+        // `tail call` at `-O`.
+        ir.matches(&format!("call i64 @{symbol}(i64 ")).count()
+    }
+
+    /// Where `div64` is false, `/` and `%` on 64 bits are calls to the four
+    /// functions of ADR 0076, declared when `core` is left out of the
+    /// dump, and 32-bit divisions stay instructions.
+    #[test]
+    fn div64_false_calls_the_four_functions() {
+        for opt in [OptLevel::None, OptLevel::Speed] {
+            let ir = ir(without_div64(), opt);
+            for symbol in ["__udivdi3", "__umoddi3", "__divdi3", "__moddi3"] {
+                assert_eq!(calls(&ir, symbol), 1, "{symbol} at {opt:?}:\n{ir}");
+                assert!(
+                    ir.contains(&format!("declare i64 @{symbol}(i64, i64)")),
+                    "{symbol} at {opt:?}:\n{ir}"
+                );
+            }
+            for instruction in ["udiv i64", "sdiv i64", "urem i64", "srem i64"] {
+                assert!(!ir.contains(instruction), "{instruction}:\n{ir}");
+            }
+            assert!(ir.contains("udiv i32"), "{ir}");
+            assert!(ir.contains("srem i32"), "{ir}");
+        }
+    }
+
+    /// Where `div64` is true, as on riscv32, nothing changes: LLVM's
+    /// instructions, and no call.
+    #[test]
+    fn div64_true_keeps_llvms_division() {
+        for opt in [OptLevel::None, OptLevel::Speed] {
+            let ir = ir(&RISCV32IMAC, opt);
+            for instruction in ["udiv i64", "sdiv i64", "urem i64", "srem i64"] {
+                assert!(ir.contains(instruction), "{instruction}:\n{ir}");
+            }
+            assert!(!ir.contains("divdi3") && !ir.contains("moddi3"), "{ir}");
+        }
+    }
+
+    /// With `core` in the module, the calls reach its functions: the
+    /// program builds and links, with no undefined symbol.
+    #[test]
+    fn div64_false_links_with_core() {
+        let dir = std::env::temp_dir().join("erebos-codegen-div64");
+        std::fs::create_dir_all(&dir).expect("the temporary directory is writable");
+        let input = dir.join("main.ers");
+        let output = dir.join("main.elf");
+        let memory = "
+memory {
+    region ROM { origin: 0x8000_0000, size: 0x0001_0000 }
+    region RAM { origin: 0x8100_0000, size: 0x0001_0000 }
+    code in ROM;
+    data in RAM;
+    stack in RAM { size: 0x1000 }
+}
+";
+        std::fs::write(&input, format!("{DIVISIONS}{memory}")).expect("the file is writable");
+        for opt in [OptLevel::None, OptLevel::Speed] {
+            driver::build(&input, &output, &[], without_div64(), opt, false)
+                .unwrap_or_else(|e| panic!("{opt:?}: {e}"));
+        }
+    }
 }

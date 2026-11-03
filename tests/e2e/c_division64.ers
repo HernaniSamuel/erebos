@@ -1,0 +1,83 @@
+// C code divides 64-bit integers, which clang compiles to calls to
+// libgcc's names; they link because `core` exports them (ADR 0076). Only
+// riscv32 has C code that can: ARMv7-M's would need `__aeabi_uldivmod`
+// (ADR 0074). The header takes effect once the harness reads it (M3.5).
+// targets: riscv32imac-unknown-none-elf
+// link-c: c_division64.c
+// expect-output: 1234567890123 89 0
+// expect-output: -1234567890123 -89 1234567890123 89
+// expect-output: 9223372036854775807 4294967297
+// expect-exit: 0
+
+extern fn c_udiv(a: u64, b: u64) -> u64;
+extern fn c_urem(a: u64, b: u64) -> u64;
+extern fn c_sdiv(a: i64, b: i64) -> i64;
+extern fn c_srem(a: i64, b: i64) -> i64;
+
+fn putc(byte: u8) {
+    let thr: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+    *thr = byte;
+}
+
+fn exit(code: u32) -> ! {
+    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+    *finisher = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    loop {}
+}
+
+fn print_u64(n: u64) {
+    if n >= 10 {
+        print_u64(n / 10);
+    }
+    putc(b'0' + (n % 10) as u8);
+}
+
+fn print_i64(n: i64) {
+    if n < 0 {
+        putc(b'-');
+        print_u64((0 - n) as u64);
+    } else {
+        print_u64(n as u64);
+    }
+}
+
+entry fn main() -> ! {
+    let big: u64 = 1234567890123 * 1000 + 89;
+    print_u64(c_udiv(big, 1000));
+    putc(b' ');
+    print_u64(c_urem(big, 1000));
+    putc(b' ');
+    print_u64(c_urem(1000, 8));
+    putc(b'\n');
+
+    let neg: i64 = 0 - big as i64;
+    print_i64(c_sdiv(neg, 1000));
+    putc(b' ');
+    print_i64(c_srem(neg, 1000));
+    putc(b' ');
+    print_i64(c_sdiv(neg, -1000));
+    putc(b' ');
+    print_i64(c_srem(big as i64, -1000));
+    putc(b'\n');
+
+    let max: u64 = 0xFFFF_FFFF_FFFF_FFFF;
+    print_u64(c_udiv(max, 2));
+    putc(b' ');
+    print_u64(c_udiv(max, 0xFFFF_FFFF));
+    putc(b'\n');
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(1)
+}
+
+// QEMU `virt`'s RAM in two regions of 64 MiB: the image in the first, and
+// in the second a 1 MiB stack at its start, then `.data` and `.bss`.
+memory {
+    region IMAGE { origin: 0x8000_0000, size: 0x0400_0000 }
+    region RAM { origin: 0x8400_0000, size: 0x0400_0000 }
+    code in IMAGE;
+    data in RAM;
+    stack in RAM { size: 0x0010_0000 }
+}

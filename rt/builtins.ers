@@ -56,10 +56,14 @@ pub fn memset(dest: *mut u8, c: i32, n: usize) -> *mut u8 {
 
 // --- 64-bit division --------------------------------------------------------
 //
-// RV32 has no instruction for 64-bit division, so LLVM lowers `/` and `%` on
-// u64 and i64 to these. They must not use `/` or `%` on 64-bit values
-// themselves. A zero divisor never reaches them, since division checks
-// happen before the call (ADR 0007).
+// No target divides 64-bit values in one instruction, and these are what
+// `/` and `%` on u64 and i64 call. Who calls them depends on the target's
+// `div64` (ADR 0076): where it is true, as on riscv32, LLVM does, when it
+// does not expand the division inline, and so does C code linked into the
+// program; where it is false, code generation calls them for every such
+// division, since LLVM's call would use a convention C cannot write. They
+// must not use `/` or `%` on 64-bit values themselves. A zero divisor never
+// reaches them, since division checks happen before the call (ADR 0007).
 
 // Restoring binary long division: one quotient bit per step, from the top.
 // Returns the remainder if `remainder` is true, otherwise the quotient.
