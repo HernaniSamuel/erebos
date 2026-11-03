@@ -59,8 +59,12 @@ panic fn on_panic() -> ! {
   panic fn on_panic(info: *const core::PanicInfo) -> ! { ... }
   ```
 
-The target is RV32IMAC on QEMU `virt` (ADR 0010). The board's memory is
-not part of the target: each program declares it in its `memory` block.
+A build is for one of two targets, chosen with `erebos build --target
+<name>`: `riscv32imac-unknown-none-elf` (RV32IMAC, the default) or
+`thumbv7m-none-eabi` (ARMv7-M, as on the Cortex-M3); see "Targets" below
+(ADR 0010, 0073 to 0077). The language is the same on both. The board is
+not part of the target: each program declares its memory in its `memory`
+block.
 
 ## Lexical structure
 
@@ -203,15 +207,17 @@ fn add(a: u32, mut b: u32) -> u32 {
 - Parameters cannot have type `()` or `!`.
 - There are no methods: functions take their receiver explicitly, such as
   `fn area(r: *const Rect) -> u32` (methods come with references, M5).
-- All functions use the C ABI of the target (ADR 0006). A function of the
-  root module has its own name as its symbol, and so has one marked
-  `#[export]`, so C code can call it by that name; a function of another
-  module is named by its path, `uart.init` (ADR 0051, see "Symbols").
+- All functions use the C ABI of the target (ADR 0006): the riscv32 one or
+  the AAPCS (see "Targets"). A function of the root module has its own
+  name as its symbol, and so has one marked `#[export]`, so C code can call
+  it by that name; a function of another module is named by its path,
+  `uart.init` (ADR 0051, see "Symbols").
 
-### Aggregates by value (ADR 0025, 0039)
+### Aggregates by value (ADR 0025, 0039, 0075)
 
 Structs, arrays and enums with payloads are parameters and return values
-like any other type, passed as the riscv32 C ABI says:
+like any other type, passed as the C ABI of the target says, so that Erebos
+and C call each other with them. On `riscv32imac-unknown-none-elf`:
 
 | Aggregate | Argument | Return value |
 |-----------|----------|--------------|
@@ -220,11 +226,35 @@ like any other type, passed as the riscv32 C ABI says:
 | up to 8 bytes | a register pair | `a0`, `a1` |
 | larger | a pointer to a copy the caller makes | memory the caller provides, through a hidden first argument |
 
-A parameter is always the callee's own copy: changing it never changes the
-caller's value. Arrays pass like a struct of the same layout; C, which has
-no arrays by value, wraps them in a struct. A slice passes like the C
-struct `struct { const T *ptr; size_t len; }`: in a register pair, and
-returned in `a0`, `a1` (ADR 0031). An enum with payloads passes by its
+On `thumbv7m-none-eabi` the AAPCS decides, with the **natural alignment** of
+the aggregate: the largest alignment of its fields, elements or variants,
+each counted with its own `#[align(N)]`, but without the aggregate's own
+`#[align(N)]` (1 for a `#[packed]` struct):
+
+| Aggregate | Argument | Return value |
+|-----------|----------|--------------|
+| size 0 | not passed | nothing |
+| 1 to 64 bytes, natural alignment up to 4 | its words, as C's `[N x i32]`, in `r0` to `r3`, then on the stack | size 1, 2, 3 or 4: in `r0`; larger: memory the caller provides, through a hidden first argument |
+| 1 to 64 bytes, natural alignment 8 or more | its double words, as `[N x i64]`: it starts at an even register or an 8-aligned stack slot | as above |
+| more than 64 bytes | copied into the argument area, aligned to its natural alignment, 4 or 8 (`byval`); its first words may travel in registers | memory the caller provides |
+
+Where an argument that does not fit the registers left is split, its first
+words go in registers and the rest on the stack; the rest of the placement
+is the AAPCS's, which the compiler does not restate. The `#[align(N)]` of a
+struct changes where it is stored, not how it is passed: a struct of four
+words with `#[align(16)]` goes as `[4 x i32]`, and one holding a field of
+that type as `[2 x i64]`. An aggregate of more than 64 bytes whose own
+alignment exceeds that of its argument area is copied by the callee into a
+slot of its own alignment, so that its address always has the alignment its
+type promises. The bytes of padding, of a register beyond the aggregate
+and of a return in `r0` beyond the aggregate's size are unspecified.
+
+On both targets a parameter is always the callee's own copy: changing it
+never changes the caller's value. Arrays pass like a struct of the same
+layout; C, which has no arrays by value, wraps them in a struct. A slice
+passes like the C struct `struct { const T *ptr; size_t len; }`: on riscv32
+in a register pair, and returned in `a0`, `a1` (ADR 0031); on thumbv7m as
+two words, and returned through memory. An enum with payloads passes by its
 size and alignment, as its C twin, a union, does (see "Enums"); it is
 never of size 0, since its tag has a size. Enums without payloads and
 bit-field structs are not aggregates: they pass as their integer type
@@ -2125,10 +2155,12 @@ one load and one store, not atomic. Otherwise the program is rejected:
   volatile slice, `(*s)[i]` is one access of the element. An enum with
   payloads has no fields, so a volatile pointer to one reaches nothing;
 - `u64` and `i64`, and enums without payloads and bit-field structs on
-  them, cannot, since riscv32 has no 64-bit access: use two `u32` halves
-  in the order the device needs; an enum, which nothing converts to, needs
-  an integer type of at most 32 bits, and so does a bit-field struct,
-  which only its integer converts to (`ty::volatile-too-wide`);
+  them, cannot, since neither target makes a 64-bit access in one bus
+  access (on ARMv7-M, `ldrd` and `strd` are one instruction that makes
+  two): use two `u32` halves in the order the device needs; an enum,
+  which nothing converts to, needs an integer type of at most 32 bits, and
+  so does a bit-field struct, which only its integer converts to
+  (`ty::volatile-too-wide`);
 - a field reached through a packed struct cannot be, if its type needs
   alignment, a bit-field struct on `u16` or `u32` included.
 
@@ -2602,22 +2634,30 @@ block is `resolve::unknown-region`.
 
 - `code in R;` puts in `R`, in this order, the reset entry `_start` (see
   "Startup and memory"), the code (`.text`), the read-only data
-  (`.rodata`) and the initial values of `.data`. `_start` is at `R`'s
-  origin, which must be a multiple of 4 (`ty::misaligned-code`) and must
-  be the address the board jumps to at reset, which the compiler cannot
-  check. On QEMU `virt` run with `-bios none`, as the tests do, that is
-  `0x8000_0000`, the start of its RAM; with QEMU's default firmware,
-  OpenSBI, loaded there, such a program does not boot.
+  (`.rodata`) and the initial values of `.data`. The reset entry starts at
+  `R`'s origin (on thumbv7m, with the two words of a vector table, so that
+  `_start` is 8 bytes after it). The origin must be a multiple of the
+  target's code alignment, 4 on riscv32 and 128 on thumbv7m
+  (`ty::misaligned-code`), and must be the address where the board starts
+  at reset (it jumps there on riscv32, and reads the vector table there on
+  thumbv7m), which the compiler cannot check. On QEMU `virt` run with
+  `-bios none`, as the tests do, that is `0x8000_0000`, the start of its
+  RAM; with QEMU's default firmware, OpenSBI, loaded there, such a program
+  does not boot. On QEMU `mps2-an385` it is `0x0`. The 128 of thumbv7m is
+  the alignment ARMv7-M requires of a vector table (`VTOR` holds multiples
+  of 128), since the reset entry of that target starts with one (see
+  "Targets").
 - `data in R;` puts in `R` the run addresses of `.data`, then `.bss`.
   `R` may be the code's region, for a board that runs from RAM: the
   initial values of `.data` are then at its run addresses, and nothing
   else is set aside for them.
 - `stack in R { size: E }` reserves `E` bytes for the stack at the
   **start** of `R`, below anything else `R` holds. Its start is `R`'s
-  origin rounded up to 16, the stack alignment of riscv32, and `E` must be
-  a multiple of 16. The stack grows down, so one that overflows leaves its
-  region below its origin, where many chips have no memory or memory that
-  faults, instead of running over `.data` and `.bss`. Nothing detects the
+  origin rounded up to the target's stack alignment, 16 on riscv32 and 8
+  on thumbv7m, and `E` must be a multiple of it. The stack grows down, so
+  one that overflows leaves its region below its origin, where many chips
+  have no memory or memory that faults, instead of running over `.data` and
+  `.bss`. Nothing detects the
   overflow at run time yet (it needs trap handlers, M4); on QEMU `virt`,
   where every region is part of one RAM, an overflow writes into the
   region below, if there is one. The stack cannot be in the code's region
@@ -2648,11 +2688,14 @@ stage `--emit` asks for after it:
 | `ty::empty-region` | a region of size 0 |
 | `ty::region-out-of-range` | a region whose end, `origin + size`, is above `0xFFFF_FFFF`, so that the address one past it, which the linker's end symbols hold, would not exist; the last byte of the address space cannot belong to a region |
 | `ty::region-overlap` | two regions sharing an address; reported once per pair, at the later region, labeling the earlier |
-| `ty::misaligned-code` | the code's region starting at an address that is not a multiple of 4 |
-| `ty::stack-size` | a stack of size 0, or not a multiple of 16, or one that does not fit in its region once its start is rounded up |
+| `ty::misaligned-code` | the code's region starting at an address that is not a multiple of the target's code alignment (4 on riscv32, 128 on thumbv7m) |
+| `ty::stack-size` | a stack of size 0, or not a multiple of the target's stack alignment (16 on riscv32, 8 on thumbv7m), or one that does not fit in its region once its start is rounded up |
 
-A stack size that is both not a multiple of 16 and too large is reported
-as not a multiple. A value whose computation failed is reported once,
+These two read the target of the build (`--target`): a code origin of
+`0x40` is an error only on thumbv7m, and a stack of 24 bytes only on
+riscv32, and the message names the target's value. A stack size that is both
+not a multiple of the alignment and too large is reported as not a
+multiple. A value whose computation failed is reported once,
 where it is written, with the errors of any compile-time evaluation or a
 `ty::mismatched-types`, and the checks that need it are skipped: a region
 whose origin failed overlaps nothing.
@@ -2662,10 +2705,11 @@ script the compiler passes to `ld.lld`:
 
 - `MEMORY` lists every region in source order under its own name, so that
   the script and the linker's messages read like the source.
-- In the code's region: `_start` in an output section of its own,
-  `.text.start`, so that only its own alignment counts and an object given
-  with `--link` whose code is aligned to 64 cannot move it off the origin;
-  then `.text`, `.rodata` and the initial values of `.data`.
+- In the code's region: the reset entry (`_start`, and on thumbv7m the two
+  words before it) in an output section of its own, `.text.start`, so that
+  only its own alignment counts and an object given with `--link` whose
+  code is aligned to 64 cannot move it off the origin; then `.text`,
+  `.rodata` and the initial values of `.data`.
 - In the stack's region: a section `.stack` without contents, from
   `__stack_start` to `__stack_end`, the bounds of the stack. In the data's
   region: `.data`, then `.bss`. `.stack` comes before both, so that it is
@@ -2674,6 +2718,13 @@ script the compiler passes to `ld.lld`:
   padded inside, the symbols of the startup loops, the small-data
   sections, the sections that are not loaded, and a link error for a
   section the script does not place.
+- Two places depend on the target (ADR 0074): the script's first line,
+  `OUTPUT_ARCH(riscv)` or `OUTPUT_ARCH(arm)`, and the section of the object's
+  attributes that is not loaded, `.riscv.attributes` or `.ARM.attributes`.
+  On thumbv7m the sections `.ARM.exidx*` and `.ARM.extab*`, the unwind
+  tables that every function of an ARM object has, are discarded
+  (`/DISCARD/`): nothing unwinds. Any other section the script does not name
+  is still an error.
 
 **Region overflow.** Only the linker knows how large the code is, so a
 region too small for what it holds is found at link time: the compiler
@@ -2692,7 +2743,8 @@ are left out.
 
 `_start`, generated by the compiler and visible in `--emit=llvm-ir`, is the
 reset entry: it sits alone at the origin of the code's region (see "Memory
-maps"), and does, in order:
+maps"; on thumbv7m two words of a vector table come first, see "Targets"),
+and does, in order:
 
 1. set the stack pointer to `__stack_end`, the end of the stack the
    `memory` block declares;
@@ -2715,6 +2767,89 @@ Object files given with `--link` may use the small-data sections
 `.bss`, and initialized likewise. A section the script does not place is a
 link error, not data left uninitialized. No `__global_pointer$` is
 defined, so nothing is addressed relative to `gp`.
+
+## Targets (ADR 0073 to 0077)
+
+`erebos build --target <name>` chooses the machine the program is built
+for. There are two:
+
+| | `riscv32imac-unknown-none-elf` (the default) | `thumbv7m-none-eabi` |
+|-|---------------------------------------------|----------------------|
+| Machine | RV32IMAC, little-endian | ARMv7-M, Thumb-2, as on the Cortex-M3, little-endian, no floating-point unit |
+| LLVM | `riscv32-unknown-none-elf`, `generic-rv32`, `+m,+a,+c` | `thumbv7m-none-eabi`, `cortex-m3` |
+| C ABI | the riscv32 one (ADR 0006, 0025) | the AAPCS, base standard (ADR 0075) |
+| Pointers, `usize`, widest access | 32 bits | 32 bits |
+| Stack alignment | 16 | 8 |
+| Code alignment | 4 | 128 |
+| 64-bit `/` and `%` | LLVM's | a call to `core` |
+
+An unknown name is an error that lists the known ones: ``error: unknown
+target `cortex-m3`; the targets are riscv32imac-unknown-none-elf,
+thumbv7m-none-eabi``. Without the flag the target is riscv32, so a program
+written for an ARM board and built without it gets the riscv32 checks and
+code. The names say an instruction set and an ABI, not a board; the board is
+the program's `memory` block and its peripherals. Only `erebos build` takes
+the flag; `erebos svd` writes source that does not depend on the target.
+Objects given with `--link` must be built for the same target, which
+nothing checks before the linker. The language is the same on both: a
+program that compiles for one has the same types, layouts and values on the
+other; what differs is the machine code, the calling convention with C, the
+reset entry and the memory map checks (`ty::misaligned-code`,
+`ty::stack-size`, see "Memory maps"). The pointer width stays 32 bits on
+every target, which `usize` and the layouts rely on.
+
+**The reset entry of thumbv7m (ADR 0074).** A Cortex-M does not start at an
+address: at reset it reads two words at the address of its vector table
+(`0x0` on `mps2-an385`), the initial stack pointer and the address of the
+reset handler, whose bit 0 is set to mark Thumb code. The reset entry
+`_start` is therefore preceded, at the origin of the code's region, by
+those two words, `__stack_end` and `_start`, in the section `.text.start`:
+the code's origin must be a multiple of 128 because of this. `_start` does
+what it does on riscv32: it sets the stack pointer again (the processor
+already loaded it, but a program that jumps back to `_start`, as a startup
+test does, gets a fresh stack), zeroes `.bss`, copies `.data`, and jumps to
+the entry function, in Thumb assembly that `--emit=llvm-ir` shows as `module
+asm`. The table has no other entry: an exception (a fault, an NMI) reads its
+handler from the words after the second, which are `_start`'s code, faults
+again and locks the processor up. Exception handlers and the rest of the
+vector table come with M4.
+
+**Calls and arithmetic.**
+
+- Aggregates cross calls as the AAPCS says (see "Aggregates by value").
+  Integers narrower than 32 bits and `bool` are extended, and `u64` and `i64`
+  take an even and an odd register or 8 aligned bytes of the stack, as in C.
+- `/` and `%` on `u64` and `i64` call `core`'s `__udivdi3`, `__umoddi3`,
+  `__divdi3` and `__moddi3` on thumbv7m (ADR 0076), instead of an LLVM
+  division: LLVM would call `__aeabi_uldivmod` and `__aeabi_ldivmod`, whose
+  convention (the quotient in `r0` and `r1`, the remainder in `r2` and `r3`)
+  no function with the C ABI has. The call is in `--emit=llvm-ir`, after the
+  checks of the divisor, and costs `core`'s loop of 64 steps even for a
+  constant divisor, which on riscv32 `-O` mostly expands inline. Divisions
+  of 32 bits and fewer stay instructions on both targets (`udiv` and `sdiv`
+  exist on ARMv7-M). Constant evaluation is the same on both.
+- C code linked into a thumbv7m program cannot divide 64-bit values: clang
+  calls `__aeabi_uldivmod` and `__aeabi_ldivmod`, which no one defines, and
+  the linker reports them as undefined. Defining them needs inline
+  assembly (M4). On riscv32 C code calls `core`'s four functions by their
+  libgcc names.
+- LLVM copies and fills memory on thumbv7m through the EABI's functions,
+  which `core` defines (see "`core`").
+
+**Tests on both targets (ADR 0077).** The tests run the e2e programs on QEMU
+`virt` (`qemu-system-riscv32`) for riscv32 and on QEMU `mps2-an385`
+(`qemu-system-arm`: a Cortex-M3 with 4 MiB of RAM at `0x0` and at
+`0x2000_0000` and a CMSDK UART at `0x4000_4000`) for thumbv7m. A program
+reaches its machine through `mod board;`: the harness supplies the file
+`tests/boards/<target>.ers`, which holds the machine's `memory` block and
+`putc`, `exit` and `SCRATCH`; a program for a real board writes its own the
+same way. The language has no conditional compilation, so a program that
+needs one machine says it in a header, `// targets: <name>`. On
+`mps2-an385` the program stops QEMU through semihosting, with a C function
+of the board (inline assembly arrives with M4). C files of the tests are
+compiled with `clang --target=thumbv7m-none-eabi -mcpu=cortex-m3
+-mfloat-abi=soft -ffreestanding` for thumbv7m. The ui tests take `//
+target: <name>`, riscv32 by default.
 
 ## Peripherals (ADR 0058)
 
@@ -3847,10 +3982,29 @@ the compiler binary, and compiled and checked with every program.
   - the **runtime support functions**, in its private module
     `core::builtins`: `memcpy`, `memmove` and `memset`, which LLVM calls
     for large copies and fills, `pub` and offered from the root with
-    `pub use`, so that a program calls `core::memcpy`; and the 64-bit
-    division functions riscv32 needs, `__udivdi3`, `__umoddi3`, `__divdi3`
-    and `__moddi3`, private, since LLVM calls them and programs write `/`
-    and `%`.
+    `pub use`, so that a program calls `core::memcpy`; the twelve
+    functions of the ARM EABI, which LLVM calls instead of those three on
+    `thumbv7m-none-eabi` (ADR 0074); and the 64-bit division functions,
+    `__udivdi3`, `__umoddi3`, `__divdi3` and `__moddi3`, private, since
+    programs write `/` and `%`.
+  - The EABI functions are `__aeabi_memcpy`, `__aeabi_memmove`,
+    `__aeabi_memset` and `__aeabi_memclr`, each also with the suffixes `4`
+    and `8`, which promise a destination (and a source) aligned to 4 or
+    8 bytes. Each calls `memcpy`, `memmove` or `memset` and ignores the
+    promise, and none returns a value. `__aeabi_memcpy` and
+    `__aeabi_memmove` take `(dest: *mut u8, src: *const u8, n: usize)`,
+    `__aeabi_memclr` takes `(dest: *mut u8, n: usize)`, and `__aeabi_memset`
+    takes `(dest: *mut u8, n: usize, c: i32)`: its length comes before the
+    value, not after as in `memset`, and only the low byte of `c` is
+    stored. They are private, and exist on
+    every target: on riscv32 nothing calls them, and they cost a few
+    hundred bytes, as the other support functions do where they are unused.
+  - The division functions are called by LLVM on riscv32, where it does not
+    expand a division by a constant, and by C code linked into a riscv32
+    program; on thumbv7m code generation calls them itself (see
+    "Targets"). They never divide 64-bit values themselves. `core` does
+    not define `__aeabi_uldivmod` and `__aeabi_ldivmod`, which need
+    inline assembly (M4).
 
   Each support function is `#[export]`, so that its symbol is the name
   LLVM calls (see "Symbols"); their private helpers are not
@@ -3988,15 +4142,18 @@ compile until it handles it.
 ## Building
 
 ```
-erebos build program.ers [-o program.elf] [-O] [--link file.o]... [--emit=<stage>]
+erebos build program.ers [-o program.elf] [-O] [--link file.o]... [--target <name>]
+                         [--emit=<stage>]
 ```
 
 `program.ers` is the root file: the files of its modules are read from its
 directory, and every file is named relative to it (see "Modules and
 paths"). `-O` enables LLVM optimizations. `--link` adds an object file
-defining `extern fn`s and `extern static`s; it may be repeated. `--emit`
-prints a compiler stage instead: `tokens`, `ast`, `hir`, `typeck`, `mir`,
-`linker-script` or `llvm-ir`.
+defining `extern fn`s and `extern static`s; it may be repeated. `--target`
+names the machine to build for, `riscv32imac-unknown-none-elf` (the default)
+or `thumbv7m-none-eabi` (see "Targets"); it may be given once, and it needs
+a name. `--emit` prints a compiler stage instead: `tokens`, `ast`, `hir`,
+`typeck`, `mir`, `linker-script` or `llvm-ir`, those of the chosen target.
 
 - Building an executable and `linker-script` need the program's `memory`
   block (`link::no-memory-map`, see "Memory maps"); the other stages do
@@ -4198,8 +4355,8 @@ Every error has a stable code, shown with the message.
 | `ty::empty-region` | a region of size 0 |
 | `ty::region-out-of-range` | a region whose end is above `0xFFFF_FFFF` |
 | `ty::region-overlap` | two regions sharing an address |
-| `ty::misaligned-code` | the code's region starting at an address that is not a multiple of 4 |
-| `ty::stack-size` | a stack of size 0, not a multiple of 16, or that does not fit in its region |
+| `ty::misaligned-code` | the code's region starting at an address that is not a multiple of the target's code alignment (4 on riscv32, 128 on thumbv7m) |
+| `ty::stack-size` | a stack of size 0, not a multiple of the target's stack alignment (16 on riscv32, 8 on thumbv7m), or that does not fit in its region |
 | `ty::register-type` | a register whose type is not `u8`, `u16` or `u32`, or a bit-field struct or an enum without payloads on one of them, or an array of such a type; an array of arrays, a peripheral type or an array of one |
 | `ty::misaligned-register` | an entry's offset that is not a multiple of its element's alignment |
 | `ty::misaligned-step` | a `step` that is not a multiple of the element's alignment |

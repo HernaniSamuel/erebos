@@ -81,6 +81,7 @@ src/svd/        `erebos svd`, the generator of Erebos source from SVD (ADR 0070 
 rt/             The `core` module in Erebos, built into every program (ADR 0020, 0052)
 tests/ui/       Snapshot tests per compiler stage
 tests/e2e/      Programs run on QEMU, with expected output and exit code
+tests/boards/   One board module per target (`mod board;` of the e2e and generated programs), with a C file where the board needs one
 tests/layout/   Structs whose layout is checked against clang
 tests/svd/      SVD files that `tests/svd.rs` generates, snapshots and type checks, and `chips/`: the ESP32-C3's, built into executables
 tests/common/   Helpers shared by the tests: QEMU harness, program generator

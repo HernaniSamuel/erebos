@@ -8,7 +8,7 @@ and ends with a program running on QEMU, verified by an automated test.
 | **M0** ✅ | `entry fn main() -> ! { loop {} }` compiles to an object file, links, and boots on QEMU. Every layer that has work to do exists, even if trivial (const evaluation waits for M2). |
 | **M1** ✅ | Functions, integers, `bool`, typed `let`, `if`/`while`/`loop`, raw and volatile pointers (ADR 0013), byte literals (ADR 0016), checked division (ADR 0007), the panic function (ADR 0014). Prints "hello" over the QEMU UART via volatile pointer writes. |
 | **M2** ✅ | Compound data, enums and modules, in the steps below. |
-| **M3** | `memory { ... }` blocks generating the linker script; `peripheral` blocks with native MMIO. The UART is declared in the language. |
+| **M3** ✅ | `memory { ... }` blocks generating the linker script; `peripheral` blocks with native MMIO. The UART is declared in the language. |
 | **M4** | Interrupt handlers, vector tables, inline `asm`, compiler and hardware fences (ADR 0023). |
 | **M5** | Moves/ownership, then references and borrow checking (ADR 0009); methods (`impl`, `self`, `&self`, `&mut self`, `x.f()`). |
 | **M6** | Types as values and `comptime` parameters: generics in the Zig model, monomorphized (ADR 0027). |
@@ -60,7 +60,7 @@ updated, and a program on QEMU.
 | **M3.3** ✅ Register fields | fields at bit positions of a register (representation clauses, as in Ada), enums in fields, write-1-to-clear fields, reads with side effects, reset values | the UART configured through its fields |
 | **M3.4a** ✅ Register arrays and clusters | register arrays and clusters (ADR 0064), access modes of fields (ADR 0065), peripherals over others (ADR 0066), from the design checked against the SVD of three real riscv32 chips (ADR 0067) | the PLIC's priorities, enable words and contexts, and the eight virtio-mmio transports through one driver |
 | **M3.4b** ✅ SVD | `erebos svd`, a subcommand writing Erebos source from an SVD file (ADR 0070), how it names items (ADR 0071) and treats what has no declaration (ADR 0072); the ESP32-C3's SVD generated and compiled | a peripheral generated from SVD, run on QEMU |
-| **M3.5** Second target | ARM Cortex-M on QEMU; what depends on the target becomes a per-target description (pointer width, widest access, ABI, startup, linker script, LLVM setup, runtime functions) | the e2e programs on both targets |
+| **M3.5** ✅ Second target | ARM Cortex-M on QEMU; what depends on the target becomes a per-target description (pointer width, widest access, ABI, startup, linker script, LLVM setup, runtime functions) | the e2e programs on both targets |
 
 Decisions already agreed for the later steps:
 
@@ -526,4 +526,36 @@ Documentation owed:
   cost (nesting, `derivedFrom` chains and copies, lists), reported as
   `svd::too-large`. Interrupts, which the generator does not write, are
   M4's.
-- **Next: M3.5** (the second target).
+- **M3.5 done.** There are two targets, chosen with `erebos build --target
+  <name>`: `riscv32imac-unknown-none-elf` (the default, so every earlier
+  command builds as before) and `thumbv7m-none-eabi` (ADR 0073, 0074). What
+  depended on the target is one description per target (`target::Target`,
+  `TARGETS`): LLVM's machine, the stack alignment (16 and 8), the code
+  alignment (4 and 128), and whether LLVM's 64-bit division may be emitted;
+  the pointer width and the widest access stay shared constants, checked
+  against every description. The memory map checks (`ty::misaligned-code`,
+  `ty::stack-size`) read the build's target. On thumbv7m the reset entry is
+  a two-word vector table (the stack's end and `_start`) before `_start`, the
+  linker script says `OUTPUT_ARCH(arm)`, places `.ARM.attributes` and
+  discards the ARM unwind tables, and aggregates cross calls as the AAPCS
+  says, as clang lowers them: `[N x i32]` and `[N x i64]` up to 64 bytes,
+  `byval` above, `i8`/`i16`/`i32` returns, classified by the natural
+  alignment, without the aggregate's own `#[align(N)]` (ADR 0075). 64-bit
+  `/` and `%` are calls to `core`'s `__udivdi3`, `__umoddi3`, `__divdi3` and
+  `__moddi3` where LLVM would call the EABI's functions, which no function
+  with the C ABI can be (ADR 0076), and `core` defines the EABI's twelve
+  memory functions. The milestone program is the e2e programs on both
+  targets: every portable program of `tests/e2e/` builds for both and runs
+  on QEMU `virt` and on `mps2-an385`, at both optimization levels, with the
+  same output and exit code, each reaching its machine through a board
+  module the harness supplies (`tests/boards/`), and stopping QEMU through
+  the test finisher or through semihosting; the generated programs, the
+  layout tests, the ELF checks and the reproducible builds run on both too,
+  and `aapcs_c` calls C and is called by C with every row of ADR 0075's
+  table, at the AAPCS's register boundaries (ADR 0077). Left to M4:
+  exception handlers and the rest of the vector table (a fault on thumbv7m
+  locks the processor up), and inline assembly, with which `core` can define
+  `__aeabi_uldivmod` and `__aeabi_ldivmod`, so that C code linked into a
+  thumbv7m program can divide 64-bit values. Not planned: Cortex-M0,
+  floating-point units, big-endian and 64-bit targets.
+- **Next: M4** (interrupt handlers, vector tables, inline `asm`).
