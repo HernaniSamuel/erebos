@@ -24,7 +24,7 @@ use common::board;
 use common::generator::{self, Feature, Uses};
 use common::qemu::{self, Expectation};
 use erebos::driver::{self, OptLevel, Stage};
-use erebos::target;
+use erebos::target::Target;
 
 /// How many seeds the test of the generator compiles.
 const SEEDS: u64 = 300;
@@ -43,21 +43,32 @@ fn work_dir() -> PathBuf {
     dir
 }
 
-/// The opaque inputs, compiled once per optimization level and shared by
-/// every program (and by both tests).
-fn opaque_object(opt: OptLevel) -> Result<PathBuf, String> {
-    static OBJECTS: OnceLock<[Result<PathBuf, String>; 2]> = OnceLock::new();
+/// The opaque inputs, compiled once per target and optimization level and
+/// shared by every program (and by both tests); the objects of one target
+/// do not link into another's program.
+fn opaque_object(target: &Target, opt: OptLevel) -> Result<Vec<PathBuf>, String> {
+    type Objects = Vec<((&'static str, bool), Result<PathBuf, String>)>;
+    static OBJECTS: OnceLock<Objects> = OnceLock::new();
     let objects = OBJECTS.get_or_init(|| {
-        let work = work_dir();
-        let source = work.join("opaque.c");
-        fs::write(&source, generator::OPAQUE_C).unwrap();
-        [OptLevel::None, OptLevel::Speed]
-            .map(|opt| qemu::compile_c(&source, &[], &work, target::DEFAULT, opt))
+        let mut objects = Vec::new();
+        for &target in board::RUN_ON {
+            let work = work_dir().join(target.name);
+            fs::create_dir_all(&work).unwrap();
+            let source = work.join("opaque.c");
+            fs::write(&source, generator::OPAQUE_C).unwrap();
+            for opt in [OptLevel::None, OptLevel::Speed] {
+                let object = qemu::compile_c(&source, &[], &work, target, opt);
+                objects.push(((target.name, opt == OptLevel::Speed), object));
+            }
+        }
+        objects
     });
-    match opt {
-        OptLevel::None => objects[0].clone(),
-        OptLevel::Speed => objects[1].clone(),
-    }
+    let key = (target.name, opt == OptLevel::Speed);
+    let (_, object) = objects
+        .iter()
+        .find(|(k, _)| *k == key)
+        .expect("every target of RUN_ON has its opaque inputs");
+    object.clone().map(|object| vec![object])
 }
 
 /// Builds `source` (named `name`) at both levels for every target and runs
@@ -90,8 +101,9 @@ fn run_both(name: &str, source: &str) -> Result<(), String> {
         ] {
             let elf = work.join(format!("{}.{file}.elf", target.name));
             let log = work.join(format!("{}.{file}.qemu.log", target.name));
-            let result = opaque_object(opt).and_then(|object| {
-                driver::build(&program, &elf, &[object], target, opt, false)
+            let result = opaque_object(target, opt).and_then(|mut objects| {
+                objects.extend(qemu::board_object(target, &work, opt)?);
+                driver::build(&program, &elf, &objects, target, opt, false)
                     .map_err(|e| format!("{label}: build failed\n{e}"))?;
                 let run = qemu::boot(&label, target, &elf, &log, WAIT)?;
                 qemu::check(&label, &expected, &run)
@@ -188,7 +200,11 @@ fn generator_makes_valid_programs() {
 
         if let Err(rendered) = driver::dump(
             Path::new("generated.ers"),
-            &board::with_board(Path::new("generated.ers"), &program.source),
+            &board::with_board(
+                Path::new("generated.ers"),
+                &program.source,
+                erebos::target::DEFAULT,
+            ),
             Stage::Mir,
             erebos::target::DEFAULT,
             OptLevel::None,

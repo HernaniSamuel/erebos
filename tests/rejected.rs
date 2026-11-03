@@ -1119,7 +1119,7 @@ const EXEMPT: &[Exempt] = &[
 fn compiles(path: &Path, text: &str, stage: Stage) -> bool {
     driver::dump(
         path,
-        &common::board::with_board(path, text),
+        &common::board::with_board(path, text, erebos::target::DEFAULT),
         stage,
         erebos::target::DEFAULT,
         OptLevel::None,
@@ -1349,7 +1349,7 @@ fn run(catalog: &[Snippet], bases: &[PathBuf], programs: usize, seed: u64) -> Re
                 .unwrap_or(path);
             match driver::dump(
                 path,
-                &common::board::with_board(path, &text),
+                &common::board::with_board(path, &text, erebos::target::DEFAULT),
                 snippet.stage,
                 erebos::target::DEFAULT,
                 OptLevel::None,

@@ -1,12 +1,12 @@
 //! Reproducible builds (ADR 0027): compile-time execution sees nothing of
 //! the host and zeroes the bytes it never wrote, so compiling the same
 //! program twice gives identical executables, for every target (ADR 0073).
-//! Nothing runs here, so the programs are staged with the default target's
-//! board for every target: its addresses mean nothing to the others, but
-//! the program builds, which is what is compared.
+//! Nothing runs here; each program is staged with each target's own board
+//! (ADR 0077), and a board's C file is linked in.
 
 mod common;
 
+use std::ffi::OsStr;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
@@ -22,20 +22,24 @@ fn builds_are_identical() {
     // Constants with padding, a table computed at compile time, and checks;
     // statics with padding and pointers to other statics (ADR 0030).
     for program in ["tests/e2e/crc_table.ers", "tests/e2e/static_pointers.ers"] {
-        // Staged with the default target's board, as the e2e tests do
-        // (ADR 0077): the programs declare `mod board;`.
-        let program = common::board::stage(
-            &root.join(program),
-            erebos::target::DEFAULT,
-            &work.join("programs"),
-        )
-        .unwrap();
         for target in TARGETS {
+            // Staged as the e2e tests do (ADR 0077): the programs declare
+            // `mod board;`.
+            let program = common::board::stage(
+                &root.join(program),
+                target,
+                &work.join("programs").join(target.name),
+            )
+            .unwrap();
             for opt in [OptLevel::None, OptLevel::Speed] {
                 let first = work.join("first.elf");
                 let second = work.join("second.elf");
-                driver::build(&program, &first, &[], target, opt, false).unwrap();
-                driver::build(&program, &second, &[], target, opt, false).unwrap();
+                let objects: Vec<_> = common::qemu::board_object(target, &work, opt)
+                    .unwrap()
+                    .into_iter()
+                    .collect();
+                driver::build(&program, &first, &objects, target, opt, false).unwrap();
+                driver::build(&program, &second, &objects, target, opt, false).unwrap();
                 assert!(
                     fs::read(&first).unwrap() == fs::read(&second).unwrap(),
                     "two builds of {} for {} at {opt:?} differ",
@@ -57,17 +61,29 @@ fn modules_build_the_same_from_any_directory() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let work = Path::new(env!("CARGO_TARGET_TMPDIR")).join("reproducible");
     fs::create_dir_all(&work).unwrap();
-    // The program and its board, copied to `<work>/programs/modules`.
-    let staged = common::board::stage(
-        &root.join("tests/e2e/modules/main.ers"),
-        erebos::target::DEFAULT,
-        &work.join("programs"),
-    )
-    .unwrap();
-    let program = staged.parent().unwrap();
-    let parent = program.parent().unwrap();
     for target in TARGETS {
+        // The program and its board, copied to
+        // `<work>/programs/<target>/modules`.
+        let staged = common::board::stage(
+            &root.join("tests/e2e/modules/main.ers"),
+            target,
+            &work.join("programs").join(target.name),
+        )
+        .unwrap();
+        let program = staged.parent().unwrap();
+        let parent = program.parent().unwrap();
         for opt in [None, Some("-O")] {
+            // The board's C file, if it has one, is built beside the program.
+            let object = common::qemu::board_object(
+                target,
+                &work,
+                if opt.is_some() {
+                    OptLevel::Speed
+                } else {
+                    OptLevel::None
+                },
+            )
+            .unwrap();
             let builds = [
                 (parent, "modules/main.ers", work.join("modules-root.elf")),
                 (program, "main.ers", work.join("modules-dir.elf")),
@@ -79,6 +95,11 @@ fn modules_build_the_same_from_any_directory() {
                     .arg(output)
                     .args(["--target", target.name])
                     .args(opt)
+                    .args(
+                        object
+                            .iter()
+                            .flat_map(|object| [OsStr::new("--link"), object.as_os_str()]),
+                    )
                     .output()
                     .unwrap();
                 assert!(

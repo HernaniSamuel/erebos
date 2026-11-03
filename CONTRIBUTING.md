@@ -70,7 +70,9 @@ instead of applying it; agents are held to it when they finish
   (ADR 0049); it is snapshotted as `<name>`. Review new snapshots with
   `cargo insta review`.
 - **End-to-end tests** (`tests/e2e/*.ers`) compile an Erebos program and boot
-  it on QEMU. They need `qemu-system-riscv32` on `PATH` (or `EREBOS_QEMU`).
+  it on QEMU, on every target it runs on (riscv32 on `virt`, thumbv7m on
+  `mps2-an385`). They need `qemu-system-riscv32` on `PATH` (or
+  `EREBOS_QEMU`) and `qemu-system-arm` on `PATH` (or `EREBOS_QEMU_ARM`).
   A program declares `// expect-output: <line>` (repeatable) and
   `// expect-exit: <code>`; it must print exactly those lines and stop QEMU
   through `board::exit` with that code. A program without
@@ -212,8 +214,11 @@ Native Windows (ADR 0011):
    repository's `.cargo/config.toml` builds Rust with `+crt-static` too.
    Mixing runtimes makes the compiler crash on exit; do not remove it.
    `C:\llvm-22\bin\ld.lld.exe` is the linker used for Erebos programs.
-4. **QEMU** for the riscv32 target (ADR 0010): the Windows installer from
+4. **QEMU** for both targets (ADR 0010, 0077): the Windows installer from
    <https://qemu.weilnetz.de/w64/>, with `C:\Program Files\qemu` on `PATH`.
+   It holds `qemu-system-riscv32` (machine `virt`) and `qemu-system-arm`
+   (machine `mps2-an385`); the tests find them through `PATH`, or through
+   `EREBOS_QEMU` and `EREBOS_QEMU_ARM`.
 
 Verify:
 
@@ -221,8 +226,9 @@ Verify:
 C:\llvm-22\bin\llvm-config.exe --version   # 22.x
 C:\llvm-22\bin\ld.lld.exe --version
 qemu-system-riscv32 --version
+qemu-system-arm --version
 ```
 
 On Linux, the equivalent is LLVM 22 from <https://apt.llvm.org>
 (`llvm-22-dev`, `libpolly-22-dev`, `lld-22`), `LLVM_SYS_221_PREFIX=/usr/lib/llvm-22`
-and `qemu-system-misc`.
+and `qemu-system-misc` (riscv32) and `qemu-system-arm`.

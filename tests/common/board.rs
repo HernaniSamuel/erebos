@@ -12,10 +12,8 @@ use erebos::target::{self, Target};
 const BOARD_FILE: &str = "board.ers";
 
 /// The targets the tests run programs on: those that have a board module
-/// and a QEMU machine. thumbv7m-none-eabi is a target of the compiler
-/// (ADR 0074) but not yet one of these; adding it here is the step that
-/// gives it `tests/boards/thumbv7m-none-eabi.ers` (ADR 0077).
-pub const RUN_ON: &[&Target] = &[&target::RISCV32IMAC];
+/// and a QEMU machine (ADR 0077). Every target of the compiler has them.
+pub const RUN_ON: &[&Target] = &[&target::RISCV32IMAC, &target::THUMBV7M];
 
 /// The source of `target`'s board module.
 pub fn source(target: &Target) -> String {
@@ -24,6 +22,15 @@ pub fn source(target: &Target) -> String {
         .join(format!("{}.ers", target.name));
     fs::read_to_string(&path)
         .unwrap_or_else(|e| panic!("cannot read the board {}: {e}", path.display()))
+}
+
+/// The C file of `target`'s board, when the board has one: the program links
+/// it in (`qemu::board_object`).
+pub fn c_file(target: &Target) -> Option<PathBuf> {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/boards")
+        .join(format!("{}.c", target.name));
+    path.is_file().then_some(path)
 }
 
 /// The targets a `// targets:` header names, or every target of `RUN_ON`
@@ -43,7 +50,7 @@ pub fn targets_named(names: &str) -> Result<Vec<&'static Target>, String> {
         };
         if !RUN_ON.iter().any(|t| std::ptr::eq(*t, target)) {
             return Err(format!(
-                "`// targets:` names `{name}`, which the tests do not run programs on yet"
+                "`// targets:` names `{name}`, which the tests do not run programs on"
             ));
         }
         found.push(target);
@@ -120,11 +127,11 @@ fn copy_dir(from: &Path, to: &Path) -> Result<(), String> {
 
 /// For the tests that read a program as text and compile it where it
 /// lies (`dump` with the path of the root file): the source with its
-/// `mod board;` line emptied and the default target's board declared
+/// `mod board;` line emptied and `target`'s board declared
 /// inline at the end, so that the lines of the program stay where they
 /// are. A source without that line, or whose directory has a `board.ers`
 /// of its own, is returned unchanged.
-pub fn with_board(path: &Path, text: &str) -> String {
+pub fn with_board(path: &Path, text: &str, target: &Target) -> String {
     if path.with_file_name(BOARD_FILE).exists() {
         return text.to_owned();
     }
@@ -143,7 +150,7 @@ pub fn with_board(path: &Path, text: &str) -> String {
     }
     let mut result = out.join("\n");
     result.push_str("\nmod board {\n");
-    result.push_str(&source(target::DEFAULT));
+    result.push_str(&source(target));
     result.push_str("}\n");
     result
 }

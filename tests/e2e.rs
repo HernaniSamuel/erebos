@@ -42,7 +42,7 @@ use std::path::{Path, PathBuf};
 use common::board;
 use common::qemu::{self, EXIT_TIMEOUT, Expectation, RUN_FOREVER_CHECK};
 use erebos::driver::OptLevel;
-use erebos::target::Target;
+use erebos::target::{RISCV32IMAC, THUMBV7M, Target};
 
 #[test]
 fn e2e() {
@@ -103,7 +103,7 @@ fn run(
     let elf = work.join(format!("{file}.elf"));
     let log = work.join(format!("{file}.qemu.log"));
 
-    let objects = expected
+    let mut objects = expected
         .link_c
         .iter()
         .map(|file| {
@@ -117,6 +117,7 @@ fn run(
         })
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| format!("{name}: {e}"))?;
+    objects.extend(qemu::board_object(target, &work, opt).map_err(|e| format!("{name}: {e}"))?);
     let staged = board::stage(program, target, &work.join("programs"))
         .map_err(|e| format!("{name}: {e}"))?;
     erebos::driver::build(&staged, &elf, &objects, target, opt, false)
@@ -186,4 +187,48 @@ fn the_targets_header_chooses_targets() {
     );
     let all: Vec<&str> = board::RUN_ON.iter().map(|t| t.name).collect();
     assert_eq!(names("// expect-exit: 0\n"), all);
+}
+
+/// The three kinds of line QEMU logs for a correct run on `mps2-an385`
+/// (ADR 0077) are removed from the event log, which is then empty.
+#[test]
+fn the_event_lines_of_a_correct_arm_run_are_removed() {
+    let log = "Loaded reset SP 0x0 PC 0x0 from vector table\n\
+               Loaded reset SP 0x20001000 PC 0x9 from vector table\n\
+               Taking exception 16 [Semihosting call] on CPU 0\n\
+               ...handling as semihosting call 0x20\n";
+    assert_eq!(qemu::expected_events_removed(&THUMBV7M, log), "");
+}
+
+/// Any other line stays, whatever it resembles: another exception, a guest
+/// error, a line that only contains one of the three.
+#[test]
+fn other_event_lines_stay() {
+    let reset = "Loaded reset SP 0x20001000 PC 0x9 from vector table\n";
+    for line in [
+        "Taking exception 3 [Prefetch Abort]",
+        "Taking exception 16 [Semihosting call",
+        "Taking exception 17 [Semihosting call] ...",
+        "Unassigned guest write to 0x40004014",
+        " Loaded reset SP 0x1 PC 0x2 from vector table",
+        "Loaded reset SP 0x1 PC 0x2 from vector table, and more",
+        "Loaded reset SP 0x PC 0x2 from vector table",
+        "Loaded reset SP 0xzz PC 0x2 from vector table",
+        "it was ...handling as semihosting call 0x20",
+        "...handling as semihosting call 20",
+    ] {
+        let log = format!("{reset}{line}\n{reset}");
+        assert_eq!(
+            qemu::expected_events_removed(&THUMBV7M, &log),
+            format!("{line}\n"),
+            "`{line}` must stay"
+        );
+    }
+}
+
+/// riscv32's log must be empty: nothing is removed from it.
+#[test]
+fn riscv32_keeps_every_event_line() {
+    let log = "Taking exception 16 [Semihosting call] ...\n";
+    assert_eq!(qemu::expected_events_removed(&RISCV32IMAC, log), log);
 }

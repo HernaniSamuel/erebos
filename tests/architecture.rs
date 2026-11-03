@@ -224,8 +224,7 @@ fn codegen_names_no_wrap_flag() {
 /// Unoptimized IR is what codegen emits, through `mem2reg` alone, which
 /// adds no flags; with `-O`, LLVM may add the flags it has proven safe.
 /// The dumps leave `core` out, which [`codegen_names_no_wrap_flag`] covers.
-/// Every target is checked (ADR 0073), with the default target's board:
-/// nothing runs here, and the programs compile for each.
+/// Every target is checked (ADR 0073), each with its own board (ADR 0077).
 #[test]
 fn integer_arithmetic_has_no_wrap_flags() {
     let mut errors = Vec::new();
@@ -235,7 +234,7 @@ fn integer_arithmetic_has_no_wrap_flags() {
             let text = fs::read_to_string(&path).unwrap().replace("\r\n", "\n");
             let Ok(ir) = driver::dump(
                 &path,
-                &common::board::with_board(&path, &text),
+                &common::board::with_board(&path, &text, target),
                 Stage::LlvmIr,
                 target,
                 OptLevel::None,

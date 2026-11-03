@@ -1,7 +1,7 @@
 // An index past a register array at run time calls the panic function (ADR
 // 0064, 0053), which prints the reason, the file, the line and the column of
-// the `[` of the index. The registers are the first four priorities of
-// QEMU `virt`'s PLIC, which keep the value written (3 bits, so 1 to 7).
+// the `[` of the index. The registers are the first four words of the
+// board's scratch memory (ADR 0077), which keep the value written.
 // expect-output: 6
 // expect-output: index out of bounds at register_index_out_of_bounds.ers:23:18
 // expect-exit: 1
@@ -9,18 +9,18 @@
 mod board;
 use board::exit;
 
-peripheral Plic {
+peripheral Block {
     read write priority: [u32; 4] at 0x0000,
 }
 
-peripheral PLIC: Plic at 0x0C00_0000;
+peripheral REGS: Block at board::SCRATCH;
 
 fn store(i: usize, value: u32) {
-    PLIC.priority[i] = value;
+    REGS.priority[i] = value;
 }
 
 fn load(i: usize) -> u32 {
-    PLIC.priority[i]
+    REGS.priority[i]
 }
 
 entry fn main() -> ! {

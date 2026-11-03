@@ -157,7 +157,7 @@ fn seeds() -> Vec<String> {
             let text = fs::read_to_string(path).unwrap().replace("\r\n", "\n");
             // A program that declares `mod board;` is read with the board
             // inline (ADR 0077), so that mutations reach all of it.
-            common::board::with_board(path, &text)
+            common::board::with_board(path, &text, erebos::target::DEFAULT)
         })
         .collect()
 }

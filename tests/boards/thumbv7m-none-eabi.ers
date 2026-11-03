@@ -1,0 +1,46 @@
+// The board of the tests on thumbv7m: QEMU `mps2-an385`, a Cortex-M3 (ADR
+// 0074, 0077). The harness gives each program a copy of it as `board.ers`,
+// which the program declares with `mod board;`. It offers what ADR 0077
+// lists: `putc`, `exit` and `SCRATCH`, and holds the machine's `memory`
+// block. Its C file, `thumbv7m-none-eabi.c`, is linked with the program.
+
+// 4 MiB of RAM at 0 hold the image; the 4 MiB at 0x2000_0000 hold a 1 MiB
+// stack at their start, then `.data` and `.bss`.
+memory {
+    region IMAGE { origin: 0x0000_0000, size: 0x0040_0000 }
+    region RAM { origin: 0x2000_0000, size: 0x0040_0000 }
+    code in IMAGE;
+    data in RAM;
+    stack in RAM { size: 0x0010_0000 }
+}
+
+// The registers of the CMSDK UART that `putc` uses: its data register, its
+// state (bit 0 is "transmit buffer full"), its control (bit 0 enables the
+// transmitter) and its baud divisor.
+const UART_DATA: *mut volatile u32 = 0x4000_4000 as *mut volatile u32;
+const UART_STATE: *mut volatile u32 = 0x4000_4004 as *mut volatile u32;
+const UART_CTRL: *mut volatile u32 = 0x4000_4008 as *mut volatile u32;
+const UART_BAUDDIV: *mut volatile u32 = 0x4000_4010 as *mut volatile u32;
+
+/// The first address of the 16 MiB of RAM at 0x2100_0000, which the
+/// `memory` block leaves out: 64 KiB that no section occupies and `_start`
+/// never writes, zero when QEMU starts.
+pub const SCRATCH: usize = 0x2100_0000;
+
+// The semihosting request of `tests/boards/thumbv7m-none-eabi.c`.
+extern fn board_exit(code: u32);
+
+// Writes one byte to the UART. The divisor is the smallest QEMU accepts and
+// must be set before the transmitter is enabled.
+pub fn putc(byte: u8) {
+    *UART_BAUDDIV = 16;
+    *UART_CTRL = 1;
+    while (*UART_STATE & 1) != 0 {}
+    *UART_DATA = byte as u32;
+}
+
+// Stops QEMU: 0 passes, any other code fails with it as the exit status.
+pub fn exit(code: u32) -> ! {
+    board_exit(code);
+    loop {}
+}

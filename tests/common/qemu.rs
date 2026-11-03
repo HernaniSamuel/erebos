@@ -137,12 +137,46 @@ pub fn boot(
     }
     qemu.wait().unwrap();
     let output = String::from_utf8_lossy(&reader.join().unwrap()).replace("\r\n", "\n");
-    let events = fs::read_to_string(log).unwrap_or_default();
+    let events = expected_events_removed(target, &fs::read_to_string(log).unwrap_or_default());
     Ok(Run {
         status,
         output,
         events,
     })
+}
+
+/// The event log of a correct run, without the lines that QEMU writes for
+/// it on `target` (ADR 0077). On `mps2-an385`, QEMU 11 logs under `-d int`
+/// the reset vector it loads (twice per boot) and each semihosting request;
+/// these are the only lines removed, each matched from the start of the
+/// line, and every other line, including any other `Taking exception`,
+/// stays. riscv32's log must be empty as it is.
+pub fn expected_events_removed(target: &Target, log: &str) -> String {
+    match target.arch {
+        Arch::Riscv32 => log.to_owned(),
+        Arch::Armv7m => log
+            .lines()
+            .filter(|line| !is_armv7m_event_of_a_correct_run(line))
+            .flat_map(|line| [line, "\n"])
+            .collect(),
+    }
+}
+
+/// The three kinds of line of ADR 0077's table.
+fn is_armv7m_event_of_a_correct_run(line: &str) -> bool {
+    line.strip_prefix("Loaded reset SP 0x")
+        .is_some_and(is_reset_vector_tail)
+        || line.starts_with("Taking exception 16 [Semihosting call]")
+        || line.starts_with("...handling as semihosting call 0x")
+}
+
+/// `<hex> PC 0x<hex> from vector table`, what follows `Loaded reset SP 0x`.
+fn is_reset_vector_tail(tail: &str) -> bool {
+    let hex =
+        |text: &str| -> bool { !text.is_empty() && text.bytes().all(|b| b.is_ascii_hexdigit()) };
+    tail.strip_suffix(" from vector table")
+        .and_then(|rest| rest.split_once(" PC 0x"))
+        .is_some_and(|(sp, pc)| hex(sp) && hex(pc))
 }
 
 /// Checks a boot against what the program expected.
@@ -223,6 +257,18 @@ pub fn compile_c(
         ));
     }
     Ok(object)
+}
+
+/// Compiles `target`'s board C file, if its board has one (ADR 0077), into
+/// `work`, for the program to link: `None` when it has none.
+pub fn board_object(
+    target: &Target,
+    work: &Path,
+    opt: OptLevel,
+) -> Result<Option<PathBuf>, String> {
+    super::board::c_file(target)
+        .map(|source| compile_c(&source, &[], work, target, opt))
+        .transpose()
 }
 
 /// The environment variable that names `target`'s QEMU.
