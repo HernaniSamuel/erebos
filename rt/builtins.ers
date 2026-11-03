@@ -1,13 +1,13 @@
 // Runtime support functions (ADR 0020), the module `core::builtins`
 // (ADR 0052).
 //
-// LLVM emits calls to these functions, named as in libgcc/compiler-rt and
-// the C library, for operations the target has no instruction for. They
-// are compiled into every program, in plain Erebos, so nothing runs that
-// the repository does not show (ADR 0002). Each is `#[export]`, so that its
-// symbol is the name LLVM calls (ADR 0051); `memcpy`, `memmove` and `memset`
-// are also `pub`, offered to programs as `core::memcpy` and so on. The
-// `__erebos_` helpers are private and keep their paths as symbols
+// LLVM emits calls to these functions, named as in libgcc/compiler-rt, the
+// C library and the ARM EABI, for operations the target has no instruction
+// for. They are compiled into every program, in plain Erebos, so nothing
+// runs that the repository does not show (ADR 0002). Each is `#[export]`, so
+// that its symbol is the name LLVM calls (ADR 0051); `memcpy`, `memmove` and
+// `memset` are also `pub`, offered to programs as `core::memcpy` and so on.
+// The `__erebos_` helpers are private and keep their paths as symbols
 // (`core.builtins.__erebos_udivmod64`). The compiler marks every function of
 // `core` `no-builtins`, so LLVM does not turn their loops back into calls.
 
@@ -52,6 +52,78 @@ pub fn memset(dest: *mut u8, c: i32, n: usize) -> *mut u8 {
         i += 1;
     }
     dest
+}
+
+// --- ARM EABI memory functions ----------------------------------------------
+//
+// On ARM EABI targets LLVM copies, moves and fills memory through these
+// instead of `memcpy`, `memmove` and `memset` (ADR 0074). They are defined on
+// every target, and nothing calls them on riscv32, except C code that names
+// them. Each calls the general function and ignores the alignment promise of
+// its `4` and `8` forms (a destination, and a source, aligned to 4 or 8
+// bytes): byte by byte, it needs none. None returns a value.
+
+#[export]
+fn __aeabi_memcpy(dest: *mut u8, src: *const u8, n: usize) {
+    memcpy(dest, src, n);
+}
+
+#[export]
+fn __aeabi_memcpy4(dest: *mut u8, src: *const u8, n: usize) {
+    memcpy(dest, src, n);
+}
+
+#[export]
+fn __aeabi_memcpy8(dest: *mut u8, src: *const u8, n: usize) {
+    memcpy(dest, src, n);
+}
+
+#[export]
+fn __aeabi_memmove(dest: *mut u8, src: *const u8, n: usize) {
+    memmove(dest, src, n);
+}
+
+#[export]
+fn __aeabi_memmove4(dest: *mut u8, src: *const u8, n: usize) {
+    memmove(dest, src, n);
+}
+
+#[export]
+fn __aeabi_memmove8(dest: *mut u8, src: *const u8, n: usize) {
+    memmove(dest, src, n);
+}
+
+// `memset`'s `n` and `c` swapped: the EABI puts the length before the value.
+// Only the low byte of `c` is stored.
+#[export]
+fn __aeabi_memset(dest: *mut u8, n: usize, c: i32) {
+    memset(dest, c, n);
+}
+
+#[export]
+fn __aeabi_memset4(dest: *mut u8, n: usize, c: i32) {
+    memset(dest, c, n);
+}
+
+#[export]
+fn __aeabi_memset8(dest: *mut u8, n: usize, c: i32) {
+    memset(dest, c, n);
+}
+
+// A fill with zero: no value argument.
+#[export]
+fn __aeabi_memclr(dest: *mut u8, n: usize) {
+    memset(dest, 0, n);
+}
+
+#[export]
+fn __aeabi_memclr4(dest: *mut u8, n: usize) {
+    memset(dest, 0, n);
+}
+
+#[export]
+fn __aeabi_memclr8(dest: *mut u8, n: usize) {
+    memset(dest, 0, n);
 }
 
 // --- 64-bit division --------------------------------------------------------

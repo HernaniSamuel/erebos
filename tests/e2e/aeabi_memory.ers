@@ -1,0 +1,63 @@
+// The twelve ARM EABI memory functions that `core` defines on every target
+// (ADR 0074), called from C, which nothing else calls on riscv32: copies and
+// moves (overlapping in both directions, and of no bytes), fills with
+// `__aeabi_memset`'s length before its value, and clears. The C side numbers
+// its checks and returns the first that failed; this program reports it
+// through the UART and the exit code, and the number of checks that ran.
+// link-c: aeabi_memory.c
+// expect-output: ok 64
+// expect-exit: 0
+
+extern fn c_check_aeabi() -> u32;
+extern fn c_aeabi_checks() -> u32;
+
+fn putc(byte: u8) {
+    let thr: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+    *thr = byte;
+}
+
+fn exit(code: u32) -> ! {
+    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+    *finisher = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    loop {}
+}
+
+fn print_u32(n: u32) {
+    if n >= 10 {
+        print_u32(n / 10);
+    }
+    putc(b'0' + (n % 10) as u8);
+}
+
+entry fn main() -> ! {
+    let failed: u32 = c_check_aeabi();
+    if failed == 0 {
+        putc(b'o');
+        putc(b'k');
+    } else {
+        putc(b'f');
+        putc(b'a');
+        putc(b'i');
+        putc(b'l');
+        putc(b' ');
+        print_u32(failed);
+    }
+    putc(b' ');
+    print_u32(c_aeabi_checks());
+    putc(b'\n');
+    exit(failed)
+}
+
+panic fn on_panic() -> ! {
+    exit(1)
+}
+
+// QEMU `virt`'s RAM in two regions of 64 MiB: the image in the first, and
+// in the second a 1 MiB stack at its start, then `.data` and `.bss`.
+memory {
+    region IMAGE { origin: 0x8000_0000, size: 0x0400_0000 }
+    region RAM { origin: 0x8400_0000, size: 0x0400_0000 }
+    code in IMAGE;
+    data in RAM;
+    stack in RAM { size: 0x0010_0000 }
+}
