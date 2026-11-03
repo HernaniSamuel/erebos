@@ -33,7 +33,8 @@ become language constructs. The compiler is written in Rust and uses LLVM via
 - No type inference and no implicit conversions (ADR 0008).
 - Integer `+ - *` wrap; never emit `nsw`/`nuw` (ADR 0007).
 - Only the target C ABI exists (ADR 0006). Aggregates cross calls by value,
-  with the riscv32 rules of ADR 0025.
+  with the riscv32 rules of ADR 0025 and the AAPCS rules of ADR 0075 on
+  thumbv7m.
 - Hand-written lexer and parser; do not add parser generators (ADR 0004).
 - User errors produce `miette` diagnostics with spans, never panics.
 - Do not add dependencies without stating why in the commit body.

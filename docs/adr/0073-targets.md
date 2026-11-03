@@ -1,6 +1,6 @@
 # 0073. Targets
 
-- Status: Accepted
+- Status: Accepted; corrected on 2026-11-03 (the example origin of the third consequence)
 - Date: 2026-11-03
 - Amends: 0010 (riscv32 is the first target, no longer the only one; the
   target is chosen per build)
@@ -106,8 +106,12 @@ with C, and the memory map checks above.
   for an ARM board and built without the flag gets the riscv32 checks
   and code; nothing in the program says which target it needs.
 - A program that is correct for two targets may still fail the memory
-  map checks of one: a code origin at 0x100 is aligned for riscv32 and
+  map checks of one: a code origin at 0x40 is aligned for riscv32 and
   not for thumbv7m.
+
+  **Note, 2026-11-03:** the example said 0x100, which is a multiple of
+  128 and so is accepted on thumbv7m; 0x40 is the origin that only
+  riscv32 accepts.
 - 32-bit pointers stay a fact of the language, now stated per target and
   checked.
 

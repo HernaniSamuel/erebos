@@ -64,7 +64,8 @@ instead of applying it; agents are held to it when they finish
   diagnostics. Snapshot changes must be reviewed, not blindly accepted.
   Each `tests/ui/*.ers` file is compiled up to the stage named in its header
   (`// emit: <stage>`); with `// opt: both` it is also compiled with `-O`,
-  and both results go in the snapshot. A directory `tests/ui/<name>/`
+  and both results go in the snapshot. `// target: <name>` builds it for
+  another target than riscv32 (ADR 0073). A directory `tests/ui/<name>/`
   with a `main.ers` is a program of several files: `main.ers` is its root
   file, with the headers, and its module files sit beside it and below
   (ADR 0049); it is snapshotted as `<name>`. Review new snapshots with
@@ -95,17 +96,19 @@ instead of applying it; agents are held to it when they finish
   `-msmall-data-limit=8` or `-g`.
   Every program runs both unoptimized and with `-O`: the optimizer exploits
   undefined behavior, so a difference means the generated IR is wrong.
-- `erebos build <file> [-O] --emit=<stage>` prints any stage (`tokens`, `ast`,
-  `hir`, `typeck`, `mir`, `linker-script`, `llvm-ir`), which is the quickest
-  way to debug. Of these, only `linker-script` needs a `memory` block, so a
-  ui test needs one only at that stage.
+- `erebos build <file> [-O] [--target <name>] --emit=<stage>` prints any
+  stage (`tokens`, `ast`, `hir`, `typeck`, `mir`, `linker-script`,
+  `llvm-ir`), which is the quickest way to debug. Of these, only
+  `linker-script` needs a `memory` block, so a ui test needs one only at
+  that stage.
 - **Layout against C** (`tests/c_layout.rs`) compiles the structs of
   `tests/layout/structs.ers` and their C twins in `tests/layout/structs.h`,
   and has clang check that every size, alignment and offset agrees
   (ADR 0022). It needs clang: `EREBOS_CLANG`, or the one in the LLVM
   archive (`C:\llvm-22\bin\clang.exe`). A struct added to one file needs
   its twin in the other; a bit-field struct needs none, its twin being its
-  integer type (ADR 0059), checked in the structs that hold it.
+  integer type (ADR 0059), checked in the structs that hold it. It runs
+  with the clang flags of every target.
 - **ELF checks** (`tests/elf.rs`) build a program and read its sections,
   symbols and program headers with `llvm-readelf`: where each kind of
   static goes, the symbols `_start` uses to initialize `.data` and
@@ -115,9 +118,11 @@ instead of applying it; agents are held to it when they finish
   `memory` block too, `VIRT_MAP` or a map of their own, but for the one
   showing `link::no-memory-map`. It needs `llvm-readelf`, found like clang:
   `EREBOS_READELF`, or the one in the LLVM archive
-  (`C:\llvm-22\bin\llvm-readelf.exe`).
+  (`C:\llvm-22\bin\llvm-readelf.exe`). Its checks run for every target,
+  with the target's stack alignment and reset entry.
 - **Reproducible builds** (`tests/reproducible.rs`) compile a program twice
-  at each level and require identical executables (ADR 0027).
+  at each level, for every target, and require identical executables
+  (ADR 0027).
 - **Fuzzing** (`tests/fuzz.rs`) mutates the test programs and requires the
   compiler to answer every input with output or diagnostics, never a panic.
   The seed is fixed; set `EREBOS_FUZZ_ITERATIONS` to run more inputs.
@@ -132,9 +137,9 @@ instead of applying it; agents are held to it when they finish
   unoptimized and with `-O`, and require that the results agree. It finds
   wrong code generation and wrong constant evaluation, which no test with
   a hand-written expected value covers for all inputs. It needs QEMU like
-  the end-to-end tests. `EREBOS_GENERATED_PROGRAMS` sets how many programs
-  run (default 20) and `EREBOS_GENERATED_SEED` the seed of the first
-  (default 0). A failure prints the seed: run it again with
+  the end-to-end tests, and runs on every target. `EREBOS_GENERATED_PROGRAMS`
+  sets how many programs run (default 20) and `EREBOS_GENERATED_SEED` the
+  seed of the first (default 0). A failure prints the seed: run it again with
   `EREBOS_GENERATED_SEED=<seed> EREBOS_GENERATED_PROGRAMS=1`.
 - **Rejected programs** (`tests/rejected.rs`, ADR 0069) insert a snippet
   that breaks one rule of the language into a valid program of `tests/ui`

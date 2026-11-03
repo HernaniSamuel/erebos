@@ -102,7 +102,7 @@ Do not write one for local implementation details that the code already explains
 | 0070 | [Peripherals generated from SVD](0070-peripherals-generated-from-svd.md) | Accepted, corrected 2026-11-02 |
 | 0071 | [Names generated from SVD](0071-names-generated-from-svd.md) | Accepted |
 | 0072 | [SVD constructs, and what has no declaration](0072-svd-constructs-and-what-has-no-declaration.md) | Accepted, amended 2026-11-02 |
-| 0073 | [Targets](0073-targets.md) | Accepted |
+| 0073 | [Targets](0073-targets.md) | Accepted, corrected 2026-11-03 |
 | 0074 | [The ARMv7-M target](0074-armv7m-target.md) | Accepted |
 | 0075 | [Aggregates across calls on ARMv7-M](0075-aggregates-across-calls-on-armv7m.md) | Accepted |
 | 0076 | [64-bit division calls `core` where LLVM's call cannot be written](0076-64-bit-division-calls-core.md) | Accepted |
