@@ -214,6 +214,16 @@ ADRs:
     64-bit target, such as x86-64 bare metal, would also make the
     pointer width a parameter of layout, types and the compile-time
     interpreter; it is not planned (ADR 0002, 0010).
+  - M3.5: settled by ADR 0073 (one description per target, chosen with
+    `--target`, riscv32 by default; pointer width and widest access
+    stay shared constants, checked per target), 0074 (`thumbv7m-none-eabi`
+    on QEMU `mps2-an385`: a two-word vector table before `_start`, ARM
+    unwind tables discarded, the EABI's memory functions in `core`),
+    0075 (aggregates across calls in the AAPCS, as clang lowers them),
+    0076 (64-bit division a call to `core` that code generation emits
+    where LLVM would call the EABI's functions; riscv32 unchanged) and
+    0077 (test programs reach their machine through a board module per
+    target, which the harness supplies; semihosting on ARM).
 - **M4:**
   - A concurrency model spanning M4 and M5, in an ADR written before M4
     starts, so that M4 decides nothing M5 must break. M4 may share a

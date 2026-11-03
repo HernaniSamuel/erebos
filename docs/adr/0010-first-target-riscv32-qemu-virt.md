@@ -1,6 +1,6 @@
 # 0010. First target: riscv32 on QEMU `virt`
 
-- Status: Accepted
+- Status: Accepted; amended by 0073 (riscv32 is the first target, not the only one; the target is chosen per build), 0077 (test programs stop QEMU through their board module)
 - Date: 2026-10-12
 
 ## Context
