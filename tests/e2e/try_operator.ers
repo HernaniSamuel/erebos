@@ -13,6 +13,9 @@
 // expect-output: quarter none
 // expect-exit: 0
 
+mod board;
+use board::{exit, putc};
+
 enum ParseError: u8 { Empty = 0, BadDigit(u8) = 1 }
 
 static mut CALLS: u32 = 0;
@@ -68,11 +71,6 @@ fn half(v: u32) -> Option(u32) {
 
 fn quarter(v: u32) -> Option(u32) {
     half(half(v)?)
-}
-
-fn putc(byte: u8) {
-    let thr: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
-    *thr = byte;
 }
 
 fn puts(s: *const [u8]) {
@@ -131,12 +129,6 @@ fn show_quarter(o: Option(u32)) {
     putc(b'\n');
 }
 
-fn exit(code: u32) -> ! {
-    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
-    *finisher = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
-    loop {}
-}
-
 entry fn main() -> ! {
     show_chain(level1(&raw const b"4"));
     show_chain(level1(&raw const b"x"));
@@ -151,14 +143,4 @@ entry fn main() -> ! {
 
 panic fn on_panic() -> ! {
     exit(1)
-}
-
-// QEMU `virt`'s RAM in two regions of 64 MiB: the image in the first, and
-// in the second a 1 MiB stack at its start, then `.data` and `.bss`.
-memory {
-    region IMAGE { origin: 0x8000_0000, size: 0x0400_0000 }
-    region RAM { origin: 0x8400_0000, size: 0x0400_0000 }
-    code in IMAGE;
-    data in RAM;
-    stack in RAM { size: 0x0010_0000 }
 }

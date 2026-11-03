@@ -12,6 +12,10 @@
 // PLIC` by itself. The magic value of each virtio-mmio transport is read
 // through one driver taking a `*const Virtio`, from a table of pointers. The
 // program stops through the test finisher with `.Pass`.
+// Only on riscv32 (ADR 0077, reason 1): it uses the devices of `virt` as
+// `erebos svd` generates them from `virt.svd`. It keeps its own devices
+// and `memory` block.
+// targets: riscv32imac-unknown-none-elf
 // expect-output: divisor 0x0180
 // expect-output: lcr 0x03
 // expect-output: hello from svd

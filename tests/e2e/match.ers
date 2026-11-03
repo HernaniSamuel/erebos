@@ -10,12 +10,8 @@
 // expect-output: once: 2 calls, bound 2
 // expect-exit: 0
 
-struct Uart { thr: u8 }
-
-fn putc(byte: u8) {
-    let uart: *mut volatile Uart = 0x1000_0000 as *mut volatile Uart;
-    (*uart).thr = byte;
-}
+mod board;
+use board::{exit, putc};
 
 fn print(s: *const [u8]) {
     let mut i: usize = 0;
@@ -138,23 +134,9 @@ entry fn main() -> ! {
     putc(b'0' + bound);
     putc(b'\n');
 
-    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
-    *finisher = 0x5555;
-    loop {}
+    exit(0)
 }
 
 panic fn on_panic() -> ! {
-    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
-    *finisher = (1 << 16) | 0x3333;
-    loop {}
-}
-
-// QEMU `virt`'s RAM in two regions of 64 MiB: the image in the first, and
-// in the second a 1 MiB stack at its start, then `.data` and `.bss`.
-memory {
-    region IMAGE { origin: 0x8000_0000, size: 0x0400_0000 }
-    region RAM { origin: 0x8400_0000, size: 0x0400_0000 }
-    code in IMAGE;
-    data in RAM;
-    stack in RAM { size: 0x0010_0000 }
+    exit(1)
 }

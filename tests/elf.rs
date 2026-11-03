@@ -25,9 +25,9 @@ panic fn on_panic() -> ! { loop {} }
 ";
 
 /// The memory block of the programs that do not test memory maps, as the
-/// e2e programs declare it: QEMU `virt`'s RAM in two regions of 64 MiB, the
-/// image in the first, and in the second a 1 MiB stack at its start, then
-/// `.data` and `.bss`.
+/// riscv32 board of the e2e programs holds it (ADR 0077): QEMU `virt`'s RAM
+/// in two regions of 64 MiB, the image in the first, and in the second a
+/// 1 MiB stack at its start, then `.data` and `.bss`.
 const VIRT_MAP: &str = "memory {
     region IMAGE { origin: 0x8000_0000, size: 0x0400_0000 }
     region RAM { origin: 0x8400_0000, size: 0x0400_0000 }

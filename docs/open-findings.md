@@ -79,7 +79,7 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   small cleanups in `tests/e2e.rs`, `tests/generated.rs`, `tests/rejected.rs`
   and `CONTRIBUTING.md` are listed in `.claude/plans/testing-oracles.md`,
   `## Left open`. (testing-oracles)
-- The header of `tests/e2e/plic_virtio/board.ers` says `PLIC_M0` is served
+- The header of `tests/e2e/plic_virtio/devices.ers` says `PLIC_M0` is served
   by the same driver as `PLIC.ctx[i]`; `main.ers` reads it directly.
   (M3.4a)
 - `tests/e2e/register_index_out_of_bounds.ers` covers a read past a

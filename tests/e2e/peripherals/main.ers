@@ -1,28 +1,32 @@
 // The program of M3.2 (roadmap): hello world through a UART and a test
-// finisher declared as peripherals in `board.ers` (ADR 0058). The console
+// finisher declared as peripherals in `devices.ers` (ADR 0058). The console
 // is a static pointer to the UART, computed at compile time, through which
-// the driver function `board::putc` reaches its registers.
+// the driver function `devices::putc` reaches its registers.
+// Only on riscv32 (ADR 0077, reason 1): it reads the 16550's line status
+// register, a device of `virt` that the board's `putc` does not offer. It
+// keeps its own devices and `memory` block.
+// targets: riscv32imac-unknown-none-elf
 // expect-output: hello world
 // expect-exit: 0
-mod board;
+mod devices;
 
-static CONSOLE: *mut board::Uart16550 = &raw mut board::UART0;
+static CONSOLE: *mut devices::Uart16550 = &raw mut devices::UART0;
 
 fn print(s: *const [u8]) {
     let mut i: usize = 0;
     while i < len(s) {
-        board::putc(CONSOLE, (*s)[i]);
+        devices::putc(CONSOLE, (*s)[i]);
         i += 1;
     }
 }
 
 entry fn main() -> ! {
     print(&raw const b"hello world\n");
-    board::exit(0)
+    devices::exit(0)
 }
 
 panic fn on_panic() -> ! {
-    board::exit(1)
+    devices::exit(1)
 }
 
 // QEMU `virt`'s RAM in two regions of 64 MiB: the image in the first, and

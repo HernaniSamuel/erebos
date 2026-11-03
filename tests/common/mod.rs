@@ -42,6 +42,10 @@ pub const CLANG_TARGET: &[&str] = &[
     "-ffreestanding",
 ];
 
+/// The board modules of the tests (ADR 0077).
+#[allow(dead_code, reason = "not every test builds programs with a board")]
+pub mod board;
+
 /// Running a program on QEMU (ADR 0010).
 #[allow(dead_code, reason = "only some tests run programs")]
 pub mod qemu;

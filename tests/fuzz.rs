@@ -6,6 +6,8 @@
 //! compiled up to LLVM IR. The seed is fixed, so failures reproduce; set
 //! `EREBOS_FUZZ_ITERATIONS` to run more inputs locally.
 
+mod common;
+
 use std::env;
 use std::fs;
 use std::panic::{self, AssertUnwindSafe};
@@ -151,7 +153,12 @@ fn seeds() -> Vec<String> {
     paths.sort();
     paths
         .iter()
-        .map(|path| fs::read_to_string(path).unwrap().replace("\r\n", "\n"))
+        .map(|path| {
+            let text = fs::read_to_string(path).unwrap().replace("\r\n", "\n");
+            // A program that declares `mod board;` is read with the board
+            // inline (ADR 0077), so that mutations reach all of it.
+            common::board::with_board(path, &text)
+        })
         .collect()
 }
 

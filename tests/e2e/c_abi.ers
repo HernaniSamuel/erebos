@@ -16,6 +16,9 @@
 // expect-output: from c 213664
 // expect-exit: 0
 
+mod board;
+use board::{exit, putc};
+
 struct One { a: u8 }
 struct Three { a: u8, b: u8, c: u8 }
 struct Word { a: u32 }
@@ -55,19 +58,6 @@ fn erebos_big(mut b: Big, k: u32) -> Big {
 
 fn erebos_three(t: Three) -> Three {
     Three { a: t.c, b: t.b, c: t.a }
-}
-
-struct Uart { thr: u8 }
-
-fn putc(byte: u8) {
-    let uart: *mut volatile Uart = 0x1000_0000 as *mut volatile Uart;
-    (*uart).thr = byte;
-}
-
-fn exit(code: u32) -> ! {
-    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
-    *finisher = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
-    loop {}
 }
 
 fn print_u64(n: u64) {
@@ -172,14 +162,4 @@ entry fn main() -> ! {
 
 panic fn on_panic() -> ! {
     exit(1)
-}
-
-// QEMU `virt`'s RAM in two regions of 64 MiB: the image in the first, and
-// in the second a 1 MiB stack at its start, then `.data` and `.bss`.
-memory {
-    region IMAGE { origin: 0x8000_0000, size: 0x0400_0000 }
-    region RAM { origin: 0x8400_0000, size: 0x0400_0000 }
-    code in IMAGE;
-    data in RAM;
-    stack in RAM { size: 0x0010_0000 }
 }

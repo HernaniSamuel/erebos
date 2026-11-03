@@ -8,14 +8,12 @@
 // expect-output: eq: FFTFF TFTTT
 // expect-exit: 0
 
+mod board;
+use board::{exit, putc};
+
 enum Mode: u8 { Off = 0, Run = 1, Sleep = 3 }
 
 static mut BYTES: [u8; 5] = [0, 0, 0, 0, 0];
-
-fn putc(byte: u8) {
-    let thr: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
-    *thr = byte;
-}
 
 fn print(s: *const [u8]) {
     let mut i: usize = 0;
@@ -85,23 +83,9 @@ entry fn main() -> ! {
     }
     putc(b'\n');
 
-    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
-    *finisher = 0x5555;
-    loop {}
+    exit(0)
 }
 
 panic fn on_panic() -> ! {
-    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
-    *finisher = (1 << 16) | 0x3333;
-    loop {}
-}
-
-// QEMU `virt`'s RAM in two regions of 64 MiB: the image in the first, and
-// in the second a 1 MiB stack at its start, then `.data` and `.bss`.
-memory {
-    region IMAGE { origin: 0x8000_0000, size: 0x0400_0000 }
-    region RAM { origin: 0x8400_0000, size: 0x0400_0000 }
-    code in IMAGE;
-    data in RAM;
-    stack in RAM { size: 0x0010_0000 }
+    exit(1)
 }

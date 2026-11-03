@@ -17,7 +17,7 @@
 //
 // The inputs are `static` tables built with the variants. `main` prints,
 // for each input, its index and the arm taken (and for `nested_arm` the
-// value bound), then exits through the finisher; a `comptime` block
+// value bound), then exits through `board::exit`; a `comptime` block
 // asserts the same arms for the same inputs.
 // expect-output: pairs 0: arm 0
 // expect-output: pairs 1: arm 1
@@ -68,8 +68,8 @@
 // expect-output: nested 12: arm 4, x 0
 // expect-exit: 0
 
-const UART: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
-const FINISHER: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+mod board;
+use board::exit;
 
 enum P: u8 {
     A(
@@ -303,7 +303,7 @@ comptime {
 fn print(s: *const [u8]) {
     let mut i: usize = 0;
     while i < len(s) {
-        *UART = (*s)[i];
+        board::putc((*s)[i]);
         i += 1;
     }
 }
@@ -330,11 +330,6 @@ fn print_taken(name: *const [u8], index: usize, arm: u8) {
     print_u32(index as u32);
     print(&raw const b": arm ");
     print_u32(arm as u32);
-}
-
-fn exit(code: u32) -> ! {
-    *FINISHER = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
-    loop {}
 }
 
 entry fn main() -> ! {
@@ -366,14 +361,4 @@ entry fn main() -> ! {
 
 panic fn on_panic() -> ! {
     exit(1)
-}
-
-// QEMU `virt`'s RAM in two regions of 64 MiB: the image in the first, and
-// in the second a 1 MiB stack at its start, then `.data` and `.bss`.
-memory {
-    region IMAGE { origin: 0x8000_0000, size: 0x0400_0000 }
-    region RAM { origin: 0x8400_0000, size: 0x0400_0000 }
-    code in IMAGE;
-    data in RAM;
-    stack in RAM { size: 0x0010_0000 }
 }

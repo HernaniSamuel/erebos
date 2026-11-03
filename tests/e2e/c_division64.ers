@@ -1,7 +1,9 @@
 // C code divides 64-bit integers, which clang compiles to calls to
 // libgcc's names; they link because `core` exports them (ADR 0076). Only
 // riscv32 has C code that can: ARMv7-M's would need `__aeabi_uldivmod`
-// (ADR 0074). The header takes effect once the harness reads it (M3.5).
+// (ADR 0074). The header is read by the harness since step 5 of M3.5, so
+// the program runs on riscv32 only (ADR 0077, reason 2: a feature of one
+// target's C compiler). It keeps its own devices and `memory` block.
 // targets: riscv32imac-unknown-none-elf
 // link-c: c_division64.c
 // expect-output: 1234567890123 89 0

@@ -2,6 +2,8 @@
 //! the host and zeroes the bytes it never wrote, so compiling the same
 //! program twice gives identical executables.
 
+mod common;
+
 use std::fs;
 use std::path::Path;
 use std::process::Command;
@@ -16,7 +18,14 @@ fn builds_are_identical() {
     // Constants with padding, a table computed at compile time, and checks;
     // statics with padding and pointers to other statics (ADR 0030).
     for program in ["tests/e2e/crc_table.ers", "tests/e2e/static_pointers.ers"] {
-        let program = root.join(program);
+        // Staged with the default target's board, as the e2e tests do
+        // (ADR 0077): the programs declare `mod board;`.
+        let program = common::board::stage(
+            &root.join(program),
+            erebos::target::DEFAULT,
+            &work.join("programs"),
+        )
+        .unwrap();
         for opt in [OptLevel::None, OptLevel::Speed] {
             let first = work.join("first.elf");
             let second = work.join("second.elf");
@@ -39,17 +48,21 @@ fn builds_are_identical() {
 #[test]
 fn modules_build_the_same_from_any_directory() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let program = root.join("tests/e2e/modules");
     let work = Path::new(env!("CARGO_TARGET_TMPDIR")).join("reproducible");
     fs::create_dir_all(&work).unwrap();
+    // The program and its board, copied to `<work>/programs/modules`.
+    let staged = common::board::stage(
+        &root.join("tests/e2e/modules/main.ers"),
+        erebos::target::DEFAULT,
+        &work.join("programs"),
+    )
+    .unwrap();
+    let program = staged.parent().unwrap();
+    let parent = program.parent().unwrap();
     for opt in [None, Some("-O")] {
         let builds = [
-            (
-                root,
-                "tests/e2e/modules/main.ers",
-                work.join("modules-root.elf"),
-            ),
-            (program.as_path(), "main.ers", work.join("modules-dir.elf")),
+            (parent, "modules/main.ers", work.join("modules-root.elf")),
+            (program, "main.ers", work.join("modules-dir.elf")),
         ];
         for (dir, input, output) in &builds {
             let result = Command::new(env!("CARGO_BIN_EXE_erebos"))

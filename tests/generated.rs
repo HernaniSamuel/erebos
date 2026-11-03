@@ -3,7 +3,9 @@
 //!
 //! Every program calls each of its functions at compile time (`comptime`,
 //! the evaluator) and at run time (LLVM, on QEMU), unoptimized and with
-//! `-O`, and stops with exit code 0 and `generated ok` when they agree.
+//! `-O`, on every target, and stops with exit code 0 and `generated ok`
+//! when they agree. A program reaches its machine through `mod board;`: the
+//! board of each target (ADR 0077) is written beside it as `board.ers`.
 //!
 //! - `EREBOS_GENERATED_PROGRAMS`: how many programs to run (default
 //!   `DEFAULT_PROGRAMS`).
@@ -18,9 +20,11 @@ use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::time::Duration;
 
+use common::board;
 use common::generator::{self, Feature, Uses};
 use common::qemu::{self, Expectation};
 use erebos::driver::{self, OptLevel, Stage};
+use erebos::target;
 
 /// How many seeds the test of the generator compiles.
 const SEEDS: u64 = 300;
@@ -55,15 +59,17 @@ fn opaque_object(opt: OptLevel) -> Result<PathBuf, String> {
     }
 }
 
-/// Builds `source` (named `name`) at both levels and runs each on QEMU. The
-/// error is every disagreement or failure, one per level. The files stay
-/// in the work directory only when something failed.
+/// Builds `source` (named `name`) at both levels for every target and runs
+/// each on QEMU. The error is every disagreement or failure, one per
+/// target and level. The files stay in the work directory only when
+/// something failed.
 fn run_both(name: &str, source: &str) -> Result<(), String> {
     let work = work_dir().join(name);
     fs::create_dir_all(&work).unwrap();
     let program = work.join(format!("{name}.ers"));
     fs::write(&program, source).unwrap();
     let expected = Expectation {
+        targets: target::TARGETS.to_vec(),
         output: "generated ok\n".into(),
         exit: Some(0),
         link_c: Vec::new(),
@@ -71,27 +77,27 @@ fn run_both(name: &str, source: &str) -> Result<(), String> {
     };
 
     let mut failures = Vec::new();
-    for (opt, label, file) in [
-        (OptLevel::None, name.to_owned(), "unopt"),
-        (OptLevel::Speed, format!("{name} (-O)"), "opt"),
-    ] {
-        let elf = work.join(format!("{file}.elf"));
-        let log = work.join(format!("{file}.qemu.log"));
-        let result = opaque_object(opt).and_then(|object| {
-            driver::build(
-                &program,
-                &elf,
-                &[object],
-                erebos::target::DEFAULT,
-                opt,
-                false,
-            )
-            .map_err(|e| format!("{label}: build failed\n{e}"))?;
-            let run = qemu::boot(&label, &elf, &log, WAIT)?;
-            qemu::check(&label, &expected, &run)
-        });
-        if let Err(e) = result {
-            failures.push(e);
+    for &target in &expected.targets {
+        fs::write(work.join("board.ers"), board::source(target)).unwrap();
+        for (opt, label, file) in [
+            (OptLevel::None, format!("{name} [{}]", target.name), "unopt"),
+            (
+                OptLevel::Speed,
+                format!("{name} [{}] (-O)", target.name),
+                "opt",
+            ),
+        ] {
+            let elf = work.join(format!("{}.{file}.elf", target.name));
+            let log = work.join(format!("{}.{file}.qemu.log", target.name));
+            let result = opaque_object(opt).and_then(|object| {
+                driver::build(&program, &elf, &[object], target, opt, false)
+                    .map_err(|e| format!("{label}: build failed\n{e}"))?;
+                let run = qemu::boot(&label, target, &elf, &log, WAIT)?;
+                qemu::check(&label, &expected, &run)
+            });
+            if let Err(e) = result {
+                failures.push(e);
+            }
         }
     }
     if failures.is_empty() {
@@ -154,7 +160,11 @@ fn a_changed_comptime_result_is_a_disagreement() {
         "unexpected report:\n{error}"
     );
     // Both levels report it.
-    assert!(error.contains("tampered:") && error.contains("tampered (-O):"));
+    let target = erebos::target::DEFAULT.name;
+    assert!(
+        error.contains(&format!("tampered [{target}]:"))
+            && error.contains(&format!("tampered [{target}] (-O):"))
+    );
     let _ = fs::remove_dir_all(work_dir().join("tampered"));
 }
 
@@ -177,7 +187,7 @@ fn generator_makes_valid_programs() {
 
         if let Err(rendered) = driver::dump(
             Path::new("generated.ers"),
-            &program.source,
+            &board::with_board(Path::new("generated.ers"), &program.source),
             Stage::Mir,
             erebos::target::DEFAULT,
             OptLevel::None,

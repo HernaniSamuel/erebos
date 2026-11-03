@@ -1,4 +1,4 @@
-//! Running a program on QEMU `virt` (ADR 0010), shared by `tests/e2e.rs`
+//! Running a program on QEMU (ADR 0010, 0077), shared by `tests/e2e.rs`
 //! and the generated programs (ADR 0068).
 
 use std::env;
@@ -10,6 +10,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use erebos::driver::OptLevel;
+use erebos::target::{Arch, Target};
 
 /// How long a program that never exits is watched.
 pub const RUN_FOREVER_CHECK: Duration = Duration::from_millis(1500);
@@ -19,18 +20,25 @@ pub const EXIT_TIMEOUT: Duration = Duration::from_secs(10);
 /// What a program says it should do, from the header comments of its root
 /// file (see `tests/e2e.rs`).
 pub struct Expectation {
+    /// The targets the program runs on: those of its `// targets:` header,
+    /// or every target.
+    pub targets: Vec<&'static Target>,
     pub output: String,
     pub exit: Option<i32>,
     pub link_c: Vec<String>,
     pub c_flags: Vec<String>,
 }
 
-pub fn expectation(source: &str) -> Expectation {
+pub fn expectation(source: &str) -> Result<Expectation, String> {
+    let mut targets = Vec::new();
     let mut output = String::new();
     let mut exit = None;
     let mut link_c = Vec::new();
     let mut c_flags = Vec::new();
     for line in source.lines() {
+        if let Some(names) = line.strip_prefix("// targets:") {
+            targets.extend(super::board::targets_named(names)?);
+        }
         if let Some(file) = line.strip_prefix("// link-c:") {
             link_c.push(file.trim().to_owned());
         }
@@ -44,12 +52,16 @@ pub fn expectation(source: &str) -> Expectation {
             exit = Some(code.trim().parse().expect("expect-exit takes an integer"));
         }
     }
-    Expectation {
+    if targets.is_empty() {
+        targets = super::board::targets_named("")?;
+    }
+    Ok(Expectation {
+        targets,
         output,
         exit,
         link_c,
         c_flags,
-    }
+    })
 }
 
 /// What came out of one boot of a program.
@@ -63,12 +75,22 @@ pub struct Run {
     pub events: String,
 }
 
-/// Boots `elf` on QEMU, logging events to `log`, and waits `wait` for it
-/// to stop; a program still running then is killed. `name` labels errors.
-pub fn boot(name: &str, elf: &Path, log: &Path, wait: Duration) -> Result<Run, String> {
+/// Boots `elf` on the QEMU machine of `target`, logging events to `log`,
+/// and waits `wait` for it to stop; a program still running then is
+/// killed. `name` labels errors.
+pub fn boot(
+    name: &str,
+    target: &Target,
+    elf: &Path,
+    log: &Path,
+    wait: Duration,
+) -> Result<Run, String> {
     let _ = fs::remove_file(log);
+    let machine: &[&str] = match target.arch {
+        Arch::Riscv32 => &["-machine", "virt", "-nographic", "-bios", "none"],
+    };
     let mut qemu = Command::new(qemu_path())
-        .args(["-machine", "virt", "-nographic", "-bios", "none"])
+        .args(machine)
         .arg("-kernel")
         .arg(elf)
         .args(["-d", "int,guest_errors", "-D"])

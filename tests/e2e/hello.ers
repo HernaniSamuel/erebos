@@ -1,40 +1,21 @@
-// Writes to the UART, then stops QEMU through the test finisher
-// (ADR 0010), both declared as peripherals (ADR 0058).
+// Writes to the UART, then stops QEMU, both through the board module
+// (ADR 0077): the smallest program that prints.
 // expect-output: hello
 // expect-exit: 0
-peripheral Uart {
-    write thr: u8 at 0,
-}
 
-peripheral TestFinisher {
-    write status: u32 at 0,
-}
-
-peripheral UART0: Uart at 0x1000_0000;
-peripheral FINISHER: TestFinisher at 0x0010_0000;
+mod board;
 
 entry fn main() -> ! {
-    UART0.thr = b'h';
-    UART0.thr = b'e';
-    UART0.thr = b'l';
-    UART0.thr = b'l';
-    UART0.thr = b'o';
-    UART0.thr = b'\n';
+    board::putc(b'h');
+    board::putc(b'e');
+    board::putc(b'l');
+    board::putc(b'l');
+    board::putc(b'o');
+    board::putc(b'\n');
 
-    FINISHER.status = 0x5555;
-    loop {}
+    board::exit(0)
 }
 
 panic fn on_panic() -> ! {
     loop {}
-}
-
-// QEMU `virt`'s RAM in two regions of 64 MiB: the image in the first, and
-// in the second a 1 MiB stack at its start, then `.data` and `.bss`.
-memory {
-    region IMAGE { origin: 0x8000_0000, size: 0x0400_0000 }
-    region RAM { origin: 0x8400_0000, size: 0x0400_0000 }
-    code in IMAGE;
-    data in RAM;
-    stack in RAM { size: 0x0010_0000 }
 }

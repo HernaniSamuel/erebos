@@ -4,16 +4,8 @@
 // expect-output: !
 // expect-exit: 0
 
-fn putc(byte: u8) {
-    let thr: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
-    thr[0] = byte;
-}
-
-fn exit(code: u32) -> ! {
-    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
-    *finisher = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
-    loop {}
-}
+mod board;
+use board::{exit, putc};
 
 fn fill(buf: *mut u8, n: usize, first: u8) {
     let mut i: usize = 0;
@@ -24,8 +16,8 @@ fn fill(buf: *mut u8, n: usize, first: u8) {
 }
 
 entry fn main() -> ! {
-    // Free RAM, well away from the program and the stack.
-    let buf: *mut u8 = 0x8100_0000 as *mut u8;
+    // RAM that no section occupies (ADR 0077).
+    let buf: *mut u8 = board::SCRATCH as *mut u8;
     fill(buf, 5, b'a');
     let mut i: usize = 0;
     while i < 5 {
@@ -50,22 +42,15 @@ entry fn main() -> ! {
     putc(if flag { b'T' } else { b'F' });
     putc(b'\n');
 
-    let uart: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
-    uart[0] = b'!';
-    uart[0] = b'\n';
+    // Indexing a volatile pointer stores and loads at once, in order.
+    let cell: *mut volatile u8 = board::SCRATCH as *mut volatile u8;
+    cell[0] = b'!';
+    putc(cell[0]);
+    cell[0] = b'\n';
+    putc(cell[0]);
     exit(0)
 }
 
 panic fn on_panic() -> ! {
     exit(1)
-}
-
-// QEMU `virt`'s RAM in two regions of 64 MiB: the image in the first, and
-// in the second a 1 MiB stack at its start, then `.data` and `.bss`.
-memory {
-    region IMAGE { origin: 0x8000_0000, size: 0x0400_0000 }
-    region RAM { origin: 0x8400_0000, size: 0x0400_0000 }
-    code in IMAGE;
-    data in RAM;
-    stack in RAM { size: 0x0010_0000 }
 }

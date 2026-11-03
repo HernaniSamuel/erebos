@@ -1,5 +1,9 @@
 // C small data (`.sdata`, `.sbss`, `.srodata`) is placed and initialized
 // like the rest (ADR 0030): its globals hold their values on entry.
+// Only on riscv32 (ADR 0077, reason 2): it tests riscv32's small-data
+// sections (`-msmall-data-limit`), which ARM's C compiler does not have.
+// It keeps its own devices and `memory` block.
+// targets: riscv32imac-unknown-none-elf
 // link-c: small_data.c
 // c-flags: -msmall-data-limit=8
 // expect-output: small data ok

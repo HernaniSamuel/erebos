@@ -7,6 +7,10 @@
 // stack and hold their initial values, and a `static` is in flash. QEMU
 // starts with RAM zeroed, so the `.bss` value would be 0 even if `_start`
 // did not zero it; `tests/elf.rs` checks the range `_start` zeroes.
+// Only on riscv32 (ADR 0077, reason 3): it tests a `memory` block of its
+// own, laid out for `virt`'s RAM; the board's block cannot be the one
+// under test. It keeps its own devices and `memory` block.
+// targets: riscv32imac-unknown-none-elf
 // expect-output: stack ok
 // expect-output: data ok
 // expect-output: bss ok

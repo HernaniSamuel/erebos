@@ -574,63 +574,44 @@ impl Gen {
         format!(
             "
 {consts}
-peripheral Uart {{
-    write thr: u8 at 0,
-}}
-
-peripheral TestFinisher {{
-    write status: u32 at 0,
-}}
-
-peripheral UART0: Uart at 0x1000_0000;
-peripheral FINISHER: TestFinisher at 0x0010_0000;
+mod board;
 
 fn print_u64(n: u64) {{
     if n >= 10 {{
         print_u64(n / 10);
     }}
-    UART0.thr = b'0' + (n % 10) as u8;
+    board::putc(b'0' + (n % 10) as u8);
 }}
 
 fn check(id: u32, at_compile_time: u64, at_run_time: u64) -> u32 {{
     if at_compile_time == at_run_time {{
         return 0;
     }}
-    UART0.thr = b'#';
+    board::putc(b'#');
     print_u64(id as u64);
-    UART0.thr = b' ';
+    board::putc(b' ');
     print_u64(at_compile_time);
-    UART0.thr = b' ';
+    board::putc(b' ');
     print_u64(at_run_time);
-    UART0.thr = b'\\n';
+    board::putc(b'\\n');
     id
 }}
 
 entry fn main() -> ! {{
     let mut bad: u32 = 0;
 {body}    if bad == 0 {{
-        UART0.thr = b'g'; UART0.thr = b'e'; UART0.thr = b'n'; UART0.thr = b'e';
-        UART0.thr = b'r'; UART0.thr = b'a'; UART0.thr = b't'; UART0.thr = b'e';
-        UART0.thr = b'd'; UART0.thr = b' '; UART0.thr = b'o'; UART0.thr = b'k';
-        UART0.thr = b'\\n';
-        FINISHER.status = 0x5555;
+        board::putc(b'g'); board::putc(b'e'); board::putc(b'n'); board::putc(b'e');
+        board::putc(b'r'); board::putc(b'a'); board::putc(b't'); board::putc(b'e');
+        board::putc(b'd'); board::putc(b' '); board::putc(b'o'); board::putc(b'k');
+        board::putc(b'\\n');
+        board::exit(0)
     }} else {{
-        FINISHER.status = (bad << 16) | 0x3333;
+        board::exit(bad)
     }}
-    loop {{}}
 }}
 
 panic fn on_panic() -> ! {{
-    FINISHER.status = (99 << 16) | 0x3333;
-    loop {{}}
-}}
-
-memory {{
-    region IMAGE {{ origin: 0x8000_0000, size: 0x0400_0000 }}
-    region RAM {{ origin: 0x8400_0000, size: 0x0400_0000 }}
-    code in IMAGE;
-    data in RAM;
-    stack in RAM {{ size: 0x0010_0000 }}
+    board::exit(99)
 }}
 "
         )

@@ -1,5 +1,5 @@
 // The program of M3.3 (roadmap): the 16550 UART of QEMU `virt` configured
-// through its fields, declared in `board.ers` (ADR 0059, 0060, 0061).
+// through its fields, declared in `devices.ers` (ADR 0059, 0060, 0061).
 // With `lcr.dlab` set by a field assignment, the divisor is written to the
 // alternate registers `dll` and `dlm` and read back; `ier`, at `dlm`'s
 // offset, keeps its own value. `lcr` and `fcr` are written whole, with
@@ -10,6 +10,10 @@
 // QEMU's loopback receives a byte when its write returns, so no wait is
 // needed before reading `lsr`. Each result is printed once loopback is
 // off.
+// Only on riscv32 (ADR 0077, reason 1): it uses the 16550's other
+// registers (line control, divisor, loopback, line status). It keeps its
+// own devices and `memory` block.
+// targets: riscv32imac-unknown-none-elf
 // expect-output: divisor 0x0180
 // expect-output: ier 0x00
 // expect-output: lcr 0x03 eight bits
@@ -20,14 +24,14 @@
 // expect-output: lsr 0x61 no overrun
 // expect-output: rbr 2
 // expect-exit: 0
-mod board;
+mod devices;
 
-use board::{Fcr, Ier, Iir, Lcr, Lsr, Mcr, UART0};
+use devices::{Fcr, Ier, Iir, Lcr, Lsr, Mcr, UART0};
 
 fn print(s: *const [u8]) {
     let mut i: usize = 0;
     while i < len(s) {
-        board::putc((*s)[i]);
+        devices::putc((*s)[i]);
         i += 1;
     }
 }
@@ -39,7 +43,7 @@ fn print_hex(value: u32, bytes: u32) {
     while shift > 0 {
         shift -= 4;
         let digit: u8 = ((value >> shift) & 0xF) as u8;
-        board::putc(if digit < 10 { b'0' + digit } else { b'A' + digit - 10 });
+        devices::putc(if digit < 10 { b'0' + digit } else { b'A' + digit - 10 });
     }
 }
 
@@ -65,13 +69,13 @@ entry fn main() -> ! {
 
     UART0.mcr.loopback = true;
     let mcr: Mcr = UART0.mcr;
-    board::putc(b'Z');
+    devices::putc(b'Z');
     while !UART0.lsr.data_ready {}
     let echo: u8 = UART0.rbr;
 
     UART0.fcr = Fcr { .. };
-    board::putc(b'1');
-    board::putc(b'2');
+    devices::putc(b'1');
+    devices::putc(b'2');
     let first: Lsr = UART0.lsr;
     let second: Lsr = UART0.lsr;
     let kept: u8 = UART0.rbr;
@@ -97,7 +101,7 @@ entry fn main() -> ! {
         print(&raw const b" loopback");
     }
     print(&raw const b"\nloopback ");
-    board::putc(echo);
+    devices::putc(echo);
     print(&raw const b"\nlsr");
     print_hex(first as u32, 1);
     if first.overrun {
@@ -113,13 +117,13 @@ entry fn main() -> ! {
         print(&raw const b" no overrun");
     }
     print(&raw const b"\nrbr ");
-    board::putc(kept);
+    devices::putc(kept);
     print(&raw const b"\n");
-    board::exit(0)
+    devices::exit(0)
 }
 
 panic fn on_panic() -> ! {
-    board::exit(1)
+    devices::exit(1)
 }
 
 // QEMU `virt`'s RAM in two regions of 64 MiB: the image in the first, and

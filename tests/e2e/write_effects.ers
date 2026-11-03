@@ -22,6 +22,9 @@
 // expect-output: mode 2 no variant 0x00000100
 // expect-exit: 0
 
+mod board;
+use board::{exit, putc};
+
 struct Status: u32 {
     pub enable: bool at 0 = false,
     pub count: u8 at 8..=15 = 0,
@@ -45,11 +48,6 @@ static mut DEVICE: [u32; 2] = [0; 2];
 // The device's word `index`, reached as the device's other agent would.
 fn word(index: usize) -> *mut volatile u32 {
     &raw mut DEVICE[index] as *mut volatile u32
-}
-
-fn putc(byte: u8) {
-    let thr: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
-    *thr = byte;
 }
 
 fn print(s: *const [u8]) {
@@ -85,12 +83,6 @@ fn mode_name(m: Mode) -> *const [u8] {
         .Auto => &raw const b" auto",
         _ => &raw const b" no variant",
     }
-}
-
-fn exit(code: u32) -> ! {
-    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
-    *finisher = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
-    loop {}
 }
 
 entry fn main() -> ! {
@@ -169,14 +161,4 @@ entry fn main() -> ! {
 
 panic fn on_panic() -> ! {
     exit(1)
-}
-
-// QEMU `virt`'s RAM in two regions of 64 MiB: the image in the first, and
-// in the second a 1 MiB stack at its start, then `.data` and `.bss`.
-memory {
-    region IMAGE { origin: 0x8000_0000, size: 0x0400_0000 }
-    region RAM { origin: 0x8400_0000, size: 0x0400_0000 }
-    code in IMAGE;
-    data in RAM;
-    stack in RAM { size: 0x0010_0000 }
 }

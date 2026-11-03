@@ -11,6 +11,8 @@
 //! takes. What they cannot read, such as a test module that is not the
 //! last item of its file, fails the test instead of passing unchecked.
 
+mod common;
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -230,7 +232,7 @@ fn integer_arithmetic_has_no_wrap_flags() {
         let text = fs::read_to_string(&path).unwrap().replace("\r\n", "\n");
         let Ok(ir) = driver::dump(
             &path,
-            &text,
+            &common::board::with_board(&path, &text),
             Stage::LlvmIr,
             erebos::target::DEFAULT,
             OptLevel::None,

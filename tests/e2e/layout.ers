@@ -6,16 +6,8 @@
 // expect-output: aligned ok
 // expect-exit: 0
 
-fn putc(byte: u8) {
-    let thr: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
-    *thr = byte;
-}
-
-fn exit(code: u32) -> ! {
-    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
-    *finisher = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
-    loop {}
-}
+mod board;
+use board::{exit, putc};
 
 fn print_u32(n: u32) {
     if n >= 10 {
@@ -95,8 +87,9 @@ entry fn main() -> ! {
     print(&raw const layout as *const u8, 9);
     putc(b'\n');
 
-    // A packed header at an odd address: its `u32` straddles words.
-    let buffer: *mut u8 = 0x8100_0001 as *mut u8;
+    // A packed header at an odd address, in the board's scratch RAM: its
+    // `u32` straddles words.
+    let buffer: *mut u8 = (board::SCRATCH + 1) as *mut u8;
     let header: *mut Header = buffer as *mut Header;
     (*header).kind = 171;
     (*header).len = 0x1234_5678;
@@ -128,14 +121,4 @@ entry fn main() -> ! {
 
 panic fn on_panic() -> ! {
     exit(1)
-}
-
-// QEMU `virt`'s RAM in two regions of 64 MiB: the image in the first, and
-// in the second a 1 MiB stack at its start, then `.data` and `.bss`.
-memory {
-    region IMAGE { origin: 0x8000_0000, size: 0x0400_0000 }
-    region RAM { origin: 0x8400_0000, size: 0x0400_0000 }
-    code in IMAGE;
-    data in RAM;
-    stack in RAM { size: 0x0010_0000 }
 }

@@ -8,10 +8,9 @@
 // expect-output: lines 3
 // expect-exit: 0
 
+mod board;
 mod uart;
 mod math;
-
-const FINISHER: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
 
 entry fn main() -> ! {
     uart::print(&raw const b"modules");
@@ -36,21 +35,9 @@ entry fn main() -> ! {
     uart::print_u32(lines);
     uart::newline();
 
-    *FINISHER = 0x5555;
-    loop {}
+    board::exit(0)
 }
 
 panic fn on_panic() -> ! {
-    *FINISHER = 1 << 16 | 0x3333;
-    loop {}
-}
-
-// QEMU `virt`'s RAM in two regions of 64 MiB: the image in the first, and
-// in the second a 1 MiB stack at its start, then `.data` and `.bss`.
-memory {
-    region IMAGE { origin: 0x8000_0000, size: 0x0400_0000 }
-    region RAM { origin: 0x8400_0000, size: 0x0400_0000 }
-    code in IMAGE;
-    data in RAM;
-    stack in RAM { size: 0x0010_0000 }
+    board::exit(1)
 }

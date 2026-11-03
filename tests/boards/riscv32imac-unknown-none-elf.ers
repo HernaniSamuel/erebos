@@ -1,0 +1,33 @@
+// The board of the tests on riscv32: QEMU `virt` (ADR 0010, 0077). The
+// harness gives each program a copy of it as `board.ers`, which the program
+// declares with `mod board;`. It offers what ADR 0077 lists: `putc`, `exit`
+// and `SCRATCH`, and holds the machine's `memory` block.
+
+// QEMU `virt`'s RAM in two regions of 64 MiB: the image in the first, and
+// in the second a 1 MiB stack at its start, then `.data` and `.bss`.
+memory {
+    region IMAGE { origin: 0x8000_0000, size: 0x0400_0000 }
+    region RAM { origin: 0x8400_0000, size: 0x0400_0000 }
+    code in IMAGE;
+    data in RAM;
+    stack in RAM { size: 0x0010_0000 }
+}
+
+// The transmit register of the 16550 UART, and the test finisher.
+const UART: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+const FINISHER: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+
+/// 16 MiB into `IMAGE`, far above the program: 64 KiB that no section
+/// occupies and `_start` never writes, zero when QEMU starts.
+pub const SCRATCH: usize = 0x8100_0000;
+
+// Writes one byte to the UART.
+pub fn putc(byte: u8) {
+    *UART = byte;
+}
+
+// Stops QEMU: 0 passes, any other code fails with it as the exit status.
+pub fn exit(code: u32) -> ! {
+    *FINISHER = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
+    loop {}
+}

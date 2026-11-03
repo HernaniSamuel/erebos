@@ -12,6 +12,9 @@
 // expect-output: from c 9
 // expect-exit: 0
 
+mod board;
+use board::{exit, putc};
+
 extern fn c_sum(s: *const [u8]) -> u32;
 extern fn c_tail(s: *const [u8]) -> *const [u8];
 extern fn c_late(a: u32, b: u32, c: u32, d: u32, e: u32, f: u32, g: u32, s: *const [u8]) -> *const [u8];
@@ -20,11 +23,6 @@ extern fn c_calls_erebos() -> usize;
 // Called from C.
 fn erebos_skip(s: *const [u8], n: usize) -> *const [u8] {
     slice(&raw const (s as *const u8)[n], len(s) - n)
-}
-
-fn putc(byte: u8) {
-    let thr: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
-    *thr = byte;
 }
 
 fn print(s: *const [u8]) {
@@ -49,12 +47,6 @@ fn print_u32(value: u32) {
         }
     }
     print(slice(&raw const digits[10 - n], n));
-}
-
-fn exit(code: u32) -> ! {
-    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
-    *finisher = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
-    loop {}
 }
 
 entry fn main() -> ! {
@@ -93,14 +85,4 @@ entry fn main() -> ! {
 
 panic fn on_panic() -> ! {
     exit(1)
-}
-
-// QEMU `virt`'s RAM in two regions of 64 MiB: the image in the first, and
-// in the second a 1 MiB stack at its start, then `.data` and `.bss`.
-memory {
-    region IMAGE { origin: 0x8000_0000, size: 0x0400_0000 }
-    region RAM { origin: 0x8400_0000, size: 0x0400_0000 }
-    code in IMAGE;
-    data in RAM;
-    stack in RAM { size: 0x0010_0000 }
 }

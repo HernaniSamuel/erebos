@@ -4,16 +4,16 @@
 // expect-output: ok
 // expect-output: su
 // expect-exit: 0
-entry fn main() -> ! {
-    let uart: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
+mod board;
 
+entry fn main() -> ! {
     // while
     let mut i: u8 = 0;
     while i < 10 {
-        *uart = b'0' + i;
+        board::putc(b'0' + i);
         i += 1;
     }
-    *uart = b'\n';
+    board::putc(b'\n');
 
     // loop with a value: the first n with n * n > 20
     let mut n: u32 = 0;
@@ -23,13 +23,13 @@ entry fn main() -> ! {
             break n;
         }
     };
-    *uart = b'0' + first as u8;
-    *uart = b' ';
+    board::putc(b'0' + first as u8);
+    board::putc(b' ');
 
     // if as an expression, with else if
     let pick: u8 = if first > 4 { 7 } else if first > 2 { 8 } else { 9 };
-    *uart = b'0' + pick;
-    *uart = b' ';
+    board::putc(b'0' + pick);
+    board::putc(b' ');
 
     // continue: count the even numbers below 10
     let mut k: u8 = 0;
@@ -41,47 +41,35 @@ entry fn main() -> ! {
         }
         evens += 1;
     }
-    *uart = b'0' + evens;
-    *uart = b' ';
+    board::putc(b'0' + evens);
+    board::putc(b' ');
 
     // bool converts to integers
     let three: u8 = 3;
-    *uart = b'0' + (three < 4) as u8;
-    *uart = b'\n';
+    board::putc(b'0' + (three < 4) as u8);
+    board::putc(b'\n');
 
     // && and || skip their right side when the left decides
-    let a: bool = false && { *uart = b'X'; true };
-    let b: bool = true || { *uart = b'Y'; true };
-    let c: bool = true && { *uart = b'o'; true };
-    let d: bool = false || { *uart = b'k'; true };
-    *uart = b'\n';
+    let a: bool = false && { board::putc(b'X'); true };
+    let b: bool = true || { board::putc(b'Y'); true };
+    let c: bool = true && { board::putc(b'o'); true };
+    let d: bool = false || { board::putc(b'k'); true };
+    board::putc(b'\n');
 
     // comparisons follow signedness
     let neg: i8 = -1;
     if neg < 0 {
-        *uart = b's';
+        board::putc(b's');
     }
     let big: u8 = 255;
     if big > 0 {
-        *uart = b'u';
+        board::putc(b'u');
     }
-    *uart = b'\n';
+    board::putc(b'\n');
 
-    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
-    *finisher = 0x5555;
-    loop {}
+    board::exit(0)
 }
 
 panic fn on_panic() -> ! {
     loop {}
-}
-
-// QEMU `virt`'s RAM in two regions of 64 MiB: the image in the first, and
-// in the second a 1 MiB stack at its start, then `.data` and `.bss`.
-memory {
-    region IMAGE { origin: 0x8000_0000, size: 0x0400_0000 }
-    region RAM { origin: 0x8400_0000, size: 0x0400_0000 }
-    code in IMAGE;
-    data in RAM;
-    stack in RAM { size: 0x0010_0000 }
 }

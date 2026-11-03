@@ -73,13 +73,16 @@ instead of applying it; agents are held to it when they finish
   it on QEMU. They need `qemu-system-riscv32` on `PATH` (or `EREBOS_QEMU`).
   A program declares `// expect-output: <line>` (repeatable) and
   `// expect-exit: <code>`; it must print exactly those lines and stop QEMU
-  through the test finisher with that code. A program without
+  through `board::exit` with that code. A program without
   `expect-exit` must run forever. Any CPU exception fails the test.
-  Every program declares its memory map, a `memory` block (ADR 0057),
-  since none is built without one: most end with the same block, which a
-  new program can copy: QEMU `virt`'s RAM in two regions of 64 MiB, the
-  image in the first, and in the second a 1 MiB stack at its start, then
-  `.data` and `.bss`.
+  A program reaches its machine through `mod board;` (ADR 0077): the
+  harness copies it into a work directory with the target's board module,
+  `tests/boards/<target>.ers`, as `board.ers`, which holds the `memory`
+  block (ADR 0057) and offers `board::putc`, `board::exit` and
+  `board::SCRATCH`. A program that has a `board.ers` of its own is an
+  error; one that must declare its own devices or `memory` block says
+  `// targets: <target name>` and which of ADR 0077's three reasons
+  applies.
   `// link-c: file.c` (repeatable) compiles a C file next to the program
   with clang for the target, at the matching optimization level, and links
   it in; the program declares its functions with `extern fn` and its

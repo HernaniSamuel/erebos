@@ -1,5 +1,5 @@
 // The program of M3.4a (roadmap): QEMU `virt`'s PLIC and virtio-mmio
-// transports through register arrays and clusters, declared in `board.ers`
+// transports through register arrays and clusters, declared in `devices.ers`
 // (ADR 0064, 0066). The priorities of sources 1 to 8 are written in a loop
 // with a run-time index, each a value from 1 to 7 (QEMU's PLIC keeps 3
 // priority bits), and read back. The enable word of context 0 is set, and
@@ -12,6 +12,9 @@
 // device is attached, and `Version` and `VendorID` are what QEMU 11.1
 // gives with the flags of the harness (`Version` 1, the legacy transport,
 // as QEMU's default is still legacy; `VendorID` is "QEMU" in ASCII).
+// Only on riscv32 (ADR 0077, reason 1): it drives `virt`'s PLIC and
+// virtio-mmio transports. It keeps its own devices and `memory` block.
+// targets: riscv32imac-unknown-none-elf
 // expect-output: priorities 1 2 3 4 5 6 7 1
 // expect-output: enable 0x000001FE
 // expect-output: threshold 3 5
@@ -26,32 +29,32 @@
 // expect-output: virtio6 magic 0x74726976 version 1 device 0 vendor 0x554D4551
 // expect-output: virtio7 magic 0x74726976 version 1 device 0 vendor 0x554D4551
 // expect-exit: 0
-mod board;
+mod devices;
 
-use board::{PlicContext, VirtioMmio};
+use devices::{PlicContext, VirtioMmio};
 
 static TRANSPORTS: [*const VirtioMmio; 8] = [
-    &raw const board::VIRTIO0,
-    &raw const board::VIRTIO1,
-    &raw const board::VIRTIO2,
-    &raw const board::VIRTIO3,
-    &raw const board::VIRTIO4,
-    &raw const board::VIRTIO5,
-    &raw const board::VIRTIO6,
-    &raw const board::VIRTIO7,
+    &raw const devices::VIRTIO0,
+    &raw const devices::VIRTIO1,
+    &raw const devices::VIRTIO2,
+    &raw const devices::VIRTIO3,
+    &raw const devices::VIRTIO4,
+    &raw const devices::VIRTIO5,
+    &raw const devices::VIRTIO6,
+    &raw const devices::VIRTIO7,
 ];
 
 fn print(s: *const [u8]) {
     let mut i: usize = 0;
     while i < len(s) {
-        board::putc((*s)[i]);
+        devices::putc((*s)[i]);
         i += 1;
     }
 }
 
 // `value` in decimal; the program prints nothing larger than 9.
 fn print_digit(value: u32) {
-    board::putc(b'0' + value as u8);
+    devices::putc(b'0' + value as u8);
 }
 
 // ` 0x` and eight hex digits.
@@ -61,7 +64,7 @@ fn print_hex(value: u32) {
     while shift > 0 {
         shift -= 4;
         let digit: u8 = ((value >> shift) & 0xF) as u8;
-        board::putc(if digit < 10 { b'0' + digit } else { b'A' + digit - 10 });
+        devices::putc(if digit < 10 { b'0' + digit } else { b'A' + digit - 10 });
     }
 }
 
@@ -89,38 +92,38 @@ entry fn main() -> ! {
     // Sources 1 to 8, priorities 1 to 7 and 1 again.
     let mut source: usize = 1;
     while source <= 8 {
-        board::PLIC.priority[source] = ((source - 1) % 7 + 1) as u32;
+        devices::PLIC.priority[source] = ((source - 1) % 7 + 1) as u32;
         source += 1;
     }
     print(&raw const b"priorities");
     source = 1;
     while source <= 8 {
-        board::putc(b' ');
-        print_digit(board::PLIC.priority[source]);
+        devices::putc(b' ');
+        print_digit(devices::PLIC.priority[source]);
         source += 1;
     }
     print(&raw const b"\n");
 
     // Sources 1 to 8 enabled for context 0.
-    board::PLIC.enables[0].word[0] = 0x1FE;
+    devices::PLIC.enables[0].word[0] = 0x1FE;
     print(&raw const b"enable");
-    print_hex(board::PLIC.enables[0].word[0]);
+    print_hex(devices::PLIC.enables[0].word[0]);
     print(&raw const b"\n");
 
     // Threshold 3 for context 0 and 5 for context 1, through one driver.
     let mut context: usize = 0;
     while context < 2 {
-        set_threshold(&raw mut board::PLIC.ctx[context], 3 + context as u32 * 2);
+        set_threshold(&raw mut devices::PLIC.ctx[context], 3 + context as u32 * 2);
         context += 1;
     }
     print(&raw const b"threshold ");
-    print_digit(board::PLIC.ctx[0].threshold);
-    board::putc(b' ');
-    print_digit(board::PLIC.ctx[1].threshold);
+    print_digit(devices::PLIC.ctx[0].threshold);
+    devices::putc(b' ');
+    print_digit(devices::PLIC.ctx[1].threshold);
     print(&raw const b"\nthreshold m0 ");
-    print_digit(board::PLIC_M0.threshold);
+    print_digit(devices::PLIC_M0.threshold);
     print(&raw const b"\nclaim ");
-    print_digit(board::PLIC_M0.claim);
+    print_digit(devices::PLIC_M0.claim);
     print(&raw const b"\n");
 
     let mut transport: usize = 0;
@@ -128,11 +131,11 @@ entry fn main() -> ! {
         describe(transport, TRANSPORTS[transport]);
         transport += 1;
     }
-    board::exit(0)
+    devices::exit(0)
 }
 
 panic fn on_panic() -> ! {
-    board::exit(1)
+    devices::exit(1)
 }
 
 // QEMU `virt`'s RAM in two regions of 64 MiB: the image in the first, and
