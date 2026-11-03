@@ -16,8 +16,21 @@ use crate::syntax::{ast, lexer, parser};
 /// The target of a build that does not choose one (ADR 0073), for the command
 /// line, which reaches the compiler through the driver alone (ADR 0063).
 pub use crate::target::DEFAULT as DEFAULT_TARGET;
-use crate::target::Target;
+pub use crate::target::Target;
+use crate::target::{self, TARGETS};
 use crate::{codegen, hir, link, mir, svd, ty};
+
+/// The target `--target` names, or the error of ADR 0073 that lists the
+/// known names. The command line reaches `target` through here (ADR 0063).
+pub fn target_by_name(name: &str) -> Result<&'static Target, String> {
+    target::by_name(name).ok_or_else(|| {
+        let names: Vec<&str> = TARGETS.iter().map(|target| target.name).collect();
+        format!(
+            "unknown target `{name}`; the targets are {}",
+            names.join(", ")
+        )
+    })
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Stage {

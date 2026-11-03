@@ -3,7 +3,9 @@
 //! Each file is compiled up to a stage and the stage's dump (or the rendered
 //! diagnostics) is snapshotted. Header comments on the first lines pick the
 //! stage (`// emit: <stage>`; otherwise the last stage is used) and, with
-//! `// opt: both`, also snapshot the stage with optimizations (`-O`).
+//! `// opt: both`, also snapshot the stage with optimizations (`-O`). The
+//! header `// target: <name>` picks the target (default: riscv32); an unknown
+//! name fails the test (ADR 0073).
 //!
 //! A directory with a `main.ers` is a program of several files: `main.ers`
 //! is its root file, holding the headers, and the files of its modules sit
@@ -49,10 +51,18 @@ fn compile(path: &Path) -> String {
         &[OptLevel::None]
     };
 
+    let target = headers
+        .iter()
+        .find_map(|line| line.strip_prefix("// target:"))
+        .map_or(Ok(driver::DEFAULT_TARGET), |name| {
+            driver::target_by_name(name.trim())
+        })
+        .unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+
     let mut output = String::new();
     for &opt in levels {
         let flag = if opt == OptLevel::Speed { " -O" } else { "" };
-        output += &match driver::dump(path, &text, stage, erebos::target::DEFAULT, opt, false) {
+        output += &match driver::dump(path, &text, stage, target, opt, false) {
             Ok(dump) => format!("--- {stage}{flag} ---\n{dump}"),
             Err(diags) => format!("--- errors{flag} ---\n{diags}"),
         };

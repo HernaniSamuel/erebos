@@ -1,0 +1,107 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/target_explicit_riscv32.ers
+---
+--- llvm-ir ---
+; ModuleID = 'erebos'
+source_filename = "erebos"
+target datalayout = "e-m:e-p:32:32-i64:64-n32-S128"
+target triple = "riscv32-unknown-none-elf"
+
+module asm "\09.section .text.start, \22ax\22, @progbits"
+module asm "\09.globl _start"
+module asm "\09.type _start, @function"
+module asm "_start:"
+module asm "\09la sp, __stack_end"
+module asm "\09la t0, __bss_start"
+module asm "\09la t1, __bss_end"
+module asm ".Lzero_bss:"
+module asm "\09bgeu t0, t1, .Lcopy_data"
+module asm "\09sw zero, 0(t0)"
+module asm "\09addi t0, t0, 4"
+module asm "\09j .Lzero_bss"
+module asm ".Lcopy_data:"
+module asm "\09la t0, __data_start"
+module asm "\09la t1, __data_end"
+module asm "\09la t2, __data_load"
+module asm ".Lcopy_word:"
+module asm "\09bgeu t0, t1, .Lenter"
+module asm "\09lw t3, 0(t2)"
+module asm "\09sw t3, 0(t0)"
+module asm "\09addi t0, t0, 4"
+module asm "\09addi t2, t2, 4"
+module asm "\09j .Lcopy_word"
+module asm ".Lenter:"
+module asm "\09j main"
+
+; Function Attrs: nounwind null_pointer_is_valid
+define i32 @unsigned(i32 %0, i32 %1) #0 {
+bb0:
+  %2 = icmp eq i32 %1, 0
+  br i1 %2, label %bb1, label %bb2
+
+bb1:                                              ; preds = %bb0
+  call void @on_panic()
+  unreachable
+
+bb2:                                              ; preds = %bb0
+  %3 = udiv i32 %0, %1
+  ret i32 %3
+}
+
+; Function Attrs: nounwind null_pointer_is_valid
+define i32 @signed(i32 %0, i32 %1) #0 {
+bb0:
+  %2 = icmp eq i32 %1, 0
+  br i1 %2, label %bb1, label %bb2
+
+bb1:                                              ; preds = %bb0
+  call void @on_panic()
+  unreachable
+
+bb2:                                              ; preds = %bb0
+  %3 = icmp eq i32 %1, -1
+  br i1 %3, label %bb3, label %bb4
+
+bb3:                                              ; preds = %bb2
+  br label %bb5
+
+bb4:                                              ; preds = %bb2
+  %4 = srem i32 %0, %1
+  br label %bb5
+
+bb5:                                              ; preds = %bb4, %bb3
+  %_4.0 = phi i32 [ 0, %bb3 ], [ %4, %bb4 ]
+  ret i32 %_4.0
+}
+
+; Function Attrs: nounwind null_pointer_is_valid
+define i32 @constants(i32 %0) #0 {
+bb0:
+  %1 = sdiv i32 %0, 3
+  %2 = sub i32 0, %0
+  %3 = add i32 %1, %2
+  ret i32 %3
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @main() #1 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @on_panic() #1 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+attributes #0 = { nounwind null_pointer_is_valid }
+attributes #1 = { noreturn nounwind null_pointer_is_valid }
