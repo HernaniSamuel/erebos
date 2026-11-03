@@ -78,8 +78,15 @@ fn run_both(name: &str, source: &str) -> Result<(), String> {
         let elf = work.join(format!("{file}.elf"));
         let log = work.join(format!("{file}.qemu.log"));
         let result = opaque_object(opt).and_then(|object| {
-            driver::build(&program, &elf, &[object], opt, false)
-                .map_err(|e| format!("{label}: build failed\n{e}"))?;
+            driver::build(
+                &program,
+                &elf,
+                &[object],
+                erebos::target::DEFAULT,
+                opt,
+                false,
+            )
+            .map_err(|e| format!("{label}: build failed\n{e}"))?;
             let run = qemu::boot(&label, &elf, &log, WAIT)?;
             qemu::check(&label, &expected, &run)
         });
@@ -172,6 +179,7 @@ fn generator_makes_valid_programs() {
             Path::new("generated.ers"),
             &program.source,
             Stage::Mir,
+            erebos::target::DEFAULT,
             OptLevel::None,
             false,
         ) {

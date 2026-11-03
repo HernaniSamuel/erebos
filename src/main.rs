@@ -103,13 +103,30 @@ fn main() -> ExitCode {
         Command::Build(args) => match args.emit {
             Some(stage) => std::fs::read_to_string(&args.input)
                 .map_err(|e| format!("error: cannot read `{}`: {e}", args.input.display()))
-                .and_then(|text| driver::dump(&args.input, &text, stage, args.opt, color))
+                .and_then(|text| {
+                    driver::dump(
+                        &args.input,
+                        &text,
+                        stage,
+                        driver::DEFAULT_TARGET,
+                        args.opt,
+                        color,
+                    )
+                })
                 .map(|dump| print!("{dump}")),
             None => {
                 let output = args
                     .output
                     .unwrap_or_else(|| args.input.with_extension("elf"));
-                driver::build(&args.input, &output, &args.link, args.opt, color)
+                let link = &args.link;
+                driver::build(
+                    &args.input,
+                    &output,
+                    link,
+                    driver::DEFAULT_TARGET,
+                    args.opt,
+                    color,
+                )
             }
         },
         // Warnings are shown, and the module is written.

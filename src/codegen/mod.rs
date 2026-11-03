@@ -28,7 +28,7 @@ use crate::mir::{
     BinOp, Body, Const, IntTy, Local, Mir, Operand, PanicInfoAt, Place, PlaceElem, Ptr, Relocation,
     Rvalue, Statement, Terminator, Ty, UnOp,
 };
-use crate::target::Target;
+use crate::target::{Arch, Target};
 use abi::{Cast, FnAbi, PassMode};
 
 /// Returns the textual LLVM IR, for `--emit=llvm-ir`.
@@ -61,21 +61,23 @@ impl OptLevel {
 pub fn emit_llvm_ir(mir: &Mir, target: &Target, opt: OptLevel) -> Result<String, String> {
     let machine = target_machine(target, opt)?;
     let context = Context::create();
-    let module = lower(&context, mir, &machine, opt);
+    let module = lower(&context, mir, target, &machine, opt);
     Ok(module.print_to_string().to_string())
 }
 
 pub fn emit_object(mir: &Mir, target: &Target, opt: OptLevel, path: &Path) -> Result<(), String> {
     let machine = target_machine(target, opt)?;
     let context = Context::create();
-    let module = lower(&context, mir, &machine, opt);
+    let module = lower(&context, mir, target, &machine, opt);
     machine
         .write_to_file(&module, FileType::Object, path)
         .map_err(|e| format!("cannot write `{}`: {e}", path.display()))
 }
 
 fn target_machine(target: &Target, opt: OptLevel) -> Result<TargetMachine, String> {
-    LlvmTarget::initialize_riscv(&InitializationConfig::default());
+    match target.arch {
+        Arch::Riscv32 => LlvmTarget::initialize_riscv(&InitializationConfig::default()),
+    }
     let triple = TargetTriple::create(target.llvm_triple);
     let llvm_target = LlvmTarget::from_triple(&triple).map_err(|e| e.to_string())?;
     llvm_target
@@ -94,6 +96,7 @@ fn target_machine(target: &Target, opt: OptLevel) -> Result<TargetMachine, Strin
 fn lower<'ctx>(
     context: &'ctx Context,
     mir: &Mir,
+    target: &Target,
     machine: &TargetMachine,
     opt: OptLevel,
 ) -> Module<'ctx> {
@@ -102,7 +105,9 @@ fn lower<'ctx>(
     module.set_data_layout(&machine.get_target_data().get_data_layout());
 
     // Declare everything first so bodies can refer to any function.
-    let abis: Vec<FnAbi> = mir.bodies().map(|(_, body)| FnAbi::of(body)).collect();
+    let abis: Vec<FnAbi> = (mir.bodies())
+        .map(|(_, body)| FnAbi::of(target.arch, body))
+        .collect();
     // Bodies run at compile time are not part of the program (ADR 0029).
     let fns: Vec<Option<FunctionValue>> = mir
         .bodies()
@@ -150,7 +155,7 @@ fn lower<'ctx>(
 
     // The entry function's symbol (ADR 0051): symbols are unique, so LLVM
     // keeps it as the function's name.
-    module.set_inline_assembly(&start_stub(&mir.body(mir.entry).name));
+    module.set_inline_assembly(&start_stub(target.arch, &mir.body(mir.entry).name));
 
     if let Err(e) = module.verify() {
         panic!("codegen produced invalid LLVM IR: {}", e.to_string());
@@ -1333,8 +1338,16 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
 /// of `.data` from their load address, a word at a time between the linker
 /// script's symbols, and jumps to the entry function. Every address comes
 /// from the linker script, so the code does not depend on the memory map
-/// (ADR 0057). It goes away once the language can express it (M4).
-fn start_stub(entry: &str) -> String {
+/// (ADR 0057). It goes away once the language can express it (M4). Each
+/// architecture has its own (ADR 0073).
+fn start_stub(arch: Arch, entry: &str) -> String {
+    match arch {
+        Arch::Riscv32 => riscv32_start_stub(entry),
+    }
+}
+
+/// The reset entry of riscv32, in RISC-V assembly.
+fn riscv32_start_stub(entry: &str) -> String {
     format!(
         "\t.section .text.start, \"ax\", @progbits\n\
          \t.globl _start\n\

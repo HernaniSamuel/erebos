@@ -228,7 +228,14 @@ fn integer_arithmetic_has_no_wrap_flags() {
     let mut seen = BTreeSet::new();
     for path in test_programs() {
         let text = fs::read_to_string(&path).unwrap().replace("\r\n", "\n");
-        let Ok(ir) = driver::dump(&path, &text, Stage::LlvmIr, OptLevel::None, false) else {
+        let Ok(ir) = driver::dump(
+            &path,
+            &text,
+            Stage::LlvmIr,
+            erebos::target::DEFAULT,
+            OptLevel::None,
+            false,
+        ) else {
             continue;
         };
         for line in ir.lines() {

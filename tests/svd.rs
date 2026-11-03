@@ -91,7 +91,14 @@ fn compile(path: &Path, svd_text: &str, module: &str) {
     fs::write(&root, ROOT).unwrap();
 
     let expected = expected_errors(svd_text);
-    match driver::dump(&root, ROOT, Stage::Typeck, OptLevel::None, false) {
+    match driver::dump(
+        &root,
+        ROOT,
+        Stage::Typeck,
+        erebos::target::DEFAULT,
+        OptLevel::None,
+        false,
+    ) {
         Ok(_) => assert!(
             expected.is_empty(),
             "{}: the compiler did not report {expected:?}",
@@ -167,7 +174,15 @@ fn the_esp32c3_is_generated_and_built() {
         (OptLevel::None, "esp32c3.elf"),
         (OptLevel::Speed, "esp32c3.opt.elf"),
     ] {
-        driver::build(&root, &dir.join(elf), &[], opt, false).unwrap_or_else(|rendered| {
+        driver::build(
+            &root,
+            &dir.join(elf),
+            &[],
+            erebos::target::DEFAULT,
+            opt,
+            false,
+        )
+        .unwrap_or_else(|rendered| {
             panic!("the generated module does not build with {opt:?}:\n{rendered}")
         });
     }

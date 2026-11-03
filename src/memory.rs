@@ -19,7 +19,7 @@ pub struct MemoryMap {
     pub data: usize,
     /// That of the region whose start holds the stack.
     pub stack: usize,
-    /// The stack's size in bytes, a multiple of `target::STACK_ALIGN`.
+    /// The stack's size in bytes, a multiple of the target's `stack_align`.
     pub stack_size: u64,
 }
 

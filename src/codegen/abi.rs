@@ -3,7 +3,7 @@
 //! implements it for `-mabi=ilp32`.
 
 use crate::mir::{Body, Ty};
-use crate::target;
+use crate::target::{self, Arch};
 
 /// How one parameter or return value crosses a call.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -32,15 +32,24 @@ pub enum Cast {
     Pair,
 }
 
-/// The table of ADR 0025, which covers enums with payloads as aggregates
-/// (ADR 0039).
-pub fn classify(ty: Ty) -> PassMode {
+/// How a value of type `ty` crosses a call on `arch`: scalars as
+/// themselves, `()` and `!` not at all, aggregates by the architecture's
+/// table (ADR 0073).
+pub fn classify(arch: Arch, ty: Ty) -> PassMode {
     if !ty.is_aggregate() {
         return match ty {
             Ty::Unit | Ty::Never => PassMode::Ignore,
             _ => PassMode::Direct,
         };
     }
+    match arch {
+        Arch::Riscv32 => classify_riscv32(ty),
+    }
+}
+
+/// The table of ADR 0025 for an aggregate, which covers enums with
+/// payloads as aggregates (ADR 0039).
+fn classify_riscv32(ty: Ty) -> PassMode {
     let xlen = target::POINTER_BYTES;
     let layout = ty.layout();
     match layout.size {
@@ -60,14 +69,14 @@ pub struct FnAbi {
 }
 
 impl FnAbi {
-    pub fn of(body: &Body) -> FnAbi {
+    pub fn of(arch: Arch, body: &Body) -> FnAbi {
         FnAbi {
             ret: body.ret,
-            ret_mode: classify(body.ret),
+            ret_mode: classify(arch, body.ret),
             params: body
                 .params()
                 .iter()
-                .map(|param| (param.ty, classify(param.ty)))
+                .map(|param| (param.ty, classify(arch, param.ty)))
                 .collect(),
         }
     }
@@ -92,6 +101,12 @@ impl FnAbi {
 mod tests {
     use super::*;
     use crate::int::IntTy;
+
+    /// `super::classify` on riscv32, the only architecture so far; it
+    /// shadows the glob import.
+    fn classify(ty: Ty) -> PassMode {
+        super::classify(Arch::Riscv32, ty)
+    }
 
     fn bytes(len: u64) -> Ty {
         Ty::Array(Box::leak(Box::new(Ty::Int(IntTy::U8))), len)

@@ -1117,7 +1117,15 @@ const EXEMPT: &[Exempt] = &[
 
 /// Whether `text` compiles to `stage` without a diagnostic.
 fn compiles(path: &Path, text: &str, stage: Stage) -> bool {
-    driver::dump(path, text, stage, OptLevel::None, false).is_ok()
+    driver::dump(
+        path,
+        text,
+        stage,
+        erebos::target::DEFAULT,
+        OptLevel::None,
+        false,
+    )
+    .is_ok()
 }
 
 /// A block of braces while the text is scanned.
@@ -1339,7 +1347,14 @@ fn run(catalog: &[Snippet], bases: &[PathBuf], programs: usize, seed: u64) -> Re
             let shown = path
                 .strip_prefix(env!("CARGO_MANIFEST_DIR"))
                 .unwrap_or(path);
-            match driver::dump(path, &text, snippet.stage, OptLevel::None, false) {
+            match driver::dump(
+                path,
+                &text,
+                snippet.stage,
+                erebos::target::DEFAULT,
+                OptLevel::None,
+                false,
+            ) {
                 Ok(_) => report.failures.push(format!(
                     "{}:{line}: `{}` was accepted ({}):\n{}",
                     shown.display(),

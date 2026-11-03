@@ -20,8 +20,8 @@ fn builds_are_identical() {
         for opt in [OptLevel::None, OptLevel::Speed] {
             let first = work.join("first.elf");
             let second = work.join("second.elf");
-            driver::build(&program, &first, &[], opt, false).unwrap();
-            driver::build(&program, &second, &[], opt, false).unwrap();
+            driver::build(&program, &first, &[], erebos::target::DEFAULT, opt, false).unwrap();
+            driver::build(&program, &second, &[], erebos::target::DEFAULT, opt, false).unwrap();
             assert!(
                 fs::read(&first).unwrap() == fs::read(&second).unwrap(),
                 "two builds of {} at {opt:?} differ",

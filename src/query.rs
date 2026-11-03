@@ -21,7 +21,7 @@ use crate::mir::{
     PanicSite, PeripheralRef, PeripheralTypeRef, Ptr, StaticRef, StructRef,
 };
 use crate::span::Span;
-use crate::target;
+use crate::target::{self, Target};
 use crate::ty::{self, Tables};
 
 mod bit_struct;
@@ -149,6 +149,9 @@ enum State<T> {
 
 pub struct Queries<'h> {
     pub hir: &'h Hir,
+    /// The target being built for: the memory map is checked against its
+    /// alignments (ADR 0073).
+    target: &'static Target,
     pub diags: Diagnostics,
     /// What type checking found out about expressions so far.
     pub tables: Tables,
@@ -233,9 +236,10 @@ pub struct Queries<'h> {
 }
 
 impl<'h> Queries<'h> {
-    pub fn new(hir: &'h Hir) -> Queries<'h> {
+    pub fn new(hir: &'h Hir, target: &'static Target) -> Queries<'h> {
         let mut q = Queries {
             hir,
+            target,
             diags: Diagnostics::default(),
             tables: Tables::new(hir.expr_count),
             checked: hir.fns.iter().map(|_| State::NotStarted).collect(),

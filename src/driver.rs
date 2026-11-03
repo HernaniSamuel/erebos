@@ -13,7 +13,11 @@ use crate::link::LinkError;
 use crate::query::Queries;
 use crate::span::SourceMap;
 use crate::syntax::{ast, lexer, parser};
-use crate::{codegen, hir, link, mir, svd, target, ty};
+/// The target of a build that does not choose one (ADR 0073), for the command
+/// line, which reaches the compiler through the driver alone (ADR 0063).
+pub use crate::target::DEFAULT as DEFAULT_TARGET;
+use crate::target::Target;
+use crate::{codegen, hir, link, mir, svd, ty};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Stage {
@@ -85,12 +89,14 @@ const CORE_FILES: &[(&str, &str)] = &[
 /// Runs the pipeline up to `stage` on the program whose root file is at
 /// `path` and holds `text`: the text is compiled, and the path gives the
 /// root file its name and locates the module files. `core` is compiled
-/// with it, but dumps show the program alone (ADR 0052). On failure,
-/// returns the rendered diagnostics.
+/// with it, but dumps show the program alone (ADR 0052). The stages are
+/// those of `target` (ADR 0073). On failure, returns the rendered
+/// diagnostics.
 pub fn dump(
     path: &Path,
     text: &str,
     stage: Stage,
+    target: &'static Target,
     opt: OptLevel,
     color: bool,
 ) -> Result<String, String> {
@@ -98,16 +104,16 @@ pub fn dump(
     let mut diags = Diagnostics::default();
 
     let program = Program::at(path, text);
-    let output = match front_end(&program, Some(stage), &mut sources, &mut diags) {
+    let output = match front_end(&program, Some(stage), target, &mut sources, &mut diags) {
         FrontEnd::Dump(dump) => Some(dump),
         FrontEnd::Mir(mir) if stage == Stage::LinkerScript => match &mir.memory {
-            Some(map) => Some(link::linker_script(map)),
+            Some(map) => Some(link::linker_script(map, target)),
             None => {
                 diags.push(link::no_memory_map());
                 None
             }
         },
-        FrontEnd::Mir(mir) => codegen::emit_llvm_ir(&mir, &target::RISCV32_VIRT, opt)
+        FrontEnd::Mir(mir) => codegen::emit_llvm_ir(&mir, target, opt)
             .map_err(|e| diags.push(Diagnostic::error("codegen::llvm", e)))
             .ok(),
         FrontEnd::Failed => None,
@@ -119,12 +125,14 @@ pub fn dump(
 }
 
 /// Compiles the program whose root file is `input` into an ELF executable
-/// at `output`, linked with the object files `link` (ADR 0026). On
-/// failure, returns the rendered diagnostics or error message.
+/// at `output` for `target`, linked with the object files `link`
+/// (ADR 0026). On failure, returns the rendered diagnostics or error
+/// message.
 pub fn build(
     input: &Path,
     output: &Path,
     link: &[PathBuf],
+    target: &'static Target,
     opt: OptLevel,
     color: bool,
 ) -> Result<(), String> {
@@ -134,7 +142,7 @@ pub fn build(
     let mut diags = Diagnostics::default();
 
     let program = Program::at(input, &text);
-    let mir = match front_end(&program, None, &mut sources, &mut diags) {
+    let mir = match front_end(&program, None, target, &mut sources, &mut diags) {
         FrontEnd::Mir(mir) if !diags.has_errors() => mir,
         _ => return Err(diag::render(&diags.into_vec(), &sources, color)),
     };
@@ -144,12 +152,11 @@ pub fn build(
     };
 
     // Intermediate files sit next to the output and are removed afterwards.
-    let target = &target::RISCV32_VIRT;
     let object = output.with_extension("o");
     let script = output.with_extension("ld");
     let result = codegen::emit_object(&mir, target, opt, &object)
         .and_then(|()| {
-            fs::write(&script, link::linker_script(map))
+            fs::write(&script, link::linker_script(map, target))
                 .map_err(|e| format!("cannot write `{}`: {e}", script.display()))
         })
         .map_err(|e| format!("error: {e}"))
@@ -524,10 +531,12 @@ enum FrontEnd {
 /// stage. The `tokens` and `ast` stages show the root file alone: the
 /// files of its modules are read after it is parsed, and `core`'s after
 /// them (ADR 0049, 0052). Every later dump leaves `core` out, and so does
-/// the MIR returned with a `stop`, for the `llvm-ir` dump.
+/// the MIR returned with a `stop`, for the `llvm-ir` dump. Type checking
+/// checks the memory map against `target` (ADR 0073).
 fn front_end(
     program: &Program,
     stop: Option<Stage>,
+    target: &'static Target,
     sources: &mut SourceMap,
     diags: &mut Diagnostics,
 ) -> FrontEnd {
@@ -598,7 +607,7 @@ fn front_end(
 
     // Every item is checked, on demand of the others and then in order
     // (ADR 0028).
-    let mut queries = Queries::new(&hir);
+    let mut queries = Queries::new(&hir, target);
     queries.check_all();
     if stop == Some(Stage::Typeck) {
         let dump = ty::dump(&mut queries);
@@ -629,6 +638,7 @@ fn front_end(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::target::DEFAULT;
 
     /// The program of root file `main.ers`, holding `text`, whose module
     /// files are `files`.
@@ -648,7 +658,7 @@ mod tests {
     fn load(program: &Program) -> (Vec<String>, Vec<&'static str>) {
         let mut sources = SourceMap::default();
         let mut diags = Diagnostics::default();
-        front_end(program, Some(Stage::Hir), &mut sources, &mut diags);
+        front_end(program, Some(Stage::Hir), DEFAULT, &mut sources, &mut diags);
         let names = sources.files().map(|file| file.name.clone()).collect();
         let codes = diags.into_vec().iter().map(|d| d.code).collect();
         (names, codes)
@@ -697,7 +707,13 @@ mod tests {
         );
         let mut sources = SourceMap::default();
         let mut diags = Diagnostics::default();
-        front_end(&program, Some(Stage::Hir), &mut sources, &mut diags);
+        front_end(
+            &program,
+            Some(Stage::Hir),
+            DEFAULT,
+            &mut sources,
+            &mut diags,
+        );
         let diags = diags.into_vec();
         assert_eq!(diags[0].code, "resolve::module-file");
         assert_eq!(
@@ -721,7 +737,13 @@ mod tests {
         );
         let mut sources = SourceMap::default();
         let mut diags = Diagnostics::default();
-        front_end(&program, Some(Stage::Hir), &mut sources, &mut diags);
+        front_end(
+            &program,
+            Some(Stage::Hir),
+            DEFAULT,
+            &mut sources,
+            &mut diags,
+        );
         let diags = diags.into_vec();
         assert_eq!(diags[0].code, "resolve::module-file");
         assert_eq!(

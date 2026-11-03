@@ -31,6 +31,7 @@ fn struct_layouts_match_c() {
         &dir.join("structs.ers"),
         &source,
         Stage::Typeck,
+        erebos::target::DEFAULT,
         OptLevel::None,
         false,
     )

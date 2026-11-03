@@ -8,18 +8,17 @@ use std::process::Command;
 
 use crate::diag::Diagnostic;
 use crate::mir::MemoryMap;
-use crate::target;
+use crate::target::{Arch, Target};
 
 /// The sections that are not loaded, placed explicitly so that no section
-/// is an orphan; the symbol table is what tools read (ADR 0030).
-const UNLOADED: &[&str] = &[
-    ".symtab",
-    ".strtab",
-    ".shstrtab",
-    ".comment",
-    ".riscv.attributes",
-    // Debug information, DWARF 2 to 5 and GNU extensions, each in a
-    // section of its own so that it stays valid.
+/// is an orphan; the symbol table is what tools read (ADR 0030). The
+/// attributes section of the target's architecture comes after these
+/// (`attributes_section`), then `UNLOADED_DEBUG`.
+const UNLOADED: &[&str] = &[".symtab", ".strtab", ".shstrtab", ".comment"];
+
+/// The unloaded debug information, DWARF 2 to 5 and GNU extensions, each
+/// in a section of its own so that it stays valid.
+const UNLOADED_DEBUG: &[&str] = &[
     ".debug_abbrev",
     ".debug_addr",
     ".debug_aranges",
@@ -49,8 +48,10 @@ const UNLOADED: &[&str] = &[
 /// region under its own name; in the code's region the reset entry in an
 /// output section of its own, then the code, the read-only data and the
 /// initial values of `.data`; at the start of the stack's region the stack;
-/// `.data` and `.bss` in theirs, as ADR 0030 lays them out.
-pub fn linker_script(map: &MemoryMap) -> String {
+/// `.data` and `.bss` in theirs, as ADR 0030 lays them out. The
+/// architecture and the attributes section are `target`'s, and the stack's
+/// alignment is its `stack_align` (ADR 0073).
+pub fn linker_script(map: &MemoryMap, target: &Target) -> String {
     let regions: String = map
         .regions
         .iter()
@@ -71,8 +72,11 @@ pub fn linker_script(map: &MemoryMap) -> String {
     } else {
         format!("> {data} AT> {code}")
     };
+    let header = match target.arch {
+        Arch::Riscv32 => "OUTPUT_ARCH(riscv)\nENTRY(_start)\n\n",
+    };
     format!(
-        "{HEADER}\
+        "{header}\
          MEMORY {{\n\
          {regions}\
          }}\n\
@@ -92,10 +96,10 @@ pub fn linker_script(map: &MemoryMap) -> String {
          {statics}\
          {unloaded}\
          }}\n",
-        align = target::STACK_ALIGN,
+        align = target.stack_align,
         stack_size = map.stack_size,
         statics = statics(&data_place, data),
-        unloaded = unloaded(),
+        unloaded = unloaded(target.arch),
     )
 }
 
@@ -116,15 +120,18 @@ pub fn no_memory_map() -> Diagnostic {
     )
 }
 
-const HEADER: &str = "OUTPUT_ARCH(riscv)\nENTRY(_start)\n\n";
-
 /// The input sections of `.rodata`, with the small-data ones (ADR 0030).
 const RODATA: &str = "*(.rodata .rodata.* .srodata .srodata.*)";
 
 /// The sections that are not loaded, each placed explicitly (ADR 0030).
-fn unloaded() -> String {
+fn unloaded(arch: Arch) -> String {
+    let attributes = match arch {
+        Arch::Riscv32 => ".riscv.attributes",
+    };
     let sections: String = UNLOADED
         .iter()
+        .chain(&[attributes])
+        .chain(UNLOADED_DEBUG)
         .map(|name| format!("    {name} 0 : {{ *({name}) }}\n"))
         .collect();
     format!("    /* Not loaded. */\n{sections}")

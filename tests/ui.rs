@@ -52,7 +52,7 @@ fn compile(path: &Path) -> String {
     let mut output = String::new();
     for &opt in levels {
         let flag = if opt == OptLevel::Speed { " -O" } else { "" };
-        output += &match driver::dump(path, &text, stage, opt, false) {
+        output += &match driver::dump(path, &text, stage, erebos::target::DEFAULT, opt, false) {
             Ok(dump) => format!("--- {stage}{flag} ---\n{dump}"),
             Err(diags) => format!("--- errors{flag} ---\n{diags}"),
         };

@@ -87,12 +87,14 @@ fn run(program: &Path, opt: OptLevel) -> Result<(), String> {
         .map(|file| qemu::compile_c(&program.with_file_name(file), &expected.c_flags, &work, opt))
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| format!("{name}: {e}"))?;
-    erebos::driver::build(program, &elf, &objects, opt, false).map_err(|e| {
-        format!(
-            "{name}: build failed
+    erebos::driver::build(program, &elf, &objects, erebos::target::DEFAULT, opt, false).map_err(
+        |e| {
+            format!(
+                "{name}: build failed
 {e}"
-        )
-    })?;
+            )
+        },
+    )?;
 
     let wait = if expected.exit.is_some() {
         EXIT_TIMEOUT

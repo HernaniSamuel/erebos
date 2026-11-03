@@ -223,6 +223,7 @@ fn compiler_never_panics() {
                 Path::new("fuzz.ers"),
                 &input,
                 Stage::LlvmIr,
+                erebos::target::DEFAULT,
                 OptLevel::None,
                 false,
             )

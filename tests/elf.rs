@@ -58,7 +58,7 @@ fn startup_ranges() {
     fs::write(&source, format!("{VIRT_MAP}\n{PROGRAM}")).unwrap();
     for opt in [OptLevel::None, OptLevel::Speed] {
         let elf = work.join(format!("startup-{opt:?}.elf"));
-        driver::build(&source, &elf, &[], opt, false).unwrap();
+        driver::build(&source, &elf, &[], erebos::target::DEFAULT, opt, false).unwrap();
         check(&elf, opt, false);
     }
 }
@@ -139,7 +139,7 @@ fn check_map(name: &str, map: &Map) {
     let shared = map.code.origin == map.data.origin;
     for opt in [OptLevel::None, OptLevel::Speed] {
         let elf = work.join(format!("{name}-{opt:?}.elf"));
-        driver::build(&source, &elf, &[], opt, false).unwrap();
+        driver::build(&source, &elf, &[], erebos::target::DEFAULT, opt, false).unwrap();
         check(&elf, opt, shared);
 
         let sections = sections(&elf);
@@ -324,7 +324,15 @@ fn reset_entry_alone() {
     fs::write(&source, format!("{block}\n{PROGRAM}")).unwrap();
     for opt in [OptLevel::None, OptLevel::Speed] {
         let elf = work.join(format!("reset_entry-{opt:?}.elf"));
-        driver::build(&source, &elf, std::slice::from_ref(&object), opt, false).unwrap();
+        driver::build(
+            &source,
+            &elf,
+            std::slice::from_ref(&object),
+            erebos::target::DEFAULT,
+            opt,
+            false,
+        )
+        .unwrap();
         let symbols = symbols(&elf);
         let value = |name: &str| symbols.iter().find(|s| s.name == name).unwrap().value;
         assert_eq!(
@@ -346,7 +354,15 @@ fn overflow(name: &str, block: &str) -> String {
     fs::write(&source, format!("{block}\n{PROGRAM}")).unwrap();
     let elf = work.join(format!("{name}.elf"));
     let _ = fs::remove_file(&elf);
-    let error = driver::build(&source, &elf, &[], OptLevel::None, false).unwrap_err();
+    let error = driver::build(
+        &source,
+        &elf,
+        &[],
+        erebos::target::DEFAULT,
+        OptLevel::None,
+        false,
+    )
+    .unwrap_err();
     assert!(!elf.exists(), "{name}: an executable was written");
     error
 }
@@ -368,7 +384,15 @@ fn data_image(name: &str) -> (u64, u64) {
 ";
     fs::write(&source, format!("{block}\n{PROGRAM}")).unwrap();
     let elf = work.join(format!("{name}.elf"));
-    driver::build(&source, &elf, &[], OptLevel::None, false).unwrap();
+    driver::build(
+        &source,
+        &elf,
+        &[],
+        erebos::target::DEFAULT,
+        OptLevel::None,
+        false,
+    )
+    .unwrap();
     let symbols = symbols(&elf);
     let value = |name: &str| symbols.iter().find(|s| s.name == name).unwrap().value;
     let start = value("__data_load");
@@ -493,7 +517,15 @@ panic fn on_panic() -> ! { loop {} }
     fs::write(&source, format!("{VIRT_MAP}\n{program}")).unwrap();
     let elf = work.join("undefined_extern.elf");
     let _ = fs::remove_file(&elf);
-    let error = driver::build(&source, &elf, &[], OptLevel::None, false).unwrap_err();
+    let error = driver::build(
+        &source,
+        &elf,
+        &[],
+        erebos::target::DEFAULT,
+        OptLevel::None,
+        false,
+    )
+    .unwrap_err();
     assert!(error.starts_with("error: linking failed:\n"), "{error}");
     assert!(error.contains("undefined symbol: missing"), "{error}");
     assert!(!error.contains("link::region-overflow"), "{error}");
@@ -518,7 +550,15 @@ fn no_memory_map() {
     for path in &written {
         let _ = fs::remove_file(path);
     }
-    let error = driver::build(&source, &elf, &[], OptLevel::None, false).unwrap_err();
+    let error = driver::build(
+        &source,
+        &elf,
+        &[],
+        erebos::target::DEFAULT,
+        OptLevel::None,
+        false,
+    )
+    .unwrap_err();
     assert!(error.starts_with("link::no-memory-map\n"), "{error}");
     assert_eq!(error.matches("link::").count(), 1, "{error}");
     for path in &written {
@@ -555,7 +595,7 @@ fn module_symbols() {
     fs::write(&source, format!("{VIRT_MAP}\n{MODULES}")).unwrap();
     for opt in [OptLevel::None, OptLevel::Speed] {
         let elf = work.join(format!("modules-{opt:?}.elf"));
-        driver::build(&source, &elf, &[], opt, false).unwrap();
+        driver::build(&source, &elf, &[], erebos::target::DEFAULT, opt, false).unwrap();
         let symbols = symbols(&elf);
         let defined = |name: &str| {
             symbols
@@ -583,7 +623,7 @@ fn core_symbols() {
     fs::write(&source, format!("{VIRT_MAP}\n{PROGRAM}")).unwrap();
     for opt in [OptLevel::None, OptLevel::Speed] {
         let elf = work.join(format!("core-{opt:?}.elf"));
-        driver::build(&source, &elf, &[], opt, false).unwrap();
+        driver::build(&source, &elf, &[], erebos::target::DEFAULT, opt, false).unwrap();
         let symbols = symbols(&elf);
         let defined = |name: &str| {
             symbols

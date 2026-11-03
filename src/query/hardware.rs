@@ -108,8 +108,9 @@ impl Queries<'_> {
         }
 
         let code = &map.regions[map.code.region];
+        let code_align = self.target.code_align;
         if let (Some(origin), _) = values[map.code.region]
-            && origin % target::CODE_ALIGN != 0
+            && origin % code_align != 0
         {
             self.diags.push(
                 Diagnostic::error(
@@ -121,15 +122,14 @@ impl Queries<'_> {
                 )
                 .label(
                     code.origin.1,
-                    format!("{origin:#x} is not a multiple of {}", target::CODE_ALIGN),
+                    format!("{origin:#x} is not a multiple of {code_align}"),
                 )
                 .label(
                     map.code.span,
                     format!("places the code, from the reset entry on, in `{}`", code.name),
                 )
                 .help(format!(
-                    "the reset entry is at the origin of the code's region, which must therefore be a multiple of the target's code alignment, {} bytes (ADR 0057)",
-                    target::CODE_ALIGN
+                    "the reset entry is at the origin of the code's region, which must therefore be a multiple of the target's code alignment, {code_align} bytes (ADR 0057)"
                 )),
             );
         }
@@ -137,7 +137,7 @@ impl Queries<'_> {
         let (Some(size), size_span) = (self.array_len(map.stack_size.0), map.stack_size.1) else {
             return;
         };
-        let align = target::STACK_ALIGN;
+        let align = self.target.stack_align;
         let alignment_help = format!(
             "the stack's size is a non-zero multiple of the target's stack alignment, {align} bytes (ADR 0057)"
         );

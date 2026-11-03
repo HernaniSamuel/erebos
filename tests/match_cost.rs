@@ -133,6 +133,7 @@ fn errors(text: &str, stage: Stage) -> String {
         Path::new("match_cost.ers"),
         text,
         stage,
+        erebos::target::DEFAULT,
         OptLevel::None,
         false,
     ) {
@@ -170,6 +171,7 @@ fn assert_linear(program: &Program, variants: usize) {
         Path::new("match_cost.ers"),
         &program.text,
         Stage::Mir,
+        erebos::target::DEFAULT,
         OptLevel::None,
         false,
     ) {
@@ -278,6 +280,7 @@ fn ors_with_a_last_bool_is_exhaustive() {
         Path::new("match_cost.ers"),
         &text,
         Stage::Typeck,
+        erebos::target::DEFAULT,
         OptLevel::None,
         false,
     ) {
