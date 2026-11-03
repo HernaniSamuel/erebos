@@ -1,0 +1,15 @@
+// emit: typeck
+// On riscv32 a code origin of 0x40 is aligned, and a stack of 24 bytes, a
+// multiple of 8 but not of 16, is `ty::stack-size` (ADR 0057): the same two
+// values on thumbv7m are `target_thumbv7m_misaligned_code.ers` (an error
+// for the origin) and `target_thumbv7m_stack_size.ers` (accepted).
+memory {
+    region CODE { origin: 0x40, size: 0x1_0000 }
+    region DATA { origin: 0x2000_0000, size: 0x1_0000 }
+    code in CODE;
+    data in DATA;
+    stack in DATA { size: 24 }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

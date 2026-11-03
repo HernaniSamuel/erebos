@@ -77,6 +77,7 @@ pub fn emit_object(mir: &Mir, target: &Target, opt: OptLevel, path: &Path) -> Re
 fn target_machine(target: &Target, opt: OptLevel) -> Result<TargetMachine, String> {
     match target.arch {
         Arch::Riscv32 => LlvmTarget::initialize_riscv(&InitializationConfig::default()),
+        Arch::Armv7m => LlvmTarget::initialize_arm(&InitializationConfig::default()),
     }
     let triple = TargetTriple::create(target.llvm_triple);
     let llvm_target = LlvmTarget::from_triple(&triple).map_err(|e| e.to_string())?;
@@ -366,12 +367,15 @@ fn initial_value<'ctx>(
     context.const_struct(&fields, true).into()
 }
 
-/// The LLVM type of an aggregate held in registers (ADR 0025).
+/// The LLVM type of an aggregate held in registers (ADR 0025, 0075).
 fn cast_type(context: &Context, cast: Cast) -> BasicTypeEnum<'_> {
     match cast {
+        Cast::Byte => context.i8_type().into(),
+        Cast::Half => context.i16_type().into(),
         Cast::Word => context.i32_type().into(),
         Cast::Long => context.i64_type().into(),
-        Cast::Pair => context.i32_type().array_type(2).into(),
+        Cast::Words(len) => context.i32_type().array_type(len).into(),
+        Cast::Longs(len) => context.i64_type().array_type(len).into(),
     }
 }
 
@@ -381,22 +385,35 @@ fn abi_type(context: &Context, ty: Ty, mode: PassMode) -> Option<BasicTypeEnum<'
         PassMode::Ignore => None,
         PassMode::Direct => basic_type(context, ty),
         PassMode::Cast(cast) => Some(cast_type(context, cast)),
-        PassMode::Indirect => Some(context.ptr_type(AddressSpace::default()).into()),
+        PassMode::Indirect | PassMode::ByVal { .. } => {
+            Some(context.ptr_type(AddressSpace::default()).into())
+        }
     }
+}
+
+/// The attributes of a pointer to an aggregate `ty` that the ABI gives a
+/// meaning: `kind`, `sret` or `byval`, which names the memory type, and its
+/// alignment.
+fn pointee_attributes(context: &Context, kind: &str, ty: Ty, align: u64) -> [Attribute; 2] {
+    let memory = memory_type(context, ty).expect("aggregates live in memory");
+    let kind = context.create_type_attribute(
+        Attribute::get_named_enum_kind_id(kind),
+        memory.as_any_type_enum(),
+    );
+    let align = context.create_enum_attribute(Attribute::get_named_enum_kind_id("align"), align);
+    [kind, align]
 }
 
 /// Marks the hidden pointer to a returned aggregate, as clang does.
 fn sret_attributes(context: &Context, ty: Ty) -> [Attribute; 2] {
-    let memory = memory_type(context, ty).expect("aggregates live in memory");
-    let sret = context.create_type_attribute(
-        Attribute::get_named_enum_kind_id("sret"),
-        memory.as_any_type_enum(),
-    );
-    let align = context.create_enum_attribute(
-        Attribute::get_named_enum_kind_id("align"),
-        ty.layout().align,
-    );
-    [sret, align]
+    pointee_attributes(context, "sret", ty, ty.layout().align)
+}
+
+/// Marks an argument the callee receives as its own copy, as clang does: the
+/// type it copies and the alignment of the copy in the argument area. The
+/// call site repeats them, for the backend lowers the call by them.
+fn byval_attributes(context: &Context, ty: Ty, align: u32) -> [Attribute; 2] {
+    pointee_attributes(context, "byval", ty, u64::from(align))
 }
 
 fn declare<'ctx>(
@@ -456,9 +473,17 @@ fn declare<'ctx>(
     }
     // The C ABI (ADR 0006) widens narrow integers to a full register; LLVM
     // needs to be told how, as clang does.
-    for (i, &(ty, _)) in abi.params.iter().enumerate() {
-        if let (Some(ext), Some(index)) = (extension(ty), abi.llvm_param(i)) {
+    for (i, &(ty, mode)) in abi.params.iter().enumerate() {
+        let Some(index) = abi.llvm_param(i) else {
+            continue;
+        };
+        if let Some(ext) = extension(ty) {
             add_attribute(context, function, AttributeLoc::Param(index), ext);
+        }
+        if let PassMode::ByVal { align } = mode {
+            for attribute in byval_attributes(context, ty, align) {
+                function.add_attribute(AttributeLoc::Param(index), attribute);
+            }
         }
     }
     if let Some(ext) = extension(body.ret) {
@@ -467,7 +492,8 @@ fn declare<'ctx>(
     function
 }
 
-/// How the RISC-V psABI extends a value narrower than a register.
+/// How the C ABI extends a value narrower than a register: the same on both
+/// targets (ADR 0074).
 fn extension(ty: Ty) -> Option<&'static str> {
     match ty {
         Ty::Bool => Some("zeroext"),
@@ -646,7 +672,14 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
             match mode {
                 PassMode::Direct => self.write(place, value),
                 PassMode::Cast(_) => self.store_cast(value, self.address(place), ty),
-                PassMode::Ignore | PassMode::Indirect => {}
+                // The argument area's copy is aligned to less than the
+                // type: the parameter lives in a slot of its own.
+                PassMode::ByVal { align } if self.byval_is_copied(ty, align) => {
+                    let to = self.address(place);
+                    let from = value.into_pointer_value();
+                    self.copy_bytes(to.ptr, to.align(ty), from, align, ty.layout().size);
+                }
+                PassMode::Ignore | PassMode::Indirect | PassMode::ByVal { .. } => {}
             }
         }
 
@@ -665,13 +698,28 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
         self.fns[body].expect("the program calls only functions of the program")
     }
 
+    /// Whether a `byval` argument of type `ty`, whose copy is aligned to
+    /// `align` bytes, is copied again into a slot with the alignment of the
+    /// type: the argument area aligns to 4 or 8 at most (ADR 0075), and a
+    /// `#[align(N)]` type may need more.
+    fn byval_is_copied(&self, ty: Ty, align: u32) -> bool {
+        ty.layout().align > u64::from(align)
+    }
+
     /// The LLVM parameter that is the memory of `local`: a parameter
-    /// passed indirectly, or the return place when the result is.
+    /// passed indirectly or by copy, or the return place when the result is
+    /// indirect.
     fn memory_param(&self, local: Local) -> Option<PointerValue<'ctx>> {
         let index = match local.0 as usize {
             0 if self.abi.ret_mode == PassMode::Indirect => 0,
             0 => return None,
-            i if i <= self.abi.params.len() && self.abi.params[i - 1].1 == PassMode::Indirect => {
+            i if i <= self.abi.params.len() => {
+                let (ty, mode) = self.abi.params[i - 1];
+                match mode {
+                    PassMode::Indirect => {}
+                    PassMode::ByVal { align } if !self.byval_is_copied(ty, align) => {}
+                    _ => return None,
+                }
                 self.abi.llvm_param(i - 1)?
             }
             _ => return None,
@@ -765,8 +813,10 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                     let value = self.load_cast(self.address(place()), ty, cast);
                     values.push(value.into());
                 }
-                PassMode::Indirect => {
-                    // The callee may change its copy (ADR 0025).
+                PassMode::Indirect | PassMode::ByVal { .. } => {
+                    // The callee may change its copy (ADR 0025); for `byval`
+                    // the call copies it again into the argument area, from
+                    // a copy aligned as the type is (ADR 0075).
                     let layout = ty.layout();
                     let memory = memory_type(self.context, ty).expect("an aggregate");
                     let copy = self.entry_alloca(memory, layout.align);
@@ -786,6 +836,13 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                 call.add_attribute(AttributeLoc::Param(0), attribute);
             }
         }
+        for (i, &(ty, mode)) in abi.params.iter().enumerate() {
+            if let (PassMode::ByVal { align }, Some(index)) = (mode, abi.llvm_param(i)) {
+                for attribute in byval_attributes(self.context, ty, align) {
+                    call.add_attribute(AttributeLoc::Param(index), attribute);
+                }
+            }
+        }
         let Some(dest) = dest else {
             return;
         };
@@ -796,7 +853,7 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
         match abi.ret_mode {
             PassMode::Direct => self.write(dest, value()),
             PassMode::Cast(_) => self.store_cast(value(), self.address(dest), abi.ret),
-            PassMode::Ignore | PassMode::Indirect => {}
+            PassMode::Ignore | PassMode::Indirect | PassMode::ByVal { .. } => {}
         }
     }
 
@@ -1369,7 +1426,9 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                     b.build_return(Some(&value))
                 }
                 // Written through the hidden pointer already.
-                PassMode::Ignore | PassMode::Indirect => b.build_return(None),
+                PassMode::Ignore | PassMode::Indirect | PassMode::ByVal { .. } => {
+                    b.build_return(None)
+                }
             },
             Terminator::Unreachable => b.build_unreachable(),
             // With the address of the check's information, in read-only data
@@ -1401,7 +1460,51 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
 fn start_stub(arch: Arch, entry: &str) -> String {
     match arch {
         Arch::Riscv32 => riscv32_start_stub(entry),
+        Arch::Armv7m => armv7m_start_stub(entry),
     }
+}
+
+/// The reset entry of ARMv7-M, in Thumb assembly (ADR 0074): the first two
+/// words of a vector table, the initial stack pointer and `_start` (the
+/// assembler sets bit 0 of a Thumb function's address), then `_start` itself,
+/// which does what riscv32's does.
+fn armv7m_start_stub(entry: &str) -> String {
+    format!(
+        "\t.syntax unified\n\
+         \t.thumb\n\
+         \t.section .text.start, \"ax\", %progbits\n\
+         \t.p2align 2\n\
+         \t.word __stack_end\n\
+         \t.word _start\n\
+         \t.globl _start\n\
+         \t.type _start, %function\n\
+         \t.thumb_func\n\
+         _start:\n\
+         \tldr r0, =__stack_end\n\
+         \tmov sp, r0\n\
+         \tldr r0, =__bss_start\n\
+         \tldr r1, =__bss_end\n\
+         \tmovs r2, #0\n\
+         .Lzero_bss:\n\
+         \tcmp r0, r1\n\
+         \tbhs .Lcopy_data\n\
+         \tstr r2, [r0], #4\n\
+         \tb .Lzero_bss\n\
+         .Lcopy_data:\n\
+         \tldr r0, =__data_start\n\
+         \tldr r1, =__data_end\n\
+         \tldr r2, =__data_load\n\
+         .Lcopy_word:\n\
+         \tcmp r0, r1\n\
+         \tbhs .Lenter\n\
+         \tldr r3, [r2], #4\n\
+         \tstr r3, [r0], #4\n\
+         \tb .Lcopy_word\n\
+         .Lenter:\n\
+         \tldr r0, ={entry}\n\
+         \tbx r0\n\
+         \t.ltorg\n"
+    )
 }
 
 /// The reset entry of riscv32, in RISC-V assembly.

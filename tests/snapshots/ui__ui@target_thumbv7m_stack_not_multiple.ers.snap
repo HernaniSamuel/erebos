@@ -1,0 +1,18 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/target_thumbv7m_stack_not_multiple.ers
+---
+--- errors ---
+ty::stack-size
+
+  × the stack's size, 12, is not a multiple of 8
+    ╭─[target_thumbv7m_stack_not_multiple.ers:10:27]
+  9 │     data in DATA;
+ 10 │     stack in DATA { size: 12 }
+    ·                           ─┬
+    ·                            ╰── not a multiple of 8
+ 11 │ }
+    ╰────
+  help: the stack's size is a non-zero multiple of the target's stack alignment, 8 bytes (ADR
+        0057)

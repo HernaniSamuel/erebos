@@ -3,6 +3,8 @@
 use std::env;
 use std::path::{Path, PathBuf};
 
+use erebos::target::{Arch, Target};
+
 /// clang, found like `ld.lld`: `EREBOS_CLANG`, then the LLVM we build
 /// against (`LLVM_SYS_221_PREFIX`), then `PATH`.
 #[allow(dead_code, reason = "not every test uses every tool")]
@@ -32,15 +34,28 @@ fn llvm_tool(name: &str, var: &str) -> PathBuf {
     exe.into()
 }
 
-/// The flags that make clang compile for the target Erebos compiles for
-/// (ADR 0010): RV32IMAC, soft-float ilp32 ABI, bare metal.
+/// The flags that make clang compile for `target`, the machine Erebos
+/// compiles for: on riscv32, RV32IMAC with the soft-float ilp32 ABI (ADR
+/// 0010); on thumbv7m, a Cortex-M3 with the soft-float AAPCS (ADR 0074);
+/// both bare metal. Chosen by the architecture, so that a new one fails to
+/// compile here until it has its flags.
 #[allow(dead_code, reason = "not every test uses every tool")]
-pub const CLANG_TARGET: &[&str] = &[
-    "--target=riscv32-unknown-elf",
-    "-march=rv32imac",
-    "-mabi=ilp32",
-    "-ffreestanding",
-];
+pub fn clang_target(target: &Target) -> &'static [&'static str] {
+    match target.arch {
+        Arch::Riscv32 => &[
+            "--target=riscv32-unknown-elf",
+            "-march=rv32imac",
+            "-mabi=ilp32",
+            "-ffreestanding",
+        ],
+        Arch::Armv7m => &[
+            "--target=thumbv7m-none-eabi",
+            "-mcpu=cortex-m3",
+            "-mfloat-abi=soft",
+            "-ffreestanding",
+        ],
+    }
+}
 
 /// The board modules of the tests (ADR 0077).
 #[allow(dead_code, reason = "not every test builds programs with a board")]

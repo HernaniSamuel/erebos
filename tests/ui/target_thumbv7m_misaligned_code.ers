@@ -1,0 +1,15 @@
+// target: thumbv7m-none-eabi
+// emit: typeck
+// The reset entry is a vector table, and VTOR only holds multiples of 128, so
+// the origin of the code's region must be one on thumbv7m (ADR 0074):
+// `ty::misaligned-code` for 0x40, which is aligned for riscv32 (4).
+memory {
+    region CODE { origin: 0x40, size: 0x1_0000 }
+    region DATA { origin: 0x2000_0000, size: 0x1_0000 }
+    code in CODE;
+    data in DATA;
+    stack in DATA { size: 0x1000 }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

@@ -51,7 +51,8 @@ fn opaque_object(opt: OptLevel) -> Result<PathBuf, String> {
         let work = work_dir();
         let source = work.join("opaque.c");
         fs::write(&source, generator::OPAQUE_C).unwrap();
-        [OptLevel::None, OptLevel::Speed].map(|opt| qemu::compile_c(&source, &[], &work, opt))
+        [OptLevel::None, OptLevel::Speed]
+            .map(|opt| qemu::compile_c(&source, &[], &work, target::DEFAULT, opt))
     });
     match opt {
         OptLevel::None => objects[0].clone(),
@@ -69,7 +70,7 @@ fn run_both(name: &str, source: &str) -> Result<(), String> {
     let program = work.join(format!("{name}.ers"));
     fs::write(&program, source).unwrap();
     let expected = Expectation {
-        targets: target::TARGETS.to_vec(),
+        targets: board::RUN_ON.to_vec(),
         output: "generated ok\n".into(),
         exit: Some(0),
         link_c: Vec::new(),

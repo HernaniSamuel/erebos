@@ -224,29 +224,38 @@ fn codegen_names_no_wrap_flag() {
 /// Unoptimized IR is what codegen emits, through `mem2reg` alone, which
 /// adds no flags; with `-O`, LLVM may add the flags it has proven safe.
 /// The dumps leave `core` out, which [`codegen_names_no_wrap_flag`] covers.
+/// Every target is checked (ADR 0073), with the default target's board:
+/// nothing runs here, and the programs compile for each.
 #[test]
 fn integer_arithmetic_has_no_wrap_flags() {
     let mut errors = Vec::new();
     let mut seen = BTreeSet::new();
-    for path in test_programs() {
-        let text = fs::read_to_string(&path).unwrap().replace("\r\n", "\n");
-        let Ok(ir) = driver::dump(
-            &path,
-            &common::board::with_board(&path, &text),
-            Stage::LlvmIr,
-            erebos::target::DEFAULT,
-            OptLevel::None,
-            false,
-        ) else {
-            continue;
-        };
-        for line in ir.lines() {
-            let Some((op, flags)) = integer_op(line) else {
+    for target in erebos::target::TARGETS {
+        for path in test_programs() {
+            let text = fs::read_to_string(&path).unwrap().replace("\r\n", "\n");
+            let Ok(ir) = driver::dump(
+                &path,
+                &common::board::with_board(&path, &text),
+                Stage::LlvmIr,
+                target,
+                OptLevel::None,
+                false,
+            ) else {
                 continue;
             };
-            seen.insert(op);
-            if flags.iter().any(|&f| f == "nsw" || f == "nuw") {
-                errors.push(format!("{}: `{}` (ADR 0007)", display(&path), line.trim()));
+            for line in ir.lines() {
+                let Some((op, flags)) = integer_op(line) else {
+                    continue;
+                };
+                seen.insert(op);
+                if flags.iter().any(|&f| f == "nsw" || f == "nuw") {
+                    errors.push(format!(
+                        "{} [{}]: `{}` (ADR 0007)",
+                        display(&path),
+                        target.name,
+                        line.trim()
+                    ));
+                }
             }
         }
     }

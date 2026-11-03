@@ -1,0 +1,14 @@
+// target: thumbv7m-none-eabi
+// emit: typeck
+// A stack of 12 bytes is not a multiple of thumbv7m's stack alignment, 8:
+// `ty::stack-size` names 8 (ADR 0074).
+memory {
+    region CODE { origin: 0x0, size: 0x1_0000 }
+    region DATA { origin: 0x2000_0000, size: 0x1_0000 }
+    code in CODE;
+    data in DATA;
+    stack in DATA { size: 12 }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

@@ -23,6 +23,8 @@ pub const WIDEST_ACCESS_BITS: u32 = 32;
 pub enum Arch {
     /// RV32IMAC, the riscv32 C ABI of ADR 0025.
     Riscv32,
+    /// ARMv7-M, Thumb-2, the AAPCS of ADR 0075 (ADR 0074).
+    Armv7m,
 }
 
 /// The machine code is generated for. Where its memory is belongs to the
@@ -64,8 +66,23 @@ pub static RISCV32IMAC: Target = Target {
     div64: true,
 };
 
+/// ARMv7-M, as on the Cortex-M3 (ADR 0074). The board is the program's: QEMU's
+/// `mps2-an385` in the tests.
+pub static THUMBV7M: Target = Target {
+    name: "thumbv7m-none-eabi",
+    arch: Arch::Armv7m,
+    llvm_triple: "thumbv7m-none-eabi",
+    llvm_cpu: "cortex-m3",
+    llvm_features: "",
+    pointer_bits: 32,
+    widest_access_bits: 32,
+    stack_align: 8,
+    code_align: 128,
+    div64: false,
+};
+
 /// Every target the compiler knows, in the order errors list them.
-pub const TARGETS: &[&Target] = &[&RISCV32IMAC];
+pub const TARGETS: &[&Target] = &[&RISCV32IMAC, &THUMBV7M];
 
 /// The target of a build that does not choose one (ADR 0073).
 pub const DEFAULT: &Target = &RISCV32IMAC;

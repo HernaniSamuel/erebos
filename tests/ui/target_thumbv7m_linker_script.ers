@@ -1,0 +1,16 @@
+// target: thumbv7m-none-eabi
+// emit: linker-script
+// The linker script on thumbv7m (ADR 0074) for QEMU's `mps2-an385`: the
+// architecture is `arm`, the stack is aligned to 8, `.ARM.attributes` is
+// placed among the sections that are not loaded, and the unwind tables
+// `.ARM.exidx*` and `.ARM.extab*` are discarded.
+memory {
+    region CODE { origin: 0x0000_0000, size: 0x40_0000 }
+    region DATA { origin: 0x2000_0000, size: 0x40_0000 }
+    code in CODE;
+    data in DATA;
+    stack in DATA { size: 0x1000 }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

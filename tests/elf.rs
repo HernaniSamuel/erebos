@@ -2,6 +2,9 @@
 //! go, and the symbols `_start` uses to fill `.bss` with zeros and copy the
 //! initial values of `.data`; where a memory map puts the code, the data
 //! and the stack, and what fails to build when they do not fit (ADR 0057).
+//! The checks on the layout run for every target (ADR 0073): the stack's
+//! alignment is the target's, and where `_start` is depends on its reset
+//! entry (ADR 0074).
 
 mod common;
 
@@ -10,6 +13,7 @@ use std::path::Path;
 use std::process::Command;
 
 use erebos::driver::{self, OptLevel};
+use erebos::target::{Arch, TARGETS, Target};
 
 /// Read-only data of odd length right before `.data`, a byte string after
 /// the static pointing to it, and `.data` holding only data of alignment 1
@@ -56,10 +60,23 @@ fn startup_ranges() {
     fs::create_dir_all(&work).unwrap();
     let source = work.join("startup.ers");
     fs::write(&source, format!("{VIRT_MAP}\n{PROGRAM}")).unwrap();
-    for opt in [OptLevel::None, OptLevel::Speed] {
-        let elf = work.join(format!("startup-{opt:?}.elf"));
-        driver::build(&source, &elf, &[], erebos::target::DEFAULT, opt, false).unwrap();
-        check(&elf, opt, false);
+    for target in TARGETS {
+        for opt in [OptLevel::None, OptLevel::Speed] {
+            let elf = work.join(format!("startup-{}-{opt:?}.elf", target.name));
+            driver::build(&source, &elf, &[], target, opt, false).unwrap();
+            check(&elf, opt, false);
+        }
+    }
+}
+
+/// The address of `_start` in a program whose code region starts at
+/// `origin`: the reset entry (ADR 0057) starts the region on riscv32; on
+/// ARMv7-M two words of a vector table come first (ADR 0074), and the symbol
+/// of a Thumb function has bit 0 set.
+fn start_address(target: &Target, origin: u64) -> u64 {
+    match target.arch {
+        Arch::Riscv32 => origin,
+        Arch::Armv7m => origin + 8 + 1,
     }
 }
 
@@ -120,13 +137,15 @@ impl Map {
     }
 }
 
-/// Builds `PROGRAM` with the memory map `map` at both levels, and checks
-/// where the linker script of ADR 0057 puts things: `_start` at the code
-/// region's origin; the stack at the start of its region, rounded up to 16,
-/// with its size; `.data` above the stack; every loaded section, and the
-/// load image of `.data`, in its region; and the guarantees of ADR 0030,
-/// without the disjointness of the load image when data shares the code's
-/// region, where it is the run range.
+/// Builds `PROGRAM` with the memory map `map` at both levels for every
+/// target, and checks where the linker script of ADR 0057 puts things:
+/// `_start` at the code region's origin, or after the vector table words
+/// the target's reset entry starts with; the stack at the start of its
+/// region, rounded up to the target's stack alignment, with its size;
+/// `.data` above the stack; every loaded section, and the load image of
+/// `.data`, in its region; and the guarantees of ADR 0030, without the
+/// disjointness of the load image when data shares the code's region, where
+/// it is the run range.
 fn check_map(name: &str, map: &Map) {
     let work = Path::new(env!("CARGO_TARGET_TMPDIR")).join("elf");
     fs::create_dir_all(&work).unwrap();
@@ -137,65 +156,72 @@ fn check_map(name: &str, map: &Map) {
     };
     fs::write(&source, format!("{}\n{PROGRAM}", map.memory_block(spare))).unwrap();
     let shared = map.code.origin == map.data.origin;
-    for opt in [OptLevel::None, OptLevel::Speed] {
-        let elf = work.join(format!("{name}-{opt:?}.elf"));
-        driver::build(&source, &elf, &[], erebos::target::DEFAULT, opt, false).unwrap();
-        check(&elf, opt, shared);
+    for target in TARGETS {
+        for opt in [OptLevel::None, OptLevel::Speed] {
+            let elf = work.join(format!("{name}-{}-{opt:?}.elf", target.name));
+            driver::build(&source, &elf, &[], target, opt, false).unwrap();
+            check(&elf, opt, shared);
 
-        let sections = sections(&elf);
-        let symbols = symbols(&elf);
-        let value = |name: &str| {
-            symbols
-                .iter()
-                .find(|s| s.name == name)
-                .unwrap_or_else(|| panic!("{opt:?}: no symbol {name}"))
-                .value
-        };
-        let section = |name: &str| {
-            sections
-                .iter()
-                .find(|s| s.name == name)
-                .unwrap_or_else(|| panic!("{opt:?}: no section {name}"))
-        };
+            let sections = sections(&elf);
+            let symbols = symbols(&elf);
+            let value = |name: &str| {
+                symbols
+                    .iter()
+                    .find(|s| s.name == name)
+                    .unwrap_or_else(|| panic!("{opt:?}: no symbol {name}"))
+                    .value
+            };
+            let section = |name: &str| {
+                sections
+                    .iter()
+                    .find(|s| s.name == name)
+                    .unwrap_or_else(|| panic!("{opt:?}: no section {name}"))
+            };
 
-        assert_eq!(value("_start"), map.code.origin, "{opt:?}: `_start`");
-        let stack_start = map.stack.origin.next_multiple_of(16);
-        assert_eq!(
-            value("__stack_start"),
-            stack_start,
-            "{opt:?}: `__stack_start`"
-        );
-        assert_eq!(
-            value("__stack_end"),
-            stack_start + map.stack_size,
-            "{opt:?}: `__stack_end`"
-        );
-        if map.data.origin == map.stack.origin {
-            assert!(
-                section(".data").address >= value("__stack_end"),
-                "{opt:?}: `.data` is below the top of the stack"
+            assert_eq!(
+                value("_start"),
+                start_address(target, map.code.origin),
+                "{} {opt:?}: `_start`",
+                target.name
             );
-        }
-
-        let data_load = value("__data_load");
-        let data_size = value("__data_end") - value("__data_start");
-        assert!(
-            map.code.contains(data_load, data_load + data_size),
-            "{opt:?}: the load image of `.data` is outside the code's region"
-        );
-        for (name, region) in [
-            (".text.start", map.code),
-            (".text", map.code),
-            (".rodata", map.code),
-            (".stack", map.stack),
-            (".data", map.data),
-            (".bss", map.data),
-        ] {
-            let s = section(name);
-            assert!(
-                region.contains(s.address, s.address + s.size),
-                "{opt:?}: {name} is outside its region"
+            let stack_start = map.stack.origin.next_multiple_of(target.stack_align);
+            assert_eq!(
+                value("__stack_start"),
+                stack_start,
+                "{opt:?}: `__stack_start`"
             );
+            assert_eq!(
+                value("__stack_end"),
+                stack_start + map.stack_size,
+                "{opt:?}: `__stack_end`"
+            );
+            if map.data.origin == map.stack.origin {
+                assert!(
+                    section(".data").address >= value("__stack_end"),
+                    "{opt:?}: `.data` is below the top of the stack"
+                );
+            }
+
+            let data_load = value("__data_load");
+            let data_size = value("__data_end") - value("__data_start");
+            assert!(
+                map.code.contains(data_load, data_load + data_size),
+                "{opt:?}: the load image of `.data` is outside the code's region"
+            );
+            for (name, region) in [
+                (".text.start", map.code),
+                (".text", map.code),
+                (".rodata", map.code),
+                (".stack", map.stack),
+                (".data", map.data),
+                (".bss", map.data),
+            ] {
+                let s = section(name);
+                assert!(
+                    region.contains(s.address, s.address + s.size),
+                    "{opt:?}: {name} is outside its region"
+                );
+            }
         }
     }
 }
@@ -267,34 +293,51 @@ fn memory_map_shared() {
         },
     );
     let work = Path::new(env!("CARGO_TARGET_TMPDIR")).join("elf");
-    for opt in [OptLevel::None, OptLevel::Speed] {
-        let symbols = symbols(&work.join(format!("map_shared-{opt:?}.elf")));
-        let value = |name: &str| symbols.iter().find(|s| s.name == name).unwrap().value;
-        assert_eq!(
-            value("__data_load"),
-            value("__data_start"),
-            "{opt:?}: the load image of `.data` is not its run range"
-        );
+    for target in TARGETS {
+        for opt in [OptLevel::None, OptLevel::Speed] {
+            let symbols = symbols(&work.join(format!("map_shared-{}-{opt:?}.elf", target.name)));
+            let value = |name: &str| symbols.iter().find(|s| s.name == name).unwrap().value;
+            assert_eq!(
+                value("__data_load"),
+                value("__data_start"),
+                "{} {opt:?}: the load image of `.data` is not its run range",
+                target.name
+            );
+        }
     }
 }
 
 /// An object linked in whose code section is aligned to 64 does not move
-/// `_start` off the origin of the code's region: the reset entry has an
-/// output section of its own (ADR 0057).
+/// `_start` off the reset entry's place in the code's region: the reset
+/// entry has an output section of its own (ADR 0057). The origin is the
+/// target's code alignment past 0x8000_0000, so that it is as unaligned as
+/// the target lets it be.
 #[test]
 fn reset_entry_alone() {
     let work = Path::new(env!("CARGO_TARGET_TMPDIR")).join("elf");
     fs::create_dir_all(&work).unwrap();
-    let asm = work.join("aligned.s");
-    fs::write(
-        &asm,
-        "\t.text\n\t.p2align 6\n\t.globl aligned\naligned:\n\tret\n",
-    )
-    .unwrap();
-    let object = work.join("aligned.o");
+    for target in TARGETS {
+        reset_entry_alone_on(target, &work);
+    }
+}
+
+fn reset_entry_alone_on(target: &'static Target, work: &Path) {
+    let (asm_text, asm_name) = match target.arch {
+        Arch::Riscv32 => (
+            "\t.text\n\t.p2align 6\n\t.globl aligned\naligned:\n\tret\n",
+            "aligned-riscv32.s",
+        ),
+        Arch::Armv7m => (
+            "\t.syntax unified\n\t.thumb\n\t.text\n\t.p2align 6\n\t.globl aligned\n\t.type aligned, %function\n\t.thumb_func\naligned:\n\tbx lr\n",
+            "aligned-armv7m.s",
+        ),
+    };
+    let asm = work.join(asm_name);
+    fs::write(&asm, asm_text).unwrap();
+    let object = work.join(format!("aligned-{}.o", target.name));
     let clang = common::clang_path();
     let output = Command::new(&clang)
-        .args(common::CLANG_TARGET)
+        .args(common::clang_target(target))
         .arg("-c")
         .arg(&asm)
         .arg("-o")
@@ -312,35 +355,45 @@ fn reset_entry_alone() {
         String::from_utf8_lossy(&output.stderr)
     );
 
-    let source = work.join("reset_entry.ers");
-    let block = "memory {
-    region FLASH { origin: 0x8000_0004, size: 0x1_0000 }
-    region RAM { origin: 0x8002_0000, size: 0x4000 }
+    let origin = 0x8000_0000 + target.code_align;
+    let source = work.join(format!("reset_entry-{}.ers", target.name));
+    let block = format!(
+        "memory {{
+    region FLASH {{ origin: {origin:#x}, size: 0x1_0000 }}
+    region RAM {{ origin: 0x8002_0000, size: 0x4000 }}
     code in FLASH;
     data in RAM;
-    stack in RAM { size: 0x800 }
-}
-";
+    stack in RAM {{ size: 0x800 }}
+}}
+"
+    );
     fs::write(&source, format!("{block}\n{PROGRAM}")).unwrap();
     for opt in [OptLevel::None, OptLevel::Speed] {
-        let elf = work.join(format!("reset_entry-{opt:?}.elf"));
+        let elf = work.join(format!("reset_entry-{}-{opt:?}.elf", target.name));
         driver::build(
             &source,
             &elf,
             std::slice::from_ref(&object),
-            erebos::target::DEFAULT,
+            target,
             opt,
             false,
         )
         .unwrap();
         let symbols = symbols(&elf);
         let value = |name: &str| symbols.iter().find(|s| s.name == name).unwrap().value;
+        // A Thumb function's symbol has bit 0 set.
         assert_eq!(
-            value("aligned") % 64,
+            value("aligned") & !1 & 63,
             0,
-            "{opt:?}: the object's code is not aligned to 64, so the test proves nothing"
+            "{} {opt:?}: the object's code is not aligned to 64, so the test proves nothing",
+            target.name
         );
-        assert_eq!(value("_start"), 0x8000_0004, "{opt:?}: `_start` moved");
+        assert_eq!(
+            value("_start"),
+            start_address(target, origin),
+            "{} {opt:?}: `_start` moved",
+            target.name
+        );
     }
 }
 
@@ -593,22 +646,25 @@ fn module_symbols() {
     fs::create_dir_all(&work).unwrap();
     let source = work.join("modules.ers");
     fs::write(&source, format!("{VIRT_MAP}\n{MODULES}")).unwrap();
-    for opt in [OptLevel::None, OptLevel::Speed] {
-        let elf = work.join(format!("modules-{opt:?}.elf"));
-        driver::build(&source, &elf, &[], erebos::target::DEFAULT, opt, false).unwrap();
-        let symbols = symbols(&elf);
-        let defined = |name: &str| {
-            symbols
-                .iter()
-                .any(|s| s.name == name && s.section != "UND" && s.section != "ABS")
-        };
-        for name in ["m.f", "m.n.S", "exported", "main", "on_panic"] {
-            assert!(defined(name), "{opt:?}: no symbol {name}");
+    for target in TARGETS {
+        for opt in [OptLevel::None, OptLevel::Speed] {
+            let elf = work.join(format!("modules-{}-{opt:?}.elf", target.name));
+            driver::build(&source, &elf, &[], target, opt, false).unwrap();
+            let symbols = symbols(&elf);
+            let defined = |name: &str| {
+                symbols
+                    .iter()
+                    .any(|s| s.name == name && s.section != "UND" && s.section != "ABS")
+            };
+            for name in ["m.f", "m.n.S", "exported", "main", "on_panic"] {
+                assert!(defined(name), "{} {opt:?}: no symbol {name}", target.name);
+            }
+            assert!(
+                !symbols.iter().any(|s| s.name == "m.exported"),
+                "{} {opt:?}: the `#[export]` function has its path as symbol",
+                target.name
+            );
         }
-        assert!(
-            !symbols.iter().any(|s| s.name == "m.exported"),
-            "{opt:?}: the `#[export]` function has its path as symbol"
-        );
     }
 }
 
@@ -621,31 +677,105 @@ fn core_symbols() {
     fs::create_dir_all(&work).unwrap();
     let source = work.join("core.ers");
     fs::write(&source, format!("{VIRT_MAP}\n{PROGRAM}")).unwrap();
+    for target in TARGETS {
+        for opt in [OptLevel::None, OptLevel::Speed] {
+            let elf = work.join(format!("core-{}-{opt:?}.elf", target.name));
+            driver::build(&source, &elf, &[], target, opt, false).unwrap();
+            let symbols = symbols(&elf);
+            let defined = |name: &str| {
+                symbols
+                    .iter()
+                    .any(|s| s.name == name && s.section != "UND" && s.section != "ABS")
+            };
+            for name in [
+                "memcpy",
+                "memmove",
+                "memset",
+                "__aeabi_memcpy",
+                "__aeabi_memclr8",
+                "__udivdi3",
+                "__moddi3",
+                "core.builtins.__erebos_udivmod64",
+            ] {
+                assert!(defined(name), "{} {opt:?}: no symbol {name}", target.name);
+            }
+            for name in ["core.builtins.memcpy", "core.builtins.__udivdi3"] {
+                assert!(
+                    !symbols.iter().any(|s| s.name == name),
+                    "{} {opt:?}: the `#[export]` function {name} has its path as symbol",
+                    target.name
+                );
+            }
+        }
+    }
+}
+
+/// The reset entry of thumbv7m (ADR 0074), in a program with QEMU's
+/// `mps2-an385` map, whose code starts at 0: the first two words of the
+/// image are the initial stack pointer, `__stack_end`, and `_start` with bit
+/// 0 set, and `_start` follows them in `.text.start`; the unwind tables of
+/// the functions are discarded, and the attributes section is there, not
+/// loaded.
+#[test]
+fn thumbv7m_reset_entry() {
+    let target = erebos::target::by_name("thumbv7m-none-eabi").unwrap();
+    let work = Path::new(env!("CARGO_TARGET_TMPDIR")).join("elf");
+    fs::create_dir_all(&work).unwrap();
+    let source = work.join("thumbv7m_reset_entry.ers");
+    let map = "memory {
+    region CODE { origin: 0x0000_0000, size: 0x40_0000 }
+    region DATA { origin: 0x2000_0000, size: 0x40_0000 }
+    code in CODE;
+    data in DATA;
+    stack in DATA { size: 0x1000 }
+}
+";
+    fs::write(&source, format!("{map}\n{PROGRAM}")).unwrap();
     for opt in [OptLevel::None, OptLevel::Speed] {
-        let elf = work.join(format!("core-{opt:?}.elf"));
-        driver::build(&source, &elf, &[], erebos::target::DEFAULT, opt, false).unwrap();
+        let elf = work.join(format!("thumbv7m_reset_entry-{opt:?}.elf"));
+        driver::build(&source, &elf, &[], target, opt, false).unwrap();
+        let sections = sections(&elf);
         let symbols = symbols(&elf);
-        let defined = |name: &str| {
-            symbols
+        let value = |name: &str| symbols.iter().find(|s| s.name == name).unwrap().value;
+
+        let start = readelf(&elf, &["--section-headers"])
+            .lines()
+            .find(|line| line.contains(" .text.start "))
+            .map(str::to_owned)
+            .unwrap_or_else(|| panic!("{opt:?}: no `.text.start`"));
+        // `[Nr] Name Type Address Off Size ...`, after the `]`.
+        let fields: Vec<&str> = start
+            .split_once(']')
+            .unwrap()
+            .1
+            .split_whitespace()
+            .collect();
+        let (address, offset) = (hex(fields[2]), hex(fields[3]) as usize);
+        assert_eq!(address, 0, "{opt:?}: `.text.start` is not at the origin");
+        let image = fs::read(&elf).unwrap();
+        let word = |at: usize| u64::from(u32::from_le_bytes(image[at..at + 4].try_into().unwrap()));
+        assert_eq!(word(offset), value("__stack_end"), "{opt:?}: first word");
+        assert_eq!(word(offset + 4), value("_start"), "{opt:?}: second word");
+        assert_eq!(
+            value("_start"),
+            8 + 1,
+            "{opt:?}: `_start` is not at 8, Thumb"
+        );
+
+        assert!(
+            !sections
                 .iter()
-                .any(|s| s.name == name && s.section != "UND" && s.section != "ABS")
-        };
-        for name in [
-            "memcpy",
-            "memmove",
-            "memset",
-            "__udivdi3",
-            "__moddi3",
-            "core.builtins.__erebos_udivmod64",
-        ] {
-            assert!(defined(name), "{opt:?}: no symbol {name}");
-        }
-        for name in ["core.builtins.memcpy", "core.builtins.__udivdi3"] {
-            assert!(
-                !symbols.iter().any(|s| s.name == name),
-                "{opt:?}: the `#[export]` function {name} has its path as symbol"
-            );
-        }
+                .any(|s| s.name.starts_with(".ARM.exidx") || s.name.starts_with(".ARM.extab")),
+            "{opt:?}: an unwind table was kept"
+        );
+        let attributes = sections
+            .iter()
+            .find(|s| s.name == ".ARM.attributes")
+            .unwrap_or_else(|| panic!("{opt:?}: no `.ARM.attributes`"));
+        assert_eq!(
+            attributes.address, 0,
+            "{opt:?}: `.ARM.attributes` is loaded"
+        );
     }
 }
 

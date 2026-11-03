@@ -6,7 +6,7 @@ license = "Apache-2.0"
 authors = ["Hernani Samuel Diniz"]
 
 [dependencies]
-inkwell = { version = "0.10", default-features = false, features = ["llvm22-1", "target-riscv"] }
+inkwell = { version = "0.10", default-features = false, features = ["llvm22-1", "target-arm", "target-riscv"] }
 miette = { version = "7.6", features = ["fancy-no-backtrace"] }
 roxmltree = "0.21.2"
 

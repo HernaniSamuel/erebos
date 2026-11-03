@@ -1,0 +1,15 @@
+// emit: llvm-ir
+// opt: both
+// 64-bit division on riscv32, where LLVM's division may be emitted
+// (`div64`, ADR 0076): `udiv`, `sdiv`, `urem` and `srem` on `i64`, which
+// LLVM expands or turns into calls to libgcc's names. The same program is
+// `target_thumbv7m_division64.ers`, where they are calls to `core`.
+fn udiv(a: u64, b: u64) -> u64 { a / b }
+fn urem(a: u64, b: u64) -> u64 { a % b }
+fn sdiv(a: i64, b: i64) -> i64 { a / b }
+fn srem(a: i64, b: i64) -> i64 { a % b }
+fn by_constant(a: u64) -> u64 { a / 10 + a % 8 }
+fn narrow(a: u32, b: i32) -> u32 { a / 3 + ((b % 7) as u32) }
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

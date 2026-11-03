@@ -12,7 +12,9 @@
 //! them all. `core::PanicInfo`, which dumps leave out, is checked against
 //! the numbers of ADR 0053 instead, which `core` asserts. Needs clang,
 //! found like `ld.lld`: `EREBOS_CLANG`, then the LLVM we build against
-//! (`LLVM_SYS_221_PREFIX`), then `PATH`.
+//! (`LLVM_SYS_221_PREFIX`), then `PATH`. It runs for every target, with the
+//! flags clang takes for it (ADR 0077): the layouts do not depend on the
+//! target, and clang agrees on each.
 
 mod common;
 
@@ -22,20 +24,27 @@ use std::path::Path;
 use std::process::Command;
 
 use erebos::driver::{self, OptLevel, Stage};
+use erebos::target::{TARGETS, Target};
 
 #[test]
 fn struct_layouts_match_c() {
+    for target in TARGETS {
+        check(target);
+    }
+}
+
+fn check(target: &'static Target) {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/layout");
     let source = fs::read_to_string(dir.join("structs.ers")).unwrap();
     let dump = driver::dump(
         &dir.join("structs.ers"),
         &source,
         Stage::Typeck,
-        erebos::target::DEFAULT,
+        target,
         OptLevel::None,
         false,
     )
-    .unwrap_or_else(|diags| panic!("structs.ers does not compile:\n{diags}"));
+    .unwrap_or_else(|diags| panic!("structs.ers does not compile for {}:\n{diags}", target.name));
 
     let mut checks = String::from("#include <stddef.h>\n#include \"structs.h\"\n\n");
     let mut structs = 0;
@@ -185,12 +194,12 @@ fn struct_layouts_match_c() {
 
     let work = Path::new(env!("CARGO_TARGET_TMPDIR")).join("c_layout");
     fs::create_dir_all(&work).unwrap();
-    let c_file = work.join("checks.c");
+    let c_file = work.join(format!("checks-{}.c", target.name));
     fs::write(&c_file, &checks).unwrap();
 
     let clang = common::clang_path();
     let output = Command::new(&clang)
-        .args(common::CLANG_TARGET)
+        .args(common::clang_target(target))
         // C23, for enums with a fixed underlying type (ADR 0035).
         .args(["-std=c23", "-fsyntax-only", "-I"])
         .arg(&dir)
@@ -204,7 +213,8 @@ fn struct_layouts_match_c() {
         });
     assert!(
         output.status.success(),
-        "clang disagrees with the compiler's layouts:\n{}\n--- checks ---\n{checks}",
+        "clang disagrees with the compiler's layouts for {}:\n{}\n--- checks ---\n{checks}",
+        target.name,
         String::from_utf8_lossy(&output.stderr)
     );
 }

@@ -1,0 +1,18 @@
+// target: thumbv7m-none-eabi
+// emit: llvm-ir
+// opt: both
+// 64-bit division on thumbv7m, where LLVM would call the EABI's
+// `__aeabi_uldivmod` and `__aeabi_ldivmod`, which no function with the C ABI
+// can be (`div64` is false, ADR 0074, 0076): `/` and `%` on `u64` and `i64`
+// are calls to `__udivdi3`, `__umoddi3`, `__divdi3` and `__moddi3` at both
+// levels, by constants too; 32-bit divisions stay instructions. The same
+// program is `codegen_division64.ers`, on riscv32.
+fn udiv(a: u64, b: u64) -> u64 { a / b }
+fn urem(a: u64, b: u64) -> u64 { a % b }
+fn sdiv(a: i64, b: i64) -> i64 { a / b }
+fn srem(a: i64, b: i64) -> i64 { a % b }
+fn by_constant(a: u64) -> u64 { a / 10 + a % 8 }
+fn narrow(a: u32, b: i32) -> u32 { a / 3 + ((b % 7) as u32) }
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

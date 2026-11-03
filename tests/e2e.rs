@@ -106,7 +106,15 @@ fn run(
     let objects = expected
         .link_c
         .iter()
-        .map(|file| qemu::compile_c(&program.with_file_name(file), &expected.c_flags, &work, opt))
+        .map(|file| {
+            qemu::compile_c(
+                &program.with_file_name(file),
+                &expected.c_flags,
+                &work,
+                target,
+                opt,
+            )
+        })
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| format!("{name}: {e}"))?;
     let staged = board::stage(program, target, &work.join("programs"))
@@ -176,6 +184,6 @@ fn the_targets_header_chooses_targets() {
         names("// targets: riscv32imac-unknown-none-elf\n"),
         ["riscv32imac-unknown-none-elf"]
     );
-    let all: Vec<&str> = erebos::target::TARGETS.iter().map(|t| t.name).collect();
+    let all: Vec<&str> = board::RUN_ON.iter().map(|t| t.name).collect();
     assert_eq!(names("// expect-exit: 0\n"), all);
 }

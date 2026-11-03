@@ -1,0 +1,55 @@
+// target: thumbv7m-none-eabi
+// emit: llvm-ir
+// opt: both
+// Aggregates by value follow the AAPCS of ARMv7-M (ADR 0075), with the same
+// forms clang gives the C twins: an argument of up to 64 bytes as `[N x i32]`
+// (`[N x i64]` when its natural alignment is 8), `byval` above that; a
+// return value as `i8`, `i16` or `i32` up to 4 bytes and through `sret`
+// above; nothing for zero-sized types. An `#[align(N)]` of the aggregate
+// itself does not count, one of a field does; `#[packed]` makes it 1.
+struct Empty {}
+struct One { a: u8 }
+struct Two { a: u16 }
+struct Three { a: u8, b: u8, c: u8 }
+struct Four { a: u32 }
+struct Five { a: [u8; 5] }
+struct Wide { a: u64 }
+struct Words16 { a: [u32; 16] }
+struct Words17 { a: [u32; 17] }
+struct Longs9 { a: [u64; 9] }
+#[align(16)]
+struct Aligned { a: [u32; 4] }
+struct Holder { a: Aligned }
+#[align(16)]
+struct BigAligned { a: [u32; 20] }
+#[packed]
+struct Packed { a: u32, b: u32, c: u8 }
+
+fn empty(a: u32, e: Empty, b: u32) -> Empty { e }
+fn one(x: One) -> One { x }
+fn two(x: Two) -> Two { x }
+fn three(x: Three) -> Three { x }
+fn four(x: Four) -> Four { x }
+fn five(x: Five) -> Five { x }
+fn wide(x: Wide) -> Wide { x }
+fn words16(x: Words16) -> Words16 { x }
+fn words17(mut x: Words17) -> Words17 {
+    x.a[0] = 1;
+    x
+}
+fn longs9(x: Longs9) -> Longs9 { x }
+fn aligned(x: Aligned) -> Aligned { x }
+fn holder(x: Holder) -> Holder { x }
+fn big_aligned(x: BigAligned) -> BigAligned { x }
+fn packed(x: Packed) -> Packed { x }
+fn slices(x: *const [u32]) -> *const [u32] { x }
+
+fn caller(x: Words17, y: Wide) -> u32 {
+    let a: Words17 = words17(x);
+    let b: Wide = wide(y);
+    let c: Three = three(Three { a: 1, b: 2, c: 3 });
+    a.a[1] + (b.a as u32) + (c.c as u32)
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

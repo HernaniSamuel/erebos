@@ -11,6 +11,12 @@ use erebos::target::{self, Target};
 /// The name the harness gives a board next to a program's root file.
 const BOARD_FILE: &str = "board.ers";
 
+/// The targets the tests run programs on: those that have a board module
+/// and a QEMU machine. thumbv7m-none-eabi is a target of the compiler
+/// (ADR 0074) but not yet one of these; adding it here is the step that
+/// gives it `tests/boards/thumbv7m-none-eabi.ers` (ADR 0077).
+pub const RUN_ON: &[&Target] = &[&target::RISCV32IMAC];
+
 /// The source of `target`'s board module.
 pub fn source(target: &Target) -> String {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -20,8 +26,8 @@ pub fn source(target: &Target) -> String {
         .unwrap_or_else(|e| panic!("cannot read the board {}: {e}", path.display()))
 }
 
-/// The targets a `// targets:` header names, or every target when
-/// `names` is empty. Names are separated by spaces or commas.
+/// The targets a `// targets:` header names, or every target of `RUN_ON`
+/// when `names` is empty. Names are separated by spaces or commas.
 pub fn targets_named(names: &str) -> Result<Vec<&'static Target>, String> {
     let mut found = Vec::new();
     for name in names
@@ -29,16 +35,21 @@ pub fn targets_named(names: &str) -> Result<Vec<&'static Target>, String> {
         .filter(|name| !name.is_empty())
     {
         let Some(target) = target::by_name(name) else {
-            let known: Vec<&str> = target::TARGETS.iter().map(|t| t.name).collect();
+            let known: Vec<&str> = RUN_ON.iter().map(|t| t.name).collect();
             return Err(format!(
                 "`// targets:` names an unknown target `{name}`; the targets are {}",
                 known.join(", ")
             ));
         };
+        if !RUN_ON.iter().any(|t| std::ptr::eq(*t, target)) {
+            return Err(format!(
+                "`// targets:` names `{name}`, which the tests do not run programs on yet"
+            ));
+        }
         found.push(target);
     }
     if found.is_empty() {
-        found.extend(target::TARGETS.iter().copied());
+        found.extend(RUN_ON.iter().copied());
     }
     Ok(found)
 }

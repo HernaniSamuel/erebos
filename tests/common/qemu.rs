@@ -88,8 +88,16 @@ pub fn boot(
     let _ = fs::remove_file(log);
     let machine: &[&str] = match target.arch {
         Arch::Riscv32 => &["-machine", "virt", "-nographic", "-bios", "none"],
+        // A Cortex-M3 that stops QEMU through semihosting (ADR 0074, 0077).
+        Arch::Armv7m => &[
+            "-machine",
+            "mps2-an385",
+            "-nographic",
+            "-semihosting-config",
+            "enable=on,target=native",
+        ],
     };
-    let mut qemu = Command::new(qemu_path())
+    let mut qemu = Command::new(qemu_path(target))
         .args(machine)
         .arg("-kernel")
         .arg(elf)
@@ -99,7 +107,12 @@ pub fn boot(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|e| format!("{name}: cannot start QEMU ({e}); install it or set EREBOS_QEMU"))?;
+        .map_err(|e| {
+            format!(
+                "{name}: cannot start QEMU ({e}); install it or set {}",
+                qemu_variable(target)
+            )
+        })?;
 
     // Drain the UART output while QEMU runs, so a chatty program never
     // blocks on a full pipe.
@@ -172,12 +185,13 @@ pub fn check(name: &str, expected: &Expectation, run: &Run) -> Result<(), String
     Ok(())
 }
 
-/// Compiles a C file for the target with clang, optimized like the program,
+/// Compiles a C file for `target` with clang, optimized like the program,
 /// with the program's extra `flags`.
 pub fn compile_c(
     source: &Path,
     flags: &[String],
     work: &Path,
+    target: &Target,
     opt: OptLevel,
 ) -> Result<PathBuf, String> {
     let stem = source.file_stem().unwrap().to_string_lossy();
@@ -188,7 +202,7 @@ pub fn compile_c(
     let object = work.join(format!("{stem}{suffix}.c.o"));
     let clang = super::clang_path();
     let output = Command::new(&clang)
-        .args(super::CLANG_TARGET)
+        .args(super::clang_target(target))
         .args(["-std=c11", "-Wall", "-Werror", "-c", level])
         .args(flags)
         .arg(source)
@@ -211,9 +225,22 @@ pub fn compile_c(
     Ok(object)
 }
 
-/// `EREBOS_QEMU` wins; otherwise `qemu-system-riscv32` from `PATH`.
-fn qemu_path() -> PathBuf {
-    env::var_os("EREBOS_QEMU")
+/// The environment variable that names `target`'s QEMU.
+fn qemu_variable(target: &Target) -> &'static str {
+    match target.arch {
+        Arch::Riscv32 => "EREBOS_QEMU",
+        Arch::Armv7m => "EREBOS_QEMU_ARM",
+    }
+}
+
+/// The variable of `qemu_variable` wins; otherwise the system emulator of
+/// the architecture from `PATH`.
+fn qemu_path(target: &Target) -> PathBuf {
+    let default = match target.arch {
+        Arch::Riscv32 => "qemu-system-riscv32",
+        Arch::Armv7m => "qemu-system-arm",
+    };
+    env::var_os(qemu_variable(target))
         .map(PathBuf::from)
-        .unwrap_or_else(|| "qemu-system-riscv32".into())
+        .unwrap_or_else(|| default.into())
 }

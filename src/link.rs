@@ -74,6 +74,7 @@ pub fn linker_script(map: &MemoryMap, target: &Target) -> String {
     };
     let header = match target.arch {
         Arch::Riscv32 => "OUTPUT_ARCH(riscv)\nENTRY(_start)\n\n",
+        Arch::Armv7m => "OUTPUT_ARCH(arm)\nENTRY(_start)\n\n",
     };
     format!(
         "{header}\
@@ -95,11 +96,13 @@ pub fn linker_script(map: &MemoryMap, target: &Target) -> String {
          \x20   }} > {stack}\n\
          {statics}\
          {unloaded}\
+         {discarded}\
          }}\n",
         align = target.stack_align,
         stack_size = map.stack_size,
         statics = statics(&data_place, data),
         unloaded = unloaded(target.arch),
+        discarded = discarded(target.arch),
     )
 }
 
@@ -127,6 +130,7 @@ const RODATA: &str = "*(.rodata .rodata.* .srodata .srodata.*)";
 fn unloaded(arch: Arch) -> String {
     let attributes = match arch {
         Arch::Riscv32 => ".riscv.attributes",
+        Arch::Armv7m => ".ARM.attributes",
     };
     let sections: String = UNLOADED
         .iter()
@@ -135,6 +139,20 @@ fn unloaded(arch: Arch) -> String {
         .map(|name| format!("    {name} 0 : {{ *({name}) }}\n"))
         .collect();
     format!("    /* Not loaded. */\n{sections}")
+}
+
+/// The sections the script drops, if the architecture has any. ARM objects
+/// have an unwind table entry for every function, which says it cannot be
+/// unwound; nothing unwinds (ADR 0002), so they are discarded rather than
+/// placed in the code's region (ADR 0074).
+fn discarded(arch: Arch) -> &'static str {
+    match arch {
+        Arch::Riscv32 => "",
+        Arch::Armv7m => {
+            "    /* Unwind tables of functions that cannot unwind (ADR 0074). */\n\
+             \x20   /DISCARD/ : { *(.ARM.exidx*) *(.ARM.extab*) }\n"
+        }
+    }
 }
 
 /// `.data`, placed by `data_place`, and `.bss`, in the region `data`, with

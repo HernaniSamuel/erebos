@@ -1,6 +1,9 @@
 //! Reproducible builds (ADR 0027): compile-time execution sees nothing of
 //! the host and zeroes the bytes it never wrote, so compiling the same
-//! program twice gives identical executables.
+//! program twice gives identical executables, for every target (ADR 0073).
+//! Nothing runs here, so the programs are staged with the default target's
+//! board for every target: its addresses mean nothing to the others, but
+//! the program builds, which is what is compared.
 
 mod common;
 
@@ -9,6 +12,7 @@ use std::path::Path;
 use std::process::Command;
 
 use erebos::driver::{self, OptLevel};
+use erebos::target::TARGETS;
 
 #[test]
 fn builds_are_identical() {
@@ -26,16 +30,19 @@ fn builds_are_identical() {
             &work.join("programs"),
         )
         .unwrap();
-        for opt in [OptLevel::None, OptLevel::Speed] {
-            let first = work.join("first.elf");
-            let second = work.join("second.elf");
-            driver::build(&program, &first, &[], erebos::target::DEFAULT, opt, false).unwrap();
-            driver::build(&program, &second, &[], erebos::target::DEFAULT, opt, false).unwrap();
-            assert!(
-                fs::read(&first).unwrap() == fs::read(&second).unwrap(),
-                "two builds of {} at {opt:?} differ",
-                program.display()
-            );
+        for target in TARGETS {
+            for opt in [OptLevel::None, OptLevel::Speed] {
+                let first = work.join("first.elf");
+                let second = work.join("second.elf");
+                driver::build(&program, &first, &[], target, opt, false).unwrap();
+                driver::build(&program, &second, &[], target, opt, false).unwrap();
+                assert!(
+                    fs::read(&first).unwrap() == fs::read(&second).unwrap(),
+                    "two builds of {} for {} at {opt:?} differ",
+                    program.display(),
+                    target.name
+                );
+            }
         }
     }
 }
@@ -59,29 +66,34 @@ fn modules_build_the_same_from_any_directory() {
     .unwrap();
     let program = staged.parent().unwrap();
     let parent = program.parent().unwrap();
-    for opt in [None, Some("-O")] {
-        let builds = [
-            (parent, "modules/main.ers", work.join("modules-root.elf")),
-            (program, "main.ers", work.join("modules-dir.elf")),
-        ];
-        for (dir, input, output) in &builds {
-            let result = Command::new(env!("CARGO_BIN_EXE_erebos"))
-                .current_dir(dir)
-                .args(["build", input, "-o"])
-                .arg(output)
-                .args(opt)
-                .output()
-                .unwrap();
+    for target in TARGETS {
+        for opt in [None, Some("-O")] {
+            let builds = [
+                (parent, "modules/main.ers", work.join("modules-root.elf")),
+                (program, "main.ers", work.join("modules-dir.elf")),
+            ];
+            for (dir, input, output) in &builds {
+                let result = Command::new(env!("CARGO_BIN_EXE_erebos"))
+                    .current_dir(dir)
+                    .args(["build", input, "-o"])
+                    .arg(output)
+                    .args(["--target", target.name])
+                    .args(opt)
+                    .output()
+                    .unwrap();
+                assert!(
+                    result.status.success(),
+                    "building {input} for {} from {} failed:\n{}",
+                    target.name,
+                    dir.display(),
+                    String::from_utf8_lossy(&result.stderr)
+                );
+            }
             assert!(
-                result.status.success(),
-                "building {input} from {} failed:\n{}",
-                dir.display(),
-                String::from_utf8_lossy(&result.stderr)
+                fs::read(&builds[0].2).unwrap() == fs::read(&builds[1].2).unwrap(),
+                "the builds of tests/e2e/modules for {} at {opt:?} differ",
+                target.name
             );
         }
-        assert!(
-            fs::read(&builds[0].2).unwrap() == fs::read(&builds[1].2).unwrap(),
-            "the builds of tests/e2e/modules at {opt:?} differ"
-        );
     }
 }
