@@ -1,6 +1,6 @@
 # 0016. Literals: integers and bytes; no chars, strings or floats
 
-- Status: Accepted
+- Status: Accepted; amended by 0079 (string literals exist, as the templates of `asm` only)
 - Date: 2026-10-12
 
 ## Context

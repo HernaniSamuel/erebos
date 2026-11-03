@@ -1,6 +1,6 @@
 # 0076. 64-bit division calls `core` where LLVM's call cannot be written
 
-- Status: Accepted
+- Status: Accepted; amended by 0080 (C code on thumbv7m divides 64-bit values through `core`'s `__aeabi_uldivmod` and `__aeabi_ldivmod`)
 - Date: 2026-11-03
 - Amends: 0020 (on a target whose 64-bit division functions LLVM would
   call with a convention no C function has, 64-bit `/` and `%` become

@@ -1,6 +1,6 @@
 # 0077. Programs tested on every target
 
-- Status: Accepted
+- Status: Accepted; amended by 0079 (the thumbv7m board stops QEMU with inline assembly, without a C file; a program holding one target's assembly or naming an item of `core::arch` specific to one target lists only that target)
 - Date: 2026-11-03
 - Amends: 0010 (test programs stop QEMU through their board module: on
   `virt` still the test finisher, on `mps2-an385` semihosting)

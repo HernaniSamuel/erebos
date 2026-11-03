@@ -45,14 +45,14 @@ Do not write one for local implementation details that the code already explains
 | 0013 | [Provisional volatile pointers](0013-provisional-volatile-pointers.md) | Accepted, amended by 0058 |
 | 0014 | [Panic handler](0014-panic-handler.md)                          | Accepted, amended by 0053 |
 | 0015 | [Expression-oriented blocks and implicit unit return](0015-expression-oriented-blocks.md) | Accepted |
-| 0016 | [Literals: integers and bytes; no chars, strings or floats](0016-literals-bytes-no-floats.md) | Accepted |
+| 0016 | [Literals: integers and bytes; no chars, strings or floats](0016-literals-bytes-no-floats.md) | Accepted, amended by 0079 |
 | 0017 | [Literal operands of `as` take the target type](0017-literal-cast-operands.md) | Accepted, amended by 0059 |
 | 0018 | [Evaluation order](0018-evaluation-order.md)                   | Accepted, amended by 0031 |
 | 0019 | [Conversions, pointer representation and pointer validity](0019-integer-pointer-conversions-and-operator-details.md) | Accepted, amended by 0031, 0059 |
 | 0020 | [Runtime support functions written in Erebos](0020-runtime-support-functions-in-erebos.md) | Accepted, amended by 0052, 0076 |
 | 0021 | [Structs and arrays](0021-structs-and-arrays.md)               | Accepted, amended by 0031, 0032, 0034, 0059 |
 | 0022 | [Data layout and alignment control](0022-data-layout-and-alignment.md) | Accepted, amended by 0030, 0031, 0034, 0059 |
-| 0023 | [Volatile access guarantees](0023-volatile-access-guarantees.md) | Accepted, amended by 0031, 0035, 0039, 0058, 0059 |
+| 0023 | [Volatile access guarantees](0023-volatile-access-guarantees.md) | Accepted, amended by 0031, 0035, 0039, 0058, 0059, 0081 |
 | 0024 | [Implicit conversion from `*mut T` to `*const T`](0024-mut-to-const-pointer-conversion.md) | Accepted |
 | 0025 | [Aggregates across calls on riscv32](0025-aggregates-across-calls.md) | Accepted, amended by 0031, 0039, 0059 |
 | 0026 | [External functions](0026-external-functions.md) | Accepted, amended by 0051 |
@@ -81,7 +81,7 @@ Do not write one for local implementation details that the code already explains
 | 0049 | [Modules and paths](0049-modules-and-paths.md) | Accepted |
 | 0050 | [Visibility](0050-visibility.md) | Accepted, amended by 0054, 0059 |
 | 0051 | [Symbol names](0051-symbol-names.md) | Accepted |
-| 0052 | [The `core` module](0052-the-core-module.md) | Accepted, amended by 0056 |
+| 0052 | [The `core` module](0052-the-core-module.md) | Accepted, amended by 0056, 0080 |
 | 0053 | [Panic information](0053-panic-information.md) | Accepted, amended by 0059 |
 | 0054 | [Only `_` covers an enum that is not reachable](0054-only-wildcards-cover-unreachable-enums.md) | Accepted |
 | 0055 | [Repeat counts and dead arms under failed values](0055-repeat-counts-and-dead-arms-under-failed-values.md) | Accepted |
@@ -103,7 +103,11 @@ Do not write one for local implementation details that the code already explains
 | 0071 | [Names generated from SVD](0071-names-generated-from-svd.md) | Accepted |
 | 0072 | [SVD constructs, and what has no declaration](0072-svd-constructs-and-what-has-no-declaration.md) | Accepted, amended 2026-11-02 |
 | 0073 | [Targets](0073-targets.md) | Accepted, corrected 2026-11-03 |
-| 0074 | [The ARMv7-M target](0074-armv7m-target.md) | Accepted |
+| 0074 | [The ARMv7-M target](0074-armv7m-target.md) | Accepted, amended by 0080 |
 | 0075 | [Aggregates across calls on ARMv7-M](0075-aggregates-across-calls-on-armv7m.md) | Accepted |
-| 0076 | [64-bit division calls `core` where LLVM's call cannot be written](0076-64-bit-division-calls-core.md) | Accepted |
-| 0077 | [Programs tested on every target](0077-programs-tested-on-every-target.md) | Accepted |
+| 0076 | [64-bit division calls `core` where LLVM's call cannot be written](0076-64-bit-division-calls-core.md) | Accepted, amended by 0080 |
+| 0077 | [Programs tested on every target](0077-programs-tested-on-every-target.md) | Accepted, amended by 0079 |
+| 0078 | [Concurrency with interrupt handlers](0078-concurrency-with-interrupt-handlers.md) | Accepted |
+| 0079 | [Inline assembly](0079-inline-assembly.md) | Accepted |
+| 0080 | [`core::arch`, one file per target](0080-core-arch-per-target.md) | Accepted |
+| 0081 | [Fences](0081-fences.md) | Accepted |

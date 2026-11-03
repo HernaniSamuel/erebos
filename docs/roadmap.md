@@ -9,7 +9,7 @@ and ends with a program running on QEMU, verified by an automated test.
 | **M1** ✅ | Functions, integers, `bool`, typed `let`, `if`/`while`/`loop`, raw and volatile pointers (ADR 0013), byte literals (ADR 0016), checked division (ADR 0007), the panic function (ADR 0014). Prints "hello" over the QEMU UART via volatile pointer writes. |
 | **M2** ✅ | Compound data, enums and modules, in the steps below. |
 | **M3** ✅ | `memory { ... }` blocks generating the linker script; `peripheral` blocks with native MMIO. The UART is declared in the language. |
-| **M4** | Interrupt handlers, vector tables, inline `asm`, compiler and hardware fences (ADR 0023). |
+| **M4** | Interrupt handlers, vector tables, inline `asm`, compiler and hardware fences (ADR 0023), in the steps below. |
 | **M5** | Moves/ownership, then references and borrow checking (ADR 0009); methods (`impl`, `self`, `&self`, `&mut self`, `x.f()`). |
 | **M6** | Types as values and `comptime` parameters: generics in the Zig model, monomorphized (ADR 0027). |
 
@@ -67,6 +67,35 @@ Decisions already agreed for the later steps:
 - **M3.5:** the second target comes before M4, so that interrupts and
   vector tables, the most target-specific part of the language, are
   designed with both targets in view.
+
+## M4 steps
+
+M4 is split into steps like M3's, each ending with ADRs, the reference
+updated, and a program on QEMU. The concurrency model they share is
+ADR 0078.
+
+| Step | Delivers | Program on QEMU |
+|------|----------|-----------------|
+| **M4.1** Inline assembly | `asm` expressions with operands, options and naked functions (ADR 0079); `core::arch`, a file per target (ADR 0080); `compiler_fence` and `fence` (ADR 0081); `__aeabi_uldivmod` and `__aeabi_ldivmod` in `core` | the thumbv7m board stops QEMU through `bkpt` in Erebos; C code divides 64-bit values on both targets; machine registers read through `asm` on each target |
+| **M4.2** Startup in the language | `_start` moves into `core::arch`, written in Erebos and assembly (ADR 0012 superseded) | the e2e programs boot through `core`'s `_start` on both targets |
+| **M4.3** Handlers and vector tables | `interrupt fn ... at` for exceptions and the target's interrupts, the vector table (thumbv7m) and the trap entry (riscv32) generated from them, `critical` blocks (ADR 0078), a vector without a handler calling the panic function | a timer interrupt (the CLINT on `virt`, SysTick on `mps2-an385`) counting ticks shared with the entry function; a fault reaching the panic function on both targets |
+| **M4.4** External interrupts | the chip's interrupts as a list `erebos svd` writes from `<interrupt>`, the NVIC's interrupts in the thumbv7m table, the PLIC's dispatched by the program on riscv32 | a UART driven by its interrupt on both targets |
+| **M4.5** Shared statics checked | the rule of ADR 0078 checked over the call graph | programs with handlers checked; rejected programs as ui tests |
+
+Decisions already agreed for the later steps:
+
+- **M4.2:** `_start` is a naked function of `core::arch` (ADR 0079,
+  0080), one per target.
+- **M4.3:** one priority level (ADR 0078). A handler is declared
+  `interrupt fn NAME() at VECTOR`, takes no parameters and cannot be
+  called; the compiler generates the vector table or trap entry from
+  the program's handlers. A vector without a handler calls the panic
+  function, with a new `PanicReason`, instead of locking up. Critical
+  sections are `critical` blocks.
+- **M4.4:** the chip's interrupt numbers come from an enum, which `erebos
+  svd` writes from the SVD's `<interrupt>` elements.
+- **M4.5:** only `static mut` and `extern static mut` named in the
+  program are checked; peripherals and raw pointers wait for M5.
 
 Until M5, there are no methods: functions are free and take their receiver
 explicitly (`fn rect_area(r: *const Rect) -> u32`), and modules (M2.6)
@@ -224,21 +253,42 @@ ADRs:
     where LLVM would call the EABI's functions; riscv32 unchanged) and
     0077 (test programs reach their machine through a board module per
     target, which the harness supplies; semihosting on ARM).
-- **M4:**
-  - A concurrency model spanning M4 and M5, in an ADR written before M4
-    starts, so that M4 decides nothing M5 must break. M4 may share a
-    `static mut` with interrupt handlers without checks (critical
-    sections, as in C; ADR 0030) if M5 then only adds checks and changes
-    no meaning. Rust checks sharing with the `Send` and `Sync` traits, and
-    Erebos has no traits (see M6). The direction discussed: interrupt
-    handlers and their priorities are declared in the language, so the
-    compiler can compute from the call graph which statics each handler
-    reaches and require a critical section only where code of another
-    priority reaches the same static, as the priority ceiling protocol of
-    RTIC does, but in the compiler instead of macros. A call through a
-    function pointer hides its callee; the ADR must say what that means.
-  - Compiler and hardware fences (ADR 0023).
-  - Moving `_start` into the language (ADR 0012, 0030).
+- **M4** (M4.1 to M4.5):
+  - The concurrency model spanning M4 and M5 is ADR 0078: contexts
+    (thread, handler, unmaskable), one priority level, `critical`
+    blocks, and the rule for shared statics, checked from M4.5; M5 and
+    priorities only add to it. Calls through function pointers are left
+    to the step that adds them, with the constraint the ADR states.
+  - M4.1: settled by ADR 0079 (inline assembly), 0080 (`core::arch`)
+    and 0081 (fences, amending ADR 0023).
+  - M4.2: how `core`'s `_start` names the program's entry function, which
+    `core` cannot name by path (a fixed symbol, or an operand the
+    compiler fills in); whether a program may supply reset code of its
+    own (clocks before `.data` is copied, memory left uninitialized);
+    ADR 0012 superseded and 0030, 0057, 0074 amended accordingly.
+  - M4.3: the vectors each target names and how a program writes them
+    after `at`; whether the handlers the compiler generates for vectors
+    without one are contexts of ADR 0078, which decides whether the
+    panic function runs in an unmaskable context in every program and
+    so which statics it may name (found by the M4.1 review); which
+    handlers are unmaskable (ADR 0078) and whether
+    fault handlers return `!`; what the default handler passes to the
+    panic function (the vector, no file and line); the riscv32 trap
+    entry (`mtvec` direct with a dispatch on `mcause`, or vectored) and
+    the registers it saves; how a program enables and masks interrupts
+    and waits for one (`wfi`) without losing a wake-up; whether `_start`
+    masks interrupts on thumbv7m so that both targets enter the entry
+    function alike; how `critical` lowers; the size of the thumbv7m table
+    and `code_align` (ADR 0074, "Consequences").
+  - M4.4: the form of the chip's interrupt list (an enum and how the
+    compiler knows it is the chip's), the length of the thumbv7m table it
+    gives, and how the program enables an interrupt in the NVIC and the
+    PLIC.
+  - M4.5: where the check runs (a MIR analysis, ADR 0033), its
+    diagnostics (the access, and the path of calls from the context), and
+    what counts as naming a static.
+  - Not in M4: priorities and nesting (ADR 0078, "What later steps may
+    add"); function pointers.
 - **M5:**
   - Constants and statics of types that must not be copied: duplicating a
     peripheral handle is a bug ownership should catch (ADR 0021), but a
@@ -558,4 +608,5 @@ Documentation owed:
   `__aeabi_uldivmod` and `__aeabi_ldivmod`, so that C code linked into a
   thumbv7m program can divide 64-bit values. Not planned: Cortex-M0,
   floating-point units, big-endian and 64-bit targets.
-- **Next: M4** (interrupt handlers, vector tables, inline `asm`).
+- **Next: M4.1** (inline assembly, `core::arch`, fences), the first of
+  the M4 steps above.

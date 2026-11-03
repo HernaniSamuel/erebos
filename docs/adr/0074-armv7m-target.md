@@ -1,6 +1,6 @@
 # 0074. The ARMv7-M target
 
-- Status: Accepted
+- Status: Accepted; amended by 0080 (`core` defines `__aeabi_uldivmod` and `__aeabi_ldivmod`)
 - Date: 2026-11-03
 - Amends: 0012 (on ARMv7-M the reset entry is two words of a vector
   table before `_start`), 0030 (the linker script discards the unwind
