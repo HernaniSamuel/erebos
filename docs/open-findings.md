@@ -57,6 +57,34 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   build and link succeed, not the values, and writes to a fixed directory
   (`erebos-codegen-div64`) that two concurrent test processes would share.
   (M3.5)
+- `src/syntax/parser.rs` (`report_unexpected`, `report_unexpected_help`): a
+  string literal met inside an `asm` where the operand takes none
+  (`in(reg) "str"`, `sym "x"`) is `parser::string-outside-asm` ("string
+  literals exist only inside `asm`"), which misleads there; the step 1
+  Decisions say `asm` uses its own `asm_expected`, true only for its direct
+  arguments. Also the lexer's "unterminated string literal" message and its
+  `asm` help are pinned by no snapshot (a unit test checks the code only);
+  `quoted` picks the help with `open.starts_with('b')`. (M4.1)
+- `src/mir/mod.rs` (`Body::for_each_asm`): clones and `Box::leak`s the
+  `InlineAsm` of every `noreturn` terminator on each call, and `leave_out`
+  and the callers of `for_each_operand` call it more than once per body; it
+  could leak only when `f` changes something. `Terminator::InlineAsm`
+  holds a leaked `&'static`, a per-compile leak in long test processes. (M4.1)
+- `const` operands reuse `comptime` evaluation, so an evaluation error
+  inside one says "this `comptime` expression" (one origin text in
+  `query`); `in("")` prints "`` is no register". `ty::asm-register` and
+  `eval` could carry their own wording. (M4.1)
+- `src/codegen/asm.rs`: a `sym` naming a function that is also a register
+  name (`x10`) is pasted into the template unquoted. (M4.1)
+- `rt/builtins.ers` (the header of the 64-bit division section): "A zero
+  divisor never reaches them, since division checks happen before the call
+  (ADR 0007)" is true only for Erebos code now that C code reaches
+  `__erebos_udivmoddi4` through `__aeabi_*`; add "from Erebos code".
+  `__divdi3` and `__moddi3` now repeat the sign logic of
+  `__erebos_divmoddi4`. (M4.1)
+- A template that makes LLVM call `report_fatal_error` still ends the
+  compiler: the diagnostic handler of ADR 0082 does not see it, and a
+  process-wide fatal error handler would need an ADR. (M4.1)
 
 ## Tests
 
@@ -111,6 +139,18 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   The step 7 Decisions of the plan also say `x72_1` skips `r1` (only
   `x72_0` does) and that the script is both kept out and the author of the
   comments. (M3.5)
+- `tests/elf.rs` (`Symbol` parsing): `size.parse().unwrap_or(0)` turns an
+  unparsable size into 0, so the `compiler_fence` check (`len() <= 4`)
+  would pass without checking; `ARCH_FILES` in `tests/e2e.rs` repeats the
+  file names `core_arch_file` in `src/driver.rs` holds. (M4.1)
+- `tests/e2e/fence_handoff.ers` cannot fail if `fence()` or
+  `compiler_fence()` emitted nothing (QEMU does not reorder; ADR 0081 says
+  so); only `tests/elf.rs` checks the instructions. Do not cite it as
+  evidence of ordering. (M4.1)
+- The Tests line of plan step 7 names a "harness test that a failing exit
+  code fails the run"; none has that name (`generated.rs` line 172 and the
+  `expect-exit: 1` programs cover it). `tests/boards/thumbv7m-none-eabi.ers`
+  has a comment line of 82 columns and an `asm(...)` line of 96. (M4.1)
 
 ## Docs
 
@@ -140,3 +180,7 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   parenthesis. `docs/roadmap.md` (lines 67 to 69 and 203 to 216) still
   speaks of M3.5 in the future. `CONTRIBUTING.md` says the ELF tests'
   checks run for every target; three of them stay on riscv32. (M3.5)
+- `docs/reference.md`, the `ty::asm-operand-type` row of the diagnostics
+  table: it omits the `const` that is not an integer (`asm("{}", const
+  true)`), which ADR 0079 and the compiler give this code; the "Operands"
+  bullet says "any integer type" without naming the error. (M4.1)
