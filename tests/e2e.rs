@@ -550,6 +550,23 @@ fn portable_items_agreed(files: &[(&str, &str)]) -> Result<Vec<String>, String> 
         .ok_or_else(|| "no file of `core::arch`".to_owned())
 }
 
+/// The portable items `docs/reference.md` lists (ADR 0080): in its section
+/// "`core`", each bullet that starts with a declaration in backticks, as
+/// ``- `pub fn fence()`: ...``, is one.
+fn reference_portable_items(reference: &str) -> Vec<String> {
+    let section = reference
+        .split("\n## `core` (ADR 0020, 0052)\n")
+        .nth(1)
+        .and_then(|rest| rest.split("\n## ").next())
+        .unwrap_or("");
+    section
+        .lines()
+        .filter_map(|line| line.trim_start().strip_prefix("- `pub "))
+        .filter_map(|rest| rest.split('`').next())
+        .map(|declaration| format!("pub {declaration}"))
+        .collect()
+}
+
 /// The call of a portable item in a program: the items of `core::arch` that
 /// have no parameter and return nothing, as the fences are. A later item
 /// with another signature needs arguments here, and the test says so.
@@ -570,8 +587,8 @@ fn call_of(item: &str) -> Result<String, String> {
 /// listed, and a program calling all of them builds for every target
 /// (ADR 0080), at both levels. The list is read from the files' headers, so a
 /// new portable item needs no change here; one missing from a file, or with
-/// another signature, fails. That `docs/reference.md` lists them too is
-/// checked from step 9 on.
+/// another signature, fails. `docs/reference.md` must list each of them in
+/// its section "`core`".
 #[test]
 fn portable_core_arch() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -589,6 +606,17 @@ fn portable_core_arch() {
             && items.contains(&"pub fn compiler_fence()".to_owned()),
         "the fences of ADR 0081 are portable: {items:?}"
     );
+
+    let reference = fs::read_to_string(root.join("docs/reference.md"))
+        .unwrap()
+        .replace("\r\n", "\n");
+    let listed = reference_portable_items(&reference);
+    for item in &items {
+        assert!(
+            listed.contains(item),
+            "`{item}` is portable but docs/reference.md does not list it (it lists {listed:?})"
+        );
+    }
 
     let calls: String = items.iter().map(|item| call_of(item).unwrap()).collect();
     let source = running(&calls, "");
@@ -639,6 +667,19 @@ fn portable_items_are_checked_against_the_files() {
         "a: lists no portable item"
     );
     assert!(portable_items_agreed(&[]).is_err());
+
+    // The reference's list is read from the bullets of its section "`core`":
+    // an item outside that section, or not a declaration, is not one.
+    let reference = "## Other\n\n- `pub fn elsewhere()`: not in `core`.\n\n\
+                     ## `core` (ADR 0020, 0052)\n\n\
+                     - `core` holds:\n  - `pub fn fence()`: a fence.\n\
+                     - `pub fn pause()`: another.\n\n\
+                     ## Next\n\n- `pub fn after()`: no.\n";
+    assert_eq!(
+        reference_portable_items(reference),
+        ["pub fn fence()", "pub fn pause()"]
+    );
+    assert!(reference_portable_items("no section").is_empty());
 
     assert_eq!(
         call_of("pub fn fence()").unwrap(),

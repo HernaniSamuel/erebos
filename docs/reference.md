@@ -1,4 +1,4 @@
-# Erebos language reference (M3.4b)
+# Erebos language reference (M4.1)
 
 This describes the language as the compiler implements it today. The
 reasoning behind each rule lives in the ADRs (`docs/adr/`), cited as
@@ -75,11 +75,11 @@ block.
   any module (`resolve::reserved-name`, ADR 0020, 0052); a module of the
   root module may not be named `llvm` (see "Symbols") or `rt` (see
   "Modules and paths").
-- **Keywords:** `align_of as break comptime const continue crate else entry
-  enum extern false fn if let loop match mod mut offset_of panic pub return
-  size_of static struct super true use volatile while`. `raw` is a keyword
-  only right after `&`. `memory`, and the words inside a `memory` block
-  (`region`, `origin`, `size`, `code`, `data`, `stack`, `in`), are no
+- **Keywords:** `align_of as asm break comptime const continue crate else
+  entry enum extern false fn if let loop match mod mut offset_of panic pub
+  return size_of static struct super true use volatile while`. `raw` is a
+  keyword only right after `&`. `memory`, and the words inside a `memory`
+  block (`region`, `origin`, `size`, `code`, `data`, `stack`, `in`), are no
   keywords: they are recognized only in their place (see "Memory maps"),
   and are ordinary names elsewhere. Nor are `peripheral`, which starts an
   item only where an item starts and a name follows it; the words
@@ -89,7 +89,10 @@ block.
   after an entry's offset and `over` after a peripheral's address;
   `clears`, `sets`, `toggles` and `modifies`, recognized only in an
   effect; and `in` after an entry's offset (see "Bit-field structs" and
-  "Peripherals").
+  "Peripherals"). Nor are `in`, `out`, `lateout`, `inout`, `sym`,
+  `clobber_abi`, `options`, `reg` and the names of the options, recognized
+  only where an operand or an option of `asm` starts (see "Inline
+  assembly"); elsewhere they are ordinary names, `in` included.
 - **`..`** ends a literal of a bit-field struct, giving the fields it
   leaves out their defaults, and **`..=`** joins the two ends of a bit
   field's bits (see "Bit-field structs"); neither has another use, and
@@ -120,8 +123,13 @@ block.
   literals (`'` may be written directly, `"` needs `\"`). It ends on its
   line: a line break inside it, or a missing `"`, is an error; write `\n`.
   See "Byte strings" below.
-- There are no `char`, text string or floating-point literals; a byte
-  string is bytes, not Unicode text (ADR 0016).
+- **String literals** (ADR 0079): `"..."` has the characters, escapes and
+  errors of a byte string, and exists only inside the parentheses of `asm`,
+  as a template, the name of a register or the name of an ABI (see "Inline
+  assembly"). It has no type and no value. Anywhere else, a string literal is
+  `parser::string-outside-asm`, whose help shows `b"..."`.
+- There are no `char`, text or floating-point values; a byte string is
+  bytes, not Unicode text (ADR 0016).
 
 ## Types
 
@@ -212,6 +220,8 @@ fn add(a: u32, mut b: u32) -> u32 {
   name as its symbol, and so has one marked `#[export]`, so C code can call
   it by that name; a function of another module is named by its path,
   `uart.init` (ADR 0051, see "Symbols").
+- `#[naked]` makes a function whose body is one `asm` expression and has no
+  code of the compiler's around it (ADR 0079, see "Inline assembly").
 
 ### Aggregates by value (ADR 0025, 0039, 0075)
 
@@ -2170,9 +2180,23 @@ load of the whole value, and written with one load and one store of it:
 fields are written with a neutral value is a matter of write effects (see
 "Peripherals").
 
-Volatile accesses are not ordered against ordinary ones, and no fences are
-emitted: until M4, handing memory to a device (DMA) cannot be written with
-a guarantee.
+Volatile accesses are not ordered against ordinary ones, and the compiler
+emits no fence of its own. Handing memory to a device (DMA), or reading
+memory a device wrote, is written with the fences of `core::arch` (ADR
+0081, see "`core`"): a driver that fills a descriptor with ordinary writes
+and then rings a doorbell calls `core::arch::fence()` between them,
+
+```
+DESCRIPTORS[0] = Descriptor { addr: buf, len: 64, flags: 1 };
+core::arch::fence();
+DEVICE.doorbell = 1;
+```
+
+and one that reads the buffer after a "done" status calls it between the two
+reads. `compiler_fence()` stops the compiler from moving accesses across it
+and emits no instruction; `fence()` also orders the accesses in the
+hardware (`fence iorw, iorw` on riscv32, `dmb sy` on thumbv7m). Both are
+`asm` (see "Inline assembly") and run at run time only.
 
 ### Control flow
 
@@ -2209,7 +2233,250 @@ that is not a place, used as the base of indexing or a field, is read
 where it is written too: in `({ x })[{ x[0] = 9; 0 }]` the block reads `x`
 before the index changes it. `e?` runs `e` where it is written, and when
 it returns from the function, nothing after it runs: in `f(a()?, b())`,
-`b()` does not run when `a()` fails (ADR 0046).
+`b()` does not run when `a()` fails (ADR 0046). In `asm`, the operands and
+the places of the outputs run left to right before the code, and the outputs
+are stored after it, left to right (ADR 0079, see "Inline assembly").
+
+## Inline assembly (ADR 0079, 0082)
+
+Some instructions have no expression in the language: a control register
+(`csrr`, `mrs`), `wfi`, a fence, a semihosting request. `asm` is an
+expression that copies a template of assembly into the program, with
+operands that carry values in and out of registers:
+
+```
+let mut cause: u32 = 0;
+asm("csrr {}, mcause", out(reg) cause, options(nomem, nostack));
+
+let mut x: u32 = 5;
+asm("add {x}, {x}, {y}", x = inout(reg) x, y = in(reg) 3 as u32,
+    options(pure, nomem, nostack));
+
+asm("wfi", options(nomem, nostack));
+```
+
+The template is assembly for one target, so a program that holds `asm`
+builds for the targets whose instructions it uses (the tests say it with `//
+targets:`, see "Targets"); `core::arch` has the portable wrappers (see
+"`core`").
+
+### Syntax
+
+```
+asm_expr  = "asm" "(" STRING { "," STRING } { "," operand }
+            [ "," "options" "(" option { "," option } [","] ")" ] [","] ")"
+operand   = [ NAME "=" ] ( "in" "(" where ")" expr
+                         | ( "out" | "lateout" ) "(" where ")" out_place
+                         | "inout" "(" where ")" expr [ "=>" out_place ]
+                         | "sym" path
+                         | "const" expr )
+          | "clobber_abi" "(" STRING ")"
+where     = "reg" | STRING
+out_place = place | "_"
+option    = "pure" | "nomem" | "readonly" | "nostack"
+          | "preserves_flags" | "noreturn"
+```
+
+- `asm` starts an expression, which is a statement with a `;` (`asm(...);`)
+  or the tail of a block. Its type is `()`, or `!` with the option
+  `noreturn`. A trailing comma is allowed after the last argument.
+  `options(...)` must be the last argument: an operand after it is
+  `parser::unexpected-token`.
+- The **templates** are the string literals first in the parentheses (see
+  "Lexical structure"). They are joined with line breaks into one template,
+  so `asm("nop", "nop")` is two instructions. A template holds ASCII bytes
+  from `0x01` to `0x7F`; a byte outside them, written with `\xNN` or `\0`, is
+  `ty::asm-template`. The compiler does not read the instructions: the
+  template is copied into the object with the placeholders replaced, and a
+  `$` or any other character is written as it is.
+- The **operands** come in three groups, in this order: operands without a
+  name, then named operands, then operands with an explicit register and
+  `clobber_abi`, which have no name and no number. An operand out of its
+  group, or a name on an operand with an explicit register or on
+  `clobber_abi`, is `parser::unexpected-token`. A name is an identifier
+  followed by `=`; `in`, `out` and the other words of `asm` are valid names.
+- The words `in`, `out`, `lateout`, `inout`, `sym`, `clobber_abi`,
+  `options`, `reg` and the option names are recognized only in these
+  positions; elsewhere they are ordinary names.
+
+### Operands
+
+| Operand | Meaning |
+|---------|---------|
+| `in(where) e` | passes the value of `e` in a register |
+| `out(where) p` | stores into the place `p`, or nowhere with `_`, what the register holds when the code ends |
+| `lateout(where) p` | as `out`, with a register an input may also use, since it is written only after every input is read |
+| `inout(where) e` | passes `e` and stores the register back into `e`, which must be a place, or into the place after `=>` (`inout(reg) x => y`, `inout(reg) x => _`) |
+| `sym path` | the symbol of a function, an external function, a static or an external static (see "Symbols"); the item counts as used, so it is kept in the object. Any other item is `ty::asm-sym`; a name that names nothing is `resolve::unknown-name` |
+| `const e` | a value of any integer type, `u64` and `i64` included, computed at compile time (ADR 0027) and written in decimal, with a `-` when negative. A run-time variable is `ty::not-comptime` |
+| `clobber_abi("C")` | every register a call of a C function may change is overwritten (see "Registers") |
+
+- `where` is `reg`, which lets the compiler choose a general-purpose
+  register, or a string naming one register (see "Registers").
+- The **type** of an `in`, `out`, `lateout` or `inout` operand is an integer
+  of at most 32 bits (`usize` and `isize` included) or a thin raw pointer
+  (to a sized type, not a slice). Anything else (`u64`, `bool`, an enum, a
+  bit-field struct, an array, a struct, a pointer to a slice) is
+  `ty::asm-operand-type`; convert with `as`. The two sides of an `inout ...
+  =>` have one type. An output cannot go to a bit field of a bit-field
+  struct, which has no place in memory (`ty::asm-operand-type`): write it to
+  a variable first. There is no expected type, so a literal needs `as`
+  (`in(reg) 3 as u32`, `const 0x100 as u32`).
+- The place of an `out`, `lateout` or `inout` follows the rules of an
+  assignment (`ty::assign-immutable`, `ty::write-through-const`,
+  `ty::not-assignable`), so a local it writes is `let mut`; the expression of
+  an `inout` without `=>` must be a place, or it is `ty::not-assignable`.
+- **Widths.** An input narrower than 32 bits fills its register extended by
+  its signedness: zeros above a `u8` or `u16`, copies of the sign bit above an
+  `i8` or `i16`. An output narrower than 32 bits takes the low bits of its
+  register.
+- **Evaluation order (ADR 0018).** The operand expressions and the output
+  places (their indices, with their checks, and the calls in them) are
+  evaluated left to right before the code runs; a check that fails there
+  calls the panic function and the code does not run. After the code the
+  outputs are stored left to right, so of two outputs to one place the right
+  one stays. The place of an `inout` without `=>` is evaluated once: read
+  before the code and written after it, so `inout(reg) A[f()]` calls `f` and
+  checks the index once.
+
+### Placeholders
+
+`{}` takes the next operand of the first group (those without a name or a
+register), `{N}` the `N`-th of them, counting from 0, and `{name}` the
+named one; `{{` and `}}` are the braces. A placeholder may appear any number
+of times. It becomes the register the compiler chose for the operand, the
+symbol of a `sym`, or the value of a `const`. Nothing else goes between the
+braces: `{0:x}` and `{ }` are no placeholders. An operand with an explicit
+register cannot be placed, since the template writes the register itself
+(naming a register in braces is a placeholder that names no operand, whose
+help says so), and every other operand must appear at least once. The
+mistakes are `ty::asm-template`: a placeholder naming no operand, an unused
+operand, an unmatched brace, a `{}` or `{N}` past the last operand without a
+name, two operands with one name, and a byte outside `0x01` to `0x7F`. The
+label is on the placeholder, through the escapes of the literal, or on the
+operand.
+
+### Registers
+
+A string names one register, by the architecture's name or the ABI's.
+`ty::asm-register` reports an unknown name, listing the target's, and a
+register the compiler keeps for itself:
+
+| | riscv32 | thumbv7m |
+|-|---------|----------|
+| Names | `x0` to `x31`, `zero`, `ra`, `sp`, `gp`, `tp`, `t0` to `t6`, `s0` (`fp`) to `s11`, `a0` to `a7` | `r0` to `r15`, `sb` (`r9`), `sl` (`r10`), `fp` (`r11`), `ip` (`r12`), `sp` (`r13`), `lr` (`r14`), `pc` (`r15`) |
+| Reserved | `x0` (`zero`), `x2` (`sp`), `x3` (`gp`), `x4` (`tp`), `x8` (`s0`, `fp`), `x9` (`s1`, LLVM's base pointer) | `r6` (LLVM's base pointer), `r7` (the frame pointer in Thumb code), `r13` (`sp`), `r15` (`pc`) |
+| `clobber_abi("C")` | `ra`, `t0` to `t6`, `a0` to `a7` | `r0` to `r3`, `r12`, `lr`, and the condition flags |
+
+Two names of one register are the same register, so `a0` and `x10` conflict.
+Also `ty::asm-register`: one register named twice among the inputs, or twice
+among the outputs; a register named by an `in` and by a plain `out`, which
+promises a register no input uses (write `inout`, or `lateout` when the output
+may reuse the input's register); and an output on `reg`, `lateout(reg)` or
+`inout(reg)` beside `clobber_abi`, since the compiler could choose a register
+the call overwrites (an `in(reg)` is fine). A register that `clobber_abi`
+covers may also be an explicit operand: as an output it is that output, not
+a clobber; as an input only, its value is lost when the code ends, as with
+`inout(...) e => _`. The registers the code does not list must be as it
+found them, the stack pointer balanced.
+
+### Meaning and options
+
+The code is copied into the object as written. Without options, an `asm`
+expression:
+
+- runs every time it is evaluated, in program order relative to calls,
+  volatile accesses (ADR 0023) and other `asm` expressions;
+- may read and write any memory the program can reach, so it is a compiler
+  fence: no access to statics or memory reached through pointers moves across
+  it;
+- may push to the stack, so the compiler aligns the stack pointer as the C ABI
+  wants before it;
+- may change the condition flags (the ARM ones; riscv32 has none).
+
+The code must not jump out of the template unless `noreturn` says so; breaking
+a promise is not defined, and the compiler cannot see it. The compiler may
+copy the template, by inlining or by unrolling a loop, so labels inside it
+must be local (`1:` and `1b`, `1f`).
+
+| Option | Promise | Effect |
+|--------|---------|--------|
+| `nomem` | reads and writes no memory | memory accesses may move across it; not a compiler fence |
+| `readonly` | reads memory, writes none | writes may not move across it, reads may |
+| `pure` | has no effect but its outputs, which depend only on its inputs and, with `readonly`, memory | may be removed when its outputs are unused, or evaluated once for equal inputs; needs `nomem` or `readonly` and an output |
+| `nostack` | does not touch the stack | the stack is not aligned for it |
+| `preserves_flags` | leaves the condition flags as they were | no effect on riscv32 |
+| `noreturn` | never ends | the expression has type `!`; no output operands |
+
+Options that contradict each other or the operands (`nomem` with `readonly`,
+`pure` without an output or without `nomem` or `readonly`, `noreturn` with
+an output, `out(reg) _` and `inout ... => _` counting as outputs), an option
+given twice, `clobber_abi` given twice, and an ABI other than `"C"` (the
+only one that exists, ADR 0006) are `ty::asm-options`. Modifiers in
+placeholders (`{0:x}`), `inlateout` and ABIs other than C do not exist.
+
+### Naked functions
+
+```
+#[export]
+#[naked]
+fn __aeabi_uldivmod() {
+    asm(
+        "push {{r4, lr}}",
+        "sub sp, sp, #16",
+        "add r4, sp, #8",
+        "str r4, [sp]",
+        "bl {div}",
+        "ldrd r2, r3, [sp, #8]",
+        "add sp, sp, #16",
+        "pop {{r4, pc}}",
+        div = sym crate::builtins::__erebos_udivmoddi4,
+        options(noreturn),
+    );
+}
+```
+
+`#[naked]` makes a function with **no code of the compiler's**: no prologue,
+no epilogue, no stack frame. Its body is exactly one `asm` expression, as a
+statement or as the tail of the block, with `noreturn` and only `sym` and
+`const` operands, and does everything, returning included
+(`ty::naked-body` for a body that is not that: another statement or item, no
+`asm`, no `noreturn`, an `in`, `out`, `inout` or `clobber_abi`). The
+parameters and the return type say how C calls it, by the C ABI of the target,
+and the template finds the arguments where the ABI puts them; the body
+cannot name a parameter, and a run-time variable in a `const` operand is
+`ty::not-comptime`. A naked function is called like any other and is the one
+way to write a function with a convention no signature has. `#[naked]` goes on
+a function with a body, and combines with `#[export]`; on an `extern fn`,
+the entry function, the panic function or any other item it is
+`resolve::misplaced-attribute`, and twice
+`resolve::duplicate-attribute`. LLVM gets the function with the `naked` and
+`noinline` attributes.
+
+### At compile time, and errors of the assembler
+
+`asm` cannot run at compile time: an evaluation that reaches one, a call of a
+naked function and of `core::arch`'s fences included, is `eval::asm`, with
+the `asm` as the first label (inside `core`'s file for the fences). A
+function that holds `asm` is still type checked and can be called at run
+time.
+
+The compiler checks operands, registers, types and placeholders; LLVM's
+assembler reads the instructions when the object is built, so `--emit=typeck`,
+`mir` and `llvm-ir` accept a template that the build rejects. An instruction
+the assembler rejects (an unknown mnemonic, a register that does not exist, an
+immediate out of range) is `codegen::asm`, at the `asm` expression, with the
+assembler's message and the position in the template. Each `asm` is reported
+once however many copies the optimizer made, in the order of the source, and
+the compiler exits with an error and no object. Some errors exist only in the
+whole object: a non-local label defined twice by inlining, an instruction that
+fails only with the registers chosen, or more `reg` operands than there are
+free registers. When the compiler cannot tell which `asm` LLVM rejected, it
+reports `codegen::asm` without a label, with LLVM's message and a help that
+says so. An error that is not about inline assembly stays `codegen::llvm`
+(ADR 0082). A template that makes LLVM abort the process instead of
+reporting (LLVM's `report_fatal_error`) is outside this: it ends the
+compiler.
 
 ## Modules and paths (ADR 0049)
 
@@ -2828,11 +3095,22 @@ vector table come with M4.
   constant divisor, which on riscv32 `-O` mostly expands inline. Divisions
   of 32 bits and fewer stay instructions on both targets (`udiv` and `sdiv`
   exist on ARMv7-M). Constant evaluation is the same on both.
-- C code linked into a thumbv7m program cannot divide 64-bit values: clang
-  calls `__aeabi_uldivmod` and `__aeabi_ldivmod`, which no one defines, and
-  the linker reports them as undefined. Defining them needs inline
-  assembly (M4). On riscv32 C code calls `core`'s four functions by their
-  libgcc names.
+- C code linked into a thumbv7m program divides 64-bit values: clang calls
+  `__aeabi_uldivmod` and `__aeabi_ldivmod`, and `core` defines them (ADR
+  0080), as naked functions of `core::arch` (see "Inline assembly") that
+  take the dividend in `r0` and `r1` and the divisor in `r2` and `r3`, and
+  return the quotient in `r0` and `r1` and the remainder in `r2` and `r3`,
+  the remainder with the sign of the dividend. Each calls a function of
+  `core::builtins` in Erebos that returns the quotient and stores the
+  remainder through a pointer, reusing the loop of `__udivdi3`. Erebos code
+  does not call them: it divides through the functions of ADR 0076, as
+  above. A zero divisor gives what `core`'s loop gives (a quotient of all
+  ones and the dividend as the remainder, before signs); C leaves it
+  undefined, and the EABI's call of `__aeabi_ldiv0` is not made. On riscv32
+  C code calls `core`'s four functions by their libgcc names, and
+  `__aeabi_*` are not defined. A program of its own cannot define either
+  name: names starting with `__` are reserved on every target
+  (`resolve::reserved-name`).
 - LLVM copies and fills memory on thumbv7m through the EABI's functions,
   which `core` defines (see "`core`").
 
@@ -2844,12 +3122,15 @@ reaches its machine through `mod board;`: the harness supplies the file
 `tests/boards/<target>.ers`, which holds the machine's `memory` block and
 `putc`, `exit` and `SCRATCH`; a program for a real board writes its own the
 same way. The language has no conditional compilation, so a program that
-needs one machine says it in a header, `// targets: <name>`. On
-`mps2-an385` the program stops QEMU through semihosting, with a C function
-of the board (inline assembly arrives with M4). C files of the tests are
-compiled with `clang --target=thumbv7m-none-eabi -mcpu=cortex-m3
--mfloat-abi=soft -ffreestanding` for thumbv7m. The ui tests take `//
-target: <name>`, riscv32 by default.
+needs one machine says it in a header, `// targets: <name>`, and runs only
+there. A program that holds one target's assembly, or names an item of
+`core::arch` specific to one target, lists only that target (ADR 0079,
+amending 0077). On `mps2-an385` the board stops QEMU through semihosting,
+with `asm("bkpt 0xab", ...)` in Erebos and no C file (the harness still links
+a board's C file when a board has one). C files of the tests are compiled
+with `clang --target=thumbv7m-none-eabi -mcpu=cortex-m3 -mfloat-abi=soft
+-ffreestanding` for thumbv7m. The ui tests take `// target: <name>`, riscv32
+by default.
 
 ## Peripherals (ADR 0058)
 
@@ -4002,15 +4283,70 @@ the compiler binary, and compiled and checked with every program.
   - The division functions are called by LLVM on riscv32, where it does not
     expand a division by a constant, and by C code linked into a riscv32
     program; on thumbv7m code generation calls them itself (see
-    "Targets"). They never divide 64-bit values themselves. `core` does
-    not define `__aeabi_uldivmod` and `__aeabi_ldivmod`, which need
-    inline assembly (M4).
+    "Targets"). They never divide 64-bit values themselves: all four go
+    through `__erebos_udivmod64` to the restoring loop,
+    `__erebos_udivmoddi4`.
+  - The functions `__erebos_udivmoddi4(n: u64, d: u64, rem: *mut u64) ->
+    u64` and `__erebos_divmoddi4(n: i64, d: i64, rem: *mut i64) -> i64`
+    return the quotient and store the remainder. They are `pub` inside the
+    private `builtins`, so that `core::arch` names them in `sym` operands and
+    programs cannot, and they are not `#[export]` (their symbols are
+    `core.builtins.__erebos_udivmoddi4` and
+    `core.builtins.__erebos_divmoddi4`). They are what `__aeabi_uldivmod` and
+    `__aeabi_ldivmod` call (see below).
 
   Each support function is `#[export]`, so that its symbol is the name
   LLVM calls (see "Symbols"); their private helpers are not
   (`core.builtins.__erebos_udivmod64`). The compiler marks every function
   of `core` `no-builtins`, so that LLVM does not turn their loops back into
   calls to them.
+- **`core::arch`** (ADR 0080, 0081) is the part of `core` that needs an
+  instruction of the target, written with `asm` (see "Inline assembly"). It
+  is a public module whose file is chosen by the build's target, not by the
+  rule of ADR 0049:
+
+  | Target | File of `core::arch` |
+  |--------|----------------------|
+  | `riscv32imac-unknown-none-elf` | `rt/arch/riscv32.ers` |
+  | `thumbv7m-none-eabi` | `rt/arch/armv7m.ers` |
+
+  Both files are embedded in the compiler, a build reads only its own
+  target's, and diagnostics name it by that path. The files have no modules
+  of their own, and `core::arch` follows every other rule of `core`: private
+  items are private. A **portable item** is declared in every file with the
+  same kind, name, signature and meaning, so a program that uses only portable
+  items builds for every target; every other item is **specific** to its
+  target, and a program that names one builds only for it: on another target
+  the path names nothing, and the error is the one of any missing item
+  (`resolve::unknown-function` for a call), not a message that it exists
+  elsewhere. A test
+  builds a program that calls every portable item on every target, at both
+  optimization levels.
+
+  The portable items are:
+
+  - `pub fn compiler_fence()`: emits no instruction. No access to memory that
+    other code can see (statics, memory reached through pointers), ordinary
+    or volatile, moves across it in the generated code. It orders nothing in
+    the hardware, which is enough for code and a handler on one core.
+  - `pub fn fence()`: a compiler fence and a hardware fence. Every access to
+    memory or to a device before it, ordinary or volatile, is observed by
+    every other observer (a device, a DMA engine, another bus master) before
+    any access after it. It is `fence iorw, iorw` on riscv32 and `dmb sy` on
+    thumbv7m. It orders; it does not wait for a write to reach a device, nor
+    make a cache coherent (neither target of the tests has a data cache).
+
+  Both are an `asm` with `options(nostack, preserves_flags)` and no option
+  about memory, and calling either at compile time is `eval::asm`. Finer
+  fences (`fence w,o`, `dmb st`, `dsb`, `isb`) are not portable: a program
+  that needs one writes its `asm`, and `core::arch` may gain target-specific
+  ones with the step that needs them. See "Volatile accesses" for the hand-off
+  of memory to a device.
+
+  Specific to thumbv7m, private and `#[export]`: the naked functions
+  `__aeabi_uldivmod` and `__aeabi_ldivmod` (see "Targets"). Each file begins
+  with the comment lines `// portable: <declaration>` that list its portable
+  items.
 - `Option`, `Result`, `assert`, `len` and `slice` are not in `core`: they
   stay built-in names, seen from every module.
 - A program item whose symbol is one of `core`'s, such as a root `fn
@@ -4018,9 +4354,12 @@ the compiler binary, and compiled and checked with every program.
   `resolve::duplicate-symbol`, whose help names the function of `core` to
   call; an item named with `__` is `resolve::reserved-name`.
 - `core` has no entry or panic function. Every program includes all of
-  it, the functions the program does not call too.
+  it, the functions the program does not call too, and the `core::arch` file
+  of its target.
 - The `--emit` dumps leave `core` out (see "Building"). An error reported
-  in a file of `core` is a compiler bug.
+  in a file of `core` is a compiler bug, except `eval::asm` for a compile-time
+  call of a function of `core::arch`, whose first label is the `asm` inside
+  the target's file.
 
 ## Panic information (ADR 0053)
 
@@ -4227,10 +4566,10 @@ Every error has a stable code, shown with the message.
 | `lexer::invalid-digit` | digit not valid in the literal's base |
 | `lexer::leading-zero` | decimal literal starting with `0` (use `0o`) |
 | `lexer::int-too-large` | literal does not fit in 64 bits |
-| `lexer::invalid-byte` | malformed byte literal, or a character or escape not allowed in a byte literal or byte string |
+| `lexer::invalid-byte` | malformed byte literal, or a character or escape not allowed in a byte literal, byte string or string literal |
 | `lexer::unterminated-byte` | byte literal without closing `'` |
-| `lexer::unterminated-byte-string` | `b"` without its closing `"` on the same line |
-| `parser::unexpected-token` | a token where it cannot appear, such as `_` as a name or a value, `pub` before a variant, or a `use` of a path made only of `crate`, `super` or `core`; in a bit-field struct, a field without `at`, half-open bits (`at 0..1`), a second effect of a kind, an effect word that is none, `write 2 clears`; in an ordinary struct, `at` or `=` after a field's type; a `..` that is not last in a literal; in a peripheral type, an entry that starts with neither an access mode nor a name followed by `:`, a `step` without its value or after the read effect or the group, a read effect on a cluster, `over` without a path or after the `;`; `read write` on a bit field, or a mode after its name |
+| `lexer::unterminated-byte-string` | `b"` or `"` without its closing `"` on the same line |
+| `parser::unexpected-token` | a token where it cannot appear, such as `_` as a name or a value, `pub` before a variant, or a `use` of a path made only of `crate`, `super` or `core`; in a bit-field struct, a field without `at`, half-open bits (`at 0..1`), a second effect of a kind, an effect word that is none, `write 2 clears`; in an ordinary struct, `at` or `=` after a field's type; a `..` that is not last in a literal; in a peripheral type, an entry that starts with neither an access mode nor a name followed by `:`, a `step` without its value or after the read effect or the group, a read effect on a cluster, `over` without a path or after the `;`; `read write` on a bit field, or a mode after its name; in `asm`, a missing template, a word that is no operand or option, a missing `,` or `)`, an empty `options()`, an operand out of its group or after `options(...)`, a name on an operand with an explicit register or on `clobber_abi` |
 | `parser::unclosed-block` | `{` without its `}` |
 | `parser::let-without-type` | `let` without `: Type`, also in a pattern |
 | `parser::chained-comparison` | `a < b < c` |
@@ -4244,8 +4583,9 @@ Every error has a stable code, shown with the message.
 | `parser::enum-without-type` | an enum without `: Type` |
 | `parser::variant-without-value` | a variant without `= value` |
 | `parser::empty-payload` | a variant written `V()`, a payload without types |
+| `parser::string-outside-asm` | a string literal anywhere but inside `asm`; use `b"..."` for bytes |
 | `resolve::module-file` | the file of `mod name;` does not exist, cannot be read, has a name that differs in case, or is the root file |
-| `resolve::unknown-name` | a name, or a path's last segment, that names no value where one is expected, also in a pattern; an enum's or struct's name alone; a name only a module around the current one has |
+| `resolve::unknown-name` | a name, or a path's last segment, that names no value where one is expected, also in a pattern; an enum's or struct's name alone; a name only a module around the current one has; the path of a `sym` operand that names nothing |
 | `resolve::unknown-type` | a type, or the struct of a literal, whose name or last path segment names nothing or an item of another kind |
 | `resolve::unknown-path` | a path segment followed by `::` that names nothing; a `use` whose last segment names nothing, or that names a built-in name |
 | `resolve::misused-module` | a module where a type, a value, a function, a struct or, in a pattern, a constant or a variant is expected |
@@ -4281,7 +4621,7 @@ Every error has a stable code, shown with the message.
 | `resolve::inconsistent-binding` | a name not bound by every alternative of an or-pattern, or bound with `let mut` by only some |
 | `resolve::reserved-name` | an item, module or `use` named `_start`, `core`, with a name starting with `__`, or like a built-in function (`assert`, `len`, `slice`); a module of the root module named `llvm` or `rt`; a region named `INCLUDE` |
 | `resolve::unknown-attribute` | an attribute that does not exist |
-| `resolve::misplaced-attribute` | an attribute on an item it does not apply to, as `#[packed]` or `#[align(N)]` on a bit-field struct |
+| `resolve::misplaced-attribute` | an attribute on an item it does not apply to, as `#[packed]` or `#[align(N)]` on a bit-field struct, or `#[naked]` on an `extern fn`, the entry function, the panic function or anything but a function with a body |
 | `resolve::attribute-argument` | an attribute with a missing or extra argument |
 | `resolve::duplicate-attribute` | an attribute given twice |
 | `resolve::conflicting-attributes` | `#[packed]` with `#[align(N)]` |
@@ -4322,7 +4662,7 @@ Every error has a stable code, shown with the message.
 | `ty::private-field` | a place or `offset_of` naming a field that is not visible here |
 | `ty::private-variant` | `.V` naming a variant of an enum that is not reachable here |
 | `ty::write-through-const` | assignment through a `*const` pointer |
-| `ty::not-assignable` | assignment to something that is not a place, or to part of a temporary |
+| `ty::not-assignable` | assignment to something that is not a place, or to part of a temporary; an `inout` operand of `asm` without `=>` whose expression is not a place |
 | `ty::assign-immutable` | assignment to a variable without `mut`, a `static`, an `extern static` without `mut`, or a byte string |
 | `ty::not-a-place` | `&raw` of a value that is not a place, or of a constant or any element or field of it |
 | `ty::address-of-immutable` | `&raw mut` of a place that cannot be written |
@@ -4336,7 +4676,7 @@ Every error has a stable code, shown with the message.
 | `ty::never-in-memory` | `!` as a pointee, slice element, field, payload type, type argument of `Option` or `Result`, array element, register type, the type of a static, `extern static`, `const` or `comptime` value, a layout query operand, or under `&raw` |
 | `ty::invalid-align` | `#[align(N)]` on a struct or static with `N` not a power of two, too large or below the natural alignment |
 | `ty::aligned-in-packed` | a packed struct containing a type with `#[align(N)]`, at any depth, such as an enum with such a payload |
-| `ty::not-comptime` | a run-time variable where a compile-time value is required |
+| `ty::not-comptime` | a run-time variable where a compile-time value is required, in a `const` operand of `asm` too |
 | `ty::cycle` | an item or variant whose value or layout needs itself, a bit-field struct whose bits (positions, field types, the variants of an enum field type) need themselves, or a default that needs its own value, including a `match` that needs the values of an enum (a variant pattern, `E::V` or `.V`, or a constant pattern at a position of its type, or no arm on it) in a function that runs while one of them is computed |
 | `ty::duplicate-discriminant` | two variants of an enum with one value |
 | `ty::match-type` | a `match` on a type other than an integer, `bool` or enum, a bit-field struct included |
@@ -4383,10 +4723,17 @@ Every error has a stable code, shown with the message.
 | `ty::bit-field-overlap` | two bit fields sharing a bit; once per pair, at the later field |
 | `ty::bit-field-offset` | `offset_of` of a bit field |
 | `ty::field-value-out-of-range` | a value, known at compile time, written to a bit field by a literal or an assignment, or a default, that does not fit in the field's bits |
+| `ty::asm-template` | in the template of an `asm`: a placeholder naming no operand, an unused operand, an explicit register named in the template, an unmatched brace, a `{}` or `{N}` past the last operand without a name, two operands with one name, a byte outside `0x01` to `0x7F` |
+| `ty::asm-register` | an unknown or reserved register in an `asm` operand; one named twice among the inputs or among the outputs, or by an `in` and an `out`; an output on `reg` beside `clobber_abi` |
+| `ty::asm-operand-type` | an operand of `asm` that is not an integer of at most 32 bits or a thin pointer, an output into a bit field, the two sides of an `inout ... =>` of different types |
+| `ty::asm-sym` | `sym` naming something other than a function or a static: a constant, a struct, a module, an enum, a variant, a peripheral |
+| `ty::asm-options` | options of `asm` that contradict each other or the operands (`nomem` with `readonly`; `pure` without an output or without `nomem` or `readonly`; `noreturn` with an output), an option or `clobber_abi` given twice, an ABI other than `"C"` |
+| `ty::naked-body` | the body of a `#[naked]` function that is not exactly one `asm` expression with `noreturn` and only `sym` and `const` operands |
 | `eval::panic` | compile-time code reached the panic function: a zero divisor, an index out of bounds, an enum value that is no variant in a `match` that no arm matches or under `?`, a value that does not fit the bit field it is written to, an explicit call |
 | `eval::assertion-failed` | `assert` with a false condition at compile time, with its message if it has one |
 | `eval::step-limit` | compile-time code ran more than 10,000,000 steps |
 | `eval::call-depth` | compile-time code nested more than 256 calls |
+| `eval::asm` | compile-time code reached an `asm` expression: directly, through a call, or a naked function, `core::arch`'s fences included |
 | `eval::volatile-access` | a volatile access at compile time, through a volatile pointer or to a register |
 | `eval::extern-call` | a call to an `extern fn` at compile time |
 | `eval::invalid-access` | reading or writing through a pointer made from an integer, or outside an object |
@@ -4399,7 +4746,8 @@ Every error has a stable code, shown with the message.
 | `eval::uninit-read` | reading bytes never written, such as padding |
 | `eval::pointer-escapes` | a compile-time result holding a pointer into the evaluation's own memory |
 | `eval::pointer-out-of-bounds` | a compile-time result holding a pointer outside its object and not one past its end, or a slice not inside its object |
-| `codegen::llvm` | LLVM rejected the target; an environment problem |
+| `codegen::asm` | an instruction LLVM's assembler rejects, at the `asm` expression with the assembler's message, or without a label when the error exists only in the whole object (a non-local label defined twice by inlining, no register left for the operands) |
+| `codegen::llvm` | LLVM rejected the target, or reported an error that is not about inline assembly; an environment problem |
 | `link::no-memory-map` | building an executable, or printing its linker script, for a program without a `memory` block |
 | `link::region-overflow` | what is placed in a region does not fit in it, found by the linker |
 

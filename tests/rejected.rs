@@ -213,6 +213,12 @@ const CATALOG: &[Snippet] = &[
         Items,
         "enum InjE: u8 { A() = 1 }"
     ),
+    s!(
+        "parser::string-outside-asm",
+        Ast,
+        Statements,
+        "let injected_a: u32 = \"abc\";"
+    ),
     // Names and items.
     s!(
         "resolve::unknown-name",
@@ -814,6 +820,57 @@ const CATALOG: &[Snippet] = &[
         Items,
         "const INJ_C: *const u32 = comptime {\n    let n: u32 = 1;\n    &raw const n\n};"
     ),
+    // Inline assembly (ADR 0079). The templates are never assembled: the
+    // stages stop before the object (`codegen::asm` is exempt below).
+    s!("ty::asm-template", Typeck, Statements, "asm(\"nop {}\");"),
+    s!(
+        "ty::asm-register",
+        Typeck,
+        Statements,
+        "asm(\"nop\", in(\"injected_register\") 1 as u32);"
+    ),
+    s!(
+        "ty::asm-operand-type",
+        Typeck,
+        Statements,
+        "asm(\"nop {}\", in(reg) true);"
+    ),
+    s!(
+        "ty::asm-sym",
+        Typeck,
+        Items,
+        "const INJ_C: u32 = 1;
+fn injected_f() {
+    asm(\"nop {}\", sym INJ_C);
+}"
+    ),
+    s!(
+        "ty::asm-options",
+        Typeck,
+        Statements,
+        "asm(\"nop\", options(nomem, readonly));"
+    ),
+    s!(
+        "ty::naked-body",
+        Typeck,
+        Items,
+        "#[naked]
+fn injected_f() {
+    asm(\"nop\");
+}"
+    ),
+    s!(
+        "eval::asm",
+        Mir,
+        Items,
+        "fn injected_f() {
+    asm(\"nop\");
+}
+const INJ_C: u32 = comptime {
+    injected_f();
+    0
+};"
+    ),
     // Bit-field structs.
     s!(
         "ty::bit-field-type",
@@ -1086,6 +1143,10 @@ const EXEMPT: &[Exempt] = &[
             "eval::pointer-out-of-bounds",
         ],
         reason: "they need an object, a pointer into it and a use, so a snippet would be a whole program of its own, which `tests/ui/eval_*.ers` already are",
+    },
+    Exempt {
+        codes: &["codegen::asm"],
+        reason: "the assembler reads the template when the object is written, and `driver::dump` has no object stage; the harness tests of `tests/e2e.rs` cover it",
     },
     Exempt {
         codes: &["codegen::llvm"],
