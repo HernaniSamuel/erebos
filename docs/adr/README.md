@@ -92,7 +92,7 @@ Do not write one for local implementation details that the code already explains
 | 0060 | [Register fields](0060-register-fields.md) | Accepted, amended by 0064, 0065 |
 | 0061 | [Alternate registers](0061-alternate-registers.md) | Accepted, amended by 0064 |
 | 0062 | [Bit-field defaults are no part of the bit layout](0062-bit-field-defaults-are-no-part-of-the-bit-layout.md) | Accepted |
-| 0063 | [Architecture rules checked by tests](0063-architecture-rules-checked-by-tests.md) | Accepted, amended by 0070 |
+| 0063 | [Architecture rules checked by tests](0063-architecture-rules-checked-by-tests.md) | Accepted, amended by 0070, 0082 |
 | 0064 | [Register arrays and clusters](0064-register-arrays-and-clusters.md) | Accepted |
 | 0065 | [Field access modes](0065-field-access-modes.md) | Accepted |
 | 0066 | [Peripherals over others](0066-peripherals-over-others.md) | Accepted |
@@ -111,3 +111,4 @@ Do not write one for local implementation details that the code already explains
 | 0079 | [Inline assembly](0079-inline-assembly.md) | Accepted |
 | 0080 | [`core::arch`, one file per target](0080-core-arch-per-target.md) | Accepted |
 | 0081 | [Fences](0081-fences.md) | Accepted |
+| 0082 | [The LLVM diagnostic handler reaches `llvm_sys`, in one file](0082-llvm-diagnostic-handler-reaches-llvm-sys.md) | Accepted |
