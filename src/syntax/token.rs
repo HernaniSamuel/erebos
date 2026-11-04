@@ -11,10 +11,15 @@ pub enum TokenKind {
     Byte,
     /// Byte string `b"..."` (ADR 0031).
     ByteString,
+    /// String literal `"..."`, which only `asm` takes (ADR 0079); its
+    /// bytes are read from the source text, as a byte string's.
+    String,
 
     // Keywords
     AlignOf,
     As,
+    /// `asm`, which starts an inline assembly expression (ADR 0079).
+    Asm,
     Break,
     Comptime,
     Const,
@@ -120,6 +125,7 @@ impl TokenKind {
         Some(match text {
             "align_of" => TokenKind::AlignOf,
             "as" => TokenKind::As,
+            "asm" => TokenKind::Asm,
             "break" => TokenKind::Break,
             "comptime" => TokenKind::Comptime,
             "const" => TokenKind::Const,
@@ -162,7 +168,9 @@ impl TokenKind {
             TokenKind::Byte => "byte literal",
             TokenKind::ByteString => "byte string",
             TokenKind::AlignOf => "`align_of`",
+            TokenKind::String => "string literal",
             TokenKind::As => "`as`",
+            TokenKind::Asm => "`asm`",
             TokenKind::Break => "`break`",
             TokenKind::Comptime => "`comptime`",
             TokenKind::Const => "`const`",

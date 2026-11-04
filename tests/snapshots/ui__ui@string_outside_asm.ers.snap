@@ -1,0 +1,76 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/string_outside_asm.ers
+---
+--- errors ---
+parser::string-outside-asm
+
+  × string literals exist only inside `asm`
+   ╭─[string_outside_asm.ers:5:1]
+ 4 │ // A malformed escape in a template is the byte string's error.
+ 5 │ "stray"
+   · ───┬───
+   ·    ╰── not valid here
+ 6 │ 
+   ╰────
+  help: text is bytes outside `asm`: write a byte string, `b"..."`, with the same escapes (ADR
+        0016, 0031, 0079)
+parser::string-outside-asm
+
+  × string literals exist only inside `asm`
+   ╭─[string_outside_asm.ers:8:18]
+ 7 │ fn f(x: u32) {
+ 8 │     let a: u32 = "text";
+   ·                  ───┬──
+   ·                     ╰── not valid here
+ 9 │     g("argument", x);
+   ╰────
+  help: text is bytes outside `asm`: write a byte string, `b"..."`, with the same escapes (ADR
+        0016, 0031, 0079)
+parser::string-outside-asm
+
+  × string literals exist only inside `asm`
+    ╭─[string_outside_asm.ers:9:7]
+  8 │     let a: u32 = "text";
+  9 │     g("argument", x);
+    ·       ─────┬────
+    ·            ╰── not valid here
+ 10 │     let b: u32 = x + "sum";
+    ╰────
+  help: text is bytes outside `asm`: write a byte string, `b"..."`, with the same escapes (ADR
+        0016, 0031, 0079)
+parser::string-outside-asm
+
+  × string literals exist only inside `asm`
+    ╭─[string_outside_asm.ers:10:22]
+  9 │     g("argument", x);
+ 10 │     let b: u32 = x + "sum";
+    ·                      ──┬──
+    ·                        ╰── not valid here
+ 11 │     asm("bad \q escape", in("a\xZZ") x);
+    ╰────
+  help: text is bytes outside `asm`: write a byte string, `b"..."`, with the same escapes (ADR
+        0016, 0031, 0079)
+lexer::invalid-byte
+
+  × unknown escape sequence
+    ╭─[string_outside_asm.ers:11:14]
+ 10 │     let b: u32 = x + "sum";
+ 11 │     asm("bad \q escape", in("a\xZZ") x);
+    ·              ─┬
+    ·               ╰── invalid in a string literal
+ 12 │ }
+    ╰────
+  help: escapes: \n \r \t \\ \' \" \0 and \xNN for any byte (ADR 0016)
+lexer::invalid-byte
+
+  × unknown escape sequence
+    ╭─[string_outside_asm.ers:11:31]
+ 10 │     let b: u32 = x + "sum";
+ 11 │     asm("bad \q escape", in("a\xZZ") x);
+    ·                               ──┬─
+    ·                                 ╰── invalid in a string literal
+ 12 │ }
+    ╰────
+  help: escapes: \n \r \t \\ \' \" \0 and \xNN for any byte (ADR 0016)

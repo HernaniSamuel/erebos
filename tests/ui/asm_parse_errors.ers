@@ -1,0 +1,23 @@
+// emit: ast
+// Each error of an `asm` expression is reported at its token, and parsing
+// goes on with the next statement (ADR 0079).
+fn errors(x: u32) {
+    asm();
+    asm(in(reg) x);
+    asm("nop", inn(reg) x);
+    asm("nop", in(reg) x, options(nomem), in(reg) x);
+    asm("nop", options(nomen));
+    asm("nop", options());
+    asm("nop", in(reg) x;
+    asm("nop" in(reg) x);
+    asm("nop", in(rg) x);
+    asm("nop", x = in(reg) x, in(reg) x);
+    asm("nop", in("a0") x, y = in(reg) x);
+    asm("nop", in("a0") x, in(reg) x);
+    asm("nop", x = in("a0") x);
+    asm("nop", x = clobber_abi("C"));
+    asm("nop", in(reg) x, "second");
+    asm("nop", clobber_abi(C));
+    asm "nop";
+    asm("fine");
+}

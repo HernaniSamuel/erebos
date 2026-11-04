@@ -5,12 +5,13 @@ use crate::builtin::{builtin_variant_help, is_builtin_enum};
 use crate::diag::{Diagnostic, Diagnostics};
 use crate::span::Span;
 use crate::syntax::ast::{
-    AccessMode, Arm, Attr, BinOp, BitFieldDecl, BitStructDecl, Block, ClusterDecl, ComptimeDecl,
-    ConstDecl, EntryDecl, EnumDecl, Expr, ExprKind, FieldDecl, FieldInit, File, FnDecl, FnKind,
-    Ident, Item, Let, LogicalOp, MemoryDecl, ModDecl, Param, Path, Pattern, PatternKind,
-    PeripheralDecl, PeripheralTypeDecl, Placement, PlacementKind, ReadEffect, RegionDecl,
-    RegisterDecl, StaticDecl, Stmt, StructDecl, Ty, TyKind, UnOp, UseDecl, UseName, VariantDecl,
-    Visibility, WriteAction, WriteEffect,
+    AccessMode, Arm, AsmExpr, AsmOperand, AsmOperandKind, AsmOption, AsmOptionKind, AsmReg, Attr,
+    BinOp, BitFieldDecl, BitStructDecl, Block, ClusterDecl, ComptimeDecl, ConstDecl, EntryDecl,
+    EnumDecl, Expr, ExprKind, FieldDecl, FieldInit, File, FnDecl, FnKind, Ident, Item, Let,
+    LogicalOp, MemoryDecl, ModDecl, Param, Path, Pattern, PatternKind, PeripheralDecl,
+    PeripheralTypeDecl, Placement, PlacementKind, ReadEffect, RegionDecl, RegisterDecl, StaticDecl,
+    Stmt, StrLit, StructDecl, Ty, TyKind, UnOp, UseDecl, UseName, VariantDecl, Visibility,
+    WriteAction, WriteEffect,
 };
 use crate::syntax::lexer;
 use crate::syntax::token::{Token, TokenKind};
@@ -198,6 +199,9 @@ impl Parser<'_> {
     /// `report_unexpected`, with `help`.
     fn report_unexpected_help(&mut self, what: &str, span: Span, help: &str) -> Reported {
         let found = self.peek();
+        if found.kind == TokenKind::String {
+            return self.string_outside_asm(found.span);
+        }
         self.diags.push(
             Diagnostic::error(
                 "parser::unexpected-token",
@@ -211,6 +215,9 @@ impl Parser<'_> {
 
     fn report_unexpected(&mut self, what: &str, span: Span) -> Reported {
         let found = self.peek();
+        if found.kind == TokenKind::String {
+            return self.string_outside_asm(found.span);
+        }
         let mut diag = Diagnostic::error(
             "parser::unexpected-token",
             format!("expected {what}, found {}", found.kind.describe()),
@@ -230,6 +237,21 @@ impl Parser<'_> {
             diag = diag.help(builtin_variant_help(name, variant));
         }
         self.diags.push(diag);
+        Reported
+    }
+
+    /// Reports the string literal at `span`, which only an `asm` expression
+    /// takes (ADR 0079); a byte string is the text of the rest of the
+    /// language (ADR 0016, 0031). The caller skips it, or recovers.
+    fn string_outside_asm(&mut self, span: Span) -> Reported {
+        self.diags.push(
+            Diagnostic::error(
+                "parser::string-outside-asm",
+                "string literals exist only inside `asm`",
+            )
+            .label(span, "not valid here")
+            .help("text is bytes outside `asm`: write a byte string, `b\"...\"`, with the same escapes (ADR 0016, 0031, 0079)"),
+        );
         Reported
     }
 
@@ -1845,6 +1867,14 @@ impl Parser<'_> {
                 self.bump();
                 ExprKind::ByteString(lexer::byte_string_value(text).ok())
             }
+            // Skipped, standing for a value, so that the rest of the
+            // statement parses and its own errors are found too.
+            TokenKind::String => {
+                self.string_outside_asm(token.span);
+                self.bump();
+                ExprKind::ByteString(None)
+            }
+            TokenKind::Asm => return Ok(self.asm_expr()),
             TokenKind::True | TokenKind::False => {
                 self.bump();
                 ExprKind::Bool(token.kind == TokenKind::True)
@@ -2266,6 +2296,336 @@ impl Parser<'_> {
             span: start.to(ty.span),
             kind: PatternKind::Binding { mutable, name, ty },
         })
+    }
+}
+
+/// The help of the errors in an `asm` expression (ADR 0079).
+const ASM_HELP: &str = "an `asm` expression is written `asm(\"template\", operands, options(...))`: one or more template strings, then the operands without a name, the named operands and the operands with an explicit register (and `clobber_abi`), in that order, then `options(...)`, which comes last (ADR 0079)";
+
+/// How an operand of `asm` is placed in the template, and so in the order of
+/// the operands (ADR 0079): the groups come in this order.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum AsmGroup {
+    /// Without a name: `{}` and `{N}` take it.
+    Positional,
+    /// With a name: `{name}` takes it.
+    Named,
+    /// With an explicit register, and `clobber_abi`: no template takes it.
+    Explicit,
+}
+
+impl AsmGroup {
+    fn describe(self) -> &'static str {
+        match self {
+            AsmGroup::Positional => "an operand without a name",
+            AsmGroup::Named => "a named operand",
+            AsmGroup::Explicit => "an operand with an explicit register",
+        }
+    }
+}
+
+impl Parser<'_> {
+    /// `asm(...)` (ADR 0079). The words of its operands (`in`, `out`,
+    /// `lateout`, `inout`, `sym`, `clobber_abi`, `options`, `reg` and the
+    /// options) are recognized here by their text, and are names anywhere
+    /// else. After an error the expression ends at its closing `)`, so that
+    /// the statement around it parses on.
+    fn asm_expr(&mut self) -> Expr {
+        let keyword = self.bump();
+        let open = self.pos;
+        let mut asm = AsmExpr {
+            templates: Vec::new(),
+            operands: Vec::new(),
+            options: Vec::new(),
+        };
+        let end = match self.asm_args(&mut asm) {
+            Ok(close) => close.span,
+            Err(Reported) => self.recover_asm(open),
+        };
+        Expr {
+            span: keyword.span.to(end),
+            kind: ExprKind::Asm(asm),
+        }
+    }
+
+    /// The parenthesized arguments of `asm`, up to the `)`, which it returns.
+    fn asm_args(&mut self, asm: &mut AsmExpr) -> PResult<Token> {
+        self.asm_expect(TokenKind::LParen)?;
+        asm.templates.push(self.asm_string("a template string")?);
+        let mut group = AsmGroup::Positional;
+        while self.eat(TokenKind::Comma).is_some() && !self.at(TokenKind::RParen) {
+            if self.at(TokenKind::String) && asm.operands.is_empty() {
+                asm.templates.push(self.asm_string("a template string")?);
+            } else if self.at_word("options") && self.peek_second() == TokenKind::LParen {
+                self.asm_options(asm)?;
+                self.eat(TokenKind::Comma);
+                if !self.at(TokenKind::RParen) {
+                    let span = self.missing_token_span();
+                    let found = self.peek().kind.describe();
+                    self.diags.push(
+                        Diagnostic::error(
+                            "parser::unexpected-token",
+                            format!("expected `)`, found {found}"),
+                        )
+                        .label(span, "expected `)`")
+                        .help("`options(...)` is the last argument of `asm`; the operands come before it (ADR 0079)"),
+                    );
+                    return Err(Reported);
+                }
+                break;
+            } else {
+                let operand = self.asm_operand()?;
+                group = self.asm_order(group, &operand);
+                asm.operands.push(operand);
+            }
+        }
+        if !self.at(TokenKind::RParen) {
+            return Err(self.asm_expected("`,` or `)`"));
+        }
+        Ok(self.bump())
+    }
+
+    /// Reports an operand that comes in the wrong group, or a name on an
+    /// operand that no template places; returns the group the operands so
+    /// far reached, `group` or the operand's.
+    fn asm_order(&mut self, group: AsmGroup, operand: &AsmOperand) -> AsmGroup {
+        let own = match (&operand.kind, &operand.name) {
+            (AsmOperandKind::ClobberAbi(_), _)
+            | (
+                AsmOperandKind::In {
+                    reg: AsmReg::Explicit(_),
+                    ..
+                }
+                | AsmOperandKind::Out {
+                    reg: AsmReg::Explicit(_),
+                    ..
+                }
+                | AsmOperandKind::InOut {
+                    reg: AsmReg::Explicit(_),
+                    ..
+                },
+                _,
+            ) => AsmGroup::Explicit,
+            (_, Some(_)) => AsmGroup::Named,
+            (_, None) => AsmGroup::Positional,
+        };
+        if let Some(name) = &operand.name
+            && own == AsmGroup::Explicit
+        {
+            self.diags.push(
+                Diagnostic::error(
+                    "parser::unexpected-token",
+                    "an operand with an explicit register, or `clobber_abi`, has no name",
+                )
+                .label(name.span, "a template cannot place this operand")
+                .help("only the operands whose register the compiler chooses, `sym` and `const` take a name, and `{name}` places them; an explicit register is part of the operand (ADR 0079)"),
+            );
+        } else if own < group {
+            // Where its group starts, which is the operand's first token.
+            let at = operand.name.as_ref().map_or(operand.span, |name| name.span);
+            self.diags.push(
+                Diagnostic::error(
+                    "parser::unexpected-token",
+                    format!("{} cannot come after {}", own.describe(), group.describe()),
+                )
+                .label(at, "comes too late")
+                .help("operands come in three groups, in this order: without a name, named, and with an explicit register (with `clobber_abi`) (ADR 0079)"),
+            );
+        }
+        group.max(own)
+    }
+
+    /// `[name =] direction(where) ...`, `sym path`, `const expr` or
+    /// `clobber_abi("C")`.
+    fn asm_operand(&mut self) -> PResult<AsmOperand> {
+        let start = self.peek().span;
+        let name = if self.at(TokenKind::Ident) && self.peek_second() == TokenKind::Eq {
+            let name = self.ident()?;
+            self.bump();
+            Some(name)
+        } else {
+            None
+        };
+        let word = self.word_at(self.pos).map(str::to_owned);
+        let kind = match word.as_deref() {
+            Some("in") => {
+                self.bump();
+                let reg = self.asm_where()?;
+                let expr = self.nested_expr()?;
+                AsmOperandKind::In { reg, expr }
+            }
+            Some(direction @ ("out" | "lateout")) => {
+                let late = direction == "lateout";
+                self.bump();
+                let reg = self.asm_where()?;
+                let place = self.asm_out_place()?;
+                AsmOperandKind::Out { reg, late, place }
+            }
+            Some("inout") => {
+                self.bump();
+                let reg = self.asm_where()?;
+                let expr = self.nested_expr()?;
+                let out = match self.eat(TokenKind::FatArrow) {
+                    Some(_) => Some(self.asm_out_place()?),
+                    None => None,
+                };
+                AsmOperandKind::InOut { reg, expr, out }
+            }
+            Some("sym") => {
+                self.bump();
+                AsmOperandKind::Sym(self.path()?)
+            }
+            Some("clobber_abi") => {
+                self.bump();
+                self.asm_expect(TokenKind::LParen)?;
+                let abi = self.asm_string("the name of an ABI")?;
+                self.asm_expect(TokenKind::RParen)?;
+                AsmOperandKind::ClobberAbi(abi)
+            }
+            _ if self.at(TokenKind::Const) => {
+                self.bump();
+                AsmOperandKind::Const(self.nested_expr()?)
+            }
+            _ => {
+                return Err(self.asm_expected(
+                    "an operand: `in`, `out`, `lateout`, `inout`, `sym`, `const` or `clobber_abi`",
+                ));
+            }
+        };
+        Ok(AsmOperand {
+            name,
+            kind,
+            span: start.to(self.tokens[self.pos - 1].span),
+        })
+    }
+
+    /// `(reg)` or `("name")`, after a direction.
+    fn asm_where(&mut self) -> PResult<AsmReg> {
+        self.asm_expect(TokenKind::LParen)?;
+        let reg = if self.at_word("reg") {
+            AsmReg::Class(self.ident()?)
+        } else if self.at(TokenKind::String) {
+            AsmReg::Explicit(self.asm_string("a register")?)
+        } else {
+            return Err(self.asm_expected("`reg` or the name of a register as a string"));
+        };
+        self.asm_expect(TokenKind::RParen)?;
+        Ok(reg)
+    }
+
+    /// The place an output stores into, or `_`, which drops the value.
+    fn asm_out_place(&mut self) -> PResult<Option<Expr>> {
+        if self.eat(TokenKind::Underscore).is_some() {
+            Ok(None)
+        } else {
+            Ok(Some(self.nested_expr()?))
+        }
+    }
+
+    /// `options(option, ...)`, at `options`.
+    fn asm_options(&mut self, asm: &mut AsmExpr) -> PResult<()> {
+        self.bump();
+        self.asm_expect(TokenKind::LParen)?;
+        loop {
+            let word = self.word_at(self.pos).map(str::to_owned);
+            let kind = AsmOptionKind::ALL
+                .iter()
+                .find(|(name, _)| Some(*name) == word.as_deref())
+                .map(|&(_, kind)| kind);
+            let Some(kind) = kind else {
+                return Err(self.asm_expected(
+                    "an option: `pure`, `nomem`, `readonly`, `nostack`, `preserves_flags` or `noreturn`",
+                ));
+            };
+            let token = self.bump();
+            asm.options.push(AsmOption {
+                kind,
+                span: token.span,
+            });
+            if self.eat(TokenKind::Comma).is_none() || self.at(TokenKind::RParen) {
+                break;
+            }
+        }
+        self.asm_expect(TokenKind::RParen)?;
+        Ok(())
+    }
+
+    /// A string literal, the template or the name of a register or of an
+    /// ABI (`what`), with the bytes it holds.
+    fn asm_string(&mut self, what: &str) -> PResult<StrLit> {
+        if !self.at(TokenKind::String) {
+            return Err(self.asm_expected(what));
+        }
+        let token = self.bump();
+        // The lexer reported a malformed literal; its bytes are not needed.
+        let bytes = lexer::string_value(&self.text[token.span.range()]).unwrap_or_default();
+        Ok(StrLit {
+            bytes,
+            span: token.span,
+        })
+    }
+
+    fn asm_expect(&mut self, kind: TokenKind) -> PResult<Token> {
+        match self.eat(kind) {
+            Some(token) => Ok(token),
+            None => Err(self.asm_expected(kind.describe())),
+        }
+    }
+
+    /// Reports that `what` is missing in the arguments of `asm`. Unlike
+    /// `report_unexpected`, a string literal found here is reported as the
+    /// unexpected token it is: it is the one place where strings are valid.
+    fn asm_expected(&mut self, what: &str) -> Reported {
+        let found = self.peek().kind.describe();
+        let span = self.missing_token_span();
+        self.diags.push(
+            Diagnostic::error(
+                "parser::unexpected-token",
+                format!("expected {what}, found {found}"),
+            )
+            .label(span, format!("expected {what}"))
+            .help(ASM_HELP),
+        );
+        Reported
+    }
+
+    /// Skips the rest of an `asm` expression after an error, to the `)` that
+    /// closes it, which it consumes; or, not to swallow the code after it, to
+    /// a `;` or `}` outside braces opened since the `asm`, even inside its
+    /// parentheses, or to the end of the file. `open`
+    /// is the position of its `(`. Returns the span of the last token
+    /// consumed.
+    fn recover_asm(&mut self, open: usize) -> Span {
+        let (mut parens, mut braces) = (0isize, 0isize);
+        for token in &self.tokens[open..self.pos] {
+            match token.kind {
+                TokenKind::LParen | TokenKind::LBracket => parens += 1,
+                TokenKind::RParen | TokenKind::RBracket => parens -= 1,
+                TokenKind::LBrace => braces += 1,
+                TokenKind::RBrace => braces -= 1,
+                _ => {}
+            }
+        }
+        loop {
+            let mut closes = false;
+            match self.peek().kind {
+                TokenKind::Eof => break,
+                TokenKind::Semi | TokenKind::RBrace if braces <= 0 => break,
+                TokenKind::LParen | TokenKind::LBracket => parens += 1,
+                TokenKind::RParen | TokenKind::RBracket => {
+                    parens -= 1;
+                    closes = parens <= 0;
+                }
+                TokenKind::LBrace => braces += 1,
+                TokenKind::RBrace => braces -= 1,
+                _ => {}
+            }
+            self.bump();
+            if closes {
+                break;
+            }
+        }
+        self.tokens[self.pos.saturating_sub(1)].span
     }
 }
 

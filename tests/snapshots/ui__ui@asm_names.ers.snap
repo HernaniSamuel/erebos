@@ -1,0 +1,54 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/asm_names.ers
+---
+--- typeck ---
+struct Words { options: u32 at 0, reg: u32 at 4, sym: u32 at 8, pure: u32 at 12, clobber_abi: u32 at 16 } size 20, align 4
+fn inout(out: u32, nomem: u32) -> u32
+    expr 0 binary + 360..371: u32
+    expr 1 local out 360..363: u32
+    expr 2 local nomem 366..371: u32
+fn lateout() -> u32
+    expr 3 int 1 401..402: u32
+fn names() -> u32
+    let w: Words
+    let in: u32
+    let out: u32
+    let readonly: u32
+    let nostack: u32
+    let noreturn: u32
+    let preserves_flags: u32
+    expr 4 struct Words 445..506: Words
+    expr 5 int 1 462..463: u32
+    expr 6 int 2 470..471: u32
+    expr 7 int 3 478..479: u32
+    expr 8 int 4 487..488: u32
+    expr 9 int 5 503..504: u32
+    expr 10 binary + 526..543: u32
+    expr 11 field options 526..535: u32
+    expr 12 local w 526..527: Words
+    expr 13 field reg 538..543: u32
+    expr 14 local w 538..539: Words
+    expr 15 binary + 564..594: u32
+    expr 16 binary + 564..578: u32
+    expr 17 field sym 564..569: u32
+    expr 18 local w 564..565: Words
+    expr 19 field pure 572..578: u32
+    expr 20 local w 572..573: Words
+    expr 21 field clobber_abi 581..594: u32
+    expr 22 local w 581..582: Words
+    expr 23 call 620..634: u32
+    expr 24 local in 626..628: u32
+    expr 25 local out 630..633: u32
+    expr 26 binary + 659..679: u32
+    expr 27 call 659..668: u32
+    expr 28 local readonly 671..679: u32
+    expr 29 local nostack 705..712: u32
+    expr 30 local noreturn 745..753: u32
+    expr 31 local preserves_flags 759..774: u32
+entry fn main() -> !
+    expr 32 call 805..812: u32
+    expr 33 loop 818..825: !
+panic fn on_panic() -> !
+    expr 34 loop 856..863: !

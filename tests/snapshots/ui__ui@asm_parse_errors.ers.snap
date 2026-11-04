@@ -1,0 +1,235 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/asm_parse_errors.ers
+---
+--- errors ---
+parser::unexpected-token
+
+  × expected a template string, found `)`
+   ╭─[asm_parse_errors.ers:5:9]
+ 4 │ fn errors(x: u32) {
+ 5 │     asm();
+   ·         ┬
+   ·         ╰── expected a template string
+ 6 │     asm(in(reg) x);
+   ╰────
+  help: an `asm` expression is written `asm("template", operands, options(...))`: one or more
+        template strings, then the operands without a name, the named operands and the operands
+        with an explicit register (and `clobber_abi`), in that order, then `options(...)`, which
+        comes last (ADR 0079)
+parser::unexpected-token
+
+  × expected a template string, found identifier
+   ╭─[asm_parse_errors.ers:6:9]
+ 5 │     asm();
+ 6 │     asm(in(reg) x);
+   ·         ─┬
+   ·          ╰── expected a template string
+ 7 │     asm("nop", inn(reg) x);
+   ╰────
+  help: an `asm` expression is written `asm("template", operands, options(...))`: one or more
+        template strings, then the operands without a name, the named operands and the operands
+        with an explicit register (and `clobber_abi`), in that order, then `options(...)`, which
+        comes last (ADR 0079)
+parser::unexpected-token
+
+  × expected an operand: `in`, `out`, `lateout`, `inout`, `sym`, `const` or `clobber_abi`, found
+  │ identifier
+   ╭─[asm_parse_errors.ers:7:16]
+ 6 │     asm(in(reg) x);
+ 7 │     asm("nop", inn(reg) x);
+   ·                ─┬─
+   ·                 ╰── expected an operand: `in`, `out`, `lateout`, `inout`, `sym`, `const` or `clobber_abi`
+ 8 │     asm("nop", in(reg) x, options(nomem), in(reg) x);
+   ╰────
+  help: an `asm` expression is written `asm("template", operands, options(...))`: one or more
+        template strings, then the operands without a name, the named operands and the operands
+        with an explicit register (and `clobber_abi`), in that order, then `options(...)`, which
+        comes last (ADR 0079)
+parser::unexpected-token
+
+  × expected `)`, found identifier
+   ╭─[asm_parse_errors.ers:8:43]
+ 7 │     asm("nop", inn(reg) x);
+ 8 │     asm("nop", in(reg) x, options(nomem), in(reg) x);
+   ·                                           ─┬
+   ·                                            ╰── expected `)`
+ 9 │     asm("nop", options(nomen));
+   ╰────
+  help: `options(...)` is the last argument of `asm`; the operands come before it (ADR 0079)
+parser::unexpected-token
+
+  × expected an option: `pure`, `nomem`, `readonly`, `nostack`, `preserves_flags` or `noreturn`,
+  │ found identifier
+    ╭─[asm_parse_errors.ers:9:24]
+  8 │     asm("nop", in(reg) x, options(nomem), in(reg) x);
+  9 │     asm("nop", options(nomen));
+    ·                        ──┬──
+    ·                          ╰── expected an option: `pure`, `nomem`, `readonly`, `nostack`, `preserves_flags` or `noreturn`
+ 10 │     asm("nop", options());
+    ╰────
+  help: an `asm` expression is written `asm("template", operands, options(...))`: one or more
+        template strings, then the operands without a name, the named operands and the operands
+        with an explicit register (and `clobber_abi`), in that order, then `options(...)`, which
+        comes last (ADR 0079)
+parser::unexpected-token
+
+  × expected an option: `pure`, `nomem`, `readonly`, `nostack`, `preserves_flags` or `noreturn`,
+  │ found `)`
+    ╭─[asm_parse_errors.ers:10:24]
+  9 │     asm("nop", options(nomen));
+ 10 │     asm("nop", options());
+    ·                        ┬
+    ·                        ╰── expected an option: `pure`, `nomem`, `readonly`, `nostack`, `preserves_flags` or `noreturn`
+ 11 │     asm("nop", in(reg) x;
+    ╰────
+  help: an `asm` expression is written `asm("template", operands, options(...))`: one or more
+        template strings, then the operands without a name, the named operands and the operands
+        with an explicit register (and `clobber_abi`), in that order, then `options(...)`, which
+        comes last (ADR 0079)
+parser::unexpected-token
+
+  × expected `,` or `)`, found `;`
+    ╭─[asm_parse_errors.ers:11:25]
+ 10 │     asm("nop", options());
+ 11 │     asm("nop", in(reg) x;
+    ·                         ┬
+    ·                         ╰── expected `,` or `)`
+ 12 │     asm("nop" in(reg) x);
+    ╰────
+  help: an `asm` expression is written `asm("template", operands, options(...))`: one or more
+        template strings, then the operands without a name, the named operands and the operands
+        with an explicit register (and `clobber_abi`), in that order, then `options(...)`, which
+        comes last (ADR 0079)
+parser::unexpected-token
+
+  × expected `,` or `)`, found identifier
+    ╭─[asm_parse_errors.ers:12:15]
+ 11 │     asm("nop", in(reg) x;
+ 12 │     asm("nop" in(reg) x);
+    ·               ─┬
+    ·                ╰── expected `,` or `)`
+ 13 │     asm("nop", in(rg) x);
+    ╰────
+  help: an `asm` expression is written `asm("template", operands, options(...))`: one or more
+        template strings, then the operands without a name, the named operands and the operands
+        with an explicit register (and `clobber_abi`), in that order, then `options(...)`, which
+        comes last (ADR 0079)
+parser::unexpected-token
+
+  × expected `reg` or the name of a register as a string, found identifier
+    ╭─[asm_parse_errors.ers:13:19]
+ 12 │     asm("nop" in(reg) x);
+ 13 │     asm("nop", in(rg) x);
+    ·                   ─┬
+    ·                    ╰── expected `reg` or the name of a register as a string
+ 14 │     asm("nop", x = in(reg) x, in(reg) x);
+    ╰────
+  help: an `asm` expression is written `asm("template", operands, options(...))`: one or more
+        template strings, then the operands without a name, the named operands and the operands
+        with an explicit register (and `clobber_abi`), in that order, then `options(...)`, which
+        comes last (ADR 0079)
+parser::unexpected-token
+
+  × an operand without a name cannot come after a named operand
+    ╭─[asm_parse_errors.ers:14:31]
+ 13 │     asm("nop", in(rg) x);
+ 14 │     asm("nop", x = in(reg) x, in(reg) x);
+    ·                               ────┬────
+    ·                                   ╰── comes too late
+ 15 │     asm("nop", in("a0") x, y = in(reg) x);
+    ╰────
+  help: operands come in three groups, in this order: without a name, named, and with an explicit
+        register (with `clobber_abi`) (ADR 0079)
+parser::unexpected-token
+
+  × a named operand cannot come after an operand with an explicit register
+    ╭─[asm_parse_errors.ers:15:28]
+ 14 │     asm("nop", x = in(reg) x, in(reg) x);
+ 15 │     asm("nop", in("a0") x, y = in(reg) x);
+    ·                            ┬
+    ·                            ╰── comes too late
+ 16 │     asm("nop", in("a0") x, in(reg) x);
+    ╰────
+  help: operands come in three groups, in this order: without a name, named, and with an explicit
+        register (with `clobber_abi`) (ADR 0079)
+parser::unexpected-token
+
+  × an operand without a name cannot come after an operand with an explicit register
+    ╭─[asm_parse_errors.ers:16:28]
+ 15 │     asm("nop", in("a0") x, y = in(reg) x);
+ 16 │     asm("nop", in("a0") x, in(reg) x);
+    ·                            ────┬────
+    ·                                ╰── comes too late
+ 17 │     asm("nop", x = in("a0") x);
+    ╰────
+  help: operands come in three groups, in this order: without a name, named, and with an explicit
+        register (with `clobber_abi`) (ADR 0079)
+parser::unexpected-token
+
+  × an operand with an explicit register, or `clobber_abi`, has no name
+    ╭─[asm_parse_errors.ers:17:16]
+ 16 │     asm("nop", in("a0") x, in(reg) x);
+ 17 │     asm("nop", x = in("a0") x);
+    ·                ┬
+    ·                ╰── a template cannot place this operand
+ 18 │     asm("nop", x = clobber_abi("C"));
+    ╰────
+  help: only the operands whose register the compiler chooses, `sym` and `const` take a name, and
+        `{name}` places them; an explicit register is part of the operand (ADR 0079)
+parser::unexpected-token
+
+  × an operand with an explicit register, or `clobber_abi`, has no name
+    ╭─[asm_parse_errors.ers:18:16]
+ 17 │     asm("nop", x = in("a0") x);
+ 18 │     asm("nop", x = clobber_abi("C"));
+    ·                ┬
+    ·                ╰── a template cannot place this operand
+ 19 │     asm("nop", in(reg) x, "second");
+    ╰────
+  help: only the operands whose register the compiler chooses, `sym` and `const` take a name, and
+        `{name}` places them; an explicit register is part of the operand (ADR 0079)
+parser::unexpected-token
+
+  × expected an operand: `in`, `out`, `lateout`, `inout`, `sym`, `const` or `clobber_abi`, found
+  │ string literal
+    ╭─[asm_parse_errors.ers:19:27]
+ 18 │     asm("nop", x = clobber_abi("C"));
+ 19 │     asm("nop", in(reg) x, "second");
+    ·                           ────┬───
+    ·                               ╰── expected an operand: `in`, `out`, `lateout`, `inout`, `sym`, `const` or `clobber_abi`
+ 20 │     asm("nop", clobber_abi(C));
+    ╰────
+  help: an `asm` expression is written `asm("template", operands, options(...))`: one or more
+        template strings, then the operands without a name, the named operands and the operands
+        with an explicit register (and `clobber_abi`), in that order, then `options(...)`, which
+        comes last (ADR 0079)
+parser::unexpected-token
+
+  × expected the name of an ABI, found identifier
+    ╭─[asm_parse_errors.ers:20:28]
+ 19 │     asm("nop", in(reg) x, "second");
+ 20 │     asm("nop", clobber_abi(C));
+    ·                            ┬
+    ·                            ╰── expected the name of an ABI
+ 21 │     asm "nop";
+    ╰────
+  help: an `asm` expression is written `asm("template", operands, options(...))`: one or more
+        template strings, then the operands without a name, the named operands and the operands
+        with an explicit register (and `clobber_abi`), in that order, then `options(...)`, which
+        comes last (ADR 0079)
+parser::unexpected-token
+
+  × expected `(`, found string literal
+    ╭─[asm_parse_errors.ers:21:9]
+ 20 │     asm("nop", clobber_abi(C));
+ 21 │     asm "nop";
+    ·         ──┬──
+    ·           ╰── expected `(`
+ 22 │     asm("fine");
+    ╰────
+  help: an `asm` expression is written `asm("template", operands, options(...))`: one or more
+        template strings, then the operands without a name, the named operands and the operands
+        with an explicit register (and `clobber_abi`), in that order, then `options(...)`, which
+        comes last (ADR 0079)

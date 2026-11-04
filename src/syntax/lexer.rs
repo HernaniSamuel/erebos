@@ -103,8 +103,13 @@ impl Lexer<'_> {
                     TokenKind::Byte
                 }
                 'b' if self.peek() == Some('"') => {
-                    self.byte_string(start);
+                    self.bump(); // opening quote
+                    self.quoted(start, "byte string", "b\"");
                     TokenKind::ByteString
+                }
+                '"' => {
+                    self.quoted(start, "string literal", "\"");
+                    TokenKind::String
                 }
                 c if is_ident_start(c) => {
                     while self.peek().is_some_and(is_ident_continue) {
@@ -232,10 +237,12 @@ impl Lexer<'_> {
         }
     }
 
-    /// Consumes a byte string `b"..."` (the `b` is already consumed), which
-    /// ends on its line (ADR 0031).
-    fn byte_string(&mut self, start: usize) {
-        self.bump(); // opening quote
+    /// Consumes the rest of a byte string `b"..."` (ADR 0031) or of a string
+    /// literal `"..."` (ADR 0079), after its opening quote: both end on
+    /// their line and hold the characters and escapes of a byte string.
+    /// `what` names the token in the diagnostics, and `open` is the text
+    /// that opened it, `b"` or `"`.
+    fn quoted(&mut self, start: usize, what: &str, open: &str) {
         loop {
             match self.peek() {
                 Some('"') => {
@@ -249,13 +256,18 @@ impl Lexer<'_> {
                     }
                 }
                 Some('\n') | None => {
+                    let help = if open.starts_with('b') {
+                        r"a byte string ends on its line; write a line break as `\n` (ADR 0031)"
+                    } else {
+                        r"a string literal ends on its line; write a line break as `\n`, or give `asm` one string per line (ADR 0079)"
+                    };
                     self.diags.push(
                         Diagnostic::error(
                             "lexer::unterminated-byte-string",
-                            "unterminated byte string",
+                            format!("unterminated {what}"),
                         )
                         .label(self.span_from(start), "missing closing `\"`")
-                        .help(r"a byte string ends on its line; write a line break as `\n` (ADR 0031)"),
+                        .help(help),
                     );
                     return;
                 }
@@ -264,7 +276,7 @@ impl Lexer<'_> {
                 }
             }
         }
-        let Err(errors) = byte_string_value(&self.text[start..self.pos]) else {
+        let Err(errors) = quoted_value(&self.text[start..self.pos], open) else {
             return;
         };
         // Each bad character or escape, so that one pass finds them all.
@@ -273,14 +285,14 @@ impl Lexer<'_> {
                 ByteError::NotAscii => "only printable ASCII can be written directly",
                 ByteError::BadEscape => "unknown escape sequence",
                 ByteError::Unterminated | ByteError::Empty | ByteError::TooMany => {
-                    unreachable!("a terminated byte string holds any number of bytes")
+                    unreachable!("a terminated {what} holds any number of bytes")
                 }
             };
             self.diags.push(
                 Diagnostic::error("lexer::invalid-byte", message)
                     .label(
                         Span::new(self.file, start + at.start, start + at.end),
-                        "invalid in a byte string",
+                        format!("invalid in a {what}"),
                     )
                     .help(r#"escapes: \n \r \t \\ \' \" \0 and \xNN for any byte (ADR 0016)"#),
             );
@@ -401,8 +413,20 @@ pub fn byte_value(text: &str) -> Result<u8, ByteError> {
 /// The bytes of a byte string's source text, including `b"` and `"`
 /// (ADR 0031); or every error, each with the range of the text at fault.
 pub fn byte_string_value(text: &str) -> Result<Vec<u8>, Vec<(ByteError, Range<usize>)>> {
+    quoted_value(text, "b\"")
+}
+
+/// The bytes of a string literal's source text, including both quotes
+/// (ADR 0079), by the rules of a byte string.
+pub fn string_value(text: &str) -> Result<Vec<u8>, Vec<(ByteError, Range<usize>)>> {
+    quoted_value(text, "\"")
+}
+
+/// The bytes of the source text of a byte string or a string literal, which
+/// starts with `open`, `b"` or `"`, and ends with `"`.
+fn quoted_value(text: &str, open: &str) -> Result<Vec<u8>, Vec<(ByteError, Range<usize>)>> {
     let Some(inner) = text
-        .strip_prefix("b\"")
+        .strip_prefix(open)
         .and_then(|rest| rest.strip_suffix('"'))
     else {
         return Err(vec![(ByteError::Unterminated, 0..text.len())]);
@@ -410,8 +434,8 @@ pub fn byte_string_value(text: &str) -> Result<Vec<u8>, Vec<(ByteError, Range<us
     let mut bytes = Vec::new();
     let mut errors = Vec::new();
     let mut chars = inner.chars();
-    // Offsets in `text`, past `b"`.
-    let offset = |rest: &str| 2 + inner.len() - rest.len();
+    // Offsets in `text`, past the opening quote.
+    let offset = |rest: &str| open.len() + inner.len() - rest.len();
     while let Some(c) = chars.next() {
         let start = offset(chars.as_str()) - c.len_utf8();
         match one_byte(c, &mut chars) {
@@ -619,6 +643,65 @@ mod tests {
         // Tokens of unterminated literals, as the parser sees them.
         assert_eq!(byte_value("b'"), Err(ByteError::Unterminated));
         assert_eq!(byte_value("b'a"), Err(ByteError::Unterminated));
+    }
+
+    #[test]
+    fn string_literals() {
+        use TokenKind::*;
+        let (kinds, diags) = kinds(r#"asm("nop", "a\"b") as asm_ b"x" "" b"" "#);
+        assert!(!diags.has_errors());
+        assert_eq!(
+            kinds,
+            [
+                Asm, LParen, String, Comma, String, RParen, As, Ident, ByteString, String,
+                ByteString, Eof
+            ]
+        );
+    }
+
+    #[test]
+    fn string_values() {
+        assert_eq!(string_value(r#""""#), Ok(vec![]));
+        assert_eq!(
+            string_value(r#""csrr {}, 0x\x41""#),
+            Ok(b"csrr {}, 0xA".to_vec())
+        );
+        assert_eq!(
+            string_value(r#""a\n\t\0\"\\""#),
+            Ok(b"a\n\t\0\"\\".to_vec())
+        );
+        // The offsets are those of the text, past the opening quote.
+        assert_eq!(
+            string_value(r#""ab\qc""#),
+            Err(vec![(ByteError::BadEscape, 3..5)])
+        );
+        assert_eq!(
+            string_value("\"aé\""),
+            Err(vec![(ByteError::NotAscii, 2..4)])
+        );
+        assert_eq!(
+            string_value(r#""ab"#),
+            Err(vec![(ByteError::Unterminated, 0..3)])
+        );
+    }
+
+    #[test]
+    fn string_literal_errors_are_those_of_byte_strings() {
+        let (kinds, diags) = kinds("\"a\\qb\" \"open\nfn");
+        assert_eq!(
+            kinds,
+            [
+                TokenKind::String,
+                TokenKind::String,
+                TokenKind::Fn,
+                TokenKind::Eof
+            ]
+        );
+        let codes: Vec<_> = diags.into_vec().iter().map(|d| d.code).collect();
+        assert_eq!(
+            codes,
+            ["lexer::invalid-byte", "lexer::unterminated-byte-string"]
+        );
     }
 
     #[test]

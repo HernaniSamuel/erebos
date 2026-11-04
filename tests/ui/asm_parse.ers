@@ -1,0 +1,45 @@
+// emit: ast
+// Every form of an `asm` expression (ADR 0079): templates, each direction
+// with `reg` and with a register named by a string, with and without a
+// name, `inout` with and without `=>`, `sym`, `const`, `clobber_abi` and
+// every option.
+fn forms(x: u32, a: [u32; 2]) {
+    let mut v: u32 = 0;
+    asm("nop");
+    asm("csrr {}, mcause", out(reg) v);
+    asm("one", "two", "three");
+    asm("add {0}, {1}", in(reg) x, in(reg) 3 as u32);
+    asm("{x} {y}", x = in(reg) x, y = lateout(reg) v);
+    asm("mv a0, {}", in("a1") x, out("a0") v, lateout("a2") a[1]);
+    asm("{}", inout(reg) v);
+    asm("{}", inout(reg) v => _);
+    asm("{}", inout(reg) x => v);
+    asm("{r}", r = inout(reg) x => a[0]);
+    asm("", inout("a0") x => _);
+    asm("", out(reg) _, lateout("a1") _);
+    asm("call {f}", f = sym callee, g = const 4 + 1, clobber_abi("C"));
+    asm("call {}", sym crate::callee, const -1 as i32);
+    asm("{in} {out}", in = in(reg) x, out = out(reg) v);
+    asm("fence", options(pure, nomem, readonly, nostack, preserves_flags, noreturn));
+    asm("wfi", in(reg) x, options(nomem,));
+    asm("wfi", out(reg) v, options(nostack),);
+    asm(
+        "a",
+        "b",
+        in(reg) x,
+        options(nomem),
+    );
+}
+
+// As the tail of a block, and where the escapes of a template show.
+fn tail() {
+    asm("a\n\tb \"c\" \\ \x41 \0")
+}
+
+fn nested() -> u32 {
+    let v: u32 = { asm("nop"); 1 };
+    if v == 1 {
+        asm("wfi", options(nomem, nostack))
+    }
+    v
+}

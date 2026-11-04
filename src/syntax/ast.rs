@@ -601,6 +601,115 @@ pub enum ExprKind {
     Continue,
     /// `return` or `return value`
     Return(Option<Box<Expr>>),
+    /// `asm("template", operands, options(...))` (ADR 0079).
+    Asm(AsmExpr),
+}
+
+/// A string literal (ADR 0079): the bytes it holds, with its escapes
+/// resolved, and the span of the literal. Empty when the lexer rejected it.
+#[derive(Clone)]
+pub struct StrLit {
+    pub bytes: Vec<u8>,
+    pub span: Span,
+}
+
+impl std::fmt::Debug for StrLit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // The bytes as text, so that a dump is readable.
+        f.debug_struct("StrLit")
+            .field("bytes", &format_args!("\"{}\"", self.bytes.escape_ascii()))
+            .field("span", &self.span)
+            .finish()
+    }
+}
+
+/// An `asm` expression (ADR 0079), as written: the templates, which the
+/// compiler joins with line breaks, the operands in the order written, and
+/// the options in the order written. The span of the expression is the
+/// one of its `Expr`.
+#[derive(Debug)]
+pub struct AsmExpr {
+    /// At least one, but for an `asm` the parser reported an error in.
+    pub templates: Vec<StrLit>,
+    pub operands: Vec<AsmOperand>,
+    pub options: Vec<AsmOption>,
+}
+
+/// `[name =] direction(where) ...`, `sym path`, `const expr` or
+/// `clobber_abi("C")`, with its span, which starts at the name.
+#[derive(Debug)]
+pub struct AsmOperand {
+    /// The name that a template places the operand by. The parser lets
+    /// only the operands that a template may name have one.
+    pub name: Option<Ident>,
+    pub kind: AsmOperandKind,
+    pub span: Span,
+}
+
+#[derive(Debug)]
+pub enum AsmOperandKind {
+    /// `in(where) expr`
+    In { reg: AsmReg, expr: Expr },
+    /// `out(where) place` or `lateout(where) place`; `None` for `_`, which
+    /// drops the value.
+    Out {
+        reg: AsmReg,
+        late: bool,
+        place: Option<Expr>,
+    },
+    /// `inout(where) expr`, and `=> place` or `=> _` after it: `out` is
+    /// `None` when absent, `Some(None)` for `=> _`, `Some(Some(place))`
+    /// for `=> place`.
+    InOut {
+        reg: AsmReg,
+        expr: Expr,
+        out: Option<Option<Expr>>,
+    },
+    /// `sym path`
+    Sym(Path),
+    /// `const expr`
+    Const(Expr),
+    /// `clobber_abi("C")`: the name of the ABI.
+    ClobberAbi(StrLit),
+}
+
+/// Where an operand lives: `reg`, a register the compiler chooses, or the
+/// name of one, a string literal (ADR 0079).
+#[derive(Debug)]
+pub enum AsmReg {
+    /// `reg`: the name of a register class.
+    Class(Ident),
+    /// `"a0"`
+    Explicit(StrLit),
+}
+
+/// An option of `options(...)`, with its span.
+#[derive(Debug)]
+pub struct AsmOption {
+    pub kind: AsmOptionKind,
+    pub span: Span,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AsmOptionKind {
+    Pure,
+    Nomem,
+    Readonly,
+    Nostack,
+    PreservesFlags,
+    Noreturn,
+}
+
+impl AsmOptionKind {
+    /// The options, as written.
+    pub const ALL: [(&'static str, AsmOptionKind); 6] = [
+        ("pure", AsmOptionKind::Pure),
+        ("nomem", AsmOptionKind::Nomem),
+        ("readonly", AsmOptionKind::Readonly),
+        ("nostack", AsmOptionKind::Nostack),
+        ("preserves_flags", AsmOptionKind::PreservesFlags),
+        ("noreturn", AsmOptionKind::Noreturn),
+    ];
 }
 
 /// `field: value` in a struct literal.

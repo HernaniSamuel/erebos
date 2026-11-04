@@ -670,6 +670,19 @@ impl Lowerer<'_> {
                 self.comptime_floor = floor;
                 ExprKind::Comptime(inner)
             }
+            // Temporary, until type checking takes `asm` (ADR 0079). The
+            // placeholder works since lowering errors stop the pipeline.
+            ast::ExprKind::Asm(_) => {
+                self.diags.push(
+                    Diagnostic::error(
+                        "resolve::asm-unsupported",
+                        "inline assembly is not lowered yet",
+                    )
+                    .label(expr.span, "this `asm` expression")
+                    .help("inline assembly is parsed but not yet checked or generated (ADR 0079)"),
+                );
+                ExprKind::Unit
+            }
         };
         Expr {
             id,

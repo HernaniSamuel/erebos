@@ -1,0 +1,37 @@
+// emit: typeck
+// The words of `asm` are recognized only inside it: everywhere else they
+// are ordinary names (ADR 0079), as the words of a `memory` block are
+// (ADR 0057). `asm` itself and `const` are keywords.
+struct Words {
+    options: u32,
+    reg: u32,
+    sym: u32,
+    pure: u32,
+    clobber_abi: u32,
+}
+
+fn inout(out: u32, nomem: u32) -> u32 {
+    out + nomem
+}
+
+fn lateout() -> u32 {
+    1
+}
+
+fn names() -> u32 {
+    let w: Words = Words { options: 1, reg: 2, sym: 3, pure: 4, clobber_abi: 5 };
+    let in: u32 = w.options + w.reg;
+    let out: u32 = w.sym + w.pure + w.clobber_abi;
+    let readonly: u32 = inout(in, out);
+    let nostack: u32 = lateout() + readonly;
+    let noreturn: u32 = nostack;
+    let preserves_flags: u32 = noreturn;
+    preserves_flags
+}
+
+entry fn main() -> ! {
+    names();
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

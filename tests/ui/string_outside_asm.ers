@@ -1,0 +1,14 @@
+// emit: ast
+// A string literal exists only inside `asm`; everywhere else it is a byte
+// string (ADR 0079). The parser skips it and goes on, so each is reported.
+// A malformed escape in a template is the byte string's error.
+"stray"
+
+fn f(x: u32) {
+    let a: u32 = "text";
+    g("argument", x);
+    let b: u32 = x + "sum";
+    asm("bad \q escape", in("a\xZZ") x);
+}
+
+fn g(s: u32, x: u32) {}
