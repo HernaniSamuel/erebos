@@ -236,6 +236,11 @@ pub struct Queries<'h> {
 }
 
 impl<'h> Queries<'h> {
+    /// The target being built for (ADR 0073).
+    pub fn target(&self) -> &'static Target {
+        self.target
+    }
+
     pub fn new(hir: &'h Hir, target: &'static Target) -> Queries<'h> {
         let mut q = Queries {
             hir,

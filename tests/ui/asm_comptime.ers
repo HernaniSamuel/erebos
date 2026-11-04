@@ -1,0 +1,34 @@
+// `asm` cannot run at compile time (ADR 0079): a constant whose evaluation
+// reaches one is `eval::asm`, whichever function it is in. That a function
+// with `asm` called at run time builds is `asm_typeck.ers`'s.
+fn read() -> u32 {
+    let mut v: u32 = 0;
+    asm("csrr {}, mcause", out(reg) v, options(nomem, nostack));
+    v
+}
+
+fn indirect() -> u32 {
+    read() + 1
+}
+
+fn stops() -> u32 {
+    asm("wfi", options(noreturn));
+}
+
+const DIRECT: u32 = comptime { read() };
+
+const THROUGH: u32 = comptime { indirect() };
+
+const NEVER: u32 = comptime { stops() };
+
+// Never evaluated: a function with `asm` that no constant calls.
+fn at_run_time() -> u32 {
+    read()
+}
+
+entry fn main() -> ! {
+    at_run_time();
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

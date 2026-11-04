@@ -1,0 +1,471 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/asm_register_errors.ers
+---
+--- errors ---
+ty::asm-register
+
+  × `a8` is no register of riscv32imac-unknown-none-elf
+   ╭─[asm_register_errors.ers:4:16]
+ 3 │ fn unknown(x: u32) {
+ 4 │     asm("", in("a8") x);
+   ·                ──┬─
+   ·                  ╰── unknown register
+ 5 │     asm("", in("x32") x);
+   ╰────
+  help: the registers of riscv32imac-unknown-none-elf are `x0` to `x31`, or their ABI names:
+        `zero`, `ra`, `sp`, `gp`, `tp`, `t0` to `t6`, `s0` (`fp`) to `s11`, `a0` to `a7` (ADR
+        0079)
+ty::asm-register
+
+  × `x32` is no register of riscv32imac-unknown-none-elf
+   ╭─[asm_register_errors.ers:5:16]
+ 4 │     asm("", in("a8") x);
+ 5 │     asm("", in("x32") x);
+   ·                ──┬──
+   ·                  ╰── unknown register
+ 6 │     asm("", in("") x);
+   ╰────
+  help: the registers of riscv32imac-unknown-none-elf are `x0` to `x31`, or their ABI names:
+        `zero`, `ra`, `sp`, `gp`, `tp`, `t0` to `t6`, `s0` (`fp`) to `s11`, `a0` to `a7` (ADR
+        0079)
+ty::asm-register
+
+  × `` is no register of riscv32imac-unknown-none-elf
+   ╭─[asm_register_errors.ers:6:16]
+ 5 │     asm("", in("x32") x);
+ 6 │     asm("", in("") x);
+   ·                ─┬
+   ·                 ╰── unknown register
+ 7 │     asm("", in("A0") x);
+   ╰────
+  help: the registers of riscv32imac-unknown-none-elf are `x0` to `x31`, or their ABI names:
+        `zero`, `ra`, `sp`, `gp`, `tp`, `t0` to `t6`, `s0` (`fp`) to `s11`, `a0` to `a7` (ADR
+        0079)
+ty::asm-register
+
+  × `A0` is no register of riscv32imac-unknown-none-elf
+   ╭─[asm_register_errors.ers:7:16]
+ 6 │     asm("", in("") x);
+ 7 │     asm("", in("A0") x);
+   ·                ──┬─
+   ·                  ╰── unknown register
+ 8 │     // A name of the other target.
+   ╰────
+  help: the registers of riscv32imac-unknown-none-elf are `x0` to `x31`, or their ABI names:
+        `zero`, `ra`, `sp`, `gp`, `tp`, `t0` to `t6`, `s0` (`fp`) to `s11`, `a0` to `a7` (ADR
+        0079)
+ty::asm-register
+
+  × `r0` is no register of riscv32imac-unknown-none-elf
+    ╭─[asm_register_errors.ers:9:16]
+  8 │     // A name of the other target.
+  9 │     asm("", in("r0") x);
+    ·                ──┬─
+    ·                  ╰── unknown register
+ 10 │     asm("", out("lr") _);
+    ╰────
+  help: the registers of riscv32imac-unknown-none-elf are `x0` to `x31`, or their ABI names:
+        `zero`, `ra`, `sp`, `gp`, `tp`, `t0` to `t6`, `s0` (`fp`) to `s11`, `a0` to `a7` (ADR
+        0079)
+ty::asm-register
+
+  × `lr` is no register of riscv32imac-unknown-none-elf
+    ╭─[asm_register_errors.ers:10:17]
+  9 │     asm("", in("r0") x);
+ 10 │     asm("", out("lr") _);
+    ·                 ──┬─
+    ·                   ╰── unknown register
+ 11 │ }
+    ╰────
+  help: the registers of riscv32imac-unknown-none-elf are `x0` to `x31`, or their ABI names:
+        `zero`, `ra`, `sp`, `gp`, `tp`, `t0` to `t6`, `s0` (`fp`) to `s11`, `a0` to `a7` (ADR
+        0079)
+ty::asm-register
+
+  × the compiler keeps `x0` for itself
+    ╭─[asm_register_errors.ers:15:16]
+ 14 │ fn reserved(x: u32) {
+ 15 │     asm("", in("x0") x);
+    ·                ──┬─
+    ·                  ╰── reserved register
+ 16 │     asm("", in("zero") x);
+    ╰────
+  help: the compiler relies on these registers for itself, as the stack, frame and base pointers
+        or the program counter; the registers reserved on riscv32imac-unknown-none-elf are `x0`
+        (`zero`), `x2` (`sp`), `x3` (`gp`), `x4` (`tp`), `x8` (`s0`), `x9` (`s1`) (ADR 0079)
+ty::asm-register
+
+  × the compiler keeps `zero` (`x0`) for itself
+    ╭─[asm_register_errors.ers:16:16]
+ 15 │     asm("", in("x0") x);
+ 16 │     asm("", in("zero") x);
+    ·                ───┬──
+    ·                   ╰── reserved register
+ 17 │     asm("", in("x2") x);
+    ╰────
+  help: the compiler relies on these registers for itself, as the stack, frame and base pointers
+        or the program counter; the registers reserved on riscv32imac-unknown-none-elf are `x0`
+        (`zero`), `x2` (`sp`), `x3` (`gp`), `x4` (`tp`), `x8` (`s0`), `x9` (`s1`) (ADR 0079)
+ty::asm-register
+
+  × the compiler keeps `x2` for itself
+    ╭─[asm_register_errors.ers:17:16]
+ 16 │     asm("", in("zero") x);
+ 17 │     asm("", in("x2") x);
+    ·                ──┬─
+    ·                  ╰── reserved register
+ 18 │     asm("", in("sp") x);
+    ╰────
+  help: the compiler relies on these registers for itself, as the stack, frame and base pointers
+        or the program counter; the registers reserved on riscv32imac-unknown-none-elf are `x0`
+        (`zero`), `x2` (`sp`), `x3` (`gp`), `x4` (`tp`), `x8` (`s0`), `x9` (`s1`) (ADR 0079)
+ty::asm-register
+
+  × the compiler keeps `sp` (`x2`) for itself
+    ╭─[asm_register_errors.ers:18:16]
+ 17 │     asm("", in("x2") x);
+ 18 │     asm("", in("sp") x);
+    ·                ──┬─
+    ·                  ╰── reserved register
+ 19 │     asm("", in("x3") x);
+    ╰────
+  help: the compiler relies on these registers for itself, as the stack, frame and base pointers
+        or the program counter; the registers reserved on riscv32imac-unknown-none-elf are `x0`
+        (`zero`), `x2` (`sp`), `x3` (`gp`), `x4` (`tp`), `x8` (`s0`), `x9` (`s1`) (ADR 0079)
+ty::asm-register
+
+  × the compiler keeps `x3` for itself
+    ╭─[asm_register_errors.ers:19:16]
+ 18 │     asm("", in("sp") x);
+ 19 │     asm("", in("x3") x);
+    ·                ──┬─
+    ·                  ╰── reserved register
+ 20 │     asm("", in("gp") x);
+    ╰────
+  help: the compiler relies on these registers for itself, as the stack, frame and base pointers
+        or the program counter; the registers reserved on riscv32imac-unknown-none-elf are `x0`
+        (`zero`), `x2` (`sp`), `x3` (`gp`), `x4` (`tp`), `x8` (`s0`), `x9` (`s1`) (ADR 0079)
+ty::asm-register
+
+  × the compiler keeps `gp` (`x3`) for itself
+    ╭─[asm_register_errors.ers:20:16]
+ 19 │     asm("", in("x3") x);
+ 20 │     asm("", in("gp") x);
+    ·                ──┬─
+    ·                  ╰── reserved register
+ 21 │     asm("", in("x4") x);
+    ╰────
+  help: the compiler relies on these registers for itself, as the stack, frame and base pointers
+        or the program counter; the registers reserved on riscv32imac-unknown-none-elf are `x0`
+        (`zero`), `x2` (`sp`), `x3` (`gp`), `x4` (`tp`), `x8` (`s0`), `x9` (`s1`) (ADR 0079)
+ty::asm-register
+
+  × the compiler keeps `x4` for itself
+    ╭─[asm_register_errors.ers:21:16]
+ 20 │     asm("", in("gp") x);
+ 21 │     asm("", in("x4") x);
+    ·                ──┬─
+    ·                  ╰── reserved register
+ 22 │     asm("", in("tp") x);
+    ╰────
+  help: the compiler relies on these registers for itself, as the stack, frame and base pointers
+        or the program counter; the registers reserved on riscv32imac-unknown-none-elf are `x0`
+        (`zero`), `x2` (`sp`), `x3` (`gp`), `x4` (`tp`), `x8` (`s0`), `x9` (`s1`) (ADR 0079)
+ty::asm-register
+
+  × the compiler keeps `tp` (`x4`) for itself
+    ╭─[asm_register_errors.ers:22:16]
+ 21 │     asm("", in("x4") x);
+ 22 │     asm("", in("tp") x);
+    ·                ──┬─
+    ·                  ╰── reserved register
+ 23 │     asm("", in("x8") x);
+    ╰────
+  help: the compiler relies on these registers for itself, as the stack, frame and base pointers
+        or the program counter; the registers reserved on riscv32imac-unknown-none-elf are `x0`
+        (`zero`), `x2` (`sp`), `x3` (`gp`), `x4` (`tp`), `x8` (`s0`), `x9` (`s1`) (ADR 0079)
+ty::asm-register
+
+  × the compiler keeps `x8` for itself
+    ╭─[asm_register_errors.ers:23:16]
+ 22 │     asm("", in("tp") x);
+ 23 │     asm("", in("x8") x);
+    ·                ──┬─
+    ·                  ╰── reserved register
+ 24 │     asm("", in("s0") x);
+    ╰────
+  help: the compiler relies on these registers for itself, as the stack, frame and base pointers
+        or the program counter; the registers reserved on riscv32imac-unknown-none-elf are `x0`
+        (`zero`), `x2` (`sp`), `x3` (`gp`), `x4` (`tp`), `x8` (`s0`), `x9` (`s1`) (ADR 0079)
+ty::asm-register
+
+  × the compiler keeps `s0` (`x8`) for itself
+    ╭─[asm_register_errors.ers:24:16]
+ 23 │     asm("", in("x8") x);
+ 24 │     asm("", in("s0") x);
+    ·                ──┬─
+    ·                  ╰── reserved register
+ 25 │     asm("", in("fp") x);
+    ╰────
+  help: the compiler relies on these registers for itself, as the stack, frame and base pointers
+        or the program counter; the registers reserved on riscv32imac-unknown-none-elf are `x0`
+        (`zero`), `x2` (`sp`), `x3` (`gp`), `x4` (`tp`), `x8` (`s0`), `x9` (`s1`) (ADR 0079)
+ty::asm-register
+
+  × the compiler keeps `fp` (`x8`) for itself
+    ╭─[asm_register_errors.ers:25:16]
+ 24 │     asm("", in("s0") x);
+ 25 │     asm("", in("fp") x);
+    ·                ──┬─
+    ·                  ╰── reserved register
+ 26 │     asm("", in("x9") x);
+    ╰────
+  help: the compiler relies on these registers for itself, as the stack, frame and base pointers
+        or the program counter; the registers reserved on riscv32imac-unknown-none-elf are `x0`
+        (`zero`), `x2` (`sp`), `x3` (`gp`), `x4` (`tp`), `x8` (`s0`), `x9` (`s1`) (ADR 0079)
+ty::asm-register
+
+  × the compiler keeps `x9` for itself
+    ╭─[asm_register_errors.ers:26:16]
+ 25 │     asm("", in("fp") x);
+ 26 │     asm("", in("x9") x);
+    ·                ──┬─
+    ·                  ╰── reserved register
+ 27 │     asm("", in("s1") x);
+    ╰────
+  help: the compiler relies on these registers for itself, as the stack, frame and base pointers
+        or the program counter; the registers reserved on riscv32imac-unknown-none-elf are `x0`
+        (`zero`), `x2` (`sp`), `x3` (`gp`), `x4` (`tp`), `x8` (`s0`), `x9` (`s1`) (ADR 0079)
+ty::asm-register
+
+  × the compiler keeps `s1` (`x9`) for itself
+    ╭─[asm_register_errors.ers:27:16]
+ 26 │     asm("", in("x9") x);
+ 27 │     asm("", in("s1") x);
+    ·                ──┬─
+    ·                  ╰── reserved register
+ 28 │     asm("", out("x2") _);
+    ╰────
+  help: the compiler relies on these registers for itself, as the stack, frame and base pointers
+        or the program counter; the registers reserved on riscv32imac-unknown-none-elf are `x0`
+        (`zero`), `x2` (`sp`), `x3` (`gp`), `x4` (`tp`), `x8` (`s0`), `x9` (`s1`) (ADR 0079)
+ty::asm-register
+
+  × the compiler keeps `x2` for itself
+    ╭─[asm_register_errors.ers:28:17]
+ 27 │     asm("", in("s1") x);
+ 28 │     asm("", out("x2") _);
+    ·                 ──┬─
+    ·                   ╰── reserved register
+ 29 │     asm("", inout("sp") x => _);
+    ╰────
+  help: the compiler relies on these registers for itself, as the stack, frame and base pointers
+        or the program counter; the registers reserved on riscv32imac-unknown-none-elf are `x0`
+        (`zero`), `x2` (`sp`), `x3` (`gp`), `x4` (`tp`), `x8` (`s0`), `x9` (`s1`) (ADR 0079)
+ty::asm-register
+
+  × the compiler keeps `sp` (`x2`) for itself
+    ╭─[asm_register_errors.ers:29:19]
+ 28 │     asm("", out("x2") _);
+ 29 │     asm("", inout("sp") x => _);
+    ·                   ──┬─
+    ·                     ╰── reserved register
+ 30 │ }
+    ╰────
+  help: the compiler relies on these registers for itself, as the stack, frame and base pointers
+        or the program counter; the registers reserved on riscv32imac-unknown-none-elf are `x0`
+        (`zero`), `x2` (`sp`), `x3` (`gp`), `x4` (`tp`), `x8` (`s0`), `x9` (`s1`) (ADR 0079)
+ty::asm-register
+
+  × the register `x10` is named by two inputs
+    ╭─[asm_register_errors.ers:34:37]
+ 33 │ fn twice(x: u32) {
+ 34 │     asm("", in("a0") x, in("a1") x, in("x10") x);
+    ·             ─────┬────              ─────┬─────
+    ·                  │                       ╰── named again
+    ·                  ╰── first named here
+ 35 │     asm("", out("a0") _, out("a1") _, lateout("x10") _);
+    ╰────
+  help: an input has a register to itself (ADR 0079)
+ty::asm-register
+
+  × the register `x10` is named by two outputs
+    ╭─[asm_register_errors.ers:35:39]
+ 34 │     asm("", in("a0") x, in("a1") x, in("x10") x);
+ 35 │     asm("", out("a0") _, out("a1") _, lateout("x10") _);
+    ·             ─────┬─────               ────────┬───────
+    ·                  │                            ╰── named again
+    ·                  ╰── first named here
+ 36 │     asm("", inout("a0") x => _, in("a0") x);
+    ╰────
+  help: an output has a register to itself (ADR 0079)
+ty::asm-register
+
+  × the register `x10` is named by two inputs
+    ╭─[asm_register_errors.ers:36:33]
+ 35 │     asm("", out("a0") _, out("a1") _, lateout("x10") _);
+ 36 │     asm("", inout("a0") x => _, in("a0") x);
+    ·             ─────────┬────────  ─────┬────
+    ·                      │               ╰── named again
+    ·                      ╰── first named here
+ 37 │     asm("", inout("a0") x => _, out("x10") _);
+    ╰────
+  help: an input has a register to itself (ADR 0079)
+ty::asm-register
+
+  × the register `x10` is named by two outputs
+    ╭─[asm_register_errors.ers:37:33]
+ 36 │     asm("", inout("a0") x => _, in("a0") x);
+ 37 │     asm("", inout("a0") x => _, out("x10") _);
+    ·             ─────────┬────────  ──────┬─────
+    ·                      │                ╰── named again
+    ·                      ╰── first named here
+ 38 │     asm("", in("a0") x, in("a0") x, out("a1") _, out("a1") _);
+    ╰────
+  help: an output has a register to itself (ADR 0079)
+ty::asm-register
+
+  × the register `x10` is named by two inputs
+    ╭─[asm_register_errors.ers:38:25]
+ 37 │     asm("", inout("a0") x => _, out("x10") _);
+ 38 │     asm("", in("a0") x, in("a0") x, out("a1") _, out("a1") _);
+    ·             ─────┬────  ─────┬────
+    ·                  │           ╰── named again
+    ·                  ╰── first named here
+ 39 │ }
+    ╰────
+  help: an input has a register to itself (ADR 0079)
+ty::asm-register
+
+  × the register `x11` is named by two outputs
+    ╭─[asm_register_errors.ers:38:50]
+ 37 │     asm("", inout("a0") x => _, out("x10") _);
+ 38 │     asm("", in("a0") x, in("a0") x, out("a1") _, out("a1") _);
+    ·                                     ─────┬─────  ─────┬─────
+    ·                                          │            ╰── named again
+    ·                                          ╰── first named here
+ 39 │ }
+    ╰────
+  help: an output has a register to itself (ADR 0079)
+ty::asm-register
+
+  × the register `x10` is named by an input and an `out`
+    ╭─[asm_register_errors.ers:43:25]
+ 42 │ fn input_and_output(x: u32) {
+ 43 │     asm("", in("a0") x, out("a0") _);
+    ·             ─────┬────  ─────┬─────
+    ·                  │           ╰── named again
+    ·                  ╰── first named here
+ 44 │     asm("", in("a0") x, out("x10") _);
+    ╰────
+  help: an `out` promises a register that no input uses: write `inout` to pass a value in and out
+        through one register, or `lateout` where the output may reuse an input's register (ADR
+        0079)
+ty::asm-register
+
+  × the register `x10` is named by an input and an `out`
+    ╭─[asm_register_errors.ers:44:25]
+ 43 │     asm("", in("a0") x, out("a0") _);
+ 44 │     asm("", in("a0") x, out("x10") _);
+    ·             ─────┬────  ──────┬─────
+    ·                  │            ╰── named again
+    ·                  ╰── first named here
+ 45 │     asm("", out("a0") _, in("a0") x);
+    ╰────
+  help: an `out` promises a register that no input uses: write `inout` to pass a value in and out
+        through one register, or `lateout` where the output may reuse an input's register (ADR
+        0079)
+ty::asm-register
+
+  × the register `x10` is named by an input and an `out`
+    ╭─[asm_register_errors.ers:45:26]
+ 44 │     asm("", in("a0") x, out("x10") _);
+ 45 │     asm("", out("a0") _, in("a0") x);
+    ·             ─────┬─────  ─────┬────
+    ·                  │            ╰── named again
+    ·                  ╰── first named here
+ 46 │     asm("", in("a0") x, lateout("a0") _);
+    ╰────
+  help: an `out` promises a register that no input uses: write `inout` to pass a value in and out
+        through one register, or `lateout` where the output may reuse an input's register (ADR
+        0079)
+ty::asm-register
+
+  × the register `x10` is named by two outputs
+    ╭─[asm_register_errors.ers:50:42]
+ 49 │     // A shared register does not hide a conflict with a later operand.
+ 50 │     asm("", in("a0") x, lateout("a0") _, lateout("x10") _);
+    ·                         ───────┬───────  ────────┬───────
+    ·                                │                 ╰── named again
+    ·                                ╰── first named here
+ 51 │     asm("", in("a0") x, lateout("a0") _, out("a0") _);
+    ╰────
+  help: an output has a register to itself (ADR 0079)
+ty::asm-register
+
+  × the register `x10` is named by an input and an `out`
+    ╭─[asm_register_errors.ers:51:42]
+ 50 │     asm("", in("a0") x, lateout("a0") _, lateout("x10") _);
+ 51 │     asm("", in("a0") x, lateout("a0") _, out("a0") _);
+    ·             ─────┬────                   ─────┬─────
+    ·                  │                            ╰── named again
+    ·                  ╰── first named here
+ 52 │ }
+    ╰────
+  help: an `out` promises a register that no input uses: write `inout` to pass a value in and out
+        through one register, or `lateout` where the output may reuse an input's register (ADR
+        0079)
+ty::asm-register
+
+  × an output beside `clobber_abi` names its register
+    ╭─[asm_register_errors.ers:57:19]
+ 56 │     let mut v: u32 = 0;
+ 57 │     asm("{}", out(reg) v, clobber_abi("C"));
+    ·                   ─┬─     ────────┬───────
+    ·                    │              ╰── this overwrites every register a C call changes
+    ·                    ╰── the compiler would choose it
+ 58 │     asm("{}", lateout(reg) v, clobber_abi("C"));
+    ╰────
+  help: write the register as a string, `out("a0")`: the compiler could choose one `clobber_abi`
+        overwrites (ADR 0079)
+ty::asm-register
+
+  × an output beside `clobber_abi` names its register
+    ╭─[asm_register_errors.ers:58:23]
+ 57 │     asm("{}", out(reg) v, clobber_abi("C"));
+ 58 │     asm("{}", lateout(reg) v, clobber_abi("C"));
+    ·                       ─┬─     ────────┬───────
+    ·                        │              ╰── this overwrites every register a C call changes
+    ·                        ╰── the compiler would choose it
+ 59 │     asm("{}", inout(reg) v, clobber_abi("C"));
+    ╰────
+  help: write the register as a string, `out("a0")`: the compiler could choose one `clobber_abi`
+        overwrites (ADR 0079)
+ty::asm-register
+
+  × an output beside `clobber_abi` names its register
+    ╭─[asm_register_errors.ers:59:21]
+ 58 │     asm("{}", lateout(reg) v, clobber_abi("C"));
+ 59 │     asm("{}", inout(reg) v, clobber_abi("C"));
+    ·                     ─┬─     ────────┬───────
+    ·                      │              ╰── this overwrites every register a C call changes
+    ·                      ╰── the compiler would choose it
+ 60 │     asm("{}", inout(reg) x => v, clobber_abi("C"));
+    ╰────
+  help: write the register as a string, `out("a0")`: the compiler could choose one `clobber_abi`
+        overwrites (ADR 0079)
+ty::asm-register
+
+  × an output beside `clobber_abi` names its register
+    ╭─[asm_register_errors.ers:60:21]
+ 59 │     asm("{}", inout(reg) v, clobber_abi("C"));
+ 60 │     asm("{}", inout(reg) x => v, clobber_abi("C"));
+    ·                     ─┬─          ────────┬───────
+    ·                      │                   ╰── this overwrites every register a C call changes
+    ·                      ╰── the compiler would choose it
+ 61 │     asm("{}", in(reg) x, clobber_abi("C"));
+    ╰────
+  help: write the register as a string, `out("a0")`: the compiler could choose one `clobber_abi`
+        overwrites (ADR 0079)

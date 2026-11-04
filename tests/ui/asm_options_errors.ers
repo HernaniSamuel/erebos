@@ -1,0 +1,40 @@
+// `ty::asm-options` (ADR 0079): options that contradict each other or the
+// operands, an option or `clobber_abi` given twice, an ABI other than "C".
+fn contradictions(x: u32) {
+    let mut v: u32 = 0;
+    asm("", options(nomem, readonly));
+    asm("", options(readonly, nomem));
+    asm("{}", out(reg) v, options(pure));
+    asm("", options(pure, nomem));
+    asm("{}", out(reg) v, options(pure, nostack));
+    asm("", options(pure, readonly));
+    // Accepted: with an output and `nomem` or `readonly`.
+    asm("{}", out(reg) v, options(pure, nomem));
+    asm("{}", out(reg) v, options(pure, readonly));
+    asm("{} {}", out(reg) v, in(reg) x, options(pure, nomem, nostack, preserves_flags));
+}
+
+fn stops(x: u32) {
+    let mut v: u32 = 0;
+    asm("{}", out(reg) v, options(noreturn));
+    asm("{}", inout(reg) x => _, options(noreturn));
+    asm("", out("a0") _, options(noreturn));
+    asm("", in("a0") x, options(noreturn));
+}
+
+fn twice() {
+    asm("", options(nomem, nomem));
+    asm("", options(nostack, nomem, nostack));
+    asm("", clobber_abi("C"), clobber_abi("C"));
+}
+
+fn abis() {
+    asm("", clobber_abi("D"));
+    asm("", clobber_abi(""));
+    asm("", clobber_abi("c"));
+    asm("", clobber_abi("C"));
+}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

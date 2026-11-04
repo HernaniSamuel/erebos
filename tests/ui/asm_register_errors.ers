@@ -1,0 +1,69 @@
+// `ty::asm-register` on riscv32 (ADR 0079): unknown and reserved registers,
+// the register named twice, `in` beside `out`, and `clobber_abi`.
+fn unknown(x: u32) {
+    asm("", in("a8") x);
+    asm("", in("x32") x);
+    asm("", in("") x);
+    asm("", in("A0") x);
+    // A name of the other target.
+    asm("", in("r0") x);
+    asm("", out("lr") _);
+}
+
+// Each reserved register, by each of its names.
+fn reserved(x: u32) {
+    asm("", in("x0") x);
+    asm("", in("zero") x);
+    asm("", in("x2") x);
+    asm("", in("sp") x);
+    asm("", in("x3") x);
+    asm("", in("gp") x);
+    asm("", in("x4") x);
+    asm("", in("tp") x);
+    asm("", in("x8") x);
+    asm("", in("s0") x);
+    asm("", in("fp") x);
+    asm("", in("x9") x);
+    asm("", in("s1") x);
+    asm("", out("x2") _);
+    asm("", inout("sp") x => _);
+}
+
+// The register named twice, by one name or by two.
+fn twice(x: u32) {
+    asm("", in("a0") x, in("a1") x, in("x10") x);
+    asm("", out("a0") _, out("a1") _, lateout("x10") _);
+    asm("", inout("a0") x => _, in("a0") x);
+    asm("", inout("a0") x => _, out("x10") _);
+    asm("", in("a0") x, in("a0") x, out("a1") _, out("a1") _);
+}
+
+// `in` beside `out`: rejected; `lateout` and `inout` accepted.
+fn input_and_output(x: u32) {
+    asm("", in("a0") x, out("a0") _);
+    asm("", in("a0") x, out("x10") _);
+    asm("", out("a0") _, in("a0") x);
+    asm("", in("a0") x, lateout("a0") _);
+    asm("", inout("a0") x => _);
+    asm("", in("a0") x, lateout("x10") _, in("a1") x, out("a2") _);
+    // A shared register does not hide a conflict with a later operand.
+    asm("", in("a0") x, lateout("a0") _, lateout("x10") _);
+    asm("", in("a0") x, lateout("a0") _, out("a0") _);
+}
+
+// With `clobber_abi`, an output names its register.
+fn clobber(x: u32) {
+    let mut v: u32 = 0;
+    asm("{}", out(reg) v, clobber_abi("C"));
+    asm("{}", lateout(reg) v, clobber_abi("C"));
+    asm("{}", inout(reg) v, clobber_abi("C"));
+    asm("{}", inout(reg) x => v, clobber_abi("C"));
+    asm("{}", in(reg) x, clobber_abi("C"));
+    asm("", out("a0") v, clobber_abi("C"));
+    asm("", in("a0") x, clobber_abi("C"));
+    asm("", out("s2") v, lateout("a1") _, inout("a2") x => _, clobber_abi("C"));
+}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

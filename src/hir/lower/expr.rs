@@ -5,8 +5,9 @@ use std::collections::HashMap;
 
 use crate::diag::Diagnostic;
 use crate::hir::{
-    BitStructId, Block, EnumId, Expr, ExprId, ExprKind, FnId, Local, LocalId, ModuleId,
-    NeverPosition, Stmt, StructId, Ty, UnsizedPosition,
+    Asm, AsmOperand, AsmOperandKind, AsmOption, AsmReg, AsmSym, BitStructId, Block, EnumId, Expr,
+    ExprId, ExprKind, FnId, Local, LocalId, ModuleId, NeverPosition, Stmt, StructId, Ty,
+    UnsizedPosition,
 };
 use crate::span::Span;
 use crate::syntax::ast;
@@ -656,38 +657,117 @@ impl Lowerer<'_> {
                 }
                 ExprKind::Try(self.boxed(operand), *question)
             }
-            ast::ExprKind::Comptime(inner) => {
-                // The enclosing function's variables and loops exist only at
-                // run time (ADR 0029).
-                let floor = self.comptime_floor.replace(self.scopes.len());
-                let loops = std::mem::take(&mut self.loops);
-                let was_comptime = std::mem::replace(&mut self.in_comptime, true);
-                self.scopes.push(HashMap::new());
-                let inner = self.boxed(inner);
-                self.scopes.pop();
-                self.in_comptime = was_comptime;
-                self.loops = loops;
-                self.comptime_floor = floor;
-                ExprKind::Comptime(inner)
-            }
-            // Temporary, until type checking takes `asm` (ADR 0079). The
-            // placeholder works since lowering errors stop the pipeline.
-            ast::ExprKind::Asm(_) => {
-                self.diags.push(
-                    Diagnostic::error(
-                        "resolve::asm-unsupported",
-                        "inline assembly is not lowered yet",
-                    )
-                    .label(expr.span, "this `asm` expression")
-                    .help("inline assembly is parsed but not yet checked or generated (ADR 0079)"),
-                );
-                ExprKind::Unit
-            }
+            ast::ExprKind::Comptime(inner) => ExprKind::Comptime(self.comptime_operand(inner)),
+            ast::ExprKind::Asm(asm) => ExprKind::Asm(Box::new(self.asm(asm))),
         };
         Expr {
             id,
             kind,
             span: expr.span,
+        }
+    }
+
+    /// The operand of `comptime`, or of `const` in `asm`: it runs at compile
+    /// time, where the enclosing function's variables and loops do not exist
+    /// (ADR 0029).
+    fn comptime_operand(&mut self, inner: &ast::Expr) -> Box<Expr> {
+        let floor = self.comptime_floor.replace(self.scopes.len());
+        let loops = std::mem::take(&mut self.loops);
+        let was_comptime = std::mem::replace(&mut self.in_comptime, true);
+        self.scopes.push(HashMap::new());
+        let inner = self.boxed(inner);
+        self.scopes.pop();
+        self.in_comptime = was_comptime;
+        self.loops = loops;
+        self.comptime_floor = floor;
+        inner
+    }
+
+    /// An `asm` expression (ADR 0079): the operands' expressions and `sym`'s
+    /// path are resolved, in the order written. A `const` operand is a
+    /// `comptime` expression, with an expression of its own.
+    fn asm(&mut self, asm: &ast::AsmExpr) -> Asm {
+        let operands = asm
+            .operands
+            .iter()
+            .map(|operand| {
+                let kind = match &operand.kind {
+                    ast::AsmOperandKind::In { reg, expr } => AsmOperandKind::In {
+                        reg: asm_reg(reg),
+                        expr: self.expr(expr),
+                    },
+                    ast::AsmOperandKind::Out { reg, late, place } => AsmOperandKind::Out {
+                        reg: asm_reg(reg),
+                        late: *late,
+                        place: place.as_ref().map(|place| self.expr(place)),
+                    },
+                    ast::AsmOperandKind::InOut { reg, expr, out } => AsmOperandKind::InOut {
+                        reg: asm_reg(reg),
+                        expr: self.expr(expr),
+                        out: out
+                            .as_ref()
+                            .map(|place| place.as_ref().map(|place| self.expr(place))),
+                    },
+                    ast::AsmOperandKind::Sym(path) => AsmOperandKind::Sym(self.asm_sym(path)),
+                    ast::AsmOperandKind::Const(value) => {
+                        let id = ExprId(self.next_expr);
+                        self.next_expr += 1;
+                        AsmOperandKind::Const(Expr {
+                            id,
+                            kind: ExprKind::Comptime(self.comptime_operand(value)),
+                            span: value.span,
+                        })
+                    }
+                    ast::AsmOperandKind::ClobberAbi(abi) => AsmOperandKind::ClobberAbi(abi.clone()),
+                };
+                AsmOperand {
+                    name: operand
+                        .name
+                        .as_ref()
+                        .map(|name| (name.name.clone(), name.span)),
+                    kind,
+                    span: operand.span,
+                }
+            })
+            .collect();
+        Asm {
+            templates: asm.templates.clone(),
+            operands,
+            options: asm
+                .options
+                .iter()
+                .map(|option| AsmOption {
+                    kind: option.kind,
+                    span: option.span,
+                })
+                .collect(),
+        }
+    }
+
+    /// What `sym` names: an item, looked up as any path is. A function or a
+    /// static is what it takes; another item is left to the type checker,
+    /// which reports it (`ty::asm-sym`).
+    fn asm_sym(&mut self, path: &ast::Path) -> AsmSym {
+        let other = |what| AsmSym::Other(what, path.span);
+        match self.lookup_path(path) {
+            Named::Item(Def::Fn(id)) => AsmSym::Fn(id),
+            Named::Item(Def::Static(id)) => AsmSym::Static(id),
+            Named::Item(def) => other(def.what()),
+            Named::Variant(..) => other("an enum variant"),
+            // Reported; lowering errors stop the pipeline.
+            Named::Failed => other("an item"),
+            Named::Missing(module) => {
+                let message = if path.segments.len() == 1 {
+                    format!("cannot find `{}` in this scope", written(path))
+                } else {
+                    format!("cannot find `{}`", written(path))
+                };
+                let diag = Diagnostic::error("resolve::unknown-name", message);
+                let diag = self.missing(diag, path, module, "not found");
+                self.diags
+                    .push(diag.help("`sym` names a function or a static by its path (ADR 0079)"));
+                other("an item")
+            }
         }
     }
 
@@ -786,6 +866,14 @@ fn named(fields: &[&LitField]) -> Vec<String> {
     (fields.iter())
         .map(|field| format!("`{}`", field.name.name))
         .collect()
+}
+
+/// How `asm` writes where an operand lives.
+fn asm_reg(reg: &ast::AsmReg) -> AsmReg {
+    match reg {
+        ast::AsmReg::Class(word) => AsmReg::Class(word.span),
+        ast::AsmReg::Explicit(name) => AsmReg::Explicit(name.clone()),
+    }
 }
 
 /// What a call's path names: a function, or a variant built with its

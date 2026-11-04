@@ -1,0 +1,235 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/asm_register_errors_thumbv7m.ers
+---
+--- errors ---
+ty::asm-register
+
+  × `r16` is no register of thumbv7m-none-eabi
+   ╭─[asm_register_errors_thumbv7m.ers:5:16]
+ 4 │ fn unknown(x: u32) {
+ 5 │     asm("", in("r16") x);
+   ·                ──┬──
+   ·                  ╰── unknown register
+ 6 │     asm("", in("s0") x);
+   ╰────
+  help: the registers of thumbv7m-none-eabi are `r0` to `r15`, or `sb` (`r9`), `sl` (`r10`), `fp`
+        (`r11`), `ip` (`r12`), `sp` (`r13`), `lr` (`r14`) and `pc` (`r15`) (ADR 0079)
+ty::asm-register
+
+  × `s0` is no register of thumbv7m-none-eabi
+   ╭─[asm_register_errors_thumbv7m.ers:6:16]
+ 5 │     asm("", in("r16") x);
+ 6 │     asm("", in("s0") x);
+   ·                ──┬─
+   ·                  ╰── unknown register
+ 7 │     asm("", in("a0") x);
+   ╰────
+  help: the registers of thumbv7m-none-eabi are `r0` to `r15`, or `sb` (`r9`), `sl` (`r10`), `fp`
+        (`r11`), `ip` (`r12`), `sp` (`r13`), `lr` (`r14`) and `pc` (`r15`) (ADR 0079)
+ty::asm-register
+
+  × `a0` is no register of thumbv7m-none-eabi
+   ╭─[asm_register_errors_thumbv7m.ers:7:16]
+ 6 │     asm("", in("s0") x);
+ 7 │     asm("", in("a0") x);
+   ·                ──┬─
+   ·                  ╰── unknown register
+ 8 │     // The names this target has.
+   ╰────
+  help: the registers of thumbv7m-none-eabi are `r0` to `r15`, or `sb` (`r9`), `sl` (`r10`), `fp`
+        (`r11`), `ip` (`r12`), `sp` (`r13`), `lr` (`r14`) and `pc` (`r15`) (ADR 0079)
+ty::asm-register
+
+  × the compiler keeps `r6` for itself
+    ╭─[asm_register_errors_thumbv7m.ers:14:16]
+ 13 │ fn reserved(x: u32) {
+ 14 │     asm("", in("r6") x);
+    ·                ──┬─
+    ·                  ╰── reserved register
+ 15 │     asm("", in("r7") x);
+    ╰────
+  help: the compiler relies on these registers for itself, as the stack, frame and base pointers
+        or the program counter; the registers reserved on thumbv7m-none-eabi are `r6`, `r7`, `r13`
+        (`sp`), `r15` (`pc`) (ADR 0079)
+ty::asm-register
+
+  × the compiler keeps `r7` for itself
+    ╭─[asm_register_errors_thumbv7m.ers:15:16]
+ 14 │     asm("", in("r6") x);
+ 15 │     asm("", in("r7") x);
+    ·                ──┬─
+    ·                  ╰── reserved register
+ 16 │     asm("", in("r13") x);
+    ╰────
+  help: the compiler relies on these registers for itself, as the stack, frame and base pointers
+        or the program counter; the registers reserved on thumbv7m-none-eabi are `r6`, `r7`, `r13`
+        (`sp`), `r15` (`pc`) (ADR 0079)
+ty::asm-register
+
+  × the compiler keeps `r13` for itself
+    ╭─[asm_register_errors_thumbv7m.ers:16:16]
+ 15 │     asm("", in("r7") x);
+ 16 │     asm("", in("r13") x);
+    ·                ──┬──
+    ·                  ╰── reserved register
+ 17 │     asm("", in("sp") x);
+    ╰────
+  help: the compiler relies on these registers for itself, as the stack, frame and base pointers
+        or the program counter; the registers reserved on thumbv7m-none-eabi are `r6`, `r7`, `r13`
+        (`sp`), `r15` (`pc`) (ADR 0079)
+ty::asm-register
+
+  × the compiler keeps `sp` (`r13`) for itself
+    ╭─[asm_register_errors_thumbv7m.ers:17:16]
+ 16 │     asm("", in("r13") x);
+ 17 │     asm("", in("sp") x);
+    ·                ──┬─
+    ·                  ╰── reserved register
+ 18 │     asm("", in("r15") x);
+    ╰────
+  help: the compiler relies on these registers for itself, as the stack, frame and base pointers
+        or the program counter; the registers reserved on thumbv7m-none-eabi are `r6`, `r7`, `r13`
+        (`sp`), `r15` (`pc`) (ADR 0079)
+ty::asm-register
+
+  × the compiler keeps `r15` for itself
+    ╭─[asm_register_errors_thumbv7m.ers:18:16]
+ 17 │     asm("", in("sp") x);
+ 18 │     asm("", in("r15") x);
+    ·                ──┬──
+    ·                  ╰── reserved register
+ 19 │     asm("", in("pc") x);
+    ╰────
+  help: the compiler relies on these registers for itself, as the stack, frame and base pointers
+        or the program counter; the registers reserved on thumbv7m-none-eabi are `r6`, `r7`, `r13`
+        (`sp`), `r15` (`pc`) (ADR 0079)
+ty::asm-register
+
+  × the compiler keeps `pc` (`r15`) for itself
+    ╭─[asm_register_errors_thumbv7m.ers:19:16]
+ 18 │     asm("", in("r15") x);
+ 19 │     asm("", in("pc") x);
+    ·                ──┬─
+    ·                  ╰── reserved register
+ 20 │     asm("", out("r6") _);
+    ╰────
+  help: the compiler relies on these registers for itself, as the stack, frame and base pointers
+        or the program counter; the registers reserved on thumbv7m-none-eabi are `r6`, `r7`, `r13`
+        (`sp`), `r15` (`pc`) (ADR 0079)
+ty::asm-register
+
+  × the compiler keeps `r6` for itself
+    ╭─[asm_register_errors_thumbv7m.ers:20:17]
+ 19 │     asm("", in("pc") x);
+ 20 │     asm("", out("r6") _);
+    ·                 ──┬─
+    ·                   ╰── reserved register
+ 21 │     asm("", inout("sp") x => _);
+    ╰────
+  help: the compiler relies on these registers for itself, as the stack, frame and base pointers
+        or the program counter; the registers reserved on thumbv7m-none-eabi are `r6`, `r7`, `r13`
+        (`sp`), `r15` (`pc`) (ADR 0079)
+ty::asm-register
+
+  × the compiler keeps `sp` (`r13`) for itself
+    ╭─[asm_register_errors_thumbv7m.ers:21:19]
+ 20 │     asm("", out("r6") _);
+ 21 │     asm("", inout("sp") x => _);
+    ·                   ──┬─
+    ·                     ╰── reserved register
+ 22 │ }
+    ╰────
+  help: the compiler relies on these registers for itself, as the stack, frame and base pointers
+        or the program counter; the registers reserved on thumbv7m-none-eabi are `r6`, `r7`, `r13`
+        (`sp`), `r15` (`pc`) (ADR 0079)
+ty::asm-register
+
+  × the register `r0` is named by two inputs
+    ╭─[asm_register_errors_thumbv7m.ers:25:37]
+ 24 │ fn twice(x: u32) {
+ 25 │     asm("", in("r0") x, in("r1") x, in("r0") x);
+    ·             ─────┬────              ─────┬────
+    ·                  │                       ╰── named again
+    ·                  ╰── first named here
+ 26 │     asm("", out("r2") _, out("r2") _);
+    ╰────
+  help: an input has a register to itself (ADR 0079)
+ty::asm-register
+
+  × the register `r2` is named by two outputs
+    ╭─[asm_register_errors_thumbv7m.ers:26:26]
+ 25 │     asm("", in("r0") x, in("r1") x, in("r0") x);
+ 26 │     asm("", out("r2") _, out("r2") _);
+    ·             ─────┬─────  ─────┬─────
+    ·                  │            ╰── named again
+    ·                  ╰── first named here
+ 27 │     asm("", in("r12") x, out("ip") _);
+    ╰────
+  help: an output has a register to itself (ADR 0079)
+ty::asm-register
+
+  × the register `r12` is named by an input and an `out`
+    ╭─[asm_register_errors_thumbv7m.ers:27:26]
+ 26 │     asm("", out("r2") _, out("r2") _);
+ 27 │     asm("", in("r12") x, out("ip") _);
+    ·             ─────┬─────  ─────┬─────
+    ·                  │            ╰── named again
+    ·                  ╰── first named here
+ 28 │     asm("", in("r12") x, lateout("ip") _);
+    ╰────
+  help: an `out` promises a register that no input uses: write `inout` to pass a value in and out
+        through one register, or `lateout` where the output may reuse an input's register (ADR
+        0079)
+ty::asm-register
+
+  × the register `r14` is named by two inputs
+    ╭─[asm_register_errors_thumbv7m.ers:29:25]
+ 28 │     asm("", in("r12") x, lateout("ip") _);
+ 29 │     asm("", in("lr") x, in("r14") x);
+    ·             ─────┬────  ─────┬─────
+    ·                  │           ╰── named again
+    ·                  ╰── first named here
+ 30 │     // A shared register does not hide a conflict with a later operand.
+    ╰────
+  help: an input has a register to itself (ADR 0079)
+ty::asm-register
+
+  × the register `r0` is named by two outputs
+    ╭─[asm_register_errors_thumbv7m.ers:31:42]
+ 30 │     // A shared register does not hide a conflict with a later operand.
+ 31 │     asm("", in("r0") x, lateout("r0") _, lateout("r0") _);
+    ·                         ───────┬───────  ───────┬───────
+    ·                                │                ╰── named again
+    ·                                ╰── first named here
+ 32 │     asm("", in("r0") x, lateout("r0") _, out("r0") _);
+    ╰────
+  help: an output has a register to itself (ADR 0079)
+ty::asm-register
+
+  × the register `r0` is named by an input and an `out`
+    ╭─[asm_register_errors_thumbv7m.ers:32:42]
+ 31 │     asm("", in("r0") x, lateout("r0") _, lateout("r0") _);
+ 32 │     asm("", in("r0") x, lateout("r0") _, out("r0") _);
+    ·             ─────┬────                   ─────┬─────
+    ·                  │                            ╰── named again
+    ·                  ╰── first named here
+ 33 │ }
+    ╰────
+  help: an `out` promises a register that no input uses: write `inout` to pass a value in and out
+        through one register, or `lateout` where the output may reuse an input's register (ADR
+        0079)
+ty::asm-register
+
+  × an output beside `clobber_abi` names its register
+    ╭─[asm_register_errors_thumbv7m.ers:37:19]
+ 36 │     let mut v: u32 = 0;
+ 37 │     asm("{}", out(reg) v, clobber_abi("C"));
+    ·                   ─┬─     ────────┬───────
+    ·                    │              ╰── this overwrites every register a C call changes
+    ·                    ╰── the compiler would choose it
+ 38 │     asm("", out("r4") v, lateout("r0") _, in("r3") x, clobber_abi("C"));
+    ╰────
+  help: write the register as a string, `out("a0")`: the compiler could choose one `clobber_abi`
+        overwrites (ADR 0079)

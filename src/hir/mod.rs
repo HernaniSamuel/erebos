@@ -11,7 +11,9 @@ use std::fmt;
 pub use crate::int::IntTy;
 pub use crate::ops::{BinOp, LogicalOp, UnOp};
 use crate::span::Span;
-pub use crate::syntax::ast::{AccessMode, ReadEffect, WriteAction, WriteEffect};
+pub use crate::syntax::ast::{
+    AccessMode, AsmOption, AsmOptionKind, ReadEffect, StrLit, WriteAction, WriteEffect,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct FnId(pub u32);
@@ -1377,6 +1379,77 @@ pub enum ExprKind {
         target: ExprId,
     },
     Return(Option<Box<Expr>>),
+    /// `asm("template", operands, options(...))` (ADR 0079).
+    Asm(Box<Asm>),
+}
+
+/// An `asm` expression (ADR 0079), with its names resolved: the type
+/// checker checks the rest.
+#[derive(Debug)]
+pub struct Asm {
+    /// The strings of the template, in order; the compiler joins them with
+    /// line breaks.
+    pub templates: Vec<StrLit>,
+    /// In the order written: operands without a name, then named ones, then
+    /// those with an explicit register and `clobber_abi` (ADR 0079).
+    pub operands: Vec<AsmOperand>,
+    pub options: Vec<AsmOption>,
+}
+
+/// `[name =] direction(where) ...`, `sym path`, `const expr` or
+/// `clobber_abi("C")`, with its span, which starts at the name.
+#[derive(Debug)]
+pub struct AsmOperand {
+    /// The name a template places the operand by, with its span.
+    pub name: Option<(String, Span)>,
+    pub kind: AsmOperandKind,
+    pub span: Span,
+}
+
+#[derive(Debug)]
+pub enum AsmOperandKind {
+    /// `in(where) expr`
+    In { reg: AsmReg, expr: Expr },
+    /// `out(where) place` or `lateout(where) place`; `None` for `_`, which
+    /// drops the value.
+    Out {
+        reg: AsmReg,
+        late: bool,
+        place: Option<Expr>,
+    },
+    /// `inout(where) expr`, and `=> place` or `=> _` after it: `out` is
+    /// `None` when absent, `Some(None)` for `=> _`, `Some(Some(place))` for
+    /// `=> place`. Without `=>`, `expr` is the place written back.
+    InOut {
+        reg: AsmReg,
+        expr: Expr,
+        out: Option<Option<Expr>>,
+    },
+    /// `sym path`
+    Sym(AsmSym),
+    /// `const expr`: the expression is a `comptime` expression, whose value
+    /// the operand is, as `comptime` gives it (ADR 0029).
+    Const(Expr),
+    /// `clobber_abi("C")`: the name of the ABI.
+    ClobberAbi(StrLit),
+}
+
+/// Where an operand lives: `reg`, with the span of the word, a register the
+/// compiler chooses, or the name of one, a string literal (ADR 0079).
+#[derive(Debug)]
+pub enum AsmReg {
+    Class(Span),
+    Explicit(StrLit),
+}
+
+/// What `sym` names (ADR 0079), by the path as an item is looked up.
+#[derive(Clone, Copy, Debug)]
+pub enum AsmSym {
+    Fn(FnId),
+    Static(StaticId),
+    /// An item that is neither: what it is, as a diagnostic says it, and the
+    /// span of its path. The type checker reports it (`ty::asm-sym`).
+    Other(&'static str, Span),
 }
 
 /// `pattern => body`, an arm of a `match` (ADR 0037). A variable the
@@ -1511,6 +1584,11 @@ impl Expr {
                 b.walk(f);
             }
             ExprKind::Block(block) | ExprKind::Loop(block) => block.walk(f),
+            ExprKind::Asm(asm) => {
+                for operand in &asm.operands {
+                    operand.walk(f);
+                }
+            }
             ExprKind::If { cond, then, else_ } => {
                 cond.walk(f);
                 then.walk(f);
@@ -1530,6 +1608,27 @@ impl Expr {
                     arm.body.walk(f);
                 }
             }
+        }
+    }
+}
+
+impl AsmOperand {
+    /// Calls `f` on every expression inside the operand, in source order.
+    pub fn walk<'a>(&'a self, f: &mut impl FnMut(&'a Expr)) {
+        match &self.kind {
+            AsmOperandKind::In { expr, .. } | AsmOperandKind::Const(expr) => expr.walk(f),
+            AsmOperandKind::Out { place, .. } => {
+                if let Some(place) = place {
+                    place.walk(f);
+                }
+            }
+            AsmOperandKind::InOut { expr, out, .. } => {
+                expr.walk(f);
+                if let Some(Some(place)) = out {
+                    place.walk(f);
+                }
+            }
+            AsmOperandKind::Sym(_) | AsmOperandKind::ClobberAbi(_) => {}
         }
     }
 }

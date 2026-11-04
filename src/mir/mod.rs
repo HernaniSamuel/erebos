@@ -8,11 +8,13 @@
 //! (`copy _1`). That is the shape later analyses, such as borrow checking
 //! (ADR 0009), need.
 
+mod asm;
 mod build;
 
+pub use asm::{AsmOperand, AsmOperandKind, AsmOptions, AsmPiece, AsmReg, AsmSym, InlineAsm};
 pub use build::{build_body, build_expr_body};
 
-use std::fmt;
+use std::fmt::{self, Write as _};
 use std::ptr;
 use std::sync::OnceLock;
 
@@ -98,8 +100,23 @@ impl Mir {
         {
             for block in &body.blocks {
                 for statement in &block.statements {
-                    if let Statement::Call { callee, .. } = statement {
-                        called[callee.0 as usize] = true;
+                    match statement {
+                        Statement::Call { callee, .. } => called[callee.0 as usize] = true,
+                        Statement::InlineAsm(asm) => {
+                            for sym in asm.syms() {
+                                if let AsmSym::Body(id) = sym {
+                                    called[id.0 as usize] = true;
+                                }
+                            }
+                        }
+                        Statement::Assign(..) => {}
+                    }
+                }
+                if let Terminator::InlineAsm(asm) = &block.terminator {
+                    for sym in asm.syms() {
+                        if let AsmSym::Body(id) = sym {
+                            called[id.0 as usize] = true;
+                        }
                     }
                 }
             }
@@ -130,6 +147,13 @@ impl Mir {
                 body.for_each_operand(&mut |operand| {
                     if let Operand::Const(Const::Static(s)) = operand {
                         statics_used[s.def().id.0 as usize] = true;
+                    }
+                });
+                body.for_each_asm(&mut |asm| {
+                    for sym in asm.syms() {
+                        if let AsmSym::Static(s) = sym {
+                            statics_used[s.def().id.0 as usize] = true;
+                        }
                     }
                 });
             }
@@ -188,6 +212,13 @@ impl Mir {
                     }
                 }
             }
+            body.for_each_asm(&mut |asm| {
+                asm.for_each_sym(&mut |sym| {
+                    if let AsmSym::Body(id) = sym {
+                        *id = new_id(*id);
+                    }
+                });
+            });
         }
         self.entry = new_id(self.entry);
         self.panic = new_id(self.panic);
@@ -253,6 +284,13 @@ impl Mir {
                 if let Operand::Const(Const::Static(s)) = operand {
                     *s = new_static(*s);
                 }
+            });
+            body.for_each_asm(&mut |asm| {
+                asm.for_each_sym(&mut |sym| {
+                    if let AsmSym::Static(s) = sym {
+                        *s = new_static(*s);
+                    }
+                });
             });
         }
         self.statics = statics;
@@ -363,6 +401,7 @@ impl Body {
                         | Rvalue::SliceLen(_) => {}
                     },
                     Statement::Call { args, .. } => args.iter_mut().for_each(&mut *f),
+                    Statement::InlineAsm(_) => {}
                 }
             }
             match &mut block.terminator {
@@ -374,7 +413,26 @@ impl Body {
                 Terminator::Goto(_)
                 | Terminator::Return
                 | Terminator::Unreachable
-                | Terminator::Panic(..) => {}
+                | Terminator::Panic(..)
+                | Terminator::InlineAsm(_) => {}
+            }
+        }
+        self.for_each_asm(&mut |asm| asm.for_each_operand(&mut *f));
+    }
+
+    /// Calls `f` on every inline assembly. A terminator's is shared, so it
+    /// is replaced by a copy that `f` may change.
+    fn for_each_asm(&mut self, f: &mut impl FnMut(&mut InlineAsm)) {
+        for block in &mut self.blocks {
+            for statement in &mut block.statements {
+                if let Statement::InlineAsm(asm) = statement {
+                    f(asm);
+                }
+            }
+            if let Terminator::InlineAsm(asm) = &mut block.terminator {
+                let mut copy = (**asm).clone();
+                f(&mut copy);
+                *asm = Box::leak(Box::new(copy));
             }
         }
     }
@@ -1033,6 +1091,9 @@ pub enum Statement {
         callee: BodyId,
         args: Vec<Operand>,
     },
+    /// Runs inline assembly, then stores its outputs (ADR 0079). With the
+    /// option `noreturn` it is a terminator instead.
+    InlineAsm(Box<InlineAsm>),
 }
 
 /// A memory location: a local, followed by projections that step from it
@@ -1180,6 +1241,10 @@ pub enum Terminator {
     /// with where the check is, whose information the call passes
     /// (ADR 0053).
     Panic(PanicCause, Option<PanicSite>),
+    /// Inline assembly with the option `noreturn` (ADR 0079): it runs, never
+    /// ends, and has no successor. Leaked, like projections, so that
+    /// terminators stay `Copy`.
+    InlineAsm(&'static InlineAsm),
 }
 
 /// Where a check is, as the panic function learns it (ADR 0053).
@@ -1392,6 +1457,7 @@ impl Mir {
                 }
                 f.write_str(")")
             }
+            Terminator::InlineAsm(asm) => self.fmt_asm(asm, f),
         }
     }
 
@@ -1411,7 +1477,68 @@ impl Mir {
                 }
                 f.write_str(")")
             }
+            Statement::InlineAsm(asm) => self.fmt_asm(asm, f),
         }
+    }
+
+    /// An inline assembly: its template with each placeholder as the index
+    /// of its operand, then the operands in order, then what it clobbers
+    /// and its options.
+    fn fmt_asm(&self, asm: &InlineAsm, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("asm(\"")?;
+        for piece in &asm.pieces {
+            match piece {
+                AsmPiece::Text(text) => {
+                    // As a string is written, but for the quote of an
+                    // instruction, which is not escaped.
+                    for c in text.chars() {
+                        match c {
+                            '{' | '}' => write!(f, "{c}{c}")?,
+                            '\'' => f.write_char(c)?,
+                            c => write!(f, "{}", c.escape_debug())?,
+                        }
+                    }
+                }
+                AsmPiece::Operand(index) => write!(f, "{{{index}}}")?,
+            }
+        }
+        f.write_str("\"")?;
+        for operand in &asm.operands {
+            f.write_str(", ")?;
+            let reg = match operand.reg {
+                AsmReg::Any => "reg".to_owned(),
+                AsmReg::Fixed(name) => format!("\"{name}\""),
+            };
+            let place = |place: &Option<Place>| match place {
+                Some(place) => place.to_string(),
+                None => "_".to_owned(),
+            };
+            match &operand.kind {
+                AsmOperandKind::In(value) => write!(f, "in({reg}) {value}")?,
+                AsmOperandKind::Out { late, place: to } => {
+                    let direction = if *late { "lateout" } else { "out" };
+                    write!(f, "{direction}({reg}) {}", place(to))?;
+                }
+                AsmOperandKind::InOut { input, place: to } => {
+                    write!(f, "inout({reg}) {input} => {}", place(to))?;
+                }
+                AsmOperandKind::Sym(AsmSym::Body(id)) => write!(f, "sym {}", self.body(*id).name)?,
+                AsmOperandKind::Sym(AsmSym::Static(s)) => {
+                    write!(f, "sym static {}", s.def().name)?;
+                }
+                AsmOperandKind::Const(bits, int) => {
+                    write!(f, "const {}_{int}", int.display_bits(*bits))?;
+                }
+            }
+        }
+        if !asm.clobbers.is_empty() {
+            write!(f, ", clobber({})", asm.clobbers.join(", "))?;
+        }
+        let options = asm.options.names();
+        if !options.is_empty() {
+            write!(f, ", options({})", options.join(", "))?;
+        }
+        f.write_str(")")
     }
 }
 
@@ -1632,5 +1759,112 @@ impl fmt::Display for Mir {
             writeln!(f, "}}")?;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::span::SourceMap;
+
+    fn body(name: &str, blocks: Vec<BasicBlockData>) -> Body {
+        let file = SourceMap::default().add("main.ers", "");
+        Body {
+            name: name.to_owned(),
+            span: Span::new(file, 0, 0),
+            comptime: false,
+            ret: Ty::Unit,
+            param_count: 0,
+            locals: vec![LocalDecl {
+                ty: Ty::Unit,
+                name: None,
+                constant: None,
+            }],
+            blocks,
+            runtime: false,
+            external: false,
+        }
+    }
+
+    fn asm_naming(callee: u32, span: Span) -> InlineAsm {
+        InlineAsm {
+            pieces: vec![AsmPiece::Operand(0)],
+            operands: vec![AsmOperand {
+                reg: AsmReg::Any,
+                kind: AsmOperandKind::Sym(AsmSym::Body(BodyId(callee))),
+            }],
+            clobbers: Vec::new(),
+            options: AsmOptions::default(),
+            span,
+        }
+    }
+
+    /// A body that `sym` names counts as called: leaving `core` out keeps it
+    /// as a declaration, and the symbol follows the renumbering, in a
+    /// statement and in a terminator.
+    #[test]
+    fn leaving_out_keeps_and_renumbers_the_bodies_that_sym_names() {
+        let at = body("at", Vec::new()).span;
+        // The entry names the body 3 in a statement, then ends in an asm that
+        // names the body 3 too; the bodies 1 and 2 are left out for good.
+        let statement = Statement::InlineAsm(Box::new(asm_naming(3, at)));
+        let ends = Terminator::InlineAsm(Box::leak(Box::new(asm_naming(3, at))));
+        let entry = body(
+            "entry",
+            vec![
+                BasicBlockData {
+                    statements: vec![statement],
+                    spans: vec![at],
+                    terminator: Terminator::Goto(BasicBlock(1)),
+                    terminator_span: at,
+                },
+                BasicBlockData {
+                    statements: Vec::new(),
+                    spans: Vec::new(),
+                    terminator: ends,
+                    terminator_span: at,
+                },
+            ],
+        );
+        let mut mir = Mir {
+            structs: Vec::new(),
+            bit_structs: Vec::new(),
+            enums: Vec::new(),
+            peripheral_types: Vec::new(),
+            peripherals: Vec::new(),
+            data: Vec::new(),
+            statics: Vec::new(),
+            bodies: vec![
+                entry,
+                body("dropped1", Vec::new()),
+                body("dropped2", Vec::new()),
+                body("named", Vec::new()),
+            ],
+            entry: BodyId(0),
+            panic: BodyId(0),
+            memory: None,
+        };
+        mir.leave_out(&LeftOut {
+            bodies: vec![false, true, true, true],
+            structs: Vec::new(),
+            bit_structs: Vec::new(),
+            enums: Vec::new(),
+            peripheral_types: Vec::new(),
+            peripherals: Vec::new(),
+            statics: Vec::new(),
+        });
+        let names: Vec<&str> = mir.bodies.iter().map(|b| b.name.as_str()).collect();
+        assert_eq!(names, ["entry", "named"]);
+        assert!(mir.bodies[1].external);
+        let syms = |asm: &InlineAsm| asm.syms().collect::<Vec<_>>();
+        let blocks = &mir.bodies[0].blocks;
+        let Statement::InlineAsm(statement) = &blocks[0].statements[0] else {
+            panic!("a statement");
+        };
+        let Terminator::InlineAsm(ends) = blocks[1].terminator else {
+            panic!("a terminator");
+        };
+        assert_eq!(syms(statement), [AsmSym::Body(BodyId(1))]);
+        assert_eq!(syms(ends), [AsmSym::Body(BodyId(1))]);
     }
 }

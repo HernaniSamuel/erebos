@@ -416,7 +416,18 @@ impl Interp<'_, '_> {
                 self.write_at(dest, value, span)
             }
             Statement::Call { dest, callee, args } => self.call(*dest, callee.0, args, span),
+            Statement::InlineAsm(_) => Err(self.asm(span)),
         }
+    }
+
+    /// `asm` cannot run at compile time (ADR 0079).
+    fn asm(&self, span: Span) -> Failure {
+        self.error(
+            "eval::asm",
+            "the evaluation reached an `asm` expression".to_owned(),
+            "inline assembly cannot run at compile time",
+            span,
+        )
     }
 
     fn call(
@@ -482,6 +493,7 @@ impl Interp<'_, '_> {
                     .map_or(otherwise, |&(_, target)| target)
             }
             Terminator::Return => return self.return_(),
+            Terminator::InlineAsm(_) => return Err(self.asm(span)),
             // It follows an expression of type `!`, which does not finish:
             // no memory holds a `!` to read (ADR 0034).
             Terminator::Unreachable => {

@@ -14,6 +14,7 @@ use crate::span::Span;
 
 use known::Known;
 
+mod asm;
 mod bit_struct;
 mod known;
 
@@ -785,6 +786,7 @@ impl Builder<'_, '_> {
                 }
                 Operand::Const(Const::Unit)
             }
+            hir::ExprKind::Asm(asm) => self.asm(expr, asm),
             hir::ExprKind::Return(value) => {
                 let value = value.as_ref().map(|v| self.expr(v));
                 if let Some(value) = value

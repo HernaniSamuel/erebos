@@ -1,0 +1,11 @@
+// A `const` operand is computed at compile time, as `comptime` is: a variable
+// of the running program, parameters included, is not known there (ADR 0029,
+// 0079).
+fn operand(x: u32) {
+    let y: u32 = 1;
+    asm("{} {}", const x, const y);
+}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

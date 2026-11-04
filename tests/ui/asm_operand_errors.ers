@@ -1,0 +1,113 @@
+// The operands of `asm` that type checking rejects (ADR 0079): types no
+// register holds (`ty::asm-operand-type`), places an output cannot be stored
+// in, and what `sym` and `const` take.
+enum Mode: u8 {
+    Run = 0,
+    Stop = 1,
+}
+
+struct Flags: u8 {
+    on: bool at 0,
+    level: u8 at 1..=3,
+}
+
+struct Wide {
+    a: u32,
+}
+
+const LIMIT: u32 = 3;
+
+static mut COUNTER: u32 = 0;
+
+static FIXED: u32 = 0;
+
+mod inner {}
+
+fn handler() {}
+
+fn types(a: u64, b: bool, c: Mode, d: Flags, e: [u8; 4], f: *const [u8], g: Wide, h: i64) {
+    asm("{}", in(reg) a);
+    asm("{}", in(reg) b);
+    asm("{}", in(reg) c);
+    asm("{}", in(reg) d);
+    asm("{}", in(reg) e);
+    asm("{}", in(reg) f);
+    asm("{}", in(reg) g);
+    asm("{}", in(reg) ());
+    asm("{}", in(reg) h);
+    // Converted with `as`, they are operands.
+    asm("{} {} {}", in(reg) b as u8, in(reg) c as u8, in(reg) a as u32);
+}
+
+// A literal has no expected type, in an input and in `const`.
+fn literals() {
+    asm("{}", in(reg) 3);
+    asm("{}", const 3);
+    asm("{} {}", in(reg) 3 as u32, const 3 as u8);
+}
+
+fn outputs(a: u64, b: bool, p: *const u32) {
+    let mut wide: u64 = 0;
+    let mut flag: bool = false;
+    let mut fine: u32 = 0;
+    asm("{}", out(reg) wide);
+    asm("{}", lateout(reg) flag);
+    asm("{}", inout(reg) wide);
+    asm("{}", inout(reg) a => fine);
+    asm("{}", inout(reg) b => _);
+    // Places that cannot be written.
+    let immutable: u32 = 0;
+    asm("{}", out(reg) immutable);
+    asm("{}", out(reg) FIXED);
+    asm("{}", out(reg) *p);
+    asm("{}", out(reg) 3 as u32);
+    asm("{}", inout(reg) immutable => immutable);
+    asm("{}", inout(reg) immutable);
+    asm("{}", inout(reg) 3 as u32);
+    asm("{}", inout(reg) LIMIT);
+    // A bit field is no place in memory.
+    let mut flags: Flags = Flags { on: false, level: 0 };
+    asm("{}", out(reg) flags.level);
+    asm("{}", inout(reg) flags.level);
+    asm("{}", inout(reg) fine => flags.level);
+    // Accepted: a field, a pointer's target, a static, a dropped output.
+    asm("{}", inout(reg) fine);
+    asm("{}", out(reg) COUNTER);
+    asm("{}", out(reg) _);
+}
+
+// The two sides of `inout ... =>` have one type.
+fn two_types(x: u32, y: u8, p: *const u8) {
+    let mut small: u8 = 0;
+    let mut big: u32 = 0;
+    let mut ptr: *const u8 = p;
+    asm("{}", inout(reg) x => small);
+    asm("{}", inout(reg) y => big);
+    asm("{}", inout(reg) p => ptr);
+    asm("{}", inout(reg) p => big);
+    asm("{}", inout(reg) x => big);
+}
+
+fn symbols() {
+    asm("{}", sym LIMIT);
+    asm("{}", sym Wide);
+    asm("{}", sym inner);
+    asm("{}", sym Mode);
+    asm("{}", sym Mode::Run);
+    asm("{}", sym Flags);
+    asm("{}", sym FIXED);
+    asm("{}", sym COUNTER);
+    asm("{}", sym handler);
+}
+
+fn constants() {
+    asm("{}", const true);
+    asm("{}", const Mode::Run);
+    asm("{}", const b"ab");
+    asm("{}", const LIMIT);
+    asm("{}", const 1 as u64);
+}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

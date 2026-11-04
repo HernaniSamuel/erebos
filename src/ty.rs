@@ -21,8 +21,10 @@ use crate::layout;
 use crate::query::Queries;
 use crate::span::Span;
 
+pub use asm::{AsmChecked, AsmPiece};
 pub use dump::dump;
 
+mod asm;
 mod dump;
 mod expr;
 mod pattern;
@@ -52,6 +54,9 @@ pub struct Tables {
     variants: HashMap<ExprId, (EnumId, u32)>,
     /// Likewise for each `.V` pattern.
     pattern_variants: HashMap<PatternId, (EnumId, u32)>,
+    /// The template and the registers of each `asm` expression, checked
+    /// (ADR 0079).
+    asms: HashMap<ExprId, AsmChecked>,
 }
 
 impl Tables {
@@ -66,6 +71,7 @@ impl Tables {
             coercions: HashMap::new(),
             variants: HashMap::new(),
             pattern_variants: HashMap::new(),
+            asms: HashMap::new(),
         }
     }
 
@@ -109,6 +115,11 @@ impl Tables {
     /// names, resolved against the type of its position (ADR 0044).
     pub fn pattern_variant(&self, id: PatternId) -> (EnumId, u32) {
         self.pattern_variants[&id]
+    }
+
+    /// What type checking found out about the `asm` expression `id`.
+    pub fn asm(&self, id: ExprId) -> &AsmChecked {
+        &self.asms[&id]
     }
 }
 
@@ -1045,6 +1056,7 @@ impl Checker<'_, '_> {
                 Ty::Never
             }
             ExprKind::Continue { .. } => Ty::Never,
+            ExprKind::Asm(asm) => self.asm(f, expr, asm),
             ExprKind::Return(value) => {
                 match value {
                     Some(value) => {

@@ -1,0 +1,58 @@
+// `ty::asm-template` (ADR 0079): the placeholders of a template, its bytes,
+// the names of its operands and the operands it leaves out.
+fn placeholders(x: u32) {
+    // Names no operand: by name, by number, and `{}` past the last.
+    asm("{missing}", in(reg) x);
+    asm("{1}", in(reg) x);
+    asm("{} {}", in(reg) x);
+    asm("{}");
+    // A register of the target in the template, not an operand.
+    asm("mv {a0}, {}", in(reg) x, in("a0") x);
+    // An operand with a register of its own is not numbered.
+    asm("{} {1}", in(reg) x, in("a0") x);
+    // A modifier, and what is no placeholder.
+    asm("{0:x}", in(reg) x);
+    asm("{ }", in(reg) x);
+    asm("{a-b}", in(reg) x);
+}
+
+fn braces(x: u32) {
+    asm("li {}, {", in(reg) x);
+    asm("li {}, }", in(reg) x);
+    asm("{ {}", in(reg) x);
+    asm("{{}} {{{}}} }}", in(reg) x);
+}
+
+// The label lands on the placeholder, past an escape that takes more text
+// than the byte it makes.
+fn escapes(x: u32) {
+    asm("\x41\t\\ {oops} \x7b\x7d", in(reg) x);
+    asm("a", "\x7b\x7d {} {2}", in(reg) x);
+    asm("\x7boops\x7d {\x31}", in(reg) x);
+}
+
+fn bytes() {
+    asm("\x80");
+    asm("nop\0nop");
+    asm("a\xFF{}\x00", in(reg) 1 as u32);
+}
+
+fn operands(x: u32, y: u32) {
+    // Not placed: each kind of operand a template places.
+    asm("", in(reg) x);
+    asm("{}", in(reg) x, in(reg) y);
+    asm("{a}", a = in(reg) x, b = out(reg) _);
+    asm("{}", in(reg) x, c = sym handler, d = const 1 as u32);
+    // An operand with a register of its own, and `clobber_abi`, need no
+    // placeholder.
+    asm("", in("a0") x, out("a1") _, clobber_abi("C"));
+    // Two operands, one name.
+    asm("{n}", n = in(reg) x, n = in(reg) y);
+    asm("{n} {m}", n = in(reg) x, m = in(reg) y, n = out(reg) _);
+}
+
+fn handler() {}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

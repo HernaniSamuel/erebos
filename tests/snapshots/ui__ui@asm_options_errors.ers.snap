@@ -1,0 +1,182 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/asm_options_errors.ers
+---
+--- errors ---
+ty::asm-options
+
+  × `nomem` and `readonly` contradict each other
+   ╭─[asm_options_errors.ers:5:28]
+ 4 │     let mut v: u32 = 0;
+ 5 │     asm("", options(nomem, readonly));
+   ·                     ──┬──  ────┬───
+   ·                       │        ╰── reads memory
+   ·                       ╰── touches no memory
+ 6 │     asm("", options(readonly, nomem));
+   ╰────
+  help: `nomem` promises no access to memory, `readonly` promises reads only: give the one that is
+        true (ADR 0079)
+ty::asm-options
+
+  × `nomem` and `readonly` contradict each other
+   ╭─[asm_options_errors.ers:6:21]
+ 5 │     asm("", options(nomem, readonly));
+ 6 │     asm("", options(readonly, nomem));
+   ·                     ────┬───  ──┬──
+   ·                         │       ╰── touches no memory
+   ·                         ╰── reads memory
+ 7 │     asm("{}", out(reg) v, options(pure));
+   ╰────
+  help: `nomem` promises no access to memory, `readonly` promises reads only: give the one that is
+        true (ADR 0079)
+ty::asm-options
+
+  × `pure` needs `nomem` or `readonly`
+   ╭─[asm_options_errors.ers:7:35]
+ 6 │     asm("", options(readonly, nomem));
+ 7 │     asm("{}", out(reg) v, options(pure));
+   ·                                   ──┬─
+   ·                                     ╰── may be removed, or run once for equal inputs
+ 8 │     asm("", options(pure, nomem));
+   ╰────
+  help: what depends on memory the compiler cannot see: add `nomem`, or `readonly` if it reads
+        memory (ADR 0079)
+ty::asm-options
+
+  × `pure` needs an output
+   ╭─[asm_options_errors.ers:8:21]
+ 7 │     asm("{}", out(reg) v, options(pure));
+ 8 │     asm("", options(pure, nomem));
+   ·                     ──┬─
+   ·                       ╰── has no effect but its outputs, and there are none
+ 9 │     asm("{}", out(reg) v, options(pure, nostack));
+   ╰────
+  help: a `pure` expression may be removed when its outputs are unused: with no output there is
+        nothing to keep it for (ADR 0079)
+ty::asm-options
+
+  × `pure` needs `nomem` or `readonly`
+    ╭─[asm_options_errors.ers:9:35]
+  8 │     asm("", options(pure, nomem));
+  9 │     asm("{}", out(reg) v, options(pure, nostack));
+    ·                                   ──┬─
+    ·                                     ╰── may be removed, or run once for equal inputs
+ 10 │     asm("", options(pure, readonly));
+    ╰────
+  help: what depends on memory the compiler cannot see: add `nomem`, or `readonly` if it reads
+        memory (ADR 0079)
+ty::asm-options
+
+  × `pure` needs an output
+    ╭─[asm_options_errors.ers:10:21]
+  9 │     asm("{}", out(reg) v, options(pure, nostack));
+ 10 │     asm("", options(pure, readonly));
+    ·                     ──┬─
+    ·                       ╰── has no effect but its outputs, and there are none
+ 11 │     // Accepted: with an output and `nomem` or `readonly`.
+    ╰────
+  help: a `pure` expression may be removed when its outputs are unused: with no output there is
+        nothing to keep it for (ADR 0079)
+ty::asm-options
+
+  × `noreturn` and an output contradict each other
+    ╭─[asm_options_errors.ers:19:15]
+ 18 │     let mut v: u32 = 0;
+ 19 │     asm("{}", out(reg) v, options(noreturn));
+    ·               ─────┬────          ────┬───
+    ·                    │                  ╰── the code never ends
+    ·                    ╰── an output is stored when the code ends
+ 20 │     asm("{}", inout(reg) x => _, options(noreturn));
+    ╰────
+  help: remove the output, or the option (ADR 0079)
+ty::asm-options
+
+  × `noreturn` and an output contradict each other
+    ╭─[asm_options_errors.ers:20:15]
+ 19 │     asm("{}", out(reg) v, options(noreturn));
+ 20 │     asm("{}", inout(reg) x => _, options(noreturn));
+    ·               ────────┬────────          ────┬───
+    ·                       │                      ╰── the code never ends
+    ·                       ╰── an output is stored when the code ends
+ 21 │     asm("", out("a0") _, options(noreturn));
+    ╰────
+  help: remove the output, or the option (ADR 0079)
+ty::asm-options
+
+  × `noreturn` and an output contradict each other
+    ╭─[asm_options_errors.ers:21:13]
+ 20 │     asm("{}", inout(reg) x => _, options(noreturn));
+ 21 │     asm("", out("a0") _, options(noreturn));
+    ·             ─────┬─────          ────┬───
+    ·                  │                   ╰── the code never ends
+    ·                  ╰── an output is stored when the code ends
+ 22 │     asm("", in("a0") x, options(noreturn));
+    ╰────
+  help: remove the output, or the option (ADR 0079)
+ty::asm-options
+
+  × the option `nomem` is given twice
+    ╭─[asm_options_errors.ers:26:28]
+ 25 │ fn twice() {
+ 26 │     asm("", options(nomem, nomem));
+    ·                     ──┬──  ──┬──
+    ·                       │      ╰── given again
+    ·                       ╰── first given here
+ 27 │     asm("", options(nostack, nomem, nostack));
+    ╰────
+ty::asm-options
+
+  × the option `nostack` is given twice
+    ╭─[asm_options_errors.ers:27:37]
+ 26 │     asm("", options(nomem, nomem));
+ 27 │     asm("", options(nostack, nomem, nostack));
+    ·                     ───┬───         ───┬───
+    ·                        │               ╰── given again
+    ·                        ╰── first given here
+ 28 │     asm("", clobber_abi("C"), clobber_abi("C"));
+    ╰────
+ty::asm-options
+
+  × `clobber_abi` is given twice
+    ╭─[asm_options_errors.ers:28:31]
+ 27 │     asm("", options(nostack, nomem, nostack));
+ 28 │     asm("", clobber_abi("C"), clobber_abi("C"));
+    ·             ────────┬───────  ────────┬───────
+    ·                     │                 ╰── given again
+    ·                     ╰── first given here
+ 29 │ }
+    ╰────
+ty::asm-options
+
+  × there is no ABI named `D`
+    ╭─[asm_options_errors.ers:32:25]
+ 31 │ fn abis() {
+ 32 │     asm("", clobber_abi("D"));
+    ·                         ─┬─
+    ·                          ╰── unknown ABI
+ 33 │     asm("", clobber_abi(""));
+    ╰────
+  help: only the C ABI exists: `clobber_abi("C")` (ADR 0006, 0079)
+ty::asm-options
+
+  × there is no ABI named ``
+    ╭─[asm_options_errors.ers:33:25]
+ 32 │     asm("", clobber_abi("D"));
+ 33 │     asm("", clobber_abi(""));
+    ·                         ─┬
+    ·                          ╰── unknown ABI
+ 34 │     asm("", clobber_abi("c"));
+    ╰────
+  help: only the C ABI exists: `clobber_abi("C")` (ADR 0006, 0079)
+ty::asm-options
+
+  × there is no ABI named `c`
+    ╭─[asm_options_errors.ers:34:25]
+ 33 │     asm("", clobber_abi(""));
+ 34 │     asm("", clobber_abi("c"));
+    ·                         ─┬─
+    ·                          ╰── unknown ABI
+ 35 │     asm("", clobber_abi("C"));
+    ╰────
+  help: only the C ABI exists: `clobber_abi("C")` (ADR 0006, 0079)

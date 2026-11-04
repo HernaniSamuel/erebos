@@ -422,9 +422,26 @@ pub fn string_value(text: &str) -> Result<Vec<u8>, Vec<(ByteError, Range<usize>)
     quoted_value(text, "\"")
 }
 
+/// The bytes of a string literal, and where each starts (`string_bytes`).
+pub type StringBytes = (Vec<u8>, Vec<usize>);
+
+/// The bytes of a string literal's source text, as `string_value`, and where
+/// each starts in the text: its offset from the opening quote, which an
+/// escape's backslash gives. One more offset follows, the closing quote's, so
+/// that `starts[i]..starts[j]` is the text of the bytes `i..j` (ADR 0079).
+pub fn string_bytes(text: &str) -> Result<StringBytes, Vec<(ByteError, Range<usize>)>> {
+    quoted_bytes(text, "\"")
+}
+
 /// The bytes of the source text of a byte string or a string literal, which
 /// starts with `open`, `b"` or `"`, and ends with `"`.
 fn quoted_value(text: &str, open: &str) -> Result<Vec<u8>, Vec<(ByteError, Range<usize>)>> {
+    quoted_bytes(text, open).map(|(bytes, _)| bytes)
+}
+
+/// `quoted_value`, with the offset in `text` of each byte, and of the
+/// closing quote.
+fn quoted_bytes(text: &str, open: &str) -> Result<StringBytes, Vec<(ByteError, Range<usize>)>> {
     let Some(inner) = text
         .strip_prefix(open)
         .and_then(|rest| rest.strip_suffix('"'))
@@ -432,6 +449,7 @@ fn quoted_value(text: &str, open: &str) -> Result<Vec<u8>, Vec<(ByteError, Range
         return Err(vec![(ByteError::Unterminated, 0..text.len())]);
     };
     let mut bytes = Vec::new();
+    let mut starts = Vec::new();
     let mut errors = Vec::new();
     let mut chars = inner.chars();
     // Offsets in `text`, past the opening quote.
@@ -439,12 +457,16 @@ fn quoted_value(text: &str, open: &str) -> Result<Vec<u8>, Vec<(ByteError, Range
     while let Some(c) = chars.next() {
         let start = offset(chars.as_str()) - c.len_utf8();
         match one_byte(c, &mut chars) {
-            Ok(byte) => bytes.push(byte),
+            Ok(byte) => {
+                bytes.push(byte);
+                starts.push(start);
+            }
             Err(e) => errors.push((e, start..offset(chars.as_str()))),
         }
     }
+    starts.push(open.len() + inner.len());
     if errors.is_empty() {
-        Ok(bytes)
+        Ok((bytes, starts))
     } else {
         Err(errors)
     }
@@ -682,6 +704,22 @@ mod tests {
         assert_eq!(
             string_value(r#""ab"#),
             Err(vec![(ByteError::Unterminated, 0..3)])
+        );
+    }
+
+    /// Each byte's offset in the text, which an escape's backslash gives, then
+    /// the closing quote's (ADR 0079).
+    #[test]
+    fn string_bytes_know_where_each_byte_starts() {
+        assert_eq!(string_bytes(r#""""#), Ok((vec![], vec![1])));
+        // `a`, `\x41`, `\n`, `\\`, `b` and the quote.
+        assert_eq!(
+            string_bytes(r#""a\x41\n\\b""#),
+            Ok((b"aA\n\\b".to_vec(), vec![1, 2, 6, 8, 10, 11]))
+        );
+        assert_eq!(
+            string_bytes(r#""ab\qc""#),
+            Err(vec![(ByteError::BadEscape, 3..5)])
         );
     }
 

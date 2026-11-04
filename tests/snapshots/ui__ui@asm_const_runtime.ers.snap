@@ -1,0 +1,28 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/asm_const_runtime.ers
+---
+--- errors ---
+ty::not-comptime
+
+  × `x` is only known at run time
+   ╭─[asm_const_runtime.ers:6:24]
+ 5 │     let y: u32 = 1;
+ 6 │     asm("{} {}", const x, const y);
+   ·                        ┬
+   ·                        ╰── a variable of the running program, used at compile time
+ 7 │ }
+   ╰────
+  help: compile-time code can use constants, literals and function calls (ADR 0029)
+ty::not-comptime
+
+  × `y` is only known at run time
+   ╭─[asm_const_runtime.ers:6:33]
+ 5 │     let y: u32 = 1;
+ 6 │     asm("{} {}", const x, const y);
+   ·                                 ┬
+   ·                                 ╰── a variable of the running program, used at compile time
+ 7 │ }
+   ╰────
+  help: compile-time code can use constants, literals and function calls (ADR 0029)

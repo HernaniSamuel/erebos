@@ -2558,10 +2558,12 @@ impl Parser<'_> {
         }
         let token = self.bump();
         // The lexer reported a malformed literal; its bytes are not needed.
-        let bytes = lexer::string_value(&self.text[token.span.range()]).unwrap_or_default();
+        let (bytes, starts) =
+            lexer::string_bytes(&self.text[token.span.range()]).unwrap_or_default();
         Ok(StrLit {
             bytes,
             span: token.span,
+            starts: starts.into_iter().map(|start| start as u32).collect(),
         })
     }
 

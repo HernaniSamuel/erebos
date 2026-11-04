@@ -59,6 +59,7 @@ impl OptLevel {
 }
 
 pub fn emit_llvm_ir(mir: &Mir, target: &Target, opt: OptLevel) -> Result<String, String> {
+    no_inline_asm(mir)?;
     let machine = target_machine(target, opt)?;
     let context = Context::create();
     let module = lower(&context, mir, target, &machine, opt);
@@ -66,12 +67,32 @@ pub fn emit_llvm_ir(mir: &Mir, target: &Target, opt: OptLevel) -> Result<String,
 }
 
 pub fn emit_object(mir: &Mir, target: &Target, opt: OptLevel, path: &Path) -> Result<(), String> {
+    no_inline_asm(mir)?;
     let machine = target_machine(target, opt)?;
     let context = Context::create();
     let module = lower(&context, mir, target, &machine, opt);
     machine
         .write_to_file(&module, FileType::Object, path)
         .map_err(|e| format!("cannot write `{}`: {e}", path.display()))
+}
+
+/// Temporary, until step 3 of M4.1 generates inline assembly: a body that
+/// holds an `asm` expression is reported, as an error of code generation, so
+/// that the statement is never met below.
+fn no_inline_asm(mir: &Mir) -> Result<(), String> {
+    for (_, body) in mir.bodies().filter(|(_, body)| !body.comptime) {
+        let holds = body.blocks.iter().any(|block| {
+            matches!(block.terminator, Terminator::InlineAsm(_))
+                || (block.statements.iter()).any(|s| matches!(s, Statement::InlineAsm(_)))
+        });
+        if holds {
+            return Err(format!(
+                "inline assembly is not generated yet: `{}` holds an `asm` expression (ADR 0079)",
+                body.name
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn target_machine(target: &Target, opt: OptLevel) -> Result<TargetMachine, String> {
@@ -881,6 +902,8 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
             Statement::Call { dest, callee, args } => {
                 self.call(*dest, callee.0 as usize, args);
             }
+            // Reported before code generation (`no_inline_asm`).
+            Statement::InlineAsm(_) => {}
         }
     }
 
@@ -1430,7 +1453,7 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                     b.build_return(None)
                 }
             },
-            Terminator::Unreachable => b.build_unreachable(),
+            Terminator::Unreachable | Terminator::InlineAsm(_) => b.build_unreachable(),
             // With the address of the check's information, in read-only data
             // or in a local, when the panic function takes it (ADR 0053).
             Terminator::Panic(_, site) => {

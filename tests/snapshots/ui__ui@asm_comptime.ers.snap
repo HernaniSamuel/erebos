@@ -1,0 +1,72 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/asm_comptime.ers
+---
+--- errors ---
+eval::asm
+
+  × the evaluation reached an `asm` expression
+   ╭─[asm_comptime.ers:6:5]
+ 5 │     let mut v: u32 = 0;
+ 6 │     asm("csrr {}, mcause", out(reg) v, options(nomem, nostack));
+   ·     ─────────────────────────────┬─────────────────────────────
+   ·                                  ╰── inline assembly cannot run at compile time
+ 7 │     v
+   ╰────
+    ╭─[asm_comptime.ers:18:30]
+ 17 │ 
+ 18 │ const DIRECT: u32 = comptime { read() };
+    ·                              ─────┬────┬
+    ·                                   │    ╰── called here
+    ·                                   ╰── while evaluating this `comptime` expression
+ 19 │ 
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::asm
+
+  × the evaluation reached an `asm` expression
+    ╭─[asm_comptime.ers:6:5]
+  5 │     let mut v: u32 = 0;
+  6 │     asm("csrr {}, mcause", out(reg) v, options(nomem, nostack));
+    ·     ─────────────────────────────┬─────────────────────────────
+    ·                                  ╰── inline assembly cannot run at compile time
+  7 │     v
+  8 │ }
+  9 │ 
+ 10 │ fn indirect() -> u32 {
+ 11 │     read() + 1
+    ·     ───┬──
+    ·        ╰── called here
+ 12 │ }
+    ╰────
+    ╭─[asm_comptime.ers:20:31]
+ 19 │ 
+ 20 │ const THROUGH: u32 = comptime { indirect() };
+    ·                               ───────┬──────┬
+    ·                                      │      ╰── called here
+    ·                                      ╰── while evaluating this `comptime` expression
+ 21 │ 
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::asm
+
+  × the evaluation reached an `asm` expression
+    ╭─[asm_comptime.ers:15:5]
+ 14 │ fn stops() -> u32 {
+ 15 │     asm("wfi", options(noreturn));
+    ·     ──────────────┬──────────────
+    ·                   ╰── inline assembly cannot run at compile time
+ 16 │ }
+ 17 │ 
+ 18 │ const DIRECT: u32 = comptime { read() };
+ 19 │ 
+ 20 │ const THROUGH: u32 = comptime { indirect() };
+ 21 │ 
+ 22 │ const NEVER: u32 = comptime { stops() };
+    ·                             ─────┬─────┬
+    ·                                  │     ╰── called here
+    ·                                  ╰── while evaluating this `comptime` expression
+ 23 │ 
+    ╰────
+  help: this code runs at compile time (ADR 0027)

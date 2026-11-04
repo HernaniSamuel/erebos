@@ -1,0 +1,110 @@
+// emit: mir
+// `asm` expressions that type check, as MIR: each operand form, a placeholder
+// used twice, outputs stored left to right, the evaluation order of the
+// operands and of the places of the outputs (ADR 0018, 0079), and `noreturn`
+// as `!`.
+struct Pair {
+    a: u32,
+    b: u32,
+}
+
+const LIMIT: u32 = 40;
+
+static mut COUNTER: u32 = 0;
+
+fn callee() {}
+
+fn index() -> usize {
+    1
+}
+
+// Every direction, with `reg` and with a register named by a string; an
+// operand with a name; `reg` operands numbered in the order written.
+fn directions(x: u32, p: *const u8) {
+    let mut v: u32 = 0;
+    let mut w: u32 = 0;
+    asm("add {}, {}", out(reg) v, in(reg) x);
+    asm("mv {}, {}", lateout(reg) w, in(reg) p);
+    asm("{n} {m}", n = inout(reg) v, m = in(reg) x);
+    asm("{}", inout(reg) x => w);
+    asm("", inout("a1") x => _, out("a2") _, lateout("a3") w);
+    asm("", in("a0") x, in("a4") p);
+    asm("{}", in(reg) 3 as u8);
+}
+
+// `sym` of a function and of a static, and `const`: a constant, a negative
+// `i32`, a `u64`, an expression.
+fn symbols() {
+    asm("call {f}; la {s}", f = sym callee, s = sym COUNTER);
+    asm("li {}, {}", in(reg) 0 as u32, const LIMIT);
+    asm("{} {} {}", const -1 as i32, const 0xFFFF_FFFF_FFFF as u64, const 2 * 8 as u32);
+}
+
+// A placeholder used twice, an operand never placed beside a register of its
+// own, `{}` and `{N}` counting the same operands.
+fn placeholders(x: u32) {
+    let mut v: u32 = 0;
+    asm("add {0}, {0}, {1}", inout(reg) v, in(reg) x);
+    asm("{} {1} {}", in(reg) x, in(reg) x, in("a0") x);
+    asm("{{}} {{{}}}", in(reg) x);
+}
+
+// Outputs into a field, an array element, a static and through a pointer.
+fn places(p: *mut u32) {
+    let mut pair: Pair = Pair { a: 0, b: 0 };
+    let mut array: [u32; 4] = [0; 4];
+    asm("", out("a0") pair.b, out("a1") array[2]);
+    asm("", out("a0") COUNTER);
+    asm("", out("a0") *p);
+    asm("{}", inout(reg) pair.a);
+}
+
+// Two outputs to one place: stored left to right, so the right one stays.
+fn twice() {
+    let mut v: u32 = 0;
+    asm("", out("a0") v, out("a1") v);
+}
+
+// The operands and the places run left to right before the statement: the
+// call of `index`, the check of the index, and the statement after them.
+fn order(x: u32) {
+    let mut array: [u32; 4] = [0; 4];
+    asm("", out("a0") array[index()], in("a1") x);
+}
+
+// An input read before a later operand assigns it: `v` is copied first.
+fn later_write() {
+    let mut v: u32 = 0;
+    asm("{} {}", in(reg) v, in(reg) { v = 5; 1 as u32 });
+}
+
+// `inout` without `=>` evaluates its place once.
+fn inout_once() {
+    let mut array: [u32; 4] = [0; 4];
+    asm("{}", inout(reg) array[index()]);
+}
+
+// `clobber_abi`, and the options.
+fn clobbers(x: u32) {
+    asm("call {}", sym callee, clobber_abi("C"));
+    asm("call {}", sym callee, in("a0") x, out("a1") _, clobber_abi("C"));
+    let mut v: u32 = 0;
+    asm("{} {}", out(reg) v, in(reg) x, options(pure, nomem, nostack, preserves_flags));
+    asm("{}", out(reg) v, options(pure, readonly));
+}
+
+// `noreturn` is `!`: as a statement, and as the tail of a function that
+// returns `!`.
+fn stops() -> ! {
+    asm("wfi", options(noreturn));
+}
+
+fn stops_in_tail() -> ! {
+    asm("wfi", options(nomem, nostack, noreturn))
+}
+
+entry fn main() -> ! {
+    stops_in_tail()
+}
+
+panic fn on_panic() -> ! { loop {} }

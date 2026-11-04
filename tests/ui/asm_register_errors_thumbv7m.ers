@@ -1,0 +1,43 @@
+// target: thumbv7m-none-eabi
+// `ty::asm-register` on thumbv7m (ADR 0079): the registers of this target,
+// each reserved one by each of its names, and a riscv32 name.
+fn unknown(x: u32) {
+    asm("", in("r16") x);
+    asm("", in("s0") x);
+    asm("", in("a0") x);
+    // The names this target has.
+    asm("", in("r0") x, in("r1") x, in("sb") x, in("sl") x, in("fp") x, in("ip") x);
+    asm("", in("lr") x, lateout("r14") _);
+}
+
+fn reserved(x: u32) {
+    asm("", in("r6") x);
+    asm("", in("r7") x);
+    asm("", in("r13") x);
+    asm("", in("sp") x);
+    asm("", in("r15") x);
+    asm("", in("pc") x);
+    asm("", out("r6") _);
+    asm("", inout("sp") x => _);
+}
+
+fn twice(x: u32) {
+    asm("", in("r0") x, in("r1") x, in("r0") x);
+    asm("", out("r2") _, out("r2") _);
+    asm("", in("r12") x, out("ip") _);
+    asm("", in("r12") x, lateout("ip") _);
+    asm("", in("lr") x, in("r14") x);
+    // A shared register does not hide a conflict with a later operand.
+    asm("", in("r0") x, lateout("r0") _, lateout("r0") _);
+    asm("", in("r0") x, lateout("r0") _, out("r0") _);
+}
+
+fn clobber(x: u32) {
+    let mut v: u32 = 0;
+    asm("{}", out(reg) v, clobber_abi("C"));
+    asm("", out("r4") v, lateout("r0") _, in("r3") x, clobber_abi("C"));
+}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

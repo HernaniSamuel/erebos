@@ -1,0 +1,9 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/asm_codegen_unsupported.ers
+---
+--- errors ---
+codegen::llvm
+
+  × inline assembly is not generated yet: `pause` holds an `asm` expression (ADR 0079)

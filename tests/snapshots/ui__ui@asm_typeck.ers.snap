@@ -1,0 +1,313 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/asm_typeck.ers
+---
+--- mir ---
+struct Pair { 0 a: u32 at 0, 1 b: u32 at 4 } // size 8, align 4
+
+static mut COUNTER: u32; // align 4
+
+fn callee() -> () {
+    let _0: ();
+
+    bb0: {
+        return;
+    }
+}
+
+fn index() -> usize {
+    let _0: usize;
+
+    bb0: {
+        _0 = const 1_usize;
+        return;
+    }
+}
+
+fn directions(_1: u32, _2: *const u8) -> () {
+    let _0: ();
+    let _1: u32; // x
+    let _2: *const u8; // p
+    let _3: u32; // v
+    let _4: u32; // w
+    let _5: u32;
+    let _6: u8;
+
+    bb0: {
+        _3 = const 0_u32;
+        _4 = const 0_u32;
+        asm("add {0}, {1}", out(reg) _3, in(reg) copy _1);
+        asm("mv {0}, {1}", lateout(reg) _4, in(reg) copy _2);
+        _5 = copy _3;
+        asm("{0} {1}", inout(reg) copy _5 => _3, in(reg) copy _1);
+        asm("{0}", inout(reg) copy _1 => _4);
+        asm("", inout("x11") copy _1 => _, out("x12") _, lateout("x13") _4);
+        asm("", in("x10") copy _1, in("x14") copy _2);
+        _6 = const 3_u8 as u8;
+        asm("{0}", in(reg) copy _6);
+        return;
+    }
+}
+
+fn symbols() -> () {
+    let _0: ();
+    let _1: u32;
+    let _2: u32;
+
+    bb0: {
+        asm("call {0}; la {1}", sym callee, sym static COUNTER);
+        _1 = const 0_u32 as u32;
+        _2 = copy _1;
+        asm("li {0}, {1}", in(reg) copy _2, const 40_u32);
+        asm("{0} {1} {2}", const -1_i32, const 281474976710655_u64, const 16_u32);
+        return;
+    }
+}
+
+fn placeholders(_1: u32) -> () {
+    let _0: ();
+    let _1: u32; // x
+    let _2: u32; // v
+    let _3: u32;
+
+    bb0: {
+        _2 = const 0_u32;
+        _3 = copy _2;
+        asm("add {0}, {0}, {1}", inout(reg) copy _3 => _2, in(reg) copy _1);
+        asm("{0} {1} {1}", in(reg) copy _1, in(reg) copy _1, in("x10") copy _1);
+        asm("{{}} {{{0}}}", in(reg) copy _1);
+        return;
+    }
+}
+
+fn places(_1: *mut u32) -> () {
+    let _0: ();
+    let _1: *mut u32; // p
+    let _2: Pair; // pair
+    let _3: [u32; 4]; // array
+    let _4: Pair;
+    let _5: [u32; 4];
+    let _6: usize;
+    let _7: bool;
+    let _8: *mut u32;
+    let _9: u32;
+
+    bb0: {
+        _4.0 = const 0_u32;
+        _4.1 = const 0_u32;
+        _2 = copy _4;
+        _6 = const 0_usize;
+        goto -> bb1;
+    }
+
+    bb1: {
+        _7 = Lt(copy _6, const 4_usize);
+        if copy _7 -> [true: bb2, false: bb3];
+    }
+
+    bb2: {
+        _5[_6] = const 0_u32;
+        _6 = Add(copy _6, const 1_usize);
+        goto -> bb1;
+    }
+
+    bb3: {
+        _3 = copy _5;
+        asm("", out("x10") _2.1, out("x11") _3[2]);
+        _8 = const static COUNTER;
+        asm("", out("x10") (*_8));
+        asm("", out("x10") (*_1));
+        _9 = copy _2.0;
+        asm("{0}", inout(reg) copy _9 => _2.0);
+        return;
+    }
+}
+
+fn twice() -> () {
+    let _0: ();
+    let _1: u32; // v
+
+    bb0: {
+        _1 = const 0_u32;
+        asm("", out("x10") _1, out("x11") _1);
+        return;
+    }
+}
+
+fn order(_1: u32) -> () {
+    let _0: ();
+    let _1: u32; // x
+    let _2: [u32; 4]; // array
+    let _3: [u32; 4];
+    let _4: usize;
+    let _5: bool;
+    let _6: usize;
+    let _7: usize;
+    let _8: bool;
+
+    bb0: {
+        _4 = const 0_usize;
+        goto -> bb1;
+    }
+
+    bb1: {
+        _5 = Lt(copy _4, const 4_usize);
+        if copy _5 -> [true: bb2, false: bb3];
+    }
+
+    bb2: {
+        _3[_4] = const 0_u32;
+        _4 = Add(copy _4, const 1_usize);
+        goto -> bb1;
+    }
+
+    bb3: {
+        _2 = copy _3;
+        _6 = call index();
+        _7 = copy _6;
+        _8 = Lt(copy _7, const 4_usize);
+        if copy _8 -> [true: bb4, false: bb5];
+    }
+
+    bb4: {
+        asm("", out("x10") _2[_7], in("x11") copy _1);
+        return;
+    }
+
+    bb5: {
+        panic(index out of bounds);
+    }
+}
+
+fn later_write() -> () {
+    let _0: ();
+    let _1: u32; // v
+    let _2: u32;
+    let _3: u32;
+
+    bb0: {
+        _1 = const 0_u32;
+        _2 = copy _1;
+        _1 = const 5_u32;
+        _3 = const 1_u32 as u32;
+        asm("{0} {1}", in(reg) copy _2, in(reg) copy _3);
+        return;
+    }
+}
+
+fn inout_once() -> () {
+    let _0: ();
+    let _1: [u32; 4]; // array
+    let _2: [u32; 4];
+    let _3: usize;
+    let _4: bool;
+    let _5: usize;
+    let _6: usize;
+    let _7: bool;
+    let _8: u32;
+
+    bb0: {
+        _3 = const 0_usize;
+        goto -> bb1;
+    }
+
+    bb1: {
+        _4 = Lt(copy _3, const 4_usize);
+        if copy _4 -> [true: bb2, false: bb3];
+    }
+
+    bb2: {
+        _2[_3] = const 0_u32;
+        _3 = Add(copy _3, const 1_usize);
+        goto -> bb1;
+    }
+
+    bb3: {
+        _1 = copy _2;
+        _5 = call index();
+        _6 = copy _5;
+        _7 = Lt(copy _6, const 4_usize);
+        if copy _7 -> [true: bb4, false: bb5];
+    }
+
+    bb4: {
+        _8 = copy _1[_6];
+        asm("{0}", inout(reg) copy _8 => _1[_6]);
+        return;
+    }
+
+    bb5: {
+        panic(index out of bounds);
+    }
+}
+
+fn clobbers(_1: u32) -> () {
+    let _0: ();
+    let _1: u32; // x
+    let _2: u32; // v
+
+    bb0: {
+        asm("call {0}", sym callee, clobber(x1, x5, x6, x7, x10, x11, x12, x13, x14, x15, x16, x17, x28, x29, x30, x31));
+        asm("call {0}", sym callee, in("x10") copy _1, out("x11") _, clobber(x1, x5, x6, x7, x10, x11, x12, x13, x14, x15, x16, x17, x28, x29, x30, x31));
+        _2 = const 0_u32;
+        asm("{0} {1}", out(reg) _2, in(reg) copy _1, options(pure, nomem, nostack, preserves_flags));
+        asm("{0}", out(reg) _2, options(pure, readonly));
+        return;
+    }
+}
+
+fn stops() -> ! {
+    let _0: !;
+
+    bb0: {
+        asm("wfi", options(noreturn));
+    }
+}
+
+fn stops_in_tail() -> ! {
+    let _0: !;
+
+    bb0: {
+        asm("wfi", options(nomem, nostack, noreturn));
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+
+    bb0: {
+        call stops_in_tail();
+        unreachable;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+comptime fn LIMIT() -> u32 {
+    let _0: u32;
+
+    bb0: {
+        _0 = const 40_u32;
+        return;
+    }
+}
+
+comptime fn COUNTER() -> u32 {
+    let _0: u32;
+
+    bb0: {
+        _0 = const 0_u32;
+        return;
+    }
+}

@@ -1,0 +1,501 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/asm_operand_errors.ers
+---
+--- errors ---
+ty::asm-operand-type
+
+  × `u64` cannot be the operand of a register
+    ╭─[asm_operand_errors.ers:29:23]
+ 28 │ fn types(a: u64, b: bool, c: Mode, d: Flags, e: [u8; 4], f: *const [u8], g: Wide, h: i64) {
+ 29 │     asm("{}", in(reg) a);
+    ·                       ┬
+    ·                       ╰── has type `u64`
+ 30 │     asm("{}", in(reg) b);
+    ╰────
+  help: a 64-bit integer takes two registers: pass its halves as two `u32`, converted with `as`
+        (ADR 0079)
+ty::asm-operand-type
+
+  × `bool` cannot be the operand of a register
+    ╭─[asm_operand_errors.ers:30:23]
+ 29 │     asm("{}", in(reg) a);
+ 30 │     asm("{}", in(reg) b);
+    ·                       ┬
+    ·                       ╰── has type `bool`
+ 31 │     asm("{}", in(reg) c);
+    ╰────
+  help: an operand is an integer of at most 32 bits or a thin pointer; convert other values with
+        `as` (ADR 0008, 0079)
+ty::asm-operand-type
+
+  × `Mode` cannot be the operand of a register
+    ╭─[asm_operand_errors.ers:31:23]
+ 30 │     asm("{}", in(reg) b);
+ 31 │     asm("{}", in(reg) c);
+    ·                       ┬
+    ·                       ╰── has type `Mode`
+ 32 │     asm("{}", in(reg) d);
+    ╰────
+  help: an operand is an integer of at most 32 bits or a thin pointer; convert other values with
+        `as` (ADR 0008, 0079)
+ty::asm-operand-type
+
+  × `Flags` cannot be the operand of a register
+    ╭─[asm_operand_errors.ers:32:23]
+ 31 │     asm("{}", in(reg) c);
+ 32 │     asm("{}", in(reg) d);
+    ·                       ┬
+    ·                       ╰── has type `Flags`
+ 33 │     asm("{}", in(reg) e);
+    ╰────
+  help: an operand is an integer of at most 32 bits or a thin pointer; convert other values with
+        `as` (ADR 0008, 0079)
+ty::asm-operand-type
+
+  × `[u8; 4]` cannot be the operand of a register
+    ╭─[asm_operand_errors.ers:33:23]
+ 32 │     asm("{}", in(reg) d);
+ 33 │     asm("{}", in(reg) e);
+    ·                       ┬
+    ·                       ╰── has type `[u8; 4]`
+ 34 │     asm("{}", in(reg) f);
+    ╰────
+  help: an operand is an integer of at most 32 bits or a thin pointer; convert other values with
+        `as` (ADR 0008, 0079)
+ty::asm-operand-type
+
+  × `*const [u8]` cannot be the operand of a register
+    ╭─[asm_operand_errors.ers:34:23]
+ 33 │     asm("{}", in(reg) e);
+ 34 │     asm("{}", in(reg) f);
+    ·                       ┬
+    ·                       ╰── has type `*const [u8]`
+ 35 │     asm("{}", in(reg) g);
+    ╰────
+  help: a pointer to a slice is an address and a length; pass the address, converted with `as`,
+        and the length as a `usize` (ADR 0031, 0079)
+ty::asm-operand-type
+
+  × `Wide` cannot be the operand of a register
+    ╭─[asm_operand_errors.ers:35:23]
+ 34 │     asm("{}", in(reg) f);
+ 35 │     asm("{}", in(reg) g);
+    ·                       ┬
+    ·                       ╰── has type `Wide`
+ 36 │     asm("{}", in(reg) ());
+    ╰────
+  help: an operand is an integer of at most 32 bits or a thin pointer; convert other values with
+        `as` (ADR 0008, 0079)
+ty::asm-operand-type
+
+  × `()` cannot be the operand of a register
+    ╭─[asm_operand_errors.ers:36:23]
+ 35 │     asm("{}", in(reg) g);
+ 36 │     asm("{}", in(reg) ());
+    ·                       ─┬
+    ·                        ╰── has type `()`
+ 37 │     asm("{}", in(reg) h);
+    ╰────
+  help: an operand is an integer of at most 32 bits or a thin pointer; convert other values with
+        `as` (ADR 0008, 0079)
+ty::asm-operand-type
+
+  × `i64` cannot be the operand of a register
+    ╭─[asm_operand_errors.ers:37:23]
+ 36 │     asm("{}", in(reg) ());
+ 37 │     asm("{}", in(reg) h);
+    ·                       ┬
+    ·                       ╰── has type `i64`
+ 38 │     // Converted with `as`, they are operands.
+    ╰────
+  help: a 64-bit integer takes two registers: pass its halves as two `u32`, converted with `as`
+        (ADR 0079)
+ty::untyped-literal
+
+  × cannot tell the type of this literal
+    ╭─[asm_operand_errors.ers:44:23]
+ 43 │ fn literals() {
+ 44 │     asm("{}", in(reg) 3);
+    ·                       ┬
+    ·                       ╰── no type is expected here
+ 45 │     asm("{}", const 3);
+    ╰────
+  help: literals take the type expected where they appear; bind it first, e.g. `let x: u32 = ...`
+        (ADR 0008)
+ty::untyped-literal
+
+  × cannot tell the type of this literal
+    ╭─[asm_operand_errors.ers:45:21]
+ 44 │     asm("{}", in(reg) 3);
+ 45 │     asm("{}", const 3);
+    ·                     ┬
+    ·                     ╰── no type is expected here
+ 46 │     asm("{} {}", in(reg) 3 as u32, const 3 as u8);
+    ╰────
+  help: literals take the type expected where they appear; bind it first, e.g. `let x: u32 = ...`
+        (ADR 0008)
+ty::asm-operand-type
+
+  × `u64` cannot be the operand of a register
+    ╭─[asm_operand_errors.ers:53:24]
+ 52 │     let mut fine: u32 = 0;
+ 53 │     asm("{}", out(reg) wide);
+    ·                        ──┬─
+    ·                          ╰── has type `u64`
+ 54 │     asm("{}", lateout(reg) flag);
+    ╰────
+  help: a 64-bit integer takes two registers: pass its halves as two `u32`, converted with `as`
+        (ADR 0079)
+ty::asm-operand-type
+
+  × `bool` cannot be the operand of a register
+    ╭─[asm_operand_errors.ers:54:28]
+ 53 │     asm("{}", out(reg) wide);
+ 54 │     asm("{}", lateout(reg) flag);
+    ·                            ──┬─
+    ·                              ╰── has type `bool`
+ 55 │     asm("{}", inout(reg) wide);
+    ╰────
+  help: an operand is an integer of at most 32 bits or a thin pointer; convert other values with
+        `as` (ADR 0008, 0079)
+ty::asm-operand-type
+
+  × `u64` cannot be the operand of a register
+    ╭─[asm_operand_errors.ers:55:26]
+ 54 │     asm("{}", lateout(reg) flag);
+ 55 │     asm("{}", inout(reg) wide);
+    ·                          ──┬─
+    ·                            ╰── has type `u64`
+ 56 │     asm("{}", inout(reg) a => fine);
+    ╰────
+  help: a 64-bit integer takes two registers: pass its halves as two `u32`, converted with `as`
+        (ADR 0079)
+ty::asm-operand-type
+
+  × `u64` cannot be the operand of a register
+    ╭─[asm_operand_errors.ers:56:26]
+ 55 │     asm("{}", inout(reg) wide);
+ 56 │     asm("{}", inout(reg) a => fine);
+    ·                          ┬
+    ·                          ╰── has type `u64`
+ 57 │     asm("{}", inout(reg) b => _);
+    ╰────
+  help: a 64-bit integer takes two registers: pass its halves as two `u32`, converted with `as`
+        (ADR 0079)
+ty::asm-operand-type
+
+  × the two sides of `inout ... =>` have different types
+    ╭─[asm_operand_errors.ers:56:26]
+ 55 │     asm("{}", inout(reg) wide);
+ 56 │     asm("{}", inout(reg) a => fine);
+    ·                          ┬    ──┬─
+    ·                          │      ╰── receives a `u32`
+    ·                          ╰── passes a `u64`
+ 57 │     asm("{}", inout(reg) b => _);
+    ╰────
+  help: one register holds the value in and out, so both sides have one type; convert with `as`
+        (ADR 0079)
+ty::asm-operand-type
+
+  × `bool` cannot be the operand of a register
+    ╭─[asm_operand_errors.ers:57:26]
+ 56 │     asm("{}", inout(reg) a => fine);
+ 57 │     asm("{}", inout(reg) b => _);
+    ·                          ┬
+    ·                          ╰── has type `bool`
+ 58 │     // Places that cannot be written.
+    ╰────
+  help: an operand is an integer of at most 32 bits or a thin pointer; convert other values with
+        `as` (ADR 0008, 0079)
+ty::assign-immutable
+
+  × cannot assign to `immutable`, which is not `mut`
+    ╭─[asm_operand_errors.ers:60:24]
+ 58 │     // Places that cannot be written.
+ 59 │     let immutable: u32 = 0;
+    ·         ────┬────
+    ·             ╰── help: declare it `let mut immutable`
+ 60 │     asm("{}", out(reg) immutable);
+    ·                        ────┬────
+    ·                            ╰── assigned here
+ 61 │     asm("{}", out(reg) FIXED);
+    ╰────
+ty::assign-immutable
+
+  × cannot assign to `FIXED`, which is not `mut`
+    ╭─[asm_operand_errors.ers:22:8]
+ 21 │ 
+ 22 │ static FIXED: u32 = 0;
+    ·        ──┬──
+    ·          ╰── help: declare it `static mut FIXED`
+ 23 │ 
+    ╰────
+    ╭─[asm_operand_errors.ers:61:24]
+ 60 │     asm("{}", out(reg) immutable);
+ 61 │     asm("{}", out(reg) FIXED);
+    ·                        ──┬──
+    ·                          ╰── assigned here
+ 62 │     asm("{}", out(reg) *p);
+    ╰────
+ty::write-through-const
+
+  × cannot write through a `*const` pointer
+    ╭─[asm_operand_errors.ers:62:25]
+ 61 │     asm("{}", out(reg) FIXED);
+ 62 │     asm("{}", out(reg) *p);
+    ·                         ┬
+    ·                         ╰── has type `*const u32`
+ 63 │     asm("{}", out(reg) 3 as u32);
+    ╰────
+  help: only `*mut` pointers can be written through
+ty::not-assignable
+
+  × cannot assign to this expression
+    ╭─[asm_operand_errors.ers:63:24]
+ 62 │     asm("{}", out(reg) *p);
+ 63 │     asm("{}", out(reg) 3 as u32);
+    ·                        ────┬───
+    ·                            ╰── not a variable, `*pointer` or `a[index]`
+ 64 │     asm("{}", inout(reg) immutable => immutable);
+    ╰────
+ty::assign-immutable
+
+  × cannot assign to `immutable`, which is not `mut`
+    ╭─[asm_operand_errors.ers:64:39]
+ 58 │     // Places that cannot be written.
+ 59 │     let immutable: u32 = 0;
+    ·         ────┬────
+    ·             ╰── help: declare it `let mut immutable`
+ 60 │     asm("{}", out(reg) immutable);
+ 61 │     asm("{}", out(reg) FIXED);
+ 62 │     asm("{}", out(reg) *p);
+ 63 │     asm("{}", out(reg) 3 as u32);
+ 64 │     asm("{}", inout(reg) immutable => immutable);
+    ·                                       ────┬────
+    ·                                           ╰── assigned here
+ 65 │     asm("{}", inout(reg) immutable);
+    ╰────
+ty::assign-immutable
+
+  × cannot assign to `immutable`, which is not `mut`
+    ╭─[asm_operand_errors.ers:65:26]
+ 58 │     // Places that cannot be written.
+ 59 │     let immutable: u32 = 0;
+    ·         ────┬────
+    ·             ╰── help: declare it `let mut immutable`
+ 60 │     asm("{}", out(reg) immutable);
+ 61 │     asm("{}", out(reg) FIXED);
+ 62 │     asm("{}", out(reg) *p);
+ 63 │     asm("{}", out(reg) 3 as u32);
+ 64 │     asm("{}", inout(reg) immutable => immutable);
+ 65 │     asm("{}", inout(reg) immutable);
+    ·                          ────┬────
+    ·                              ╰── assigned here
+ 66 │     asm("{}", inout(reg) 3 as u32);
+    ╰────
+ty::not-assignable
+
+  × an `inout` without `=>` needs a place to store the result in
+    ╭─[asm_operand_errors.ers:66:26]
+ 65 │     asm("{}", inout(reg) immutable);
+ 66 │     asm("{}", inout(reg) 3 as u32);
+    ·                          ────┬───
+    ·                              ╰── not a variable, `*pointer` or `a[index]`
+ 67 │     asm("{}", inout(reg) LIMIT);
+    ╰────
+  help: write the place the result goes to after `=>`, or `=> _` to drop it (ADR 0079)
+ty::not-assignable
+
+  × an `inout` without `=>` needs a place to store the result in
+    ╭─[asm_operand_errors.ers:67:26]
+ 66 │     asm("{}", inout(reg) 3 as u32);
+ 67 │     asm("{}", inout(reg) LIMIT);
+    ·                          ──┬──
+    ·                            ╰── not a variable, `*pointer` or `a[index]`
+ 68 │     // A bit field is no place in memory.
+    ╰────
+  help: write the place the result goes to after `=>`, or `=> _` to drop it (ADR 0079)
+ty::asm-operand-type
+
+  × a bit field cannot receive the output of `asm`
+    ╭─[asm_operand_errors.ers:70:24]
+ 69 │     let mut flags: Flags = Flags { on: false, level: 0 };
+ 70 │     asm("{}", out(reg) flags.level);
+    ·                        ─────┬─────
+    ·                             ╰── a bit field, with no place in memory
+ 71 │     asm("{}", inout(reg) flags.level);
+    ╰────
+  help: store the output in a variable of the integer type, and assign the field from it (ADR
+        0059, 0079)
+ty::asm-operand-type
+
+  × a bit field cannot receive the output of `asm`
+    ╭─[asm_operand_errors.ers:71:26]
+ 70 │     asm("{}", out(reg) flags.level);
+ 71 │     asm("{}", inout(reg) flags.level);
+    ·                          ─────┬─────
+    ·                               ╰── a bit field, with no place in memory
+ 72 │     asm("{}", inout(reg) fine => flags.level);
+    ╰────
+  help: pass the field's value and write the result to a variable with `=> place` (ADR 0059, 0079)
+ty::asm-operand-type
+
+  × a bit field cannot receive the output of `asm`
+    ╭─[asm_operand_errors.ers:72:34]
+ 71 │     asm("{}", inout(reg) flags.level);
+ 72 │     asm("{}", inout(reg) fine => flags.level);
+    ·                                  ─────┬─────
+    ·                                       ╰── a bit field, with no place in memory
+ 73 │     // Accepted: a field, a pointer's target, a static, a dropped output.
+    ╰────
+  help: store the output in a variable of the integer type, and assign the field from it (ADR
+        0059, 0079)
+ty::asm-operand-type
+
+  × the two sides of `inout ... =>` have different types
+    ╭─[asm_operand_errors.ers:84:26]
+ 83 │     let mut ptr: *const u8 = p;
+ 84 │     asm("{}", inout(reg) x => small);
+    ·                          ┬    ──┬──
+    ·                          │      ╰── receives a `u8`
+    ·                          ╰── passes a `u32`
+ 85 │     asm("{}", inout(reg) y => big);
+    ╰────
+  help: one register holds the value in and out, so both sides have one type; convert with `as`
+        (ADR 0079)
+ty::asm-operand-type
+
+  × the two sides of `inout ... =>` have different types
+    ╭─[asm_operand_errors.ers:85:26]
+ 84 │     asm("{}", inout(reg) x => small);
+ 85 │     asm("{}", inout(reg) y => big);
+    ·                          ┬    ─┬─
+    ·                          │     ╰── receives a `u32`
+    ·                          ╰── passes a `u8`
+ 86 │     asm("{}", inout(reg) p => ptr);
+    ╰────
+  help: one register holds the value in and out, so both sides have one type; convert with `as`
+        (ADR 0079)
+ty::asm-operand-type
+
+  × the two sides of `inout ... =>` have different types
+    ╭─[asm_operand_errors.ers:87:26]
+ 86 │     asm("{}", inout(reg) p => ptr);
+ 87 │     asm("{}", inout(reg) p => big);
+    ·                          ┬    ─┬─
+    ·                          │     ╰── receives a `u32`
+    ·                          ╰── passes a `*const u8`
+ 88 │     asm("{}", inout(reg) x => big);
+    ╰────
+  help: one register holds the value in and out, so both sides have one type; convert with `as`
+        (ADR 0079)
+ty::asm-sym
+
+  × `sym` cannot name a constant
+    ╭─[asm_operand_errors.ers:92:19]
+ 91 │ fn symbols() {
+ 92 │     asm("{}", sym LIMIT);
+    ·                   ──┬──
+    ·                     ╰── a constant, not a function or a static
+ 93 │     asm("{}", sym Wide);
+    ╰────
+  help: `sym` names a function, an `extern fn`, a static or an `extern static`, and the template
+        gets its symbol (ADR 0079)
+ty::asm-sym
+
+  × `sym` cannot name a struct
+    ╭─[asm_operand_errors.ers:93:19]
+ 92 │     asm("{}", sym LIMIT);
+ 93 │     asm("{}", sym Wide);
+    ·                   ──┬─
+    ·                     ╰── a struct, not a function or a static
+ 94 │     asm("{}", sym inner);
+    ╰────
+  help: `sym` names a function, an `extern fn`, a static or an `extern static`, and the template
+        gets its symbol (ADR 0079)
+ty::asm-sym
+
+  × `sym` cannot name a module
+    ╭─[asm_operand_errors.ers:94:19]
+ 93 │     asm("{}", sym Wide);
+ 94 │     asm("{}", sym inner);
+    ·                   ──┬──
+    ·                     ╰── a module, not a function or a static
+ 95 │     asm("{}", sym Mode);
+    ╰────
+  help: `sym` names a function, an `extern fn`, a static or an `extern static`, and the template
+        gets its symbol (ADR 0079)
+ty::asm-sym
+
+  × `sym` cannot name an enum
+    ╭─[asm_operand_errors.ers:95:19]
+ 94 │     asm("{}", sym inner);
+ 95 │     asm("{}", sym Mode);
+    ·                   ──┬─
+    ·                     ╰── an enum, not a function or a static
+ 96 │     asm("{}", sym Mode::Run);
+    ╰────
+  help: `sym` names a function, an `extern fn`, a static or an `extern static`, and the template
+        gets its symbol (ADR 0079)
+ty::asm-sym
+
+  × `sym` cannot name an enum variant
+    ╭─[asm_operand_errors.ers:96:19]
+ 95 │     asm("{}", sym Mode);
+ 96 │     asm("{}", sym Mode::Run);
+    ·                   ────┬────
+    ·                       ╰── an enum variant, not a function or a static
+ 97 │     asm("{}", sym Flags);
+    ╰────
+  help: `sym` names a function, an `extern fn`, a static or an `extern static`, and the template
+        gets its symbol (ADR 0079)
+ty::asm-sym
+
+  × `sym` cannot name a bit-field struct
+    ╭─[asm_operand_errors.ers:97:19]
+ 96 │     asm("{}", sym Mode::Run);
+ 97 │     asm("{}", sym Flags);
+    ·                   ──┬──
+    ·                     ╰── a bit-field struct, not a function or a static
+ 98 │     asm("{}", sym FIXED);
+    ╰────
+  help: `sym` names a function, an `extern fn`, a static or an `extern static`, and the template
+        gets its symbol (ADR 0079)
+ty::asm-operand-type
+
+  × a `const` operand is an integer, found `bool`
+     ╭─[asm_operand_errors.ers:104:21]
+ 103 │ fn constants() {
+ 104 │     asm("{}", const true);
+     ·                     ──┬─
+     ·                       ╰── has type `bool`
+ 105 │     asm("{}", const Mode::Run);
+     ╰────
+  help: `const` puts the value of an integer into the template as a number; convert it with `as`
+        (ADR 0079)
+ty::asm-operand-type
+
+  × a `const` operand is an integer, found `Mode`
+     ╭─[asm_operand_errors.ers:105:21]
+ 104 │     asm("{}", const true);
+ 105 │     asm("{}", const Mode::Run);
+     ·                     ────┬────
+     ·                         ╰── has type `Mode`
+ 106 │     asm("{}", const b"ab");
+     ╰────
+  help: `const` puts the value of an integer into the template as a number; convert it with `as`
+        (ADR 0079)
+ty::asm-operand-type
+
+  × a `const` operand is an integer, found `[u8; 2]`
+     ╭─[asm_operand_errors.ers:106:21]
+ 105 │     asm("{}", const Mode::Run);
+ 106 │     asm("{}", const b"ab");
+     ·                     ──┬──
+     ·                       ╰── has type `[u8; 2]`
+ 107 │     asm("{}", const LIMIT);
+     ╰────
+  help: `const` puts the value of an integer into the template as a number; convert it with `as`
+        (ADR 0079)

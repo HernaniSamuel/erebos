@@ -611,6 +611,26 @@ pub enum ExprKind {
 pub struct StrLit {
     pub bytes: Vec<u8>,
     pub span: Span,
+    /// Where each byte starts in the source, from the start of `span`, and the
+    /// closing quote after them, so that a diagnostic about some bytes can
+    /// label their text, escapes included. Empty when the lexer rejected the
+    /// literal.
+    pub starts: Vec<u32>,
+}
+
+impl StrLit {
+    /// The source text of the bytes `from..to`, or the whole literal if the
+    /// offsets are not known.
+    pub fn span_of(&self, from: usize, to: usize) -> Span {
+        match (self.starts.get(from), self.starts.get(to)) {
+            (Some(&lo), Some(&hi)) => Span {
+                file: self.span.file,
+                lo: self.span.lo + lo,
+                hi: self.span.lo + hi,
+            },
+            _ => self.span,
+        }
+    }
 }
 
 impl std::fmt::Debug for StrLit {
@@ -771,5 +791,35 @@ impl ExprKind {
                 | ExprKind::Loop(_)
                 | ExprKind::Match { .. }
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::span::SourceMap;
+
+    /// The text of some bytes, escapes included; the whole literal when the
+    /// offsets are not known.
+    #[test]
+    fn a_literal_gives_the_text_of_some_of_its_bytes() {
+        let file = SourceMap::default().add("main.ers", "");
+        // `"a\x41b"` at 10, as the parser makes it.
+        let lit = StrLit {
+            bytes: b"aAb".to_vec(),
+            span: Span::new(file, 10, 18),
+            starts: vec![1, 2, 6, 7],
+        };
+        assert_eq!(lit.span_of(0, 1), Span::new(file, 11, 12));
+        assert_eq!(lit.span_of(1, 2), Span::new(file, 12, 16));
+        assert_eq!(lit.span_of(0, 3), Span::new(file, 11, 17));
+        // Past the end, or unknown: the whole literal.
+        assert_eq!(lit.span_of(2, 9), lit.span);
+        let rejected = StrLit {
+            bytes: Vec::new(),
+            span: lit.span,
+            starts: Vec::new(),
+        };
+        assert_eq!(rejected.span_of(0, 1), lit.span);
     }
 }

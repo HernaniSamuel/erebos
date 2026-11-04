@@ -395,5 +395,6 @@ fn expr_label(q: &Queries, f: &Fn, expr: &Expr) -> String {
         ExprKind::Slice(..) => "slice".to_owned(),
         ExprKind::Loop(_) => "loop".to_owned(),
         ExprKind::Match { .. } => "match".to_owned(),
+        ExprKind::Asm(_) => "asm".to_owned(),
     }
 }

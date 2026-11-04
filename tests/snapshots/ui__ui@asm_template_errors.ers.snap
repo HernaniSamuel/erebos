@@ -1,0 +1,328 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/asm_template_errors.ers
+---
+--- errors ---
+ty::asm-template
+
+  × the placeholder `{missing}` names no operand
+   ╭─[asm_template_errors.ers:5:10]
+ 4 │     // Names no operand: by name, by number, and `{}` past the last.
+ 5 │     asm("{missing}", in(reg) x);
+   ·          ────┬────
+   ·              ╰── no operand is named `missing`
+ 6 │     asm("{1}", in(reg) x);
+   ╰────
+  help: no operand has a name: write `name = in(reg) ...` to name one (ADR 0079)
+ty::asm-template
+
+  × the placeholder `{1}` names no operand
+   ╭─[asm_template_errors.ers:6:10]
+ 5 │     asm("{missing}", in(reg) x);
+ 6 │     asm("{1}", in(reg) x);
+   ·          ─┬─
+   ·           ╰── no such operand
+ 7 │     asm("{} {}", in(reg) x);
+   ╰────
+  help: the operands without a name or a register are numbered from 0, and there is 1 (ADR 0079)
+ty::asm-template
+
+  × `{}` takes operand number 1, which does not exist
+   ╭─[asm_template_errors.ers:7:13]
+ 6 │     asm("{1}", in(reg) x);
+ 7 │     asm("{} {}", in(reg) x);
+   ·             ─┬
+   ·              ╰── takes the operand number 1
+ 8 │     asm("{}");
+   ╰────
+  help: each `{}` takes the next operand without a name or a register; the operands without a name
+        or a register are numbered from 0, and there is 1 (ADR 0079)
+ty::asm-template
+
+  × `{}` takes operand number 0, which does not exist
+   ╭─[asm_template_errors.ers:8:10]
+ 7 │     asm("{} {}", in(reg) x);
+ 8 │     asm("{}");
+   ·          ─┬
+   ·           ╰── takes the operand number 0
+ 9 │     // A register of the target in the template, not an operand.
+   ╰────
+  help: each `{}` takes the next operand without a name or a register; the operands without a name
+        or a register are numbered from 0, and there are 0 (ADR 0079)
+ty::asm-template
+
+  × the placeholder `{a0}` names no operand
+    ╭─[asm_template_errors.ers:10:13]
+  9 │     // A register of the target in the template, not an operand.
+ 10 │     asm("mv {a0}, {}", in(reg) x, in("a0") x);
+    ·             ──┬─
+    ·               ╰── no operand is named `a0`
+ 11 │     // An operand with a register of its own is not numbered.
+    ╰────
+  help: `a0` is a register: an operand with a register of its own is not placed, so write the
+        register itself in the template, as `a0` (ADR 0079)
+ty::asm-template
+
+  × the placeholder `{1}` names no operand
+    ╭─[asm_template_errors.ers:12:13]
+ 11 │     // An operand with a register of its own is not numbered.
+ 12 │     asm("{} {1}", in(reg) x, in("a0") x);
+    ·             ─┬─
+    ·              ╰── no such operand
+ 13 │     // A modifier, and what is no placeholder.
+    ╰────
+  help: the operands without a name or a register are numbered from 0, and there is 1 (ADR 0079)
+ty::asm-template
+
+  × `{0:x}` is no placeholder
+    ╭─[asm_template_errors.ers:14:10]
+ 13 │     // A modifier, and what is no placeholder.
+ 14 │     asm("{0:x}", in(reg) x);
+    ·          ──┬──
+    ·            ╰── not `{}`, `{N}` or `{name}`
+ 15 │     asm("{ }", in(reg) x);
+    ╰────
+  help: a placeholder is `{}`, `{N}` or `{name}`; operand modifiers such as `{0:x}` do not exist
+        (ADR 0079)
+ty::asm-template
+
+  × `{ }` is no placeholder
+    ╭─[asm_template_errors.ers:15:10]
+ 14 │     asm("{0:x}", in(reg) x);
+ 15 │     asm("{ }", in(reg) x);
+    ·          ─┬─
+    ·           ╰── not `{}`, `{N}` or `{name}`
+ 16 │     asm("{a-b}", in(reg) x);
+    ╰────
+  help: a placeholder is `{}`, `{N}` or `{name}`; operand modifiers such as `{0:x}` do not exist
+        (ADR 0079)
+ty::asm-template
+
+  × `{a-b}` is no placeholder
+    ╭─[asm_template_errors.ers:16:10]
+ 15 │     asm("{ }", in(reg) x);
+ 16 │     asm("{a-b}", in(reg) x);
+    ·          ──┬──
+    ·            ╰── not `{}`, `{N}` or `{name}`
+ 17 │ }
+    ╰────
+  help: a placeholder is `{}`, `{N}` or `{name}`; operand modifiers such as `{0:x}` do not exist
+        (ADR 0079)
+ty::asm-template
+
+  × unmatched `{` in the template
+    ╭─[asm_template_errors.ers:20:17]
+ 19 │ fn braces(x: u32) {
+ 20 │     asm("li {}, {", in(reg) x);
+    ·                 ┬
+    ·                 ╰── no `}` closes it
+ 21 │     asm("li {}, }", in(reg) x);
+    ╰────
+  help: write `{{` and `}}` for a brace of the instructions themselves (ADR 0079)
+ty::asm-template
+
+  × unmatched `}` in the template
+    ╭─[asm_template_errors.ers:21:17]
+ 20 │     asm("li {}, {", in(reg) x);
+ 21 │     asm("li {}, }", in(reg) x);
+    ·                 ┬
+    ·                 ╰── no `{` opens it
+ 22 │     asm("{ {}", in(reg) x);
+    ╰────
+  help: write `{{` and `}}` for a brace of the instructions themselves (ADR 0079)
+ty::asm-template
+
+  × unmatched `{` in the template
+    ╭─[asm_template_errors.ers:22:10]
+ 21 │     asm("li {}, }", in(reg) x);
+ 22 │     asm("{ {}", in(reg) x);
+    ·          ┬
+    ·          ╰── no `}` closes it
+ 23 │     asm("{{}} {{{}}} }}", in(reg) x);
+    ╰────
+  help: write `{{` and `}}` for a brace of the instructions themselves (ADR 0079)
+ty::asm-template
+
+  × the placeholder `{oops}` names no operand
+    ╭─[asm_template_errors.ers:29:19]
+ 28 │ fn escapes(x: u32) {
+ 29 │     asm("\x41\t\\ {oops} \x7b\x7d", in(reg) x);
+    ·                   ───┬──
+    ·                      ╰── no operand is named `oops`
+ 30 │     asm("a", "\x7b\x7d {} {2}", in(reg) x);
+    ╰────
+  help: no operand has a name: write `name = in(reg) ...` to name one (ADR 0079)
+ty::asm-template
+
+  × `{}` takes operand number 1, which does not exist
+    ╭─[asm_template_errors.ers:30:24]
+ 29 │     asm("\x41\t\\ {oops} \x7b\x7d", in(reg) x);
+ 30 │     asm("a", "\x7b\x7d {} {2}", in(reg) x);
+    ·                        ─┬
+    ·                         ╰── takes the operand number 1
+ 31 │     asm("\x7boops\x7d {\x31}", in(reg) x);
+    ╰────
+  help: each `{}` takes the next operand without a name or a register; the operands without a name
+        or a register are numbered from 0, and there is 1 (ADR 0079)
+ty::asm-template
+
+  × the placeholder `{2}` names no operand
+    ╭─[asm_template_errors.ers:30:27]
+ 29 │     asm("\x41\t\\ {oops} \x7b\x7d", in(reg) x);
+ 30 │     asm("a", "\x7b\x7d {} {2}", in(reg) x);
+    ·                           ─┬─
+    ·                            ╰── no such operand
+ 31 │     asm("\x7boops\x7d {\x31}", in(reg) x);
+    ╰────
+  help: the operands without a name or a register are numbered from 0, and there is 1 (ADR 0079)
+ty::asm-template
+
+  × the placeholder `{oops}` names no operand
+    ╭─[asm_template_errors.ers:31:10]
+ 30 │     asm("a", "\x7b\x7d {} {2}", in(reg) x);
+ 31 │     asm("\x7boops\x7d {\x31}", in(reg) x);
+    ·          ──────┬─────
+    ·                ╰── no operand is named `oops`
+ 32 │ }
+    ╰────
+  help: no operand has a name: write `name = in(reg) ...` to name one (ADR 0079)
+ty::asm-template
+
+  × the placeholder `{1}` names no operand
+    ╭─[asm_template_errors.ers:31:23]
+ 30 │     asm("a", "\x7b\x7d {} {2}", in(reg) x);
+ 31 │     asm("\x7boops\x7d {\x31}", in(reg) x);
+    ·                       ───┬──
+    ·                          ╰── no such operand
+ 32 │ }
+    ╰────
+  help: the operands without a name or a register are numbered from 0, and there is 1 (ADR 0079)
+ty::asm-template
+
+  × the template holds the byte `\x80`
+    ╭─[asm_template_errors.ers:35:10]
+ 34 │ fn bytes() {
+ 35 │     asm("\x80");
+    ·          ──┬─
+    ·            ╰── not ASCII text
+ 36 │     asm("nop\0nop");
+    ╰────
+  help: a template is ASCII, from `0x01` to `0x7F` (ADR 0079)
+ty::asm-template
+
+  × the template holds the byte `\x00`
+    ╭─[asm_template_errors.ers:36:13]
+ 35 │     asm("\x80");
+ 36 │     asm("nop\0nop");
+    ·             ─┬
+    ·              ╰── not ASCII text
+ 37 │     asm("a\xFF{}\x00", in(reg) 1 as u32);
+    ╰────
+  help: a template is ASCII, from `0x01` to `0x7F` (ADR 0079)
+ty::asm-template
+
+  × the template holds the byte `\xff`
+    ╭─[asm_template_errors.ers:37:11]
+ 36 │     asm("nop\0nop");
+ 37 │     asm("a\xFF{}\x00", in(reg) 1 as u32);
+    ·           ──┬─
+    ·             ╰── not ASCII text
+ 38 │ }
+    ╰────
+  help: a template is ASCII, from `0x01` to `0x7F` (ADR 0079)
+ty::asm-template
+
+  × the template holds the byte `\x00`
+    ╭─[asm_template_errors.ers:37:17]
+ 36 │     asm("nop\0nop");
+ 37 │     asm("a\xFF{}\x00", in(reg) 1 as u32);
+    ·                 ──┬─
+    ·                   ╰── not ASCII text
+ 38 │ }
+    ╰────
+  help: a template is ASCII, from `0x01` to `0x7F` (ADR 0079)
+ty::asm-template
+
+  × an operand is not used in the template
+    ╭─[asm_template_errors.ers:42:13]
+ 41 │     // Not placed: each kind of operand a template places.
+ 42 │     asm("", in(reg) x);
+    ·             ────┬────
+    ·                 ╰── no placeholder places it
+ 43 │     asm("{}", in(reg) x, in(reg) y);
+    ╰────
+  help: write `{}`, `{N}` or `{name}` where its register, symbol or value goes; an operand with a
+        register of its own is exempt (ADR 0079)
+ty::asm-template
+
+  × an operand is not used in the template
+    ╭─[asm_template_errors.ers:43:26]
+ 42 │     asm("", in(reg) x);
+ 43 │     asm("{}", in(reg) x, in(reg) y);
+    ·                          ────┬────
+    ·                              ╰── no placeholder places it
+ 44 │     asm("{a}", a = in(reg) x, b = out(reg) _);
+    ╰────
+  help: write `{}`, `{N}` or `{name}` where its register, symbol or value goes; an operand with a
+        register of its own is exempt (ADR 0079)
+ty::asm-template
+
+  × an operand is not used in the template
+    ╭─[asm_template_errors.ers:44:31]
+ 43 │     asm("{}", in(reg) x, in(reg) y);
+ 44 │     asm("{a}", a = in(reg) x, b = out(reg) _);
+    ·                               ───────┬──────
+    ·                                      ╰── no placeholder places it
+ 45 │     asm("{}", in(reg) x, c = sym handler, d = const 1 as u32);
+    ╰────
+  help: write `{}`, `{N}` or `{name}` where its register, symbol or value goes; an operand with a
+        register of its own is exempt (ADR 0079)
+ty::asm-template
+
+  × an operand is not used in the template
+    ╭─[asm_template_errors.ers:45:26]
+ 44 │     asm("{a}", a = in(reg) x, b = out(reg) _);
+ 45 │     asm("{}", in(reg) x, c = sym handler, d = const 1 as u32);
+    ·                          ───────┬───────
+    ·                                 ╰── no placeholder places it
+ 46 │     // An operand with a register of its own, and `clobber_abi`, need no
+    ╰────
+  help: write `{}`, `{N}` or `{name}` where its register, symbol or value goes; an operand with a
+        register of its own is exempt (ADR 0079)
+ty::asm-template
+
+  × an operand is not used in the template
+    ╭─[asm_template_errors.ers:45:43]
+ 44 │     asm("{a}", a = in(reg) x, b = out(reg) _);
+ 45 │     asm("{}", in(reg) x, c = sym handler, d = const 1 as u32);
+    ·                                           ─────────┬────────
+    ·                                                    ╰── no placeholder places it
+ 46 │     // An operand with a register of its own, and `clobber_abi`, need no
+    ╰────
+  help: write `{}`, `{N}` or `{name}` where its register, symbol or value goes; an operand with a
+        register of its own is exempt (ADR 0079)
+ty::asm-template
+
+  × two operands are named `n`
+    ╭─[asm_template_errors.ers:50:31]
+ 49 │     // Two operands, one name.
+ 50 │     asm("{n}", n = in(reg) x, n = in(reg) y);
+    ·                ┬              ┬
+    ·                │              ╰── named again
+    ·                ╰── first named here
+ 51 │     asm("{n} {m}", n = in(reg) x, m = in(reg) y, n = out(reg) _);
+    ╰────
+  help: a placeholder `{name}` places one operand, so each name belongs to one (ADR 0079)
+ty::asm-template
+
+  × two operands are named `n`
+    ╭─[asm_template_errors.ers:51:50]
+ 50 │     asm("{n}", n = in(reg) x, n = in(reg) y);
+ 51 │     asm("{n} {m}", n = in(reg) x, m = in(reg) y, n = out(reg) _);
+    ·                    ┬                             ┬
+    ·                    │                             ╰── named again
+    ·                    ╰── first named here
+ 52 │ }
+    ╰────
+  help: a placeholder `{name}` places one operand, so each name belongs to one (ADR 0079)
