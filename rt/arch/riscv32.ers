@@ -1,0 +1,32 @@
+// `core::arch` on riscv32 (ADR 0080): the part of `core` that needs an
+// instruction of the target, written with `asm` (ADR 0079). The compiler reads
+// this file only for `riscv32imac-unknown-none-elf`; `rt/arch/armv7m.ers` is
+// its counterpart.
+//
+// A portable item is declared in every file of `core::arch` with the same
+// kind, name and signature, so that a program using only portable items
+// builds for every target. The list below is read by `tests/e2e.rs`, which
+// checks that the files agree, that each line is the declaration it lists and
+// that a program calling every item builds; one line per item, each starting
+// with `// portable:`. Every other item of this file is specific to this
+// target, and a program that names one builds only for it.
+//
+// portable: pub fn compiler_fence()
+// portable: pub fn fence()
+
+// --- Fences (ADR 0081) -------------------------------------------------------
+
+// Emits no instruction: no access to memory that other code can see moves
+// across it in the generated code. It orders nothing in the hardware. The
+// `asm` has no memory option, so it is ordered like any `asm`.
+pub fn compiler_fence() {
+    asm("", options(nostack, preserves_flags));
+}
+
+// A compiler fence and a hardware fence: every access to memory or to a
+// device before it, ordinary or volatile, is observed by every other observer
+// before any access after it. `fence iorw, iorw` orders input, output, reads
+// and writes, where LLVM's own `fence` leaves I/O out.
+pub fn fence() {
+    asm("fence iorw, iorw", options(nostack, preserves_flags));
+}

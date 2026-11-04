@@ -50,6 +50,8 @@ struct Section {
 struct Symbol {
     name: String,
     value: u64,
+    /// The size of what it names, in bytes.
+    size: u64,
     /// The section index, or `ABS`, `UND`.
     section: String,
 }
@@ -833,6 +835,71 @@ panic fn on_panic() -> ! {{ loop {{}} }}
     }
 }
 
+/// `core::arch::fence()` is the target's hardware fence, and
+/// `core::arch::compiler_fence()` emits no instruction (ADR 0081): the code
+/// of the function `core.arch.fence` holds `fence iorw, iorw` on riscv32 and
+/// `dmb sy` on thumbv7m, and the code of `core.arch.compiler_fence` holds
+/// nothing but the return. The `ui` snapshots cannot show it: they leave
+/// `core`'s code out.
+#[test]
+fn a_fence_is_an_instruction_and_a_compiler_fence_is_not() {
+    let work = Path::new(env!("CARGO_TARGET_TMPDIR")).join("elf");
+    fs::create_dir_all(&work).unwrap();
+    for (target, instruction) in [
+        ("riscv32imac-unknown-none-elf", [0x0f, 0x00, 0xf0, 0x0f]),
+        ("thumbv7m-none-eabi", [0xbf, 0xf3, 0x5f, 0x8f]),
+    ] {
+        let target = erebos::target::by_name(target).unwrap();
+        let source = work.join(format!("fence-{}.ers", target.name));
+        let program = format!(
+            "{VIRT_MAP}
+entry fn main() -> ! {{
+    core::arch::compiler_fence();
+    core::arch::fence();
+    loop {{}}
+}}
+
+panic fn on_panic() -> ! {{ loop {{}} }}
+"
+        );
+        fs::write(&source, program).unwrap();
+        for opt in [OptLevel::None, OptLevel::Speed] {
+            let elf = work.join(format!("fence-{}-{opt:?}.elf", target.name));
+            driver::build(&source, &elf, &[], target, opt, false).unwrap();
+            let text = sections(&elf)
+                .into_iter()
+                .find(|section| section.name == ".text")
+                .unwrap();
+            let bytes = section_bytes(&elf, ".text");
+            let symbols = symbols(&elf);
+            // The code of a function; a Thumb function's address has bit 0 set.
+            let code = |name: &str| {
+                let symbol = symbols
+                    .iter()
+                    .find(|symbol| symbol.name == name)
+                    .unwrap_or_else(|| panic!("{} {opt:?}: no symbol {name}", target.name));
+                let from = (symbol.value & !1) - text.address;
+                &bytes[from as usize..(from + symbol.size) as usize]
+            };
+            let holds = |code: &[u8]| {
+                code.windows(instruction.len())
+                    .any(|window| window == instruction)
+            };
+            assert!(
+                holds(code("core.arch.fence")),
+                "{} {opt:?}: `fence` lacks {instruction:02x?}",
+                target.name
+            );
+            let compiler_fence = code("core.arch.compiler_fence");
+            assert!(
+                !holds(compiler_fence) && compiler_fence.len() <= 4,
+                "{} {opt:?}: `compiler_fence` is {compiler_fence:02x?}",
+                target.name
+            );
+        }
+    }
+}
+
 /// The contents of the section `name` of `elf`, from its file.
 fn section_bytes(elf: &Path, name: &str) -> Vec<u8> {
     let headers = readelf(elf, &["--section-headers"]);
@@ -995,12 +1062,13 @@ fn symbols(elf: &Path) -> Vec<Symbol> {
         .filter_map(|line| {
             let fields: Vec<&str> = line.split_whitespace().collect();
             match fields.as_slice() {
-                [num, value, _size, _type, _bind, _vis, section, name]
+                [num, value, size, _type, _bind, _vis, section, name]
                     if num.ends_with(':') && *num != "Num:" =>
                 {
                     Some(Symbol {
                         name: (*name).to_owned(),
                         value: hex(value),
+                        size: size.parse().unwrap_or(0),
                         section: (*section).to_owned(),
                     })
                 }

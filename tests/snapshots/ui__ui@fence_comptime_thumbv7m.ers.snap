@@ -1,0 +1,53 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/fence_comptime_thumbv7m.ers
+---
+--- errors ---
+eval::asm
+
+  × the evaluation reached an `asm` expression
+    ╭─[rt/arch/armv7m.ers:23:5]
+ 22 │ pub fn compiler_fence() {
+ 23 │     asm("", options(nostack, preserves_flags));
+    ·     ─────────────────────┬────────────────────
+    ·                          ╰── inline assembly cannot run at compile time
+ 24 │ }
+    ╰────
+    ╭─[fence_comptime_thumbv7m.ers:14:39]
+ 13 │     
+ 14 │ ╭─▶ const COMPILER_FENCED: u32 = comptime {
+ 15 │ │       core::arch::compiler_fence();
+    · │       ──────────────┬─────────────
+    · │                     ╰── called here
+ 16 │ │       2
+ 17 │ ├─▶ };
+    · ╰──── while evaluating this `comptime` expression
+ 18 │     
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::asm
+
+  × the evaluation reached an `asm` expression
+    ╭─[rt/arch/armv7m.ers:30:5]
+ 29 │ pub fn fence() {
+ 30 │     asm("dmb sy", options(nostack, preserves_flags));
+    ·     ────────────────────────┬───────────────────────
+    ·                             ╰── inline assembly cannot run at compile time
+ 31 │ }
+    ╰────
+    ╭─[fence_comptime_thumbv7m.ers:8:5]
+  7 │ fn ordered() -> u32 {
+  8 │     core::arch::fence();
+    ·     ─────────┬─────────
+    ·              ╰── called here
+  9 │     1
+ 10 │ }
+ 11 │ 
+ 12 │ const FENCED: u32 = comptime { ordered() };
+    ·                              ──────┬──────┬
+    ·                                    │      ╰── called here
+    ·                                    ╰── while evaluating this `comptime` expression
+ 13 │ 
+    ╰────
+  help: this code runs at compile time (ADR 0027)

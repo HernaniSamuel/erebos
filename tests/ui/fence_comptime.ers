@@ -1,0 +1,20 @@
+// emit: typeck
+// Calling a fence at compile time is `eval::asm` (ADR 0081), and the
+// diagnostic is at the `asm` inside `core::arch`, whose file is the target's:
+// `rt/arch/riscv32.ers` here, `rt/arch/armv7m.ers` in
+// `fence_comptime_thumbv7m.ers`.
+fn ordered() -> u32 {
+    core::arch::fence();
+    1
+}
+
+const FENCED: u32 = comptime { ordered() };
+
+const COMPILER_FENCED: u32 = comptime {
+    core::arch::compiler_fence();
+    2
+};
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

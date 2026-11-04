@@ -501,3 +501,149 @@ fn once() {
         rendered("render_registers", &registers, &THUMBV7M, OptLevel::None)
     );
 }
+
+/// The files of `core::arch`, one per target (ADR 0080), by their path from
+/// the repository's root.
+const ARCH_FILES: [&str; 2] = ["rt/arch/riscv32.ers", "rt/arch/armv7m.ers"];
+
+/// The portable items a file of `core::arch` lists in its header (ADR 0080):
+/// the text after `// portable: ` on each line that has it, which is also the
+/// start of the line that declares the item. Each must be declared in the
+/// file as listed (`<item> {`), so that the list and the code cannot drift
+/// apart.
+fn portable_items(file: &str, text: &str) -> Result<Vec<String>, String> {
+    let items: Vec<String> = text
+        .lines()
+        .filter_map(|line| line.strip_prefix("// portable: "))
+        .map(|item| item.trim().to_owned())
+        .collect();
+    if items.is_empty() {
+        return Err(format!("{file}: lists no portable item"));
+    }
+    for item in &items {
+        let declaration = format!("{item} {{");
+        if !text.lines().any(|line| line == declaration) {
+            return Err(format!("{file}: no line `{declaration}`"));
+        }
+    }
+    Ok(items)
+}
+
+/// The portable items every file of `core::arch` lists, given as `(file,
+/// text)` pairs; an error when the files do not list the same.
+fn portable_items_agreed(files: &[(&str, &str)]) -> Result<Vec<String>, String> {
+    let mut agreed: Option<(&str, Vec<String>)> = None;
+    for (file, text) in files {
+        let items = portable_items(file, text)?;
+        match &agreed {
+            None => agreed = Some((file, items)),
+            Some((first, expected)) if *expected != items => {
+                return Err(format!(
+                    "{file} lists {items:?} as portable, {first} lists {expected:?}"
+                ));
+            }
+            Some(_) => {}
+        }
+    }
+    agreed
+        .map(|(_, items)| items)
+        .ok_or_else(|| "no file of `core::arch`".to_owned())
+}
+
+/// The call of a portable item in a program: the items of `core::arch` that
+/// have no parameter and return nothing, as the fences are. A later item
+/// with another signature needs arguments here, and the test says so.
+fn call_of(item: &str) -> Result<String, String> {
+    let name = item
+        .strip_prefix("pub fn ")
+        .and_then(|rest| rest.strip_suffix("()"))
+        .filter(|name| !name.is_empty() && name.chars().all(|c| c.is_alphanumeric() || c == '_'));
+    match name {
+        Some(name) => Ok(format!("    core::arch::{name}();\n")),
+        None => Err(format!(
+            "`{item}` is not `pub fn name()`: teach `call_of` to call it"
+        )),
+    }
+}
+
+/// Every file of `core::arch` lists the same portable items, each declared as
+/// listed, and a program calling all of them builds for every target
+/// (ADR 0080), at both levels. The list is read from the files' headers, so a
+/// new portable item needs no change here; one missing from a file, or with
+/// another signature, fails. That `docs/reference.md` lists them too is
+/// checked from step 9 on.
+#[test]
+fn portable_core_arch() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let texts: Vec<(&str, String)> = ARCH_FILES
+        .iter()
+        .map(|file| {
+            let text = fs::read_to_string(root.join(file)).unwrap();
+            (*file, text.replace("\r\n", "\n"))
+        })
+        .collect();
+    let files: Vec<(&str, &str)> = texts.iter().map(|(f, t)| (*f, t.as_str())).collect();
+    let items = portable_items_agreed(&files).unwrap();
+    assert!(
+        items.contains(&"pub fn fence()".to_owned())
+            && items.contains(&"pub fn compiler_fence()".to_owned()),
+        "the fences of ADR 0081 are portable: {items:?}"
+    );
+
+    let calls: String = items.iter().map(|item| call_of(item).unwrap()).collect();
+    let source = running(&calls, "");
+    for target in board::RUN_ON {
+        for opt in [OptLevel::None, OptLevel::Speed] {
+            let output = build_by_command_line("portable_core_arch", &source, target, opt);
+            assert!(
+                output.status.success(),
+                "[{}] {opt:?}:\n{}",
+                target.name,
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+    }
+}
+
+/// The agreement test fails on what it is meant to catch: a file that lists
+/// another set, one that lists an item it does not declare or declares with
+/// another signature, and one that lists none.
+#[test]
+fn portable_items_are_checked_against_the_files() {
+    let fence = "// portable: pub fn fence()\npub fn fence() {\n}\n";
+    let both = "// portable: pub fn fence()\n// portable: pub fn pause()\n\
+                pub fn fence() {\n}\npub fn pause() {\n}\n";
+    assert_eq!(
+        portable_items_agreed(&[("a", both), ("b", both)]).unwrap(),
+        ["pub fn fence()", "pub fn pause()"]
+    );
+
+    let error = portable_items_agreed(&[("a", both), ("b", fence)]).unwrap_err();
+    assert!(
+        error.starts_with("b lists") && error.contains("a lists"),
+        "{error}"
+    );
+
+    // Listed, but declared with another signature.
+    let other = "// portable: pub fn fence()\npub fn fence(x: u32) {\n}\n";
+    let error = portable_items_agreed(&[("a", fence), ("b", other)]).unwrap_err();
+    assert_eq!(error, "b: no line `pub fn fence() {`");
+
+    // Listed, but not declared.
+    let missing = "// portable: pub fn fence()\npub fn other() {\n}\n";
+    assert!(portable_items_agreed(&[("a", missing)]).is_err());
+
+    let none = "pub fn fence() {\n}\n";
+    assert_eq!(
+        portable_items_agreed(&[("a", none)]).unwrap_err(),
+        "a: lists no portable item"
+    );
+    assert!(portable_items_agreed(&[]).is_err());
+
+    assert_eq!(
+        call_of("pub fn fence()").unwrap(),
+        "    core::arch::fence();\n"
+    );
+    assert!(call_of("pub fn wait(n: u32)").is_err());
+    assert!(call_of("pub fn id() -> u32").is_err());
+}

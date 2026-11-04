@@ -9,6 +9,12 @@ mod builtins;
 
 pub use builtins::{memcpy, memmove, memset};
 
+// The code that needs an instruction of the target, such as the fences
+// (ADR 0080, 0081). Its file depends on the target of the build:
+// `rt/arch/riscv32.ers` or `rt/arch/armv7m.ers`, chosen by the compiler, not
+// by the rule of ADR 0049.
+pub mod arch;
+
 // --- Panic information (ADR 0053) -------------------------------------------
 //
 // A panic function declared `panic fn on_panic(info: *const core::PanicInfo)`

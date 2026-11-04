@@ -1,0 +1,33 @@
+// emit: llvm-ir
+// opt: both
+// target: thumbv7m-none-eabi
+// The fences of `core::arch` (ADR 0080, 0081) between ordinary stores to
+// statics. `core` is left out of the dump, so each fence is a call to the
+// function of `core`, and at `-O` the stores stay on their side of each call,
+// in the order written: the call may read or write any static. That `fence()`
+// emits its instruction is `tests/elf.rs`'s. The riscv32 counterpart is
+// `fences.ers`.
+static mut DESCRIPTOR: u32 = 0;
+static mut DOORBELL: u32 = 0;
+
+fn hand_off(value: u32) {
+    DESCRIPTOR = value;
+    core::arch::fence();
+    DOORBELL = 1;
+}
+
+fn compiler_only(value: u32) {
+    DESCRIPTOR = value;
+    core::arch::compiler_fence();
+    DOORBELL = 2;
+    core::arch::compiler_fence();
+    DESCRIPTOR = value + 1;
+}
+
+entry fn main() -> ! {
+    hand_off(7);
+    compiler_only(9);
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

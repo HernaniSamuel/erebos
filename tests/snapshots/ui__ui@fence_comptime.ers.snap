@@ -1,0 +1,53 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/fence_comptime.ers
+---
+--- errors ---
+eval::asm
+
+  × the evaluation reached an `asm` expression
+    ╭─[rt/arch/riscv32.ers:23:5]
+ 22 │ pub fn compiler_fence() {
+ 23 │     asm("", options(nostack, preserves_flags));
+    ·     ─────────────────────┬────────────────────
+    ·                          ╰── inline assembly cannot run at compile time
+ 24 │ }
+    ╰────
+    ╭─[fence_comptime.ers:13:39]
+ 12 │     
+ 13 │ ╭─▶ const COMPILER_FENCED: u32 = comptime {
+ 14 │ │       core::arch::compiler_fence();
+    · │       ──────────────┬─────────────
+    · │                     ╰── called here
+ 15 │ │       2
+ 16 │ ├─▶ };
+    · ╰──── while evaluating this `comptime` expression
+ 17 │     
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::asm
+
+  × the evaluation reached an `asm` expression
+    ╭─[rt/arch/riscv32.ers:31:5]
+ 30 │ pub fn fence() {
+ 31 │     asm("fence iorw, iorw", options(nostack, preserves_flags));
+    ·     ─────────────────────────────┬────────────────────────────
+    ·                                  ╰── inline assembly cannot run at compile time
+ 32 │ }
+    ╰────
+    ╭─[fence_comptime.ers:7:5]
+  6 │ fn ordered() -> u32 {
+  7 │     core::arch::fence();
+    ·     ─────────┬─────────
+    ·              ╰── called here
+  8 │     1
+  9 │ }
+ 10 │ 
+ 11 │ const FENCED: u32 = comptime { ordered() };
+    ·                              ──────┬──────┬
+    ·                                    │      ╰── called here
+    ·                                    ╰── while evaluating this `comptime` expression
+ 12 │ 
+    ╰────
+  help: this code runs at compile time (ADR 0027)

@@ -1,0 +1,18 @@
+// emit: typeck
+// A path into `core::arch` that no file of the target defines is a path that
+// names nothing, as any missing item (ADR 0080): naming an item that exists
+// only for another target says nothing more, so a program that does builds
+// for one target only. No file defines `core::arch::fence_w_o`, the name a
+// finer fence would have (ADR 0081); `core::arch::fence` is portable and
+// resolves.
+fn main_work() {
+    core::arch::fence_w_o();
+    core::arch::fence();
+}
+
+entry fn main() -> ! {
+    main_work();
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

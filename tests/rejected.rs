@@ -1137,6 +1137,9 @@ struct Block {
     maybe_unchecked: bool,
     /// A statement of it may not complete: what follows is dead code.
     dead: bool,
+    /// It is the body of a naked function, which is one `asm` expression and
+    /// nothing else (ADR 0079): a statement added to it is its own error.
+    naked: bool,
 }
 
 /// The names of the functions of `text` that return `!`.
@@ -1235,6 +1238,7 @@ fn statement_boundaries(text: &str) -> Vec<usize> {
                     function,
                     maybe_unchecked: !function && names_a_constant(&header),
                     dead: false,
+                    naked: function && header.contains("#[naked]"),
                 });
                 code.push(c);
                 header.clear();
@@ -1258,8 +1262,8 @@ fn statement_boundaries(text: &str) -> Vec<usize> {
             i += 1;
         }
         let diverging = diverges(&code, &never);
-        let usable =
-            stack.iter().any(|b| b.function) && !stack.iter().any(|b| b.maybe_unchecked || b.dead);
+        let usable = stack.iter().any(|b| b.function)
+            && !stack.iter().any(|b| b.maybe_unchecked || b.dead || b.naked);
         if line.ends_with('\n') && usable {
             match last {
                 Some(('{', true)) => points.push(offset + line.len()),
@@ -1482,6 +1486,28 @@ fn stop() -> ! {
     // in the `if` on a constant, nor after the call to `stop`, which never
     // returns. The opening of `stop` is a place too.
     assert_eq!(lines, vec![4, 5, 6, 7, 15, 16, 24]);
+}
+
+/// The body of a naked function is one `asm` and nothing else, so no place
+/// is inside it; the function after it has its places.
+#[test]
+fn a_naked_body_has_no_statement_boundaries() {
+    let text = "#[naked]
+#[export]
+fn naked(a: u32) -> u32 {
+    asm(\"ret\", options(noreturn));
+}
+
+fn other(a: u32) {
+    let b = a;
+}
+";
+    let points = statement_boundaries(text);
+    let lines: Vec<usize> = points
+        .iter()
+        .map(|p| text[..*p].matches('\n').count() + 1)
+        .collect();
+    assert_eq!(lines, vec![8, 9]);
 }
 
 /// The codes of the table of the section "Diagnostics" of the reference.

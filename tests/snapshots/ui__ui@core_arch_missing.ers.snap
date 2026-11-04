@@ -1,0 +1,16 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/core_arch_missing.ers
+---
+--- errors ---
+resolve::unknown-function
+
+  × cannot find function `core::arch::fence_w_o`
+    ╭─[core_arch_missing.ers:9:17]
+  8 │ fn main_work() {
+  9 │     core::arch::fence_w_o();
+    ·                 ────┬────
+    ·                     ╰── not found in module `core::arch`
+ 10 │     core::arch::fence();
+    ╰────

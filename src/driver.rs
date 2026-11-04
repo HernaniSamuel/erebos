@@ -99,6 +99,21 @@ const CORE_FILES: &[(&str, &str)] = &[
     ("rt/builtins.ers", include_str!("../rt/builtins.ers")),
 ];
 
+/// The module of `core` whose file depends on the target (ADR 0080).
+const CORE_ARCH_MODULE: &str = "core::arch";
+
+/// The file of `core::arch` for `arch`, by the name diagnostics give it, as
+/// ADR 0080's table says.
+fn core_arch_file(arch: target::Arch) -> (&'static str, &'static str) {
+    match arch {
+        target::Arch::Riscv32 => (
+            "rt/arch/riscv32.ers",
+            include_str!("../rt/arch/riscv32.ers"),
+        ),
+        target::Arch::Armv7m => ("rt/arch/armv7m.ers", include_str!("../rt/arch/armv7m.ers")),
+    }
+}
+
 /// Runs the pipeline up to `stage` on the program whose root file is at
 /// `path` and holds `text`: the text is compiled, and the path gives the
 /// root file its name and locates the module files. `core` is compiled
@@ -286,6 +301,8 @@ struct Program<'a> {
     name: String,
     text: &'a str,
     loader: Loader,
+    /// The file of the module `core::arch`, in `core` only (ADR 0080).
+    arch: Option<&'static str>,
 }
 
 impl<'a> Program<'a> {
@@ -307,20 +324,34 @@ impl<'a> Program<'a> {
             name,
             text,
             loader: Loader::Dir(dir),
+            arch: None,
+        }
+    }
+
+    /// The file of the module at `path`, `file` by ADR 0049's rule: the
+    /// module `core::arch` has the one of the target instead (ADR 0080).
+    fn module_file(&self, path: &str, file: String) -> String {
+        match self.arch {
+            Some(arch) if path == CORE_ARCH_MODULE => arch.to_owned(),
+            _ => file,
         }
     }
 }
 
 impl Program<'static> {
-    /// `core`, from the compiler binary (ADR 0052). Its files are named
-    /// from the repository's root, `rt/core.ers`, so its root module's
-    /// directory is `rt`.
-    fn core() -> Self {
+    /// `core`, from the compiler binary (ADR 0052), with the file of
+    /// `core::arch` that `target` has (ADR 0080). Its files are named from the
+    /// repository's root, `rt/core.ers`, so its root module's directory is
+    /// `rt`.
+    fn core(target: &Target) -> Self {
         let (name, text) = CORE_FILES[0];
+        let arch = core_arch_file(target.arch);
+        let files = CORE_FILES.iter().copied().chain([arch]).collect();
         Program {
             name: name.to_owned(),
             text,
-            loader: Loader::Core,
+            loader: Loader::Core(files),
+            arch: Some(arch.0),
         }
     }
 }
@@ -350,8 +381,9 @@ fn listed_name(typed: &str, entries: &[String]) -> String {
 enum Loader {
     /// The file system, below this directory.
     Dir(PathBuf),
-    /// The files of `core`, `CORE_FILES` (ADR 0052).
-    Core,
+    /// The files of `core`, `CORE_FILES` and the file of `core::arch`
+    /// (ADR 0052, 0080).
+    Core(Vec<(&'static str, &'static str)>),
     /// Files held in memory, each by its path, with its text or the error
     /// reading it gives.
     #[cfg(test)]
@@ -363,7 +395,7 @@ impl Loader {
     fn read(&self, path: &str) -> Result<String, String> {
         match self {
             Loader::Dir(dir) => fs::read_to_string(dir.join(path)).map_err(|e| e.to_string()),
-            Loader::Core => CORE_FILES
+            Loader::Core(files) => files
                 .iter()
                 .find(|(name, _)| *name == path)
                 .map(|(_, text)| (*text).to_owned())
@@ -387,7 +419,7 @@ impl Loader {
                         .collect()
                 })
                 .map_err(|e| e.to_string()),
-            Loader::Core => Ok(listing(CORE_FILES.iter().map(|(path, _)| *path), dir)),
+            Loader::Core(files) => Ok(listing(files.iter().map(|(path, _)| *path), dir)),
             // A directory's own path given with an error stands for a
             // directory that cannot be listed.
             #[cfg(test)]
@@ -443,7 +475,7 @@ fn load_modules(
         let mut items = match decl.items.take() {
             Some(items) => items,
             None => {
-                let file_path = join(dir, "/", &format!("{name}.ers"));
+                let file_path = program.module_file(&path, join(dir, "/", &format!("{name}.ers")));
                 let text = match read_module_file(&file_path, &path, program) {
                     Ok(text) => text,
                     Err(error) => {
@@ -591,7 +623,7 @@ fn front_end(
         &mut file_errors,
     );
 
-    let core = Program::core();
+    let core = Program::core(target);
     let core_file = sources.add(&core.name, core.text);
     let tokens = lexer::lex(core_file, core.text, diags);
     let mut core_ast = parser::parse(core.text, &tokens, diags);
@@ -673,6 +705,7 @@ mod tests {
             name: "main.ers".to_owned(),
             text,
             loader: Loader::Memory(files),
+            arch: None,
         }
     }
 
@@ -711,10 +744,40 @@ mod tests {
                 "c/d.ers",
                 "e.ers",
                 "rt/core.ers",
-                "rt/builtins.ers"
+                "rt/builtins.ers",
+                "rt/arch/riscv32.ers"
             ]
         );
         assert_eq!(codes, ["resolve::missing-entry", "resolve::missing-panic"]);
+    }
+
+    /// The file of `core::arch` is the target's (ADR 0080): a build reads one
+    /// of them, named as the table of the ADR names it, and a program's own
+    /// module called `arch` is not that module.
+    #[test]
+    fn core_arch_file_depends_on_the_target() {
+        for (target, file) in [
+            (&target::RISCV32IMAC, "rt/arch/riscv32.ers"),
+            (&target::THUMBV7M, "rt/arch/armv7m.ers"),
+        ] {
+            let program = program("mod arch;", vec![("arch.ers", Ok(""))]);
+            let mut sources = SourceMap::default();
+            let mut diags = Diagnostics::default();
+            front_end(&program, Some(Stage::Hir), target, &mut sources, &mut diags);
+            let names: Vec<&str> = sources.files().map(|file| file.name.as_str()).collect();
+            assert_eq!(
+                names,
+                [
+                    "main.ers",
+                    "arch.ers",
+                    "rt/core.ers",
+                    "rt/builtins.ers",
+                    file
+                ],
+                "{}",
+                target.name
+            );
+        }
     }
 
     /// A file that is listed but cannot be read is `resolve::module-file`,
@@ -746,7 +809,13 @@ mod tests {
         let names: Vec<&str> = sources.files().map(|file| file.name.as_str()).collect();
         assert_eq!(
             names,
-            ["main.ers", "b.ers", "rt/core.ers", "rt/builtins.ers"]
+            [
+                "main.ers",
+                "b.ers",
+                "rt/core.ers",
+                "rt/builtins.ers",
+                "rt/arch/riscv32.ers"
+            ]
         );
     }
 
