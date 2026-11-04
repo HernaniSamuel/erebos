@@ -1,0 +1,133 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/naked_attributes.ers
+---
+--- errors ---
+resolve::misplaced-attribute
+
+  × `#[naked]` applies only to functions with a body, other than the entry and the panic function
+   ╭─[naked_attributes.ers:3:1]
+ 2 │ // panic function (ADR 0079); given once, without an argument.
+ 3 │ #[naked]
+   · ────┬───
+   ·     ╰── not allowed on an `extern fn`
+ 4 │ extern fn outside();
+   ╰────
+  help: `#[naked]` makes a function with a body that is one `asm` expression, with no code of the
+        compiler's; the entry and the panic function are written in Erebos, and an `extern fn` has
+        no body here (ADR 0079)
+resolve::misplaced-attribute
+
+  × `#[naked]` applies only to functions with a body, other than the entry and the panic function
+   ╭─[naked_attributes.ers:6:1]
+ 5 │ 
+ 6 │ #[naked]
+   · ────┬───
+   ·     ╰── not allowed on the entry function
+ 7 │ entry fn main() -> ! { loop {} }
+   ╰────
+  help: `#[naked]` makes a function with a body that is one `asm` expression, with no code of the
+        compiler's; the entry and the panic function are written in Erebos, and an `extern fn` has
+        no body here (ADR 0079)
+resolve::misplaced-attribute
+
+  × `#[naked]` applies only to functions with a body, other than the entry and the panic function
+    ╭─[naked_attributes.ers:9:1]
+  8 │ 
+  9 │ #[naked]
+    · ────┬───
+    ·     ╰── not allowed on the panic function
+ 10 │ panic fn on_panic() -> ! { loop {} }
+    ╰────
+  help: `#[naked]` makes a function with a body that is one `asm` expression, with no code of the
+        compiler's; the entry and the panic function are written in Erebos, and an `extern fn` has
+        no body here (ADR 0079)
+resolve::misplaced-attribute
+
+  × `#[naked]` applies only to functions with a body, other than the entry and the panic function
+    ╭─[naked_attributes.ers:12:1]
+ 11 │ 
+ 12 │ #[naked]
+    · ────┬───
+    ·     ╰── not allowed on a struct
+ 13 │ struct S { a: u32 }
+    ╰────
+  help: `#[naked]` makes a function with a body that is one `asm` expression, with no code of the
+        compiler's; the entry and the panic function are written in Erebos, and an `extern fn` has
+        no body here (ADR 0079)
+resolve::misplaced-attribute
+
+  × `#[naked]` applies only to functions with a body, other than the entry and the panic function
+    ╭─[naked_attributes.ers:15:1]
+ 14 │ 
+ 15 │ #[naked]
+    · ────┬───
+    ·     ╰── not allowed on a static
+ 16 │ static COUNTER: u32 = 0;
+    ╰────
+  help: `#[naked]` makes a function with a body that is one `asm` expression, with no code of the
+        compiler's; the entry and the panic function are written in Erebos, and an `extern fn` has
+        no body here (ADR 0079)
+resolve::misplaced-attribute
+
+  × `#[naked]` applies only to functions with a body, other than the entry and the panic function
+    ╭─[naked_attributes.ers:18:1]
+ 17 │ 
+ 18 │ #[naked]
+    · ────┬───
+    ·     ╰── not allowed on a constant
+ 19 │ const LIMIT: u32 = 1;
+    ╰────
+  help: `#[naked]` makes a function with a body that is one `asm` expression, with no code of the
+        compiler's; the entry and the panic function are written in Erebos, and an `extern fn` has
+        no body here (ADR 0079)
+resolve::misplaced-attribute
+
+  × `#[naked]` applies only to functions with a body, other than the entry and the panic function
+    ╭─[naked_attributes.ers:21:1]
+ 20 │ 
+ 21 │ #[naked]
+    · ────┬───
+    ·     ╰── not allowed on a module
+ 22 │ mod inner {}
+    ╰────
+  help: `#[naked]` makes a function with a body that is one `asm` expression, with no code of the
+        compiler's; the entry and the panic function are written in Erebos, and an `extern fn` has
+        no body here (ADR 0079)
+resolve::duplicate-attribute
+
+  × `#[naked]` is given more than once
+    ╭─[naked_attributes.ers:25:1]
+ 23 │ 
+ 24 │ #[naked]
+    · ────┬───
+    ·     ╰── first given here
+ 25 │ #[naked]
+    · ────┬───
+    ·     ╰── given again here
+ 26 │ fn twice() {
+    ╰────
+resolve::attribute-argument
+
+  × `#[naked]` takes no argument
+    ╭─[naked_attributes.ers:30:9]
+ 29 │ 
+ 30 │ #[naked(1)]
+    ·         ┬
+    ·         ╰── remove this
+ 31 │ fn with_argument() {
+    ╰────
+resolve::misplaced-attribute
+
+  × `#[naked]` applies only to functions with a body, other than the entry and the panic function
+    ╭─[naked_attributes.ers:41:1]
+ 40 │ 
+ 41 │ #[naked]
+    · ────┬───
+    ·     ╰── not allowed on a bit-field struct
+ 42 │ struct Flags: u8 {
+    ╰────
+  help: `#[naked]` makes a function with a body that is one `asm` expression, with no code of the
+        compiler's; the entry and the panic function are written in Erebos, and an `extern fn` has
+        no body here (ADR 0079)

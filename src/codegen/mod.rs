@@ -520,6 +520,12 @@ fn declare<'ctx>(
     if body.ret == Ty::Never {
         add_attribute(context, function, AttributeLoc::Function, "noreturn");
     }
+    // No code of the compiler's, and nothing to inline (ADR 0079): the body
+    // is the template and `unreachable`.
+    if body.naked {
+        add_attribute(context, function, AttributeLoc::Function, "naked");
+        add_attribute(context, function, AttributeLoc::Function, "noinline");
+    }
     // The C ABI (ADR 0006) widens narrow integers to a full register; LLVM
     // needs to be told how, as clang does.
     for (i, &(ty, mode)) in abi.params.iter().enumerate() {
@@ -687,6 +693,18 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
     }
 
     fn define(mut self) {
+        // A naked function has no frame: its body is the `asm` terminator,
+        // which names no local, and its parameters stay in the registers the
+        // C ABI put them in (ADR 0079).
+        if self.body.naked {
+            self.builder.position_at_end(self.blocks[0]);
+            self.slots = vec![None; self.body.locals.len()];
+            for (bb, data) in self.body.blocks() {
+                self.builder.position_at_end(self.blocks[bb.0 as usize]);
+                self.terminator(data.terminator);
+            }
+            return;
+        }
         // Stack slots go first in the start block, which nothing jumps to.
         self.builder.position_at_end(self.blocks[0]);
         self.slots = self

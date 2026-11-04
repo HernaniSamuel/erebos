@@ -1,0 +1,16 @@
+// A naked function cannot run at compile time (ADR 0079): a constant whose
+// evaluation calls one is `eval::asm`, at the function's `asm`. At run time
+// the same call is fine.
+#[naked]
+fn sum(a: u32, b: u32) -> u32 {
+    asm("add a0, a0, a1", "ret", options(noreturn));
+}
+
+const TOTAL: u32 = comptime { sum(1, 2) };
+
+entry fn main() -> ! {
+    sum(1, 2);
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

@@ -1,0 +1,64 @@
+// The body of a naked function is exactly one `asm` expression, with
+// `noreturn` and only `sym` and `const` operands (ADR 0079): each of these is
+// `ty::naked-body`. The attributes' own errors are `naked_attributes.ers`'s,
+// and a variable in a `const` operand is `naked_const_param.ers`'s: those are
+// reported before type checking, which they stop.
+fn target() {}
+
+#[naked]
+fn statement_before() {
+    let x: u32 = 1;
+    asm("ret", options(noreturn));
+}
+
+#[naked]
+fn statement_after() {
+    asm("ret", options(noreturn));
+    target();
+}
+
+#[naked]
+fn two_asms() {
+    asm("nop", options(noreturn));
+    asm("ret", options(noreturn));
+}
+
+#[naked]
+fn without_noreturn() {
+    asm("ret");
+}
+
+#[naked]
+fn input_operand(a: u32) {
+    asm("mv a1, {}", in(reg) a, options(noreturn));
+}
+
+#[naked]
+fn output_operand() {
+    let mut x: u32 = 0;
+    asm("ret", out("a0") x, options(noreturn));
+}
+
+#[naked]
+fn clobber() {
+    asm("ret", clobber_abi("C"), options(noreturn));
+}
+
+#[naked]
+fn empty() {}
+
+#[naked]
+fn not_an_asm() -> u32 {
+    1
+}
+
+#[naked]
+fn everything_wrong(a: u32) -> u32 {
+    let x: u32 = a;
+    asm("ret", in("a0") x);
+    x
+}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

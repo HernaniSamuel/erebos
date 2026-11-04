@@ -1,0 +1,12 @@
+// A `const` operand is computed at compile time, so a parameter of a naked
+// function is not known there either (ADR 0029, 0079): `ty::not-comptime`,
+// which is reported before type checking. The parameter arrives in a
+// register, and the template names the register.
+#[naked]
+fn shifted(shift: u32) -> u32 {
+    asm("slli a0, a0, {}", "ret", const shift, options(noreturn));
+}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

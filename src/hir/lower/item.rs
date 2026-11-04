@@ -158,7 +158,7 @@ impl Lowerer<'_> {
                     .label(attr.span, "not allowed on a bit-field struct")
                     .help("a bit-field struct has the size and alignment of its integer type, which it is stored as (ADR 0059)"),
                 ),
-                "export" => self.misplaced_attr(attr, "a bit-field struct"),
+                "export" | "naked" => self.misplaced_attr(attr, "a bit-field struct"),
                 _ => self.unknown_attr(attr),
             }
         }
@@ -189,7 +189,7 @@ impl Lowerer<'_> {
                     }
                     align_attr.replace(attr.span)
                 }
-                "export" => {
+                "export" | "naked" => {
                     self.misplaced_attr(attr, "a struct");
                     None
                 }
@@ -228,7 +228,7 @@ impl Lowerer<'_> {
     pub(super) fn no_attrs(&mut self, attrs: &[ast::Attr], what: &str) {
         for attr in attrs {
             match attr.name.name.as_str() {
-                "packed" | "align" | "export" => self.misplaced_attr(attr, what),
+                "packed" | "align" | "export" | "naked" => self.misplaced_attr(attr, what),
                 _ => self.unknown_attr(attr),
             }
         }
@@ -238,6 +238,7 @@ impl Lowerer<'_> {
         let applies_to = match attr.name.name.as_str() {
             "align" => "structs and statics",
             "export" => "functions and statics defined in the program",
+            "naked" => "functions with a body, other than the entry and the panic function",
             _ => "structs",
         };
         let mut diag = Diagnostic::error(
@@ -248,20 +249,29 @@ impl Lowerer<'_> {
         if attr.name.name == "export" {
             diag = diag.help("`#[export]` gives a function or static its own name as its symbol; an `extern` item always has its own name (ADR 0051)");
         }
+        if attr.name.name == "naked" {
+            diag = diag.help("`#[naked]` makes a function with a body that is one `asm` expression, with no code of the compiler's; the entry and the panic function are written in Erebos, and an `extern fn` has no body here (ADR 0079)");
+        }
         self.diags.push(diag);
     }
 
-    /// `#[export]` (ADR 0051): no argument, at most once; `export` holds
-    /// the span of the one already given.
-    fn export_attr(&mut self, attr: &ast::Attr, export: &mut Option<Span>) {
+    /// An attribute that takes no argument and is given at most once
+    /// (`#[export]`, ADR 0051; `#[naked]`, ADR 0079); `given` holds the span
+    /// of the one already given.
+    fn flag_attr(&mut self, attr: &ast::Attr, given: &mut Option<Span>) {
+        let name = &attr.name.name;
         if let Some(arg) = &attr.arg {
-            self.attr_error(arg.span, "`#[export]` takes no argument", "remove this");
+            self.attr_error(
+                arg.span,
+                &format!("`#[{name}]` takes no argument"),
+                "remove this",
+            );
         }
-        if let Some(first) = export.replace(attr.span) {
+        if let Some(first) = given.replace(attr.span) {
             self.diags.push(
                 Diagnostic::error(
                     "resolve::duplicate-attribute",
-                    "`#[export]` is given more than once",
+                    format!("`#[{name}]` is given more than once"),
                 )
                 .label(attr.span, "given again here")
                 .label(first, "first given here"),
@@ -269,22 +279,30 @@ impl Lowerer<'_> {
         }
     }
 
-    /// `#[export]` is the only attribute of a function with a body; an
-    /// `extern fn` takes none (ADR 0051). Returns whether it is exported.
-    fn fn_attrs(&mut self, attrs: &[ast::Attr], external: bool) -> bool {
+    /// `#[export]` and `#[naked]` are the attributes of a function with a
+    /// body; an `extern fn` takes none (ADR 0051), and the entry and the
+    /// panic function are not naked (ADR 0079). Returns whether it is
+    /// exported, and whether it is naked.
+    fn fn_attrs(&mut self, attrs: &[ast::Attr], external: bool, kind: ast::FnKind) -> (bool, bool) {
         if external {
             self.no_attrs(attrs, "an `extern fn`");
-            return false;
+            return (false, false);
         }
         let mut export = None;
+        let mut naked = None;
         for attr in attrs {
             match attr.name.name.as_str() {
-                "export" => self.export_attr(attr, &mut export),
+                "export" => self.flag_attr(attr, &mut export),
+                "naked" => match kind {
+                    ast::FnKind::Plain => self.flag_attr(attr, &mut naked),
+                    ast::FnKind::Entry => self.misplaced_attr(attr, "the entry function"),
+                    ast::FnKind::Panic => self.misplaced_attr(attr, "the panic function"),
+                },
                 "packed" | "align" => self.misplaced_attr(attr, "a function"),
                 _ => self.unknown_attr(attr),
             }
         }
-        export.is_some()
+        (export.is_some(), naked.is_some())
     }
 
     /// `#[align(N)]` and `#[export]`, at most once each, are the attributes
@@ -325,8 +343,8 @@ impl Lowerer<'_> {
                         );
                     }
                 }
-                "export" => self.export_attr(attr, &mut export),
-                "packed" => self.misplaced_attr(attr, "a static"),
+                "export" => self.flag_attr(attr, &mut export),
+                "packed" | "naked" => self.misplaced_attr(attr, "a static"),
                 _ => self.unknown_attr(attr),
             }
         }
@@ -661,7 +679,7 @@ impl Lowerer<'_> {
                 format!("unknown attribute `#[{}]`", attr.name.name),
             )
             .label(attr.name.span, "not an attribute")
-            .help("the attributes are `#[packed]` and `#[align(N)]` on structs (ADR 0022), `#[align(N)]` on statics (ADR 0030), and `#[export]` on functions and statics (ADR 0051)"),
+            .help("the attributes are `#[packed]` and `#[align(N)]` on structs (ADR 0022), `#[align(N)]` on statics (ADR 0030), `#[export]` on functions and statics (ADR 0051), and `#[naked]` on functions (ADR 0079)"),
         );
     }
 
@@ -672,7 +690,7 @@ impl Lowerer<'_> {
 
     pub(super) fn fn_decl(&mut self, decl: &ast::FnDecl) -> Fn {
         let external = decl.body.is_none();
-        let export = self.fn_attrs(&decl.attrs, external);
+        let (export, naked) = self.fn_attrs(&decl.attrs, external, decl.kind);
         self.locals.clear();
         self.scopes.clear();
         self.loops.clear();
@@ -724,6 +742,7 @@ impl Lowerer<'_> {
             module: self.module,
             vis: visibility(decl.vis),
             kind: match decl.kind {
+                ast::FnKind::Plain if naked => FnKind::Naked,
                 ast::FnKind::Plain => FnKind::Plain,
                 ast::FnKind::Entry => FnKind::Entry,
                 ast::FnKind::Panic => FnKind::Panic,

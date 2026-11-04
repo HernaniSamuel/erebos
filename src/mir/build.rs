@@ -218,12 +218,15 @@ impl<'a, 'h> Builder<'a, 'h> {
         } else {
             self.q.hir.fn_(self.fn_id).param_count
         };
+        // A `const` operand's value is a body of its own, not the function's.
+        let naked = !comptime && self.q.hir.fn_(self.fn_id).kind == hir::FnKind::Naked;
         Some(Body {
             name,
             span,
             comptime,
             runtime,
             external,
+            naked,
             ret: self.locals[0].ty,
             param_count,
             locals: self.locals,

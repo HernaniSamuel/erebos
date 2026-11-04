@@ -1,0 +1,28 @@
+// emit: mir
+// A naked function's MIR is its `asm` terminator alone, as the dump says
+// (`naked fn`); the locals of its parameters are declared and never used
+// (ADR 0079). One whose `asm` is a statement and one whose `asm` is the tail
+// have the same body.
+#[naked]
+fn statement(a: u32) -> u32 {
+    asm("ret", options(noreturn));
+}
+
+#[naked]
+fn tail(a: u32) -> u32 {
+    asm("ret", options(noreturn))
+}
+
+#[naked]
+fn constant() {
+    asm("li a0, {}", "ret", const 7 as u32, options(noreturn))
+}
+
+entry fn main() -> ! {
+    statement(1);
+    tail(2);
+    constant();
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

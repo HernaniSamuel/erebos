@@ -1,0 +1,49 @@
+// emit: llvm-ir
+// opt: both
+// target: thumbv7m-none-eabi
+// `#[naked]` functions on thumbv7m (ADR 0079): as in `naked.ers`, with the
+// AAPCS signature and no frame.
+fn add_one(x: u32) -> u32 {
+    x + 1
+}
+
+#[naked]
+fn sum(a: u32, b: u32) -> u32 {
+    asm("adds r0, r0, r1", "bx lr", options(noreturn));
+}
+
+#[naked]
+fn widths(a: u8, b: i16, c: *const u8, d: u64) -> u8 {
+    asm("bx lr", options(noreturn));
+}
+
+#[naked]
+fn scale_then_add_one(x: u32) -> u32 {
+    asm(
+        "lsls r0, r0, #{shift}",
+        "b {next}",
+        shift = const 3 as u32,
+        next = sym add_one,
+        options(noreturn),
+    );
+}
+
+#[export]
+#[naked]
+fn exported(a: u32) -> u32 {
+    asm("adds r0, r0, #1", "bx lr", options(noreturn))
+}
+
+#[naked]
+fn no_result() {
+    asm("bx lr", options(noreturn))
+}
+
+entry fn main() -> ! {
+    let total: u32 = sum(1, 2) + scale_then_add_one(3) + exported(4);
+    widths(1, 2, 0 as *const u8, 3);
+    no_result();
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

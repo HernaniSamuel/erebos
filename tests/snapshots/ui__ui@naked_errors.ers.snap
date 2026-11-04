@@ -1,0 +1,203 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/naked_errors.ers
+---
+--- errors ---
+ty::naked-body
+
+  × the body of the naked function `statement_before` is not one `asm` expression
+    ╭─[naked_errors.ers:10:9]
+  9 │ fn statement_before() {
+ 10 │     let x: u32 = 1;
+    ·         ─────┬────
+    ·              ╰── not allowed here
+ 11 │     asm("ret", options(noreturn));
+    ·     ──────────────┬──────────────
+    ·                   ╰── the one `asm`
+ 12 │ }
+    ╰────
+  help: the body of a naked function is one `asm(..., options(noreturn))` expression with only
+        `sym` and `const` operands, which does everything, returning included; the compiler writes
+        no code around it (ADR 0079)
+ty::naked-body
+
+  × the body of the naked function `statement_after` is not one `asm` expression
+    ╭─[naked_errors.ers:17:5]
+ 15 │ fn statement_after() {
+ 16 │     asm("ret", options(noreturn));
+    ·     ──────────────┬──────────────
+    ·                   ╰── the one `asm`
+ 17 │     target();
+    ·     ────┬───
+    ·         ╰── not allowed here
+ 18 │ }
+    ╰────
+  help: the body of a naked function is one `asm(..., options(noreturn))` expression with only
+        `sym` and `const` operands, which does everything, returning included; the compiler writes
+        no code around it (ADR 0079)
+ty::naked-body
+
+  × the body of the naked function `two_asms` is not one `asm` expression
+    ╭─[naked_errors.ers:23:5]
+ 21 │ fn two_asms() {
+ 22 │     asm("nop", options(noreturn));
+    ·     ──────────────┬──────────────
+    ·                   ╰── the one `asm`
+ 23 │     asm("ret", options(noreturn));
+    ·     ──────────────┬──────────────
+    ·                   ╰── not allowed here
+ 24 │ }
+    ╰────
+  help: the body of a naked function is one `asm(..., options(noreturn))` expression with only
+        `sym` and `const` operands, which does everything, returning included; the compiler writes
+        no code around it (ADR 0079)
+ty::naked-body
+
+  × the `asm` of a naked function must have `noreturn`
+    ╭─[naked_errors.ers:28:5]
+ 27 │ fn without_noreturn() {
+ 28 │     asm("ret");
+    ·     ─────┬────
+    ·          ╰── the compiler would add a return after this
+ 29 │ }
+    ╰────
+  help: a naked function has no epilogue, so the template itself returns (`ret`, `bx lr`, a jump)
+        and the expression is `asm(..., options(noreturn))` (ADR 0079)
+ty::naked-body
+
+  × the `asm` of a naked function takes only `sym` and `const` operands
+    ╭─[naked_errors.ers:33:22]
+ 32 │ fn input_operand(a: u32) {
+ 33 │     asm("mv a1, {}", in(reg) a, options(noreturn));
+    ·                      ────┬────
+    ·                          ╰── not allowed here
+ 34 │ }
+    ╰────
+  help: a naked function has no variables: its parameters arrive where the C ABI puts them, and
+        the template reads them there; only symbols and compile-time values can be named (ADR
+        0079)
+ty::naked-body
+
+  × the body of the naked function `output_operand` is not one `asm` expression
+    ╭─[naked_errors.ers:38:13]
+ 37 │ fn output_operand() {
+ 38 │     let mut x: u32 = 0;
+    ·             ─────┬────
+    ·                  ╰── not allowed here
+ 39 │     asm("ret", out("a0") x, options(noreturn));
+    ·     ─────────────────────┬────────────────────
+    ·                          ╰── the one `asm`
+ 40 │ }
+    ╰────
+  help: the body of a naked function is one `asm(..., options(noreturn))` expression with only
+        `sym` and `const` operands, which does everything, returning included; the compiler writes
+        no code around it (ADR 0079)
+ty::asm-options
+
+  × `noreturn` and an output contradict each other
+    ╭─[naked_errors.ers:39:16]
+ 38 │     let mut x: u32 = 0;
+ 39 │     asm("ret", out("a0") x, options(noreturn));
+    ·                ─────┬─────          ────┬───
+    ·                     │                   ╰── the code never ends
+    ·                     ╰── an output is stored when the code ends
+ 40 │ }
+    ╰────
+  help: remove the output, or the option (ADR 0079)
+ty::naked-body
+
+  × the `asm` of a naked function takes only `sym` and `const` operands
+    ╭─[naked_errors.ers:39:16]
+ 38 │     let mut x: u32 = 0;
+ 39 │     asm("ret", out("a0") x, options(noreturn));
+    ·                ─────┬─────
+    ·                     ╰── not allowed here
+ 40 │ }
+    ╰────
+  help: a naked function has no variables: its parameters arrive where the C ABI puts them, and
+        the template reads them there; only symbols and compile-time values can be named (ADR
+        0079)
+ty::naked-body
+
+  × the `asm` of a naked function takes only `sym` and `const` operands
+    ╭─[naked_errors.ers:44:16]
+ 43 │ fn clobber() {
+ 44 │     asm("ret", clobber_abi("C"), options(noreturn));
+    ·                ────────┬───────
+    ·                        ╰── not allowed here
+ 45 │ }
+    ╰────
+  help: a naked function has no variables: its parameters arrive where the C ABI puts them, and
+        the template reads them there; only symbols and compile-time values can be named (ADR
+        0079)
+ty::naked-body
+
+  × the body of the naked function `empty` is not one `asm` expression
+    ╭─[naked_errors.ers:48:12]
+ 47 │ #[naked]
+ 48 │ fn empty() {}
+    ·            ─┬
+    ·             ╰── an empty body
+ 49 │ 
+    ╰────
+  help: the body of a naked function is one `asm(..., options(noreturn))` expression with only
+        `sym` and `const` operands, which does everything, returning included; the compiler writes
+        no code around it (ADR 0079)
+ty::naked-body
+
+  × the body of the naked function `not_an_asm` is not one `asm` expression
+    ╭─[naked_errors.ers:52:5]
+ 51 │ fn not_an_asm() -> u32 {
+ 52 │     1
+    ·     ┬
+    ·     ╰── not an `asm` expression
+ 53 │ }
+    ╰────
+  help: the body of a naked function is one `asm(..., options(noreturn))` expression with only
+        `sym` and `const` operands, which does everything, returning included; the compiler writes
+        no code around it (ADR 0079)
+ty::naked-body
+
+  × the body of the naked function `everything_wrong` is not one `asm` expression
+    ╭─[naked_errors.ers:57:9]
+ 56 │ fn everything_wrong(a: u32) -> u32 {
+ 57 │     let x: u32 = a;
+    ·         ─────┬────
+    ·              ╰── not allowed here
+ 58 │     asm("ret", in("a0") x);
+    ·     ───────────┬──────────
+    ·                ╰── the one `asm`
+ 59 │     x
+    ·     ┬
+    ·     ╰── not allowed here
+ 60 │ }
+    ╰────
+  help: the body of a naked function is one `asm(..., options(noreturn))` expression with only
+        `sym` and `const` operands, which does everything, returning included; the compiler writes
+        no code around it (ADR 0079)
+ty::naked-body
+
+  × the `asm` of a naked function must have `noreturn`
+    ╭─[naked_errors.ers:58:5]
+ 57 │     let x: u32 = a;
+ 58 │     asm("ret", in("a0") x);
+    ·     ───────────┬──────────
+    ·                ╰── the compiler would add a return after this
+ 59 │     x
+    ╰────
+  help: a naked function has no epilogue, so the template itself returns (`ret`, `bx lr`, a jump)
+        and the expression is `asm(..., options(noreturn))` (ADR 0079)
+ty::naked-body
+
+  × the `asm` of a naked function takes only `sym` and `const` operands
+    ╭─[naked_errors.ers:58:16]
+ 57 │     let x: u32 = a;
+ 58 │     asm("ret", in("a0") x);
+    ·                ─────┬────
+    ·                     ╰── not allowed here
+ 59 │     x
+    ╰────
+  help: a naked function has no variables: its parameters arrive where the C ABI puts them, and
+        the template reads them there; only symbols and compile-time values can be named (ADR
+        0079)

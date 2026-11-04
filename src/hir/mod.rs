@@ -976,6 +976,9 @@ pub enum FnKind {
     Plain,
     Entry,
     Panic,
+    /// `#[naked]` (ADR 0079): no code of the compiler's, its body is one
+    /// `asm` expression.
+    Naked,
 }
 
 #[derive(Debug)]

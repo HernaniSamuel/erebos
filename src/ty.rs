@@ -523,7 +523,7 @@ impl Checker<'_, '_> {
                 "panic",
                 "execution cannot continue after a panic (ADR 0014)",
             )),
-            FnKind::Plain => None,
+            FnKind::Plain | FnKind::Naked => None,
         };
         self.ret = self.norm(f.ret);
         if let Some((code, what, why)) = special
@@ -554,6 +554,9 @@ impl Checker<'_, '_> {
 
         if let Some(body) = &f.body {
             self.checked_block(f, body, self.ret, because);
+            if f.kind == FnKind::Naked {
+                self.naked_body(f, body);
+            }
         }
     }
 

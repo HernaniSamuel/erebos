@@ -1,0 +1,232 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/naked_thumbv7m.ers
+---
+--- llvm-ir ---
+; ModuleID = 'erebos'
+source_filename = "erebos"
+target datalayout = "e-m:e-p:32:32-Fi8-i64:64-v128:64:128-a:0:32-n32-S64"
+target triple = "thumbv7m-none-eabi"
+
+module asm "\09.syntax unified"
+module asm "\09.thumb"
+module asm "\09.section .text.start, \22ax\22, %progbits"
+module asm "\09.p2align 2"
+module asm "\09.word __stack_end"
+module asm "\09.word _start"
+module asm "\09.globl _start"
+module asm "\09.type _start, %function"
+module asm "\09.thumb_func"
+module asm "_start:"
+module asm "\09ldr r0, =__stack_end"
+module asm "\09mov sp, r0"
+module asm "\09ldr r0, =__bss_start"
+module asm "\09ldr r1, =__bss_end"
+module asm "\09movs r2, #0"
+module asm ".Lzero_bss:"
+module asm "\09cmp r0, r1"
+module asm "\09bhs .Lcopy_data"
+module asm "\09str r2, [r0], #4"
+module asm "\09b .Lzero_bss"
+module asm ".Lcopy_data:"
+module asm "\09ldr r0, =__data_start"
+module asm "\09ldr r1, =__data_end"
+module asm "\09ldr r2, =__data_load"
+module asm ".Lcopy_word:"
+module asm "\09cmp r0, r1"
+module asm "\09bhs .Lenter"
+module asm "\09ldr r3, [r2], #4"
+module asm "\09str r3, [r0], #4"
+module asm "\09b .Lcopy_word"
+module asm ".Lenter:"
+module asm "\09ldr r0, =main"
+module asm "\09bx r0"
+module asm "\09.ltorg"
+
+@llvm.compiler.used = appending global [1 x ptr] [ptr @add_one], section "llvm.metadata"
+
+; Function Attrs: nounwind null_pointer_is_valid
+define i32 @add_one(i32 %0) #0 {
+bb0:
+  %1 = add i32 %0, 1
+  ret i32 %1
+}
+
+; Function Attrs: naked noinline nounwind null_pointer_is_valid
+define i32 @sum(i32 %0, i32 %1) #1 {
+bb0:
+  call void asm sideeffect alignstack "adds r0, r0, r1\0Abx lr", "~{memory},~{cc}"() #3
+  unreachable
+}
+
+; Function Attrs: naked noinline nounwind null_pointer_is_valid
+define zeroext i8 @widths(i8 zeroext %0, i16 signext %1, ptr %2, i64 %3) #1 {
+bb0:
+  call void asm sideeffect alignstack "bx lr", "~{memory},~{cc}"() #3
+  unreachable
+}
+
+; Function Attrs: naked noinline nounwind null_pointer_is_valid
+define i32 @scale_then_add_one(i32 %0) #1 {
+bb0:
+  call void asm sideeffect alignstack "lsls r0, r0, #3\0Ab add_one", "~{memory},~{cc}"() #3
+  unreachable
+}
+
+; Function Attrs: naked noinline nounwind null_pointer_is_valid
+define i32 @exported(i32 %0) #1 {
+bb0:
+  call void asm sideeffect alignstack "adds r0, r0, #1\0Abx lr", "~{memory},~{cc}"() #3
+  unreachable
+}
+
+; Function Attrs: naked noinline nounwind null_pointer_is_valid
+define void @no_result() #1 {
+bb0:
+  call void asm sideeffect alignstack "bx lr", "~{memory},~{cc}"() #3
+  unreachable
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @main() #2 {
+bb0:
+  %0 = call i32 @sum(i32 1, i32 2)
+  %1 = call i32 @scale_then_add_one(i32 3)
+  %2 = add i32 %0, %1
+  %3 = call i32 @exported(i32 4)
+  %4 = add i32 %2, %3
+  %5 = call i8 @widths(i8 1, i16 2, ptr null, i64 3)
+  call void @no_result()
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @on_panic() #2 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+attributes #0 = { nounwind null_pointer_is_valid }
+attributes #1 = { naked noinline nounwind null_pointer_is_valid }
+attributes #2 = { noreturn nounwind null_pointer_is_valid }
+attributes #3 = { nounwind }
+--- llvm-ir -O ---
+; ModuleID = 'erebos'
+source_filename = "erebos"
+target datalayout = "e-m:e-p:32:32-Fi8-i64:64-v128:64:128-a:0:32-n32-S64"
+target triple = "thumbv7m-none-eabi"
+
+module asm "\09.syntax unified"
+module asm "\09.thumb"
+module asm "\09.section .text.start, \22ax\22, %progbits"
+module asm "\09.p2align 2"
+module asm "\09.word __stack_end"
+module asm "\09.word _start"
+module asm "\09.globl _start"
+module asm "\09.type _start, %function"
+module asm "\09.thumb_func"
+module asm "_start:"
+module asm "\09ldr r0, =__stack_end"
+module asm "\09mov sp, r0"
+module asm "\09ldr r0, =__bss_start"
+module asm "\09ldr r1, =__bss_end"
+module asm "\09movs r2, #0"
+module asm ".Lzero_bss:"
+module asm "\09cmp r0, r1"
+module asm "\09bhs .Lcopy_data"
+module asm "\09str r2, [r0], #4"
+module asm "\09b .Lzero_bss"
+module asm ".Lcopy_data:"
+module asm "\09ldr r0, =__data_start"
+module asm "\09ldr r1, =__data_end"
+module asm "\09ldr r2, =__data_load"
+module asm ".Lcopy_word:"
+module asm "\09cmp r0, r1"
+module asm "\09bhs .Lenter"
+module asm "\09ldr r3, [r2], #4"
+module asm "\09str r3, [r0], #4"
+module asm "\09b .Lcopy_word"
+module asm ".Lenter:"
+module asm "\09ldr r0, =main"
+module asm "\09bx r0"
+module asm "\09.ltorg"
+
+@llvm.compiler.used = appending global [1 x ptr] [ptr @add_one], section "llvm.metadata"
+
+; Function Attrs: mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(none)
+define i32 @add_one(i32 %0) #0 {
+bb0:
+  %1 = add i32 %0, 1
+  ret i32 %1
+}
+
+; Function Attrs: naked noinline nounwind null_pointer_is_valid
+define i32 @sum(i32 %0, i32 %1) #1 {
+bb0:
+  tail call void asm sideeffect alignstack "adds r0, r0, r1\0Abx lr", "~{memory},~{cc}"() #4
+  unreachable
+}
+
+; Function Attrs: naked noinline nounwind null_pointer_is_valid
+define zeroext i8 @widths(i8 zeroext %0, i16 signext %1, ptr %2, i64 %3) #1 {
+bb0:
+  tail call void asm sideeffect alignstack "bx lr", "~{memory},~{cc}"() #4
+  unreachable
+}
+
+; Function Attrs: naked noinline nounwind null_pointer_is_valid
+define i32 @scale_then_add_one(i32 %0) #1 {
+bb0:
+  tail call void asm sideeffect alignstack "lsls r0, r0, #3\0Ab add_one", "~{memory},~{cc}"() #4
+  unreachable
+}
+
+; Function Attrs: naked noinline nounwind null_pointer_is_valid
+define i32 @exported(i32 %0) #1 {
+bb0:
+  tail call void asm sideeffect alignstack "adds r0, r0, #1\0Abx lr", "~{memory},~{cc}"() #4
+  unreachable
+}
+
+; Function Attrs: naked noinline nounwind null_pointer_is_valid
+define void @no_result() #1 {
+bb0:
+  tail call void asm sideeffect alignstack "bx lr", "~{memory},~{cc}"() #4
+  unreachable
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @main() local_unnamed_addr #2 {
+bb0:
+  %0 = tail call i32 @sum(i32 1, i32 2)
+  %1 = tail call i32 @scale_then_add_one(i32 3)
+  %2 = tail call i32 @exported(i32 4)
+  %3 = tail call i8 @widths(i8 1, i16 2, ptr null, i64 3)
+  tail call void @no_result()
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none)
+define void @on_panic() local_unnamed_addr #3 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+attributes #0 = { mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(none) }
+attributes #1 = { naked noinline nounwind null_pointer_is_valid }
+attributes #2 = { noreturn nounwind null_pointer_is_valid }
+attributes #3 = { nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none) }
+attributes #4 = { nounwind }

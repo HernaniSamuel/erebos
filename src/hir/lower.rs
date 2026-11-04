@@ -1172,7 +1172,7 @@ fn find_unique(fns: &[Fn], kind: FnKind, diags: &mut Diagnostics) -> Option<FnId
     let (what, example) = match kind {
         FnKind::Entry => ("entry", "entry fn main() -> ! { ... }"),
         FnKind::Panic => ("panic", "panic fn on_panic() -> ! { loop {} }"),
-        FnKind::Plain => unreachable!("plain functions are not unique"),
+        FnKind::Plain | FnKind::Naked => unreachable!("plain functions are not unique"),
     };
     let mut found = fns
         .iter()

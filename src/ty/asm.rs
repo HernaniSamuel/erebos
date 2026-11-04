@@ -7,8 +7,8 @@ use std::collections::HashMap;
 
 use crate::diag::Diagnostic;
 use crate::hir::{
-    AccessMode, Asm, AsmOperand, AsmOperandKind, AsmOptionKind, AsmReg, AsmSym, Expr, ExprKind, Fn,
-    IntTy, Ty,
+    AccessMode, Asm, AsmOperand, AsmOperandKind, AsmOptionKind, AsmReg, AsmSym, Block, Expr,
+    ExprKind, Fn, IntTy, Stmt, Ty,
 };
 use crate::span::Span;
 use crate::target::Register;
@@ -72,6 +72,98 @@ impl Checker<'_, '_> {
             Ty::Never
         } else {
             Ty::Unit
+        }
+    }
+
+    /// The body of a `#[naked]` function is one `asm` expression, as a
+    /// statement or as the tail, with `noreturn` and only `sym` and `const`
+    /// operands (ADR 0079): the compiler writes no code around it, so
+    /// nothing may need any (a local, a value in a register) and the code
+    /// itself returns.
+    pub(super) fn naked_body(&mut self, f: &Fn, body: &Block) {
+        // What the body holds, in order: the statements and the tail, with
+        // the `asm` expression of each that is one.
+        let mut items: Vec<(Span, Option<(&Expr, &Asm)>)> = Vec::new();
+        fn asm_of(expr: &Expr) -> Option<(&Expr, &Asm)> {
+            match &expr.kind {
+                ExprKind::Asm(asm) => Some((expr, asm)),
+                _ => None,
+            }
+        }
+        for stmt in &body.stmts {
+            items.push(match stmt {
+                Stmt::Let { local, init } => (f.local(*local).span.to(init.span), None),
+                Stmt::Expr { expr, .. } => (expr.span, asm_of(expr)),
+            });
+        }
+        if let Some(tail) = &body.tail {
+            items.push((tail.span, asm_of(tail)));
+        }
+        let help = "the body of a naked function is one `asm(..., options(noreturn))` expression with only `sym` and `const` operands, which does everything, returning included; the compiler writes no code around it (ADR 0079)";
+        let found = (items.iter().enumerate()).find_map(|(i, item)| item.1.map(|asm| (i, asm)));
+        let Some((first, (expr, asm))) = found else {
+            let mut diag = Diagnostic::error(
+                "ty::naked-body",
+                format!(
+                    "the body of the naked function `{}` is not one `asm` expression",
+                    f.name
+                ),
+            );
+            diag = if items.is_empty() {
+                diag.label(body.span, "an empty body")
+            } else {
+                items.iter().fold(diag, |diag, (span, _)| {
+                    diag.label(*span, "not an `asm` expression")
+                })
+            };
+            self.q.diags.push(diag.help(help));
+            return;
+        };
+        if items.len() > 1 {
+            let mut diag = Diagnostic::error(
+                "ty::naked-body",
+                format!(
+                    "the body of the naked function `{}` is not one `asm` expression",
+                    f.name
+                ),
+            );
+            for (i, (span, _)) in items.iter().enumerate() {
+                if i != first {
+                    diag = diag.label(*span, "not allowed here");
+                }
+            }
+            self.q
+                .diags
+                .push(diag.label(items[first].0, "the one `asm`").help(help));
+        }
+        if !asm
+            .options
+            .iter()
+            .any(|option| option.kind == AsmOptionKind::Noreturn)
+        {
+            self.q.diags.push(
+                Diagnostic::error(
+                    "ty::naked-body",
+                    "the `asm` of a naked function must have `noreturn`",
+                )
+                .label(expr.span, "the compiler would add a return after this")
+                .help("a naked function has no epilogue, so the template itself returns (`ret`, `bx lr`, a jump) and the expression is `asm(..., options(noreturn))` (ADR 0079)"),
+            );
+        }
+        for operand in &asm.operands {
+            if !matches!(
+                operand.kind,
+                AsmOperandKind::Sym(_) | AsmOperandKind::Const(_)
+            ) {
+                self.q.diags.push(
+                    Diagnostic::error(
+                        "ty::naked-body",
+                        "the `asm` of a naked function takes only `sym` and `const` operands",
+                    )
+                    .label(operand.span, "not allowed here")
+                    .help("a naked function has no variables: its parameters arrive where the C ABI puts them, and the template reads them there; only symbols and compile-time values can be named (ADR 0079)"),
+                );
+            }
         }
     }
 

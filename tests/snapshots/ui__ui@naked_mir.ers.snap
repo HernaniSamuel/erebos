@@ -1,0 +1,60 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/naked_mir.ers
+---
+--- mir ---
+naked fn statement(_1: u32) -> u32 {
+    let _0: u32;
+    let _1: u32; // a
+
+    bb0: {
+        asm("ret", options(noreturn));
+    }
+}
+
+naked fn tail(_1: u32) -> u32 {
+    let _0: u32;
+    let _1: u32; // a
+
+    bb0: {
+        asm("ret", options(noreturn));
+    }
+}
+
+naked fn constant() -> () {
+    let _0: ();
+
+    bb0: {
+        asm("li a0, {0}\nret", const 7_u32, options(noreturn));
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+    let _1: u32;
+    let _2: u32;
+
+    bb0: {
+        _1 = call statement(const 1_u32);
+        _2 = call tail(const 2_u32);
+        call constant();
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}

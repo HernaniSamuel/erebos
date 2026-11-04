@@ -1,0 +1,23 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/naked_comptime.ers
+---
+--- errors ---
+eval::asm
+
+  × the evaluation reached an `asm` expression
+    ╭─[naked_comptime.ers:6:5]
+  5 │ fn sum(a: u32, b: u32) -> u32 {
+  6 │     asm("add a0, a0, a1", "ret", options(noreturn));
+    ·     ───────────────────────┬───────────────────────
+    ·                            ╰── inline assembly cannot run at compile time
+  7 │ }
+  8 │ 
+  9 │ const TOTAL: u32 = comptime { sum(1, 2) };
+    ·                             ──────┬──────┬
+    ·                                   │      ╰── called here
+    ·                                   ╰── while evaluating this `comptime` expression
+ 10 │ 
+    ╰────
+  help: this code runs at compile time (ADR 0027)

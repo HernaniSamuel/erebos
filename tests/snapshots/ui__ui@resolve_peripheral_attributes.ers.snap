@@ -35,7 +35,8 @@ resolve::unknown-attribute
  7 │ peripheral Uart {
    ╰────
   help: the attributes are `#[packed]` and `#[align(N)]` on structs (ADR 0022), `#[align(N)]` on
-        statics (ADR 0030), and `#[export]` on functions and statics (ADR 0051)
+        statics (ADR 0030), `#[export]` on functions and statics (ADR 0051), and `#[naked]` on
+        functions (ADR 0079)
 resolve::misplaced-attribute
 
   × `#[export]` applies only to functions and statics defined in the program
@@ -69,4 +70,5 @@ resolve::unknown-attribute
  14 │ peripheral UART0: Uart at 0x1000_0000;
     ╰────
   help: the attributes are `#[packed]` and `#[align(N)]` on structs (ADR 0022), `#[align(N)]` on
-        statics (ADR 0030), and `#[export]` on functions and statics (ADR 0051)
+        statics (ADR 0030), `#[export]` on functions and statics (ADR 0051), and `#[naked]` on
+        functions (ADR 0079)

@@ -1,0 +1,44 @@
+// `#[naked]` applies to a function with a body, except the entry and the
+// panic function (ADR 0079); given once, without an argument.
+#[naked]
+extern fn outside();
+
+#[naked]
+entry fn main() -> ! { loop {} }
+
+#[naked]
+panic fn on_panic() -> ! { loop {} }
+
+#[naked]
+struct S { a: u32 }
+
+#[naked]
+static COUNTER: u32 = 0;
+
+#[naked]
+const LIMIT: u32 = 1;
+
+#[naked]
+mod inner {}
+
+#[naked]
+#[naked]
+fn twice() {
+    asm("ret", options(noreturn));
+}
+
+#[naked(1)]
+fn with_argument() {
+    asm("ret", options(noreturn));
+}
+
+#[naked]
+#[export]
+fn both() {
+    asm("ret", options(noreturn));
+}
+
+#[naked]
+struct Flags: u8 {
+    ready: bool at 0,
+}

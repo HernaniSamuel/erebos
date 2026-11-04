@@ -47,4 +47,5 @@ resolve::unknown-attribute
  8 │ memory {
    ╰────
   help: the attributes are `#[packed]` and `#[align(N)]` on structs (ADR 0022), `#[align(N)]` on
-        statics (ADR 0030), and `#[export]` on functions and statics (ADR 0051)
+        statics (ADR 0030), `#[export]` on functions and statics (ADR 0051), and `#[naked]` on
+        functions (ADR 0079)

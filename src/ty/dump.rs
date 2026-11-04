@@ -248,6 +248,7 @@ pub fn dump(q: &mut Queries) -> String {
             FnKind::Plain => "",
             FnKind::Entry => "entry ",
             FnKind::Panic => "panic ",
+            FnKind::Naked => "naked ",
         };
         let params: Vec<String> = f
             .params()

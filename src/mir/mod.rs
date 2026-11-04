@@ -197,6 +197,7 @@ impl Mir {
             if left_out.bodies[i] {
                 body.external = true;
                 body.runtime = false;
+                body.naked = false;
                 body.blocks.clear();
                 body.locals.truncate(1 + body.param_count);
             }
@@ -354,6 +355,9 @@ pub struct Body {
     /// Defined outside the program (ADR 0026): no locals besides the
     /// parameters, and no blocks.
     pub external: bool,
+    /// `#[naked]` (ADR 0079): the body is its `asm` terminator alone, and
+    /// code generation adds no frame, nothing for the parameters, no return.
+    pub naked: bool,
 }
 
 impl Body {
@@ -1720,7 +1724,8 @@ impl fmt::Display for Mir {
             };
             let external = if body.external { "extern " } else { "" };
             let comptime = if body.comptime { "comptime " } else { "" };
-            write!(f, "{external}{comptime}{kind}fn {}(", body.name)?;
+            let naked = if body.naked { "naked " } else { "" };
+            write!(f, "{external}{comptime}{naked}{kind}fn {}(", body.name)?;
             for (i, param) in body.params().iter().enumerate() {
                 if i > 0 {
                     f.write_str(", ")?;
@@ -1783,6 +1788,7 @@ mod tests {
             blocks,
             runtime: false,
             external: false,
+            naked: false,
         }
     }
 

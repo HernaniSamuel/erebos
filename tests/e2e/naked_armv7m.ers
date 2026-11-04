@@ -1,0 +1,84 @@
+// `#[naked]` functions (ADR 0079): the compiler writes no prologue, no
+// epilogue and no frame, and the template finds the arguments in the
+// registers the C ABI puts them in and returns by itself. Called from
+// Erebos and from C (`#[export]`), with `const` and `sym` operands, `asm` as a
+// statement and as the tail of the body. The assembly is thumbv7m's, which is
+// why the header lists one target (the reason ADR 0079 adds to ADR 0077's).
+// targets: thumbv7m-none-eabi
+// link-c: naked_armv7m.c
+// expect-output: 7 40 42 6 31
+// expect-exit: 0
+
+mod board;
+use board::{exit, putc};
+
+extern fn c_sum_plus_one(a: u32, b: u32) -> u32;
+
+#[export]
+#[naked]
+fn erebos_sum(a: u32, b: u32) -> u32 {
+    asm(
+        "adds r0, r0, r1",
+        "bx lr",
+        options(noreturn),
+    );
+}
+
+#[naked]
+fn scale(a: u32) -> u32 {
+    asm(
+        "lsls r0, r0, #{shift}",
+        "bx lr",
+        shift = const 3 as u32,
+        options(noreturn),
+    );
+}
+
+fn add_one(x: u32) -> u32 {
+    x + 1
+}
+
+#[naked]
+fn plus_two(x: u32) -> u32 {
+    asm(
+        "adds r0, r0, #1",
+        "b {next}",
+        next = sym add_one,
+        options(noreturn),
+    );
+}
+
+#[naked]
+fn sum3(a: u32, b: u32, c: u32) -> u32 {
+    asm(
+        "adds r0, r0, r1",
+        "adds r0, r0, r2",
+        "bx lr",
+        options(noreturn),
+    )
+}
+
+fn print_u32(n: u32) {
+    if n >= 10 {
+        print_u32(n / 10);
+    }
+    putc(b'0' + (n % 10) as u8);
+}
+
+entry fn main() -> ! {
+    print_u32(erebos_sum(3, 4));
+    putc(b' ');
+    print_u32(scale(5));
+    putc(b' ');
+    print_u32(plus_two(40));
+    putc(b' ');
+    print_u32(sum3(1, 2, 3));
+    putc(b' ');
+    print_u32(c_sum_plus_one(10, 20));
+    putc(b'\n');
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(1)
+}

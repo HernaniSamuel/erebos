@@ -1,0 +1,52 @@
+// emit: llvm-ir
+// opt: both
+// `#[naked]` functions on riscv32 (ADR 0079): the IR has the `naked` and
+// `noinline` attributes, no `alloca` and no stores of the parameters, the
+// template and `unreachable`, with the signature of the C ABI. One takes
+// parameters of several types, one has `sym` and `const` operands, one is
+// `#[export]`, and one has its `asm` as the tail of the body, without `;`.
+// The thumbv7m counterpart is `naked_thumbv7m.ers`.
+fn add_one(x: u32) -> u32 {
+    x + 1
+}
+
+#[naked]
+fn sum(a: u32, b: u32) -> u32 {
+    asm("add a0, a0, a1", "ret", options(noreturn));
+}
+
+#[naked]
+fn widths(a: u8, b: i16, c: *const u8, d: u64) -> u8 {
+    asm("ret", options(noreturn));
+}
+
+#[naked]
+fn scale_then_add_one(x: u32) -> u32 {
+    asm(
+        "slli a0, a0, {shift}",
+        "j {next}",
+        shift = const 3 as u32,
+        next = sym add_one,
+        options(noreturn),
+    );
+}
+
+#[export]
+#[naked]
+fn exported(a: u32) -> u32 {
+    asm("addi a0, a0, 1", "ret", options(noreturn))
+}
+
+#[naked]
+fn no_result() {
+    asm("ret", options(noreturn))
+}
+
+entry fn main() -> ! {
+    let total: u32 = sum(1, 2) + scale_then_add_one(3) + exported(4);
+    widths(1, 2, 0 as *const u8, 3);
+    no_result();
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }
