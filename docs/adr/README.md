@@ -41,7 +41,7 @@ Do not write one for local implementation details that the code already explains
 | 0009 | [Defer borrow checking](0009-defer-borrow-checking.md)           | Accepted |
 | 0010 | [First target: riscv32 on QEMU `virt`](0010-first-target-riscv32-qemu-virt.md) | Accepted, amended by 0073, 0077 |
 | 0011 | [Development environment: native Windows with prebuilt LLVM 22](0011-development-environment.md) | Accepted |
-| 0012 | [Provisional compiler-generated startup code](0012-provisional-compiler-generated-startup.md) | Accepted, amended by 0030, 0057, 0074 |
+| 0012 | [Provisional compiler-generated startup code](0012-provisional-compiler-generated-startup.md) | Superseded by 0083 |
 | 0013 | [Provisional volatile pointers](0013-provisional-volatile-pointers.md) | Accepted, amended by 0058 |
 | 0014 | [Panic handler](0014-panic-handler.md)                          | Accepted, amended by 0053 |
 | 0015 | [Expression-oriented blocks and implicit unit return](0015-expression-oriented-blocks.md) | Accepted |
@@ -59,7 +59,7 @@ Do not write one for local implementation details that the code already explains
 | 0027 | [Compile-time execution (comptime)](0027-compile-time-execution.md) | Accepted, amended by 0030 |
 | 0028 | [On-demand type checking and evaluation](0028-on-demand-compilation.md) | Accepted, amended by 0033 |
 | 0029 | [Constants and comptime expressions](0029-constants-and-comptime-syntax.md) | Accepted, amended by 0030, 0031, 0034, 0049 |
-| 0030 | [Statics and startup initialization](0030-statics-and-startup-initialization.md) | Accepted, amended by 0034, 0051, 0057, 0074 |
+| 0030 | [Statics and startup initialization](0030-statics-and-startup-initialization.md) | Accepted, amended by 0034, 0051, 0057, 0074, 0083 |
 | 0031 | [Byte strings and slices](0031-byte-strings-and-slices.md) | Accepted, amended by 0053 |
 | 0032 | [Checks on values known at compile time](0032-checks-on-values-known-at-compile-time.md) | Accepted, amended by 0035, 0037, 0039, 0059 |
 | 0033 | [The compiler pipeline with compile-time evaluation](0033-compiler-pipeline-with-evaluation.md) | Accepted, amended by 0063 |
@@ -81,12 +81,12 @@ Do not write one for local implementation details that the code already explains
 | 0049 | [Modules and paths](0049-modules-and-paths.md) | Accepted |
 | 0050 | [Visibility](0050-visibility.md) | Accepted, amended by 0054, 0059 |
 | 0051 | [Symbol names](0051-symbol-names.md) | Accepted |
-| 0052 | [The `core` module](0052-the-core-module.md) | Accepted, amended by 0056, 0080 |
+| 0052 | [The `core` module](0052-the-core-module.md) | Accepted, amended by 0056, 0080, 0083 |
 | 0053 | [Panic information](0053-panic-information.md) | Accepted, amended by 0059 |
 | 0054 | [Only `_` covers an enum that is not reachable](0054-only-wildcards-cover-unreachable-enums.md) | Accepted |
 | 0055 | [Repeat counts and dead arms under failed values](0055-repeat-counts-and-dead-arms-under-failed-values.md) | Accepted |
 | 0056 | [`rt` is reserved in the root module](0056-rt-is-reserved-in-the-root-module.md) | Accepted |
-| 0057 | [Memory maps](0057-memory-maps.md) | Accepted |
+| 0057 | [Memory maps](0057-memory-maps.md) | Accepted, amended by 0083 |
 | 0058 | [Peripherals](0058-peripherals.md) | Accepted, amended by 0060, 0061, 0064, 0066 |
 | 0059 | [Bit-field structs](0059-bit-field-structs.md) | Accepted, amended by 0062, 0065 |
 | 0060 | [Register fields](0060-register-fields.md) | Accepted, amended by 0064, 0065 |
@@ -103,12 +103,13 @@ Do not write one for local implementation details that the code already explains
 | 0071 | [Names generated from SVD](0071-names-generated-from-svd.md) | Accepted |
 | 0072 | [SVD constructs, and what has no declaration](0072-svd-constructs-and-what-has-no-declaration.md) | Accepted, amended 2026-11-02 |
 | 0073 | [Targets](0073-targets.md) | Accepted, corrected 2026-11-03 |
-| 0074 | [The ARMv7-M target](0074-armv7m-target.md) | Accepted, amended by 0080 |
+| 0074 | [The ARMv7-M target](0074-armv7m-target.md) | Accepted, amended by 0080, 0083 |
 | 0075 | [Aggregates across calls on ARMv7-M](0075-aggregates-across-calls-on-armv7m.md) | Accepted |
 | 0076 | [64-bit division calls `core` where LLVM's call cannot be written](0076-64-bit-division-calls-core.md) | Accepted, amended by 0080 |
 | 0077 | [Programs tested on every target](0077-programs-tested-on-every-target.md) | Accepted, amended by 0079 |
 | 0078 | [Concurrency with interrupt handlers](0078-concurrency-with-interrupt-handlers.md) | Accepted |
-| 0079 | [Inline assembly](0079-inline-assembly.md) | Accepted |
+| 0079 | [Inline assembly](0079-inline-assembly.md) | Accepted, amended by 0083 |
 | 0080 | [`core::arch`, one file per target](0080-core-arch-per-target.md) | Accepted, corrected 2026-11-04 |
 | 0081 | [Fences](0081-fences.md) | Accepted |
 | 0082 | [The LLVM diagnostic handler reaches `llvm_sys`, in one file](0082-llvm-diagnostic-handler-reaches-llvm-sys.md) | Accepted |
+| 0083 | [Startup code in `core::arch`](0083-startup-code-in-core-arch.md) | Accepted |

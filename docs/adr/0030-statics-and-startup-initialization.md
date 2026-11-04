@@ -1,6 +1,6 @@
 # 0030. Statics and startup initialization
 
-- Status: Accepted; amended by 0034 (no statics of type `!`), 0051 (the symbols of statics), 0057 (the `memory` block replaces the fixed split of QEMU's RAM; the load image of `.data` is its run range when data shares the code's region), 0074 (the unwind tables of ARM objects are discarded)
+- Status: Accepted; amended by 0034 (no statics of type `!`), 0051 (the symbols of statics), 0057 (the `memory` block replaces the fixed split of QEMU's RAM; the load image of `.data` is its run range when data shares the code's region), 0074 (the unwind tables of ARM objects are discarded), 0083 (`_start` is `core`'s, read in `rt/arch/`, not in `--emit=llvm-ir`)
 - Date: 2026-10-15
 - Amends: 0012 (`_start` initializes `.data` and `.bss`), 0022 (the
   alignment of `.data` and `.bss`), 0027 (comparing pointers at compile

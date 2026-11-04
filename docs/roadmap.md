@@ -186,6 +186,14 @@ Agreed as useful, not yet scheduled:
   attribute on the static naming a region would make region names
   visible to code, while a placement in the `memory` block naming the
   static would not.
+- Reset code of the program, for boards that must run code before
+  `.bss` and `.data` are initialized, such as setting up an external
+  memory controller that holds them (ADR 0083 gives every program
+  `core`'s `_start`). The open variant is a hook in assembly: a naked
+  function of the program that `_start` calls before the loops, as
+  `cortex-m-rt`'s `__pre_init`. A hook of compiled code would read
+  statics not yet set, which is why `cortex-m-rt` deprecated its Rust
+  `#[pre_init]`; a program-defined `_start` repeats the loops.
 - Reading the values of the memory map from code (a region's origin and
   size, the stack's bounds), for example to check stack use. Until then a
   value both need is a `const` used in the block and in the code
@@ -261,11 +269,11 @@ ADRs:
     to the step that adds them, with the constraint the ADR states.
   - M4.1: settled by ADR 0079 (inline assembly), 0080 (`core::arch`)
     and 0081 (fences, amending ADR 0023).
-  - M4.2: how `core`'s `_start` names the program's entry function, which
-    `core` cannot name by path (a fixed symbol, or an operand the
-    compiler fills in); whether a program may supply reset code of its
-    own (clocks before `.data` is copied, memory left uninitialized);
-    ADR 0012 superseded and 0030, 0057, 0074 amended accordingly.
+  - M4.2: settled by ADR 0083 (`_start` a naked function of
+    `core::arch`, found by path; `sym entry`; no reset code of the
+    program; the thumbv7m vector table's words emitted by the compiler
+    in `.vector_table`), which supersedes 0012 and amends 0030, 0052,
+    0057, 0074 and 0079.
   - M4.3: the vectors each target names and how a program writes them
     after `at`; whether the handlers the compiler generates for vectors
     without one are contexts of ADR 0078, which decides whether the

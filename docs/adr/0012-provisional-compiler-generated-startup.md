@@ -1,6 +1,6 @@
 # 0012. Provisional compiler-generated startup code
 
-- Status: Accepted; amended by 0030 (`_start` initializes `.data` and `.bss`), 0057 (`_start` at the origin of the code's region, the stack's top from the linker script, a declared stack), 0074 (on ARMv7-M the reset entry is two words of a vector table before `_start`)
+- Status: Superseded by 0083; was amended by 0030 (`_start` initializes `.data` and `.bss`), 0057 (`_start` at the origin of the code's region, the stack's top from the linker script, a declared stack), 0074 (on ARMv7-M the reset entry is two words of a vector table before `_start`)
 - Date: 2026-10-12
 
 ## Context

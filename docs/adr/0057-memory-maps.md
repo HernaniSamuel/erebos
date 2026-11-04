@@ -1,6 +1,6 @@
 # 0057. Memory maps
 
-- Status: Accepted
+- Status: Accepted; amended by 0083 (on thumbv7m the reset entry is the vector table's section, then `_start`'s)
 - Date: 2026-10-25
 - Amends: 0012 (`_start` sits at the origin of the code's region instead
   of first in RAM, and takes the stack's top from the linker script; the
