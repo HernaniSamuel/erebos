@@ -1,0 +1,149 @@
+// Inline assembly on riscv32 (ADR 0079): machine registers read with `csrr`,
+// and values moved in and out of the code through every kind of operand: `in`,
+// `out`, `lateout`, `inout` with explicit registers, narrow integers (extended
+// as the type says on the way in, truncated on the way out), `sym` with
+// `clobber_abi("C")` to call an Erebos function, `const` for an immediate, and
+// a `noreturn` asm that ends the program by jumping to a function. The assembly
+// is riscv32's, which is why the header lists one target (the reason ADR 0079
+// adds to ADR 0077's).
+// targets: riscv32imac-unknown-none-elf
+// expect-output: 0 1 1 1 1 1
+// expect-output: 8 7 3 42 142
+// expect-output: ffffffff 000000ff 255
+// expect-output: 42 1 done
+// expect-exit: 0
+
+mod board;
+use board::{exit, putc};
+
+fn print_u32(n: u32) {
+    if n >= 10 {
+        print_u32(n / 10);
+    }
+    putc(b'0' + (n % 10) as u8);
+}
+
+fn print_hex(n: u32) {
+    let mut shift: u32 = 32;
+    while shift > 0 {
+        shift -= 4;
+        let digit: u8 = ((n >> shift) & 0xF) as u8;
+        putc(if digit < 10 { b'0' + digit } else { b'a' + (digit - 10) });
+    }
+}
+
+fn space() {
+    putc(b' ');
+}
+
+fn newline() {
+    putc(b'\n');
+}
+
+fn flag(set: bool) {
+    putc(if set { b'1' } else { b'0' });
+}
+
+// Called from assembly, through `sym`: the C ABI's `a0` in and out.
+fn triple(x: u32) -> u32 {
+    x * 3
+}
+
+// Where the program ends: the `noreturn` asm of `main` jumps here.
+fn finish() -> ! {
+    putc(b'd');
+    putc(b'o');
+    putc(b'n');
+    putc(b'e');
+    newline();
+    exit(0)
+}
+
+entry fn main() -> ! {
+    // `mhartid` is 0 on the only hart; `misa` has the 32-bit MXL (1) in its
+    // top two bits and one bit per extension: A (0), C (2), I (8), M (12).
+    let mut hart: u32 = 7;
+    asm("csrr {}, mhartid", out(reg) hart, options(nomem, nostack));
+    let mut misa: u32 = 0;
+    asm("csrr {}, misa", out(reg) misa, options(nomem, nostack));
+    print_u32(hart);
+    space();
+    print_u32(misa >> 30);
+    space();
+    flag((misa & (1 << 8)) != 0);
+    space();
+    flag((misa & (1 << 12)) != 0);
+    space();
+    flag((misa & 1) != 0);
+    space();
+    flag((misa & (1 << 2)) != 0);
+    newline();
+
+    // `inout` adds in place; two `inout` with explicit registers swap by xor;
+    // `lateout` may share a register with an input.
+    let mut sum: u32 = 5;
+    asm("add {x}, {x}, {y}", x = inout(reg) sum, y = in(reg) 3 as u32,
+        options(pure, nomem, nostack));
+    let mut first: u32 = 3;
+    let mut second: u32 = 7;
+    asm(
+        "xor a0, a0, a1",
+        "xor a1, a0, a1",
+        "xor a0, a0, a1",
+        inout("a0") first,
+        inout("a1") second,
+        options(pure, nomem, nostack),
+    );
+    let mut total: u32 = 0;
+    asm("add {r}, {a}, {b}", a = in(reg) 20 as u32, b = in(reg) 22 as u32,
+        r = lateout(reg) total, options(pure, nomem, nostack));
+    let mut immediate: u32 = 0;
+    asm("addi {r}, {x}, {k}", x = in(reg) 42 as u32, k = const 100 as u32,
+        r = lateout(reg) immediate, options(pure, nomem, nostack));
+    print_u32(sum);
+    space();
+    print_u32(first);
+    space();
+    print_u32(second);
+    space();
+    print_u32(total);
+    space();
+    print_u32(immediate);
+    newline();
+
+    // An `i8` of -1 fills its register with ones and a `u8` of 255 with zeros
+    // above its byte; an `out` into a `u8` keeps the low byte of 0x1FF.
+    let negative: i8 = -1;
+    let byte: u8 = 255;
+    let mut signed_register: u32 = 0;
+    let mut unsigned_register: u32 = 0;
+    let mut low: u8 = 0;
+    asm("mv {r}, {x}", x = in(reg) negative, r = lateout(reg) signed_register,
+        options(pure, nomem, nostack));
+    asm("mv {r}, {x}", x = in(reg) byte, r = lateout(reg) unsigned_register,
+        options(pure, nomem, nostack));
+    asm("li {}, 0x1ff", out(reg) low, options(pure, nomem, nostack));
+    print_hex(signed_register);
+    space();
+    print_hex(unsigned_register);
+    space();
+    print_u32(low as u32);
+    newline();
+
+    // A call from assembly: `triple` is `a0` in and out, and everything a C
+    // call may change is clobbered, `ra` included.
+    let mut tripled: u32 = 0;
+    asm("call {f}", f = sym triple, inout("a0") 14 as u32 => tripled,
+        clobber_abi("C"));
+    print_u32(tripled);
+    space();
+    flag(tripled == 42);
+    space();
+
+    // The program ends in the assembly: `finish` prints and stops QEMU.
+    asm("j {next}", next = sym finish, options(noreturn))
+}
+
+panic fn on_panic() -> ! {
+    exit(1)
+}

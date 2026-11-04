@@ -1,0 +1,71 @@
+// A hand-off to a device across the fences of `core::arch` (ADR 0081): the
+// program fills a descriptor in memory, calls `fence()` so that the device
+// would see it before it sees the doorbell, rings the doorbell with a volatile
+// store, and reads both back across `compiler_fence()`, which keeps the
+// compiler from moving the reads before the stores. The "device" is the
+// program itself: no hardware here reads the descriptor, so the test shows that
+// the fences build, run and keep the values on both targets, at both
+// optimization levels, and `tests/elf.rs` shows the instruction each emits.
+// expect-output: 1000 64 3
+// expect-output: 7 ok
+// expect-exit: 0
+
+mod board;
+use board::{exit, putc};
+
+struct Descriptor { addr: u32, len: u32, flags: u32 }
+
+static mut DESCRIPTOR: Descriptor = Descriptor { addr: 0, len: 0, flags: 0 };
+
+fn print_u32(n: u32) {
+    if n >= 10 {
+        print_u32(n / 10);
+    }
+    putc(b'0' + (n % 10) as u8);
+}
+
+entry fn main() -> ! {
+    // The doorbell, a word of RAM that no section occupies (ADR 0077).
+    let doorbell: *mut volatile u32 = board::SCRATCH as *mut volatile u32;
+    *doorbell = 0;
+
+    let descriptor: *mut Descriptor = &raw mut DESCRIPTOR;
+    (*descriptor).addr = 1000;
+    (*descriptor).len = 64;
+    (*descriptor).flags = 3;
+
+    // Every store above is visible before the doorbell is.
+    core::arch::fence();
+    *doorbell = 7;
+
+    // Neither read moves above the stores, whatever the optimizer thinks of
+    // the memory it knows.
+    core::arch::compiler_fence();
+    let seen_bell: u32 = *doorbell;
+    let seen_addr: u32 = (*descriptor).addr;
+    let seen_len: u32 = (*descriptor).len;
+    let seen_flags: u32 = (*descriptor).flags;
+    core::arch::compiler_fence();
+
+    print_u32(seen_addr);
+    putc(b' ');
+    print_u32(seen_len);
+    putc(b' ');
+    print_u32(seen_flags);
+    putc(b'\n');
+    print_u32(seen_bell);
+    putc(b' ');
+    if seen_bell == 7 && seen_addr == 1000 && seen_len == 64 && seen_flags == 3 {
+        putc(b'o');
+        putc(b'k');
+    } else {
+        putc(b'n');
+        putc(b'o');
+    }
+    putc(b'\n');
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(1)
+}
