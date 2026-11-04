@@ -25,7 +25,8 @@ pub fn source(target: &Target) -> String {
 }
 
 /// The C file of `target`'s board, when the board has one: the program links
-/// it in (`qemu::board_object`).
+/// it in (`qemu::board_object`). No board has one today (the thumbv7m board
+/// stops QEMU with inline assembly, ADR 0079); a future board may need one.
 pub fn c_file(target: &Target) -> Option<PathBuf> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/boards")

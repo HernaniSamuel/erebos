@@ -2,7 +2,7 @@
 // 0074, 0077). The harness gives each program a copy of it as `board.ers`,
 // which the program declares with `mod board;`. It offers what ADR 0077
 // lists: `putc`, `exit` and `SCRATCH`, and holds the machine's `memory`
-// block. Its C file, `thumbv7m-none-eabi.c`, is linked with the program.
+// block. It stops QEMU with an `asm` expression (ADR 0079) and has no C file.
 
 // 4 MiB of RAM at 0 hold the image; the 4 MiB at 0x2000_0000 hold a 1 MiB
 // stack at their start, then `.data` and `.bss`.
@@ -27,9 +27,6 @@ const UART_BAUDDIV: *mut volatile u32 = 0x4000_4010 as *mut volatile u32;
 /// never writes, zero when QEMU starts.
 pub const SCRATCH: usize = 0x2100_0000;
 
-// The semihosting request of `tests/boards/thumbv7m-none-eabi.c`.
-extern fn board_exit(code: u32);
-
 // Writes one byte to the UART. The divisor is the smallest QEMU accepts and
 // must be set before the transmitter is enabled.
 pub fn putc(byte: u8) {
@@ -39,8 +36,14 @@ pub fn putc(byte: u8) {
     *UART_DATA = byte as u32;
 }
 
-// Stops QEMU: 0 passes, any other code fails with it as the exit status.
+// Stops QEMU: 0 passes, any other code fails with it as the exit status. The
+// request is SYS_EXIT_EXTENDED (0x20) with the reason ADP_Stopped_ApplicationExit
+// (0x20026) and `code`, which QEMU, started with `-semihosting-config
+// enable=on`, turns into its exit status. `bkpt 0xab` takes the request number
+// in r0 and the address of the two-word block in r1, and leaves a result in r0
+// that the request does not need.
 pub fn exit(code: u32) -> ! {
-    board_exit(code);
+    let block: [u32; 2] = [0x20026, code];
+    asm("bkpt 0xab", inout("r0") 0x20 as u32 => _, in("r1") &raw const block, options(nostack));
     loop {}
 }
