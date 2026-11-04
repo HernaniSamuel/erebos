@@ -2405,7 +2405,7 @@ must be local (`1:` and `1b`, `1f`).
 | `readonly` | reads memory, writes none | writes may not move across it, reads may |
 | `pure` | has no effect but its outputs, which depend only on its inputs and, with `readonly`, memory | may be removed when its outputs are unused, or evaluated once for equal inputs; needs `nomem` or `readonly` and an output |
 | `nostack` | does not touch the stack | the stack is not aligned for it |
-| `preserves_flags` | leaves the condition flags as they were | no effect on riscv32 |
+| `preserves_flags` | leaves the condition flags as they were | no effect on riscv32, nor beside `clobber_abi("C")`, which covers the flags |
 | `noreturn` | never ends | the expression has type `!`; no output operands |
 
 Options that contradict each other or the operands (`nomem` with `readonly`,

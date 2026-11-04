@@ -4,7 +4,7 @@
 // `asm` expressions on thumbv7m as LLVM's inline assembly (ADR 0079): as in
 // `asm_codegen.ers`, with what is the target's own: the registers by their
 // names (`r14` is LLVM's `lr`), and `~{cc}` for the flags unless
-// `preserves_flags`.
+// `preserves_flags` without `clobber_abi`.
 static mut COUNTER: u32 = 0;
 
 fn callee() {}
@@ -57,6 +57,12 @@ fn clobbers(x: u32) -> u32 {
     v
 }
 
+// `clobber_abi("C")` covers the flags, so `preserves_flags` beside it does not
+// keep them.
+fn call_preserving_flags() {
+    asm("bl {}", sym callee, clobber_abi("C"), options(preserves_flags));
+}
+
 // The flags: clobbered unless `preserves_flags`.
 fn options(x: u32) -> u32 {
     let mut v: u32 = 0;
@@ -87,6 +93,7 @@ entry fn main() -> ! {
     widths(1, 2, 3, 4, 0 as *const u8);
     symbols();
     clobbers(1);
+    call_preserving_flags();
     options(1);
     removed(1);
     stops()

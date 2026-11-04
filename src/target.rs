@@ -71,9 +71,6 @@ pub struct Register {
     /// pointer, the program counter, and the registers LLVM keeps for the
     /// frame and for addressing the frame.
     pub reserved: bool,
-    /// `reg` may choose it: a general-purpose register the compiler may give
-    /// to any operand.
-    pub in_reg_class: bool,
 }
 
 impl Register {
@@ -82,7 +79,6 @@ impl Register {
             name,
             aliases,
             reserved: false,
-            in_reg_class: true,
         }
     }
 
@@ -91,7 +87,6 @@ impl Register {
             name,
             aliases,
             reserved: true,
-            in_reg_class: false,
         }
     }
 
@@ -271,12 +266,6 @@ mod tests {
                     assert!(!seen.contains(name), "{}: `{name}`", target.name);
                     seen.push(name);
                 }
-                // `reg` never chooses a register the compiler keeps.
-                assert!(
-                    !(register.reserved && register.in_reg_class),
-                    "{}",
-                    register.name
-                );
             }
             for name in target.c_clobbers {
                 let register = target.register(name.as_bytes()).expect(name);

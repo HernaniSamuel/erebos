@@ -191,7 +191,9 @@ impl Plan {
         if !options.nomem && !options.readonly {
             constraints.push("~{memory}".to_owned());
         }
-        if arch == Arch::Armv7m && !options.preserves_flags {
+        // `clobber_abi("C")` covers the flags on thumbv7m (ADR 0079), whatever
+        // `preserves_flags` says of the code itself.
+        if arch == Arch::Armv7m && (!options.preserves_flags || !inline.clobbers.is_empty()) {
             constraints.push("~{cc}".to_owned());
         }
 
