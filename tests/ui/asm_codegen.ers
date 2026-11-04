@@ -1,0 +1,108 @@
+// emit: llvm-ir
+// opt: both
+// `asm` expressions on riscv32 as LLVM's inline assembly (ADR 0079): the
+// constraint string of every direction, an explicit register,
+// `clobber_abi("C")`, `sym` and `const`, a `$` escaped, several outputs, each
+// option, and `noreturn`. At `-O`, a `pure` expression whose output is unused
+// is gone, and one that is not `pure` stays. The thumbv7m counterpart is
+// `asm_codegen_thumbv7m.ers`.
+static mut COUNTER: u32 = 0;
+
+fn callee() {}
+
+// `out` is an early-clobber output, `lateout` is not, and `inout` is an output
+// with an input tied to it.
+fn directions(x: u32, p: *const u8) -> u32 {
+    let mut v: u32 = 0;
+    let mut w: u32 = 0;
+    asm("add {}, {}, {}", out(reg) v, in(reg) x, in(reg) p);
+    asm("mv {}, {}", lateout(reg) w, in(reg) x);
+    asm("addi {0}, {0}, 1", inout(reg) v);
+    asm("mv {}, a0", inout(reg) x => w, in("a0") p);
+    asm("li {}, 7", out(reg) _);
+    w + v
+}
+
+// Explicit registers: an input, an output stored, one dropped, an output that
+// is a clobber, and an input whose register is also an output.
+fn explicit(x: u32) -> u32 {
+    let mut v: u32 = 0;
+    asm("mv a1, a0", in("a0") x, out("a1") v);
+    asm("mv a2, a0", in("a0") x, lateout("a0") _, out("a2") _);
+    asm("mv a3, a0", inout("a0") x => _, lateout("a3") v);
+    v
+}
+
+// What a register holds when the type is narrower: extended by the signedness
+// of the input, truncated for the output. A pointer stays a pointer.
+fn widths(a: u8, b: i8, c: u16, d: i16, p: *const u8) -> u8 {
+    let mut out8: u8 = 0;
+    let mut out16: i16 = 0;
+    let mut out_ptr: *const u8 = p;
+    asm("add {}, {}, {}", out(reg) out8, in(reg) a, in(reg) b);
+    asm("add {}, {}, {}", out(reg) out16, in(reg) c, in(reg) d);
+    asm("mv {}, {}", out(reg) out_ptr, in(reg) p);
+    asm("addi {0}, {0}, 1", inout(reg) out8);
+    out8
+}
+
+// `sym` is pasted as the symbol and joins `llvm.compiler.used`; `const` is
+// pasted in decimal, with its sign; `$` is escaped.
+fn symbols() {
+    asm("call {}", sym callee, clobber_abi("C"));
+    asm("la {}, {}", out(reg) _, sym COUNTER);
+    asm("li a0, {}", const -1 as i32, out("a0") _);
+    asm("li a0, {}", const 0xFFFF_FFFF_FFFF as u64, out("a0") _);
+    asm("li a0, {}", const 255 as u8, out("a0") _);
+    asm(".word 1$2");
+}
+
+// `clobber_abi("C")` clobbers every register a C call changes, but those an
+// operand names: an explicit input among them is tied to an output nothing
+// reads.
+fn clobbers(x: u32) -> u32 {
+    let mut v: u32 = 0;
+    asm("call {}", sym callee, in("a0") x, out("a1") _, clobber_abi("C"));
+    asm("call {}", sym callee, inout("a0") x => v, clobber_abi("C"));
+    v
+}
+
+// Each option, one at a time and together.
+fn options(x: u32) -> u32 {
+    let mut v: u32 = 0;
+    asm("nop", options(nomem));
+    asm("nop", options(readonly));
+    asm("nop", options(nostack));
+    asm("nop", options(preserves_flags));
+    asm("nop {}", out(reg) v, options(pure, nomem));
+    asm("lw {}, 0({})", out(reg) v, in(reg) x, options(pure, readonly, nostack));
+    asm("nop", options(nomem, nostack, preserves_flags));
+    v
+}
+
+// A `pure` expression whose output is unused is removed by `-O`; the same
+// with no option stays, and so does one with an effect.
+fn removed(x: u32) {
+    let mut v: u32 = 0;
+    asm("addi {}, {}, 1", out(reg) v, in(reg) x, options(pure, nomem));
+    asm("addi {}, {}, 2", out(reg) v, in(reg) x);
+    asm("addi {}, {}, 3", out(reg) v, in(reg) x, options(nomem));
+}
+
+// `noreturn` ends the block, and the function returns `!`.
+fn stops() -> ! {
+    asm("wfi", options(noreturn));
+}
+
+entry fn main() -> ! {
+    directions(1, 0 as *const u8);
+    explicit(1);
+    widths(1, 2, 3, 4, 0 as *const u8);
+    symbols();
+    clobbers(1);
+    options(1);
+    removed(1);
+    stops()
+}
+
+panic fn on_panic() -> ! { loop {} }

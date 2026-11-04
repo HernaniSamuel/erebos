@@ -232,3 +232,272 @@ fn riscv32_keeps_every_event_line() {
     let log = "Taking exception 16 [Semihosting call] ...\n";
     assert_eq!(qemu::expected_events_removed(&RISCV32IMAC, log), log);
 }
+
+/// A program of one file, `main.ers`, beside `target`'s board (the program
+/// declares `mod board;`), built by the compiler's command line; its
+/// objects are those the board needs. What the process did.
+fn build_by_command_line(
+    name: &str,
+    source: &str,
+    target: &'static Target,
+    opt: OptLevel,
+) -> std::process::Output {
+    let work = Path::new(env!("CARGO_TARGET_TMPDIR"))
+        .join("e2e-harness")
+        .join(target.name);
+    let dir = work.join(name);
+    fs::create_dir_all(&dir).unwrap();
+    fs::write(dir.join("main.ers"), source).unwrap();
+    fs::write(dir.join("board.ers"), board::source(target)).unwrap();
+    let objects = qemu::board_object(target, &work, opt).unwrap();
+    let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_erebos"));
+    command
+        .current_dir(&dir)
+        .args(["build", "main.ers", "-o", "main.elf"])
+        .args(["--target", target.name]);
+    if opt == OptLevel::Speed {
+        command.arg("-O");
+    }
+    if let Some(object) = &objects {
+        command.arg("--link").arg(object);
+    }
+    command.output().unwrap()
+}
+
+/// A program that runs `body`, then stops QEMU, with `definitions` before
+/// its entry function.
+fn running(body: &str, definitions: &str) -> String {
+    format!(
+        "mod board;
+
+{definitions}
+entry fn main() -> ! {{
+{body}    board::exit(0)
+}}
+
+panic fn on_panic() -> ! {{ loop {{}} }}
+"
+    )
+}
+
+/// The line and column where the first `asm(` of `source` starts, as
+/// diagnostics show them.
+fn asm_position(source: &str) -> String {
+    let (line, text) = source
+        .lines()
+        .enumerate()
+        .find(|(_, text)| text.contains("asm("))
+        .unwrap();
+    format!("main.ers:{}:{}", line + 1, text.find("asm(").unwrap() + 1)
+}
+
+/// A template the assembler rejects is `codegen::asm`, labelled at the `asm`
+/// expression, with the compiler's own exit status: LLVM's default handler
+/// would print a message of its own and end the process (ADR 0079, 0082).
+#[test]
+fn an_instruction_the_assembler_rejects_is_codegen_asm() {
+    let source = running(
+        "    bad();
+",
+        "fn bad() {
+    asm(\"frobnicate x1, x2\");
+}
+",
+    );
+    for target in board::RUN_ON {
+        for opt in [OptLevel::None, OptLevel::Speed] {
+            let name = format!("unknown_instruction [{}] {opt:?}", target.name);
+            let output = build_by_command_line("unknown_instruction", &source, target, opt);
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            assert_eq!(output.status.code(), Some(1), "{name}:\n{stderr}");
+            assert_eq!(
+                stderr.matches("codegen::asm").count(),
+                1,
+                "{name}:\n{stderr}"
+            );
+            assert!(
+                stderr.contains(&asm_position(&source)) && stderr.contains("frobnicate"),
+                "{name}: the label is not at the `asm`:\n{stderr}"
+            );
+            assert!(!stderr.contains("codegen::llvm"), "{name}:\n{stderr}");
+        }
+    }
+}
+
+/// A function with a bad template called from three places, which `-O`
+/// inlines into three copies of it, is one report, not three (ADR 0079).
+#[test]
+fn a_bad_template_called_from_three_places_is_reported_once() {
+    let source = running(
+        "    bad();
+    bad();
+    bad();
+",
+        "fn bad() {
+    asm(\"frobnicate x1, x2\");
+}
+",
+    );
+    for target in board::RUN_ON {
+        for opt in [OptLevel::None, OptLevel::Speed] {
+            let name = format!("three_calls [{}] {opt:?}", target.name);
+            let output = build_by_command_line("three_calls", &source, target, opt);
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            assert_eq!(output.status.code(), Some(1), "{name}:\n{stderr}");
+            assert_eq!(
+                stderr.matches("codegen::asm").count(),
+                1,
+                "{name}:\n{stderr}"
+            );
+            assert!(stderr.contains(&asm_position(&source)), "{name}:\n{stderr}");
+        }
+    }
+}
+
+/// A label that is not local, in a function that `-O` inlines twice, is
+/// defined twice in the object: LLVM cannot say which `asm` expression it
+/// comes from, so the report has no label. Without inlining the program
+/// builds (ADR 0079).
+#[test]
+fn a_label_defined_by_inlining_is_codegen_asm_without_a_label() {
+    let source = "mod board;
+
+static mut COUNT: u32 = 0;
+
+fn once() {
+    asm(\"shared_label: nop\");
+    COUNT = COUNT + 1;
+}
+
+entry fn main() -> ! {
+    once();
+    once();
+    board::exit(0)
+}
+
+panic fn on_panic() -> ! { loop {} }
+";
+    for target in board::RUN_ON {
+        let name = format!("shared_label [{}]", target.name);
+        let output = build_by_command_line("shared_label", source, target, OptLevel::None);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            output.status.success(),
+            "{name} builds without inlining:\n{stderr}"
+        );
+
+        let output = build_by_command_line("shared_label", source, target, OptLevel::Speed);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(output.status.code(), Some(1), "{name} -O:\n{stderr}");
+        assert_eq!(
+            stderr.matches("codegen::asm").count(),
+            1,
+            "{name} -O:\n{stderr}"
+        );
+        assert!(
+            stderr.contains("shared_label") && !stderr.contains("main.ers:"),
+            "{name} -O: the report has a label, or not the message:\n{stderr}"
+        );
+    }
+}
+
+/// More `reg` operands than registers: LLVM finds none for the rest, which is
+/// a report of the `asm` expression, not `codegen::llvm` (ADR 0079).
+#[test]
+fn more_operands_than_registers_is_codegen_asm() {
+    let operands = "in(reg) a, ".repeat(16);
+    let placeholders = "{}".repeat(16);
+    let definitions = format!(
+        "fn many(a: u32) {{
+    asm(\"nop {placeholders}\", {});
+}}
+",
+        operands.trim_end_matches(", ")
+    );
+    let source = running(
+        "    many(1);
+",
+        &definitions,
+    );
+    let target = &THUMBV7M;
+    for opt in [OptLevel::None, OptLevel::Speed] {
+        let name = format!("too_many_registers [{}] {opt:?}", target.name);
+        let output = build_by_command_line("too_many_registers", &source, target, opt);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(output.status.code(), Some(1), "{name}:\n{stderr}");
+        assert_eq!(
+            stderr.matches("codegen::asm").count(),
+            1,
+            "{name}:\n{stderr}"
+        );
+        assert!(stderr.contains(&asm_position(&source)), "{name}:\n{stderr}");
+        assert!(!stderr.contains("codegen::llvm"), "{name}:\n{stderr}");
+    }
+}
+
+/// The rendered `codegen::asm` (ADR 0079), as the command line prints it: two
+/// templates the assembler rejects reported in the order of the source and
+/// not of the calls, a label LLVM cannot place, and an `asm` that finds no
+/// register. The paths are those of the program, never the work directory's.
+#[test]
+fn codegen_asm_is_rendered() {
+    let rendered = |name: &str, source: &str, target: &'static Target, opt: OptLevel| {
+        let output = build_by_command_line(name, source, target, opt);
+        assert_eq!(output.status.code(), Some(1), "{name}");
+        String::from_utf8(output.stderr).unwrap()
+    };
+
+    // The second function is called first, and the first has an immediate the
+    // assembler refuses on riscv32.
+    let two = running(
+        "    second(1);
+    first();
+",
+        "fn first() {
+    asm(\"frobnicate x1, x2\");
+}
+
+fn second(x: u32) {
+    asm(\"addi a0, {}, 99999\", in(reg) x, out(\"a0\") _);
+}
+",
+    );
+    insta::assert_snapshot!(
+        "codegen_asm_two_in_source_order",
+        rendered("render_two", &two, &RISCV32IMAC, OptLevel::None)
+    );
+
+    let label = running(
+        "    once();
+    once();
+",
+        "static mut COUNT: u32 = 0;
+
+fn once() {
+    asm(\"shared_label: nop\");
+    COUNT = COUNT + 1;
+}
+",
+    );
+    insta::assert_snapshot!(
+        "codegen_asm_without_a_label",
+        rendered("render_label", &label, &RISCV32IMAC, OptLevel::Speed)
+    );
+
+    let registers = running(
+        "    many(1);
+",
+        &format!(
+            "fn many(a: u32) {{
+    asm(\"nop {}\", {});
+}}
+",
+            "{}".repeat(16),
+            vec!["in(reg) a"; 16].join(", ")
+        ),
+    );
+    insta::assert_snapshot!(
+        "codegen_asm_without_registers",
+        rendered("render_registers", &registers, &THUMBV7M, OptLevel::None)
+    );
+}

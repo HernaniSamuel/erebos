@@ -1,6 +1,8 @@
 //! MIR -> LLVM IR -> object file, through inkwell (ADR 0005).
 
 mod abi;
+mod asm;
+mod diagnostics;
 
 use std::path::Path;
 
@@ -24,14 +26,15 @@ use inkwell::values::{
 };
 use inkwell::{IntPredicate, OptimizationLevel};
 
+use crate::diag::Diagnostic;
 use crate::mir::{
     BinOp, Body, Const, IntTy, Local, Mir, Operand, PanicInfoAt, Place, PlaceElem, Ptr, Relocation,
     Rvalue, Statement, Terminator, Ty, UnOp,
 };
 use crate::target::{Arch, Target};
 use abi::{Cast, FnAbi, PassMode};
+use diagnostics::Collector;
 
-/// Returns the textual LLVM IR, for `--emit=llvm-ir`.
 /// How much LLVM optimizes. Without optimization, locals are still promoted
 /// to registers (`mem2reg`), which keeps the IR readable.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -58,41 +61,62 @@ impl OptLevel {
     }
 }
 
-pub fn emit_llvm_ir(mir: &Mir, target: &Target, opt: OptLevel) -> Result<String, String> {
-    no_inline_asm(mir)?;
-    let machine = target_machine(target, opt)?;
-    let context = Context::create();
-    let module = lower(&context, mir, target, &machine, opt);
-    Ok(module.print_to_string().to_string())
+/// An error of code generation that has no `asm` expression to blame: LLVM
+/// could not do what it was asked.
+fn llvm_error(message: impl Into<String>) -> Vec<Diagnostic> {
+    vec![Diagnostic::error("codegen::llvm", message)]
 }
 
-pub fn emit_object(mir: &Mir, target: &Target, opt: OptLevel, path: &Path) -> Result<(), String> {
-    no_inline_asm(mir)?;
-    let machine = target_machine(target, opt)?;
+/// The textual LLVM IR, for `--emit=llvm-ir`. Every error LLVM reports on the
+/// way is a diagnostic (ADR 0082).
+pub fn emit_llvm_ir(mir: &Mir, target: &Target, opt: OptLevel) -> Result<String, Vec<Diagnostic>> {
+    let machine = target_machine(target, opt).map_err(llvm_error)?;
+    // Declared before the context: LLVM calls the handler until the context
+    // is dropped (ADR 0082).
+    let collector = Collector::default();
     let context = Context::create();
+    collector.install(&context);
     let module = lower(&context, mir, target, &machine, opt);
-    machine
-        .write_to_file(&module, FileType::Object, path)
-        .map_err(|e| format!("cannot write `{}`: {e}", path.display()))
-}
-
-/// Temporary, until step 3 of M4.1 generates inline assembly: a body that
-/// holds an `asm` expression is reported, as an error of code generation, so
-/// that the statement is never met below.
-fn no_inline_asm(mir: &Mir) -> Result<(), String> {
-    for (_, body) in mir.bodies().filter(|(_, body)| !body.comptime) {
-        let holds = body.blocks.iter().any(|block| {
-            matches!(block.terminator, Terminator::InlineAsm(_))
-                || (block.statements.iter()).any(|s| matches!(s, Statement::InlineAsm(_)))
-        });
-        if holds {
-            return Err(format!(
-                "inline assembly is not generated yet: `{}` holds an `asm` expression (ADR 0079)",
-                body.name
-            ));
-        }
+    let text = module.print_to_string().to_string();
+    let errors = collector.take();
+    if errors.is_empty() {
+        return Ok(text);
     }
-    Ok(())
+    Err(asm::diagnose(errors, mir, &machine, target.arch))
+}
+
+/// Writes the object file at `path`. A build whose LLVM reported an error
+/// fails, and its object is discarded, even when LLVM went on to write one
+/// (ADR 0082); an error of the assembler is `codegen::asm` (ADR 0079).
+pub fn emit_object(
+    mir: &Mir,
+    target: &Target,
+    opt: OptLevel,
+    path: &Path,
+) -> Result<(), Vec<Diagnostic>> {
+    let machine = target_machine(target, opt).map_err(llvm_error)?;
+    let collector = Collector::default();
+    let context = Context::create();
+    collector.install(&context);
+    let module = lower(&context, mir, target, &machine, opt);
+    let written = machine.write_to_file(&module, FileType::Object, path);
+    let errors = collector.take();
+    let mut failures = if errors.is_empty() {
+        Vec::new()
+    } else {
+        asm::diagnose(errors, mir, &machine, target.arch)
+    };
+    if let Err(e) = written {
+        failures.extend(llvm_error(format!(
+            "cannot write `{}`: {e}",
+            path.display()
+        )));
+    }
+    if failures.is_empty() {
+        return Ok(());
+    }
+    asm::discard(path);
+    Err(failures)
 }
 
 fn target_machine(target: &Target, opt: OptLevel) -> Result<TargetMachine, String> {
@@ -167,6 +191,8 @@ fn lower<'ctx>(
         panic: mir.panic.0 as usize,
         module: &module,
         div64: target.div64,
+        mir,
+        arch: target.arch,
     };
     for (((_, body), function), abi) in mir.bodies().zip(&fns).zip(&abis) {
         // An `extern fn` stays a declaration for the linker to resolve.
@@ -176,6 +202,8 @@ fn lower<'ctx>(
             FnCodegen::new(context, body, abi, *function, &shared).define();
         }
     }
+
+    asm::keep_symbols(context, &module, mir, &fns, &statics);
 
     // The entry function's symbol (ADR 0051): symbols are unique, so LLVM
     // keeps it as the function's name.
@@ -575,6 +603,10 @@ struct FnCodegen<'a, 'ctx> {
     module: &'a Module<'ctx>,
     /// Whether LLVM's 64-bit division may be emitted (ADR 0076).
     div64: bool,
+    /// The program, where the names of the symbols `asm` expressions use are
+    /// found (ADR 0079), and the architecture it is built for.
+    mir: &'a Mir,
+    arch: Arch,
     builder: Builder<'ctx>,
     blocks: Vec<LlvmBlock<'ctx>>,
     slots: Vec<Option<PointerValue<'ctx>>>,
@@ -598,6 +630,8 @@ struct Shared<'a, 'ctx> {
     panic: usize,
     module: &'a Module<'ctx>,
     div64: bool,
+    mir: &'a Mir,
+    arch: Arch,
 }
 
 impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
@@ -616,6 +650,8 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
             panic,
             module,
             div64,
+            mir,
+            arch,
         } = *shared;
         let blocks = body
             .blocks()
@@ -641,6 +677,8 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
             panic,
             module,
             div64,
+            mir,
+            arch,
             builder: context.create_builder(),
             blocks,
             slots: Vec::new(),
@@ -902,8 +940,7 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
             Statement::Call { dest, callee, args } => {
                 self.call(*dest, callee.0 as usize, args);
             }
-            // Reported before code generation (`no_inline_asm`).
-            Statement::InlineAsm(_) => {}
+            Statement::InlineAsm(inline) => self.inline_asm(inline),
         }
     }
 
@@ -1453,7 +1490,12 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                     b.build_return(None)
                 }
             },
-            Terminator::Unreachable | Terminator::InlineAsm(_) => b.build_unreachable(),
+            Terminator::Unreachable => b.build_unreachable(),
+            // Only `noreturn` ends a block with one (ADR 0079).
+            Terminator::InlineAsm(inline) => {
+                self.inline_asm(inline);
+                b.build_unreachable()
+            }
             // With the address of the check's information, in read-only data
             // or in a local, when the panic function takes it (ADR 0053).
             Terminator::Panic(_, site) => {

@@ -74,9 +74,30 @@ const EXTERNAL: &[(&str, &str)] = &[
     ("roxmltree", "svd"),
 ];
 
-/// Names no module may use: the raw LLVM API, which `inkwell` re-exports,
-/// would bypass the checks on codegen (`LLVMBuildNSWAdd`).
-const FORBIDDEN: &[&str] = &["llvm_sys"];
+/// Names no module may use, with the files that may (ADR 0063, 0082): the
+/// raw LLVM API, which `inkwell` re-exports, would bypass the checks on
+/// codegen (`LLVMBuildNSWAdd`). Only the diagnostic handler needs it.
+const FORBIDDEN: &[(&str, &[&str])] = &[("llvm_sys", &[HANDLER])];
+
+/// The one file that names `llvm_sys` (ADR 0082), and the only one that
+/// defines an `extern "C" fn`.
+const HANDLER: &str = "src/codegen/diagnostics.rs";
+
+/// The names that start with `LLVM` that [`HANDLER`] may use, and no others
+/// (ADR 0082): changing the list takes a new ADR.
+const HANDLER_NAMES: &[&str] = &[
+    "LLVMContextRef",
+    "LLVMContextSetDiagnosticHandler",
+    "LLVMDiagnosticInfoRef",
+    "LLVMGetDiagInfoDescription",
+    "LLVMGetDiagInfoSeverity",
+    "LLVMDiagnosticSeverity",
+    "LLVMDSError",
+    "LLVMDSWarning",
+    "LLVMDSRemark",
+    "LLVMDSNote",
+    "LLVMDisposeMessage",
+];
 
 /// The integer operations of LLVM IR that can carry `nsw` or `nuw`.
 const WRAPPING_OPS: &[&str] = &["add", "sub", "mul", "shl", "trunc"];
@@ -88,6 +109,7 @@ const WRAPPING_OPS: &[&str] = &["add", "sub", "mul", "shl", "trunc"];
 /// count, and say why in the step's `Decisions`. A count that drops is
 /// lowered here, so it cannot grow back.
 const PANICS: &[(&str, usize)] = &[
+    ("src/codegen/asm.rs", 7),
     ("src/codegen/mod.rs", 69),
     ("src/diag.rs", 2),
     ("src/eval.rs", 28),
@@ -179,7 +201,7 @@ fn external_crates_stay_in_their_module() {
     let mut errors = Vec::new();
     for source in sources() {
         for (i, line) in source.code.lines().enumerate() {
-            if let Some(name) = idents(line).find(|name| FORBIDDEN.contains(name)) {
+            if let Some(name) = forbidden_name(&source.name, line) {
                 errors.push(format!(
                     "{}:{}: `{name}` is not used in the compiler (ADR 0063)",
                     source.name,
@@ -197,6 +219,27 @@ fn external_crates_stay_in_their_module() {
                     ));
                 }
             }
+        }
+    }
+    assert!(errors.is_empty(), "\n{}\n", errors.join("\n"));
+}
+
+/// The diagnostic handler stays a handler (ADR 0082): the one file that may
+/// name `llvm_sys` builds nothing, and names only what the ADR lists.
+#[test]
+fn the_diagnostic_handler_stays_a_handler() {
+    let errors = handler_errors(&sources());
+    assert!(errors.is_empty(), "\n{}\n", errors.join("\n"));
+}
+
+/// Nothing reaches LLVM around the name check (ADR 0082): no `extern`
+/// block, no `link_name`, and no `extern "C" fn` outside the handler.
+#[test]
+fn nothing_reaches_llvm_without_naming_it() {
+    let mut errors = Vec::new();
+    for source in sources() {
+        for (line, problem) in extern_problems(&source.name, &source.code) {
+            errors.push(format!("{}:{line}: {problem} (ADR 0082)", source.name));
         }
     }
     assert!(errors.is_empty(), "\n{}\n", errors.join("\n"));
@@ -437,6 +480,60 @@ fn f() { mir::build_body(); }",
         2
     );
     assert_eq!(count_panics("src/ty.rs", ".map(Option::unwrap)"), 1);
+
+    // The handler may name what the ADR lists, in its own file only.
+    let handler = |code: &str| {
+        handler_errors(&[Source {
+            name: HANDLER.to_owned(),
+            module: module("codegen::diagnostics"),
+            code: code.to_owned(),
+        }])
+    };
+    let listed = HANDLER_NAMES
+        .iter()
+        .map(|name| format!("let _ = {name};"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(handler(&listed).is_empty());
+    assert!(handler("extern \"C\" fn handle() { let _ = llvm_sys::x; }").is_empty());
+    for name in [
+        "LLVMBuildAdd",
+        "LLVMBuildNSWAdd",
+        "LLVMContextCreate",
+        "build_add",
+        "build_int_nsw_add",
+        "Builder",
+        "set_no_unsigned_wrap",
+    ] {
+        assert_eq!(
+            handler(&format!("fn f() {{ {name}(x); }}")).len(),
+            1,
+            "`{name}` must fail in the handler"
+        );
+    }
+    // Comments and strings may say anything.
+    assert!(handler(&strip("// LLVMBuildAdd\nlet s = \"Builder\";")).is_empty());
+    // A missing file fails, so that the allow-list cannot outlive it.
+    assert_eq!(handler_errors(&[]).len(), 1);
+    // `llvm_sys` is the handler's alone.
+    assert!(forbidden_name("src/ty.rs", "use inkwell::llvm_sys::core;").is_some());
+    assert!(forbidden_name("src/codegen/mod.rs", "llvm_sys::core::X").is_some());
+    assert!(forbidden_name(HANDLER, "use inkwell::llvm_sys::core;").is_none());
+    assert!(forbidden_name("src/ty.rs", "let llvm_system = 1;").is_none());
+    // An `extern` block and `link_name` anywhere, an `extern` function but
+    // in the handler.
+    let problems = |file: &str, code: &str| extern_problems(file, &strip(code));
+    for file in ["src/ty.rs", HANDLER] {
+        assert_eq!(problems(file, "extern \"C\" {\n fn f(); }").len(), 1);
+        assert_eq!(problems(file, "unsafe extern \"C\" { fn f(); }").len(), 1);
+        assert_eq!(problems(file, "extern { fn f(); }").len(), 1);
+        assert_eq!(problems(file, "#[link_name = \"x\"] fn f();").len(), 1);
+    }
+    assert!(problems(HANDLER, "extern \"C\" fn f() {}").is_empty());
+    assert_eq!(problems("src/ty.rs", "extern \"C\" fn f() {}").len(), 1);
+    assert_eq!(problems("src/ty.rs", "pub extern fn f() {}").len(), 1);
+    assert!(problems("src/ty.rs", "// extern \"C\" {}\nlet s = \"extern {\";").is_empty());
+    assert!(problems("src/ty.rs", "pub extern crate x;\nlet external = 1;").is_empty());
 
     assert!(names_wrap_flag("build_int_nsw_add"));
     assert!(names_wrap_flag("set_no_signed_wrap_flag"));
@@ -977,6 +1074,87 @@ fn integer_op(line: &str) -> Option<(&'static str, Vec<&str>)> {
             .map(|op| (at, *op))
     })?;
     Some((op, tokens[at + 1..].iter().copied().take(2).collect()))
+}
+
+/// The name on `line` that `file` may not use, if any ([`FORBIDDEN`]).
+fn forbidden_name<'a>(file: &str, line: &'a str) -> Option<&'a str> {
+    idents(line).find(|name| {
+        FORBIDDEN
+            .iter()
+            .any(|&(forbidden, allowed)| forbidden == *name && !allowed.contains(&file))
+    })
+}
+
+/// What is wrong with the handler file among `sources` (ADR 0082): it is
+/// missing, or it names an item of the raw API that is not on the list, a
+/// builder, or a wrap flag. Names, not what the code does with them.
+fn handler_errors(sources: &[Source]) -> Vec<String> {
+    let Some(handler) = sources.iter().find(|source| source.name == HANDLER) else {
+        return vec![format!(
+            "{HANDLER}: missing, but `FORBIDDEN` still allows it to name `llvm_sys` (ADR 0082)"
+        )];
+    };
+    let mut errors = Vec::new();
+    for (i, line) in handler.code.lines().enumerate() {
+        for name in idents(line) {
+            let problem = if name.starts_with("LLVM") && !HANDLER_NAMES.contains(&name) {
+                "is not on the list of the handler's names"
+            } else if name.starts_with("build_") || name == "Builder" {
+                "builds IR, which the handler does not"
+            } else if names_wrap_flag(name) {
+                "names a wrap flag (ADR 0007)"
+            } else {
+                continue;
+            };
+            errors.push(format!(
+                "{HANDLER}:{}: `{name}` {problem} (ADR 0082)",
+                i + 1
+            ));
+        }
+    }
+    errors
+}
+
+/// The places of `code`, a file of `src/` named `file`, that reach LLVM
+/// without naming `llvm_sys` (ADR 0082): an `extern` block, `link_name`, and
+/// an `extern` function outside [`HANDLER`], with the line and the problem.
+fn extern_problems(file: &str, code: &str) -> Vec<(usize, &'static str)> {
+    let whole_word = |at: usize, word: &str| {
+        let before = code[..at].chars().next_back();
+        let after = code[at + word.len()..].chars().next();
+        !before.is_some_and(is_ident) && !after.is_some_and(is_ident)
+    };
+    let mut found = Vec::new();
+    for (at, word) in code.match_indices("extern") {
+        if !whole_word(at, word) {
+            continue;
+        }
+        let mut rest = code[at + word.len()..].trim_start();
+        // The ABI is a string, whose contents `strip` blanked.
+        if let Some(abi) = rest.strip_prefix('"') {
+            rest = abi
+                .split_once('"')
+                .map_or("", |(_, rest)| rest)
+                .trim_start();
+        }
+        let line = line_of(code, at);
+        if rest.starts_with('{') {
+            found.push((line, "an `extern` block"));
+        } else if rest
+            .strip_prefix("fn")
+            .is_some_and(|after| !after.starts_with(is_ident))
+            && file != HANDLER
+        {
+            found.push((line, "an `extern` function outside the handler"));
+        }
+    }
+    for (at, word) in code.match_indices("link_name") {
+        if whole_word(at, word) {
+            found.push((line_of(code, at), "`link_name`"));
+        }
+    }
+    found.sort_by_key(|&(line, _)| line);
+    found
 }
 
 fn idents(line: &str) -> impl Iterator<Item = &str> {

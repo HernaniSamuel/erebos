@@ -126,9 +126,13 @@ pub fn dump(
                 None
             }
         },
-        FrontEnd::Mir(mir) => codegen::emit_llvm_ir(&mir, target, opt)
-            .map_err(|e| diags.push(Diagnostic::error("codegen::llvm", e)))
-            .ok(),
+        FrontEnd::Mir(mir) => match codegen::emit_llvm_ir(&mir, target, opt) {
+            Ok(ir) => Some(ir),
+            Err(failures) => {
+                failures.into_iter().for_each(|diag| diags.push(diag));
+                None
+            }
+        },
         FrontEnd::Failed => None,
     };
     match output {
@@ -167,12 +171,18 @@ pub fn build(
     // Intermediate files sit next to the output and are removed afterwards.
     let object = output.with_extension("o");
     let script = output.with_extension("ld");
+    // What code generation reports is diagnostics, with spans of the program
+    // (ADR 0079).
     let result = codegen::emit_object(&mir, target, opt, &object)
+        .map_err(|failures| {
+            let mut diags = Diagnostics::default();
+            failures.into_iter().for_each(|diag| diags.push(diag));
+            diag::render(&diags.into_vec(), &sources, color)
+        })
         .and_then(|()| {
             fs::write(&script, link::linker_script(map, target))
-                .map_err(|e| format!("cannot write `{}`: {e}", script.display()))
+                .map_err(|e| format!("error: cannot write `{}`: {e}", script.display()))
         })
-        .map_err(|e| format!("error: {e}"))
         .and_then(|()| {
             link::link(&object, link, &script, output).map_err(|e| match e {
                 LinkError::Run(e) => format!("error: {e}"),

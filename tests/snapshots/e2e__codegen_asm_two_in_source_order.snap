@@ -1,0 +1,29 @@
+---
+source: tests/e2e.rs
+expression: "rendered(\"render_two\", &two, &RISCV32IMAC, OptLevel::None)"
+---
+codegen::asm
+
+  × <inline asm>:1:2: unrecognized instruction mnemonic
+  │         frobnicate x1, x2
+  │         ^
+   ╭─[main.ers:4:5]
+ 3 │ fn first() {
+ 4 │     asm("frobnicate x1, x2");
+   ·     ────────────┬───────────
+   ·                 ╰── the assembler rejects this code
+ 5 │ }
+   ╰────
+codegen::asm
+
+  × <inline asm>:1:15: operand must be a symbol with %lo/%pcrel_lo/%tprel_lo specifier or an
+  │ integer in the range [-2048, 2047]
+  │         addi a0, a1, 99999
+  │                      ^
+   ╭─[main.ers:8:5]
+ 7 │ fn second(x: u32) {
+ 8 │     asm("addi a0, {}, 99999", in(reg) x, out("a0") _);
+   ·     ────────────────────────┬────────────────────────
+   ·                             ╰── the assembler rejects this code
+ 9 │ }
+   ╰────

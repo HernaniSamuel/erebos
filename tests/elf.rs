@@ -779,6 +779,73 @@ fn thumbv7m_reset_entry() {
     }
 }
 
+/// An `asm` expression is assembled into the program's code (ADR 0079): the
+/// template reaches the assembler as rendered, so `.text` holds the
+/// instruction it names, in the register the operand names. `csrr a0,
+/// mhartid` is `csrrs a0, mhartid, zero`, and `mrs r0, ipsr` is two Thumb-2
+/// halfwords. The programs that run on QEMU are in `tests/e2e`.
+#[test]
+fn an_asm_expression_is_assembled_into_the_code() {
+    let work = Path::new(env!("CARGO_TARGET_TMPDIR")).join("elf");
+    fs::create_dir_all(&work).unwrap();
+    for (target, template, register, instruction) in [
+        (
+            "riscv32imac-unknown-none-elf",
+            "csrr a0, mhartid",
+            "a0",
+            [0x73, 0x25, 0x40, 0xf1],
+        ),
+        (
+            "thumbv7m-none-eabi",
+            "mrs r0, ipsr",
+            "r0",
+            [0xef, 0xf3, 0x05, 0x80],
+        ),
+    ] {
+        let target = erebos::target::by_name(target).unwrap();
+        let source = work.join(format!("asm-{}.ers", target.name));
+        let program = format!(
+            "{VIRT_MAP}
+static mut OUT: u32 = 0;
+
+entry fn main() -> ! {{
+    let mut v: u32 = 0;
+    asm(\"{template}\", out(\"{register}\") v, options(nomem, nostack));
+    OUT = v;
+    loop {{}}
+}}
+
+panic fn on_panic() -> ! {{ loop {{}} }}
+"
+        );
+        fs::write(&source, program).unwrap();
+        for opt in [OptLevel::None, OptLevel::Speed] {
+            let elf = work.join(format!("asm-{}-{opt:?}.elf", target.name));
+            driver::build(&source, &elf, &[], target, opt, false).unwrap();
+            let text = section_bytes(&elf, ".text");
+            assert!(
+                text.windows(instruction.len())
+                    .any(|window| window == instruction),
+                "{} {opt:?}: `.text` does not hold `{template}` ({instruction:02x?})",
+                target.name
+            );
+        }
+    }
+}
+
+/// The contents of the section `name` of `elf`, from its file.
+fn section_bytes(elf: &Path, name: &str) -> Vec<u8> {
+    let headers = readelf(elf, &["--section-headers"]);
+    let line = headers
+        .lines()
+        .find(|line| line.contains(&format!(" {name} ")))
+        .unwrap_or_else(|| panic!("no section `{name}`"));
+    // `[Nr] Name Type Address Off Size ...`, after the `]`.
+    let fields: Vec<&str> = line.split_once(']').unwrap().1.split_whitespace().collect();
+    let (offset, size) = (hex(fields[3]) as usize, hex(fields[4]) as usize);
+    fs::read(elf).unwrap()[offset..offset + size].to_vec()
+}
+
 /// The guarantees of ADR 0030 on the startup ranges; with `shared`, data
 /// shares the code's region and the load image of `.data` is its run range
 /// (ADR 0057), so it is not disjoint from it.

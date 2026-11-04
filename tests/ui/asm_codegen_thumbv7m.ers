@@ -1,0 +1,95 @@
+// emit: llvm-ir
+// opt: both
+// target: thumbv7m-none-eabi
+// `asm` expressions on thumbv7m as LLVM's inline assembly (ADR 0079): as in
+// `asm_codegen.ers`, with what is the target's own: the registers by their
+// names (`r14` is LLVM's `lr`), and `~{cc}` for the flags unless
+// `preserves_flags`.
+static mut COUNTER: u32 = 0;
+
+fn callee() {}
+
+fn directions(x: u32, p: *const u8) -> u32 {
+    let mut v: u32 = 0;
+    let mut w: u32 = 0;
+    asm("add {}, {}, {}", out(reg) v, in(reg) x, in(reg) p);
+    asm("mov {}, {}", lateout(reg) w, in(reg) x);
+    asm("add {0}, {0}, #1", inout(reg) v);
+    asm("mov {}, r0", inout(reg) x => w, in("r0") p);
+    asm("movs {}, #7", out(reg) _);
+    w + v
+}
+
+// Explicit registers, among them the ones LLVM names otherwise: `lr` is `r14`,
+// and `fp`, `ip`, `sb` and `sl` are `r11` to `r9`.
+fn explicit(x: u32) -> u32 {
+    let mut v: u32 = 0;
+    asm("mov r1, r0", in("r0") x, out("r1") v);
+    asm("mov r2, lr", in("lr") x, out("r2") _);
+    asm("mov r0, fp", in("fp") x, in("ip") x, in("sb") x, in("sl") x, out("r0") v);
+    asm("mov lr, r0", inout("r0") x => _, lateout("lr") v);
+    v
+}
+
+fn widths(a: u8, b: i8, c: u16, d: i16, p: *const u8) -> u8 {
+    let mut out8: u8 = 0;
+    let mut out16: i16 = 0;
+    let mut out_ptr: *const u8 = p;
+    asm("add {}, {}, {}", out(reg) out8, in(reg) a, in(reg) b);
+    asm("add {}, {}, {}", out(reg) out16, in(reg) c, in(reg) d);
+    asm("mov {}, {}", out(reg) out_ptr, in(reg) p);
+    out8
+}
+
+fn symbols() {
+    asm("bl {}", sym callee, clobber_abi("C"));
+    asm("ldr {}, ={}", out(reg) _, sym COUNTER);
+    asm("ldr r0, ={}", const -1 as i32, out("r0") _);
+    asm("ldr r0, ={}", const 0xFFFF_FFFF_FFFF as u64, out("r0") _);
+    asm(".word 1$2");
+}
+
+// `clobber_abi("C")` covers `r0` to `r3`, `r12`, `lr` and the flags.
+fn clobbers(x: u32) -> u32 {
+    let mut v: u32 = 0;
+    asm("bl {}", sym callee, in("r0") x, out("r1") _, clobber_abi("C"));
+    asm("bl {}", sym callee, inout("r0") x => v, clobber_abi("C"));
+    v
+}
+
+// The flags: clobbered unless `preserves_flags`.
+fn options(x: u32) -> u32 {
+    let mut v: u32 = 0;
+    asm("nop", options(nomem));
+    asm("nop", options(readonly));
+    asm("nop", options(nostack));
+    asm("nop", options(preserves_flags));
+    asm("nop {}", out(reg) v, options(pure, nomem));
+    asm("ldr {}, [{}]", out(reg) v, in(reg) x, options(pure, readonly, nostack));
+    asm("nop", options(nomem, nostack, preserves_flags));
+    v
+}
+
+fn removed(x: u32) {
+    let mut v: u32 = 0;
+    asm("adds {}, {}, #1", out(reg) v, in(reg) x, options(pure, nomem));
+    asm("adds {}, {}, #2", out(reg) v, in(reg) x);
+    asm("adds {}, {}, #3", out(reg) v, in(reg) x, options(nomem));
+}
+
+fn stops() -> ! {
+    asm("wfi", options(noreturn));
+}
+
+entry fn main() -> ! {
+    directions(1, 0 as *const u8);
+    explicit(1);
+    widths(1, 2, 3, 4, 0 as *const u8);
+    symbols();
+    clobbers(1);
+    options(1);
+    removed(1);
+    stops()
+}
+
+panic fn on_panic() -> ! { loop {} }

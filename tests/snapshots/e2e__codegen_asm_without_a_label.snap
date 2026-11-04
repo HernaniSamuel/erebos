@@ -1,0 +1,10 @@
+---
+source: tests/e2e.rs
+expression: "rendered(\"render_label\", &label, &RISCV32IMAC, OptLevel::Speed)"
+---
+codegen::asm
+
+  × <inline asm>:1:2: symbol 'shared_label' is already defined
+  │         shared_label: nop
+  │         ^
+  help: LLVM found this in the whole object, so it cannot say which `asm` expression it comes from

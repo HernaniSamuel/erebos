@@ -1,0 +1,14 @@
+---
+source: tests/e2e.rs
+expression: "rendered(\"render_registers\", &registers, &THUMBV7M, OptLevel::None)"
+---
+codegen::asm
+
+  × inline assembly requires more registers than available
+   ╭─[main.ers:4:5]
+ 3 │ fn many(a: u32) {
+ 4 │     asm("nop {}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}", in(reg) a, in(reg) a, in(reg) a, in(reg) a, in(reg) a, in(reg) a, in(reg) a, in(reg) a, in(reg) a, in(reg) a, in(reg) a, in(reg) a, in(reg) a, in(reg) a, in(reg) a, in(reg) a);
+   ·     ─────────────────────────────────────────────────────────────────────────────────────────────────────────────┬─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   ·                                                                                                                  ╰── LLVM finds no register for this code
+ 5 │ }
+   ╰────
