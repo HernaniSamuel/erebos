@@ -151,6 +151,11 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   code fails the run"; none has that name (`generated.rs` line 172 and the
   `expect-exit: 1` programs cover it). `tests/boards/thumbv7m-none-eabi.ers`
   has a comment line of 82 columns and an `asm(...)` line of 96. (M4.1)
+- `tests/architecture.rs` (the handler file check of ADR 0082) is textual:
+  a glob import such as `use inkwell::llvm_sys::core::*` followed by a
+  function the allow-list does not name would not be caught. The ADR
+  accepts the limit; an `extern`/`use` parse instead of a text search
+  would close it. (M4.1)
 
 ## Docs
 
@@ -184,3 +189,8 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   table: it omits the `const` that is not an integer (`asm("{}", const
   true)`), which ADR 0079 and the compiler give this code; the "Operands"
   bullet says "any integer type" without naming the error. (M4.1)
+- `.claude/plans/M4.1.md`, step 1 `Decisions`: the `asm_names.ers` entry
+  says the test shows every contextual word as a local, a function, a
+  parameter and a field; it spreads the words across those roles (fields:
+  `options`, `reg`, `sym`, `pure`, `clobber_abi`; functions: `inout`,
+  `lateout`; locals and parameters: the rest). (M4.1)
