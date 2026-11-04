@@ -1,6 +1,6 @@
 # 0080. `core::arch`, one file per target
 
-- Status: Accepted
+- Status: Accepted; corrected on 2026-11-04 (a program cannot define `__aeabi_uldivmod`, on any target)
 - Date: 2026-11-03
 - Amends: 0052 (`core` has a module whose file depends on the target),
   0074 and 0076 (`core` defines `__aeabi_uldivmod` and
@@ -39,10 +39,17 @@ The files are embedded in the compiler with the rest of `core`
 checks only its target's file; the other is compiled by the builds of
 its own target. `core::arch` follows every other rule of `core`:
 private items are private, and its exported symbols are reserved as
-`core`'s are (`resolve::duplicate-symbol`), on the targets whose file
-exports them: a program defining `__aeabi_uldivmod` is rejected on
-thumbv7m and accepted on riscv32. The files have no modules of their
-own; a step that needs one says where its file lives.
+`core`'s are: a program defining `__aeabi_uldivmod` is rejected, on
+every target, because names starting with `__` are reserved
+(`resolve::reserved-name`, ADR 0020, 0052). The files have no modules of
+their own; a step that needs one says where its file lives.
+
+**Note, 2026-11-04:** the text said the program was
+`resolve::duplicate-symbol` on thumbv7m and accepted on riscv32. A name
+starting with `__` is reserved before any symbol is compared, so the
+program is `resolve::reserved-name` on both targets, whether the
+function is `#[export]` or not and whichever module it is in; no program
+reaches `duplicate-symbol` with these names.
 
 ### Portable and target-specific items
 

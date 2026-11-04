@@ -109,6 +109,6 @@ Do not write one for local implementation details that the code already explains
 | 0077 | [Programs tested on every target](0077-programs-tested-on-every-target.md) | Accepted, amended by 0079 |
 | 0078 | [Concurrency with interrupt handlers](0078-concurrency-with-interrupt-handlers.md) | Accepted |
 | 0079 | [Inline assembly](0079-inline-assembly.md) | Accepted |
-| 0080 | [`core::arch`, one file per target](0080-core-arch-per-target.md) | Accepted |
+| 0080 | [`core::arch`, one file per target](0080-core-arch-per-target.md) | Accepted, corrected 2026-11-04 |
 | 0081 | [Fences](0081-fences.md) | Accepted |
 | 0082 | [The LLVM diagnostic handler reaches `llvm_sys`, in one file](0082-llvm-diagnostic-handler-reaches-llvm-sys.md) | Accepted |

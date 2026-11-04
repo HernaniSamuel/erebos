@@ -1,31 +1,50 @@
-// C code divides 64-bit integers, which clang compiles to calls to
-// libgcc's names; they link because `core` exports them (ADR 0076). Only
-// riscv32 has C code that can: ARMv7-M's would need `__aeabi_uldivmod`
-// (ADR 0074). The header restricts the program to riscv32 (ADR 0077,
-// reason 2: a feature of one target's C compiler). It keeps its own
-// devices and `memory` block.
-// targets: riscv32imac-unknown-none-elf
+// C code divides 64-bit integers, which clang compiles to calls to the
+// runtime's names; they link because `core` defines them: libgcc's
+// `__udivdi3` and the rest on riscv32 (ADR 0076), the EABI's
+// `__aeabi_uldivmod` and `__aeabi_ldivmod` on thumbv7m (ADR 0080), whose
+// quotient is in `r0`-`r1` and remainder in `r2`-`r3`. The program runs on
+// both targets. The first three lines divide and take the remainder apart;
+// the rest take both from one expression, with the divisor above 2^32, a
+// divisor larger than the dividend, one with its top bit set, remainders with
+// the high word set, signs, and the neighbours of `i64`'s minimum that C
+// defines (`MIN / -1` is not one of them).
 // link-c: c_division64.c
 // expect-output: 1234567890123 89 0
 // expect-output: -1234567890123 -89 1234567890123 89
 // expect-output: 9223372036854775807 4294967297
+// expect-output: 1234567890123 89
+// expect-output: 4294967295 0
+// expect-output: 4294967293 8
+// expect-output: 130489 64426494538839
+// expect-output: 0 1311768467463790320
+// expect-output: 1 0
+// expect-output: 3074457345618258602 2
+// expect-output: 0 7
+// expect-output: -1234567890123 -89
+// expect-output: 1234567890123 -89
+// expect-output: -1234567890123 89
+// expect-output: -3 -1
+// expect-output: -3 1
+// expect-output: 3 -1
+// expect-output: -9223372036854775808 0
+// expect-output: 9223372036854775807 0
+// expect-output: -4611686018427387904 0
+// expect-output: -1 -1
+// expect-output: 0 9223372036854775807
+// expect-output: 1 0
+// expect-output: 3074457345618258602 -2
+// expect-output: -74565 -1736851966
 // expect-exit: 0
+
+mod board;
+use board::{exit, putc};
 
 extern fn c_udiv(a: u64, b: u64) -> u64;
 extern fn c_urem(a: u64, b: u64) -> u64;
 extern fn c_sdiv(a: i64, b: i64) -> i64;
 extern fn c_srem(a: i64, b: i64) -> i64;
-
-fn putc(byte: u8) {
-    let thr: *mut volatile u8 = 0x1000_0000 as *mut volatile u8;
-    *thr = byte;
-}
-
-fn exit(code: u32) -> ! {
-    let finisher: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
-    *finisher = if code == 0 { 0x5555 } else { (code << 16) | 0x3333 };
-    loop {}
-}
+extern fn c_udivmod(a: u64, b: u64, rem: *mut u64) -> u64;
+extern fn c_sdivmod(a: i64, b: i64, rem: *mut i64) -> i64;
 
 fn print_u64(n: u64) {
     if n >= 10 {
@@ -41,6 +60,25 @@ fn print_i64(n: i64) {
     } else {
         print_u64(n as u64);
     }
+}
+
+// The quotient and the remainder of one C expression, on a line.
+fn udivmod(a: u64, b: u64) {
+    let mut rem: u64 = 0;
+    let quotient: u64 = c_udivmod(a, b, &raw mut rem);
+    print_u64(quotient);
+    putc(b' ');
+    print_u64(rem);
+    putc(b'\n');
+}
+
+fn sdivmod(a: i64, b: i64) {
+    let mut rem: i64 = 0;
+    let quotient: i64 = c_sdivmod(a, b, &raw mut rem);
+    print_i64(quotient);
+    putc(b' ');
+    print_i64(rem);
+    putc(b'\n');
 }
 
 entry fn main() -> ! {
@@ -67,19 +105,34 @@ entry fn main() -> ! {
     putc(b' ');
     print_u64(c_udiv(max, 0xFFFF_FFFF));
     putc(b'\n');
+
+    udivmod(big, 1000);
+    udivmod(max, 0x1_0000_0001);
+    udivmod(max, 0x1_0000_0003);
+    udivmod(0xFEDC_BA98_7654_3210, 0x8000_0000_0001);
+    udivmod(0x1234_5678_9ABC_DEF0, 0xF000_0000_0000_0000);
+    udivmod(max, max);
+    udivmod(0x8000_0000_0000_0000, 3);
+    udivmod(7, 8);
+
+    let min: i64 = 0 - 0x7FFF_FFFF_FFFF_FFFF - 1;
+    sdivmod(neg, 1000);
+    sdivmod(neg, -1000);
+    sdivmod(big as i64, -1000);
+    sdivmod(-7, 2);
+    sdivmod(7, -2);
+    sdivmod(-7, -2);
+    sdivmod(min, 1);
+    sdivmod(min + 1, -1);
+    sdivmod(min, 2);
+    sdivmod(min, 0x7FFF_FFFF_FFFF_FFFF);
+    sdivmod(0x7FFF_FFFF_FFFF_FFFF, min);
+    sdivmod(min, min);
+    sdivmod(min, -3);
+    sdivmod(-0x1_2345_6789_ABCD, 0x1_0000_0003);
     exit(0)
 }
 
 panic fn on_panic() -> ! {
     exit(1)
-}
-
-// QEMU `virt`'s RAM in two regions of 64 MiB: the image in the first, and
-// in the second a 1 MiB stack at its start, then `.data` and `.bss`.
-memory {
-    region IMAGE { origin: 0x8000_0000, size: 0x0400_0000 }
-    region RAM { origin: 0x8400_0000, size: 0x0400_0000 }
-    code in IMAGE;
-    data in RAM;
-    stack in RAM { size: 0x0010_0000 }
 }

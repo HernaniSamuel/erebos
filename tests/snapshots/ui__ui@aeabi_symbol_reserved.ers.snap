@@ -1,0 +1,28 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/aeabi_symbol_reserved.ers
+---
+--- errors ---
+resolve::reserved-name
+
+  × `__aeabi_uldivmod` is a reserved name
+    ╭─[aeabi_symbol_reserved.ers:11:4]
+ 10 │ #[export]
+ 11 │ fn __aeabi_uldivmod() {}
+    ·    ────────┬───────
+    ·            ╰── names starting with `__` are reserved
+ 12 │ 
+    ╰────
+  help: the runtime support functions of `core` use them (ADR 0020, 0052)
+resolve::reserved-name
+
+  × `__aeabi_ldivmod` is a reserved name
+    ╭─[aeabi_symbol_reserved.ers:15:8]
+ 14 │     #[export]
+ 15 │     fn __aeabi_ldivmod() {}
+    ·        ───────┬───────
+    ·               ╰── names starting with `__` are reserved
+ 16 │ }
+    ╰────
+  help: the runtime support functions of `core` use them (ADR 0020, 0052)

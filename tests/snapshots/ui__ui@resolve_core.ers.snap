@@ -107,12 +107,12 @@ resolve::private-item
     ·                         ╰── not visible here
  29 │ }
     ╰────
-     ╭─[rt/builtins.ers:164:4]
- 163 │ #[export]
- 164 │ fn __udivdi3(n: u64, d: u64) -> u64 {
+     ╭─[rt/builtins.ers:177:4]
+ 176 │ #[export]
+ 177 │ fn __udivdi3(n: u64, d: u64) -> u64 {
      ·    ────┬────
      ·        ╰── declared here without `pub`
- 165 │     __erebos_udivmod64(n, d, false)
+ 178 │     __erebos_udivmod64(n, d, false)
      ╰────
   help: a private item of module `core::builtins` is visible only there and in the modules inside
         it; the program uses what `core` declares `pub` (ADR 0050, 0052)

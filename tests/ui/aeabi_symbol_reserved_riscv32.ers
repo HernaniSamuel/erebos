@@ -1,0 +1,17 @@
+// emit: hir
+// The same program as `aeabi_symbol_reserved.ers`, for riscv32: the file of
+// `core::arch` of this target exports neither `__aeabi_uldivmod` nor
+// `__aeabi_ldivmod` (ADR 0080), and the names are still
+// `resolve::reserved-name`, since the rule is on names starting with `__`
+// (ADR 0020, 0052), not on the symbols of the target.
+#[export]
+fn __aeabi_uldivmod() {}
+
+mod other {
+    #[export]
+    fn __aeabi_ldivmod() {}
+}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

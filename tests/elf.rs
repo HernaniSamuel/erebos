@@ -900,6 +900,85 @@ panic fn on_panic() -> ! {{ loop {{}} }}
     }
 }
 
+/// `core` defines the EABI's 64-bit division on thumbv7m and only there (ADR
+/// 0080): a program linked with the C file of `tests/e2e/c_division64.ers`,
+/// whose divisions clang compiles to calls of those names, defines
+/// `__aeabi_uldivmod` and `__aeabi_ldivmod` in `.text` as Thumb functions
+/// (bit 0 of the address set, a size), and a riscv32 build defines neither,
+/// where the same C file calls libgcc's names. The programs that run the
+/// functions are in `tests/e2e`.
+#[test]
+fn the_eabi_division_is_defined_on_thumbv7m_only() {
+    let work = Path::new(env!("CARGO_TARGET_TMPDIR")).join("elf");
+    fs::create_dir_all(&work).unwrap();
+    let c_file = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/e2e/c_division64.c");
+    let source = work.join("eabi_division.ers");
+    fs::write(
+        &source,
+        format!(
+            "{VIRT_MAP}
+extern fn c_udivmod(a: u64, b: u64, rem: *mut u64) -> u64;
+extern fn c_sdivmod(a: i64, b: i64, rem: *mut i64) -> i64;
+
+static mut OUT: u64 = 0;
+
+entry fn main() -> ! {{
+    let mut u: u64 = 0;
+    let mut s: i64 = 0;
+    OUT = c_udivmod(7, 2, &raw mut u) + c_sdivmod(7, 2, &raw mut s) as u64;
+    loop {{}}
+}}
+
+panic fn on_panic() -> ! {{ loop {{}} }}
+"
+        ),
+    )
+    .unwrap();
+    for target in TARGETS {
+        for opt in [OptLevel::None, OptLevel::Speed] {
+            let object = common::qemu::compile_c(&c_file, &[], &work, target, opt).unwrap();
+            let elf = work.join(format!("eabi_division-{}-{opt:?}.elf", target.name));
+            driver::build(&source, &elf, &[object], target, opt, false).unwrap();
+            let sections = sections(&elf);
+            let symbols = symbols(&elf);
+            let text = |name: &str| {
+                let symbol = symbols.iter().find(|symbol| symbol.name == name)?;
+                let index: usize = symbol.section.parse().ok()?;
+                (sections[index].name == ".text").then_some(symbol)
+            };
+            for name in ["__aeabi_uldivmod", "__aeabi_ldivmod"] {
+                let symbol = text(name);
+                match target.arch {
+                    Arch::Armv7m => {
+                        let symbol = symbol.unwrap_or_else(|| {
+                            panic!(
+                                "{} {opt:?}: `{name}` is not defined in `.text`",
+                                target.name
+                            )
+                        });
+                        assert_eq!(
+                            symbol.value & 1,
+                            1,
+                            "{} {opt:?}: `{name}` is not a Thumb function",
+                            target.name
+                        );
+                        assert!(
+                            symbol.size > 0,
+                            "{} {opt:?}: `{name}` is empty",
+                            target.name
+                        );
+                    }
+                    Arch::Riscv32 => assert!(
+                        !symbols.iter().any(|symbol| symbol.name == name),
+                        "{} {opt:?}: `{name}` exists",
+                        target.name
+                    ),
+                }
+            }
+        }
+    }
+}
+
 /// The contents of the section `name` of `elf`, from its file.
 fn section_bytes(elf: &Path, name: &str) -> Vec<u8> {
     let headers = readelf(elf, &["--section-headers"]);

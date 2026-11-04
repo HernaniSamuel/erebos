@@ -1,0 +1,20 @@
+// emit: hir
+// target: thumbv7m-none-eabi
+// `core::arch` of thumbv7m exports `__aeabi_uldivmod` and `__aeabi_ldivmod`
+// (ADR 0080), and a program cannot define either: a name starting with `__`
+// is `resolve::reserved-name` (ADR 0020, 0052) before any symbol is compared,
+// so there is no `resolve::duplicate-symbol` to reach, at the root or in a
+// module, with `#[export]` or without. `aeabi_symbol_reserved_riscv32.ers`
+// is the same program for riscv32, whose `core::arch` exports neither: the
+// rule is on names, not on the symbols of the target.
+#[export]
+fn __aeabi_uldivmod() {}
+
+mod other {
+    #[export]
+    fn __aeabi_ldivmod() {}
+}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

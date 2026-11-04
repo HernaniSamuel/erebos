@@ -138,8 +138,12 @@ fn __aeabi_memclr8(dest: *mut u8, n: usize) {
 // reaches them, since division checks happen before the call (ADR 0007).
 
 // Restoring binary long division: one quotient bit per step, from the top.
-// Returns the remainder if `remainder` is true, otherwise the quotient.
-fn __erebos_udivmod64(n: u64, d: u64, remainder: bool) -> u64 {
+// Returns the quotient and stores the remainder through `rem`. This is the one
+// loop of the file: the functions below take the part they need, and the EABI
+// functions of `core::arch` (ADR 0080) call it and `__erebos_divmoddi4`
+// directly, so they are `pub` inside this private module. A zero divisor gives
+// a quotient of all ones and the dividend as the remainder.
+pub fn __erebos_udivmoddi4(n: u64, d: u64, rem: *mut u64) -> u64 {
     let mut quotient: u64 = 0;
     let mut rest: u64 = 0;
     let mut bit: u32 = 64;
@@ -151,6 +155,15 @@ fn __erebos_udivmod64(n: u64, d: u64, remainder: bool) -> u64 {
             quotient |= 1 << bit;
         }
     }
+    *rem = rest;
+    quotient
+}
+
+// The loop for the functions that want one of its two results. Returns the
+// remainder if `remainder` is true, otherwise the quotient.
+fn __erebos_udivmod64(n: u64, d: u64, remainder: bool) -> u64 {
+    let mut rest: u64 = 0;
+    let quotient: u64 = __erebos_udivmoddi4(n, d, &raw mut rest);
     if remainder { rest } else { quotient }
 }
 
@@ -183,4 +196,15 @@ fn __divdi3(a: i64, b: i64) -> i64 {
 fn __moddi3(a: i64, b: i64) -> i64 {
     let magnitude: u64 = __erebos_udivmod64(__erebos_magnitude64(a), __erebos_magnitude64(b), true);
     if a < 0 { 0 - magnitude as i64 } else { magnitude as i64 }
+}
+
+// Signed division and remainder together, for `__aeabi_ldivmod` (ADR 0080):
+// the quotient is negative when exactly one operand is, and the remainder,
+// stored through `rem`, takes the sign of the dividend. A zero divisor gives
+// what `__erebos_udivmoddi4` gives for the magnitudes, before the signs.
+pub fn __erebos_divmoddi4(n: i64, d: i64, rem: *mut i64) -> i64 {
+    let mut rest: u64 = 0;
+    let magnitude: u64 = __erebos_udivmoddi4(__erebos_magnitude64(n), __erebos_magnitude64(d), &raw mut rest);
+    *rem = if n < 0 { 0 - rest as i64 } else { rest as i64 };
+    if (n < 0) != (d < 0) { 0 - magnitude as i64 } else { magnitude as i64 }
 }
