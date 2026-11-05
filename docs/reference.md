@@ -43,9 +43,10 @@ panic fn on_panic() -> ! {
 }
 ```
 
-- `entry fn` is where execution starts, after `_start` has set up the
-  stack, `.bss` and `.data` (see "Startup and memory" below). It takes no
-  parameters, must return `!`, and cannot be called.
+- `entry fn` is where execution starts, after `_start`, which `core` defines
+  (see "Startup and memory" below), has set up the stack, `.bss` and
+  `.data`. It takes no parameters, must return `!`, and cannot be called from
+  Erebos; an `asm` may jump to it (`sym entry`, see "Inline assembly").
 - `panic fn` runs when an operation cannot produce a result, such as
   division by zero, an index out of bounds, a failed `assert`, or an enum
   value that is no variant, met by a `match` that no arm matches or by `?`,
@@ -2268,7 +2269,7 @@ asm_expr  = "asm" "(" STRING { "," STRING } { "," operand }
 operand   = [ NAME "=" ] ( "in" "(" where ")" expr
                          | ( "out" | "lateout" ) "(" where ")" out_place
                          | "inout" "(" where ")" expr [ "=>" out_place ]
-                         | "sym" path
+                         | "sym" ( path | "entry" )
                          | "const" expr )
           | "clobber_abi" "(" STRING ")"
 where     = "reg" | STRING
@@ -2308,6 +2309,7 @@ option    = "pure" | "nomem" | "readonly" | "nostack"
 | `lateout(where) p` | as `out`, with a register an input may also use, since it is written only after every input is read |
 | `inout(where) e` | passes `e` and stores the register back into `e`, which must be a place, or into the place after `=>` (`inout(reg) x => y`, `inout(reg) x => _`) |
 | `sym path` | the symbol of a function, an external function, a static or an external static (see "Symbols"); the item counts as used, so it is kept in the object. Any other item is `ty::asm-sym`; a name that names nothing is `resolve::unknown-name` |
+| `sym entry` | the symbol of the entry function, whatever its module and name (ADR 0083): `entry` is a keyword, so no path means it, and nothing follows it (`sym entry::x` is `parser::unexpected-token`). Allowed in any `asm`, also of a program and in a naked function; it is a jump the template writes, so `resolve::call-entry` does not apply |
 | `const e` | a value of any integer type, `u64` and `i64` included, computed at compile time (ADR 0027) and written in decimal, with a `-` when negative. A run-time variable is `ty::not-comptime` |
 | `clobber_abi("C")` | every register a call of a C function may change is overwritten (see "Registers") |
 
@@ -2797,8 +2799,9 @@ pub fn config(baud: u32) -> Config {
   module, `use`, `comptime` block) it is `resolve::misplaced-attribute`.
 - An **`extern fn` or `extern static`** always has its own name, in any
   module: it names a symbol defined outside the program.
-- The entry and panic functions follow the same rules; `_start` jumps to
-  the entry function's symbol, whatever it is.
+- The entry and panic functions follow the same rules. `sym entry` (see
+  "Inline assembly") is the entry function's symbol, whatever it is, and
+  it is how `core`'s `_start` jumps to it.
 - A dot occurs in no Erebos or C identifier, so a path symbol never equals
   a plain name. C code names the root module's items and the exported
   ones; to call another function from C, mark it `#[export]`. Linker
@@ -2817,8 +2820,11 @@ pub fn config(baud: u32) -> Config {
   of their own, so `llvm` is a reserved module name in the root module
   (`resolve::reserved-name`); a module of another module, or a root item,
   may be named `llvm`. `_start` stays reserved in every module, with or
-  without `#[export]` (ADR 0012), and so are names starting with `__`
-  (ADR 0052).
+  without `#[export]`, as a function, a `static`, an `extern fn` or an
+  `extern static`, because `core::arch` defines it (ADR 0083): the program gets the one
+  `resolve::reserved-name`, whose help says so, and not also a
+  `resolve::duplicate-symbol` against an item of `core` it cannot name. So
+  are names starting with `__` (ADR 0052).
 - Symbols are not visibility: every function and static, private or not,
   is emitted as an external symbol of the object file (ADR 0030). Byte
   strings and other constant data keep private names, and bodies run only
@@ -2902,8 +2908,8 @@ block is `resolve::unknown-region`.
 - `code in R;` puts in `R`, in this order, the reset entry `_start` (see
   "Startup and memory"), the code (`.text`), the read-only data
   (`.rodata`) and the initial values of `.data`. The reset entry starts at
-  `R`'s origin (on thumbv7m, with the two words of a vector table, so that
-  `_start` is 8 bytes after it). The origin must be a multiple of the
+  `R`'s origin (on thumbv7m, with the two words of a vector table first, so
+  that `_start` is 8 bytes after it). The origin must be a multiple of the
   target's code alignment, 4 on riscv32 and 128 on thumbv7m
   (`ty::misaligned-code`), and must be the address where the board starts
   at reset (it jumps there on riscv32, and reads the vector table there on
@@ -2972,10 +2978,11 @@ script the compiler passes to `ld.lld`:
 
 - `MEMORY` lists every region in source order under its own name, so that
   the script and the linker's messages read like the source.
-- In the code's region: the reset entry (`_start`, and on thumbv7m the two
-  words before it) in an output section of its own, `.text.start`, so that
-  only its own alignment counts and an object given with `--link` whose
-  code is aligned to 64 cannot move it off the origin; then `.text`,
+- In the code's region: the reset entry, which is `_start` in an output
+  section of its own, `.text.start`, so that only its own alignment counts
+  and an object given with `--link` whose code is aligned to 64 cannot move
+  it off the origin; on thumbv7m the two words of the vector table come
+  first, in `.vector_table`, which `KEEP` retains (ADR 0083). Then `.text`,
   `.rodata` and the initial values of `.data`.
 - In the stack's region: a section `.stack` without contents, from
   `__stack_start` to `__stack_end`, the bounds of the stack. In the data's
@@ -3006,12 +3013,15 @@ when a region overflows: the regions being disjoint, sections overlap
 only past the end of one, so those errors follow from the overflow and
 are left out.
 
-## Startup and memory (ADR 0012, 0030, 0057)
+## Startup and memory (ADR 0030, 0057, 0083)
 
-`_start`, generated by the compiler and visible in `--emit=llvm-ir`, is the
-reset entry: it sits alone at the origin of the code's region (see "Memory
-maps"; on thumbv7m two words of a vector table come first, see "Targets"),
-and does, in order:
+`_start` is the reset entry. It is written in Erebos, a private `#[export]`
+`#[naked]` function of `core::arch` (see "`core`"), in `rt/arch/riscv32.ers`
+and `rt/arch/armv7m.ers`: that is where to read it, since `--emit=llvm-ir`
+leaves `core` out and so does not show it. The compiler names
+`core::arch::_start` by path and puts it in the section `.text.start`, alone
+at the origin of the code's region (see "Memory maps"; on thumbv7m two words
+of a vector table come first, see "Targets"). It does, in order:
 
 1. set the stack pointer to `__stack_end`, the end of the stack the
    `memory` block declares;
@@ -3019,14 +3029,22 @@ and does, in order:
 3. copy the initial values of `.data` from their load address to their
    run address; when the data shares the code's region the two are one,
    and each word is copied onto itself;
-4. jump to the entry function, by its symbol (see "Symbols").
+4. jump to the entry function, through `sym entry` (see "Inline assembly").
 
 Nothing else runs before the entry function: there are no constructors and
 no order of initialization. The loops work a word at a time between
 symbols the linker script defines (`__bss_start`, `__bss_end`,
-`__data_start`, `__data_end`, `__data_load`), and do nothing when a range
-is empty. `_start` takes `__stack_end` from the script too, so the LLVM
-IR of a program is the same whatever its board.
+`__data_start`, `__data_end`, `__data_load`), test their bounds before the
+first word and do nothing when a range is empty. `_start` takes
+`__stack_end` from the script too, so the LLVM IR of a program is the same
+whatever its board. The jump reaches the entry function wherever it is in
+the address space: on riscv32 it is a `tail` (`auipc` and `jalr`, not a
+`j`, which reaches only 1 MiB each way), on thumbv7m a `movw` and `movt`
+into a register and `bx`.
+
+A program cannot define `_start`, replace it or run code before it (see
+"Symbols"). Code that must run early, such as raising a clock, runs first in
+the entry function, after `.data` is copied.
 
 Object files given with `--link` may use the small-data sections
 (`.srodata`, `.sdata`, `.sbss`, as GCC emits by default and clang with
@@ -3068,18 +3086,20 @@ every target, which `usize` and the layouts rely on.
 **The reset entry of thumbv7m (ADR 0074).** A Cortex-M does not start at an
 address: at reset it reads two words at the address of its vector table
 (`0x0` on `mps2-an385`), the initial stack pointer and the address of the
-reset handler, whose bit 0 is set to mark Thumb code. The reset entry
-`_start` is therefore preceded, at the origin of the code's region, by
-those two words, `__stack_end` and `_start`, in the section `.text.start`:
-the code's origin must be a multiple of 128 because of this. `_start` does
-what it does on riscv32: it sets the stack pointer again (the processor
-already loaded it, but a program that jumps back to `_start`, as a startup
-test does, gets a fresh stack), zeroes `.bss`, copies `.data`, and jumps to
-the entry function, in Thumb assembly that `--emit=llvm-ir` shows as `module
-asm`. The table has no other entry: an exception (a fault, an NMI) reads its
-handler from the words after the second, which are `_start`'s code, faults
-again and locks the processor up. Exception handlers and the rest of the
-vector table come with M4.
+reset handler, whose bit 0 is set to mark Thumb code. The reset entry is
+therefore two sections at the origin of the code's region: `.vector_table`
+first, which holds those two words, `__stack_end` and `_start`, and then
+`.text.start`, which holds `_start` (ADR 0083). The compiler emits the two
+words as module-level assembly, which `--emit=llvm-ir` shows as `module asm`;
+`_start` is `core`'s, in Thumb assembly (see "Startup and memory"), so it is
+8 bytes after the origin. The code's origin must be a multiple of 128 because
+of the table. `_start` does what it does on riscv32: it sets the stack
+pointer again (the processor already loaded it, but a program that jumps back
+to `_start`, as a startup test does, gets a fresh stack), zeroes `.bss`,
+copies `.data`, and jumps to the entry function. The table has no other
+entry: an exception (a fault, an NMI) reads its handler from the words after
+the second, which are `_start`'s code, faults again and locks the processor
+up. Exception handlers and the rest of the vector table come with M4.3.
 
 **Calls and arithmetic.**
 
@@ -4347,6 +4367,13 @@ the compiler binary, and compiled and checked with every program.
   `__aeabi_uldivmod` and `__aeabi_ldivmod` (see "Targets"). Each file begins
   with the comment lines `// portable: <declaration>` that list its portable
   items.
+
+  Every file also defines the reset entry, the private `#[export]` `#[naked]`
+  function `_start` (ADR 0083, see "Startup and memory"). It is in no list of
+  portable items: it exists on every target, but no program can name it, and
+  only the compiler does, by the path `core::arch::_start`, to put it in the
+  section `.text.start`. A file of `core::arch` without it is a bug of the
+  compiler, not a diagnostic.
 - `Option`, `Result`, `assert`, `len` and `slice` are not in `core`: they
   stay built-in names, seen from every module.
 - A program item whose symbol is one of `core`'s, such as a root `fn
