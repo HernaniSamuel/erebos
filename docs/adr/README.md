@@ -106,7 +106,7 @@ Do not write one for local implementation details that the code already explains
 | 0074 | [The ARMv7-M target](0074-armv7m-target.md) | Accepted, amended by 0080, 0083, 0085 |
 | 0075 | [Aggregates across calls on ARMv7-M](0075-aggregates-across-calls-on-armv7m.md) | Accepted |
 | 0076 | [64-bit division calls `core` where LLVM's call cannot be written](0076-64-bit-division-calls-core.md) | Accepted, amended by 0080 |
-| 0077 | [Programs tested on every target](0077-programs-tested-on-every-target.md) | Accepted, amended by 0079 |
+| 0077 | [Programs tested on every target](0077-programs-tested-on-every-target.md) | Accepted, amended by 0079, 0088 |
 | 0078 | [Concurrency with interrupt handlers](0078-concurrency-with-interrupt-handlers.md) | Accepted |
 | 0079 | [Inline assembly](0079-inline-assembly.md) | Accepted, amended by 0083, 0084 |
 | 0080 | [`core::arch`, one file per target](0080-core-arch-per-target.md) | Accepted, corrected 2026-11-04 |
@@ -117,3 +117,4 @@ Do not write one for local implementation details that the code already explains
 | 0085 | [Vector tables, the trap entry and default handlers](0085-vector-tables-and-the-trap-entry.md) | Accepted |
 | 0086 | [Masking and waiting for interrupts](0086-masking-and-waiting-for-interrupts.md) | Accepted |
 | 0087 | [`#[align(N)]` on functions](0087-align-on-functions.md) | Accepted |
+| 0088 | [Programs that take exceptions on purpose](0088-programs-that-take-exceptions.md) | Accepted |
