@@ -1,0 +1,49 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/align_fn_invalid.ers
+---
+--- errors ---
+ty::invalid-align
+
+  × invalid alignment 3
+   ╭─[align_fn_invalid.ers:4:9]
+ 3 │ // is no natural alignment to stay above, so 1 is valid.
+ 4 │ #[align(3)]
+   ·         ┬
+   ·         ╰── an alignment is a power of two
+ 5 │ fn not_a_power() {}
+   ╰────
+  help: `#[align(N)]` takes a power of two not below the natural alignment (ADR 0022)
+ty::invalid-align
+
+  × invalid alignment 0
+   ╭─[align_fn_invalid.ers:7:9]
+ 6 │ 
+ 7 │ #[align(0)]
+   ·         ┬
+   ·         ╰── an alignment is a power of two
+ 8 │ fn zero() {}
+   ╰────
+  help: `#[align(N)]` takes a power of two not below the natural alignment (ADR 0022)
+ty::division-by-zero
+
+  × division by zero
+    ╭─[align_fn_invalid.ers:10:13]
+  9 │ 
+ 10 │ #[align(1 / 0)]
+    ·             ┬
+    ·             ╰── this divisor is zero
+ 11 │ fn fails_to_compute() {}
+    ╰────
+  help: at run time this would call the panic function (ADR 0007)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[align_fn_invalid.ers:13:9]
+ 12 │ 
+ 13 │ #[align(true)]
+    ·         ──┬─
+    ·           ╰── expected `usize`, found `bool`
+ 14 │ fn not_an_integer() {}
+    ╰────

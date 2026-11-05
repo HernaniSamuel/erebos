@@ -60,6 +60,7 @@ Hir {
             span: 13..49,
             runtime: false,
             comptime: None,
+            align: None,
         },
         Fn {
             name: "idle",
@@ -115,6 +116,7 @@ Hir {
             span: 51..85,
             runtime: false,
             comptime: None,
+            align: None,
         },
         Fn {
             name: "on_panic",
@@ -158,6 +160,7 @@ Hir {
             span: 87..127,
             runtime: false,
             comptime: None,
+            align: None,
         },
     ],
     consts: [],

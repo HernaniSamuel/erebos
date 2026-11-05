@@ -1,0 +1,68 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/align_fn_mir.ers
+---
+--- mir ---
+#[align(64)]
+fn aligned() -> () {
+    let _0: ();
+
+    bb0: {
+        return;
+    }
+}
+
+fn plain() -> () {
+    let _0: ();
+
+    bb0: {
+        return;
+    }
+}
+
+#[align(1)]
+fn one() -> () {
+    let _0: ();
+
+    bb0: {
+        return;
+    }
+}
+
+#[align(4)]
+naked fn naked_ret() -> () {
+    let _0: ();
+
+    bb0: {
+        asm("ret", options(noreturn));
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+
+    bb0: {
+        call aligned();
+        call plain();
+        call one();
+        call naked_ret();
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}

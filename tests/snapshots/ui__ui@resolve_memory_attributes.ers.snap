@@ -6,7 +6,7 @@ input_file: tests/ui/resolve_memory_attributes.ers
 --- errors ---
 resolve::misplaced-attribute
 
-  × `#[align]` applies only to structs and statics
+  × `#[align]` applies only to structs, statics and functions with a body
    ╭─[resolve_memory_attributes.ers:4:1]
  3 │ // items are misplaced there, any other is unknown.
  4 │ #[align(4)]
@@ -47,5 +47,5 @@ resolve::unknown-attribute
  8 │ memory {
    ╰────
   help: the attributes are `#[packed]` and `#[align(N)]` on structs (ADR 0022), `#[align(N)]` on
-        statics (ADR 0030), `#[export]` on functions and statics (ADR 0051), and `#[naked]` on
-        functions (ADR 0079)
+        statics (ADR 0030) and on functions (ADR 0087), `#[export]` on functions and statics (ADR
+        0051), and `#[naked]` on functions (ADR 0079)

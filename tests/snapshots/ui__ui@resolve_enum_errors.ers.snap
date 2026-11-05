@@ -61,7 +61,7 @@ resolve::misplaced-attribute
    ╰────
 resolve::misplaced-attribute
 
-  × `#[align]` applies only to structs and statics
+  × `#[align]` applies only to structs, statics and functions with a body
    ╭─[resolve_enum_errors.ers:7:1]
  6 │ #[packed]
  7 │ #[align(4)]

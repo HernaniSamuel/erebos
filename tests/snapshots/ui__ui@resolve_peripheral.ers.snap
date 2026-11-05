@@ -86,6 +86,7 @@ Hir {
             span: 828..860,
             runtime: false,
             comptime: None,
+            align: None,
         },
         Fn {
             name: "on_panic",
@@ -129,6 +130,7 @@ Hir {
             span: 861..897,
             runtime: false,
             comptime: None,
+            align: None,
         },
         Fn {
             name: "LSR",
@@ -174,6 +176,7 @@ Hir {
                     ),
                 ),
             ),
+            align: None,
         },
         Fn {
             name: "UART1_BASE",
@@ -219,6 +222,7 @@ Hir {
                     ),
                 ),
             ),
+            align: None,
         },
         Fn {
             name: "offset",
@@ -260,6 +264,7 @@ Hir {
             comptime: Some(
                 Value,
             ),
+            align: None,
         },
         Fn {
             name: "address",
@@ -301,6 +306,7 @@ Hir {
             comptime: Some(
                 Value,
             ),
+            align: None,
         },
     ],
     consts: [

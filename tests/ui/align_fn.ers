@@ -1,0 +1,44 @@
+// emit: llvm-ir
+// opt: both
+// `#[align(N)]` on a function with a body (ADR 0087): a plain function, a
+// naked function, the entry function and the panic function, each with its
+// alignment in the LLVM IR; an argument computed at compile time; `align(1)`
+// changes nothing.
+const BASE: usize = 16;
+
+#[align(64)]
+fn plain(x: u32) -> u32 {
+    x + 1
+}
+
+#[align(BASE * 2)]
+fn computed(x: u32) -> u32 {
+    x + 2
+}
+
+#[align(1)]
+fn one(x: u32) -> u32 {
+    x + 3
+}
+
+#[align(32)]
+#[export]
+fn exported(x: u32) -> u32 {
+    x + 4
+}
+
+#[align(16)]
+#[naked]
+fn naked_ret() {
+    asm("ret", options(noreturn))
+}
+
+#[align(8)]
+entry fn main() -> ! {
+    let total: u32 = plain(1) + computed(2) + one(3) + exported(4);
+    naked_ret();
+    loop {}
+}
+
+#[align(128)]
+panic fn on_panic() -> ! { loop {} }

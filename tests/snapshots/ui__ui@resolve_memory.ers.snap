@@ -73,6 +73,7 @@ Hir {
             span: 547..579,
             runtime: false,
             comptime: None,
+            align: None,
         },
         Fn {
             name: "on_panic",
@@ -116,6 +117,7 @@ Hir {
             span: 580..616,
             runtime: false,
             comptime: None,
+            align: None,
         },
         Fn {
             name: "KIB",
@@ -161,6 +163,7 @@ Hir {
                     ),
                 ),
             ),
+            align: None,
         },
         Fn {
             name: "size",
@@ -221,6 +224,7 @@ Hir {
             comptime: Some(
                 Value,
             ),
+            align: None,
         },
         Fn {
             name: "size",
@@ -281,6 +285,7 @@ Hir {
             comptime: Some(
                 Value,
             ),
+            align: None,
         },
         Fn {
             name: "stack_size",
@@ -341,6 +346,7 @@ Hir {
             comptime: Some(
                 Value,
             ),
+            align: None,
         },
     ],
     consts: [

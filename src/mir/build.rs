@@ -220,6 +220,11 @@ impl<'a, 'h> Builder<'a, 'h> {
         };
         // A `const` operand's value is a body of its own, not the function's.
         let naked = !comptime && self.q.hir.fn_(self.fn_id).kind == hir::FnKind::Naked;
+        let align = if comptime || external {
+            None
+        } else {
+            self.q.fn_align(self.fn_id)
+        };
         Some(Body {
             name,
             span,
@@ -227,6 +232,7 @@ impl<'a, 'h> Builder<'a, 'h> {
             runtime,
             external,
             naked,
+            align,
             ret: self.locals[0].ty,
             param_count,
             locals: self.locals,

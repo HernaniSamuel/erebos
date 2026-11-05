@@ -1,0 +1,26 @@
+// `#[align(N)]` on a function (ADR 0087): not on an `extern fn`, given once,
+// with an argument; `#[packed]` stays misplaced. The values that are not
+// alignments are in `align_fn_invalid.ers`, which resolution lets through.
+#[align(4)]
+extern fn outside();
+
+#[align(4)]
+#[align(8)]
+fn twice() {}
+
+#[align]
+fn without_argument() {}
+
+#[packed]
+fn packed() {}
+
+#[align(2)]
+#[naked]
+#[packed]
+fn naked_and_packed() {
+    asm("ret", options(noreturn))
+}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

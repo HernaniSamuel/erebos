@@ -99,6 +99,7 @@ Hir {
             span: 1788..1820,
             runtime: false,
             comptime: None,
+            align: None,
         },
         Fn {
             name: "on_panic",
@@ -142,6 +143,7 @@ Hir {
             span: 1821..1857,
             runtime: false,
             comptime: None,
+            align: None,
         },
         Fn {
             name: "SOURCES",
@@ -187,6 +189,7 @@ Hir {
                     ),
                 ),
             ),
+            align: None,
         },
         Fn {
             name: "CONTEXT_STEP",
@@ -232,6 +235,7 @@ Hir {
                     ),
                 ),
             ),
+            align: None,
         },
         Fn {
             name: "length",
@@ -273,6 +277,7 @@ Hir {
             comptime: Some(
                 Value,
             ),
+            align: None,
         },
         Fn {
             name: "step",
@@ -314,6 +319,7 @@ Hir {
             comptime: Some(
                 Value,
             ),
+            align: None,
         },
     ],
     consts: [

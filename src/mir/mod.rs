@@ -202,6 +202,7 @@ impl Mir {
                 body.external = true;
                 body.runtime = false;
                 body.naked = false;
+                body.align = None;
                 body.blocks.clear();
                 body.locals.truncate(1 + body.param_count);
             }
@@ -364,6 +365,9 @@ pub struct Body {
     /// `#[naked]` (ADR 0079): the body is its `asm` terminator alone, and
     /// code generation adds no frame, nothing for the parameters, no return.
     pub naked: bool,
+    /// `#[align(N)]` (ADR 0087): the function's first instruction is at a
+    /// multiple of this, which code generation sets on the LLVM function.
+    pub align: Option<u64>,
 }
 
 impl Body {
@@ -1731,6 +1735,9 @@ impl fmt::Display for Mir {
             let external = if body.external { "extern " } else { "" };
             let comptime = if body.comptime { "comptime " } else { "" };
             let naked = if body.naked { "naked " } else { "" };
+            if let Some(align) = body.align {
+                writeln!(f, "#[align({align})]")?;
+            }
             write!(f, "{external}{comptime}{naked}{kind}fn {}(", body.name)?;
             for (i, param) in body.params().iter().enumerate() {
                 if i > 0 {
@@ -1795,6 +1802,7 @@ mod tests {
             runtime: false,
             external: false,
             naked: false,
+            align: None,
         }
     }
 

@@ -1,0 +1,119 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/align_fn_thumbv7m.ers
+---
+--- llvm-ir ---
+; ModuleID = 'erebos'
+source_filename = "erebos"
+target datalayout = "e-m:e-p:32:32-Fi8-i64:64-v128:64:128-a:0:32-n32-S64"
+target triple = "thumbv7m-none-eabi"
+
+module asm "\09.section .vector_table, \22a\22, %progbits"
+module asm "\09.p2align 2"
+module asm "\09.word __stack_end"
+module asm "\09.word _start"
+
+; Function Attrs: nounwind null_pointer_is_valid
+define i32 @plain(i32 %0) #0 align 64 {
+bb0:
+  %1 = add i32 %0, 1
+  ret i32 %1
+}
+
+; Function Attrs: nounwind null_pointer_is_valid
+define i32 @exported(i32 %0) #0 align 16 {
+bb0:
+  %1 = add i32 %0, 2
+  ret i32 %1
+}
+
+; Function Attrs: naked noinline nounwind null_pointer_is_valid
+define void @naked_ret() #1 align 4 {
+bb0:
+  call void asm sideeffect alignstack "bx lr", "~{memory},~{cc}"() #3
+  unreachable
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @main() #2 align 8 {
+bb0:
+  %0 = call i32 @plain(i32 1)
+  %1 = call i32 @exported(i32 2)
+  %2 = add i32 %0, %1
+  call void @naked_ret()
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @on_panic() #2 align 32 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+attributes #0 = { nounwind null_pointer_is_valid }
+attributes #1 = { naked noinline nounwind null_pointer_is_valid }
+attributes #2 = { noreturn nounwind null_pointer_is_valid }
+attributes #3 = { nounwind }
+--- llvm-ir -O ---
+; ModuleID = 'erebos'
+source_filename = "erebos"
+target datalayout = "e-m:e-p:32:32-Fi8-i64:64-v128:64:128-a:0:32-n32-S64"
+target triple = "thumbv7m-none-eabi"
+
+module asm "\09.section .vector_table, \22a\22, %progbits"
+module asm "\09.p2align 2"
+module asm "\09.word __stack_end"
+module asm "\09.word _start"
+
+; Function Attrs: mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(none)
+define i32 @plain(i32 %0) local_unnamed_addr #0 align 64 {
+bb0:
+  %1 = add i32 %0, 1
+  ret i32 %1
+}
+
+; Function Attrs: mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(none)
+define i32 @exported(i32 %0) local_unnamed_addr #0 align 16 {
+bb0:
+  %1 = add i32 %0, 2
+  ret i32 %1
+}
+
+; Function Attrs: naked noinline nounwind null_pointer_is_valid
+define void @naked_ret() #1 align 4 {
+bb0:
+  tail call void asm sideeffect alignstack "bx lr", "~{memory},~{cc}"() #4
+  unreachable
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @main() local_unnamed_addr #2 align 8 {
+bb0:
+  tail call void @naked_ret()
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none)
+define void @on_panic() local_unnamed_addr #3 align 32 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+attributes #0 = { mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(none) }
+attributes #1 = { naked noinline nounwind null_pointer_is_valid }
+attributes #2 = { noreturn nounwind null_pointer_is_valid }
+attributes #3 = { nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none) }
+attributes #4 = { nounwind }

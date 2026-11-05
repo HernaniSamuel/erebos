@@ -1017,6 +1017,8 @@ pub struct Fn {
     pub runtime: bool,
     /// A body run only at compile time, never part of the program.
     pub comptime: Option<Comptime>,
+    /// `#[align(N)]` (ADR 0087), with the span of `N`.
+    pub align: Option<(ArrayLen, Span)>,
 }
 
 impl Fn {

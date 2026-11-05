@@ -236,7 +236,7 @@ impl Lowerer<'_> {
 
     fn misplaced_attr(&mut self, attr: &ast::Attr, what: &str) {
         let applies_to = match attr.name.name.as_str() {
-            "align" => "structs and statics",
+            "align" => "structs, statics and functions with a body",
             "export" => "functions and statics defined in the program",
             "naked" => "functions with a body, other than the entry and the panic function",
             _ => "structs",
@@ -279,17 +279,24 @@ impl Lowerer<'_> {
         }
     }
 
-    /// `#[export]` and `#[naked]` are the attributes of a function with a
-    /// body; an `extern fn` takes none (ADR 0051), and the entry and the
-    /// panic function are not naked (ADR 0079). Returns whether it is
-    /// exported, and whether it is naked.
-    fn fn_attrs(&mut self, attrs: &[ast::Attr], external: bool, kind: ast::FnKind) -> (bool, bool) {
+    /// `#[export]`, `#[naked]` and `#[align(N)]` are the attributes of a
+    /// function with a body; an `extern fn` takes none (ADR 0051, 0087), and
+    /// the entry and the panic function are not naked (ADR 0079). Returns
+    /// whether it is exported, whether it is naked, and its alignment.
+    fn fn_attrs(
+        &mut self,
+        attrs: &[ast::Attr],
+        external: bool,
+        kind: ast::FnKind,
+    ) -> (bool, bool, Option<(ArrayLen, Span)>) {
         if external {
             self.no_attrs(attrs, "an `extern fn`");
-            return (false, false);
+            return (false, false, None);
         }
         let mut export = None;
         let mut naked = None;
+        let mut align: Option<(ArrayLen, Span)> = None;
+        let mut align_attr: Option<Span> = None;
         for attr in attrs {
             match attr.name.name.as_str() {
                 "export" => self.flag_attr(attr, &mut export),
@@ -298,11 +305,31 @@ impl Lowerer<'_> {
                     ast::FnKind::Entry => self.misplaced_attr(attr, "the entry function"),
                     ast::FnKind::Panic => self.misplaced_attr(attr, "the panic function"),
                 },
-                "packed" | "align" => self.misplaced_attr(attr, "a function"),
+                "align" => {
+                    match &attr.arg {
+                        Some(arg) => align = Some((self.array_len(arg), arg.span)),
+                        None => self.attr_error(
+                            attr.span,
+                            "`#[align]` takes an alignment, such as `#[align(64)]`",
+                            "no alignment",
+                        ),
+                    }
+                    if let Some(first) = align_attr.replace(attr.span) {
+                        self.diags.push(
+                            Diagnostic::error(
+                                "resolve::duplicate-attribute",
+                                "`#[align]` is given more than once",
+                            )
+                            .label(attr.span, "given again here")
+                            .label(first, "first given here"),
+                        );
+                    }
+                }
+                "packed" => self.misplaced_attr(attr, "a function"),
                 _ => self.unknown_attr(attr),
             }
         }
-        (export.is_some(), naked.is_some())
+        (export.is_some(), naked.is_some(), align)
     }
 
     /// `#[align(N)]` and `#[export]`, at most once each, are the attributes
@@ -403,6 +430,7 @@ impl Lowerer<'_> {
             span: decl.span,
             runtime: false,
             comptime: Some(Comptime::Static(id)),
+            align: None,
         };
         (def, Some(body))
     }
@@ -446,6 +474,7 @@ impl Lowerer<'_> {
             span: decl.span,
             runtime: false,
             comptime: Some(Comptime::Const(id)),
+            align: None,
         };
         (def, body)
     }
@@ -527,6 +556,7 @@ impl Lowerer<'_> {
                 span,
                 runtime: false,
                 comptime: Some(Comptime::Discriminant(id, i as u32)),
+                align: None,
             });
         }
         let def = EnumDef {
@@ -574,6 +604,7 @@ impl Lowerer<'_> {
             span: decl.span,
             runtime: false,
             comptime: Some(Comptime::Block),
+            align: None,
         }
     }
 
@@ -654,6 +685,7 @@ impl Lowerer<'_> {
             span: expr.span,
             runtime: false,
             comptime: Some(comptime),
+            align: None,
         });
         id
     }
@@ -679,7 +711,7 @@ impl Lowerer<'_> {
                 format!("unknown attribute `#[{}]`", attr.name.name),
             )
             .label(attr.name.span, "not an attribute")
-            .help("the attributes are `#[packed]` and `#[align(N)]` on structs (ADR 0022), `#[align(N)]` on statics (ADR 0030), `#[export]` on functions and statics (ADR 0051), and `#[naked]` on functions (ADR 0079)"),
+            .help("the attributes are `#[packed]` and `#[align(N)]` on structs (ADR 0022), `#[align(N)]` on statics (ADR 0030) and on functions (ADR 0087), `#[export]` on functions and statics (ADR 0051), and `#[naked]` on functions (ADR 0079)"),
         );
     }
 
@@ -690,7 +722,7 @@ impl Lowerer<'_> {
 
     pub(super) fn fn_decl(&mut self, decl: &ast::FnDecl) -> Fn {
         let external = decl.body.is_none();
-        let (export, naked) = self.fn_attrs(&decl.attrs, external, decl.kind);
+        let (export, naked, align) = self.fn_attrs(&decl.attrs, external, decl.kind);
         self.locals.clear();
         self.scopes.clear();
         self.loops.clear();
@@ -755,6 +787,7 @@ impl Lowerer<'_> {
             span: decl.span,
             runtime: false,
             comptime: None,
+            align,
         }
     }
 }

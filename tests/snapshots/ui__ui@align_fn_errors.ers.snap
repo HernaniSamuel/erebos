@@ -1,0 +1,59 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/align_fn_errors.ers
+---
+--- errors ---
+resolve::misplaced-attribute
+
+  × `#[align]` applies only to structs, statics and functions with a body
+   ╭─[align_fn_errors.ers:4:1]
+ 3 │ // alignments are in `align_fn_invalid.ers`, which resolution lets through.
+ 4 │ #[align(4)]
+   · ─────┬─────
+   ·      ╰── not allowed on an `extern fn`
+ 5 │ extern fn outside();
+   ╰────
+resolve::duplicate-attribute
+
+  × `#[align]` is given more than once
+   ╭─[align_fn_errors.ers:8:1]
+ 6 │ 
+ 7 │ #[align(4)]
+   · ─────┬─────
+   ·      ╰── first given here
+ 8 │ #[align(8)]
+   · ─────┬─────
+   ·      ╰── given again here
+ 9 │ fn twice() {}
+   ╰────
+resolve::attribute-argument
+
+  × `#[align]` takes an alignment, such as `#[align(64)]`
+    ╭─[align_fn_errors.ers:11:1]
+ 10 │ 
+ 11 │ #[align]
+    · ────┬───
+    ·     ╰── no alignment
+ 12 │ fn without_argument() {}
+    ╰────
+resolve::misplaced-attribute
+
+  × `#[packed]` applies only to structs
+    ╭─[align_fn_errors.ers:14:1]
+ 13 │ 
+ 14 │ #[packed]
+    · ────┬────
+    ·     ╰── not allowed on a function
+ 15 │ fn packed() {}
+    ╰────
+resolve::misplaced-attribute
+
+  × `#[packed]` applies only to structs
+    ╭─[align_fn_errors.ers:19:1]
+ 18 │ #[naked]
+ 19 │ #[packed]
+    · ────┬────
+    ·     ╰── not allowed on a function
+ 20 │ fn naked_and_packed() {
+    ╰────

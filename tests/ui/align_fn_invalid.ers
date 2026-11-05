@@ -1,0 +1,27 @@
+// `#[align(N)]` on a function takes a power of two (ADR 0087): not 3, not 0,
+// and a value that fails to compute is reported as it is for a struct. There
+// is no natural alignment to stay above, so 1 is valid.
+#[align(3)]
+fn not_a_power() {}
+
+#[align(0)]
+fn zero() {}
+
+#[align(1 / 0)]
+fn fails_to_compute() {}
+
+#[align(true)]
+fn not_an_integer() {}
+
+#[align(1)]
+fn one() {}
+
+// Valid, with no effect where the function runs only at compile time.
+#[align(16)]
+fn at_compile_time() -> usize { 3 }
+
+const VALUE: usize = at_compile_time();
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

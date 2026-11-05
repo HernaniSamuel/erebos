@@ -534,6 +534,13 @@ fn declare<'ctx>(
         add_attribute(context, function, AttributeLoc::Function, "naked");
         add_attribute(context, function, AttributeLoc::Function, "noinline");
     }
+    // The function's first instruction is at a multiple of it (ADR 0087);
+    // LLVM may align further, never less.
+    if let Some(align) = body.align {
+        function
+            .as_global_value()
+            .set_alignment(u32::try_from(align).expect("alignments are small"));
+    }
     // The C ABI (ADR 0006) widens narrow integers to a full register; LLVM
     // needs to be told how, as clang does.
     for (i, &(ty, mode)) in abi.params.iter().enumerate() {

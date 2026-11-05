@@ -715,6 +715,132 @@ fn core_symbols() {
     }
 }
 
+/// `#[align(N)]` on a function moves its symbol (ADR 0087): an `#[export]`
+/// function and a naked function with `#[align(64)]` are at multiples of 64
+/// (a Thumb function's symbol has bit 0 set, which is not part of the
+/// address), on both targets at both levels.
+#[test]
+fn function_alignment() {
+    let work = Path::new(env!("CARGO_TARGET_TMPDIR")).join("elf");
+    fs::create_dir_all(&work).unwrap();
+    for target in TARGETS {
+        let ret = match target.arch {
+            Arch::Riscv32 => "ret",
+            Arch::Armv7m => "bx lr",
+        };
+        let source = work.join(format!("align-{}.ers", target.name));
+        let program = format!(
+            "{VIRT_MAP}
+#[export]
+#[align(64)]
+fn aligned(x: u32) -> u32 {{ x + 1 }}
+
+fn unaligned(x: u32) -> u32 {{ x + 2 }}
+
+#[align(64)]
+#[naked]
+fn naked_aligned() {{
+    asm(\"{ret}\", options(noreturn))
+}}
+
+entry fn main() -> ! {{
+    aligned(1);
+    unaligned(1);
+    naked_aligned();
+    loop {{}}
+}}
+
+panic fn on_panic() -> ! {{ loop {{}} }}
+"
+        );
+        fs::write(&source, program).unwrap();
+        for opt in [OptLevel::None, OptLevel::Speed] {
+            let elf = work.join(format!("align-{}-{opt:?}.elf", target.name));
+            driver::build(&source, &elf, &[], target, opt, false).unwrap();
+            let symbols = symbols(&elf);
+            for name in ["aligned", "naked_aligned"] {
+                let symbol = symbols
+                    .iter()
+                    .find(|s| s.name == name && s.section != "UND")
+                    .unwrap_or_else(|| panic!("{} {opt:?}: no symbol {name}", target.name));
+                let address = symbol.value & !1;
+                assert_eq!(
+                    address % 64,
+                    0,
+                    "{} {opt:?}: `{name}` is at {address:#x}",
+                    target.name
+                );
+            }
+        }
+    }
+}
+
+/// The attribute moves the symbol where the template of a naked function
+/// cannot, whose `.p2align` would put padding after it (ADR 0087). On
+/// riscv32, `pad` holds one return, which the assembler compresses to two bytes, and `next` follows
+/// it. In the control build `next` has no attribute and is at 2 mod 4, right
+/// after `pad`, which also pins the order of the two; with `#[align(4)]` on
+/// `next` it is at 0 mod 4.
+#[test]
+fn function_alignment_moves_the_symbol() {
+    let target = erebos::target::by_name("riscv32imac-unknown-none-elf").unwrap();
+    let work = Path::new(env!("CARGO_TARGET_TMPDIR")).join("elf");
+    fs::create_dir_all(&work).unwrap();
+    for (attribute, build) in [
+        ("", "control"),
+        (
+            "#[align(4)]
+",
+            "aligned",
+        ),
+    ] {
+        let source = work.join(format!("align-pad-{build}.ers"));
+        let program = format!(
+            "{VIRT_MAP}
+#[align(4)]
+#[naked]
+fn pad() {{
+    asm(\"ret\", options(noreturn))
+}}
+
+{attribute}#[naked]
+fn next() {{
+    asm(\"ret\", options(noreturn))
+}}
+
+entry fn main() -> ! {{
+    pad();
+    next();
+    loop {{}}
+}}
+
+panic fn on_panic() -> ! {{ loop {{}} }}
+"
+        );
+        fs::write(&source, program).unwrap();
+        for opt in [OptLevel::None, OptLevel::Speed] {
+            let elf = work.join(format!("align-pad-{build}-{opt:?}.elf"));
+            driver::build(&source, &elf, &[], target, opt, false).unwrap();
+            let symbols = symbols(&elf);
+            let at = |name: &str| {
+                symbols
+                    .iter()
+                    .find(|s| s.name == name && s.section != "UND")
+                    .unwrap_or_else(|| panic!("{build} {opt:?}: no symbol {name}"))
+                    .value
+            };
+            let (pad, next) = (at("pad"), at("next"));
+            assert_eq!(pad % 4, 0, "{build} {opt:?}: `pad` is at {pad:#x}");
+            if attribute.is_empty() {
+                assert_eq!(next, pad + 2, "{build} {opt:?}: `next` is at {next:#x}");
+                assert_eq!(next % 4, 2, "{build} {opt:?}: `next` is at {next:#x}");
+            } else {
+                assert_eq!(next % 4, 0, "{build} {opt:?}: `next` is at {next:#x}");
+            }
+        }
+    }
+}
+
 /// The reset entry of thumbv7m (ADR 0074, 0083), in a program with QEMU's
 /// `mps2-an385` map, whose code starts at 0: the section `.vector_table` is
 /// at the origin, and its two words are the initial stack pointer,

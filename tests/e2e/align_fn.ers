@@ -1,0 +1,35 @@
+// `#[align(N)]` on functions (ADR 0087): aligned functions are called as any
+// other, whatever their kind: a plain function, an `#[export]` one, and the
+// panic function aligned too. The alignment itself is checked in the ELF, by
+// `function_alignment` in `tests/elf.rs`.
+// expect-output: 7 9
+// expect-exit: 0
+mod board;
+use board::{exit, putc};
+
+#[align(64)]
+fn plain(x: u32) -> u32 {
+    x + 1
+}
+
+#[export]
+#[align(256)]
+fn exported(x: u32) -> u32 {
+    x * 2
+}
+
+#[align(1)]
+fn one(x: u32) -> u32 {
+    x + 3
+}
+
+entry fn main() -> ! {
+    putc(b'0' + (plain(2) + one(1)) as u8);
+    putc(b' ');
+    putc(b'0' + exported(4) as u8 + 1);
+    putc(b'\n');
+    exit(0)
+}
+
+#[align(16)]
+panic fn on_panic() -> ! { exit(1) }

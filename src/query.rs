@@ -207,6 +207,9 @@ pub struct Queries<'h> {
     /// The alignment of each static; `None` if its type has no layout
     /// (reported).
     static_aligns: Vec<Option<Option<u64>>>,
+    /// The `#[align(N)]` of each function, once computed; `None` inside if
+    /// it has none or is invalid (reported).
+    fn_aligns: Vec<Option<Option<u64>>>,
     /// The MIR view of each static.
     mir_statics: Vec<Option<StaticRef>>,
     /// Each byte string used, as a static numbered after the statics, in
@@ -277,6 +280,7 @@ impl<'h> Queries<'h> {
                 .collect(),
             enums_ok: vec![None; hir.enums.len()],
             static_aligns: vec![None; hir.statics.len()],
+            fn_aligns: vec![None; hir.fns.len()],
             mir_statics: vec![None; hir.statics.len()],
             byte_strings: Vec::new(),
             byte_strings_in_core: Vec::new(),
@@ -338,6 +342,10 @@ impl<'h> Queries<'h> {
         for id in 0..hir.statics.len() {
             self.static_align(StaticId(id as u32));
             self.static_value(StaticId(id as u32));
+        }
+        // And every `#[align(N)]` of a function (ADR 0087).
+        for id in 0..hir.fns.len() {
+            self.fn_align(FnId(id as u32));
         }
         for &block in &hir.comptime_blocks {
             self.comptime_block(block);
@@ -644,6 +652,23 @@ impl<'h> Queries<'h> {
             }),
         };
         self.static_aligns[id.0 as usize] = Some(align);
+        align
+    }
+
+    /// The alignment a function asks for with `#[align(N)]` (ADR 0087), or
+    /// `None` if it has none, or if it is invalid, reported once. A function
+    /// has no natural alignment in the language, so the rule of ADR 0022
+    /// asks nothing more than a power of two up to `MAX_ALIGN`.
+    pub fn fn_align(&mut self, id: FnId) -> Option<u64> {
+        if let Some(align) = self.fn_aligns[id.0 as usize] {
+            return align;
+        }
+        let hir = self.hir;
+        let align = hir.fn_(id).align.and_then(|(len, span)| {
+            let wanted = self.array_len(len)?;
+            self.checked_align(wanted, span, 1, "a function")
+        });
+        self.fn_aligns[id.0 as usize] = Some(align);
         align
     }
 

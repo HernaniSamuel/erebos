@@ -1,0 +1,26 @@
+// emit: mir
+// The alignment of a function is part of its MIR (ADR 0087): the dump shows
+// `#[align(N)]` before the function, and nothing for one without it.
+#[align(64)]
+fn aligned() {}
+
+fn plain() {}
+
+#[align(1)]
+fn one() {}
+
+#[align(4)]
+#[naked]
+fn naked_ret() {
+    asm("ret", options(noreturn))
+}
+
+entry fn main() -> ! {
+    aligned();
+    plain();
+    one();
+    naked_ret();
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

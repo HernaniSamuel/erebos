@@ -433,6 +433,7 @@ Hir {
             span: 1366..1572,
             runtime: false,
             comptime: None,
+            align: None,
         },
         Fn {
             name: "configure",
@@ -581,6 +582,7 @@ Hir {
             span: 1620..1785,
             runtime: false,
             comptime: None,
+            align: None,
         },
         Fn {
             name: "main",
@@ -624,6 +626,7 @@ Hir {
             span: 1789..1821,
             runtime: false,
             comptime: None,
+            align: None,
         },
         Fn {
             name: "on_panic",
@@ -667,6 +670,7 @@ Hir {
             span: 1822..1858,
             runtime: false,
             comptime: None,
+            align: None,
         },
         Fn {
             name: "STOP",
@@ -712,6 +716,7 @@ Hir {
                     ),
                 ),
             ),
+            align: None,
         },
         Fn {
             name: "DLAB",
@@ -757,6 +762,7 @@ Hir {
                     ),
                 ),
             ),
+            align: None,
         },
         Fn {
             name: "NO_PARITY",
@@ -800,6 +806,7 @@ Hir {
                     ),
                 ),
             ),
+            align: None,
         },
         Fn {
             name: "WordLength::Five",
@@ -846,6 +853,7 @@ Hir {
                     0,
                 ),
             ),
+            align: None,
         },
         Fn {
             name: "WordLength::Six",
@@ -892,6 +900,7 @@ Hir {
                     1,
                 ),
             ),
+            align: None,
         },
         Fn {
             name: "WordLength::Seven",
@@ -938,6 +947,7 @@ Hir {
                     2,
                 ),
             ),
+            align: None,
         },
         Fn {
             name: "WordLength::Eight",
@@ -984,6 +994,7 @@ Hir {
                     3,
                 ),
             ),
+            align: None,
         },
         Fn {
             name: "default",
@@ -1037,6 +1048,7 @@ Hir {
                     0,
                 ),
             ),
+            align: None,
         },
         Fn {
             name: "bits",
@@ -1083,6 +1095,7 @@ Hir {
                     1,
                 ),
             ),
+            align: None,
         },
         Fn {
             name: "default",
@@ -1125,6 +1138,7 @@ Hir {
                     1,
                 ),
             ),
+            align: None,
         },
         Fn {
             name: "bits",
@@ -1190,6 +1204,7 @@ Hir {
                     2,
                 ),
             ),
+            align: None,
         },
         Fn {
             name: "bits",
@@ -1255,6 +1270,7 @@ Hir {
                     2,
                 ),
             ),
+            align: None,
         },
         Fn {
             name: "default",
@@ -1299,6 +1315,7 @@ Hir {
                     2,
                 ),
             ),
+            align: None,
         },
         Fn {
             name: "bits",
@@ -1345,6 +1362,7 @@ Hir {
                     4,
                 ),
             ),
+            align: None,
         },
     ],
     consts: [

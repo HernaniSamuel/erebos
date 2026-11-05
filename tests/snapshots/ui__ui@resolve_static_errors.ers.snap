@@ -44,7 +44,7 @@ resolve::duplicate-attribute
     ╰────
 resolve::misplaced-attribute
 
-  × `#[align]` applies only to structs and statics
+  × `#[align]` applies only to structs, statics and functions with a body
     ╭─[resolve_static_errors.ers:15:1]
  14 │ 
  15 │ #[align(4)]
@@ -94,7 +94,7 @@ resolve::reserved-name
         (ADR 0083)
 resolve::misplaced-attribute
 
-  × `#[align]` applies only to structs and statics
+  × `#[align]` applies only to structs, statics and functions with a body
     ╭─[resolve_static_errors.ers:22:1]
  21 │ 
  22 │ #[align(8)]

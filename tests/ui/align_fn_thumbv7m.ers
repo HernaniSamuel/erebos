@@ -1,0 +1,30 @@
+// emit: llvm-ir
+// opt: both
+// target: thumbv7m-none-eabi
+// `#[align(N)]` on functions on thumbv7m (ADR 0087): as in `align_fn.ers`.
+#[align(64)]
+fn plain(x: u32) -> u32 {
+    x + 1
+}
+
+#[align(16)]
+#[export]
+fn exported(x: u32) -> u32 {
+    x + 2
+}
+
+#[align(4)]
+#[naked]
+fn naked_ret() {
+    asm("bx lr", options(noreturn))
+}
+
+#[align(8)]
+entry fn main() -> ! {
+    let total: u32 = plain(1) + exported(2);
+    naked_ret();
+    loop {}
+}
+
+#[align(32)]
+panic fn on_panic() -> ! { loop {} }

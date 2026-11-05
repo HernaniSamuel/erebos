@@ -241,6 +241,7 @@ Hir {
             span: 439..471,
             runtime: false,
             comptime: None,
+            align: None,
         },
         Fn {
             name: "on_panic",
@@ -284,6 +285,7 @@ Hir {
             span: 472..508,
             runtime: false,
             comptime: None,
+            align: None,
         },
         Fn {
             name: "default",
@@ -328,6 +330,7 @@ Hir {
                     4,
                 ),
             ),
+            align: None,
         },
     ],
     consts: [],
