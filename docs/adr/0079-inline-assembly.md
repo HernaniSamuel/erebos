@@ -1,6 +1,6 @@
 # 0079. Inline assembly
 
-- Status: Accepted; amended by 0083 (`sym entry`)
+- Status: Accepted; amended by 0083 (`sym entry`), 0084 (`#[naked]` does not apply to a handler)
 - Date: 2026-11-03
 - Amends: 0016 (string literals exist, as the templates of `asm` only),
   0077 (the thumbv7m board stops QEMU with inline assembly, without a C

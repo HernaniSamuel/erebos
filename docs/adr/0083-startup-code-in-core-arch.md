@@ -1,6 +1,6 @@
 # 0083. Startup code in `core::arch`
 
-- Status: Accepted
+- Status: Accepted; amended by 0085 (the table has 16 words, `_start` at origin plus 64 on thumbv7m; `_start` sets `mtvec`; the table is not in the dump of a program without handlers), 0086 (`_start` masks interrupts first)
 - Date: 2026-11-04
 - Supersedes: 0012
 - Amends: 0030 (`_start` is `core`'s, and is read in `rt/arch/`, not in

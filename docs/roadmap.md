@@ -125,6 +125,12 @@ Agreed as useful, not yet scheduled:
   (ADR 0007): the loop ends, or calls the panic function, and never hangs
   silently; checks the compiler can prove, as `i = i + 1` with `n` fixed,
   are removed.
+- Handlers with a frame: a handler that receives the interrupted state
+  (the stacked `pc` on thumbv7m, `mepc` and the saved registers on
+  riscv32), so that a fault handler can report where it happened, or repair
+  the cause and return, and `ecall` can return past itself. ADR 0084 allows
+  a return only where nothing needs repairing; this step would relax that,
+  with the trap entry saving `mepc` and `mstatus` (ADR 0085).
 - A compiler server for AI agents: look up a symbol by name and get its
   definition, type and uses from the compiler, and edit by symbol (a patch
   to a function or item) with the change type checked before it is
@@ -272,24 +278,17 @@ ADRs:
     program; the thumbv7m vector table's words emitted by the compiler
     in `.vector_table`), which supersedes 0012 and amends 0030, 0052,
     0057, 0074 and 0079.
-  - M4.3: the vectors each target names and how a program writes them
-    after `at`; whether the handlers the compiler generates for vectors
-    without one are contexts of ADR 0078, which decides whether the
-    panic function runs in an unmaskable context in every program and
-    so which statics it may name (found by the M4.1 review); which
-    handlers are unmaskable (ADR 0078) and whether
-    fault handlers return `!`; what the default handler passes to the
-    panic function (the vector, no file and line); the riscv32 trap
-    entry (`mtvec` direct with a dispatch on `mcause`, or vectored) and
-    the registers it saves; how a program enables and masks interrupts
-    and waits for one (`wfi`) without losing a wake-up; whether `_start`
-    masks interrupts on thumbv7m so that both targets enter the entry
-    function alike; how `critical` lowers; the size of the thumbv7m table
-    and `code_align` (ADR 0074, "Consequences").
+  - M4.3: settled by ADR 0084 (handlers: `core::arch::Vector`, which are
+    unmaskable, which must return `!`), 0085 (the table on each target,
+    the riscv32 trap entry with `mtvec` direct, default handlers, which
+    are not contexts of ADR 0078), 0086 (`_start` masks, the portable
+    items, how `critical` lowers, the wait) and 0087 (`#[align(N)]` on
+    functions).
   - M4.4: the form of the chip's interrupt list (an enum and how the
     compiler knows it is the chip's), the length of the thumbv7m table it
-    gives, and how the program enables an interrupt in the NVIC and the
-    PLIC.
+    gives and `code_align` (ADR 0074, "Consequences"; ADR 0085 keeps 16
+    words and 128 until then), and how the program enables an interrupt
+    in the NVIC and the PLIC.
   - M4.5: where the check runs (a MIR analysis, ADR 0033), its
     diagnostics (the access, and the path of calls from the context), and
     what counts as naming a static.

@@ -1,6 +1,6 @@
 # 0053. Panic information
 
-- Status: Accepted; amended by 0059 (the panic reason `FieldOutOfRange`)
+- Status: Accepted; amended by 0059 (the panic reason `FieldOutOfRange`), 0085 (`PanicReason::UnhandledVector`, with a `PanicInfo` that locates nothing)
 - Date: 2026-10-20
 - Amends: 0014 (the panic function may take a `*const core::PanicInfo`),
   0031 (an `assert` message reaches the panic function), 0036 (the cause
