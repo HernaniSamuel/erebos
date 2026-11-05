@@ -85,6 +85,13 @@ M3.1 to M3.3 on 2026-10-28; these remain.
 - A template that makes LLVM call `report_fatal_error` still ends the
   compiler: the diagnostic handler of ADR 0082 does not see it, and a
   process-wide fatal error handler would need an ADR. (M4.1)
+- `check_start` (`src/hir/lower.rs`, around line 1033) asks whether an
+  item is in the program with `module.0 < core_root.0`, and
+  `check_symbols` asks the same through its `in_core` helper (`>=`); one
+  helper would say it once. (M4.2)
+- `ast::SymTarget::Entry(Span)` keeps a span that nothing reads: it is
+  there for symmetry with `Path`, and a lint on it would mean dropping
+  the span. (M4.2)
 
 ## Tests
 
@@ -156,6 +163,10 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   function the allow-list does not name would not be caught. The ADR
   accepts the limit; an `extern`/`use` parse instead of a text search
   would close it. (M4.1)
+- ADR 0083's conformance list names the LLVM IR of `sym entry` in the root
+  module and with the entry function in a module; the ui snapshots
+  (`asm_sym_entry*.ers`) cover only the entry function in `mod app`. The
+  root case runs on QEMU in every e2e program, but has no snapshot. (M4.2)
 
 ## Docs
 
@@ -194,3 +205,9 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   parameter and a field; it spreads the words across those roles (fields:
   `options`, `reg`, `sym`, `pure`, `clobber_abi`; functions: `inout`,
   `lateout`; locals and parameters: the rest). (M4.1)
+- `docs/reference.md`, "Symbols": the bullet on `_start` has one line
+  wider than its neighbours ("`extern static`, because `core::arch`
+  defines it (ADR 0083): the program gets the one"). (M4.2)
+- `.claude/plans/M4.2.md`, step 1 `Changes` says the HIR dump prints `sym
+  entry`; the dump is derived `Debug` and shows `Sym(Entry)`, as its
+  `Decisions` say. (M4.2)
