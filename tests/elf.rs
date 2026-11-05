@@ -673,6 +673,75 @@ fn module_symbols() {
     }
 }
 
+/// An interrupt handler is part of the program whether or not anything names
+/// it (ADR 0084): each is a function in the executable, named as any
+/// function is (ADR 0051), also in a module and with `#[export]`, on each
+/// target at both levels. The `Vector` differs by target, so does the
+/// program.
+#[test]
+fn handlers_are_kept() {
+    const ENDING: &str = "
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }
+";
+    let work = Path::new(env!("CARGO_TARGET_TMPDIR")).join("elf");
+    fs::create_dir_all(&work).unwrap();
+    for target in TARGETS {
+        let (handlers, names) = match target.arch {
+            Arch::Riscv32 => (
+                "
+use core::arch::Vector;
+interrupt fn timer() at Vector::MachineTimer {}
+interrupt fn crash() -> ! at Vector::IllegalInstruction { loop {} }
+mod drivers {
+    pub interrupt fn software() at core::arch::Vector::MachineSoftware {}
+    #[export]
+    pub interrupt fn external() at core::arch::Vector::MachineExternal {}
+}
+",
+                ["timer", "crash", "drivers.software", "external"],
+            ),
+            Arch::Armv7m => (
+                "
+use core::arch::Vector;
+interrupt fn tick() at Vector::SysTick {}
+interrupt fn fault() -> ! at Vector::HardFault { loop {} }
+mod drivers {
+    pub interrupt fn pend() at core::arch::Vector::PendSV {}
+    #[export]
+    pub interrupt fn svc() at core::arch::Vector::SVCall {}
+}
+",
+                ["tick", "fault", "drivers.pend", "svc"],
+            ),
+        };
+        let source = work.join(format!("handlers-{}.ers", target.name));
+        fs::write(&source, format!("{VIRT_MAP}{handlers}{ENDING}")).unwrap();
+        for opt in [OptLevel::None, OptLevel::Speed] {
+            let elf = work.join(format!("handlers-{}-{opt:?}.elf", target.name));
+            driver::build(&source, &elf, &[], target, opt, false).unwrap();
+            let symbols = symbols(&elf);
+            for name in names {
+                assert!(
+                    symbols
+                        .iter()
+                        .any(|s| s.name == name && s.kind == "FUNC" && s.size > 0),
+                    "{} {opt:?}: no function {name}",
+                    target.name
+                );
+            }
+            // `#[export]` names the handler by itself, not by its path.
+            for path in ["drivers.external", "drivers.svc"] {
+                assert!(
+                    !symbols.iter().any(|s| s.name == path),
+                    "{} {opt:?}: the `#[export]` handler has its path as symbol",
+                    target.name
+                );
+            }
+        }
+    }
+}
+
 /// The functions of `core` (ADR 0052): the runtime support functions keep
 /// the names LLVM and C call them by, being `#[export]`, and a private
 /// helper has its path as symbol (ADR 0051).

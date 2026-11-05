@@ -1,0 +1,83 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/interrupt_type_errors_thumbv7m.ers
+---
+--- errors ---
+ty::interrupt-return
+
+  × the handler of `HardFault` must never return
+   ╭─[interrupt_type_errors_thumbv7m.ers:6:14]
+ 5 │ 
+ 6 │ interrupt fn hard_fault() at Vector::HardFault {}
+   ·              ─────┬────      ────────┬────────
+   ·                   │                  ╰── `HardFault` must diverge
+   ·                   ╰── returns `()`
+ 7 │ 
+   ╰────
+  help: returning would run the instruction that trapped again, with nothing changed; declare it
+        `-> !` and end it with a `loop` (ADR 0084)
+ty::interrupt-return
+
+  × the handler of `MemManage` must never return
+   ╭─[interrupt_type_errors_thumbv7m.ers:8:30]
+ 7 │ 
+ 8 │ interrupt fn mem_manage() -> () at Vector::MemManage {}
+   ·                              ─┬    ────────┬────────
+   ·                               │            ╰── `MemManage` must diverge
+   ·                               ╰── returns `()`
+ 9 │ 
+   ╰────
+  help: returning would run the instruction that trapped again, with nothing changed; declare it
+        `-> !` and end it with a `loop` (ADR 0084)
+ty::interrupt-return
+
+  × the handler of `BusFault` must never return
+    ╭─[interrupt_type_errors_thumbv7m.ers:10:14]
+  9 │ 
+ 10 │ interrupt fn bus_fault() at Vector::BusFault {
+    ·              ────┬────      ────────┬───────
+    ·                  │                  ╰── `BusFault` must diverge
+    ·                  ╰── returns `()`
+ 11 │     let x: u32 = 1;
+    ╰────
+  help: returning would run the instruction that trapped again, with nothing changed; declare it
+        `-> !` and end it with a `loop` (ADR 0084)
+ty::interrupt-return
+
+  × the handler of `UsageFault` must never return
+    ╭─[interrupt_type_errors_thumbv7m.ers:14:14]
+ 13 │ 
+ 14 │ interrupt fn usage_fault() at Vector::UsageFault {}
+    ·              ─────┬─────      ─────────┬────────
+    ·                   │                    ╰── `UsageFault` must diverge
+    ·                   ╰── returns `()`
+ 15 │ 
+    ╰────
+  help: returning would run the instruction that trapped again, with nothing changed; declare it
+        `-> !` and end it with a `loop` (ADR 0084)
+ty::interrupt-return
+
+  × the handler of `DebugMonitor` must never return
+    ╭─[interrupt_type_errors_thumbv7m.ers:16:14]
+ 15 │ 
+ 16 │ interrupt fn debug_monitor() at Vector::DebugMonitor {}
+    ·              ──────┬──────      ──────────┬─────────
+    ·                    │                      ╰── `DebugMonitor` must diverge
+    ·                    ╰── returns `()`
+ 17 │ 
+    ╰────
+  help: returning would run the instruction that trapped again, with nothing changed; declare it
+        `-> !` and end it with a `loop` (ADR 0084)
+ty::interrupt-return
+
+  × an interrupt handler returns `()` or `!`
+    ╭─[interrupt_type_errors_thumbv7m.ers:26:24]
+ 25 │ 
+ 26 │ interrupt fn tick() -> u8 at Vector::SysTick {
+    ·                        ─┬
+    ·                         ╰── return type is `u8`
+ 27 │     1
+    ╰────
+  help: nothing receives a handler's value; declare it with no return type, or `-> !` where the
+        vector must not return (ADR 0084)

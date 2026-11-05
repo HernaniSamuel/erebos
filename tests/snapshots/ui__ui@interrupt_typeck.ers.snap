@@ -1,0 +1,19 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/interrupt_typeck.ers
+---
+--- typeck ---
+interrupt fn timer() -> () at MachineTimer
+    expr 0 assign += 280..290: ()
+    expr 1 static TICKS 280..285: u32
+    expr 2 int 1 289..290: u32
+interrupt fn crash() -> ! at IllegalInstruction
+    expr 3 loop 369..376: !
+interrupt fn drivers::external() -> () at MachineExternal
+entry fn main() -> !
+    expr 4 loop 500..507: !
+panic fn on_panic() -> !
+    expr 5 loop 538..545: !
+comptime fn TICKS() -> u32
+    expr 6 int 0 225..226: u32

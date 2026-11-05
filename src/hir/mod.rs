@@ -137,6 +137,12 @@ pub struct Hir {
     /// and the compiler's checks use (ADR 0052, 0053).
     pub panic_info: StructId,
     pub panic_reason: EnumId,
+    /// `core::arch::Vector`, the enum whose variants name the vectors a
+    /// handler serves, found by path as `reset` is (ADR 0084).
+    pub vector: EnumId,
+    /// The interrupt handlers, in the order of their ids; a vector has at
+    /// most one. Their `kind` holds the vector.
+    pub handlers: Vec<FnId>,
     /// Every source file, indexed by its id: the program's in the order of
     /// ADR 0049, then `core`'s (ADR 0052).
     pub files: Vec<FileDef>,
@@ -212,8 +218,9 @@ impl Hir {
     /// The HIR of the program, as `--emit=hir` shows it: `core` left out
     /// (ADR 0052). Its fields are those of `Hir`, in its order, but for
     /// those about `core` (where it starts, the ids of `PanicInfo` and
-    /// `PanicReason`) and the table of files, which only turns the spans
-    /// shown into lines and columns.
+    /// `PanicReason`, `Vector`), the table of files, which only turns the spans
+    /// shown into lines and columns, and `handlers`, which the `kind` of
+    /// each function says.
     pub fn dump(&self) -> String {
         #[derive(Debug)]
         #[expect(dead_code, reason = "only its `Debug` output is read")]
@@ -294,6 +301,11 @@ impl Hir {
 
     pub fn fn_(&self, id: FnId) -> &Fn {
         &self.fns[id.0 as usize]
+    }
+
+    /// The name of the variant of `core::arch::Vector` that `vector` is.
+    pub fn vector_name(&self, vector: HandlerVector) -> &str {
+        &self.enums[self.vector.0 as usize].variants[vector.variant as usize].name
     }
 
     pub fn struct_(&self, id: StructId) -> &StructDef {
@@ -986,6 +998,18 @@ pub enum FnKind {
     /// `#[naked]` (ADR 0079): no code of the compiler's, its body is one
     /// `asm` expression.
     Naked,
+    /// `interrupt fn ... at VECTOR` (ADR 0084), which the hardware runs.
+    Interrupt(HandlerVector),
+}
+
+/// The vector an interrupt handler serves (ADR 0084).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct HandlerVector {
+    /// The index of the variant of `core::arch::Vector` that the path after
+    /// `at` names.
+    pub variant: u32,
+    /// The path after `at`.
+    pub span: Span,
 }
 
 #[derive(Debug)]

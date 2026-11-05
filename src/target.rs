@@ -57,6 +57,76 @@ pub struct Target {
     pub c_clobbers: &'static [&'static str],
     /// How the registers are written, for the help of an unknown name.
     pub register_names: &'static str,
+    /// The variants of `core::arch::Vector` of this target, in the order of
+    /// the enum in `rt/arch/` (ADR 0084).
+    pub vectors: &'static [Vector],
+}
+
+/// A variant of `core::arch::Vector`, with what the language needs of the
+/// vector (ADR 0084); a test checks the list of each target against the
+/// enum of its file in `rt/arch/`.
+#[derive(Debug)]
+pub struct Vector {
+    /// The variant's name.
+    pub name: &'static str,
+    /// The variant's value: the exception number on ARMv7-M, `mcause` on
+    /// RISC-V.
+    pub value: u32,
+    /// The word of the target's vector table that holds the handler
+    /// (ADR 0085): on ARMv7-M the value itself; on RISC-V a value `n` is word
+    /// `n`, and a value `0x8000_0000 + n` is word `16 + n`.
+    pub word: u32,
+    pub kind: VectorKind,
+    /// A handler must return `!`: returning would run the instruction that
+    /// trapped again.
+    pub diverges: bool,
+}
+
+/// Whether a handler runs in the handler context of ADR 0078, or in a
+/// context of its own (ADR 0084).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VectorKind {
+    Maskable,
+    Unmaskable,
+}
+
+impl Vector {
+    const fn new(
+        name: &'static str,
+        value: u32,
+        word: u32,
+        kind: VectorKind,
+        diverges: bool,
+    ) -> Vector {
+        Vector {
+            name,
+            value,
+            word,
+            kind,
+            diverges,
+        }
+    }
+
+    /// A system exception of ARMv7-M, whose word is its number.
+    const fn arm(name: &'static str, value: u32, kind: VectorKind, diverges: bool) -> Vector {
+        Vector::new(name, value, value, kind, diverges)
+    }
+
+    /// An exception of RISC-V, whose handler never returns (ADR 0084).
+    const fn exception(name: &'static str, cause: u32) -> Vector {
+        Vector::new(name, cause, cause, VectorKind::Unmaskable, true)
+    }
+
+    /// An interrupt of RISC-V, `mcause` with bit 31 set, in the word 16 on.
+    const fn interrupt(name: &'static str, cause: u32) -> Vector {
+        Vector::new(
+            name,
+            0x8000_0000 + cause,
+            16 + cause,
+            VectorKind::Maskable,
+            false,
+        )
+    }
 }
 
 /// A register inline assembly may name (ADR 0079).
@@ -111,7 +181,24 @@ pub static RISCV32IMAC: Target = Target {
     registers: &RISCV32_REGISTERS,
     c_clobbers: &RISCV32_C_CLOBBERS,
     register_names: "`x0` to `x31`, or their ABI names: `zero`, `ra`, `sp`, `gp`, `tp`, `t0` to `t6`, `s0` (`fp`) to `s11`, `a0` to `a7`",
+    vectors: &RISCV32_VECTORS,
 };
+
+/// The variants of `Vector` in `rt/arch/riscv32.ers` (ADR 0084).
+static RISCV32_VECTORS: [Vector; 12] = [
+    Vector::exception("InstructionMisaligned", 0),
+    Vector::exception("InstructionFault", 1),
+    Vector::exception("IllegalInstruction", 2),
+    Vector::exception("Breakpoint", 3),
+    Vector::exception("LoadMisaligned", 4),
+    Vector::exception("LoadFault", 5),
+    Vector::exception("StoreMisaligned", 6),
+    Vector::exception("StoreFault", 7),
+    Vector::exception("EnvironmentCall", 11),
+    Vector::interrupt("MachineSoftware", 3),
+    Vector::interrupt("MachineTimer", 7),
+    Vector::interrupt("MachineExternal", 11),
+];
 
 /// RV32I's registers, by the architecture's names and the ABI's.
 static RISCV32_REGISTERS: [Register; 32] = [
@@ -172,7 +259,21 @@ pub static THUMBV7M: Target = Target {
     registers: &ARMV7M_REGISTERS,
     c_clobbers: &ARMV7M_C_CLOBBERS,
     register_names: "`r0` to `r15`, or `sb` (`r9`), `sl` (`r10`), `fp` (`r11`), `ip` (`r12`), `sp` (`r13`), `lr` (`r14`) and `pc` (`r15`)",
+    vectors: &ARMV7M_VECTORS,
 };
+
+/// The variants of `Vector` in `rt/arch/armv7m.ers` (ADR 0084).
+static ARMV7M_VECTORS: [Vector; 9] = [
+    Vector::arm("NMI", 2, VectorKind::Unmaskable, false),
+    Vector::arm("HardFault", 3, VectorKind::Unmaskable, true),
+    Vector::arm("MemManage", 4, VectorKind::Unmaskable, true),
+    Vector::arm("BusFault", 5, VectorKind::Unmaskable, true),
+    Vector::arm("UsageFault", 6, VectorKind::Unmaskable, true),
+    Vector::arm("SVCall", 11, VectorKind::Unmaskable, false),
+    Vector::arm("DebugMonitor", 12, VectorKind::Unmaskable, true),
+    Vector::arm("PendSV", 14, VectorKind::Maskable, false),
+    Vector::arm("SysTick", 15, VectorKind::Maskable, false),
+];
 
 /// ARMv7-M's general-purpose registers. `r6` is LLVM's base pointer and `r7`
 /// the frame pointer in Thumb code.
@@ -212,6 +313,12 @@ impl Target {
         self.registers
             .iter()
             .find(|register| register.is_named(name))
+    }
+
+    /// The vector that the variant `name` of `core::arch::Vector` names, by
+    /// the variant's name (ADR 0084).
+    pub fn vector(&self, name: &str) -> Option<&'static Vector> {
+        self.vectors.iter().find(|vector| vector.name == name)
     }
 }
 
@@ -305,5 +412,84 @@ mod tests {
     #[test]
     fn the_default_is_a_listed_target() {
         assert!(TARGETS.iter().any(|target| std::ptr::eq(*target, DEFAULT)));
+    }
+
+    /// The variants `NAME = VALUE,` of the `enum Vector: u32` that `source`
+    /// declares, one per line, with their values (ADR 0084).
+    fn declared_vectors(source: &str) -> Vec<(String, u32)> {
+        const OPEN: &str = "pub enum Vector: u32 {";
+        let after = &source[source.find(OPEN).expect("the file declares `Vector`") + OPEN.len()..];
+        let body = &after[..after.find('}').expect("the enum is closed")];
+        body.lines()
+            .map(|line| line.split("//").next().unwrap_or("").trim())
+            .filter(|line| !line.is_empty())
+            .map(|line| {
+                let (name, value) = line
+                    .trim_end_matches(',')
+                    .split_once(" = ")
+                    .unwrap_or_else(|| panic!("`{line}` is not `NAME = VALUE,`"));
+                let digits = value.replace('_', "");
+                let value = match digits.strip_prefix("0x") {
+                    Some(hex) => u32::from_str_radix(hex, 16),
+                    None => digits.parse(),
+                };
+                (name.to_owned(), value.expect("a number"))
+            })
+            .collect()
+    }
+
+    /// The `Vector` of each file of `core::arch` and the list of its target
+    /// are the same: names, values and the words of the table (ADR 0084).
+    #[test]
+    fn the_vectors_agree_with_the_enums_of_core_arch() {
+        let files = [
+            (&RISCV32IMAC, include_str!("../rt/arch/riscv32.ers")),
+            (&THUMBV7M, include_str!("../rt/arch/armv7m.ers")),
+        ];
+        for (target, source) in files {
+            let declared = declared_vectors(source);
+            let listed: Vec<(String, u32)> = (target.vectors.iter())
+                .map(|vector| (vector.name.to_owned(), vector.value))
+                .collect();
+            assert_eq!(declared, listed, "{}", target.name);
+            let mut words: Vec<u32> = Vec::new();
+            for vector in target.vectors {
+                let (word, table) = match target.arch {
+                    // The word is the exception number, in a table of 16.
+                    Arch::Armv7m => (vector.value, 16),
+                    // A cause `n` is word `n`, an interrupt `16 + n`, in a
+                    // table of 32 and the word of any other cause.
+                    Arch::Riscv32 => match vector.value.checked_sub(0x8000_0000) {
+                        Some(cause) => (16 + cause, 32),
+                        None => (vector.value, 32),
+                    },
+                };
+                assert_eq!(vector.word, word, "{}: {}", target.name, vector.name);
+                assert!(word < table, "{}: {}", target.name, vector.name);
+                assert!(!words.contains(&word), "{}: {}", target.name, vector.name);
+                words.push(word);
+                if target.arch == Arch::Riscv32 {
+                    // An interrupt can be masked and may return; an
+                    // exception cannot be masked and never returns.
+                    let interrupt = vector.value >= 0x8000_0000;
+                    assert_eq!(vector.kind == VectorKind::Maskable, interrupt);
+                    assert_eq!(vector.diverges, !interrupt, "{}", vector.name);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_vector_is_found_by_the_name_of_its_variant() {
+        let tick = THUMBV7M.vector("SysTick").expect("a vector of thumbv7m");
+        assert_eq!((tick.value, tick.word), (15, 15));
+        assert!(!tick.diverges);
+        assert!(THUMBV7M.vector("HardFault").expect("listed").diverges);
+        // The other target's, and what is no variant.
+        assert!(THUMBV7M.vector("MachineTimer").is_none());
+        assert!(RISCV32IMAC.vector("SysTick").is_none());
+        let timer = RISCV32IMAC.vector("MachineTimer").expect("listed");
+        assert_eq!((timer.value, timer.word), (0x8000_0007, 23));
+        assert!(RISCV32IMAC.vector("systick").is_none());
     }
 }

@@ -392,16 +392,30 @@ impl Lowerer<'_> {
         );
         let diag = match self.lookup_path(path) {
             Named::Item(Def::Fn(id)) => {
-                if self.fn_decl_of(id).0.kind == ast::FnKind::Entry {
-                    self.diags.push(
-                        Diagnostic::error(
-                            "resolve::call-entry",
-                            "the entry function cannot be called",
-                        )
-                        .label(path.span, "called here")
-                        .help("execution starts there; it is not a function to call"),
-                    );
-                    return None;
+                match &self.fn_decl_of(id).0.kind {
+                    ast::FnKind::Entry => {
+                        self.diags.push(
+                            Diagnostic::error(
+                                "resolve::call-entry",
+                                "the entry function cannot be called",
+                            )
+                            .label(path.span, "called here")
+                            .help("execution starts there; it is not a function to call"),
+                        );
+                        return None;
+                    }
+                    ast::FnKind::Interrupt(_) => {
+                        self.diags.push(
+                            Diagnostic::error(
+                                "resolve::call-interrupt",
+                                "an interrupt handler cannot be called",
+                            )
+                            .label(path.span, "called here")
+                            .help("the hardware runs it when the vector it serves is taken; it is not a function to call, although `sym` may name it for its address (ADR 0084)"),
+                        );
+                        return None;
+                    }
+                    ast::FnKind::Plain | ast::FnKind::Panic => {}
                 }
                 return Some(Callee::Fn(id));
             }

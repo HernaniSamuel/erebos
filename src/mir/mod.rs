@@ -79,9 +79,21 @@ pub struct Mir {
     /// with one, the body stays as a declaration.
     pub critical_enter: Option<BodyId>,
     pub critical_exit: Option<BodyId>,
+    /// The interrupt handlers, in the order of their bodies, each with the
+    /// vector it serves (ADR 0084).
+    pub handlers: Vec<Handler>,
     /// The program's memory map, of which the linker script is made
     /// (ADR 0057); `None` without a `memory` block.
     pub memory: Option<MemoryMap>,
+}
+
+/// An interrupt handler (ADR 0084).
+#[derive(Debug)]
+pub struct Handler {
+    /// The name of the variant of `core::arch::Vector` it serves, which
+    /// `target::Target::vector` finds the vector by.
+    pub vector: String,
+    pub body: BodyId,
 }
 
 impl Mir {
@@ -245,6 +257,9 @@ impl Mir {
         }
         self.entry = new_id(self.entry);
         self.panic = new_id(self.panic);
+        for handler in &mut self.handlers {
+            handler.body = new_id(handler.body);
+        }
         // `_start` is `core`'s, and nothing calls it.
         self.reset = None;
         // The two functions of a `critical` block stay when a body kept has
@@ -1758,10 +1773,13 @@ impl fmt::Display for Mir {
             if i > 0 {
                 writeln!(f)?;
             }
+            let handler = self.handlers.iter().find(|handler| handler.body == id);
             let kind = if id == self.entry {
                 "entry "
             } else if id == self.panic {
                 "panic "
+            } else if handler.is_some() {
+                "interrupt "
             } else {
                 ""
             };
@@ -1782,7 +1800,11 @@ impl fmt::Display for Mir {
                 writeln!(f, ") -> {};", body.ret)?;
                 continue;
             }
-            writeln!(f, ") -> {} {{", body.ret)?;
+            write!(f, ") -> {}", body.ret)?;
+            if let Some(handler) = handler {
+                write!(f, " at {}", handler.vector)?;
+            }
+            writeln!(f, " {{")?;
             for (local, decl) in body.locals() {
                 write!(f, "    let {local}: {}", decl.ty)?;
                 if let Some(data) = decl.constant {
@@ -1898,6 +1920,7 @@ mod tests {
             reset: None,
             critical_enter: None,
             critical_exit: None,
+            handlers: Vec::new(),
             memory: None,
         };
         mir.leave_out(&LeftOut {

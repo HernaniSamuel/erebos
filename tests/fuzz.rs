@@ -56,6 +56,8 @@ const SNIPPETS: &[&str] = &[
     "loop { break 5; }",
     "critical {",
     "critical { 1 }",
+    "interrupt fn",
+    "interrupt fn f() at core::arch::Vector::",
     "fn",
     "entry",
     "panic",

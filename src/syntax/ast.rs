@@ -393,12 +393,17 @@ pub struct FnDecl {
 }
 
 /// Plain functions are called; the program has exactly one entry function
-/// (where execution starts) and one panic function (ADR 0014).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// (where execution starts) and one panic function (ADR 0014), and an
+/// interrupt handler for each vector it serves, which the hardware runs
+/// (ADR 0084).
+#[derive(Clone, Debug)]
 pub enum FnKind {
     Plain,
     Entry,
     Panic,
+    /// `interrupt fn NAME() at PATH`, with the path after `at`: the vector
+    /// it serves.
+    Interrupt(Path),
 }
 
 /// `[mut] name: Type`

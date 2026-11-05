@@ -6,13 +6,14 @@ use std::collections::HashMap;
 use crate::diag::Diagnostic;
 use crate::hir::{
     ArrayLen, BitFieldDef, BitStructDef, BitStructId, Block, Comptime, ConstDef, ConstId, EnumDef,
-    EnumId, FieldDef, Fn, FnId, FnKind, IntTy, ModuleDef, ModuleId, NeverPosition, PayloadDef,
-    StaticDef, StaticId, StructDef, Ty, UnsizedPosition, VariantDef, VariantValue, Visibility,
+    EnumId, FieldDef, Fn, FnId, FnKind, HandlerVector, IntTy, ModuleDef, ModuleId, NeverPosition,
+    PayloadDef, StaticDef, StaticId, StructDef, Ty, UnsizedPosition, VariantDef, VariantValue,
+    Visibility,
 };
 use crate::span::Span;
 use crate::syntax::ast;
 
-use super::{Lowerer, visibility};
+use super::{Lowerer, Named, visibility, written};
 
 impl Lowerer<'_> {
     pub(super) fn struct_decl(&mut self, decl: &ast::StructDecl) -> StructDef {
@@ -238,7 +239,9 @@ impl Lowerer<'_> {
         let applies_to = match attr.name.name.as_str() {
             "align" => "structs, statics and functions with a body",
             "export" => "functions and statics defined in the program",
-            "naked" => "functions with a body, other than the entry and the panic function",
+            "naked" => {
+                "functions with a body, other than the entry function, the panic function and interrupt handlers"
+            }
             _ => "structs",
         };
         let mut diag = Diagnostic::error(
@@ -250,7 +253,7 @@ impl Lowerer<'_> {
             diag = diag.help("`#[export]` gives a function or static its own name as its symbol; an `extern` item always has its own name (ADR 0051)");
         }
         if attr.name.name == "naked" {
-            diag = diag.help("`#[naked]` makes a function with a body that is one `asm` expression, with no code of the compiler's; the entry and the panic function are written in Erebos, and an `extern fn` has no body here (ADR 0079)");
+            diag = diag.help("`#[naked]` makes a function with a body that is one `asm` expression, with no code of the compiler's; the entry, the panic function and the interrupt handlers are written in Erebos, and an `extern fn` has no body here (ADR 0079, 0084)");
         }
         self.diags.push(diag);
     }
@@ -281,13 +284,14 @@ impl Lowerer<'_> {
 
     /// `#[export]`, `#[naked]` and `#[align(N)]` are the attributes of a
     /// function with a body; an `extern fn` takes none (ADR 0051, 0087), and
-    /// the entry and the panic function are not naked (ADR 0079). Returns
+    /// the entry, the panic function and the interrupt handlers are not naked
+    /// (ADR 0079, 0084). Returns
     /// whether it is exported, whether it is naked, and its alignment.
     fn fn_attrs(
         &mut self,
         attrs: &[ast::Attr],
         external: bool,
-        kind: ast::FnKind,
+        kind: &ast::FnKind,
     ) -> (bool, bool, Option<(ArrayLen, Span)>) {
         if external {
             self.no_attrs(attrs, "an `extern fn`");
@@ -304,6 +308,7 @@ impl Lowerer<'_> {
                     ast::FnKind::Plain => self.flag_attr(attr, &mut naked),
                     ast::FnKind::Entry => self.misplaced_attr(attr, "the entry function"),
                     ast::FnKind::Panic => self.misplaced_attr(attr, "the panic function"),
+                    ast::FnKind::Interrupt(_) => self.misplaced_attr(attr, "an interrupt handler"),
                 },
                 "align" => {
                     match &attr.arg {
@@ -720,9 +725,60 @@ impl Lowerer<'_> {
             .push(Diagnostic::error("resolve::attribute-argument", message).label(span, label));
     }
 
+    /// The vector an `interrupt fn` serves: the variant of `core::arch::Vector`
+    /// that `at` names, resolved from the module of the handler like any path.
+    /// What it names otherwise is reported; a variant that `Vector` does not
+    /// have, such as another target's, is `resolve::unknown-variant`
+    /// (ADR 0080, 0084).
+    fn handler_vector(&mut self, at: &ast::Path) -> Option<HandlerVector> {
+        let vector = self.vector;
+        let not_a_vector = |this: &mut Self, what: String| {
+            let name = this.enum_tys[vector.0 as usize].name;
+            this.diags.push(
+                Diagnostic::error(
+                    "resolve::not-a-vector",
+                    format!("`{}` is not a variant of `{name}`", written(at)),
+                )
+                .label(at.span, what)
+                .help(format!(
+                    "an interrupt handler names the vector it serves with a variant of `{name}`, as in `at Vector::SysTick` after `use core::arch::Vector;` (ADR 0084)"
+                )),
+            );
+        };
+        match self.lookup_path(at) {
+            Named::Variant(id, variant) if id == vector => Some(HandlerVector {
+                variant,
+                span: at.span,
+            }),
+            Named::Variant(id, _) => {
+                let other = self.enum_tys[id.0 as usize].name;
+                not_a_vector(self, format!("a variant of `{other}`"));
+                None
+            }
+            Named::Item(def) => {
+                not_a_vector(self, def.what().to_owned());
+                None
+            }
+            Named::Missing(module) => {
+                let diag = Diagnostic::error(
+                    "resolve::unknown-path",
+                    format!("cannot find `{}`", written(at)),
+                );
+                let diag = self.missing(diag, at, module, "not found");
+                self.diags.push(diag);
+                None
+            }
+            Named::Failed => None,
+        }
+    }
+
     pub(super) fn fn_decl(&mut self, decl: &ast::FnDecl) -> Fn {
         let external = decl.body.is_none();
-        let (export, naked, align) = self.fn_attrs(&decl.attrs, external, decl.kind);
+        let (export, naked, align) = self.fn_attrs(&decl.attrs, external, &decl.kind);
+        let vector = match &decl.kind {
+            ast::FnKind::Interrupt(at) => self.handler_vector(at),
+            _ => None,
+        };
         self.locals.clear();
         self.scopes.clear();
         self.loops.clear();
@@ -762,6 +818,15 @@ impl Lowerer<'_> {
         }
         let body = decl.body.as_ref().map(|body| self.block(body));
         self.scopes.pop();
+        let kind = match &decl.kind {
+            ast::FnKind::Plain if naked => FnKind::Naked,
+            ast::FnKind::Plain => FnKind::Plain,
+            ast::FnKind::Entry => FnKind::Entry,
+            ast::FnKind::Panic => FnKind::Panic,
+            // A vector that could not be resolved was reported, and
+            // lowering errors stop the pipeline: any kind works.
+            ast::FnKind::Interrupt(_) => vector.map_or(FnKind::Plain, FnKind::Interrupt),
+        };
         Fn {
             name: decl.name.name.clone(),
             path: self.path_of(self.module, &decl.name.name),
@@ -773,12 +838,7 @@ impl Lowerer<'_> {
             name_span: decl.name.span,
             module: self.module,
             vis: visibility(decl.vis),
-            kind: match decl.kind {
-                ast::FnKind::Plain if naked => FnKind::Naked,
-                ast::FnKind::Plain => FnKind::Plain,
-                ast::FnKind::Entry => FnKind::Entry,
-                ast::FnKind::Panic => FnKind::Panic,
-            },
+            kind,
             ret,
             ret_span: decl.ret.as_ref().map(|ty| ty.span),
             param_count: decl.params.len(),

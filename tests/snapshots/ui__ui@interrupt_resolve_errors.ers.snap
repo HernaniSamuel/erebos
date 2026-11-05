@@ -1,0 +1,216 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/interrupt_resolve_errors.ers
+---
+--- errors ---
+resolve::duplicate-vector
+
+  × `core::arch::Vector::MachineTimer` has more than one handler
+    ╭─[interrupt_resolve_errors.ers:28:34]
+ 22 │ 
+ 23 │ interrupt fn first() at Vector::MachineTimer {}
+    ·                         ──────────┬─────────
+    ·                                   ╰── first served here
+ 24 │ 
+ 25 │ mod app {
+ 26 │     use core::arch::Vector;
+ 27 │ 
+ 28 │     pub interrupt fn second() at Vector::MachineTimer {}
+    ·                                  ──────────┬─────────
+    ·                                            ╰── served again here
+ 29 │ 
+    ╰────
+  help: a vector has one handler: serve the vector in one function, or remove one (ADR 0084)
+resolve::duplicate-vector
+
+  × `core::arch::Vector::MachineTimer` has more than one handler
+    ╭─[interrupt_resolve_errors.ers:30:29]
+ 22 │ 
+ 23 │ interrupt fn first() at Vector::MachineTimer {}
+    ·                         ──────────┬─────────
+    ·                                   ╰── first served here
+ 24 │ 
+ 25 │ mod app {
+ 26 │     use core::arch::Vector;
+ 27 │ 
+ 28 │     pub interrupt fn second() at Vector::MachineTimer {}
+ 29 │ 
+ 30 │     interrupt fn third() at core::arch::Vector::MachineTimer {}
+    ·                             ────────────────┬───────────────
+    ·                                             ╰── served again here
+ 31 │ }
+    ╰────
+  help: a vector has one handler: serve the vector in one function, or remove one (ADR 0084)
+resolve::not-a-vector
+
+  × `Config` is not a variant of `core::arch::Vector`
+    ╭─[interrupt_resolve_errors.ers:33:28]
+ 32 │ 
+ 33 │ interrupt fn a_struct() at Config {}
+    ·                            ───┬──
+    ·                               ╰── a struct
+ 34 │ 
+    ╰────
+  help: an interrupt handler names the vector it serves with a variant of `core::arch::Vector`, as
+        in `at Vector::SysTick` after `use core::arch::Vector;` (ADR 0084)
+resolve::not-a-vector
+
+  × `helper` is not a variant of `core::arch::Vector`
+    ╭─[interrupt_resolve_errors.ers:35:30]
+ 34 │ 
+ 35 │ interrupt fn a_function() at helper {}
+    ·                              ───┬──
+    ·                                 ╰── a function
+ 36 │ 
+    ╰────
+  help: an interrupt handler names the vector it serves with a variant of `core::arch::Vector`, as
+        in `at Vector::SysTick` after `use core::arch::Vector;` (ADR 0084)
+resolve::not-a-vector
+
+  × `LIMIT` is not a variant of `core::arch::Vector`
+    ╭─[interrupt_resolve_errors.ers:37:30]
+ 36 │ 
+ 37 │ interrupt fn a_constant() at LIMIT {}
+    ·                              ──┬──
+    ·                                ╰── a constant
+ 38 │ 
+    ╰────
+  help: an interrupt handler names the vector it serves with a variant of `core::arch::Vector`, as
+        in `at Vector::SysTick` after `use core::arch::Vector;` (ADR 0084)
+resolve::not-a-vector
+
+  × `inner` is not a variant of `core::arch::Vector`
+    ╭─[interrupt_resolve_errors.ers:39:28]
+ 38 │ 
+ 39 │ interrupt fn a_module() at inner {}
+    ·                            ──┬──
+    ·                              ╰── a module
+ 40 │ 
+    ╰────
+  help: an interrupt handler names the vector it serves with a variant of `core::arch::Vector`, as
+        in `at Vector::SysTick` after `use core::arch::Vector;` (ADR 0084)
+resolve::not-a-vector
+
+  × `Vector` is not a variant of `core::arch::Vector`
+    ╭─[interrupt_resolve_errors.ers:41:28]
+ 40 │ 
+ 41 │ interrupt fn the_enum() at Vector {}
+    ·                            ───┬──
+    ·                               ╰── an enum
+ 42 │ 
+    ╰────
+  help: an interrupt handler names the vector it serves with a variant of `core::arch::Vector`, as
+        in `at Vector::SysTick` after `use core::arch::Vector;` (ADR 0084)
+resolve::not-a-vector
+
+  × `Mode::Idle` is not a variant of `core::arch::Vector`
+    ╭─[interrupt_resolve_errors.ers:43:30]
+ 42 │ 
+ 43 │ interrupt fn other_enum() at Mode::Idle {}
+    ·                              ─────┬────
+    ·                                   ╰── a variant of `Mode`
+ 44 │ 
+    ╰────
+  help: an interrupt handler names the vector it serves with a variant of `core::arch::Vector`, as
+        in `at Vector::SysTick` after `use core::arch::Vector;` (ADR 0084)
+resolve::unknown-path
+
+  × cannot find `Nowhere`
+    ╭─[interrupt_resolve_errors.ers:45:27]
+ 44 │ 
+ 45 │ interrupt fn nowhere() at Nowhere {}
+    ·                           ───┬───
+    ·                              ╰── not found
+ 46 │ 
+    ╰────
+resolve::unknown-variant
+
+  × `core::arch::Vector` has no variant `Nowhere`
+    ╭─[interrupt_resolve_errors.ers:47:38]
+ 46 │ 
+ 47 │ interrupt fn no_variant() at Vector::Nowhere {}
+    ·                                      ───┬───
+    ·                                         ╰── unknown variant
+ 48 │ 
+    ╰────
+    ╭─[rt/arch/riscv32.ers:71:10]
+ 70 │ // have no variant, and reset has none: `_start` serves it (ADR 0083).
+ 71 │ pub enum Vector: u32 {
+    ·          ───┬──
+    ·             ╰── `core::arch::Vector` is declared here
+ 72 │     InstructionMisaligned = 0,
+    ╰────
+  help: its variants are `InstructionMisaligned`, `InstructionFault`, `IllegalInstruction`,
+        `Breakpoint`, `LoadMisaligned`, `LoadFault`, `StoreMisaligned`, `StoreFault`,
+        `EnvironmentCall`, `MachineSoftware`, `MachineTimer`, `MachineExternal`
+resolve::unknown-variant
+
+  × `core::arch::Vector` has no variant `SysTick`
+    ╭─[interrupt_resolve_errors.ers:49:40]
+ 48 │ 
+ 49 │ interrupt fn other_target() at Vector::SysTick {}
+    ·                                        ───┬───
+    ·                                           ╰── unknown variant
+ 50 │ 
+    ╰────
+    ╭─[rt/arch/riscv32.ers:71:10]
+ 70 │ // have no variant, and reset has none: `_start` serves it (ADR 0083).
+ 71 │ pub enum Vector: u32 {
+    ·          ───┬──
+    ·             ╰── `core::arch::Vector` is declared here
+ 72 │     InstructionMisaligned = 0,
+    ╰────
+  help: its variants are `InstructionMisaligned`, `InstructionFault`, `IllegalInstruction`,
+        `Breakpoint`, `LoadMisaligned`, `LoadFault`, `StoreMisaligned`, `StoreFault`,
+        `EnvironmentCall`, `MachineSoftware`, `MachineTimer`, `MachineExternal`
+resolve::call-interrupt
+
+  × an interrupt handler cannot be called
+    ╭─[interrupt_resolve_errors.ers:52:5]
+ 51 │ fn calls_a_handler() {
+ 52 │     first();
+    ·     ──┬──
+    ·       ╰── called here
+ 53 │     app::second();
+    ╰────
+  help: the hardware runs it when the vector it serves is taken; it is not a function to call,
+        although `sym` may name it for its address (ADR 0084)
+resolve::call-interrupt
+
+  × an interrupt handler cannot be called
+    ╭─[interrupt_resolve_errors.ers:53:5]
+ 52 │     first();
+ 53 │     app::second();
+    ·     ─────┬─────
+    ·          ╰── called here
+ 54 │ }
+    ╰────
+  help: the hardware runs it when the vector it serves is taken; it is not a function to call,
+        although `sym` may name it for its address (ADR 0084)
+resolve::call-interrupt
+
+  × an interrupt handler cannot be called
+    ╭─[interrupt_resolve_errors.ers:57:5]
+ 56 │ const CALLED: u32 = {
+ 57 │     first();
+    ·     ──┬──
+    ·       ╰── called here
+ 58 │     1
+    ╰────
+  help: the hardware runs it when the vector it serves is taken; it is not a function to call,
+        although `sym` may name it for its address (ADR 0084)
+resolve::misplaced-attribute
+
+  × `#[naked]` applies only to functions with a body, other than the entry function, the panic
+  │ function and interrupt handlers
+    ╭─[interrupt_resolve_errors.ers:61:1]
+ 60 │ 
+ 61 │ #[naked]
+    · ────┬───
+    ·     ╰── not allowed on an interrupt handler
+ 62 │ interrupt fn naked_handler() at Vector::MachineSoftware {
+    ╰────
+  help: `#[naked]` makes a function with a body that is one `asm` expression, with no code of the
+        compiler's; the entry, the panic function and the interrupt handlers are written in
+        Erebos, and an `extern fn` has no body here (ADR 0079, 0084)

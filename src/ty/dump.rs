@@ -249,6 +249,11 @@ pub fn dump(q: &mut Queries) -> String {
             FnKind::Entry => "entry ",
             FnKind::Panic => "panic ",
             FnKind::Naked => "naked ",
+            FnKind::Interrupt(_) => "interrupt ",
+        };
+        let at = match f.kind {
+            FnKind::Interrupt(vector) => format!(" at {}", hir.vector_name(vector)),
+            _ => String::new(),
         };
         let params: Vec<String> = f
             .params()
@@ -263,7 +268,7 @@ pub fn dump(q: &mut Queries) -> String {
         };
         writeln!(
             out,
-            "{external}{kind}fn {}({}) -> {}",
+            "{external}{kind}fn {}({}) -> {}{at}",
             f.path,
             params.join(", "),
             q.normalize(f.ret)

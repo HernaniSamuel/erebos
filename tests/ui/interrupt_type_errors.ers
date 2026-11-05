@@ -1,0 +1,35 @@
+// What a handler declares (ADR 0084), on riscv32: no parameters, `()` or `!`,
+// and `!` at every exception, which would run again the instruction that
+// trapped. A handler no code names is still checked: the one for
+// `StoreFault` has an error in its body. The thumbv7m counterpart is
+// `interrupt_type_errors_thumbv7m.ers`.
+use core::arch::Vector;
+
+interrupt fn with_parameter(x: u32, y: u32) at Vector::MachineTimer {}
+
+interrupt fn returns_a_value() -> u32 at Vector::MachineSoftware {
+    1
+}
+
+interrupt fn exception_returns() at Vector::IllegalInstruction {}
+
+interrupt fn exception_returns_unit() -> () at Vector::Breakpoint {}
+
+interrupt fn call_returns() at Vector::EnvironmentCall {
+    let x: u32 = 1;
+}
+
+interrupt fn body_error() -> ! at Vector::StoreFault {
+    let x: u8 = true;
+    loop {}
+}
+
+interrupt fn interrupt_returns() at Vector::MachineExternal {}
+
+interrupt fn exception_diverges() -> ! at Vector::LoadFault {
+    loop {}
+}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

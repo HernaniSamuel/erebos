@@ -1,0 +1,54 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/interrupt_resolve_errors_thumbv7m.ers
+---
+--- errors ---
+resolve::duplicate-vector
+
+  × `core::arch::Vector::SysTick` has more than one handler
+    ╭─[interrupt_resolve_errors_thumbv7m.ers:9:26]
+  6 │ 
+  7 │ interrupt fn first() at Vector::SysTick {}
+    ·                         ───────┬───────
+    ·                                ╰── first served here
+  8 │ 
+  9 │ interrupt fn second() at Vector::SysTick {}
+    ·                          ───────┬───────
+    ·                                 ╰── served again here
+ 10 │ 
+    ╰────
+  help: a vector has one handler: serve the vector in one function, or remove one (ADR 0084)
+resolve::unknown-variant
+
+  × `core::arch::Vector` has no variant `MachineTimer`
+    ╭─[interrupt_resolve_errors_thumbv7m.ers:11:40]
+ 10 │ 
+ 11 │ interrupt fn other_target() at Vector::MachineTimer {}
+    ·                                        ──────┬─────
+    ·                                              ╰── unknown variant
+ 12 │ 
+    ╰────
+    ╭─[rt/arch/armv7m.ers:79:10]
+ 78 │ // serves it (ADR 0083). The chip's interrupts, from 16 on, come with the chip.
+ 79 │ pub enum Vector: u32 {
+    ·          ───┬──
+    ·             ╰── `core::arch::Vector` is declared here
+ 80 │     NMI = 2,
+    ╰────
+  help: its variants are `NMI`, `HardFault`, `MemManage`, `BusFault`, `UsageFault`, `SVCall`,
+        `DebugMonitor`, `PendSV`, `SysTick`
+resolve::misplaced-attribute
+
+  × `#[naked]` applies only to functions with a body, other than the entry function, the panic
+  │ function and interrupt handlers
+    ╭─[interrupt_resolve_errors_thumbv7m.ers:13:1]
+ 12 │ 
+ 13 │ #[naked]
+    · ────┬───
+    ·     ╰── not allowed on an interrupt handler
+ 14 │ interrupt fn naked_handler() at Vector::PendSV {
+    ╰────
+  help: `#[naked]` makes a function with a body that is one `asm` expression, with no code of the
+        compiler's; the entry, the panic function and the interrupt handlers are written in
+        Erebos, and an `extern fn` has no body here (ADR 0079, 0084)

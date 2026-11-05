@@ -384,7 +384,7 @@ Hir {
                     size: (
                         Comptime(
                             FnId(
-                                40,
+                                52,
                             ),
                         ),
                         424..432,
@@ -403,7 +403,7 @@ Hir {
                     size: (
                         Comptime(
                             FnId(
-                                41,
+                                53,
                             ),
                         ),
                         483..491,
@@ -426,7 +426,7 @@ Hir {
             stack_size: (
                 Comptime(
                     FnId(
-                        42,
+                        54,
                     ),
                 ),
                 364..371,

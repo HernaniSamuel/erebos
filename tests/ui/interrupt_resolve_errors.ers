@@ -1,0 +1,68 @@
+// A handler's `at` and uses (ADR 0084), on riscv32: three handlers at one
+// vector, in two modules and through a full path; a path after `at` that is no
+// variant of `core::arch::Vector`, or no path at all; a variant of the other
+// target's `Vector`; a handler called from a function and from a constant;
+// `#[naked]` on a handler. The thumbv7m counterpart is
+// `interrupt_resolve_errors_thumbv7m.ers`.
+use core::arch::Vector;
+
+struct Config {
+    x: u32,
+}
+
+enum Mode: u8 {
+    Idle = 0,
+}
+
+const LIMIT: u32 = 3;
+
+fn helper() {}
+
+mod inner {}
+
+interrupt fn first() at Vector::MachineTimer {}
+
+mod app {
+    use core::arch::Vector;
+
+    pub interrupt fn second() at Vector::MachineTimer {}
+
+    interrupt fn third() at core::arch::Vector::MachineTimer {}
+}
+
+interrupt fn a_struct() at Config {}
+
+interrupt fn a_function() at helper {}
+
+interrupt fn a_constant() at LIMIT {}
+
+interrupt fn a_module() at inner {}
+
+interrupt fn the_enum() at Vector {}
+
+interrupt fn other_enum() at Mode::Idle {}
+
+interrupt fn nowhere() at Nowhere {}
+
+interrupt fn no_variant() at Vector::Nowhere {}
+
+interrupt fn other_target() at Vector::SysTick {}
+
+fn calls_a_handler() {
+    first();
+    app::second();
+}
+
+const CALLED: u32 = {
+    first();
+    1
+};
+
+#[naked]
+interrupt fn naked_handler() at Vector::MachineSoftware {
+    asm("mret", options(noreturn))
+}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

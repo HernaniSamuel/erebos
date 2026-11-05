@@ -1866,6 +1866,16 @@ impl<'h> Queries<'h> {
         let peripherals = (0..self.hir.peripherals.len())
             .map(|id| self.mir_peripheral(PeripheralId(id as u32)))
             .collect();
+        let hir = self.hir;
+        let handlers = (hir.handlers.iter())
+            .filter_map(|&id| match hir.fn_(id).kind {
+                hir::FnKind::Interrupt(vector) => Some(mir::Handler {
+                    vector: hir.vector_name(vector).to_owned(),
+                    body: BodyId(id.0),
+                }),
+                _ => None,
+            })
+            .collect();
         let memory = self.hir.memory.as_ref().map(|_| {
             self.memory_map()
                 .expect("every value of a program without errors is computed")
@@ -1891,6 +1901,7 @@ impl<'h> Queries<'h> {
             reset: Some(BodyId(self.hir.reset.0)),
             critical_enter: Some(BodyId(self.hir.critical_enter.0)),
             critical_exit: Some(BodyId(self.hir.critical_exit.0)),
+            handlers,
             memory,
         }
     }

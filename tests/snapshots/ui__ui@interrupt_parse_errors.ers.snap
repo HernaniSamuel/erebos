@@ -1,0 +1,102 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/interrupt_parse_errors.ers
+---
+--- errors ---
+parser::unexpected-token
+
+  × expected `at`, found `{`
+   ╭─[interrupt_parse_errors.ers:7:26]
+ 6 │ 
+ 7 │ interrupt fn no_vector() {}
+   ·                          ┬
+   ·                          ╰── expected `at`
+ 8 │ 
+   ╰────
+  help: an interrupt handler names the vector it serves after its signature, as in `interrupt fn
+        tick() at Vector::SysTick { ... }` (ADR 0084)
+parser::unexpected-token
+
+  × expected identifier, found `{`
+    ╭─[interrupt_parse_errors.ers:9:27]
+  8 │ 
+  9 │ interrupt fn no_path() at {}
+    ·                           ┬
+    ·                           ╰── expected identifier
+ 10 │ 
+    ╰────
+parser::unexpected-token
+
+  × expected `{`, found identifier
+    ╭─[interrupt_parse_errors.ers:11:12]
+ 10 │ 
+ 11 │ fn plain() at Vector::SysTick {}
+    ·            ─┬
+    ·             ╰── expected `{`
+ 12 │ 
+    ╰────
+  help: only an `interrupt fn` names a vector with `at`: declare it `interrupt fn name() at
+        Vector::Name { ... }` (ADR 0084)
+parser::unexpected-token
+
+  × expected `{`, found identifier
+    ╭─[interrupt_parse_errors.ers:13:26]
+ 12 │ 
+ 13 │ entry fn also_not() -> ! at Vector::SysTick { loop {} }
+    ·                          ─┬
+    ·                           ╰── expected `{`
+ 14 │ 
+    ╰────
+  help: only an `interrupt fn` names a vector with `at`: declare it `interrupt fn name() at
+        Vector::Name { ... }` (ADR 0084)
+parser::unexpected-token
+
+  × expected `fn`, found `interrupt`
+    ╭─[interrupt_parse_errors.ers:15:8]
+ 14 │ 
+ 15 │ extern interrupt fn external() at Vector::SysTick;
+    ·        ────┬────
+    ·            ╰── expected `fn`
+ 16 │ 
+    ╰────
+parser::unexpected-token
+
+  × expected `{`, found `;`
+    ╭─[interrupt_parse_errors.ers:15:50]
+ 14 │ 
+ 15 │ extern interrupt fn external() at Vector::SysTick;
+    ·                                                  ┬
+    ·                                                  ╰── expected `{`
+ 16 │ 
+    ╰────
+parser::unexpected-token
+
+  × expected identifier, found `.`
+    ╭─[interrupt_parse_errors.ers:17:29]
+ 16 │ 
+ 17 │ interrupt fn shorthand() at .SysTick {}
+    ·                             ┬
+    ·                             ╰── expected identifier
+ 18 │ 
+    ╰────
+parser::unexpected-token
+
+  × expected identifier, found integer literal
+    ╭─[interrupt_parse_errors.ers:19:27]
+ 18 │ 
+ 19 │ interrupt fn integer() at 15 {}
+    ·                           ─┬
+    ·                            ╰── expected identifier
+ 20 │ 
+    ╰────
+parser::unexpected-token
+
+  × expected identifier, found `(`
+    ╭─[interrupt_parse_errors.ers:21:14]
+ 20 │ 
+ 21 │ interrupt fn () at Vector::SysTick {}
+    ·              ┬
+    ·              ╰── expected identifier
+ 22 │ 
+    ╰────

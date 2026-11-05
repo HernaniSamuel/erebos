@@ -1,0 +1,33 @@
+// emit: mir
+// target: thumbv7m-none-eabi
+// `interrupt_mir.ers` on thumbv7m (ADR 0084).
+use core::arch::Vector;
+
+static mut TICKS: u32 = 0;
+
+interrupt fn tick() at Vector::SysTick {
+    TICKS += 1;
+}
+
+#[export]
+interrupt fn fault() -> ! at Vector::HardFault {
+    loop {}
+}
+
+#[align(64)]
+pub interrupt fn pend() at Vector::PendSV {}
+
+mod drivers {
+    pub interrupt fn svc() at core::arch::Vector::SVCall {}
+}
+
+fn address() {
+    asm("ldr {}, ={}", out(reg) _, sym tick);
+}
+
+entry fn main() -> ! {
+    address();
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

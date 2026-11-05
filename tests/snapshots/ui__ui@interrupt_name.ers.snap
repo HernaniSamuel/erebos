@@ -1,0 +1,36 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/interrupt_name.ers
+---
+--- errors ---
+parser::unexpected-token
+
+  × expected identifier, found `interrupt`
+   ╭─[interrupt_name.ers:3:4]
+ 2 │ // `interrupt` is a keyword (ADR 0084): it names no item, local or field.
+ 3 │ fn interrupt() {}
+   ·    ────┬────
+   ·        ╰── expected identifier
+ 4 │ 
+   ╰────
+parser::unexpected-token
+
+  × expected identifier, found `interrupt`
+   ╭─[interrupt_name.ers:5:16]
+ 4 │ 
+ 5 │ struct Config {
+   ·                ▲
+   ·                ╰── expected identifier
+ 6 │     interrupt: u32,
+   ╰────
+parser::unexpected-token
+
+  × expected identifier, found `interrupt`
+    ╭─[interrupt_name.ers:10:9]
+  9 │ entry fn main() -> ! {
+ 10 │     let interrupt: u32 = 1;
+    ·         ────┬────
+    ·             ╰── expected identifier
+ 11 │     loop {}
+    ╰────

@@ -1,0 +1,36 @@
+// emit: mir
+// Handlers in the dump of MIR (ADR 0084): each shows the variant of `Vector`
+// it serves; a handler in a module, one with `pub`, `#[export]` and
+// `#[align]`, and one that only an `asm` names with `sym`, which gives its
+// address and does not call it. The thumbv7m counterpart is
+// `interrupt_mir_thumbv7m.ers`.
+use core::arch::Vector;
+
+static mut TICKS: u32 = 0;
+
+interrupt fn timer() at Vector::MachineTimer {
+    TICKS += 1;
+}
+
+#[export]
+interrupt fn crash() -> ! at Vector::IllegalInstruction {
+    loop {}
+}
+
+#[align(64)]
+pub interrupt fn software() at Vector::MachineSoftware {}
+
+mod drivers {
+    pub interrupt fn external() at core::arch::Vector::MachineExternal {}
+}
+
+fn address() {
+    asm("la {}, {}", out(reg) _, sym timer);
+}
+
+entry fn main() -> ! {
+    address();
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

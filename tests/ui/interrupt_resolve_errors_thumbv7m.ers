@@ -1,0 +1,20 @@
+// target: thumbv7m-none-eabi
+// `interrupt_resolve_errors.ers` on thumbv7m (ADR 0084): two handlers at one
+// vector, a variant of riscv32's `Vector` (`resolve::unknown-variant`) and
+// `#[naked]` on a handler.
+use core::arch::Vector;
+
+interrupt fn first() at Vector::SysTick {}
+
+interrupt fn second() at Vector::SysTick {}
+
+interrupt fn other_target() at Vector::MachineTimer {}
+
+#[naked]
+interrupt fn naked_handler() at Vector::PendSV {
+    asm("bx lr", options(noreturn))
+}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

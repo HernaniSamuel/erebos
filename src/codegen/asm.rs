@@ -378,9 +378,9 @@ impl<'ctx> FnCodegen<'_, 'ctx> {
     }
 }
 
-/// Keeps what `sym` operands name: the items join `llvm.compiler.used`, so
-/// that LLVM neither removes nor renames what the text refers to
-/// (ADR 0079).
+/// Keeps what `sym` operands name, and the interrupt handlers: the items join
+/// `llvm.compiler.used`, so that LLVM neither removes nor renames what the
+/// text refers to (ADR 0079), or what the hardware reaches (ADR 0084).
 pub(super) fn keep_symbols<'ctx>(
     context: &'ctx Context,
     module: &Module<'ctx>,
@@ -402,6 +402,15 @@ pub(super) fn keep_symbols<'ctx>(
                 {
                     used.push(item);
                 }
+            }
+        }
+    }
+    // So do the handlers, which the hardware reaches (ADR 0084).
+    for handler in &mir.handlers {
+        if let Some(function) = fns[handler.body.0 as usize] {
+            let item = function.as_global_value().as_pointer_value();
+            if !used.contains(&item) {
+                used.push(item);
             }
         }
     }

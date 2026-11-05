@@ -14,7 +14,7 @@ use std::collections::{HashMap, HashSet};
 use crate::diag::Diagnostic;
 use crate::hir::{
     self, AccessMode, BinOp, BitStructId, BitStructTy, Block, EnumId, EnumTy, Expr, ExprId,
-    ExprKind, Fn, FnKind, Hir, IntTy, LocalId, ModuleId, NeverPosition, PatternId,
+    ExprKind, Fn, FnKind, HandlerVector, Hir, IntTy, LocalId, ModuleId, NeverPosition, PatternId,
     PeripheralTypeId, Ptr, StaticId, Stmt, Ty, UnsizedPosition,
 };
 use crate::layout;
@@ -523,7 +523,7 @@ impl Checker<'_, '_> {
                 "panic",
                 "execution cannot continue after a panic (ADR 0014)",
             )),
-            FnKind::Plain | FnKind::Naked => None,
+            FnKind::Plain | FnKind::Naked | FnKind::Interrupt(_) => None,
         };
         self.ret = self.norm(f.ret);
         if let Some((code, what, why)) = special
@@ -540,6 +540,9 @@ impl Checker<'_, '_> {
         }
 
         self.params(f);
+        if let FnKind::Interrupt(vector) = f.kind {
+            self.interrupt_return(f, vector);
+        }
         // A constant's type is not a return type.
         let because = if f.comptime.is_some() {
             None
@@ -617,6 +620,18 @@ impl Checker<'_, '_> {
         if f.kind == FnKind::Panic {
             self.panic_params(f);
         }
+        if matches!(f.kind, FnKind::Interrupt(_))
+            && let Some(first) = f.params().first()
+        {
+            self.q.diags.push(
+                Diagnostic::error(
+                    "ty::interrupt-params",
+                    "an interrupt handler takes no parameters",
+                )
+                .label(first.span, "parameter here")
+                .help("the hardware gives a handler nothing: it reads what it needs from the device and from statics (ADR 0084)"),
+            );
+        }
         for param in f.params() {
             if matches!(param.ty, Ty::Unit | Ty::Never) {
                 self.q.diags.push(
@@ -627,6 +642,39 @@ impl Checker<'_, '_> {
                     .label(param.span, "has no value to pass"),
                 );
             }
+        }
+    }
+
+    /// An interrupt handler returns `()` or `!`, and `!` where `vector` must
+    /// not return: the instruction that trapped would run again with nothing
+    /// changed, since a handler cannot see the frame (ADR 0084).
+    fn interrupt_return(&mut self, f: &Fn, vector: HandlerVector) {
+        let at = f.ret_span.unwrap_or(f.name_span);
+        match self.ret {
+            // Reported where the type is written.
+            Ty::Never | Ty::Error => {}
+            Ty::Unit => {
+                let name = self.hir.vector_name(vector);
+                if self.q.target().vector(name).is_some_and(|v| v.diverges) {
+                    self.q.diags.push(
+                        Diagnostic::error(
+                            "ty::interrupt-return",
+                            format!("the handler of `{name}` must never return"),
+                        )
+                        .label(at, "returns `()`")
+                        .label(vector.span, format!("`{name}` must diverge"))
+                        .help("returning would run the instruction that trapped again, with nothing changed; declare it `-> !` and end it with a `loop` (ADR 0084)"),
+                    );
+                }
+            }
+            ty => self.q.diags.push(
+                Diagnostic::error(
+                    "ty::interrupt-return",
+                    "an interrupt handler returns `()` or `!`",
+                )
+                .label(at, format!("return type is `{ty}`"))
+                .help("nothing receives a handler's value; declare it with no return type, or `-> !` where the vector must not return (ADR 0084)"),
+            ),
         }
     }
 

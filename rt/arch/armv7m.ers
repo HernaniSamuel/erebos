@@ -68,6 +68,26 @@ pub fn interrupts_enabled() -> bool {
     primask == 0 && ipsr == 0
 }
 
+// --- Vectors (ADR 0084) ------------------------------------------------------
+
+// What an `interrupt fn` serves: `interrupt fn tick() at Vector::SysTick`. The
+// compiler knows this enum by its path, and `src/target.rs` holds the same list
+// with what the compiler needs of each vector; a test checks that they agree.
+// The value is the exception number, which is also the word of the vector
+// table that holds the handler (ADR 0085). Reset has no variant: `_start`
+// serves it (ADR 0083). The chip's interrupts, from 16 on, come with the chip.
+pub enum Vector: u32 {
+    NMI = 2,
+    HardFault = 3,
+    MemManage = 4,
+    BusFault = 5,
+    UsageFault = 6,
+    SVCall = 11,
+    DebugMonitor = 12,
+    PendSV = 14,
+    SysTick = 15,
+}
+
 // --- Critical sections (ADR 0086) --------------------------------------------
 
 // What a `critical` block calls where it starts and where it ends, on every

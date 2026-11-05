@@ -1,0 +1,31 @@
+// emit: llvm-ir
+// opt: both
+// target: thumbv7m-none-eabi
+// `interrupt_codegen.ers` on thumbv7m (ADR 0084).
+use core::arch::Vector;
+
+static mut TICKS: u32 = 0;
+
+interrupt fn tick() at Vector::SysTick {
+    TICKS += 1;
+}
+
+interrupt fn fault() -> ! at Vector::HardFault {
+    loop {}
+}
+
+mod drivers {
+    // In a module, the symbol is the path; `#[export]` gives the name alone.
+    pub interrupt fn pend() at core::arch::Vector::PendSV {
+        super::TICKS = 1;
+    }
+
+    #[export]
+    pub interrupt fn svc() at core::arch::Vector::SVCall {
+        super::TICKS = 0;
+    }
+}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

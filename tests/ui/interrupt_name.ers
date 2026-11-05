@@ -1,0 +1,14 @@
+// emit: ast
+// `interrupt` is a keyword (ADR 0084): it names no item, local or field.
+fn interrupt() {}
+
+struct Config {
+    interrupt: u32,
+}
+
+entry fn main() -> ! {
+    let interrupt: u32 = 1;
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

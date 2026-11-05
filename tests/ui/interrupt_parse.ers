@@ -1,0 +1,40 @@
+// emit: ast
+// `interrupt fn NAME(...) [-> TYPE] at PATH { ... }` (ADR 0084): a handler
+// returning `()` and one returning `!`, the vector written in full and through
+// `use`, `pub`, an attribute, and a handler in a module. The path is not
+// resolved here.
+use core::arch::Vector;
+
+interrupt fn tick() at Vector::SysTick {
+    TICKS += 1;
+}
+
+interrupt fn crash() -> ! at Vector::HardFault {
+    loop {}
+}
+
+pub interrupt fn pend() -> () at core::arch::Vector::PendSV {}
+
+#[export]
+#[align(16)]
+interrupt fn svc() at core::arch::Vector::SVCall {}
+
+mod handlers {
+    use core::arch::Vector;
+
+    pub interrupt fn bus() -> ! at Vector::BusFault {
+        loop {}
+    }
+}
+
+// `at` is a word of its own: it still names things elsewhere.
+fn at(at: u32) -> u32 {
+    let value: u32 = at;
+    value
+}
+
+static mut TICKS: u32 = 0;
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

@@ -36,6 +36,9 @@ pub enum TokenKind {
     False,
     Fn,
     If,
+    /// `interrupt`, which declares a handler: `interrupt fn NAME() at VECTOR`
+    /// (ADR 0084).
+    Interrupt,
     Let,
     Loop,
     Match,
@@ -141,6 +144,7 @@ impl TokenKind {
             "false" => TokenKind::False,
             "fn" => TokenKind::Fn,
             "if" => TokenKind::If,
+            "interrupt" => TokenKind::Interrupt,
             "let" => TokenKind::Let,
             "loop" => TokenKind::Loop,
             "match" => TokenKind::Match,
@@ -187,6 +191,7 @@ impl TokenKind {
             TokenKind::False => "`false`",
             TokenKind::Fn => "`fn`",
             TokenKind::If => "`if`",
+            TokenKind::Interrupt => "`interrupt`",
             TokenKind::Let => "`let`",
             TokenKind::Loop => "`loop`",
             TokenKind::Match => "`match`",

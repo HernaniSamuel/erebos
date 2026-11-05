@@ -1,0 +1,34 @@
+// emit: llvm-ir
+// opt: both
+// A handler's symbol in LLVM IR (ADR 0084, 0051): its path joined by dots, or
+// its own name with `#[export]`. Each is a function of the C ABI that LLVM
+// keeps, also when nothing calls it (it cannot be called): it is listed in
+// `llvm.compiler.used`. The thumbv7m counterpart is
+// `interrupt_codegen_thumbv7m.ers`.
+use core::arch::Vector;
+
+static mut TICKS: u32 = 0;
+
+interrupt fn timer() at Vector::MachineTimer {
+    TICKS += 1;
+}
+
+interrupt fn crash() -> ! at Vector::IllegalInstruction {
+    loop {}
+}
+
+mod drivers {
+    // In a module, the symbol is the path; `#[export]` gives the name alone.
+    pub interrupt fn software() at core::arch::Vector::MachineSoftware {
+        super::TICKS = 1;
+    }
+
+    #[export]
+    pub interrupt fn external() at core::arch::Vector::MachineExternal {
+        super::TICKS = 0;
+    }
+}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

@@ -1,0 +1,32 @@
+// target: thumbv7m-none-eabi
+// `interrupt_type_errors.ers` on thumbv7m (ADR 0084): the faults and
+// DebugMonitor must not return, NMI, SVCall, PendSV and SysTick may.
+use core::arch::Vector;
+
+interrupt fn hard_fault() at Vector::HardFault {}
+
+interrupt fn mem_manage() -> () at Vector::MemManage {}
+
+interrupt fn bus_fault() at Vector::BusFault {
+    let x: u32 = 1;
+}
+
+interrupt fn usage_fault() at Vector::UsageFault {}
+
+interrupt fn debug_monitor() at Vector::DebugMonitor {}
+
+interrupt fn nmi() at Vector::NMI {}
+
+interrupt fn nmi_never_returns() -> ! at Vector::SVCall {
+    loop {}
+}
+
+interrupt fn pend() -> () at Vector::PendSV {}
+
+interrupt fn tick() -> u8 at Vector::SysTick {
+    1
+}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

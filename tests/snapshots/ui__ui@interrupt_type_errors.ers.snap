@@ -1,0 +1,79 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/interrupt_type_errors.ers
+---
+--- errors ---
+ty::interrupt-params
+
+  × an interrupt handler takes no parameters
+   ╭─[interrupt_type_errors.ers:8:29]
+ 7 │ 
+ 8 │ interrupt fn with_parameter(x: u32, y: u32) at Vector::MachineTimer {}
+   ·                             ┬
+   ·                             ╰── parameter here
+ 9 │ 
+   ╰────
+  help: the hardware gives a handler nothing: it reads what it needs from the device and from
+        statics (ADR 0084)
+ty::interrupt-return
+
+  × an interrupt handler returns `()` or `!`
+    ╭─[interrupt_type_errors.ers:10:35]
+  9 │ 
+ 10 │ interrupt fn returns_a_value() -> u32 at Vector::MachineSoftware {
+    ·                                   ─┬─
+    ·                                    ╰── return type is `u32`
+ 11 │     1
+    ╰────
+  help: nothing receives a handler's value; declare it with no return type, or `-> !` where the
+        vector must not return (ADR 0084)
+ty::interrupt-return
+
+  × the handler of `IllegalInstruction` must never return
+    ╭─[interrupt_type_errors.ers:14:14]
+ 13 │ 
+ 14 │ interrupt fn exception_returns() at Vector::IllegalInstruction {}
+    ·              ────────┬────────      ─────────────┬────────────
+    ·                      │                           ╰── `IllegalInstruction` must diverge
+    ·                      ╰── returns `()`
+ 15 │ 
+    ╰────
+  help: returning would run the instruction that trapped again, with nothing changed; declare it
+        `-> !` and end it with a `loop` (ADR 0084)
+ty::interrupt-return
+
+  × the handler of `Breakpoint` must never return
+    ╭─[interrupt_type_errors.ers:16:42]
+ 15 │ 
+ 16 │ interrupt fn exception_returns_unit() -> () at Vector::Breakpoint {}
+    ·                                          ─┬    ─────────┬────────
+    ·                                           │             ╰── `Breakpoint` must diverge
+    ·                                           ╰── returns `()`
+ 17 │ 
+    ╰────
+  help: returning would run the instruction that trapped again, with nothing changed; declare it
+        `-> !` and end it with a `loop` (ADR 0084)
+ty::interrupt-return
+
+  × the handler of `EnvironmentCall` must never return
+    ╭─[interrupt_type_errors.ers:18:14]
+ 17 │ 
+ 18 │ interrupt fn call_returns() at Vector::EnvironmentCall {
+    ·              ──────┬─────      ───────────┬───────────
+    ·                    │                      ╰── `EnvironmentCall` must diverge
+    ·                    ╰── returns `()`
+ 19 │     let x: u32 = 1;
+    ╰────
+  help: returning would run the instruction that trapped again, with nothing changed; declare it
+        `-> !` and end it with a `loop` (ADR 0084)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[interrupt_type_errors.ers:23:17]
+ 22 │ interrupt fn body_error() -> ! at Vector::StoreFault {
+ 23 │     let x: u8 = true;
+    ·                 ──┬─
+    ·                   ╰── expected `u8`, found `bool`
+ 24 │     loop {}
+    ╰────

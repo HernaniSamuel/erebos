@@ -6,7 +6,8 @@ input_file: tests/ui/naked_attributes.ers
 --- errors ---
 resolve::misplaced-attribute
 
-  × `#[naked]` applies only to functions with a body, other than the entry and the panic function
+  × `#[naked]` applies only to functions with a body, other than the entry function, the panic
+  │ function and interrupt handlers
    ╭─[naked_attributes.ers:3:1]
  2 │ // panic function (ADR 0079); given once, without an argument.
  3 │ #[naked]
@@ -15,11 +16,12 @@ resolve::misplaced-attribute
  4 │ extern fn outside();
    ╰────
   help: `#[naked]` makes a function with a body that is one `asm` expression, with no code of the
-        compiler's; the entry and the panic function are written in Erebos, and an `extern fn` has
-        no body here (ADR 0079)
+        compiler's; the entry, the panic function and the interrupt handlers are written in
+        Erebos, and an `extern fn` has no body here (ADR 0079, 0084)
 resolve::misplaced-attribute
 
-  × `#[naked]` applies only to functions with a body, other than the entry and the panic function
+  × `#[naked]` applies only to functions with a body, other than the entry function, the panic
+  │ function and interrupt handlers
    ╭─[naked_attributes.ers:6:1]
  5 │ 
  6 │ #[naked]
@@ -28,11 +30,12 @@ resolve::misplaced-attribute
  7 │ entry fn main() -> ! { loop {} }
    ╰────
   help: `#[naked]` makes a function with a body that is one `asm` expression, with no code of the
-        compiler's; the entry and the panic function are written in Erebos, and an `extern fn` has
-        no body here (ADR 0079)
+        compiler's; the entry, the panic function and the interrupt handlers are written in
+        Erebos, and an `extern fn` has no body here (ADR 0079, 0084)
 resolve::misplaced-attribute
 
-  × `#[naked]` applies only to functions with a body, other than the entry and the panic function
+  × `#[naked]` applies only to functions with a body, other than the entry function, the panic
+  │ function and interrupt handlers
     ╭─[naked_attributes.ers:9:1]
   8 │ 
   9 │ #[naked]
@@ -41,11 +44,12 @@ resolve::misplaced-attribute
  10 │ panic fn on_panic() -> ! { loop {} }
     ╰────
   help: `#[naked]` makes a function with a body that is one `asm` expression, with no code of the
-        compiler's; the entry and the panic function are written in Erebos, and an `extern fn` has
-        no body here (ADR 0079)
+        compiler's; the entry, the panic function and the interrupt handlers are written in
+        Erebos, and an `extern fn` has no body here (ADR 0079, 0084)
 resolve::misplaced-attribute
 
-  × `#[naked]` applies only to functions with a body, other than the entry and the panic function
+  × `#[naked]` applies only to functions with a body, other than the entry function, the panic
+  │ function and interrupt handlers
     ╭─[naked_attributes.ers:12:1]
  11 │ 
  12 │ #[naked]
@@ -54,11 +58,12 @@ resolve::misplaced-attribute
  13 │ struct S { a: u32 }
     ╰────
   help: `#[naked]` makes a function with a body that is one `asm` expression, with no code of the
-        compiler's; the entry and the panic function are written in Erebos, and an `extern fn` has
-        no body here (ADR 0079)
+        compiler's; the entry, the panic function and the interrupt handlers are written in
+        Erebos, and an `extern fn` has no body here (ADR 0079, 0084)
 resolve::misplaced-attribute
 
-  × `#[naked]` applies only to functions with a body, other than the entry and the panic function
+  × `#[naked]` applies only to functions with a body, other than the entry function, the panic
+  │ function and interrupt handlers
     ╭─[naked_attributes.ers:15:1]
  14 │ 
  15 │ #[naked]
@@ -67,11 +72,12 @@ resolve::misplaced-attribute
  16 │ static COUNTER: u32 = 0;
     ╰────
   help: `#[naked]` makes a function with a body that is one `asm` expression, with no code of the
-        compiler's; the entry and the panic function are written in Erebos, and an `extern fn` has
-        no body here (ADR 0079)
+        compiler's; the entry, the panic function and the interrupt handlers are written in
+        Erebos, and an `extern fn` has no body here (ADR 0079, 0084)
 resolve::misplaced-attribute
 
-  × `#[naked]` applies only to functions with a body, other than the entry and the panic function
+  × `#[naked]` applies only to functions with a body, other than the entry function, the panic
+  │ function and interrupt handlers
     ╭─[naked_attributes.ers:18:1]
  17 │ 
  18 │ #[naked]
@@ -80,11 +86,12 @@ resolve::misplaced-attribute
  19 │ const LIMIT: u32 = 1;
     ╰────
   help: `#[naked]` makes a function with a body that is one `asm` expression, with no code of the
-        compiler's; the entry and the panic function are written in Erebos, and an `extern fn` has
-        no body here (ADR 0079)
+        compiler's; the entry, the panic function and the interrupt handlers are written in
+        Erebos, and an `extern fn` has no body here (ADR 0079, 0084)
 resolve::misplaced-attribute
 
-  × `#[naked]` applies only to functions with a body, other than the entry and the panic function
+  × `#[naked]` applies only to functions with a body, other than the entry function, the panic
+  │ function and interrupt handlers
     ╭─[naked_attributes.ers:21:1]
  20 │ 
  21 │ #[naked]
@@ -93,8 +100,8 @@ resolve::misplaced-attribute
  22 │ mod inner {}
     ╰────
   help: `#[naked]` makes a function with a body that is one `asm` expression, with no code of the
-        compiler's; the entry and the panic function are written in Erebos, and an `extern fn` has
-        no body here (ADR 0079)
+        compiler's; the entry, the panic function and the interrupt handlers are written in
+        Erebos, and an `extern fn` has no body here (ADR 0079, 0084)
 resolve::duplicate-attribute
 
   × `#[naked]` is given more than once
@@ -120,7 +127,8 @@ resolve::attribute-argument
     ╰────
 resolve::misplaced-attribute
 
-  × `#[naked]` applies only to functions with a body, other than the entry and the panic function
+  × `#[naked]` applies only to functions with a body, other than the entry function, the panic
+  │ function and interrupt handlers
     ╭─[naked_attributes.ers:41:1]
  40 │ 
  41 │ #[naked]
@@ -129,5 +137,5 @@ resolve::misplaced-attribute
  42 │ struct Flags: u8 {
     ╰────
   help: `#[naked]` makes a function with a body that is one `asm` expression, with no code of the
-        compiler's; the entry and the panic function are written in Erebos, and an `extern fn` has
-        no body here (ADR 0079)
+        compiler's; the entry, the panic function and the interrupt handlers are written in
+        Erebos, and an `extern fn` has no body here (ADR 0079, 0084)

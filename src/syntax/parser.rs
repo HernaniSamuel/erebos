@@ -313,7 +313,10 @@ impl Parser<'_> {
                     | TokenKind::Use
                     | TokenKind::Pound
                     | TokenKind::Eof
-            ) || (at_items && (self.at_memory() || self.at_peripheral()));
+            ) || (at_items && (self.at_memory() || self.at_peripheral()))
+                // A keyword that cannot be a name, so `interrupt` alone is
+                // the misplaced name of something (ADR 0084).
+                || (self.at(TokenKind::Interrupt) && self.peek_second() == TokenKind::Fn);
             if closes_module || starts_item {
                 return;
             }
@@ -358,9 +361,11 @@ impl Parser<'_> {
             return self.peripheral_item(attrs, vis);
         }
         match self.peek().kind {
-            TokenKind::Entry | TokenKind::Panic | TokenKind::Fn | TokenKind::Extern => {
-                Ok(Item::Fn(self.fn_decl(attrs, vis)?))
-            }
+            TokenKind::Entry
+            | TokenKind::Panic
+            | TokenKind::Interrupt
+            | TokenKind::Fn
+            | TokenKind::Extern => Ok(Item::Fn(self.fn_decl(attrs, vis)?)),
             TokenKind::Struct => self.struct_item(attrs, vis),
             TokenKind::Enum => Ok(Item::Enum(self.enum_decl(attrs, vis)?)),
             TokenKind::Const => Ok(Item::Const(self.const_decl(attrs, vis)?)),
@@ -560,12 +565,18 @@ impl Parser<'_> {
     fn fn_decl(&mut self, attrs: Vec<Attr>, vis: Visibility) -> PResult<FnDecl> {
         let start = self.peek().span;
         let external = self.eat(TokenKind::Extern).is_some();
+        let mut interrupt = false;
         let kind = if external {
             FnKind::Plain
         } else if self.eat(TokenKind::Entry).is_some() {
             FnKind::Entry
         } else if self.eat(TokenKind::Panic).is_some() {
             FnKind::Panic
+        } else if self.at(TokenKind::Interrupt) {
+            // Its vector follows the signature; the kind is set then.
+            self.bump();
+            interrupt = true;
+            FnKind::Plain
         } else {
             FnKind::Plain
         };
@@ -590,6 +601,25 @@ impl Parser<'_> {
                 body: None,
             });
         }
+        // `at` follows the signature of an `interrupt fn`, where it is
+        // required, and of nothing else (ADR 0084).
+        let kind = if interrupt {
+            if !self.at_word("at") {
+                return Err(self.error_expected_help(
+                    "`at`",
+                    "an interrupt handler names the vector it serves after its signature, as in `interrupt fn tick() at Vector::SysTick { ... }` (ADR 0084)",
+                ));
+            }
+            self.bump();
+            FnKind::Interrupt(self.path()?)
+        } else if self.at_word("at") {
+            return Err(self.error_expected_help(
+                "`{`",
+                "only an `interrupt fn` names a vector with `at`: declare it `interrupt fn name() at Vector::Name { ... }` (ADR 0084)",
+            ));
+        } else {
+            kind
+        };
         let body = self.block()?;
         Ok(FnDecl {
             attrs,

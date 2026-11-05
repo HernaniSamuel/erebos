@@ -1,0 +1,23 @@
+// emit: ast
+// What `interrupt fn` takes (ADR 0084): `at` is required after its signature,
+// and nothing else takes it; the vector is a path, not a shorthand or an
+// integer; `extern` goes with `fn` only.
+use core::arch::Vector;
+
+interrupt fn no_vector() {}
+
+interrupt fn no_path() at {}
+
+fn plain() at Vector::SysTick {}
+
+entry fn also_not() -> ! at Vector::SysTick { loop {} }
+
+extern interrupt fn external() at Vector::SysTick;
+
+interrupt fn shorthand() at .SysTick {}
+
+interrupt fn integer() at 15 {}
+
+interrupt fn () at Vector::SysTick {}
+
+panic fn on_panic() -> ! { loop {} }

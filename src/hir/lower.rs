@@ -188,11 +188,52 @@ pub fn lower(
         })
         .collect();
 
+    // The items of `core`'s root that the compiler knows (ADR 0052).
+    let core_item = |name: &str| match namespaces[core_root.0 as usize].get(name) {
+        Some(Entry {
+            binding: Binding::Def(def),
+            ..
+        }) => *def,
+        _ => unreachable!("`core` declares `{name}` in its root"),
+    };
+    let Def::Struct(panic_info) = core_item("PanicInfo") else {
+        unreachable!("`core::PanicInfo` is a struct")
+    };
+    let Def::Enum(panic_reason) = core_item("PanicReason") else {
+        unreachable!("`core::PanicReason` is an enum")
+    };
+    // The reset entry, `core::arch::_start`, which every file of `core::arch`
+    // defines (ADR 0083): found through the namespace of `arch`.
+    let Def::Module(arch) = core_item("arch") else {
+        unreachable!("`core::arch` is a module")
+    };
+    let arch_fn = |name: &str| match namespaces[arch.0 as usize].get(name) {
+        Some(Entry {
+            binding: Binding::Def(Def::Fn(f)),
+            ..
+        }) => *f,
+        _ => unreachable!("`core::arch` defines `{name}`"),
+    };
+    let reset = arch_fn("_start");
+    // What a `critical` block calls (ADR 0086), likewise in every file.
+    let critical_enter = arch_fn("__critical_enter");
+    let critical_exit = arch_fn("__critical_exit");
+
+    // The enum a handler's vector is a variant of (ADR 0084), in every file.
+    let vector = match namespaces[arch.0 as usize].get("Vector") {
+        Some(Entry {
+            binding: Binding::Def(Def::Enum(e)),
+            ..
+        }) => *e,
+        _ => unreachable!("`core::arch` defines the enum `Vector`"),
+    };
+
     let mut lowerer = Lowerer {
         modules,
         namespaces,
         module: ModuleId::ROOT,
         core_root,
+        vector,
         fn_decls: &fn_decls,
         core_fns,
         core_fn_base,
@@ -375,37 +416,7 @@ pub fn lower(
     // In any module, whatever their visibility (ADR 0049, 0050).
     let entry = find_unique(&fns, FnKind::Entry, diags);
     let panic = find_unique(&fns, FnKind::Panic, diags);
-    // The items of `core`'s root that the compiler knows (ADR 0052).
-    let core_item = |name: &str| match namespaces[core_root.0 as usize].get(name) {
-        Some(Entry {
-            binding: Binding::Def(def),
-            ..
-        }) => *def,
-        _ => unreachable!("`core` declares `{name}` in its root"),
-    };
-    let Def::Struct(panic_info) = core_item("PanicInfo") else {
-        unreachable!("`core::PanicInfo` is a struct")
-    };
-    let Def::Enum(panic_reason) = core_item("PanicReason") else {
-        unreachable!("`core::PanicReason` is an enum")
-    };
-    // The reset entry, `core::arch::_start`, which every file of `core::arch`
-    // defines (ADR 0083): found through the namespace of `arch`.
-    let Def::Module(arch) = core_item("arch") else {
-        unreachable!("`core::arch` is a module")
-    };
-    let arch_fn = |name: &str| match namespaces[arch.0 as usize].get(name) {
-        Some(Entry {
-            binding: Binding::Def(Def::Fn(f)),
-            ..
-        }) => *f,
-        _ => unreachable!("`core::arch` defines `{name}`"),
-    };
-    let reset = arch_fn("_start");
-    // What a `critical` block calls (ADR 0086), likewise in every file.
-    let critical_enter = arch_fn("__critical_enter");
-    let critical_exit = arch_fn("__critical_exit");
-
+    let handlers = find_handlers(&fns, &enums[vector.0 as usize], diags);
     Some(Hir {
         modules,
         structs,
@@ -432,6 +443,8 @@ pub fn lower(
         core: core.expect("`core` is lowered after the program"),
         panic_info,
         panic_reason,
+        vector,
+        handlers,
         files,
     })
 }
@@ -1197,7 +1210,9 @@ fn find_unique(fns: &[Fn], kind: FnKind, diags: &mut Diagnostics) -> Option<FnId
     let (what, example) = match kind {
         FnKind::Entry => ("entry", "entry fn main() -> ! { ... }"),
         FnKind::Panic => ("panic", "panic fn on_panic() -> ! { loop {} }"),
-        FnKind::Plain | FnKind::Naked => unreachable!("plain functions are not unique"),
+        FnKind::Plain | FnKind::Naked | FnKind::Interrupt(_) => {
+            unreachable!("these functions are not unique")
+        }
     };
     let mut found = fns
         .iter()
@@ -1234,6 +1249,35 @@ fn find_unique(fns: &[Fn], kind: FnKind, diags: &mut Diagnostics) -> Option<FnId
         );
     }
     Some(id)
+}
+
+/// Finds the interrupt handlers, in the order of the functions' ids, which
+/// follows the source (ADR 0084). A vector has one: each further handler of
+/// a vector is reported, with the first.
+fn find_handlers(fns: &[Fn], vector: &EnumDef, diags: &mut Diagnostics) -> Vec<FnId> {
+    let mut first: HashMap<u32, Span> = HashMap::new();
+    let mut handlers = Vec::new();
+    for (i, f) in fns.iter().enumerate() {
+        let FnKind::Interrupt(at) = f.kind else {
+            continue;
+        };
+        handlers.push(FnId(i as u32));
+        let Some(&earlier) = first.get(&at.variant) else {
+            first.insert(at.variant, at.span);
+            continue;
+        };
+        let name = &vector.variants[at.variant as usize].name;
+        diags.push(
+            Diagnostic::error(
+                "resolve::duplicate-vector",
+                format!("`{}::{name}` has more than one handler", vector.name),
+            )
+            .label(at.span, "served again here")
+            .label(earlier, "first served here")
+            .help("a vector has one handler: serve the vector in one function, or remove one (ADR 0084)"),
+        );
+    }
+    handlers
 }
 
 /// A variable a pattern binds, as lowering collects them (ADR 0040, 0041).
@@ -1275,6 +1319,9 @@ struct Lowerer<'a> {
     module: ModuleId,
     /// The root of `core` (ADR 0052); the modules from it on are `core`'s.
     core_root: ModuleId,
+    /// `core::arch::Vector`, which the path after an `interrupt fn`'s `at`
+    /// must name a variant of (ADR 0084).
+    vector: EnumId,
     /// Every function's declaration, the program's then `core`'s, with its
     /// module; `fn_decl` finds one by id.
     fn_decls: &'a [(&'a ast::FnDecl, ModuleId)],
@@ -1368,6 +1415,7 @@ mod tests {
                 fn limit() -> u32 { crate::LIMIT }
             }
             mod arch {
+                pub enum Vector: u32 { Tick = 1 }
                 fn _start() -> ! { loop {} }
                 fn __critical_enter() -> u32 { 0 }
                 fn __critical_exit(was: u32) {}

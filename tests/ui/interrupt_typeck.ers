@@ -1,0 +1,23 @@
+// emit: typeck
+// A handler in the dump of the type checker (ADR 0084): its kind and the
+// variant of `Vector` it serves. A handler no code names is checked all the
+// same.
+use core::arch::Vector;
+
+static mut TICKS: u32 = 0;
+
+interrupt fn timer() at Vector::MachineTimer {
+    TICKS += 1;
+}
+
+interrupt fn crash() -> ! at core::arch::Vector::IllegalInstruction {
+    loop {}
+}
+
+mod drivers {
+    pub interrupt fn external() -> () at core::arch::Vector::MachineExternal {}
+}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

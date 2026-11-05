@@ -1,0 +1,597 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/interrupt_parse.ers
+---
+--- ast ---
+File {
+    items: [
+        Use(
+            UseDecl {
+                attrs: [],
+                vis: Private,
+                prefix: None,
+                names: [
+                    UseName {
+                        path: Path {
+                            segments: [
+                                Ident {
+                                    name: "core",
+                                    span: 265..269,
+                                },
+                                Ident {
+                                    name: "arch",
+                                    span: 271..275,
+                                },
+                                Ident {
+                                    name: "Vector",
+                                    span: 277..283,
+                                },
+                            ],
+                            span: 265..283,
+                        },
+                        alias: None,
+                    },
+                ],
+                span: 261..284,
+            },
+        ),
+        Fn(
+            FnDecl {
+                attrs: [],
+                vis: Private,
+                kind: Interrupt(
+                    Path {
+                        segments: [
+                            Ident {
+                                name: "Vector",
+                                span: 309..315,
+                            },
+                            Ident {
+                                name: "SysTick",
+                                span: 317..324,
+                            },
+                        ],
+                        span: 309..324,
+                    },
+                ),
+                name: Ident {
+                    name: "tick",
+                    span: 299..303,
+                },
+                params: [],
+                ret: None,
+                body: Some(
+                    Block {
+                        stmts: [
+                            Expr {
+                                expr: Expr {
+                                    kind: CompoundAssign(
+                                        Add,
+                                        Expr {
+                                            kind: Name(
+                                                Path {
+                                                    segments: [
+                                                        Ident {
+                                                            name: "TICKS",
+                                                            span: 331..336,
+                                                        },
+                                                    ],
+                                                    span: 331..336,
+                                                },
+                                            ),
+                                            span: 331..336,
+                                        },
+                                        Expr {
+                                            kind: Int(
+                                                Some(
+                                                    1,
+                                                ),
+                                            ),
+                                            span: 340..341,
+                                        },
+                                        337..339,
+                                    ),
+                                    span: 331..341,
+                                },
+                                semi: Some(
+                                    341..342,
+                                ),
+                            },
+                        ],
+                        tail: None,
+                        span: 325..344,
+                    },
+                ),
+                span: 286..344,
+            },
+        ),
+        Fn(
+            FnDecl {
+                attrs: [],
+                vis: Private,
+                kind: Interrupt(
+                    Path {
+                        segments: [
+                            Ident {
+                                name: "Vector",
+                                span: 375..381,
+                            },
+                            Ident {
+                                name: "HardFault",
+                                span: 383..392,
+                            },
+                        ],
+                        span: 375..392,
+                    },
+                ),
+                name: Ident {
+                    name: "crash",
+                    span: 359..364,
+                },
+                params: [],
+                ret: Some(
+                    Ty {
+                        kind: Never,
+                        span: 370..371,
+                    },
+                ),
+                body: Some(
+                    Block {
+                        stmts: [],
+                        tail: Some(
+                            Expr {
+                                kind: Loop(
+                                    Block {
+                                        stmts: [],
+                                        tail: None,
+                                        span: 404..406,
+                                    },
+                                ),
+                                span: 399..406,
+                            },
+                        ),
+                        span: 393..408,
+                    },
+                ),
+                span: 346..408,
+            },
+        ),
+        Fn(
+            FnDecl {
+                attrs: [],
+                vis: Pub,
+                kind: Interrupt(
+                    Path {
+                        segments: [
+                            Ident {
+                                name: "core",
+                                span: 443..447,
+                            },
+                            Ident {
+                                name: "arch",
+                                span: 449..453,
+                            },
+                            Ident {
+                                name: "Vector",
+                                span: 455..461,
+                            },
+                            Ident {
+                                name: "PendSV",
+                                span: 463..469,
+                            },
+                        ],
+                        span: 443..469,
+                    },
+                ),
+                name: Ident {
+                    name: "pend",
+                    span: 427..431,
+                },
+                params: [],
+                ret: Some(
+                    Ty {
+                        kind: Unit,
+                        span: 437..439,
+                    },
+                ),
+                body: Some(
+                    Block {
+                        stmts: [],
+                        tail: None,
+                        span: 470..472,
+                    },
+                ),
+                span: 414..472,
+            },
+        ),
+        Fn(
+            FnDecl {
+                attrs: [
+                    Attr {
+                        name: Ident {
+                            name: "export",
+                            span: 476..482,
+                        },
+                        arg: None,
+                        span: 474..483,
+                    },
+                    Attr {
+                        name: Ident {
+                            name: "align",
+                            span: 486..491,
+                        },
+                        arg: Some(
+                            Expr {
+                                kind: Int(
+                                    Some(
+                                        16,
+                                    ),
+                                ),
+                                span: 492..494,
+                            },
+                        ),
+                        span: 484..496,
+                    },
+                ],
+                vis: Private,
+                kind: Interrupt(
+                    Path {
+                        segments: [
+                            Ident {
+                                name: "core",
+                                span: 519..523,
+                            },
+                            Ident {
+                                name: "arch",
+                                span: 525..529,
+                            },
+                            Ident {
+                                name: "Vector",
+                                span: 531..537,
+                            },
+                            Ident {
+                                name: "SVCall",
+                                span: 539..545,
+                            },
+                        ],
+                        span: 519..545,
+                    },
+                ),
+                name: Ident {
+                    name: "svc",
+                    span: 510..513,
+                },
+                params: [],
+                ret: None,
+                body: Some(
+                    Block {
+                        stmts: [],
+                        tail: None,
+                        span: 546..548,
+                    },
+                ),
+                span: 497..548,
+            },
+        ),
+        Mod(
+            ModDecl {
+                attrs: [],
+                vis: Private,
+                name: Ident {
+                    name: "handlers",
+                    span: 554..562,
+                },
+                items: Some(
+                    [
+                        Use(
+                            UseDecl {
+                                attrs: [],
+                                vis: Private,
+                                prefix: None,
+                                names: [
+                                    UseName {
+                                        path: Path {
+                                            segments: [
+                                                Ident {
+                                                    name: "core",
+                                                    span: 573..577,
+                                                },
+                                                Ident {
+                                                    name: "arch",
+                                                    span: 579..583,
+                                                },
+                                                Ident {
+                                                    name: "Vector",
+                                                    span: 585..591,
+                                                },
+                                            ],
+                                            span: 573..591,
+                                        },
+                                        alias: None,
+                                    },
+                                ],
+                                span: 569..592,
+                            },
+                        ),
+                        Fn(
+                            FnDecl {
+                                attrs: [],
+                                vis: Pub,
+                                kind: Interrupt(
+                                    Path {
+                                        segments: [
+                                            Ident {
+                                                name: "Vector",
+                                                span: 629..635,
+                                            },
+                                            Ident {
+                                                name: "BusFault",
+                                                span: 637..645,
+                                            },
+                                        ],
+                                        span: 629..645,
+                                    },
+                                ),
+                                name: Ident {
+                                    name: "bus",
+                                    span: 615..618,
+                                },
+                                params: [],
+                                ret: Some(
+                                    Ty {
+                                        kind: Never,
+                                        span: 624..625,
+                                    },
+                                ),
+                                body: Some(
+                                    Block {
+                                        stmts: [],
+                                        tail: Some(
+                                            Expr {
+                                                kind: Loop(
+                                                    Block {
+                                                        stmts: [],
+                                                        tail: None,
+                                                        span: 661..663,
+                                                    },
+                                                ),
+                                                span: 656..663,
+                                            },
+                                        ),
+                                        span: 646..669,
+                                    },
+                                ),
+                                span: 602..669,
+                            },
+                        ),
+                    ],
+                ),
+                span: 550..671,
+            },
+        ),
+        Fn(
+            FnDecl {
+                attrs: [],
+                vis: Private,
+                kind: Plain,
+                name: Ident {
+                    name: "at",
+                    span: 739..741,
+                },
+                params: [
+                    Param {
+                        mutable: false,
+                        name: Ident {
+                            name: "at",
+                            span: 742..744,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Path {
+                                    segments: [
+                                        Ident {
+                                            name: "u32",
+                                            span: 746..749,
+                                        },
+                                    ],
+                                    span: 746..749,
+                                },
+                            ),
+                            span: 746..749,
+                        },
+                    },
+                ],
+                ret: Some(
+                    Ty {
+                        kind: Named(
+                            Path {
+                                segments: [
+                                    Ident {
+                                        name: "u32",
+                                        span: 754..757,
+                                    },
+                                ],
+                                span: 754..757,
+                            },
+                        ),
+                        span: 754..757,
+                    },
+                ),
+                body: Some(
+                    Block {
+                        stmts: [
+                            Let(
+                                Let {
+                                    mutable: false,
+                                    name: Ident {
+                                        name: "value",
+                                        span: 768..773,
+                                    },
+                                    ty: Ty {
+                                        kind: Named(
+                                            Path {
+                                                segments: [
+                                                    Ident {
+                                                        name: "u32",
+                                                        span: 775..778,
+                                                    },
+                                                ],
+                                                span: 775..778,
+                                            },
+                                        ),
+                                        span: 775..778,
+                                    },
+                                    init: Expr {
+                                        kind: Name(
+                                            Path {
+                                                segments: [
+                                                    Ident {
+                                                        name: "at",
+                                                        span: 781..783,
+                                                    },
+                                                ],
+                                                span: 781..783,
+                                            },
+                                        ),
+                                        span: 781..783,
+                                    },
+                                    span: 764..784,
+                                },
+                            ),
+                        ],
+                        tail: Some(
+                            Expr {
+                                kind: Name(
+                                    Path {
+                                        segments: [
+                                            Ident {
+                                                name: "value",
+                                                span: 789..794,
+                                            },
+                                        ],
+                                        span: 789..794,
+                                    },
+                                ),
+                                span: 789..794,
+                            },
+                        ),
+                        span: 758..796,
+                    },
+                ),
+                span: 736..796,
+            },
+        ),
+        Static(
+            StaticDecl {
+                attrs: [],
+                vis: Private,
+                external: false,
+                mutable: true,
+                name: Ident {
+                    name: "TICKS",
+                    span: 809..814,
+                },
+                ty: Ty {
+                    kind: Named(
+                        Path {
+                            segments: [
+                                Ident {
+                                    name: "u32",
+                                    span: 816..819,
+                                },
+                            ],
+                            span: 816..819,
+                        },
+                    ),
+                    span: 816..819,
+                },
+                value: Some(
+                    Expr {
+                        kind: Int(
+                            Some(
+                                0,
+                            ),
+                        ),
+                        span: 822..823,
+                    },
+                ),
+                span: 798..824,
+            },
+        ),
+        Fn(
+            FnDecl {
+                attrs: [],
+                vis: Private,
+                kind: Entry,
+                name: Ident {
+                    name: "main",
+                    span: 835..839,
+                },
+                params: [],
+                ret: Some(
+                    Ty {
+                        kind: Never,
+                        span: 845..846,
+                    },
+                ),
+                body: Some(
+                    Block {
+                        stmts: [],
+                        tail: Some(
+                            Expr {
+                                kind: Loop(
+                                    Block {
+                                        stmts: [],
+                                        tail: None,
+                                        span: 854..856,
+                                    },
+                                ),
+                                span: 849..856,
+                            },
+                        ),
+                        span: 847..858,
+                    },
+                ),
+                span: 826..858,
+            },
+        ),
+        Fn(
+            FnDecl {
+                attrs: [],
+                vis: Private,
+                kind: Panic,
+                name: Ident {
+                    name: "on_panic",
+                    span: 869..877,
+                },
+                params: [],
+                ret: Some(
+                    Ty {
+                        kind: Never,
+                        span: 883..884,
+                    },
+                ),
+                body: Some(
+                    Block {
+                        stmts: [],
+                        tail: Some(
+                            Expr {
+                                kind: Loop(
+                                    Block {
+                                        stmts: [],
+                                        tail: None,
+                                        span: 892..894,
+                                    },
+                                ),
+                                span: 887..894,
+                            },
+                        ),
+                        span: 885..896,
+                    },
+                ),
+                span: 860..896,
+            },
+        ),
+    ],
+}

@@ -59,6 +59,30 @@ pub fn interrupts_enabled() -> bool {
     (mstatus & 8) != 0
 }
 
+// --- Vectors (ADR 0084) ------------------------------------------------------
+
+// What an `interrupt fn` serves: `interrupt fn tick() at Vector::MachineTimer`.
+// The compiler knows this enum by its path, and `src/target.rs` holds the same
+// list with what the compiler needs of each vector; a test checks that they
+// agree. The value is `mcause`: bit 31 is set for an interrupt and clear for an
+// exception, and an interrupt and an exception may have the same number. A
+// program runs in machine mode, so the causes of the other modes and of paging
+// have no variant, and reset has none: `_start` serves it (ADR 0083).
+pub enum Vector: u32 {
+    InstructionMisaligned = 0,
+    InstructionFault = 1,
+    IllegalInstruction = 2,
+    Breakpoint = 3,
+    LoadMisaligned = 4,
+    LoadFault = 5,
+    StoreMisaligned = 6,
+    StoreFault = 7,
+    EnvironmentCall = 11,
+    MachineSoftware = 0x8000_0003,
+    MachineTimer = 0x8000_0007,
+    MachineExternal = 0x8000_000B,
+}
+
 // --- Critical sections (ADR 0086) --------------------------------------------
 
 // What a `critical` block calls where it starts and where it ends, on every
