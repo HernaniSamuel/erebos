@@ -152,9 +152,24 @@ Agreed as useful, not yet scheduled:
   the index of a format string and its arguments, and the strings stay on
   the host, in a section that is not loaded. `comptime` can build the
   table.
-- Several cores (harts) sharing memory. On microcontrollers concurrency is
-  mostly interrupts, which M4 covers; several cores need atomics (the `A`
-  extension) and a memory model of their own.
+- More concurrency than one core with one priority level, not scheduled
+  but kept open on purpose: later steps must not close it. Two parts:
+  - Priorities and nesting (ADR 0078, "What later steps may add"):
+    handlers of several priorities, and `critical` blocks that mask only up
+    to a ceiling, as RTIC's stack resource policy does. One level is the
+    case where every handler has the same priority, so programs written
+    for M4 keep their meaning. What each target gives has to be checked
+    first: the NVIC has priorities on thumbv7m, while on riscv32 the
+    CLINT and exceptions have none and the PLIC has priorities and a
+    threshold for external interrupts only.
+  - Several cores (harts) sharing memory. A critical section protects
+    nothing from another core (ADR 0078), so this needs atomics (the `A`
+    extension on riscv32, exclusive loads and stores on ARMv7-M) and a
+    memory model of their own, and the rule for shared statics would gain
+    a kind of context for code running on another core. On
+    microcontrollers concurrency is mostly interrupts, which M4 covers.
+  The M5 ADRs on ownership and references should say how they extend to
+  both, as ADR 0078 says for its own rule, before they are accepted.
 - Ada-inspired types for hardware. Representation clauses are bit-field
   structs (ADR 0059), whose fields are checked against their bits at
   run time through the panic function; what remains is range types
