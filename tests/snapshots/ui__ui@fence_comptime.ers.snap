@@ -7,12 +7,12 @@ input_file: tests/ui/fence_comptime.ers
 eval::asm
 
   × the evaluation reached an `asm` expression
-    ╭─[rt/arch/riscv32.ers:23:5]
- 22 │ pub fn compiler_fence() {
- 23 │     asm("", options(nostack, preserves_flags));
+    ╭─[rt/arch/riscv32.ers:26:5]
+ 25 │ pub fn compiler_fence() {
+ 26 │     asm("", options(nostack, preserves_flags));
     ·     ─────────────────────┬────────────────────
     ·                          ╰── inline assembly cannot run at compile time
- 24 │ }
+ 27 │ }
     ╰────
     ╭─[fence_comptime.ers:13:39]
  12 │     
@@ -29,12 +29,12 @@ eval::asm
 eval::asm
 
   × the evaluation reached an `asm` expression
-    ╭─[rt/arch/riscv32.ers:31:5]
- 30 │ pub fn fence() {
- 31 │     asm("fence iorw, iorw", options(nostack, preserves_flags));
+    ╭─[rt/arch/riscv32.ers:34:5]
+ 33 │ pub fn fence() {
+ 34 │     asm("fence iorw, iorw", options(nostack, preserves_flags));
     ·     ─────────────────────────────┬────────────────────────────
     ·                                  ╰── inline assembly cannot run at compile time
- 32 │ }
+ 35 │ }
     ╰────
     ╭─[fence_comptime.ers:7:5]
   6 │ fn ordered() -> u32 {

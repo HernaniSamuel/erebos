@@ -13,6 +13,9 @@
 //
 // portable: pub fn compiler_fence()
 // portable: pub fn fence()
+// portable: pub fn enable_interrupts()
+// portable: pub fn wait_for_interrupt()
+// portable: pub fn interrupts_enabled() -> bool
 
 // --- Fences (ADR 0081) -------------------------------------------------------
 
@@ -30,6 +33,41 @@ pub fn fence() {
     asm("dmb sy", options(nostack, preserves_flags));
 }
 
+// --- Interrupts (ADR 0086) ---------------------------------------------------
+
+// Lets maskable handlers run: `cpsie i` clears `PRIMASK`. Each source has its
+// own enable (SysTick's `TICKINT`, the NVIC), which is the program's. The `asm`
+// has no memory option, so this is a compiler fence: statics written before it
+// are in memory. Inside a critical section or a handler it ends that
+// protection.
+pub fn enable_interrupts() {
+    asm("cpsie i", options(nostack, preserves_flags));
+}
+
+// Runs `wfi`, a compiler fence too. It may return for no reason, so it belongs in
+// a loop; inside a `critical` block it returns for a pending interrupt, which
+// runs at the end of the block (ADR 0086).
+pub fn wait_for_interrupt() {
+    asm("wfi", options(nostack, preserves_flags));
+}
+
+// Reads the mask state and nothing else: true when `PRIMASK` is 0 and `IPSR` is
+// 0, so that a handler finds it false, as on riscv32. It does not read `BASEPRI`
+// or `FAULTMASK`, which a program of this model leaves at 0 (ADR 0078), nor
+// whether a source is enabled. False in a critical section.
+pub fn interrupts_enabled() -> bool {
+    let mut primask: u32 = 0;
+    let mut ipsr: u32 = 0;
+    asm(
+        "mrs {}, primask",
+        "mrs {}, ipsr",
+        out(reg) primask,
+        out(reg) ipsr,
+        options(nostack, preserves_flags),
+    );
+    primask == 0 && ipsr == 0
+}
+
 // --- The reset entry (ADR 0083) ----------------------------------------------
 
 // What runs first: the compiler puts it in the section `.text.start`, which
@@ -38,13 +76,17 @@ pub fn fence() {
 // so its symbol is `_start` and no program can name it. It does exactly this,
 // in this order, and nothing else (ADR 0030):
 //
-// 1. Set the stack pointer to the top of the stack. Nothing before this point
+// 1. Mask interrupts (`cpsid i`, ADR 0086), so that the entry function starts
+//    masked as on riscv32, also when a program jumps back to `_start`, and no
+//    handler sees `.bss` and `.data` half done. The program enables them when
+//    it is ready (`enable_interrupts`).
+// 2. Set the stack pointer to the top of the stack. Nothing before this point
 //    may use the stack, and nothing here does.
-// 2. Fill `.bss` with zeros, a word at a time between the linker script's
+// 3. Fill `.bss` with zeros, a word at a time between the linker script's
 //    symbols, testing the bound before the first word.
-// 3. Copy `.data` from its load address, in the same way. This comes after
+// 4. Copy `.data` from its load address, in the same way. This comes after
 //    `.bss` only because both are independent; neither reads the other.
-// 4. Jump to the entry function, which is the first compiled code to run, so
+// 5. Jump to the entry function, which is the first compiled code to run, so
 //    every static holds its value when it starts. Each address is loaded with
 //    a `movw`/`movt` pair, which needs no literal pool kept inside the
 //    section, and reaches the whole address space; a Thumb function's symbol
@@ -57,6 +99,7 @@ pub fn fence() {
 #[naked]
 fn _start() -> ! {
     asm(
+        "cpsid i",
         "movw r0, :lower16:__stack_end",
         "movt r0, :upper16:__stack_end",
         "mov sp, r0",

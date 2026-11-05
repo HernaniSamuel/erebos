@@ -568,17 +568,33 @@ fn reference_portable_items(reference: &str) -> Vec<String> {
 }
 
 /// The call of a portable item in a program: the items of `core::arch` that
-/// have no parameter and return nothing, as the fences are. A later item
-/// with another signature needs arguments here, and the test says so.
+/// have no parameter, as the fences and the interrupt functions do, and return
+/// nothing or a value, which the program binds to a local named after the item. A later item with
+/// another signature needs arguments here, and the test says so.
 fn call_of(item: &str) -> Result<String, String> {
-    let name = item
-        .strip_prefix("pub fn ")
-        .and_then(|rest| rest.strip_suffix("()"))
-        .filter(|name| !name.is_empty() && name.chars().all(|c| c.is_alphanumeric() || c == '_'));
-    match name {
-        Some(name) => Ok(format!("    core::arch::{name}();\n")),
-        None => Err(format!(
-            "`{item}` is not `pub fn name()`: teach `call_of` to call it"
+    let signature = item.strip_prefix("pub fn ").and_then(|rest| {
+        let (name, returned) = rest.split_once("()")?;
+        let returned = match returned {
+            "" => None,
+            _ => Some(returned.strip_prefix(" -> ")?),
+        };
+        Some((name, returned))
+    });
+    match signature {
+        Some((name, returned))
+            if !name.is_empty()
+                && name.chars().all(|c| c.is_alphanumeric() || c == '_')
+                && returned.is_none_or(|ty| {
+                    !ty.is_empty() && ty.chars().all(|c| c.is_alphanumeric() || c == '_')
+                }) =>
+        {
+            Ok(match returned {
+                None => format!("    core::arch::{name}();\n"),
+                Some(ty) => format!("    let {name}_result: {ty} = core::arch::{name}();\n"),
+            })
+        }
+        _ => Err(format!(
+            "`{item}` is not `pub fn name()` or `pub fn name() -> type`: teach `call_of` to call it"
         )),
     }
 }
@@ -686,5 +702,11 @@ fn portable_items_are_checked_against_the_files() {
         "    core::arch::fence();\n"
     );
     assert!(call_of("pub fn wait(n: u32)").is_err());
-    assert!(call_of("pub fn id() -> u32").is_err());
+    assert_eq!(
+        call_of("pub fn id() -> u32").unwrap(),
+        "    let id_result: u32 = core::arch::id();\n"
+    );
+    assert!(call_of("pub fn id() -> &u32").is_err());
+    assert!(call_of("pub fn id() u32").is_err());
+    assert!(call_of("pub fn id(x: u32) -> u32").is_err());
 }

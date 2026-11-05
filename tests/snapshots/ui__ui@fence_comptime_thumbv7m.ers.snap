@@ -7,12 +7,12 @@ input_file: tests/ui/fence_comptime_thumbv7m.ers
 eval::asm
 
   × the evaluation reached an `asm` expression
-    ╭─[rt/arch/armv7m.ers:23:5]
- 22 │ pub fn compiler_fence() {
- 23 │     asm("", options(nostack, preserves_flags));
+    ╭─[rt/arch/armv7m.ers:26:5]
+ 25 │ pub fn compiler_fence() {
+ 26 │     asm("", options(nostack, preserves_flags));
     ·     ─────────────────────┬────────────────────
     ·                          ╰── inline assembly cannot run at compile time
- 24 │ }
+ 27 │ }
     ╰────
     ╭─[fence_comptime_thumbv7m.ers:14:39]
  13 │     
@@ -29,12 +29,12 @@ eval::asm
 eval::asm
 
   × the evaluation reached an `asm` expression
-    ╭─[rt/arch/armv7m.ers:30:5]
- 29 │ pub fn fence() {
- 30 │     asm("dmb sy", options(nostack, preserves_flags));
+    ╭─[rt/arch/armv7m.ers:33:5]
+ 32 │ pub fn fence() {
+ 33 │     asm("dmb sy", options(nostack, preserves_flags));
     ·     ────────────────────────┬───────────────────────
     ·                             ╰── inline assembly cannot run at compile time
- 31 │ }
+ 34 │ }
     ╰────
     ╭─[fence_comptime_thumbv7m.ers:8:5]
   7 │ fn ordered() -> u32 {

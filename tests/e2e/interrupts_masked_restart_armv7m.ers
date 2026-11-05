@@ -1,0 +1,47 @@
+// `_start` masks interrupts also when a program jumps back to it (ADR 0086):
+// the first run enables them and jumps to `_start` with `asm`, and the second
+// finds them masked again. The count of runs is in the board's scratch RAM,
+// which starts zero and which `_start` leaves alone, as `.bss` and `.data` are
+// filled again. The jump is thumbv7m's (a `movw`/`movt` pair and `bx`, as
+// `_start` itself jumps to the entry function), which is why the header lists
+// one target (`interrupts_masked_restart_riscv32.ers` is its counterpart).
+// targets: thumbv7m-none-eabi
+// expect-output: first run
+// expect-output: masked again
+// expect-exit: 0
+
+mod board;
+use board::{exit, putc};
+
+const RUNS: *mut volatile u32 = board::SCRATCH as *mut volatile u32;
+
+entry fn main() -> ! {
+    if *RUNS == 0 {
+        if core::arch::interrupts_enabled() {
+            exit(1)
+        }
+        *RUNS = 1;
+        core::arch::enable_interrupts();
+        if !core::arch::interrupts_enabled() {
+            exit(2)
+        }
+        putc(b'f'); putc(b'i'); putc(b'r'); putc(b's'); putc(b't'); putc(b' ');
+        putc(b'r'); putc(b'u'); putc(b'n'); putc(b'\n');
+        asm(
+            "movw r0, :lower16:_start",
+            "movt r0, :upper16:_start",
+            "bx r0",
+            options(noreturn),
+        );
+    }
+    if core::arch::interrupts_enabled() {
+        exit(3)
+    }
+    putc(b'm'); putc(b'a'); putc(b's'); putc(b'k'); putc(b'e'); putc(b'd'); putc(b' ');
+    putc(b'a'); putc(b'g'); putc(b'a'); putc(b'i'); putc(b'n'); putc(b'\n');
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(99)
+}

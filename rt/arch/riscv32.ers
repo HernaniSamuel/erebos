@@ -13,6 +13,9 @@
 //
 // portable: pub fn compiler_fence()
 // portable: pub fn fence()
+// portable: pub fn enable_interrupts()
+// portable: pub fn wait_for_interrupt()
+// portable: pub fn interrupts_enabled() -> bool
 
 // --- Fences (ADR 0081) -------------------------------------------------------
 
@@ -31,6 +34,31 @@ pub fn fence() {
     asm("fence iorw, iorw", options(nostack, preserves_flags));
 }
 
+// --- Interrupts (ADR 0086) ---------------------------------------------------
+
+// Lets maskable handlers run: `csrsi mstatus, 8` sets `mstatus.MIE`. Each source
+// has its own enable (`mie`), which is the program's. The `asm` has no memory
+// option, so this is a compiler fence: statics written before it are in memory.
+// Inside a critical section or a handler it ends that protection.
+pub fn enable_interrupts() {
+    asm("csrsi mstatus, 8", options(nostack, preserves_flags));
+}
+
+// Runs `wfi`, a compiler fence too. It may return for no reason, so it belongs in
+// a loop; inside a `critical` block it returns for a pending interrupt, which
+// runs at the end of the block (ADR 0086).
+pub fn wait_for_interrupt() {
+    asm("wfi", options(nostack, preserves_flags));
+}
+
+// Reads `mstatus.MIE`, and nothing else: whether a source is enabled (`mie`) is
+// not part of the answer. False in a critical section.
+pub fn interrupts_enabled() -> bool {
+    let mut mstatus: u32 = 0;
+    asm("csrr {}, mstatus", out(reg) mstatus, options(nostack, preserves_flags));
+    (mstatus & 8) != 0
+}
+
 // --- The reset entry (ADR 0083) ----------------------------------------------
 
 // What runs first, at the origin of the code's region: the compiler puts it in
@@ -39,13 +67,17 @@ pub fn fence() {
 // `#[export]`, so its symbol is `_start` and no program can name it. It does
 // exactly this, in this order, and nothing else (ADR 0030):
 //
-// 1. Set the stack pointer to the top of the stack. Nothing before this point
+// 1. Mask interrupts (`csrci mstatus, 8`, ADR 0086), so that the entry function
+//    starts masked also when a program jumps back to `_start`, and no handler
+//    sees `.bss` and `.data` half done. The program enables them when it is
+//    ready (`enable_interrupts`).
+// 2. Set the stack pointer to the top of the stack. Nothing before this point
 //    may use the stack, and nothing here does.
-// 2. Fill `.bss` with zeros, a word at a time between the linker script's
+// 3. Fill `.bss` with zeros, a word at a time between the linker script's
 //    symbols, testing the bound before the first word.
-// 3. Copy `.data` from its load address, in the same way. This comes after
+// 4. Copy `.data` from its load address, in the same way. This comes after
 //    `.bss` only because both are independent; neither reads the other.
-// 4. Jump to the entry function, which is the first compiled code to run, so
+// 5. Jump to the entry function, which is the first compiled code to run, so
 //    every static holds its value when it starts. `tail` (`auipc` and `jalr`)
 //    reaches the whole address space, where `j` reached only 1 MiB.
 //
@@ -56,6 +88,7 @@ pub fn fence() {
 #[naked]
 fn _start() -> ! {
     asm(
+        "csrci mstatus, 8",
         "la sp, __stack_end",
         "la t0, __bss_start",
         "la t1, __bss_end",

@@ -1,0 +1,28 @@
+// The entry function starts with interrupts masked, on both targets (ADR
+// 0086): `interrupts_enabled` is false at entry and true after
+// `enable_interrupts`. The jump back to `_start` is the one of the two
+// `interrupts_masked_restart_*` programs, which need the target's assembly.
+// expect-output: masked
+// expect-output: enabled
+// expect-exit: 0
+
+mod board;
+use board::{exit, putc};
+
+entry fn main() -> ! {
+    if core::arch::interrupts_enabled() {
+        exit(1)
+    }
+    putc(b'm'); putc(b'a'); putc(b's'); putc(b'k'); putc(b'e'); putc(b'd'); putc(b'\n');
+    core::arch::enable_interrupts();
+    if !core::arch::interrupts_enabled() {
+        exit(2)
+    }
+    putc(b'e'); putc(b'n'); putc(b'a'); putc(b'b'); putc(b'l'); putc(b'e'); putc(b'd');
+    putc(b'\n');
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(99)
+}

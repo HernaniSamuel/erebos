@@ -4355,9 +4355,22 @@ the compiler binary, and compiled and checked with every program.
     any access after it. It is `fence iorw, iorw` on riscv32 and `dmb sy` on
     thumbv7m. It orders; it does not wait for a write to reach a device, nor
     make a cache coherent (neither target of the tests has a data cache).
+  - `pub fn enable_interrupts()`: lets maskable handlers run (`csrsi mstatus,
+    8` on riscv32, `cpsie i` on thumbv7m). A compiler fence. Each source of
+    interrupts has its own enable, which is the program's (ADR 0086).
+  - `pub fn wait_for_interrupt()`: runs `wfi`, a compiler fence too. It may
+    return for no reason, so it belongs in a loop.
+  - `pub fn interrupts_enabled() -> bool`: the mask state and nothing else:
+    `mstatus.MIE` on riscv32; on thumbv7m, that `PRIMASK` and `IPSR` are 0, so
+    that a handler finds it false on both targets. It says nothing of whether
+    a source is enabled.
 
-  Both are an `asm` with `options(nostack, preserves_flags)` and no option
-  about memory, and calling either at compile time is `eval::asm`. Finer
+  `_start` masks interrupts as its first instruction (`csrci mstatus, 8`,
+  `cpsid i`), so the entry function starts with `interrupts_enabled()` false
+  (ADR 0086).
+
+  Each is an `asm` with `options(nostack, preserves_flags)` and no option
+  about memory, and calling any of them at compile time is `eval::asm`. Finer
   fences (`fence w,o`, `dmb st`, `dsb`, `isb`) are not portable: a program
   that needs one writes its `asm`, and `core::arch` may gain target-specific
   ones with the step that needs them. See "Volatile accesses" for the hand-off
