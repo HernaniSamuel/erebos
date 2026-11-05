@@ -1,0 +1,17 @@
+// emit: ast
+// A statement that starts with `critical BLOCK` ends with it, as one that
+// starts with `if` or `loop` does (ADR 0015, 0086): `+` cannot continue it. The
+// keyword takes a block and nothing else.
+static mut TICKS: u32 = 0;
+
+fn operand() -> u32 {
+    critical { TICKS } + 1
+}
+
+fn missing_block() {
+    critical;
+}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

@@ -73,6 +73,12 @@ pub struct Mir {
     /// generation puts in the section `.text.start` (ADR 0083); `None` once
     /// `core` is left out, as `_start` is not in a dump.
     pub reset: Option<BodyId>,
+    /// The bodies of `core::arch::__critical_enter` and `__critical_exit`,
+    /// which `Statement::CriticalEnter` and `CriticalExit` call (ADR 0086).
+    /// `None` once `core` is left out and no body kept has such a statement;
+    /// with one, the body stays as a declaration.
+    pub critical_enter: Option<BodyId>,
+    pub critical_exit: Option<BodyId>,
     /// The program's memory map, of which the linker script is made
     /// (ADR 0057); `None` without a `memory` block.
     pub memory: Option<MemoryMap>,
@@ -111,6 +117,17 @@ impl Mir {
                                 if let AsmSym::Body(id) = sym {
                                     called[id.0 as usize] = true;
                                 }
+                            }
+                        }
+                        // Calls to the two functions of `core::arch`.
+                        Statement::CriticalEnter(_) => {
+                            if let Some(id) = self.critical_enter {
+                                called[id.0 as usize] = true;
+                            }
+                        }
+                        Statement::CriticalExit(_) => {
+                            if let Some(id) = self.critical_exit {
+                                called[id.0 as usize] = true;
                             }
                         }
                         Statement::Assign(..) => {}
@@ -230,6 +247,10 @@ impl Mir {
         self.panic = new_id(self.panic);
         // `_start` is `core`'s, and nothing calls it.
         self.reset = None;
+        // The two functions of a `critical` block stay when a body kept has
+        // one, as declarations; with none, they are gone.
+        self.critical_enter = self.critical_enter.and_then(|id| ids[id.0 as usize]);
+        self.critical_exit = self.critical_exit.and_then(|id| ids[id.0 as usize]);
         self.bodies = kept;
 
         self.structs = unmarked(std::mem::take(&mut self.structs), &left_out.structs);
@@ -415,7 +436,9 @@ impl Body {
                         | Rvalue::SliceLen(_) => {}
                     },
                     Statement::Call { args, .. } => args.iter_mut().for_each(&mut *f),
-                    Statement::InlineAsm(_) => {}
+                    Statement::InlineAsm(_)
+                    | Statement::CriticalEnter(_)
+                    | Statement::CriticalExit(_) => {}
                 }
             }
             match &mut block.terminator {
@@ -1108,6 +1131,14 @@ pub enum Statement {
     /// Runs inline assembly, then stores its outputs (ADR 0079). With the
     /// option `noreturn` it is a terminator instead.
     InlineAsm(Box<InlineAsm>),
+    /// Where a `critical` block starts (ADR 0086): `_n = core::arch::
+    /// __critical_enter()`, which masks interrupts and records in the `u32`
+    /// local what they were. Compile-time evaluation does nothing for it.
+    CriticalEnter(Local),
+    /// Where a `critical` block ends, or a jump leaves it:
+    /// `core::arch::__critical_exit(_n)`, which puts back what the local
+    /// holds.
+    CriticalExit(Local),
 }
 
 /// A memory location: a local, followed by projections that step from it
@@ -1492,6 +1523,8 @@ impl Mir {
                 f.write_str(")")
             }
             Statement::InlineAsm(asm) => self.fmt_asm(asm, f),
+            Statement::CriticalEnter(was) => write!(f, "critical_enter {was}"),
+            Statement::CriticalExit(was) => write!(f, "critical_exit {was}"),
         }
     }
 
@@ -1863,6 +1896,8 @@ mod tests {
             entry: BodyId(0),
             panic: BodyId(0),
             reset: None,
+            critical_enter: None,
+            critical_exit: None,
             memory: None,
         };
         mir.leave_out(&LeftOut {

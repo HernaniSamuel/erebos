@@ -54,6 +54,8 @@ const SNIPPETS: &[&str] = &[
     "<<",
     "1 << 40",
     "loop { break 5; }",
+    "critical {",
+    "critical { 1 }",
     "fn",
     "entry",
     "panic",

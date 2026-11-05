@@ -1,0 +1,59 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/critical_types_errors.ers
+---
+--- errors ---
+ty::mismatched-types
+
+  × mismatched types
+   ╭─[critical_types_errors.ers:8:16]
+ 7 │ fn statement() {
+ 8 │     critical { COUNT }
+   ·                ──┬──
+   ·                  ╰── expected `()`, found `u32`
+ 9 │     COUNT = 1;
+   ╰────
+  help: this value would be discarded; add `;` after it if that is intended
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[critical_types_errors.ers:13:16]
+ 12 │ fn wrong_type() -> bool {
+ 13 │     critical { COUNT }
+    ·                ──┬──
+    ·                  ╰── expected `bool`, found `u32`
+ 14 │ }
+    ╰────
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[critical_types_errors.ers:17:33]
+ 16 │ fn let_value() {
+ 17 │     let flag: bool = critical { COUNT };
+    ·                                 ──┬──
+    ·                                   ╰── expected `bool`, found `u32`
+ 18 │ }
+    ╰────
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[critical_types_errors.ers:21:16]
+ 20 │ fn missing_value() -> u32 {
+ 21 │     critical { COUNT; }
+    ·                ──┬──┬
+    ·                  │  ╰── remove this semicolon to return the value
+    ·                  ╰── expected `u32`, found `()`
+ 22 │ }
+    ╰────
+  help: a block's value is its last expression without `;`
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[critical_types_errors.ers:25:14]
+ 24 │ fn no_value() -> u32 {
+ 25 │     critical {}
+    ·              ─┬
+    ·               ╰── expected `u32`, found `()`
+ 26 │ }
+    ╰────

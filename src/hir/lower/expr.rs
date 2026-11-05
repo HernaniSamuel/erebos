@@ -574,6 +574,7 @@ impl Lowerer<'_> {
                 ExprKind::CompoundAssign(*op, self.boxed(place), self.boxed(value), *op_span)
             }
             ast::ExprKind::Block(block) => ExprKind::Block(self.block(block)),
+            ast::ExprKind::Critical(block) => ExprKind::Critical(self.block(block)),
             ast::ExprKind::If { cond, then, else_ } => ExprKind::If {
                 cond: self.boxed(cond),
                 then: self.block(then),

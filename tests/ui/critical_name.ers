@@ -1,0 +1,14 @@
+// emit: ast
+// `critical` is a keyword (ADR 0078): it names no item, local or field.
+fn critical() {}
+
+struct Config {
+    critical: u32,
+}
+
+entry fn main() -> ! {
+    let critical: u32 = 1;
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

@@ -1,0 +1,108 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/critical_comptime.ers
+---
+--- typeck ---
+enum Option(u32): u8 { None = 0, Some(u32 at 4) = 1 } size 8, align 4
+fn first(values: [u32; 3]) -> u32
+    expr 0 critical 200..242: !
+    expr 1 return 219..235: !
+    expr 2 index 226..235: u32
+    expr 3 local values 226..232: [u32; 3]
+    expr 4 int 0 233..234: usize
+fn counted() -> u32
+    let mut count: u32
+    expr 5 int 0 293..294: u32
+    expr 6 loop 300..402: ()
+    expr 7 critical 315..396: ()
+    expr 8 if 338..362: ()
+    expr 9 binary == 341..351: bool
+    expr 10 local count 341..346: u32
+    expr 11 int 4 350..351: u32
+    expr 12 break 354..359: !
+    expr 13 assign += 375..385: ()
+    expr 14 local count 375..380: u32
+    expr 15 int 1 384..385: u32
+    expr 16 local count 407..412: u32
+fn continued() -> u32
+    let mut count: u32
+    let mut sum: u32
+    expr 17 int 0 465..466: u32
+    expr 18 int 0 491..492: u32
+    expr 19 while 498..636: ()
+    expr 20 binary < 504..513: bool
+    expr 21 local count 504..509: u32
+    expr 22 int 5 512..513: u32
+    expr 23 assign += 524..534: ()
+    expr 24 local count 524..529: u32
+    expr 25 int 1 533..534: u32
+    expr 26 critical 544..630: ()
+    expr 27 if 567..594: ()
+    expr 28 binary == 570..580: bool
+    expr 29 local count 570..575: u32
+    expr 30 int 3 579..580: u32
+    expr 31 continue 583..591: !
+    expr 32 assign += 607..619: ()
+    expr 33 local sum 607..610: u32
+    expr 34 local count 614..619: u32
+    expr 35 local sum 641..644: u32
+fn tried(input: Option(u32)) -> Option(u32)
+    let value: u32
+    expr 36 critical 698..772: Option(u32)
+    expr 37 try 734..740: u32
+    expr 38 local input 734..739: Option(u32)
+    expr 39 variant .Some (Option(u32)::Some) 750..766: Option(u32)
+    expr 40 binary + 756..765: u32
+    expr 41 local value 756..761: u32
+    expr 42 int 1 764..765: u32
+fn unwrapped() -> u32
+    let value: u32
+    expr 43 match 804..893: u32
+    expr 44 call 810..825: Option(u32)
+    expr 45 variant .Some (Option(u32)::Some) 816..824: Option(u32)
+    expr 46 int 2 822..823: u32
+    expr 47 local value 861..866: u32
+    expr 48 int 0 885..886: u32
+entry fn main() -> !
+    expr 49 loop 1322..1329: !
+panic fn on_panic() -> !
+    expr 50 loop 1360..1367: !
+comptime fn FIRST() -> u32
+    expr 51 call 916..932: u32
+    expr 52 array 922..931: [u32; 3]
+    expr 53 int 7 923..924: u32
+    expr 54 int 8 926..927: u32
+    expr 55 int 9 929..930: u32
+comptime fn COUNTED() -> u32
+    expr 56 call 955..964: u32
+comptime fn CONTINUED() -> u32
+    expr 57 call 989..1000: u32
+comptime fn TRIED() -> u32
+    expr 58 call 1021..1032: u32
+comptime fn BLOCK() -> u32
+    expr 59 comptime 1053..1084: u32
+    expr 60 block 1062..1084: u32
+    expr 61 critical 1068..1082: u32
+    expr 62 int 5 1079..1080: u32
+comptime fn comptime() -> ()
+    expr 63 assert 1173..1191: ()
+    expr 64 binary == 1180..1190: bool
+    expr 65 const FIRST 1180..1185: u32
+    expr 66 int 7 1189..1190: u32
+    expr 67 assert 1197..1217: ()
+    expr 68 binary == 1204..1216: bool
+    expr 69 const COUNTED 1204..1211: u32
+    expr 70 int 4 1215..1216: u32
+    expr 71 assert 1223..1246: ()
+    expr 72 binary == 1230..1245: bool
+    expr 73 const CONTINUED 1230..1239: u32
+    expr 74 int 12 1243..1245: u32
+    expr 75 assert 1252..1270: ()
+    expr 76 binary == 1259..1269: bool
+    expr 77 const TRIED 1259..1264: u32
+    expr 78 int 3 1268..1269: u32
+    expr 79 assert 1276..1294: ()
+    expr 80 binary == 1283..1293: bool
+    expr 81 const BLOCK 1283..1288: u32
+    expr 82 int 5 1292..1293: u32

@@ -68,6 +68,28 @@ pub fn interrupts_enabled() -> bool {
     primask == 0 && ipsr == 0
 }
 
+// --- Critical sections (ADR 0086) --------------------------------------------
+
+// What a `critical` block calls where it starts and where it ends, on every
+// path out of it. The compiler names them by their path, and their `__` keeps
+// a program from naming them, so `critical` stays the only form. Neither `asm`
+// has a memory option, so both are compiler fences, as ADR 0078 asks of the
+// block's entry and exit.
+
+// Reads `PRIMASK` and then sets it (`cpsid i`): returns 1 if interrupts were
+// masked already, 0 if not.
+fn __critical_enter() -> u32 {
+    let mut was: u32 = 0;
+    asm("mrs {}, primask", "cpsid i", out(reg) was, options(nostack, preserves_flags));
+    was
+}
+
+// Writes back what `__critical_enter` returned, so a block entered masked
+// leaves it masked.
+fn __critical_exit(was: u32) {
+    asm("msr primask, {}", in(reg) was, options(nostack, preserves_flags));
+}
+
 // --- The reset entry (ADR 0083) ----------------------------------------------
 
 // What runs first: the compiler puts it in the section `.text.start`, which

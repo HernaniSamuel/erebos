@@ -27,6 +27,8 @@ pub enum TokenKind {
     /// `crate`, the root of the module tree, at the start of a path
     /// (ADR 0049).
     Crate,
+    /// `critical`, which runs a block with interrupts masked (ADR 0078).
+    Critical,
     Else,
     Entry,
     Enum,
@@ -131,6 +133,7 @@ impl TokenKind {
             "const" => TokenKind::Const,
             "continue" => TokenKind::Continue,
             "crate" => TokenKind::Crate,
+            "critical" => TokenKind::Critical,
             "else" => TokenKind::Else,
             "entry" => TokenKind::Entry,
             "enum" => TokenKind::Enum,
@@ -176,6 +179,7 @@ impl TokenKind {
             TokenKind::Const => "`const`",
             TokenKind::Continue => "`continue`",
             TokenKind::Crate => "`crate`",
+            TokenKind::Critical => "`critical`",
             TokenKind::Else => "`else`",
             TokenKind::Entry => "`entry`",
             TokenKind::Enum => "`enum`",

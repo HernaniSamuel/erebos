@@ -125,6 +125,10 @@ pub struct Hir {
     /// `core::arch::_start`, the reset entry, which the compiler places by
     /// path (ADR 0083).
     pub reset: FnId,
+    /// `core::arch::__critical_enter` and `__critical_exit`, which the code
+    /// of a `critical` block calls, found by path as `reset` is (ADR 0086).
+    pub critical_enter: FnId,
+    pub critical_exit: FnId,
     /// Expression ids are `0..expr_count`.
     pub expr_count: u32,
     /// Where `core` starts.
@@ -1361,6 +1365,9 @@ pub enum ExprKind {
     /// `place op= value`, with the span of the operator, as `Binary`.
     CompoundAssign(BinOp, Box<Expr>, Box<Expr>, Span),
     Block(Block),
+    /// `critical { .. }`: the block, run with interrupts masked (ADR 0078,
+    /// 0086).
+    Critical(Block),
     If {
         cond: Box<Expr>,
         then: Block,
@@ -1594,7 +1601,9 @@ impl Expr {
                 a.walk(f);
                 b.walk(f);
             }
-            ExprKind::Block(block) | ExprKind::Loop(block) => block.walk(f),
+            ExprKind::Block(block) | ExprKind::Critical(block) | ExprKind::Loop(block) => {
+                block.walk(f);
+            }
             ExprKind::Asm(asm) => {
                 for operand in &asm.operands {
                     operand.walk(f);

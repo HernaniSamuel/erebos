@@ -1,0 +1,51 @@
+// emit: typeck
+// The type of `critical BLOCK` is the block's (ADR 0086): a value of any type
+// leaves it, the block can have type `!`, and as a statement without `;` its
+// type must be `()` or `!`. Mismatches are reported as a block's are.
+struct Pair {
+    a: u8,
+    b: u8,
+}
+
+static mut COUNT: u32 = 0;
+static mut PAIR: Pair = Pair { a: 1, b: 2 };
+
+fn value() -> u32 {
+    critical { COUNT }
+}
+
+fn aggregate() -> Pair {
+    critical { PAIR }
+}
+
+fn unit() {
+    critical {
+        COUNT += 1;
+    }
+}
+
+fn diverges() -> u32 {
+    critical { return 1; }
+}
+
+fn never() -> ! {
+    critical { loop {} }
+}
+
+fn in_loop() -> u32 {
+    loop {
+        let found: u32 = critical {
+            if COUNT == 3 { break 4; }
+            COUNT
+        };
+        COUNT = found;
+    }
+}
+
+fn as_condition() {
+    while !critical { COUNT == 0 } {}
+}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

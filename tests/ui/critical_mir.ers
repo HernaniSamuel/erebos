@@ -1,0 +1,80 @@
+// emit: mir
+// How `critical` lowers (ADR 0086): `critical_enter` where the block starts,
+// `critical_exit` on every path out of it, innermost block first and each with
+// its own local, after the value that leaves and before the jump.
+static mut COUNT: u32 = 0;
+static mut DONE: bool = false;
+
+// The end of the block: the value is read under the mask.
+fn end() -> u32 {
+    critical { COUNT }
+}
+
+// `break` and `continue` to a loop outside the block; the loop's own
+// blocks, and the ones outside it, are not left.
+fn jumps() {
+    critical {
+        loop {
+            critical {
+                if DONE { break; }
+                if COUNT == 2 { continue; }
+                COUNT += 1;
+            }
+        }
+    }
+}
+
+// `return` with a value, computed before the exit.
+fn returns() -> u32 {
+    critical {
+        if DONE { return COUNT + 1; }
+    }
+    0
+}
+
+// `?`: the failure returns, and the exit comes before the return.
+fn tries(input: Option(u32)) -> Option(u32) {
+    critical {
+        let value: u32 = input?;
+        COUNT = value;
+    }
+    .Some(1)
+}
+
+// One jump that crosses two blocks leaves the inner one first.
+fn nested() -> u32 {
+    critical {
+        critical {
+            if DONE { return 1; }
+            COUNT += 1;
+        }
+        COUNT += 2;
+    }
+    COUNT
+}
+
+// A break out of a loop that starts inside a block crosses only the blocks
+// inside the loop; the value of `break` is computed under the mask.
+fn loop_value() -> u32 {
+    critical {
+        let found: u32 = loop {
+            critical {
+                break COUNT;
+            }
+        };
+        found
+    }
+}
+
+// A block whose end cannot be reached has no exit there; a check inside is
+// not an exit.
+fn diverges(divisor: u32) -> ! {
+    critical {
+        COUNT = COUNT / divisor;
+        loop {}
+    }
+}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

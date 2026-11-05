@@ -1,0 +1,147 @@
+// `critical` masks interrupts and puts back what it found on every exit (ADR
+// 0078, 0086), seen through `interrupts_enabled`: false in a block; true after
+// the end of a block, `break`, `continue`, `return` and `?`; a nested block
+// leaves them masked until the outer one ends; a block entered masked leaves
+// them masked; the value of the block is the block's. Each failed check exits
+// with its own code.
+// expect-output: critical ok
+// expect-exit: 0
+
+mod board;
+use board::{exit, putc};
+
+static mut COUNT: u32 = 0;
+
+fn check(ok: bool, code: u32) {
+    if !ok {
+        exit(code)
+    }
+}
+
+fn enabled() -> bool {
+    core::arch::interrupts_enabled()
+}
+
+fn returns() -> u32 {
+    critical {
+        check(!enabled(), 30);
+        return 7;
+    }
+}
+
+fn returns_from_two() -> u32 {
+    critical {
+        critical {
+            check(!enabled(), 31);
+            return 8;
+        }
+    }
+}
+
+fn tries(input: Option(u32)) -> Option(u32) {
+    let mut out: u32 = 0;
+    critical {
+        check(!enabled(), 40);
+        let value: u32 = input?;
+        check(!enabled(), 41);
+        out = value;
+    }
+    .Some(out)
+}
+
+entry fn main() -> ! {
+    // A block entered masked leaves interrupts masked.
+    check(!enabled(), 1);
+    critical {
+        check(!enabled(), 2);
+    }
+    check(!enabled(), 3);
+    let masked_value: u32 = critical { 9 };
+    check(masked_value == 9, 4);
+    check(!enabled(), 5);
+
+    core::arch::enable_interrupts();
+    check(enabled(), 6);
+
+    // The end of the block, and its value.
+    let inside: bool = critical { enabled() };
+    check(!inside, 10);
+    check(enabled(), 11);
+    let value: u32 = critical {
+        COUNT = 41;
+        COUNT + 1
+    };
+    check(value == 42, 12);
+    check(enabled(), 13);
+
+    // `break`.
+    let mut seen: bool = true;
+    loop {
+        critical {
+            seen = enabled();
+            break;
+        }
+    }
+    check(!seen, 20);
+    check(enabled(), 21);
+
+    // `continue`: the head of the loop finds them enabled after each exit.
+    let mut n: u32 = 0;
+    loop {
+        check(enabled(), 22);
+        n += 1;
+        if n == 4 {
+            break;
+        }
+        critical {
+            check(!enabled(), 23);
+            if n == 2 {
+                continue;
+            }
+        }
+    }
+
+    // `return`, out of one block and out of two.
+    check(returns() == 7, 32);
+    check(enabled(), 33);
+    check(returns_from_two() == 8, 34);
+    check(enabled(), 35);
+
+    // `?`, on a failure and on a success.
+    match tries(.None) {
+        .Some(let found: u32) => exit(42),
+        .None => {}
+    }
+    check(enabled(), 43);
+    match tries(.Some(5)) {
+        .Some(let found: u32) => check(found == 5, 44),
+        .None => exit(45),
+    }
+    check(enabled(), 46);
+
+    // Nested blocks: the inner one leaves them masked.
+    critical {
+        critical {
+            check(!enabled(), 60);
+        }
+        check(!enabled(), 61);
+    }
+    check(enabled(), 62);
+    // A `break` that crosses two blocks.
+    loop {
+        critical {
+            critical {
+                break;
+            }
+        }
+    }
+    check(enabled(), 63);
+
+    putc(b'c'); putc(b'r'); putc(b'i'); putc(b't'); putc(b'i'); putc(b'c'); putc(b'a');
+    putc(b'l'); putc(b' '); putc(b'o'); putc(b'k'); putc(b'\n');
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(99)
+}

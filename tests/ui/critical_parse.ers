@@ -1,0 +1,28 @@
+// emit: ast
+// `critical BLOCK` is a block expression (ADR 0078, 0086): a statement with no
+// `;`, a `let` value, a `while` condition, the tail of a block and an operand,
+// and it nests.
+static mut TICKS: u32 = 0;
+static mut DONE: bool = false;
+
+fn parse() -> u32 {
+    critical {
+        TICKS = 0;
+    }
+    let ticks: u32 = critical { TICKS };
+    while !critical { DONE } {}
+    let nested: u32 = critical {
+        critical {
+            TICKS = 1;
+        }
+        TICKS
+    };
+    let sum: u32 = critical { TICKS } + 1;
+    critical { TICKS = sum; };
+    let total: u32 = critical { TICKS } + ticks + nested;
+    total
+}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

@@ -1889,6 +1889,8 @@ impl<'h> Queries<'h> {
             entry: BodyId(self.hir.entry.0),
             panic: BodyId(self.hir.panic.0),
             reset: Some(BodyId(self.hir.reset.0)),
+            critical_enter: Some(BodyId(self.hir.critical_enter.0)),
+            critical_exit: Some(BodyId(self.hir.critical_exit.0)),
             memory,
         }
     }

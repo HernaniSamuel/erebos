@@ -417,6 +417,9 @@ impl Interp<'_, '_> {
             }
             Statement::Call { dest, callee, args } => self.call(*dest, callee.0, args, span),
             Statement::InlineAsm(_) => Err(self.asm(span)),
+            // There are no interrupts to mask at compile time (ADR 0078): the
+            // block runs as a block, and the local is never read.
+            Statement::CriticalEnter(_) | Statement::CriticalExit(_) => Ok(()),
         }
     }
 

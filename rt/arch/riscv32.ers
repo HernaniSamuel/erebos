@@ -59,6 +59,28 @@ pub fn interrupts_enabled() -> bool {
     (mstatus & 8) != 0
 }
 
+// --- Critical sections (ADR 0086) --------------------------------------------
+
+// What a `critical` block calls where it starts and where it ends, on every
+// path out of it. The compiler names them by their path, and their `__` keeps
+// a program from naming them, so `critical` stays the only form. Neither `asm`
+// has a memory option, so both are compiler fences, as ADR 0078 asks of the
+// block's entry and exit.
+
+// Clears `mstatus.MIE` and returns what it was (`csrrci` reads the old value),
+// in bit 3: 8 if interrupts were enabled, 0 if not.
+fn __critical_enter() -> u32 {
+    let mut was: u32 = 0;
+    asm("csrrci {}, mstatus, 8", out(reg) was, options(nostack, preserves_flags));
+    was & 8
+}
+
+// Sets back what `__critical_enter` returned: `csrs` sets `MIE` if `was` is 8
+// and changes nothing if it is 0, so a block entered masked leaves it masked.
+fn __critical_exit(was: u32) {
+    asm("csrs mstatus, {}", in(reg) was, options(nostack, preserves_flags));
+}
+
 // --- The reset entry (ADR 0083) ----------------------------------------------
 
 // What runs first, at the origin of the code's region: the compiler puts it in

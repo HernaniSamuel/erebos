@@ -276,6 +276,8 @@ mod tests {
     fn names_with_a_meaning_get_an_underscore() {
         assert_eq!(lower("CONTINUE"), "continue_");
         assert_eq!(lower("MATCH"), "match_");
+        // `critical` is a keyword with M4.3 (ADR 0078).
+        assert_eq!(lower("CRITICAL"), "critical_");
         assert_eq!(lower("CORE"), "core_");
         assert_eq!(lower("U8"), "u8_");
         assert_eq!(name("OPTION", Index::Whole, Case::Pascal), "Option_");

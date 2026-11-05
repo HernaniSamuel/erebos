@@ -1,0 +1,30 @@
+// emit: typeck
+// Mismatches of `critical BLOCK`, reported as a block's are (ADR 0086): a
+// statement without `;` whose type is not `()`, a value of the wrong type
+// where one is expected, and a block with a `;` after its last expression.
+static mut COUNT: u32 = 0;
+
+fn statement() {
+    critical { COUNT }
+    COUNT = 1;
+}
+
+fn wrong_type() -> bool {
+    critical { COUNT }
+}
+
+fn let_value() {
+    let flag: bool = critical { COUNT };
+}
+
+fn missing_value() -> u32 {
+    critical { COUNT; }
+}
+
+fn no_value() -> u32 {
+    critical {}
+}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

@@ -114,6 +114,9 @@ struct Builder<'a, 'h> {
     current: Option<BasicBlock>,
     /// Enclosing loops, innermost last.
     loops: Vec<LoopScope>,
+    /// The hidden local of each enclosing `critical` block, innermost last:
+    /// what a jump out of the blocks puts back (ADR 0086).
+    criticals: Vec<Local>,
 }
 
 /// Whether `pattern` names one value of its position, as a literal, a
@@ -164,6 +167,9 @@ struct LoopScope {
     break_to: Option<BasicBlock>,
     /// Where `break value` stores the value, for loops with a value.
     result: Option<Place>,
+    /// How many `critical` blocks enclosed the loop where it started: the
+    /// ones a `break` or `continue` of this loop crosses are the later ones.
+    criticals: usize,
 }
 
 impl<'a, 'h> Builder<'a, 'h> {
@@ -192,6 +198,7 @@ impl<'a, 'h> Builder<'a, 'h> {
             blocks: Vec::new(),
             current: None,
             loops: Vec::new(),
+            criticals: Vec::new(),
         };
         // HIR locals become MIR locals `_1..`, in declaration order.
         for local in &f.locals {
@@ -693,6 +700,19 @@ impl Builder<'_, '_> {
                 Operand::Const(Const::Unit)
             }
             hir::ExprKind::Block(block) => self.block(block),
+            // Masks where it starts and puts back what it recorded where it
+            // ends, and before each jump that leaves it (ADR 0086). The value
+            // is an operand read before the exit: a static is read into a
+            // temporary where it is written, and a local is no one else's.
+            hir::ExprKind::Critical(block) => {
+                let was = self.new_local(Ty::Int(hir::IntTy::U32), None);
+                self.push(Statement::CriticalEnter(was));
+                self.criticals.push(was);
+                let value = self.block(block);
+                self.criticals.pop();
+                self.push(Statement::CriticalExit(was));
+                value
+            }
             hir::ExprKind::Logical(op, lhs, rhs) => self.logical(*op, lhs, rhs),
             hir::ExprKind::If { cond, then, else_ } => {
                 let cond_expr = cond;
@@ -776,6 +796,7 @@ impl Builder<'_, '_> {
                     self.assign(place, Rvalue::Use(value));
                 }
                 if self.current.is_some() {
+                    self.leave_criticals(self.loops[index].criticals);
                     let exit = match self.loops[index].break_to {
                         Some(exit) => exit,
                         None => {
@@ -789,8 +810,10 @@ impl Builder<'_, '_> {
                 Operand::Const(Const::Unit)
             }
             hir::ExprKind::Continue { target } => {
-                let head = self.loops[self.loop_index(*target)].continue_to;
+                let scope = &self.loops[self.loop_index(*target)];
+                let (head, depth) = (scope.continue_to, scope.criticals);
                 if self.current.is_some() {
+                    self.leave_criticals(depth);
                     self.terminate(Terminator::Goto(head));
                 }
                 Operand::Const(Const::Unit)
@@ -804,6 +827,7 @@ impl Builder<'_, '_> {
                     self.assign(Place::local(Local::RETURN), Rvalue::Use(value));
                 }
                 if self.current.is_some() {
+                    self.leave_criticals(0);
                     self.terminate(Terminator::Return);
                 }
                 Operand::Const(Const::Unit)
@@ -982,6 +1006,7 @@ impl Builder<'_, '_> {
             ret.project(PlaceElem::Tag),
             Rvalue::Use(Operand::Const(Const::Int(ret_tag, ret_enum.def().int))),
         );
+        self.leave_criticals(0);
         self.terminate(Terminator::Return);
 
         self.current = Some(success_bb);
@@ -1757,9 +1782,20 @@ impl Builder<'_, '_> {
             continue_to,
             break_to,
             result,
+            criticals: self.criticals.len(),
         });
         body(self);
         self.loops.pop().expect("pushed above")
+    }
+
+    /// Puts back what the `critical` blocks from the `depth`-th on recorded,
+    /// innermost first, before a jump out of them (ADR 0086). Nothing is
+    /// emitted in unreachable code.
+    fn leave_criticals(&mut self, depth: usize) {
+        for i in (depth..self.criticals.len()).rev() {
+            let was = self.criticals[i];
+            self.push(Statement::CriticalExit(was));
+        }
     }
 
     fn loop_index(&self, target: hir::ExprId) -> usize {

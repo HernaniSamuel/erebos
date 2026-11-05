@@ -727,8 +727,10 @@ impl Checker<'_, '_> {
         let mut ty = self.expr_kind(f, expr, expected);
         // A block passes the expected type to its tail, and `comptime` to
         // its operand, which report any mismatch themselves.
-        let reported_inside = matches!(&expr.kind, ExprKind::Block(b) if b.tail.is_some())
-            || matches!(expr.kind, ExprKind::Comptime(_));
+        let reported_inside = matches!(
+            &expr.kind,
+            ExprKind::Block(b) | ExprKind::Critical(b) if b.tail.is_some()
+        ) || matches!(expr.kind, ExprKind::Comptime(_));
         if let Some(expected) = expected
             && unsizes(ty, expected)
         {
@@ -757,7 +759,9 @@ impl Checker<'_, '_> {
             && !reported_inside
         {
             match &expr.kind {
-                ExprKind::Block(block) => self.report_block_mismatch(block, expected, ty, None),
+                ExprKind::Block(block) | ExprKind::Critical(block) => {
+                    self.report_block_mismatch(block, expected, ty, None);
+                }
                 _ => self.mismatch(expr, expected, ty),
             }
         }
@@ -990,7 +994,9 @@ impl Checker<'_, '_> {
                 Ty::Int(IntTy::Usize)
             }
             ExprKind::Slice(pointer, len) => self.make_slice(f, pointer, len),
-            ExprKind::Block(block) => self.block(f, block, expected),
+            // The block's type, as any block's: the mask changes no type
+            // (ADR 0086).
+            ExprKind::Block(block) | ExprKind::Critical(block) => self.block(f, block, expected),
             ExprKind::If { cond, then, else_ } => {
                 self.check(f, cond, Some(Ty::Bool));
                 let Some(else_) = else_ else {

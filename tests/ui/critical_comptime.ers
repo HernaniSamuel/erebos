@@ -1,0 +1,67 @@
+// emit: typeck
+// A `critical` block runs at compile time as the block it is, with no
+// `eval::asm` (ADR 0078, 0086): its `return`, `break` and `?` evaluate.
+fn first(values: [u32; 3]) -> u32 {
+    critical {
+        return values[0];
+    }
+}
+
+fn counted() -> u32 {
+    let mut count: u32 = 0;
+    loop {
+        critical {
+            if count == 4 { break; }
+            count += 1;
+        }
+    }
+    count
+}
+
+fn continued() -> u32 {
+    let mut count: u32 = 0;
+    let mut sum: u32 = 0;
+    while count < 5 {
+        count += 1;
+        critical {
+            if count == 3 { continue; }
+            sum += count;
+        }
+    }
+    sum
+}
+
+fn tried(input: Option(u32)) -> Option(u32) {
+    critical {
+        let value: u32 = input?;
+        .Some(value + 1)
+    }
+}
+
+fn unwrapped() -> u32 {
+    match tried(.Some(2)) {
+        .Some(let value: u32) => value,
+        .None => 0,
+    }
+}
+
+const FIRST: u32 = first([7, 8, 9]);
+const COUNTED: u32 = counted();
+const CONTINUED: u32 = continued();
+const TRIED: u32 = unwrapped();
+const BLOCK: u32 = comptime {
+    critical { 5 }
+};
+
+// The values are the block's own; a wrong one would be an error here.
+comptime {
+    assert(FIRST == 7);
+    assert(COUNTED == 4);
+    assert(CONTINUED == 12);
+    assert(TRIED == 3);
+    assert(BLOCK == 5);
+}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

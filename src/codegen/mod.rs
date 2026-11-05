@@ -974,7 +974,30 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                 self.call(*dest, callee.0 as usize, args);
             }
             Statement::InlineAsm(inline) => self.inline_asm(inline),
+            // Calls of the two functions of `core::arch`, which hold the
+            // instructions (ADR 0086): the local receives what the first
+            // returns and is passed to the second.
+            Statement::CriticalEnter(was) => {
+                self.call(Some(Place::local(*was)), self.critical_callee(true), &[]);
+            }
+            Statement::CriticalExit(was) => {
+                let args = [Operand::Copy(Place::local(*was))];
+                self.call(None, self.critical_callee(false), &args);
+            }
         }
+    }
+
+    /// The index of the body that a `critical` statement calls: the one that
+    /// masks (`enter`) or the one that puts back.
+    fn critical_callee(&self, enter: bool) -> usize {
+        let callee = if enter {
+            self.mir.critical_enter
+        } else {
+            self.mir.critical_exit
+        };
+        callee
+            .expect("a program with a `critical` block keeps the two functions of its statements")
+            .0 as usize
     }
 
     /// The address of a place. A place is volatile when the last pointer on

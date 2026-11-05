@@ -1,0 +1,36 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/critical_name.ers
+---
+--- errors ---
+parser::unexpected-token
+
+  × expected identifier, found `critical`
+   ╭─[critical_name.ers:3:4]
+ 2 │ // `critical` is a keyword (ADR 0078): it names no item, local or field.
+ 3 │ fn critical() {}
+   ·    ────┬───
+   ·        ╰── expected identifier
+ 4 │ 
+   ╰────
+parser::unexpected-token
+
+  × expected identifier, found `critical`
+   ╭─[critical_name.ers:5:16]
+ 4 │ 
+ 5 │ struct Config {
+   ·                ▲
+   ·                ╰── expected identifier
+ 6 │     critical: u32,
+   ╰────
+parser::unexpected-token
+
+  × expected identifier, found `critical`
+    ╭─[critical_name.ers:10:9]
+  9 │ entry fn main() -> ! {
+ 10 │     let critical: u32 = 1;
+    ·         ────┬───
+    ·             ╰── expected identifier
+ 11 │     loop {}
+    ╰────

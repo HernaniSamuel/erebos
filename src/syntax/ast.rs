@@ -577,6 +577,8 @@ pub enum ExprKind {
     /// `place op= value`, with the span of the operator, as `Binary`.
     CompoundAssign(BinOp, Box<Expr>, Box<Expr>, Span),
     Block(Block),
+    /// `critical { .. }`: the block, run with interrupts masked (ADR 0078).
+    Critical(Block),
     /// `if cond { .. } else ..`; the `else` part is a block or another `if`.
     If {
         cond: Box<Expr>,
@@ -795,6 +797,7 @@ impl ExprKind {
         matches!(
             self,
             ExprKind::Block(_)
+                | ExprKind::Critical(_)
                 | ExprKind::If { .. }
                 | ExprKind::While { .. }
                 | ExprKind::Loop(_)

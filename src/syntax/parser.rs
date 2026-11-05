@@ -1633,6 +1633,7 @@ impl Parser<'_> {
                 | TokenKind::If
                 | TokenKind::While
                 | TokenKind::Loop
+                | TokenKind::Critical
                 | TokenKind::Match
         )
     }
@@ -2003,6 +2004,15 @@ impl Parser<'_> {
                 return Ok(Expr {
                     span: token.span.to(body.span),
                     kind: ExprKind::Loop(body),
+                });
+            }
+            // `critical BLOCK`, a block expression like `loop` (ADR 0086).
+            TokenKind::Critical => {
+                self.bump();
+                let body = self.block()?;
+                return Ok(Expr {
+                    span: token.span.to(body.span),
+                    kind: ExprKind::Critical(body),
                 });
             }
             _ => return Err(self.error_expected("an expression")),

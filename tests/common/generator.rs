@@ -198,6 +198,7 @@ pub enum Feature {
     While,
     Loop,
     Break,
+    Critical,
     TyU8,
     TyU16,
     TyU32,
@@ -251,6 +252,7 @@ impl Feature {
         Feature::While,
         Feature::Loop,
         Feature::Break,
+        Feature::Critical,
         Feature::TyU8,
         Feature::TyU16,
         Feature::TyU32,
@@ -688,7 +690,7 @@ panic fn on_panic() -> ! {{
 
     fn stmt(&mut self, depth: u32, indent: usize, out: &mut String) {
         let pad = "    ".repeat(indent);
-        match self.rng.below(20) {
+        match self.rng.below(22) {
             0..=6 => self.let_stmt(&pad, out),
             7..=10 => {
                 let mutable: Vec<Var> = self.vars.iter().filter(|v| v.mutable).cloned().collect();
@@ -709,6 +711,7 @@ panic fn on_panic() -> ! {{
             }
             14..=16 if depth > 0 => self.if_stmt(depth, indent, out),
             17..=19 if depth > 0 => self.loop_stmt(depth, indent, out),
+            20..=21 if depth > 0 => self.critical_stmt(depth, indent, out),
             _ => self.let_stmt(&pad, out),
         }
     }
@@ -765,6 +768,18 @@ panic fn on_panic() -> ! {{
         let _ = writeln!(out, "{pad}}}");
     }
 
+    /// `critical { ... }` around a generated block (ADR 0086), as a statement.
+    /// Its value is not used: the oracles agree on what the block computes, and
+    /// that the evaluator, which does nothing for the mask, and the target,
+    /// which masks, give one result.
+    fn critical_stmt(&mut self, depth: u32, indent: usize, out: &mut String) {
+        let pad = "    ".repeat(indent);
+        self.use_feature(Feature::Critical);
+        let _ = writeln!(out, "{pad}critical {{");
+        self.block(depth - 1, indent + 1, out);
+        let _ = writeln!(out, "{pad}}}");
+    }
+
     /// A `while` or a `loop` run `bound` times by a counter that the body
     /// can read but not assign.
     fn loop_stmt(&mut self, depth: u32, indent: usize, out: &mut String) {
@@ -786,9 +801,19 @@ panic fn on_panic() -> ! {{
             self.use_feature(Feature::Loop);
             self.use_feature(Feature::Break);
             let _ = writeln!(out, "{pad}loop {{");
+            // Sometimes inside a `critical` block, so that the `break` leaves
+            // it and the exit is on that path (ADR 0086).
+            let masked = self.rng.chance(1, 3);
+            if masked {
+                self.use_feature(Feature::Critical);
+                let _ = writeln!(out, "{pad}    critical {{");
+            }
             let _ = writeln!(out, "{pad}    if {counter} >= {bound} {{");
             let _ = writeln!(out, "{pad}        break;");
             let _ = writeln!(out, "{pad}    }}");
+            if masked {
+                let _ = writeln!(out, "{pad}    }}");
+            }
         }
         self.block(depth - 1, indent + 1, out);
         let _ = writeln!(out, "{pad}    {counter} += 1;");

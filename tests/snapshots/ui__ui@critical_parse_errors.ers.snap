@@ -1,0 +1,26 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/critical_parse_errors.ers
+---
+--- errors ---
+parser::unexpected-token
+
+  × expected an expression, found `+`
+   ╭─[critical_parse_errors.ers:8:24]
+ 7 │ fn operand() -> u32 {
+ 8 │     critical { TICKS } + 1
+   ·                        ┬
+   ·                        ╰── expected an expression
+ 9 │ }
+   ╰────
+parser::unexpected-token
+
+  × expected `{`, found `;`
+    ╭─[critical_parse_errors.ers:12:13]
+ 11 │ fn missing_block() {
+ 12 │     critical;
+    ·             ┬
+    ·             ╰── expected `{`
+ 13 │ }
+    ╰────

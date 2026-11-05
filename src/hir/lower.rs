@@ -394,13 +394,17 @@ pub fn lower(
     let Def::Module(arch) = core_item("arch") else {
         unreachable!("`core::arch` is a module")
     };
-    let reset = match namespaces[arch.0 as usize].get("_start") {
+    let arch_fn = |name: &str| match namespaces[arch.0 as usize].get(name) {
         Some(Entry {
-            binding: Binding::Def(Def::Fn(reset)),
+            binding: Binding::Def(Def::Fn(f)),
             ..
-        }) => *reset,
-        _ => unreachable!("`core::arch` defines `_start`"),
+        }) => *f,
+        _ => unreachable!("`core::arch` defines `{name}`"),
     };
+    let reset = arch_fn("_start");
+    // What a `critical` block calls (ADR 0086), likewise in every file.
+    let critical_enter = arch_fn("__critical_enter");
+    let critical_exit = arch_fn("__critical_exit");
 
     Some(Hir {
         modules,
@@ -422,6 +426,8 @@ pub fn lower(
         entry: entry?,
         panic: panic?,
         reset,
+        critical_enter,
+        critical_exit,
         expr_count,
         core: core.expect("`core` is lowered after the program"),
         panic_info,
@@ -1363,6 +1369,8 @@ mod tests {
             }
             mod arch {
                 fn _start() -> ! { loop {} }
+                fn __critical_enter() -> u32 { 0 }
+                fn __critical_exit(was: u32) {}
             }
         ";
         let program = "

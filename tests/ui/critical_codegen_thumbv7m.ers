@@ -1,0 +1,30 @@
+// emit: llvm-ir
+// opt: both
+// target: thumbv7m-none-eabi
+// `critical` is a call to `core::arch::__critical_enter` where the block
+// starts and one to `__critical_exit` with what it returned where it ends and
+// before each jump out (ADR 0086). A dump leaves `core` out, so both are
+// declared.
+static mut COUNT: u32 = 0;
+
+fn read() -> u32 {
+    critical { COUNT }
+}
+
+fn jump() -> u32 {
+    loop {
+        critical {
+            if COUNT == 2 { break; }
+            COUNT += 1;
+        }
+    }
+    COUNT
+}
+
+entry fn main() -> ! {
+    read();
+    jump();
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }
