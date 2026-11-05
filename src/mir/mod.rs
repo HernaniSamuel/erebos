@@ -69,6 +69,10 @@ pub struct Mir {
     pub bodies: Vec<Body>,
     pub entry: BodyId,
     pub panic: BodyId,
+    /// The body of `core::arch::_start`, the reset entry, which code
+    /// generation puts in the section `.text.start` (ADR 0083); `None` once
+    /// `core` is left out, as `_start` is not in a dump.
+    pub reset: Option<BodyId>,
     /// The program's memory map, of which the linker script is made
     /// (ADR 0057); `None` without a `memory` block.
     pub memory: Option<MemoryMap>,
@@ -223,6 +227,8 @@ impl Mir {
         }
         self.entry = new_id(self.entry);
         self.panic = new_id(self.panic);
+        // `_start` is `core`'s, and nothing calls it.
+        self.reset = None;
         self.bodies = kept;
 
         self.structs = unmarked(std::mem::take(&mut self.structs), &left_out.structs);
@@ -1848,6 +1854,7 @@ mod tests {
             ],
             entry: BodyId(0),
             panic: BodyId(0),
+            reset: None,
             memory: None,
         };
         mir.leave_out(&LeftOut {

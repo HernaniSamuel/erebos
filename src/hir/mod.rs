@@ -122,6 +122,9 @@ pub struct Hir {
     pub applications: Vec<(Span, Ty)>,
     pub entry: FnId,
     pub panic: FnId,
+    /// `core::arch::_start`, the reset entry, which the compiler places by
+    /// path (ADR 0083).
+    pub reset: FnId,
     /// Expression ids are `0..expr_count`.
     pub expr_count: u32,
     /// Where `core` starts.

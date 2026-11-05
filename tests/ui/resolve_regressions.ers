@@ -1,5 +1,5 @@
 // emit: hir
-// Regression: `_start` is reserved (ADR 0012) and used to fail at link time;
+// Regression: `_start` is reserved (ADR 0083) and used to fail at link time;
 // duplicate parameters used to shadow each other silently.
 fn _start() {}
 fn h(a: u32, a: u32) -> u32 { a }

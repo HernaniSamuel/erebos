@@ -30,6 +30,68 @@ pub fn fence() {
     asm("dmb sy", options(nostack, preserves_flags));
 }
 
+// --- The reset entry (ADR 0083) ----------------------------------------------
+
+// What runs first: the compiler puts it in the section `.text.start`, which
+// the linker script places after the vector table's section, `.vector_table`
+// (ADR 0074), whose second word is its address. It is private and `#[export]`,
+// so its symbol is `_start` and no program can name it. It does exactly this,
+// in this order, and nothing else (ADR 0030):
+//
+// 1. Set the stack pointer to the top of the stack. Nothing before this point
+//    may use the stack, and nothing here does.
+// 2. Fill `.bss` with zeros, a word at a time between the linker script's
+//    symbols, testing the bound before the first word.
+// 3. Copy `.data` from its load address, in the same way. This comes after
+//    `.bss` only because both are independent; neither reads the other.
+// 4. Jump to the entry function, which is the first compiled code to run, so
+//    every static holds its value when it starts. Each address is loaded with
+//    a `movw`/`movt` pair, which needs no literal pool kept inside the
+//    section, and reaches the whole address space; a Thumb function's symbol
+//    has bit 0 set, as `bx` needs.
+//
+// The linker script's symbols are written by name: declaring them as `extern
+// static`s to name them with `sym` would check nothing more. The labels are
+// local, as ADR 0079 asks of every template.
+#[export]
+#[naked]
+fn _start() -> ! {
+    asm(
+        "movw r0, :lower16:__stack_end",
+        "movt r0, :upper16:__stack_end",
+        "mov sp, r0",
+        "movw r0, :lower16:__bss_start",
+        "movt r0, :upper16:__bss_start",
+        "movw r1, :lower16:__bss_end",
+        "movt r1, :upper16:__bss_end",
+        "movs r2, #0",
+        "1:",
+        "cmp r0, r1",
+        "bhs 2f",
+        "str r2, [r0], #4",
+        "b 1b",
+        "2:",
+        "movw r0, :lower16:__data_start",
+        "movt r0, :upper16:__data_start",
+        "movw r1, :lower16:__data_end",
+        "movt r1, :upper16:__data_end",
+        "movw r2, :lower16:__data_load",
+        "movt r2, :upper16:__data_load",
+        "3:",
+        "cmp r0, r1",
+        "bhs 4f",
+        "ldr r3, [r2], #4",
+        "str r3, [r0], #4",
+        "b 3b",
+        "4:",
+        "movw r0, :lower16:{0}",
+        "movt r0, :upper16:{0}",
+        "bx r0",
+        sym entry,
+        options(noreturn),
+    );
+}
+
 // --- The EABI's 64-bit division (ADR 0080) ----------------------------------
 //
 // C code that divides 64-bit values on this target calls these, which clang

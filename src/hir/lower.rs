@@ -370,7 +370,7 @@ pub fn lower(
         diags.push(diag);
     }
     let memory = memory_map(maps, diags);
-    check_start(&fns, &statics, diags);
+    check_start(&fns, &statics, core_root, diags);
     check_symbols(&fns, &statics, &namespaces, &uses, core_root, diags);
     // In any module, whatever their visibility (ADR 0049, 0050).
     let entry = find_unique(&fns, FnKind::Entry, diags);
@@ -388,6 +388,18 @@ pub fn lower(
     };
     let Def::Enum(panic_reason) = core_item("PanicReason") else {
         unreachable!("`core::PanicReason` is an enum")
+    };
+    // The reset entry, `core::arch::_start`, which every file of `core::arch`
+    // defines (ADR 0083): found through the namespace of `arch`.
+    let Def::Module(arch) = core_item("arch") else {
+        unreachable!("`core::arch` is a module")
+    };
+    let reset = match namespaces[arch.0 as usize].get("_start") {
+        Some(Entry {
+            binding: Binding::Def(Def::Fn(reset)),
+            ..
+        }) => *reset,
+        _ => unreachable!("`core::arch` defines `_start`"),
     };
 
     Some(Hir {
@@ -409,6 +421,7 @@ pub fn lower(
         applications,
         entry: entry?,
         panic: panic?,
+        reset,
         expr_count,
         core: core.expect("`core` is lowered after the program"),
         panic_info,
@@ -1014,20 +1027,24 @@ enum Lookup {
     Failed,
 }
 
-/// The compiler defines `_start` itself (ADR 0012). The bodies include
-/// those computing constants and statics, named after them.
-fn check_start(fns: &[Fn], statics: &[StaticDef], diags: &mut Diagnostics) {
-    let bodies = fns.iter().map(|f| (f.name.as_str(), f.name_span));
+/// `core::arch` defines `_start` (ADR 0083), so a program may not: an item of
+/// the program named `_start` is reserved, `core`'s own is exempt. The bodies
+/// include those computing constants and statics, named after them.
+fn check_start(fns: &[Fn], statics: &[StaticDef], core_root: ModuleId, diags: &mut Diagnostics) {
+    let in_program = |module: ModuleId| module.0 < core_root.0;
+    let bodies = (fns.iter())
+        .filter(|f| in_program(f.module))
+        .map(|f| (f.name.as_str(), f.name_span));
     // An `extern static` has no body.
     let externs = statics
         .iter()
-        .filter(|s| s.init.is_none())
+        .filter(|s| in_program(s.module) && s.init.is_none())
         .map(|s| (s.name.as_str(), s.name_span));
     for (_, span) in bodies.chain(externs).filter(|(name, _)| *name == "_start") {
         diags.push(
             Diagnostic::error("resolve::reserved-name", "`_start` is a reserved name")
                 .label(span, "reserved for the startup code")
-                .help("the compiler generates `_start`, which sets up the stack and jumps to the entry function (ADR 0012)"),
+                .help("`core::arch` defines `_start`, which sets up the stack and jumps to the entry function (ADR 0083)"),
         );
     }
 }
@@ -1049,7 +1066,9 @@ struct Symbol<'a> {
 /// An item that did not get its name in its module's namespace was reported
 /// as `resolve::duplicate-item`, and an item of the program named with `__`
 /// as `resolve::reserved-name` (ADR 0020): both are left out, the latter
-/// since `core` gives such names as symbols. `core`'s files come after the
+/// since `core` gives such names as symbols; so is an item of the program
+/// named `_start`, reported by `check_start`, which `core`'s private `_start`
+/// would otherwise collide with (ADR 0083). `core`'s files come after the
 /// program's, so an item of the program taking a symbol of `core` is
 /// reported at the program's item, with a help naming what to call instead
 /// (ADR 0052).
@@ -1065,7 +1084,7 @@ fn check_symbols(
     // Whether the item holds its name in its module, and is not an item of
     // the program with a reserved name.
     let checked = |module: ModuleId, name: &str, def: Def| {
-        (in_core(module) || !name.starts_with("__"))
+        (in_core(module) || !(name.starts_with("__") || name == "_start"))
             && namespaces[module.0 as usize]
                 .get(name)
                 .is_some_and(|entry| entry.binding == Binding::Def(def))
@@ -1341,6 +1360,9 @@ mod tests {
             pub fn limit() -> u32 { crate::LIMIT }
             mod inner {
                 fn limit() -> u32 { crate::LIMIT }
+            }
+            mod arch {
+                fn _start() -> ! { loop {} }
             }
         ";
         let program = "

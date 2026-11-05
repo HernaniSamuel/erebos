@@ -1863,6 +1863,7 @@ impl<'h> Queries<'h> {
                 .collect(),
             entry: BodyId(self.hir.entry.0),
             panic: BodyId(self.hir.panic.0),
+            reset: Some(BodyId(self.hir.reset.0)),
             memory,
         }
     }

@@ -14,8 +14,8 @@ resolve::reserved-name
    ·       ╰── reserved for the startup code
  5 │ fn h(a: u32, a: u32) -> u32 { a }
    ╰────
-  help: the compiler generates `_start`, which sets up the stack and jumps to the entry function
-        (ADR 0012)
+  help: `core::arch` defines `_start`, which sets up the stack and jumps to the entry function
+        (ADR 0083)
 resolve::duplicate-param
 
   × the parameter `a` is declared more than once

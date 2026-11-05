@@ -52,6 +52,8 @@ struct Symbol {
     value: u64,
     /// The size of what it names, in bytes.
     size: u64,
+    /// `FUNC`, `OBJECT`, `NOTYPE`...
+    kind: String,
     /// The section index, or `ABS`, `UND`.
     section: String,
 }
@@ -73,8 +75,9 @@ fn startup_ranges() {
 
 /// The address of `_start` in a program whose code region starts at
 /// `origin`: the reset entry (ADR 0057) starts the region on riscv32; on
-/// ARMv7-M two words of a vector table come first (ADR 0074), and the symbol
-/// of a Thumb function has bit 0 set.
+/// ARMv7-M the two words of the vector table, the section `.vector_table`,
+/// come first (ADR 0074, 0083), and the symbol of a Thumb function has bit 0
+/// set.
 fn start_address(target: &Target, origin: u64) -> u64 {
     match target.arch {
         Arch::Riscv32 => origin,
@@ -712,12 +715,12 @@ fn core_symbols() {
     }
 }
 
-/// The reset entry of thumbv7m (ADR 0074), in a program with QEMU's
-/// `mps2-an385` map, whose code starts at 0: the first two words of the
-/// image are the initial stack pointer, `__stack_end`, and `_start` with bit
-/// 0 set, and `_start` follows them in `.text.start`; the unwind tables of
-/// the functions are discarded, and the attributes section is there, not
-/// loaded.
+/// The reset entry of thumbv7m (ADR 0074, 0083), in a program with QEMU's
+/// `mps2-an385` map, whose code starts at 0: the section `.vector_table` is
+/// at the origin, and its two words are the initial stack pointer,
+/// `__stack_end`, and `_start` with bit 0 set; `_start` follows them, alone
+/// in `.text.start`, at 8; the unwind tables of the functions are discarded,
+/// and the attributes section is there, not loaded.
 #[test]
 fn thumbv7m_reset_entry() {
     let target = erebos::target::by_name("thumbv7m-none-eabi").unwrap();
@@ -740,20 +743,22 @@ fn thumbv7m_reset_entry() {
         let symbols = symbols(&elf);
         let value = |name: &str| symbols.iter().find(|s| s.name == name).unwrap().value;
 
-        let start = readelf(&elf, &["--section-headers"])
-            .lines()
-            .find(|line| line.contains(" .text.start "))
-            .map(str::to_owned)
-            .unwrap_or_else(|| panic!("{opt:?}: no `.text.start`"));
-        // `[Nr] Name Type Address Off Size ...`, after the `]`.
-        let fields: Vec<&str> = start
-            .split_once(']')
-            .unwrap()
-            .1
-            .split_whitespace()
-            .collect();
-        let (address, offset) = (hex(fields[2]), hex(fields[3]) as usize);
-        assert_eq!(address, 0, "{opt:?}: `.text.start` is not at the origin");
+        // `[Nr] Name Type Address Off Size ...`, after the `]`: the address
+        // and the offset in the file of the section `name`.
+        let headers = readelf(&elf, &["--section-headers"]);
+        let place = |name: &str| {
+            let line = headers
+                .lines()
+                .find(|line| line.contains(&format!(" {name} ")))
+                .unwrap_or_else(|| panic!("{opt:?}: no `{name}`"));
+            let fields: Vec<&str> = line.split_once(']').unwrap().1.split_whitespace().collect();
+            (hex(fields[2]), hex(fields[3]) as usize, hex(fields[4]))
+        };
+        let (address, offset, size) = place(".vector_table");
+        assert_eq!(address, 0, "{opt:?}: `.vector_table` is not at the origin");
+        assert_eq!(size, 8, "{opt:?}: `.vector_table` is not two words");
+        let (text_start, _, _) = place(".text.start");
+        assert_eq!(text_start, 8, "{opt:?}: `.text.start` is not at 8");
         let image = fs::read(&elf).unwrap();
         let word = |at: usize| u64::from(u32::from_le_bytes(image[at..at + 4].try_into().unwrap()));
         assert_eq!(word(offset), value("__stack_end"), "{opt:?}: first word");
@@ -777,6 +782,31 @@ fn thumbv7m_reset_entry() {
         assert_eq!(
             attributes.address, 0,
             "{opt:?}: `.ARM.attributes` is loaded"
+        );
+    }
+}
+
+/// The reach of `_start`'s jump on riscv32 (ADR 0083): in
+/// `tests/e2e/startup_far_entry.ers`, the entry function is more than 1 MiB
+/// past `_start`, where `j` would not reach. The e2e test boots the program;
+/// this one checks the distance, so that it does not pass without
+/// proving anything if the functions are emitted in another order.
+#[test]
+fn the_entry_function_is_far_from_start() {
+    let target = erebos::target::by_name("riscv32imac-unknown-none-elf").unwrap();
+    let work = Path::new(env!("CARGO_TARGET_TMPDIR")).join("elf");
+    fs::create_dir_all(&work).unwrap();
+    let program = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/e2e/startup_far_entry.ers");
+    let source = common::board::stage(&program, target, &work).unwrap();
+    for opt in [OptLevel::None, OptLevel::Speed] {
+        let elf = work.join(format!("startup_far_entry-{opt:?}.elf"));
+        driver::build(&source, &elf, &[], target, opt, false).unwrap();
+        let symbols = symbols(&elf);
+        let value = |name: &str| symbols.iter().find(|s| s.name == name).unwrap().value;
+        let distance = value("main").wrapping_sub(value("_start"));
+        assert!(
+            distance > 0x10_0000,
+            "{opt:?}: the entry function is {distance:#x} bytes past `_start`, within the reach of `j`"
         );
     }
 }
@@ -1012,6 +1042,12 @@ fn check(elf: &Path, opt: OptLevel, shared: bool) {
     };
     let value = |name: &str| symbol(name).value;
 
+    // `_start` is `core`'s naked function, and not a label of module assembly
+    // (ADR 0083): a function symbol with a size.
+    let start = symbol("_start");
+    assert_eq!(start.kind, "FUNC", "{opt:?}: `_start` is not a function");
+    assert!(start.size > 0, "{opt:?}: `_start` has no size");
+
     // The case the padding guards against really occurs.
     let rodata = section(".rodata");
     assert_ne!(
@@ -1141,13 +1177,14 @@ fn symbols(elf: &Path) -> Vec<Symbol> {
         .filter_map(|line| {
             let fields: Vec<&str> = line.split_whitespace().collect();
             match fields.as_slice() {
-                [num, value, size, _type, _bind, _vis, section, name]
+                [num, value, size, kind, _bind, _vis, section, name]
                     if num.ends_with(':') && *num != "Num:" =>
                 {
                     Some(Symbol {
                         name: (*name).to_owned(),
                         value: hex(value),
                         size: size.parse().unwrap_or(0),
+                        kind: (*kind).to_owned(),
                         section: (*section).to_owned(),
                     })
                 }

@@ -1,9 +1,9 @@
 // target: thumbv7m-none-eabi
 // emit: llvm-ir
-// The reset entry of ARMv7-M (ADR 0074) is `module asm`: two words of a
-// vector table, the initial stack pointer and `_start` (bit 0 set by the
-// assembler, `.thumb_func`), then `_start`, which sets the stack pointer,
-// zeroes `.bss`, copies `.data` and jumps to the entry function by a
-// register, with `.ltorg` for the literal pool of its `ldr =` loads.
+// The reset entry of ARMv7-M (ADR 0074, 0083): the compiler's `module asm`
+// holds only the two words of the vector table, in the section
+// `.vector_table`: the initial stack pointer and `_start`. `_start` is `core`'s
+// naked function, in `rt/arch/armv7m.ers`, which `--emit=llvm-ir` leaves
+// out, so it is not here.
 entry fn reset_main() -> ! { loop {} }
 panic fn on_panic() -> ! { loop {} }

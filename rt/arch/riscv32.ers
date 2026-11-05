@@ -30,3 +30,54 @@ pub fn compiler_fence() {
 pub fn fence() {
     asm("fence iorw, iorw", options(nostack, preserves_flags));
 }
+
+// --- The reset entry (ADR 0083) ----------------------------------------------
+
+// What runs first, at the origin of the code's region: the compiler puts it in
+// the section `.text.start`, which the linker script places there alone (ADR
+// 0057), and names it by its path, as it names `PanicInfo`. It is private and
+// `#[export]`, so its symbol is `_start` and no program can name it. It does
+// exactly this, in this order, and nothing else (ADR 0030):
+//
+// 1. Set the stack pointer to the top of the stack. Nothing before this point
+//    may use the stack, and nothing here does.
+// 2. Fill `.bss` with zeros, a word at a time between the linker script's
+//    symbols, testing the bound before the first word.
+// 3. Copy `.data` from its load address, in the same way. This comes after
+//    `.bss` only because both are independent; neither reads the other.
+// 4. Jump to the entry function, which is the first compiled code to run, so
+//    every static holds its value when it starts. `tail` (`auipc` and `jalr`)
+//    reaches the whole address space, where `j` reached only 1 MiB.
+//
+// The linker script's symbols are written by name: declaring them as `extern
+// static`s to name them with `sym` would check nothing more. The labels are
+// local, as ADR 0079 asks of every template.
+#[export]
+#[naked]
+fn _start() -> ! {
+    asm(
+        "la sp, __stack_end",
+        "la t0, __bss_start",
+        "la t1, __bss_end",
+        "1:",
+        "bgeu t0, t1, 2f",
+        "sw zero, 0(t0)",
+        "addi t0, t0, 4",
+        "j 1b",
+        "2:",
+        "la t0, __data_start",
+        "la t1, __data_end",
+        "la t2, __data_load",
+        "3:",
+        "bgeu t0, t1, 4f",
+        "lw t3, 0(t2)",
+        "sw t3, 0(t0)",
+        "addi t0, t0, 4",
+        "addi t2, t2, 4",
+        "j 3b",
+        "4:",
+        "tail {}",
+        sym entry,
+        options(noreturn),
+    );
+}

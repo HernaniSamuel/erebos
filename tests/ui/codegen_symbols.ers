@@ -2,7 +2,7 @@
 // Symbols (ADR 0051): a function or static of a module is named by its path
 // joined by dots, `uart.regs.step`; one of the root module keeps its own
 // name, and so do an `#[export]` item, in the root or in a module, and an
-// `extern` declaration, in any module. `_start` jumps to the entry
+// `extern` declaration, in any module. `core`'s `_start` jumps to the entry
 // function's symbol.
 static mut COUNT: u32 = 0;
 

@@ -1,0 +1,31 @@
+// `_start` reaches an entry function more than 1 MiB away (ADR 0083): a naked
+// function of 1.5 MiB of `.space`, declared before the entry function, puts
+// it that far past `_start`, which is alone at the origin of the code's
+// region, where riscv32's `j` reached only 1 MiB and `tail` reaches any
+// address. `tests/elf.rs` builds this program and checks the distance, so the
+// test does not pass if the functions are laid out in another order. The
+// assembly is riscv32's, which is why the header lists one target (the reason
+// ADR 0079 adds to ADR 0077's); thumbv7m jumps through a register.
+// targets: riscv32imac-unknown-none-elf
+// expect-output: far
+// expect-exit: 0
+
+mod board;
+use board::{exit, putc};
+
+#[naked]
+fn pad() {
+    asm(".space 0x180000", options(noreturn));
+}
+
+entry fn main() -> ! {
+    putc(b'f');
+    putc(b'a');
+    putc(b'r');
+    putc(b'\n');
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(1)
+}

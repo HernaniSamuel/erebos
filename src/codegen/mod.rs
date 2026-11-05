@@ -205,9 +205,17 @@ fn lower<'ctx>(
 
     asm::keep_symbols(context, &module, mir, &fns, &statics);
 
-    // The entry function's symbol (ADR 0051): symbols are unique, so LLVM
-    // keeps it as the function's name.
-    module.set_inline_assembly(&start_stub(target.arch, &mir.body(mir.entry).name));
+    // The reset entry is `core`'s `_start`, alone in the section the linker
+    // script places at the code's origin (ADR 0083, 0057). A dump leaves
+    // `core` out, and with it `_start`.
+    if let Some(reset) = mir.reset
+        && let Some(function) = fns[reset.0 as usize]
+    {
+        function.set_section(Some(RESET_SECTION));
+    }
+    if let Some(table) = vector_table(target.arch) {
+        module.set_inline_assembly(table);
+    }
 
     if let Err(e) = module.verify() {
         panic!("codegen produced invalid LLVM IR: {}", e.to_string());
@@ -1533,92 +1541,26 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
     }
 }
 
-/// Provisional startup code (ADR 0012, 0030): sets the stack pointer to
-/// the top of the stack, fills `.bss` with zeros, copies the initial values
-/// of `.data` from their load address, a word at a time between the linker
-/// script's symbols, and jumps to the entry function. Every address comes
-/// from the linker script, so the code does not depend on the memory map
-/// (ADR 0057). It goes away once the language can express it (M4). Each
-/// architecture has its own (ADR 0073).
-fn start_stub(arch: Arch, entry: &str) -> String {
+/// The section of the reset entry, `core`'s `_start` (ADR 0083): the linker
+/// script places it alone, at the origin of the code's region (ADR 0057).
+const RESET_SECTION: &str = ".text.start";
+
+/// The vector table's first two words on ARMv7-M (ADR 0074, 0083), in a
+/// section of their own that the linker script places first in the code's
+/// region: the initial stack pointer, `__stack_end`, and `_start`, whose
+/// address the linker gives bit 0 set, as a Thumb function's. Written as
+/// module assembly because the compiler, not the program, owns the table:
+/// M4.3 generates all of it from the program's handlers. riscv32 has none.
+fn vector_table(arch: Arch) -> Option<&'static str> {
     match arch {
-        Arch::Riscv32 => riscv32_start_stub(entry),
-        Arch::Armv7m => armv7m_start_stub(entry),
+        Arch::Riscv32 => None,
+        Arch::Armv7m => Some(
+            "\t.section .vector_table, \"a\", %progbits\n\
+             \t.p2align 2\n\
+             \t.word __stack_end\n\
+             \t.word _start\n",
+        ),
     }
-}
-
-/// The reset entry of ARMv7-M, in Thumb assembly (ADR 0074): the first two
-/// words of a vector table, the initial stack pointer and `_start` (the
-/// assembler sets bit 0 of a Thumb function's address), then `_start` itself,
-/// which does what riscv32's does.
-fn armv7m_start_stub(entry: &str) -> String {
-    format!(
-        "\t.syntax unified\n\
-         \t.thumb\n\
-         \t.section .text.start, \"ax\", %progbits\n\
-         \t.p2align 2\n\
-         \t.word __stack_end\n\
-         \t.word _start\n\
-         \t.globl _start\n\
-         \t.type _start, %function\n\
-         \t.thumb_func\n\
-         _start:\n\
-         \tldr r0, =__stack_end\n\
-         \tmov sp, r0\n\
-         \tldr r0, =__bss_start\n\
-         \tldr r1, =__bss_end\n\
-         \tmovs r2, #0\n\
-         .Lzero_bss:\n\
-         \tcmp r0, r1\n\
-         \tbhs .Lcopy_data\n\
-         \tstr r2, [r0], #4\n\
-         \tb .Lzero_bss\n\
-         .Lcopy_data:\n\
-         \tldr r0, =__data_start\n\
-         \tldr r1, =__data_end\n\
-         \tldr r2, =__data_load\n\
-         .Lcopy_word:\n\
-         \tcmp r0, r1\n\
-         \tbhs .Lenter\n\
-         \tldr r3, [r2], #4\n\
-         \tstr r3, [r0], #4\n\
-         \tb .Lcopy_word\n\
-         .Lenter:\n\
-         \tldr r0, ={entry}\n\
-         \tbx r0\n\
-         \t.ltorg\n"
-    )
-}
-
-/// The reset entry of riscv32, in RISC-V assembly.
-fn riscv32_start_stub(entry: &str) -> String {
-    format!(
-        "\t.section .text.start, \"ax\", @progbits\n\
-         \t.globl _start\n\
-         \t.type _start, @function\n\
-         _start:\n\
-         \tla sp, __stack_end\n\
-         \tla t0, __bss_start\n\
-         \tla t1, __bss_end\n\
-         .Lzero_bss:\n\
-         \tbgeu t0, t1, .Lcopy_data\n\
-         \tsw zero, 0(t0)\n\
-         \taddi t0, t0, 4\n\
-         \tj .Lzero_bss\n\
-         .Lcopy_data:\n\
-         \tla t0, __data_start\n\
-         \tla t1, __data_end\n\
-         \tla t2, __data_load\n\
-         .Lcopy_word:\n\
-         \tbgeu t0, t1, .Lenter\n\
-         \tlw t3, 0(t2)\n\
-         \tsw t3, 0(t0)\n\
-         \taddi t0, t0, 4\n\
-         \taddi t2, t2, 4\n\
-         \tj .Lcopy_word\n\
-         .Lenter:\n\
-         \tj {entry}\n"
-    )
 }
 
 #[cfg(test)]

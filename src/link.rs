@@ -45,8 +45,9 @@ const UNLOADED_DEBUG: &[&str] = &[
 ];
 
 /// The linker script of the program's `memory` block (ADR 0057): every
-/// region under its own name; in the code's region the reset entry in an
-/// output section of its own, then the code, the read-only data and the
+/// region under its own name; in the code's region the vector table, on
+/// thumbv7m, and the reset entry, each in an output section of its own
+/// (ADR 0083), then the code, the read-only data and the
 /// initial values of `.data`; at the start of the stack's region the stack;
 /// `.data` and `.bss` in theirs, as ADR 0030 lays them out. The
 /// architecture and the attributes section are `target`'s, and the stack's
@@ -83,8 +84,10 @@ pub fn linker_script(map: &MemoryMap, target: &Target) -> String {
          }}\n\
          \n\
          SECTIONS {{\n\
+         {vector_table}\
          \x20   /* The reset entry, alone so that only its own alignment counts:\n\
-         \x20      it is at the origin of the code's region (ADR 0057). */\n\
+         \x20      it is at the origin of the code's region (ADR 0057), after the\n\
+         \x20      vector table where there is one (ADR 0083). */\n\
          \x20   .text.start : {{ KEEP(*(.text.start)) }} > {code}\n\
          \x20   .text : {{ *(.text .text.*) }} > {code}\n\
          \x20   .rodata : {{ {RODATA} }} > {code}\n\
@@ -98,12 +101,26 @@ pub fn linker_script(map: &MemoryMap, target: &Target) -> String {
          {unloaded}\
          {discarded}\
          }}\n",
+        vector_table = vector_table(target.arch, code),
         align = target.stack_align,
         stack_size = map.stack_size,
         statics = statics(&data_place, data),
         unloaded = unloaded(target.arch),
         discarded = discarded(target.arch),
     )
+}
+
+/// The vector table's section, first in the code's region on thumbv7m, where
+/// the compiler emits its first two words (ADR 0074, 0083); riscv32 has none.
+fn vector_table(arch: Arch, code: &str) -> String {
+    match arch {
+        Arch::Riscv32 => String::new(),
+        Arch::Armv7m => format!(
+            "\x20   /* The vector table, where the core reads its reset words: at the\n\
+             \x20      origin of the code's region (ADR 0057, 0074, 0083). */\n\
+             \x20   .vector_table : {{ KEEP(*(.vector_table)) }} > {code}\n"
+        ),
+    }
 }
 
 /// `link::no-memory-map`: the program has no `memory` block, so there is

@@ -1,6 +1,6 @@
 // The entry function may be in any module, and share its name with a
 // function of another module declared before it: its symbol is
-// `app.main`, which `_start` jumps to (ADR 0012, 0051). Booting the root
+// `app.main`, which `_start` jumps to (ADR 0083, 0051). Booting the root
 // `main` instead would return to nowhere.
 // expect-exit: 7
 

@@ -15,7 +15,8 @@ MEMORY {
 
 SECTIONS {
     /* The reset entry, alone so that only its own alignment counts:
-       it is at the origin of the code's region (ADR 0057). */
+       it is at the origin of the code's region (ADR 0057), after the
+       vector table where there is one (ADR 0083). */
     .text.start : { KEEP(*(.text.start)) } > FLASH
     .text : { *(.text .text.*) } > FLASH
     .rodata : { *(.rodata .rodata.* .srodata .srodata.*) } > FLASH

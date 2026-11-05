@@ -1,7 +1,7 @@
 // emit: llvm-ir
 // An entry function in a module, named like a function of the root module
 // declared before it: each has its own symbol, `main` and `app.main`, and
-// `_start` jumps to the entry function's (ADR 0012, 0051).
+// `core`'s `_start` jumps to the entry function's (ADR 0083, 0051).
 fn main() -> u32 { 7 }
 
 mod app {

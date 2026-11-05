@@ -62,8 +62,8 @@ resolve::reserved-name
     ·           ╰── reserved for the startup code
  19 │ // Also defined above, which is reported too.
     ╰────
-  help: the compiler generates `_start`, which sets up the stack and jumps to the entry function
-        (ADR 0012)
+  help: `core::arch` defines `_start`, which sets up the stack and jumps to the entry function
+        (ADR 0083)
 resolve::duplicate-item
 
   × `_start` is defined more than once
@@ -90,8 +90,8 @@ resolve::reserved-name
     ·                  ╰── reserved for the startup code
  21 │ 
     ╰────
-  help: the compiler generates `_start`, which sets up the stack and jumps to the entry function
-        (ADR 0012)
+  help: `core::arch` defines `_start`, which sets up the stack and jumps to the entry function
+        (ADR 0083)
 resolve::misplaced-attribute
 
   × `#[align]` applies only to structs and statics
