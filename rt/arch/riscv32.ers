@@ -105,6 +105,95 @@ fn __critical_exit(was: u32) {
     asm("csrs mstatus, {}", in(reg) was, options(nostack, preserves_flags));
 }
 
+// --- The trap entry (ADR 0085) -----------------------------------------------
+
+// Where every trap enters: `_start` writes its address to `mtvec`, in direct
+// mode (the mode bits, the two low bits of `mtvec`, are 0), so the core jumps
+// here for every exception and every interrupt. It looks the handler up in
+// `__erebos_trap_table`, which the compiler generates from the program's
+// handlers: 33 words, word `n` for the exception with `mcause` `n`, word `16 + n`
+// for the interrupt `n` (`mcause` without bit 31), and word 32 for any other
+// cause (ADR 0085). A cause that no handler serves holds a default handler, which
+// calls the panic function.
+//
+// It saves the 16 registers the C ABI does not preserve, `ra`, `t0` to `t6` and
+// `a0` to `a7`, in 64 bytes, so that the stack stays aligned to 16 if it was, and
+// interrupted code cannot tell it ran. The handler is a plain function of the C
+// ABI, so it saves the others (`s0` to `s11`) if it uses them. It runs on the
+// stack of the interrupted code: there is no stack for traps. `mepc` and
+// `mstatus` are not saved: a trap clears `MIE`, so no maskable handler enters
+// while one runs, and an exception inside a handler never returns (ADR 0084), so
+// nothing that returns overwrites them. A program that sets `MIE` inside a
+// handler must save them itself.
+//
+// `t0` holds `mcause` and `t1` its number, without bit 31. A number of 16 or more
+// is a cause the table does not name and takes word 32; otherwise the word is the
+// number for an exception (`mcause` not negative) and 16 more for an interrupt.
+// The handler is called with `jalr`, so it returns here, and `ra` is restored
+// after it.
+//
+// It is private and the compiler does not name it: `_start` names it with `sym`.
+// `#[align(4)]` (ADR 0087) is there because `mtvec` holds multiples of 4 and,
+// with the C extension, LLVM may align a function to 2.
+#[naked]
+#[align(4)]
+fn __erebos_trap() -> ! {
+    asm(
+        "addi sp, sp, -64",
+        "sw ra, 0(sp)",
+        "sw t0, 4(sp)",
+        "sw t1, 8(sp)",
+        "sw t2, 12(sp)",
+        "sw a0, 16(sp)",
+        "sw a1, 20(sp)",
+        "sw a2, 24(sp)",
+        "sw a3, 28(sp)",
+        "sw a4, 32(sp)",
+        "sw a5, 36(sp)",
+        "sw a6, 40(sp)",
+        "sw a7, 44(sp)",
+        "sw t3, 48(sp)",
+        "sw t4, 52(sp)",
+        "sw t5, 56(sp)",
+        "sw t6, 60(sp)",
+        "csrr t0, mcause",
+        "slli t1, t0, 1",
+        "srli t1, t1, 1",
+        "li t2, 16",
+        "bltu t1, t2, 1f",
+        "li t1, 32",
+        "j 2f",
+        "1:",
+        "bgez t0, 2f",
+        "addi t1, t1, 16",
+        "2:",
+        "slli t1, t1, 2",
+        "la t2, __erebos_trap_table",
+        "add t1, t1, t2",
+        "lw t1, 0(t1)",
+        "jalr t1",
+        "lw ra, 0(sp)",
+        "lw t0, 4(sp)",
+        "lw t1, 8(sp)",
+        "lw t2, 12(sp)",
+        "lw a0, 16(sp)",
+        "lw a1, 20(sp)",
+        "lw a2, 24(sp)",
+        "lw a3, 28(sp)",
+        "lw a4, 32(sp)",
+        "lw a5, 36(sp)",
+        "lw a6, 40(sp)",
+        "lw a7, 44(sp)",
+        "lw t3, 48(sp)",
+        "lw t4, 52(sp)",
+        "lw t5, 56(sp)",
+        "lw t6, 60(sp)",
+        "addi sp, sp, 64",
+        "mret",
+        options(noreturn),
+    );
+}
+
 // --- The reset entry (ADR 0083) ----------------------------------------------
 
 // What runs first, at the origin of the code's region: the compiler puts it in
@@ -119,11 +208,14 @@ fn __critical_exit(was: u32) {
 //    ready (`enable_interrupts`).
 // 2. Set the stack pointer to the top of the stack. Nothing before this point
 //    may use the stack, and nothing here does.
-// 3. Fill `.bss` with zeros, a word at a time between the linker script's
+// 3. Set the trap vector, `mtvec`, to `__erebos_trap` (ADR 0085), so that a trap
+//    from here on reaches a handler or the panic function and not address 0. It
+//    comes right after the stack, which the trap entry uses.
+// 4. Fill `.bss` with zeros, a word at a time between the linker script's
 //    symbols, testing the bound before the first word.
-// 4. Copy `.data` from its load address, in the same way. This comes after
+// 5. Copy `.data` from its load address, in the same way. This comes after
 //    `.bss` only because both are independent; neither reads the other.
-// 5. Jump to the entry function, which is the first compiled code to run, so
+// 6. Jump to the entry function, which is the first compiled code to run, so
 //    every static holds its value when it starts. `tail` (`auipc` and `jalr`)
 //    reaches the whole address space, where `j` reached only 1 MiB.
 //
@@ -136,6 +228,8 @@ fn _start() -> ! {
     asm(
         "csrci mstatus, 8",
         "la sp, __stack_end",
+        "la t0, {}",
+        "csrw mtvec, t0",
         "la t0, __bss_start",
         "la t1, __bss_end",
         "1:",
@@ -156,6 +250,7 @@ fn _start() -> ! {
         "j 3b",
         "4:",
         "tail {}",
+        sym __erebos_trap,
         sym entry,
         options(noreturn),
     );

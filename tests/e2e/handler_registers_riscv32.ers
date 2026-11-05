@@ -1,0 +1,231 @@
+// A handler interrupts code that holds a known value in every register but the
+// stack pointer and the zero register, and the code finds them unchanged (ADR
+// 0085): the trap entry saves the 16 registers the C ABI does not preserve,
+// `ra`, `t0` to `t6` and `a0` to `a7`, and the handler, a plain function of the C
+// ABI, saves the others if it uses them, which this one does: it keeps ten values
+// live across an `asm` that overwrites every register the C ABI does not
+// preserve, so the compiler puts them in `s2` to `s11`. `gp` and `tp`, which
+// nothing touches, are checked too. The code waits with `wfi`, which needs no
+// register, until the timer interrupts it.
+// takes-exceptions: yes
+// targets: riscv32imac-unknown-none-elf
+// expect-output: registers kept
+// expect-exit: 0
+
+mod board;
+use board::{exit, putc};
+use core::arch::Vector;
+
+const MTIME: *mut volatile u32 = 0x0200_BFF8 as *mut volatile u32;
+const MTIMECMP_LOW: *mut volatile u32 = 0x0200_4000 as *mut volatile u32;
+const MTIMECMP_HIGH: *mut volatile u32 = 0x0200_4004 as *mut volatile u32;
+const PERIOD: u32 = 1000;
+const MTIE: u32 = 0x80;
+
+// Words in the board's scratch RAM: the handler reads the first ten and writes
+// them back to the next ten.
+const SRC: *mut volatile u32 = board::SCRATCH as *mut volatile u32;
+const OUT: *mut volatile u32 = (board::SCRATCH + 64) as *mut volatile u32;
+
+static mut TICKS: u32 = 0;
+
+interrupt fn tick() at Vector::MachineTimer {
+    let a: u32 = SRC[0];
+    let b: u32 = SRC[1];
+    let c: u32 = SRC[2];
+    let d: u32 = SRC[3];
+    let e: u32 = SRC[4];
+    let f: u32 = SRC[5];
+    let g: u32 = SRC[6];
+    let h: u32 = SRC[7];
+    let i: u32 = SRC[8];
+    let j: u32 = SRC[9];
+    // Every register the C ABI does not preserve gets a value that is not the
+    // interrupted code's, so each value above is, below, in a register the C ABI
+    // preserves, or in the frame.
+    asm(
+        "li ra, -1",
+        "li t0, -1",
+        "li t1, -1",
+        "li t2, -1",
+        "li a0, -1",
+        "li a1, -1",
+        "li a2, -1",
+        "li a3, -1",
+        "li a4, -1",
+        "li a5, -1",
+        "li a6, -1",
+        "li a7, -1",
+        "li t3, -1",
+        "li t4, -1",
+        "li t5, -1",
+        "li t6, -1",
+        clobber_abi("C"),
+    );
+    OUT[0] = a;
+    OUT[1] = b;
+    OUT[2] = c;
+    OUT[3] = d;
+    OUT[4] = e;
+    OUT[5] = f;
+    OUT[6] = g;
+    OUT[7] = h;
+    OUT[8] = i;
+    OUT[9] = j;
+    TICKS += 1;
+    // The next tick, so that a tick that came before the `wfi` does not leave it
+    // waiting for ever.
+    *MTIMECMP_LOW = *MTIME + PERIOD;
+}
+
+entry fn main() -> ! {
+    *MTIMECMP_HIGH = 0;
+    *MTIMECMP_LOW = *MTIME + PERIOD;
+    asm("csrs mie, {}", in(reg) MTIE, options(nostack, preserves_flags));
+    core::arch::enable_interrupts();
+    // The registers the template changes besides the ones it clobbers are saved
+    // in a frame it makes and restored from it, `s0` and `s1` too, which the
+    // compiler keeps for itself. `t0` is checked first and is then the scratch.
+    asm(
+        "addi sp, sp, -64",
+        "sw gp, 0(sp)",
+        "sw tp, 4(sp)",
+        "sw s0, 8(sp)",
+        "sw s1, 12(sp)",
+        "sw s2, 16(sp)",
+        "sw s3, 20(sp)",
+        "sw s4, 24(sp)",
+        "sw s5, 28(sp)",
+        "sw s6, 32(sp)",
+        "sw s7, 36(sp)",
+        "sw s8, 40(sp)",
+        "sw s9, 44(sp)",
+        "sw s10, 48(sp)",
+        "sw s11, 52(sp)",
+        "li ra, 0x40",
+        "li gp, 0x41",
+        "li tp, 0x42",
+        "li t0, 0x43",
+        "li t1, 0x44",
+        "li t2, 0x45",
+        "li s0, 0x46",
+        "li s1, 0x47",
+        "li a0, 0x48",
+        "li a1, 0x49",
+        "li a2, 0x4a",
+        "li a3, 0x4b",
+        "li a4, 0x4c",
+        "li a5, 0x4d",
+        "li a6, 0x4e",
+        "li a7, 0x4f",
+        "li s2, 0x50",
+        "li s3, 0x51",
+        "li s4, 0x52",
+        "li s5, 0x53",
+        "li s6, 0x54",
+        "li s7, 0x55",
+        "li s8, 0x56",
+        "li s9, 0x57",
+        "li s10, 0x58",
+        "li s11, 0x59",
+        "li t3, 0x5a",
+        "li t4, 0x5b",
+        "li t5, 0x5c",
+        "li t6, 0x5d",
+        "wfi",
+        "addi t0, t0, -0x43",
+        "bnez t0, 9f",
+        "li t0, 0x40",
+        "bne ra, t0, 9f",
+        "li t0, 0x41",
+        "bne gp, t0, 9f",
+        "li t0, 0x42",
+        "bne tp, t0, 9f",
+        "li t0, 0x44",
+        "bne t1, t0, 9f",
+        "li t0, 0x45",
+        "bne t2, t0, 9f",
+        "li t0, 0x46",
+        "bne s0, t0, 9f",
+        "li t0, 0x47",
+        "bne s1, t0, 9f",
+        "li t0, 0x48",
+        "bne a0, t0, 9f",
+        "li t0, 0x49",
+        "bne a1, t0, 9f",
+        "li t0, 0x4a",
+        "bne a2, t0, 9f",
+        "li t0, 0x4b",
+        "bne a3, t0, 9f",
+        "li t0, 0x4c",
+        "bne a4, t0, 9f",
+        "li t0, 0x4d",
+        "bne a5, t0, 9f",
+        "li t0, 0x4e",
+        "bne a6, t0, 9f",
+        "li t0, 0x4f",
+        "bne a7, t0, 9f",
+        "li t0, 0x50",
+        "bne s2, t0, 9f",
+        "li t0, 0x51",
+        "bne s3, t0, 9f",
+        "li t0, 0x52",
+        "bne s4, t0, 9f",
+        "li t0, 0x53",
+        "bne s5, t0, 9f",
+        "li t0, 0x54",
+        "bne s6, t0, 9f",
+        "li t0, 0x55",
+        "bne s7, t0, 9f",
+        "li t0, 0x56",
+        "bne s8, t0, 9f",
+        "li t0, 0x57",
+        "bne s9, t0, 9f",
+        "li t0, 0x58",
+        "bne s10, t0, 9f",
+        "li t0, 0x59",
+        "bne s11, t0, 9f",
+        "li t0, 0x5a",
+        "bne t3, t0, 9f",
+        "li t0, 0x5b",
+        "bne t4, t0, 9f",
+        "li t0, 0x5c",
+        "bne t5, t0, 9f",
+        "li t0, 0x5d",
+        "bne t6, t0, 9f",
+        "j 8f",
+        "9:",
+        "unimp",
+        "8:",
+        "lw gp, 0(sp)",
+        "lw tp, 4(sp)",
+        "lw s0, 8(sp)",
+        "lw s1, 12(sp)",
+        "lw s2, 16(sp)",
+        "lw s3, 20(sp)",
+        "lw s4, 24(sp)",
+        "lw s5, 28(sp)",
+        "lw s6, 32(sp)",
+        "lw s7, 36(sp)",
+        "lw s8, 40(sp)",
+        "lw s9, 44(sp)",
+        "lw s10, 48(sp)",
+        "lw s11, 52(sp)",
+        "addi sp, sp, 64",
+        clobber_abi("C"),
+    );
+    // The handler ran: without it the test proves nothing.
+    if critical { TICKS } == 0 {
+        exit(2)
+    }
+    asm("csrc mie, {}", in(reg) MTIE, options(nostack, preserves_flags));
+    putc(b'r'); putc(b'e'); putc(b'g'); putc(b'i'); putc(b's'); putc(b't'); putc(b'e');
+    putc(b'r'); putc(b's'); putc(b' '); putc(b'k'); putc(b'e'); putc(b'p'); putc(b't');
+    putc(b'\n');
+    exit(0)
+}
+
+// A register that changed reaches here through `unimp`, as an illegal instruction.
+panic fn on_panic() -> ! {
+    exit(1)
+}

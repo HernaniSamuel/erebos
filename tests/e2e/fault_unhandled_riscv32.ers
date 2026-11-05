@@ -1,0 +1,66 @@
+// A fault in a program without a handler reaches the panic function (ADR 0085):
+// an illegal instruction is the exception `IllegalInstruction`. The panic
+// function finds the reason `UnhandledVector`, the vector's name as the message,
+// an empty file and line and column 0, which are not counted from 1 here.
+// takes-exceptions: yes
+// targets: riscv32imac-unknown-none-elf
+// expect-output: vector not handled: IllegalInstruction at :0:0
+// expect-exit: 1
+
+mod board;
+use board::exit;
+
+entry fn main() -> ! {
+    // `unimp` is the instruction of all zeros, which is illegal.
+    asm("unimp");
+    exit(2)
+}
+
+fn print(s: *const [u8]) {
+    let mut i: usize = 0;
+    while i < len(s) {
+        board::putc((*s)[i]);
+        i += 1;
+    }
+}
+
+fn print_u32(value: u32) {
+    let mut digits: [u8; 10] = [0; 10];
+    let mut n: usize = 0;
+    let mut rest: u32 = value;
+    loop {
+        digits[9 - n] = b'0' + (rest % 10) as u8;
+        n += 1;
+        rest /= 10;
+        if rest == 0 {
+            break;
+        }
+    }
+    print(slice(&raw const digits[10 - n], n));
+}
+
+fn reason(reason: core::PanicReason) -> *const [u8] {
+    match reason {
+        .DivisionByZero => &raw const b"division by zero",
+        .IndexOutOfBounds => &raw const b"index out of bounds",
+        .AssertionFailed => &raw const b"assertion failed",
+        .NoVariant => &raw const b"enum value is no variant",
+        .FieldOutOfRange => &raw const b"value does not fit its field",
+        .UnhandledVector => &raw const b"vector not handled",
+    }
+}
+
+// Prints `<reason>: <message> at <file>:<line>:<column>`.
+panic fn on_panic(info: *const core::PanicInfo) -> ! {
+    print(reason((*info).reason));
+    print(&raw const b": ");
+    print((*info).message);
+    print(&raw const b" at ");
+    print((*info).file);
+    print(&raw const b":");
+    print_u32((*info).line);
+    print(&raw const b":");
+    print_u32((*info).column);
+    print(&raw const b"\n");
+    exit(1)
+}

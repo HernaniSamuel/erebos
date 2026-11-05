@@ -1,0 +1,32 @@
+// A fault in the panic function enters the trap entry again, on the same stack,
+// and reaches the panic function again (ADR 0085, 0088): on riscv32 nothing
+// guards against that recursion, and the first fault would loop for ever if
+// the program did not tell the second pass apart. The panic function records
+// that it ran, faults, and finds the record the second time. On thumbv7m a fault
+// in a default handler of HardFault is a lockup instead (ADR 0088).
+// takes-exceptions: yes
+// targets: riscv32imac-unknown-none-elf
+// expect-output: first
+// expect-output: second
+// expect-exit: 1
+
+mod board;
+use board::{exit, putc};
+
+static mut ENTERED: bool = false;
+
+entry fn main() -> ! {
+    asm("unimp");
+    exit(2)
+}
+
+panic fn on_panic() -> ! {
+    if ENTERED {
+        putc(b's'); putc(b'e'); putc(b'c'); putc(b'o'); putc(b'n'); putc(b'd'); putc(b'\n');
+        exit(1)
+    }
+    ENTERED = true;
+    putc(b'f'); putc(b'i'); putc(b'r'); putc(b's'); putc(b't'); putc(b'\n');
+    asm("unimp");
+    exit(3)
+}

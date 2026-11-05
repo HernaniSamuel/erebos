@@ -1,0 +1,37 @@
+// emit: llvm-ir
+// opt: both
+// The trap table of riscv32 and the default handlers (ADR 0085), with a panic
+// function that takes `*const core::PanicInfo`: 33 words in the section
+// `.rodata.__erebos_trap_table`, the exceptions, then the interrupts, then the
+// word of any other cause; a handler's word holds its symbol, the dotted path of
+// one in a module and the name alone of an `#[export]` one; every vector with a
+// variant and no handler has a default handler of its own,
+// `__erebos_unhandled_<variant>`, whose information is `UnhandledVector`, an
+// empty file, line and column 0, and the variant's name as message; every cause
+// with no variant shares `__erebos_unhandled_other`, whose message is `unknown`.
+use core::arch::Vector;
+
+static mut TICKS: u32 = 0;
+
+interrupt fn tick() at Vector::MachineTimer {
+    TICKS += 1;
+}
+
+interrupt fn trap() -> ! at Vector::IllegalInstruction {
+    loop {}
+}
+
+mod drivers {
+    pub interrupt fn soft() at core::arch::Vector::MachineSoftware {
+        super::TICKS = 0;
+    }
+
+    #[export]
+    pub interrupt fn call() -> ! at core::arch::Vector::EnvironmentCall {
+        loop {}
+    }
+}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic(info: *const core::PanicInfo) -> ! { loop {} }

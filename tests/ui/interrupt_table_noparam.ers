@@ -1,0 +1,31 @@
+// emit: llvm-ir
+// opt: both
+// The same table with a panic function that takes no parameter (ADR 0085, 0053):
+// one default handler, `__erebos_unhandled`, serves every word no handler
+// serves, the causes with no variant too, and no information is built.
+use core::arch::Vector;
+
+static mut TICKS: u32 = 0;
+
+interrupt fn tick() at Vector::MachineTimer {
+    TICKS += 1;
+}
+
+interrupt fn trap() -> ! at Vector::IllegalInstruction {
+    loop {}
+}
+
+mod drivers {
+    pub interrupt fn soft() at core::arch::Vector::MachineSoftware {
+        super::TICKS = 0;
+    }
+
+    #[export]
+    pub interrupt fn call() -> ! at core::arch::Vector::EnvironmentCall {
+        loop {}
+    }
+}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

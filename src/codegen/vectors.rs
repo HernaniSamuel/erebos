@@ -28,30 +28,35 @@ pub(super) fn lower<'ctx>(
     let Some(table) = &mir.vector_table else {
         return Vec::new();
     };
-    let Some(header) = header(arch) else {
-        return Vec::new();
-    };
     let defaults = (table.defaults.iter())
         .map(|default| default_handler(context, module, mir, fns, data, default))
         .collect();
-    module.set_inline_assembly(&text(header, mir, table));
+    module.set_inline_assembly(&text(header(arch), arch, mir, table));
     defaults
 }
 
 /// What starts the table's assembly on `arch`: its section and alignment.
 /// ARMv7-M's table is the section `.vector_table`, which the linker script
 /// places first in the code's region, where the core reads it (ADR 0074,
-/// 0083). riscv32's is not generated yet.
-fn header(arch: Arch) -> Option<&'static str> {
+/// 0083). riscv32's is read-only data under the symbol `__erebos_trap_table`,
+/// which the trap entry of `core::arch` loads (ADR 0085); the linker script
+/// places `.rodata.*` already.
+fn header(arch: Arch) -> &'static str {
     match arch {
-        Arch::Riscv32 => None,
-        Arch::Armv7m => Some("\t.section .vector_table, \"a\", %progbits\n\t.p2align 2\n"),
+        Arch::Riscv32 => concat!(
+            "\t.section .rodata.__erebos_trap_table, \"a\", @progbits\n",
+            "\t.p2align 2\n",
+            "\t.globl __erebos_trap_table\n",
+            "\t.type __erebos_trap_table, @object\n",
+            "__erebos_trap_table:\n",
+        ),
+        Arch::Armv7m => "\t.section .vector_table, \"a\", %progbits\n\t.p2align 2\n",
     }
 }
 
 /// The module assembly: one `.word` per word of the table, in order. The
 /// linker gives bit 0 to the address of a Thumb function, as `bx` needs.
-fn text(header: &str, mir: &Mir, table: &VectorTable) -> String {
+fn text(header: &str, arch: Arch, mir: &Mir, table: &VectorTable) -> String {
     let mut text = header.to_owned();
     for word in &table.words {
         let value = match *word {
@@ -63,6 +68,13 @@ fn text(header: &str, mir: &Mir, table: &VectorTable) -> String {
         };
         // Writing to a `String` cannot fail.
         let _ = writeln!(text, "\t.word {value}");
+    }
+    if arch == Arch::Riscv32 {
+        let _ = writeln!(
+            text,
+            "\t.size __erebos_trap_table, {}",
+            4 * table.words.len()
+        );
     }
     text
 }

@@ -1,0 +1,36 @@
+// `ecall` with a declared `EnvironmentCall` handler (ADR 0084, 0085): the handler
+// runs, finds `mcause` 11 and the register `a7` that the caller set, which the
+// trap entry saved, and stops. An exception's handler never returns.
+// takes-exceptions: yes
+// targets: riscv32imac-unknown-none-elf
+// expect-output: ecall 93
+// expect-exit: 0
+
+mod board;
+use board::{exit, putc};
+use core::arch::Vector;
+
+interrupt fn call() -> ! at Vector::EnvironmentCall {
+    let mut cause: u32 = 0;
+    asm("csrr {}, mcause", out(reg) cause, options(nostack, preserves_flags));
+    if cause != 11 {
+        exit(3)
+    }
+    let mut number: u32 = 0;
+    // The trap entry saved `a7` and left it as it found it.
+    asm("mv {}, a7", out(reg) number, options(nostack, preserves_flags));
+    putc(b'e'); putc(b'c'); putc(b'a'); putc(b'l'); putc(b'l'); putc(b' ');
+    putc(b'0' + (number / 10) as u8);
+    putc(b'0' + (number % 10) as u8);
+    putc(b'\n');
+    exit(0)
+}
+
+entry fn main() -> ! {
+    asm("li a7, 93", "ecall", out("a7") _);
+    exit(2)
+}
+
+panic fn on_panic() -> ! {
+    exit(99)
+}

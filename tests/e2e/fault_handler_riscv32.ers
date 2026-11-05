@@ -1,0 +1,31 @@
+// A fault with a declared handler runs that handler and not the panic function
+// (ADR 0084, 0085). It never returns, reads `mcause` (2 is an illegal
+// instruction) and stops.
+// takes-exceptions: yes
+// targets: riscv32imac-unknown-none-elf
+// expect-output: illegal instruction 2
+// expect-exit: 0
+
+mod board;
+use board::{exit, putc};
+use core::arch::Vector;
+
+interrupt fn fault() -> ! at Vector::IllegalInstruction {
+    let mut cause: u32 = 0;
+    asm("csrr {}, mcause", out(reg) cause, options(nostack, preserves_flags));
+    putc(b'i'); putc(b'l'); putc(b'l'); putc(b'e'); putc(b'g'); putc(b'a'); putc(b'l'); putc(b' ');
+    putc(b'i'); putc(b'n'); putc(b's'); putc(b't'); putc(b'r'); putc(b'u'); putc(b'c');
+    putc(b't'); putc(b'i'); putc(b'o'); putc(b'n'); putc(b' ');
+    putc(b'0' + cause as u8);
+    putc(b'\n');
+    exit(0)
+}
+
+entry fn main() -> ! {
+    asm("unimp");
+    exit(2)
+}
+
+panic fn on_panic() -> ! {
+    exit(99)
+}

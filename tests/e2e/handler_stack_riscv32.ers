@@ -1,0 +1,81 @@
+// A handler finds the stack aligned to `stack_align`, 16 on riscv32, and uses a
+// `u64` local (ADR 0085): the trap entry runs on the stack of the interrupted
+// code and moves it by 64 bytes, so an aligned stack stays aligned. The
+// interrupted code waits with `sp` at 0 modulo 16, as the C ABI keeps it.
+// takes-exceptions: yes
+// targets: riscv32imac-unknown-none-elf
+// expect-output: sp aligned, 64 bits 4294967300
+// expect-exit: 0
+
+mod board;
+use board::{exit, putc};
+use core::arch::Vector;
+
+const MTIME: *mut volatile u32 = 0x0200_BFF8 as *mut volatile u32;
+const MTIMECMP_LOW: *mut volatile u32 = 0x0200_4000 as *mut volatile u32;
+const MTIMECMP_HIGH: *mut volatile u32 = 0x0200_4004 as *mut volatile u32;
+const MTIE: u32 = 0x80;
+
+static mut SP_MOD_16: u32 = 99;
+static mut WIDE: u64 = 0;
+
+// A `u64` computed in the handler, in a register pair or in the frame as the
+// compiler chooses; the test checks its value, and the alignment of `sp`.
+fn widen(x: u32) -> u64 {
+    let mut value: u64 = x as u64;
+    value = value + 0x1_0000_0000;
+    value + x as u64
+}
+
+interrupt fn tick() at Vector::MachineTimer {
+    let mut sp: u32 = 0;
+    asm("mv {}, sp", out(reg) sp, options(nomem, nostack, preserves_flags));
+    SP_MOD_16 = sp % 16;
+    WIDE = widen(0x8000_0001 - 0x7fff_ffff);
+    // The next tick, so that one that came before the `wfi` does not leave it
+    // waiting for ever.
+    *MTIMECMP_LOW = *MTIME + 1000;
+}
+
+fn print_u64(value: u64) {
+    let mut digits: [u8; 20] = [0; 20];
+    let mut n: usize = 0;
+    let mut rest: u64 = value;
+    loop {
+        digits[19 - n] = b'0' + (rest % 10) as u8;
+        n += 1;
+        rest /= 10;
+        if rest == 0 {
+            break;
+        }
+    }
+    let mut i: usize = 0;
+    while i < n {
+        putc(digits[20 - n + i]);
+        i += 1;
+    }
+}
+
+entry fn main() -> ! {
+    *MTIMECMP_HIGH = 0;
+    *MTIMECMP_LOW = *MTIME + 1000;
+    asm("csrs mie, {}", in(reg) MTIE, options(nostack, preserves_flags));
+    core::arch::enable_interrupts();
+    // `sp` is aligned to 16 while it waits, as the compiler leaves it.
+    asm("wfi", clobber_abi("C"));
+    asm("csrc mie, {}", in(reg) MTIE, options(nostack, preserves_flags));
+    let sp: u32 = critical { SP_MOD_16 };
+    if sp != 0 {
+        exit(2)
+    }
+    putc(b's'); putc(b'p'); putc(b' '); putc(b'a'); putc(b'l'); putc(b'i'); putc(b'g');
+    putc(b'n'); putc(b'e'); putc(b'd'); putc(b','); putc(b' ');
+    putc(b'6'); putc(b'4'); putc(b' '); putc(b'b'); putc(b'i'); putc(b't'); putc(b's'); putc(b' ');
+    print_u64(critical { WIDE });
+    putc(b'\n');
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(99)
+}

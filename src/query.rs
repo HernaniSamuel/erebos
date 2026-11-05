@@ -1676,7 +1676,7 @@ impl<'h> Queries<'h> {
         // The table's byte strings follow every other one, and must exist
         // before `core_parts`, whose mask covers the byte strings made so far.
         if !self.diags.has_errors() {
-            self.vector_table = self.make_vector_table();
+            self.vector_table = Some(self.make_vector_table());
         }
     }
 
@@ -1968,16 +1968,15 @@ impl<'h> Queries<'h> {
     }
 
     /// The vector table of the target (ADR 0085): for each word, the handler
-    /// of its vector, or a default handler that calls the panic function; the
-    /// words the architecture reserves are 0. `None` where the table is not
-    /// generated.
-    fn make_vector_table(&mut self) -> Option<VectorTable> {
+    /// of its vector, or a default handler that calls the panic function. On
+    /// ARMv7-M the words 0 and 1 are the stack and the reset entry, and the
+    /// words the architecture reserves are 0; on RISC-V every word is a cause
+    /// (the exceptions, then the interrupts, then any other), and a cause
+    /// `Vector` has no variant for shares the default handler `other`, whose
+    /// message is `unknown`.
+    fn make_vector_table(&mut self) -> VectorTable {
         let handlers = self.handlers();
         let target = self.target;
-        match target.arch {
-            Arch::Riscv32 => return None,
-            Arch::Armv7m => {}
-        }
         // With a parameter, each vector has a default handler of its own,
         // passing its name; without, one serves all of them, and no
         // information is built (ADR 0053).
@@ -1985,20 +1984,31 @@ impl<'h> Queries<'h> {
         let mut defaults: Vec<DefaultHandler> = Vec::new();
         let mut words = Vec::new();
         for word in 0..target.table_words {
-            let word = match word {
-                0 => VectorWord::StackEnd,
-                1 => VectorWord::Reset,
-                _ => match target.vectors.iter().find(|vector| vector.word == word) {
-                    None => VectorWord::Reserved,
-                    Some(vector) => match handlers.iter().find(|h| h.vector == vector.name) {
+            let vector = target.vectors.iter().find(|vector| vector.word == word);
+            let word = match (target.arch, word, vector) {
+                (Arch::Armv7m, 0, _) => VectorWord::StackEnd,
+                (Arch::Armv7m, 1, _) => VectorWord::Reset,
+                (Arch::Armv7m, _, None) => VectorWord::Reserved,
+                (_, _, vector) => {
+                    let handler = vector.and_then(|v| handlers.iter().find(|h| h.vector == v.name));
+                    match handler {
                         Some(handler) => VectorWord::Handler(handler.body),
                         None if with_info => {
-                            let info = self.unhandled_info(vector.name);
-                            defaults.push(DefaultHandler {
-                                symbol: format!("__erebos_unhandled_{}", vector.name),
-                                info: Some(info),
-                            });
-                            VectorWord::Default(defaults.len() - 1)
+                            // The words with no variant share one function.
+                            let name = vector.map_or("other", |vector| vector.name);
+                            let symbol = format!("__erebos_unhandled_{name}");
+                            match defaults.iter().position(|d| d.symbol == symbol) {
+                                Some(index) => VectorWord::Default(index),
+                                None => {
+                                    let message = vector.map_or("unknown", |vector| vector.name);
+                                    let info = self.unhandled_info(message);
+                                    defaults.push(DefaultHandler {
+                                        symbol,
+                                        info: Some(info),
+                                    });
+                                    VectorWord::Default(defaults.len() - 1)
+                                }
+                            }
                         }
                         None => {
                             if defaults.is_empty() {
@@ -2009,11 +2019,11 @@ impl<'h> Queries<'h> {
                             }
                             VectorWord::Default(0)
                         }
-                    },
-                },
+                    }
+                }
             };
             words.push(word);
         }
-        Some(VectorTable { words, defaults })
+        VectorTable { words, defaults }
     }
 }

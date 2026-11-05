@@ -216,12 +216,13 @@ fn the_takes_exceptions_header_is_read() {
     );
 }
 
-/// A program that takes an exception on purpose (an `svc` served by a handler)
-/// passes with the header, and without it the harness fails it, showing the
-/// `Taking exception` lines that ADR 0077 does not allow.
+/// A program that takes an exception on purpose (an `svc` served by a handler on
+/// thumbv7m, an `ecall` on riscv32) passes with the header, and without it the
+/// harness fails it, showing the event lines that ADR 0077 does not allow: the
+/// `Taking exception` lines of `mps2-an385`, `riscv_cpu_do_interrupt` on `virt`.
 #[test]
 fn a_program_that_takes_exceptions_passes_only_with_the_header() {
-    const PROGRAM: &str = "// targets: thumbv7m-none-eabi
+    const THUMBV7M_PROGRAM: &str = "// targets: thumbv7m-none-eabi
 // expect-output: svc
 // expect-exit: 0
 
@@ -239,35 +240,61 @@ entry fn main() -> ! {
 
 panic fn on_panic() -> ! { board::exit(99) }
 ";
+    // An exception's handler never returns, so this one stops the machine.
+    const RISCV32_PROGRAM: &str = "// targets: riscv32imac-unknown-none-elf
+// expect-output: ecall
+// expect-exit: 0
+
+mod board;
+
+interrupt fn call() -> ! at core::arch::Vector::EnvironmentCall {
+    board::putc(b'e'); board::putc(b'c'); board::putc(b'a'); board::putc(b'l');
+    board::putc(b'l'); board::putc(b'\\n');
+    board::exit(0)
+}
+
+entry fn main() -> ! {
+    asm(\"ecall\");
+    board::exit(2)
+}
+
+panic fn on_panic() -> ! { board::exit(99) }
+";
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join("e2e-harness-exceptions");
     fs::create_dir_all(&dir).unwrap();
-    let program = dir.join("svc.ers");
-    for opt in [OptLevel::None, OptLevel::Speed] {
-        let with = format!(
-            "// takes-exceptions: yes
-{PROGRAM}"
-        );
-        fs::write(&program, &with).unwrap();
-        let expected = qemu::expectation(&with).unwrap();
-        run(&program, &expected, &THUMBV7M, opt).unwrap();
+    for (target, program, lines) in [
+        (&THUMBV7M, THUMBV7M_PROGRAM, "Taking exception"),
+        (&RISCV32IMAC, RISCV32_PROGRAM, "riscv_cpu_do_interrupt"),
+    ] {
+        let path = dir.join(format!("exceptions_{}.ers", target.name));
+        for opt in [OptLevel::None, OptLevel::Speed] {
+            let with = format!(
+                "// takes-exceptions: yes
+{program}"
+            );
+            fs::write(&path, &with).unwrap();
+            let expected = qemu::expectation(&with).unwrap();
+            run(&path, &expected, target, opt).unwrap();
 
-        fs::write(&program, PROGRAM).unwrap();
-        let expected = qemu::expectation(PROGRAM).unwrap();
-        let error = run(&program, &expected, &THUMBV7M, opt).expect_err("the log is not empty");
-        assert!(
-            error.contains("the CPU raised exceptions") && error.contains("Taking exception"),
-            "{opt:?}: {error}"
-        );
+            fs::write(&path, program).unwrap();
+            let expected = qemu::expectation(program).unwrap();
+            let error = run(&path, &expected, target, opt).expect_err("the log is not empty");
+            assert!(
+                error.contains("the CPU raised exceptions") && error.contains(lines),
+                "{} {opt:?}: {error}",
+                target.name
+            );
+        }
     }
 }
 
 /// A guest error still fails a program with the header: the log of `-d
-/// guest_errors` is checked (ADR 0088). The UART is enabled with a divisor
-/// QEMU refuses, which it logs as a guest error. thumbv7m only; the first
-/// riscv32 program with the header is that target's test.
+/// guest_errors` is checked (ADR 0088). On thumbv7m the UART is enabled with a
+/// divisor QEMU refuses; on riscv32 the test finisher gets a value it does not
+/// know. Either is logged as a guest error.
 #[test]
 fn a_guest_error_fails_a_program_that_takes_exceptions() {
-    const PROGRAM: &str = "// takes-exceptions: yes
+    const THUMBV7M_PROGRAM: &str = "// takes-exceptions: yes
 // targets: thumbv7m-none-eabi
 // expect-exit: 0
 
@@ -284,17 +311,38 @@ entry fn main() -> ! {
 
 panic fn on_panic() -> ! { board::exit(99) }
 ";
+    const RISCV32_PROGRAM: &str = "// takes-exceptions: yes
+// targets: riscv32imac-unknown-none-elf
+// expect-exit: 0
+
+mod board;
+
+const FINISHER: *mut volatile u32 = 0x0010_0000 as *mut volatile u32;
+
+entry fn main() -> ! {
+    *FINISHER = 0x1234;
+    board::exit(0)
+}
+
+panic fn on_panic() -> ! { board::exit(99) }
+";
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join("e2e-harness-guest-error");
     fs::create_dir_all(&dir).unwrap();
-    let program = dir.join("uart.ers");
-    fs::write(&program, PROGRAM).unwrap();
-    let expected = qemu::expectation(PROGRAM).unwrap();
-    for opt in [OptLevel::None, OptLevel::Speed] {
-        let error = run(&program, &expected, &THUMBV7M, opt).expect_err("a guest error");
-        assert!(
-            error.contains("invalid baudrate"),
-            "{opt:?}: the guest error is not shown: {error}"
-        );
+    for (target, program, shown) in [
+        (&THUMBV7M, THUMBV7M_PROGRAM, "invalid baudrate"),
+        (&RISCV32IMAC, RISCV32_PROGRAM, "sifive_test_write"),
+    ] {
+        let path = dir.join(format!("guest_error_{}.ers", target.name));
+        fs::write(&path, program).unwrap();
+        let expected = qemu::expectation(program).unwrap();
+        for opt in [OptLevel::None, OptLevel::Speed] {
+            let error = run(&path, &expected, target, opt).expect_err("a guest error");
+            assert!(
+                error.contains(shown),
+                "{} {opt:?}: the guest error is not shown: {error}",
+                target.name
+            );
+        }
     }
 }
 

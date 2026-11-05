@@ -1,0 +1,44 @@
+// A loop that tests a flag inside `critical` sees the handler's write at every
+// level (ADR 0078, 0086): the block is a compiler fence at entry and exit, so
+// the optimizer cannot read the flag once and spin on it. The loop does not
+// wait, so the interrupt runs at the end of a block.
+// takes-exceptions: yes
+// targets: riscv32imac-unknown-none-elf
+// expect-output: spin done
+// expect-exit: 0
+
+mod board;
+use board::{exit, putc};
+use core::arch::Vector;
+
+const MTIME: *mut volatile u32 = 0x0200_BFF8 as *mut volatile u32;
+const MTIMECMP_LOW: *mut volatile u32 = 0x0200_4000 as *mut volatile u32;
+const MTIMECMP_HIGH: *mut volatile u32 = 0x0200_4004 as *mut volatile u32;
+const MTIE: u32 = 0x80;
+
+static mut DONE: bool = false;
+
+interrupt fn tick() at Vector::MachineTimer {
+    DONE = true;
+    // One tick is enough: the interrupt is disabled until the code enables it.
+    asm("csrc mie, {}", in(reg) MTIE, options(nostack, preserves_flags));
+}
+
+entry fn main() -> ! {
+    *MTIMECMP_HIGH = 0;
+    *MTIMECMP_LOW = *MTIME + 1000;
+    asm("csrs mie, {}", in(reg) MTIE, options(nostack, preserves_flags));
+    core::arch::enable_interrupts();
+    loop {
+        if critical { DONE } {
+            break;
+        }
+    }
+    putc(b's'); putc(b'p'); putc(b'i'); putc(b'n'); putc(b' ');
+    putc(b'd'); putc(b'o'); putc(b'n'); putc(b'e'); putc(b'\n');
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(99)
+}

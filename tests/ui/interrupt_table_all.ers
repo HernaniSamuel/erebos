@@ -1,0 +1,22 @@
+// emit: llvm-ir
+// A handler at every vector `Vector` has (ADR 0085): the twelve words with a
+// variant hold the handlers, and the twenty-one that have none hold the default
+// handler for them, `__erebos_unhandled_other`, which is the only one built.
+use core::arch::Vector;
+
+interrupt fn a() -> ! at Vector::InstructionMisaligned { loop {} }
+interrupt fn b() -> ! at Vector::InstructionFault { loop {} }
+interrupt fn c() -> ! at Vector::IllegalInstruction { loop {} }
+interrupt fn d() -> ! at Vector::Breakpoint { loop {} }
+interrupt fn e() -> ! at Vector::LoadMisaligned { loop {} }
+interrupt fn f() -> ! at Vector::LoadFault { loop {} }
+interrupt fn g() -> ! at Vector::StoreMisaligned { loop {} }
+interrupt fn h() -> ! at Vector::StoreFault { loop {} }
+interrupt fn i() -> ! at Vector::EnvironmentCall { loop {} }
+interrupt fn j() at Vector::MachineSoftware {}
+interrupt fn k() at Vector::MachineTimer {}
+interrupt fn l() at Vector::MachineExternal {}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic(info: *const core::PanicInfo) -> ! { loop {} }

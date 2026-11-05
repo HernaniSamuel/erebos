@@ -33,7 +33,8 @@ pub mod arch;
 // There is one exception (ADR 0085): a vector that no handler serves calls the
 // panic function with `reason` `UnhandledVector`, an empty `file`, `line` and
 // `column` 0 (they are not counted from 1 and locate nothing), and the
-// vector's name in `message`, as bytes: `HardFault`, `SysTick`.
+// vector's name in `message`, as bytes: `HardFault`, `SysTick`; on riscv32,
+// `unknown` for a cause that `core::arch::Vector` has no variant for.
 pub struct PanicInfo {
     pub file: *const [u8],
     pub line: u32,

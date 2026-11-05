@@ -1,0 +1,228 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/interrupt_table_noparam.ers
+---
+--- llvm-ir ---
+; ModuleID = 'erebos'
+source_filename = "erebos"
+target datalayout = "e-m:e-p:32:32-i64:64-n32-S128"
+target triple = "riscv32-unknown-none-elf"
+
+module asm "\09.section .rodata.__erebos_trap_table, \22a\22, @progbits"
+module asm "\09.p2align 2"
+module asm "\09.globl __erebos_trap_table"
+module asm "\09.type __erebos_trap_table, @object"
+module asm "__erebos_trap_table:"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word trap"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word call"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word drivers.soft"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word tick"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.size __erebos_trap_table, 132"
+
+@TICKS = global [4 x i8] zeroinitializer, align 4
+@llvm.compiler.used = appending global [5 x ptr] [ptr @tick, ptr @trap, ptr @drivers.soft, ptr @call, ptr @__erebos_unhandled], section "llvm.metadata"
+
+; Function Attrs: nounwind null_pointer_is_valid
+define void @tick() #0 {
+bb0:
+  %0 = load i32, ptr @TICKS, align 4
+  %1 = add i32 %0, 1
+  store i32 %1, ptr @TICKS, align 4
+  ret void
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @trap() #1 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: nounwind null_pointer_is_valid
+define void @drivers.soft() #0 {
+bb0:
+  store i32 0, ptr @TICKS, align 4
+  ret void
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @call() #1 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @main() #1 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @on_panic() #1 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @__erebos_unhandled() #1 {
+bb0:
+  call void @on_panic()
+  unreachable
+}
+
+attributes #0 = { nounwind null_pointer_is_valid }
+attributes #1 = { noreturn nounwind null_pointer_is_valid }
+--- llvm-ir -O ---
+; ModuleID = 'erebos'
+source_filename = "erebos"
+target datalayout = "e-m:e-p:32:32-i64:64-n32-S128"
+target triple = "riscv32-unknown-none-elf"
+
+module asm "\09.section .rodata.__erebos_trap_table, \22a\22, @progbits"
+module asm "\09.p2align 2"
+module asm "\09.globl __erebos_trap_table"
+module asm "\09.type __erebos_trap_table, @object"
+module asm "__erebos_trap_table:"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word trap"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word call"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word drivers.soft"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word tick"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.size __erebos_trap_table, 132"
+
+@TICKS = local_unnamed_addr global [4 x i8] zeroinitializer, align 4
+@llvm.compiler.used = appending global [5 x ptr] [ptr @__erebos_unhandled, ptr @call, ptr @drivers.soft, ptr @tick, ptr @trap], section "llvm.metadata"
+
+; Function Attrs: mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(readwrite, argmem: none, inaccessiblemem: none, target_mem0: none, target_mem1: none)
+define void @tick() #0 {
+bb0:
+  %0 = load i32, ptr @TICKS, align 4
+  %1 = add i32 %0, 1
+  store i32 %1, ptr @TICKS, align 4
+  ret void
+}
+
+; Function Attrs: nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none)
+define void @trap() #1 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(write, argmem: none, inaccessiblemem: none, target_mem0: none, target_mem1: none)
+define void @drivers.soft() #2 {
+bb0:
+  store i32 0, ptr @TICKS, align 4
+  ret void
+}
+
+; Function Attrs: nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none)
+define void @call() #1 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none)
+define void @main() local_unnamed_addr #1 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none)
+define void @on_panic() local_unnamed_addr #1 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none)
+define void @__erebos_unhandled() #1 {
+bb0:
+  br label %bb1.i
+
+bb1.i:                                            ; preds = %bb1.i, %bb0
+  br label %bb1.i
+}
+
+attributes #0 = { mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(readwrite, argmem: none, inaccessiblemem: none, target_mem0: none, target_mem1: none) }
+attributes #1 = { nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none) }
+attributes #2 = { mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(write, argmem: none, inaccessiblemem: none, target_mem0: none, target_mem1: none) }

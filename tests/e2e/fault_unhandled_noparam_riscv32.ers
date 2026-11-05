@@ -1,0 +1,19 @@
+// A fault reaches a panic function that takes no parameter (ADR 0085, 0053):
+// one shared default handler calls it, and no information is built.
+// takes-exceptions: yes
+// targets: riscv32imac-unknown-none-elf
+// expect-output: panic
+// expect-exit: 1
+
+mod board;
+use board::{exit, putc};
+
+entry fn main() -> ! {
+    asm("unimp");
+    exit(2)
+}
+
+panic fn on_panic() -> ! {
+    putc(b'p'); putc(b'a'); putc(b'n'); putc(b'i'); putc(b'c'); putc(b'\n');
+    exit(1)
+}

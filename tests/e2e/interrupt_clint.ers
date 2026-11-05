@@ -1,0 +1,72 @@
+// The milestone of M4.3 on riscv32 (ADR 0084, 0085, 0086): the machine timer of
+// the CLINT interrupts the entry function, which waits for it in a `critical`
+// block with `wait_for_interrupt`, and exits after 5 ticks. The handler counts
+// them in a `static mut` that the entry function reads inside `critical`, where
+// it also disables the timer interrupt, so that the count is final, and finds
+// `interrupts_enabled` false, as a handler does on every target.
+// takes-exceptions: yes
+// targets: riscv32imac-unknown-none-elf
+// expect-output: ticks ok
+// expect-exit: 0
+
+mod board;
+use board::{exit, putc};
+use core::arch::Vector;
+
+// QEMU `virt`'s CLINT: the time counter, and the compare value of hart 0, each
+// 64 bits wide, read and written as two words. The time stays below 2^32 for the
+// life of the program (it counts 10 MHz), so only the low words are used, and the
+// high word of the compare value is kept at 0.
+const MTIME: *mut volatile u32 = 0x0200_BFF8 as *mut volatile u32;
+const MTIMECMP_LOW: *mut volatile u32 = 0x0200_4000 as *mut volatile u32;
+const MTIMECMP_HIGH: *mut volatile u32 = 0x0200_4004 as *mut volatile u32;
+
+// 1000 counts of the timer, 100 microseconds.
+const PERIOD: u32 = 1000;
+// `mie.MTIE`: the machine timer interrupt is enabled.
+const MTIE: u32 = 0x80;
+
+static mut TICKS: u32 = 0;
+
+// The next tick is a period from now: the compare value is what the pending
+// interrupt compares the time with, so moving it clears the interrupt.
+fn arm() {
+    *MTIMECMP_LOW = *MTIME + PERIOD;
+}
+
+interrupt fn tick() at Vector::MachineTimer {
+    if core::arch::interrupts_enabled() {
+        exit(10)
+    }
+    TICKS += 1;
+    arm();
+}
+
+entry fn main() -> ! {
+    *MTIMECMP_HIGH = 0;
+    arm();
+    asm("csrs mie, {}", in(reg) MTIE, options(nostack, preserves_flags));
+    core::arch::enable_interrupts();
+    let mut seen: u32 = 0;
+    loop {
+        critical {
+            if TICKS >= 5 {
+                // No tick is left to run when the block ends.
+                asm("csrc mie, {}", in(reg) MTIE, options(nostack, preserves_flags));
+                seen = TICKS;
+                break;
+            }
+            core::arch::wait_for_interrupt();
+        }
+    }
+    if seen < 5 {
+        exit(2)
+    }
+    putc(b't'); putc(b'i'); putc(b'c'); putc(b'k'); putc(b's'); putc(b' ');
+    putc(b'o'); putc(b'k'); putc(b'\n');
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(99)
+}

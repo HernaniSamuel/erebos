@@ -1,0 +1,57 @@
+// A handler in a nested module has a dotted symbol, and the table's word for it
+// holds that name: the trap entry jumps to it (ADR 0085). The machine timer runs
+// it three times; the entry function disables the interrupt inside `critical`, so
+// that the count is final.
+// takes-exceptions: yes
+// targets: riscv32imac-unknown-none-elf
+// expect-output: nested ok
+// expect-exit: 0
+
+mod board;
+use board::{exit, putc};
+
+const MTIME: *mut volatile u32 = 0x0200_BFF8 as *mut volatile u32;
+const MTIMECMP_LOW: *mut volatile u32 = 0x0200_4000 as *mut volatile u32;
+const MTIMECMP_HIGH: *mut volatile u32 = 0x0200_4004 as *mut volatile u32;
+const PERIOD: u32 = 1000;
+const MTIE: u32 = 0x80;
+
+static mut TICKS: u32 = 0;
+
+mod timer {
+    pub mod machine {
+        pub interrupt fn tick() at core::arch::Vector::MachineTimer {
+            super::super::TICKS += 1;
+            *super::super::MTIMECMP_LOW = *super::super::MTIME + super::super::PERIOD;
+        }
+    }
+}
+
+entry fn main() -> ! {
+    *MTIMECMP_HIGH = 0;
+    *MTIMECMP_LOW = *MTIME + PERIOD;
+    asm("csrs mie, {}", in(reg) MTIE, options(nostack, preserves_flags));
+    core::arch::enable_interrupts();
+    let mut seen: u32 = 0;
+    loop {
+        critical {
+            if TICKS >= 3 {
+                asm("csrc mie, {}", in(reg) MTIE, options(nostack, preserves_flags));
+                seen = TICKS;
+                break;
+            }
+            core::arch::wait_for_interrupt();
+        }
+    }
+    if seen < 3 {
+        exit(2)
+    }
+    putc(b'n'); putc(b'e'); putc(b's'); putc(b't'); putc(b'e'); putc(b'd'); putc(b' ');
+    putc(b'o'); putc(b'k');
+    putc(b'\n');
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(99)
+}

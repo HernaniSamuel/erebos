@@ -83,8 +83,8 @@ pub struct Mir {
     /// vector it serves (ADR 0084).
     pub handlers: Vec<Handler>,
     /// The words of the target's vector table and the default handlers they
-    /// name (ADR 0085); `None` on a target whose table is not generated yet,
-    /// and once `core` is left out of a program that declares no handler.
+    /// name (ADR 0085); `None` once `core` is left out of a program that
+    /// declares no handler.
     pub vector_table: Option<VectorTable>,
     /// The program's memory map, of which the linker script is made
     /// (ADR 0057); `None` without a `memory` block.
@@ -113,11 +113,11 @@ pub struct VectorTable {
 /// A word of the vector table.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum VectorWord {
-    /// The initial stack pointer, the linker script's `__stack_end`.
+    /// The initial stack pointer, the linker script's `__stack_end` (ARMv7-M).
     StackEnd,
-    /// The reset entry, `core::arch::_start`.
+    /// The reset entry, `core::arch::_start` (ARMv7-M).
     Reset,
-    /// Reserved by the architecture and never read: 0.
+    /// Reserved by the architecture and never read: 0 (ARMv7-M).
     Reserved,
     /// The address of an interrupt handler.
     Handler(BodyId),

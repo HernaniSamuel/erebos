@@ -1,0 +1,73 @@
+// The entry function and the timer's handler both increment `COUNT`, a load, an
+// add and a store, and the entry function does it inside `critical`, so the
+// handler never runs between its load and its store (ADR 0078, 0086): with
+// 200000 increments by the entry function and the interrupts the timer raised
+// meanwhile, the total is exactly their sum. Some interrupt came while the loop
+// ran, or the test proves nothing. QEMU takes an interrupt only between two
+// blocks of translated code, which a branch ends, so the increment holds one,
+// never taken, between its load and its store: without `critical` a tick lands
+// there and its count is lost.
+// takes-exceptions: yes
+// targets: riscv32imac-unknown-none-elf
+// expect-output: race ok
+// expect-exit: 0
+
+mod board;
+use board::{exit, putc};
+use core::arch::Vector;
+
+const MTIME: *mut volatile u32 = 0x0200_BFF8 as *mut volatile u32;
+const MTIMECMP_LOW: *mut volatile u32 = 0x0200_4000 as *mut volatile u32;
+const MTIMECMP_HIGH: *mut volatile u32 = 0x0200_4004 as *mut volatile u32;
+const MTIE: u32 = 0x80;
+
+const INCREMENTS: u32 = 200000;
+// 5 microseconds between ticks: many while the loop runs, and long enough for
+// the loop to go on between two.
+const PERIOD: u32 = 50;
+
+static mut COUNT: u32 = 0;
+static mut TICKS: u32 = 0;
+
+interrupt fn tick() at Vector::MachineTimer {
+    COUNT += 1;
+    TICKS += 1;
+    *MTIMECMP_LOW = *MTIME + PERIOD;
+}
+
+entry fn main() -> ! {
+    *MTIMECMP_HIGH = 0;
+    *MTIMECMP_LOW = *MTIME + PERIOD;
+    asm("csrs mie, {}", in(reg) MTIE, options(nostack, preserves_flags));
+    core::arch::enable_interrupts();
+    let mut i: u32 = 0;
+    while i < INCREMENTS {
+        critical {
+            let seen: u32 = COUNT;
+            if seen == 0xFFFF_FFFF {
+                exit(3)
+            }
+            COUNT = seen + 1;
+        }
+        i += 1;
+    }
+    // Both are read in one block, in which the timer is disabled: a tick pending
+    // at the end of a first block would run before the second, and the pair would
+    // not be consistent.
+    critical {
+        asm("csrc mie, {}", in(reg) MTIE, options(nostack, preserves_flags));
+        if TICKS == 0 {
+            exit(2)
+        }
+        if COUNT != INCREMENTS + TICKS {
+            exit(1)
+        }
+    }
+    putc(b'r'); putc(b'a'); putc(b'c'); putc(b'e'); putc(b' ');
+    putc(b'o'); putc(b'k'); putc(b'\n');
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(99)
+}

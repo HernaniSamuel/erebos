@@ -1,0 +1,60 @@
+// A maskable vector without a handler reaches the panic function with its name
+// (ADR 0085): the machine timer is enabled and no handler serves it. The panic
+// function runs with what the trap left: it finds `mcause` with bit 31 set and
+// the number 7, and `mstatus.MIE` clear.
+// takes-exceptions: yes
+// targets: riscv32imac-unknown-none-elf
+// expect-output: vector not handled: MachineTimer mcause 80000007 mie 0
+// expect-exit: 1
+
+mod board;
+use board::{exit, putc};
+
+const MTIME: *mut volatile u32 = 0x0200_BFF8 as *mut volatile u32;
+const MTIMECMP_LOW: *mut volatile u32 = 0x0200_4000 as *mut volatile u32;
+const MTIMECMP_HIGH: *mut volatile u32 = 0x0200_4004 as *mut volatile u32;
+const MTIE: u32 = 0x80;
+
+entry fn main() -> ! {
+    *MTIMECMP_HIGH = 0;
+    *MTIMECMP_LOW = *MTIME + 1000;
+    asm("csrs mie, {}", in(reg) MTIE, options(nostack, preserves_flags));
+    core::arch::enable_interrupts();
+    loop {
+        core::arch::wait_for_interrupt();
+    }
+}
+
+fn print(s: *const [u8]) {
+    let mut i: usize = 0;
+    while i < len(s) {
+        putc((*s)[i]);
+        i += 1;
+    }
+}
+
+fn print_hex(value: u32) {
+    let mut shift: u32 = 32;
+    while shift > 0 {
+        shift -= 4;
+        let digit: u8 = ((value >> shift) & 15) as u8;
+        putc(if digit < 10 { b'0' + digit } else { b'a' + digit - 10 });
+    }
+}
+
+panic fn on_panic(info: *const core::PanicInfo) -> ! {
+    match (*info).reason {
+        .UnhandledVector => print(&raw const b"vector not handled"),
+        _ => exit(3),
+    }
+    print(&raw const b": ");
+    print((*info).message);
+    let mut cause: u32 = 0;
+    asm("csrr {}, mcause", out(reg) cause, options(nostack, preserves_flags));
+    print(&raw const b" mcause ");
+    print_hex(cause);
+    print(&raw const b" mie ");
+    putc(if core::arch::interrupts_enabled() { b'1' } else { b'0' });
+    putc(b'\n');
+    exit(1)
+}

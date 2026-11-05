@@ -1,0 +1,182 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/interrupt_table_all.ers
+---
+--- llvm-ir ---
+; ModuleID = 'erebos'
+source_filename = "erebos"
+target datalayout = "e-m:e-p:32:32-i64:64-n32-S128"
+target triple = "riscv32-unknown-none-elf"
+
+module asm "\09.section .rodata.__erebos_trap_table, \22a\22, @progbits"
+module asm "\09.p2align 2"
+module asm "\09.globl __erebos_trap_table"
+module asm "\09.type __erebos_trap_table, @object"
+module asm "__erebos_trap_table:"
+module asm "\09.word a"
+module asm "\09.word b"
+module asm "\09.word c"
+module asm "\09.word d"
+module asm "\09.word e"
+module asm "\09.word f"
+module asm "\09.word g"
+module asm "\09.word h"
+module asm "\09.word __erebos_unhandled_other"
+module asm "\09.word __erebos_unhandled_other"
+module asm "\09.word __erebos_unhandled_other"
+module asm "\09.word i"
+module asm "\09.word __erebos_unhandled_other"
+module asm "\09.word __erebos_unhandled_other"
+module asm "\09.word __erebos_unhandled_other"
+module asm "\09.word __erebos_unhandled_other"
+module asm "\09.word __erebos_unhandled_other"
+module asm "\09.word __erebos_unhandled_other"
+module asm "\09.word __erebos_unhandled_other"
+module asm "\09.word j"
+module asm "\09.word __erebos_unhandled_other"
+module asm "\09.word __erebos_unhandled_other"
+module asm "\09.word __erebos_unhandled_other"
+module asm "\09.word k"
+module asm "\09.word __erebos_unhandled_other"
+module asm "\09.word __erebos_unhandled_other"
+module asm "\09.word __erebos_unhandled_other"
+module asm "\09.word l"
+module asm "\09.word __erebos_unhandled_other"
+module asm "\09.word __erebos_unhandled_other"
+module asm "\09.word __erebos_unhandled_other"
+module asm "\09.word __erebos_unhandled_other"
+module asm "\09.word __erebos_unhandled_other"
+module asm "\09.size __erebos_trap_table, 132"
+
+@bytes = private unnamed_addr constant [23 x i8] c"interrupt_table_all.ers", align 1
+@bytes.1 = private unnamed_addr constant [7 x i8] c"unknown", align 1
+@data0 = private unnamed_addr constant <{ [20 x i8], ptr, [4 x i8] }> <{ [20 x i8] c"\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\05\00\00\00", ptr @bytes.1, [4 x i8] c"\07\00\00\00" }>, align 4
+@llvm.compiler.used = appending global [13 x ptr] [ptr @a, ptr @b, ptr @c, ptr @d, ptr @e, ptr @f, ptr @g, ptr @h, ptr @i, ptr @j, ptr @k, ptr @l, ptr @__erebos_unhandled_other], section "llvm.metadata"
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @a() #0 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @b() #0 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @c() #0 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @d() #0 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @e() #0 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @f() #0 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @g() #0 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @h() #0 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @i() #0 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: nounwind null_pointer_is_valid
+define void @j() #1 {
+bb0:
+  ret void
+}
+
+; Function Attrs: nounwind null_pointer_is_valid
+define void @k() #1 {
+bb0:
+  ret void
+}
+
+; Function Attrs: nounwind null_pointer_is_valid
+define void @l() #1 {
+bb0:
+  ret void
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @main() #0 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @on_panic(ptr %0) #0 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @__erebos_unhandled_other() #0 {
+bb0:
+  call void @on_panic(ptr @data0)
+  unreachable
+}
+
+attributes #0 = { noreturn nounwind null_pointer_is_valid }
+attributes #1 = { nounwind null_pointer_is_valid }

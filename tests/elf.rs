@@ -1114,6 +1114,165 @@ entry fn main() -> ! { loop {} }
     }
 }
 
+/// The trap table and the trap entry of riscv32 (ADR 0085) in three programs, at
+/// both levels: with handlers (one in a module, one `#[export]`, one named like a
+/// register), with none and a panic function that takes the information, with
+/// none and a panic function that does not. `__erebos_trap_table` is 33 words,
+/// the exceptions, then the interrupts, then the word of any other cause, each
+/// the address of the expected function: the handler, the default handler of a
+/// vector that has no handler, or `__erebos_unhandled_other` for a cause without
+/// a variant (the shared `__erebos_unhandled` without the information). The trap
+/// entry, `core.arch.__erebos_trap`, is a function at a multiple of 4, which
+/// `mtvec` needs, though LLVM would align it to 2.
+#[test]
+fn riscv32_trap_table() {
+    // The words that hold a vector, by the name of its variant (ADR 0084): the
+    // exception `n` is word `n`, and the interrupt `n` is word `16 + n`.
+    const VECTORS: [(usize, &str); 12] = [
+        (0, "InstructionMisaligned"),
+        (1, "InstructionFault"),
+        (2, "IllegalInstruction"),
+        (3, "Breakpoint"),
+        (4, "LoadMisaligned"),
+        (5, "LoadFault"),
+        (6, "StoreMisaligned"),
+        (7, "StoreFault"),
+        (11, "EnvironmentCall"),
+        (19, "MachineSoftware"),
+        (23, "MachineTimer"),
+        (27, "MachineExternal"),
+    ];
+    const WITH_INFO: &str = "panic fn on_panic(info: *const core::PanicInfo) -> ! { loop {} }\n";
+    const WITHOUT_INFO: &str = "panic fn on_panic() -> ! { loop {} }\n";
+    const HANDLERS: &str = "
+use core::arch::Vector;
+interrupt fn tick() at Vector::MachineTimer {}
+interrupt fn sp() -> ! at Vector::IllegalInstruction { loop {} }
+mod drivers {
+    pub interrupt fn soft() at core::arch::Vector::MachineSoftware {}
+    #[export]
+    pub interrupt fn call() -> ! at core::arch::Vector::EnvironmentCall { loop {} }
+}
+entry fn main() -> ! { loop {} }
+";
+    const NONE: &str = "entry fn main() -> ! { loop {} }\n";
+
+    let target = erebos::target::by_name("riscv32imac-unknown-none-elf").unwrap();
+    let work = Path::new(env!("CARGO_TARGET_TMPDIR")).join("elf");
+    fs::create_dir_all(&work).unwrap();
+    /// One program: its name and source, the symbol of each handler by the
+    /// variant it serves, and the symbol of the default handler of a variant
+    /// that has no handler, and of a cause without a variant.
+    struct Program {
+        name: &'static str,
+        source: String,
+        handlers: &'static [(&'static str, &'static str)],
+        default: fn(&str) -> String,
+        other: &'static str,
+    }
+    let per_vector: fn(&str) -> String = |variant| format!("__erebos_unhandled_{variant}");
+    let shared: fn(&str) -> String = |_| "__erebos_unhandled".to_owned();
+    let programs = [
+        Program {
+            name: "handlers",
+            source: format!("{HANDLERS}{WITH_INFO}"),
+            handlers: &[
+                ("MachineTimer", "tick"),
+                ("IllegalInstruction", "sp"),
+                ("MachineSoftware", "drivers.soft"),
+                ("EnvironmentCall", "call"),
+            ],
+            default: per_vector,
+            other: "__erebos_unhandled_other",
+        },
+        Program {
+            name: "none",
+            source: format!("{NONE}{WITH_INFO}"),
+            handlers: &[],
+            default: per_vector,
+            other: "__erebos_unhandled_other",
+        },
+        Program {
+            name: "none_without_info",
+            source: format!("{NONE}{WITHOUT_INFO}"),
+            handlers: &[],
+            default: shared,
+            other: "__erebos_unhandled",
+        },
+    ];
+    for Program {
+        name,
+        source: program,
+        handlers,
+        default,
+        other,
+    } in programs
+    {
+        let source = work.join(format!("riscv32_trap_table_{name}.ers"));
+        fs::write(&source, format!("{VIRT_MAP}{program}")).unwrap();
+        for opt in [OptLevel::None, OptLevel::Speed] {
+            let elf = work.join(format!("riscv32_trap_table_{name}-{opt:?}.elf"));
+            driver::build(&source, &elf, &[], target, opt, false).unwrap();
+            let symbols = symbols(&elf);
+            let function = |symbol: &str| {
+                let found = symbols.iter().find(|s| s.name == symbol);
+                let found = found.unwrap_or_else(|| panic!("{name} {opt:?}: no `{symbol}`"));
+                assert_eq!(
+                    found.kind, "FUNC",
+                    "{name} {opt:?}: `{symbol}` is no function"
+                );
+                assert!(found.size > 0, "{name} {opt:?}: `{symbol}` has no size");
+                found.value
+            };
+
+            // The table is an object of 33 words, inside `.rodata`.
+            let table = symbols
+                .iter()
+                .find(|s| s.name == "__erebos_trap_table")
+                .unwrap_or_else(|| panic!("{name} {opt:?}: no `__erebos_trap_table`"));
+            assert_eq!(table.kind, "OBJECT", "{name} {opt:?}: the table's kind");
+            assert_eq!(table.size, 132, "{name} {opt:?}: the table is not 33 words");
+            assert_eq!(table.value % 4, 0, "{name} {opt:?}: the table is unaligned");
+            let sections = sections(&elf);
+            let rodata = sections
+                .iter()
+                .find(|s| s.name == ".rodata")
+                .unwrap_or_else(|| panic!("{name} {opt:?}: no `.rodata`"));
+            assert!(
+                rodata.address <= table.value && table.value + 132 <= rodata.address + rodata.size,
+                "{name} {opt:?}: the table is outside `.rodata`"
+            );
+            let bytes = section_bytes(&elf, ".rodata");
+            let at = (table.value - rodata.address) as usize;
+            let word = |n: usize| {
+                let word: [u8; 4] = bytes[at + 4 * n..at + 4 * n + 4].try_into().unwrap();
+                u64::from(u32::from_le_bytes(word))
+            };
+            for n in 0..33 {
+                let (symbol, what) = match VECTORS.iter().find(|(word, _)| *word == n) {
+                    Some((_, variant)) => match handlers.iter().find(|(v, _)| v == variant) {
+                        Some((_, symbol)) => ((*symbol).to_owned(), (*variant).to_owned()),
+                        None => (default(variant), (*variant).to_owned()),
+                    },
+                    None => (other.to_owned(), "a cause without a variant".to_owned()),
+                };
+                assert_eq!(
+                    word(n),
+                    function(&symbol),
+                    "{name} {opt:?}: word {n} ({what}) is not `{symbol}`"
+                );
+            }
+
+            let trap = function("core.arch.__erebos_trap");
+            assert_eq!(
+                trap % 4,
+                0,
+                "{name} {opt:?}: the trap entry is at {trap:#x}"
+            );
+        }
+    }
+}
+
 /// The reach of `_start`'s jump on riscv32 (ADR 0083): in
 /// `tests/e2e/startup_far_entry.ers`, the entry function is more than 1 MiB
 /// past `_start`, where `j` would not reach. The e2e test boots the program;

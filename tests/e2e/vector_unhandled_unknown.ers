@@ -1,0 +1,55 @@
+// A cause that `Vector` has no variant for reaches the panic function as
+// `unknown` (ADR 0085): the supervisor software interrupt, which the program
+// raises itself by setting `mip.SSIP` and enables in `mie`. The table sends every
+// such cause to one default handler, the shared `__erebos_unhandled_other`.
+// takes-exceptions: yes
+// targets: riscv32imac-unknown-none-elf
+// expect-output: vector not handled: unknown mcause 80000001
+// expect-exit: 1
+
+mod board;
+use board::{exit, putc};
+
+// `SSIP` and `SSIE`: bit 1 of `mip` and of `mie`.
+const SUPERVISOR_SOFTWARE: u32 = 2;
+
+entry fn main() -> ! {
+    asm("csrs mie, {}", in(reg) SUPERVISOR_SOFTWARE, options(nostack, preserves_flags));
+    asm("csrs mip, {}", in(reg) SUPERVISOR_SOFTWARE, options(nostack, preserves_flags));
+    core::arch::enable_interrupts();
+    loop {
+        core::arch::wait_for_interrupt();
+    }
+}
+
+fn print(s: *const [u8]) {
+    let mut i: usize = 0;
+    while i < len(s) {
+        putc((*s)[i]);
+        i += 1;
+    }
+}
+
+fn print_hex(value: u32) {
+    let mut shift: u32 = 32;
+    while shift > 0 {
+        shift -= 4;
+        let digit: u8 = ((value >> shift) & 15) as u8;
+        putc(if digit < 10 { b'0' + digit } else { b'a' + digit - 10 });
+    }
+}
+
+panic fn on_panic(info: *const core::PanicInfo) -> ! {
+    match (*info).reason {
+        .UnhandledVector => print(&raw const b"vector not handled"),
+        _ => exit(3),
+    }
+    print(&raw const b": ");
+    print((*info).message);
+    let mut cause: u32 = 0;
+    asm("csrr {}, mcause", out(reg) cause, options(nostack, preserves_flags));
+    print(&raw const b" mcause ");
+    print_hex(cause);
+    putc(b'\n');
+    exit(1)
+}
