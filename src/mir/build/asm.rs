@@ -176,6 +176,7 @@ impl Builder<'_, '_> {
             // MIR bodies are built in HIR function order.
             hir::AsmSym::Fn(id) => AsmSym::Body(BodyId(id.0)),
             hir::AsmSym::Static(id) => AsmSym::Static(self.q.mir_static(*id)),
+            hir::AsmSym::Entry => AsmSym::Body(BodyId(self.q.hir.entry.0)),
             // Reported by type checking; the body is not used.
             hir::AsmSym::Other(..) => {
                 self.failed = true;

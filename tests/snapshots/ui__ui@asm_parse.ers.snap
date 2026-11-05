@@ -862,15 +862,17 @@ File {
                                                         },
                                                     ),
                                                     kind: Sym(
-                                                        Path {
-                                                            segments: [
-                                                                Ident {
-                                                                    name: "callee",
-                                                                    span: 813..819,
-                                                                },
-                                                            ],
-                                                            span: 813..819,
-                                                        },
+                                                        Path(
+                                                            Path {
+                                                                segments: [
+                                                                    Ident {
+                                                                        name: "callee",
+                                                                        span: 813..819,
+                                                                    },
+                                                                ],
+                                                                span: 813..819,
+                                                            },
+                                                        ),
                                                     ),
                                                     span: 805..819,
                                                 },
@@ -942,19 +944,21 @@ File {
                                                 AsmOperand {
                                                     name: None,
                                                     kind: Sym(
-                                                        Path {
-                                                            segments: [
-                                                                Ident {
-                                                                    name: "crate",
-                                                                    span: 880..885,
-                                                                },
-                                                                Ident {
-                                                                    name: "callee",
-                                                                    span: 887..893,
-                                                                },
-                                                            ],
-                                                            span: 880..893,
-                                                        },
+                                                        Path(
+                                                            Path {
+                                                                segments: [
+                                                                    Ident {
+                                                                        name: "crate",
+                                                                        span: 880..885,
+                                                                    },
+                                                                    Ident {
+                                                                        name: "callee",
+                                                                        span: 887..893,
+                                                                    },
+                                                                ],
+                                                                span: 880..893,
+                                                            },
+                                                        ),
                                                     ),
                                                     span: 876..893,
                                                 },

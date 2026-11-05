@@ -685,12 +685,21 @@ pub enum AsmOperandKind {
         expr: Expr,
         out: Option<Option<Expr>>,
     },
-    /// `sym path`
-    Sym(Path),
+    /// `sym path` or `sym entry`
+    Sym(SymTarget),
     /// `const expr`
     Const(Expr),
     /// `clobber_abi("C")`: the name of the ABI.
     ClobberAbi(StrLit),
+}
+
+/// What a `sym` operand names (ADR 0079, 0083).
+#[derive(Debug)]
+pub enum SymTarget {
+    /// An item, by its path.
+    Path(Path),
+    /// `entry`, the entry function, with the span of the keyword.
+    Entry(Span),
 }
 
 /// Where an operand lives: `reg`, a register the compiler chooses, or the

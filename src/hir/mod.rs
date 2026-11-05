@@ -1428,7 +1428,7 @@ pub enum AsmOperandKind {
         expr: Expr,
         out: Option<Option<Expr>>,
     },
-    /// `sym path`
+    /// `sym path` or `sym entry`
     Sym(AsmSym),
     /// `const expr`: the expression is a `comptime` expression, whose value
     /// the operand is, as `comptime` gives it (ADR 0029).
@@ -1450,6 +1450,9 @@ pub enum AsmReg {
 pub enum AsmSym {
     Fn(FnId),
     Static(StaticId),
+    /// `entry`: the entry function (ADR 0083), which `Hir::entry` names once
+    /// every function is lowered.
+    Entry,
     /// An item that is neither: what it is, as a diagnostic says it, and the
     /// span of its path. The type checker reports it (`ty::asm-sym`).
     Other(&'static str, Span),

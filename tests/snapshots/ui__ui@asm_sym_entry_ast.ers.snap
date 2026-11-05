@@ -1,0 +1,299 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/asm_sym_entry_ast.ers
+---
+--- ast ---
+File {
+    items: [
+        Fn(
+            FnDecl {
+                attrs: [],
+                vis: Private,
+                kind: Plain,
+                name: Ident {
+                    name: "forms",
+                    span: 187..192,
+                },
+                params: [
+                    Param {
+                        mutable: false,
+                        name: Ident {
+                            name: "x",
+                            span: 193..194,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Path {
+                                    segments: [
+                                        Ident {
+                                            name: "u32",
+                                            span: 196..199,
+                                        },
+                                    ],
+                                    span: 196..199,
+                                },
+                            ),
+                            span: 196..199,
+                        },
+                    },
+                ],
+                ret: None,
+                body: Some(
+                    Block {
+                        stmts: [
+                            Expr {
+                                expr: Expr {
+                                    kind: Asm(
+                                        AsmExpr {
+                                            templates: [
+                                                StrLit {
+                                                    bytes: "j {}",
+                                                    span: 211..217,
+                                                },
+                                            ],
+                                            operands: [
+                                                AsmOperand {
+                                                    name: None,
+                                                    kind: Sym(
+                                                        Entry(
+                                                            223..228,
+                                                        ),
+                                                    ),
+                                                    span: 219..228,
+                                                },
+                                            ],
+                                            options: [],
+                                        },
+                                    ),
+                                    span: 207..229,
+                                },
+                                semi: Some(
+                                    229..230,
+                                ),
+                            },
+                            Expr {
+                                expr: Expr {
+                                    kind: Asm(
+                                        AsmExpr {
+                                            templates: [
+                                                StrLit {
+                                                    bytes: "j {main}",
+                                                    span: 239..249,
+                                                },
+                                            ],
+                                            operands: [
+                                                AsmOperand {
+                                                    name: Some(
+                                                        Ident {
+                                                            name: "main",
+                                                            span: 251..255,
+                                                        },
+                                                    ),
+                                                    kind: Sym(
+                                                        Entry(
+                                                            262..267,
+                                                        ),
+                                                    ),
+                                                    span: 251..267,
+                                                },
+                                            ],
+                                            options: [],
+                                        },
+                                    ),
+                                    span: 235..268,
+                                },
+                                semi: Some(
+                                    268..269,
+                                ),
+                            },
+                            Expr {
+                                expr: Expr {
+                                    kind: Asm(
+                                        AsmExpr {
+                                            templates: [
+                                                StrLit {
+                                                    bytes: "j {}",
+                                                    span: 278..284,
+                                                },
+                                            ],
+                                            operands: [
+                                                AsmOperand {
+                                                    name: None,
+                                                    kind: Sym(
+                                                        Entry(
+                                                            290..295,
+                                                        ),
+                                                    ),
+                                                    span: 286..295,
+                                                },
+                                            ],
+                                            options: [],
+                                        },
+                                    ),
+                                    span: 274..297,
+                                },
+                                semi: Some(
+                                    297..298,
+                                ),
+                            },
+                            Expr {
+                                expr: Expr {
+                                    kind: Asm(
+                                        AsmExpr {
+                                            templates: [
+                                                StrLit {
+                                                    bytes: "call {f} {e} {}",
+                                                    span: 307..324,
+                                                },
+                                            ],
+                                            operands: [
+                                                AsmOperand {
+                                                    name: None,
+                                                    kind: Const(
+                                                        Expr {
+                                                            kind: Cast(
+                                                                Expr {
+                                                                    kind: Int(
+                                                                        Some(
+                                                                            1,
+                                                                        ),
+                                                                    ),
+                                                                    span: 332..333,
+                                                                },
+                                                                Ty {
+                                                                    kind: Named(
+                                                                        Path {
+                                                                            segments: [
+                                                                                Ident {
+                                                                                    name: "u32",
+                                                                                    span: 337..340,
+                                                                                },
+                                                                            ],
+                                                                            span: 337..340,
+                                                                        },
+                                                                    ),
+                                                                    span: 337..340,
+                                                                },
+                                                            ),
+                                                            span: 332..340,
+                                                        },
+                                                    ),
+                                                    span: 326..340,
+                                                },
+                                                AsmOperand {
+                                                    name: Some(
+                                                        Ident {
+                                                            name: "f",
+                                                            span: 342..343,
+                                                        },
+                                                    ),
+                                                    kind: Sym(
+                                                        Path(
+                                                            Path {
+                                                                segments: [
+                                                                    Ident {
+                                                                        name: "crate",
+                                                                        span: 350..355,
+                                                                    },
+                                                                    Ident {
+                                                                        name: "entry_like",
+                                                                        span: 357..367,
+                                                                    },
+                                                                ],
+                                                                span: 350..367,
+                                                            },
+                                                        ),
+                                                    ),
+                                                    span: 342..367,
+                                                },
+                                                AsmOperand {
+                                                    name: Some(
+                                                        Ident {
+                                                            name: "e",
+                                                            span: 369..370,
+                                                        },
+                                                    ),
+                                                    kind: Sym(
+                                                        Entry(
+                                                            377..382,
+                                                        ),
+                                                    ),
+                                                    span: 369..382,
+                                                },
+                                            ],
+                                            options: [],
+                                        },
+                                    ),
+                                    span: 303..383,
+                                },
+                                semi: Some(
+                                    383..384,
+                                ),
+                            },
+                            Expr {
+                                expr: Expr {
+                                    kind: Asm(
+                                        AsmExpr {
+                                            templates: [
+                                                StrLit {
+                                                    bytes: "j {}",
+                                                    span: 393..399,
+                                                },
+                                            ],
+                                            operands: [
+                                                AsmOperand {
+                                                    name: None,
+                                                    kind: Sym(
+                                                        Entry(
+                                                            405..410,
+                                                        ),
+                                                    ),
+                                                    span: 401..410,
+                                                },
+                                            ],
+                                            options: [
+                                                AsmOption {
+                                                    kind: Noreturn,
+                                                    span: 420..428,
+                                                },
+                                            ],
+                                        },
+                                    ),
+                                    span: 389..430,
+                                },
+                                semi: Some(
+                                    430..431,
+                                ),
+                            },
+                        ],
+                        tail: None,
+                        span: 201..433,
+                    },
+                ),
+                span: 184..433,
+            },
+        ),
+        Fn(
+            FnDecl {
+                attrs: [],
+                vis: Private,
+                kind: Plain,
+                name: Ident {
+                    name: "entry_like",
+                    span: 438..448,
+                },
+                params: [],
+                ret: None,
+                body: Some(
+                    Block {
+                        stmts: [],
+                        tail: None,
+                        span: 451..453,
+                    },
+                ),
+                span: 435..453,
+            },
+        ),
+    ],
+}

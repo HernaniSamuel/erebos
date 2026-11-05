@@ -10,8 +10,8 @@ use crate::syntax::ast::{
     EnumDecl, Expr, ExprKind, FieldDecl, FieldInit, File, FnDecl, FnKind, Ident, Item, Let,
     LogicalOp, MemoryDecl, ModDecl, Param, Path, Pattern, PatternKind, PeripheralDecl,
     PeripheralTypeDecl, Placement, PlacementKind, ReadEffect, RegionDecl, RegisterDecl, StaticDecl,
-    Stmt, StrLit, StructDecl, Ty, TyKind, UnOp, UseDecl, UseName, VariantDecl, Visibility,
-    WriteAction, WriteEffect,
+    Stmt, StrLit, StructDecl, SymTarget, Ty, TyKind, UnOp, UseDecl, UseName, VariantDecl,
+    Visibility, WriteAction, WriteEffect,
 };
 use crate::syntax::lexer;
 use crate::syntax::token::{Token, TokenKind};
@@ -2473,7 +2473,12 @@ impl Parser<'_> {
             }
             Some("sym") => {
                 self.bump();
-                AsmOperandKind::Sym(self.path()?)
+                // `entry` is a keyword, so no path means it and nothing
+                // follows it (ADR 0083).
+                match self.eat(TokenKind::Entry) {
+                    Some(token) => AsmOperandKind::Sym(SymTarget::Entry(token.span)),
+                    None => AsmOperandKind::Sym(SymTarget::Path(self.path()?)),
+                }
             }
             Some("clobber_abi") => {
                 self.bump();

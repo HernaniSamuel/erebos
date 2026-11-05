@@ -1,0 +1,34 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/asm_sym_entry_mir.ers
+---
+--- mir ---
+fn jump() -> ! {
+    let _0: !;
+
+    bb0: {
+        asm("j {0}", sym app.main, options(noreturn));
+    }
+}
+
+entry fn app.main() -> ! {
+    let _0: !;
+
+    bb0: {
+        call jump();
+        unreachable;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}

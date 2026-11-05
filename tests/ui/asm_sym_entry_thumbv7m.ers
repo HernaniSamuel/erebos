@@ -1,0 +1,20 @@
+// emit: llvm-ir
+// target: thumbv7m-none-eabi
+// `sym entry` on thumbv7m (ADR 0083): as in `asm_sym_entry.ers`, with the
+// entry function in a module, so its symbol is `app.main`.
+fn jump() -> ! {
+    asm("b {}", sym entry, options(noreturn));
+}
+
+#[naked]
+fn naked_jump() -> ! {
+    asm("movw r0, :lower16:{0}", "movt r0, :upper16:{0}", "bx r0", sym entry, options(noreturn));
+}
+
+mod app {
+    entry fn main() -> ! {
+        super::jump()
+    }
+}
+
+panic fn on_panic() -> ! { loop {} }

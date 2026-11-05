@@ -1,0 +1,6 @@
+// emit: ast
+// Nothing follows `sym entry`: the keyword is not the start of a path, so
+// `sym entry::x` is reported at `::` (ADR 0083).
+fn errors() {
+    asm("j {}", sym entry::x);
+}

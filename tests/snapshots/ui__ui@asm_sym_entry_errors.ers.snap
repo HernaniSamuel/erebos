@@ -1,0 +1,20 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/asm_sym_entry_errors.ers
+---
+--- errors ---
+parser::unexpected-token
+
+  × expected `,` or `)`, found `::`
+   ╭─[asm_sym_entry_errors.ers:5:26]
+ 4 │ fn errors() {
+ 5 │     asm("j {}", sym entry::x);
+   ·                          ─┬
+   ·                           ╰── expected `,` or `)`
+ 6 │ }
+   ╰────
+  help: an `asm` expression is written `asm("template", operands, options(...))`: one or more
+        template strings, then the operands without a name, the named operands and the operands
+        with an explicit register (and `clobber_abi`), in that order, then `options(...)`, which
+        comes last (ADR 0079)

@@ -1,0 +1,15 @@
+// emit: mir
+// `sym entry` is, in MIR, the symbol of the entry function's body, which the
+// dump names as it does a function (ADR 0083). Here the entry function is in
+// a module.
+fn jump() -> ! {
+    asm("j {}", sym entry, options(noreturn));
+}
+
+mod app {
+    entry fn main() -> ! {
+        super::jump()
+    }
+}
+
+panic fn on_panic() -> ! { loop {} }

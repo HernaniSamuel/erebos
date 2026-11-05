@@ -1,0 +1,37 @@
+// `sym entry` names the entry function's symbol (ADR 0083): the entry
+// function, in a module and named like a function of the root, counts its
+// runs in a `static mut`. The first run jumps to the entry function again
+// through `asm` with `sym entry`, and the second exits 0, so the symbol is the
+// entry function's and not the root `main`'s, which would exit 3. The
+// assembly is riscv32's, which is why the header lists one target (the
+// reason ADR 0079 adds to ADR 0077's).
+// targets: riscv32imac-unknown-none-elf
+// expect-output: 1 2
+// expect-exit: 0
+
+mod board;
+use board::{exit, putc};
+
+static mut RUNS: u32 = 0;
+
+fn main() -> ! {
+    exit(3)
+}
+
+mod app {
+    entry fn main() -> ! {
+        crate::RUNS += 1;
+        if crate::RUNS == 1 {
+            crate::putc(b'1');
+            crate::putc(b' ');
+            asm("j {}", sym entry, options(noreturn))
+        }
+        crate::putc(b'2');
+        crate::putc(b'\n');
+        crate::exit(0)
+    }
+}
+
+panic fn on_panic() -> ! {
+    exit(1)
+}

@@ -708,7 +708,12 @@ impl Lowerer<'_> {
                             .as_ref()
                             .map(|place| place.as_ref().map(|place| self.expr(place))),
                     },
-                    ast::AsmOperandKind::Sym(path) => AsmOperandKind::Sym(self.asm_sym(path)),
+                    ast::AsmOperandKind::Sym(ast::SymTarget::Path(path)) => {
+                        AsmOperandKind::Sym(self.asm_sym(path))
+                    }
+                    ast::AsmOperandKind::Sym(ast::SymTarget::Entry(_)) => {
+                        AsmOperandKind::Sym(AsmSym::Entry)
+                    }
                     ast::AsmOperandKind::Const(value) => {
                         let id = ExprId(self.next_expr);
                         self.next_expr += 1;

@@ -1,0 +1,13 @@
+// emit: ast
+// The operand `sym entry` (ADR 0083): the keyword `entry` in place of a
+// path, plain, named, and among other operands. `sym crate::entry_like` is a
+// path, as before.
+fn forms(x: u32) {
+    asm("j {}", sym entry);
+    asm("j {main}", main = sym entry);
+    asm("j {}", sym entry,);
+    asm("call {f} {e} {}", const 1 as u32, f = sym crate::entry_like, e = sym entry);
+    asm("j {}", sym entry, options(noreturn));
+}
+
+fn entry_like() {}
