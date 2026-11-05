@@ -3,6 +3,7 @@
 mod abi;
 mod asm;
 mod diagnostics;
+mod vectors;
 
 use std::path::Path;
 
@@ -203,7 +204,10 @@ fn lower<'ctx>(
         }
     }
 
-    asm::keep_symbols(context, &module, mir, &fns, &statics);
+    // The table's words name the handlers and the default handlers, which
+    // only the hardware reaches (ADR 0085).
+    let defaults = vectors::lower(context, &module, mir, target.arch, &fns, &data);
+    asm::keep_symbols(context, &module, mir, &fns, &statics, &defaults);
 
     // The reset entry is `core`'s `_start`, alone in the section the linker
     // script places at the code's origin (ADR 0083, 0057). A dump leaves
@@ -212,9 +216,6 @@ fn lower<'ctx>(
         && let Some(function) = fns[reset.0 as usize]
     {
         function.set_section(Some(RESET_SECTION));
-    }
-    if let Some(table) = vector_table(target.arch) {
-        module.set_inline_assembly(table);
     }
 
     if let Err(e) = module.verify() {
@@ -1574,24 +1575,6 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
 /// The section of the reset entry, `core`'s `_start` (ADR 0083): the linker
 /// script places it alone, at the origin of the code's region (ADR 0057).
 const RESET_SECTION: &str = ".text.start";
-
-/// The vector table's first two words on ARMv7-M (ADR 0074, 0083), in a
-/// section of their own that the linker script places first in the code's
-/// region: the initial stack pointer, `__stack_end`, and `_start`, whose
-/// address the linker gives bit 0 set, as a Thumb function's. Written as
-/// module assembly because the compiler, not the program, owns the table:
-/// M4.3 generates all of it from the program's handlers. riscv32 has none.
-fn vector_table(arch: Arch) -> Option<&'static str> {
-    match arch {
-        Arch::Riscv32 => None,
-        Arch::Armv7m => Some(
-            "\t.section .vector_table, \"a\", %progbits\n\
-             \t.p2align 2\n\
-             \t.word __stack_end\n\
-             \t.word _start\n",
-        ),
-    }
-}
 
 #[cfg(test)]
 mod tests {

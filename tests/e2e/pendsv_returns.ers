@@ -1,0 +1,41 @@
+// A program pends PendSV in `ICSR`, the handler runs when interrupts are enabled
+// and the code it interrupted resumes (ADR 0085). The entry function waits in
+// the form of ADR 0086.
+// takes-exceptions: yes
+// targets: thumbv7m-none-eabi
+// expect-output: pendsv 1
+// expect-exit: 0
+
+mod board;
+use board::{exit, putc};
+use core::arch::Vector;
+
+// The interrupt control and state register: PENDSVSET is bit 28.
+const ICSR: *mut volatile u32 = 0xE000_ED04 as *mut volatile u32;
+
+static mut RUNS: u32 = 0;
+
+interrupt fn pend() at Vector::PendSV {
+    RUNS += 1;
+}
+
+entry fn main() -> ! {
+    core::arch::enable_interrupts();
+    *ICSR = 1 << 28;
+    loop {
+        critical {
+            if RUNS >= 1 {
+                break;
+            }
+            core::arch::wait_for_interrupt();
+        }
+    }
+    putc(b'p'); putc(b'e'); putc(b'n'); putc(b'd'); putc(b's'); putc(b'v'); putc(b' ');
+    putc(b'0' + RUNS as u8);
+    putc(b'\n');
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(99)
+}

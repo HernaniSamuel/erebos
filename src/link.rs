@@ -111,7 +111,8 @@ pub fn linker_script(map: &MemoryMap, target: &Target) -> String {
 }
 
 /// The vector table's section, first in the code's region on thumbv7m, where
-/// the compiler emits its first two words (ADR 0074, 0083); riscv32 has none.
+/// the compiler emits its 16 words, 64 bytes (ADR 0074, 0083, 0085); the reset
+/// entry follows it. riscv32's table is read-only data and has no section here.
 fn vector_table(arch: Arch, code: &str) -> String {
     match arch {
         Arch::Riscv32 => String::new(),

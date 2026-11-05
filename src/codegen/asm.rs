@@ -378,15 +378,17 @@ impl<'ctx> FnCodegen<'_, 'ctx> {
     }
 }
 
-/// Keeps what `sym` operands name, and the interrupt handlers: the items join
-/// `llvm.compiler.used`, so that LLVM neither removes nor renames what the
-/// text refers to (ADR 0079), or what the hardware reaches (ADR 0084).
+/// Keeps what `sym` operands name, the interrupt handlers and the default
+/// handlers: the items join `llvm.compiler.used`, so that LLVM neither
+/// removes nor renames what the text refers to (ADR 0079), or what the
+/// hardware reaches (ADR 0084, 0085).
 pub(super) fn keep_symbols<'ctx>(
     context: &'ctx Context,
     module: &Module<'ctx>,
     mir: &Mir,
     fns: &[Option<FunctionValue<'ctx>>],
     statics: &[PointerValue<'ctx>],
+    defaults: &[FunctionValue<'ctx>],
 ) {
     let mut used: Vec<PointerValue> = Vec::new();
     for (_, body) in mir.bodies().filter(|(_, body)| !body.comptime) {
@@ -414,6 +416,12 @@ pub(super) fn keep_symbols<'ctx>(
             }
         }
     }
+    // And the default handlers, which the vector table names (ADR 0085).
+    used.extend(
+        defaults
+            .iter()
+            .map(|function| function.as_global_value().as_pointer_value()),
+    );
     if used.is_empty() {
         return;
     }

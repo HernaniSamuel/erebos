@@ -20,13 +20,18 @@
 //! // link-c: helpers.c        (a C file, next to the root file, compiled
 //! //                           with clang and linked in; may repeat)
 //! // c-flags: -O1 -DX         (extra clang flags for those C files)
+//! // takes-exceptions: yes    (the program raises exceptions on purpose, so
+//! //                           QEMU logs guest errors only, ADR 0088)
 //! ```
 //!
 //! With `expect-exit`, the program must stop QEMU through `board::exit`
 //! with that code, having printed exactly the expected lines. Without it,
 //! the program must run forever: after a while QEMU must still be up.
 //! Either way, the CPU must raise no exception or guest error; a
-//! miscompiled program faults almost immediately and floods that log.
+//! miscompiled program faults almost immediately and floods that log. A
+//! program that takes exceptions by design (a handler, a fault that reaches the
+//! panic function) says so with `takes-exceptions`, and only guest errors fail
+//! it (ADR 0088).
 //!
 //! Every program runs twice per target: unoptimized and with `-O`. The
 //! optimizer exploits any undefined behavior in the generated IR, so
@@ -128,7 +133,7 @@ fn run(
     } else {
         RUN_FOREVER_CHECK
     };
-    let run = qemu::boot(&name, target, &elf, &log, wait)?;
+    let run = qemu::boot(&name, target, &elf, &log, wait, expected.takes_exceptions)?;
     qemu::check(&name, expected, &run)
 }
 
@@ -187,6 +192,110 @@ fn the_targets_header_chooses_targets() {
     );
     let all: Vec<&str> = board::RUN_ON.iter().map(|t| t.name).collect();
     assert_eq!(names("// expect-exit: 0\n"), all);
+}
+
+/// `// takes-exceptions: yes` is read (ADR 0088); without it the program takes
+/// none, any value but `yes` is an error that names it, and so is the header
+/// without `// expect-exit:`.
+#[test]
+fn the_takes_exceptions_header_is_read() {
+    let takes = |source: &str| qemu::expectation(source).unwrap().takes_exceptions;
+    assert!(takes("// takes-exceptions: yes\n// expect-exit: 0\n"));
+    assert!(!takes("// expect-exit: 0\n"));
+    assert!(!takes("// expect-output: hi\n"));
+    let error = qemu::expectation("// takes-exceptions: no\n// expect-exit: 0\n")
+        .err()
+        .expect("only `yes` is accepted");
+    assert!(error.contains("`no`") && error.contains("0088"), "{error}");
+    let error = qemu::expectation("// takes-exceptions: yes\n")
+        .err()
+        .expect("the header needs an exit code");
+    assert!(
+        error.contains("expect-exit") && error.contains("0088"),
+        "{error}"
+    );
+}
+
+/// A program that takes an exception on purpose (an `svc` served by a handler)
+/// passes with the header, and without it the harness fails it, showing the
+/// `Taking exception` lines that ADR 0077 does not allow.
+#[test]
+fn a_program_that_takes_exceptions_passes_only_with_the_header() {
+    const PROGRAM: &str = "// targets: thumbv7m-none-eabi
+// expect-output: svc
+// expect-exit: 0
+
+mod board;
+
+interrupt fn service() at core::arch::Vector::SVCall {
+    board::putc(b's'); board::putc(b'v'); board::putc(b'c'); board::putc(b'\\n');
+}
+
+entry fn main() -> ! {
+    core::arch::enable_interrupts();
+    asm(\"svc #0\");
+    board::exit(0)
+}
+
+panic fn on_panic() -> ! { board::exit(99) }
+";
+    let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join("e2e-harness-exceptions");
+    fs::create_dir_all(&dir).unwrap();
+    let program = dir.join("svc.ers");
+    for opt in [OptLevel::None, OptLevel::Speed] {
+        let with = format!(
+            "// takes-exceptions: yes
+{PROGRAM}"
+        );
+        fs::write(&program, &with).unwrap();
+        let expected = qemu::expectation(&with).unwrap();
+        run(&program, &expected, &THUMBV7M, opt).unwrap();
+
+        fs::write(&program, PROGRAM).unwrap();
+        let expected = qemu::expectation(PROGRAM).unwrap();
+        let error = run(&program, &expected, &THUMBV7M, opt).expect_err("the log is not empty");
+        assert!(
+            error.contains("the CPU raised exceptions") && error.contains("Taking exception"),
+            "{opt:?}: {error}"
+        );
+    }
+}
+
+/// A guest error still fails a program with the header: the log of `-d
+/// guest_errors` is checked (ADR 0088). The UART is enabled with a divisor
+/// QEMU refuses, which it logs as a guest error. thumbv7m only; the first
+/// riscv32 program with the header is that target's test.
+#[test]
+fn a_guest_error_fails_a_program_that_takes_exceptions() {
+    const PROGRAM: &str = "// takes-exceptions: yes
+// targets: thumbv7m-none-eabi
+// expect-exit: 0
+
+mod board;
+
+const UART_CTRL: *mut volatile u32 = 0x4000_4008 as *mut volatile u32;
+const UART_BAUDDIV: *mut volatile u32 = 0x4000_4010 as *mut volatile u32;
+
+entry fn main() -> ! {
+    *UART_BAUDDIV = 1;
+    *UART_CTRL = 1;
+    board::exit(0)
+}
+
+panic fn on_panic() -> ! { board::exit(99) }
+";
+    let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join("e2e-harness-guest-error");
+    fs::create_dir_all(&dir).unwrap();
+    let program = dir.join("uart.ers");
+    fs::write(&program, PROGRAM).unwrap();
+    let expected = qemu::expectation(PROGRAM).unwrap();
+    for opt in [OptLevel::None, OptLevel::Speed] {
+        let error = run(&program, &expected, &THUMBV7M, opt).expect_err("a guest error");
+        assert!(
+            error.contains("invalid baudrate"),
+            "{opt:?}: the guest error is not shown: {error}"
+        );
+    }
 }
 
 /// The three kinds of line QEMU logs for a correct run on `mps2-an385`

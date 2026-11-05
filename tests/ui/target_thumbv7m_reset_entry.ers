@@ -1,9 +1,14 @@
 // target: thumbv7m-none-eabi
 // emit: llvm-ir
-// The reset entry of ARMv7-M (ADR 0074, 0083): the compiler's `module asm`
-// holds only the two words of the vector table, in the section
-// `.vector_table`: the initial stack pointer and `_start`. `_start` is `core`'s
-// naked function, in `rt/arch/armv7m.ers`, which `--emit=llvm-ir` leaves
-// out, so it is not here.
+// The reset entry of ARMv7-M (ADR 0074, 0083, 0085): the compiler's `module asm`
+// is the vector table, 16 words in the section `.vector_table`: the initial
+// stack pointer, `_start`, then the handlers' words and the default handlers'.
+// `_start` is `core`'s naked function, in `rt/arch/armv7m.ers`, which
+// `--emit=llvm-ir` leaves out, so it is not here. A program with no handler has
+// no table in the dump: see the other thumbv7m snapshots.
+use core::arch::Vector;
+
+interrupt fn tick() at Vector::SysTick {}
+
 entry fn reset_main() -> ! { loop {} }
 panic fn on_panic() -> ! { loop {} }

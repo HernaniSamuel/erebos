@@ -1,0 +1,54 @@
+// A check that fails in a maskable handler reaches the panic function (ADR
+// 0085): SysTick's handler divides by a zero that the compiler cannot see, and
+// the panic function runs in the handler's context, where `IPSR` is 15.
+// takes-exceptions: yes
+// targets: thumbv7m-none-eabi
+// expect-output: division by zero ipsr 15
+// expect-exit: 1
+
+mod board;
+use board::{exit, putc};
+use core::arch::Vector;
+
+const SYST_CSR: *mut volatile u32 = 0xE000_E010 as *mut volatile u32;
+const SYST_RVR: *mut volatile u32 = 0xE000_E014 as *mut volatile u32;
+const SYST_CVR: *mut volatile u32 = 0xE000_E018 as *mut volatile u32;
+const ZERO: *mut volatile u32 = board::SCRATCH as *mut volatile u32;
+
+static mut QUOTIENT: u32 = 0;
+
+interrupt fn tick() at Vector::SysTick {
+    QUOTIENT = 100 / *ZERO;
+}
+
+entry fn main() -> ! {
+    *SYST_RVR = 10_000;
+    *SYST_CVR = 0;
+    *SYST_CSR = 7;
+    core::arch::enable_interrupts();
+    loop {
+        core::arch::wait_for_interrupt();
+    }
+}
+
+fn print(s: *const [u8]) {
+    let mut i: usize = 0;
+    while i < len(s) {
+        putc((*s)[i]);
+        i += 1;
+    }
+}
+
+panic fn on_panic(info: *const core::PanicInfo) -> ! {
+    match (*info).reason {
+        .DivisionByZero => print(&raw const b"division by zero"),
+        _ => exit(3),
+    }
+    let mut ipsr: u32 = 0;
+    asm("mrs {}, ipsr", out(reg) ipsr, options(nostack, preserves_flags));
+    print(&raw const b" ipsr ");
+    putc(b'0' + (ipsr / 10) as u8);
+    putc(b'0' + (ipsr % 10) as u8);
+    putc(b'\n');
+    exit(1)
+}

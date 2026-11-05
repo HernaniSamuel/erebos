@@ -1,0 +1,45 @@
+// A program pends the NMI in `ICSR`; its handler runs, with interrupts masked,
+// and the code it interrupted resumes (ADR 0085). The NMI is not maskable, so
+// the entry function never enables interrupts: `_start` left them masked, and
+// the handler finds them so.
+// takes-exceptions: yes
+// targets: thumbv7m-none-eabi
+// expect-output: nmi 1 masked
+// expect-exit: 0
+
+mod board;
+use board::{exit, putc};
+use core::arch::Vector;
+
+// The interrupt control and state register: NMIPENDSET is bit 31.
+const ICSR: *mut volatile u32 = 0xE000_ED04 as *mut volatile u32;
+
+static mut RUNS: u32 = 0;
+
+interrupt fn nonmaskable() at Vector::NMI {
+    if core::arch::interrupts_enabled() {
+        exit(10)
+    }
+    RUNS += 1;
+}
+
+entry fn main() -> ! {
+    *ICSR = 1 << 31;
+    loop {
+        critical {
+            if RUNS >= 1 {
+                break;
+            }
+        }
+    }
+    putc(b'n'); putc(b'm'); putc(b'i'); putc(b' ');
+    putc(b'0' + RUNS as u8);
+    putc(b' ');
+    putc(b'm'); putc(b'a'); putc(b's'); putc(b'k'); putc(b'e'); putc(b'd');
+    putc(b'\n');
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(99)
+}

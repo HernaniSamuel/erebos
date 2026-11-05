@@ -60,6 +60,10 @@ pub struct Target {
     /// The variants of `core::arch::Vector` of this target, in the order of
     /// the enum in `rt/arch/` (ADR 0084).
     pub vectors: &'static [Vector],
+    /// The words of the vector table (ADR 0085): 16 on ARMv7-M, the system
+    /// exceptions' table; on RISC-V 33, the exceptions, the interrupts and the
+    /// word of any other cause.
+    pub table_words: u32,
 }
 
 /// A variant of `core::arch::Vector`, with what the language needs of the
@@ -182,6 +186,7 @@ pub static RISCV32IMAC: Target = Target {
     c_clobbers: &RISCV32_C_CLOBBERS,
     register_names: "`x0` to `x31`, or their ABI names: `zero`, `ra`, `sp`, `gp`, `tp`, `t0` to `t6`, `s0` (`fp`) to `s11`, `a0` to `a7`",
     vectors: &RISCV32_VECTORS,
+    table_words: 33,
 };
 
 /// The variants of `Vector` in `rt/arch/riscv32.ers` (ADR 0084).
@@ -260,6 +265,7 @@ pub static THUMBV7M: Target = Target {
     c_clobbers: &ARMV7M_C_CLOBBERS,
     register_names: "`r0` to `r15`, or `sb` (`r9`), `sl` (`r10`), `fp` (`r11`), `ip` (`r12`), `sp` (`r13`), `lr` (`r14`) and `pc` (`r15`)",
     vectors: &ARMV7M_VECTORS,
+    table_words: 16,
 };
 
 /// The variants of `Vector` in `rt/arch/armv7m.ers` (ADR 0084).
@@ -466,6 +472,10 @@ mod tests {
                 };
                 assert_eq!(vector.word, word, "{}: {}", target.name, vector.name);
                 assert!(word < table, "{}: {}", target.name, vector.name);
+                // The table the compiler generates holds these words, and
+                // riscv32's one more, for any other cause.
+                let extra = u32::from(target.arch == Arch::Riscv32);
+                assert_eq!(target.table_words, table + extra);
                 assert!(!words.contains(&word), "{}: {}", target.name, vector.name);
                 words.push(word);
                 if target.arch == Arch::Riscv32 {

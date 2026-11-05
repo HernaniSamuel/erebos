@@ -1,0 +1,77 @@
+// A handler finds the stack aligned to `stack_align`, 8 on thumbv7m, and uses
+// a `u64` local (ADR 0085). The core aligns it on entry (`CCR.STKALIGN`, 1 at
+// reset on QEMU) whatever the interrupted code left: this code interrupts with
+// `sp` at 4 modulo 8, so the core has to pad its frame.
+// takes-exceptions: yes
+// targets: thumbv7m-none-eabi
+// expect-output: sp aligned, 64 bits 4294967300
+// expect-exit: 0
+
+mod board;
+use board::{exit, putc};
+use core::arch::Vector;
+
+const SYST_CSR: *mut volatile u32 = 0xE000_E010 as *mut volatile u32;
+const SYST_RVR: *mut volatile u32 = 0xE000_E014 as *mut volatile u32;
+const SYST_CVR: *mut volatile u32 = 0xE000_E018 as *mut volatile u32;
+
+static mut SP_MOD_8: u32 = 99;
+static mut WIDE: u64 = 0;
+
+// A `u64` computed in the handler, in a register pair or in the frame as the
+// compiler chooses; the test checks its value, and the alignment of `sp`.
+fn widen(x: u32) -> u64 {
+    let mut value: u64 = x as u64;
+    value = value + 0x1_0000_0000;
+    value + x as u64
+}
+
+interrupt fn tick() at Vector::SysTick {
+    let mut sp: u32 = 0;
+    asm("mov {}, sp", out(reg) sp, options(nomem, nostack, preserves_flags));
+    SP_MOD_8 = sp % 8;
+    WIDE = widen(0x8000_0001 - 0x7fff_ffff);
+}
+
+fn print_u64(value: u64) {
+    let mut digits: [u8; 20] = [0; 20];
+    let mut n: usize = 0;
+    let mut rest: u64 = value;
+    loop {
+        digits[19 - n] = b'0' + (rest % 10) as u8;
+        n += 1;
+        rest /= 10;
+        if rest == 0 {
+            break;
+        }
+    }
+    let mut i: usize = 0;
+    while i < n {
+        putc(digits[20 - n + i]);
+        i += 1;
+    }
+}
+
+entry fn main() -> ! {
+    *SYST_RVR = 10_000;
+    *SYST_CVR = 0;
+    *SYST_CSR = 7;
+    core::arch::enable_interrupts();
+    // `sp` is 4 modulo 8 while it waits.
+    asm("sub sp, sp, #4", "wfi", "add sp, sp, #4", clobber_abi("C"));
+    *SYST_CSR = 0;
+    let sp: u32 = critical { SP_MOD_8 };
+    if sp != 0 {
+        exit(2)
+    }
+    putc(b's'); putc(b'p'); putc(b' '); putc(b'a'); putc(b'l'); putc(b'i'); putc(b'g');
+    putc(b'n'); putc(b'e'); putc(b'd'); putc(b','); putc(b' ');
+    putc(b'6'); putc(b'4'); putc(b' '); putc(b'b'); putc(b'i'); putc(b't'); putc(b's'); putc(b' ');
+    print_u64(critical { WIDE });
+    putc(b'\n');
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(99)
+}

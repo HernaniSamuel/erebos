@@ -1,0 +1,42 @@
+// A loop that tests a flag inside `critical` sees the handler's write at every
+// level (ADR 0078, 0086): the block is a compiler fence at entry and exit, so
+// the optimizer cannot read the flag once and spin on it. The loop does not
+// wait, so the interrupt runs at the end of a block.
+// takes-exceptions: yes
+// targets: thumbv7m-none-eabi
+// expect-output: spin done
+// expect-exit: 0
+
+mod board;
+use board::{exit, putc};
+use core::arch::Vector;
+
+const SYST_CSR: *mut volatile u32 = 0xE000_E010 as *mut volatile u32;
+const SYST_RVR: *mut volatile u32 = 0xE000_E014 as *mut volatile u32;
+const SYST_CVR: *mut volatile u32 = 0xE000_E018 as *mut volatile u32;
+
+static mut DONE: bool = false;
+
+interrupt fn tick() at Vector::SysTick {
+    DONE = true;
+}
+
+entry fn main() -> ! {
+    *SYST_RVR = 10_000;
+    *SYST_CVR = 0;
+    *SYST_CSR = 7;
+    core::arch::enable_interrupts();
+    loop {
+        if critical { DONE } {
+            break;
+        }
+    }
+    *SYST_CSR = 0;
+    putc(b's'); putc(b'p'); putc(b'i'); putc(b'n'); putc(b' ');
+    putc(b'd'); putc(b'o'); putc(b'n'); putc(b'e'); putc(b'\n');
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(99)
+}

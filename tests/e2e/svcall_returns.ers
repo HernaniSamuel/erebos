@@ -1,0 +1,32 @@
+// A returning `SVCall` handler resumes the code after `svc` (ADR 0085): the core
+// stacks and unstacks the registers the C ABI does not preserve, and the
+// handler is a plain function. `svc` under `PRIMASK` would escalate to HardFault
+// (ADR 0084), so interrupts are enabled first.
+// takes-exceptions: yes
+// targets: thumbv7m-none-eabi
+// expect-output: svc 2 after
+// expect-exit: 0
+
+mod board;
+use board::{exit, putc};
+use core::arch::Vector;
+
+static mut CALLS: u32 = 0;
+
+interrupt fn service() at Vector::SVCall {
+    CALLS += 1;
+}
+
+entry fn main() -> ! {
+    core::arch::enable_interrupts();
+    asm("svc #0");
+    asm("svc #0");
+    putc(b's'); putc(b'v'); putc(b'c'); putc(b' ');
+    putc(b'0' + CALLS as u8);
+    putc(b' '); putc(b'a'); putc(b'f'); putc(b't'); putc(b'e'); putc(b'r'); putc(b'\n');
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(99)
+}

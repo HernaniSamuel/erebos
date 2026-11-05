@@ -1,0 +1,67 @@
+// The entry function and SysTick's handler both increment `COUNT`, a load, an
+// add and a store, and the entry function does it inside `critical`, so the
+// handler never runs between its load and its store (ADR 0078, 0086): with
+// 200000 increments by the entry function and the interrupts SysTick raised
+// meanwhile, the total is exactly their sum. Some interrupt came while the loop
+// ran, or the test proves nothing. QEMU takes an interrupt only between two
+// blocks of translated code, which a branch ends, so the increment holds one,
+// never taken, between its load and its store: without `critical` a tick lands
+// there and its count is lost.
+// takes-exceptions: yes
+// targets: thumbv7m-none-eabi
+// expect-output: race ok
+// expect-exit: 0
+
+mod board;
+use board::{exit, putc};
+use core::arch::Vector;
+
+const SYST_CSR: *mut volatile u32 = 0xE000_E010 as *mut volatile u32;
+const SYST_RVR: *mut volatile u32 = 0xE000_E014 as *mut volatile u32;
+const SYST_CVR: *mut volatile u32 = 0xE000_E018 as *mut volatile u32;
+
+const INCREMENTS: u32 = 200000;
+
+static mut COUNT: u32 = 0;
+static mut TICKS: u32 = 0;
+
+interrupt fn tick() at Vector::SysTick {
+    COUNT += 1;
+    TICKS += 1;
+}
+
+entry fn main() -> ! {
+    *SYST_RVR = 20;
+    *SYST_CVR = 0;
+    *SYST_CSR = 7;
+    core::arch::enable_interrupts();
+    let mut i: u32 = 0;
+    while i < INCREMENTS {
+        critical {
+            let seen: u32 = COUNT;
+            if seen == 0xFFFF_FFFF {
+                exit(3)
+            }
+            COUNT = seen + 1;
+        }
+        i += 1;
+    }
+    // Both are read in one block: a tick pending at the end of a first one
+    // would run before the second, and the pair would not be consistent.
+    critical {
+        if TICKS == 0 {
+            exit(2)
+        }
+        if COUNT != INCREMENTS + TICKS {
+            exit(1)
+        }
+    }
+    *SYST_CSR = 0;
+    putc(b'r'); putc(b'a'); putc(b'c'); putc(b'e'); putc(b' ');
+    putc(b'o'); putc(b'k'); putc(b'\n');
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(99)
+}

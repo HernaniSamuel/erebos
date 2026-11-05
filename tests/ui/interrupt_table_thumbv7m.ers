@@ -1,0 +1,30 @@
+// target: thumbv7m-none-eabi
+// emit: llvm-ir
+// opt: both
+// The vector table of ARMv7-M and the default handlers (ADR 0085), with a panic
+// function that takes `*const core::PanicInfo`: 16 words; a handler's word
+// holds its symbol, the dotted path of one in a module and the name alone of an
+// `#[export]` one; every other exception has a default handler of its own,
+// `__erebos_unhandled_<variant>`, whose information is `UnhandledVector`, an
+// empty file, line and column 0, and the variant's name as message; the words
+// the architecture reserves are 0.
+use core::arch::Vector;
+
+static mut TICKS: u32 = 0;
+
+interrupt fn tick() at Vector::SysTick {
+    TICKS += 1;
+}
+
+mod drivers {
+    pub interrupt fn pend() at core::arch::Vector::PendSV {
+        super::TICKS = 0;
+    }
+
+    #[export]
+    pub interrupt fn svc() at core::arch::Vector::SVCall {}
+}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic(info: *const core::PanicInfo) -> ! { loop {} }

@@ -1,0 +1,256 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/interrupt_table_thumbv7m.ers
+---
+--- llvm-ir ---
+; ModuleID = 'erebos'
+source_filename = "erebos"
+target datalayout = "e-m:e-p:32:32-Fi8-i64:64-v128:64:128-a:0:32-n32-S64"
+target triple = "thumbv7m-none-eabi"
+
+module asm "\09.section .vector_table, \22a\22, %progbits"
+module asm "\09.p2align 2"
+module asm "\09.word __stack_end"
+module asm "\09.word _start"
+module asm "\09.word __erebos_unhandled_NMI"
+module asm "\09.word __erebos_unhandled_HardFault"
+module asm "\09.word __erebos_unhandled_MemManage"
+module asm "\09.word __erebos_unhandled_BusFault"
+module asm "\09.word __erebos_unhandled_UsageFault"
+module asm "\09.word 0"
+module asm "\09.word 0"
+module asm "\09.word 0"
+module asm "\09.word 0"
+module asm "\09.word svc"
+module asm "\09.word __erebos_unhandled_DebugMonitor"
+module asm "\09.word 0"
+module asm "\09.word drivers.pend"
+module asm "\09.word tick"
+
+@TICKS = global [4 x i8] zeroinitializer, align 4
+@bytes = private unnamed_addr constant [28 x i8] c"interrupt_table_thumbv7m.ers", align 1
+@bytes.1 = private unnamed_addr constant [3 x i8] c"NMI", align 1
+@bytes.2 = private unnamed_addr constant [9 x i8] c"HardFault", align 1
+@bytes.3 = private unnamed_addr constant [9 x i8] c"MemManage", align 1
+@bytes.4 = private unnamed_addr constant [8 x i8] c"BusFault", align 1
+@bytes.5 = private unnamed_addr constant [10 x i8] c"UsageFault", align 1
+@bytes.6 = private unnamed_addr constant [12 x i8] c"DebugMonitor", align 1
+@data0 = private unnamed_addr constant <{ [20 x i8], ptr, [4 x i8] }> <{ [20 x i8] c"\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\05\00\00\00", ptr @bytes.1, [4 x i8] c"\03\00\00\00" }>, align 4
+@data1 = private unnamed_addr constant <{ [20 x i8], ptr, [4 x i8] }> <{ [20 x i8] c"\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\05\00\00\00", ptr @bytes.2, [4 x i8] c"\09\00\00\00" }>, align 4
+@data2 = private unnamed_addr constant <{ [20 x i8], ptr, [4 x i8] }> <{ [20 x i8] c"\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\05\00\00\00", ptr @bytes.3, [4 x i8] c"\09\00\00\00" }>, align 4
+@data3 = private unnamed_addr constant <{ [20 x i8], ptr, [4 x i8] }> <{ [20 x i8] c"\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\05\00\00\00", ptr @bytes.4, [4 x i8] c"\08\00\00\00" }>, align 4
+@data4 = private unnamed_addr constant <{ [20 x i8], ptr, [4 x i8] }> <{ [20 x i8] c"\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\05\00\00\00", ptr @bytes.5, [4 x i8] c"\0A\00\00\00" }>, align 4
+@data5 = private unnamed_addr constant <{ [20 x i8], ptr, [4 x i8] }> <{ [20 x i8] c"\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\05\00\00\00", ptr @bytes.6, [4 x i8] c"\0C\00\00\00" }>, align 4
+@llvm.compiler.used = appending global [9 x ptr] [ptr @tick, ptr @drivers.pend, ptr @svc, ptr @__erebos_unhandled_NMI, ptr @__erebos_unhandled_HardFault, ptr @__erebos_unhandled_MemManage, ptr @__erebos_unhandled_BusFault, ptr @__erebos_unhandled_UsageFault, ptr @__erebos_unhandled_DebugMonitor], section "llvm.metadata"
+
+; Function Attrs: nounwind null_pointer_is_valid
+define void @tick() #0 {
+bb0:
+  %0 = load i32, ptr @TICKS, align 4
+  %1 = add i32 %0, 1
+  store i32 %1, ptr @TICKS, align 4
+  ret void
+}
+
+; Function Attrs: nounwind null_pointer_is_valid
+define void @drivers.pend() #0 {
+bb0:
+  store i32 0, ptr @TICKS, align 4
+  ret void
+}
+
+; Function Attrs: nounwind null_pointer_is_valid
+define void @svc() #0 {
+bb0:
+  ret void
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @main() #1 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @on_panic(ptr %0) #1 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @__erebos_unhandled_NMI() #1 {
+bb0:
+  call void @on_panic(ptr @data0)
+  unreachable
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @__erebos_unhandled_HardFault() #1 {
+bb0:
+  call void @on_panic(ptr @data1)
+  unreachable
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @__erebos_unhandled_MemManage() #1 {
+bb0:
+  call void @on_panic(ptr @data2)
+  unreachable
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @__erebos_unhandled_BusFault() #1 {
+bb0:
+  call void @on_panic(ptr @data3)
+  unreachable
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @__erebos_unhandled_UsageFault() #1 {
+bb0:
+  call void @on_panic(ptr @data4)
+  unreachable
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @__erebos_unhandled_DebugMonitor() #1 {
+bb0:
+  call void @on_panic(ptr @data5)
+  unreachable
+}
+
+attributes #0 = { nounwind null_pointer_is_valid }
+attributes #1 = { noreturn nounwind null_pointer_is_valid }
+--- llvm-ir -O ---
+; ModuleID = 'erebos'
+source_filename = "erebos"
+target datalayout = "e-m:e-p:32:32-Fi8-i64:64-v128:64:128-a:0:32-n32-S64"
+target triple = "thumbv7m-none-eabi"
+
+module asm "\09.section .vector_table, \22a\22, %progbits"
+module asm "\09.p2align 2"
+module asm "\09.word __stack_end"
+module asm "\09.word _start"
+module asm "\09.word __erebos_unhandled_NMI"
+module asm "\09.word __erebos_unhandled_HardFault"
+module asm "\09.word __erebos_unhandled_MemManage"
+module asm "\09.word __erebos_unhandled_BusFault"
+module asm "\09.word __erebos_unhandled_UsageFault"
+module asm "\09.word 0"
+module asm "\09.word 0"
+module asm "\09.word 0"
+module asm "\09.word 0"
+module asm "\09.word svc"
+module asm "\09.word __erebos_unhandled_DebugMonitor"
+module asm "\09.word 0"
+module asm "\09.word drivers.pend"
+module asm "\09.word tick"
+
+@TICKS = local_unnamed_addr global [4 x i8] zeroinitializer, align 4
+@llvm.compiler.used = appending global [9 x ptr] [ptr @__erebos_unhandled_BusFault, ptr @__erebos_unhandled_DebugMonitor, ptr @__erebos_unhandled_HardFault, ptr @__erebos_unhandled_MemManage, ptr @__erebos_unhandled_NMI, ptr @__erebos_unhandled_UsageFault, ptr @drivers.pend, ptr @svc, ptr @tick], section "llvm.metadata"
+
+; Function Attrs: mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(readwrite, argmem: none, inaccessiblemem: none, target_mem0: none, target_mem1: none)
+define void @tick() #0 {
+bb0:
+  %0 = load i32, ptr @TICKS, align 4
+  %1 = add i32 %0, 1
+  store i32 %1, ptr @TICKS, align 4
+  ret void
+}
+
+; Function Attrs: mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(write, argmem: none, inaccessiblemem: none, target_mem0: none, target_mem1: none)
+define void @drivers.pend() #1 {
+bb0:
+  store i32 0, ptr @TICKS, align 4
+  ret void
+}
+
+; Function Attrs: mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(none)
+define void @svc() #2 {
+bb0:
+  ret void
+}
+
+; Function Attrs: nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none)
+define void @main() local_unnamed_addr #3 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none)
+define void @on_panic(ptr readnone captures(none) %0) local_unnamed_addr #3 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none)
+define void @__erebos_unhandled_NMI() #3 {
+bb0:
+  br label %bb1.i
+
+bb1.i:                                            ; preds = %bb1.i, %bb0
+  br label %bb1.i
+}
+
+; Function Attrs: nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none)
+define void @__erebos_unhandled_HardFault() #3 {
+bb0:
+  br label %bb1.i
+
+bb1.i:                                            ; preds = %bb1.i, %bb0
+  br label %bb1.i
+}
+
+; Function Attrs: nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none)
+define void @__erebos_unhandled_MemManage() #3 {
+bb0:
+  br label %bb1.i
+
+bb1.i:                                            ; preds = %bb1.i, %bb0
+  br label %bb1.i
+}
+
+; Function Attrs: nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none)
+define void @__erebos_unhandled_BusFault() #3 {
+bb0:
+  br label %bb1.i
+
+bb1.i:                                            ; preds = %bb1.i, %bb0
+  br label %bb1.i
+}
+
+; Function Attrs: nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none)
+define void @__erebos_unhandled_UsageFault() #3 {
+bb0:
+  br label %bb1.i
+
+bb1.i:                                            ; preds = %bb1.i, %bb0
+  br label %bb1.i
+}
+
+; Function Attrs: nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none)
+define void @__erebos_unhandled_DebugMonitor() #3 {
+bb0:
+  br label %bb1.i
+
+bb1.i:                                            ; preds = %bb1.i, %bb0
+  br label %bb1.i
+}
+
+attributes #0 = { mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(readwrite, argmem: none, inaccessiblemem: none, target_mem0: none, target_mem1: none) }
+attributes #1 = { mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(write, argmem: none, inaccessiblemem: none, target_mem0: none, target_mem1: none) }
+attributes #2 = { mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(none) }
+attributes #3 = { nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none) }

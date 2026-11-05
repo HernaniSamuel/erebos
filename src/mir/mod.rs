@@ -82,6 +82,10 @@ pub struct Mir {
     /// The interrupt handlers, in the order of their bodies, each with the
     /// vector it serves (ADR 0084).
     pub handlers: Vec<Handler>,
+    /// The words of the target's vector table and the default handlers they
+    /// name (ADR 0085); `None` on a target whose table is not generated yet,
+    /// and once `core` is left out of a program that declares no handler.
+    pub vector_table: Option<VectorTable>,
     /// The program's memory map, of which the linker script is made
     /// (ADR 0057); `None` without a `memory` block.
     pub memory: Option<MemoryMap>,
@@ -94,6 +98,42 @@ pub struct Handler {
     /// `target::Target::vector` finds the vector by.
     pub vector: String,
     pub body: BodyId,
+}
+
+/// The vector table the hardware reads, as data (ADR 0085): one entry per
+/// word, in the order of the words, and the functions the compiler generates
+/// for the words no handler serves.
+#[derive(Debug)]
+pub struct VectorTable {
+    pub words: Vec<VectorWord>,
+    /// The default handlers, in the order of the first word that names each.
+    pub defaults: Vec<DefaultHandler>,
+}
+
+/// A word of the vector table.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VectorWord {
+    /// The initial stack pointer, the linker script's `__stack_end`.
+    StackEnd,
+    /// The reset entry, `core::arch::_start`.
+    Reset,
+    /// Reserved by the architecture and never read: 0.
+    Reserved,
+    /// The address of an interrupt handler.
+    Handler(BodyId),
+    /// The address of a default handler, by its index in `defaults`.
+    Default(usize),
+}
+
+/// A function that calls the panic function for a vector no handler serves,
+/// and never returns (ADR 0085). It is not a context of ADR 0078.
+#[derive(Debug)]
+pub struct DefaultHandler {
+    /// Its symbol.
+    pub symbol: String,
+    /// The `core::PanicInfo` it passes, in read-only data, when the panic
+    /// function takes one; `None` when it takes none.
+    pub info: Option<DataId>,
 }
 
 impl Mir {
@@ -159,6 +199,16 @@ impl Mir {
         let mut data_kept = vec![false; self.data.len()];
         let mut data_dropped = vec![false; self.data.len()];
         let mut statics_used = vec![false; self.statics.len()];
+        // The table is the compiler's and not `core`'s, but a program that
+        // declares no handler has none in a dump (ADR 0085): the information
+        // of its default handlers goes with it.
+        if self.handlers.is_empty()
+            && let Some(table) = &self.vector_table
+        {
+            for info in table.defaults.iter().filter_map(|default| default.info) {
+                data_dropped[info.0 as usize] = true;
+            }
+        }
         for (i, body) in self.bodies.iter_mut().enumerate() {
             let used = if left_out.bodies[i] {
                 &mut data_dropped
@@ -260,6 +310,14 @@ impl Mir {
         for handler in &mut self.handlers {
             handler.body = new_id(handler.body);
         }
+        if self.handlers.is_empty() {
+            self.vector_table = None;
+        }
+        for word in (self.vector_table.iter_mut()).flat_map(|table| &mut table.words) {
+            if let VectorWord::Handler(body) = word {
+                *body = new_id(*body);
+            }
+        }
         // `_start` is `core`'s, and nothing calls it.
         self.reset = None;
         // The two functions of a `critical` block stay when a body kept has
@@ -302,6 +360,11 @@ impl Mir {
             if keep {
                 data.push(d);
             }
+        }
+        // What the default handlers of a table kept pass is kept with it.
+        let defaults = (self.vector_table.iter_mut()).flat_map(|table| &mut table.defaults);
+        for default in defaults {
+            default.info = default.info.and_then(|info| data_ids[info.0 as usize]);
         }
         let relocations = (statics.iter_mut().map(|s| &mut s.relocations))
             .chain(data.iter_mut().map(|d| &mut d.relocations));
@@ -1921,6 +1984,7 @@ mod tests {
             critical_enter: None,
             critical_exit: None,
             handlers: Vec::new(),
+            vector_table: None,
             memory: None,
         };
         mir.leave_out(&LeftOut {
@@ -1945,5 +2009,101 @@ mod tests {
         };
         assert_eq!(syms(statement), [AsmSym::Body(BodyId(1))]);
         assert_eq!(syms(ends), [AsmSym::Body(BodyId(1))]);
+    }
+
+    /// A program with one body of `core` (0), the entry, which is the panic
+    /// function too (1), and a handler (2); its table names the handler and a
+    /// default handler whose information is the second of two pieces of data,
+    /// the first being a check's.
+    fn with_table(handlers: bool) -> Mir {
+        let data = |byte| ConstData {
+            bytes: vec![byte],
+            align: 1,
+            relocations: Vec::new(),
+        };
+        Mir {
+            structs: Vec::new(),
+            bit_structs: Vec::new(),
+            enums: Vec::new(),
+            peripheral_types: Vec::new(),
+            peripherals: Vec::new(),
+            data: vec![data(1), data(2)],
+            statics: Vec::new(),
+            bodies: vec![
+                body("core_fn", Vec::new()),
+                body("entry", Vec::new()),
+                body("tick", Vec::new()),
+            ],
+            entry: BodyId(1),
+            panic: BodyId(1),
+            reset: None,
+            critical_enter: None,
+            critical_exit: None,
+            handlers: if handlers {
+                vec![Handler {
+                    vector: "SysTick".to_owned(),
+                    body: BodyId(2),
+                }]
+            } else {
+                Vec::new()
+            },
+            vector_table: Some(VectorTable {
+                words: vec![
+                    VectorWord::StackEnd,
+                    VectorWord::Reset,
+                    VectorWord::Default(0),
+                    VectorWord::Reserved,
+                    VectorWord::Handler(BodyId(2)),
+                ],
+                defaults: vec![DefaultHandler {
+                    symbol: "__erebos_unhandled_NMI".to_owned(),
+                    info: Some(DataId(1)),
+                }],
+            }),
+            memory: None,
+        }
+    }
+
+    fn core_out() -> LeftOut {
+        LeftOut {
+            bodies: vec![true, false, false],
+            structs: Vec::new(),
+            bit_structs: Vec::new(),
+            enums: Vec::new(),
+            peripheral_types: Vec::new(),
+            peripherals: Vec::new(),
+            statics: Vec::new(),
+        }
+    }
+
+    /// The vector table is the compiler's and not `core`'s, so a program with a
+    /// handler keeps it, with its words and the data of its default handlers
+    /// renumbered (ADR 0085).
+    #[test]
+    fn leaving_out_keeps_and_renumbers_the_table_of_a_program_with_handlers() {
+        let mut mir = with_table(true);
+        mir.leave_out(&core_out());
+        let table = mir.vector_table.expect("the table is kept");
+        assert_eq!(table.words[4], VectorWord::Handler(BodyId(1)));
+        assert_eq!(table.words[2], VectorWord::Default(0));
+        assert_eq!(table.defaults[0].info, Some(DataId(1)));
+        assert_eq!(mir.data.len(), 2);
+    }
+
+    /// Without a handler a dump has no table, and the information of its default
+    /// handlers goes with it, but a check's data stays (ADR 0085).
+    #[test]
+    fn leaving_out_drops_the_table_of_a_program_without_handlers() {
+        let mut mir = with_table(false);
+        // The first piece of data is a check's: a body kept uses it.
+        mir.bodies[1].locals.push(LocalDecl {
+            ty: Ty::Unit,
+            name: None,
+            constant: Some(DataId(0)),
+        });
+        mir.leave_out(&core_out());
+        assert!(mir.vector_table.is_none());
+        assert_eq!(mir.data.len(), 1);
+        assert_eq!(mir.data[0].bytes, [1]);
     }
 }

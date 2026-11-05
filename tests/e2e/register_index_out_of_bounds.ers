@@ -61,6 +61,7 @@ fn reason(reason: core::PanicReason) -> *const [u8] {
         .AssertionFailed => &raw const b"assertion failed",
         .NoVariant => &raw const b"enum value is no variant",
         .FieldOutOfRange => &raw const b"value does not fit its field",
+        .UnhandledVector => &raw const b"vector not handled",
     }
 }
 

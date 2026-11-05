@@ -9,11 +9,6 @@ source_filename = "erebos"
 target datalayout = "e-m:e-p:32:32-Fi8-i64:64-v128:64:128-a:0:32-n32-S64"
 target triple = "thumbv7m-none-eabi"
 
-module asm "\09.section .vector_table, \22a\22, %progbits"
-module asm "\09.p2align 2"
-module asm "\09.word __stack_end"
-module asm "\09.word _start"
-
 @llvm.compiler.used = appending global [1 x ptr] [ptr @app.main], section "llvm.metadata"
 
 ; Function Attrs: noreturn nounwind null_pointer_is_valid

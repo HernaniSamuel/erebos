@@ -29,6 +29,11 @@ pub mod arch;
 // both from 1, the column in bytes. `message` is the message of
 // `assert(c, msg)`, computed when the assertion fails; for every other
 // check it is empty.
+//
+// There is one exception (ADR 0085): a vector that no handler serves calls the
+// panic function with `reason` `UnhandledVector`, an empty `file`, `line` and
+// `column` 0 (they are not counted from 1 and locate nothing), and the
+// vector's name in `message`, as bytes: `HardFault`, `SysTick`.
 pub struct PanicInfo {
     pub file: *const [u8],
     pub line: u32,
@@ -37,13 +42,15 @@ pub struct PanicInfo {
     pub message: *const [u8],
 }
 
-// Why: the compiler's check that failed.
+// Why: the compiler's check that failed, or, for `UnhandledVector`, the vector
+// the machine took that no handler serves (ADR 0085).
 pub enum PanicReason: u8 {
     DivisionByZero = 0,
     IndexOutOfBounds = 1,
     AssertionFailed = 2,
     NoVariant = 3,
     FieldOutOfRange = 4,
+    UnhandledVector = 5,
 }
 
 // The layout ADR 0053 gives, which `tests/layout` checks against C.

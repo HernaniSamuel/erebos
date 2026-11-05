@@ -9,11 +9,6 @@ source_filename = "erebos"
 target datalayout = "e-m:e-p:32:32-Fi8-i64:64-v128:64:128-a:0:32-n32-S64"
 target triple = "thumbv7m-none-eabi"
 
-module asm "\09.section .vector_table, \22a\22, %progbits"
-module asm "\09.p2align 2"
-module asm "\09.word __stack_end"
-module asm "\09.word _start"
-
 ; Function Attrs: nounwind null_pointer_is_valid
 define i64 @udiv(i64 %0, i64 %1) #0 {
 bb0:
@@ -153,11 +148,6 @@ attributes #2 = { nounwind }
 source_filename = "erebos"
 target datalayout = "e-m:e-p:32:32-Fi8-i64:64-v128:64:128-a:0:32-n32-S64"
 target triple = "thumbv7m-none-eabi"
-
-module asm "\09.section .vector_table, \22a\22, %progbits"
-module asm "\09.p2align 2"
-module asm "\09.word __stack_end"
-module asm "\09.word _start"
 
 ; Function Attrs: nounwind null_pointer_is_valid
 define i64 @udiv(i64 %0, i64 %1) local_unnamed_addr #0 {

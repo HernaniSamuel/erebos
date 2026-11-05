@@ -86,6 +86,7 @@ fn run_both(name: &str, source: &str) -> Result<(), String> {
         exit: Some(0),
         link_c: Vec::new(),
         c_flags: Vec::new(),
+        takes_exceptions: false,
     };
 
     let mut failures = Vec::new();
@@ -105,7 +106,7 @@ fn run_both(name: &str, source: &str) -> Result<(), String> {
                 objects.extend(qemu::board_object(target, &work, opt)?);
                 driver::build(&program, &elf, &objects, target, opt, false)
                     .map_err(|e| format!("{label}: build failed\n{e}"))?;
-                let run = qemu::boot(&label, target, &elf, &log, WAIT)?;
+                let run = qemu::boot(&label, target, &elf, &log, WAIT, false)?;
                 qemu::check(&label, &expected, &run)
             });
             if let Err(e) = result {

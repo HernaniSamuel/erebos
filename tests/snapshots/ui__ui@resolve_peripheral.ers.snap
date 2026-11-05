@@ -442,7 +442,7 @@ Hir {
                     offset: (
                         Comptime(
                             FnId(
-                                53,
+                                54,
                             ),
                         ),
                         610..613,
@@ -497,7 +497,7 @@ Hir {
             address: (
                 Comptime(
                     FnId(
-                        54,
+                        55,
                     ),
                 ),
                 813..823,

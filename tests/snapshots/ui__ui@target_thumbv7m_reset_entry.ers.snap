@@ -13,9 +13,31 @@ module asm "\09.section .vector_table, \22a\22, %progbits"
 module asm "\09.p2align 2"
 module asm "\09.word __stack_end"
 module asm "\09.word _start"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word 0"
+module asm "\09.word 0"
+module asm "\09.word 0"
+module asm "\09.word 0"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word 0"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word tick"
+
+@llvm.compiler.used = appending global [2 x ptr] [ptr @tick, ptr @__erebos_unhandled], section "llvm.metadata"
+
+; Function Attrs: nounwind null_pointer_is_valid
+define void @tick() #0 {
+bb0:
+  ret void
+}
 
 ; Function Attrs: noreturn nounwind null_pointer_is_valid
-define void @reset_main() #0 {
+define void @reset_main() #1 {
 bb0:
   br label %bb1
 
@@ -24,7 +46,7 @@ bb1:                                              ; preds = %bb1, %bb0
 }
 
 ; Function Attrs: noreturn nounwind null_pointer_is_valid
-define void @on_panic() #0 {
+define void @on_panic() #1 {
 bb0:
   br label %bb1
 
@@ -32,4 +54,12 @@ bb1:                                              ; preds = %bb1, %bb0
   br label %bb1
 }
 
-attributes #0 = { noreturn nounwind null_pointer_is_valid }
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @__erebos_unhandled() #1 {
+bb0:
+  call void @on_panic()
+  unreachable
+}
+
+attributes #0 = { nounwind null_pointer_is_valid }
+attributes #1 = { noreturn nounwind null_pointer_is_valid }

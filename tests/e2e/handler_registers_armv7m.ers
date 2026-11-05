@@ -1,0 +1,127 @@
+// A handler interrupts code that holds a known value in every register but the
+// stack pointer and the program counter, and the code finds them unchanged
+// (ADR 0085): the core stacks `r0` to `r3`, `r12`, `lr` and the flags, and the
+// handler, a plain function of the C ABI, saves the others if it uses them,
+// which this one does, with ten values live across a call-like `asm`. The
+// code waits with `wfi`, which needs no register, until SysTick interrupts it.
+// takes-exceptions: yes
+// targets: thumbv7m-none-eabi
+// expect-output: registers kept
+// expect-exit: 0
+
+mod board;
+use board::{exit, putc};
+use core::arch::Vector;
+
+const SYST_CSR: *mut volatile u32 = 0xE000_E010 as *mut volatile u32;
+const SYST_RVR: *mut volatile u32 = 0xE000_E014 as *mut volatile u32;
+const SYST_CVR: *mut volatile u32 = 0xE000_E018 as *mut volatile u32;
+
+// Words in the board's scratch RAM: the handler reads the first ten and writes
+// them back to the next ten.
+const SRC: *mut volatile u32 = board::SCRATCH as *mut volatile u32;
+const OUT: *mut volatile u32 = (board::SCRATCH + 64) as *mut volatile u32;
+
+static mut TICKS: u32 = 0;
+
+interrupt fn tick() at Vector::SysTick {
+    let a: u32 = SRC[0];
+    let b: u32 = SRC[1];
+    let c: u32 = SRC[2];
+    let d: u32 = SRC[3];
+    let e: u32 = SRC[4];
+    let f: u32 = SRC[5];
+    let g: u32 = SRC[6];
+    let h: u32 = SRC[7];
+    let i: u32 = SRC[8];
+    let j: u32 = SRC[9];
+    // Everything a call may change is overwritten, so each value is, below, in
+    // a register the C ABI preserves, or in the frame.
+    asm("", clobber_abi("C"));
+    OUT[0] = a;
+    OUT[1] = b;
+    OUT[2] = c;
+    OUT[3] = d;
+    OUT[4] = e;
+    OUT[5] = f;
+    OUT[6] = g;
+    OUT[7] = h;
+    OUT[8] = i;
+    OUT[9] = j;
+    TICKS += 1;
+}
+
+entry fn main() -> ! {
+    *SYST_RVR = 10_000;
+    *SYST_CVR = 0;
+    *SYST_CSR = 7;
+    core::arch::enable_interrupts();
+    // `r4` to `r11` are saved and restored by the template, which uses them
+    // as they are, `r6` and `r7` too, that the compiler keeps for itself.
+    asm(
+        "push {{r4, r5, r6, r7, r8, r9, r10, r11}}",
+        "movs r0, #0x10",
+        "movs r1, #0x11",
+        "movs r2, #0x12",
+        "movs r3, #0x13",
+        "movs r4, #0x14",
+        "movs r5, #0x15",
+        "movs r6, #0x16",
+        "movs r7, #0x17",
+        "mov.w r8, #0x18",
+        "mov.w r9, #0x19",
+        "mov.w r10, #0x1a",
+        "mov.w r11, #0x1b",
+        "mov.w r12, #0x1c",
+        "mov.w lr, #0x1d",
+        "wfi",
+        "cmp r0, #0x10",
+        "bne 9f",
+        "cmp r1, #0x11",
+        "bne 9f",
+        "cmp r2, #0x12",
+        "bne 9f",
+        "cmp r3, #0x13",
+        "bne 9f",
+        "cmp r4, #0x14",
+        "bne 9f",
+        "cmp r5, #0x15",
+        "bne 9f",
+        "cmp r6, #0x16",
+        "bne 9f",
+        "cmp r7, #0x17",
+        "bne 9f",
+        "cmp.w r8, #0x18",
+        "bne 9f",
+        "cmp.w r9, #0x19",
+        "bne 9f",
+        "cmp.w r10, #0x1a",
+        "bne 9f",
+        "cmp.w r11, #0x1b",
+        "bne 9f",
+        "cmp.w r12, #0x1c",
+        "bne 9f",
+        "cmp.w lr, #0x1d",
+        "bne 9f",
+        "b 8f",
+        "9:",
+        "udf #1",
+        "8:",
+        "pop {{r4, r5, r6, r7, r8, r9, r10, r11}}",
+        clobber_abi("C"),
+    );
+    *SYST_CSR = 0;
+    // The handler ran: without it the test proves nothing.
+    if critical { TICKS } == 0 {
+        exit(2)
+    }
+    putc(b'r'); putc(b'e'); putc(b'g'); putc(b'i'); putc(b's'); putc(b't'); putc(b'e');
+    putc(b'r'); putc(b's'); putc(b' '); putc(b'k'); putc(b'e'); putc(b'p'); putc(b't');
+    putc(b'\n');
+    exit(0)
+}
+
+// A register that changed reaches here through `udf`, as a HardFault.
+panic fn on_panic() -> ! {
+    exit(1)
+}

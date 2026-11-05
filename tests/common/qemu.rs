@@ -27,6 +27,9 @@ pub struct Expectation {
     pub exit: Option<i32>,
     pub link_c: Vec<String>,
     pub c_flags: Vec<String>,
+    /// `// takes-exceptions: yes` (ADR 0088): the program raises exceptions on
+    /// purpose, so QEMU logs guest errors only.
+    pub takes_exceptions: bool,
 }
 
 pub fn expectation(source: &str) -> Result<Expectation, String> {
@@ -35,7 +38,18 @@ pub fn expectation(source: &str) -> Result<Expectation, String> {
     let mut exit = None;
     let mut link_c = Vec::new();
     let mut c_flags = Vec::new();
+    let mut takes_exceptions = false;
     for line in source.lines() {
+        if let Some(value) = line.strip_prefix("// takes-exceptions:") {
+            match value.trim() {
+                "yes" => takes_exceptions = true,
+                other => {
+                    return Err(format!(
+                        "`// takes-exceptions:` takes `yes`, not `{other}` (ADR 0088)"
+                    ));
+                }
+            }
+        }
         if let Some(names) = line.strip_prefix("// targets:") {
             targets.extend(super::board::targets_named(names)?);
         }
@@ -52,6 +66,13 @@ pub fn expectation(source: &str) -> Result<Expectation, String> {
             exit = Some(code.trim().parse().expect("expect-exit takes an integer"));
         }
     }
+    // With the event log reduced to guest errors, the exit code is what tells a
+    // fault that was meant from one that was not (ADR 0088).
+    if takes_exceptions && exit.is_none() {
+        return Err(
+            "`// takes-exceptions: yes` needs an `// expect-exit:` too (ADR 0088)".to_owned(),
+        );
+    }
     if targets.is_empty() {
         targets = super::board::targets_named("")?;
     }
@@ -61,6 +82,7 @@ pub fn expectation(source: &str) -> Result<Expectation, String> {
         exit,
         link_c,
         c_flags,
+        takes_exceptions,
     })
 }
 
@@ -77,14 +99,22 @@ pub struct Run {
 
 /// Boots `elf` on the QEMU machine of `target`, logging events to `log`,
 /// and waits `wait` for it to stop; a program still running then is
-/// killed. `name` labels errors.
+/// killed. `name` labels errors. The event log is `int,guest_errors`
+/// (ADR 0077), or `guest_errors` alone for a program that `takes_exceptions`
+/// on purpose (ADR 0088).
 pub fn boot(
     name: &str,
     target: &Target,
     elf: &Path,
     log: &Path,
     wait: Duration,
+    takes_exceptions: bool,
 ) -> Result<Run, String> {
+    let events = if takes_exceptions {
+        "guest_errors"
+    } else {
+        "int,guest_errors"
+    };
     let _ = fs::remove_file(log);
     let machine: &[&str] = match target.arch {
         Arch::Riscv32 => &["-machine", "virt", "-nographic", "-bios", "none"],
@@ -101,7 +131,7 @@ pub fn boot(
         .args(machine)
         .arg("-kernel")
         .arg(elf)
-        .args(["-d", "int,guest_errors", "-D"])
+        .args(["-d", events, "-D"])
         .arg(log)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())

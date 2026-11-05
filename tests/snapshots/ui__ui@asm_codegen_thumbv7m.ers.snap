@@ -9,11 +9,6 @@ source_filename = "erebos"
 target datalayout = "e-m:e-p:32:32-Fi8-i64:64-v128:64:128-a:0:32-n32-S64"
 target triple = "thumbv7m-none-eabi"
 
-module asm "\09.section .vector_table, \22a\22, %progbits"
-module asm "\09.p2align 2"
-module asm "\09.word __stack_end"
-module asm "\09.word _start"
-
 @COUNTER = global [4 x i8] zeroinitializer, align 4
 @llvm.compiler.used = appending global [2 x ptr] [ptr @callee, ptr @COUNTER], section "llvm.metadata"
 
@@ -153,11 +148,6 @@ attributes #6 = { nounwind willreturn memory(read) }
 source_filename = "erebos"
 target datalayout = "e-m:e-p:32:32-Fi8-i64:64-v128:64:128-a:0:32-n32-S64"
 target triple = "thumbv7m-none-eabi"
-
-module asm "\09.section .vector_table, \22a\22, %progbits"
-module asm "\09.p2align 2"
-module asm "\09.word __stack_end"
-module asm "\09.word _start"
 
 @COUNTER = global [4 x i8] zeroinitializer, align 4
 @llvm.compiler.used = appending global [2 x ptr] [ptr @COUNTER, ptr @callee], section "llvm.metadata"

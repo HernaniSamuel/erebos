@@ -1,0 +1,19 @@
+// target: thumbv7m-none-eabi
+// emit: llvm-ir
+// A handler at every vector of ARMv7-M (ADR 0085): no default handler is
+// generated, and no information with it, whatever the panic function takes.
+use core::arch::Vector;
+
+interrupt fn nmi() at Vector::NMI {}
+interrupt fn hard() -> ! at Vector::HardFault { loop {} }
+interrupt fn mem() -> ! at Vector::MemManage { loop {} }
+interrupt fn bus() -> ! at Vector::BusFault { loop {} }
+interrupt fn usage() -> ! at Vector::UsageFault { loop {} }
+interrupt fn svc() at Vector::SVCall {}
+interrupt fn debug() -> ! at Vector::DebugMonitor { loop {} }
+interrupt fn pend() at Vector::PendSV {}
+interrupt fn tick() at Vector::SysTick {}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic(info: *const core::PanicInfo) -> ! { loop {} }

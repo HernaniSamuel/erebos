@@ -17,11 +17,12 @@ use crate::layout::{
     StructLayout,
 };
 use crate::mir::{
-    self, BodyId, ConstData, DataId, EnumRef, Field, LeftOut, Mir, PanicCause, PanicInfoAt,
-    PanicSite, PeripheralRef, PeripheralTypeRef, Ptr, StaticRef, StructRef,
+    self, BodyId, ConstData, DataId, DefaultHandler, EnumRef, Field, LeftOut, Mir, PanicCause,
+    PanicInfoAt, PanicSite, PeripheralRef, PeripheralTypeRef, Ptr, StaticRef, StructRef,
+    VectorTable, VectorWord,
 };
 use crate::span::Span;
-use crate::target::{self, Target};
+use crate::target::{self, Arch, Target};
 use crate::ty::{self, Tables};
 
 mod bit_struct;
@@ -234,6 +235,10 @@ pub struct Queries<'h> {
     /// Read-only data computed at compile time, and what it came from.
     data: Vec<ConstData>,
     data_ids: HashMap<DataSource, DataId>,
+    /// The vector table of the target, with the information of its default
+    /// handlers in `data` and their names among the byte strings: made once
+    /// every body is lowered, before `core_parts` marks what dumps leave out.
+    vector_table: Option<VectorTable>,
     /// Items being computed, outermost first.
     in_progress: Vec<InProgress>,
 }
@@ -290,6 +295,7 @@ impl<'h> Queries<'h> {
             values: HashMap::new(),
             data: Vec::new(),
             data_ids: HashMap::new(),
+            vector_table: None,
             in_progress: Vec::new(),
         };
         // Every file, whether or not it holds a check: that is only known
@@ -1463,22 +1469,27 @@ impl<'h> Queries<'h> {
     pub fn panic_fields(&mut self, cause: PanicCause, at: Span) -> PanicFields {
         let hir = self.hir;
         let (_, line, column) = hir.location(at);
-        let reason = self.enum_def(hir.panic_reason);
-        let index = reason
-            .variants
-            .iter()
-            .position(|v| v.name == cause.reason());
-        let index = index.expect("a variant of `core::PanicReason`") as u32;
-        let tag = self
-            .discriminant(hir.panic_reason, index)
-            .expect("the variants of `core::PanicReason` have values");
+        let (reason, reason_ty) = self.panic_reason(cause.reason());
         PanicFields {
             file: self.file_names[at.file.index()],
             line,
             column,
-            reason: tag,
-            reason_ty: reason.ty.int,
+            reason,
+            reason_ty,
         }
+    }
+
+    /// The bits of the variant `name` of `core::PanicReason`, and the
+    /// integer type they have.
+    fn panic_reason(&mut self, name: &str) -> (u64, hir::IntTy) {
+        let hir = self.hir;
+        let reason = self.enum_def(hir.panic_reason);
+        let index = reason.variants.iter().position(|v| v.name == name);
+        let index = index.expect("a variant of `core::PanicReason`") as u32;
+        let tag = self
+            .discriminant(hir.panic_reason, index)
+            .expect("the variants of `core::PanicReason` have values");
+        (tag, reason.ty.int)
     }
 
     /// Where the check that `cause` names is, located at the first byte of
@@ -1486,8 +1497,34 @@ impl<'h> Queries<'h> {
     /// read-only data of its own, its `file` pointing to the byte string
     /// naming the file, its `message` empty, address 0 and length 0.
     pub fn panic_site(&mut self, cause: PanicCause, at: Span) -> PanicSite {
-        let hir = self.hir;
         let fields = self.panic_fields(cause, at);
+        let info = self.panic_info_data(
+            Some(fields.file),
+            fields.line,
+            fields.column,
+            (fields.reason, fields.reason_ty),
+            None,
+        );
+        PanicSite {
+            info: PanicInfoAt::Data(info),
+            file: fields.file,
+            line: fields.line,
+            column: fields.column,
+        }
+    }
+
+    /// A `core::PanicInfo` in read-only data: `file` and `message` point to
+    /// the byte strings given, or are empty (address 0, length 0) without
+    /// one.
+    fn panic_info_data(
+        &mut self,
+        file: Option<StaticRef>,
+        line: u32,
+        column: u32,
+        (reason, reason_ty): (u64, hir::IntTy),
+        message: Option<StaticRef>,
+    ) -> DataId {
+        let hir = self.hir;
         let def = hir.struct_(hir.panic_info);
         let layout = self
             .struct_layout(hir.panic_info)
@@ -1496,36 +1533,48 @@ impl<'h> Queries<'h> {
             let index = def.fields.iter().position(|field| field.name == name);
             layout.offsets[index.expect("a field of `core::PanicInfo`")] as usize
         };
-        let tag_bytes = fields.reason_ty.bytes() as usize;
+        let tag_bytes = reason_ty.bytes() as usize;
 
         let mut bytes = vec![0; layout.layout.size as usize];
         let mut put = |at: usize, value: &[u8]| bytes[at..at + value.len()].copy_from_slice(value);
         // A slice is its address, then its length (ADR 0031); the address
-        // of the file's name is the linker's to fill in (ADR 0030).
-        let name_len = u32::try_from(fields.name_len()).expect("file names are short");
-        put(
-            offset("file") + target::POINTER_BYTES as usize,
-            &name_len.to_le_bytes(),
-        );
-        put(offset("line"), &fields.line.to_le_bytes());
-        put(offset("column"), &fields.column.to_le_bytes());
-        put(offset("reason"), &fields.reason.to_le_bytes()[..tag_bytes]);
+        // of a byte string is the linker's to fill in (ADR 0030).
+        let mut relocations = Vec::new();
+        for (name, string) in [("file", file), ("message", message)] {
+            let Some(string) = string else { continue };
+            let len = string.def().byte_string.as_ref().map_or(0, Vec::len);
+            let len = u32::try_from(len).expect("file and vector names are short");
+            put(
+                offset(name) + target::POINTER_BYTES as usize,
+                &len.to_le_bytes(),
+            );
+            relocations.push(mir::Relocation {
+                offset: offset(name) as u32,
+                target: string.def().id,
+                addend: 0,
+            });
+        }
+        put(offset("line"), &line.to_le_bytes());
+        put(offset("column"), &column.to_le_bytes());
+        put(offset("reason"), &reason.to_le_bytes()[..tag_bytes]);
         let info = DataId(self.data.len() as u32);
         self.data.push(ConstData {
             bytes,
             align: layout.layout.align,
-            relocations: vec![mir::Relocation {
-                offset: offset("file") as u32,
-                target: fields.file.def().id,
-                addend: 0,
-            }],
+            relocations,
         });
-        PanicSite {
-            info: PanicInfoAt::Data(info),
-            file: fields.file,
-            line: fields.line,
-            column: fields.column,
-        }
+        info
+    }
+
+    /// The information a default handler passes for the vector `vector`
+    /// (ADR 0085): the reason `UnhandledVector`, the vector's name as the
+    /// message, no file and no position.
+    fn unhandled_info(&mut self, vector: &str) -> DataId {
+        let reason = self.panic_reason("UnhandledVector");
+        // In `core`'s part of the numbering, like the file names of `core`: a
+        // dump leaves it out with the table that uses it.
+        let name = self.new_byte_string(vector.as_bytes(), true);
+        self.panic_info_data(None, 0, 0, reason, Some(name))
     }
 
     /// The static numbered `id` in MIR: a static, or a byte string.
@@ -1623,6 +1672,11 @@ impl<'h> Queries<'h> {
     pub fn lower_all(&mut self) {
         for id in 0..self.hir.fns.len() {
             self.mir_body(FnId(id as u32));
+        }
+        // The table's byte strings follow every other one, and must exist
+        // before `core_parts`, whose mask covers the byte strings made so far.
+        if !self.diags.has_errors() {
+            self.vector_table = self.make_vector_table();
         }
     }
 
@@ -1768,6 +1822,7 @@ impl<'h> Queries<'h> {
         for id in 0..self.hir.fns.len() {
             self.mir_body(FnId(id as u32));
         }
+        let handlers = self.handlers();
         // The declared enums, then the `Option(T)` and `Result(T, E)` the
         // program uses, by name (ADR 0045).
         let ids: Vec<EnumId> = (0..self.hir.enums.len())
@@ -1866,16 +1921,6 @@ impl<'h> Queries<'h> {
         let peripherals = (0..self.hir.peripherals.len())
             .map(|id| self.mir_peripheral(PeripheralId(id as u32)))
             .collect();
-        let hir = self.hir;
-        let handlers = (hir.handlers.iter())
-            .filter_map(|&id| match hir.fn_(id).kind {
-                hir::FnKind::Interrupt(vector) => Some(mir::Handler {
-                    vector: hir.vector_name(vector).to_owned(),
-                    body: BodyId(id.0),
-                }),
-                _ => None,
-            })
-            .collect();
         let memory = self.hir.memory.as_ref().map(|_| {
             self.memory_map()
                 .expect("every value of a program without errors is computed")
@@ -1902,7 +1947,73 @@ impl<'h> Queries<'h> {
             critical_enter: Some(BodyId(self.hir.critical_enter.0)),
             critical_exit: Some(BodyId(self.hir.critical_exit.0)),
             handlers,
+            vector_table: self.vector_table,
             memory,
         }
+    }
+
+    /// The program's interrupt handlers, in the order of their bodies, each
+    /// with its vector.
+    fn handlers(&self) -> Vec<mir::Handler> {
+        let hir = self.hir;
+        (hir.handlers.iter())
+            .filter_map(|&id| match hir.fn_(id).kind {
+                hir::FnKind::Interrupt(vector) => Some(mir::Handler {
+                    vector: hir.vector_name(vector).to_owned(),
+                    body: BodyId(id.0),
+                }),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// The vector table of the target (ADR 0085): for each word, the handler
+    /// of its vector, or a default handler that calls the panic function; the
+    /// words the architecture reserves are 0. `None` where the table is not
+    /// generated.
+    fn make_vector_table(&mut self) -> Option<VectorTable> {
+        let handlers = self.handlers();
+        let target = self.target;
+        match target.arch {
+            Arch::Riscv32 => return None,
+            Arch::Armv7m => {}
+        }
+        // With a parameter, each vector has a default handler of its own,
+        // passing its name; without, one serves all of them, and no
+        // information is built (ADR 0053).
+        let with_info = self.takes_panic_info();
+        let mut defaults: Vec<DefaultHandler> = Vec::new();
+        let mut words = Vec::new();
+        for word in 0..target.table_words {
+            let word = match word {
+                0 => VectorWord::StackEnd,
+                1 => VectorWord::Reset,
+                _ => match target.vectors.iter().find(|vector| vector.word == word) {
+                    None => VectorWord::Reserved,
+                    Some(vector) => match handlers.iter().find(|h| h.vector == vector.name) {
+                        Some(handler) => VectorWord::Handler(handler.body),
+                        None if with_info => {
+                            let info = self.unhandled_info(vector.name);
+                            defaults.push(DefaultHandler {
+                                symbol: format!("__erebos_unhandled_{}", vector.name),
+                                info: Some(info),
+                            });
+                            VectorWord::Default(defaults.len() - 1)
+                        }
+                        None => {
+                            if defaults.is_empty() {
+                                defaults.push(DefaultHandler {
+                                    symbol: "__erebos_unhandled".to_owned(),
+                                    info: None,
+                                });
+                            }
+                            VectorWord::Default(0)
+                        }
+                    },
+                },
+            };
+            words.push(word);
+        }
+        Some(VectorTable { words, defaults })
     }
 }

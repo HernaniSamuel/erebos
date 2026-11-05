@@ -13,9 +13,23 @@ module asm "\09.section .vector_table, \22a\22, %progbits"
 module asm "\09.p2align 2"
 module asm "\09.word __stack_end"
 module asm "\09.word _start"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word fault"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word 0"
+module asm "\09.word 0"
+module asm "\09.word 0"
+module asm "\09.word 0"
+module asm "\09.word svc"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word 0"
+module asm "\09.word drivers.pend"
+module asm "\09.word tick"
 
 @TICKS = global [4 x i8] zeroinitializer, align 4
-@llvm.compiler.used = appending global [4 x ptr] [ptr @tick, ptr @fault, ptr @drivers.pend, ptr @svc], section "llvm.metadata"
+@llvm.compiler.used = appending global [5 x ptr] [ptr @tick, ptr @fault, ptr @drivers.pend, ptr @svc, ptr @__erebos_unhandled], section "llvm.metadata"
 
 ; Function Attrs: nounwind null_pointer_is_valid
 define void @tick() #0 {
@@ -67,6 +81,13 @@ bb1:                                              ; preds = %bb1, %bb0
   br label %bb1
 }
 
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @__erebos_unhandled() #1 {
+bb0:
+  call void @on_panic()
+  unreachable
+}
+
 attributes #0 = { nounwind null_pointer_is_valid }
 attributes #1 = { noreturn nounwind null_pointer_is_valid }
 --- llvm-ir -O ---
@@ -79,9 +100,23 @@ module asm "\09.section .vector_table, \22a\22, %progbits"
 module asm "\09.p2align 2"
 module asm "\09.word __stack_end"
 module asm "\09.word _start"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word fault"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word 0"
+module asm "\09.word 0"
+module asm "\09.word 0"
+module asm "\09.word 0"
+module asm "\09.word svc"
+module asm "\09.word __erebos_unhandled"
+module asm "\09.word 0"
+module asm "\09.word drivers.pend"
+module asm "\09.word tick"
 
 @TICKS = local_unnamed_addr global [4 x i8] zeroinitializer, align 4
-@llvm.compiler.used = appending global [4 x ptr] [ptr @drivers.pend, ptr @fault, ptr @svc, ptr @tick], section "llvm.metadata"
+@llvm.compiler.used = appending global [5 x ptr] [ptr @__erebos_unhandled, ptr @drivers.pend, ptr @fault, ptr @svc, ptr @tick], section "llvm.metadata"
 
 ; Function Attrs: mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(readwrite, argmem: none, inaccessiblemem: none, target_mem0: none, target_mem1: none)
 define void @tick() #0 {
@@ -131,6 +166,15 @@ bb0:
 
 bb1:                                              ; preds = %bb1, %bb0
   br label %bb1
+}
+
+; Function Attrs: nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none)
+define void @__erebos_unhandled() #1 {
+bb0:
+  br label %bb1.i
+
+bb1.i:                                            ; preds = %bb1.i, %bb0
+  br label %bb1.i
 }
 
 attributes #0 = { mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(readwrite, argmem: none, inaccessiblemem: none, target_mem0: none, target_mem1: none) }

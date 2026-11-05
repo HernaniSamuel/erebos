@@ -1,0 +1,56 @@
+// A handler in a nested module has a dotted symbol, and the table's word for it
+// has bit 0 set, as a Thumb function's: the core jumps to it and does not fault
+// (ADR 0085). SysTick runs it three times; the entry function stops SysTick and
+// clears what is pending inside `critical`, so that the count is final.
+// takes-exceptions: yes
+// targets: thumbv7m-none-eabi
+// expect-output: nested ok
+// expect-exit: 0
+
+mod board;
+use board::{exit, putc};
+
+const SYST_CSR: *mut volatile u32 = 0xE000_E010 as *mut volatile u32;
+const SYST_RVR: *mut volatile u32 = 0xE000_E014 as *mut volatile u32;
+const SYST_CVR: *mut volatile u32 = 0xE000_E018 as *mut volatile u32;
+const ICSR: *mut volatile u32 = 0xE000_ED04 as *mut volatile u32;
+
+static mut TICKS: u32 = 0;
+
+mod timer {
+    pub mod systick {
+        pub interrupt fn tick() at core::arch::Vector::SysTick {
+            super::super::TICKS += 1;
+        }
+    }
+}
+
+entry fn main() -> ! {
+    *SYST_RVR = 10_000;
+    *SYST_CVR = 0;
+    *SYST_CSR = 7;
+    core::arch::enable_interrupts();
+    let mut seen: u32 = 0;
+    loop {
+        critical {
+            if TICKS >= 3 {
+                *SYST_CSR = 0;
+                *ICSR = 1 << 25;
+                seen = TICKS;
+                break;
+            }
+            core::arch::wait_for_interrupt();
+        }
+    }
+    if seen < 3 {
+        exit(2)
+    }
+    putc(b'n'); putc(b'e'); putc(b's'); putc(b't'); putc(b'e'); putc(b'd'); putc(b' ');
+    putc(b'o'); putc(b'k');
+    putc(b'\n');
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(99)
+}

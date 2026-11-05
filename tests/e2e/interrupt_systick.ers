@@ -1,0 +1,62 @@
+// The milestone of M4.3 on thumbv7m (ADR 0084, 0085, 0086): SysTick interrupts
+// the entry function, which waits for it in a `critical` block with
+// `wait_for_interrupt`, and exits after 5 ticks. The handler counts them in a
+// `static mut` that the entry function reads inside `critical`, where it stops
+// SysTick and clears what is pending, so that the count is final, and finds
+// `interrupts_enabled` false, as a handler does on every target.
+// takes-exceptions: yes
+// targets: thumbv7m-none-eabi
+// expect-output: ticks ok
+// expect-exit: 0
+
+mod board;
+use board::{exit, putc};
+use core::arch::Vector;
+
+// SysTick (ARMv7-M): control and status (bit 0 enables the counter, bit 1 the
+// interrupt, bit 2 selects the processor clock), reload value and current value.
+const SYST_CSR: *mut volatile u32 = 0xE000_E010 as *mut volatile u32;
+const SYST_RVR: *mut volatile u32 = 0xE000_E014 as *mut volatile u32;
+const SYST_CVR: *mut volatile u32 = 0xE000_E018 as *mut volatile u32;
+// PENDSTCLR, bit 25 of the interrupt control and state register, clears a pending
+// SysTick.
+const ICSR: *mut volatile u32 = 0xE000_ED04 as *mut volatile u32;
+
+static mut TICKS: u32 = 0;
+
+interrupt fn tick() at Vector::SysTick {
+    if core::arch::interrupts_enabled() {
+        exit(10)
+    }
+    TICKS += 1;
+}
+
+entry fn main() -> ! {
+    *SYST_RVR = 10_000;
+    *SYST_CVR = 0;
+    *SYST_CSR = 7;
+    core::arch::enable_interrupts();
+    let mut seen: u32 = 0;
+    loop {
+        critical {
+            if TICKS >= 5 {
+                // No tick is left to run when the block ends.
+                *SYST_CSR = 0;
+                *ICSR = 1 << 25;
+                seen = TICKS;
+                break;
+            }
+            core::arch::wait_for_interrupt();
+        }
+    }
+    if seen < 5 {
+        exit(2)
+    }
+    putc(b't'); putc(b'i'); putc(b'c'); putc(b'k'); putc(b's'); putc(b' ');
+    putc(b'o'); putc(b'k'); putc(b'\n');
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(99)
+}
