@@ -252,7 +252,7 @@ pub fn dump(q: &mut Queries) -> String {
             FnKind::Interrupt(_) => "interrupt ",
         };
         let at = match f.kind {
-            FnKind::Interrupt(vector) => format!(" at {}", hir.vector_name(vector)),
+            FnKind::Interrupt(vector) => format!(" at {}", hir.vector_path(vector)),
             _ => String::new(),
         };
         let params: Vec<String> = f

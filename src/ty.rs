@@ -541,6 +541,7 @@ impl Checker<'_, '_> {
 
         self.params(f);
         if let FnKind::Interrupt(vector) = f.kind {
+            self.interrupt_vector(vector);
             self.interrupt_return(f, vector);
         }
         // A constant's type is not a return type.
@@ -645,9 +646,33 @@ impl Checker<'_, '_> {
         }
     }
 
+    /// A handler at a variant of the chip's list needs a target whose
+    /// interrupts are vectors; on the others they arrive at one cause, which
+    /// the program dispatches (ADR 0089). Lowering does not know the target,
+    /// so this is reported here.
+    fn interrupt_vector(&mut self, vector: HandlerVector) {
+        if self.hir.is_core_vector(vector) || self.q.target().external_vectors.is_some() {
+            return;
+        }
+        let path = self.hir.vector_path(vector);
+        self.q.diags.push(
+            Diagnostic::error(
+                "ty::interrupt-not-a-vector",
+                format!(
+                    "`{path}` is not a vector on {}",
+                    self.q.target().name
+                ),
+            )
+            .label(vector.span, "an interrupt of the chip, not a vector")
+            .help("on this target every external interrupt arrives at `Vector::MachineExternal`: serve that vector, and tell the source with the chip's controller (ADR 0089, 0091)"),
+        );
+    }
+
     /// An interrupt handler returns `()` or `!`, and `!` where `vector` must
     /// not return: the instruction that trapped would run again with nothing
-    /// changed, since a handler cannot see the frame (ADR 0084).
+    /// changed, since a handler cannot see the frame (ADR 0084). Only a
+    /// variant of `core::arch::Vector` can be one that must not: a chip's
+    /// variant called `HardFault` is a line (ADR 0089).
     fn interrupt_return(&mut self, f: &Fn, vector: HandlerVector) {
         let at = f.ret_span.unwrap_or(f.name_span);
         match self.ret {
@@ -655,7 +680,9 @@ impl Checker<'_, '_> {
             Ty::Never | Ty::Error => {}
             Ty::Unit => {
                 let name = self.hir.vector_name(vector);
-                if self.q.target().vector(name).is_some_and(|v| v.diverges) {
+                if self.hir.is_core_vector(vector)
+                    && self.q.target().vector(name).is_some_and(|v| v.diverges)
+                {
                     self.q.diags.push(
                         Diagnostic::error(
                             "ty::interrupt-return",

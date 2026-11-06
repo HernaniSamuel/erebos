@@ -1,0 +1,37 @@
+// emit: mir
+// target: thumbv7m-none-eabi
+// The MIR of handlers at the chip's list (ADR 0089): a list's vector is written
+// with its enum's path (`at chip::Interrupt::SysTick`), and a `Vector`'s as
+// ADR 0084 has it (`at SysTick`), so the two handlers called alike are told
+// apart.
+use core::arch::Vector;
+
+mod chip {
+    #[interrupts]
+    pub enum Interrupt: u32 {
+        Uart0Tx = 1,
+        SysTick = 3,
+        HardFault = 4,
+    }
+}
+
+static mut TICKS: u32 = 0;
+
+interrupt fn core_tick() at Vector::SysTick {
+    TICKS += 1;
+}
+
+interrupt fn line_tick() at chip::Interrupt::SysTick {
+    TICKS += 2;
+}
+
+#[export]
+interrupt fn line_fault() at chip::Interrupt::HardFault {}
+
+interrupt fn transmitted() -> ! at chip::Interrupt::Uart0Tx {
+    loop {}
+}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

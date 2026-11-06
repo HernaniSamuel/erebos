@@ -1,0 +1,30 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/chip_interrupts_handlers_type_errors_thumbv7m.ers
+---
+--- errors ---
+ty::interrupt-params
+
+  × an interrupt handler takes no parameters
+    ╭─[chip_interrupts_handlers_type_errors_thumbv7m.ers:17:29]
+ 16 │ 
+ 17 │ interrupt fn with_parameter(x: u32) at chip::Interrupt::Uart0Rx {}
+    ·                             ┬
+    ·                             ╰── parameter here
+ 18 │ 
+    ╰────
+  help: the hardware gives a handler nothing: it reads what it needs from the device and from
+        statics (ADR 0084)
+ty::interrupt-return
+
+  × an interrupt handler returns `()` or `!`
+    ╭─[chip_interrupts_handlers_type_errors_thumbv7m.ers:19:35]
+ 18 │ 
+ 19 │ interrupt fn returns_a_value() -> u32 at chip::Interrupt::Uart0Tx {
+    ·                                   ─┬─
+    ·                                    ╰── return type is `u32`
+ 20 │     1
+    ╰────
+  help: nothing receives a handler's value; declare it with no return type, or `-> !` where the
+        vector must not return (ADR 0084)

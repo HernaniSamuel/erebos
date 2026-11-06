@@ -1954,18 +1954,37 @@ impl<'h> Queries<'h> {
     }
 
     /// The program's interrupt handlers, in the order of their bodies, each
-    /// with its vector.
-    fn handlers(&self) -> Vec<mir::Handler> {
+    /// with its vector and the word of the table that holds it. The program
+    /// must have been checked without errors: a handler at the chip's list on
+    /// a target whose interrupts are no vectors, and a value the table cannot
+    /// hold, are errors of the type checker.
+    fn handlers(&mut self) -> Vec<mir::Handler> {
         let hir = self.hir;
-        (hir.handlers.iter())
-            .filter_map(|&id| match hir.fn_(id).kind {
-                hir::FnKind::Interrupt(vector) => Some(mir::Handler {
-                    vector: hir.vector_name(vector).to_owned(),
-                    body: BodyId(id.0),
-                }),
-                _ => None,
-            })
-            .collect()
+        let target = self.target;
+        let mut handlers = Vec::new();
+        for &id in &hir.handlers {
+            let hir::FnKind::Interrupt(vector) = hir.fn_(id).kind else {
+                continue;
+            };
+            let word = if hir.is_core_vector(vector) {
+                target.vector(hir.vector_name(vector)).map(|v| v.word)
+            } else {
+                let value = self.discriminant(vector.enum_id, vector.variant);
+                (target.external_vectors.zip(value))
+                    .map(|(lines, value)| lines.first_word + value as u32)
+            };
+            let Some(word) = word else {
+                unreachable!(
+                    "a handler of a program without errors has a word of its target's table"
+                )
+            };
+            handlers.push(mir::Handler {
+                vector: hir.vector_path(vector),
+                word,
+                body: BodyId(id.0),
+            });
+        }
+        handlers
     }
 
     /// The vector table of the target (ADR 0085): for each word, the handler
@@ -1991,7 +2010,7 @@ impl<'h> Queries<'h> {
                 (Arch::Armv7m, 1, _) => VectorWord::Reset,
                 (Arch::Armv7m, _, None) => VectorWord::Reserved,
                 (_, _, vector) => {
-                    let handler = vector.and_then(|v| handlers.iter().find(|h| h.vector == v.name));
+                    let handler = vector.and_then(|v| handlers.iter().find(|h| h.word == v.word));
                     match handler {
                         Some(handler) => VectorWord::Handler(handler.body),
                         None if with_info => {

@@ -451,7 +451,7 @@ pub fn lower(
     // In any module, whatever their visibility (ADR 0049, 0050).
     let entry = find_unique(&fns, FnKind::Entry, diags);
     let panic = find_unique(&fns, FnKind::Panic, diags);
-    let handlers = find_handlers(&fns, &enums[vector.0 as usize], diags);
+    let handlers = find_handlers(&fns, &enums, diags);
     Some(Hir {
         modules,
         structs,
@@ -1288,25 +1288,29 @@ fn find_unique(fns: &[Fn], kind: FnKind, diags: &mut Diagnostics) -> Option<FnId
 }
 
 /// Finds the interrupt handlers, in the order of the functions' ids, which
-/// follows the source (ADR 0084). A vector has one: each further handler of
-/// a vector is reported, with the first.
-fn find_handlers(fns: &[Fn], vector: &EnumDef, diags: &mut Diagnostics) -> Vec<FnId> {
-    let mut first: HashMap<u32, Span> = HashMap::new();
+/// follows the source (ADR 0084). A vector, told by its enum and its variant
+/// (ADR 0089), has one: each further handler of a vector is reported, with
+/// the first.
+fn find_handlers(fns: &[Fn], enums: &[EnumDef], diags: &mut Diagnostics) -> Vec<FnId> {
+    let mut first: HashMap<(EnumId, u32), Span> = HashMap::new();
     let mut handlers = Vec::new();
     for (i, f) in fns.iter().enumerate() {
         let FnKind::Interrupt(at) = f.kind else {
             continue;
         };
         handlers.push(FnId(i as u32));
-        let Some(&earlier) = first.get(&at.variant) else {
-            first.insert(at.variant, at.span);
+        let Some(&earlier) = first.get(&(at.enum_id, at.variant)) else {
+            first.insert((at.enum_id, at.variant), at.span);
             continue;
         };
-        let name = &vector.variants[at.variant as usize].name;
+        let vector = &enums[at.enum_id.0 as usize];
         diags.push(
             Diagnostic::error(
                 "resolve::duplicate-vector",
-                format!("`{}::{name}` has more than one handler", vector.name),
+                format!(
+                    "`{}` has more than one handler",
+                    vector.variant_path(at.variant as usize)
+                ),
             )
             .label(at.span, "served again here")
             .label(earlier, "first served here")

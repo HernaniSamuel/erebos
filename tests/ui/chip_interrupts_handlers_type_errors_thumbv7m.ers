@@ -1,0 +1,25 @@
+// target: thumbv7m-none-eabi
+// A handler at a variant of the chip's list (ADR 0089) obeys the rules of
+// ADR 0084: no parameters, and `()` or `!`. A variant called `HardFault` is a
+// line and may return, so the first handler is accepted; the second has a
+// parameter and the third returns `u32`.
+mod chip {
+    #[interrupts]
+    pub enum Interrupt: u32 {
+        HardFault = 3,
+        Uart0Rx = 0,
+        Uart0Tx = 1,
+    }
+}
+
+interrupt fn line_fault() at chip::Interrupt::HardFault {}
+
+interrupt fn with_parameter(x: u32) at chip::Interrupt::Uart0Rx {}
+
+interrupt fn returns_a_value() -> u32 at chip::Interrupt::Uart0Tx {
+    1
+}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

@@ -1,0 +1,111 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/chip_interrupts_mir_thumbv7m.ers
+---
+--- mir ---
+enum chip::Interrupt: u32 { Uart0Tx = 1, SysTick = 3, HardFault = 4 }
+
+static mut TICKS: u32; // align 4
+
+interrupt fn core_tick() -> () at SysTick {
+    let _0: ();
+    let _1: *mut u32;
+
+    bb0: {
+        _1 = const static TICKS;
+        (*_1) = Add(copy (*_1), const 1_u32);
+        return;
+    }
+}
+
+interrupt fn line_tick() -> () at chip::Interrupt::SysTick {
+    let _0: ();
+    let _1: *mut u32;
+
+    bb0: {
+        _1 = const static TICKS;
+        (*_1) = Add(copy (*_1), const 2_u32);
+        return;
+    }
+}
+
+interrupt fn line_fault() -> () at chip::Interrupt::HardFault {
+    let _0: ();
+
+    bb0: {
+        return;
+    }
+}
+
+interrupt fn transmitted() -> ! at chip::Interrupt::Uart0Tx {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+comptime fn TICKS() -> u32 {
+    let _0: u32;
+
+    bb0: {
+        _0 = const 0_u32;
+        return;
+    }
+}
+
+comptime fn chip::Interrupt::Uart0Tx() -> u32 {
+    let _0: u32;
+
+    bb0: {
+        _0 = const 1_u32;
+        return;
+    }
+}
+
+comptime fn chip::Interrupt::SysTick() -> u32 {
+    let _0: u32;
+
+    bb0: {
+        _0 = const 3_u32;
+        return;
+    }
+}
+
+comptime fn chip::Interrupt::HardFault() -> u32 {
+    let _0: u32;
+
+    bb0: {
+        _0 = const 4_u32;
+        return;
+    }
+}

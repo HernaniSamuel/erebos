@@ -748,10 +748,14 @@ impl Lowerer<'_> {
     }
 
     /// The vector an `interrupt fn` serves: the variant of `core::arch::Vector`
-    /// that `at` names, resolved from the module of the handler like any path.
-    /// What it names otherwise is reported; a variant that `Vector` does not
-    /// have, such as another target's, is `resolve::unknown-variant`
-    /// (ADR 0080, 0084).
+    /// or of an enum with `#[interrupts]` that `at` names, resolved from the
+    /// module of the handler like any path. What it names otherwise is
+    /// reported; a variant that `Vector` does not have, such as another
+    /// target's, is `resolve::unknown-variant` (ADR 0080, 0084, 0089).
+    ///
+    /// Every enum with the attribute is the list here, not only the first:
+    /// `resolve::duplicate-interrupts` reports the further ones, and a handler
+    /// at one of their variants gets no second error for the same mistake.
     fn handler_vector(&mut self, at: &ast::Path) -> Option<HandlerVector> {
         let vector = self.vector;
         let not_a_vector = |this: &mut Self, what: String| {
@@ -763,15 +767,18 @@ impl Lowerer<'_> {
                 )
                 .label(at.span, what)
                 .help(format!(
-                    "an interrupt handler names the vector it serves with a variant of `{name}`, as in `at Vector::SysTick` after `use core::arch::Vector;` (ADR 0084)"
+                    "an interrupt handler names the vector it serves with a variant of `{name}`, as in `at Vector::SysTick` after `use core::arch::Vector;`, or, where the chip's interrupts are vectors, with a variant of the enum that has `#[interrupts]` (ADR 0084, 0089)"
                 )),
             );
         };
         match self.lookup_path(at) {
-            Named::Variant(id, variant) if id == vector => Some(HandlerVector {
-                variant,
-                span: at.span,
-            }),
+            Named::Variant(id, variant) if id == vector || self.is_interrupt_list(id) => {
+                Some(HandlerVector {
+                    enum_id: id,
+                    variant,
+                    span: at.span,
+                })
+            }
             Named::Variant(id, _) => {
                 let other = self.enum_tys[id.0 as usize].name;
                 not_a_vector(self, format!("a variant of `{other}`"));
@@ -792,6 +799,13 @@ impl Lowerer<'_> {
             }
             Named::Failed => None,
         }
+    }
+
+    /// Whether the enum `id` has `#[interrupts]` (ADR 0089). `core` declares
+    /// no such enum, so the declarations of both parts can be asked.
+    fn is_interrupt_list(&self, id: EnumId) -> bool {
+        let (decl, _) = self.enum_decls[id.0 as usize];
+        decl.attrs.iter().any(|attr| attr.name.name == "interrupts")
     }
 
     pub(super) fn fn_decl(&mut self, decl: &ast::FnDecl) -> Fn {

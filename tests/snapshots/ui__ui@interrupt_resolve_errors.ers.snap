@@ -53,7 +53,8 @@ resolve::not-a-vector
  34 │ 
     ╰────
   help: an interrupt handler names the vector it serves with a variant of `core::arch::Vector`, as
-        in `at Vector::SysTick` after `use core::arch::Vector;` (ADR 0084)
+        in `at Vector::SysTick` after `use core::arch::Vector;`, or, where the chip's interrupts
+        are vectors, with a variant of the enum that has `#[interrupts]` (ADR 0084, 0089)
 resolve::not-a-vector
 
   × `helper` is not a variant of `core::arch::Vector`
@@ -65,7 +66,8 @@ resolve::not-a-vector
  36 │ 
     ╰────
   help: an interrupt handler names the vector it serves with a variant of `core::arch::Vector`, as
-        in `at Vector::SysTick` after `use core::arch::Vector;` (ADR 0084)
+        in `at Vector::SysTick` after `use core::arch::Vector;`, or, where the chip's interrupts
+        are vectors, with a variant of the enum that has `#[interrupts]` (ADR 0084, 0089)
 resolve::not-a-vector
 
   × `LIMIT` is not a variant of `core::arch::Vector`
@@ -77,7 +79,8 @@ resolve::not-a-vector
  38 │ 
     ╰────
   help: an interrupt handler names the vector it serves with a variant of `core::arch::Vector`, as
-        in `at Vector::SysTick` after `use core::arch::Vector;` (ADR 0084)
+        in `at Vector::SysTick` after `use core::arch::Vector;`, or, where the chip's interrupts
+        are vectors, with a variant of the enum that has `#[interrupts]` (ADR 0084, 0089)
 resolve::not-a-vector
 
   × `inner` is not a variant of `core::arch::Vector`
@@ -89,7 +92,8 @@ resolve::not-a-vector
  40 │ 
     ╰────
   help: an interrupt handler names the vector it serves with a variant of `core::arch::Vector`, as
-        in `at Vector::SysTick` after `use core::arch::Vector;` (ADR 0084)
+        in `at Vector::SysTick` after `use core::arch::Vector;`, or, where the chip's interrupts
+        are vectors, with a variant of the enum that has `#[interrupts]` (ADR 0084, 0089)
 resolve::not-a-vector
 
   × `Vector` is not a variant of `core::arch::Vector`
@@ -101,7 +105,8 @@ resolve::not-a-vector
  42 │ 
     ╰────
   help: an interrupt handler names the vector it serves with a variant of `core::arch::Vector`, as
-        in `at Vector::SysTick` after `use core::arch::Vector;` (ADR 0084)
+        in `at Vector::SysTick` after `use core::arch::Vector;`, or, where the chip's interrupts
+        are vectors, with a variant of the enum that has `#[interrupts]` (ADR 0084, 0089)
 resolve::not-a-vector
 
   × `Mode::Idle` is not a variant of `core::arch::Vector`
@@ -113,7 +118,8 @@ resolve::not-a-vector
  44 │ 
     ╰────
   help: an interrupt handler names the vector it serves with a variant of `core::arch::Vector`, as
-        in `at Vector::SysTick` after `use core::arch::Vector;` (ADR 0084)
+        in `at Vector::SysTick` after `use core::arch::Vector;`, or, where the chip's interrupts
+        are vectors, with a variant of the enum that has `#[interrupts]` (ADR 0084, 0089)
 resolve::unknown-path
 
   × cannot find `Nowhere`

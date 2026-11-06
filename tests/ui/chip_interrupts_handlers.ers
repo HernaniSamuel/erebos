@@ -1,0 +1,29 @@
+// A handler at a variant of the chip's list on riscv32 (ADR 0089), where the
+// chip's interrupts are no vectors and arrive at `Vector::MachineExternal`:
+// `ty::interrupt-not-a-vector`, at the path after `at`. The list itself is
+// accepted, and so is a handler at `Vector::MachineExternal`; one at a variant
+// that also returns `u32` has the two errors, which are two mistakes.
+use core::arch::Vector;
+
+mod chip {
+    #[interrupts]
+    pub enum Interrupt: u32 {
+        Uart0 = 10,
+        HardFault = 11,
+        Spi = 12,
+    }
+}
+
+interrupt fn uart() at chip::Interrupt::Uart0 {}
+
+interrupt fn hard_fault() at chip::Interrupt::HardFault {}
+
+interrupt fn external() at Vector::MachineExternal {}
+
+interrupt fn also_returns() -> u32 at chip::Interrupt::Spi {
+    1
+}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

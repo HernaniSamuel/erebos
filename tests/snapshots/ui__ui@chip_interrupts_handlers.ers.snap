@@ -1,0 +1,54 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/chip_interrupts_handlers.ers
+---
+--- errors ---
+ty::interrupt-not-a-vector
+
+  × `chip::Interrupt::Uart0` is not a vector on riscv32imac-unknown-none-elf
+    ╭─[chip_interrupts_handlers.ers:17:24]
+ 16 │ 
+ 17 │ interrupt fn uart() at chip::Interrupt::Uart0 {}
+    ·                        ───────────┬──────────
+    ·                                   ╰── an interrupt of the chip, not a vector
+ 18 │ 
+    ╰────
+  help: on this target every external interrupt arrives at `Vector::MachineExternal`: serve that
+        vector, and tell the source with the chip's controller (ADR 0089, 0091)
+ty::interrupt-not-a-vector
+
+  × `chip::Interrupt::HardFault` is not a vector on riscv32imac-unknown-none-elf
+    ╭─[chip_interrupts_handlers.ers:19:30]
+ 18 │ 
+ 19 │ interrupt fn hard_fault() at chip::Interrupt::HardFault {}
+    ·                              ─────────────┬────────────
+    ·                                           ╰── an interrupt of the chip, not a vector
+ 20 │ 
+    ╰────
+  help: on this target every external interrupt arrives at `Vector::MachineExternal`: serve that
+        vector, and tell the source with the chip's controller (ADR 0089, 0091)
+ty::interrupt-return
+
+  × an interrupt handler returns `()` or `!`
+    ╭─[chip_interrupts_handlers.ers:23:32]
+ 22 │ 
+ 23 │ interrupt fn also_returns() -> u32 at chip::Interrupt::Spi {
+    ·                                ─┬─
+    ·                                 ╰── return type is `u32`
+ 24 │     1
+    ╰────
+  help: nothing receives a handler's value; declare it with no return type, or `-> !` where the
+        vector must not return (ADR 0084)
+ty::interrupt-not-a-vector
+
+  × `chip::Interrupt::Spi` is not a vector on riscv32imac-unknown-none-elf
+    ╭─[chip_interrupts_handlers.ers:23:39]
+ 22 │ 
+ 23 │ interrupt fn also_returns() -> u32 at chip::Interrupt::Spi {
+    ·                                       ──────────┬─────────
+    ·                                                 ╰── an interrupt of the chip, not a vector
+ 24 │     1
+    ╰────
+  help: on this target every external interrupt arrives at `Vector::MachineExternal`: serve that
+        vector, and tell the source with the chip's controller (ADR 0089, 0091)

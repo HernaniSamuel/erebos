@@ -1,0 +1,48 @@
+// emit: typeck
+// target: thumbv7m-none-eabi
+// A handler at a variant of the chip's list (ADR 0089), on thumbv7m, where the
+// chip's interrupts are vectors: in full, through `use`, and with the list in a
+// module; returning `()` and `!`; one at a variant called `HardFault` that
+// returns `()`, since a chip's `HardFault` is a line; and one at
+// `Vector::SysTick` beside one at the list's `SysTick`, which the dump tells
+// apart by the enum's path.
+use core::arch::Vector;
+use chip::Interrupt;
+
+mod chip {
+    #[interrupts]
+    pub enum Interrupt: u32 {
+        Uart0Rx = 0,
+        Uart0Tx = 1,
+        HardFault = 2,
+        SysTick = 3,
+        Timer = 4,
+        Spi = 5,
+    }
+}
+
+static mut COUNT: u32 = 0;
+
+interrupt fn received() at chip::Interrupt::Uart0Rx {
+    COUNT += 1;
+}
+
+interrupt fn transmitted() at Interrupt::Uart0Tx {}
+
+interrupt fn line_fault() -> () at Interrupt::HardFault {}
+
+interrupt fn line_tick() at Interrupt::SysTick {}
+
+interrupt fn core_tick() at Vector::SysTick {}
+
+interrupt fn never() -> ! at Interrupt::Timer {
+    loop {}
+}
+
+mod drivers {
+    pub interrupt fn spi() at crate::chip::Interrupt::Spi {}
+}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

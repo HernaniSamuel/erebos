@@ -307,9 +307,29 @@ impl Hir {
         &self.fns[id.0 as usize]
     }
 
-    /// The name of the variant of `core::arch::Vector` that `vector` is.
+    /// The name of the variant that `vector` is, of `core::arch::Vector` or of
+    /// the chip's list.
     pub fn vector_name(&self, vector: HandlerVector) -> &str {
-        &self.enums[self.vector.0 as usize].variants[vector.variant as usize].name
+        &self.enums[vector.enum_id.0 as usize].variants[vector.variant as usize].name
+    }
+
+    /// Whether `vector` is a variant of `core::arch::Vector`, which the target
+    /// describes (`Target::vector`), and not one of the chip's list, which
+    /// only its value describes (ADR 0089).
+    pub fn is_core_vector(&self, vector: HandlerVector) -> bool {
+        vector.enum_id == self.vector
+    }
+
+    /// How dumps write `vector` after `at` (ADR 0089): a variant of `Vector`
+    /// by its name, as ADR 0084 has it, and one of the chip's list with its
+    /// enum's path, since a vector is told by its enum and variant.
+    pub fn vector_path(&self, vector: HandlerVector) -> String {
+        let name = self.vector_name(vector);
+        if self.is_core_vector(vector) {
+            name.to_owned()
+        } else {
+            format!("{}::{name}", self.enums[vector.enum_id.0 as usize].name)
+        }
     }
 
     pub fn struct_(&self, id: StructId) -> &StructDef {
@@ -1009,8 +1029,10 @@ pub enum FnKind {
 /// The vector an interrupt handler serves (ADR 0084).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct HandlerVector {
-    /// The index of the variant of `core::arch::Vector` that the path after
-    /// `at` names.
+    /// The enum the path after `at` names a variant of: `core::arch::Vector`
+    /// or an enum with `#[interrupts]` (ADR 0089).
+    pub enum_id: EnumId,
+    /// The index of that variant in the enum.
     pub variant: u32,
     /// The path after `at`.
     pub span: Span,
