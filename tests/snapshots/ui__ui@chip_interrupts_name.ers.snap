@@ -1,0 +1,25 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/chip_interrupts_name.ers
+---
+--- typeck ---
+struct Config { interrupts: u32 at 0 } size 4, align 4
+enum Interrupt: u32 { Uart = 1 }
+fn interrupts() -> u32
+    expr 0 int 1 310..311: u32
+fn field(c: Config) -> u32
+    expr 1 field interrupts 388..400: u32
+    expr 2 local c 388..389: Config
+entry fn main() -> !
+    let config: Config
+    let interrupts: u32
+    expr 3 struct Config 452..487: Config
+    expr 4 call 473..485: u32
+    expr 5 call 515..528: u32
+    expr 6 local config 521..527: Config
+    expr 7 loop 534..541: !
+panic fn on_panic() -> !
+    expr 8 loop 572..579: !
+comptime fn Interrupt::Uart() -> u32
+    expr 9 int 1 275..276: u32

@@ -1,0 +1,21 @@
+// target: thumbv7m-none-eabi
+// `#[interrupts]` on thumbv7m (ADR 0089): the architecture has 496 lines, 0 to
+// 495, and a variant with a value of 496 or more is reported where it is
+// declared, whether or not a handler names it: here none does, and the program
+// has no `memory` block.
+mod chip {
+    #[interrupts]
+    pub enum Interrupt: u32 {
+        First = 0,
+        Last = 495,
+        Past = 496,
+        Next = 497,
+        Far = 0x1_0000,
+        Top = 0xFFFF_FFFF,
+        Computed = 400 + 100,
+    }
+}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

@@ -1,0 +1,15 @@
+// `#[interrupts]` (ADR 0089), on riscv32: the list is an enum of `u32` without
+// payloads, whichever the target, so an enum of `u8` that also carries payloads
+// gets both reports. The other shapes are in `chip_interrupts_type_errors_*.ers`,
+// as a program has one list.
+#[interrupts]
+enum Interrupt: u8 {
+    Uart = 1,
+    Timer(u8) = 2,
+    Pair(u8, u16) = 3,
+    Idle = 4,
+}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

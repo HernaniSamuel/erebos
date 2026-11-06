@@ -1,0 +1,268 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/chip_interrupts_resolve_errors.ers
+---
+--- errors ---
+resolve::misplaced-attribute
+
+  × `#[interrupts]` applies only to an enum declared in the program
+   ╭─[chip_interrupts_resolve_errors.ers:7:1]
+ 6 │ 
+ 7 │ #[interrupts]
+   · ──────┬──────
+   ·       ╰── not allowed on a struct
+ 8 │ struct Config {
+   ╰────
+  help: `#[interrupts]` makes an enum the list of the chip's interrupts, whose variants are their
+        numbers; it is not a property of other items (ADR 0089)
+resolve::misplaced-attribute
+
+  × `#[interrupts]` applies only to an enum declared in the program
+    ╭─[chip_interrupts_resolve_errors.ers:12:1]
+ 11 │ 
+ 12 │ #[interrupts]
+    · ──────┬──────
+    ·       ╰── not allowed on a bit-field struct
+ 13 │ struct Control: u32 {
+    ╰────
+  help: `#[interrupts]` makes an enum the list of the chip's interrupts, whose variants are their
+        numbers; it is not a property of other items (ADR 0089)
+resolve::misplaced-attribute
+
+  × `#[interrupts]` applies only to an enum declared in the program
+    ╭─[chip_interrupts_resolve_errors.ers:17:1]
+ 16 │ 
+ 17 │ #[interrupts]
+    · ──────┬──────
+    ·       ╰── not allowed on a function
+ 18 │ fn helper() {}
+    ╰────
+  help: `#[interrupts]` makes an enum the list of the chip's interrupts, whose variants are their
+        numbers; it is not a property of other items (ADR 0089)
+resolve::misplaced-attribute
+
+  × `#[interrupts]` applies only to an enum declared in the program
+    ╭─[chip_interrupts_resolve_errors.ers:20:1]
+ 19 │ 
+ 20 │ #[interrupts]
+    · ──────┬──────
+    ·       ╰── not allowed on an `extern fn`
+ 21 │ extern fn outside();
+    ╰────
+  help: `#[interrupts]` makes an enum the list of the chip's interrupts, whose variants are their
+        numbers; it is not a property of other items (ADR 0089)
+resolve::misplaced-attribute
+
+  × `#[interrupts]` applies only to an enum declared in the program
+    ╭─[chip_interrupts_resolve_errors.ers:23:1]
+ 22 │ 
+ 23 │ #[interrupts]
+    · ──────┬──────
+    ·       ╰── not allowed on a static
+ 24 │ static COUNTER: u32 = 0;
+    ╰────
+  help: `#[interrupts]` makes an enum the list of the chip's interrupts, whose variants are their
+        numbers; it is not a property of other items (ADR 0089)
+resolve::misplaced-attribute
+
+  × `#[interrupts]` applies only to an enum declared in the program
+    ╭─[chip_interrupts_resolve_errors.ers:26:1]
+ 25 │ 
+ 26 │ #[interrupts]
+    · ──────┬──────
+    ·       ╰── not allowed on an `extern static`
+ 27 │ extern static LIMIT: u32;
+    ╰────
+  help: `#[interrupts]` makes an enum the list of the chip's interrupts, whose variants are their
+        numbers; it is not a property of other items (ADR 0089)
+resolve::misplaced-attribute
+
+  × `#[interrupts]` applies only to an enum declared in the program
+    ╭─[chip_interrupts_resolve_errors.ers:29:1]
+ 28 │ 
+ 29 │ #[interrupts]
+    · ──────┬──────
+    ·       ╰── not allowed on a constant
+ 30 │ const SIZE: u32 = 4;
+    ╰────
+  help: `#[interrupts]` makes an enum the list of the chip's interrupts, whose variants are their
+        numbers; it is not a property of other items (ADR 0089)
+resolve::misplaced-attribute
+
+  × `#[interrupts]` applies only to an enum declared in the program
+    ╭─[chip_interrupts_resolve_errors.ers:32:1]
+ 31 │ 
+ 32 │ #[interrupts]
+    · ──────┬──────
+    ·       ╰── not allowed on a module
+ 33 │ mod inner {}
+    ╰────
+  help: `#[interrupts]` makes an enum the list of the chip's interrupts, whose variants are their
+        numbers; it is not a property of other items (ADR 0089)
+resolve::misplaced-attribute
+
+  × `#[interrupts]` applies only to an enum declared in the program
+    ╭─[chip_interrupts_resolve_errors.ers:35:1]
+ 34 │ 
+ 35 │ #[interrupts]
+    · ──────┬──────
+    ·       ╰── not allowed on a `comptime` block
+ 36 │ comptime {
+    ╰────
+  help: `#[interrupts]` makes an enum the list of the chip's interrupts, whose variants are their
+        numbers; it is not a property of other items (ADR 0089)
+resolve::misplaced-attribute
+
+  × `#[interrupts]` applies only to an enum declared in the program
+    ╭─[chip_interrupts_resolve_errors.ers:40:1]
+ 39 │ 
+ 40 │ #[interrupts]
+    · ──────┬──────
+    ·       ╰── not allowed on a function
+ 41 │ interrupt fn tick() at Vector::MachineTimer {}
+    ╰────
+  help: `#[interrupts]` makes an enum the list of the chip's interrupts, whose variants are their
+        numbers; it is not a property of other items (ADR 0089)
+resolve::misplaced-attribute
+
+  × `#[interrupts]` applies only to an enum declared in the program
+    ╭─[chip_interrupts_resolve_errors.ers:43:1]
+ 42 │ 
+ 43 │ #[interrupts]
+    · ──────┬──────
+    ·       ╰── not allowed on a function
+ 44 │ entry fn main() -> ! { loop {} }
+    ╰────
+  help: `#[interrupts]` makes an enum the list of the chip's interrupts, whose variants are their
+        numbers; it is not a property of other items (ADR 0089)
+resolve::misplaced-attribute
+
+  × `#[interrupts]` applies only to an enum declared in the program
+    ╭─[chip_interrupts_resolve_errors.ers:46:1]
+ 45 │ 
+ 46 │ #[interrupts]
+    · ──────┬──────
+    ·       ╰── not allowed on a function
+ 47 │ panic fn on_panic() -> ! { loop {} }
+    ╰────
+  help: `#[interrupts]` makes an enum the list of the chip's interrupts, whose variants are their
+        numbers; it is not a property of other items (ADR 0089)
+resolve::duplicate-attribute
+
+  × `#[interrupts]` is given more than once
+    ╭─[chip_interrupts_resolve_errors.ers:51:1]
+ 49 │ // The first list, given twice and with an argument.
+ 50 │ #[interrupts]
+    · ──────┬──────
+    ·       ╰── first given here
+ 51 │ #[interrupts]
+    · ──────┬──────
+    ·       ╰── given again here
+ 52 │ #[interrupts(1)]
+    ╰────
+resolve::duplicate-attribute
+
+  × `#[interrupts]` is given more than once
+    ╭─[chip_interrupts_resolve_errors.ers:52:1]
+ 50 │ #[interrupts]
+ 51 │ #[interrupts]
+    · ──────┬──────
+    ·       ╰── first given here
+ 52 │ #[interrupts(1)]
+    · ────────┬───────
+    ·         ╰── given again here
+ 53 │ pub enum Interrupt: u32 {
+    ╰────
+resolve::attribute-argument
+
+  × `#[interrupts]` takes no argument
+    ╭─[chip_interrupts_resolve_errors.ers:52:14]
+ 51 │ #[interrupts]
+ 52 │ #[interrupts(1)]
+    ·              ┬
+    ·              ╰── remove this
+ 53 │ pub enum Interrupt: u32 {
+    ╰────
+resolve::duplicate-interrupts
+
+  × `second::Lines` is a second enum with `#[interrupts]`
+    ╭─[chip_interrupts_resolve_errors.ers:59:14]
+ 52 │ #[interrupts(1)]
+ 53 │ pub enum Interrupt: u32 {
+    ·          ────┬────
+    ·              ╰── `Interrupt` is the first
+ 54 │     Uart = 1,
+ 55 │ }
+ 56 │ 
+ 57 │ mod second {
+ 58 │     #[interrupts]
+ 59 │     pub enum Lines: u32 {
+    ·              ──┬──
+    ·                ╰── a second list of the chip's interrupts
+ 60 │         A = 1,
+    ╰────
+  help: a program has one list of the chip's interrupts, as it has one `memory` block: put them in
+        one enum, or leave the other without `#[interrupts]` (ADR 0089)
+resolve::duplicate-interrupts
+
+  × `third::deeper::Sources` is a second enum with `#[interrupts]`
+    ╭─[chip_interrupts_resolve_errors.ers:67:14]
+ 52 │ #[interrupts(1)]
+ 53 │ pub enum Interrupt: u32 {
+    ·          ────┬────
+    ·              ╰── `Interrupt` is the first
+ 54 │     Uart = 1,
+ 55 │ }
+ 56 │ 
+ 57 │ mod second {
+ 58 │     #[interrupts]
+ 59 │     pub enum Lines: u32 {
+ 60 │         A = 1,
+ 61 │     }
+ 62 │ }
+ 63 │ 
+ 64 │ mod third {
+ 65 │     mod deeper {
+ 66 │         #[interrupts]
+ 67 │         enum Sources: u32 {
+    ·              ───┬───
+    ·                 ╰── a second list of the chip's interrupts
+ 68 │             B = 1,
+    ╰────
+  help: a program has one list of the chip's interrupts, as it has one `memory` block: put them in
+        one enum, or leave the other without `#[interrupts]` (ADR 0089)
+resolve::duplicate-interrupts
+
+  × `third::Others` is a second enum with `#[interrupts]`
+    ╭─[chip_interrupts_resolve_errors.ers:73:10]
+ 52 │ #[interrupts(1)]
+ 53 │ pub enum Interrupt: u32 {
+    ·          ────┬────
+    ·              ╰── `Interrupt` is the first
+ 54 │     Uart = 1,
+ 55 │ }
+ 56 │ 
+ 57 │ mod second {
+ 58 │     #[interrupts]
+ 59 │     pub enum Lines: u32 {
+ 60 │         A = 1,
+ 61 │     }
+ 62 │ }
+ 63 │ 
+ 64 │ mod third {
+ 65 │     mod deeper {
+ 66 │         #[interrupts]
+ 67 │         enum Sources: u32 {
+ 68 │             B = 1,
+ 69 │         }
+ 70 │     }
+ 71 │ 
+ 72 │     #[interrupts]
+ 73 │     enum Others: u8 {
+    ·          ───┬──
+    ·             ╰── a second list of the chip's interrupts
+ 74 │         C = 1,
+    ╰────
+  help: a program has one list of the chip's interrupts, as it has one `memory` block: put them in
+        one enum, or leave the other without `#[interrupts]` (ADR 0089)

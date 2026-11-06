@@ -1,0 +1,61 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/chip_interrupts_type_errors_thumbv7m.ers
+---
+--- errors ---
+ty::interrupt-number
+
+  × `chip::Interrupt::Past` is the interrupt 496, which thumbv7m-none-eabi has no line for
+    ╭─[chip_interrupts_type_errors_thumbv7m.ers:11:9]
+ 10 │         Last = 495,
+ 11 │         Past = 496,
+    ·         ──┬─
+    ·           ╰── past the last line, 495
+ 12 │         Next = 497,
+    ╰────
+  help: the interrupts of the architecture are the lines 0 to 495, exceptions 16 to 511 (ADR 0089)
+ty::interrupt-number
+
+  × `chip::Interrupt::Next` is the interrupt 497, which thumbv7m-none-eabi has no line for
+    ╭─[chip_interrupts_type_errors_thumbv7m.ers:12:9]
+ 11 │         Past = 496,
+ 12 │         Next = 497,
+    ·         ──┬─
+    ·           ╰── past the last line, 495
+ 13 │         Far = 0x1_0000,
+    ╰────
+  help: the interrupts of the architecture are the lines 0 to 495, exceptions 16 to 511 (ADR 0089)
+ty::interrupt-number
+
+  × `chip::Interrupt::Far` is the interrupt 65536, which thumbv7m-none-eabi has no line for
+    ╭─[chip_interrupts_type_errors_thumbv7m.ers:13:9]
+ 12 │         Next = 497,
+ 13 │         Far = 0x1_0000,
+    ·         ─┬─
+    ·          ╰── past the last line, 495
+ 14 │         Top = 0xFFFF_FFFF,
+    ╰────
+  help: the interrupts of the architecture are the lines 0 to 495, exceptions 16 to 511 (ADR 0089)
+ty::interrupt-number
+
+  × `chip::Interrupt::Top` is the interrupt 4294967295, which thumbv7m-none-eabi has no line for
+    ╭─[chip_interrupts_type_errors_thumbv7m.ers:14:9]
+ 13 │         Far = 0x1_0000,
+ 14 │         Top = 0xFFFF_FFFF,
+    ·         ─┬─
+    ·          ╰── past the last line, 495
+ 15 │         Computed = 400 + 100,
+    ╰────
+  help: the interrupts of the architecture are the lines 0 to 495, exceptions 16 to 511 (ADR 0089)
+ty::interrupt-number
+
+  × `chip::Interrupt::Computed` is the interrupt 500, which thumbv7m-none-eabi has no line for
+    ╭─[chip_interrupts_type_errors_thumbv7m.ers:15:9]
+ 14 │         Top = 0xFFFF_FFFF,
+ 15 │         Computed = 400 + 100,
+    ·         ────┬───
+    ·             ╰── past the last line, 495
+ 16 │     }
+    ╰────
+  help: the interrupts of the architecture are the lines 0 to 495, exceptions 16 to 511 (ADR 0089)

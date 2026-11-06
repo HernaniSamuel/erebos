@@ -362,6 +362,7 @@ impl<'h> Queries<'h> {
             }
         }
         self.check_memory_map();
+        self.check_chip_interrupts();
         self.check_peripherals();
         self.check_bit_structs();
         for (id, f) in hir.fns() {

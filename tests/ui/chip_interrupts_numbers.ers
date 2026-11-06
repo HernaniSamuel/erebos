@@ -1,0 +1,26 @@
+// emit: typeck
+// `#[interrupts]` on riscv32 (ADR 0089): the numbers are the PLIC's, or
+// anything the chip's controller gives, so none is too large: 496 is accepted,
+// as are 1000 and the largest `u32`. The same list on thumbv7m reports them
+// (`chip_interrupts_type_errors_thumbv7m.ers`). The list is read for nothing
+// here, so the dump shows an enum like any other, and the program converts a
+// variant with `as u32`.
+#[interrupts]
+pub enum Interrupt: u32 {
+    Uart0 = 10,
+    Edge = 495,
+    Past = 496,
+    Far = 1000,
+    Top = 0xFFFF_FFFF,
+}
+
+fn number(i: Interrupt) -> u32 {
+    i as u32
+}
+
+entry fn main() -> ! {
+    let n: u32 = number(Interrupt::Past);
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

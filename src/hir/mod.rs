@@ -140,6 +140,10 @@ pub struct Hir {
     /// `core::arch::Vector`, the enum whose variants name the vectors a
     /// handler serves, found by path as `reset` is (ADR 0084).
     pub vector: EnumId,
+    /// The enum with `#[interrupts]`, which lists the chip's interrupts
+    /// (ADR 0089): the first in the order of the enums' ids, and `None` for a
+    /// program without one.
+    pub chip_interrupts: Option<EnumId>,
     /// The interrupt handlers, in the order of their ids; a vector has at
     /// most one. Their `kind` holds the vector.
     pub handlers: Vec<FnId>,
@@ -218,7 +222,7 @@ impl Hir {
     /// The HIR of the program, as `--emit=hir` shows it: `core` left out
     /// (ADR 0052). Its fields are those of `Hir`, in its order, but for
     /// those about `core` (where it starts, the ids of `PanicInfo` and
-    /// `PanicReason`, `Vector`), the table of files, which only turns the spans
+    /// `PanicReason`, `Vector`, `chip_interrupts`), the table of files, which only turns the spans
     /// shown into lines and columns, and `handlers`, which the `kind` of
     /// each function says.
     pub fn dump(&self) -> String {

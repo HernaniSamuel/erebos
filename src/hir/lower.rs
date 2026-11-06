@@ -178,6 +178,41 @@ pub fn lower(
         });
     }
 
+    // The enum that lists the chip's interrupts (ADR 0089): a program has at
+    // most one, in any module, as it has one `memory` block, and each further
+    // one is reported with the first. `core` declares none, so only the
+    // program's enums are looked at; `#[interrupts]` given twice on one enum
+    // is reported where the enum is lowered.
+    let mut chip_interrupts: Option<EnumId> = None;
+    for (i, &(decl, module)) in enum_decls[..program_end.enums].iter().enumerate() {
+        if !decl.attrs.iter().any(|attr| attr.name.name == "interrupts") {
+            continue;
+        }
+        let Some(first) = chip_interrupts else {
+            chip_interrupts = Some(EnumId(i as u32));
+            continue;
+        };
+        let (first_decl, first_module) = enum_decls[first.0 as usize];
+        diags.push(
+            Diagnostic::error(
+                "resolve::duplicate-interrupts",
+                format!(
+                    "`{}` is a second enum with `#[interrupts]`",
+                    item_path(&modules, module, &decl.name.name)
+                ),
+            )
+            .label(decl.name.span, "a second list of the chip's interrupts")
+            .label(
+                first_decl.name.span,
+                format!(
+                    "`{}` is the first",
+                    item_path(&modules, first_module, &first_decl.name.name)
+                ),
+            )
+            .help("a program has one list of the chip's interrupts, as it has one `memory` block: put them in one enum, or leave the other without `#[interrupts]` (ADR 0089)"),
+        );
+    }
+
     // Peripheral types too (ADR 0058).
     let peripheral_tys = peripheral_type_decls
         .iter()
@@ -444,6 +479,7 @@ pub fn lower(
         panic_info,
         panic_reason,
         vector,
+        chip_interrupts,
         handlers,
         files,
     })

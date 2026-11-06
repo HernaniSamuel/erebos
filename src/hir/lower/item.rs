@@ -159,7 +159,9 @@ impl Lowerer<'_> {
                     .label(attr.span, "not allowed on a bit-field struct")
                     .help("a bit-field struct has the size and alignment of its integer type, which it is stored as (ADR 0059)"),
                 ),
-                "export" | "naked" => self.misplaced_attr(attr, "a bit-field struct"),
+                "export" | "naked" | "interrupts" => {
+                    self.misplaced_attr(attr, "a bit-field struct")
+                }
                 _ => self.unknown_attr(attr),
             }
         }
@@ -190,7 +192,7 @@ impl Lowerer<'_> {
                     }
                     align_attr.replace(attr.span)
                 }
-                "export" | "naked" => {
+                "export" | "naked" | "interrupts" => {
                     self.misplaced_attr(attr, "a struct");
                     None
                 }
@@ -224,12 +226,27 @@ impl Lowerer<'_> {
         (packed.is_some(), align)
     }
 
-    /// Items other than structs, statics and functions with a body take no
-    /// attributes; `what` names the item.
+    /// Items other than structs, enums, statics and functions with a body take
+    /// no attributes; `what` names the item.
     pub(super) fn no_attrs(&mut self, attrs: &[ast::Attr], what: &str) {
         for attr in attrs {
             match attr.name.name.as_str() {
-                "packed" | "align" | "export" | "naked" => self.misplaced_attr(attr, what),
+                "packed" | "align" | "export" | "naked" | "interrupts" => {
+                    self.misplaced_attr(attr, what)
+                }
+                _ => self.unknown_attr(attr),
+            }
+        }
+    }
+
+    /// `#[interrupts]` is the one attribute of an enum (ADR 0089); the chip's
+    /// list is found by `lower`, which is told whether the enum has it.
+    fn enum_attrs(&mut self, attrs: &[ast::Attr]) {
+        let mut interrupts = None;
+        for attr in attrs {
+            match attr.name.name.as_str() {
+                "interrupts" => self.flag_attr(attr, &mut interrupts),
+                "packed" | "align" | "export" | "naked" => self.misplaced_attr(attr, "an enum"),
                 _ => self.unknown_attr(attr),
             }
         }
@@ -242,6 +259,7 @@ impl Lowerer<'_> {
             "naked" => {
                 "functions with a body, other than the entry function, the panic function and interrupt handlers"
             }
+            "interrupts" => "an enum declared in the program",
             _ => "structs",
         };
         let mut diag = Diagnostic::error(
@@ -255,11 +273,15 @@ impl Lowerer<'_> {
         if attr.name.name == "naked" {
             diag = diag.help("`#[naked]` makes a function with a body that is one `asm` expression, with no code of the compiler's; the entry, the panic function and the interrupt handlers are written in Erebos, and an `extern fn` has no body here (ADR 0079, 0084)");
         }
+        if attr.name.name == "interrupts" {
+            diag = diag.help("`#[interrupts]` makes an enum the list of the chip's interrupts, whose variants are their numbers; it is not a property of other items (ADR 0089)");
+        }
         self.diags.push(diag);
     }
 
     /// An attribute that takes no argument and is given at most once
-    /// (`#[export]`, ADR 0051; `#[naked]`, ADR 0079); `given` holds the span
+    /// (`#[export]`, ADR 0051; `#[naked]`, ADR 0079; `#[interrupts]`,
+    /// ADR 0089); `given` holds the span
     /// of the one already given.
     fn flag_attr(&mut self, attr: &ast::Attr, given: &mut Option<Span>) {
         let name = &attr.name.name;
@@ -330,7 +352,7 @@ impl Lowerer<'_> {
                         );
                     }
                 }
-                "packed" => self.misplaced_attr(attr, "a function"),
+                "packed" | "interrupts" => self.misplaced_attr(attr, "a function"),
                 _ => self.unknown_attr(attr),
             }
         }
@@ -376,7 +398,7 @@ impl Lowerer<'_> {
                     }
                 }
                 "export" => self.flag_attr(attr, &mut export),
-                "packed" | "naked" => self.misplaced_attr(attr, "a static"),
+                "packed" | "naked" | "interrupts" => self.misplaced_attr(attr, "a static"),
                 _ => self.unknown_attr(attr),
             }
         }
@@ -493,7 +515,7 @@ impl Lowerer<'_> {
         id: EnumId,
         first_body: u32,
     ) -> (EnumDef, Vec<Fn>) {
-        self.no_attrs(&decl.attrs, "an enum");
+        self.enum_attrs(&decl.attrs);
         let mut seen: HashMap<&str, Span> = HashMap::new();
         for variant in &decl.variants {
             if let Some(&first) = seen.get(variant.name.name.as_str()) {
@@ -716,7 +738,7 @@ impl Lowerer<'_> {
                 format!("unknown attribute `#[{}]`", attr.name.name),
             )
             .label(attr.name.span, "not an attribute")
-            .help("the attributes are `#[packed]` and `#[align(N)]` on structs (ADR 0022), `#[align(N)]` on statics (ADR 0030) and on functions (ADR 0087), `#[export]` on functions and statics (ADR 0051), and `#[naked]` on functions (ADR 0079)"),
+            .help("the attributes are `#[packed]` and `#[align(N)]` on structs (ADR 0022), `#[align(N)]` on statics (ADR 0030) and on functions (ADR 0087), `#[export]` on functions and statics (ADR 0051), `#[naked]` on functions (ADR 0079), and `#[interrupts]` on an enum (ADR 0089)"),
         );
     }
 

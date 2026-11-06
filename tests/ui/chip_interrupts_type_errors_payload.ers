@@ -1,0 +1,15 @@
+// `#[interrupts]` (ADR 0089): an enum of `u32` with a payload in one variant is
+// reported once, at that variant; one with the type right and no payload is the
+// list (`chip_interrupts_numbers.ers`). A value of 496 or more is not reported
+// here, even on thumbv7m (`chip_interrupts_type_errors_thumbv7m.ers`), since
+// these are not the chip's numbers.
+// target: thumbv7m-none-eabi
+#[interrupts]
+enum Interrupt: u32 {
+    Uart = 1,
+    Timer(bool) = 600,
+}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

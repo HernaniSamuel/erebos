@@ -1,0 +1,28 @@
+// emit: typeck
+// `interrupts` is a name like any other (ADR 0089): it is the name of an
+// attribute only between `#[` and `]`, and no keyword, so it names a function,
+// a field and a local, beside the attribute on the list.
+#[interrupts]
+enum Interrupt: u32 {
+    Uart = 1,
+}
+
+fn interrupts() -> u32 {
+    1
+}
+
+struct Config {
+    interrupts: u32,
+}
+
+fn field(c: Config) -> u32 {
+    c.interrupts
+}
+
+entry fn main() -> ! {
+    let config: Config = Config { interrupts: interrupts() };
+    let interrupts: u32 = field(config);
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

@@ -1,0 +1,18 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/chip_interrupts_type_errors_wide.ers
+---
+--- errors ---
+ty::interrupts-enum
+
+  × the chip's list of interrupts `Interrupt` is stored as `u64`
+   ╭─[chip_interrupts_type_errors_wide.ers:6:6]
+ 5 │ #[interrupts]
+ 6 │ enum Interrupt: u64 {
+   ·      ────┬────
+   ·          ╰── must be an enum of `u32`
+ 7 │     Uart = 1,
+   ╰────
+  help: a variant is the number the chip's controller gives the interrupt, a `u32` as the values
+        of `core::arch::Vector` are (ADR 0089)

@@ -64,6 +64,21 @@ pub struct Target {
     /// exceptions' table; on RISC-V 33, the exceptions, the interrupts and the
     /// word of any other cause.
     pub table_words: u32,
+    /// Whether the interrupts of the chip's list are vectors, each with a word
+    /// of the table of its own (ADR 0089): ARMv7-M's lines, `None` on RISC-V,
+    /// whose interrupts all arrive at `MachineExternal`.
+    pub external_vectors: Option<ExternalVectors>,
+}
+
+/// Where the chip's interrupts are in the vector table of a target on which
+/// they are vectors (ADR 0089).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ExternalVectors {
+    /// The word of the line 0: the system exceptions come before it.
+    pub first_word: u32,
+    /// The most interrupts the architecture has: a value of this or more is no
+    /// line (`ty::interrupt-number`).
+    pub max: u32,
 }
 
 /// A variant of `core::arch::Vector`, with what the language needs of the
@@ -187,6 +202,7 @@ pub static RISCV32IMAC: Target = Target {
     register_names: "`x0` to `x31`, or their ABI names: `zero`, `ra`, `sp`, `gp`, `tp`, `t0` to `t6`, `s0` (`fp`) to `s11`, `a0` to `a7`",
     vectors: &RISCV32_VECTORS,
     table_words: 33,
+    external_vectors: None,
 };
 
 /// The variants of `Vector` in `rt/arch/riscv32.ers` (ADR 0084).
@@ -266,6 +282,11 @@ pub static THUMBV7M: Target = Target {
     register_names: "`r0` to `r15`, or `sb` (`r9`), `sl` (`r10`), `fp` (`r11`), `ip` (`r12`), `sp` (`r13`), `lr` (`r14`) and `pc` (`r15`)",
     vectors: &ARMV7M_VECTORS,
     table_words: 16,
+    // Exceptions 16 to 511: the architecture's 496 lines (ADR 0089).
+    external_vectors: Some(ExternalVectors {
+        first_word: 16,
+        max: 496,
+    }),
 };
 
 /// The variants of `Vector` in `rt/arch/armv7m.ers` (ADR 0084).
@@ -487,6 +508,19 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// The chip's interrupts are vectors on ARMv7-M only, from the word after
+    /// the system exceptions, and at most 496 (ADR 0089).
+    #[test]
+    fn external_vectors_on_each_target() {
+        assert_eq!(RISCV32IMAC.external_vectors, None);
+        let arm = THUMBV7M.external_vectors.expect("lines are vectors");
+        assert_eq!((arm.first_word, arm.max), (16, 496));
+        // The first line follows the table of the system exceptions, and the
+        // last is exception 511, the highest the architecture has.
+        assert_eq!(arm.first_word, THUMBV7M.table_words);
+        assert_eq!(arm.first_word + arm.max - 1, 511);
     }
 
     #[test]
