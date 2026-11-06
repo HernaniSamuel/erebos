@@ -131,6 +131,15 @@ Agreed as useful, not yet scheduled:
   applied, instead of reading and matching file text. Unlike LSP, queries
   are by name, not by cursor position. It builds on the on-demand queries
   of ADR 0028 and the structured diagnostics; still to be designed.
+- Function pointers, as a safe, copyable type and not a raw pointer: one
+  points to code that does not change and, with no closures, carries no
+  environment, so the borrow checker has nothing to check in it. Not
+  decided. The step that adds them must settle the rule of ADR 0078 (a call
+  through a pointer reaches every function whose address is taken, unless
+  its type says more), the Thumb bit 0 in their value on thumbv7m (ADR
+  0074), and whether a pointer to a function that may run only in some
+  context can be told from one that may run in any (the effect system
+  below). Dynamic dispatch is a struct of them (M6).
 - An effect system: annotations such as "never panics" or "safe in an
   interrupt handler", checked over the call graph. With "anything" as the
   default and annotations only restricting, it can be added without
@@ -321,6 +330,16 @@ ADRs:
     aliases a `static mut` its callee also names (M4.5's check sees only
     statics), references in locals, and how this meets the choice between
     affine and linear values below.
+  - Fewer raw pointers, a goal to measure once references exist: parameters
+    by address and slices move to references; a static placed in a named
+    region (deferred ideas) replaces a computed address for a DMA buffer;
+    handles into static arrays, with range-typed indexes (deferred ideas),
+    replace pointers in linked data. What stays raw is `extern`, `asm`
+    operands, fixed addresses outside peripherals, reinterpreting memory and
+    the inside of allocators. Rule of thumb: if the safe form needs a written
+    lifetime or region, leave it raw. Whether to mark the dereference of a
+    raw pointer (the language has no `unsafe`, ADR 0030) waits until it is
+    clear what remains.
   - The `(*s)[i]` syntax for slice elements (ADR 0031).
   - Whether the MIR analyses run before compile-time evaluation, which
     today runs MIR they have not checked (ADR 0033).
