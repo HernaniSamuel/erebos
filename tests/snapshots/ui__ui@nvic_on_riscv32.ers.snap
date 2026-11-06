@@ -1,0 +1,56 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/nvic_on_riscv32.ers
+---
+--- errors ---
+resolve::unknown-function
+
+  × cannot find function `core::arch::nvic_enable`
+   ╭─[nvic_on_riscv32.ers:7:17]
+ 6 │ fn main_work() {
+ 7 │     core::arch::nvic_enable(1);
+   ·                 ─────┬─────
+   ·                      ╰── not found in module `core::arch`
+ 8 │     core::arch::nvic_disable(1);
+   ╰────
+resolve::unknown-function
+
+  × cannot find function `core::arch::nvic_disable`
+   ╭─[nvic_on_riscv32.ers:8:17]
+ 7 │     core::arch::nvic_enable(1);
+ 8 │     core::arch::nvic_disable(1);
+   ·                 ──────┬─────
+   ·                       ╰── not found in module `core::arch`
+ 9 │     core::arch::nvic_pend(1);
+   ╰────
+resolve::unknown-function
+
+  × cannot find function `core::arch::nvic_pend`
+    ╭─[nvic_on_riscv32.ers:9:17]
+  8 │     core::arch::nvic_disable(1);
+  9 │     core::arch::nvic_pend(1);
+    ·                 ────┬────
+    ·                     ╰── not found in module `core::arch`
+ 10 │     core::arch::nvic_unpend(1);
+    ╰────
+resolve::unknown-function
+
+  × cannot find function `core::arch::nvic_unpend`
+    ╭─[nvic_on_riscv32.ers:10:17]
+  9 │     core::arch::nvic_pend(1);
+ 10 │     core::arch::nvic_unpend(1);
+    ·                 ─────┬─────
+    ·                      ╰── not found in module `core::arch`
+ 11 │     let pending: bool = core::arch::nvic_is_pending(1);
+    ╰────
+resolve::unknown-function
+
+  × cannot find function `core::arch::nvic_is_pending`
+    ╭─[nvic_on_riscv32.ers:11:37]
+ 10 │     core::arch::nvic_unpend(1);
+ 11 │     let pending: bool = core::arch::nvic_is_pending(1);
+    ·                                     ───────┬───────
+    ·                                            ╰── not found in module `core::arch`
+ 12 │     core::arch::enable_interrupts();
+    ╰────

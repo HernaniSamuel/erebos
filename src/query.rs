@@ -362,6 +362,7 @@ impl<'h> Queries<'h> {
             }
         }
         self.check_memory_map();
+        self.check_chip_interrupts();
         self.check_peripherals();
         self.check_bit_structs();
         for (id, f) in hir.fns() {
@@ -1953,24 +1954,46 @@ impl<'h> Queries<'h> {
     }
 
     /// The program's interrupt handlers, in the order of their bodies, each
-    /// with its vector.
-    fn handlers(&self) -> Vec<mir::Handler> {
+    /// with its vector and the word of the table that holds it. The program
+    /// must have been checked without errors: a handler at the chip's list on
+    /// a target whose interrupts are no vectors, and a value the table cannot
+    /// hold, are errors of the type checker.
+    fn handlers(&mut self) -> Vec<mir::Handler> {
         let hir = self.hir;
-        (hir.handlers.iter())
-            .filter_map(|&id| match hir.fn_(id).kind {
-                hir::FnKind::Interrupt(vector) => Some(mir::Handler {
-                    vector: hir.vector_name(vector).to_owned(),
-                    body: BodyId(id.0),
-                }),
-                _ => None,
-            })
-            .collect()
+        let target = self.target;
+        let mut handlers = Vec::new();
+        for &id in &hir.handlers {
+            let hir::FnKind::Interrupt(vector) = hir.fn_(id).kind else {
+                continue;
+            };
+            let word = if hir.is_core_vector(vector) {
+                target.vector(hir.vector_name(vector)).map(|v| v.word)
+            } else {
+                let value = self.discriminant(vector.enum_id, vector.variant);
+                (target.external_vectors.zip(value))
+                    .map(|(lines, value)| lines.first_word + value as u32)
+            };
+            let Some(word) = word else {
+                unreachable!(
+                    "a handler of a program without errors has a word of its target's table"
+                )
+            };
+            handlers.push(mir::Handler {
+                vector: hir.vector_path(vector),
+                word,
+                body: BodyId(id.0),
+            });
+        }
+        handlers
     }
 
     /// The vector table of the target (ADR 0085): for each word, the handler
     /// of its vector, or a default handler that calls the panic function. On
     /// ARMv7-M the words 0 and 1 are the stack and the reset entry, and the
-    /// words the architecture reserves are 0; on RISC-V every word is a cause
+    /// words the architecture reserves are 0, and with the chip's list the
+    /// table goes on with a word per line, up to the list's largest value
+    /// (ADR 0090), a line the list does not name having the default handler
+    /// `other`; on RISC-V every word is a cause
     /// (the exceptions, then the interrupts, then any other), and a cause
     /// `Vector` has no variant for shares the default handler `other`, whose
     /// message is `unknown`.
@@ -1983,24 +2006,43 @@ impl<'h> Queries<'h> {
         let with_info = self.takes_panic_info();
         let mut defaults: Vec<DefaultHandler> = Vec::new();
         let mut words = Vec::new();
-        for word in 0..target.table_words {
+        // With the chip's list, the table runs to its largest value (ADR 0090).
+        let lines = self.chip_lines().unwrap_or_default();
+        let total = self.chip_table_words().unwrap_or(target.table_words);
+        for word in 0..total {
             let vector = target.vectors.iter().find(|vector| vector.word == word);
-            let word = match (target.arch, word, vector) {
-                (Arch::Armv7m, 0, _) => VectorWord::StackEnd,
-                (Arch::Armv7m, 1, _) => VectorWord::Reset,
-                (Arch::Armv7m, _, None) => VectorWord::Reserved,
-                (_, _, vector) => {
-                    let handler = vector.and_then(|v| handlers.iter().find(|h| h.vector == v.name));
+            // `Some(Some(variant))` at a line the list names, `Some(None)` at
+            // one it leaves out, `None` before the lines.
+            let line = (target.external_vectors)
+                .filter(|external| word >= external.first_word)
+                .map(|external| {
+                    lines
+                        .iter()
+                        .find(|&&(v, _)| v == word - external.first_word)
+                });
+            let word = match (target.arch, word, vector, line) {
+                (Arch::Armv7m, 0, ..) => VectorWord::StackEnd,
+                (Arch::Armv7m, 1, ..) => VectorWord::Reset,
+                (Arch::Armv7m, _, None, None) => VectorWord::Reserved,
+                (_, word, vector, line) => {
+                    let handler = handlers.iter().find(|h| h.word == word);
                     match handler {
                         Some(handler) => VectorWord::Handler(handler.body),
                         None if with_info => {
-                            // The words with no variant share one function.
-                            let name = vector.map_or("other", |vector| vector.name);
+                            // A line has a function of its own under the prefix
+                            // `irq_`, which a `Vector` of that name does not have;
+                            // the words with no variant share one function.
+                            let (name, message) = match (vector, line) {
+                                (Some(vector), _) => (vector.name.to_owned(), vector.name),
+                                (None, Some(Some((_, variant)))) => {
+                                    (format!("irq_{variant}"), variant.as_str())
+                                }
+                                _ => ("other".to_owned(), "unknown"),
+                            };
                             let symbol = format!("__erebos_unhandled_{name}");
                             match defaults.iter().position(|d| d.symbol == symbol) {
                                 Some(index) => VectorWord::Default(index),
                                 None => {
-                                    let message = vector.map_or("unknown", |vector| vector.name);
                                     let info = self.unhandled_info(message);
                                     defaults.push(DefaultHandler {
                                         symbol,

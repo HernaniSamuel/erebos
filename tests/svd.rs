@@ -91,25 +91,29 @@ fn compile(path: &Path, svd_text: &str, module: &str) {
     fs::write(&root, ROOT).unwrap();
 
     let expected = expected_errors(svd_text);
-    match driver::dump(
-        &root,
-        ROOT,
-        Stage::Typeck,
-        erebos::target::DEFAULT,
-        OptLevel::None,
-        false,
-    ) {
-        Ok(_) => assert!(
-            expected.is_empty(),
-            "{}: the compiler did not report {expected:?}",
-            path.display()
-        ),
-        Err(rendered) => assert_eq!(
-            error_codes(&rendered),
-            expected,
-            "{}: the generated module does not compile:\n{rendered}",
-            path.display()
-        ),
+    // The list of interrupts means something else on thumbv7m, where its
+    // values are lines of the NVIC with a limit (ADR 0089): a module that has
+    // one is checked there too.
+    let mut targets = vec![erebos::target::DEFAULT];
+    if module.lines().any(|line| line == "#[interrupts]") {
+        targets.push(&erebos::target::THUMBV7M);
+    }
+    for target in targets {
+        match driver::dump(&root, ROOT, Stage::Typeck, target, OptLevel::None, false) {
+            Ok(_) => assert!(
+                expected.is_empty(),
+                "{}: the compiler did not report {expected:?} for {}",
+                path.display(),
+                target.name
+            ),
+            Err(rendered) => assert_eq!(
+                error_codes(&rendered),
+                expected,
+                "{}: the generated module does not compile for {}:\n{rendered}",
+                path.display(),
+                target.name
+            ),
+        }
     }
 }
 
@@ -229,8 +233,16 @@ fn summary(module: &str, diags: &[diag::Diagnostic], sources: &SourceMap) -> Str
     // level in, entries two levels in.
     let (mut types, mut peripherals, mut registers, mut fields) = (0, 0, 0, 0);
     let mut inside = "";
+    // The variants of the chip's interrupts, which follow `#[interrupts]`.
+    let (mut interrupts, mut listing) = (0, false);
     for line in module.lines() {
-        if line.starts_with("pub peripheral ") {
+        if line == "#[interrupts]" {
+            listing = true;
+        } else if listing && line == "}" {
+            listing = false;
+        } else if listing && line.starts_with("    ") && !line.trim_start().starts_with("//") {
+            interrupts += 1;
+        } else if line.starts_with("pub peripheral ") {
             peripherals += 1;
         } else if let Some(item) = line.strip_prefix("    pub ") {
             inside = item.split(' ').next().unwrap_or("");
@@ -250,6 +262,7 @@ fn summary(module: &str, diags: &[diag::Diagnostic], sources: &SourceMap) -> Str
          peripherals: {peripherals}\n\
          registers: {registers}\n\
          fields: {fields}\n\
+         interrupts: {interrupts}\n\
          warnings: {}\n",
         diags.len()
     );
@@ -269,33 +282,48 @@ fn summary(module: &str, diags: &[diag::Diagnostic], sources: &SourceMap) -> Str
     out
 }
 
-// ---- QEMU `virt`
+// ---- the modules kept beside the e2e programs
 
-/// `virt.ers`, the module the e2e program of `tests/e2e/svd_virt/` declares,
-/// is what the generator writes from `virt.svd` today: it is kept in the
-/// repository, so a change to the generator that alters it shows in the diff.
+/// The e2e programs that declare a module generated from an SVD file kept
+/// beside it: the directory under `tests/e2e/` and the file's stem. QEMU
+/// `virt`'s devices (ADR 0070), and the UART of each target driven by its
+/// interrupt (ADR 0092).
+const KEPT: [(&str, &str); 3] = [
+    ("svd_virt", "virt"),
+    ("uart_interrupt_riscv32", "virt"),
+    ("uart_interrupt_armv7m", "an385"),
+];
+
+/// Each kept module (`virt.ers`, `an385.ers`), the one an e2e program
+/// declares, is what the generator writes from its SVD file today: it is kept
+/// in the repository, so a change to the generator that alters it shows in
+/// the diff.
 #[test]
-fn virt_ers_is_what_the_generator_writes_from_virt_svd() {
-    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/e2e/svd_virt");
-    let name = "virt.svd";
-    let (generated, diags, sources) = svd::generate(name, &read(&dir.join(name)));
-    let diags = diags.into_vec();
-    let Some(module) = generated else {
-        panic!(
-            "{name} was not generated:\n{}",
+fn kept_modules_are_what_the_generator_writes_from_their_svd_files() {
+    for (directory, stem) in KEPT {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/e2e")
+            .join(directory);
+        let name = format!("{stem}.svd");
+        let (generated, diags, sources) = svd::generate(&name, &read(&dir.join(&name)));
+        let diags = diags.into_vec();
+        let Some(module) = generated else {
+            panic!(
+                "{directory}/{name} was not generated:\n{}",
+                diag::render(&diags, &sources, false)
+            );
+        };
+        assert!(
+            diags.is_empty(),
+            "{directory}/{name} gave diagnostics:\n{}",
             diag::render(&diags, &sources, false)
         );
-    };
-    assert!(
-        diags.is_empty(),
-        "{name} gave diagnostics:\n{}",
-        diag::render(&diags, &sources, false)
-    );
-    assert!(
-        module == read(&dir.join("virt.ers")),
-        "tests/e2e/svd_virt/virt.ers is not what the generator writes from {name}; \
-         regenerate it with `erebos svd tests/e2e/svd_virt/virt.svd`"
-    );
+        assert!(
+            module == read(&dir.join(format!("{stem}.ers"))),
+            "tests/e2e/{directory}/{stem}.ers is not what the generator writes from \
+             {name}; regenerate it with `erebos svd tests/e2e/{directory}/{name}`"
+        );
+    }
 }
 
 // ---- the command

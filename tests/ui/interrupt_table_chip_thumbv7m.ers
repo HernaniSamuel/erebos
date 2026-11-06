@@ -1,0 +1,36 @@
+// target: thumbv7m-none-eabi
+// emit: llvm-ir
+// opt: both
+// The vector table with the chip's list (ADR 0090), and a panic function that
+// takes `*const core::PanicInfo`: the table has `16 + m + 1` words, 21 for the
+// largest value 4; the word `16 + n` holds the handler at the variant of value
+// `n`, or the default handler `__erebos_unhandled_irq_<variant>`, whose
+// information is `UnhandledVector` and the variant's bare name; a line the list
+// leaves out (3) holds `__erebos_unhandled_other`, with the message `unknown`.
+// A line called `SysTick` and one called `other` do not meet the core's
+// `__erebos_unhandled_SysTick` and the hole's `__erebos_unhandled_other`, which
+// are in the same table.
+mod chip {
+    #[interrupts]
+    pub enum Interrupt: u32 {
+        Uart = 0,
+        SysTick = 1,
+        other = 2,
+        Timer = 4,
+    }
+}
+
+static mut COUNT: u32 = 0;
+
+interrupt fn uart() at chip::Interrupt::Uart {
+    COUNT += 1;
+}
+
+mod drivers {
+    #[export]
+    pub interrupt fn timer() at crate::chip::Interrupt::Timer {}
+}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic(info: *const core::PanicInfo) -> ! { loop {} }

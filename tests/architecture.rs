@@ -124,7 +124,7 @@ const PANICS: &[(&str, usize)] = &[
     ("src/mir/build.rs", 40),
     ("src/mir/build/bit_struct.rs", 3),
     ("src/mir/mod.rs", 16),
-    ("src/query.rs", 27),
+    ("src/query.rs", 28),
     ("src/query/bit_struct.rs", 2),
     ("src/query/hardware.rs", 3),
     ("src/span.rs", 3),

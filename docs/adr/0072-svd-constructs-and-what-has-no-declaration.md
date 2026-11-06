@@ -1,6 +1,6 @@
 # 0072. SVD constructs, and what has no declaration
 
-- Status: Accepted; amended on 2026-11-02 (a derived set with values of its own)
+- Status: Accepted; amended on 2026-11-02 (a derived set with values of its own); amended by 0092 (`interrupt` is read)
 - Date: 2026-11-02
 
 ## Context

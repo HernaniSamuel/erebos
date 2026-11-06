@@ -1,0 +1,63 @@
+// `nvic_disable` keeps a pended line from running (ADR 0091): the line is
+// enabled, disabled and pended, with interrupts enabled; it stays pending and its
+// handler does not run through a fixed number of loops, until `nvic_enable`, which
+// lets it run once.
+// takes-exceptions: yes
+// targets: thumbv7m-none-eabi
+// expect-output: disabled ok
+// expect-exit: 0
+
+mod board;
+use board::{exit, putc};
+
+#[interrupts]
+enum Interrupt: u32 {
+    Dma = 7,
+}
+
+static mut RUNS: u32 = 0;
+
+interrupt fn dma() at Interrupt::Dma {
+    RUNS += 1;
+}
+
+entry fn main() -> ! {
+    let line: u32 = Interrupt::Dma as u32;
+    core::arch::nvic_enable(line);
+    core::arch::nvic_disable(line);
+    core::arch::enable_interrupts();
+    core::arch::nvic_pend(line);
+    let mut loops: u32 = 0;
+    while loops < 1000 {
+        core::arch::compiler_fence();
+        if RUNS != 0 {
+            exit(2)
+        }
+        loops += 1;
+    }
+    if !core::arch::nvic_is_pending(line) {
+        exit(3)
+    }
+    core::arch::nvic_enable(line);
+    loop {
+        critical {
+            if RUNS != 0 {
+                break;
+            }
+            core::arch::wait_for_interrupt();
+        }
+    }
+    if RUNS != 1 {
+        exit(4)
+    }
+    if core::arch::nvic_is_pending(line) {
+        exit(5)
+    }
+    putc(b'd'); putc(b'i'); putc(b's'); putc(b'a'); putc(b'b'); putc(b'l'); putc(b'e'); putc(b'd');
+    putc(b' '); putc(b'o'); putc(b'k'); putc(b'\n');
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(99)
+}

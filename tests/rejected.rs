@@ -729,6 +729,14 @@ const CATALOG: &[Snippet] = &[
         "interrupt fn injected_h() at core::arch::Vector::MachineExternal {}\n\
          fn injected_f() {\n    injected_h();\n}"
     ),
+    // Two lists are an error whether or not the base has one: a base with one
+    // gets the second and third reported against it.
+    s!(
+        "resolve::duplicate-interrupts",
+        Hir,
+        Items,
+        "#[interrupts]\nenum InjI1: u32 { A = 0 }\n#[interrupts]\nenum InjI2: u32 { B = 0 }"
+    ),
     s!(
         "resolve::duplicate-memory",
         Hir,
@@ -1158,6 +1166,14 @@ const EXEMPT: &[Exempt] = &[
     Exempt {
         codes: &["ty::interrupt-params", "ty::interrupt-return"],
         reason: "a handler needs a vector, and between them the bases of `tests/ui` and `tests/e2e` serve every vector of riscv32: a snippet clashes with a base that serves its vector, `resolve::duplicate-vector`, reported before type checking, which hides these; `tests/ui/interrupt_type_errors.ers` and `_thumbv7m.ers` cover them",
+    },
+    Exempt {
+        codes: &[
+            "ty::interrupts-enum",
+            "ty::interrupt-number",
+            "ty::interrupt-not-a-vector",
+        ],
+        reason: "each needs an enum with `#[interrupts]` of its own, and a program has one: a base that has a list (`tests/ui/chip_interrupts_*.ers`, `tests/e2e/uart_loopback_riscv32.ers`) gets `resolve::duplicate-interrupts` from the snippet's, reported before type checking, which hides these; `ty::interrupt-number` is also about thumbv7m, and the bases are built for riscv32, where 496 is accepted; `tests/ui/chip_interrupts_*.ers` cover them",
     },
     Exempt {
         codes: &["eval::step-limit"],

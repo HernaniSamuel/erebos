@@ -13,7 +13,7 @@ use super::raw::{
     Cluster, Common, Dim, Field, Id, MAX_DEPTH, Named, Periph, Props, Reg, Set, State, Tree, Value,
 };
 use super::read::Reader;
-use super::{Access, Bits, ReadAction, Usage, WriteEffect};
+use super::{Access, Bits, Interrupt, ReadAction, Usage, WriteEffect};
 
 pub(super) struct Parser<'a, 'r> {
     pub file: FileId,
@@ -79,10 +79,15 @@ impl Parser<'_, '_> {
 
     pub fn missing(&mut self, node: Node, what: &str, element: &str) {
         let span = self.span(node);
+        let article = if what.starts_with(['a', 'e', 'i', 'o', 'u']) {
+            "an"
+        } else {
+            "a"
+        };
         self.rd.error(
             Diagnostic::error(
                 "svd::missing-element",
-                format!("a {what} needs a `{element}`"),
+                format!("{article} {what} needs a `{element}`"),
             )
             .label(span, format!("this {what} has no `{element}`")),
         );
@@ -296,6 +301,9 @@ impl Parser<'_, '_> {
         let props = self.props(node, &mut notes);
         let dim = self.dim(node);
         let registers = child(node, "registers");
+        let interrupts = children(node, "interrupt")
+            .filter_map(|i| self.interrupt(i))
+            .collect();
         let common = self.common(node, Some(name), Id::Device, Vec::new(), notes);
         self.tree.periphs.push(Periph {
             c: common,
@@ -306,6 +314,7 @@ impl Parser<'_, '_> {
             dim,
             registers_stated: registers.is_some(),
             shares: None,
+            interrupts,
         });
         let id = Id::Periph(self.tree.periphs.len() - 1);
         if let Some(registers) = registers {
@@ -314,6 +323,26 @@ impl Parser<'_, '_> {
                 c.children = items;
             }
         }
+    }
+
+    /// An `interrupt` of a peripheral: its `name` and `value` are required
+    /// (ADR 0092), and both are looked for before either failure ends the
+    /// element, so that a file reports every mistake.
+    fn interrupt(&mut self, node: Node) -> Option<Interrupt> {
+        let name = self.name(node, "interrupt");
+        let value = if child(node, "value").is_some() {
+            self.number(node, "value")
+        } else {
+            self.missing(node, "interrupt", "value");
+            None
+        };
+        Some(Interrupt {
+            span: self.span(node),
+            name_span: self.name_span(node),
+            name: name?,
+            description: self.string(node, "description"),
+            value: value?,
+        })
     }
 
     /// The registers and clusters of a `registers` or `cluster` element,

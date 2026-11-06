@@ -3,6 +3,7 @@
 
 use crate::diag::Diagnostic;
 use crate::hir::{self, AccessMode, PeripheralId, PeripheralTypeId};
+use crate::int::IntTy;
 use crate::layout::{self, Composite, EntryPlace, PAST_ADDRESS_SPACE, PeripheralLayout};
 use crate::memory::{MemoryMap, Region};
 use crate::span::Span;
@@ -11,6 +12,126 @@ use crate::target;
 use super::{Item, PeripheralFailures, Queries, State};
 
 impl Queries<'_> {
+    /// Checks the chip's list of interrupts, if the program has one
+    /// (ADR 0089): its type is `u32` and no variant carries a payload, and on
+    /// a target whose interrupts are vectors no variant is a number the
+    /// architecture has no line for. It runs whether or not a handler names a
+    /// variant. The numbers are not looked at in an enum that failed the first
+    /// check: they are not the chip's numbers.
+    pub(super) fn check_chip_interrupts(&mut self) {
+        let hir = self.hir;
+        let Some(id) = hir.chip_interrupts else {
+            return;
+        };
+        let def = self.enum_def(id);
+        // Declared in the program, since it has an attribute.
+        let Some(name_span) = def.name_span else {
+            return;
+        };
+        let mut ok = true;
+        if def.ty.int != IntTy::U32 {
+            ok = false;
+            self.diags.push(
+                Diagnostic::error(
+                    "ty::interrupts-enum",
+                    format!(
+                        "the chip's list of interrupts `{}` is stored as `{}`",
+                        def.name, def.ty.int
+                    ),
+                )
+                .label(name_span, "must be an enum of `u32`")
+                .help("a variant is the number the chip's controller gives the interrupt, a `u32` as the values of `core::arch::Vector` are (ADR 0089)"),
+            );
+        }
+        let payloads: Vec<Span> = (def.variants.iter())
+            .filter(|variant| !variant.payload.is_empty())
+            .filter_map(|variant| variant.span)
+            .collect();
+        if !payloads.is_empty() {
+            ok = false;
+            let mut diag = Diagnostic::error(
+                "ty::interrupts-enum",
+                format!(
+                    "the chip's list of interrupts `{}` has variants with a payload",
+                    def.name
+                ),
+            )
+            .help("a variant is the number of an interrupt and nothing more: its value is that number (ADR 0089)");
+            for span in payloads {
+                diag = diag.label(span, "carries a payload");
+            }
+            self.diags.push(diag);
+        }
+        let Some(lines) = self.target.external_vectors else {
+            return;
+        };
+        if !ok {
+            return;
+        }
+        for (index, variant) in def.variants.iter().enumerate() {
+            let (Some(span), Some(value)) = (variant.span, self.discriminant(id, index as u32))
+            else {
+                continue;
+            };
+            if value < u64::from(lines.max) {
+                continue;
+            }
+            self.diags.push(
+                Diagnostic::error(
+                    "ty::interrupt-number",
+                    format!(
+                        "`{}` is the interrupt {value}, which {} has no line for",
+                        def.variant_path(index),
+                        self.target.name
+                    ),
+                )
+                .label(
+                    span,
+                    format!("past the last line, {}", lines.max - 1),
+                )
+                .help(format!(
+                    "the interrupts of the architecture are the lines 0 to {}, exceptions {} to {} (ADR 0089)",
+                    lines.max - 1,
+                    lines.first_word,
+                    lines.first_word + lines.max - 1
+                )),
+            );
+        }
+    }
+
+    /// The variants of the chip's list as the lines of the table, each with
+    /// its value and its name (ADR 0090), on a target whose interrupts are
+    /// vectors. `None` without a list, or when the list failed one of
+    /// `check_chip_interrupts`'s rules, which was reported: the values are
+    /// then not the chip's numbers.
+    pub(super) fn chip_lines(&mut self) -> Option<Vec<(u32, String)>> {
+        let lines = self.target.external_vectors?;
+        let id = self.hir.chip_interrupts?;
+        let def = self.enum_def(id);
+        if def.ty.int != IntTy::U32 || def.variants.iter().any(|v| !v.payload.is_empty()) {
+            return None;
+        }
+        let mut out = Vec::with_capacity(def.variants.len());
+        for (index, variant) in def.variants.iter().enumerate() {
+            let value = self.discriminant(id, index as u32)?;
+            if value >= u64::from(lines.max) {
+                return None;
+            }
+            out.push((value as u32, variant.name.clone()));
+        }
+        Some(out)
+    }
+
+    /// The words of the table of a program with a list: the system
+    /// exceptions and the lines up to the list's largest value (ADR 0090).
+    /// `None` without a list, with an empty one, or with one that failed.
+    pub(super) fn chip_table_words(&mut self) -> Option<u32> {
+        let first_word = self.target.external_vectors?.first_word;
+        let lines = self.chip_lines()?;
+        let largest = lines.iter().map(|&(value, _)| value).max()?;
+        Some(first_word + largest + 1)
+    }
+
     /// Checks the values of the program's `memory` block, if any
     /// (ADR 0057): no region empty or ending at 2³² or past it, no two
     /// sharing an address, the code's region starting at a multiple of the
@@ -109,9 +230,30 @@ impl Queries<'_> {
 
         let code = &map.regions[map.code.region];
         let code_align = self.target.code_align;
+        // The table of a program with a list is longer than the target's
+        // minimum, and the origin must suit it (ADR 0090). Where the list
+        // failed, an error is reported already.
+        let table = self.chip_table_words().map(|words| {
+            let bytes = 4 * u64::from(words);
+            (words, code_align.max(bytes.next_power_of_two()))
+        });
+        let (list_words, required) = match table {
+            Some((words, required)) if required > code_align => (Some(words), required),
+            _ => (None, code_align),
+        };
         if let (Some(origin), _) = values[map.code.region]
-            && origin % code_align != 0
+            && origin % required != 0
         {
+            let help = match (list_words, hir.chip_interrupts) {
+                (Some(words), Some(list)) => format!(
+                    "the reset entry is the vector table, at the origin of the code's region; the chip's list `{}` makes it {words} words, {} bytes, so the origin must be a multiple of {required} bytes, the smallest power of two that holds the table (ADR 0057, 0090)",
+                    self.enum_def(list).name,
+                    4 * words
+                ),
+                _ => format!(
+                    "the reset entry is at the origin of the code's region, which must therefore be a multiple of the target's code alignment, {code_align} bytes (ADR 0057)"
+                ),
+            };
             self.diags.push(
                 Diagnostic::error(
                     "ty::misaligned-code",
@@ -122,15 +264,16 @@ impl Queries<'_> {
                 )
                 .label(
                     code.origin.1,
-                    format!("{origin:#x} is not a multiple of {code_align}"),
+                    format!("{origin:#x} is not a multiple of {required}"),
                 )
                 .label(
                     map.code.span,
-                    format!("places the code, from the reset entry on, in `{}`", code.name),
+                    format!(
+                        "places the code, from the reset entry on, in `{}`",
+                        code.name
+                    ),
                 )
-                .help(format!(
-                    "the reset entry is at the origin of the code's region, which must therefore be a multiple of the target's code alignment, {code_align} bytes (ADR 0057)"
-                )),
+                .help(help),
             );
         }
 

@@ -1,0 +1,18 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/chip_interrupts_type_errors_payload.ers
+---
+--- errors ---
+ty::interrupts-enum
+
+  × the chip's list of interrupts `Interrupt` has variants with a payload
+    ╭─[chip_interrupts_type_errors_payload.ers:10:5]
+  9 │     Uart = 1,
+ 10 │     Timer(bool) = 600,
+    ·     ──┬──
+    ·       ╰── carries a payload
+ 11 │ }
+    ╰────
+  help: a variant is the number of an interrupt and nothing more: its value is that number (ADR
+        0089)

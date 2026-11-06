@@ -1,0 +1,20 @@
+// emit: typeck
+// The NVIC functions of `core::arch` are specific to thumbv7m (ADR 0091): the
+// file of riscv32 defines none, so each path is one that names nothing, as any
+// item of another target (ADR 0080), and the error does not say the item
+// exists elsewhere. The portable `enable_interrupts` beside them resolves.
+fn main_work() {
+    core::arch::nvic_enable(1);
+    core::arch::nvic_disable(1);
+    core::arch::nvic_pend(1);
+    core::arch::nvic_unpend(1);
+    let pending: bool = core::arch::nvic_is_pending(1);
+    core::arch::enable_interrupts();
+}
+
+entry fn main() -> ! {
+    main_work();
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

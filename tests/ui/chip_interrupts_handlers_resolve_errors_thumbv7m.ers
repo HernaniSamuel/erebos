@@ -1,0 +1,49 @@
+// target: thumbv7m-none-eabi
+// A handler at a variant of the chip's list (ADR 0089): two handlers at one
+// variant (`resolve::duplicate-vector`); a variant of an enum without the
+// attribute and the enum itself (`resolve::not-a-vector`, the help naming
+// `#[interrupts]`; the shorthand and an integer are parse errors, in
+// `interrupt_parse_errors.ers`); a variant of a further list, which resolves as
+// the list's and adds no error to the one on the enum
+// (`resolve::duplicate-interrupts`).
+use core::arch::Vector;
+use chip::Interrupt;
+
+mod chip {
+    #[interrupts]
+    pub enum Interrupt: u32 {
+        Uart0Rx = 0,
+        Uart0Tx = 1,
+    }
+}
+
+mod other {
+    #[interrupts]
+    pub enum Extra: u32 {
+        Dma = 7,
+    }
+
+    pub enum Mode: u32 {
+        Idle = 0,
+    }
+}
+
+interrupt fn first() at Interrupt::Uart0Rx {}
+
+interrupt fn second() at Interrupt::Uart0Rx {}
+
+interrupt fn third() at chip::Interrupt::Uart0Rx {}
+
+interrupt fn core_twice_a() at Vector::SysTick {}
+
+interrupt fn core_twice_b() at Vector::SysTick {}
+
+interrupt fn no_attribute() at other::Mode::Idle {}
+
+interrupt fn further_list() at other::Extra::Dma {}
+
+interrupt fn the_list() at Interrupt {}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

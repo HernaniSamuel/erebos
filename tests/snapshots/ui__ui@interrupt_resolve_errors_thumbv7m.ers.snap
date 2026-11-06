@@ -29,12 +29,12 @@ resolve::unknown-variant
     ·                                              ╰── unknown variant
  12 │ 
     ╰────
-    ╭─[rt/arch/armv7m.ers:79:10]
- 78 │ // serves it (ADR 0083). The chip's interrupts, from 16 on, come with the chip.
- 79 │ pub enum Vector: u32 {
+    ╭─[rt/arch/armv7m.ers:81:10]
+ 80 │ // numbers `nvic_enable` and its siblings take (below).
+ 81 │ pub enum Vector: u32 {
     ·          ───┬──
     ·             ╰── `core::arch::Vector` is declared here
- 80 │     NMI = 2,
+ 82 │     NMI = 2,
     ╰────
   help: its variants are `NMI`, `HardFault`, `MemManage`, `BusFault`, `UsageFault`, `SVCall`,
         `DebugMonitor`, `PendSV`, `SysTick`

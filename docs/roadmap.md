@@ -79,13 +79,11 @@ ADR 0078.
 | **M4.1** ✅ Inline assembly | `asm` expressions with operands, options and naked functions (ADR 0079); `core::arch`, a file per target (ADR 0080); `compiler_fence` and `fence` (ADR 0081); `__aeabi_uldivmod` and `__aeabi_ldivmod` in `core` | the thumbv7m board stops QEMU through `bkpt` in Erebos; C code divides 64-bit values on both targets; machine registers read through `asm` on each target |
 | **M4.2** ✅ Startup in the language | `_start` moves into `core::arch`, written in Erebos and assembly (ADR 0012 superseded by 0083); `sym entry` | the e2e programs boot through `core`'s `_start` on both targets |
 | **M4.3** ✅ Handlers and vector tables | `interrupt fn ... at` for exceptions and the target's interrupts, the vector table (thumbv7m) and the trap entry (riscv32) generated from them, `critical` blocks (ADR 0078), a vector without a handler calling the panic function | a timer interrupt (the CLINT on `virt`, SysTick on `mps2-an385`) counting ticks shared with the entry function; a fault reaching the panic function on both targets |
-| **M4.4** External interrupts | the chip's interrupts as a list `erebos svd` writes from `<interrupt>`, the NVIC's interrupts in the thumbv7m table, the PLIC's dispatched by the program on riscv32 | a UART driven by its interrupt on both targets |
+| **M4.4** ✅ External interrupts | the chip's interrupts as a list `erebos svd` writes from `<interrupt>`, the NVIC's interrupts in the thumbv7m table, the PLIC's dispatched by the program on riscv32 | a UART driven by its interrupt on both targets |
 | **M4.5** Shared statics checked | the rule of ADR 0078 checked over the call graph | programs with handlers checked; rejected programs as ui tests |
 
 Decisions already agreed for the later steps:
 
-- **M4.4:** the chip's interrupt numbers come from an enum, which `erebos
-  svd` writes from the SVD's `<interrupt>` elements.
 - **M4.5:** only `static mut` and `extern static mut` named in the
   program are checked; peripherals and raw pointers wait for M5.
 
@@ -131,6 +129,15 @@ Agreed as useful, not yet scheduled:
   applied, instead of reading and matching file text. Unlike LSP, queries
   are by name, not by cursor position. It builds on the on-demand queries
   of ADR 0028 and the structured diagnostics; still to be designed.
+- Function pointers, as a safe, copyable type and not a raw pointer: one
+  points to code that does not change and, with no closures, carries no
+  environment, so the borrow checker has nothing to check in it. Not
+  decided. The step that adds them must settle the rule of ADR 0078 (a call
+  through a pointer reaches every function whose address is taken, unless
+  its type says more), the Thumb bit 0 in their value on thumbv7m (ADR
+  0074), and whether a pointer to a function that may run only in some
+  context can be told from one that may run in any (the effect system
+  below). Dynamic dispatch is a struct of them (M6).
 - An effect system: annotations such as "never panics" or "safe in an
   interrupt handler", checked over the call graph. With "anything" as the
   default and annotations only restricting, it can be added without
@@ -293,11 +300,12 @@ ADRs:
     are not contexts of ADR 0078), 0086 (`_start` masks, the portable
     items, how `critical` lowers, the wait) and 0087 (`#[align(N)]` on
     functions).
-  - M4.4: the form of the chip's interrupt list (an enum and how the
-    compiler knows it is the chip's), the length of the thumbv7m table it
-    gives and `code_align` (ADR 0074, "Consequences"; ADR 0085 keeps 16
-    words and 128 until then), and how the program enables an interrupt
-    in the NVIC and the PLIC.
+  - M4.4: settled by ADR 0089 (`#[interrupts]` on one enum; vectors on
+    thumbv7m, a list for the program on riscv32), 0090 (the table's length,
+    a word with no variant, default handlers for lines, the origin's
+    alignment per program), 0091 (`core::arch::nvic_*` on thumbv7m; the PLIC
+    and its dispatch are the program's) and 0092 (`erebos svd` writes the
+    enum; the milestone programs).
   - M4.5: where the check runs (a MIR analysis, ADR 0033), its
     diagnostics (the access, and the path of calls from the context), and
     what counts as naming a static.
@@ -307,7 +315,29 @@ ADRs:
   - Constants and statics of types that must not be copied: duplicating a
     peripheral handle is a bug ownership should catch (ADR 0021), but a
     constant is copied at each use and reading a static copies it.
-  - Copy versus move (ADR 0021), and borrow checking (ADR 0009).
+  - Copy versus move (ADR 0021), and borrow checking (ADR 0009). A direction
+    to weigh, not decided: references as second-class values, allowed as
+    parameters (and perhaps locals) but not stored in struct fields and not
+    returned, so that no lifetime is ever written and the check stays inside
+    one function, an in-house analysis in place of Polonius (ADR 0009). It
+    costs accessors that return references, structs that hold views and
+    chaining on `&mut self`; raw pointers and slices (ADR 0013, 0031) stay
+    the unchecked way out for those. The aim behind it is that the compiler
+    checks everything that can be checked, and what cannot (raw pointers,
+    what a register does) stays visibly marked. Open: a `&mut` parameter that
+    aliases a `static mut` its callee also names (M4.5's check sees only
+    statics), references in locals, and how this meets the choice between
+    affine and linear values below.
+  - Fewer raw pointers, a goal to measure once references exist: parameters
+    by address and slices move to references; a static placed in a named
+    region (deferred ideas) replaces a computed address for a DMA buffer;
+    handles into static arrays, with range-typed indexes (deferred ideas),
+    replace pointers in linked data. What stays raw is `extern`, `asm`
+    operands, fixed addresses outside peripherals, reinterpreting memory and
+    the inside of allocators. Rule of thumb: if the safe form needs a written
+    lifetime or region, leave it raw. Whether to mark the dereference of a
+    raw pointer (the language has no `unsafe`, ADR 0030) waits until it is
+    clear what remains.
   - The `(*s)[i]` syntax for slice elements (ADR 0031).
   - Whether the MIR analyses run before compile-time evaluation, which
     today runs MIR they have not checked (ADR 0033).
@@ -716,4 +746,31 @@ Documentation owed:
   Left to M4.4: the chip's interrupts and the length of the thumbv7m table
   beyond the system exceptions, `code_align`, and enabling interrupts in the
   NVIC and the PLIC; the check of shared statics is M4.5.
-- **Next: M4.4** (external interrupts), the fourth of the M4 steps above.
+- **M4.4 done.** The chip's interrupts are an enum with `#[interrupts]`, one
+  per program, `u32` with no payloads (ADR 0089); `erebos svd` writes it last in
+  the generated file from the SVD's `<interrupt>` elements, merging a line
+  shared by several peripherals and leaving out a second name for a value
+  (ADR 0092), and a hand-written one works the same. Four codes are new:
+  `resolve::duplicate-interrupts`, `ty::interrupts-enum`,
+  `ty::interrupt-number` and `ty::interrupt-not-a-vector`. On thumbv7m the list's
+  variants are vectors: `interrupt fn ... at Interrupt::Uart0Tx`, maskable, told
+  apart from `Vector`'s by enum and variant, with a value of 496 or more
+  rejected (ADR 0089). `.vector_table` has `16 + m + 1` words for a list whose
+  largest value is `m`; a hole holds `__erebos_unhandled_other`, a line without a
+  handler `__erebos_unhandled_irq_<variant>`, and `ty::misaligned-code` asks the
+  origin a multiple of the power of two that holds the table (ADR 0090).
+  `core::arch` gains `nvic_enable`, `nvic_disable`, `nvic_pend`, `nvic_unpend`
+  and `nvic_is_pending` on thumbv7m, taking the line's number and failing an
+  `assert` at 496 (ADR 0091). On riscv32 the compiler reads the list for
+  nothing: a handler at its variant is `ty::interrupt-not-a-vector`, and the
+  program enables the PLIC and dispatches from `Vector::MachineExternal`, a
+  `claim` loop over the sources (ADR 0091). The milestone programs run on both
+  targets at both levels: a UART driven by its interrupt, the CMSDK UART0's
+  transmit line through the NVIC on `mps2-an385` and the 16550 through the PLIC
+  on `virt`, each printing a message through the handler alone from a ring
+  buffer; and, on riscv32, the 16550's loopback giving a received byte and a
+  transmit interrupt of one source. Reception on thumbv7m is not tested end to
+  end (the CMSDK UART has no loopback, and a byte through QEMU's standard input
+  did not reach it on Windows; ADR 0092). Left to M4.5: the check of shared
+  statics; priorities and nesting stay out of M4 (ADR 0078).
+- **Next: M4.5** (shared statics checked), the last of the M4 steps above.

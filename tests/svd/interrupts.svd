@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Interrupts (ADR 0092): the order of the values, holes, a line shared by peripherals, two names for one value, one name for two values, names to convert, a peripheral named Interrupt, derived peripherals with and without their own. -->
+<device>
+  <name>INTERRUPTS</name>
+  <size>32</size>
+  <access>read-write</access>
+  <peripherals>
+    <peripheral>
+      <name>UART0</name>
+      <description>Out of order in the file, and each with a description.</description>
+      <baseAddress>0x40000000</baseAddress>
+      <interrupt>
+        <name>UART0_TX</name>
+        <description>UART 0, transmit.</description>
+        <value>7</value>
+      </interrupt>
+      <interrupt>
+        <name>UART0_RX</name>
+        <description>UART 0, receive, and a description long enough that the comment above the variant is wrapped at seventy-nine columns.</description>
+        <value>6</value>
+      </interrupt>
+      <registers>
+        <register><name>R</name><addressOffset>0x0</addressOffset></register>
+      </registers>
+    </peripheral>
+    <peripheral>
+      <name>TIMER%s</name>
+      <description>A dim: its interrupt is one, and the %s of its name goes.</description>
+      <baseAddress>0x40001000</baseAddress>
+      <dim>2</dim>
+      <dimIncrement>0x100</dimIncrement>
+      <interrupt>
+        <name>TIMER%s</name>
+        <value>20</value>
+      </interrupt>
+      <registers>
+        <register><name>R</name><addressOffset>0x0</addressOffset></register>
+      </registers>
+    </peripheral>
+    <peripheral>
+      <name>SHARED_A</name>
+      <description>One line, named by three peripherals, in three spellings of one name: one variant, with the first description.</description>
+      <baseAddress>0x40002000</baseAddress>
+      <interrupt>
+        <name>SHARED</name>
+        <description>A line shared by peripherals.</description>
+        <value>10</value>
+      </interrupt>
+      <registers>
+        <register><name>R</name><addressOffset>0x0</addressOffset></register>
+      </registers>
+    </peripheral>
+    <peripheral>
+      <name>SHARED_B</name>
+      <baseAddress>0x40002100</baseAddress>
+      <interrupt>
+        <name>shared</name>
+        <description>Another description, not used.</description>
+        <value>10</value>
+      </interrupt>
+      <registers>
+        <register><name>R</name><addressOffset>0x0</addressOffset></register>
+      </registers>
+    </peripheral>
+    <peripheral>
+      <name>SHARED_C</name>
+      <baseAddress>0x40002200</baseAddress>
+      <interrupt>
+        <name>__SHARED__</name>
+        <value>10</value>
+      </interrupt>
+      <registers>
+        <register><name>R</name><addressOffset>0x0</addressOffset></register>
+      </registers>
+    </peripheral>
+    <peripheral>
+      <name>ALIAS_A</name>
+      <description>Three names for the line 12: only the first is a variant, and the others are left out.</description>
+      <baseAddress>0x40003000</baseAddress>
+      <interrupt>
+        <name>DMA_DONE</name>
+        <value>12</value>
+      </interrupt>
+      <interrupt>
+        <name>DMA_COMPLETE</name>
+        <value>12</value>
+      </interrupt>
+      <interrupt>
+        <name>DMA_END</name>
+        <value>12</value>
+      </interrupt>
+      <registers>
+        <register><name>R</name><addressOffset>0x0</addressOffset></register>
+      </registers>
+    </peripheral>
+    <peripheral>
+      <name>ALIAS_B</name>
+      <description>The same three again, in another order: nothing more is said.</description>
+      <baseAddress>0x40003100</baseAddress>
+      <interrupt>
+        <name>DMA_COMPLETE</name>
+        <value>12</value>
+      </interrupt>
+      <interrupt>
+        <name>DMA_DONE</name>
+        <value>12</value>
+      </interrupt>
+      <interrupt>
+        <name>DMA_END</name>
+        <value>12</value>
+      </interrupt>
+      <registers>
+        <register><name>R</name><addressOffset>0x0</addressOffset></register>
+      </registers>
+    </peripheral>
+    <peripheral>
+      <name>TWICE</name>
+      <description>One name, two values: both are written, the later with an underscore after it.</description>
+      <baseAddress>0x40004000</baseAddress>
+      <interrupt>
+        <name>EDGE</name>
+        <value>31</value>
+      </interrupt>
+      <interrupt>
+        <name>edge</name>
+        <value>30</value>
+      </interrupt>
+      <registers>
+        <register><name>R</name><addressOffset>0x0</addressOffset></register>
+      </registers>
+    </peripheral>
+    <peripheral>
+      <name>CONVERTED</name>
+      <description>Names ADR 0071 converts: characters, a leading digit, and a name Erebos gives a meaning. Values in the other syntaxes of SVD, and the largest of thumbv7m.</description>
+      <baseAddress>0x40005000</baseAddress>
+      <interrupt>
+        <name>RX.FIFO-FULL</name>
+        <value>0x28</value>
+      </interrupt>
+      <interrupt>
+        <name>3V3_OK</name>
+        <value>#101001</value>
+      </interrupt>
+      <interrupt>
+        <name>OPTION</name>
+        <value>50</value>
+      </interrupt>
+      <interrupt>
+        <name>LAST</name>
+        <value>0x1EF</value>
+      </interrupt>
+      <interrupt>
+        <name>FIRST</name>
+        <value>0</value>
+      </interrupt>
+      <registers>
+        <register><name>R</name><addressOffset>0x0</addressOffset></register>
+      </registers>
+    </peripheral>
+    <peripheral>
+      <name>Interrupt</name>
+      <description>A peripheral named as the enum: the enum, written last, is the one renamed.</description>
+      <baseAddress>0x40006000</baseAddress>
+      <registers>
+        <register><name>R</name><addressOffset>0x0</addressOffset></register>
+      </registers>
+    </peripheral>
+    <peripheral>
+      <name>BASE</name>
+      <baseAddress>0x40007000</baseAddress>
+      <interrupt>
+        <name>BASE_IRQ</name>
+        <value>60</value>
+      </interrupt>
+      <registers>
+        <register><name>R</name><addressOffset>0x0</addressOffset></register>
+      </registers>
+    </peripheral>
+    <peripheral derivedFrom="BASE">
+      <name>DERIVED_NONE</name>
+      <description>Derived, with no interrupt of its own: the base's are not repeated.</description>
+      <baseAddress>0x40007100</baseAddress>
+    </peripheral>
+    <peripheral derivedFrom="BASE">
+      <name>DERIVED_OWN</name>
+      <description>Derived, with an interrupt of its own: only that one.</description>
+      <baseAddress>0x40007200</baseAddress>
+      <interrupt>
+        <name>DERIVED_IRQ</name>
+        <value>61</value>
+      </interrupt>
+    </peripheral>
+    <peripheral>
+      <name>QUIET</name>
+      <description>No interrupt.</description>
+      <baseAddress>0x40008000</baseAddress>
+      <registers>
+        <register><name>R</name><addressOffset>0x0</addressOffset></register>
+      </registers>
+    </peripheral>
+  </peripherals>
+</device>

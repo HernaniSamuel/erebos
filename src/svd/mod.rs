@@ -16,6 +16,7 @@
 mod build;
 mod derive;
 mod fields;
+mod interrupts;
 mod names;
 mod number;
 mod over;
@@ -73,6 +74,25 @@ pub struct Device {
     pub license_text: Option<String>,
     /// In the order of the file.
     pub peripherals: Vec<Peripheral>,
+    /// The `interrupt` elements of every peripheral, each peripheral's own,
+    /// in the order of the file (ADR 0092). Not merged nor ordered: the
+    /// writer does both, since they compare Erebos names.
+    pub interrupts: Vec<Interrupt>,
+}
+
+/// An `interrupt` element of a peripheral.
+#[derive(Clone, Debug)]
+pub struct Interrupt {
+    pub span: Span,
+    /// The `name` element, which the diagnostics about the name point at.
+    pub name_span: Span,
+    /// The SVD `name`, white space around it removed; `%s` is not replaced,
+    /// since the element is one even in a peripheral with a `dim`.
+    pub name: String,
+    pub description: Option<String>,
+    /// The `value`: any number the file's syntax allows, which the compiler
+    /// judges (ADR 0092).
+    pub value: u64,
 }
 
 #[derive(Clone, Debug)]

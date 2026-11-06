@@ -1,0 +1,27 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/chip_interrupts_numbers.ers
+---
+--- typeck ---
+enum Interrupt: u32 { Uart0 = 10, Edge = 495, Past = 496, Far = 1000, Top = 4294967295 }
+fn number(i: Interrupt) -> u32
+    expr 0 as u32 595..603: u32
+    expr 1 local i 595..596: Interrupt
+entry fn main() -> !
+    let n: u32
+    expr 2 call 647..670: u32
+    expr 3 variant Interrupt::Past 654..669: Interrupt
+    expr 4 loop 676..683: !
+panic fn on_panic() -> !
+    expr 5 loop 714..721: !
+comptime fn Interrupt::Uart0() -> u32
+    expr 6 int 10 480..482: u32
+comptime fn Interrupt::Edge() -> u32
+    expr 7 int 495 495..498: u32
+comptime fn Interrupt::Past() -> u32
+    expr 8 int 496 511..514: u32
+comptime fn Interrupt::Far() -> u32
+    expr 9 int 1000 526..530: u32
+comptime fn Interrupt::Top() -> u32
+    expr 10 int 4294967295 542..553: u32

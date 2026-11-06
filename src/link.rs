@@ -111,8 +111,9 @@ pub fn linker_script(map: &MemoryMap, target: &Target) -> String {
 }
 
 /// The vector table's section, first in the code's region on thumbv7m, where
-/// the compiler emits its 16 words, 64 bytes (ADR 0074, 0083, 0085); the reset
-/// entry follows it. riscv32's table is read-only data and has no section here.
+/// the compiler emits its words: 16, 64 bytes, or `16 + m + 1` with a list of
+/// the chip's interrupts whose largest value is `m` (ADR 0074, 0083, 0085,
+/// 0090); the reset entry follows it. riscv32's table is read-only data and has no section here.
 fn vector_table(arch: Arch, code: &str) -> String {
     match arch {
         Arch::Riscv32 => String::new(),

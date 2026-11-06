@@ -1,0 +1,136 @@
+// The milestone of M4.4 on riscv32 (ADR 0089 to 0092): a UART driven by its
+// interrupt. QEMU `virt`'s 16550, its PLIC and its test finisher are declared
+// in `virt.svd`, and `virt.ers` is what `erebos svd` writes from it, kept
+// (`tests/svd.rs` requires that they agree), the chip's list `Interrupt`
+// included: the UART is its source 10. The entry function gives the source a
+// priority and enables it for context 0, sets `mie.MEIE`, and queues a message
+// of 21 bytes in a `static mut` ring buffer of 16, inside `critical`, waiting
+// there (`wait_for_interrupt`) while the ring is full; it then enables the
+// UART's transmit interrupt, and waits the same way until the queue is empty
+// and the last byte has been sent. The handler, at `Vector::MachineExternal`,
+// is the dispatch the program writes (ADR 0091): it claims sources until `claim`
+// gives 0, serves source 10 with the UART's own handler, and completes each. That
+// one reads `IIR`, which names the cause and takes it, sends the next byte and
+// counts the bytes sent, which the entry function compares with the message's
+// length; when the queue is empty it clears `IER.THRI`.
+// takes-exceptions: yes
+// targets: riscv32imac-unknown-none-elf
+// expect-output: uart tx by interrupt
+// expect-exit: 0
+mod board;
+mod virt;
+
+use core::arch::Vector;
+use virt::test::Finisher;
+use virt::{Interrupt, PLIC, TEST, UART0};
+
+const UART_SOURCE: u32 = Interrupt::Uart0 as u32;
+const SLOTS: usize = 16;
+
+// The ring: `HEAD` counts the bytes queued and `TAIL` the bytes taken, and the
+// slot of each is the count modulo `SLOTS`. `BUSY` is a byte in the
+// transmitter, whose interrupt has not come.
+static mut QUEUE: [u8; 16] = [0; 16];
+static mut HEAD: usize = 0;
+static mut TAIL: usize = 0;
+static mut BUSY: bool = false;
+// The interrupts of the transmitter that the handler served.
+static mut SENT: u32 = 0;
+
+// Stops QEMU: 0 passes, any other code fails with it.
+fn exit(code: u16) -> ! {
+    TEST.finisher = if code == 0 {
+        Finisher { status: .Pass, .. }
+    } else {
+        Finisher { status: .Fail, code: code }
+    };
+    loop {}
+}
+
+// The UART's interrupt: THR is empty, so the byte before it has been sent.
+fn uart_interrupt() {
+    // 1 is "no interrupt", 2 "THR empty"; the other causes are not enabled.
+    let cause: u8 = UART0.iir.cause;
+    if cause == 1 {
+        return;
+    }
+    if cause != 2 {
+        exit(12)
+    }
+    BUSY = false;
+    if TAIL != HEAD {
+        let byte: u8 = QUEUE[TAIL % SLOTS];
+        TAIL += 1;
+        BUSY = true;
+        SENT += 1;
+        UART0.thr = byte;
+    } else {
+        UART0.ier.thri = false;
+    }
+}
+
+interrupt fn external() at Vector::MachineExternal {
+    if core::arch::interrupts_enabled() {
+        exit(10)
+    }
+    loop {
+        let source: u32 = PLIC.ctx[0].claim;
+        if source == 0 {
+            break;
+        }
+        match source {
+            UART_SOURCE => uart_interrupt(),
+            _ => exit(11),
+        }
+        PLIC.ctx[0].claim = source;
+    }
+}
+
+// Queues `text`, a part at a time when the ring is full.
+fn send(text: *const [u8]) {
+    let mut i: usize = 0;
+    while i < len(text) {
+        critical {
+            while i < len(text) && HEAD - TAIL < SLOTS {
+                QUEUE[HEAD % SLOTS] = (*text)[i];
+                HEAD += 1;
+                i += 1;
+            }
+            // THR is empty or its byte is out: the interrupt starts or goes on
+            // with the queue.
+            UART0.ier.thri = true;
+            if i < len(text) {
+                core::arch::wait_for_interrupt();
+            }
+        }
+    }
+}
+
+entry fn main() -> ! {
+    PLIC.priority[UART_SOURCE as usize] = 1;
+    PLIC.enable[0].sources[0] = 1 << UART_SOURCE;
+    PLIC.ctx[0].threshold = 0;
+    // `mie.MEIE`: the machine external interrupt is enabled.
+    asm("csrs mie, {}", in(reg) 0x800 as u32, options(nostack, preserves_flags));
+    core::arch::enable_interrupts();
+
+    send(&raw const b"uart tx by interrupt\n");
+
+    // The last byte is sent when its interrupt has been served.
+    loop {
+        critical {
+            if !BUSY && TAIL == HEAD {
+                break;
+            }
+            core::arch::wait_for_interrupt();
+        }
+    }
+    if SENT != 21 {
+        exit(2)
+    }
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(99)
+}

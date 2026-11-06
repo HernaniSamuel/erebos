@@ -97,6 +97,28 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   ("expected `fn`, found `interrupt`"): `recover_to_item` stops at
   `interrupt fn` and the rest is parsed as a handler with a body. One
   error would be enough; `extern entry fn` recovers cleanly. (M4.3)
+- The doc comment of `Hir::dump` in `src/hir/mod.rs` runs past 100 columns
+  after `chip_interrupts` was added to its list; `rustfmt` does not reflow
+  comments. (M4.4)
+- `Interrupt::span` in `src/svd/mod.rs` is filled in by the parser and read
+  by nothing (`name_span` is used everywhere); clippy does not warn since
+  the field is `pub`. (M4.4)
+- `interrupt_block` in `src/svd/interrupts.rs` builds the left-out lines with
+  `flat_map(|text| comment(0, "// svd: ", text))`; `svd_lines(0, &left_out)`
+  in `src/svd/write.rs` does the same. (M4.4)
+- The `svd::renamed` warning for `Interrupt_` labels the first interrupt's
+  `name` (the enum has no SVD element of its own), so it reads as if that
+  interrupt were renamed; a label text saying "the enum, written at the end"
+  would help. (M4.4)
+- `chip_table_words` in `src/query/hardware.rs` ends in a `max()?` for a list
+  with no variant, which cannot occur (`enum I: u32 {}` is
+  `resolve::empty-enum`); `docs/reference.md` ("The table with the chip's
+  interrupts") says such a list leaves the table at 16 words. Drop the
+  sentence, or say that an empty enum is rejected first. (M4.4)
+- `--emit=hir` prints `FnKind::Interrupt(HandlerVector { enum_id, variant,
+  span })` through `Debug`, so the new `enum_id` shows in the HIR dump of any
+  handler. No snapshot has one today; the day one does, it churns with the
+  ids of enums. (M4.4)
 
 ## Tests
 
@@ -190,6 +212,13 @@ M3.1 to M3.3 on 2026-10-28; these remain.
 - Two `///` lines run past the width of their neighbours, which `rustfmt`
   does not wrap: the doc comment of `call_of` in `tests/e2e.rs` and the
   one of `function_alignment_moves_the_symbol` in `tests/elf.rs`. (M4.3)
+- The `dsb`/`isb` of `nvic_disable` cannot be observed on QEMU, and
+  `irq_disabled_armv7m.ers` only disables a line before pending it; the
+  plan's `Decisions` do not say the barriers go untested (ADR 0091 cites
+  CMSIS for them). (M4.4)
+- A generated list value past `u32` is written as is for the compiler to
+  reject (`ty::literal-out-of-range`); only the reader's unit test in
+  `src/svd/read.rs` covers it, no snapshot. (M4.4)
 
 ## Docs
 
@@ -249,3 +278,17 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   roots" (nothing was added for roots; `into_mir` fills `Mir::handlers`);
   step 5 `Decisions` call ADR 0088 `Proposed` and say the index lists it
   so (it is Accepted since `03a30c0`). (M4.3)
+- The `Decisions` of the M4.4 plan: step 1 does not say that only the first
+  list is type-checked (a second list gets `resolve::duplicate-interrupts`
+  and nothing else); step 3 says a list with no variant leaves the table at
+  16 words, which cannot occur (see the `chip_table_words` entry under
+  Code); step 4's bullet "From the final review" says "(5 for `Spi`, 4 for
+  the hole, 2 for the no-parameter one)" right after "exits with 4", which
+  reads as the exit code, and the header comments of the three
+  `irq_unhandled_*` tests do not say that the panic function also checks
+  `IPSR`. (M4.4)
+- `docs/reference.md`: the paragraphs on the table's length and alignment
+  ("multiple of 128 because of the table (of", "`_start` is at the origin
+  plus 64 (without a list)...") and the one on `code_align` are wrapped
+  unevenly, and "as every program did before M4.4" puts a milestone name in
+  the reference ("as every program does without one"). (M4.4)

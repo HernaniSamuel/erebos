@@ -1,0 +1,36 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/chip_interrupts_handlers_thumbv7m.ers
+---
+--- typeck ---
+enum chip::Interrupt: u32 { Uart0Rx = 0, Uart0Tx = 1, HardFault = 2, SysTick = 3, Timer = 4, Spi = 5 }
+interrupt fn received() -> () at chip::Interrupt::Uart0Rx
+    expr 0 assign += 778..788: ()
+    expr 1 static COUNT 778..783: u32
+    expr 2 int 1 787..788: u32
+interrupt fn transmitted() -> () at chip::Interrupt::Uart0Tx
+interrupt fn line_fault() -> () at chip::Interrupt::HardFault
+interrupt fn line_tick() -> () at chip::Interrupt::SysTick
+interrupt fn core_tick() -> () at SysTick
+interrupt fn never() -> ! at chip::Interrupt::Timer
+    expr 3 loop 1057..1064: !
+interrupt fn drivers::spi() -> () at chip::Interrupt::Spi
+entry fn main() -> !
+    expr 4 loop 1169..1176: !
+panic fn on_panic() -> !
+    expr 5 loop 1207..1214: !
+comptime fn COUNT() -> u32
+    expr 6 int 0 716..717: u32
+comptime fn chip::Interrupt::Uart0Rx() -> u32
+    expr 7 int 0 579..580: u32
+comptime fn chip::Interrupt::Uart0Tx() -> u32
+    expr 8 int 1 600..601: u32
+comptime fn chip::Interrupt::HardFault() -> u32
+    expr 9 int 2 623..624: u32
+comptime fn chip::Interrupt::SysTick() -> u32
+    expr 10 int 3 644..645: u32
+comptime fn chip::Interrupt::Timer() -> u32
+    expr 11 int 4 663..664: u32
+comptime fn chip::Interrupt::Spi() -> u32
+    expr 12 int 5 680..681: u32

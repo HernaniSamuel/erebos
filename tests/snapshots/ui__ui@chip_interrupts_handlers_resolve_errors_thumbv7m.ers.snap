@@ -1,0 +1,101 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/chip_interrupts_handlers_resolve_errors_thumbv7m.ers
+---
+--- errors ---
+resolve::duplicate-interrupts
+
+  × `other::Extra` is a second enum with `#[interrupts]`
+    ╭─[chip_interrupts_handlers_resolve_errors_thumbv7m.ers:22:14]
+ 13 │     #[interrupts]
+ 14 │     pub enum Interrupt: u32 {
+    ·              ────┬────
+    ·                  ╰── `chip::Interrupt` is the first
+ 15 │         Uart0Rx = 0,
+ 16 │         Uart0Tx = 1,
+ 17 │     }
+ 18 │ }
+ 19 │ 
+ 20 │ mod other {
+ 21 │     #[interrupts]
+ 22 │     pub enum Extra: u32 {
+    ·              ──┬──
+    ·                ╰── a second list of the chip's interrupts
+ 23 │         Dma = 7,
+    ╰────
+  help: a program has one list of the chip's interrupts, as it has one `memory` block: put them in
+        one enum, or leave the other without `#[interrupts]` (ADR 0089)
+resolve::duplicate-vector
+
+  × `chip::Interrupt::Uart0Rx` has more than one handler
+    ╭─[chip_interrupts_handlers_resolve_errors_thumbv7m.ers:33:26]
+ 30 │ 
+ 31 │ interrupt fn first() at Interrupt::Uart0Rx {}
+    ·                         ─────────┬────────
+    ·                                  ╰── first served here
+ 32 │ 
+ 33 │ interrupt fn second() at Interrupt::Uart0Rx {}
+    ·                          ─────────┬────────
+    ·                                   ╰── served again here
+ 34 │ 
+    ╰────
+  help: a vector has one handler: serve the vector in one function, or remove one (ADR 0084)
+resolve::duplicate-vector
+
+  × `chip::Interrupt::Uart0Rx` has more than one handler
+    ╭─[chip_interrupts_handlers_resolve_errors_thumbv7m.ers:35:25]
+ 30 │ 
+ 31 │ interrupt fn first() at Interrupt::Uart0Rx {}
+    ·                         ─────────┬────────
+    ·                                  ╰── first served here
+ 32 │ 
+ 33 │ interrupt fn second() at Interrupt::Uart0Rx {}
+ 34 │ 
+ 35 │ interrupt fn third() at chip::Interrupt::Uart0Rx {}
+    ·                         ────────────┬───────────
+    ·                                     ╰── served again here
+ 36 │ 
+    ╰────
+  help: a vector has one handler: serve the vector in one function, or remove one (ADR 0084)
+resolve::duplicate-vector
+
+  × `core::arch::Vector::SysTick` has more than one handler
+    ╭─[chip_interrupts_handlers_resolve_errors_thumbv7m.ers:39:32]
+ 36 │ 
+ 37 │ interrupt fn core_twice_a() at Vector::SysTick {}
+    ·                                ───────┬───────
+    ·                                       ╰── first served here
+ 38 │ 
+ 39 │ interrupt fn core_twice_b() at Vector::SysTick {}
+    ·                                ───────┬───────
+    ·                                       ╰── served again here
+ 40 │ 
+    ╰────
+  help: a vector has one handler: serve the vector in one function, or remove one (ADR 0084)
+resolve::not-a-vector
+
+  × `other::Mode::Idle` is not a variant of `core::arch::Vector`
+    ╭─[chip_interrupts_handlers_resolve_errors_thumbv7m.ers:41:32]
+ 40 │ 
+ 41 │ interrupt fn no_attribute() at other::Mode::Idle {}
+    ·                                ────────┬────────
+    ·                                        ╰── a variant of `other::Mode`
+ 42 │ 
+    ╰────
+  help: an interrupt handler names the vector it serves with a variant of `core::arch::Vector`, as
+        in `at Vector::SysTick` after `use core::arch::Vector;`, or, where the chip's interrupts
+        are vectors, with a variant of the enum that has `#[interrupts]` (ADR 0084, 0089)
+resolve::not-a-vector
+
+  × `Interrupt` is not a variant of `core::arch::Vector`
+    ╭─[chip_interrupts_handlers_resolve_errors_thumbv7m.ers:45:28]
+ 44 │ 
+ 45 │ interrupt fn the_list() at Interrupt {}
+    ·                            ────┬────
+    ·                                ╰── an enum
+ 46 │ 
+    ╰────
+  help: an interrupt handler names the vector it serves with a variant of `core::arch::Vector`, as
+        in `at Vector::SysTick` after `use core::arch::Vector;`, or, where the chip's interrupts
+        are vectors, with a variant of the enum that has `#[interrupts]` (ADR 0084, 0089)

@@ -1,0 +1,28 @@
+---
+source: tests/svd.rs
+expression: run(path)
+input_file: tests/svd/errors_interrupt_invalid_value.svd
+---
+--- not generated ---
+svd::invalid-number
+
+  × `3h` is no number SVD allows in `value`
+    ╭─[errors_interrupt_invalid_value.svd:13:9]
+ 12 │         <name>BAD_SYNTAX</name>
+ 13 │         <value>3h</value>
+    ·         ────────┬────────
+    ·                 ╰── not a number
+ 14 │       </interrupt>
+    ╰────
+  help: write decimal digits, `0x` then hexadecimal digits, or `#` then binary digits
+svd::invalid-number
+
+  × `0x1FFFFFFFFFFFFFFFF` does not fit in 64 bits
+    ╭─[errors_interrupt_invalid_value.svd:17:9]
+ 16 │         <name>TOO_BIG</name>
+ 17 │         <value>0x1FFFFFFFFFFFFFFFF</value>
+    ·         ─────────────────┬────────────────
+    ·                          ╰── too large
+ 18 │       </interrupt>
+    ╰────
+  help: write decimal digits, `0x` then hexadecimal digits, or `#` then binary digits

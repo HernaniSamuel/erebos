@@ -7,6 +7,7 @@ peripheral types: 34
 peripherals: 37
 registers: 1429
 fields: 3507
+interrupts: 62
 warnings: 2
 svd::renamed: the field `_1P8_READY` is named `_1p8_ready`
   esp32c3.svd:18594:15: its name has characters no identifier has, or starts with a digit

@@ -94,9 +94,15 @@ pub struct Mir {
 /// An interrupt handler (ADR 0084).
 #[derive(Debug)]
 pub struct Handler {
-    /// The name of the variant of `core::arch::Vector` it serves, which
-    /// `target::Target::vector` finds the vector by.
+    /// The vector it serves as the dump writes it (ADR 0089): the name of the
+    /// variant of `core::arch::Vector`, or the path of the variant of the
+    /// chip's list.
     pub vector: String,
+    /// The word of the target's vector table that holds it (ADR 0085, 0090),
+    /// which `make_vector_table` finds the handler by: the vector's own on a
+    /// variant of `Vector`, and the first line's word plus the variant's value
+    /// on one of the chip's list.
+    pub word: u32,
     pub body: BodyId,
 }
 
@@ -119,9 +125,11 @@ pub enum VectorWord {
     Reset,
     /// Reserved by the architecture and never read: 0 (ARMv7-M).
     Reserved,
-    /// The address of an interrupt handler.
+    /// The address of an interrupt handler, at a variant of `Vector` or of
+    /// the chip's list (ADR 0090).
     Handler(BodyId),
-    /// The address of a default handler, by its index in `defaults`.
+    /// The address of a default handler, by its index in `defaults`: of a
+    /// vector, of a line, or the one shared by the words with no variant.
     Default(usize),
 }
 
@@ -2042,6 +2050,7 @@ mod tests {
             handlers: if handlers {
                 vec![Handler {
                     vector: "SysTick".to_owned(),
+                    word: 15,
                     body: BodyId(2),
                 }]
             } else {

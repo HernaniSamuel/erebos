@@ -1,0 +1,13 @@
+// `#[interrupts]` (ADR 0089): an enum of `u64`, wide enough for every number, is
+// not `u32` all the same: reported once, at the enum's name, with no report on
+// the value of 5000 on thumbv7m, as these are not the chip's numbers.
+// target: thumbv7m-none-eabi
+#[interrupts]
+enum Interrupt: u64 {
+    Uart = 1,
+    Far = 5000,
+}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

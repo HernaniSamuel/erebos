@@ -1,0 +1,22 @@
+// target: thumbv7m-none-eabi
+// emit: typeck
+// The origin of the code's region must suit the table of the program's list
+// (ADR 0090): the largest value 15 makes a table of 32 words, 128 bytes,
+// and the origin must be a multiple of the smallest power of two that holds
+// it, at least 128. Accepted at 128, the minimum.
+memory {
+    region CODE { origin: 0x80, size: 0x1_0000 }
+    region DATA { origin: 0x2000_0000, size: 0x1_0000 }
+    code in CODE;
+    data in DATA;
+    stack in DATA { size: 0x1000 }
+}
+
+#[interrupts]
+enum Interrupt: u32 {
+    First = 0,
+    Last = 15,
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

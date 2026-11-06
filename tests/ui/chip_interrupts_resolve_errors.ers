@@ -1,0 +1,76 @@
+// `#[interrupts]` (ADR 0089), on riscv32: misplaced on each kind of item it
+// does not apply to; given twice and with an argument on the one enum that
+// is the first list; a second and a third list in modules, each reported with
+// the first. None of this depends on the target.
+use core::arch::Vector;
+
+#[interrupts]
+struct Config {
+    x: u32,
+}
+
+#[interrupts]
+struct Control: u32 {
+    pub count: u8 at 0..=3 = 0,
+}
+
+#[interrupts]
+fn helper() {}
+
+#[interrupts]
+extern fn outside();
+
+#[interrupts]
+static COUNTER: u32 = 0;
+
+#[interrupts]
+extern static LIMIT: u32;
+
+#[interrupts]
+const SIZE: u32 = 4;
+
+#[interrupts]
+mod inner {}
+
+#[interrupts]
+comptime {
+    assert(SIZE == 4);
+}
+
+#[interrupts]
+interrupt fn tick() at Vector::MachineTimer {}
+
+#[interrupts]
+entry fn main() -> ! { loop {} }
+
+#[interrupts]
+panic fn on_panic() -> ! { loop {} }
+
+// The first list, given twice and with an argument.
+#[interrupts]
+#[interrupts]
+#[interrupts(1)]
+pub enum Interrupt: u32 {
+    Uart = 1,
+}
+
+mod second {
+    #[interrupts]
+    pub enum Lines: u32 {
+        A = 1,
+    }
+}
+
+mod third {
+    mod deeper {
+        #[interrupts]
+        enum Sources: u32 {
+            B = 1,
+        }
+    }
+
+    #[interrupts]
+    enum Others: u8 {
+        C = 1,
+    }
+}
