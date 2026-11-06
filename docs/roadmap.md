@@ -308,7 +308,19 @@ ADRs:
   - Constants and statics of types that must not be copied: duplicating a
     peripheral handle is a bug ownership should catch (ADR 0021), but a
     constant is copied at each use and reading a static copies it.
-  - Copy versus move (ADR 0021), and borrow checking (ADR 0009).
+  - Copy versus move (ADR 0021), and borrow checking (ADR 0009). A direction
+    to weigh, not decided: references as second-class values, allowed as
+    parameters (and perhaps locals) but not stored in struct fields and not
+    returned, so that no lifetime is ever written and the check stays inside
+    one function, an in-house analysis in place of Polonius (ADR 0009). It
+    costs accessors that return references, structs that hold views and
+    chaining on `&mut self`; raw pointers and slices (ADR 0013, 0031) stay
+    the unchecked way out for those. The aim behind it is that the compiler
+    checks everything that can be checked, and what cannot (raw pointers,
+    what a register does) stays visibly marked. Open: a `&mut` parameter that
+    aliases a `static mut` its callee also names (M4.5's check sees only
+    statics), references in locals, and how this meets the choice between
+    affine and linear values below.
   - The `(*s)[i]` syntax for slice elements (ADR 0031).
   - Whether the MIR analyses run before compile-time evaluation, which
     today runs MIR they have not checked (ADR 0033).
