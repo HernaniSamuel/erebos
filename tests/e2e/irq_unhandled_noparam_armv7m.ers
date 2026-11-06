@@ -24,6 +24,12 @@ entry fn main() -> ! {
 }
 
 panic fn on_panic() -> ! {
+    let mut ipsr: u32 = 0;
+    asm("mrs {}, ipsr", out(reg) ipsr, options(nostack, preserves_flags));
     putc(b'p'); putc(b'a'); putc(b'n'); putc(b'i'); putc(b'c'); putc(b'\n');
+    // No information is built, so `IPSR` is the only way to tell the line: `Spi` is 2.
+    if ipsr != 16 + 2 {
+        exit(4)
+    }
     exit(1)
 }
