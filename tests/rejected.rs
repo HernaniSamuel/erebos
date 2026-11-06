@@ -705,6 +705,30 @@ const CATALOG: &[Snippet] = &[
         Items,
         "panic fn injected_p1() -> ! {\n    loop {}\n}\npanic fn injected_p2() -> ! {\n    loop {}\n}"
     ),
+    // Handlers. The bases are built for the default target, riscv32, so the
+    // paths name its vectors; a base for thumbv7m does not compile and is
+    // skipped. A base that serves the vector of a snippet adds a
+    // `resolve::duplicate-vector`, which does not hide the code asked for.
+    s!(
+        "resolve::not-a-vector",
+        Hir,
+        Items,
+        "struct InjS { a: u8 }\ninterrupt fn injected_h() at InjS {}"
+    ),
+    s!(
+        "resolve::duplicate-vector",
+        Hir,
+        Items,
+        "interrupt fn injected_h1() at core::arch::Vector::MachineSoftware {}\n\
+         interrupt fn injected_h2() at core::arch::Vector::MachineSoftware {}"
+    ),
+    s!(
+        "resolve::call-interrupt",
+        Hir,
+        Items,
+        "interrupt fn injected_h() at core::arch::Vector::MachineExternal {}\n\
+         fn injected_f() {\n    injected_h();\n}"
+    ),
     s!(
         "resolve::duplicate-memory",
         Hir,
@@ -1130,6 +1154,10 @@ const EXEMPT: &[Exempt] = &[
             "ty::stack-size",
         ],
         reason: "they are about the program's `memory` block, and a program has one: a second block in a snippet is `resolve::duplicate-memory` in a base that has one, which stops before these checks",
+    },
+    Exempt {
+        codes: &["ty::interrupt-params", "ty::interrupt-return"],
+        reason: "a handler needs a vector, and between them the bases of `tests/ui` and `tests/e2e` serve every vector of riscv32: a snippet clashes with a base that serves its vector, `resolve::duplicate-vector`, reported before type checking, which hides these; `tests/ui/interrupt_type_errors.ers` and `_thumbv7m.ers` cover them",
     },
     Exempt {
         codes: &["eval::step-limit"],

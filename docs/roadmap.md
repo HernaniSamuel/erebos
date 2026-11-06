@@ -78,18 +78,12 @@ ADR 0078.
 |------|----------|-----------------|
 | **M4.1** ✅ Inline assembly | `asm` expressions with operands, options and naked functions (ADR 0079); `core::arch`, a file per target (ADR 0080); `compiler_fence` and `fence` (ADR 0081); `__aeabi_uldivmod` and `__aeabi_ldivmod` in `core` | the thumbv7m board stops QEMU through `bkpt` in Erebos; C code divides 64-bit values on both targets; machine registers read through `asm` on each target |
 | **M4.2** ✅ Startup in the language | `_start` moves into `core::arch`, written in Erebos and assembly (ADR 0012 superseded by 0083); `sym entry` | the e2e programs boot through `core`'s `_start` on both targets |
-| **M4.3** Handlers and vector tables | `interrupt fn ... at` for exceptions and the target's interrupts, the vector table (thumbv7m) and the trap entry (riscv32) generated from them, `critical` blocks (ADR 0078), a vector without a handler calling the panic function | a timer interrupt (the CLINT on `virt`, SysTick on `mps2-an385`) counting ticks shared with the entry function; a fault reaching the panic function on both targets |
+| **M4.3** ✅ Handlers and vector tables | `interrupt fn ... at` for exceptions and the target's interrupts, the vector table (thumbv7m) and the trap entry (riscv32) generated from them, `critical` blocks (ADR 0078), a vector without a handler calling the panic function | a timer interrupt (the CLINT on `virt`, SysTick on `mps2-an385`) counting ticks shared with the entry function; a fault reaching the panic function on both targets |
 | **M4.4** External interrupts | the chip's interrupts as a list `erebos svd` writes from `<interrupt>`, the NVIC's interrupts in the thumbv7m table, the PLIC's dispatched by the program on riscv32 | a UART driven by its interrupt on both targets |
 | **M4.5** Shared statics checked | the rule of ADR 0078 checked over the call graph | programs with handlers checked; rejected programs as ui tests |
 
 Decisions already agreed for the later steps:
 
-- **M4.3:** one priority level (ADR 0078). A handler is declared
-  `interrupt fn NAME() at VECTOR`, takes no parameters and cannot be
-  called; the compiler generates the vector table or trap entry from
-  the program's handlers. A vector without a handler calls the panic
-  function, with a new `PanicReason`, instead of locking up. Critical
-  sections are `critical` blocks.
 - **M4.4:** the chip's interrupt numbers come from an enum, which `erebos
   svd` writes from the SVD's `<interrupt>` elements.
 - **M4.5:** only `static mut` and `extern static mut` named in the
@@ -684,5 +678,42 @@ Documentation owed:
   masks interrupts on thumbv7m, and the table's size and `code_align`; a
   program cannot run code before `_start`, and reset code of the program is a
   deferred idea.
-- **Next: M4.3** (handlers and vector tables), the third of the M4 steps
-  above.
+- **M4.3 done.** A handler is `interrupt fn name() at Vector::X` (ADR 0084),
+  with a path to a variant of `core::arch::Vector`, an enum in each file of
+  `core::arch` (`rt/arch/riscv32.ers`, `rt/arch/armv7m.ers`) whose values are
+  `mcause` and the exception number. It takes no parameters, returns `()` or
+  `!`, must return `!` where returning would run the trapping instruction
+  again (the faults, and on riscv32 every exception), cannot be called, and
+  is a root; `src/target.rs` holds what the compiler needs of each vector, and
+  a test keeps it equal to the enums. Five codes are new:
+  `resolve::call-interrupt`, `resolve::not-a-vector`,
+  `resolve::duplicate-vector`, `ty::interrupt-params` and
+  `ty::interrupt-return`. `#[align(N)]` applies to functions (ADR 0087), set on
+  the LLVM function and shown in the MIR dump. `critical { ... }` is an
+  expression (ADR 0078, 0086): MIR has `critical_enter` and `critical_exit`,
+  emitted on every way out of the block, innermost first, and code generation
+  calls `core::arch`'s private `__critical_enter` and `__critical_exit`; the
+  evaluator does nothing for them. `_start` masks interrupts first on both
+  targets, and `core::arch` gains the portable `enable_interrupts`,
+  `wait_for_interrupt` and `interrupts_enabled`. The compiler generates the
+  table (ADR 0085): on thumbv7m `.vector_table` has 16 words and `_start` is
+  at the origin plus 64; on riscv32 `__erebos_trap_table` has 33 words, and
+  `_start` sets `mtvec` to `__erebos_trap`, a naked `#[align(4)]` function of
+  `core::arch` that saves the 16 registers the C ABI does not preserve. A
+  vector without a handler names a default handler that calls the panic
+  function, with the new `PanicReason::UnhandledVector` and a `PanicInfo` of
+  an empty file, line 0 and the vector's name as message (`unknown` for a
+  cause of riscv32 `Vector` lacks); the table and the defaults are left out of
+  the dump of a program without handlers. The milestone programs run on both
+  targets at both levels: a timer (SysTick on `mps2-an385`, the CLINT on
+  `virt`) counting five ticks that the entry function reads in a `critical`
+  block while waiting with `wait_for_interrupt`; a fault reaching the panic
+  function (`udf` as `HardFault`, an illegal instruction as
+  `IllegalInstruction`); handlers that keep every register and the stack's
+  alignment; and a race on a counter that is exact only with `critical`. The
+  harness gained the header `// takes-exceptions: yes`, which needs
+  `// expect-exit:` and reduces the QEMU event log to guest errors (ADR 0088).
+  Left to M4.4: the chip's interrupts and the length of the thumbv7m table
+  beyond the system exceptions, `code_align`, and enabling interrupts in the
+  NVIC and the PLIC; the check of shared statics is M4.5.
+- **Next: M4.4** (external interrupts), the fourth of the M4 steps above.

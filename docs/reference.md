@@ -1,4 +1,4 @@
-# Erebos language reference (M4.1)
+# Erebos language reference (M4.3)
 
 This describes the language as the compiler implements it today. The
 reasoning behind each rule lives in the ADRs (`docs/adr/`), cited as
@@ -13,7 +13,8 @@ plus the files of the modules it declares (ADR 0049), plus the module
 items, in any order: functions, external functions, structs, bit-field
 structs (see "Bit-field structs"), enums, constants, statics, external
 statics, `comptime` blocks, modules (`mod`), `use` declarations, the
-`memory` block, peripheral types and peripherals (see "Peripherals"). The
+`memory` block, peripheral types and peripherals (see "Peripherals"), and
+interrupt handlers (`interrupt fn`, see "Interrupts"). The
 root file is the **root module**, and the modules it declares, inline or
 in their own files, form a tree under it; each module has its own
 namespace (see "Modules and paths"). Items may refer to each other
@@ -60,6 +61,12 @@ panic fn on_panic() -> ! {
   panic fn on_panic(info: *const core::PanicInfo) -> ! { ... }
   ```
 
+- `interrupt fn name() at core::arch::Vector::SysTick { ... }` is the handler
+  of one interrupt or exception of the target. A program has any number of
+  them, at most one per vector, and nothing calls them; the machine does,
+  through the vector table or the trap entry that the compiler generates
+  from them (ADR 0084, 0085, see "Interrupts").
+
 A build is for one of two targets, chosen with `erebos build --target
 <name>`: `riscv32imac-unknown-none-elf` (RV32IMAC, the default) or
 `thumbv7m-none-eabi` (ARMv7-M, as on the Cortex-M3); see "Targets" below
@@ -76,17 +83,18 @@ block.
   any module (`resolve::reserved-name`, ADR 0020, 0052); a module of the
   root module may not be named `llvm` (see "Symbols") or `rt` (see
   "Modules and paths").
-- **Keywords:** `align_of as asm break comptime const continue crate else
-  entry enum extern false fn if let loop match mod mut offset_of panic pub
-  return size_of static struct super true use volatile while`. `raw` is a
-  keyword only right after `&`. `memory`, and the words inside a `memory`
+- **Keywords:** `align_of as asm break comptime const continue crate critical
+  else entry enum extern false fn if interrupt let loop match mod mut
+  offset_of panic pub return size_of static struct super true use volatile
+  while`. `raw` is a keyword only right after `&`. `memory`, and the words inside a `memory`
   block (`region`, `origin`, `size`, `code`, `data`, `stack`, `in`), are no
   keywords: they are recognized only in their place (see "Memory maps"),
   and are ordinary names elsewhere. Nor are `peripheral`, which starts an
   item only where an item starts and a name follows it; the words
   `read`, `write` and `at`, recognized only inside the two `peripheral`
   items and, `at` before a field's bits, `read` and `write` before a
-  field's name and starting its effects, in a bit-field struct; `step`
+  field's name and starting its effects, in a bit-field struct, and `at`
+  after the signature of an `interrupt fn`; `step`
   after an entry's offset and `over` after a peripheral's address;
   `clears`, `sets`, `toggles` and `modifies`, recognized only in an
   effect; and `in` after an entry's offset (see "Bit-field structs" and
@@ -223,6 +231,8 @@ fn add(a: u32, mut b: u32) -> u32 {
   `uart.init` (ADR 0051, see "Symbols").
 - `#[naked]` makes a function whose body is one `asm` expression and has no
   code of the compiler's around it (ADR 0079, see "Inline assembly").
+- `#[align(N)]` before a function with a body, `N` a power of two, says that
+  its first instruction is at a multiple of `N` (ADR 0087, see "Layout").
 
 ### Aggregates by value (ADR 0025, 0039, 0075)
 
@@ -296,7 +306,7 @@ x + y;                   // expression statement
 A block `{ ... }` is an expression (ADR 0015). Its value is its final
 expression without `;`; with no such expression it has type `()`, or `!` if
 it cannot reach its end. A block-like expression (`if`, `match`, `while`,
-`loop`, `{ }`) may stand as a statement without `;`, but must then have
+`loop`, `critical`, `{ }`) may stand as a statement without `;`, but must then have
 type `()`. A statement that starts with one ends with it: `if c { } - 1`
 is not a subtraction.
 
@@ -628,8 +638,10 @@ extern static crc_lookup: [u32; 256];
 - A `static` cannot be assigned (`ty::assign-immutable`) nor have its
   address taken with `&raw mut` (`ty::address-of-immutable`). A
   `static mut` is read and written like a `mut` variable (`TICKS += 1`,
-  `&raw mut DMA_BUF`), with ordinary loads and stores. Sharing one with
-  interrupt handlers comes with interrupts (M4).
+  `&raw mut DMA_BUF`), with ordinary loads and stores. A handler and the
+  code it interrupts may share one; the ordinary access is then a race
+  unless it is inside a `critical` block (see "Interrupts"). Nothing checks
+  that yet (M4.5).
 - **A static is read where the read is written**, like a read through a
   pointer, never deferred: in `TICKS + bump()`, where `bump` changes
   `TICKS`, `TICKS` is read before the call.
@@ -1679,6 +1691,21 @@ unspecified values.
   static, it raises the static's alignment by the same rules, without
   changing its size; there, an `N` in error leaves the type's alignment
   (see "Statics").
+- `#[align(N)]` before a function with a body (a plain, naked, entry, panic
+  or handler function; ADR 0087) says that its first instruction, when the
+  function is in the object, is at a multiple of `N`: LLVM may align it
+  further, never less. `N` is computed at compile time as for a struct or a
+  static, a power of two up to the same limit, or `ty::invalid-align`; a
+  function has no natural alignment in the language, so `#[align(1)]` is
+  valid and changes nothing. An `N` in error is reported once and leaves the
+  function without alignment. The attribute takes effect only where the
+  function is emitted: on one that LLVM inlines and drops, which has no
+  address, or that runs only at compile time, it has none and no diagnostic.
+  `#[export]` or a `sym` operand keeps the function. Given twice it is
+  `resolve::duplicate-attribute`, on an `extern fn` it is
+  `resolve::misplaced-attribute`, and `#[packed]` stays misplaced on a
+  function. `--emit=mir` shows it on the line before the function, and
+  `--emit=llvm-ir` as the function's `align`.
 - `#[packed]` and `#[align(N)]` cannot be combined, and a packed struct
   cannot contain a type with `#[align(N)]`, at any depth: through fields,
   array elements or payload values.
@@ -1867,7 +1894,8 @@ address failed:
 
 The `#[align(N)]` of a static is no failed value: it is part of no type.
 One in error is reported, and the static keeps the alignment of its type
-(see "Statics").
+(see "Statics"). Nor is that of a function (see "Layout"): one in error is
+reported, and the function has no alignment.
 
 Since whether a body is built depends on the lengths and alignments of
 the types it mentions, behind pointers too, a length or alignment of `S`
@@ -2210,6 +2238,8 @@ hardware (`fence iorw, iorw` on riscv32, `dmb sy` on thumbv7m). Both are
   or `!` if it has no `break`. `break value` is only allowed in `loop`.
 - `continue` jumps to the next iteration; `break` and `continue` refer to
   the innermost loop.
+- `critical { ... }` runs its block with interrupts masked and has the
+  block's value and type; see "Interrupts".
 - `return` or `return value` leaves the function.
 - `break`, `continue` and `return` have type `!`.
 - `e?` gives the value of an `Option` or a `Result`, or returns its
@@ -2450,7 +2480,8 @@ cannot name a parameter, and a run-time variable in a `const` operand is
 `ty::not-comptime`. A naked function is called like any other and is the one
 way to write a function with a convention no signature has. `#[naked]` goes on
 a function with a body, and combines with `#[export]`; on an `extern fn`,
-the entry function, the panic function or any other item it is
+the entry function, the panic function, an interrupt handler or any other
+item it is
 `resolve::misplaced-attribute`, and twice
 `resolve::duplicate-attribute`. LLVM gets the function with the `naked` and
 `noinline` attributes.
@@ -2799,7 +2830,9 @@ pub fn config(baud: u32) -> Config {
   module, `use`, `comptime` block) it is `resolve::misplaced-attribute`.
 - An **`extern fn` or `extern static`** always has its own name, in any
   module: it names a symbol defined outside the program.
-- The entry and panic functions follow the same rules. `sym entry` (see
+- The entry and panic functions and the interrupt handlers follow the same
+  rules (a handler `tick` in `timer` is `timer.tick`, or `tick` with
+  `#[export]`). `sym entry` (see
   "Inline assembly") is the entry function's symbol, whatever it is, and
   it is how `core`'s `_start` jumps to it.
 - A dot occurs in no Erebos or C identifier, so a path symbol never equals
@@ -2908,8 +2941,8 @@ block is `resolve::unknown-region`.
 - `code in R;` puts in `R`, in this order, the reset entry `_start` (see
   "Startup and memory"), the code (`.text`), the read-only data
   (`.rodata`) and the initial values of `.data`. The reset entry starts at
-  `R`'s origin (on thumbv7m, with the two words of a vector table first, so
-  that `_start` is 8 bytes after it). The origin must be a multiple of the
+  `R`'s origin (on thumbv7m, with the 16 words of a vector table first, so
+  that `_start` is 64 bytes after it). The origin must be a multiple of the
   target's code alignment, 4 on riscv32 and 128 on thumbv7m
   (`ty::misaligned-code`), and must be the address where the board starts
   at reset (it jumps there on riscv32, and reads the vector table there on
@@ -2931,7 +2964,8 @@ block is `resolve::unknown-region`.
   one that overflows leaves its region below its origin, where many chips
   have no memory or memory that faults, instead of running over `.data` and
   `.bss`. Nothing detects the
-  overflow at run time yet (it needs trap handlers, M4); on QEMU `virt`,
+  overflow at run time yet (a fault that stacking causes needs a stack of its
+  own, which a later step may add, ADR 0085); on QEMU `virt`,
   where every region is part of one RAM, an overflow writes into the
   region below, if there is one. The stack cannot be in the code's region
   (`resolve::stack-with-code`), whose origin `_start` needs; a program on
@@ -2981,8 +3015,8 @@ script the compiler passes to `ld.lld`:
 - In the code's region: the reset entry, which is `_start` in an output
   section of its own, `.text.start`, so that only its own alignment counts
   and an object given with `--link` whose code is aligned to 64 cannot move
-  it off the origin; on thumbv7m the two words of the vector table come
-  first, in `.vector_table`, which `KEEP` retains (ADR 0083). Then `.text`,
+  it off the origin; on thumbv7m the 16 words of the vector table come
+  first, in `.vector_table`, which `KEEP` retains (ADR 0083, 0085). Then `.text`,
   `.rodata` and the initial values of `.data`.
 - In the stack's region: a section `.stack` without contents, from
   `__stack_start` to `__stack_end`, the bounds of the stack. In the data's
@@ -3013,29 +3047,39 @@ when a region overflows: the regions being disjoint, sections overlap
 only past the end of one, so those errors follow from the overflow and
 are left out.
 
-## Startup and memory (ADR 0030, 0057, 0083)
+## Startup and memory (ADR 0030, 0057, 0083, 0085, 0086)
 
 `_start` is the reset entry. It is written in Erebos, a private `#[export]`
 `#[naked]` function of `core::arch` (see "`core`"), in `rt/arch/riscv32.ers`
 and `rt/arch/armv7m.ers`: that is where to read it, since `--emit=llvm-ir`
 leaves `core` out and so does not show it. The compiler names
 `core::arch::_start` by path and puts it in the section `.text.start`, alone
-at the origin of the code's region (see "Memory maps"; on thumbv7m two words
-of a vector table come first, see "Targets"). It does, in order:
+at the origin of the code's region (see "Memory maps"; on thumbv7m the 16
+words of a vector table come first, see "Targets"). It does, in order:
 
-1. set the stack pointer to `__stack_end`, the end of the stack the
+1. mask interrupts (`csrci mstatus, 8` on riscv32, `cpsid i` on thumbv7m,
+   ADR 0086), so that the entry function starts masked on both targets, also
+   when a program jumps back to `_start`, and no handler sees `.bss` and
+   `.data` half done;
+2. set the stack pointer to `__stack_end`, the end of the stack the
    `memory` block declares;
-2. fill `.bss` with zeros;
-3. copy the initial values of `.data` from their load address to their
+3. on riscv32 only, set `mtvec` to the trap entry (ADR 0085, see
+   "Interrupts"), so that a trap from here on reaches a handler or the panic
+   function and not address 0; on thumbv7m the core finds the table by
+   itself;
+4. fill `.bss` with zeros;
+5. copy the initial values of `.data` from their load address to their
    run address; when the data shares the code's region the two are one,
    and each word is copied onto itself;
-4. jump to the entry function, through `sym entry` (see "Inline assembly").
+6. jump to the entry function, through `sym entry` (see "Inline assembly").
 
-Nothing else runs before the entry function: there are no constructors and
-no order of initialization. The loops work a word at a time between
-symbols the linker script defines (`__bss_start`, `__bss_end`,
-`__data_start`, `__data_end`, `__data_load`), test their bounds before the
-first word and do nothing when a range is empty. `_start` takes
+The entry function enables interrupts when it is ready, with
+`core::arch::enable_interrupts()` (see "Interrupts"). Nothing else runs
+before it: there are no constructors and no order of initialization. The
+loops work a word at a time between symbols the linker script defines
+(`__bss_start`, `__bss_end`, `__data_start`, `__data_end`, `__data_load`),
+test their bounds before the first word and do nothing when a range is
+empty. `_start` takes
 `__stack_end` from the script too, so the LLVM IR of a program is the same
 whatever its board. The jump reaches the entry function wherever it is in
 the address space: on riscv32 it is a `tail` (`auipc` and `jalr`, not a
@@ -3053,7 +3097,7 @@ Object files given with `--link` may use the small-data sections
 link error, not data left uninitialized. No `__global_pointer$` is
 defined, so nothing is addressed relative to `gp`.
 
-## Targets (ADR 0073 to 0077)
+## Targets (ADR 0073 to 0077, 0085, 0088)
 
 `erebos build --target <name>` chooses the machine the program is built
 for. There are two:
@@ -3083,23 +3127,52 @@ reset entry and the memory map checks (`ty::misaligned-code`,
 `ty::stack-size`, see "Memory maps"). The pointer width stays 32 bits on
 every target, which `usize` and the layouts rely on.
 
-**The reset entry of thumbv7m (ADR 0074).** A Cortex-M does not start at an
-address: at reset it reads two words at the address of its vector table
-(`0x0` on `mps2-an385`), the initial stack pointer and the address of the
-reset handler, whose bit 0 is set to mark Thumb code. The reset entry is
-therefore two sections at the origin of the code's region: `.vector_table`
-first, which holds those two words, `__stack_end` and `_start`, and then
-`.text.start`, which holds `_start` (ADR 0083). The compiler emits the two
-words as module-level assembly, which `--emit=llvm-ir` shows as `module asm`;
-`_start` is `core`'s, in Thumb assembly (see "Startup and memory"), so it is
-8 bytes after the origin. The code's origin must be a multiple of 128 because
-of the table. `_start` does what it does on riscv32: it sets the stack
-pointer again (the processor already loaded it, but a program that jumps back
-to `_start`, as a startup test does, gets a fresh stack), zeroes `.bss`,
-copies `.data`, and jumps to the entry function. The table has no other
-entry: an exception (a fault, an NMI) reads its handler from the words after
-the second, which are `_start`'s code, faults again and locks the processor
-up. Exception handlers and the rest of the vector table come with M4.3.
+**The vector table of thumbv7m (ADR 0074, 0083, 0085).** A Cortex-M does not
+start at an address: at reset it reads two words at the address of its vector
+table (`0x0` on `mps2-an385`), the initial stack pointer and the address of
+the reset handler, whose bit 0 is set to mark Thumb code, and an exception
+reads its handler from the word of its number. The reset entry is therefore
+two sections at the origin of the code's region: `.vector_table` first, of
+**16 words**, 64 bytes, and then `.text.start`, which holds `_start` (ADR
+0083), so `_start` is at the origin plus 64. The code's origin must be a
+multiple of 128 because of the table. `_start` is `core`'s, in Thumb assembly
+(see "Startup and memory"): it sets the stack pointer again (the processor
+already loaded it, but a program that jumps back to `_start`, as a startup
+test does, gets a fresh stack), zeroes `.bss`, copies `.data`, and jumps to
+the entry function. The words are:
+
+| Word | Holds |
+|------|-------|
+| 0 | `__stack_end` |
+| 1 | `_start` |
+| 2, 3, 4, 5, 6, 11, 12, 14, 15 | the handler at that `Vector` (`NMI`, `HardFault`, `MemManage`, `BusFault`, `UsageFault`, `SVCall`, `DebugMonitor`, `PendSV`, `SysTick`), or its default handler (see "Interrupts") |
+| 7, 8, 9, 10, 13 | 0: reserved by the architecture, never read by the core |
+
+The linker sets bit 0 of each handler's word, as it does for `_start`. The
+compiler emits the table as module-level assembly, one `.word` per word: a
+handler's is its function's symbol (`tick`, or `timer.tick` for a handler in
+a module). It is in every executable; `--emit=llvm-ir` shows it, as `module
+asm`, with the default handlers it names, only for a program that declares a
+handler. A handler is a plain function of the C ABI: the core stacks `r0` to
+`r3`, `r12`, `lr`, `pc` and `xPSR` on entry and returns with `bx lr`, and
+relies on `CCR.STKALIGN` being 1, so that it aligns the stack to 8 (it is 1 at
+reset on `mps2-an385` and on the Cortex-M3 from revision r2p0; `_start` does
+not write it). The table has no entries for the chip's interrupts: a program
+that enables an NVIC interrupt through registers makes the core read a word of
+`_start`'s code (the chip's interrupts and the table's length come with M4.4).
+
+**The trap table of riscv32 (ADR 0085).** A RISC-V core in machine mode jumps
+to one address, `mtvec`, for every trap, which nothing sets at reset (0 on
+QEMU `virt`). `_start` sets it to `core::arch::__erebos_trap` (see
+"Interrupts"), in direct mode. The compiler generates the table that code
+reads, `__erebos_trap_table`, a global object of **33 words**, 132 bytes, in
+the section `.rodata.__erebos_trap_table`, which the linker script places with
+`.rodata`: word `n` for the exception with `mcause` `n`, word `16 + n` for
+the interrupt of cause `n` (`mcause` without bit 31), and word 32 for any
+other cause, each the handler of the `Vector` with that value, or a default
+handler. A cause that `Vector` has no variant for, and word 32, hold
+`__erebos_unhandled_other`. As on thumbv7m, `--emit=llvm-ir` shows the table
+only for a program that declares a handler.
 
 **Calls and arithmetic.**
 
@@ -3150,7 +3223,266 @@ with `asm("bkpt 0xab", ...)` in Erebos and no C file (the harness still links
 a board's C file when a board has one). C files of the tests are compiled
 with `clang --target=thumbv7m-none-eabi -mcpu=cortex-m3 -mfloat-abi=soft
 -ffreestanding` for thumbv7m. The ui tests take `// target: <name>`, riscv32
-by default.
+by default. The harness runs QEMU with an event log that must stay empty bar
+a few lines of a correct run, so a program that takes an exception on
+purpose (a handler that runs, a fault that reaches the panic function)
+declares it in its header, `// takes-exceptions: yes`, together with
+`// expect-exit:`: the log is then reduced to guest errors, and the output
+and the exit code carry the check (ADR 0088).
+
+## Interrupts (ADR 0078, 0084 to 0088)
+
+```
+use core::arch::Vector;
+
+static mut TICKS: u32 = 0;
+
+interrupt fn tick() at Vector::SysTick {
+    TICKS += 1;
+}
+
+interrupt fn crash() -> ! at Vector::HardFault {
+    loop {}
+}
+
+entry fn main() -> ! {
+    // ... set up SysTick ...
+    core::arch::enable_interrupts();
+    loop {
+        let ticks: u32 = critical { TICKS };
+        if ticks >= 5 {
+            break;
+        }
+        core::arch::wait_for_interrupt();
+    }
+    loop {}
+}
+```
+
+A program runs in machine mode (ADR 0010) with **one priority level**
+(ADR 0078): a maskable handler never preempts another, and preempts the thread
+that runs the entry function anywhere outside a `critical` block. A program
+that changes priorities, or enables interrupts inside a handler, leaves this
+model, and nothing checks it. Sharing a `static mut` between a handler and the
+thread needs a `critical` block around the thread's access; that rule is not
+checked yet (M4.5), so an unprotected access is a race, as in C.
+
+### Handlers (ADR 0084)
+
+```
+fn_decl = { attr } [ "pub" ] [ "entry" | "panic" | "interrupt" ] "fn" NAME
+          "(" params ")" [ "->" type ] [ "at" path ] block
+```
+
+`interrupt fn name() at VECTOR { ... }` declares the handler of one vector of
+the target. `at` follows the signature, and an `interrupt fn` requires it;
+nothing else takes it (`parser::unexpected-token`, as for `extern interrupt
+fn`). The vector is a **path to a variant of `core::arch::Vector`**, in full
+or through `use`, resolved in the module of the handler like any path (see
+"Modules and paths"); it is no expression, `at` takes no constant, and the
+shorthand `.SysTick` does not apply.
+
+- A path that names nothing is `resolve::unknown-path` (or
+  `resolve::unknown-variant` for a variant `Vector` does not have, such as
+  the other target's); a path that names anything else, such as a variant of
+  another enum, a struct, a function, a constant or a module, is
+  `resolve::not-a-vector`.
+- At most one handler per vector in a program, in any module. Each further
+  handler of a vector is one `resolve::duplicate-vector`, labelling it and the
+  first, in the order of the functions' ids, which follows the source.
+- A handler takes no parameters (`ty::interrupt-params`) and returns `()`
+  (the default) or `!`; any other type is `ty::interrupt-return`, and so is
+  `()` at a vector that must diverge (see below).
+- It cannot be called, from Erebos or at compile time, constants and
+  `comptime` blocks included: `resolve::call-interrupt`. A `sym` operand of
+  `asm` may name it, since that gives only its address.
+- It is a function of the C ABI with a symbol by the rules of "Symbols", so
+  `#[export]` and `#[align(N)]` apply. `#[naked]` does not
+  (`resolve::misplaced-attribute`): no contract says what state a naked
+  handler would find, and it differs on each target. `pub` is accepted, as
+  on `entry fn`; since a handler cannot be called, it only decides who may
+  name it in a `sym`.
+- A handler is a root, as the entry and the panic function are: it is type
+  checked, lowered and kept in the object whether or not anything names it.
+- A handler sees nothing of the interrupted state: it can report and stop,
+  not repair and resume. `interrupt` is a keyword, so no item, local or field
+  can be named so (`erebos svd` renames it, ADR 0071). `core` declares no
+  handler.
+
+**The vectors.** `core::arch::Vector` is a public `enum Vector: u32`
+declared in each file of `core::arch`, so it is specific to its target (see
+"`core`"): on another target the path names nothing. Its value is what the
+machine calls the event, so a program can compare it with `IPSR` or `mcause`.
+The **kind** says whether masking stops the event. Maskable handlers are the
+handler context of ADR 0078; each unmaskable one is a context of its own,
+since masking does not delay it (on thumbv7m, `MemManage`, `BusFault`,
+`UsageFault` and `SVCall` escalate to `HardFault` under `PRIMASK` rather than
+wait).
+
+On `thumbv7m-none-eabi` (`rt/arch/armv7m.ers`), the value is the exception
+number, which is the word of the vector table:
+
+| Variant | Value | Kind | A handler returns |
+|---------|-------|------|-------------------|
+| `NMI` | 2 | unmaskable | `()` or `!` |
+| `HardFault` | 3 | unmaskable | `!` |
+| `MemManage` | 4 | unmaskable | `!` |
+| `BusFault` | 5 | unmaskable | `!` |
+| `UsageFault` | 6 | unmaskable | `!` |
+| `SVCall` | 11 | unmaskable | `()` or `!` |
+| `DebugMonitor` | 12 | unmaskable | `!` |
+| `PendSV` | 14 | maskable | `()` or `!` |
+| `SysTick` | 15 | maskable | `()` or `!` |
+
+On `riscv32imac-unknown-none-elf` (`rt/arch/riscv32.ers`), the value is
+`mcause`: bit 31 is set for an interrupt and clear for an exception.
+
+| Variant | Value | Kind | A handler returns |
+|---------|-------|------|-------------------|
+| `InstructionMisaligned` | 0 | unmaskable | `!` |
+| `InstructionFault` | 1 | unmaskable | `!` |
+| `IllegalInstruction` | 2 | unmaskable | `!` |
+| `Breakpoint` | 3 | unmaskable | `!` |
+| `LoadMisaligned` | 4 | unmaskable | `!` |
+| `LoadFault` | 5 | unmaskable | `!` |
+| `StoreMisaligned` | 6 | unmaskable | `!` |
+| `StoreFault` | 7 | unmaskable | `!` |
+| `EnvironmentCall` | 11 | unmaskable | `!` |
+| `MachineSoftware` | `0x8000_0003` | maskable | `()` or `!` |
+| `MachineTimer` | `0x8000_0007` | maskable | `()` or `!` |
+| `MachineExternal` | `0x8000_000B` | maskable | `()` or `!` |
+
+Reset has no variant: `_start` serves it, and a program cannot replace it. On
+riscv32 the causes of the lower privilege modes and of paging cannot arise in
+machine mode and have none either. The chip's interrupts are not in the enum
+yet (M4.4).
+
+**What a handler returns.** A handler must return `!` where returning would
+run the instruction that trapped again, with nothing changed, since a handler
+without parameters cannot see the frame to fix the cause: on thumbv7m
+`HardFault`, `MemManage`, `BusFault`, `UsageFault` and `DebugMonitor`, and on
+riscv32 every exception, `ecall` and `ebreak` included, since `mepc` points
+at the instruction itself. Elsewhere `()` or `!`. The error
+(`ty::interrupt-return`) labels the return type, or the function's name when
+it is omitted.
+
+### Vectors without a handler (ADR 0085)
+
+A trap whose vector has no handler reaches a **default handler** that the
+compiler generates: it calls the panic function, with the call a check makes
+(see "Panic information"), and never returns. So a fault in a program without
+handlers reaches the panic function on both targets, where it used to lock up
+(thumbv7m) or jump to address 0 (riscv32).
+
+- With a panic function that takes no parameter, one function serves every
+  word, `__erebos_unhandled`, and no information is built.
+- With `*const core::PanicInfo`, one function per vector,
+  `__erebos_unhandled_<variant>`, and `__erebos_unhandled_other` for the words
+  of riscv32 that have no variant (a cause of `mcause` that `Vector` does not
+  name, and word 32). Each passes read-only information of its own:
+  `reason` is `PanicReason::UnhandledVector`, `message` is the variant's name
+  as bytes (`b"HardFault"`, `b"IllegalInstruction"`, and `b"unknown"` for
+  `__erebos_unhandled_other`), `file` is an empty slice, and `line` and
+  `column` are 0.
+  Only a vector left without a handler costs its information (28 bytes, the
+  name and the small function); a program with a handler at every vector has
+  none.
+
+The panic function runs with what the trap left: `mstatus.MIE` clear on
+riscv32 and, on thumbv7m, at the priority of the exception. It may read
+`mcause`, `mepc`, `IPSR` or `HFSR` with `asm`. If it faults in turn: on
+thumbv7m at `HardFault`'s level the core locks up; on riscv32 the trap entry
+runs again on the same stack, and the panic function with it, for ever if it
+always faults. Default handlers are **not contexts** of ADR 0078, maskable or
+not, since they never return: nothing is left to race with.
+
+### The trap entry of riscv32 (ADR 0085)
+
+`mtvec` is direct: every trap enters one function, `core::arch::__erebos_trap`
+(`rt/arch/riscv32.ers`), a private naked function with `#[align(4)]`, since
+`mtvec` holds multiples of 4. It saves the 16 registers that the C ABI does
+not preserve (`ra`, `t0` to `t6`, `a0` to `a7`) in 64 bytes of the stack of
+the interrupted code, so that the stack stays aligned to 16 and the
+interrupted code cannot tell it ran; reads `mcause`; looks the handler up in
+`__erebos_trap_table` (see "Targets"); calls it with `jalr`; restores the
+registers; and runs `mret`. There is no stack for traps. `mepc` and `mstatus`
+are not saved: a trap clears `MIE`, so no maskable handler enters while one
+runs, and an exception inside a handler never returns. A program that sets
+`MIE` inside a handler leaves the model and saves them itself. A program that
+writes `mtvec` with `asm` leaves the handlers and defaults behind.
+
+### `critical` blocks (ADR 0078, 0086)
+
+```
+critical BLOCK
+```
+
+`critical` is a keyword. `critical { ... }` is an expression of the type and
+value of its block, usable wherever an expression is, a `while` condition
+included (`while !critical { DONE } {}`). As a statement it ends with its
+block, like `if` and `loop`: no `;` is needed after it, its type must be `()`
+or `!`, and `critical { X } + 1` as a statement is
+`parser::unexpected-token`. A value of any type may leave it, as from any
+block, and `break` and `continue` to a loop outside it, `return` and `?` are
+allowed inside.
+
+- On entry it records whether maskable interrupts were enabled and masks them;
+  on **every** way out of the block it puts back what it recorded: the end of
+  the block, `break` and `continue` to a loop outside it, `return` and `?`.
+  When a jump crosses several blocks they are left innermost first. A value
+  that leaves (`return x`, `break x`, the block's own) is computed before the
+  exit, so it is read under the mask. The call of the panic function by a
+  check is not an exit: the panic function runs with interrupts as the block
+  left them. A block whose end cannot be reached has no exit there.
+- Blocks nest: an inner block finds interrupts masked and leaves them masked,
+  and a block entered masked leaves them masked. In a handler, interrupts are
+  masked already under the one level, and the block changes nothing.
+- Entry and exit are compiler fences: no access to memory that other code can
+  see (statics, memory reached through pointers) moves into or out of the
+  block.
+- It does not mask unmaskable events: faults, `NMI` and the rest of the
+  unmaskable vectors run inside it.
+- At compile time it runs its block as a block: there are no interrupts to
+  mask, and the `asm` of `core::arch` is not reached (no `eval::asm`).
+- It lowers to two statements of MIR, `critical_enter` and `critical_exit`,
+  each with a hidden `u32` local, and then to calls of two private functions
+  of `core::arch`, `__critical_enter` and `__critical_exit`, which the
+  compiler names by path and no program can name (their `__`). On riscv32
+  `__critical_enter` is `csrrci` on `mstatus` that clears `MIE`, returning
+  8 or 0, and `__critical_exit` is `csrs mstatus` with that value; on
+  thumbv7m, `mrs` of `PRIMASK` and `cpsid i`, and `msr primask`. At `-O0`
+  each is a call; at `-O` LLVM inlines them to two or three instructions.
+  `--emit=mir` shows the two statements and `--emit=llvm-ir` the calls, as
+  declarations, since dumps leave `core` out.
+
+### Enabling, waiting and testing (ADR 0086)
+
+`_start` masks interrupts first (see "Startup and memory"), so the entry
+function starts masked on both targets, and a program calls
+`core::arch::enable_interrupts()` when what its handlers use is set up (see
+"`core`" for the three portable items). Each source of interrupts has its own
+enable, which is the program's: `mie` on riscv32, the peripheral's control
+register on thumbv7m (SysTick's `TICKINT`). There is no function that masks:
+that is `critical`. On thumbv7m `PRIMASK` turns `svc` into a `HardFault`, so a
+program uses `svc` only after enabling interrupts and outside `critical`
+blocks.
+
+To wait for a handler without losing a wake-up, test and wait in one critical
+section:
+
+```
+loop {
+    critical {
+        if DONE { break; }
+        core::arch::wait_for_interrupt();
+    }
+}
+```
+
+`wfi` returns for an interrupt that is pending and enabled at its source even
+while masked, and the handler runs when the block ends, before the next
+test. Testing the flag outside the block and then waiting loses a wake-up
+that comes between the two.
 
 ## Peripherals (ADR 0058)
 
@@ -4320,7 +4652,7 @@ the compiler binary, and compiled and checked with every program.
   (`core.builtins.__erebos_udivmod64`). The compiler marks every function
   of `core` `no-builtins`, so that LLVM does not turn their loops back into
   calls to them.
-- **`core::arch`** (ADR 0080, 0081) is the part of `core` that needs an
+- **`core::arch`** (ADR 0080, 0081, 0084 to 0086) is the part of `core` that needs an
   instruction of the target, written with `asm` (see "Inline assembly"). It
   is a public module whose file is chosen by the build's target, not by the
   rule of ADR 0049:
@@ -4381,6 +4713,19 @@ the compiler binary, and compiled and checked with every program.
   with the comment lines `// portable: <declaration>` that list its portable
   items.
 
+  Specific to each target, and not portable:
+
+  - `pub enum Vector: u32`, the vectors that an `interrupt fn` serves, with
+    different variants in each file (ADR 0084, see "Interrupts"). It is not in
+    the list of portable items, and the compiler knows it by the path
+    `core::arch::Vector`, with the list it keeps in `src/target.rs`, which a
+    test compares with each file.
+  - the private `__critical_enter() -> u32` and `__critical_exit(was: u32)`
+    that a `critical` block calls (ADR 0086), which the compiler names by
+    path.
+  - on riscv32, the private naked `#[align(4)]` function `__erebos_trap`, the
+    trap entry that `_start` writes to `mtvec` (ADR 0085, see "Interrupts").
+
   Every file also defines the reset entry, the private `#[export]` `#[naked]`
   function `_start` (ADR 0083, see "Startup and memory"). It is in no list of
   portable items: it exists on every target, but no program can name it, and
@@ -4413,6 +4758,7 @@ panic fn on_panic(info: *const PanicInfo) -> ! {
         PanicReason::AssertionFailed => &raw const b"assertion failed",
         PanicReason::NoVariant => &raw const b"enum value is no variant",
         PanicReason::FieldOutOfRange => &raw const b"value does not fit its field",
+        PanicReason::UnhandledVector => &raw const b"vector not handled",
     };
     print(reason);
     print(&raw const b" at ");
@@ -4457,6 +4803,7 @@ pub enum PanicReason: u8 {
     AssertionFailed = 2,
     NoVariant = 3,
     FieldOutOfRange = 4,
+    UnhandledVector = 5,
 }
 ```
 
@@ -4470,12 +4817,14 @@ clang's.
   file's directory, with `/` between directories (`main.ers`,
   `uart/regs.ers`), and `rt/core.ers` or `rt/builtins.ers` in `core`. It
   depends neither on the directory the compiler runs in nor on how the
-  command line wrote the root file's path, so builds stay reproducible.
+  command line wrote the root file's path, so builds stay reproducible. For
+  `UnhandledVector` it names no file: it is an empty slice.
 - **`line`** and **`column`** locate the first byte of the token that
   performs the check, both counted from 1, the column in bytes (the
   character, in ASCII sources), so that nested checks, as in `a[i][j]` or
   `a / b / c`, each have their own. Parentheses change nothing: `(a / b)`
-  is located at its `/`.
+  is located at its `/`. For `UnhandledVector` they are 0: a trap locates
+  nothing in the source, and it is the one case that is not counted from 1.
 
   | Reason | Checked by | Located at |
   |--------|------------|------------|
@@ -4485,19 +4834,23 @@ clang's.
   | `NoVariant` | a `match` without a catch-all arm (ADR 0036, 0042) | `match` |
   | `NoVariant` | `e?` (ADR 0046) | the `?` |
   | `FieldOutOfRange` | a value written to a bit field that does not fit its bits, by a literal, an assignment or a compound assignment (ADR 0059) | the field's name |
+  | `UnhandledVector` | a trap whose vector has no handler, through a default handler (ADR 0085, see "Interrupts") | nowhere: empty file, line and column 0 |
 
 - **`reason`** is the cause of the check.
 - **`message`** is the message of `assert(c, msg)`, computed only when the
   assertion fails (see "Messages in `assert`"); for every other check, and
   for an `assert` without one, it is an empty slice, whose address is
-  unspecified.
+  unspecified. For `UnhandledVector` it is the name of the vector as bytes
+  (`b"HardFault"`, `b"MachineTimer"`), or `b"unknown"` for a cause of
+  riscv32 that `Vector` has no variant for.
 
 **Where the information lives.**
 
 - For every check but an `assert` with a message, every field is known at
   compile time, and the `PanicInfo` is **read-only data** the compiler
   emits, one per check (LLVM may merge identical ones); the call passes
-  its address. The file names are byte strings, one per file: the name of
+  its address. A default handler (see "Interrupts") passes one of its own for
+  each vector it serves, built the same way. The file names are byte strings, one per file: the name of
   every file of the program and of `core` is emitted, and `-O` removes
   those no check uses.
 - An `assert` with a message builds its `PanicInfo` in the frame of the
@@ -4542,6 +4895,12 @@ a name. `--emit` prints a compiler stage instead: `tokens`, `ast`, `hir`,
 - The dumps leave `core` out: `mir` and `llvm-ir` show a function of `core`
   the program calls as a declaration (`extern fn memcpy(...)`,
   `declare ptr @memcpy`), and the others not at all.
+- `typeck` and `mir` show a handler as `interrupt fn name() -> () at
+  SysTick`, and `mir` shows `critical_enter _n` and `critical_exit _n` for a
+  `critical` block and `#[align(N)]` on the line before a function that has
+  it. `llvm-ir` shows the vector table, as `module asm`, and the default
+  handlers with their information only for a program that declares a handler
+  (ADR 0085); every executable has them.
 - `hir` and `typeck` show the items outside the root module by their
   paths, and `mir` and `llvm-ir` show functions and statics by their
   symbols (see "Symbols"); the `hir` dump starts with the module tree.
@@ -4609,7 +4968,7 @@ Every error has a stable code, shown with the message.
 | `lexer::invalid-byte` | malformed byte literal, or a character or escape not allowed in a byte literal, byte string or string literal |
 | `lexer::unterminated-byte` | byte literal without closing `'` |
 | `lexer::unterminated-byte-string` | `b"` or `"` without its closing `"` on the same line |
-| `parser::unexpected-token` | a token where it cannot appear, such as `_` as a name or a value, `pub` before a variant, or a `use` of a path made only of `crate`, `super` or `core`; in a bit-field struct, a field without `at`, half-open bits (`at 0..1`), a second effect of a kind, an effect word that is none, `write 2 clears`; in an ordinary struct, `at` or `=` after a field's type; a `..` that is not last in a literal; in a peripheral type, an entry that starts with neither an access mode nor a name followed by `:`, a `step` without its value or after the read effect or the group, a read effect on a cluster, `over` without a path or after the `;`; `read write` on a bit field, or a mode after its name; in `asm`, a missing template, a word that is no operand or option, a missing `,` or `)`, an empty `options()`, an operand out of its group or after `options(...)`, a name on an operand with an explicit register or on `clobber_abi` |
+| `parser::unexpected-token` | a token where it cannot appear, such as `_` as a name or a value, `pub` before a variant, or a `use` of a path made only of `crate`, `super` or `core`; in a bit-field struct, a field without `at`, half-open bits (`at 0..1`), a second effect of a kind, an effect word that is none, `write 2 clears`; in an ordinary struct, `at` or `=` after a field's type; a `..` that is not last in a literal; in a peripheral type, an entry that starts with neither an access mode nor a name followed by `:`, a `step` without its value or after the read effect or the group, a read effect on a cluster, `over` without a path or after the `;`; `read write` on a bit field, or a mode after its name; in `asm`, a missing template, a word that is no operand or option, a missing `,` or `)`, an empty `options()`, an operand out of its group or after `options(...)`, a name on an operand with an explicit register or on `clobber_abi`; an `interrupt fn` without `at`, `at` on any other function, `extern interrupt fn`, a shorthand or an integer after `at`; a statement that starts with a `critical` block and goes on with an operator |
 | `parser::unclosed-block` | `{` without its `}` |
 | `parser::let-without-type` | `let` without `: Type`, also in a pattern |
 | `parser::chained-comparison` | `a < b < c` |
@@ -4634,6 +4993,9 @@ Every error has a stable code, shown with the message.
 | `resolve::unknown-function` | call to a function that does not exist, or to an item that is not a function |
 | `resolve::not-a-function` | call to a variable |
 | `resolve::call-entry` | call to the entry function |
+| `resolve::call-interrupt` | call to an `interrupt fn`, from a function or at compile time |
+| `resolve::not-a-vector` | the path after `at` of an `interrupt fn` names something other than a variant of `core::arch::Vector`: a variant of another enum, a struct, a function, a constant, a static, an enum, a module or a peripheral |
+| `resolve::duplicate-vector` | a second `interrupt fn` at one vector; once per extra handler, labelling the first |
 | `resolve::duplicate-item` | two items, modules or `use` names with one name in one module |
 | `resolve::duplicate-symbol` | two items of the program, `core` included, with one symbol |
 | `resolve::duplicate-type` | any item, module or `use` name named like a built-in type: `bool`, an integer type, `Option` or `Result` |
@@ -4661,7 +5023,7 @@ Every error has a stable code, shown with the message.
 | `resolve::inconsistent-binding` | a name not bound by every alternative of an or-pattern, or bound with `let mut` by only some |
 | `resolve::reserved-name` | an item, module or `use` named `_start`, `core`, with a name starting with `__`, or like a built-in function (`assert`, `len`, `slice`); a module of the root module named `llvm` or `rt`; a region named `INCLUDE` |
 | `resolve::unknown-attribute` | an attribute that does not exist |
-| `resolve::misplaced-attribute` | an attribute on an item it does not apply to, as `#[packed]` or `#[align(N)]` on a bit-field struct, or `#[naked]` on an `extern fn`, the entry function, the panic function or anything but a function with a body |
+| `resolve::misplaced-attribute` | an attribute on an item it does not apply to, as `#[packed]` or `#[align(N)]` on a bit-field struct, `#[align(N)]` on an `extern fn`, or `#[naked]` on an `extern fn`, the entry function, the panic function, an interrupt handler or anything but a function with a body |
 | `resolve::attribute-argument` | an attribute with a missing or extra argument |
 | `resolve::duplicate-attribute` | an attribute given twice |
 | `resolve::conflicting-attributes` | `#[packed]` with `#[align(N)]` |
@@ -4714,7 +5076,7 @@ Every error has a stable code, shown with the message.
 | `ty::infinite-size` | structs and enums that contain themselves, directly, through each other or through `Option` and `Result`; peripheral types that contain themselves through clusters |
 | `ty::unsized` | `[T]` where a size is needed, or `*s` read or written whole |
 | `ty::never-in-memory` | `!` as a pointee, slice element, field, payload type, type argument of `Option` or `Result`, array element, register type, the type of a static, `extern static`, `const` or `comptime` value, a layout query operand, or under `&raw` |
-| `ty::invalid-align` | `#[align(N)]` on a struct or static with `N` not a power of two, too large or below the natural alignment |
+| `ty::invalid-align` | `#[align(N)]` on a struct, static or function with `N` not a power of two, too large or below the natural alignment |
 | `ty::aligned-in-packed` | a packed struct containing a type with `#[align(N)]`, at any depth, such as an enum with such a payload |
 | `ty::not-comptime` | a run-time variable where a compile-time value is required, in a `const` operand of `asm` too |
 | `ty::cycle` | an item or variant whose value or layout needs itself, a bit-field struct whose bits (positions, field types, the variants of an enum field type) need themselves, or a default that needs its own value, including a `match` that needs the values of an enum (a variant pattern, `E::V` or `.V`, or a constant pattern at a position of its type, or no arm on it) in a function that runs while one of them is computed |
@@ -4732,6 +5094,8 @@ Every error has a stable code, shown with the message.
 | `ty::special-fn-params` | entry function with parameters |
 | `ty::panic-param` | a panic function whose parameters are not none or one `*const core::PanicInfo` |
 | `ty::entry-returns`, `ty::panic-returns` | entry or panic function that can return |
+| `ty::interrupt-params` | an `interrupt fn` with parameters |
+| `ty::interrupt-return` | an `interrupt fn` returning a type other than `()` or `!`, or returning `()` at a vector that must diverge |
 | `ty::empty-region` | a region of size 0 |
 | `ty::region-out-of-range` | a region whose end is above `0xFFFF_FFFF` |
 | `ty::region-overlap` | two regions sharing an address |
