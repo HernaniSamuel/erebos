@@ -1990,7 +1990,10 @@ impl<'h> Queries<'h> {
     /// The vector table of the target (ADR 0085): for each word, the handler
     /// of its vector, or a default handler that calls the panic function. On
     /// ARMv7-M the words 0 and 1 are the stack and the reset entry, and the
-    /// words the architecture reserves are 0; on RISC-V every word is a cause
+    /// words the architecture reserves are 0, and with the chip's list the
+    /// table goes on with a word per line, up to the list's largest value
+    /// (ADR 0090), a line the list does not name having the default handler
+    /// `other`; on RISC-V every word is a cause
     /// (the exceptions, then the interrupts, then any other), and a cause
     /// `Vector` has no variant for shares the default handler `other`, whose
     /// message is `unknown`.
@@ -2003,24 +2006,43 @@ impl<'h> Queries<'h> {
         let with_info = self.takes_panic_info();
         let mut defaults: Vec<DefaultHandler> = Vec::new();
         let mut words = Vec::new();
-        for word in 0..target.table_words {
+        // With the chip's list, the table runs to its largest value (ADR 0090).
+        let lines = self.chip_lines().unwrap_or_default();
+        let total = self.chip_table_words().unwrap_or(target.table_words);
+        for word in 0..total {
             let vector = target.vectors.iter().find(|vector| vector.word == word);
-            let word = match (target.arch, word, vector) {
-                (Arch::Armv7m, 0, _) => VectorWord::StackEnd,
-                (Arch::Armv7m, 1, _) => VectorWord::Reset,
-                (Arch::Armv7m, _, None) => VectorWord::Reserved,
-                (_, _, vector) => {
-                    let handler = vector.and_then(|v| handlers.iter().find(|h| h.word == v.word));
+            // `Some(Some(variant))` at a line the list names, `Some(None)` at
+            // one it leaves out, `None` before the lines.
+            let line = (target.external_vectors)
+                .filter(|external| word >= external.first_word)
+                .map(|external| {
+                    lines
+                        .iter()
+                        .find(|&&(v, _)| v == word - external.first_word)
+                });
+            let word = match (target.arch, word, vector, line) {
+                (Arch::Armv7m, 0, ..) => VectorWord::StackEnd,
+                (Arch::Armv7m, 1, ..) => VectorWord::Reset,
+                (Arch::Armv7m, _, None, None) => VectorWord::Reserved,
+                (_, word, vector, line) => {
+                    let handler = handlers.iter().find(|h| h.word == word);
                     match handler {
                         Some(handler) => VectorWord::Handler(handler.body),
                         None if with_info => {
-                            // The words with no variant share one function.
-                            let name = vector.map_or("other", |vector| vector.name);
+                            // A line has a function of its own under the prefix
+                            // `irq_`, which a `Vector` of that name does not have;
+                            // the words with no variant share one function.
+                            let (name, message) = match (vector, line) {
+                                (Some(vector), _) => (vector.name.to_owned(), vector.name),
+                                (None, Some(Some((_, variant)))) => {
+                                    (format!("irq_{variant}"), variant.as_str())
+                                }
+                                _ => ("other".to_owned(), "unknown"),
+                            };
                             let symbol = format!("__erebos_unhandled_{name}");
                             match defaults.iter().position(|d| d.symbol == symbol) {
                                 Some(index) => VectorWord::Default(index),
                                 None => {
-                                    let message = vector.map_or("unknown", |vector| vector.name);
                                     let info = self.unhandled_info(message);
                                     defaults.push(DefaultHandler {
                                         symbol,

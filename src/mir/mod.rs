@@ -125,9 +125,11 @@ pub enum VectorWord {
     Reset,
     /// Reserved by the architecture and never read: 0 (ARMv7-M).
     Reserved,
-    /// The address of an interrupt handler.
+    /// The address of an interrupt handler, at a variant of `Vector` or of
+    /// the chip's list (ADR 0090).
     Handler(BodyId),
-    /// The address of a default handler, by its index in `defaults`.
+    /// The address of a default handler, by its index in `defaults`: of a
+    /// vector, of a line, or the one shared by the words with no variant.
     Default(usize),
 }
 

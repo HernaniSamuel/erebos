@@ -1,0 +1,17 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/chip_interrupts_misaligned_skipped_thumbv7m.ers
+---
+--- errors ---
+ty::interrupt-number
+
+  × `Interrupt::Last` is the interrupt 496, which thumbv7m-none-eabi has no line for
+    ╭─[chip_interrupts_misaligned_skipped_thumbv7m.ers:17:5]
+ 16 │     First = 0,
+ 17 │     Last = 496,
+    ·     ──┬─
+    ·       ╰── past the last line, 495
+ 18 │ }
+    ╰────
+  help: the interrupts of the architecture are the lines 0 to 495, exceptions 16 to 511 (ADR 0089)

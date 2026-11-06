@@ -1,0 +1,22 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/chip_interrupts_aligned_15_thumbv7m.ers
+---
+--- typeck ---
+memory {
+    region CODE { origin: 0x80, size: 65536 }
+    region DATA { origin: 0x20000000, size: 65536 }
+    code in CODE;
+    data in DATA;
+    stack in DATA { size: 4096 }
+}
+enum Interrupt: u32 { First = 0, Last = 15 }
+entry fn main() -> !
+    expr 0 loop 605..612: !
+panic fn on_panic() -> !
+    expr 1 loop 642..649: !
+comptime fn Interrupt::First() -> u32
+    expr 2 int 0 561..562: u32
+comptime fn Interrupt::Last() -> u32
+    expr 3 int 15 575..577: u32

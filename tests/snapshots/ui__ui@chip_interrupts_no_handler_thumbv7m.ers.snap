@@ -1,0 +1,32 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/chip_interrupts_no_handler_thumbv7m.ers
+---
+--- llvm-ir ---
+; ModuleID = 'erebos'
+source_filename = "erebos"
+target datalayout = "e-m:e-p:32:32-Fi8-i64:64-v128:64:128-a:0:32-n32-S64"
+target triple = "thumbv7m-none-eabi"
+
+@bytes = private unnamed_addr constant [39 x i8] c"chip_interrupts_no_handler_thumbv7m.ers", align 1
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @main() #0 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @on_panic(ptr %0) #0 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+attributes #0 = { noreturn nounwind null_pointer_is_valid }

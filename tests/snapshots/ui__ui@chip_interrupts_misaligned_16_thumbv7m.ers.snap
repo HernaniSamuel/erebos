@@ -1,0 +1,23 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/chip_interrupts_misaligned_16_thumbv7m.ers
+---
+--- errors ---
+ty::misaligned-code
+
+  × the code's region `CODE` starts at a misaligned address
+    ╭─[chip_interrupts_misaligned_16_thumbv7m.ers:8:27]
+  7 │ memory {
+  8 │     region CODE { origin: 0x80, size: 0x1_0000 }
+    ·                           ──┬─
+    ·                             ╰── 0x80 is not a multiple of 256
+  9 │     region DATA { origin: 0x2000_0000, size: 0x1_0000 }
+ 10 │     code in CODE;
+    ·     ──────┬─────
+    ·           ╰── places the code, from the reset entry on, in `CODE`
+ 11 │     data in DATA;
+    ╰────
+  help: the reset entry is the vector table, at the origin of the code's region; the chip's list
+        `Interrupt` makes it 33 words, 132 bytes, so the origin must be a multiple of 256 bytes,
+        the smallest power of two that holds the table (ADR 0057, 0090)

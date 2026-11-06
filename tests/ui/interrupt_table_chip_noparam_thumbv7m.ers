@@ -1,0 +1,30 @@
+// target: thumbv7m-none-eabi
+// emit: llvm-ir
+// opt: both
+// The same table with a panic function that takes no parameter (ADR 0090, 0053):
+// `__erebos_unhandled`, the one function, serves every line no handler serves
+// and the hole, and no information is built.
+mod chip {
+    #[interrupts]
+    pub enum Interrupt: u32 {
+        Uart = 0,
+        SysTick = 1,
+        other = 2,
+        Timer = 4,
+    }
+}
+
+static mut COUNT: u32 = 0;
+
+interrupt fn uart() at chip::Interrupt::Uart {
+    COUNT += 1;
+}
+
+mod drivers {
+    #[export]
+    pub interrupt fn timer() at crate::chip::Interrupt::Timer {}
+}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic() -> ! { loop {} }

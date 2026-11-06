@@ -75,13 +75,13 @@ fn startup_ranges() {
 
 /// The address of `_start` in a program whose code region starts at
 /// `origin`: the reset entry (ADR 0057) starts the region on riscv32; on
-/// ARMv7-M the 16 words of the vector table, the section `.vector_table`,
-/// come first (ADR 0074, 0083, 0085), and the symbol of a Thumb function has
-/// bit 0 set.
-fn start_address(target: &Target, origin: u64) -> u64 {
+/// ARMv7-M the `words` of the vector table, the section `.vector_table`, come
+/// first (ADR 0074, 0083, 0085): 16, or more with the chip's list (ADR 0090);
+/// and the symbol of a Thumb function has bit 0 set.
+fn start_address(target: &Target, origin: u64, words: u64) -> u64 {
     match target.arch {
         Arch::Riscv32 => origin,
-        Arch::Armv7m => origin + 64 + 1,
+        Arch::Armv7m => origin + 4 * words + 1,
     }
 }
 
@@ -185,7 +185,7 @@ fn check_map(name: &str, map: &Map) {
 
             assert_eq!(
                 value("_start"),
-                start_address(target, map.code.origin),
+                start_address(target, map.code.origin, 16),
                 "{} {opt:?}: `_start`",
                 target.name
             );
@@ -395,7 +395,7 @@ fn reset_entry_alone_on(target: &'static Target, work: &Path) {
         );
         assert_eq!(
             value("_start"),
-            start_address(target, origin),
+            start_address(target, origin, 16),
             "{} {opt:?}: `_start` moved",
             target.name
         );
@@ -1109,6 +1109,185 @@ entry fn main() -> ! { loop {} }
             }
             for n in RESERVED {
                 assert_eq!(word(n), 0, "{name} {opt:?}: word {n} is reserved");
+            }
+        }
+    }
+}
+
+/// The vector table of thumbv7m with the chip's list (ADR 0090), in two
+/// programs with the same list, a panic function that takes the information and
+/// one that does not, at both levels, and a code region at `0x0800_0000`. The
+/// list has a hole (3, and 5 to 39), and its largest value is 40: the section
+/// `.vector_table` is `16 + 40 + 1` words, at the origin, and `_start` is at the
+/// origin plus 4 bytes per word, bit 0 set. Every word is checked: the stack
+/// and `_start`; the system exceptions as in `thumbv7m_vector_table`, one of
+/// them with a handler beside a line of the same name; the lines, where
+/// `16 + n` holds the handler at the variant of value `n` (`n` of 0, 4 and 40,
+/// which pins the word that `mir::Handler::word` computes for a list's variant),
+/// or the default handler `__erebos_unhandled_irq_<variant>`, or, in a hole,
+/// `__erebos_unhandled_other`; the shared `__erebos_unhandled` for all of them
+/// without the information. The words the architecture reserves are 0.
+#[test]
+fn thumbv7m_vector_table_with_a_list() {
+    const ORIGIN: u64 = 0x0800_0000;
+    const WORDS: usize = 16 + 40 + 1;
+    // The words that hold a vector, by the name of its variant (ADR 0084).
+    const VECTORS: [(usize, &str); 9] = [
+        (2, "NMI"),
+        (3, "HardFault"),
+        (4, "MemManage"),
+        (5, "BusFault"),
+        (6, "UsageFault"),
+        (11, "SVCall"),
+        (12, "DebugMonitor"),
+        (14, "PendSV"),
+        (15, "SysTick"),
+    ];
+    const RESERVED: [usize; 5] = [7, 8, 9, 10, 13];
+    // The list's variants by value; the others of 0 to 40 are holes.
+    const LINES: [(usize, &str); 5] = [
+        (0, "Uart"),
+        (1, "SysTick"),
+        (2, "other"),
+        (4, "Timer"),
+        (40, "Last"),
+    ];
+    // The symbol of the handler at a value, and at a variant of `Vector`.
+    const LINE_HANDLERS: [(usize, &str); 3] = [(0, "uart"), (4, "drivers.timer"), (40, "last")];
+    const VECTOR_HANDLERS: [(&str, &str); 1] = [("SysTick", "tick")];
+    const PROGRAM: &str = "memory {
+    region CODE { origin: 0x0800_0000, size: 0x40_0000 }
+    region DATA { origin: 0x2000_0000, size: 0x40_0000 }
+    code in CODE;
+    data in DATA;
+    stack in DATA { size: 0x1000 }
+}
+mod chip {
+    #[interrupts]
+    pub enum Interrupt: u32 {
+        Uart = 0,
+        SysTick = 1,
+        other = 2,
+        Timer = 4,
+        Last = 40,
+    }
+}
+interrupt fn uart() at chip::Interrupt::Uart {}
+interrupt fn tick() at core::arch::Vector::SysTick {}
+#[export]
+interrupt fn last() at chip::Interrupt::Last {}
+mod drivers {
+    pub interrupt fn timer() at crate::chip::Interrupt::Timer {}
+}
+entry fn main() -> ! { loop {} }
+";
+    const WITH_INFO: &str = "panic fn on_panic(info: *const core::PanicInfo) -> ! { loop {} }\n";
+    const WITHOUT_INFO: &str = "panic fn on_panic() -> ! { loop {} }\n";
+
+    let target = erebos::target::by_name("thumbv7m-none-eabi").unwrap();
+    let work = Path::new(env!("CARGO_TARGET_TMPDIR")).join("elf");
+    fs::create_dir_all(&work).unwrap();
+    // The default handler of a vector or a line, by its name and kind.
+    type Default = fn(&str, bool) -> String;
+    let per_vector: Default = |name, line| {
+        if line {
+            format!("__erebos_unhandled_irq_{name}")
+        } else {
+            format!("__erebos_unhandled_{name}")
+        }
+    };
+    let shared: Default = |_, _| "__erebos_unhandled".to_owned();
+    for (name, panic_fn, default, hole) in [
+        (
+            "with_info",
+            WITH_INFO,
+            per_vector,
+            "__erebos_unhandled_other",
+        ),
+        ("without_info", WITHOUT_INFO, shared, "__erebos_unhandled"),
+    ] {
+        let source = work.join(format!("thumbv7m_vector_table_list_{name}.ers"));
+        fs::write(&source, format!("{PROGRAM}{panic_fn}")).unwrap();
+        for opt in [OptLevel::None, OptLevel::Speed] {
+            let elf = work.join(format!("thumbv7m_vector_table_list_{name}-{opt:?}.elf"));
+            driver::build(&source, &elf, &[], target, opt, false).unwrap();
+            let symbols = symbols(&elf);
+            let value = |symbol: &str| {
+                let found = symbols.iter().find(|s| s.name == symbol);
+                let found = found.unwrap_or_else(|| panic!("{name} {opt:?}: no `{symbol}`"));
+                assert_eq!(
+                    found.kind, "FUNC",
+                    "{name} {opt:?}: `{symbol}` is no function"
+                );
+                assert!(found.size > 0, "{name} {opt:?}: `{symbol}` has no size");
+                found.value
+            };
+
+            let (address, size) = {
+                let section = sections(&elf);
+                let section = section.iter().find(|s| s.name == ".vector_table").unwrap();
+                (section.address, section.size)
+            };
+            assert_eq!(address, ORIGIN, "{name} {opt:?}: `.vector_table` address");
+            assert_eq!(
+                size,
+                4 * WORDS as u64,
+                "{name} {opt:?}: `.vector_table` size"
+            );
+            assert_eq!(
+                value("_start"),
+                start_address(target, ORIGIN, WORDS as u64),
+                "{name} {opt:?}: `_start` is not after the table"
+            );
+            assert_eq!(
+                value("_start") & 1,
+                1,
+                "{name} {opt:?}: `_start` is not Thumb"
+            );
+
+            let table = section_bytes(&elf, ".vector_table");
+            assert_eq!(table.len(), 4 * WORDS, "{name} {opt:?}: the table's words");
+            let word = |n: usize| {
+                let bytes: [u8; 4] = table[4 * n..4 * n + 4].try_into().unwrap();
+                u64::from(u32::from_le_bytes(bytes))
+            };
+            let thumb = |symbol: &str| {
+                let address = value(symbol);
+                assert_eq!(address & 1, 1, "{name} {opt:?}: `{symbol}` is not Thumb");
+                address
+            };
+            let stack_end = symbols.iter().find(|s| s.name == "__stack_end").unwrap();
+            assert_eq!(word(0), stack_end.value, "{name} {opt:?}: word 0");
+            assert_eq!(word(1), value("_start"), "{name} {opt:?}: word 1");
+            for (n, variant) in VECTORS {
+                let symbol = match VECTOR_HANDLERS.iter().find(|(v, _)| *v == variant) {
+                    Some((_, symbol)) => (*symbol).to_owned(),
+                    None => default(variant, false),
+                };
+                assert_eq!(
+                    word(n),
+                    thumb(&symbol),
+                    "{name} {opt:?}: word {n} ({variant})"
+                );
+            }
+            for n in RESERVED {
+                assert_eq!(word(n), 0, "{name} {opt:?}: word {n} is reserved");
+            }
+            for line in 0..=40 {
+                let n = 16 + line;
+                let symbol = match (
+                    LINES.iter().find(|(v, _)| *v == line),
+                    LINE_HANDLERS.iter().find(|(v, _)| *v == line),
+                ) {
+                    (_, Some((_, symbol))) => (*symbol).to_owned(),
+                    (Some((_, variant)), None) => default(variant, true),
+                    (None, None) => hole.to_owned(),
+                };
+                assert_eq!(
+                    word(n),
+                    thumb(&symbol),
+                    "{name} {opt:?}: word {n} (line {line})"
+                );
             }
         }
     }

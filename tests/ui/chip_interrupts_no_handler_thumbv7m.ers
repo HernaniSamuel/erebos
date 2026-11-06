@@ -1,0 +1,16 @@
+// target: thumbv7m-none-eabi
+// emit: llvm-ir
+// A list and no handler (ADR 0090): the table and its default handlers appear
+// only when the program declares a handler, whatever its list, so there is no
+// `module asm` here, and the list is no code.
+mod chip {
+    #[interrupts]
+    pub enum Interrupt: u32 {
+        Uart = 0,
+        Timer = 40,
+    }
+}
+
+entry fn main() -> ! { loop {} }
+
+panic fn on_panic(info: *const core::PanicInfo) -> ! { loop {} }
