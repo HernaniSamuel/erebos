@@ -1,6 +1,6 @@
 # 0070. Peripherals generated from SVD
 
-- Status: Accepted; corrected on 2026-11-02 (`roxmltree` depends on `memchr`)
+- Status: Accepted; corrected on 2026-11-02 (`roxmltree` depends on `memchr`); amended by 0092 (`svd::missing-element` covers an `interrupt`; two more kept modules)
 - Date: 2026-11-02
 - Amends: 0063 (the tables gain the module `svd`, which uses `syntax`
   and which `driver` uses, and the external crate `roxmltree`, used only

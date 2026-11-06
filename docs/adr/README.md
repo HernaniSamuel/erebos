@@ -86,7 +86,7 @@ Do not write one for local implementation details that the code already explains
 | 0054 | [Only `_` covers an enum that is not reachable](0054-only-wildcards-cover-unreachable-enums.md) | Accepted |
 | 0055 | [Repeat counts and dead arms under failed values](0055-repeat-counts-and-dead-arms-under-failed-values.md) | Accepted |
 | 0056 | [`rt` is reserved in the root module](0056-rt-is-reserved-in-the-root-module.md) | Accepted |
-| 0057 | [Memory maps](0057-memory-maps.md) | Accepted, amended by 0083 |
+| 0057 | [Memory maps](0057-memory-maps.md) | Accepted, amended by 0083, 0090 |
 | 0058 | [Peripherals](0058-peripherals.md) | Accepted, amended by 0060, 0061, 0064, 0066 |
 | 0059 | [Bit-field structs](0059-bit-field-structs.md) | Accepted, amended by 0062, 0065 |
 | 0060 | [Register fields](0060-register-fields.md) | Accepted, amended by 0064, 0065 |
@@ -99,11 +99,11 @@ Do not write one for local implementation details that the code already explains
 | 0067 | [Peripherals checked against SVD](0067-peripherals-checked-against-svd.md) | Accepted |
 | 0068 | [Generated programs checked against independent oracles](0068-generated-programs-checked-against-oracles.md) | Accepted |
 | 0069 | [Programs with an injected error are rejected](0069-programs-with-an-injected-error-are-rejected.md) | Accepted |
-| 0070 | [Peripherals generated from SVD](0070-peripherals-generated-from-svd.md) | Accepted, corrected 2026-11-02 |
-| 0071 | [Names generated from SVD](0071-names-generated-from-svd.md) | Accepted |
-| 0072 | [SVD constructs, and what has no declaration](0072-svd-constructs-and-what-has-no-declaration.md) | Accepted, amended 2026-11-02 |
+| 0070 | [Peripherals generated from SVD](0070-peripherals-generated-from-svd.md) | Accepted, corrected 2026-11-02, amended by 0092 |
+| 0071 | [Names generated from SVD](0071-names-generated-from-svd.md) | Accepted, amended by 0092 |
+| 0072 | [SVD constructs, and what has no declaration](0072-svd-constructs-and-what-has-no-declaration.md) | Accepted, amended 2026-11-02, amended by 0092 |
 | 0073 | [Targets](0073-targets.md) | Accepted, corrected 2026-11-03 |
-| 0074 | [The ARMv7-M target](0074-armv7m-target.md) | Accepted, amended by 0080, 0083, 0085 |
+| 0074 | [The ARMv7-M target](0074-armv7m-target.md) | Accepted, amended by 0080, 0083, 0085, 0090 |
 | 0075 | [Aggregates across calls on ARMv7-M](0075-aggregates-across-calls-on-armv7m.md) | Accepted |
 | 0076 | [64-bit division calls `core` where LLVM's call cannot be written](0076-64-bit-division-calls-core.md) | Accepted, amended by 0080 |
 | 0077 | [Programs tested on every target](0077-programs-tested-on-every-target.md) | Accepted, amended by 0079, 0088 |
@@ -112,9 +112,13 @@ Do not write one for local implementation details that the code already explains
 | 0080 | [`core::arch`, one file per target](0080-core-arch-per-target.md) | Accepted, corrected 2026-11-04 |
 | 0081 | [Fences](0081-fences.md) | Accepted |
 | 0082 | [The LLVM diagnostic handler reaches `llvm_sys`, in one file](0082-llvm-diagnostic-handler-reaches-llvm-sys.md) | Accepted |
-| 0083 | [Startup code in `core::arch`](0083-startup-code-in-core-arch.md) | Accepted, amended by 0085, 0086 |
-| 0084 | [Interrupt handlers](0084-interrupt-handlers.md) | Accepted |
-| 0085 | [Vector tables, the trap entry and default handlers](0085-vector-tables-and-the-trap-entry.md) | Accepted |
+| 0083 | [Startup code in `core::arch`](0083-startup-code-in-core-arch.md) | Accepted, amended by 0085, 0086, 0090 |
+| 0084 | [Interrupt handlers](0084-interrupt-handlers.md) | Accepted, amended by 0089 |
+| 0085 | [Vector tables, the trap entry and default handlers](0085-vector-tables-and-the-trap-entry.md) | Accepted, amended by 0090 |
 | 0086 | [Masking and waiting for interrupts](0086-masking-and-waiting-for-interrupts.md) | Accepted |
 | 0087 | [`#[align(N)]` on functions](0087-align-on-functions.md) | Accepted |
 | 0088 | [Programs that take exceptions on purpose](0088-programs-that-take-exceptions.md) | Accepted |
+| 0089 | [The chip's interrupts](0089-the-chips-interrupts.md) | Accepted |
+| 0090 | [The thumbv7m table with the chip's interrupts](0090-the-thumbv7m-table-with-the-chips-interrupts.md) | Accepted |
+| 0091 | [Enabling and dispatching external interrupts](0091-enabling-and-dispatching-external-interrupts.md) | Accepted |
+| 0092 | [Interrupts generated from SVD](0092-interrupts-generated-from-svd.md) | Accepted |

@@ -293,11 +293,12 @@ ADRs:
     are not contexts of ADR 0078), 0086 (`_start` masks, the portable
     items, how `critical` lowers, the wait) and 0087 (`#[align(N)]` on
     functions).
-  - M4.4: the form of the chip's interrupt list (an enum and how the
-    compiler knows it is the chip's), the length of the thumbv7m table it
-    gives and `code_align` (ADR 0074, "Consequences"; ADR 0085 keeps 16
-    words and 128 until then), and how the program enables an interrupt
-    in the NVIC and the PLIC.
+  - M4.4: settled by ADR 0089 (`#[interrupts]` on one enum; vectors on
+    thumbv7m, a list for the program on riscv32), 0090 (the table's length,
+    a word with no variant, default handlers for lines, the origin's
+    alignment per program), 0091 (`core::arch::nvic_*` on thumbv7m; the PLIC
+    and its dispatch are the program's) and 0092 (`erebos svd` writes the
+    enum; the milestone programs).
   - M4.5: where the check runs (a MIR analysis, ADR 0033), its
     diagnostics (the access, and the path of calls from the context), and
     what counts as naming a static.

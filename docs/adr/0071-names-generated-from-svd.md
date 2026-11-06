@@ -1,6 +1,6 @@
 # 0071. Names generated from SVD
 
-- Status: Accepted
+- Status: Accepted; amended by 0092 (the generated file ends with the list)
 - Date: 2026-11-02
 
 ## Context

@@ -1,6 +1,6 @@
 # 0084. Interrupt handlers
 
-- Status: Accepted
+- Status: Accepted; amended by 0089 (the path after `at` may name a variant of the chip's list; the meaning of `resolve::not-a-vector`)
 - Date: 2026-11-05
 - Amends: 0052 (the compiler knows `core::arch::Vector` by path), 0079
   (`#[naked]` does not apply to a handler)
