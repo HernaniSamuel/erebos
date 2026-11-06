@@ -1,0 +1,83 @@
+// A line of the chip enabled and pended while interrupts are masked (ADR 0091):
+// `nvic_is_pending` sees it, and the handler does not run until
+// `enable_interrupts`; it then runs once, finding `IPSR` `16 + n` and
+// `interrupts_enabled` false, and the line is no longer pending. The line next to
+// it, which nothing pended, is not pending throughout.
+// takes-exceptions: yes
+// targets: thumbv7m-none-eabi
+// expect-output: irq ok
+// expect-exit: 0
+
+mod board;
+use board::{exit, putc};
+
+#[interrupts]
+enum Interrupt: u32 {
+    Uart0Rx = 4,
+    Uart0Tx = 5,
+    Timer0 = 6,
+}
+
+static mut RUNS: u32 = 0;
+static mut IPSR: u32 = 0;
+static mut ENABLED: u32 = 0;
+
+interrupt fn transmitted() at Interrupt::Uart0Tx {
+    RUNS += 1;
+    let mut ipsr: u32 = 0;
+    asm("mrs {}, ipsr", out(reg) ipsr, options(nostack, preserves_flags));
+    IPSR = ipsr;
+    if core::arch::interrupts_enabled() {
+        ENABLED = 1;
+    }
+}
+
+entry fn main() -> ! {
+    let line: u32 = Interrupt::Uart0Tx as u32;
+    let other: u32 = Interrupt::Timer0 as u32;
+    core::arch::nvic_enable(line);
+    if core::arch::nvic_is_pending(line) {
+        exit(2)
+    }
+    core::arch::nvic_pend(line);
+    if !core::arch::nvic_is_pending(line) {
+        exit(3)
+    }
+    if core::arch::nvic_is_pending(other) {
+        exit(4)
+    }
+    // Masked: it waits.
+    if RUNS != 0 {
+        exit(5)
+    }
+    core::arch::enable_interrupts();
+    loop {
+        critical {
+            if RUNS != 0 {
+                break;
+            }
+            core::arch::wait_for_interrupt();
+        }
+    }
+    if RUNS != 1 {
+        exit(6)
+    }
+    if IPSR != 16 + 5 {
+        exit(7)
+    }
+    if ENABLED != 0 {
+        exit(8)
+    }
+    if core::arch::nvic_is_pending(line) {
+        exit(9)
+    }
+    if core::arch::nvic_is_pending(other) {
+        exit(10)
+    }
+    putc(b'i'); putc(b'r'); putc(b'q'); putc(b' '); putc(b'o'); putc(b'k'); putc(b'\n');
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(99)
+}

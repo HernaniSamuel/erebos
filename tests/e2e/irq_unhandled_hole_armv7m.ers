@@ -1,0 +1,83 @@
+// A line the list leaves out reaches the panic function as `unknown` (ADR 0090):
+// the list has lines 0 and 7, line 4 is a hole of the table, and its default
+// handler is the shared `__erebos_unhandled_other`. The program raises the line by
+// hand, as a chip could.
+// takes-exceptions: yes
+// targets: thumbv7m-none-eabi
+// expect-output: vector not handled: unknown at :0:0
+// expect-exit: 1
+
+mod board;
+use board::exit;
+
+#[interrupts]
+enum Interrupt: u32 {
+    Uart = 0,
+    Last = 7,
+}
+
+interrupt fn uart() at Interrupt::Uart {
+    exit(2)
+}
+
+interrupt fn last() at Interrupt::Last {
+    exit(3)
+}
+
+entry fn main() -> ! {
+    core::arch::nvic_enable(4);
+    core::arch::nvic_pend(4);
+    core::arch::enable_interrupts();
+    loop {
+        core::arch::wait_for_interrupt();
+    }
+}
+
+fn print(s: *const [u8]) {
+    let mut i: usize = 0;
+    while i < len(s) {
+        board::putc((*s)[i]);
+        i += 1;
+    }
+}
+
+fn print_u32(value: u32) {
+    let mut digits: [u8; 10] = [0; 10];
+    let mut n: usize = 0;
+    let mut rest: u32 = value;
+    loop {
+        digits[9 - n] = b'0' + (rest % 10) as u8;
+        n += 1;
+        rest /= 10;
+        if rest == 0 {
+            break;
+        }
+    }
+    print(slice(&raw const digits[10 - n], n));
+}
+
+fn reason(reason: core::PanicReason) -> *const [u8] {
+    match reason {
+        .DivisionByZero => &raw const b"division by zero",
+        .IndexOutOfBounds => &raw const b"index out of bounds",
+        .AssertionFailed => &raw const b"assertion failed",
+        .NoVariant => &raw const b"enum value is no variant",
+        .FieldOutOfRange => &raw const b"value does not fit its field",
+        .UnhandledVector => &raw const b"vector not handled",
+    }
+}
+
+// Prints `<reason>: <message> at <file>:<line>:<column>`.
+panic fn on_panic(info: *const core::PanicInfo) -> ! {
+    print(reason((*info).reason));
+    print(&raw const b": ");
+    print((*info).message);
+    print(&raw const b" at ");
+    print((*info).file);
+    print(&raw const b":");
+    print_u32((*info).line);
+    print(&raw const b":");
+    print_u32((*info).column);
+    print(&raw const b"\n");
+    exit(1)
+}

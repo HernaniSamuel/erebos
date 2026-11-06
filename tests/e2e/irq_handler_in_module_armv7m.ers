@@ -1,0 +1,55 @@
+// A handler in nested modules, at a variant of a list in another module, has a
+// dotted symbol, and the table's word for it has bit 0 set, as a Thumb
+// function's: the core jumps to it and does not fault (ADR 0090). The line is
+// raised with `nvic_pend`; the handler runs once.
+// takes-exceptions: yes
+// targets: thumbv7m-none-eabi
+// expect-output: nested irq ok
+// expect-exit: 0
+
+mod board;
+use board::{exit, putc};
+
+mod chip {
+    #[interrupts]
+    pub enum Interrupt: u32 {
+        Uart0Rx = 0,
+        Uart0Tx = 1,
+        Timer = 9,
+    }
+}
+
+static mut RUNS: u32 = 0;
+
+mod drivers {
+    pub mod timer {
+        pub interrupt fn tick() at crate::chip::Interrupt::Timer {
+            super::super::RUNS += 1;
+        }
+    }
+}
+
+entry fn main() -> ! {
+    let line: u32 = chip::Interrupt::Timer as u32;
+    core::arch::nvic_enable(line);
+    core::arch::nvic_pend(line);
+    core::arch::enable_interrupts();
+    loop {
+        critical {
+            if RUNS != 0 {
+                break;
+            }
+            core::arch::wait_for_interrupt();
+        }
+    }
+    if RUNS != 1 {
+        exit(2)
+    }
+    putc(b'n'); putc(b'e'); putc(b's'); putc(b't'); putc(b'e'); putc(b'd'); putc(b' ');
+    putc(b'i'); putc(b'r'); putc(b'q'); putc(b' '); putc(b'o'); putc(b'k'); putc(b'\n');
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(99)
+}

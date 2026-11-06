@@ -1,0 +1,51 @@
+// A number of 496 or more fails an `assert` of `core` (ADR 0091): the last line
+// of the machine, 31, is accepted by `nvic_pend`, `nvic_is_pending` and
+// `nvic_unpend`, and `nvic_enable(496)` reaches the panic function with the
+// reason `AssertionFailed` (the check is in `core`, so only the reason is printed
+// here).
+// takes-exceptions: yes
+// targets: thumbv7m-none-eabi
+// expect-output: assertion failed
+// expect-exit: 1
+
+mod board;
+use board::{exit, putc};
+
+#[interrupts]
+enum Interrupt: u32 {
+    Uart = 0,
+}
+
+interrupt fn uart() at Interrupt::Uart {}
+
+fn print(s: *const [u8]) {
+    let mut i: usize = 0;
+    while i < len(s) {
+        putc((*s)[i]);
+        i += 1;
+    }
+}
+
+entry fn main() -> ! {
+    core::arch::nvic_pend(31);
+    if !core::arch::nvic_is_pending(31) {
+        exit(2)
+    }
+    core::arch::nvic_unpend(31);
+    if core::arch::nvic_is_pending(31) {
+        exit(3)
+    }
+    let mut irq: u32 = 400;
+    irq += 96;
+    core::arch::nvic_enable(irq);
+    exit(4)
+}
+
+panic fn on_panic(info: *const core::PanicInfo) -> ! {
+    match (*info).reason {
+        .AssertionFailed => print(&raw const b"assertion failed"),
+        _ => exit(5),
+    }
+    putc(b'\n');
+    exit(1)
+}

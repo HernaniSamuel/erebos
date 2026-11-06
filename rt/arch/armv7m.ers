@@ -75,7 +75,9 @@ pub fn interrupts_enabled() -> bool {
 // with what the compiler needs of each vector; a test checks that they agree.
 // The value is the exception number, which is also the word of the vector
 // table that holds the handler (ADR 0085). Reset has no variant: `_start`
-// serves it (ADR 0083). The chip's interrupts, from 16 on, come with the chip.
+// serves it (ADR 0083). The chip's interrupts, from 16 on, are the program's
+// own list, an enum with `#[interrupts]` (ADR 0089), whose values are the line
+// numbers `nvic_enable` and its siblings take (below).
 pub enum Vector: u32 {
     NMI = 2,
     HardFault = 3,
@@ -86,6 +88,103 @@ pub enum Vector: u32 {
     DebugMonitor = 12,
     PendSV = 14,
     SysTick = 15,
+}
+
+// --- The NVIC (ADR 0091) -----------------------------------------------------
+
+// The NVIC is part of ARMv7-M, so its registers are at the same addresses on
+// every chip: four arrays of 16 words, one bit per line, all write-1, so that
+// setting a bit touches only that line and no context races another. These are
+// specific to this target, and not in the `// portable:` list. They take the
+// line's number, the value of the variant of the chip's list converted with
+// `as u32` (`core::arch::nvic_enable(Interrupt::Uart0Tx as u32)`), since `core`
+// cannot name that enum. No priorities: every line stays at 0, the one level of
+// ADR 0078. They may be called from any context.
+//
+// A number of 496 or more is no line the table can hold (ADR 0090) and its word
+// would be another register of the System Control Space: it fails the `assert`
+// of `nvic_address`, and reaches the panic function.
+
+const NVIC_ISER: usize = 0xE000_E100;
+const NVIC_ICER: usize = 0xE000_E180;
+const NVIC_ISPR: usize = 0xE000_E200;
+const NVIC_ICPR: usize = 0xE000_E280;
+
+// The address of the word of `base`'s array that holds line `irq`, 32 lines a
+// word; the bit in it is `1 << (irq % 32)`. A number and not a pointer, so that
+// the `comptime` block below can compare it.
+fn nvic_address(base: usize, irq: u32) -> usize {
+    assert(irq < 496);
+    base + 4 * (irq / 32) as usize
+}
+
+// The machine of the tests has lines in the first word only, so the other
+// words are checked here, at compile time: the first and last line of the
+// first word, the first of the second, and the last of the last.
+comptime {
+    assert(nvic_address(NVIC_ISER, 0) == 0xE000_E100);
+    assert(nvic_address(NVIC_ISER, 31) == 0xE000_E100);
+    assert(nvic_address(NVIC_ISER, 32) == 0xE000_E104);
+    assert(nvic_address(NVIC_ISER, 495) == 0xE000_E13C);
+    assert(nvic_address(NVIC_ICER, 0) == 0xE000_E180);
+    assert(nvic_address(NVIC_ICER, 31) == 0xE000_E180);
+    assert(nvic_address(NVIC_ICER, 32) == 0xE000_E184);
+    assert(nvic_address(NVIC_ICER, 495) == 0xE000_E1BC);
+    assert(nvic_address(NVIC_ISPR, 0) == 0xE000_E200);
+    assert(nvic_address(NVIC_ISPR, 31) == 0xE000_E200);
+    assert(nvic_address(NVIC_ISPR, 32) == 0xE000_E204);
+    assert(nvic_address(NVIC_ISPR, 495) == 0xE000_E23C);
+    assert(nvic_address(NVIC_ICPR, 0) == 0xE000_E280);
+    assert(nvic_address(NVIC_ICPR, 31) == 0xE000_E280);
+    assert(nvic_address(NVIC_ICPR, 32) == 0xE000_E284);
+    assert(nvic_address(NVIC_ICPR, 495) == 0xE000_E2BC);
+}
+
+// Enables line `irq`: a write of its bit to `ISER`. A compiler fence before and
+// after, since it decides whether a handler runs at this point: statics written
+// before the call are in memory, and statics read after it are not read before.
+pub fn nvic_enable(irq: u32) {
+    let word: *mut volatile u32 = nvic_address(NVIC_ISER, irq) as *mut volatile u32;
+    compiler_fence();
+    *word = 1 << (irq % 32);
+    compiler_fence();
+}
+
+// Disables line `irq`: a write to `ICER`, then `dsb` and `isb`, so that no
+// handler of the line starts once this returns: without them the core may still
+// take the line for a few instructions (as Arm's CMSIS does). A compiler fence
+// before the write and after the barriers.
+pub fn nvic_disable(irq: u32) {
+    let word: *mut volatile u32 = nvic_address(NVIC_ICER, irq) as *mut volatile u32;
+    compiler_fence();
+    *word = 1 << (irq % 32);
+    asm("dsb sy", "isb sy", options(nostack, preserves_flags));
+    compiler_fence();
+}
+
+// Pends line `irq`: a write to `ISPR`. It runs when enabled and when interrupts
+// are. A compiler fence before and after.
+pub fn nvic_pend(irq: u32) {
+    let word: *mut volatile u32 = nvic_address(NVIC_ISPR, irq) as *mut volatile u32;
+    compiler_fence();
+    *word = 1 << (irq % 32);
+    compiler_fence();
+}
+
+// Takes line `irq` out of the pending lines: a write to `ICPR`. A compiler
+// fence before and after.
+pub fn nvic_unpend(irq: u32) {
+    let word: *mut volatile u32 = nvic_address(NVIC_ICPR, irq) as *mut volatile u32;
+    compiler_fence();
+    *word = 1 << (irq % 32);
+    compiler_fence();
+}
+
+// Whether line `irq` is pending: a read of `ISPR`. It says nothing of whether
+// the line is enabled; it serves a program that polls a masked line.
+pub fn nvic_is_pending(irq: u32) -> bool {
+    let word: *mut volatile u32 = nvic_address(NVIC_ISPR, irq) as *mut volatile u32;
+    (*word & (1 << (irq % 32))) != 0
 }
 
 // --- Critical sections (ADR 0086) --------------------------------------------
