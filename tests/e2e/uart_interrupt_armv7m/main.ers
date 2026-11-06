@@ -1,0 +1,108 @@
+// The milestone of M4.4 on thumbv7m (ADR 0089 to 0092): a UART driven by its
+// interrupt. QEMU `mps2-an385`'s CMSDK UART 0 is declared in `an385.svd`, and
+// `an385.ers` is what `erebos svd` writes from it, kept (`tests/svd.rs`
+// requires that they agree), the chip's list `Interrupt` included. The entry
+// function queues a message of 21 bytes in a `static mut` ring buffer of 16,
+// inside `critical`, and waits there (`wait_for_interrupt`) while the ring is
+// full; it starts the transmitter with the first byte, then waits the same way
+// until the queue is empty and the last byte has been sent. The handler, at
+// `Interrupt::Uart0Tx`, clears the interrupt in `INTSTATUS` and writes the next
+// byte: it alone sends all but the first, finds `IPSR` 17 and
+// `interrupts_enabled` false, and counts the bytes sent, which the entry
+// function compares with the message's length.
+// takes-exceptions: yes
+// targets: thumbv7m-none-eabi
+// expect-output: uart tx by interrupt
+// expect-exit: 0
+mod an385;
+mod board;
+
+use an385::uart0::Ctrl;
+use an385::{Interrupt, UART0};
+use board::exit;
+
+const SLOTS: usize = 16;
+
+// The ring: `HEAD` counts the bytes queued and `TAIL` the bytes taken, and the
+// slot of each is the count modulo `SLOTS`. `BUSY` is a byte in the
+// transmitter, whose interrupt has not come.
+static mut QUEUE: [u8; 16] = [0; 16];
+static mut HEAD: usize = 0;
+static mut TAIL: usize = 0;
+static mut BUSY: bool = false;
+// The interrupts of the transmitter that the handler served.
+static mut SENT: u32 = 0;
+
+// Sends the next byte of the queue, if the transmitter is idle and one waits.
+// Called with interrupts masked: in `critical` or in the handler.
+fn start() {
+    if !BUSY && TAIL != HEAD {
+        let byte: u8 = QUEUE[TAIL % SLOTS];
+        TAIL += 1;
+        BUSY = true;
+        UART0.data = byte as u32;
+    }
+}
+
+interrupt fn transmitted() at Interrupt::Uart0Tx {
+    if core::arch::interrupts_enabled() {
+        exit(10)
+    }
+    let mut ipsr: u32 = 0;
+    asm("mrs {}, ipsr", out(reg) ipsr, options(nostack, preserves_flags));
+    if ipsr != 16 + Interrupt::Uart0Tx as u32 {
+        exit(11)
+    }
+    // The level of the line follows this bit: it must be cleared before the
+    // handler returns, or the handler runs again.
+    UART0.intstatus.tx = true;
+    SENT += 1;
+    BUSY = false;
+    start();
+}
+
+// Queues `text`, a part at a time when the ring is full.
+fn send(text: *const [u8]) {
+    let mut i: usize = 0;
+    while i < len(text) {
+        critical {
+            while i < len(text) && HEAD - TAIL < SLOTS {
+                QUEUE[HEAD % SLOTS] = (*text)[i];
+                HEAD += 1;
+                i += 1;
+            }
+            start();
+            if i < len(text) {
+                core::arch::wait_for_interrupt();
+            }
+        }
+    }
+}
+
+entry fn main() -> ! {
+    // The divisor must be set before the transmitter is enabled.
+    UART0.bauddiv = 16;
+    UART0.ctrl = Ctrl { tx_en: true, tx_inten: true, .. };
+    core::arch::nvic_enable(Interrupt::Uart0Tx as u32);
+    core::arch::enable_interrupts();
+
+    send(&raw const b"uart tx by interrupt\n");
+
+    // The last byte is sent when its interrupt has been served.
+    loop {
+        critical {
+            if !BUSY && TAIL == HEAD {
+                break;
+            }
+            core::arch::wait_for_interrupt();
+        }
+    }
+    if SENT != 21 {
+        exit(2)
+    }
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(99)
+}

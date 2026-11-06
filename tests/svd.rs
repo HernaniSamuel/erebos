@@ -282,33 +282,48 @@ fn summary(module: &str, diags: &[diag::Diagnostic], sources: &SourceMap) -> Str
     out
 }
 
-// ---- QEMU `virt`
+// ---- the modules kept beside the e2e programs
 
-/// `virt.ers`, the module the e2e program of `tests/e2e/svd_virt/` declares,
-/// is what the generator writes from `virt.svd` today: it is kept in the
-/// repository, so a change to the generator that alters it shows in the diff.
+/// The e2e programs that declare a module generated from an SVD file kept
+/// beside it: the directory under `tests/e2e/` and the file's stem. QEMU
+/// `virt`'s devices (ADR 0070), and the UART of each target driven by its
+/// interrupt (ADR 0092).
+const KEPT: [(&str, &str); 3] = [
+    ("svd_virt", "virt"),
+    ("uart_interrupt_riscv32", "virt"),
+    ("uart_interrupt_armv7m", "an385"),
+];
+
+/// Each kept module (`virt.ers`, `an385.ers`), the one an e2e program
+/// declares, is what the generator writes from its SVD file today: it is kept
+/// in the repository, so a change to the generator that alters it shows in
+/// the diff.
 #[test]
-fn virt_ers_is_what_the_generator_writes_from_virt_svd() {
-    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/e2e/svd_virt");
-    let name = "virt.svd";
-    let (generated, diags, sources) = svd::generate(name, &read(&dir.join(name)));
-    let diags = diags.into_vec();
-    let Some(module) = generated else {
-        panic!(
-            "{name} was not generated:\n{}",
+fn kept_modules_are_what_the_generator_writes_from_their_svd_files() {
+    for (directory, stem) in KEPT {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/e2e")
+            .join(directory);
+        let name = format!("{stem}.svd");
+        let (generated, diags, sources) = svd::generate(&name, &read(&dir.join(&name)));
+        let diags = diags.into_vec();
+        let Some(module) = generated else {
+            panic!(
+                "{directory}/{name} was not generated:\n{}",
+                diag::render(&diags, &sources, false)
+            );
+        };
+        assert!(
+            diags.is_empty(),
+            "{directory}/{name} gave diagnostics:\n{}",
             diag::render(&diags, &sources, false)
         );
-    };
-    assert!(
-        diags.is_empty(),
-        "{name} gave diagnostics:\n{}",
-        diag::render(&diags, &sources, false)
-    );
-    assert!(
-        module == read(&dir.join("virt.ers")),
-        "tests/e2e/svd_virt/virt.ers is not what the generator writes from {name}; \
-         regenerate it with `erebos svd tests/e2e/svd_virt/virt.svd`"
-    );
+        assert!(
+            module == read(&dir.join(format!("{stem}.ers"))),
+            "tests/e2e/{directory}/{stem}.ers is not what the generator writes from \
+             {name}; regenerate it with `erebos svd tests/e2e/{directory}/{name}`"
+        );
+    }
 }
 
 // ---- the command

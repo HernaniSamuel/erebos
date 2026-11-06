@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The CMSDK UART 0 of QEMU `mps2-an385` the program of this directory uses, at
+  its address, with the lines it raises (ADR 0010, 0070, 0092): `hw/arm/mps2.c`
+  gives UART 0 the base 0x40004000 and the NVIC lines 0 (receive) and 1
+  (transmit), and `hw/char/cmsdk-apb-uart.c` the registers. Written by hand
+  from QEMU's sources, not taken from a vendor. `an385.ers` is generated from
+  it with `erebos svd tests/e2e/uart_interrupt_armv7m/an385.svd` and kept, and
+  `tests/svd.rs` requires that they agree.
+-->
+<device>
+  <name>QEMU_MPS2_AN385</name>
+  <version>1.0</version>
+  <description>The CMSDK UART 0 of QEMU's mps2-an385 machine that the e2e program uses.</description>
+  <size>32</size>
+  <access>read-write</access>
+  <peripherals>
+    <peripheral>
+      <name>UART0</name>
+      <description>The CMSDK APB UART 0: the console of the machine.</description>
+      <baseAddress>0x40004000</baseAddress>
+      <interrupt>
+        <name>UART0_RX</name>
+        <description>UART 0, receive.</description>
+        <value>0</value>
+      </interrupt>
+      <interrupt>
+        <name>UART0_TX</name>
+        <description>UART 0, transmit.</description>
+        <value>1</value>
+      </interrupt>
+      <registers>
+        <register>
+          <name>DATA</name>
+          <description>Data: writing it sends a byte, reading it takes the byte received.</description>
+          <addressOffset>0x0</addressOffset>
+        </register>
+        <register>
+          <name>STATE</name>
+          <description>State of the buffers.</description>
+          <addressOffset>0x4</addressOffset>
+          <access>read-only</access>
+          <fields>
+            <field>
+              <name>TXFULL</name>
+              <description>The transmit buffer is full.</description>
+              <bitOffset>0</bitOffset>
+              <bitWidth>1</bitWidth>
+            </field>
+            <field>
+              <name>RXFULL</name>
+              <description>The receive buffer is full.</description>
+              <bitOffset>1</bitOffset>
+              <bitWidth>1</bitWidth>
+            </field>
+          </fields>
+        </register>
+        <register>
+          <name>CTRL</name>
+          <description>Control: the transmitter, the receiver and their interrupts.</description>
+          <addressOffset>0x8</addressOffset>
+          <resetValue>0x0</resetValue>
+          <fields>
+            <field>
+              <name>TX_EN</name>
+              <description>The transmitter is enabled.</description>
+              <bitOffset>0</bitOffset>
+              <bitWidth>1</bitWidth>
+            </field>
+            <field>
+              <name>RX_EN</name>
+              <description>The receiver is enabled.</description>
+              <bitOffset>1</bitOffset>
+              <bitWidth>1</bitWidth>
+            </field>
+            <field>
+              <name>TX_INTEN</name>
+              <description>A byte sent raises the transmit interrupt.</description>
+              <bitOffset>2</bitOffset>
+              <bitWidth>1</bitWidth>
+            </field>
+            <field>
+              <name>RX_INTEN</name>
+              <description>A byte received raises the receive interrupt.</description>
+              <bitOffset>3</bitOffset>
+              <bitWidth>1</bitWidth>
+            </field>
+          </fields>
+        </register>
+        <register>
+          <name>INTSTATUS</name>
+          <description>Interrupt status: writing a 1 to a bit clears it.</description>
+          <addressOffset>0xC</addressOffset>
+          <fields>
+            <field>
+              <name>TX</name>
+              <description>The transmit interrupt is raised.</description>
+              <bitOffset>0</bitOffset>
+              <bitWidth>1</bitWidth>
+              <modifiedWriteValues>oneToClear</modifiedWriteValues>
+            </field>
+            <field>
+              <name>RX</name>
+              <description>The receive interrupt is raised.</description>
+              <bitOffset>1</bitOffset>
+              <bitWidth>1</bitWidth>
+              <modifiedWriteValues>oneToClear</modifiedWriteValues>
+            </field>
+          </fields>
+        </register>
+        <register>
+          <name>BAUDDIV</name>
+          <description>Baud rate divisor: QEMU accepts 16 and more, and wants it set before the transmitter is enabled.</description>
+          <addressOffset>0x10</addressOffset>
+        </register>
+      </registers>
+    </peripheral>
+  </peripherals>
+</device>
