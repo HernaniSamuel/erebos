@@ -173,7 +173,9 @@ instead of applying it; agents are held to it when they finish
   `erebos svd tests/e2e/svd_virt/virt.svd` (with the compiler built, as
   `target/x86_64-pc-windows-msvc/debug/erebos.exe`), then review the diff,
   which is how a change of the generator is reviewed. A test requires
-  that the kept file is what the generator writes, and fails otherwise.
+  that the kept file is what the generator writes, and fails otherwise. The
+  other two are `tests/e2e/uart_interrupt_riscv32/virt.ers` and
+  `tests/e2e/uart_interrupt_armv7m/an385.ers`, each beside its `.svd`.
 - Every bug fix comes with a test that fails without the fix.
 - Every new diagnostic comes with a snapshot of its rendered output.
 

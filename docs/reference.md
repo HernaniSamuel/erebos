@@ -1,4 +1,4 @@
-# Erebos language reference (M4.3)
+# Erebos language reference (M4.4)
 
 This describes the language as the compiler implements it today. The
 reasoning behind each rule lives in the ADRs (`docs/adr/`), cited as
@@ -813,7 +813,9 @@ let w: Msg = Msg::Write(3, 0x1234);
 - A value that fails to evaluate is reported once, like a constant, and so
   is a value given twice; uses of the enum report nothing more because of
   it (see "`match`" for what a `match` on it does).
-- No attribute applies to an enum: `#[packed]` and `#[align(N)]` are
+- One attribute applies to an enum, `#[interrupts]` (see "The chip's
+  interrupts"), which declares the program's list of the chip's interrupts.
+  `#[packed]`, `#[align(N)]` and the others are
   `resolve::misplaced-attribute`.
 
 **Payloads (ADR 0039).**
@@ -2942,8 +2944,10 @@ block is `resolve::unknown-region`.
   "Startup and memory"), the code (`.text`), the read-only data
   (`.rodata`) and the initial values of `.data`. The reset entry starts at
   `R`'s origin (on thumbv7m, with the 16 words of a vector table first, so
-  that `_start` is 64 bytes after it). The origin must be a multiple of the
-  target's code alignment, 4 on riscv32 and 128 on thumbv7m
+  that `_start` is 64 bytes after it; more words with the chip's list, see
+  "Targets"). The origin must be a multiple of the
+  target's code alignment, 4 on riscv32 and 128 on thumbv7m, or of the
+  table's power of two when the program's list needs more
   (`ty::misaligned-code`), and must be the address where the board starts
   at reset (it jumps there on riscv32, and reads the vector table there on
   thumbv7m), which the compiler cannot check. On QEMU `virt` run with
@@ -2995,7 +2999,7 @@ stage `--emit` asks for after it:
 | `ty::empty-region` | a region of size 0 |
 | `ty::region-out-of-range` | a region whose end, `origin + size`, is above `0xFFFF_FFFF`, so that the address one past it, which the linker's end symbols hold, would not exist; the last byte of the address space cannot belong to a region |
 | `ty::region-overlap` | two regions sharing an address; reported once per pair, at the later region, labeling the earlier |
-| `ty::misaligned-code` | the code's region starting at an address that is not a multiple of the target's code alignment (4 on riscv32, 128 on thumbv7m) |
+| `ty::misaligned-code` | the code's region starting at an address that is not a multiple of the target's code alignment (4 on riscv32, 128 on thumbv7m), or, on thumbv7m with a list of the chip's interrupts, of the smallest power of two that holds its table when that is larger than 128 (see "Targets") |
 | `ty::stack-size` | a stack of size 0, or not a multiple of the target's stack alignment (16 on riscv32, 8 on thumbv7m), or one that does not fit in its region once its start is rounded up |
 
 These two read the target of the build (`--target`): a code origin of
@@ -3015,8 +3019,9 @@ script the compiler passes to `ld.lld`:
 - In the code's region: the reset entry, which is `_start` in an output
   section of its own, `.text.start`, so that only its own alignment counts
   and an object given with `--link` whose code is aligned to 64 cannot move
-  it off the origin; on thumbv7m the 16 words of the vector table come
-  first, in `.vector_table`, which `KEEP` retains (ADR 0083, 0085). Then `.text`,
+  it off the origin; on thumbv7m the words of the vector table (16, or more
+  with the chip's list) come first, in `.vector_table`, which `KEEP` retains
+  (ADR 0083, 0085, 0090). Then `.text`,
   `.rodata` and the initial values of `.data`.
 - In the stack's region: a section `.stack` without contents, from
   `__stack_start` to `__stack_end`, the bounds of the stack. In the data's
@@ -3054,8 +3059,8 @@ are left out.
 and `rt/arch/armv7m.ers`: that is where to read it, since `--emit=llvm-ir`
 leaves `core` out and so does not show it. The compiler names
 `core::arch::_start` by path and puts it in the section `.text.start`, alone
-at the origin of the code's region (see "Memory maps"; on thumbv7m the 16
-words of a vector table come first, see "Targets"). It does, in order:
+at the origin of the code's region (see "Memory maps"; on thumbv7m the
+words of a vector table come first, 16 or more, see "Targets"). It does, in order:
 
 1. mask interrupts (`csrci mstatus, 8` on riscv32, `cpsid i` on thumbv7m,
    ADR 0086), so that the entry function starts masked on both targets, also
@@ -3097,7 +3102,7 @@ Object files given with `--link` may use the small-data sections
 link error, not data left uninitialized. No `__global_pointer$` is
 defined, so nothing is addressed relative to `gp`.
 
-## Targets (ADR 0073 to 0077, 0085, 0088)
+## Targets (ADR 0073 to 0077, 0085, 0088, 0090)
 
 `erebos build --target <name>` chooses the machine the program is built
 for. There are two:
@@ -3109,7 +3114,7 @@ for. There are two:
 | C ABI | the riscv32 one (ADR 0006, 0025) | the AAPCS, base standard (ADR 0075) |
 | Pointers, `usize`, widest access | 32 bits | 32 bits |
 | Stack alignment | 16 | 8 |
-| Code alignment | 4 | 128 |
+| Code alignment | 4 | 128, or more with the chip's list |
 | 64-bit `/` and `%` | LLVM's | a call to `core` |
 
 An unknown name is an error that lists the known ones: ``error: unknown
@@ -3133,9 +3138,11 @@ table (`0x0` on `mps2-an385`), the initial stack pointer and the address of
 the reset handler, whose bit 0 is set to mark Thumb code, and an exception
 reads its handler from the word of its number. The reset entry is therefore
 two sections at the origin of the code's region: `.vector_table` first, of
-**16 words**, 64 bytes, and then `.text.start`, which holds `_start` (ADR
-0083), so `_start` is at the origin plus 64. The code's origin must be a
-multiple of 128 because of the table. `_start` is `core`'s, in Thumb assembly
+**16 words**, 64 bytes (more with the chip's interrupts, see below), and then
+`.text.start`, which holds `_start` (ADR 0083), so `_start` is at the origin
+plus 64 (without a list). The code's origin must be a multiple of 128 because of the table (of
+more with the chip's interrupts, see below). `_start` is `core`'s, in Thumb
+assembly
 (see "Startup and memory"): it sets the stack pointer again (the processor
 already loaded it, but a program that jumps back to `_start`, as a startup
 test does, gets a fresh stack), zeroes `.bss`, copies `.data`, and jumps to
@@ -3157,9 +3164,60 @@ handler. A handler is a plain function of the C ABI: the core stacks `r0` to
 `r3`, `r12`, `lr`, `pc` and `xPSR` on entry and returns with `bx lr`, and
 relies on `CCR.STKALIGN` being 1, so that it aligns the stack to 8 (it is 1 at
 reset on `mps2-an385` and on the Cortex-M3 from revision r2p0; `_start` does
-not write it). The table has no entries for the chip's interrupts: a program
-that enables an NVIC interrupt through registers makes the core read a word of
-`_start`'s code (the chip's interrupts and the table's length come with M4.4).
+not write it).
+
+**The table with the chip's interrupts (ADR 0090).** A program with a list of
+the chip's interrupts (an enum with `#[interrupts]`, see "Interrupts") has a
+longer table. The list alone decides, whether or not a handler names a
+variant and whichever module holds it:
+
+| Program | Words of `.vector_table` |
+|---------|--------------------------|
+| without a list | 16 |
+| with a list whose largest value is `m` | `16 + m + 1` |
+
+`_start` follows the table, at the origin plus 4 bytes per word, and the
+linker script is the same. `--emit=llvm-ir` shows the table, with its default
+handlers, only for a program that declares a handler, whatever its list. A
+list with no variant has no largest value and leaves the table at 16 words.
+Words 0 to 15 are as above, and the words after them are:
+
+| Word | Holds |
+|------|-------|
+| `16 + n`, where a variant has the value `n` | the handler at that variant, or its default handler |
+| `16 + n`, where no variant has it (a hole) | the default handler of a word with no variant |
+
+A hole holds a default handler, not 0, since a line in a hole can be read (a
+list may be incomplete, and `nvic_pend` takes any number); the reserved words
+7 to 10 and 13 stay 0. **Past the table's end nothing is checked**: a line above
+the list's largest value, and any line in a program with no list, makes the core
+read a word of `_start`'s code, since the compiler cannot see a number a program
+computes. A list that failed one of its checks (`ty::interrupts-enum`, or
+`ty::interrupt-number`) leaves the table at 16 words; the error is reported
+already.
+
+**The origin's alignment with a list.** ARMv7-M requires a vector table aligned
+to a power of two at least as large as its size, and at least 128 bytes. The
+code's origin of a program with a list must be a multiple of
+`max(128, the smallest power of two that is at least 4 * words)`
+(`ty::misaligned-code`):
+
+| Largest value | Words | Bytes | Origin a multiple of |
+|---------------|-------|-------|----------------------|
+| no list | 16 | 64 | 128 |
+| 15 | 32 | 128 | 128 |
+| 16 | 33 | 132 | 256 |
+| 61 | 78 | 312 | 512 |
+| 239 | 256 | 1024 | 1024 |
+| 495 | 512 | 2048 | 2048 |
+
+`Target::code_align` stays 128 as the minimum. When the list is why an origin is
+rejected, the message says "not a multiple of" the larger number and the help
+names the list and gives its words and bytes; a program without a list, or
+with a list of 15 or less, gets the message it always had. It applies whether
+or not the program writes `VTOR`: the reset entry is the table a program would
+point `VTOR` at. It is skipped where the list failed a check. On riscv32
+nothing changes (the code alignment is 4).
 
 **The trap table of riscv32 (ADR 0085).** A RISC-V core in machine mode jumps
 to one address, `mtvec`, for every trap, which nothing sets at reset (0 on
@@ -3230,7 +3288,7 @@ declares it in its header, `// takes-exceptions: yes`, together with
 `// expect-exit:`: the log is then reduced to guest errors, and the output
 and the exit code carry the check (ADR 0088).
 
-## Interrupts (ADR 0078, 0084 to 0088)
+## Interrupts (ADR 0078, 0084 to 0091)
 
 ```
 use core::arch::Vector;
@@ -3280,16 +3338,22 @@ nothing else takes it (`parser::unexpected-token`, as for `extern interrupt
 fn`). The vector is a **path to a variant of `core::arch::Vector`**, in full
 or through `use`, resolved in the module of the handler like any path (see
 "Modules and paths"); it is no expression, `at` takes no constant, and the
-shorthand `.SysTick` does not apply.
+shorthand `.SysTick` does not apply. On thumbv7m the path may also name a
+variant of the chip's list, an enum with `#[interrupts]` (see "The chip's
+interrupts").
 
 - A path that names nothing is `resolve::unknown-path` (or
   `resolve::unknown-variant` for a variant `Vector` does not have, such as
   the other target's); a path that names anything else, such as a variant of
-  another enum, a struct, a function, a constant or a module, is
-  `resolve::not-a-vector`.
-- At most one handler per vector in a program, in any module. Each further
-  handler of a vector is one `resolve::duplicate-vector`, labelling it and the
-  first, in the order of the functions' ids, which follows the source.
+  an enum without `#[interrupts]`, a struct, a function, a constant, a
+  module or an enum itself, is `resolve::not-a-vector`. Its help names
+  `#[interrupts]`.
+- At most one handler per vector in a program, in any module. A vector is
+  told by its enum and its variant, never by the name alone: a handler at
+  `Vector::SysTick` and one at a variant called `SysTick` of the chip's list
+  serve two vectors. Each further handler of a vector is one
+  `resolve::duplicate-vector`, labelling it and the first, in the order of
+  the functions' ids, which follows the source.
 - A handler takes no parameters (`ty::interrupt-params`) and returns `()`
   (the default) or `!`; any other type is `ty::interrupt-return`, and so is
   `()` at a vector that must diverge (see below).
@@ -3354,17 +3418,97 @@ On `riscv32imac-unknown-none-elf` (`rt/arch/riscv32.ers`), the value is
 
 Reset has no variant: `_start` serves it, and a program cannot replace it. On
 riscv32 the causes of the lower privilege modes and of paging cannot arise in
-machine mode and have none either. The chip's interrupts are not in the enum
-yet (M4.4).
+machine mode and have none either. The chip's interrupts are not in the enum:
+they are the program's own list (see "The chip's interrupts").
 
 **What a handler returns.** A handler must return `!` where returning would
 run the instruction that trapped again, with nothing changed, since a handler
 without parameters cannot see the frame to fix the cause: on thumbv7m
 `HardFault`, `MemManage`, `BusFault`, `UsageFault` and `DebugMonitor`, and on
 riscv32 every exception, `ecall` and `ebreak` included, since `mepc` points
-at the instruction itself. Elsewhere `()` or `!`. The error
-(`ty::interrupt-return`) labels the return type, or the function's name when
-it is omitted.
+at the instruction itself. Elsewhere `()` or `!`; so a handler at a variant of
+the chip's list, which is maskable, returns `()` or `!`, whatever the
+variant is called (a chip's line named `HardFault` is a line, not the fault).
+The error (`ty::interrupt-return`) labels the return type, or the function's
+name when it is omitted.
+
+### The chip's interrupts (ADR 0089 to 0092)
+
+The interrupts of a chip (its UARTs, timers and the rest) differ per chip, so
+`core` cannot list them. The program declares them as an enum:
+
+```
+#[interrupts]
+pub enum Interrupt: u32 {
+    Uart0Rx = 0,
+    Uart0Tx = 1,
+}
+
+interrupt fn transmitted() at Interrupt::Uart0Tx {
+    // ...
+}
+```
+
+`erebos svd` writes this enum from the SVD's `<interrupt>` elements (see
+"Peripherals from SVD"), and a program with no SVD writes it by hand.
+
+- **`#[interrupts]`** declares the enum the chip's list. It applies to an enum
+  declared in the program (`core` declares none), takes no argument and is
+  given once. On any other item it is `resolve::misplaced-attribute`, with an
+  argument `resolve::attribute-argument`, and given twice
+  `resolve::duplicate-attribute`; the help of `resolve::unknown-attribute`
+  lists it. `interrupts` is no keyword: it stays a name for a function, a
+  field or a local. It is accepted on every target, so that a generated
+  module means the same everywhere.
+- **At most one enum has it**, in any module, `pub` or not, as a program has
+  one `memory` block: each further one is `resolve::duplicate-interrupts`,
+  labelling its name and the first's, in the order of the enums' ids, which
+  follows the source. With three lists the second and the third are each
+  reported against the first. A handler at a variant of a further list reports
+  nothing more, so that one mistake gives one error. A program with no such
+  enum has no list, as every program did before M4.4.
+- **The integer type is `u32` and no variant has a payload**
+  (`ty::interrupts-enum`; one report at the enum's name for the type, one
+  labelling each variant with a payload). The attribute changes nothing else:
+  the variants are used as any variant, and `use`, visibility and `match`
+  apply.
+- **A variant's value is the number the chip's controller gives the
+  interrupt**: the line of the NVIC on thumbv7m, the source of the PLIC on
+  QEMU `virt`. A program converts it where it needs the number
+  (`Interrupt::Uart0Tx as u32`).
+- **A value of 496 or more is `ty::interrupt-number` on thumbv7m**, at the
+  variant, whether or not a handler names it: the architecture has no such
+  line (exception 511 is the last, and the first 16 are the system's). The
+  limit is the architecture's, not a Cortex-M3's 240. It is not checked in a
+  list that failed `ty::interrupts-enum`, and on riscv32 any `u32` value is
+  accepted.
+
+| Code | Case |
+|------|------|
+| `resolve::duplicate-interrupts` | a second enum with `#[interrupts]` in a program |
+| `ty::interrupts-enum` | an enum with `#[interrupts]` whose integer type is not `u32`, or with a payload |
+| `ty::interrupt-number` | on thumbv7m, a variant of the list with a value of 496 or more |
+| `ty::interrupt-not-a-vector` | a handler at a variant of the list, on riscv32 |
+
+**On thumbv7m the list's variants are vectors.** Line `n` of the NVIC is
+exception `16 + n` and has a word of its own in the vector table (see
+"Targets"), so a handler at `Interrupt::Uart0Tx` is a handler like SysTick's:
+in the handler context of ADR 0078, maskable, returning `()` or `!`, and every
+other rule of "Handlers" applies. `PRIMASK` masks every line and every line
+resets to priority 0, so the one level holds. `--emit=typeck` and
+`--emit=mir` write the vector of such a handler with its enum's path after
+`at` (`at chip::Interrupt::SysTick`), and a `Vector`'s as before (`at
+SysTick`).
+
+**On riscv32 they are numbers for the program.** Every external interrupt
+arrives at `MachineExternal`; what says which source raised it is a controller
+outside the architecture (the PLIC on `virt`, other things on other chips,
+and none on the ESP32-C3), at an address of the chip's. A handler at a
+variant of the list is `ty::interrupt-not-a-vector`, whose help says the
+interrupt arrives at `Vector::MachineExternal`; it is the type checker's
+error, since lowering does not know the target. The table of "Targets" does
+not change. The program's handler of `MachineExternal` asks the controller
+(see "Enabling, waiting and testing").
 
 ### Vectors without a handler (ADR 0085)
 
@@ -3379,14 +3523,25 @@ handlers reaches the panic function on both targets, where it used to lock up
 - With `*const core::PanicInfo`, one function per vector,
   `__erebos_unhandled_<variant>`, and `__erebos_unhandled_other` for the words
   of riscv32 that have no variant (a cause of `mcause` that `Vector` does not
-  name, and word 32). Each passes read-only information of its own:
+  name, and word 32). On thumbv7m a variant of the chip's list without a
+  handler has `__erebos_unhandled_irq_<variant>` (the `irq_` keeps it from
+  `__erebos_unhandled_<variant>` of a `Vector` when a chip calls a line
+  `SysTick`), and the words with no variant, the holes of a list, share
+  `__erebos_unhandled_other` with the message `unknown`, which exists on
+  thumbv7m only for a program whose list has a hole. A line's message is its
+  bare variant name, so a chip's line called `SysTick` and an unhandled
+  `Vector::SysTick` print the same; the panic function tells them apart
+  through `IPSR` (`16 + n` for line `n`). Each passes read-only information of its own:
   `reason` is `PanicReason::UnhandledVector`, `message` is the variant's name
   as bytes (`b"HardFault"`, `b"IllegalInstruction"`, and `b"unknown"` for
   `__erebos_unhandled_other`), `file` is an empty slice, and `line` and
   `column` are 0.
   Only a vector left without a handler costs its information (28 bytes, the
   name and the small function); a program with a handler at every vector has
-  none.
+  none. With a list this grows with the list, about 50 bytes per line without
+  a handler (about 3 KB for 62 lines and 12 KB for 240), however few lines
+  the program uses; a program that must not pay declares its panic function
+  without the parameter.
 
 The panic function runs with what the trap left: `mstatus.MIE` clear on
 riscv32 and, on thumbv7m, at the priority of the exception. It may read
@@ -3455,14 +3610,15 @@ allowed inside.
   `--emit=mir` shows the two statements and `--emit=llvm-ir` the calls, as
   declarations, since dumps leave `core` out.
 
-### Enabling, waiting and testing (ADR 0086)
+### Enabling, waiting and testing (ADR 0086, 0091)
 
 `_start` masks interrupts first (see "Startup and memory"), so the entry
 function starts masked on both targets, and a program calls
 `core::arch::enable_interrupts()` when what its handlers use is set up (see
 "`core`" for the three portable items). Each source of interrupts has its own
 enable, which is the program's: `mie` on riscv32, the peripheral's control
-register on thumbv7m (SysTick's `TICKINT`). There is no function that masks:
+register on thumbv7m (SysTick's `TICKINT`), and, for the chip's interrupts,
+the controller's (see below). There is no function that masks:
 that is `critical`. On thumbv7m `PRIMASK` turns `svc` into a `HardFault`, so a
 program uses `svc` only after enabling interrupts and outside `critical`
 blocks.
@@ -3483,6 +3639,94 @@ loop {
 while masked, and the handler runs when the block ends, before the next
 test. Testing the flag outside the block and then waiting loses a wake-up
 that comes between the two.
+
+**The chip's interrupts on thumbv7m (ADR 0091).** The NVIC is part of ARMv7-M:
+its registers are at the same addresses on every chip (`ISER` at
+`0xE000_E100`, `ICER` at `0xE000_E180`, `ISPR` at `0xE000_E200`, `ICPR` at
+`0xE000_E280`, 16 words each, one bit per line), and they are write-1
+registers, so setting a bit touches only that line. `core::arch` has five
+public functions for them, specific to this target (not portable, so the paths
+name nothing on riscv32: `resolve::unknown-function`):
+
+| Function | What it does |
+|----------|--------------|
+| `nvic_enable(irq: u32)` | a write of the line's bit to `ISER` |
+| `nvic_disable(irq: u32)` | a write to `ICER`, then `dsb sy` and `isb sy`, so that no handler of the line starts once it returns |
+| `nvic_pend(irq: u32)` | a write to `ISPR` |
+| `nvic_unpend(irq: u32)` | a write to `ICPR` |
+| `nvic_is_pending(irq: u32) -> bool` | a read of `ISPR`, testing the bit |
+
+```
+core::arch::nvic_enable(Interrupt::Uart0Tx as u32);
+core::arch::enable_interrupts();
+```
+
+- They take the number, the variant's value converted with `as u32`: `core`
+  cannot name the program's enum, and a conversion is written (ADR 0008).
+- **A number of 496 or more fails an `assert` in `core`**, reaching the panic
+  function with the reason `AssertionFailed` and, as the check is in `core`,
+  the file and line of `core`'s: no word holds the line, and the address would
+  be another register of the System Control Space. The check is in the one
+  private function that computes the word's address, so all five have it, and
+  it runs before anything is written. `comptime` assertions in `core` check
+  that function at lines 0, 31, 32 and 495 of each register, since the tests'
+  machine has 32 lines (`ICTR` 0) and one above 31 is checked at compile time
+  only.
+- The four that write are compiler fences before the write and after it, as
+  `enable_interrupts` is one: statics written before the call are in memory,
+  and statics read after it are not read before. `nvic_disable`'s two barriers
+  are for the hardware, between the write and the second fence.
+- They may be called from any context. They set no priorities: every line
+  stays at priority 0, the one level of ADR 0078, and a program that writes
+  `IPR` leaves that model. They write through raw pointers, so a chip's own
+  `NVIC` peripheral from SVD coexists with them.
+- Neither the list nor the table is consulted: a number above the list's
+  largest value compiles, and the core reads a word of `_start`'s code when the
+  line fires (see "Targets").
+
+**The chip's interrupts on riscv32 (ADR 0091).** `core::arch` adds nothing: the
+PLIC is no part of RISC-V, and some chips have none. Its registers are in the
+chip's module, as any peripheral's, and the program writes them. A source needs
+a priority above 0 and its bit in the enable word of a context, with
+`mie.MEIE` set in the core, which stays one line of `asm`. With one level, the
+program gives every source the same priority and leaves the threshold 0; a trap
+clears `MIE`, so the handler is not preempted.
+
+```
+const UART_SOURCE: u32 = Interrupt::Uart0 as u32;
+
+entry fn main() -> ! {
+    PLIC.priority[UART_SOURCE as usize] = 1;
+    PLIC.enable[0].sources[0] = 1 << UART_SOURCE;
+    PLIC.ctx[0].threshold = 0;
+    asm("csrs mie, {}", in(reg) 0x800 as u32, options(nostack, preserves_flags));
+    core::arch::enable_interrupts();
+    // ...
+}
+
+interrupt fn external() at Vector::MachineExternal {
+    loop {
+        let source: u32 = PLIC.ctx[0].claim;
+        if source == 0 {
+            break;
+        }
+        match source {
+            UART_SOURCE => uart_interrupt(),
+            _ => board::exit(3),
+        }
+        PLIC.ctx[0].claim = source;
+    }
+}
+```
+
+The program dispatches in the handler of `MachineExternal`: `claim` names a
+source and takes it, 0 means none, and the number written back completes it;
+the loop takes the sources that became pending while one was served. An
+integer does not convert to an enum (ADR 0035), so the number is compared with
+the list's values as integers, through constants as above (constants of an
+integer type are patterns) or with `==`. A program without that handler
+reaches the panic function with the name `MachineExternal`. The PLIC and its
+dispatch are never in `core`; a board's module may have them.
 
 ## Peripherals (ADR 0058)
 
@@ -4229,7 +4473,7 @@ against the length first (see "Register arrays and clusters"). Until M5, any cod
 a peripheral reaches it, as with a `static mut`; ownership of peripherals
 is M5's.
 
-## Peripherals from SVD (ADR 0070 to 0072)
+## Peripherals from SVD (ADR 0070 to 0072, 0092)
 
 ```
 erebos svd <input.svd> [-o <output.ers>]
@@ -4297,7 +4541,9 @@ the type, then, in the order of its registers, the bit-field struct of each
 register that has fields and the enums of its fields, then **a module per
 cluster type**, which holds the cluster's type and its registers' items in
 the same way. A path from one generated module to another goes through
-`super`, so the file works wherever the program declares it.
+`super`, so the file works wherever the program declares it. The file ends with
+**the chip's interrupts**, an enum, when the SVD has an `interrupt` (see "The
+enum of the chip's interrupts" below).
 
 **How names are converted.** An item is named from the `name` of one SVD
 element, in these steps:
@@ -4341,6 +4587,8 @@ element, in these steps:
 | a field's enum | the struct's name, then Pascal case of the field | `LcrWls` |
 | an enum's variant | Pascal case of the enumerated value | `Eight` |
 | an alternate group | lower case | `in dlab` |
+| the enum of the chip's interrupts | `Interrupt` | `Interrupt` |
+| a variant of that enum | Pascal case of the interrupt | `Uart0Tx` for `UART0_TX` |
 
 A register's struct that meets the peripheral type it is declared next to is
 renamed, as the struct of `RTC_CNTL`'s register `RTC_CNTL` is `RtcCntl_`. A
@@ -4377,6 +4625,7 @@ is then no variant.
 | `resetValue` and `resetMask` | the field's default: `true`, `false`, an integer or `.Variant`; none when it has a write effect, when the mask leaves one of its bits unknown, or when its enum has no variant of that value |
 | `enumeratedValues` | an enum on the field's integer type, a variant per `enumeratedValue` that has a `value`, in the file's order |
 | `enumeratedValues` with `derivedFrom` | the enum written for the set it names, when the merged values equal the base's and the integer type is the same; otherwise a set of its own |
+| `interrupt` of a `peripheral` | a variant of the enum of the chip's interrupts, with `name` and `value` (see below) |
 
 `size`, `access`, `resetValue` and `resetMask` are inherited from the device,
 the peripheral and the clusters to their registers, as SVD has it, a register
@@ -4407,9 +4656,56 @@ each other `svd::derived-cycle`.
 
 **Not read.** `addressUnitBits` and `width` (every offset counts bytes),
 `addressBlock`, `groupName`, `headerStructName`, `prependToName`,
-`appendToName`, `dataType`, `cpu` and `interrupt`: the generator writes no
-interrupts (they are M4's). An `alternateRegister` or `alternateCluster`
+`appendToName`, `dataType` and `cpu` (so `deviceNumInterrupts` and
+`nvicPrioBits` too). An `alternateRegister` or `alternateCluster`
 naming nothing is no error.
+
+### The enum of the chip's interrupts (ADR 0092)
+
+The generated file ends, after the peripherals, with the list, in the syntax of
+"The chip's interrupts" of "Interrupts":
+
+```
+#[interrupts]
+pub enum Interrupt: u32 {
+    // UART 0, receive.
+    Uart0Rx = 0,
+
+    // UART 0, transmit.
+    Uart0Tx = 1,
+}
+```
+
+- **What is read.** The `interrupt` elements of every `peripheral`, in the order
+  of the file, each peripheral's own: a `derivedFrom` copies none (a derived
+  peripheral without its own would only repeat its base's), and a `dim` on a
+  peripheral repeats nothing, its `interrupt` being one, so a `%s` or `[%s]`
+  is removed from its name. `name` and `value` are required
+  (`svd::missing-element`, both reported when both are missing), and a value
+  SVD's syntax does not allow (decimal, `0x`, `#` for binary) is
+  `svd::invalid-number`. A name with nothing left after its characters are
+  replaced is `svd::invalid-name`.
+- **What is written.** The enum is named `Interrupt` and is the last item, so a
+  peripheral of that name makes the enum `Interrupt_`, with `svd::renamed`.
+  Its variants are in the order of their values, the file's order for equal
+  ones, named by the steps above, with the element's `description` as a
+  comment. Values are in decimal. `#[interrupts]` is always written, whatever
+  `cpu` says, so that the module means the same on every target. A file with
+  no `interrupt` writes no enum, and its output is as it was.
+- **The same line or the same number, twice.** Names are compared after the
+  conversion, so `UART_TX` and `UART__TX` are one name.
+
+  | Case | Written | Warning |
+  |------|---------|---------|
+  | one converted name and one value, under several peripherals or not | one variant, with the first's description | none: vendors repeat a shared line under each peripheral that uses it |
+  | two converted names with one value | the first in the file; the others are left out, named by a `// svd:` comment above the attribute | `svd::not-declared`, at the `name` of each left out |
+  | one converted name with two values | both, the later one with `_` after it | `svd::renamed` |
+
+- A value too large for `u32`, or at the target's limit, is not the
+  generator's: it is written as it is and reported when the module is compiled
+  (`ty::literal-out-of-range` for the first, `ty::interrupt-number` on thumbv7m
+  for 496 and above).
+
 
 ### What has no declaration
 
@@ -4438,6 +4734,9 @@ search finds them all. They follow the item's description. Each case:
   absent one: no comment, no warning.
 - **A reset value that is no variant of the field's enum**: the field has no
   default.
+- **Two interrupts with one value** and different names: the first in the file
+  is the variant, and the others are left out of the enum of the chip's
+  interrupts, with a comment above `#[interrupts]` (see above).
 - **An enumerated value with don't-care bits** (`#1x0`), **one whose value
   another variant has**, and **one whose name has nothing left after step 2**
   are left out of the enum, the comment standing where the variant would be.
@@ -4652,7 +4951,7 @@ the compiler binary, and compiled and checked with every program.
   (`core.builtins.__erebos_udivmod64`). The compiler marks every function
   of `core` `no-builtins`, so that LLVM does not turn their loops back into
   calls to them.
-- **`core::arch`** (ADR 0080, 0081, 0084 to 0086) is the part of `core` that needs an
+- **`core::arch`** (ADR 0080, 0081, 0084 to 0086, 0091) is the part of `core` that needs an
   instruction of the target, written with `asm` (see "Inline assembly"). It
   is a public module whose file is chosen by the build's target, not by the
   rule of ADR 0049:
@@ -4720,6 +5019,12 @@ the compiler binary, and compiled and checked with every program.
     the list of portable items, and the compiler knows it by the path
     `core::arch::Vector`, with the list it keeps in `src/target.rs`, which a
     test compares with each file.
+  - on thumbv7m, the five public functions for the NVIC, `nvic_enable`,
+    `nvic_disable`, `nvic_pend`, `nvic_unpend` (each takes `irq: u32`) and
+    `nvic_is_pending(irq: u32) -> bool`, with a private function that computes
+    a register's word for a line and four private constants for the registers'
+    addresses (ADR 0091, see "Interrupts"). They are not in the files' list of
+    portable items, and on riscv32 the paths name nothing.
   - the private `__critical_enter() -> u32` and `__critical_exit(was: u32)`
     that a `critical` block calls (ADR 0086), which the compiler names by
     path.
@@ -4994,8 +5299,9 @@ Every error has a stable code, shown with the message.
 | `resolve::not-a-function` | call to a variable |
 | `resolve::call-entry` | call to the entry function |
 | `resolve::call-interrupt` | call to an `interrupt fn`, from a function or at compile time |
-| `resolve::not-a-vector` | the path after `at` of an `interrupt fn` names something other than a variant of `core::arch::Vector`: a variant of another enum, a struct, a function, a constant, a static, an enum, a module or a peripheral |
-| `resolve::duplicate-vector` | a second `interrupt fn` at one vector; once per extra handler, labelling the first |
+| `resolve::not-a-vector` | the path after `at` of an `interrupt fn` names something other than a variant of `core::arch::Vector` or of an enum with `#[interrupts]`: a variant of another enum, a struct, a function, a constant, a static, an enum, a module or a peripheral |
+| `resolve::duplicate-vector` | a second `interrupt fn` at one vector (an enum and a variant); once per extra handler, labelling the first |
+| `resolve::duplicate-interrupts` | a second enum with `#[interrupts]` in a program; once per extra enum, labelling the first |
 | `resolve::duplicate-item` | two items, modules or `use` names with one name in one module |
 | `resolve::duplicate-symbol` | two items of the program, `core` included, with one symbol |
 | `resolve::duplicate-type` | any item, module or `use` name named like a built-in type: `bool`, an integer type, `Option` or `Result` |
@@ -5023,7 +5329,7 @@ Every error has a stable code, shown with the message.
 | `resolve::inconsistent-binding` | a name not bound by every alternative of an or-pattern, or bound with `let mut` by only some |
 | `resolve::reserved-name` | an item, module or `use` named `_start`, `core`, with a name starting with `__`, or like a built-in function (`assert`, `len`, `slice`); a module of the root module named `llvm` or `rt`; a region named `INCLUDE` |
 | `resolve::unknown-attribute` | an attribute that does not exist |
-| `resolve::misplaced-attribute` | an attribute on an item it does not apply to, as `#[packed]` or `#[align(N)]` on a bit-field struct, `#[align(N)]` on an `extern fn`, or `#[naked]` on an `extern fn`, the entry function, the panic function, an interrupt handler or anything but a function with a body |
+| `resolve::misplaced-attribute` | an attribute on an item it does not apply to, as `#[packed]` or `#[align(N)]` on a bit-field struct, `#[align(N)]` on an `extern fn`, or `#[naked]` on an `extern fn`, the entry function, the panic function, an interrupt handler or anything but a function with a body, or `#[interrupts]` on anything but an enum |
 | `resolve::attribute-argument` | an attribute with a missing or extra argument |
 | `resolve::duplicate-attribute` | an attribute given twice |
 | `resolve::conflicting-attributes` | `#[packed]` with `#[align(N)]` |
@@ -5096,10 +5402,13 @@ Every error has a stable code, shown with the message.
 | `ty::entry-returns`, `ty::panic-returns` | entry or panic function that can return |
 | `ty::interrupt-params` | an `interrupt fn` with parameters |
 | `ty::interrupt-return` | an `interrupt fn` returning a type other than `()` or `!`, or returning `()` at a vector that must diverge |
+| `ty::interrupt-not-a-vector` | an `interrupt fn` at a variant of the chip's list, on a target where the chip's interrupts are no vectors (riscv32) |
+| `ty::interrupts-enum` | an enum with `#[interrupts]` whose integer type is not `u32`, or with a payload |
+| `ty::interrupt-number` | on thumbv7m, a variant of the chip's list with a value of 496 or more |
 | `ty::empty-region` | a region of size 0 |
 | `ty::region-out-of-range` | a region whose end is above `0xFFFF_FFFF` |
 | `ty::region-overlap` | two regions sharing an address |
-| `ty::misaligned-code` | the code's region starting at an address that is not a multiple of the target's code alignment (4 on riscv32, 128 on thumbv7m) |
+| `ty::misaligned-code` | the code's region starting at an address that is not a multiple of the target's code alignment (4 on riscv32, 128 on thumbv7m), or on thumbv7m of the power of two that holds the table of the chip's list, when larger |
 | `ty::stack-size` | a stack of size 0, not a multiple of the target's stack alignment (16 on riscv32, 8 on thumbv7m), or that does not fit in its region |
 | `ty::register-type` | a register whose type is not `u8`, `u16` or `u32`, or a bit-field struct or an enum without payloads on one of them, or an array of such a type; an array of arrays, a peripheral type or an array of one |
 | `ty::misaligned-register` | an entry's offset that is not a multiple of its element's alignment |
@@ -5166,14 +5475,14 @@ below, the four warnings marked.
 |------|---------|
 | `svd::xml` | a file that is not well-formed XML, with a DTD, or not UTF-8 (without a span, then) |
 | `svd::not-svd` | a root element other than `device`, or no `peripherals` |
-| `svd::missing-element` | an element SVD requires and no parent supplies: the device's `name`, a peripheral's `name` or `baseAddress`, a register's `name`, `addressOffset` or `size`, a cluster's `name` or `addressOffset`, a field's `name` or bits, an enumerated value with neither `value` nor `isDefault` |
-| `svd::invalid-number` | a number SVD's syntax does not allow (decimal, `0x`, `#` for binary), one that does not fit where 32 bits are needed, a `bitRange` that is not `[msb:lsb]`, a `bitWidth` of 0, an `msb` below the `lsb` |
+| `svd::missing-element` | an element SVD requires and no parent supplies: the device's `name`, a peripheral's `name` or `baseAddress`, a register's `name`, `addressOffset` or `size`, a cluster's `name` or `addressOffset`, a field's `name` or bits, an enumerated value with neither `value` nor `isDefault`, an interrupt's `name` or `value` |
+| `svd::invalid-number` | a number SVD's syntax does not allow (decimal, `0x`, `#` for binary), one that does not fit where 32 bits are needed (64 for an interrupt's value), a `bitRange` that is not `[msb:lsb]`, a `bitWidth` of 0, an `msb` below the `lsb` |
 | `svd::invalid-dim` | a `dim` of 0 or without `dimIncrement`, a `dimIndex` that is no list or range, goes down or has another length than `dim`, a `[%s]` or `%s` missing from a repeated name, a list of more than 65 536 indices |
 | `svd::unknown-reference` | a `derivedFrom` naming no element of its kind, or an `alternatePeripheral` naming no peripheral |
 | `svd::derived-cycle` | elements deriving from each other |
 | `svd::too-large` | a file that passes a limit of the reader: elements more than 32 levels deep (nested or through `derivedFrom`), more than 32 elements waiting on a `derivedFrom`, or more than 262 144 elements copied by `derivedFrom` |
-| `svd::invalid-name` | a name with nothing left after its characters are replaced, an empty one included; not for an enumerated value |
+| `svd::invalid-name` | a name with nothing left after its characters are replaced, an empty one included, an interrupt's included; not for an enumerated value |
 | `svd::renamed` (warning) | an item renamed because its SVD name has characters no identifier has or starts with a digit, or because another of its scope has its name |
-| `svd::not-declared` (warning) | an SVD construct the generated item does not declare: a register of a size other than 8, 16 or 32, `writeOnce`, a reset value or `modifiedWriteValues` on a register without fields, `writeConstraint`, `protection`, `modifiedWriteValues` `clear` or `set`, a reset value that is no variant, an enumerated value with don't-care bits, a duplicate value or no name, two sets on a field |
+| `svd::not-declared` (warning) | an SVD construct the generated item does not declare: a register of a size other than 8, 16 or 32, `writeOnce`, a reset value or `modifiedWriteValues` on a register without fields, `writeConstraint`, `protection`, `modifiedWriteValues` `clear` or `set`, a reset value that is no variant, an enumerated value with don't-care bits, a duplicate value or no name, two sets on a field, an interrupt left out because another name has its value |
 | `svd::invalid-value` (warning) | an `access`, `readAction`, `modifiedWriteValues`, `usage` or `isDefault` whose value SVD does not define, read as absent (as `false` for `isDefault`) |
 | `svd::overlap` (warning) | a peripheral sharing bytes with earlier ones that one `over` cannot name |
