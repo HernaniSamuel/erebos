@@ -8,7 +8,9 @@ use crate::diag::Diagnostic;
 use super::number::{self, IndexError};
 use super::raw::{Common, Dim, Id, Props, Tree};
 use super::read::Reader;
-use super::{Cluster, EnumSet, EnumValue, Field, Item, Peripheral, Register, Repeat, SetId};
+use super::{
+    Cluster, EnumSet, EnumValue, Field, Interrupt, Item, Peripheral, Register, Repeat, SetId,
+};
 
 /// The most indices a list is made of. A `dim` above it is an
 /// `svd::invalid-dim`: a list of that many elements is written out, and a
@@ -19,6 +21,16 @@ pub(super) fn build(tree: &Tree, device: Props, rd: &mut Reader) -> Vec<Peripher
     let mut builder = Builder { tree, rd };
     (0..tree.periphs.len())
         .filter_map(|i| builder.peripheral(i, device))
+        .collect()
+}
+
+/// The `interrupt` elements of every peripheral, in the order of the file
+/// (ADR 0092): a peripheral's own, a derived one's not copied, and a `dim`
+/// repeating none.
+pub(super) fn interrupts(tree: &Tree) -> Vec<Interrupt> {
+    tree.periphs
+        .iter()
+        .flat_map(|p| p.interrupts.iter().cloned())
         .collect()
 }
 

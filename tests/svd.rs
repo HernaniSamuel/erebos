@@ -91,25 +91,29 @@ fn compile(path: &Path, svd_text: &str, module: &str) {
     fs::write(&root, ROOT).unwrap();
 
     let expected = expected_errors(svd_text);
-    match driver::dump(
-        &root,
-        ROOT,
-        Stage::Typeck,
-        erebos::target::DEFAULT,
-        OptLevel::None,
-        false,
-    ) {
-        Ok(_) => assert!(
-            expected.is_empty(),
-            "{}: the compiler did not report {expected:?}",
-            path.display()
-        ),
-        Err(rendered) => assert_eq!(
-            error_codes(&rendered),
-            expected,
-            "{}: the generated module does not compile:\n{rendered}",
-            path.display()
-        ),
+    // The list of interrupts means something else on thumbv7m, where its
+    // values are lines of the NVIC with a limit (ADR 0089): a module that has
+    // one is checked there too.
+    let mut targets = vec![erebos::target::DEFAULT];
+    if module.lines().any(|line| line == "#[interrupts]") {
+        targets.push(&erebos::target::THUMBV7M);
+    }
+    for target in targets {
+        match driver::dump(&root, ROOT, Stage::Typeck, target, OptLevel::None, false) {
+            Ok(_) => assert!(
+                expected.is_empty(),
+                "{}: the compiler did not report {expected:?} for {}",
+                path.display(),
+                target.name
+            ),
+            Err(rendered) => assert_eq!(
+                error_codes(&rendered),
+                expected,
+                "{}: the generated module does not compile for {}:\n{rendered}",
+                path.display(),
+                target.name
+            ),
+        }
     }
 }
 
@@ -229,8 +233,16 @@ fn summary(module: &str, diags: &[diag::Diagnostic], sources: &SourceMap) -> Str
     // level in, entries two levels in.
     let (mut types, mut peripherals, mut registers, mut fields) = (0, 0, 0, 0);
     let mut inside = "";
+    // The variants of the chip's interrupts, which follow `#[interrupts]`.
+    let (mut interrupts, mut listing) = (0, false);
     for line in module.lines() {
-        if line.starts_with("pub peripheral ") {
+        if line == "#[interrupts]" {
+            listing = true;
+        } else if listing && line == "}" {
+            listing = false;
+        } else if listing && line.starts_with("    ") && !line.trim_start().starts_with("//") {
+            interrupts += 1;
+        } else if line.starts_with("pub peripheral ") {
             peripherals += 1;
         } else if let Some(item) = line.strip_prefix("    pub ") {
             inside = item.split(' ').next().unwrap_or("");
@@ -250,6 +262,7 @@ fn summary(module: &str, diags: &[diag::Diagnostic], sources: &SourceMap) -> Str
          peripherals: {peripherals}\n\
          registers: {registers}\n\
          fields: {fields}\n\
+         interrupts: {interrupts}\n\
          warnings: {}\n",
         diags.len()
     );

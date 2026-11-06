@@ -4,7 +4,7 @@
 
 use crate::span::Span;
 
-use super::{Access, EnumNumber, ReadAction, Usage, WriteEffect};
+use super::{Access, EnumNumber, Interrupt, ReadAction, Usage, WriteEffect};
 
 /// An element of the tree, or the device itself, whose children are
 /// [`Tree::peripherals`].
@@ -102,6 +102,9 @@ pub(super) struct Periph {
     /// Whether the element has a `registers` element of its own.
     pub registers_stated: bool,
     pub shares: Option<usize>,
+    /// The peripheral's own `interrupt` elements: `derivedFrom` copies none
+    /// (ADR 0092), so `derive` never touches them.
+    pub interrupts: Vec<Interrupt>,
 }
 
 #[derive(Clone, Debug)]

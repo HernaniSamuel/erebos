@@ -1,0 +1,39 @@
+---
+source: tests/svd.rs
+expression: run(path)
+input_file: tests/svd/errors_interrupt_invalid_name.svd
+---
+--- not generated ---
+svd::invalid-name
+
+  × the name `...` of this interrupt leaves nothing for an identifier
+    ╭─[errors_interrupt_invalid_name.svd:12:9]
+ 11 │       <interrupt>
+ 12 │         <name>...</name>
+    ·         ────────┬───────
+    ·                 ╰── this name has no ASCII letter, digit or `_`
+ 13 │         <value>1</value>
+    ╰────
+  help: an identifier is made of ASCII letters, digits and `_`: rename it
+svd::invalid-name
+
+  × this interrupt has an empty name
+    ╭─[errors_interrupt_invalid_name.svd:16:9]
+ 15 │       <interrupt>
+ 16 │         <name> </name>
+    ·         ───────┬──────
+    ·                ╰── this name has no ASCII letter, digit or `_`
+ 17 │         <value>2</value>
+    ╰────
+  help: an identifier is made of ASCII letters, digits and `_`: rename it
+svd::invalid-name
+
+  × the name `%s` of this interrupt leaves nothing for an identifier
+    ╭─[errors_interrupt_invalid_name.svd:20:9]
+ 19 │       <interrupt>
+ 20 │         <name>%s</name>
+    ·         ───────┬───────
+    ·                ╰── this name has no ASCII letter, digit or `_`
+ 21 │         <value>3</value>
+    ╰────
+  help: an identifier is made of ASCII letters, digits and `_`: rename it

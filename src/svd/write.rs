@@ -1,6 +1,7 @@
 //! The model into Erebos source (ADR 0070 to 0072): a module per peripheral
 //! type holding the type and a module per cluster type, then the
-//! peripherals. Names are converted and kept apart by [`super::names`],
+//! peripherals, then the enum of the chip's interrupts ([`super::interrupts`]).
+//! Names are converted and kept apart by [`super::names`],
 //! peripherals sharing bytes are found by [`super::over`], and
 //! the text of numbers and comments is [`super::text`]'s.
 //!
@@ -43,6 +44,7 @@ pub(super) fn write(file_name: &str, device: &Device, rd: &mut Reader) -> String
         sets: fields::written_sets(&device.peripherals),
         enums: HashMap::new(),
         plans: device.peripherals.iter().map(|_| None).collect(),
+        interrupt_enum: None,
     };
     writer.name_peripherals();
     writer.find_overs();
@@ -87,6 +89,10 @@ pub(super) struct Writer<'a, 'r> {
     /// By peripheral: the structs and enums of its type, until the module is
     /// written.
     plans: Vec<Option<TypePlan<'a>>>,
+    /// The name of the enum of the chip's interrupts, taken in the file's
+    /// scope after every module and peripheral; `None` when the file has no
+    /// `interrupt` (ADR 0092).
+    interrupt_enum: Option<String>,
 }
 
 /// An SVD element whose name is converted.
@@ -151,6 +157,9 @@ impl<'a> Writer<'a, '_> {
                 }
             }
         }
+        // The enum is the last item of the file, so it is the later one when a
+        // peripheral has its name (ADR 0092).
+        self.interrupt_enum = self.name_interrupt_enum(&mut top, &device.interrupts);
     }
 
     /// Converts the SVD name of an element and takes it in `scope`.
@@ -339,6 +348,13 @@ impl<'a> Writer<'a, '_> {
             lines.push(String::new());
         }
         lines.extend(join(peripherals, false));
+        if let Some(name) = self.interrupt_enum.clone() {
+            let block = self.interrupt_block(&name, &device.interrupts);
+            if !lines.last().is_some_and(String::is_empty) {
+                lines.push(String::new());
+            }
+            lines.extend(block);
+        }
         let mut out = lines.join("\n");
         out.push('\n');
         out

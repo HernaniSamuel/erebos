@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- An interrupt without a value, and one with neither. -->
+<device>
+  <name>ERRORS</name>
+  <size>32</size>
+  <access>read-write</access>
+  <peripherals>
+    <peripheral>
+      <name>A</name>
+      <baseAddress>0x40000000</baseAddress>
+      <interrupt>
+        <name>NO_VALUE</name>
+      </interrupt>
+      <interrupt>
+        <description>Nothing else.</description>
+      </interrupt>
+      <registers>
+        <register><name>R</name><addressOffset>0x0</addressOffset></register>
+      </registers>
+    </peripheral>
+  </peripherals>
+</device>

@@ -149,6 +149,7 @@ pub fn read(file: FileId, text: &str, diags: &mut Diagnostics) -> Option<Device>
         version: parse::child(root, "version").map(|v| parse::text_of(v).trim().to_owned()),
         license_text: parse::child(root, "licenseText").map(parse::text_of),
         peripherals,
+        interrupts: build::interrupts(&tree),
     })
 }
 
@@ -1900,5 +1901,87 @@ mod tests {
             assert!(diags.is_empty());
             assert_eq!(device.peripherals.len(), 32);
         });
+    }
+
+    // ---- interrupts (ADR 0092)
+
+    fn interrupt_xml(name: &str, value: &str) -> String {
+        format!("<interrupt><name>{name}</name><value>{value}</value></interrupt>")
+    }
+
+    #[test]
+    fn interrupts_are_read_from_every_peripheral_in_the_order_of_the_file() {
+        let a = format!(
+            "{}<interrupt><name> TX </name><description>Sends.</description><value>0x2</value>\
+             </interrupt>",
+            interrupt_xml("RX", "5")
+        );
+        let text = svd(
+            "",
+            &format!("{}{}", p("A", &a), p("B", &interrupt_xml("TX", "#11"))),
+        );
+        let (device, diags) = ok(&text);
+        assert!(diags.is_empty());
+        let read: Vec<_> = device
+            .interrupts
+            .iter()
+            .map(|i| (i.name.as_str(), i.value, i.description.as_deref()))
+            .collect();
+        // Not ordered nor merged by the reader; a name loses the white space
+        // around it; a value is any syntax of SVD.
+        assert_eq!(
+            read,
+            [("RX", 5, None), ("TX", 2, Some("Sends.")), ("TX", 3, None)]
+        );
+        assert_eq!(
+            &text[device.interrupts[1].name_span.range()],
+            "<name> TX </name>"
+        );
+    }
+
+    #[test]
+    fn a_derived_peripheral_has_the_interrupts_it_states_and_a_dim_repeats_none() {
+        let base = p("BASE", &interrupt_xml("IRQ", "1"));
+        let derived = "<peripheral derivedFrom=\"BASE\"><name>COPY</name>\
+                       <baseAddress>0x2000</baseAddress></peripheral>";
+        let own = format!(
+            "<peripheral derivedFrom=\"BASE\"><name>OWN</name><baseAddress>0x3000</baseAddress>{}\
+             </peripheral>",
+            interrupt_xml("OWN_IRQ", "2")
+        );
+        let dim = format!(
+            "<peripheral><name>T%s</name><baseAddress>0x4000</baseAddress><dim>3</dim>\
+             <dimIncrement>0x100</dimIncrement>{}</peripheral>",
+            interrupt_xml("T%s", "3")
+        );
+        let (device, _) = ok(&svd("", &format!("{base}{derived}{own}{dim}")));
+        let names: Vec<_> = device.interrupts.iter().map(|i| i.name.as_str()).collect();
+        assert_eq!(names, ["IRQ", "OWN_IRQ", "T%s"]);
+    }
+
+    #[test]
+    fn an_interrupt_needs_a_name_and_a_value() {
+        for (element, code) in [
+            (
+                "<interrupt><value>1</value></interrupt>",
+                "svd::missing-element",
+            ),
+            (
+                "<interrupt><name>X</name></interrupt>",
+                "svd::missing-element",
+            ),
+            (
+                "<interrupt><name>X</name><value>1h</value></interrupt>",
+                "svd::invalid-number",
+            ),
+        ] {
+            let text = svd("", &p("A", element));
+            let (device, diags) = read_str(&text);
+            assert!(device.is_none(), "{element}");
+            assert_eq!(codes(&diags), [code], "{element}");
+        }
+        // A value above 32 bits is the compiler's to judge.
+        let text = svd("", &p("A", &interrupt_xml("X", "0x100000000")));
+        assert_eq!(ok(&text).0.interrupts[0].value, 1 << 32);
     }
 }
