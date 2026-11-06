@@ -92,6 +92,11 @@ M3.1 to M3.3 on 2026-10-28; these remain.
 - `ast::SymTarget::Entry(Span)` keeps a span that nothing reads: it is
   there for symmetry with `Path`, and a lint on it would mean dropping
   the span. (M4.2)
+- `extern interrupt fn external() at Vector::SysTick;` gives a second,
+  misleading parser error ("expected `{`, found `;`") after the right one
+  ("expected `fn`, found `interrupt`"): `recover_to_item` stops at
+  `interrupt fn` and the rest is parsed as a handler with a body. One
+  error would be enough; `extern entry fn` recovers cleanly. (M4.3)
 
 ## Tests
 
@@ -167,6 +172,24 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   module and with the entry function in a module; the ui snapshots
   (`asm_sym_entry*.ers`) cover only the entry function in `mod app`. The
   root case runs on QEMU in every e2e program, but has no snapshot. (M4.2)
+- `tests/e2e/critical_race_riscv32.ers` has `PERIOD = 50` (5 microseconds
+  at the 10 MHz `mtime`), chosen because a longer period made the test
+  prove too little. On a very loaded host a handler that outlasts one
+  period leaves the timer pending again at `mret`, and the 200000
+  increments could overrun the harness timeout. Not reproduced (12
+  parallel QEMU processes passed); lower the count or raise the period if
+  it ever flakes. (M4.3)
+- `the_takes_exceptions_header_is_read` (`tests/e2e.rs`) does not test a
+  repeated `// takes-exceptions: yes`, which ADR 0088 says changes
+  nothing; the code handles it. (M4.3)
+- `tests/rejected.rs` with `EREBOS_REJECTED_PROGRAMS=2000` (seed 0): one
+  injection of 65203 is accepted, the existing `ty::index-out-of-bounds`
+  snippet at `tests/e2e/layout.ers:37`. Not a snippet of M4.3 and not
+  checked against the tree before M4.3; the default run of 40 passes.
+  (M4.3)
+- Two `///` lines run past the width of their neighbours, which `rustfmt`
+  does not wrap: the doc comment of `call_of` in `tests/e2e.rs` and the
+  one of `function_alignment_moves_the_symbol` in `tests/elf.rs`. (M4.3)
 
 ## Docs
 
@@ -211,3 +234,18 @@ M3.1 to M3.3 on 2026-10-28; these remain.
 - `.claude/plans/M4.2.md`, step 1 `Changes` says the HIR dump prints `sym
   entry`; the dump is derived `Debug` and shows `Sym(Entry)`, as its
   `Decisions` say. (M4.2)
+- `docs/reference.md`, "Panic information", near the end: "(28 bytes, the
+  name and the small function)" dangles after its bullet list and reads
+  as if 28 bytes held the name and the function; the `PanicInfo` is 28
+  bytes, with the name and the function on top. A few lines edited for
+  M4.3 are not wrapped at the file's width. (M4.3)
+- ADR 0088, "Consequences", still says the harness tests of the header
+  "run on thumbv7m only" and that step 6's first riscv32 program is that
+  target's test; step 6 made both tests loop over both targets. One
+  sentence; an accepted ADR, so the user's call. (M4.3)
+- `.claude/plans/M4.3.md`: step 2 `Tests` says "`static mut` counting runs"
+  (the restart programs count in the board's scratch RAM, as its
+  `Decisions` say); step 4 `Changes` says "`src/query.rs`: handlers are
+  roots" (nothing was added for roots; `into_mir` fills `Mir::handlers`);
+  step 5 `Decisions` call ADR 0088 `Proposed` and say the index lists it
+  so (it is Accepted since `03a30c0`). (M4.3)
