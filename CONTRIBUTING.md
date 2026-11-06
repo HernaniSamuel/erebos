@@ -77,7 +77,10 @@ instead of applying it; agents are held to it when they finish
   A program declares `// expect-output: <line>` (repeatable) and
   `// expect-exit: <code>`; it must print exactly those lines and stop QEMU
   through `board::exit` with that code. A program without
-  `expect-exit` must run forever. Any CPU exception fails the test.
+  `expect-exit` must run forever. Any CPU exception fails the test, unless
+  the program declares `// takes-exceptions: yes` (ADR 0088): it raises
+  exceptions on purpose, needs `expect-exit` too, and only a QEMU guest
+  error fails it.
   A program reaches its machine through `mod board;` (ADR 0077): the
   harness copies it into a work directory with the target's board module,
   `tests/boards/<target>.ers`, as `board.ers`, which holds the `memory`
