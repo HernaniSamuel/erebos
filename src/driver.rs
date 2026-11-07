@@ -863,4 +863,234 @@ mod tests {
         assert_eq!(listed_name("MAIN.ERS", &both), "MAIN.ERS");
         assert_eq!(listed_name("Main.ers", &both), "Main.ers");
     }
+
+    // ADR 0093, "What is a call": the calls code generation and LLVM insert
+    // are not in MIR, and the check does not see them. That holds while the
+    // functions they reach name no `static mut` and have no check. The walk
+    // below is the test's own, not `analysis`'s: it follows `sym` operands,
+    // which the check does not, and it reads every block, reachable or not.
+
+    /// The whole MIR of a program of `text` on `target`, `core` included,
+    /// before `leave_out`.
+    fn whole_mir(target: &'static Target, text: &'static str) -> mir::Mir {
+        let program = program(text, Vec::new());
+        let mut sources = SourceMap::default();
+        let mut diags = Diagnostics::default();
+        match front_end(&program, None, target, &mut sources, &mut diags) {
+            FrontEnd::Mir(mir) => *mir,
+            FrontEnd::Dump(_) | FrontEnd::Failed => {
+                panic!(
+                    "{}: the program has errors: {:?}",
+                    target.name,
+                    diags.into_vec()
+                )
+            }
+        }
+    }
+
+    /// What a walk found: the bodies that hold a check (`Terminator::Panic`)
+    /// and the `static mut` they or others name, as `body: static`.
+    #[derive(Debug, Default, PartialEq)]
+    struct Found {
+        checks: Vec<String>,
+        statics: Vec<String>,
+    }
+
+    /// The `static mut`s a body names, by operand or by `sym`, and whether it
+    /// holds a check; the bodies it calls or gives a `sym` to.
+    fn read_body(body: &mir::Body, found: &mut Found, next: &mut Vec<mir::BodyId>) {
+        let mut note = |stat: mir::StaticRef| {
+            if stat.def().mutable {
+                found
+                    .statics
+                    .push(format!("{}: {}", body.name, stat.def().name));
+            }
+        };
+        let mut checks = false;
+        for (_, block) in body.blocks() {
+            let mut asms = Vec::new();
+            for statement in &block.statements {
+                statement.visit_operands(&mut |operand| {
+                    if let mir::Operand::Const(mir::Const::Static(stat)) = operand {
+                        note(*stat);
+                    }
+                });
+                if let mir::Statement::Call { callee, .. } = statement {
+                    next.push(*callee);
+                }
+                asms.extend(statement.asm());
+            }
+            block.terminator.visit_operands(&mut |operand| {
+                if let mir::Operand::Const(mir::Const::Static(stat)) = operand {
+                    note(*stat);
+                }
+            });
+            asms.extend(block.terminator.asm());
+            checks |= matches!(block.terminator, mir::Terminator::Panic(..));
+            for asm in asms {
+                for sym in asm.syms() {
+                    match sym {
+                        mir::AsmSym::Body(callee) => next.push(callee),
+                        mir::AsmSym::Static(stat) => note(stat),
+                    }
+                }
+            }
+        }
+        if checks {
+            found.checks.push(body.name.clone());
+        }
+    }
+
+    /// What the bodies reach from `roots`, following calls and `sym` operands.
+    fn walk(mir: &mir::Mir, roots: &[mir::BodyId]) -> Found {
+        let mut found = Found::default();
+        let mut seen = vec![false; mir.bodies.len()];
+        let mut work = roots.to_vec();
+        while let Some(id) = work.pop() {
+            if std::mem::replace(&mut seen[id.0 as usize], true) {
+                continue;
+            }
+            read_body(mir.body(id), &mut found, &mut work);
+        }
+        found.checks.sort();
+        found.statics.sort();
+        found
+    }
+
+    /// The functions "What is a call" lists: every `#[export]` function of
+    /// `core` (`runtime`, with a symbol that is no path) but `_start`, and the
+    /// two of the `critical` block.
+    fn inserted_roots(mir: &mir::Mir) -> Vec<mir::BodyId> {
+        let mut roots: Vec<mir::BodyId> = mir
+            .bodies()
+            .filter(|(id, body)| body.runtime && !body.name.contains('.') && Some(*id) != mir.reset)
+            .map(|(id, _)| id)
+            .collect();
+        roots.extend(mir.critical_enter);
+        roots.extend(mir.critical_exit);
+        roots
+    }
+
+    const BARE: &str = "entry fn main() -> ! { loop {} } panic fn on_panic() -> ! { loop {} }";
+
+    const BOTH_TARGETS: [&Target; 2] = [&target::RISCV32IMAC, &target::THUMBV7M];
+
+    /// The calls the compiler inserts reach no check and no `static mut`, on
+    /// both targets. A later change to `core` that gives one a check fails
+    /// here, and must then add the edge to the check (ADR 0093).
+    #[test]
+    fn inserted_calls_reach_no_static_and_no_check() {
+        for target in BOTH_TARGETS {
+            let mir = whole_mir(target, BARE);
+            let roots = inserted_roots(&mir);
+            assert_eq!(walk(&mir, &roots), Found::default(), "{}", target.name);
+        }
+    }
+
+    /// The list of roots is not empty by accident: a rename of `memcpy`, or
+    /// a change of how `core` marks its functions, would otherwise pass the
+    /// test above with nothing to walk.
+    #[test]
+    fn the_inserted_roots_are_there() {
+        for target in BOTH_TARGETS {
+            let mir = whole_mir(target, BARE);
+            let names: Vec<&str> = inserted_roots(&mir)
+                .into_iter()
+                .map(|id| mir.body(id).name.as_str())
+                .collect();
+            let mut wanted = vec!["memcpy", "__critical_enter", "__critical_exit"];
+            if std::ptr::eq(target, &target::THUMBV7M) {
+                wanted.push("__aeabi_uldivmod");
+            }
+            for name in wanted {
+                assert!(
+                    names.iter().any(|n| n.rsplit('.').next() == Some(name)),
+                    "{}: no root `{name}` among {names:?}",
+                    target.name
+                );
+            }
+            assert!(
+                names.iter().all(|name| *name != "_start"),
+                "{}: `_start` is no root",
+                target.name
+            );
+        }
+    }
+
+    /// The walk can fail: from roots the program declares, it finds a check
+    /// in a function that has one, and a `static mut` in another, through
+    /// a call and through a `sym`.
+    #[test]
+    fn the_walk_finds_a_check_and_a_static() {
+        let text = "
+            static mut COUNT: u32 = 0;
+            fn checked(a: u32, d: u32) -> u32 { a / d }
+            fn writes() { COUNT = 1; }
+            fn through_call() { writes(); }
+            #[naked]
+            fn through_sym() -> ! {
+                asm(\"j {}\", sym writes, options(noreturn));
+            }
+            fn quiet() {}
+            entry fn main() -> ! { loop {} }
+            panic fn on_panic() -> ! { loop {} }";
+        for target in BOTH_TARGETS {
+            let mir = whole_mir(target, text);
+            let root = |name: &str| -> Vec<mir::BodyId> {
+                mir.bodies()
+                    .filter(|(_, body)| body.name == name)
+                    .map(|(id, _)| id)
+                    .collect()
+            };
+            let at = |name: &str| format!("{}: {name}", target.name);
+            assert_eq!(
+                walk(&mir, &root("checked")),
+                Found {
+                    checks: vec!["checked".to_owned()],
+                    statics: Vec::new()
+                },
+                "{}",
+                at("checked")
+            );
+            let writes = Found {
+                checks: Vec::new(),
+                statics: vec!["writes: COUNT".to_owned()],
+            };
+            for name in ["writes", "through_call", "through_sym"] {
+                assert_eq!(walk(&mir, &root(name)), writes, "{}", at(name));
+            }
+            assert_eq!(
+                walk(&mir, &root("quiet")),
+                Found::default(),
+                "{}",
+                at("quiet")
+            );
+        }
+    }
+
+    /// `Mir::reset` leads into the program through `sym entry`, so a walk
+    /// from it reaches the program's statics; its own body names none, as
+    /// "Contexts, as MIR shows them" relies on.
+    #[test]
+    fn reset_names_no_static_mut() {
+        for target in BOTH_TARGETS {
+            let mir = whole_mir(
+                target,
+                "static mut COUNT: u32 = 0; entry fn main() -> ! { COUNT = 1; loop {} } panic fn on_panic() -> ! { loop {} }",
+            );
+            let reset = mir.reset.expect("core holds `_start`");
+            let mut found = Found::default();
+            let mut next = Vec::new();
+            read_body(mir.body(reset), &mut found, &mut next);
+            assert_eq!(found, Found::default(), "{}", target.name);
+            assert!(!next.is_empty(), "{}: `_start` leads nowhere", target.name);
+            // The walk would find the program's static through it.
+            assert_eq!(
+                walk(&mir, &[reset]).statics,
+                ["main: COUNT"],
+                "{}",
+                target.name
+            );
+        }
+    }
 }
