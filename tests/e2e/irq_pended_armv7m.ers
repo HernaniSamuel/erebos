@@ -47,7 +47,8 @@ entry fn main() -> ! {
         exit(4)
     }
     // Masked: it waits.
-    if RUNS != 0 {
+    let before: u32 = critical { RUNS };
+    if before != 0 {
         exit(5)
     }
     core::arch::enable_interrupts();
@@ -59,13 +60,16 @@ entry fn main() -> ! {
             core::arch::wait_for_interrupt();
         }
     }
-    if RUNS != 1 {
+    let runs: u32 = critical { RUNS };
+    if runs != 1 {
         exit(6)
     }
-    if IPSR != 16 + 5 {
+    let ipsr: u32 = critical { IPSR };
+    if ipsr != 16 + 5 {
         exit(7)
     }
-    if ENABLED != 0 {
+    let enabled: u32 = critical { ENABLED };
+    if enabled != 0 {
         exit(8)
     }
     if core::arch::nvic_is_pending(line) {

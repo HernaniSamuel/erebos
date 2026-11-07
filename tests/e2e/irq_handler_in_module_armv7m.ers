@@ -42,7 +42,8 @@ entry fn main() -> ! {
             core::arch::wait_for_interrupt();
         }
     }
-    if RUNS != 1 {
+    let runs: u32 = critical { RUNS };
+    if runs != 1 {
         exit(2)
     }
     putc(b'n'); putc(b'e'); putc(b's'); putc(b't'); putc(b'e'); putc(b'd'); putc(b' ');

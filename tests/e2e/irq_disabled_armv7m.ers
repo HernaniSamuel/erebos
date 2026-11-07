@@ -29,8 +29,8 @@ entry fn main() -> ! {
     core::arch::nvic_pend(line);
     let mut loops: u32 = 0;
     while loops < 1000 {
-        core::arch::compiler_fence();
-        if RUNS != 0 {
+        let runs: u32 = critical { RUNS };
+        if runs != 0 {
             exit(2)
         }
         loops += 1;
@@ -47,7 +47,8 @@ entry fn main() -> ! {
             core::arch::wait_for_interrupt();
         }
     }
-    if RUNS != 1 {
+    let runs: u32 = critical { RUNS };
+    if runs != 1 {
         exit(4)
     }
     if core::arch::nvic_is_pending(line) {

@@ -11,10 +11,14 @@ mod board;
 use board::{exit, putc};
 use core::arch::Vector;
 
-static mut CALLS: u32 = 0;
+// The handler is unmaskable, so the program names `COUNT` only at compile time,
+// in the constant `CALLS`, and answers for the accesses itself: they are
+// `volatile` (ADR 0093, "What names a static").
+static mut COUNT: u32 = 0;
+const CALLS: *mut volatile u32 = &raw mut COUNT as *mut volatile u32;
 
 interrupt fn service() at Vector::SVCall {
-    CALLS += 1;
+    *CALLS += 1;
 }
 
 entry fn main() -> ! {
@@ -22,7 +26,7 @@ entry fn main() -> ! {
     asm("svc #0");
     asm("svc #0");
     putc(b's'); putc(b'v'); putc(b'c'); putc(b' ');
-    putc(b'0' + CALLS as u8);
+    putc(b'0' + *CALLS as u8);
     putc(b' '); putc(b'a'); putc(b'f'); putc(b't'); putc(b'e'); putc(b'r'); putc(b'\n');
     exit(0)
 }
