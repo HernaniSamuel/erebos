@@ -1,0 +1,26 @@
+// emit: mir
+// A fault handler with a check, and a panic function that names a static the
+// thread names (ADR 0093, "Consequences"): the path ends at the panic function,
+// and the check shows as a step. The panic function's access in `critical`
+// does not help: nothing protects a static from a fault handler.
+use core::arch::Vector;
+
+static mut FAILS: u32 = 0;
+static ZERO: u32 = 0;
+
+interrupt fn crash() -> ! at Vector::IllegalInstruction {
+    let x: u32 = 1 / ZERO;
+    loop {}
+}
+
+entry fn main() -> ! {
+    let seen: u32 = critical { FAILS };
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    critical {
+        FAILS += 1;
+    }
+    loop {}
+}

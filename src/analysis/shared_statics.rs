@@ -1,7 +1,9 @@
 //! The rule of shared statics (ADR 0078, 0093). A `static mut` that the thread
 //! context and the handler context both reach may be reached by the thread
-//! only inside `critical`. The contexts are read off the call graph MIR shows:
-//! `Statement::Call` and the checks that call the panic function, nothing else.
+//! only inside `critical` (rule 1); one that an unmaskable handler reaches may
+//! be reached by no other context, `critical` or not (rule 2). The contexts
+//! are read off the call graph MIR shows: `Statement::Call` and the checks
+//! that call the panic function, nothing else.
 //!
 //! Each body is scanned once for its places (the operands and `sym` operands
 //! that name a `static mut`) and its calls, each with whether some path
@@ -18,6 +20,7 @@ use crate::span::Span;
 use crate::target::VectorKind;
 
 const UNPROTECTED: &str = "analysis::unprotected-static";
+const UNMASKABLE: &str = "analysis::unmaskable-static";
 
 /// Reports the errors of the rule over the whole program.
 pub fn check(mir: &Mir, diags: &mut Diagnostics) {
@@ -25,13 +28,21 @@ pub fn check(mir: &Mir, diags: &mut Diagnostics) {
         .bodies()
         .map(|(_, body)| Scan::of(body, mir.panic))
         .collect();
-    let handlers: Vec<BodyId> = mir
-        .handlers
-        .iter()
-        .filter(|handler| handler.kind == VectorKind::Maskable)
-        .map(|handler| handler.body)
-        .collect();
-    unprotected(mir, &scans, &handlers, diags);
+    let roots = |kind: VectorKind| -> Vec<BodyId> {
+        let mut roots: Vec<BodyId> = Vec::new();
+        for handler in mir.handlers.iter().filter(|handler| handler.kind == kind) {
+            if !roots.contains(&handler.body) {
+                roots.push(handler.body);
+            }
+        }
+        roots
+    };
+    let maskable = roots(VectorKind::Maskable);
+    let unmaskable = roots(VectorKind::Unmaskable);
+    let thread = Context::of(mir, &scans, &[mir.entry]);
+    let handler = Context::of(mir, &scans, &maskable);
+    unprotected(mir, &scans, &thread, &handler, &maskable, diags);
+    unmaskable_statics(mir, &scans, &thread, &handler, &unmaskable, diags);
 }
 
 /// Where something is in a body.
@@ -249,16 +260,6 @@ impl Reach {
         self.found[body.0 as usize].is_some()
     }
 
-    /// The statics named by a place in a body reached.
-    fn statics(&self, scans: &[Scan]) -> HashSet<StaticId> {
-        scans
-            .iter()
-            .enumerate()
-            .filter(|&(i, _)| self.found[i].is_some())
-            .flat_map(|(_, scan)| scan.places.iter().map(|place| place.stat.def().id))
-            .collect()
-    }
-
     /// The calls from a root to `body`, in order, as the search followed them.
     fn path<'a>(&self, scans: &'a [Scan], body: BodyId) -> Vec<&'a Call> {
         let mut path = Vec::new();
@@ -276,34 +277,57 @@ impl Reach {
     }
 }
 
+/// What a context reaches, and its first place of each static: the place in
+/// the lowest body, then block, then statement (ADR 0093).
+struct Context {
+    reach: Reach,
+    first: HashMap<StaticId, (BodyId, usize)>,
+}
+
+impl Context {
+    fn of(mir: &Mir, scans: &[Scan], roots: &[BodyId]) -> Context {
+        let reach = Reach::search(scans, roots, false);
+        let mut first: HashMap<StaticId, (BodyId, usize)> = HashMap::new();
+        for (id, _) in mir.bodies() {
+            if !reach.reaches(id) {
+                continue;
+            }
+            for (p, place) in scans[id.0 as usize].places.iter().enumerate() {
+                first.entry(place.stat.def().id).or_insert((id, p));
+            }
+        }
+        Context { reach, first }
+    }
+
+    /// The handler the search found `body` from.
+    fn root(&self, body: BodyId) -> Option<BodyId> {
+        self.reach.found[body.0 as usize].map(|found| found.root)
+    }
+}
+
 /// Rule 1 of ADR 0093: a place outside `critical` in the thread context, that
 /// names a static the handler context also reaches.
-fn unprotected(mir: &Mir, scans: &[Scan], handlers: &[BodyId], diags: &mut Diagnostics) {
+fn unprotected(
+    mir: &Mir,
+    scans: &[Scan],
+    thread: &Context,
+    handler: &Context,
+    handlers: &[BodyId],
+    diags: &mut Diagnostics,
+) {
     if handlers.is_empty() {
         return;
     }
-    let thread = Reach::search(scans, &[mir.entry], false);
-    let handler = Reach::search(scans, handlers, false);
-    let from_handler = handler.statics(scans);
     let shared: HashSet<StaticId> = thread
-        .statics(scans)
-        .into_iter()
-        .filter(|stat| from_handler.contains(stat))
+        .first
+        .keys()
+        .filter(|stat| handler.first.contains_key(stat))
+        .copied()
         .collect();
     if shared.is_empty() {
         return;
     }
-    // The first place of each static in the handler context, by body, block
-    // and statement.
-    let mut first: HashMap<StaticId, (BodyId, usize)> = HashMap::new();
-    for (id, _) in mir.bodies() {
-        if !handler.reaches(id) {
-            continue;
-        }
-        for (p, place) in scans[id.0 as usize].places.iter().enumerate() {
-            first.entry(place.stat.def().id).or_insert((id, p));
-        }
-    }
+    let first = &handler.first;
     let open = Reach::search(scans, &[mir.entry], true);
     for (id, _) in mir.bodies() {
         if !open.reaches(id) {
@@ -318,7 +342,7 @@ fn unprotected(mir: &Mir, scans: &[Scan], handlers: &[BodyId], diags: &mut Diagn
             let Some(&(other, q)) = first.get(&stat.id) else {
                 continue;
             };
-            let root = handler.found[other.0 as usize].map_or(other, |found| found.root);
+            let root = handler.root(other).unwrap_or(other);
             let by = format!("the handler `{}`", shown(&mir.body(root).name));
             let name = shown(&stat.name);
             let mut diag = Diagnostic::error(
@@ -354,6 +378,129 @@ fn unprotected(mir: &Mir, scans: &[Scan], handlers: &[BodyId], diags: &mut Diagn
             diags.push(
                 diag.help("put the access, or one call on the path to it, in a `critical` block"),
             );
+        }
+    }
+}
+
+/// Another context that reaches a static, as rule 2 names it.
+struct Other {
+    /// How the context is named: "the thread context", "the handler `h`".
+    name: String,
+    /// Its first place of the static: the body and the index in its scan.
+    place: (BodyId, usize),
+}
+
+/// The other context of rule 2 that reaches `stat`, other than the unmaskable
+/// context `own`: the thread's first place, else the handler context's, else
+/// that of the other unmaskable contexts in the order of `Mir::handlers`
+/// (ADR 0093).
+fn other_context(
+    mir: &Mir,
+    thread: &Context,
+    handler: &Context,
+    unmaskable: &[(BodyId, Context)],
+    own: usize,
+    stat: StaticId,
+) -> Option<Other> {
+    if let Some(&place) = thread.first.get(&stat) {
+        return Some(Other {
+            name: "the thread context".to_string(),
+            place,
+        });
+    }
+    if let Some(&place) = handler.first.get(&stat) {
+        let root = handler.root(place.0).unwrap_or(place.0);
+        return Some(Other {
+            name: format!("the handler `{}`", shown(&mir.body(root).name)),
+            place,
+        });
+    }
+    unmaskable
+        .iter()
+        .enumerate()
+        .filter(|&(j, _)| j != own)
+        .find_map(|(_, (root, context))| {
+            context.first.get(&stat).map(|&place| Other {
+                name: format!("the unmaskable handler `{}`", shown(&mir.body(*root).name)),
+                place,
+            })
+        })
+}
+
+/// Rule 2 of ADR 0093: a place in the context of an unmaskable handler, that
+/// names a static another context also reaches. `critical` changes nothing.
+/// A place that two unmaskable handlers reach is reported for the first.
+fn unmaskable_statics(
+    mir: &Mir,
+    scans: &[Scan],
+    thread: &Context,
+    handler: &Context,
+    roots: &[BodyId],
+    diags: &mut Diagnostics,
+) {
+    let contexts: Vec<(BodyId, Context)> = roots
+        .iter()
+        .map(|&root| (root, Context::of(mir, scans, &[root])))
+        .collect();
+    for (id, _) in mir.bodies() {
+        // The first unmaskable handler that reaches the body owns its places.
+        let Some(i) = contexts
+            .iter()
+            .position(|(_, context)| context.reach.reaches(id))
+        else {
+            continue;
+        };
+        let (root, context) = &contexts[i];
+        let by = format!("the unmaskable handler `{}`", shown(&mir.body(*root).name));
+        for (p, place) in scans[id.0 as usize].places.iter().enumerate() {
+            let stat = place.stat.def();
+            // A shared static has a place in another context.
+            let Some(other) = other_context(mir, thread, handler, &contexts, i, stat.id) else {
+                continue;
+            };
+            let mut diag = Diagnostic::error(
+                UNMASKABLE,
+                format!(
+                    "`{}` is reached from {by}, and {} reaches it too",
+                    shown(&stat.name),
+                    other.name
+                ),
+            );
+            let same = other.place == (id, p);
+            diag = if same {
+                diag.label(
+                    place.site.span,
+                    format!(
+                        "reached here by this handler and by {}; `critical` does not stop \
+                         this handler",
+                        other.name
+                    ),
+                )
+            } else {
+                diag.label(
+                    place.site.span,
+                    "reached here; `critical` does not stop this handler",
+                )
+            };
+            for call in context.reach.path(scans, id) {
+                diag = diag.label(
+                    call.site.span,
+                    if call.check {
+                        "this check may call the panic function"
+                    } else {
+                        "called here"
+                    },
+                );
+            }
+            if !same {
+                let (body, q) = other.place;
+                let there = &scans[body.0 as usize].places[q];
+                diag = diag.label(there.site.span, format!("{} reaches it here", other.name));
+            }
+            diags.push(diag.help(
+                "give the handler a static of its own, or reach this memory through a pointer \
+                 from a `const`",
+            ));
         }
     }
 }

@@ -1,0 +1,33 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/shared_static_fault_panic.ers
+---
+--- errors ---
+analysis::unmaskable-static
+
+  × `FAILS` is reached from the unmaskable handler `crash`, and the thread context reaches it too
+    ╭─[shared_static_fault_panic.ers:23:9]
+ 11 │ interrupt fn crash() -> ! at Vector::IllegalInstruction {
+ 12 │     let x: u32 = 1 / ZERO;
+    ·                  ────┬───
+    ·                      ╰── this check may call the panic function
+ 13 │     loop {}
+ 14 │ }
+ 15 │ 
+ 16 │ entry fn main() -> ! {
+ 17 │     let seen: u32 = critical { FAILS };
+    ·                                ──┬──
+    ·                                  ╰── the thread context reaches it here
+ 18 │     loop {}
+ 19 │ }
+ 20 │ 
+ 21 │ panic fn on_panic() -> ! {
+ 22 │     critical {
+ 23 │         FAILS += 1;
+    ·         ─────┬────
+    ·              ╰── reached here; `critical` does not stop this handler
+ 24 │     }
+    ╰────
+  help: give the handler a static of its own, or reach this memory through a pointer from a
+        `const`

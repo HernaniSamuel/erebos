@@ -5460,6 +5460,7 @@ Every error has a stable code, shown with the message.
 | `eval::pointer-escapes` | a compile-time result holding a pointer into the evaluation's own memory |
 | `eval::pointer-out-of-bounds` | a compile-time result holding a pointer outside its object and not one past its end, or a slice not inside its object |
 | `analysis::unprotected-static` | a place in the thread context, outside `critical`, naming a `static mut` or `extern static mut` that the handler context also reaches (ADR 0078, 0093) |
+| `analysis::unmaskable-static` | a place in the context of an unmaskable handler, naming a `static mut` or `extern static mut` that another context also reaches; being inside `critical` changes nothing (ADR 0078, 0093) |
 | `codegen::asm` | an instruction LLVM's assembler rejects, at the `asm` expression with the assembler's message, or without a label when the error exists only in the whole object (a non-local label defined twice by inlining, no register left for the operands) |
 | `codegen::llvm` | LLVM rejected the target, or reported an error that is not about inline assembly; an environment problem |
 | `link::no-memory-map` | building an executable, or printing its linker script, for a program without a `memory` block |

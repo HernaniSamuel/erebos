@@ -1,0 +1,27 @@
+// emit: mir
+// target: thumbv7m-none-eabi
+// Nothing protects a static from an unmaskable handler (ADR 0084, 0093): the
+// thread's access inside `critical` is still an error, and it is the thread's
+// place that the other label shows. The NMI and the SVCall handler each have
+// a static of their own with the thread; the entry function's reads are in
+// `critical`, which a maskable handler would have accepted.
+use core::arch::Vector;
+
+static mut RUNS: u32 = 0;
+static mut CALLS: u32 = 0;
+
+interrupt fn nonmaskable() at Vector::NMI {
+    RUNS += 1;
+}
+
+interrupt fn service() at Vector::SVCall {
+    CALLS += 1;
+}
+
+entry fn main() -> ! {
+    let runs: u32 = critical { RUNS };
+    let calls: u32 = critical { CALLS };
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }
