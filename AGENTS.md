@@ -28,7 +28,8 @@ become language constructs. The compiler is written in Rust and uses LLVM via
   checking and MIR building ask the compile-time evaluator for values, and
   get values, never MIR. Codegen sees only MIR and evaluated data. The
   evaluator names HIR items only by their ids, and `query` schedules all
-  of it (ADR 0063). `tests/architecture.rs` checks the modules each
+  of it (ADR 0063). Analyses (`src/analysis/`, ADR 0093) read only MIR.
+  `tests/architecture.rs` checks the modules each
   layer may name; do not widen its tables to make it pass, ask.
 - No type inference and no implicit conversions (ADR 0008).
 - Integer `+ - *` wrap; never emit `nsw`/`nuw` (ADR 0007).

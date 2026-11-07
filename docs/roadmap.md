@@ -9,7 +9,7 @@ and ends with a program running on QEMU, verified by an automated test.
 | **M1** ✅ | Functions, integers, `bool`, typed `let`, `if`/`while`/`loop`, raw and volatile pointers (ADR 0013), byte literals (ADR 0016), checked division (ADR 0007), the panic function (ADR 0014). Prints "hello" over the QEMU UART via volatile pointer writes. |
 | **M2** ✅ | Compound data, enums and modules, in the steps below. |
 | **M3** ✅ | `memory { ... }` blocks generating the linker script; `peripheral` blocks with native MMIO. The UART is declared in the language. |
-| **M4** | Interrupt handlers, vector tables, inline `asm`, compiler and hardware fences (ADR 0023), in the steps below. |
+| **M4** ✅ | Interrupt handlers, vector tables, inline `asm`, compiler and hardware fences (ADR 0023), in the steps below. |
 | **M5** | Moves/ownership, then references and borrow checking (ADR 0009); methods (`impl`, `self`, `&self`, `&mut self`, `x.f()`). |
 | **M6** | Types as values and `comptime` parameters: generics in the Zig model, monomorphized (ADR 0027). |
 
@@ -80,7 +80,7 @@ ADR 0078.
 | **M4.2** ✅ Startup in the language | `_start` moves into `core::arch`, written in Erebos and assembly (ADR 0012 superseded by 0083); `sym entry` | the e2e programs boot through `core`'s `_start` on both targets |
 | **M4.3** ✅ Handlers and vector tables | `interrupt fn ... at` for exceptions and the target's interrupts, the vector table (thumbv7m) and the trap entry (riscv32) generated from them, `critical` blocks (ADR 0078), a vector without a handler calling the panic function | a timer interrupt (the CLINT on `virt`, SysTick on `mps2-an385`) counting ticks shared with the entry function; a fault reaching the panic function on both targets |
 | **M4.4** ✅ External interrupts | the chip's interrupts as a list `erebos svd` writes from `<interrupt>`, the NVIC's interrupts in the thumbv7m table, the PLIC's dispatched by the program on riscv32 | a UART driven by its interrupt on both targets |
-| **M4.5** Shared statics checked | the rule of ADR 0078 checked over the call graph | programs with handlers checked; rejected programs as ui tests |
+| **M4.5** ✅ Shared statics checked | the rule of ADR 0078 checked over the call graph | programs with handlers checked; rejected programs as ui tests |
 
 Decisions already agreed for the later steps:
 
@@ -774,4 +774,26 @@ Documentation owed:
   end (the CMSDK UART has no loopback, and a byte through QEMU's standard input
   did not reach it on Windows; ADR 0092). Left to M4.5: the check of shared
   statics; priorities and nesting stay out of M4 (ADR 0078).
-- **Next: M4.5** (shared statics checked), the last of the M4 steps above.
+- **M4.5 done.** The rule of ADR 0078 for shared statics is checked by a new
+  layer, `src/analysis/`, the first MIR analysis (ADR 0093): after MIR is
+  built for the whole program, `core` included, and before any dump of it, it
+  finds the functions each context reaches by calls and by the checks that
+  reach the panic function. `analysis::unprotected-static` reports a place in
+  the thread context, outside `critical`, naming a `static mut` or
+  `extern static mut` that the handlers of maskable vectors also reach;
+  `analysis::unmaskable-static` one that an unmaskable handler reaches and
+  another context reaches too, `critical` or not. Each error is one place,
+  with the path of calls from the context, a place of the other context and a
+  help. Only what a body does at run time names a static: a pointer made at
+  compile time (`const P: *mut u32 = &raw mut X;`) is a raw pointer, the way
+  out, which waits for M5 like peripherals. The calls the compiler inserts
+  reach no check and no static, which a unit test keeps. The nine e2e programs
+  that shared a static without the rule were rewritten with the same output
+  (a read in `critical`; a `const` pointer for `nmi_returns` and
+  `svcall_returns`), and `critical_race` and `uart_interrupt` on both
+  targets are the programs that share one. Left open: accepting accesses before
+  `enable_interrupts` or after the last interrupt (ADR 0078), function
+  pointers, handlers in the generator of ADR 0068, and whether the analyses of
+  M5 run before compile-time evaluation.
+- **Next: M5** (moves, ownership, references and methods), the milestone after M4 in
+  the table above.
