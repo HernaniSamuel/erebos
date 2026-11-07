@@ -1,0 +1,13 @@
+// emit: mir
+// A path across files (ADR 0049, 0093): the call in this file, the call in
+// `drivers.ers` and the place there each show in the snippet of their file,
+// and the handler's place in `handlers.ers` too. Names are written with `::`.
+mod drivers;
+mod handlers;
+
+entry fn main() -> ! {
+    drivers::start();
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

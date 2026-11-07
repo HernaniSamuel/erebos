@@ -1966,14 +1966,21 @@ impl<'h> Queries<'h> {
             let hir::FnKind::Interrupt(vector) = hir.fn_(id).kind else {
                 continue;
             };
+            // The chip's interrupts are all maskable (ADR 0089).
             let word = if hir.is_core_vector(vector) {
-                target.vector(hir.vector_name(vector)).map(|v| v.word)
+                target
+                    .vector(hir.vector_name(vector))
+                    .map(|v| (v.word, v.kind))
             } else {
                 let value = self.discriminant(vector.enum_id, vector.variant);
-                (target.external_vectors.zip(value))
-                    .map(|(lines, value)| lines.first_word + value as u32)
+                (target.external_vectors.zip(value)).map(|(lines, value)| {
+                    (
+                        lines.first_word + value as u32,
+                        target::VectorKind::Maskable,
+                    )
+                })
             };
-            let Some(word) = word else {
+            let Some((word, kind)) = word else {
                 unreachable!(
                     "a handler of a program without errors has a word of its target's table"
                 )
@@ -1981,6 +1988,7 @@ impl<'h> Queries<'h> {
             handlers.push(mir::Handler {
                 vector: hir.vector_path(vector),
                 word,
+                kind,
                 body: BodyId(id.0),
             });
         }

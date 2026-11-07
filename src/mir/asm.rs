@@ -116,6 +116,21 @@ impl InlineAsm {
         }
     }
 
+    /// The operand values the code reads: the inputs of `in` and `inout`.
+    /// The read-only twin of `for_each_operand`.
+    pub fn inputs(&self) -> impl Iterator<Item = &Operand> {
+        self.operands
+            .iter()
+            .filter_map(|operand| match &operand.kind {
+                AsmOperandKind::In(value) | AsmOperandKind::InOut { input: value, .. } => {
+                    Some(value)
+                }
+                AsmOperandKind::Out { .. } | AsmOperandKind::Sym(_) | AsmOperandKind::Const(..) => {
+                    None
+                }
+            })
+    }
+
     /// The symbols `sym` operands name.
     pub fn syms(&self) -> impl Iterator<Item = AsmSym> + '_ {
         self.operands
@@ -215,5 +230,6 @@ mod tests {
         let mut seen = 0;
         inline.for_each_operand(&mut |_| seen += 1);
         assert_eq!(seen, 2);
+        assert_eq!(inline.inputs().count(), 2);
     }
 }

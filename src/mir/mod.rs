@@ -103,6 +103,11 @@ pub struct Handler {
     /// variant of `Vector`, and the first line's word plus the variant's value
     /// on one of the chip's list.
     pub word: u32,
+    /// The kind in the target's list for a variant of `Vector` (ADR 0084),
+    /// `Maskable` for a variant of the chip's list (ADR 0089): whether the
+    /// handler is in the handler context of ADR 0078 or in one of its own
+    /// (ADR 0093). Not shown in dumps.
+    pub kind: target::VectorKind,
     pub body: BodyId,
 }
 
@@ -1227,6 +1232,94 @@ pub enum Statement {
     CriticalExit(Local),
 }
 
+impl Statement {
+    /// Calls `f` on every operand value the statement reads, the inputs of an
+    /// inline assembly included. The read-only twin of
+    /// `Body::for_each_operand`: it matches every variant, so that a new kind
+    /// of operand fails to compile here.
+    pub fn visit_operands(&self, f: &mut impl FnMut(&Operand)) {
+        match self {
+            Statement::Assign(_, rvalue) => match rvalue {
+                Rvalue::Use(operand) | Rvalue::Unary(_, operand) | Rvalue::Cast(operand, _) => {
+                    f(operand)
+                }
+                Rvalue::Binary(_, lhs, rhs) => {
+                    f(lhs);
+                    f(rhs);
+                }
+                Rvalue::Slice { ptr, len } => {
+                    f(ptr);
+                    f(len);
+                }
+                Rvalue::AddressOf { .. } | Rvalue::SliceAddress(_) | Rvalue::SliceLen(_) => {}
+            },
+            Statement::Call { args, .. } => args.iter().for_each(f),
+            Statement::InlineAsm(asm) => asm.inputs().for_each(f),
+            Statement::CriticalEnter(_) | Statement::CriticalExit(_) => {}
+        }
+    }
+
+    /// The inline assembly the statement runs, if it is one.
+    pub fn asm(&self) -> Option<&InlineAsm> {
+        match self {
+            Statement::InlineAsm(asm) => Some(asm),
+            Statement::Assign(..)
+            | Statement::Call { .. }
+            | Statement::CriticalEnter(_)
+            | Statement::CriticalExit(_) => None,
+        }
+    }
+}
+
+impl Terminator {
+    /// Calls `f` on every operand value the terminator reads, the inputs of
+    /// a naked function's assembly included. See [`Statement::visit_operands`].
+    pub fn visit_operands(&self, f: &mut impl FnMut(&Operand)) {
+        match self {
+            Terminator::If { cond: operand, .. }
+            | Terminator::Switch { discr: operand, .. }
+            | Terminator::Panic(PanicCause::AssertionFailed(Some((operand, _))), _) => f(operand),
+            Terminator::InlineAsm(asm) => asm.inputs().for_each(f),
+            Terminator::Goto(_)
+            | Terminator::Return
+            | Terminator::Unreachable
+            | Terminator::Panic(..) => {}
+        }
+    }
+
+    /// The inline assembly the terminator runs, if it is one.
+    pub fn asm(&self) -> Option<&'static InlineAsm> {
+        match self {
+            Terminator::InlineAsm(asm) => Some(asm),
+            Terminator::Goto(_)
+            | Terminator::If { .. }
+            | Terminator::Switch { .. }
+            | Terminator::Return
+            | Terminator::Unreachable
+            | Terminator::Panic(..) => None,
+        }
+    }
+
+    /// The blocks control may go to next, in the order of the terminator.
+    pub fn successors(&self) -> Vec<BasicBlock> {
+        match self {
+            Terminator::Goto(next) => vec![*next],
+            Terminator::If { then, else_, .. } => vec![*then, *else_],
+            Terminator::Switch {
+                cases, otherwise, ..
+            } => cases
+                .iter()
+                .map(|&(_, block)| block)
+                .chain([*otherwise])
+                .collect(),
+            Terminator::Return
+            | Terminator::Unreachable
+            | Terminator::Panic(..)
+            | Terminator::InlineAsm(_) => Vec::new(),
+        }
+    }
+}
+
 /// A memory location: a local, followed by projections that step from it
 /// to another location. Accesses through a `volatile` pointer are volatile
 /// (ADR 0013), and so are accesses to a register (ADR 0058).
@@ -2051,6 +2144,7 @@ mod tests {
                 vec![Handler {
                     vector: "SysTick".to_owned(),
                     word: 15,
+                    kind: target::VectorKind::Maskable,
                     body: BodyId(2),
                 }]
             } else {

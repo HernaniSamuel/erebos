@@ -1,0 +1,38 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/shared_static_modules/main.ers
+---
+--- errors ---
+analysis::unprotected-static
+
+  × `drivers::COUNT` is reached outside `critical` in the thread context, and a handler reaches it
+  │ too
+   ╭─[drivers.ers:8:5]
+ 3 │ pub fn start() {
+ 4 │     bump();
+   ·     ───┬──
+   ·        ╰── called here, outside `critical`
+ 5 │ }
+ 6 │ 
+ 7 │ fn bump() {
+ 8 │     COUNT += 1;
+   ·     ─────┬────
+   ·          ╰── reached here, outside `critical`
+ 9 │ }
+   ╰────
+    ╭─[main.ers:9:5]
+  8 │ entry fn main() -> ! {
+  9 │     drivers::start();
+    ·     ────────┬───────
+    ·             ╰── called here, outside `critical`
+ 10 │     loop {}
+    ╰────
+   ╭─[handlers.ers:2:5]
+ 1 │ pub interrupt fn tick() at core::arch::Vector::MachineTimer {
+ 2 │     super::drivers::COUNT = 0;
+   ·     ────────────┬────────────
+   ·                 ╰── the handler `handlers::tick` reaches it here
+ 3 │ }
+   ╰────
+  help: put the access, or one call on the path to it, in a `critical` block

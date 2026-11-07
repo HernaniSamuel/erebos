@@ -1,0 +1,27 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/shared_static_same_place.ers
+---
+--- errors ---
+analysis::unprotected-static
+
+  × `COUNT` is reached outside `critical` in the thread context, and a handler reaches it too
+    ╭─[shared_static_same_place.ers:10:5]
+  9 │ fn bump() {
+ 10 │     COUNT += 1;
+    ·     ─────┬────
+    ·          ╰── reached here, outside `critical`, by the thread and by the handler `tick`
+ 11 │ }
+ 12 │ 
+ 13 │ interrupt fn tick() at Vector::MachineTimer {
+ 14 │     bump();
+ 15 │ }
+ 16 │ 
+ 17 │ entry fn main() -> ! {
+ 18 │     bump();
+    ·     ───┬──
+    ·        ╰── called here, outside `critical`
+ 19 │     loop {}
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block

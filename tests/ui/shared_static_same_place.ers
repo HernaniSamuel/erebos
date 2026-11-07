@@ -1,0 +1,22 @@
+// emit: mir
+// A helper that both contexts call, outside `critical`: the place is the
+// handler's too, so the error has one label that says both, and not a
+// second one (ADR 0093).
+use core::arch::Vector;
+
+static mut COUNT: u32 = 0;
+
+fn bump() {
+    COUNT += 1;
+}
+
+interrupt fn tick() at Vector::MachineTimer {
+    bump();
+}
+
+entry fn main() -> ! {
+    bump();
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

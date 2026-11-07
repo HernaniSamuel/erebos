@@ -1,0 +1,28 @@
+// emit: mir
+// The panic function that names a static (ADR 0078, 0093): the thread reaches
+// it through a check outside `critical`, in a function it calls, and the
+// handler reaches it through a check too. The place is the same one, so the
+// primary label says both. A check inside `critical` stays inside:
+// `shared_static_accepted_panic_inside.ers`.
+use core::arch::Vector;
+
+static mut FAILS: u32 = 0;
+static ZERO: u32 = 0;
+
+fn divide(a: u32, d: u32) -> u32 {
+    a / d
+}
+
+interrupt fn tick() at Vector::MachineTimer {
+    let x: u32 = divide(1, ZERO);
+}
+
+entry fn main() -> ! {
+    let x: u32 = divide(2, ZERO);
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    FAILS += 1;
+    loop {}
+}

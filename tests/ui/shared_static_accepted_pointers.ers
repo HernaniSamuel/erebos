@@ -1,0 +1,49 @@
+// emit: mir
+// Raw pointers are what ADR 0078 leaves unchecked until M5, and a pointer made
+// at compile time names no static (ADR 0093): one from a `const`, one from a
+// `comptime` block and one from a `static`'s initializer, each used in the
+// thread, in the handler and in a function both call. A pointer taken inside
+// `critical` and used outside is free too.
+use core::arch::Vector;
+
+static mut FROM_CONST: u32 = 0;
+static mut FROM_COMPTIME: u32 = 0;
+static mut FROM_STATIC: u32 = 0;
+static mut FROM_BLOCK: u32 = 0;
+
+const CONST_POINTER: *mut volatile u32 = &raw mut FROM_CONST as *mut volatile u32;
+static STATIC_POINTER: *mut u32 = &raw mut FROM_STATIC;
+
+fn comptime_pointer() -> *mut u32 {
+    comptime { &raw mut FROM_COMPTIME }
+}
+
+fn taken() -> *mut u32 {
+    critical { &raw mut FROM_BLOCK }
+}
+
+fn shared() {
+    *CONST_POINTER = 3;
+    *comptime_pointer() = 3;
+    *STATIC_POINTER = 3;
+    *taken() = 3;
+}
+
+interrupt fn tick() at Vector::MachineTimer {
+    *CONST_POINTER = 1;
+    *comptime_pointer() = 1;
+    *STATIC_POINTER = 1;
+    *taken() = 1;
+    shared();
+}
+
+entry fn main() -> ! {
+    *CONST_POINTER = 2;
+    *comptime_pointer() = 2;
+    *STATIC_POINTER = 2;
+    *taken() = 2;
+    shared();
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

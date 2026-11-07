@@ -1,0 +1,444 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/shared_static_accepted.ers
+---
+--- mir ---
+static mut AROUND: u32; // align 4
+static mut CALLED: u32; // align 4
+static mut NESTED: u32; // align 4
+static mut RECURSIVE: u32; // align 4
+static mut DONE: bool; // align 1
+static mut WOKEN: u32; // align 4
+static mut BETWEEN: u32; // align 4
+static mut OWN: u32; // align 4
+static mut MINE: u32; // align 4
+static mut NAMED: u32; // align 4
+static mut ORPHAN: u32; // align 4
+static mut EXPORTED: u32; // align 4
+static TABLE: [u32; 2]; // align 4
+
+fn called() -> () {
+    let _0: ();
+    let _1: *mut u32;
+
+    bb0: {
+        _1 = const static CALLED;
+        (*_1) = Add(copy (*_1), const 1_u32);
+        return;
+    }
+}
+
+fn recursive(_1: u32) -> () {
+    let _0: ();
+    let _1: u32; // n
+    let _2: *mut u32;
+    let _3: bool;
+    let _4: u32;
+
+    bb0: {
+        _2 = const static RECURSIVE;
+        (*_2) = copy _1;
+        _3 = Gt(copy _1, const 0_u32);
+        if copy _3 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _4 = Sub(copy _1, const 1_u32);
+        call recursive(copy _4);
+        goto -> bb3;
+    }
+
+    bb2: {
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn read_table(_1: usize) -> u32 {
+    let _0: u32;
+    let _1: usize; // i
+    let _2: *const [u32; 2];
+    let _3: usize;
+    let _4: bool;
+    let _5: u32;
+    let _6: u32;
+    let _7: *const [u8; 2];
+    let _8: usize;
+    let _9: bool;
+    let _10: u8;
+    let _11: u32;
+    let _12: u32;
+
+    bb0: {
+        _2 = const static TABLE;
+        _3 = copy _1;
+        _4 = Lt(copy _3, const 2_usize);
+        if copy _4 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _5 = copy (*_2)[_3];
+        _6 = copy _5;
+        _7 = const b"ok";
+        _8 = copy _1;
+        _9 = Lt(copy _8, const 2_usize);
+        if copy _9 -> [true: bb3, false: bb4];
+    }
+
+    bb2: {
+        panic(index out of bounds);
+    }
+
+    bb3: {
+        _10 = copy (*_7)[_8];
+        _11 = copy _10 as u32;
+        _12 = Add(copy _6, copy _11);
+        _0 = copy _12;
+        return;
+    }
+
+    bb4: {
+        panic(index out of bounds);
+    }
+}
+
+fn named() -> () {
+    let _0: ();
+    let _1: *mut u32;
+
+    bb0: {
+        _1 = const static NAMED;
+        (*_1) = const 1_u32;
+        return;
+    }
+}
+
+fn address() -> () {
+    let _0: ();
+
+    bb0: {
+        asm("la {0}, {1}", out(reg) _, sym named);
+        return;
+    }
+}
+
+fn orphan() -> () {
+    let _0: ();
+    let _1: *mut u32;
+
+    bb0: {
+        _1 = const static ORPHAN;
+        (*_1) = const 1_u32;
+        return;
+    }
+}
+
+fn exported() -> () {
+    let _0: ();
+    let _1: *mut u32;
+
+    bb0: {
+        _1 = const static EXPORTED;
+        (*_1) = const 1_u32;
+        return;
+    }
+}
+
+interrupt fn tick() -> () at MachineTimer {
+    let _0: ();
+    let _1: u32; // t
+    let _2: *mut u32;
+    let _3: *mut u32;
+    let _4: *mut u32;
+    let _5: *mut u32;
+    let _6: *mut bool;
+    let _7: *mut u32;
+    let _8: *mut u32;
+    let _9: *mut u32;
+    let _10: *mut u32;
+    let _11: *mut u32;
+    let _12: *mut u32;
+    let _13: u32;
+
+    bb0: {
+        _2 = const static AROUND;
+        (*_2) = const 0_u32;
+        _3 = const static CALLED;
+        (*_3) = const 0_u32;
+        _4 = const static NESTED;
+        (*_4) = const 0_u32;
+        _5 = const static RECURSIVE;
+        (*_5) = const 0_u32;
+        _6 = const static DONE;
+        (*_6) = const true;
+        _7 = const static WOKEN;
+        (*_7) = const 1_u32;
+        _8 = const static BETWEEN;
+        (*_8) = Add(copy (*_8), const 1_u32);
+        _9 = const static OWN;
+        (*_9) = Add(copy (*_9), const 1_u32);
+        _10 = const static NAMED;
+        (*_10) = const 2_u32;
+        _11 = const static ORPHAN;
+        (*_11) = const 2_u32;
+        _12 = const static EXPORTED;
+        (*_12) = const 2_u32;
+        _13 = call read_table(const 1_usize);
+        _1 = copy _13;
+        return;
+    }
+}
+
+interrupt fn soft() -> () at MachineSoftware {
+    let _0: ();
+    let _1: *mut u32;
+    let _2: *mut u32;
+
+    bb0: {
+        _1 = const static BETWEEN;
+        (*_1) = Add(copy (*_1), const 2_u32);
+        _2 = const static OWN;
+        (*_2) = Add(copy (*_2), const 1_u32);
+        return;
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+    let _1: u32; // t
+    let _2: u32;
+    let _3: *mut u32;
+    let _4: u32;
+    let _5: u32;
+    let _6: u32;
+    let _7: *mut u32;
+    let _8: *mut u32;
+    let _9: u32;
+    let _10: u32;
+    let _11: *mut bool;
+    let _12: bool;
+    let _13: bool;
+    let _14: u32;
+    let _15: *mut u32;
+    let _16: u32;
+    let _17: bool;
+    let _18: u32;
+    let _19: *mut u32;
+
+    bb0: {
+        critical_enter _2;
+        _3 = const static AROUND;
+        (*_3) = Add(copy (*_3), const 1_u32);
+        critical_exit _2;
+        critical_enter _4;
+        call called();
+        critical_exit _4;
+        critical_enter _5;
+        critical_enter _6;
+        _7 = const static NESTED;
+        (*_7) = Add(copy (*_7), const 1_u32);
+        critical_exit _6;
+        _8 = const static NESTED;
+        (*_8) = Add(copy (*_8), const 2_u32);
+        critical_exit _5;
+        critical_enter _9;
+        call recursive(const 3_u32);
+        critical_exit _9;
+        goto -> bb1;
+    }
+
+    bb1: {
+        critical_enter _10;
+        _11 = const static DONE;
+        _12 = copy (*_11);
+        critical_exit _10;
+        _13 = Not(copy _12);
+        if copy _13 -> [true: bb2, false: bb3];
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+
+    bb3: {
+        goto -> bb4;
+    }
+
+    bb4: {
+        critical_enter _14;
+        _15 = const static WOKEN;
+        _16 = copy (*_15);
+        _17 = Ne(copy _16, const 0_u32);
+        if copy _17 -> [true: bb5, false: bb6];
+    }
+
+    bb5: {
+        critical_exit _14;
+        goto -> bb7;
+    }
+
+    bb6: {
+        goto -> bb8;
+    }
+
+    bb7: {
+        _18 = call read_table(const 0_usize);
+        _1 = copy _18;
+        _19 = const static MINE;
+        (*_19) = Add(copy (*_19), const 1_u32);
+        call address();
+        goto -> bb9;
+    }
+
+    bb8: {
+        call core.arch.wait_for_interrupt();
+        critical_exit _14;
+        goto -> bb4;
+    }
+
+    bb9: {
+        goto -> bb9;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+comptime fn AROUND() -> u32 {
+    let _0: u32;
+
+    bb0: {
+        _0 = const 0_u32;
+        return;
+    }
+}
+
+comptime fn CALLED() -> u32 {
+    let _0: u32;
+
+    bb0: {
+        _0 = const 0_u32;
+        return;
+    }
+}
+
+comptime fn NESTED() -> u32 {
+    let _0: u32;
+
+    bb0: {
+        _0 = const 0_u32;
+        return;
+    }
+}
+
+comptime fn RECURSIVE() -> u32 {
+    let _0: u32;
+
+    bb0: {
+        _0 = const 0_u32;
+        return;
+    }
+}
+
+comptime fn DONE() -> bool {
+    let _0: bool;
+
+    bb0: {
+        _0 = const false;
+        return;
+    }
+}
+
+comptime fn WOKEN() -> u32 {
+    let _0: u32;
+
+    bb0: {
+        _0 = const 0_u32;
+        return;
+    }
+}
+
+comptime fn BETWEEN() -> u32 {
+    let _0: u32;
+
+    bb0: {
+        _0 = const 0_u32;
+        return;
+    }
+}
+
+comptime fn OWN() -> u32 {
+    let _0: u32;
+
+    bb0: {
+        _0 = const 0_u32;
+        return;
+    }
+}
+
+comptime fn MINE() -> u32 {
+    let _0: u32;
+
+    bb0: {
+        _0 = const 0_u32;
+        return;
+    }
+}
+
+comptime fn NAMED() -> u32 {
+    let _0: u32;
+
+    bb0: {
+        _0 = const 0_u32;
+        return;
+    }
+}
+
+comptime fn ORPHAN() -> u32 {
+    let _0: u32;
+
+    bb0: {
+        _0 = const 0_u32;
+        return;
+    }
+}
+
+comptime fn EXPORTED() -> u32 {
+    let _0: u32;
+
+    bb0: {
+        _0 = const 0_u32;
+        return;
+    }
+}
+
+comptime fn TABLE() -> [u32; 2] {
+    let _0: [u32; 2];
+    let _1: [u32; 2];
+
+    bb0: {
+        _1[0] = const 1_u32;
+        _1[1] = const 2_u32;
+        _0 = copy _1;
+        return;
+    }
+}
+
+extern fn core.arch.wait_for_interrupt() -> ();
+
+extern fn core.arch.__critical_enter() -> u32;
+
+extern fn core.arch.__critical_exit(_1: u32) -> ();

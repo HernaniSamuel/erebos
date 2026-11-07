@@ -1,0 +1,34 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/shared_static_panic.ers
+---
+--- errors ---
+analysis::unprotected-static
+
+  × `FAILS` is reached outside `critical` in the thread context, and a handler reaches it too
+    ╭─[shared_static_panic.ers:26:5]
+ 12 │ fn divide(a: u32, d: u32) -> u32 {
+ 13 │     a / d
+    ·     ──┬──
+    ·       ╰── this check may call the panic function, outside `critical`
+ 14 │ }
+ 15 │ 
+ 16 │ interrupt fn tick() at Vector::MachineTimer {
+ 17 │     let x: u32 = divide(1, ZERO);
+ 18 │ }
+ 19 │ 
+ 20 │ entry fn main() -> ! {
+ 21 │     let x: u32 = divide(2, ZERO);
+    ·                  ───────┬───────
+    ·                         ╰── called here, outside `critical`
+ 22 │     loop {}
+ 23 │ }
+ 24 │ 
+ 25 │ panic fn on_panic() -> ! {
+ 26 │     FAILS += 1;
+    ·     ─────┬────
+    ·          ╰── reached here, outside `critical`, by the thread and by the handler `tick`
+ 27 │     loop {}
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block

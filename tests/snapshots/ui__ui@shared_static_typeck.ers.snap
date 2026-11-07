@@ -1,0 +1,19 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/shared_static_typeck.ers
+---
+--- typeck ---
+interrupt fn tick() -> () at MachineTimer
+    expr 0 assign += 248..258: ()
+    expr 1 static COUNT 248..253: u32
+    expr 2 int 1 257..258: u32
+entry fn main() -> !
+    expr 3 assign 290..299: ()
+    expr 4 static COUNT 290..295: u32
+    expr 5 int 0 298..299: u32
+    expr 6 loop 305..312: !
+panic fn on_panic() -> !
+    expr 7 loop 343..350: !
+comptime fn COUNT() -> u32
+    expr 8 int 0 194..195: u32

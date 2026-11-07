@@ -1,0 +1,186 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/shared_static_accepted_pointers.ers
+---
+--- mir ---
+static mut FROM_CONST: u32; // align 4
+static mut FROM_COMPTIME: u32; // align 4
+static mut FROM_STATIC: u32; // align 4
+static mut FROM_BLOCK: u32; // align 4
+static STATIC_POINTER: *mut u32; // align 4
+
+fn comptime_pointer() -> *mut u32 {
+    let _0: *mut u32;
+    let _1: *mut u32 = data0;
+
+    bb0: {
+        _0 = copy _1;
+        return;
+    }
+}
+
+fn taken() -> *mut u32 {
+    let _0: *mut u32;
+    let _1: u32;
+    let _2: *mut u32;
+    let _3: *mut u32;
+
+    bb0: {
+        critical_enter _1;
+        _2 = const static FROM_BLOCK;
+        _3 = &raw mut (*_2);
+        critical_exit _1;
+        _0 = copy _3;
+        return;
+    }
+}
+
+fn shared() -> () {
+    let _0: ();
+    let _1: *mut volatile u32 = data1;
+    let _2: *mut u32;
+    let _3: *const *mut u32;
+    let _4: *mut u32;
+    let _5: *mut u32;
+
+    bb0: {
+        (*_1) = const 3_u32;
+        _2 = call comptime_pointer();
+        (*_2) = const 3_u32;
+        _3 = const static STATIC_POINTER;
+        _4 = copy (*_3);
+        (*_4) = const 3_u32;
+        _5 = call taken();
+        (*_5) = const 3_u32;
+        return;
+    }
+}
+
+interrupt fn tick() -> () at MachineTimer {
+    let _0: ();
+    let _1: *mut volatile u32 = data1;
+    let _2: *mut u32;
+    let _3: *const *mut u32;
+    let _4: *mut u32;
+    let _5: *mut u32;
+
+    bb0: {
+        (*_1) = const 1_u32;
+        _2 = call comptime_pointer();
+        (*_2) = const 1_u32;
+        _3 = const static STATIC_POINTER;
+        _4 = copy (*_3);
+        (*_4) = const 1_u32;
+        _5 = call taken();
+        (*_5) = const 1_u32;
+        call shared();
+        return;
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+    let _1: *mut volatile u32 = data1;
+    let _2: *mut u32;
+    let _3: *const *mut u32;
+    let _4: *mut u32;
+    let _5: *mut u32;
+
+    bb0: {
+        (*_1) = const 2_u32;
+        _2 = call comptime_pointer();
+        (*_2) = const 2_u32;
+        _3 = const static STATIC_POINTER;
+        _4 = copy (*_3);
+        (*_4) = const 2_u32;
+        _5 = call taken();
+        (*_5) = const 2_u32;
+        call shared();
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+comptime fn CONST_POINTER() -> *mut volatile u32 {
+    let _0: *mut volatile u32;
+    let _1: *mut u32;
+    let _2: *mut u32;
+    let _3: *mut volatile u32;
+
+    bb0: {
+        _1 = const static FROM_CONST;
+        _2 = &raw mut (*_1);
+        _3 = copy _2 as *mut volatile u32;
+        _0 = copy _3;
+        return;
+    }
+}
+
+comptime fn FROM_CONST() -> u32 {
+    let _0: u32;
+
+    bb0: {
+        _0 = const 0_u32;
+        return;
+    }
+}
+
+comptime fn FROM_COMPTIME() -> u32 {
+    let _0: u32;
+
+    bb0: {
+        _0 = const 0_u32;
+        return;
+    }
+}
+
+comptime fn FROM_STATIC() -> u32 {
+    let _0: u32;
+
+    bb0: {
+        _0 = const 0_u32;
+        return;
+    }
+}
+
+comptime fn FROM_BLOCK() -> u32 {
+    let _0: u32;
+
+    bb0: {
+        _0 = const 0_u32;
+        return;
+    }
+}
+
+comptime fn STATIC_POINTER() -> *mut u32 {
+    let _0: *mut u32;
+    let _1: *mut u32;
+    let _2: *mut u32;
+
+    bb0: {
+        _1 = const static FROM_STATIC;
+        _2 = &raw mut (*_1);
+        _0 = copy _2;
+        return;
+    }
+}
+
+extern fn core.arch.__critical_enter() -> u32;
+
+extern fn core.arch.__critical_exit(_1: u32) -> ();

@@ -1,0 +1,44 @@
+// emit: mir
+// The ways to name a `static mut` (ADR 0093): a read, a write, a compound
+// assignment, `&raw`, a `sym` operand and an `extern static mut`, each in the
+// entry function and in a function it calls, outside `critical`. The handler
+// names each of them too, so each place of the thread context is an error.
+use core::arch::Vector;
+
+static mut READ: u32 = 0;
+static mut WRITE: u32 = 0;
+static mut COMPOUND: u32 = 0;
+static mut ADDRESS: u32 = 0;
+static mut SYMBOL: u32 = 0;
+extern static mut FOREIGN: u32;
+
+interrupt fn tick() at Vector::MachineTimer {
+    READ = 1;
+    WRITE = 1;
+    COMPOUND = 1;
+    ADDRESS = 1;
+    asm("la {}, {}", out(reg) _, sym SYMBOL);
+    FOREIGN = 1;
+}
+
+fn callee() {
+    let value: u32 = READ;
+    WRITE = value;
+    COMPOUND += 1;
+    let address: *mut u32 = &raw mut ADDRESS;
+    asm("la {}, {}", out(reg) _, sym SYMBOL);
+    FOREIGN = 2;
+}
+
+entry fn main() -> ! {
+    let value: u32 = READ;
+    WRITE = value;
+    COMPOUND += 1;
+    let address: *mut u32 = &raw mut ADDRESS;
+    asm("la {}, {}", out(reg) _, sym SYMBOL);
+    FOREIGN = 2;
+    callee();
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

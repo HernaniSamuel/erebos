@@ -1,0 +1,18 @@
+// emit: llvm-ir
+// opt: both
+// The verdict does not depend on the optimization level: MIR is the same at
+// both, so the same error is reported at both (ADR 0093).
+use core::arch::Vector;
+
+static mut COUNT: u32 = 0;
+
+interrupt fn tick() at Vector::MachineTimer {
+    COUNT += 1;
+}
+
+entry fn main() -> ! {
+    COUNT = 0;
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

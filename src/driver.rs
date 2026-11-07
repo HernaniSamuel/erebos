@@ -18,7 +18,7 @@ use crate::syntax::{ast, lexer, parser};
 pub use crate::target::DEFAULT as DEFAULT_TARGET;
 pub use crate::target::Target;
 use crate::target::{self, TARGETS};
-use crate::{codegen, hir, link, mir, svd, ty};
+use crate::{analysis, codegen, hir, link, mir, svd, ty};
 
 /// The target `--target` names, or the error of ADR 0073 that lists the
 /// known names. The command line reaches `target` through here (ADR 0063).
@@ -681,6 +681,11 @@ fn front_end(
 
     let core = queries.core_parts();
     let mut mir = queries.into_mir();
+    // The first MIR analysis (ADR 0093), over the program with `core`.
+    analysis::check(&mir, diags);
+    if diags.has_errors() {
+        return FrontEnd::Failed;
+    }
     if stop.is_some() {
         mir.leave_out(&core);
     }

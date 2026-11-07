@@ -1,0 +1,17 @@
+// emit: typeck
+// The rule is checked on MIR (ADR 0093), so a program that breaks it still has
+// a dump at `--emit=typeck` and earlier stages.
+use core::arch::Vector;
+
+static mut COUNT: u32 = 0;
+
+interrupt fn tick() at Vector::MachineTimer {
+    COUNT += 1;
+}
+
+entry fn main() -> ! {
+    COUNT = 0;
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

@@ -1,0 +1,56 @@
+// emit: mir
+// The path to a place (ADR 0093): a path of two calls labels both; a function
+// called inside `critical` and outside labels the outside call only; a
+// recursion entered outside labels the call that enters it; a static with
+// several places in the handler context labels the first by body, and
+// `early` is defined before the handler that calls it.
+use core::arch::Vector;
+
+static mut DEEP: u32 = 0;
+static mut BOTH: u32 = 0;
+static mut LOOPED: u32 = 0;
+static mut MANY: u32 = 0;
+
+fn early() {
+    MANY = 1;
+}
+
+interrupt fn tick() at Vector::MachineTimer {
+    DEEP = 0;
+    BOTH = 0;
+    LOOPED = 0;
+    MANY = 2;
+    early();
+}
+
+fn second() {
+    DEEP += 1;
+}
+
+fn first() {
+    second();
+}
+
+fn both() {
+    BOTH += 1;
+}
+
+fn spin(n: u32) {
+    LOOPED = n;
+    if n > 0 {
+        spin(n - 1);
+    }
+}
+
+entry fn main() -> ! {
+    first();
+    critical {
+        both();
+    }
+    both();
+    spin(3);
+    MANY = 3;
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

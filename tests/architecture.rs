@@ -54,10 +54,12 @@ const LAYERS: &[(&str, &[&str])] = &[
     ),
     ("codegen", &["mir"]),
     ("link", &["mir"]),
+    // The MIR analyses (ADR 0093).
+    ("analysis", &["mir"]),
     (
         "driver",
         &[
-            "syntax", "hir", "ty", "query", "mir", "codegen", "link", "svd",
+            "syntax", "hir", "ty", "query", "mir", "analysis", "codegen", "link", "svd",
         ],
     ),
 ];
