@@ -119,6 +119,10 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   span })` through `Debug`, so the new `enum_id` shows in the HIR dump of any
   handler. No snapshot has one today; the day one does, it churns with the
   ids of enums. (M4.4)
+- In `unprotected` in `src/analysis/shared_statics.rs`, the parameter
+  `handlers` (the maskable roots, used only for `is_empty`) sits next to
+  `handler: &Context`; a name like `maskable_roots` would not be confused
+  with it. (M4.5)
 
 ## Tests
 
@@ -219,6 +223,20 @@ M3.1 to M3.3 on 2026-10-28; these remain.
 - A generated list value past `u32` is written as is for the compiler to
   reject (`ty::literal-out-of-range`); only the reader's unit test in
   `src/svd/read.rs` covers it, no snapshot. (M4.4)
+- The header comment of `tests/ui/shared_static_unmaskable.ers` could say
+  that `EVERY` is reported under rule 2 for `crash` only (one body, one
+  owner), and that the maskable handler `tick` appears only in rule 1's
+  label. (M4.5)
+- In `tests/ui/shared_static_flow.ers`, the `return` and `?` cases cannot
+  tell a walk over depth from a reading of the text (the access after the
+  block is outside either way), and `continue` is not tested apart; only
+  `break` and the nested `critical` discriminate. A gap against the literal
+  wording of ADR 0093, not a bug. (M4.5)
+- `the_inserted_roots_are_there` in `src/driver.rs` asserts `memcpy`, the
+  `critical` pair and `__aeabi_uldivmod` only, so the rename of another root
+  (`__udivdi3`, `memmove`...) drops it silently; the step 4 `Decisions` list
+  more roots than any test asserts, and the root filter (`runtime` and no
+  `.` in the symbol) relies on how body names are written. (M4.5)
 
 ## Docs
 
@@ -292,3 +310,13 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   plus 64 (without a list)...") and the one on `code_align` are wrapped
   unevenly, and "as every program did before M4.4" puts a milestone name in
   the reference ("as every program does without one"). (M4.4)
+- `docs/reference.md`, "Shared statics": the two examples build only on
+  thumbv7m (`Vector::SysTick` and `Vector::NMI` do not exist on riscv32) and
+  only the first names the target; "NMI, SVCall and the faults" reads
+  narrowly, since every exception of riscv32 is unmaskable too ("the
+  exceptions" covers both targets); the printed source line of the sample
+  error lacks the `// error: ...` comment that line 6 of the example
+  program carries. (M4.5)
+- `AGENTS.md`: the sentence added to "Respect layer boundaries" leaves a
+  short, ragged line before `tests/architecture.rs checks the modules each`.
+  (M4.5)
