@@ -1,0 +1,241 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/shared_static_unmaskable.ers
+---
+--- errors ---
+analysis::unmaskable-static
+
+  × `HELPED` is reached from the unmaskable handler `crash`, and the unmaskable handler `fetch`
+  │ reaches it too
+    ╭─[shared_static_unmaskable.ers:19:5]
+ 18 │ fn help() {
+ 19 │     HELPED += 1;
+    ·     ─────┬─────
+    ·          ╰── reached here by this handler and by the unmaskable handler `fetch`; `critical` does not stop this handler
+ 20 │ }
+ 21 │ 
+ 22 │ fn common() {
+ 23 │     SAME += 1;
+ 24 │ }
+ 25 │ 
+ 26 │ fn everywhere() {
+ 27 │     EVERY += 1;
+ 28 │ }
+ 29 │ 
+ 30 │ interrupt fn tick() at Vector::MachineTimer {
+ 31 │     FAULTS = 0;
+ 32 │     BOTH = 1;
+ 33 │     everywhere();
+ 34 │ }
+ 35 │ 
+ 36 │ interrupt fn crash() -> ! at Vector::IllegalInstruction {
+ 37 │     FAULTS += 1;
+ 38 │     SHARED += 1;
+ 39 │     help();
+    ·     ───┬──
+    ·        ╰── called here
+ 40 │     common();
+    ╰────
+  help: give the handler a static of its own, or reach this memory through a pointer from a
+        `const`
+analysis::unmaskable-static
+
+  × `SAME` is reached from the unmaskable handler `crash`, and the thread context reaches it too
+    ╭─[shared_static_unmaskable.ers:23:5]
+ 22 │ fn common() {
+ 23 │     SAME += 1;
+    ·     ────┬────
+    ·         ╰── reached here by this handler and by the thread context; `critical` does not stop this handler
+ 24 │ }
+ 25 │ 
+ 26 │ fn everywhere() {
+ 27 │     EVERY += 1;
+ 28 │ }
+ 29 │ 
+ 30 │ interrupt fn tick() at Vector::MachineTimer {
+ 31 │     FAULTS = 0;
+ 32 │     BOTH = 1;
+ 33 │     everywhere();
+ 34 │ }
+ 35 │ 
+ 36 │ interrupt fn crash() -> ! at Vector::IllegalInstruction {
+ 37 │     FAULTS += 1;
+ 38 │     SHARED += 1;
+ 39 │     help();
+ 40 │     common();
+    ·     ────┬───
+    ·         ╰── called here
+ 41 │     everywhere();
+    ╰────
+  help: give the handler a static of its own, or reach this memory through a pointer from a
+        `const`
+analysis::unprotected-static
+
+  × `EVERY` is reached outside `critical` in the thread context, and a handler reaches it too
+    ╭─[shared_static_unmaskable.ers:27:5]
+ 26 │ fn everywhere() {
+ 27 │     EVERY += 1;
+    ·     ─────┬────
+    ·          ╰── reached here, outside `critical`, by the thread and by the handler `tick`
+ 28 │ }
+ 29 │ 
+ 30 │ interrupt fn tick() at Vector::MachineTimer {
+ 31 │     FAULTS = 0;
+ 32 │     BOTH = 1;
+ 33 │     everywhere();
+ 34 │ }
+ 35 │ 
+ 36 │ interrupt fn crash() -> ! at Vector::IllegalInstruction {
+ 37 │     FAULTS += 1;
+ 38 │     SHARED += 1;
+ 39 │     help();
+ 40 │     common();
+ 41 │     everywhere();
+ 42 │     loop {}
+ 43 │ }
+ 44 │ 
+ 45 │ interrupt fn fetch() -> ! at Vector::InstructionFault {
+ 46 │     SHARED += 2;
+ 47 │     help();
+ 48 │     LONELY = 1;
+ 49 │     loop {}
+ 50 │ }
+ 51 │ 
+ 52 │ entry fn main() -> ! {
+ 53 │     BOTH += 1;
+ 54 │     common();
+ 55 │     everywhere();
+    ·     ──────┬─────
+    ·           ╰── called here, outside `critical`
+ 56 │     loop {}
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block
+analysis::unmaskable-static
+
+  × `EVERY` is reached from the unmaskable handler `crash`, and the thread context reaches it too
+    ╭─[shared_static_unmaskable.ers:27:5]
+ 26 │ fn everywhere() {
+ 27 │     EVERY += 1;
+    ·     ─────┬────
+    ·          ╰── reached here by this handler and by the thread context; `critical` does not stop this handler
+ 28 │ }
+ 29 │ 
+ 30 │ interrupt fn tick() at Vector::MachineTimer {
+ 31 │     FAULTS = 0;
+ 32 │     BOTH = 1;
+ 33 │     everywhere();
+ 34 │ }
+ 35 │ 
+ 36 │ interrupt fn crash() -> ! at Vector::IllegalInstruction {
+ 37 │     FAULTS += 1;
+ 38 │     SHARED += 1;
+ 39 │     help();
+ 40 │     common();
+ 41 │     everywhere();
+    ·     ──────┬─────
+    ·           ╰── called here
+ 42 │     loop {}
+    ╰────
+  help: give the handler a static of its own, or reach this memory through a pointer from a
+        `const`
+analysis::unmaskable-static
+
+  × `FAULTS` is reached from the unmaskable handler `crash`, and the handler `tick` reaches it too
+    ╭─[shared_static_unmaskable.ers:37:5]
+ 30 │ interrupt fn tick() at Vector::MachineTimer {
+ 31 │     FAULTS = 0;
+    ·     ─────┬────
+    ·          ╰── the handler `tick` reaches it here
+ 32 │     BOTH = 1;
+ 33 │     everywhere();
+ 34 │ }
+ 35 │ 
+ 36 │ interrupt fn crash() -> ! at Vector::IllegalInstruction {
+ 37 │     FAULTS += 1;
+    ·     ─────┬─────
+    ·          ╰── reached here; `critical` does not stop this handler
+ 38 │     SHARED += 1;
+    ╰────
+  help: give the handler a static of its own, or reach this memory through a pointer from a
+        `const`
+analysis::unmaskable-static
+
+  × `SHARED` is reached from the unmaskable handler `crash`, and the unmaskable handler `fetch`
+  │ reaches it too
+    ╭─[shared_static_unmaskable.ers:38:5]
+ 37 │     FAULTS += 1;
+ 38 │     SHARED += 1;
+    ·     ─────┬─────
+    ·          ╰── reached here; `critical` does not stop this handler
+ 39 │     help();
+ 40 │     common();
+ 41 │     everywhere();
+ 42 │     loop {}
+ 43 │ }
+ 44 │ 
+ 45 │ interrupt fn fetch() -> ! at Vector::InstructionFault {
+ 46 │     SHARED += 2;
+    ·     ─────┬─────
+    ·          ╰── the unmaskable handler `fetch` reaches it here
+ 47 │     help();
+    ╰────
+  help: give the handler a static of its own, or reach this memory through a pointer from a
+        `const`
+analysis::unmaskable-static
+
+  × `SHARED` is reached from the unmaskable handler `fetch`, and the unmaskable handler `crash`
+  │ reaches it too
+    ╭─[shared_static_unmaskable.ers:46:5]
+ 37 │     FAULTS += 1;
+ 38 │     SHARED += 1;
+    ·     ─────┬─────
+    ·          ╰── the unmaskable handler `crash` reaches it here
+ 39 │     help();
+ 40 │     common();
+ 41 │     everywhere();
+ 42 │     loop {}
+ 43 │ }
+ 44 │ 
+ 45 │ interrupt fn fetch() -> ! at Vector::InstructionFault {
+ 46 │     SHARED += 2;
+    ·     ─────┬─────
+    ·          ╰── reached here; `critical` does not stop this handler
+ 47 │     help();
+    ╰────
+  help: give the handler a static of its own, or reach this memory through a pointer from a
+        `const`
+analysis::unprotected-static
+
+  × `BOTH` is reached outside `critical` in the thread context, and a handler reaches it too
+    ╭─[shared_static_unmaskable.ers:53:5]
+ 31 │     FAULTS = 0;
+ 32 │     BOTH = 1;
+    ·     ────┬───
+    ·         ╰── the handler `tick` reaches it here
+ 33 │     everywhere();
+ 34 │ }
+ 35 │ 
+ 36 │ interrupt fn crash() -> ! at Vector::IllegalInstruction {
+ 37 │     FAULTS += 1;
+ 38 │     SHARED += 1;
+ 39 │     help();
+ 40 │     common();
+ 41 │     everywhere();
+ 42 │     loop {}
+ 43 │ }
+ 44 │ 
+ 45 │ interrupt fn fetch() -> ! at Vector::InstructionFault {
+ 46 │     SHARED += 2;
+ 47 │     help();
+ 48 │     LONELY = 1;
+ 49 │     loop {}
+ 50 │ }
+ 51 │ 
+ 52 │ entry fn main() -> ! {
+ 53 │     BOTH += 1;
+    ·     ────┬────
+    ·         ╰── reached here, outside `critical`
+ 54 │     common();
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block

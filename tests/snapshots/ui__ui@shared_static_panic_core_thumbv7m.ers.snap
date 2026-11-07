@@ -1,0 +1,63 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/shared_static_panic_core_thumbv7m.ers
+---
+--- errors ---
+analysis::unprotected-static
+
+  × `FAILS` is reached outside `critical` in the thread context, and a handler reaches it too
+    ╭─[shared_static_panic_core_thumbv7m.ers:21:5]
+ 15 │ entry fn main() -> ! {
+ 16 │     core::arch::nvic_enable(1);
+    ·     ─────────────┬────────────
+    ·                  ╰── called here, outside `critical`
+ 17 │     loop {}
+ 18 │ }
+ 19 │ 
+ 20 │ panic fn on_panic() -> ! {
+ 21 │     FAILS += 1;
+    ·     ─────┬────
+    ·          ╰── reached here, outside `critical`, by the thread and by the handler `tick`
+ 22 │     loop {}
+    ╰────
+     ╭─[rt/arch/armv7m.ers:117:5]
+ 116 │ fn nvic_address(base: usize, irq: u32) -> usize {
+ 117 │     assert(irq < 496);
+     ·     ────────┬────────
+     ·             ╰── this check may call the panic function, outside `critical`
+ 118 │     base + 4 * (irq / 32) as usize
+ 119 │ }
+ 120 │ 
+ 121 │ // The machine of the tests has lines in the first word only, so the other
+ 122 │ // words are checked here, at compile time: the first and last line of the
+ 123 │ // first word, the first of the second, and the last of the last.
+ 124 │ comptime {
+ 125 │     assert(nvic_address(NVIC_ISER, 0) == 0xE000_E100);
+ 126 │     assert(nvic_address(NVIC_ISER, 31) == 0xE000_E100);
+ 127 │     assert(nvic_address(NVIC_ISER, 32) == 0xE000_E104);
+ 128 │     assert(nvic_address(NVIC_ISER, 495) == 0xE000_E13C);
+ 129 │     assert(nvic_address(NVIC_ICER, 0) == 0xE000_E180);
+ 130 │     assert(nvic_address(NVIC_ICER, 31) == 0xE000_E180);
+ 131 │     assert(nvic_address(NVIC_ICER, 32) == 0xE000_E184);
+ 132 │     assert(nvic_address(NVIC_ICER, 495) == 0xE000_E1BC);
+ 133 │     assert(nvic_address(NVIC_ISPR, 0) == 0xE000_E200);
+ 134 │     assert(nvic_address(NVIC_ISPR, 31) == 0xE000_E200);
+ 135 │     assert(nvic_address(NVIC_ISPR, 32) == 0xE000_E204);
+ 136 │     assert(nvic_address(NVIC_ISPR, 495) == 0xE000_E23C);
+ 137 │     assert(nvic_address(NVIC_ICPR, 0) == 0xE000_E280);
+ 138 │     assert(nvic_address(NVIC_ICPR, 31) == 0xE000_E280);
+ 139 │     assert(nvic_address(NVIC_ICPR, 32) == 0xE000_E284);
+ 140 │     assert(nvic_address(NVIC_ICPR, 495) == 0xE000_E2BC);
+ 141 │ }
+ 142 │ 
+ 143 │ // Enables line `irq`: a write of its bit to `ISER`. A compiler fence before and
+ 144 │ // after, since it decides whether a handler runs at this point: statics written
+ 145 │ // before the call are in memory, and statics read after it are not read before.
+ 146 │ pub fn nvic_enable(irq: u32) {
+ 147 │     let word: *mut volatile u32 = nvic_address(NVIC_ISER, irq) as *mut volatile u32;
+     ·                                   ──────────────┬─────────────
+     ·                                                 ╰── called here, outside `critical`
+ 148 │     compiler_fence();
+     ╰────
+  help: put the access, or one call on the path to it, in a `critical` block

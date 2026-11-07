@@ -29,6 +29,7 @@ module asm "\09.word drivers.pend"
 module asm "\09.word tick"
 
 @TICKS = global [4 x i8] zeroinitializer, align 4
+@CALLS = global [4 x i8] zeroinitializer, align 4
 @llvm.compiler.used = appending global [5 x ptr] [ptr @tick, ptr @fault, ptr @drivers.pend, ptr @svc, ptr @__erebos_unhandled], section "llvm.metadata"
 
 ; Function Attrs: nounwind null_pointer_is_valid
@@ -59,7 +60,7 @@ bb0:
 ; Function Attrs: nounwind null_pointer_is_valid
 define void @svc() #0 {
 bb0:
-  store i32 0, ptr @TICKS, align 4
+  store i32 1, ptr @CALLS, align 4
   ret void
 }
 
@@ -116,6 +117,7 @@ module asm "\09.word drivers.pend"
 module asm "\09.word tick"
 
 @TICKS = local_unnamed_addr global [4 x i8] zeroinitializer, align 4
+@CALLS = local_unnamed_addr global [4 x i8] zeroinitializer, align 4
 @llvm.compiler.used = appending global [5 x ptr] [ptr @__erebos_unhandled, ptr @drivers.pend, ptr @fault, ptr @svc, ptr @tick], section "llvm.metadata"
 
 ; Function Attrs: mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(readwrite, argmem: none, inaccessiblemem: none, target_mem0: none, target_mem1: none)
@@ -146,7 +148,7 @@ bb0:
 ; Function Attrs: mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(write, argmem: none, inaccessiblemem: none, target_mem0: none, target_mem1: none)
 define void @svc() #2 {
 bb0:
-  store i32 0, ptr @TICKS, align 4
+  store i32 1, ptr @CALLS, align 4
   ret void
 }
 

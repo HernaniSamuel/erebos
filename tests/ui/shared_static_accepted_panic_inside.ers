@@ -1,0 +1,33 @@
+// emit: mir
+// A check inside `critical` stays inside (ADR 0078, 0093): the thread reaches
+// the panic function only through divisions in `critical` blocks, which are no
+// way out, so the panic function may name a static that a handler reaches
+// without a block of its own. The handler's context does not read `critical`,
+// and its check outside is enough for the static to be shared.
+use core::arch::Vector;
+
+static mut FAILS: u32 = 0;
+static ZERO: u32 = 0;
+
+fn divide(a: u32, d: u32) -> u32 {
+    a / d
+}
+
+interrupt fn tick() at Vector::MachineTimer {
+    let x: u32 = divide(1, ZERO);
+}
+
+entry fn main() -> ! {
+    critical {
+        let x: u32 = 2 / ZERO;
+    }
+    critical {
+        let y: u32 = divide(3, ZERO);
+    }
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    FAILS += 1;
+    loop {}
+}

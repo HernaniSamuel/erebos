@@ -640,8 +640,9 @@ extern static crc_lookup: [u32; 256];
   `static mut` is read and written like a `mut` variable (`TICKS += 1`,
   `&raw mut DMA_BUF`), with ordinary loads and stores. A handler and the
   code it interrupts may share one; the ordinary access is then a race
-  unless it is inside a `critical` block (see "Interrupts"). Nothing checks
-  that yet (M4.5).
+  unless it is inside a `critical` block, and the compiler rejects the
+  program otherwise (`analysis::unprotected-static`,
+  `analysis::unmaskable-static`; see "Shared statics").
 - **A static is read where the read is written**, like a read through a
   pointer, never deferred: in `TICKS + bump()`, where `bump` changes
   `TICKS`, `TICKS` is read before the call.
@@ -3322,8 +3323,8 @@ A program runs in machine mode (ADR 0010) with **one priority level**
 that runs the entry function anywhere outside a `critical` block. A program
 that changes priorities, or enables interrupts inside a handler, leaves this
 model, and nothing checks it. Sharing a `static mut` between a handler and the
-thread needs a `critical` block around the thread's access; that rule is not
-checked yet (M4.5), so an unprotected access is a race, as in C.
+thread needs a `critical` block around the thread's access, and the compiler
+checks that rule over the call graph (see "Shared statics").
 
 ### Handlers (ADR 0084)
 
@@ -3727,6 +3728,205 @@ the list's values as integers, through constants as above (constants of an
 integer type are patterns) or with `==`. A program without that handler
 reaches the panic function with the name `MachineExternal`. The PLIC and its
 dispatch are never in `core`; a board's module may have them.
+
+### Shared statics (ADR 0078, 0093)
+
+```
+use core::arch::Vector;
+
+static mut COUNT: u32 = 0;
+
+fn bump() {
+    COUNT += 1;                // error: reached outside `critical`
+}
+
+interrupt fn tick() at Vector::SysTick {
+    COUNT = 0;
+}
+
+entry fn main() -> ! {
+    bump();
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    loop {}
+}
+```
+
+The compiler checks the rule of ADR 0078 on the MIR of the whole program, `core`
+included, after it is built and before any dump of it: a `static mut` that the
+thread and a handler both reach must be accessed in the thread only inside
+`critical`, and one that an unmaskable handler reaches must be reached by no
+other context. There is no attribute that silences it.
+
+**Contexts.** The **thread context** starts at the entry function. The **handler
+context** starts at every handler of a maskable vector: `Vector`'s maskable
+variants, and the variants of the chip's list (ADR 0089). Each handler of an
+unmaskable vector of `Vector` (`NMI`, `SVCall` and the faults, ADR 0084) is a
+**context of its own**. A context reaches what its functions call, and what their checks may call.
+`_start` is no context (it runs before the entry function, with interrupts masked,
+and names no `static mut`), nor is a default handler (ADR 0085), a `comptime` body,
+a function nothing calls, or one that only C or assembly calls.
+
+**What is a call.** A call statement reaches its callee. A check that may fail
+(a division by zero, an index out of bounds, an `assert`, a `match` on a value
+that is no variant, a bit field written out of range) reaches the panic function,
+from the context of the check and inside the block it is in.
+Nothing else is an edge:
+
+- `sym f` in `asm` gives an address to assembly, which the check does not see;
+- an `extern fn` has no body to follow;
+- the calls that code generation or LLVM inserts (`memcpy`, `__udivdi3`,
+  `__aeabi_uldivmod`, `__critical_enter`) are not in MIR. The functions of `core`
+  that they reach contain no check and name no `static mut`; a test fails if that
+  stops being so.
+
+**What names a static.** A **place** is a statement of a reachable block that holds
+an operand naming a `static mut` or an `extern static mut`: a read, a write, a
+compound assignment, `&raw const` or `&raw mut` of it, or a `sym` operand of `asm`,
+including the `asm` of a naked function. A statement that names one static twice is
+one place. A `static` (without `mut`) and a byte string are not checked. The
+check does not read types: a static of size 0 is a static like any other. Code
+after a `return` or a diverging call has no MIR and holds no places; the blocks of
+`if false { ... }` are reachable and count.
+
+**What does not name a static is compile time.** `const P: *mut u32 = &raw mut X;`,
+a block `comptime { &raw mut X }` in a function, and the initializer of a `static`
+holding `&raw mut X` run in no context; what a function gets from them is a raw
+pointer, which the check does not follow (see below). `size_of` and `len` of a
+static's type name nothing. A `let p: *mut u32 = &raw mut X;` in a function runs
+at run time and is a place like any other.
+
+**Inside and outside `critical`.** In each body, a place, a call or a check is
+**outside** when some path reaches it with no `critical` block around it, and
+**inside** otherwise. The walk follows control flow, not the text: an access after
+a `break`, `continue`, `return` or `?` has left a block, or after its end, is
+outside when the block was left. The call of the panic function by a check inside a
+block stays inside: it is no exit (see "`critical` blocks"). In a handler context,
+`critical` changes nothing and is not read.
+
+**The rules.**
+
+1. A static that the thread context and the handler context both reach: each
+   place naming it, in the thread context, outside `critical`, is an error,
+   `analysis::unprotected-static`. A place is unprotected when some path reaches it
+   with no block around it, so it is enough to put the access, or one call on the
+   path to it, in a `critical` block. A recursion entered inside a block is
+   protected.
+2. A static that a context of an unmaskable handler reaches, and any other
+   context also reaches: each place naming it, in a function that unmaskable
+   handler reaches, is an error, `analysis::unmaskable-static`. Being inside
+   `critical` changes nothing, because no mask stops an unmaskable handler. A place
+   that two unmaskable handlers reach is reported once, for the first in the order
+   of the handlers in the program.
+3. Two maskable handlers may share a static freely: they never preempt each other.
+   A static reached from one context only is not shared.
+
+A place can break both rules, and is then reported under both codes, rule 1 first.
+
+**The error.** One error per place, with the message naming the static (written as
+a path: `uart::COUNT`, `.` as `::`, ADR 0051) and, as labels:
+
+- the place, as the primary label;
+- one label for each call or check on the path from the context to the place,
+  all of them and in their own files when the path crosses files, so that the call
+  to protect is among them. The path is the shortest, and among equals the one the
+  walk meets first. A path through `core` shows `core`'s own line;
+- one place of the other context (rule 1: the handler context's first; rule 2: the
+  thread's, else the maskable handlers', else the first other unmaskable
+  handler's), with the name of the handler, and no path to it. When it is the same
+  place, because a function both contexts call holds it, the primary label says
+  so and there is no second one;
+- a help: to put the access, or one call on the path to it, in a `critical`
+  block (rule 1), or to give the handler a static of its own or reach this memory
+  through a pointer from a `const` (rule 2).
+
+The program of the first example, in `main.ers` and built for `thumbv7m-none-eabi`
+(`--emit=mir`), is reported as:
+
+```
+analysis::unprotected-static
+
+  × `COUNT` is reached outside `critical` in the thread context, and a handler reaches it too
+    ╭─[main.ers:6:5]
+  5 │ fn bump() {
+  6 │     COUNT += 1;
+    ·     ─────┬────
+    ·          ╰── reached here, outside `critical`
+  7 │ }
+  8 │ 
+  9 │ interrupt fn tick() at Vector::SysTick {
+ 10 │     COUNT = 0;
+    ·     ────┬────
+    ·         ╰── the handler `tick` reaches it here
+ 11 │ }
+ 12 │ 
+ 13 │ entry fn main() -> ! {
+ 14 │     bump();
+    ·     ───┬──
+    ·        ╰── called here, outside `critical`
+ 15 │     loop {}
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block
+```
+
+**A panic function that names a static** is checked like any function. It reaches
+the panic function from every check, so a `static mut` it names, shared with the
+other contexts, needs its own `critical` block when a handler has a check too; and
+when an unmaskable handler has one it cannot be protected, so a fault handler that
+may fail a check reaches only what no other context names. A panic function in a
+program with no handler is in no shared context.
+
+**When it runs.** The check needs a program without errors: a run with a type error
+reports it first, and these only on the next run. `--emit=typeck` and the stages
+before it stop before the check; `--emit=mir`, `--emit=linker-script`,
+`--emit=llvm-ir` and `erebos build` pass through it, and an error stops them with
+no dump. MIR is the same at both optimization levels, so the verdict does not
+depend on `-O`. The check changes no generated code: a program it accepts compiles
+to what it did before.
+
+**What it does not see.** Only a `static mut` and an `extern static mut` named in
+the program are checked. A raw pointer to one, a peripheral, assembly and a call
+through an address are not followed: raw pointers wait for the ownership of M5
+(ADR 0078), and there are no function pointers yet. The check does not accept an
+access before `enable_interrupts` or after the last interrupt: those need
+`critical` too, which costs two or three instructions at `-O`. It does not check
+priorities, nor a handler that enables interrupts, which leave the one-level model
+(ADR 0078).
+
+**The way out.** What the rule cannot express is written visibly, with the pointer
+made at compile time, from a `const` and not one taken in a function:
+
+```
+use core::arch::Vector;
+
+static mut COUNT: u32 = 0;
+const RUNS: *mut volatile u32 = &raw mut COUNT as *mut volatile u32;
+
+interrupt fn nonmaskable() at Vector::NMI {
+    *RUNS += 1;
+}
+
+entry fn main() -> ! {
+    loop {
+        if *RUNS >= 1 {
+            break;
+        }
+    }
+    loop {}
+}
+```
+
+No handler or function names `COUNT`, so nothing is shared as far as the check
+goes; the program answers for the rest. An access through a plain pointer has
+neither the fence of `critical` nor the guarantees of `volatile` (ADR 0023): a
+loop `while *P == 0 {}` may read once, which is why the example is `volatile`. A
+type that `volatile` does not apply to, such as an array, a struct or a `u64`, is
+reached through a plain pointer, with `core::arch::compiler_fence` where the order
+matters. Neither makes a read-modify-write or an access of several words atomic: the
+example's `*RUNS += 1` is safe only because the handler is its one writer. A
+pointer taken inside `critical` and used outside is free in the same way.
 
 ## Peripherals (ADR 0058)
 
@@ -5459,6 +5659,8 @@ Every error has a stable code, shown with the message.
 | `eval::uninit-read` | reading bytes never written, such as padding |
 | `eval::pointer-escapes` | a compile-time result holding a pointer into the evaluation's own memory |
 | `eval::pointer-out-of-bounds` | a compile-time result holding a pointer outside its object and not one past its end, or a slice not inside its object |
+| `analysis::unprotected-static` | a place in the thread context, outside `critical`, naming a `static mut` or `extern static mut` that the handler context also reaches (ADR 0078, 0093) |
+| `analysis::unmaskable-static` | a place in the context of an unmaskable handler, naming a `static mut` or `extern static mut` that another context also reaches; being inside `critical` changes nothing (ADR 0078, 0093) |
 | `codegen::asm` | an instruction LLVM's assembler rejects, at the `asm` expression with the assembler's message, or without a label when the error exists only in the whole object (a non-local label defined twice by inlining, no register left for the operands) |
 | `codegen::llvm` | LLVM rejected the target, or reported an error that is not about inline assembly; an environment problem |
 | `link::no-memory-map` | building an executable, or printing its linker script, for a program without a `memory` block |

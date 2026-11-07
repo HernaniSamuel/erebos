@@ -1,0 +1,57 @@
+// emit: mir
+// `tests/e2e/critical_race_riscv32.ers` with `critical` removed (ADR 0093):
+// the race it shows on QEMU is real, so every access of the entry function to
+// `COUNT` and `TICKS` is an error, and the handler's are the labels.
+use core::arch::Vector;
+
+fn exit(code: u32) -> ! {
+    loop {}
+}
+
+fn putc(c: u8) {}
+
+const MTIME: *mut volatile u32 = 0x0200_BFF8 as *mut volatile u32;
+const MTIMECMP_LOW: *mut volatile u32 = 0x0200_4000 as *mut volatile u32;
+const MTIMECMP_HIGH: *mut volatile u32 = 0x0200_4004 as *mut volatile u32;
+const MTIE: u32 = 0x80;
+
+const INCREMENTS: u32 = 200000;
+const PERIOD: u32 = 50;
+
+static mut COUNT: u32 = 0;
+static mut TICKS: u32 = 0;
+
+interrupt fn tick() at Vector::MachineTimer {
+    COUNT += 1;
+    TICKS += 1;
+    *MTIMECMP_LOW = *MTIME + PERIOD;
+}
+
+entry fn main() -> ! {
+    *MTIMECMP_HIGH = 0;
+    *MTIMECMP_LOW = *MTIME + PERIOD;
+    asm("csrs mie, {}", in(reg) MTIE, options(nostack, preserves_flags));
+    core::arch::enable_interrupts();
+    let mut i: u32 = 0;
+    while i < INCREMENTS {
+        let seen: u32 = COUNT;
+        if seen == 0xFFFF_FFFF {
+            exit(3)
+        }
+        COUNT = seen + 1;
+        i += 1;
+    }
+    asm("csrc mie, {}", in(reg) MTIE, options(nostack, preserves_flags));
+    if TICKS == 0 {
+        exit(2)
+    }
+    if COUNT != INCREMENTS + TICKS {
+        exit(1)
+    }
+    putc(b'r'); putc(b'a'); putc(b'c'); putc(b'e'); putc(b'\n');
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(99)
+}

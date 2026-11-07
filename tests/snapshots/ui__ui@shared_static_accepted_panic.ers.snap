@@ -1,0 +1,107 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/shared_static_accepted_panic.ers
+---
+--- mir ---
+static mut FAILS: u32; // align 4
+static ZERO: u32; // align 4
+
+fn divide(_1: u32, _2: u32) -> u32 {
+    let _0: u32;
+    let _1: u32; // a
+    let _2: u32; // d
+    let _3: bool;
+    let _4: u32;
+
+    bb0: {
+        _3 = Eq(copy _2, const 0_u32);
+        if copy _3 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        panic(division by zero);
+    }
+
+    bb2: {
+        _4 = Div(copy _1, copy _2);
+        _0 = copy _4;
+        return;
+    }
+}
+
+interrupt fn tick() -> () at MachineTimer {
+    let _0: ();
+    let _1: u32; // x
+    let _2: *const u32;
+    let _3: u32;
+    let _4: u32;
+
+    bb0: {
+        _2 = const static ZERO;
+        _3 = copy (*_2);
+        _4 = call divide(const 1_u32, copy _3);
+        _1 = copy _4;
+        return;
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+    let _1: u32; // x
+    let _2: *const u32;
+    let _3: u32;
+    let _4: u32;
+
+    bb0: {
+        _2 = const static ZERO;
+        _3 = copy (*_2);
+        _4 = call divide(const 2_u32, copy _3);
+        _1 = copy _4;
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+    let _1: u32;
+    let _2: *mut u32;
+
+    bb0: {
+        critical_enter _1;
+        _2 = const static FAILS;
+        (*_2) = Add(copy (*_2), const 1_u32);
+        critical_exit _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+comptime fn FAILS() -> u32 {
+    let _0: u32;
+
+    bb0: {
+        _0 = const 0_u32;
+        return;
+    }
+}
+
+comptime fn ZERO() -> u32 {
+    let _0: u32;
+
+    bb0: {
+        _0 = const 0_u32;
+        return;
+    }
+}
+
+extern fn core.arch.__critical_enter() -> u32;
+
+extern fn core.arch.__critical_exit(_1: u32) -> ();

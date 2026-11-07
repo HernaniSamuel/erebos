@@ -1,0 +1,23 @@
+// emit: mir
+// target: thumbv7m-none-eabi
+// A handler at a variant of the chip's list is in the handler context, as one
+// at a variant of `Vector` is (ADR 0089, 0093).
+mod chip {
+    #[interrupts]
+    pub enum Interrupt: u32 {
+        Uart0Tx = 1,
+    }
+}
+
+static mut SENT: u32 = 0;
+
+interrupt fn transmitted() at chip::Interrupt::Uart0Tx {
+    SENT += 1;
+}
+
+entry fn main() -> ! {
+    SENT = 0;
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

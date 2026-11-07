@@ -1,0 +1,23 @@
+// emit: mir
+// target: thumbv7m-none-eabi
+// The check on the path is in `core::arch` (ADR 0093): the `assert` of
+// `nvic_address`, reached through `nvic_enable`. Each step shows, the lines of
+// `core` among them: the call in this file, the call in `nvic_enable`, and the
+// check. The handler reaches the panic function through `nvic_pend`.
+use core::arch::Vector;
+
+static mut FAILS: u32 = 0;
+
+interrupt fn tick() at Vector::SysTick {
+    core::arch::nvic_pend(1);
+}
+
+entry fn main() -> ! {
+    core::arch::nvic_enable(1);
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    FAILS += 1;
+    loop {}
+}

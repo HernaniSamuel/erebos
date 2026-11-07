@@ -1,0 +1,59 @@
+// emit: mir
+// Rule 2 of ADR 0093, on riscv32: a fault handler and a maskable one that share
+// a static; two unmaskable handlers, both reported; a helper called by two
+// unmaskable handlers, reported once for the first in the order of the
+// handlers; a place that breaks both rules (`everywhere`, which the thread, a
+// maskable handler and a fault handler call), under both codes; a place whose
+// other context is the same place, with one label.
+use core::arch::Vector;
+
+static mut FAULTS: u32 = 0;
+static mut SHARED: u32 = 0;
+static mut BOTH: u32 = 0;
+static mut LONELY: u32 = 0;
+static mut HELPED: u32 = 0;
+static mut EVERY: u32 = 0;
+static mut SAME: u32 = 0;
+
+fn help() {
+    HELPED += 1;
+}
+
+fn common() {
+    SAME += 1;
+}
+
+fn everywhere() {
+    EVERY += 1;
+}
+
+interrupt fn tick() at Vector::MachineTimer {
+    FAULTS = 0;
+    BOTH = 1;
+    everywhere();
+}
+
+interrupt fn crash() -> ! at Vector::IllegalInstruction {
+    FAULTS += 1;
+    SHARED += 1;
+    help();
+    common();
+    everywhere();
+    loop {}
+}
+
+interrupt fn fetch() -> ! at Vector::InstructionFault {
+    SHARED += 2;
+    help();
+    LONELY = 1;
+    loop {}
+}
+
+entry fn main() -> ! {
+    BOTH += 1;
+    common();
+    everywhere();
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

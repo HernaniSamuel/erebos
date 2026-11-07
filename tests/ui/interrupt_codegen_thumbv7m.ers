@@ -5,6 +5,7 @@
 use core::arch::Vector;
 
 static mut TICKS: u32 = 0;
+static mut CALLS: u32 = 0;
 
 interrupt fn tick() at Vector::SysTick {
     TICKS += 1;
@@ -22,7 +23,7 @@ mod drivers {
 
     #[export]
     pub interrupt fn svc() at core::arch::Vector::SVCall {
-        super::TICKS = 0;
+        super::CALLS = 1;
     }
 }
 

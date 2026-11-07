@@ -1,0 +1,43 @@
+// emit: mir
+// What rule 2 accepts (ADR 0093); the dump shows the program passed. An
+// unmaskable handler's own static; two handlers using the way out, a pointer
+// from a `const`; a fault handler with a check, whose panic function names
+// nothing; a `static` and a byte string in every context.
+use core::arch::Vector;
+
+static mut OWN: u32 = 0;
+static mut COUNT: u32 = 0;
+const RUNS: *mut volatile u32 = &raw mut COUNT as *mut volatile u32;
+static TABLE: [u32; 2] = [1, 2];
+static ZERO: u32 = 0;
+
+fn read_table(i: usize) -> u32 {
+    TABLE[i] + b"ok"[i] as u32
+}
+
+interrupt fn crash() -> ! at Vector::IllegalInstruction {
+    OWN += 1;
+    *RUNS += 1;
+    let t: u32 = read_table(1);
+    let x: u32 = 1 / ZERO;
+    loop {}
+}
+
+interrupt fn fetch() -> ! at Vector::InstructionFault {
+    *RUNS += 2;
+    let t: u32 = read_table(0);
+    loop {}
+}
+
+interrupt fn tick() at Vector::MachineTimer {
+    *RUNS = 0;
+    let t: u32 = read_table(1);
+}
+
+entry fn main() -> ! {
+    let seen: u32 = *RUNS;
+    let t: u32 = read_table(1);
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

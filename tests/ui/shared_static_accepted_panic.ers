@@ -1,0 +1,29 @@
+// emit: mir
+// The panic function names a static in its own `critical` block (ADR 0078,
+// 0093): the thread and the handler both reach it through a check, and the
+// access is inside. The counterpart without a handler is
+// `shared_static_accepted_panic_no_handler.ers`.
+use core::arch::Vector;
+
+static mut FAILS: u32 = 0;
+static ZERO: u32 = 0;
+
+fn divide(a: u32, d: u32) -> u32 {
+    a / d
+}
+
+interrupt fn tick() at Vector::MachineTimer {
+    let x: u32 = divide(1, ZERO);
+}
+
+entry fn main() -> ! {
+    let x: u32 = divide(2, ZERO);
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    critical {
+        FAILS += 1;
+    }
+    loop {}
+}

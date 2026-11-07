@@ -31,7 +31,8 @@ entry fn main() -> ! {
         }
     }
     putc(b'p'); putc(b'e'); putc(b'n'); putc(b'd'); putc(b's'); putc(b'v'); putc(b' ');
-    putc(b'0' + RUNS as u8);
+    let runs: u32 = critical { RUNS };
+    putc(b'0' + runs as u8);
     putc(b'\n');
     exit(0)
 }

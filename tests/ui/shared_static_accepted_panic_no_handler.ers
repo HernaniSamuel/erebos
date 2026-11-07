@@ -1,0 +1,18 @@
+// emit: mir
+// A panic function that names a `static mut` in a program with no handler: the
+// default handlers of ADR 0085 call it, and they are no context (ADR 0093), so
+// the thread is the only one that reaches the static and the access needs no
+// `critical`.
+static mut FAILS: u32 = 0;
+static ZERO: u32 = 0;
+
+entry fn main() -> ! {
+    let x: u32 = 1 / ZERO;
+    FAILS = 0;
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    FAILS += 1;
+    loop {}
+}

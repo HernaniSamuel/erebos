@@ -1,0 +1,49 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/shared_static_nmi_thumbv7m.ers
+---
+--- errors ---
+analysis::unmaskable-static
+
+  × `RUNS` is reached from the unmaskable handler `nonmaskable`, and the thread context reaches it
+  │ too
+    ╭─[shared_static_nmi_thumbv7m.ers:14:5]
+ 13 │ interrupt fn nonmaskable() at Vector::NMI {
+ 14 │     RUNS += 1;
+    ·     ────┬────
+    ·         ╰── reached here; `critical` does not stop this handler
+ 15 │ }
+ 16 │ 
+ 17 │ interrupt fn service() at Vector::SVCall {
+ 18 │     CALLS += 1;
+ 19 │ }
+ 20 │ 
+ 21 │ entry fn main() -> ! {
+ 22 │     let runs: u32 = critical { RUNS };
+    ·                                ──┬─
+    ·                                  ╰── the thread context reaches it here
+ 23 │     let calls: u32 = critical { CALLS };
+    ╰────
+  help: give the handler a static of its own, or reach this memory through a pointer from a
+        `const`
+analysis::unmaskable-static
+
+  × `CALLS` is reached from the unmaskable handler `service`, and the thread context reaches it
+  │ too
+    ╭─[shared_static_nmi_thumbv7m.ers:18:5]
+ 17 │ interrupt fn service() at Vector::SVCall {
+ 18 │     CALLS += 1;
+    ·     ─────┬────
+    ·          ╰── reached here; `critical` does not stop this handler
+ 19 │ }
+ 20 │ 
+ 21 │ entry fn main() -> ! {
+ 22 │     let runs: u32 = critical { RUNS };
+ 23 │     let calls: u32 = critical { CALLS };
+    ·                                 ──┬──
+    ·                                   ╰── the thread context reaches it here
+ 24 │     loop {}
+    ╰────
+  help: give the handler a static of its own, or reach this memory through a pointer from a
+        `const`

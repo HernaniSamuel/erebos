@@ -1,0 +1,9 @@
+pub static mut COUNT: u32 = 0;
+
+pub fn start() {
+    bump();
+}
+
+fn bump() {
+    COUNT += 1;
+}

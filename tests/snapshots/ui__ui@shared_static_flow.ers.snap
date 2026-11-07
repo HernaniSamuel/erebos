@@ -1,0 +1,207 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/shared_static_flow.ers
+---
+--- errors ---
+analysis::unprotected-static
+
+  × `BRANCH` is reached outside `critical` in the thread context, and a handler reaches it too
+    ╭─[shared_static_flow.ers:29:9]
+ 14 │ interrupt fn tick() at Vector::MachineTimer {
+ 15 │     BRANCH = 0;
+    ·     ─────┬────
+    ·          ╰── the handler `tick` reaches it here
+ 16 │     BROKEN = 0;
+ 17 │     RETURNED = 0;
+ 18 │     TRIED = 0;
+ 19 │     ENDED = 0;
+ 20 │ }
+ 21 │ 
+ 22 │ // One branch is protected and the other is not: only the second is an error.
+ 23 │ fn branch(inside: bool) {
+ 24 │     if inside {
+ 25 │         critical {
+ 26 │             BRANCH = 1;
+ 27 │         }
+ 28 │     } else {
+ 29 │         BRANCH = 2;
+    ·         ─────┬────
+    ·              ╰── reached here, outside `critical`
+ 30 │     }
+    ╰────
+    ╭─[shared_static_flow.ers:76:5]
+ 75 │ entry fn main() -> ! {
+ 76 │     branch(true);
+    ·     ──────┬─────
+    ·           ╰── called here, outside `critical`
+ 77 │     broken();
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block
+analysis::unprotected-static
+
+  × `BROKEN` is reached outside `critical` in the thread context, and a handler reaches it too
+    ╭─[shared_static_flow.ers:16:5]
+ 15 │     BRANCH = 0;
+ 16 │     BROKEN = 0;
+    ·     ─────┬────
+    ·          ╰── the handler `tick` reaches it here
+ 17 │     RETURNED = 0;
+    ╰────
+    ╭─[shared_static_flow.ers:42:5]
+ 41 │     }
+ 42 │     BROKEN = 2;
+    ·     ─────┬────
+    ·          ╰── reached here, outside `critical`
+ 43 │ }
+ 44 │ 
+ 45 │ fn returned(early: bool) -> u32 {
+ 46 │     critical {
+ 47 │         if early {
+ 48 │             return RETURNED;
+ 49 │         }
+ 50 │         RETURNED = 1;
+ 51 │     }
+ 52 │     RETURNED = 2;
+ 53 │     0
+ 54 │ }
+ 55 │ 
+ 56 │ fn tried(value: Option(u32)) -> Option(u32) {
+ 57 │     critical {
+ 58 │         let inner: u32 = value?;
+ 59 │         TRIED = inner;
+ 60 │     }
+ 61 │     TRIED = 0;
+ 62 │     .Some(1)
+ 63 │ }
+ 64 │ 
+ 65 │ fn ended() {
+ 66 │     critical {
+ 67 │         critical {
+ 68 │             ENDED = 1;
+ 69 │         }
+ 70 │         ENDED = 2;
+ 71 │     }
+ 72 │     ENDED = 3;
+ 73 │ }
+ 74 │ 
+ 75 │ entry fn main() -> ! {
+ 76 │     branch(true);
+ 77 │     broken();
+    ·     ────┬───
+    ·         ╰── called here, outside `critical`
+ 78 │     let r: u32 = returned(false);
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block
+analysis::unprotected-static
+
+  × `RETURNED` is reached outside `critical` in the thread context, and a handler reaches it too
+    ╭─[shared_static_flow.ers:17:5]
+ 16 │     BROKEN = 0;
+ 17 │     RETURNED = 0;
+    ·     ──────┬─────
+    ·           ╰── the handler `tick` reaches it here
+ 18 │     TRIED = 0;
+    ╰────
+    ╭─[shared_static_flow.ers:52:5]
+ 51 │     }
+ 52 │     RETURNED = 2;
+    ·     ──────┬─────
+    ·           ╰── reached here, outside `critical`
+ 53 │     0
+ 54 │ }
+ 55 │ 
+ 56 │ fn tried(value: Option(u32)) -> Option(u32) {
+ 57 │     critical {
+ 58 │         let inner: u32 = value?;
+ 59 │         TRIED = inner;
+ 60 │     }
+ 61 │     TRIED = 0;
+ 62 │     .Some(1)
+ 63 │ }
+ 64 │ 
+ 65 │ fn ended() {
+ 66 │     critical {
+ 67 │         critical {
+ 68 │             ENDED = 1;
+ 69 │         }
+ 70 │         ENDED = 2;
+ 71 │     }
+ 72 │     ENDED = 3;
+ 73 │ }
+ 74 │ 
+ 75 │ entry fn main() -> ! {
+ 76 │     branch(true);
+ 77 │     broken();
+ 78 │     let r: u32 = returned(false);
+    ·                  ───────┬───────
+    ·                         ╰── called here, outside `critical`
+ 79 │     let t: Option(u32) = tried(.Some(1));
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block
+analysis::unprotected-static
+
+  × `TRIED` is reached outside `critical` in the thread context, and a handler reaches it too
+    ╭─[shared_static_flow.ers:18:5]
+ 17 │     RETURNED = 0;
+ 18 │     TRIED = 0;
+    ·     ────┬────
+    ·         ╰── the handler `tick` reaches it here
+ 19 │     ENDED = 0;
+    ╰────
+    ╭─[shared_static_flow.ers:61:5]
+ 60 │     }
+ 61 │     TRIED = 0;
+    ·     ────┬────
+    ·         ╰── reached here, outside `critical`
+ 62 │     .Some(1)
+ 63 │ }
+ 64 │ 
+ 65 │ fn ended() {
+ 66 │     critical {
+ 67 │         critical {
+ 68 │             ENDED = 1;
+ 69 │         }
+ 70 │         ENDED = 2;
+ 71 │     }
+ 72 │     ENDED = 3;
+ 73 │ }
+ 74 │ 
+ 75 │ entry fn main() -> ! {
+ 76 │     branch(true);
+ 77 │     broken();
+ 78 │     let r: u32 = returned(false);
+ 79 │     let t: Option(u32) = tried(.Some(1));
+    ·                          ───────┬───────
+    ·                                 ╰── called here, outside `critical`
+ 80 │     ended();
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block
+analysis::unprotected-static
+
+  × `ENDED` is reached outside `critical` in the thread context, and a handler reaches it too
+    ╭─[shared_static_flow.ers:19:5]
+ 18 │     TRIED = 0;
+ 19 │     ENDED = 0;
+    ·     ────┬────
+    ·         ╰── the handler `tick` reaches it here
+ 20 │ }
+    ╰────
+    ╭─[shared_static_flow.ers:72:5]
+ 71 │     }
+ 72 │     ENDED = 3;
+    ·     ────┬────
+    ·         ╰── reached here, outside `critical`
+ 73 │ }
+ 74 │ 
+ 75 │ entry fn main() -> ! {
+ 76 │     branch(true);
+ 77 │     broken();
+ 78 │     let r: u32 = returned(false);
+ 79 │     let t: Option(u32) = tried(.Some(1));
+ 80 │     ended();
+    ·     ───┬───
+    ·        ╰── called here, outside `critical`
+ 81 │     loop {}
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block

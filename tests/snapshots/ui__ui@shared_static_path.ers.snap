@@ -1,0 +1,158 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/shared_static_path.ers
+---
+--- errors ---
+analysis::unprotected-static
+
+  × `DEEP` is reached outside `critical` in the thread context, and a handler reaches it too
+    ╭─[shared_static_path.ers:27:5]
+ 18 │ interrupt fn tick() at Vector::MachineTimer {
+ 19 │     DEEP = 0;
+    ·     ────┬───
+    ·         ╰── the handler `tick` reaches it here
+ 20 │     BOTH = 0;
+ 21 │     LOOPED = 0;
+ 22 │     MANY = 2;
+ 23 │     early();
+ 24 │ }
+ 25 │ 
+ 26 │ fn second() {
+ 27 │     DEEP += 1;
+    ·     ────┬────
+    ·         ╰── reached here, outside `critical`
+ 28 │ }
+ 29 │ 
+ 30 │ fn first() {
+ 31 │     second();
+    ·     ────┬───
+    ·         ╰── called here, outside `critical`
+ 32 │ }
+ 33 │ 
+ 34 │ fn both() {
+ 35 │     BOTH += 1;
+ 36 │ }
+ 37 │ 
+ 38 │ fn spin(n: u32) {
+ 39 │     LOOPED = n;
+ 40 │     if n > 0 {
+ 41 │         spin(n - 1);
+ 42 │     }
+ 43 │ }
+ 44 │ 
+ 45 │ entry fn main() -> ! {
+ 46 │     first();
+    ·     ───┬───
+    ·        ╰── called here, outside `critical`
+ 47 │     critical {
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block
+analysis::unprotected-static
+
+  × `BOTH` is reached outside `critical` in the thread context, and a handler reaches it too
+    ╭─[shared_static_path.ers:35:5]
+ 19 │     DEEP = 0;
+ 20 │     BOTH = 0;
+    ·     ────┬───
+    ·         ╰── the handler `tick` reaches it here
+ 21 │     LOOPED = 0;
+ 22 │     MANY = 2;
+ 23 │     early();
+ 24 │ }
+ 25 │ 
+ 26 │ fn second() {
+ 27 │     DEEP += 1;
+ 28 │ }
+ 29 │ 
+ 30 │ fn first() {
+ 31 │     second();
+ 32 │ }
+ 33 │ 
+ 34 │ fn both() {
+ 35 │     BOTH += 1;
+    ·     ────┬────
+    ·         ╰── reached here, outside `critical`
+ 36 │ }
+ 37 │ 
+ 38 │ fn spin(n: u32) {
+ 39 │     LOOPED = n;
+ 40 │     if n > 0 {
+ 41 │         spin(n - 1);
+ 42 │     }
+ 43 │ }
+ 44 │ 
+ 45 │ entry fn main() -> ! {
+ 46 │     first();
+ 47 │     critical {
+ 48 │         both();
+ 49 │     }
+ 50 │     both();
+    ·     ───┬──
+    ·        ╰── called here, outside `critical`
+ 51 │     spin(3);
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block
+analysis::unprotected-static
+
+  × `LOOPED` is reached outside `critical` in the thread context, and a handler reaches it too
+    ╭─[shared_static_path.ers:39:5]
+ 20 │     BOTH = 0;
+ 21 │     LOOPED = 0;
+    ·     ─────┬────
+    ·          ╰── the handler `tick` reaches it here
+ 22 │     MANY = 2;
+ 23 │     early();
+ 24 │ }
+ 25 │ 
+ 26 │ fn second() {
+ 27 │     DEEP += 1;
+ 28 │ }
+ 29 │ 
+ 30 │ fn first() {
+ 31 │     second();
+ 32 │ }
+ 33 │ 
+ 34 │ fn both() {
+ 35 │     BOTH += 1;
+ 36 │ }
+ 37 │ 
+ 38 │ fn spin(n: u32) {
+ 39 │     LOOPED = n;
+    ·     ─────┬────
+    ·          ╰── reached here, outside `critical`
+ 40 │     if n > 0 {
+ 41 │         spin(n - 1);
+ 42 │     }
+ 43 │ }
+ 44 │ 
+ 45 │ entry fn main() -> ! {
+ 46 │     first();
+ 47 │     critical {
+ 48 │         both();
+ 49 │     }
+ 50 │     both();
+ 51 │     spin(3);
+    ·     ───┬───
+    ·        ╰── called here, outside `critical`
+ 52 │     MANY = 3;
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block
+analysis::unprotected-static
+
+  × `MANY` is reached outside `critical` in the thread context, and a handler reaches it too
+    ╭─[shared_static_path.ers:15:5]
+ 14 │ fn early() {
+ 15 │     MANY = 1;
+    ·     ────┬───
+    ·         ╰── the handler `tick` reaches it here
+ 16 │ }
+    ╰────
+    ╭─[shared_static_path.ers:52:5]
+ 51 │     spin(3);
+ 52 │     MANY = 3;
+    ·     ────┬───
+    ·         ╰── reached here, outside `critical`
+ 53 │     loop {}
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block

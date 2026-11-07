@@ -1,0 +1,84 @@
+// emit: mir
+// Inside and outside are walked over the blocks of MIR, not read off the text
+// (ADR 0093): `critical` in one branch only; an access after a block's
+// `break`, `return` and `?` have left it; and after a block's end. The
+// accesses inside a block are no errors, the ones after it are.
+use core::arch::Vector;
+
+static mut BRANCH: u32 = 0;
+static mut BROKEN: u32 = 0;
+static mut RETURNED: u32 = 0;
+static mut TRIED: u32 = 0;
+static mut ENDED: u32 = 0;
+
+interrupt fn tick() at Vector::MachineTimer {
+    BRANCH = 0;
+    BROKEN = 0;
+    RETURNED = 0;
+    TRIED = 0;
+    ENDED = 0;
+}
+
+// One branch is protected and the other is not: only the second is an error.
+fn branch(inside: bool) {
+    if inside {
+        critical {
+            BRANCH = 1;
+        }
+    } else {
+        BRANCH = 2;
+    }
+}
+
+// The loop ends only through the `break`, so the access after it is reached
+// only once the block has been left.
+fn broken() {
+    loop {
+        critical {
+            BROKEN = 1;
+            break;
+        }
+    }
+    BROKEN = 2;
+}
+
+fn returned(early: bool) -> u32 {
+    critical {
+        if early {
+            return RETURNED;
+        }
+        RETURNED = 1;
+    }
+    RETURNED = 2;
+    0
+}
+
+fn tried(value: Option(u32)) -> Option(u32) {
+    critical {
+        let inner: u32 = value?;
+        TRIED = inner;
+    }
+    TRIED = 0;
+    .Some(1)
+}
+
+fn ended() {
+    critical {
+        critical {
+            ENDED = 1;
+        }
+        ENDED = 2;
+    }
+    ENDED = 3;
+}
+
+entry fn main() -> ! {
+    branch(true);
+    broken();
+    let r: u32 = returned(false);
+    let t: Option(u32) = tried(.Some(1));
+    ended();
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

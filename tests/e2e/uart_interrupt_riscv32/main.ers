@@ -125,7 +125,8 @@ entry fn main() -> ! {
             core::arch::wait_for_interrupt();
         }
     }
-    if SENT != 21 {
+    let sent: u32 = critical { SENT };
+    if sent != 21 {
         exit(2)
     }
     exit(0)

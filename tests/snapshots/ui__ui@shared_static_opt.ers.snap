@@ -1,0 +1,41 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/shared_static_opt.ers
+---
+--- errors ---
+analysis::unprotected-static
+
+  × `COUNT` is reached outside `critical` in the thread context, and a handler reaches it too
+    ╭─[shared_static_opt.ers:14:5]
+  9 │ interrupt fn tick() at Vector::MachineTimer {
+ 10 │     COUNT += 1;
+    ·     ─────┬────
+    ·          ╰── the handler `tick` reaches it here
+ 11 │ }
+ 12 │ 
+ 13 │ entry fn main() -> ! {
+ 14 │     COUNT = 0;
+    ·     ────┬────
+    ·         ╰── reached here, outside `critical`
+ 15 │     loop {}
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block
+--- errors -O ---
+analysis::unprotected-static
+
+  × `COUNT` is reached outside `critical` in the thread context, and a handler reaches it too
+    ╭─[shared_static_opt.ers:14:5]
+  9 │ interrupt fn tick() at Vector::MachineTimer {
+ 10 │     COUNT += 1;
+    ·     ─────┬────
+    ·          ╰── the handler `tick` reaches it here
+ 11 │ }
+ 12 │ 
+ 13 │ entry fn main() -> ! {
+ 14 │     COUNT = 0;
+    ·     ────┬────
+    ·         ╰── reached here, outside `critical`
+ 15 │     loop {}
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block

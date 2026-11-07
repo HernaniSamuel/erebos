@@ -1,0 +1,23 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/shared_static_chip_thumbv7m.ers
+---
+--- errors ---
+analysis::unprotected-static
+
+  × `SENT` is reached outside `critical` in the thread context, and a handler reaches it too
+    ╭─[shared_static_chip_thumbv7m.ers:19:5]
+ 14 │ interrupt fn transmitted() at chip::Interrupt::Uart0Tx {
+ 15 │     SENT += 1;
+    ·     ────┬────
+    ·         ╰── the handler `transmitted` reaches it here
+ 16 │ }
+ 17 │ 
+ 18 │ entry fn main() -> ! {
+ 19 │     SENT = 0;
+    ·     ────┬───
+    ·         ╰── reached here, outside `critical`
+ 20 │     loop {}
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block

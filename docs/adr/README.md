@@ -92,7 +92,7 @@ Do not write one for local implementation details that the code already explains
 | 0060 | [Register fields](0060-register-fields.md) | Accepted, amended by 0064, 0065 |
 | 0061 | [Alternate registers](0061-alternate-registers.md) | Accepted, amended by 0064 |
 | 0062 | [Bit-field defaults are no part of the bit layout](0062-bit-field-defaults-are-no-part-of-the-bit-layout.md) | Accepted |
-| 0063 | [Architecture rules checked by tests](0063-architecture-rules-checked-by-tests.md) | Accepted, amended by 0070, 0082 |
+| 0063 | [Architecture rules checked by tests](0063-architecture-rules-checked-by-tests.md) | Accepted, amended by 0070, 0082, 0093 |
 | 0064 | [Register arrays and clusters](0064-register-arrays-and-clusters.md) | Accepted |
 | 0065 | [Field access modes](0065-field-access-modes.md) | Accepted |
 | 0066 | [Peripherals over others](0066-peripherals-over-others.md) | Accepted |
@@ -107,7 +107,7 @@ Do not write one for local implementation details that the code already explains
 | 0075 | [Aggregates across calls on ARMv7-M](0075-aggregates-across-calls-on-armv7m.md) | Accepted |
 | 0076 | [64-bit division calls `core` where LLVM's call cannot be written](0076-64-bit-division-calls-core.md) | Accepted, amended by 0080 |
 | 0077 | [Programs tested on every target](0077-programs-tested-on-every-target.md) | Accepted, amended by 0079, 0088 |
-| 0078 | [Concurrency with interrupt handlers](0078-concurrency-with-interrupt-handlers.md) | Accepted |
+| 0078 | [Concurrency with interrupt handlers](0078-concurrency-with-interrupt-handlers.md) | Accepted, amended by 0093 |
 | 0079 | [Inline assembly](0079-inline-assembly.md) | Accepted, amended by 0083, 0084 |
 | 0080 | [`core::arch`, one file per target](0080-core-arch-per-target.md) | Accepted, corrected 2026-11-04 |
 | 0081 | [Fences](0081-fences.md) | Accepted |
@@ -122,3 +122,4 @@ Do not write one for local implementation details that the code already explains
 | 0090 | [The thumbv7m table with the chip's interrupts](0090-the-thumbv7m-table-with-the-chips-interrupts.md) | Accepted |
 | 0091 | [Enabling and dispatching external interrupts](0091-enabling-and-dispatching-external-interrupts.md) | Accepted |
 | 0092 | [Interrupts generated from SVD](0092-interrupts-generated-from-svd.md) | Accepted |
+| 0093 | [Shared statics checked](0093-shared-statics-checked.md) | Accepted |

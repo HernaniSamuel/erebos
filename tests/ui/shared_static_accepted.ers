@@ -1,0 +1,108 @@
+// emit: mir
+// What the rule accepts (ADR 0078, 0093); the dump shows the program passed.
+// A block around the place, around a call on the path, nested; a recursion
+// entered inside; the forms `while !critical { DONE } {}` and the wait of
+// ADR 0086; two maskable handlers sharing a static; a handler's own static
+// and the thread's own; a `static` and a byte string in every context; a
+// function nothing calls; one only `sym` names; an `#[export]` function
+// nothing in the program calls.
+use core::arch::Vector;
+
+static mut AROUND: u32 = 0;
+static mut CALLED: u32 = 0;
+static mut NESTED: u32 = 0;
+static mut RECURSIVE: u32 = 0;
+static mut DONE: bool = false;
+static mut WOKEN: u32 = 0;
+static mut BETWEEN: u32 = 0;
+static mut OWN: u32 = 0;
+static mut MINE: u32 = 0;
+static mut NAMED: u32 = 0;
+static mut ORPHAN: u32 = 0;
+static mut EXPORTED: u32 = 0;
+static TABLE: [u32; 2] = [1, 2];
+
+fn called() {
+    CALLED += 1;
+}
+
+fn recursive(n: u32) {
+    RECURSIVE = n;
+    if n > 0 {
+        recursive(n - 1);
+    }
+}
+
+fn read_table(i: usize) -> u32 {
+    TABLE[i] + b"ok"[i] as u32
+}
+
+fn named() {
+    NAMED = 1;
+}
+
+fn address() {
+    asm("la {}, {}", out(reg) _, sym named);
+}
+
+fn orphan() {
+    ORPHAN = 1;
+}
+
+#[export]
+fn exported() {
+    EXPORTED = 1;
+}
+
+interrupt fn tick() at Vector::MachineTimer {
+    AROUND = 0;
+    CALLED = 0;
+    NESTED = 0;
+    RECURSIVE = 0;
+    DONE = true;
+    WOKEN = 1;
+    BETWEEN += 1;
+    OWN += 1;
+    NAMED = 2;
+    ORPHAN = 2;
+    EXPORTED = 2;
+    let t: u32 = read_table(1);
+}
+
+interrupt fn soft() at Vector::MachineSoftware {
+    BETWEEN += 2;
+    OWN += 1;
+}
+
+entry fn main() -> ! {
+    critical {
+        AROUND += 1;
+    }
+    critical {
+        called();
+    }
+    critical {
+        critical {
+            NESTED += 1;
+        }
+        NESTED += 2;
+    }
+    critical {
+        recursive(3);
+    }
+    while !critical { DONE } {}
+    loop {
+        critical {
+            if WOKEN != 0 {
+                break;
+            }
+            core::arch::wait_for_interrupt();
+        }
+    }
+    let t: u32 = read_table(0);
+    MINE += 1;
+    address();
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

@@ -1,0 +1,3 @@
+pub interrupt fn tick() at core::arch::Vector::MachineTimer {
+    super::drivers::COUNT = 0;
+}

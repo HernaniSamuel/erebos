@@ -1176,6 +1176,13 @@ const EXEMPT: &[Exempt] = &[
         reason: "each needs an enum with `#[interrupts]` of its own, and a program has one: a base that has a list (`tests/ui/chip_interrupts_*.ers`, `tests/e2e/uart_loopback_riscv32.ers`) gets `resolve::duplicate-interrupts` from the snippet's, reported before type checking, which hides these; `ty::interrupt-number` is also about thumbv7m, and the bases are built for riscv32, where 496 is accepted; `tests/ui/chip_interrupts_*.ers` cover them",
     },
     Exempt {
+        codes: &[
+            "analysis::unprotected-static",
+            "analysis::unmaskable-static",
+        ],
+        reason: "a snippet cannot break either rule alone: rule 1 needs a place the thread context reaches, rule 2 a place an unmaskable handler reaches and another context too, and a snippet's statements land in any function; a handler in a snippet clashes with a base that serves its vector, `resolve::duplicate-vector`, which hides the code, as for `ty::interrupt-return`; the `tests/ui/shared_static_*.ers` cover it (ADR 0093)",
+    },
+    Exempt {
         codes: &["eval::step-limit"],
         reason: "a loop of 10,000,000 steps takes seconds in a debug build, in every program it is injected into; `tests/ui/eval_comptime_loop.ers` covers it",
     },
