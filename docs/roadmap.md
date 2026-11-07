@@ -306,9 +306,10 @@ ADRs:
     alignment per program), 0091 (`core::arch::nvic_*` on thumbv7m; the PLIC
     and its dispatch are the program's) and 0092 (`erebos svd` writes the
     enum; the milestone programs).
-  - M4.5: where the check runs (a MIR analysis, ADR 0033), its
-    diagnostics (the access, and the path of calls from the context), and
-    what counts as naming a static.
+  - M4.5: settled by ADR 0093 (a new layer, `analysis`, over the whole
+    program's MIR before any dump of it; one error per place, with the path of
+    calls from the context; only what a body does at run time names a static,
+    so a pointer from a `const` is a raw pointer, and the way out).
   - Not in M4: priorities and nesting (ADR 0078, "What later steps may
     add"); function pointers.
 - **M5:**
