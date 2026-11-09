@@ -123,6 +123,25 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   `handlers` (the maskable roots, used only for `is_empty`) sits next to
   `handler: &Context`; a name like `maskable_roots` would not be confused
   with it. (M4.5)
+- In `src/mir/validate.rs`, `volatile_after` has a `_ => from.volatile` arm
+  (as `Builder::is_volatile` does), so a new projection that crosses a
+  pointer compiles without setting volatility, while the module header says
+  the `PlaceElem` matches have no `_` arm. Reword the header or name the
+  projections. (M5.1)
+- In `src/mir/validate.rs`, `binary` has two arms with the same result
+  (`Unit | Never | Array | Slice | Struct` and `Enum | Peripheral`); they
+  could be one. (M5.1)
+- `Builder::cast` in `src/mir/build.rs` builds a `SliceAddress` plus a
+  `Cast` for `*mut [u8]` to `*const u8`, which `fits` would accept without
+  the `Cast` (ADR 0024); using `fits` there keeps the earlier MIR for that
+  case. Harmless as it is. (M5.1)
+- `report` in `src/mir/validate.rs` formats with a string holding a raw
+  newline and two spaces instead of `format!("\n  {violation}")`; the
+  output is the same, but the form is harder to read and no `Decisions`
+  entry records it. (M5.1)
+- The `Display` arm of `Location::Program` in `src/mir/validate.rs` is never
+  reached, since `Violation::fmt` returns early for it; drop its text or say
+  that it is a placeholder. (M5.1)
 
 ## Tests
 
@@ -237,6 +256,10 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   (`__udivdi3`, `memmove`...) drops it silently; the step 4 `Decisions` list
   more roots than any test asserts, and the root filter (`runtime` and no
   `.` in the symbol) relies on how body names are written. (M4.5)
+- No test says that a kept body with a `critical_enter` statement, while
+  `Mir::critical_enter` is `None`, is not a P2 (a reading of ADR 0095 that
+  the step 4 `Decisions` record); one line in `a_valid_program_reports_nothing`
+  in `src/mir/validate.rs`. (M5.1)
 
 ## Docs
 
@@ -320,3 +343,13 @@ M3.1 to M3.3 on 2026-10-28; these remain.
 - `AGENTS.md`: the sentence added to "Respect layer boundaries" leaves a
   short, ragged line before `tests/architecture.rs checks the modules each`.
   (M4.5)
+- `docs/roadmap.md`, "M5.1 done": the gloss of T1 to T9 says "no value of an
+  unsized type", where T3 says `!`, `[T]` and peripheral types; and "the
+  ADR's rules stand as written" hides two readings that step 4 records (P2
+  also covers `VectorWord::Default(i)`, and a `critical_enter` statement with
+  `Mir::critical_enter == None` is not a P2); "no test's MIR broke a rule
+  beyond the cast" would be exact. (M5.1)
+- The step 4 `Decisions` of `.claude/plans/M5.1.md` do not list the
+  re-exports that step adds to `src/mir/mod.rs` (`check_program`,
+  `assert_valid_program`, `programs_checked`); only step 1 lists the ones it
+  added. (M5.1)
