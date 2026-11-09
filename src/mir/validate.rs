@@ -9,11 +9,13 @@
 //! `Operand`, `PlaceElem` and `AsmOperandKind` name every variant and have
 //! no `_` arm, so that a new variant fails to compile here.
 
+use std::collections::HashSet;
 use std::fmt;
 
 use super::{
-    AsmOperandKind, AsmPiece, BasicBlock, Body, InlineAsm, Local, Operand, PanicCause, PanicInfoAt,
-    Place, PlaceElem, Rvalue, Statement, Terminator, Ty,
+    AsmOperandKind, AsmPiece, BasicBlock, BinOp, Body, Const, InlineAsm, IntTy, Local, Operand,
+    PanicCause, PanicInfoAt, PeripheralTypeRef, Place, PlaceElem, Ptr, Rvalue, Statement,
+    Terminator, Ty, UnOp,
 };
 
 /// Where in a body a rule is broken.
@@ -260,44 +262,111 @@ impl Checker<'_> {
         exists
     }
 
-    /// S7 for the base and the index locals of a place. Whether the base
-    /// exists is the result.
-    fn place(&mut self, place: Place) -> bool {
-        let base = self.local(place.local, "a place");
+    /// S7, T1 and T2 for a place: its type and whether accessing it is
+    /// volatile, if its base exists and every projection applies to the type
+    /// before it. Each index local that exists is checked for T2, whatever
+    /// became of the walk; the walk stops at the first projection that does
+    /// not apply.
+    fn place(&mut self, place: Place) -> Option<Typed> {
+        let mut typed = self.local(place.local, "a place").then(|| Typed {
+            ty: self.body.locals[place.local.0 as usize].ty,
+            volatile: false,
+        });
         for elem in place.projection {
-            match elem {
+            let index = match elem {
                 PlaceElem::Offset(index)
                 | PlaceElem::Index(index)
-                | PlaceElem::Element(_, index) => {
-                    self.local(*index, "a projection");
-                }
+                | PlaceElem::Element(_, index) => Some(*index),
                 PlaceElem::Deref
                 | PlaceElem::ConstIndex(_)
                 | PlaceElem::Field(_)
                 | PlaceElem::ConstElement(..)
                 | PlaceElem::Tag
-                | PlaceElem::Payload { .. } => {}
+                | PlaceElem::Payload { .. } => None,
+            };
+            if let Some(index) = index
+                && self.local(index, "a projection")
+                && self.local_ty(index) != Some(Ty::Int(IntTy::Usize))
+            {
+                self.violation(
+                    "T2",
+                    format!(
+                        "the index `{index}` has type `{}`, not `usize`",
+                        self.body.locals[index.0 as usize].ty
+                    ),
+                );
+            }
+            if let Some(from) = typed {
+                typed = match project(from.ty, elem) {
+                    Ok(ty) => Some(Typed {
+                        ty,
+                        volatile: volatile_after(from, elem),
+                    }),
+                    Err(text) => {
+                        self.violation("T1", text);
+                        None
+                    }
+                };
             }
         }
-        base
+        typed
     }
 
-    /// S7 for a place that is read.
-    fn read(&mut self, place: Place) {
-        self.place(place);
+    fn local_ty(&self, local: Local) -> Option<Ty> {
+        self.body.locals.get(local.0 as usize).map(|decl| decl.ty)
     }
 
-    /// S7 for a place, and S8 for the constant local it may change: a
-    /// place written, or taken by `&raw mut`, through no pointer.
-    fn write(&mut self, place: Place, how: &str) {
-        if !self.place(place) {
-            return;
+    /// T3 and T4 for a place read or written whole. Its type, if it is a
+    /// type of values, which T5 and T9 rely on.
+    fn whole(&mut self, typed: Option<Typed>, verb: &str) -> Option<Ty> {
+        let typed = typed?;
+        if matches!(typed.ty, Ty::Never | Ty::Slice(_) | Ty::Peripheral(_)) {
+            self.violation(
+                "T3",
+                format!(
+                    "a place of type `{}`, which has no value, is {verb}",
+                    typed.ty
+                ),
+            );
+            return None;
         }
+        if typed.volatile && typed.ty.is_aggregate() {
+            self.violation(
+                "T4",
+                format!(
+                    "a volatile place of type `{}`, an aggregate, is {verb}",
+                    typed.ty
+                ),
+            );
+        }
+        Some(typed.ty)
+    }
+
+    /// A place that is read: S7, T1 to T4. Its type, if a value.
+    fn read(&mut self, place: Place) -> Option<Ty> {
+        let typed = self.place(place);
+        self.whole(typed, "read")
+    }
+
+    /// A place that is written whole: the checks of a read, and S8.
+    fn written(&mut self, place: Place, how: &str) -> Option<Ty> {
+        let typed = self.place(place);
+        self.constant_write(place, how);
+        self.whole(typed, "written")
+    }
+
+    /// S8: a constant local that is changed, as a place written, or taken
+    /// by `&raw mut`, through no pointer. A base that does not exist was
+    /// reported by S7.
+    fn constant_write(&mut self, place: Place, how: &str) {
+        let Some(decl) = self.body.locals.get(place.local.0 as usize) else {
+            return;
+        };
         let through_pointer = place
             .projection
             .iter()
             .any(|elem| matches!(elem, PlaceElem::Deref | PlaceElem::Offset(_)));
-        if !through_pointer && self.body.locals[place.local.0 as usize].constant.is_some() {
+        if !through_pointer && decl.constant.is_some() {
             self.violation(
                 "S8",
                 format!(
@@ -308,22 +377,43 @@ impl Checker<'_> {
         }
     }
 
-    fn operand(&mut self, operand: &Operand) {
+    /// T6 for the bits of an integer constant.
+    fn int_const(&mut self, bits: u64, int: IntTy) {
+        if bits & !int.mask() != 0 {
+            self.violation(
+                "T6",
+                format!(
+                    "the constant {bits:#x} has bits above the {} bits of `{int}`",
+                    int.bits()
+                ),
+            );
+        }
+    }
+
+    /// An operand: S7, T1 to T4, T6. Its type, if it is valid.
+    fn operand(&mut self, operand: &Operand) -> Option<Ty> {
         match operand {
             Operand::Copy(place) => self.read(*place),
-            Operand::Const(_) => {}
+            Operand::Const(Const::Int(bits, int)) => {
+                self.int_const(*bits, *int);
+                Some(Ty::Int(*int))
+            }
+            Operand::Const(Const::Bool(_)) => Some(Ty::Bool),
+            Operand::Const(Const::Unit) => Some(Ty::Unit),
+            Operand::Const(Const::Static(s)) => Some(s.def().address_ty()),
+            Operand::Const(Const::Peripheral(p)) => Some(p.def().address_ty()),
         }
     }
 
     fn statement(&mut self, statement: &Statement) {
         match statement {
             Statement::Assign(dest, rvalue) => {
-                self.write(*dest, "an assignment writes");
-                self.rvalue(rvalue);
+                let dest = self.written(*dest, "an assignment writes");
+                self.rvalue(rvalue, dest);
             }
             Statement::Call { dest, args, .. } => {
                 if let Some(dest) = dest {
-                    self.write(*dest, "a call's destination is");
+                    self.written(*dest, "a call's destination is");
                 }
                 for arg in args {
                     self.operand(arg);
@@ -331,33 +421,234 @@ impl Checker<'_> {
             }
             Statement::InlineAsm(asm) => self.asm(asm, false),
             Statement::CriticalEnter(local) | Statement::CriticalExit(local) => {
-                self.local(*local, "a `critical` statement");
+                self.critical_local(*local);
             }
         }
     }
 
-    fn rvalue(&mut self, rvalue: &Rvalue) {
+    /// S7 and T2 for the local of a `critical` statement.
+    fn critical_local(&mut self, local: Local) {
+        if self.local(local, "a `critical` statement")
+            && self.local_ty(local) != Some(Ty::Int(IntTy::U32))
+        {
+            self.violation(
+                "T2",
+                format!(
+                    "the local `{local}` of a `critical` statement has type `{}`, not `u32`",
+                    self.body.locals[local.0 as usize].ty
+                ),
+            );
+        }
+    }
+
+    /// T5: a type that does not fit the place's, or an operand the rvalue
+    /// does not apply to.
+    fn fit(&mut self, what: &str, ty: Ty, dest: Option<Ty>) {
+        if let Some(dest) = dest
+            && !fits(ty, dest)
+        {
+            self.violation(
+                "T5",
+                format!("{what} has type `{ty}`, which does not fit the place's `{dest}`"),
+            );
+        }
+    }
+
+    /// An assignment's rvalue, and T5 against the type of the place it goes
+    /// to, if that is a valid type of values.
+    fn rvalue(&mut self, rvalue: &Rvalue, dest: Option<Ty>) {
         match rvalue {
-            Rvalue::Use(operand) | Rvalue::Unary(_, operand) | Rvalue::Cast(operand, _) => {
-                self.operand(operand)
+            Rvalue::Use(operand) => {
+                let Some(ty) = self.operand(operand) else {
+                    return;
+                };
+                // A slice into a slice of the same elements, whatever the
+                // mutability and volatility (ADR 0031).
+                let slices = ty.slice_elem().is_some()
+                    && dest.is_some_and(|dest| dest.slice_elem() == ty.slice_elem());
+                if !slices {
+                    self.fit("`use`", ty, dest);
+                }
             }
-            Rvalue::Binary(_, lhs, rhs) => {
-                self.operand(lhs);
-                self.operand(rhs);
+            Rvalue::Unary(op, operand) => {
+                let Some(ty) = self.operand(operand) else {
+                    return;
+                };
+                let applies = match op {
+                    UnOp::Neg => matches!(ty, Ty::Int(int) if int.is_signed()),
+                    UnOp::Not => matches!(ty, Ty::Int(_) | Ty::Bool),
+                };
+                if applies {
+                    self.fit("a unary operation", ty, dest);
+                } else {
+                    self.violation(
+                        "T5",
+                        format!("`{op:?}` does not apply to an operand of type `{ty}`"),
+                    );
+                }
+            }
+            Rvalue::Binary(op, lhs, rhs) => {
+                let lhs = self.operand(lhs);
+                let rhs = self.operand(rhs);
+                let (Some(lhs), Some(rhs)) = (lhs, rhs) else {
+                    return;
+                };
+                self.binary(*op, lhs, rhs, dest);
+            }
+            Rvalue::Cast(operand, target) => {
+                let Some(from) = self.operand(operand) else {
+                    return;
+                };
+                if from.is_aggregate() || target.is_aggregate() {
+                    self.violation(
+                        "T5",
+                        format!("a cast from `{from}` to `{target}`, one of them an aggregate"),
+                    );
+                } else {
+                    self.fit("a cast", *target, dest);
+                }
             }
             Rvalue::AddressOf {
                 mutable: true,
                 place,
-            } => self.write(*place, "`&raw mut` takes"),
+            } => {
+                let typed = self.place(*place);
+                self.constant_write(*place, "`&raw mut` takes");
+                self.address_of(true, typed, dest);
+            }
             Rvalue::AddressOf {
                 mutable: false,
                 place,
-            } => self.read(*place),
-            Rvalue::Slice { ptr, len } => {
-                self.operand(ptr);
-                self.operand(len);
+            } => {
+                let typed = self.place(*place);
+                self.address_of(false, typed, dest);
             }
-            Rvalue::SliceAddress(place) | Rvalue::SliceLen(place) => self.read(*place),
+            Rvalue::Slice { ptr, len } => {
+                let ptr = self.operand(ptr);
+                let len = self.operand(len);
+                if let Some(len) = len
+                    && len != Ty::Int(IntTy::Usize)
+                {
+                    self.violation("T5", format!("a slice's length has type `{len}`"));
+                }
+                let Some(ptr) = ptr else {
+                    return;
+                };
+                let Ty::Ptr(from) = ptr else {
+                    self.violation("T5", format!("a slice is made from `{ptr}`, no pointer"));
+                    return;
+                };
+                if !thin(&from) {
+                    self.violation("T5", format!("a slice is made from `{ptr}`, not thin"));
+                    return;
+                }
+                let Some(dest) = dest else {
+                    return;
+                };
+                let by_elem = |elem: Ty| dest.slice_elem() == Some(elem);
+                let elements = by_elem(*from.pointee)
+                    || matches!(from.pointee, Ty::Array(elem, _) if by_elem(**elem));
+                if !elements {
+                    self.violation(
+                        "T5",
+                        format!("a slice made from `{ptr}` does not fit the place's `{dest}`"),
+                    );
+                }
+            }
+            Rvalue::SliceAddress(place) => {
+                let Some(typed) = self.place(*place) else {
+                    return;
+                };
+                match typed.ty.slice_address_ty() {
+                    Some(address) => self.fit("a slice's address", address, dest),
+                    None => self.violation(
+                        "T5",
+                        format!("the address of `{}`, which is no slice", typed.ty),
+                    ),
+                }
+            }
+            Rvalue::SliceLen(place) => {
+                let Some(typed) = self.place(*place) else {
+                    return;
+                };
+                if typed.ty.slice_elem().is_some() {
+                    self.fit("a slice's length", Ty::Int(IntTy::Usize), dest);
+                } else {
+                    self.violation(
+                        "T5",
+                        format!("the length of `{}`, which is no slice", typed.ty),
+                    );
+                }
+            }
+        }
+    }
+
+    /// T5 for a binary operation on operands of valid types.
+    fn binary(&mut self, op: BinOp, lhs: Ty, rhs: Ty, dest: Option<Ty>) {
+        let symbol = op.symbol();
+        if op.is_shift() {
+            if matches!((lhs, rhs), (Ty::Int(_), Ty::Int(_))) {
+                self.fit("a shift", lhs, dest);
+            } else {
+                self.violation(
+                    "T5",
+                    format!("`{symbol}` applies to integers, not `{lhs}` and `{rhs}`"),
+                );
+            }
+        } else if op.is_comparison() {
+            let one_type = fits(lhs, rhs) || fits(rhs, lhs);
+            let comparable = match lhs {
+                Ty::Int(_) => true,
+                Ty::Bool => matches!(op, BinOp::Eq | BinOp::Ne),
+                Ty::Ptr(ptr) => thin(&ptr),
+                Ty::Unit | Ty::Never | Ty::Array(..) | Ty::Slice(_) | Ty::Struct(_) => false,
+                Ty::Enum(_) | Ty::Peripheral(_) => false,
+            };
+            if one_type && comparable {
+                self.fit("a comparison", Ty::Bool, dest);
+            } else {
+                self.violation(
+                    "T5",
+                    format!("`{symbol}` does not compare `{lhs}` with `{rhs}`"),
+                );
+            }
+        } else {
+            let applies = lhs == rhs
+                && match lhs {
+                    Ty::Int(_) => true,
+                    Ty::Bool => op.is_bitwise(),
+                    _ => false,
+                };
+            if applies {
+                self.fit("an arithmetic operation", lhs, dest);
+            } else {
+                self.violation(
+                    "T5",
+                    format!("`{symbol}` does not apply to `{lhs}` and `{rhs}`"),
+                );
+            }
+        }
+    }
+
+    /// T5 for `&raw const` and `&raw mut` of a place of type `typed.ty`: a
+    /// pointer to it that is not volatile, `*const` if written so.
+    fn address_of(&mut self, mutable: bool, typed: Option<Typed>, dest: Option<Ty>) {
+        let (Some(typed), Some(dest)) = (typed, dest) else {
+            return;
+        };
+        let fits = matches!(
+            dest,
+            Ty::Ptr(ptr) if ptr.pointee == &typed.ty && !ptr.volatile && (mutable || !ptr.mutable)
+        );
+        if !fits {
+            let how = if mutable { "mut" } else { "const" };
+            self.violation(
+                "T5",
+                format!(
+                    "`&raw {how}` of a place of type `{}` does not fit the place's `{dest}`",
+                    typed.ty
+                ),
+            );
         }
     }
 
@@ -375,8 +666,18 @@ impl Checker<'_> {
         }
         match terminator {
             Terminator::Goto(_) | Terminator::Unreachable => {}
-            Terminator::If { cond, .. } => self.operand(cond),
-            Terminator::Switch { discr, .. } => self.operand(discr),
+            Terminator::If { cond, .. } => {
+                if let Some(ty) = self.operand(cond)
+                    && ty != Ty::Bool
+                {
+                    self.violation("T7", format!("`if` tests `{ty}`, not `bool`"));
+                }
+            }
+            Terminator::Switch { discr, cases, .. } => {
+                if let Some(ty) = self.operand(discr) {
+                    self.switch(ty, cases);
+                }
+            }
             Terminator::Return => {
                 if self.body.ret == Ty::Never {
                     self.violation("S6", "a body that returns `!` has a `return`".to_owned());
@@ -384,7 +685,18 @@ impl Checker<'_> {
             }
             Terminator::Panic(cause, site) => {
                 match cause {
-                    PanicCause::AssertionFailed(Some((message, _))) => self.operand(message),
+                    PanicCause::AssertionFailed(Some((message, _))) => {
+                        if let Some(ty) = self.operand(message) {
+                            let is_message = ty.slice_elem() == Some(Ty::Int(IntTy::U8))
+                                && matches!(ty, Ty::Ptr(ptr) if !ptr.mutable && !ptr.volatile);
+                            if !is_message {
+                                self.violation(
+                                    "T8",
+                                    format!("the message of an `assert` has type `{ty}`, not `*const [u8]`"),
+                                );
+                            }
+                        }
+                    }
                     PanicCause::AssertionFailed(None)
                     | PanicCause::DivisionByZero
                     | PanicCause::IndexOutOfBounds
@@ -404,7 +716,43 @@ impl Checker<'_> {
         }
     }
 
-    /// S7 to S9 for an `asm`, a statement or a terminator.
+    /// T7 for the cases of a `switch` on a value of type `ty`.
+    fn switch(&mut self, ty: Ty, cases: &[(u64, BasicBlock)]) {
+        let mask = match ty {
+            Ty::Int(int) => int.mask(),
+            Ty::Bool => 1,
+            Ty::Unit
+            | Ty::Never
+            | Ty::Ptr(_)
+            | Ty::Array(..)
+            | Ty::Slice(_)
+            | Ty::Struct(_)
+            | Ty::Enum(_)
+            | Ty::Peripheral(_) => {
+                self.violation(
+                    "T7",
+                    format!("`switch` tests `{ty}`, not an integer or `bool`"),
+                );
+                return;
+            }
+        };
+        let mut seen = HashSet::new();
+        for &(value, _) in cases {
+            if value & !mask != 0 {
+                self.violation(
+                    "T7",
+                    format!(
+                        "the case {value:#x} does not fit the {} bits tested",
+                        mask.count_ones()
+                    ),
+                );
+            } else if !seen.insert(value) {
+                self.violation("T7", format!("the case {value:#x} appears twice"));
+            }
+        }
+    }
+
+    /// S7 to S9, T6 and T9 for an `asm`, a statement or a terminator.
     fn asm(&mut self, asm: &InlineAsm, terminator: bool) {
         let noreturn = asm.options.noreturn;
         if terminator && !noreturn {
@@ -427,30 +775,198 @@ impl Checker<'_> {
         }
         for operand in &asm.operands {
             match &operand.kind {
-                AsmOperandKind::In(value) => self.operand(value),
+                AsmOperandKind::In(value) => {
+                    let ty = self.operand(value);
+                    self.asm_value(ty, "an `asm` input");
+                }
                 AsmOperandKind::Out { place, .. } => {
                     if let Some(place) = place {
-                        self.write(*place, "an `asm` output is");
+                        let ty = self.written(*place, "an `asm` output is");
+                        self.asm_value(ty, "an `asm` output");
                     }
                 }
                 AsmOperandKind::InOut { input, place } => {
-                    self.operand(input);
+                    let ty = self.operand(input);
+                    self.asm_value(ty, "an `asm` input");
                     if let Some(place) = place {
-                        self.write(*place, "an `asm` output is");
+                        let ty = self.written(*place, "an `asm` output is");
+                        self.asm_value(ty, "an `asm` output");
                     }
                 }
-                AsmOperandKind::Sym(_) | AsmOperandKind::Const(..) => {}
+                AsmOperandKind::Sym(_) => {}
+                AsmOperandKind::Const(bits, int) => self.int_const(*bits, *int),
             }
         }
     }
+
+    /// T9: an integer of at most 32 bits or a thin pointer.
+    fn asm_value(&mut self, ty: Option<Ty>, what: &str) {
+        let Some(ty) = ty else {
+            return;
+        };
+        let allowed = match ty {
+            Ty::Int(int) => int.bits() <= 32,
+            Ty::Ptr(ptr) => thin(&ptr),
+            Ty::Unit
+            | Ty::Never
+            | Ty::Bool
+            | Ty::Array(..)
+            | Ty::Slice(_)
+            | Ty::Struct(_)
+            | Ty::Enum(_)
+            | Ty::Peripheral(_) => false,
+        };
+        if !allowed {
+            self.violation(
+                "T9",
+                format!(
+                    "{what} has type `{ty}`, not an integer of at most 32 bits or a thin pointer"
+                ),
+            );
+        }
+    }
+}
+
+/// A place's type, and whether accessing it is volatile.
+#[derive(Clone, Copy)]
+struct Typed {
+    ty: Ty,
+    volatile: bool,
+}
+
+/// Whether `from` fits a place of type `to` (ADR 0095, "Types"): the same
+/// type, or `*mut T` where `*const T` is wanted, ADR 0024's conversion.
+fn fits(from: Ty, to: Ty) -> bool {
+    match (from, to) {
+        (Ty::Ptr(from), Ty::Ptr(to)) => {
+            from.pointee == to.pointee
+                && from.volatile == to.volatile
+                && (from.mutable || !to.mutable)
+        }
+        _ => from == to,
+    }
+}
+
+/// Whether accessing the place after `elem` is volatile, as code generation
+/// decides it (`address` in `src/codegen/mod.rs`, `Builder::is_volatile`):
+/// the last pointer dereferenced sets it, a register of a peripheral type
+/// makes it so.
+fn volatile_after(from: Typed, elem: &PlaceElem) -> bool {
+    match (elem, from.ty) {
+        (PlaceElem::Deref | PlaceElem::Offset(_), Ty::Ptr(ptr)) => ptr.volatile,
+        (
+            PlaceElem::Field(_) | PlaceElem::Element(..) | PlaceElem::ConstElement(..),
+            Ty::Peripheral(_),
+        ) => true,
+        _ => from.volatile,
+    }
+}
+
+/// T1: the type of a place after one more projection, or what is wrong. It
+/// reads the definitions without the accessors that panic when something is
+/// missing. Every `PlaceElem` is named, so that a new one fails to compile
+/// here.
+fn project(ty: Ty, elem: &PlaceElem) -> Result<Ty, String> {
+    let wrong = || -> Result<Ty, String> { Err(format!("`{elem:?}` does not apply to `{ty}`")) };
+    match elem {
+        PlaceElem::Deref => match ty {
+            Ty::Ptr(ptr) => Ok(*ptr.pointee),
+            _ => wrong(),
+        },
+        PlaceElem::Offset(_) => match ty {
+            Ty::Ptr(ptr) if matches!(ptr.pointee, Ty::Slice(_) | Ty::Peripheral(_)) => Err(
+                format!("`Offset` of `{ty}`, a pointer to a type with no size"),
+            ),
+            Ty::Ptr(ptr) => Ok(*ptr.pointee),
+            _ => wrong(),
+        },
+        PlaceElem::Index(_) => match ty {
+            Ty::Array(item, _) => Ok(*item),
+            _ => wrong(),
+        },
+        PlaceElem::ConstIndex(index) => match ty {
+            Ty::Array(item, len) if *index < len => Ok(*item),
+            Ty::Array(_, len) => Err(format!(
+                "`ConstIndex({index})` of `{ty}`, of {len} elements"
+            )),
+            _ => wrong(),
+        },
+        PlaceElem::Field(index) => match ty {
+            Ty::Struct(s) => {
+                let fields = s.def().fields.get();
+                let field = fields.and_then(|fields| fields.get(*index as usize));
+                field
+                    .map(|field| field.ty)
+                    .ok_or_else(|| format!("`Field({index})` of `{ty}`, which has no such field"))
+            }
+            Ty::Peripheral(p) => match entry(p, *index)? {
+                (ty, None) => Ok(ty),
+                (_, Some(_)) => Err(format!(
+                    "`Field({index})` of `{p:?}`, an entry that is an array"
+                )),
+            },
+            _ => wrong(),
+        },
+        PlaceElem::Element(entry_index, _) | PlaceElem::ConstElement(entry_index, _) => {
+            let Ty::Peripheral(p) = ty else {
+                return wrong();
+            };
+            match entry(p, *entry_index)? {
+                (_, None) => Err(format!("`{elem:?}` of `{p:?}`, an entry that is no array")),
+                (ty, Some((len, _))) => match elem {
+                    PlaceElem::ConstElement(_, index) if *index >= len => {
+                        Err(format!("`{elem:?}` of `{p:?}`, an entry of {len} elements"))
+                    }
+                    _ => Ok(ty),
+                },
+            }
+        }
+        PlaceElem::Tag => match ty {
+            Ty::Enum(e) => Ok(Ty::Int(e.def().int)),
+            _ => wrong(),
+        },
+        PlaceElem::Payload { variant, index } => match ty {
+            Ty::Enum(e) => {
+                let variants = e.def().variants.get();
+                let value = variants
+                    .and_then(|variants| variants.get(*variant as usize))
+                    .and_then(|variant| variant.payload.get(*index as usize));
+                value.map(|value| value.ty).ok_or_else(|| {
+                    format!("`Payload {{ variant: {variant}, index: {index} }}` of `{ty}`, which has no such value")
+                })
+            }
+            _ => wrong(),
+        },
+    }
+}
+
+/// An entry of a peripheral type: its element type, and its length and step
+/// if it is an array (ADR 0064).
+fn entry(p: PeripheralTypeRef, index: u32) -> Result<(Ty, Option<(u64, u64)>), String> {
+    let def = p.def();
+    let register = def
+        .registers
+        .get(index as usize)
+        .ok_or_else(|| format!("`{}` has no entry {index}", def.name))?;
+    let layout = def
+        .layout()
+        .ok_or_else(|| format!("`{}` has no layout", def.name))?;
+    let array = layout.arrays.get(index as usize).copied().flatten();
+    Ok((register.ty, array))
+}
+
+/// A pointer to a sized type, or to a slice's elements: one address.
+fn thin(ptr: &Ptr) -> bool {
+    !matches!(ptr.pointee, Ty::Slice(_))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::mir::{
-        AsmOperand, AsmOptions, AsmReg, BasicBlockData, Const, DataId, IntTy, LocalDecl, PanicSite,
-        StaticRef,
+        AsmOperand, AsmOptions, AsmReg, BasicBlockData, BodyId, DataId, EnumId, EnumRef, Field,
+        Layout, LocalDecl, PanicSite, PeripheralLayout, Register, StaticId, StaticRef, StructRef,
+        Variant,
     };
     use crate::span::{SourceMap, Span};
 
@@ -488,10 +1004,59 @@ mod tests {
         Ty::Int(IntTy::U32)
     }
 
+    fn usize_ty() -> Ty {
+        Ty::Int(IntTy::Usize)
+    }
+
+    /// A pointer type.
+    fn ptr(mutable: bool, volatile: bool, pointee: Ty) -> Ty {
+        Ty::Ptr(crate::mir::Ptr {
+            mutable,
+            volatile,
+            pointee: Box::leak(Box::new(pointee)),
+        })
+    }
+
+    /// A place: a local followed by projections.
+    fn projected(local: u32, projection: &[PlaceElem]) -> Place {
+        Place {
+            local: Local(local),
+            projection: Box::leak(projection.to_vec().into_boxed_slice()),
+        }
+    }
+
+    /// A peripheral type with a register `_0: u32` and a register array
+    /// `_1: [u32; 4]`, laid out.
+    fn peripheral() -> PeripheralTypeRef {
+        let register = |name: &str| Register {
+            name: name.to_owned(),
+            ty: u32_ty(),
+            group: None,
+        };
+        let p = PeripheralTypeRef::new("P".to_owned(), vec![register("a"), register("b")]);
+        p.def().set_layout(PeripheralLayout {
+            offsets: vec![0, 4],
+            arrays: vec![None, Some((4, 4))],
+            extent: 20,
+            align: 4,
+        });
+        p
+    }
+
+    /// A local number that `valid` has no local for.
+    const GHOST: u32 = 50;
+
     /// `fn f(_1: u32) -> u32`, with `_2: u32` as a constant local, `_3: u32`
-    /// as a variable and `_4: *mut u32`: `bb0` assigns `_0 = copy _1` and
-    /// goes to `bb1`, which returns.
+    /// as a variable, `_4: *mut u32`, `_5: [u32; 4]`, `_6: *mut u32` as a
+    /// constant local, `_7: *const u32`, `_8: usize`, `_9: *mut P` of a
+    /// peripheral type and `_10: *mut [u32]`: `bb0` assigns `_0 = copy _1`
+    /// and goes to `bb1`, which returns. No local has the number `GHOST`.
     fn valid() -> Body {
+        let constant = |ty| LocalDecl {
+            ty,
+            name: None,
+            constant: Some(DataId(0)),
+        };
         Body {
             name: "f".to_owned(),
             span: span(),
@@ -501,17 +1066,15 @@ mod tests {
             locals: vec![
                 decl(u32_ty()),
                 decl(u32_ty()),
-                LocalDecl {
-                    ty: u32_ty(),
-                    name: None,
-                    constant: Some(DataId(0)),
-                },
+                constant(u32_ty()),
                 decl(u32_ty()),
-                decl(Ty::Ptr(crate::mir::Ptr {
-                    mutable: true,
-                    volatile: false,
-                    pointee: Box::leak(Box::new(u32_ty())),
-                })),
+                decl(ptr(true, false, u32_ty())),
+                decl(Ty::Array(Box::leak(Box::new(u32_ty())), 4)),
+                constant(ptr(true, false, u32_ty())),
+                decl(ptr(false, false, u32_ty())),
+                decl(usize_ty()),
+                decl(ptr(true, false, Ty::Peripheral(peripheral()))),
+                decl(ptr(true, false, Ty::Slice(Box::leak(Box::new(u32_ty()))))),
             ],
             blocks: vec![
                 block(
@@ -595,7 +1158,7 @@ mod tests {
         breaks_only(&body, "S1");
 
         let mut body = valid();
-        body.param_count = 5;
+        body.param_count = 20;
         breaks_only(&body, "S1");
 
         let mut body = valid();
@@ -627,7 +1190,10 @@ mod tests {
         breaks_only(&body, "S3");
 
         let mut body = naked();
-        statement_of(&mut body, Statement::CriticalEnter(Local(0)));
+        statement_of(
+            &mut body,
+            Statement::Assign(local(0), Rvalue::Use(Operand::Const(Const::Unit))),
+        );
         breaks_only(&body, "S3");
 
         let mut body = naked();
@@ -693,6 +1259,8 @@ mod tests {
         let mut body = valid();
         body.ret = Ty::Never;
         body.locals[0].ty = Ty::Never;
+        body.blocks[0].statements.clear();
+        body.blocks[0].spans.clear();
         breaks_only(&body, "S6");
         body.blocks[1].terminator = Terminator::Unreachable;
         assert!(check_body(&body).is_empty());
@@ -700,13 +1268,7 @@ mod tests {
 
     #[test]
     fn s7_every_local_named_exists() {
-        let ghost = 9;
-        let at_index = |elem: PlaceElem| -> Place {
-            Place {
-                local: Local(4),
-                projection: Box::leak(Box::new([elem])),
-            }
-        };
+        let ghost = GHOST;
         let cases = [
             // The base of a place, written and read.
             Statement::Assign(local(ghost), Rvalue::Use(copy(1))),
@@ -715,28 +1277,37 @@ mod tests {
             // The index of each projection that has one.
             Statement::Assign(
                 local(3),
-                Rvalue::Use(Operand::Copy(at_index(PlaceElem::Offset(Local(ghost))))),
+                Rvalue::Use(Operand::Copy(projected(
+                    4,
+                    &[PlaceElem::Offset(Local(ghost))],
+                ))),
             ),
             Statement::Assign(
                 local(3),
-                Rvalue::Use(Operand::Copy(at_index(PlaceElem::Index(Local(ghost))))),
+                Rvalue::Use(Operand::Copy(projected(
+                    5,
+                    &[PlaceElem::Index(Local(ghost))],
+                ))),
             ),
             Statement::Assign(
                 local(3),
-                Rvalue::Use(Operand::Copy(at_index(PlaceElem::Element(0, Local(ghost))))),
+                Rvalue::Use(Operand::Copy(projected(
+                    9,
+                    &[PlaceElem::Deref, PlaceElem::Element(1, Local(ghost))],
+                ))),
             ),
             Statement::CriticalEnter(Local(ghost)),
             Statement::CriticalExit(Local(ghost)),
             Statement::Call {
                 dest: Some(local(ghost)),
-                callee: crate::mir::BodyId(0),
+                callee: BodyId(0),
                 args: Vec::new(),
             },
             // Every operand of a statement: a call's arguments, the
             // operands of each rvalue, the inputs of an `asm`.
             Statement::Call {
                 dest: None,
-                callee: crate::mir::BodyId(0),
+                callee: BodyId(0),
                 args: vec![copy(1), copy(ghost)],
             },
             Statement::Assign(local(3), Rvalue::Unary(crate::ops::UnOp::Neg, copy(ghost))),
@@ -753,13 +1324,13 @@ mod tests {
                 local(3),
                 Rvalue::Slice {
                     ptr: copy(ghost),
-                    len: copy(1),
+                    len: copy(8),
                 },
             ),
             Statement::Assign(
-                local(3),
+                local(10),
                 Rvalue::Slice {
-                    ptr: copy(1),
+                    ptr: copy(4),
                     len: copy(ghost),
                 },
             ),
@@ -828,13 +1399,7 @@ mod tests {
         }
         let site = |info| PanicSite {
             info,
-            file: StaticRef::new(
-                crate::mir::StaticId(0),
-                "f".to_owned(),
-                Ty::Unit,
-                false,
-                true,
-            ),
+            file: StaticRef::new(StaticId(0), "f".to_owned(), Ty::Unit, false, true),
             line: 1,
             column: 1,
         };
@@ -859,10 +1424,10 @@ mod tests {
         statement_of(
             &mut body,
             Statement::Assign(
-                local(9),
+                local(GHOST),
                 Rvalue::AddressOf {
                     mutable: true,
-                    place: local(9),
+                    place: local(GHOST),
                 },
             ),
         );
@@ -891,7 +1456,7 @@ mod tests {
             Statement::Assign(local(2), Rvalue::Use(copy(1))),
             Statement::Call {
                 dest: Some(local(2)),
-                callee: crate::mir::BodyId(0),
+                callee: BodyId(0),
                 args: Vec::new(),
             },
             Statement::InlineAsm(Box::new(asm(
@@ -920,16 +1485,13 @@ mod tests {
 
         // Read, taken as `&raw const`, or written through a pointer it holds:
         // none changes the local.
-        let through = |elem| Place {
-            local: Local(2),
-            projection: Box::leak(Box::new([elem])),
-        };
+        let through = |elem| projected(6, &[elem]);
         let mut body = valid();
         statement_of(&mut body, Statement::Assign(local(3), Rvalue::Use(copy(2))));
         statement_of(
             &mut body,
             Statement::Assign(
-                local(4),
+                local(7),
                 Rvalue::AddressOf {
                     mutable: false,
                     place: local(2),
@@ -942,7 +1504,7 @@ mod tests {
         );
         statement_of(
             &mut body,
-            Statement::Assign(through(PlaceElem::Offset(Local(1))), Rvalue::Use(copy(1))),
+            Statement::Assign(through(PlaceElem::Offset(Local(8))), Rvalue::Use(copy(1))),
         );
         statement_of(
             &mut body,
@@ -991,7 +1553,7 @@ mod tests {
         // S5 in the terminator, S7 in the statement, S4 in the block: listed
         // by place in the body, the block first, the terminator last.
         let mut body = valid();
-        statement_of(&mut body, Statement::CriticalEnter(Local(9)));
+        statement_of(&mut body, Statement::CriticalEnter(Local(GHOST)));
         body.blocks[0].spans.pop();
         body.blocks[0].terminator = Terminator::Goto(BasicBlock(4));
         body.ret = Ty::Bool;
@@ -1012,12 +1574,12 @@ mod tests {
     #[should_panic(
         expected = "invalid MIR, a bug of the compiler (ADR 0095): 3 violations\n  \
         `f`, bb0: S4: 2 statements but 1 spans\n  \
-        `f`, bb0, statement 1: S7: a `critical` statement names `_9`, but the body has 5 locals\n  \
+        `f`, bb0, statement 1: S7: a `critical` statement names `_50`, but the body has 11 locals\n  \
         `f`, bb0, terminator: S5: a terminator jumps to bb4, but the body has 2 blocks"
     )]
     fn the_panic_lists_every_violation() {
         let mut body = valid();
-        statement_of(&mut body, Statement::CriticalEnter(Local(9)));
+        statement_of(&mut body, Statement::CriticalEnter(Local(GHOST)));
         body.blocks[0].spans.pop();
         body.blocks[0].terminator = Terminator::Goto(BasicBlock(4));
         assert_valid_body(&body);
@@ -1028,5 +1590,786 @@ mod tests {
         let before = bodies_checked();
         assert_valid_body(&valid());
         assert_eq!(bodies_checked(), before + 1);
+    }
+
+    // ---- Types (ADR 0095, T1 to T9) ----
+
+    /// `struct Pair { a: u32, b: u32 }`.
+    fn pair() -> StructRef {
+        let s = StructRef::new("Pair".to_owned(), Layout { size: 8, align: 4 }, false);
+        let field = |name: &str, offset| Field {
+            name: name.to_owned(),
+            ty: u32_ty(),
+            offset,
+        };
+        s.def().set_fields(vec![field("a", 0), field("b", 4)]);
+        s
+    }
+
+    /// `enum E { None, Some(u32) }`, with a `u8` tag.
+    fn option() -> EnumRef {
+        let e = EnumRef::new(
+            EnumId(0),
+            "E".to_owned(),
+            IntTy::U8,
+            Layout { size: 8, align: 4 },
+        );
+        e.def().set_variants(vec![
+            Variant {
+                name: "None".to_owned(),
+                payload: Vec::new(),
+            },
+            Variant {
+                name: "Some".to_owned(),
+                payload: vec![Field {
+                    name: "0".to_owned(),
+                    ty: u32_ty(),
+                    offset: 4,
+                }],
+            },
+        ]);
+        e
+    }
+
+    /// `struct Holder { q: *mut Pair }`.
+    fn holder() -> StructRef {
+        let s = StructRef::new("Holder".to_owned(), Layout { size: 4, align: 4 }, false);
+        s.def().set_fields(vec![Field {
+            name: "q".to_owned(),
+            ty: ptr(true, false, Ty::Struct(pair())),
+            offset: 0,
+        }]);
+        s
+    }
+
+    // The locals `typed` adds to `valid`.
+    const BOOL: u32 = 11;
+    const I32: u32 = 12;
+    const U8: u32 = 13;
+    const SLICE_C: u32 = 14;
+    const SLICE_M: u32 = 15;
+    const ARRAY_PTR: u32 = 16;
+    const U64: u32 = 17;
+
+    /// `valid` with `_11: bool`, `_12: i32`, `_13: u8`, `_14: *const [u8]`,
+    /// `_15: *mut [u8]`, `_16: *const [u8; 4]` and `_17: u64`.
+    fn typed() -> Body {
+        let mut body = valid();
+        let bytes = Ty::Int(IntTy::U8);
+        let slice = |mutable| ptr(mutable, false, Ty::Slice(Box::leak(Box::new(bytes))));
+        body.locals.extend([
+            decl(Ty::Bool),
+            decl(Ty::Int(IntTy::I32)),
+            decl(bytes),
+            decl(slice(false)),
+            decl(slice(true)),
+            decl(ptr(false, false, Ty::Array(Box::leak(Box::new(bytes)), 4))),
+            decl(Ty::Int(IntTy::U64)),
+        ]);
+        body
+    }
+
+    /// The rules broken by a call that passes `projection` of a new local of
+    /// type `ty`, read whole.
+    fn reading(ty: Ty, projection: &[PlaceElem]) -> Vec<&'static str> {
+        let mut body = valid();
+        body.locals.push(decl(ty));
+        let n = body.locals.len() as u32 - 1;
+        statement_of(
+            &mut body,
+            Statement::Call {
+                dest: None,
+                callee: BodyId(0),
+                args: vec![Operand::Copy(projected(n, projection))],
+            },
+        );
+        rules(&body)
+    }
+
+    /// The rules broken by assigning `rvalue` to a new local of type `dest`,
+    /// in a body that has the locals of `typed`.
+    fn assigning(dest: Ty, rvalue: Rvalue) -> Vec<&'static str> {
+        let mut body = typed();
+        body.locals.push(decl(dest));
+        let n = body.locals.len() as u32 - 1;
+        statement_of(&mut body, Statement::Assign(local(n), rvalue));
+        rules(&body)
+    }
+
+    #[track_caller]
+    fn accepts(rules: Vec<&'static str>) {
+        assert_eq!(rules, Vec::<&str>::new());
+    }
+
+    #[track_caller]
+    fn rejects(rules: Vec<&'static str>, rule: &str) {
+        assert_eq!(rules, [rule]);
+    }
+
+    #[test]
+    fn t1_every_projection_applies_to_the_type_before_it() {
+        let usize_local = Local(8);
+        let array = Ty::Array(Box::leak(Box::new(u32_ty())), 4);
+        let pair = Ty::Struct(pair());
+        let option = Ty::Enum(option());
+        let periph = Ty::Peripheral(peripheral());
+        let read = |ty: Ty, projection: &[PlaceElem], rule: Option<&str>| {
+            let found = reading(ty, projection);
+            assert_eq!(found, rule.as_slice(), "{ty}: {projection:?}");
+        };
+
+        // `Deref`: to a pointer, thin or slice.
+        read(ptr(true, false, u32_ty()), &[PlaceElem::Deref], None);
+        read(u32_ty(), &[PlaceElem::Deref], Some("T1"));
+        // `Offset`: to a thin pointer to a sized type.
+        let offset = [PlaceElem::Offset(usize_local)];
+        read(ptr(true, false, u32_ty()), &offset, None);
+        read(u32_ty(), &offset, Some("T1"));
+        let slice = Ty::Slice(Box::leak(Box::new(u32_ty())));
+        read(ptr(true, false, slice), &offset, Some("T1"));
+        read(ptr(true, false, periph), &offset, Some("T1"));
+        // `Index` and `ConstIndex`: to an array, the second below its length.
+        read(array, &[PlaceElem::Index(usize_local)], None);
+        read(u32_ty(), &[PlaceElem::Index(usize_local)], Some("T1"));
+        read(array, &[PlaceElem::ConstIndex(3)], None);
+        read(array, &[PlaceElem::ConstIndex(4)], Some("T1"));
+        read(u32_ty(), &[PlaceElem::ConstIndex(0)], Some("T1"));
+        // `Field`: to a struct with that field, or to a peripheral type whose
+        // entry is no array.
+        read(pair, &[PlaceElem::Field(1)], None);
+        read(pair, &[PlaceElem::Field(2)], Some("T1"));
+        read(u32_ty(), &[PlaceElem::Field(0)], Some("T1"));
+        read(periph, &[PlaceElem::Field(0)], None);
+        read(periph, &[PlaceElem::Field(1)], Some("T1"));
+        read(periph, &[PlaceElem::Field(2)], Some("T1"));
+        // `Element` and `ConstElement`: to a peripheral type whose entry is
+        // an array, the second below its length.
+        read(periph, &[PlaceElem::Element(1, usize_local)], None);
+        read(periph, &[PlaceElem::Element(0, usize_local)], Some("T1"));
+        read(periph, &[PlaceElem::Element(2, usize_local)], Some("T1"));
+        read(u32_ty(), &[PlaceElem::Element(0, usize_local)], Some("T1"));
+        read(periph, &[PlaceElem::ConstElement(1, 3)], None);
+        read(periph, &[PlaceElem::ConstElement(1, 4)], Some("T1"));
+        read(periph, &[PlaceElem::ConstElement(0, 0)], Some("T1"));
+        read(u32_ty(), &[PlaceElem::ConstElement(0, 0)], Some("T1"));
+        // A peripheral type without a layout cannot tell its arrays.
+        let unlaid = Ty::Peripheral(PeripheralTypeRef::new(
+            "Q".to_owned(),
+            vec![Register {
+                name: "a".to_owned(),
+                ty: u32_ty(),
+                group: None,
+            }],
+        ));
+        read(unlaid, &[PlaceElem::Field(0)], Some("T1"));
+        // `Tag` and `Payload`: to an enum with payloads, with that variant
+        // and payload value.
+        read(option, &[PlaceElem::Tag], None);
+        read(u32_ty(), &[PlaceElem::Tag], Some("T1"));
+        let payload = |variant, index| [PlaceElem::Payload { variant, index }];
+        read(option, &payload(1, 0), None);
+        read(option, &payload(2, 0), Some("T1"));
+        read(option, &payload(1, 1), Some("T1"));
+        read(option, &payload(0, 0), Some("T1"));
+        read(u32_ty(), &payload(0, 0), Some("T1"));
+        // A struct whose fields were never set.
+        let unset = StructRef::new("U".to_owned(), Layout { size: 0, align: 1 }, false);
+        read(Ty::Struct(unset), &[PlaceElem::Field(0)], Some("T1"));
+
+        // The walk stops at the first projection that does not apply.
+        read(
+            u32_ty(),
+            &[PlaceElem::Deref, PlaceElem::Deref, PlaceElem::Field(9)],
+            Some("T1"),
+        );
+        // And a projection can apply after others.
+        read(
+            ptr(true, false, option),
+            &[
+                PlaceElem::Deref,
+                PlaceElem::Payload {
+                    variant: 1,
+                    index: 0,
+                },
+            ],
+            None,
+        );
+    }
+
+    #[test]
+    fn t1_does_not_cascade_into_the_rules_of_the_type() {
+        // The place has no type, so neither T3, T4 nor T5 can say anything.
+        let mut body = valid();
+        statement_of(
+            &mut body,
+            Statement::Assign(
+                local(3),
+                Rvalue::Use(Operand::Copy(projected(1, &[PlaceElem::Deref]))),
+            ),
+        );
+        breaks_only(&body, "T1");
+        let mut body = valid();
+        statement_of(
+            &mut body,
+            Statement::Assign(projected(3, &[PlaceElem::Tag]), Rvalue::Use(copy(1))),
+        );
+        breaks_only(&body, "T1");
+    }
+
+    #[test]
+    fn t2_an_index_is_a_usize_and_a_critical_local_a_u32() {
+        let wrong = Local(1);
+        let places = [
+            projected(4, &[PlaceElem::Offset(wrong)]),
+            projected(5, &[PlaceElem::Index(wrong)]),
+            projected(9, &[PlaceElem::Deref, PlaceElem::Element(1, wrong)]),
+        ];
+        for place in places {
+            let mut body = valid();
+            statement_of(
+                &mut body,
+                Statement::Call {
+                    dest: None,
+                    callee: BodyId(0),
+                    args: vec![Operand::Copy(place)],
+                },
+            );
+            breaks_only(&body, "T2");
+        }
+        for statement in [
+            Statement::CriticalEnter(Local(8)),
+            Statement::CriticalExit(Local(8)),
+        ] {
+            let mut body = valid();
+            statement_of(&mut body, statement);
+            breaks_only(&body, "T2");
+        }
+        for statement in [
+            Statement::CriticalEnter(Local(1)),
+            Statement::CriticalExit(Local(3)),
+        ] {
+            let mut body = valid();
+            statement_of(&mut body, statement);
+            assert!(check_body(&body).is_empty());
+        }
+    }
+
+    #[test]
+    fn t3_a_place_read_or_written_whole_has_a_value() {
+        let slice = Ty::Slice(Box::leak(Box::new(u32_ty())));
+        // `[T]` and a peripheral type, read through a pointer.
+        rejects(reading(ptr(true, false, slice), &[PlaceElem::Deref]), "T3");
+        let periph = Ty::Peripheral(peripheral());
+        rejects(reading(ptr(true, false, periph), &[PlaceElem::Deref]), "T3");
+        // `!`, read and written whole.
+        rejects(reading(Ty::Never, &[]), "T3");
+        let mut body = valid();
+        body.locals.push(decl(Ty::Never));
+        statement_of(
+            &mut body,
+            Statement::Assign(local(11), Rvalue::Use(Operand::Const(Const::Unit))),
+        );
+        breaks_only(&body, "T3");
+        // Written through a pointer, as the destination of a call, and as an
+        // `asm` output.
+        let mut body = valid();
+        statement_of(
+            &mut body,
+            Statement::Assign(projected(10, &[PlaceElem::Deref]), Rvalue::Use(copy(1))),
+        );
+        breaks_only(&body, "T3");
+        let mut body = valid();
+        body.locals.push(decl(Ty::Never));
+        statement_of(
+            &mut body,
+            Statement::Call {
+                dest: Some(local(11)),
+                callee: BodyId(0),
+                args: Vec::new(),
+            },
+        );
+        breaks_only(&body, "T3");
+        let mut body = valid();
+        statement_of(
+            &mut body,
+            Statement::InlineAsm(Box::new(asm(
+                AsmOptions::default(),
+                Vec::new(),
+                vec![AsmOperand {
+                    reg: AsmReg::Any,
+                    kind: AsmOperandKind::Out {
+                        late: false,
+                        place: Some(projected(10, &[PlaceElem::Deref])),
+                    },
+                }],
+            ))),
+        );
+        breaks_only(&body, "T3");
+        // `()` is a value.
+        accepts(reading(Ty::Unit, &[]));
+    }
+
+    #[test]
+    fn t4_a_volatile_place_read_or_written_whole_is_no_aggregate() {
+        let pair = Ty::Struct(pair());
+        let array = Ty::Array(Box::leak(Box::new(u32_ty())), 4);
+        let slice = ptr(true, false, Ty::Slice(Box::leak(Box::new(u32_ty()))));
+        let deref = [PlaceElem::Deref];
+        for pointee in [pair, array, Ty::Enum(option()), slice] {
+            rejects(reading(ptr(true, true, pointee), &deref), "T4");
+            // Not volatile, it is a value like any other.
+            accepts(reading(ptr(true, false, pointee), &deref));
+        }
+        // Written whole: `*p = x`, with `x` of the pointee's type.
+        let mut body = valid();
+        body.locals.push(decl(pair));
+        body.locals.push(decl(ptr(true, true, pair)));
+        statement_of(
+            &mut body,
+            Statement::Assign(projected(12, &deref), Rvalue::Use(copy(11))),
+        );
+        breaks_only(&body, "T4");
+        // A scalar, `()` and a pointer are values to access.
+        accepts(reading(ptr(true, true, u32_ty()), &deref));
+        accepts(reading(ptr(true, true, Ty::Unit), &deref));
+        accepts(reading(ptr(true, true, ptr(true, false, u32_ty())), &deref));
+        // A register is accessed volatile, and is no aggregate.
+        accepts(reading(
+            ptr(true, false, Ty::Peripheral(peripheral())),
+            &[PlaceElem::Deref, PlaceElem::Field(0)],
+        ));
+        // The last pointer decides: `*(*p).q` with `p` volatile and `q` not.
+        let holder = Ty::Struct(holder());
+        accepts(reading(
+            ptr(true, true, holder),
+            &[PlaceElem::Deref, PlaceElem::Field(0), PlaceElem::Deref],
+        ));
+        // `(*p).q`, the pointer itself, is read through a volatile one.
+        accepts(reading(
+            ptr(true, true, holder),
+            &[PlaceElem::Deref, PlaceElem::Field(0)],
+        ));
+        // And a volatile pointer after a non-volatile one makes it volatile.
+        let volatile = StructRef::new("VH".to_owned(), Layout { size: 4, align: 4 }, false);
+        volatile.def().set_fields(vec![Field {
+            name: "q".to_owned(),
+            ty: ptr(true, true, pair),
+            offset: 0,
+        }]);
+        rejects(
+            reading(
+                ptr(true, false, Ty::Struct(volatile)),
+                &[PlaceElem::Deref, PlaceElem::Field(0), PlaceElem::Deref],
+            ),
+            "T4",
+        );
+    }
+
+    #[test]
+    fn t5_use() {
+        let u = u32_ty();
+        accepts(assigning(u, Rvalue::Use(copy(1))));
+        rejects(assigning(Ty::Bool, Rvalue::Use(copy(1))), "T5");
+        // ADR 0024: `*mut T` where `*const T` is wanted, and not the reverse.
+        accepts(assigning(ptr(false, false, u), Rvalue::Use(copy(4))));
+        rejects(assigning(ptr(true, false, u), Rvalue::Use(copy(7))), "T5");
+        // Another pointee, or another volatility.
+        rejects(
+            assigning(ptr(true, false, Ty::Bool), Rvalue::Use(copy(4))),
+            "T5",
+        );
+        rejects(assigning(ptr(true, true, u), Rvalue::Use(copy(4))), "T5");
+        // A slice goes to a slice of the same elements, whatever the
+        // mutability and volatility (ADR 0031), and to no other.
+        let bytes = Ty::Int(IntTy::U8);
+        let slice =
+            |mutable, volatile, elem| ptr(mutable, volatile, Ty::Slice(Box::leak(Box::new(elem))));
+        accepts(assigning(
+            slice(false, true, bytes),
+            Rvalue::Use(copy(SLICE_M)),
+        ));
+        accepts(assigning(
+            slice(true, false, bytes),
+            Rvalue::Use(copy(SLICE_C)),
+        ));
+        rejects(
+            assigning(slice(false, false, u), Rvalue::Use(copy(SLICE_C))),
+            "T5",
+        );
+        rejects(assigning(u, Rvalue::Use(copy(SLICE_C))), "T5");
+        // Constants: an integer, `()`, and the address of a static.
+        let int = Operand::Const(Const::Int(7, IntTy::U32));
+        accepts(assigning(u, Rvalue::Use(int)));
+        rejects(assigning(Ty::Bool, Rvalue::Use(int)), "T5");
+        accepts(assigning(
+            Ty::Unit,
+            Rvalue::Use(Operand::Const(Const::Unit)),
+        ));
+        let s = StaticRef::new(StaticId(0), "S".to_owned(), u, true, false);
+        let address = Operand::Const(Const::Static(s));
+        accepts(assigning(ptr(true, false, u), Rvalue::Use(address)));
+        accepts(assigning(ptr(false, false, u), Rvalue::Use(address)));
+        rejects(
+            assigning(ptr(true, false, Ty::Bool), Rvalue::Use(address)),
+            "T5",
+        );
+        // A `static` that is not `mut` has a `*const` address.
+        let read_only = StaticRef::new(StaticId(1), "R".to_owned(), u, false, false);
+        let address = Operand::Const(Const::Static(read_only));
+        accepts(assigning(ptr(false, false, u), Rvalue::Use(address)));
+        rejects(assigning(ptr(true, false, u), Rvalue::Use(address)), "T5");
+    }
+
+    #[test]
+    fn t5_unary() {
+        accepts(assigning(
+            Ty::Int(IntTy::I32),
+            Rvalue::Unary(UnOp::Neg, copy(I32)),
+        ));
+        rejects(assigning(u32_ty(), Rvalue::Unary(UnOp::Neg, copy(1))), "T5");
+        rejects(
+            assigning(Ty::Bool, Rvalue::Unary(UnOp::Neg, copy(BOOL))),
+            "T5",
+        );
+        accepts(assigning(Ty::Bool, Rvalue::Unary(UnOp::Not, copy(BOOL))));
+        accepts(assigning(u32_ty(), Rvalue::Unary(UnOp::Not, copy(1))));
+        rejects(
+            assigning(
+                ptr(true, false, u32_ty()),
+                Rvalue::Unary(UnOp::Not, copy(4)),
+            ),
+            "T5",
+        );
+        // The result has the operand's type.
+        rejects(assigning(Ty::Bool, Rvalue::Unary(UnOp::Not, copy(1))), "T5");
+    }
+
+    #[test]
+    fn t5_binary() {
+        let u = u32_ty();
+        let bin = |op, lhs, rhs| Rvalue::Binary(op, copy(lhs), copy(rhs));
+        // Arithmetic: one integer type, which is the result's.
+        accepts(assigning(u, bin(BinOp::Add, 1, 3)));
+        rejects(assigning(u, bin(BinOp::Add, 1, 8)), "T5");
+        rejects(assigning(u, bin(BinOp::Add, BOOL, BOOL)), "T5");
+        rejects(assigning(Ty::Bool, bin(BinOp::Mul, 1, 3)), "T5");
+        rejects(assigning(u, bin(BinOp::Sub, 4, 4)), "T5");
+        // Bitwise: `bool` too.
+        accepts(assigning(Ty::Bool, bin(BinOp::BitXor, BOOL, BOOL)));
+        // Shifts: integers of any widths, with the left one's type.
+        accepts(assigning(u, bin(BinOp::Shl, 1, U8)));
+        accepts(assigning(u, bin(BinOp::Shr, 1, U64)));
+        rejects(assigning(u, bin(BinOp::Shl, 1, BOOL)), "T5");
+        rejects(assigning(u, bin(BinOp::Shr, BOOL, 1)), "T5");
+        rejects(assigning(Ty::Int(IntTy::U8), bin(BinOp::Shl, 1, U8)), "T5");
+        // Comparisons: `bool`, from operands of one type up to fitting.
+        accepts(assigning(Ty::Bool, bin(BinOp::Lt, 1, 3)));
+        rejects(assigning(u, bin(BinOp::Lt, 1, 3)), "T5");
+        rejects(assigning(Ty::Bool, bin(BinOp::Lt, 1, 8)), "T5");
+        accepts(assigning(Ty::Bool, bin(BinOp::Eq, BOOL, BOOL)));
+        accepts(assigning(Ty::Bool, bin(BinOp::Ne, BOOL, BOOL)));
+        rejects(assigning(Ty::Bool, bin(BinOp::Lt, BOOL, BOOL)), "T5");
+        accepts(assigning(Ty::Bool, bin(BinOp::Le, 4, 4)));
+        accepts(assigning(Ty::Bool, bin(BinOp::Eq, 4, 7)));
+        accepts(assigning(Ty::Bool, bin(BinOp::Eq, 7, 4)));
+        rejects(assigning(Ty::Bool, bin(BinOp::Eq, 4, 1)), "T5");
+        // Slices and aggregates are not compared.
+        rejects(assigning(Ty::Bool, bin(BinOp::Eq, SLICE_C, SLICE_C)), "T5");
+        rejects(assigning(Ty::Bool, bin(BinOp::Eq, 5, 5)), "T5");
+    }
+
+    #[test]
+    fn t5_cast() {
+        let cast = |from, to| Rvalue::Cast(copy(from), to);
+        accepts(assigning(Ty::Int(IntTy::U8), cast(1, Ty::Int(IntTy::U8))));
+        accepts(assigning(usize_ty(), cast(4, usize_ty())));
+        let to_bool = ptr(true, false, Ty::Bool);
+        accepts(assigning(to_bool, cast(4, to_bool)));
+        // The result has the target's type.
+        rejects(assigning(u32_ty(), cast(1, Ty::Int(IntTy::U8))), "T5");
+        // Neither side is an array, struct, slice or enum with payloads.
+        rejects(assigning(u32_ty(), cast(5, u32_ty())), "T5");
+        rejects(assigning(u32_ty(), cast(SLICE_C, u32_ty())), "T5");
+        let array = Ty::Array(Box::leak(Box::new(u32_ty())), 4);
+        rejects(assigning(array, cast(1, array)), "T5");
+        let pair = Ty::Struct(pair());
+        rejects(assigning(pair, cast(1, pair)), "T5");
+        let slice = ptr(false, false, Ty::Slice(Box::leak(Box::new(u32_ty()))));
+        rejects(assigning(slice, cast(SLICE_C, slice)), "T5");
+    }
+
+    #[test]
+    fn t5_address_of() {
+        let u = u32_ty();
+        let of = |mutable, place| Rvalue::AddressOf { mutable, place };
+        accepts(assigning(ptr(false, false, u), of(false, local(3))));
+        accepts(assigning(ptr(true, false, u), of(true, local(3))));
+        // `*mut` converts to `*const`, not the reverse.
+        accepts(assigning(ptr(false, false, u), of(true, local(3))));
+        rejects(assigning(ptr(true, false, u), of(false, local(3))), "T5");
+        // The pointee is the place's type, and the pointer is not volatile.
+        rejects(
+            assigning(ptr(false, false, Ty::Bool), of(false, local(3))),
+            "T5",
+        );
+        rejects(assigning(ptr(false, true, u), of(false, local(3))), "T5");
+        rejects(assigning(u, of(false, local(3))), "T5");
+        // A place of type `[T]` gives a slice.
+        let slice = Ty::Slice(Box::leak(Box::new(u)));
+        let elements = projected(10, &[PlaceElem::Deref]);
+        accepts(assigning(ptr(true, false, slice), of(true, elements)));
+        accepts(assigning(ptr(false, false, slice), of(false, elements)));
+        // The address of a register: the place is volatile, the pointer not.
+        let register = projected(9, &[PlaceElem::Deref, PlaceElem::Field(0)]);
+        accepts(assigning(ptr(true, false, u), of(true, register)));
+    }
+
+    #[test]
+    fn t5_slice_and_its_parts() {
+        let u = u32_ty();
+        let bytes = Ty::Int(IntTy::U8);
+        let slice =
+            |mutable, volatile, elem| ptr(mutable, volatile, Ty::Slice(Box::leak(Box::new(elem))));
+        let make = |ptr, len| Rvalue::Slice {
+            ptr: copy(ptr),
+            len: copy(len),
+        };
+        // From a thin pointer to `T`, and from one to `[T; N]` (ADR 0031),
+        // into a slice of any mutability and volatility.
+        accepts(assigning(slice(true, false, u), make(4, 8)));
+        accepts(assigning(slice(false, true, u), make(4, 8)));
+        accepts(assigning(slice(true, false, bytes), make(ARRAY_PTR, 8)));
+        // The length is a `usize`, the pointer is thin, the elements agree.
+        rejects(assigning(slice(true, false, u), make(4, 1)), "T5");
+        rejects(assigning(slice(true, false, u), make(10, 8)), "T5");
+        rejects(assigning(slice(true, false, u), make(1, 8)), "T5");
+        rejects(assigning(slice(true, false, bytes), make(4, 8)), "T5");
+        rejects(assigning(u, make(4, 8)), "T5");
+        // The address of a slice keeps its mutability and volatility.
+        let address = |place| Rvalue::SliceAddress(local(place));
+        accepts(assigning(ptr(true, false, u), address(10)));
+        accepts(assigning(ptr(false, false, u), address(10)));
+        rejects(assigning(ptr(false, true, u), address(10)), "T5");
+        rejects(assigning(ptr(true, false, bytes), address(10)), "T5");
+        rejects(assigning(u, address(1)), "T5");
+        rejects(assigning(ptr(true, false, u), address(4)), "T5");
+        // The length is a `usize`, of a slice.
+        accepts(assigning(usize_ty(), Rvalue::SliceLen(local(10))));
+        rejects(assigning(u, Rvalue::SliceLen(local(10))), "T5");
+        rejects(assigning(usize_ty(), Rvalue::SliceLen(local(4))), "T5");
+        // What `Builder::cast` builds: a slice into a slice of another
+        // mutability and volatility, and a pointer to an array into a slice.
+        accepts(assigning(
+            slice(false, true, bytes),
+            Rvalue::Use(copy(SLICE_M)),
+        ));
+        accepts(assigning(slice(true, false, bytes), make(ARRAY_PTR, 8)));
+    }
+
+    #[test]
+    fn the_rules_of_types_do_not_cascade_from_what_failed_before() {
+        // The operand names a local that does not exist: S7 only.
+        let mut body = typed();
+        statement_of(
+            &mut body,
+            Statement::Assign(local(BOOL), Rvalue::Use(copy(GHOST))),
+        );
+        breaks_only(&body, "S7");
+        // The place is `[T]`: T3 only, whatever the rvalue.
+        let mut body = typed();
+        statement_of(
+            &mut body,
+            Statement::Assign(projected(10, &[PlaceElem::Deref]), Rvalue::Use(copy(1))),
+        );
+        breaks_only(&body, "T3");
+        // The operand is `[T]`: T3 only.
+        let mut body = typed();
+        let slice = Operand::Copy(projected(10, &[PlaceElem::Deref]));
+        statement_of(&mut body, Statement::Assign(local(3), Rvalue::Use(slice)));
+        breaks_only(&body, "T3");
+        // An `asm` output of type `[T]`: T3 only, not also T9.
+        let mut body = typed();
+        statement_of(
+            &mut body,
+            Statement::InlineAsm(Box::new(asm(
+                AsmOptions::default(),
+                Vec::new(),
+                vec![AsmOperand {
+                    reg: AsmReg::Any,
+                    kind: AsmOperandKind::Out {
+                        late: false,
+                        place: Some(projected(10, &[PlaceElem::Deref])),
+                    },
+                }],
+            ))),
+        );
+        breaks_only(&body, "T3");
+    }
+
+    #[test]
+    fn t6_an_integer_constant_has_no_bit_above_its_width() {
+        let int = |bits, ty| {
+            assigning(
+                Ty::Int(ty),
+                Rvalue::Use(Operand::Const(Const::Int(bits, ty))),
+            )
+        };
+        accepts(int(0xFF, IntTy::U8));
+        rejects(int(0x100, IntTy::U8), "T6");
+        accepts(int(0xFF, IntTy::I8));
+        rejects(int(u64::MAX, IntTy::I8), "T6");
+        accepts(int(0xFFFF_FFFF, IntTy::U32));
+        rejects(int(0x1_0000_0000, IntTy::U32), "T6");
+        // `usize` has the width of the target's pointers.
+        accepts(int(IntTy::Usize.mask(), IntTy::Usize));
+        rejects(int(IntTy::Usize.mask() + 1, IntTy::Usize), "T6");
+        accepts(int(u64::MAX, IntTy::U64));
+        accepts(int(u64::MAX, IntTy::I64));
+        // Wherever an operand is, and in an `asm` `const`.
+        let mut body = typed();
+        statement_of(
+            &mut body,
+            Statement::Call {
+                dest: None,
+                callee: BodyId(0),
+                args: vec![Operand::Const(Const::Int(0x100, IntTy::U8))],
+            },
+        );
+        breaks_only(&body, "T6");
+        for (bits, expected) in [(0xFF, Vec::new()), (0x1FF, vec!["T6"])] {
+            let mut body = typed();
+            statement_of(
+                &mut body,
+                Statement::InlineAsm(Box::new(asm(
+                    AsmOptions::default(),
+                    Vec::new(),
+                    vec![AsmOperand {
+                        reg: AsmReg::Any,
+                        kind: AsmOperandKind::Const(bits, IntTy::U8),
+                    }],
+                ))),
+            );
+            assert_eq!(rules(&body), expected);
+        }
+    }
+
+    #[test]
+    fn t7_if_tests_a_bool_and_switch_an_integer_or_bool_with_distinct_cases() {
+        let mut body = typed();
+        body.blocks[0].terminator = Terminator::If {
+            cond: copy(BOOL),
+            then: BasicBlock(1),
+            else_: BasicBlock(1),
+        };
+        assert!(check_body(&body).is_empty());
+        body.blocks[0].terminator = Terminator::If {
+            cond: copy(1),
+            then: BasicBlock(1),
+            else_: BasicBlock(1),
+        };
+        breaks_only(&body, "T7");
+
+        const ONE: BasicBlock = BasicBlock(1);
+        let switch = |discr: u32, cases: &'static [(u64, BasicBlock)]| {
+            let mut body = typed();
+            body.blocks[0].terminator = Terminator::Switch {
+                discr: copy(discr),
+                cases,
+                otherwise: ONE,
+            };
+            rules(&body)
+        };
+        accepts(switch(BOOL, &[(0, ONE), (1, ONE)]));
+        rejects(switch(BOOL, &[(0, ONE), (2, ONE)]), "T7");
+        accepts(switch(U8, &[(0, ONE), (255, ONE)]));
+        rejects(switch(U8, &[(0, ONE), (256, ONE)]), "T7");
+        accepts(switch(1, &[(0xFFFF_FFFF, ONE)]));
+        rejects(switch(1, &[(0x1_0000_0000, ONE)]), "T7");
+        accepts(switch(U64, &[(u64::MAX, ONE)]));
+        // Distinct.
+        rejects(switch(1, &[(3, ONE), (3, ONE)]), "T7");
+        rejects(switch(BOOL, &[(1, ONE), (0, ONE), (1, ONE)]), "T7");
+        // Not an integer or `bool`.
+        rejects(switch(4, &[]), "T7");
+        rejects(switch(5, &[]), "T7");
+        // One violation for each case at fault.
+        assert_eq!(switch(U8, &[(256, ONE), (512, ONE)]), ["T7", "T7"]);
+    }
+
+    #[test]
+    fn t8_the_message_of_an_assert_is_a_const_slice_of_bytes() {
+        let assertion = |message| {
+            let mut body = typed();
+            body.blocks[1].terminator = Terminator::Panic(
+                PanicCause::AssertionFailed(Some((copy(message), span()))),
+                None,
+            );
+            rules(&body)
+        };
+        accepts(assertion(SLICE_C));
+        rejects(assertion(SLICE_M), "T8");
+        rejects(assertion(ARRAY_PTR), "T8");
+        rejects(assertion(1), "T8");
+        rejects(assertion(10), "T8");
+    }
+
+    #[test]
+    fn t9_an_asm_value_is_an_integer_of_at_most_32_bits_or_a_thin_pointer() {
+        let with = |kind: AsmOperandKind| {
+            let mut body = typed();
+            statement_of(
+                &mut body,
+                Statement::InlineAsm(Box::new(asm(
+                    AsmOptions::default(),
+                    Vec::new(),
+                    vec![AsmOperand {
+                        reg: AsmReg::Any,
+                        kind,
+                    }],
+                ))),
+            );
+            rules(&body)
+        };
+        let input = |local| AsmOperandKind::In(copy(local));
+        accepts(with(input(1)));
+        accepts(with(input(U8)));
+        accepts(with(input(8)));
+        accepts(with(input(4)));
+        rejects(with(input(U64)), "T9");
+        rejects(with(input(BOOL)), "T9");
+        rejects(with(input(SLICE_C)), "T9");
+        rejects(with(input(5)), "T9");
+        // An output's place, and an `inout`'s two parts.
+        let output = |place| AsmOperandKind::Out {
+            late: false,
+            place: Some(local(place)),
+        };
+        accepts(with(output(3)));
+        rejects(with(output(BOOL)), "T9");
+        rejects(with(output(U64)), "T9");
+        let inout = |value, place| AsmOperandKind::InOut {
+            input: copy(value),
+            place: Some(local(place)),
+        };
+        accepts(with(inout(1, 3)));
+        rejects(with(inout(U64, 3)), "T9");
+        rejects(with(inout(1, U64)), "T9");
+        assert_eq!(with(inout(U64, U64)), ["T9", "T9"]);
+        // `_` as an output has no place.
+        accepts(with(AsmOperandKind::Out {
+            late: false,
+            place: None,
+        }));
+        // The same in a terminator.
+        let mut body = typed();
+        body.blocks[1].terminator = Terminator::InlineAsm(Box::leak(Box::new(asm(
+            noreturn(),
+            Vec::new(),
+            vec![AsmOperand {
+                reg: AsmReg::Any,
+                kind: input(U64),
+            }],
+        ))));
+        breaks_only(&body, "T9");
     }
 }

@@ -1611,8 +1611,17 @@ impl Builder<'_, '_> {
             return Operand::Const(Const::Unit);
         }
         let from = self.operand_ty(operand);
-        match (operand, from.slice_elem(), ty.slice_elem()) {
-            (Operand::Copy(place), Some(_), None) => self.temp(ty, Rvalue::SliceAddress(place)),
+        match (operand, from.slice_address_ty(), ty.slice_elem()) {
+            // The address part has the slice's own pointee, mutability and
+            // volatility; another pointer type is a cast of that (ADR 0095, T5).
+            (Operand::Copy(place), Some(address_ty), None) => {
+                let address = self.temp(address_ty, Rvalue::SliceAddress(place));
+                if address_ty == ty {
+                    address
+                } else {
+                    self.temp(ty, Rvalue::Cast(address, ty))
+                }
+            }
             (_, Some(_), Some(_)) => self.temp(ty, Rvalue::Use(operand)),
             (_, None, Some(_)) => self.array_slice(operand, ty),
             _ => self.temp(ty, Rvalue::Cast(operand, ty)),
