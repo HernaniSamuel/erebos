@@ -9,8 +9,10 @@
 // position; a variant of another enum is a mismatch, and its own payload
 // patterns are checked against its declaration.
 enum Mode: u8 { Off = 0, Run = 1 }
+#[copy]
 struct Pair { a: u8, b: u8 }
 
+#[copy]
 enum Msg: u8 {
     Nop = 0,
     Led(bool) = 1,

@@ -9,6 +9,7 @@
 // enum's alignment.
 struct Point { x: i32, y: i32 }
 enum Mode: u8 { Off = 0, Run = 3 }
+#[copy]
 enum Msg: u8 { Nop = 0, Led(bool) = 1, Write(u8, u16) = 2, Wide(u32) = 3 }
 
 enum Every: u16 {

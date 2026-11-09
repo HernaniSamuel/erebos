@@ -22,6 +22,7 @@ panic fn on_panic() -> ! { loop {} }
 
 pub mod uart {
     pub struct Config {}
+    #[copy]
     pub enum Mode: u8 { Off = 0, Run(u8) = 1 }
     pub const MODE: Mode = Mode::Off;
     pub static mut LAST: Option(Mode) = .None;

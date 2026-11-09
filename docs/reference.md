@@ -5582,6 +5582,8 @@ Every error has a stable code, shown with the message.
 | `ty::infinite-size` | structs and enums that contain themselves, directly, through each other or through `Option` and `Result`; peripheral types that contain themselves through clusters |
 | `ty::unsized` | `[T]` where a size is needed, or `*s` read or written whole |
 | `ty::copy-field-not-copy` | a field of a `#[copy]` struct, or a payload value of a `#[copy]` enum, whose type is not copy |
+| `ty::non-copy-constant` | a `const` whose type is not copy, or a `comptime` expression of a type that is not copy; a static's initializer is neither |
+| `ty::non-copy-repeat` | `[v; N]` with `v` of a type that is not copy, whatever `N` is, unless `v` is a variant written without payload values |
 | `ty::never-in-memory` | `!` as a pointee, slice element, field, payload type, type argument of `Option` or `Result`, array element, register type, the type of a static, `extern static`, `const` or `comptime` value, a layout query operand, or under `&raw` |
 | `ty::invalid-align` | `#[align(N)]` on a struct, static or function with `N` not a power of two, too large or below the natural alignment |
 | `ty::aligned-in-packed` | a packed struct containing a type with `#[align(N)]`, at any depth, such as an enum with such a payload |

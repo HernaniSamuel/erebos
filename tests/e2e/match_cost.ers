@@ -214,6 +214,7 @@ enum N1: u8 { A(N2) = 0, B(N2) = 1 }
 enum N: u8 { A(N1, u8) = 0, B(N1) = 1 }
 
 // The arm taken, and the value it bound, 0 for none.
+#[copy]
 struct Taken { arm: u8, x: u8 }
 
 fn nested_arm(n: N) -> Taken {

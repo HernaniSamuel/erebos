@@ -47,6 +47,7 @@ struct HasEmpty { a: u8, e: Empty, b: u8 }
 struct Header { kind: u8, len: u32, tag: u16 }
 
 #[align(64)]
+#[copy]
 struct Descriptor { addr: u32, len: u32 }
 
 struct Mixed { tag: u8, header: Header, tail: u16 }

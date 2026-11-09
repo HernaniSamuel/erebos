@@ -8,31 +8,31 @@ struct Regs { data: u32 at 0, ctrl: u32 at 4 } size 8, align 4
 struct Pair { f: u32 at 0, a: [u16; 3] at 4 } size 12, align 4
 fn through_pointers() -> *mut u32
     let ctrl: *mut u32
-    expr 0 &raw mut 478..499: *mut u32
-    expr 1 field ctrl 487..499: u32
-    expr 2 deref 487..494: Regs
-    expr 3 const UART 489..493: *mut Regs
-    expr 4 &raw mut 505..521: *mut u32
-    expr 5 index 514..521: u32
-    expr 6 const BASE 514..518: *mut u32
-    expr 7 int 1 519..520: usize
+    expr 0 &raw mut 486..507: *mut u32
+    expr 1 field ctrl 495..507: u32
+    expr 2 deref 495..502: Regs
+    expr 3 const UART 497..501: *mut Regs
+    expr 4 &raw mut 513..529: *mut u32
+    expr 5 index 522..529: u32
+    expr 6 const BASE 522..526: *mut u32
+    expr 7 int 1 527..528: usize
 fn reads(i: usize) -> u32
-    expr 8 binary + 557..583: u32
-    expr 9 binary + 557..567: u32
-    expr 10 index 557..561: u32
-    expr 11 const T 557..558: [u32; 4]
-    expr 12 local i 559..560: usize
-    expr 13 field f 564..567: u32
-    expr 14 const S 564..565: Pair
-    expr 15 as u32 570..583: u32
-    expr 16 index 570..576: u16
-    expr 17 field a 570..573: [u16; 3]
-    expr 18 const S 570..571: Pair
-    expr 19 int 2 574..575: usize
+    expr 8 binary + 565..591: u32
+    expr 9 binary + 565..575: u32
+    expr 10 index 565..569: u32
+    expr 11 const T 565..566: [u32; 4]
+    expr 12 local i 567..568: usize
+    expr 13 field f 572..575: u32
+    expr 14 const S 572..573: Pair
+    expr 15 as u32 578..591: u32
+    expr 16 index 578..584: u16
+    expr 17 field a 578..581: [u16; 3]
+    expr 18 const S 578..579: Pair
+    expr 19 int 2 582..583: usize
 entry fn main() -> !
-    expr 20 loop 610..617: !
+    expr 20 loop 618..625: !
 panic fn on_panic() -> !
-    expr 21 loop 647..654: !
+    expr 21 loop 655..662: !
 comptime fn UART() -> *mut Regs
     expr 22 as *mut Regs 190..214: *mut Regs
     expr 23 int 268435456 190..201: usize

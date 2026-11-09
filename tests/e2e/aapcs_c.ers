@@ -69,85 +69,105 @@ fn check(p: *const u8, n: usize, seed: u8) -> bool {
 struct Empty {}
 
 // 1 byte: `[1 x i32]`, returned as `i8`
+#[copy]
 struct B1 { b: [u8; 1] }
 const ZERO_B1: B1 = B1 { b: [0; 1] };
 
 // 2 bytes: returned as `i16`
+#[copy]
 struct B2 { b: [u8; 2] }
 const ZERO_B2: B2 = B2 { b: [0; 2] };
 
 // 3 bytes: returned as `i32`
+#[copy]
 struct B3 { b: [u8; 3] }
 const ZERO_B3: B3 = B3 { b: [0; 3] };
 
 // 4 bytes, alignment 1: returned as `i32`
+#[copy]
 struct B4 { b: [u8; 4] }
 const ZERO_B4: B4 = B4 { b: [0; 4] };
 
 // 5 bytes, alignment 1: `[2 x i32]`, returned through `sret`
+#[copy]
 struct B5 { b: [u8; 5] }
 const ZERO_B5: B5 = B5 { b: [0; 5] };
 
 // one word
+#[copy]
 struct W4 { w: u32 }
 const ZERO_W4: W4 = W4 { w: 0 };
 
 // two words: `[2 x i32]`
+#[copy]
 struct X8 { w: [u32; 2] }
 const ZERO_X8: X8 = X8 { w: [0; 2] };
 
 // three words: `[3 x i32]`
+#[copy]
 struct X12 { w: [u32; 3] }
 const ZERO_X12: X12 = X12 { w: [0; 3] };
 
 // `{ uint64_t }`: `[1 x i64]`
+#[copy]
 struct L8 { a: [u64; 1] }
 const ZERO_L8: L8 = L8 { a: [0; 1] };
 
 // two `u64`: `[2 x i64]`
+#[copy]
 struct L16 { a: [u64; 2] }
 const ZERO_L16: L16 = L16 { a: [0; 2] };
 
 // three `u64`: `[3 x i64]`
+#[copy]
 struct L24 { a: [u64; 3] }
 const ZERO_L24: L24 = L24 { a: [0; 3] };
 
 // 64 bytes, alignment 8: `[8 x i64]`
+#[copy]
 struct L64 { a: [u64; 8] }
 const ZERO_L64: L64 = L64 { a: [0; 8] };
 
 // 64 bytes, alignment 4: `[16 x i32]`
+#[copy]
 struct X64 { w: [u32; 16] }
 const ZERO_X64: X64 = X64 { w: [0; 16] };
 
 // 68 bytes: `byval align 4`
+#[copy]
 struct X68 { w: [u32; 17] }
 const ZERO_X68: X68 = X68 { w: [0; 17] };
 
 // 72 bytes, alignment 8: `byval align 8`
+#[copy]
 struct X72 { a: [u64; 9] }
 const ZERO_X72: X72 = X72 { a: [0; 9] };
 
 // `#[align(16)]` struct of words: `[4 x i32]`
 #[align(16)]
+#[copy]
 struct A16 { w: [u32; 4] }
 const ZERO_A16: A16 = A16 { w: [0; 4] };
 
 // 80 bytes, `#[align(16)]`: `byval align 4`, copied to an aligned slot
 #[align(16)]
+#[copy]
 struct A16Big { w: [u32; 20] }
 const ZERO_A16BIG: A16Big = A16Big { w: [0; 20] };
 
 // holds an `#[align(16)]` struct: `[2 x i64]`
+#[copy]
 struct Nest16 { a: A16 }
 const ZERO_NEST16: Nest16 = Nest16 { a: A16 { w: [0; 4] } };
 
 // holds two: `[4 x i64]`
+#[copy]
 struct Nest32 { a: A16, b: A16 }
 const ZERO_NEST32: Nest32 = Nest32 { a: A16 { w: [0; 4] }, b: A16 { w: [0; 4] } };
 
 // 9 bytes, `#[packed]`: `[3 x i32]`
 #[packed]
+#[copy]
 struct P9 { a: u8, w: [u32; 2] }
 const ZERO_P9: P9 = P9 { a: 0, w: [0; 2] };
 

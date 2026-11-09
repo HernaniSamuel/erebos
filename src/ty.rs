@@ -528,6 +528,7 @@ impl Checker<'_, '_> {
             FnKind::Plain | FnKind::Naked | FnKind::Interrupt(_) => None,
         };
         self.ret = self.norm(f.ret);
+        self.check_constant_copy(f);
         if let Some((code, what, why)) = special
             && f.ret != Ty::Never
         {
@@ -881,6 +882,7 @@ impl Checker<'_, '_> {
             ExprKind::Repeat(value, len) => {
                 let want = element_of(expected);
                 let ty = self.check(f, value, want);
+                self.check_repeat_copy(value, ty);
                 match (ty, self.q.array_len(*len)) {
                     (Ty::Error, _) | (_, None) => Ty::Error,
                     // Like a block that does not finish (ADR 0034).
@@ -915,7 +917,10 @@ impl Checker<'_, '_> {
                     ));
                     Ty::Error
                 }
-                ty => ty,
+                ty => {
+                    self.check_comptime_copy(expr, ty);
+                    ty
+                }
             },
             ExprKind::SizeOf(ty) | ExprKind::AlignOf(ty) => {
                 self.queried_layout(*ty, expr.span);

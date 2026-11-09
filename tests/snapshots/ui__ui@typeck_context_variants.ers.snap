@@ -8,7 +8,7 @@ struct Holder { mode: Mode at 0, msg: Msg at 2 } size 6, align 2
 enum Mode: u8 { Off = 0, Run = 3 }
 enum Msg: u8 { Nop = 0, Set(Mode at 1) = 1, Write(u8 at 1, u16 at 2) = 2 } size 4, align 2
 fn take(m: Mode, msg: Msg) -> Msg
-    expr 0 local msg 972..975: Msg
+    expr 0 local msg 980..983: Msg
 fn statements(m: Mode) -> Mode
     let mut a: Mode
     let mut b: Msg
@@ -20,94 +20,94 @@ fn statements(m: Mode) -> Mode
     let filled_msgs: [Msg; 2]
     let block: Mode
     let known: Msg
-    expr 1 variant .Off (Mode::Off) 1034..1038: Mode
-    expr 2 assign 1044..1052: ()
-    expr 3 local a 1044..1045: Mode
-    expr 4 variant .Run (Mode::Run) 1048..1052: Mode
-    expr 5 variant .Nop (Msg::Nop) 1075..1079: Msg
-    expr 6 assign 1085..1101: ()
-    expr 7 local b 1085..1086: Msg
-    expr 8 variant .Write (Msg::Write) 1089..1101: Msg
-    expr 9 int 1 1096..1097: u8
-    expr 10 int 2 1099..1100: u16
-    expr 11 assign 1107..1124: ()
-    expr 12 static LAST 1107..1111: Msg
-    expr 13 variant .Set (Msg::Set) 1114..1124: Msg
-    expr 14 variant .Run (Mode::Run) 1119..1123: Mode
-    expr 15 call 1143..1165: Msg
-    expr 16 variant .Run (Mode::Run) 1148..1152: Mode
-    expr 17 variant .Set (Msg::Set) 1154..1164: Msg
-    expr 18 variant .Off (Mode::Off) 1159..1163: Mode
-    expr 19 struct Holder 1187..1227: Holder
-    expr 20 variant .Off (Mode::Off) 1202..1206: Mode
-    expr 21 variant .Write (Msg::Write) 1213..1225: Msg
-    expr 22 int 4 1220..1221: u8
-    expr 23 int 5 1223..1224: u16
-    expr 24 array 1256..1271: [Mode; 3]
-    expr 25 variant .Off (Mode::Off) 1257..1261: Mode
-    expr 26 variant .Run (Mode::Run) 1263..1267: Mode
-    expr 27 local m 1269..1270: Mode
-    expr 28 array 1298..1316: [Msg; 2]
-    expr 29 variant .Nop (Msg::Nop) 1299..1303: Msg
-    expr 30 variant .Set (Msg::Set) 1305..1315: Msg
-    expr 31 variant .Run (Mode::Run) 1310..1314: Mode
-    expr 32 repeat 1346..1355: [Mode; 4]
-    expr 33 variant .Run (Mode::Run) 1347..1351: Mode
-    expr 34 repeat 1389..1406: [Msg; 2]
-    expr 35 variant .Write (Msg::Write) 1390..1402: Msg
-    expr 36 int 0 1397..1398: u8
-    expr 37 int 0 1400..1401: u16
-    expr 38 block 1430..1438: Mode
-    expr 39 variant .Run (Mode::Run) 1432..1436: Mode
-    expr 40 comptime 1461..1482: Msg
-    expr 41 variant .Write (Msg::Write) 1470..1482: Msg
-    expr 42 int 7 1477..1478: u8
-    expr 43 int 8 1480..1481: u16
-    expr 44 variant .Off (Mode::Off) 1488..1492: Mode
+    expr 1 variant .Off (Mode::Off) 1042..1046: Mode
+    expr 2 assign 1052..1060: ()
+    expr 3 local a 1052..1053: Mode
+    expr 4 variant .Run (Mode::Run) 1056..1060: Mode
+    expr 5 variant .Nop (Msg::Nop) 1083..1087: Msg
+    expr 6 assign 1093..1109: ()
+    expr 7 local b 1093..1094: Msg
+    expr 8 variant .Write (Msg::Write) 1097..1109: Msg
+    expr 9 int 1 1104..1105: u8
+    expr 10 int 2 1107..1108: u16
+    expr 11 assign 1115..1132: ()
+    expr 12 static LAST 1115..1119: Msg
+    expr 13 variant .Set (Msg::Set) 1122..1132: Msg
+    expr 14 variant .Run (Mode::Run) 1127..1131: Mode
+    expr 15 call 1151..1173: Msg
+    expr 16 variant .Run (Mode::Run) 1156..1160: Mode
+    expr 17 variant .Set (Msg::Set) 1162..1172: Msg
+    expr 18 variant .Off (Mode::Off) 1167..1171: Mode
+    expr 19 struct Holder 1195..1235: Holder
+    expr 20 variant .Off (Mode::Off) 1210..1214: Mode
+    expr 21 variant .Write (Msg::Write) 1221..1233: Msg
+    expr 22 int 4 1228..1229: u8
+    expr 23 int 5 1231..1232: u16
+    expr 24 array 1264..1279: [Mode; 3]
+    expr 25 variant .Off (Mode::Off) 1265..1269: Mode
+    expr 26 variant .Run (Mode::Run) 1271..1275: Mode
+    expr 27 local m 1277..1278: Mode
+    expr 28 array 1306..1324: [Msg; 2]
+    expr 29 variant .Nop (Msg::Nop) 1307..1311: Msg
+    expr 30 variant .Set (Msg::Set) 1313..1323: Msg
+    expr 31 variant .Run (Mode::Run) 1318..1322: Mode
+    expr 32 repeat 1354..1363: [Mode; 4]
+    expr 33 variant .Run (Mode::Run) 1355..1359: Mode
+    expr 34 repeat 1397..1414: [Msg; 2]
+    expr 35 variant .Write (Msg::Write) 1398..1410: Msg
+    expr 36 int 0 1405..1406: u8
+    expr 37 int 0 1408..1409: u16
+    expr 38 block 1438..1446: Mode
+    expr 39 variant .Run (Mode::Run) 1440..1444: Mode
+    expr 40 comptime 1469..1490: Msg
+    expr 41 variant .Write (Msg::Write) 1478..1490: Msg
+    expr 42 int 7 1485..1486: u8
+    expr 43 int 8 1488..1489: u16
+    expr 44 variant .Off (Mode::Off) 1496..1500: Mode
 fn returns(c: bool) -> Msg
-    expr 45 if 1529..1568: ()
-    expr 46 local c 1532..1533: bool
-    expr 47 return 1544..1561: !
-    expr 48 variant .Set (Msg::Set) 1551..1561: Msg
-    expr 49 variant .Run (Mode::Run) 1556..1560: Mode
-    expr 50 variant .Nop (Msg::Nop) 1573..1577: Msg
+    expr 45 if 1537..1576: ()
+    expr 46 local c 1540..1541: bool
+    expr 47 return 1552..1569: !
+    expr 48 variant .Set (Msg::Set) 1559..1569: Msg
+    expr 49 variant .Run (Mode::Run) 1564..1568: Mode
+    expr 50 variant .Nop (Msg::Nop) 1581..1585: Msg
 fn branches(c: bool, x: u8) -> Msg
     let m: Mode
     let n: Mode
     let out: Msg
-    expr 51 if 1636..1663: Mode
-    expr 52 local c 1639..1640: bool
-    expr 53 variant .Run (Mode::Run) 1643..1647: Mode
-    expr 54 block 1655..1663: Mode
-    expr 55 variant .Off (Mode::Off) 1657..1661: Mode
-    expr 56 match 1683..1736: Mode
-    expr 57 local x 1689..1690: u8
-    expr 58 variant .Off (Mode::Off) 1706..1710: Mode
-    expr 59 variant .Run (Mode::Run) 1725..1729: Mode
-    expr 60 loop 1757..1846: Msg
-    expr 61 if 1772..1820: ()
-    expr 62 local c 1775..1776: bool
-    expr 63 break 1791..1809: !
-    expr 64 variant .Write (Msg::Write) 1797..1809: Msg
-    expr 65 int 1 1804..1805: u8
-    expr 66 int 2 1807..1808: u16
-    expr 67 break 1829..1839: !
-    expr 68 variant .Nop (Msg::Nop) 1835..1839: Msg
-    expr 69 if 1852..1885: Msg
-    expr 70 local c 1855..1856: bool
-    expr 71 variant .Set (Msg::Set) 1859..1866: Msg
-    expr 72 local m 1864..1865: Mode
-    expr 73 block 1874..1885: Msg
-    expr 74 variant .Set (Msg::Set) 1876..1883: Msg
-    expr 75 local n 1881..1882: Mode
+    expr 51 if 1644..1671: Mode
+    expr 52 local c 1647..1648: bool
+    expr 53 variant .Run (Mode::Run) 1651..1655: Mode
+    expr 54 block 1663..1671: Mode
+    expr 55 variant .Off (Mode::Off) 1665..1669: Mode
+    expr 56 match 1691..1744: Mode
+    expr 57 local x 1697..1698: u8
+    expr 58 variant .Off (Mode::Off) 1714..1718: Mode
+    expr 59 variant .Run (Mode::Run) 1733..1737: Mode
+    expr 60 loop 1765..1854: Msg
+    expr 61 if 1780..1828: ()
+    expr 62 local c 1783..1784: bool
+    expr 63 break 1799..1817: !
+    expr 64 variant .Write (Msg::Write) 1805..1817: Msg
+    expr 65 int 1 1812..1813: u8
+    expr 66 int 2 1815..1816: u16
+    expr 67 break 1837..1847: !
+    expr 68 variant .Nop (Msg::Nop) 1843..1847: Msg
+    expr 69 if 1860..1893: Msg
+    expr 70 local c 1863..1864: bool
+    expr 71 variant .Set (Msg::Set) 1867..1874: Msg
+    expr 72 local m 1872..1873: Mode
+    expr 73 block 1882..1893: Msg
+    expr 74 variant .Set (Msg::Set) 1884..1891: Msg
+    expr 75 local n 1889..1890: Mode
 fn compared(m: Mode) -> bool
-    expr 76 logical && 1924..1946: bool
-    expr 77 binary == 1924..1933: bool
-    expr 78 local m 1924..1925: Mode
-    expr 79 variant .Run (Mode::Run) 1929..1933: Mode
-    expr 80 binary != 1937..1946: bool
-    expr 81 variant .Off (Mode::Off) 1937..1941: Mode
-    expr 82 local m 1945..1946: Mode
+    expr 76 logical && 1932..1954: bool
+    expr 77 binary == 1932..1941: bool
+    expr 78 local m 1932..1933: Mode
+    expr 79 variant .Run (Mode::Run) 1937..1941: Mode
+    expr 80 binary != 1945..1954: bool
+    expr 81 variant .Off (Mode::Off) 1945..1949: Mode
+    expr 82 local m 1953..1954: Mode
 fn siblings(c: bool, x: u8, m: Mode, msg: Msg) -> Mode
     let a: Mode
     let b: Msg
@@ -116,67 +116,67 @@ fn siblings(c: bool, x: u8, m: Mode, msg: Msg) -> Mode
     let f: u8
     let g: u8
     let h: u8
-    expr 83 if 2059..2083: Mode
-    expr 84 local c 2062..2063: bool
-    expr 85 local m 2066..2067: Mode
-    expr 86 block 2075..2083: Mode
-    expr 87 variant .Off (Mode::Off) 2077..2081: Mode
-    expr 88 match 2102..2181: Msg
-    expr 89 local x 2108..2109: u8
-    expr 90 local msg 2125..2128: Msg
-    expr 91 variant .Nop (Msg::Nop) 2143..2147: Msg
-    expr 92 variant .Write (Msg::Write) 2162..2174: Msg
-    expr 93 int 1 2169..2170: u8
-    expr 94 int 2 2172..2173: u16
-    expr 95 loop 2201..2279: Mode
-    expr 96 if 2216..2253: ()
-    expr 97 local c 2219..2220: bool
-    expr 98 break 2235..2242: !
-    expr 99 local m 2241..2242: Mode
-    expr 100 break 2262..2272: !
-    expr 101 variant .Run (Mode::Run) 2268..2272: Mode
-    expr 102 array 2304..2313: [Mode; 2]
-    expr 103 local m 2305..2306: Mode
-    expr 104 variant .Off (Mode::Off) 2308..2312: Mode
-    expr 105 as u8 2331..2349: u8
-    expr 106 index 2331..2343: Mode
-    expr 107 array 2331..2340: [Mode; 2]
-    expr 108 local m 2332..2333: Mode
-    expr 109 variant .Off (Mode::Off) 2335..2339: Mode
-    expr 110 int 1 2341..2342: usize
-    expr 111 as u8 2367..2385: u8
-    expr 112 index 2367..2379: Mode
-    expr 113 array 2367..2376: [Mode; 2]
-    expr 114 variant .Off (Mode::Off) 2368..2372: Mode
-    expr 115 local m 2374..2375: Mode
-    expr 116 int 0 2377..2378: usize
-    expr 117 as u8 2403..2435: u8
-    expr 118 if 2403..2429: Mode
-    expr 119 local c 2407..2408: bool
-    expr 120 local m 2411..2412: Mode
-    expr 121 block 2420..2428: Mode
-    expr 122 variant .Run (Mode::Run) 2422..2426: Mode
-    expr 123 local a 2441..2442: Mode
+    expr 83 if 2067..2091: Mode
+    expr 84 local c 2070..2071: bool
+    expr 85 local m 2074..2075: Mode
+    expr 86 block 2083..2091: Mode
+    expr 87 variant .Off (Mode::Off) 2085..2089: Mode
+    expr 88 match 2110..2189: Msg
+    expr 89 local x 2116..2117: u8
+    expr 90 local msg 2133..2136: Msg
+    expr 91 variant .Nop (Msg::Nop) 2151..2155: Msg
+    expr 92 variant .Write (Msg::Write) 2170..2182: Msg
+    expr 93 int 1 2177..2178: u8
+    expr 94 int 2 2180..2181: u16
+    expr 95 loop 2209..2287: Mode
+    expr 96 if 2224..2261: ()
+    expr 97 local c 2227..2228: bool
+    expr 98 break 2243..2250: !
+    expr 99 local m 2249..2250: Mode
+    expr 100 break 2270..2280: !
+    expr 101 variant .Run (Mode::Run) 2276..2280: Mode
+    expr 102 array 2312..2321: [Mode; 2]
+    expr 103 local m 2313..2314: Mode
+    expr 104 variant .Off (Mode::Off) 2316..2320: Mode
+    expr 105 as u8 2339..2357: u8
+    expr 106 index 2339..2351: Mode
+    expr 107 array 2339..2348: [Mode; 2]
+    expr 108 local m 2340..2341: Mode
+    expr 109 variant .Off (Mode::Off) 2343..2347: Mode
+    expr 110 int 1 2349..2350: usize
+    expr 111 as u8 2375..2393: u8
+    expr 112 index 2375..2387: Mode
+    expr 113 array 2375..2384: [Mode; 2]
+    expr 114 variant .Off (Mode::Off) 2376..2380: Mode
+    expr 115 local m 2382..2383: Mode
+    expr 116 int 0 2385..2386: usize
+    expr 117 as u8 2411..2443: u8
+    expr 118 if 2411..2437: Mode
+    expr 119 local c 2415..2416: bool
+    expr 120 local m 2419..2420: Mode
+    expr 121 block 2428..2436: Mode
+    expr 122 variant .Run (Mode::Run) 2430..2434: Mode
+    expr 123 local a 2449..2450: Mode
 entry fn main() -> !
-    expr 124 loop 2469..2476: !
+    expr 124 loop 2477..2484: !
 panic fn on_panic() -> !
-    expr 125 loop 2506..2513: !
+    expr 125 loop 2514..2521: !
 comptime fn START() -> Mode
-    expr 126 variant .Run (Mode::Run) 852..856: Mode
+    expr 126 variant .Run (Mode::Run) 860..864: Mode
 comptime fn FIRST() -> Msg
-    expr 127 variant .Write (Msg::Write) 877..894: Msg
-    expr 128 int 3 884..885: u8
-    expr 129 int 4660 887..893: u16
+    expr 127 variant .Write (Msg::Write) 885..902: Msg
+    expr 128 int 3 892..893: u8
+    expr 129 int 4660 895..901: u16
 comptime fn LAST() -> Msg
-    expr 130 variant .Set (Msg::Set) 919..929: Msg
-    expr 131 variant .Off (Mode::Off) 924..928: Mode
+    expr 130 variant .Set (Msg::Set) 927..937: Msg
+    expr 131 variant .Off (Mode::Off) 932..936: Mode
 comptime fn Mode::Off() -> u8
     expr 132 int 0 718..719: u8
 comptime fn Mode::Run() -> u8
     expr 133 int 3 727..728: u8
 comptime fn Msg::Nop() -> u8
-    expr 134 int 0 752..753: u8
+    expr 134 int 0 760..761: u8
 comptime fn Msg::Set() -> u8
-    expr 135 int 1 767..768: u8
+    expr 135 int 1 775..776: u8
 comptime fn Msg::Write() -> u8
-    expr 136 int 2 787..788: u8
+    expr 136 int 2 795..796: u8

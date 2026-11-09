@@ -1,0 +1,102 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/non_copy_constant.ers
+---
+--- errors ---
+ty::non-copy-constant
+
+  × the constant `H` is of the non-copy type `Handle`
+    ╭─[non_copy_constant.ers:17:10]
+ 16 │ // Rejected, at the type of the constant.
+ 17 │ const H: Handle = Handle { id: 1 };
+    ·          ───┬──
+    ·             ╰── `Handle` is not copy
+ 18 │ const T: Token = Token::Closed;
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated, or declare a `static`, whose
+        initializer may be of any type (ADR 0096)
+ty::non-copy-constant
+
+  × the constant `T` is of the non-copy type `Token`
+    ╭─[non_copy_constant.ers:18:10]
+ 17 │ const H: Handle = Handle { id: 1 };
+ 18 │ const T: Token = Token::Closed;
+    ·          ──┬──
+    ·            ╰── `Token` is not copy
+ 19 │ const O: Option(Handle) = .None;
+    ╰────
+  help: mark `Token` with `#[copy]` if its values may be duplicated, or declare a `static`, whose
+        initializer may be of any type (ADR 0096)
+ty::non-copy-constant
+
+  × the constant `O` is of the non-copy type `Option(Handle)`
+    ╭─[non_copy_constant.ers:19:10]
+ 18 │ const T: Token = Token::Closed;
+ 19 │ const O: Option(Handle) = .None;
+    ·          ───────┬──────
+    ·                 ╰── `Option(Handle)` is not copy
+ 20 │ const A: [Handle; 2] = [Handle { id: 1 }, Handle { id: 2 }];
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated, or declare a `static`, whose
+        initializer may be of any type (ADR 0096)
+ty::non-copy-constant
+
+  × the constant `A` is of the non-copy type `[Handle; 2]`
+    ╭─[non_copy_constant.ers:20:10]
+ 19 │ const O: Option(Handle) = .None;
+ 20 │ const A: [Handle; 2] = [Handle { id: 1 }, Handle { id: 2 }];
+    ·          ─────┬─────
+    ·               ╰── `[Handle; 2]` is not copy
+ 21 │ const NESTED: Option([Token; 2]) = .None;
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated, or declare a `static`, whose
+        initializer may be of any type (ADR 0096)
+ty::non-copy-constant
+
+  × the constant `NESTED` is of the non-copy type `Option([Token; 2])`
+    ╭─[non_copy_constant.ers:21:15]
+ 20 │ const A: [Handle; 2] = [Handle { id: 1 }, Handle { id: 2 }];
+ 21 │ const NESTED: Option([Token; 2]) = .None;
+    ·               ─────────┬────────
+    ·                        ╰── `Option([Token; 2])` is not copy
+ 22 │ 
+    ╰────
+  help: mark `Token` with `#[copy]` if its values may be duplicated, or declare a `static`, whose
+        initializer may be of any type (ADR 0096)
+ty::non-copy-constant
+
+  × a `comptime` expression cannot be of the non-copy type `Handle`
+    ╭─[non_copy_constant.ers:42:21]
+ 41 │     // Rejected, at the expression.
+ 42 │     let a: Handle = comptime Handle { id: 2 };
+    ·                     ────────────┬────────────
+    ·                                 ╰── `Handle` is not copy
+ 43 │     let b: Token = comptime Token::Closed;
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated, or build the value at run
+        time (ADR 0096)
+ty::non-copy-constant
+
+  × a `comptime` expression cannot be of the non-copy type `Token`
+    ╭─[non_copy_constant.ers:43:20]
+ 42 │     let a: Handle = comptime Handle { id: 2 };
+ 43 │     let b: Token = comptime Token::Closed;
+    ·                    ───────────┬──────────
+    ·                               ╰── `Token` is not copy
+ 44 │     let c: Option(Handle) = comptime .None;
+    ╰────
+  help: mark `Token` with `#[copy]` if its values may be duplicated, or build the value at run
+        time (ADR 0096)
+ty::non-copy-constant
+
+  × a `comptime` expression cannot be of the non-copy type `Option(Handle)`
+    ╭─[non_copy_constant.ers:44:29]
+ 43 │     let b: Token = comptime Token::Closed;
+ 44 │     let c: Option(Handle) = comptime .None;
+    ·                             ───────┬──────
+    ·                                    ╰── `Option(Handle)` is not copy
+ 45 │     // Accepted: the value that leaves evaluation is copy.
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated, or build the value at run
+        time (ADR 0096)

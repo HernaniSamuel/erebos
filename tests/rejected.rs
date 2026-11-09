@@ -550,6 +550,22 @@ const CATALOG: &[Snippet] = &[
 struct InjCopy { h: InjHandle }"
     ),
     s!(
+        "ty::non-copy-constant",
+        Typeck,
+        Items,
+        "struct InjHandle2 { id: u32 }
+const INJ_C: InjHandle2 = InjHandle2 { id: 1 };"
+    ),
+    s!(
+        "ty::non-copy-repeat",
+        Typeck,
+        Items,
+        "struct InjHandle3 { id: u32 }
+fn injected_f() {
+    let injected_a: [InjHandle3; 2] = [InjHandle3 { id: 1 }; 2];
+}"
+    ),
+    s!(
         "ty::invalid-align",
         Typeck,
         Items,

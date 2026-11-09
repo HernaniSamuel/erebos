@@ -1,0 +1,52 @@
+// emit: typeck
+// A `const` of a non-copy type, and a `comptime` expression of one, are
+// errors: the value would be copied at each use, forging what the type
+// stands for (ADR 0096). A static's initializer is not one, and a function
+// run at compile time may build, move and return non-copy values.
+struct Handle { id: u32 }
+
+#[copy]
+struct Point { x: u32, y: u32 }
+
+enum Token: u8 { Open(Handle) = 0, Closed = 1 }
+
+#[copy]
+enum Mark: u8 { On(u32) = 0, Off = 1 }
+
+// Rejected, at the type of the constant.
+const H: Handle = Handle { id: 1 };
+const T: Token = Token::Closed;
+const O: Option(Handle) = .None;
+const A: [Handle; 2] = [Handle { id: 1 }, Handle { id: 2 }];
+const NESTED: Option([Token; 2]) = .None;
+
+// Accepted: the types are copy.
+const P: Point = Point { x: 1, y: 2 };
+const M: Mark = Mark::On(3);
+const OM: Option(Mark) = .Some(Mark::Off);
+const N: u32 = 7;
+
+// Accepted: the function builds and consumes a handle while it runs, and
+// only a `u32` leaves evaluation.
+fn open(id: u32) -> Handle { Handle { id: id } }
+fn id_of(h: Handle) -> u32 { h.id }
+const FROM_HANDLE: u32 = id_of(open(5));
+
+// A static of a non-copy type is valid.
+static S: Handle = Handle { id: 9 };
+static mut TABLE: [Token; 2] = [Token::Closed, Token::Open(Handle { id: 3 })];
+static mut MAYBE: Option(Handle) = .None;
+
+fn uses() {
+    // Rejected, at the expression.
+    let a: Handle = comptime Handle { id: 2 };
+    let b: Token = comptime Token::Closed;
+    let c: Option(Handle) = comptime .None;
+    // Accepted: the value that leaves evaluation is copy.
+    let d: u32 = comptime id_of(open(4));
+    let e: Point = comptime Point { x: 1, y: 2 };
+    let f: u32 = comptime { let h: Handle = open(1); id_of(h) };
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }
