@@ -121,44 +121,44 @@ ty::no-fields
 ty::volatile-aggregate
 
   × a volatile `Pair` cannot be accessed as a whole
-    ╭─[typeck_slice_index_errors.ers:29:22]
- 28 │ fn volatile_elements(pairs: *const volatile [Pair], wide: *mut volatile [u64]) {
- 29 │     let pair: Pair = (*pairs)[0];
+    ╭─[typeck_slice_index_errors.ers:30:22]
+ 29 │ fn volatile_elements(pairs: *const volatile [Pair], wide: *mut volatile [u64]) {
+ 30 │     let pair: Pair = (*pairs)[0];
     ·                      ─────┬─────
     ·                           ╰── access its elements or fields one at a time
- 30 │     (*wide)[1] = 0;
+ 31 │     (*wide)[1] = 0;
     ╰────
   help: the width and number of the bus accesses would be up to the compiler (ADR 0023)
 ty::volatile-too-wide
 
   × a volatile `u64` cannot be accessed in one instruction
-    ╭─[typeck_slice_index_errors.ers:30:5]
- 29 │     let pair: Pair = (*pairs)[0];
- 30 │     (*wide)[1] = 0;
+    ╭─[typeck_slice_index_errors.ers:31:5]
+ 30 │     let pair: Pair = (*pairs)[0];
+ 31 │     (*wide)[1] = 0;
     ·     ─────┬────
     ·          ╰── the widest single access is 32 bits
- 31 │ }
+ 32 │ }
     ╰────
   help: access it as `u32` halves, in the order the device needs (ADR 0023)
 ty::too-large
 
   × `[u32; 1073741824]` is too large
-    ╭─[typeck_slice_index_errors.ers:36:22]
- 35 │ fn too_large(s: *const [[u32; 0x4000_0000]], i: usize) -> *const [u32; 0x4000_0000] {
- 36 │     let first: u32 = (*s)[i][0];
+    ╭─[typeck_slice_index_errors.ers:37:22]
+ 36 │ fn too_large(s: *const [[u32; 0x4000_0000]], i: usize) -> *const [u32; 0x4000_0000] {
+ 37 │     let first: u32 = (*s)[i][0];
     ·                      ──┬─
     ·                        ╰── the distance between elements does not fit in the address space
- 37 │     &raw const (*s)[i]
+ 38 │     &raw const (*s)[i]
     ╰────
   help: objects are limited to 2147483647 bytes on this target
 ty::too-large
 
   × `[u32; 1073741824]` is too large
-    ╭─[typeck_slice_index_errors.ers:37:16]
- 36 │     let first: u32 = (*s)[i][0];
- 37 │     &raw const (*s)[i]
+    ╭─[typeck_slice_index_errors.ers:38:16]
+ 37 │     let first: u32 = (*s)[i][0];
+ 38 │     &raw const (*s)[i]
     ·                ──┬─
     ·                  ╰── the distance between elements does not fit in the address space
- 38 │ }
+ 39 │ }
     ╰────
   help: objects are limited to 2147483647 bytes on this target

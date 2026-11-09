@@ -75,6 +75,26 @@ fn mark_copy(q: &Queries, ty: Ty) -> String {
     format!("mark `{inner}` with `#[copy]` if its values may be duplicated")
 }
 
+/// The help of a use that would duplicate a value of the non-copy `ty`
+/// (ADR 0097): `#[copy]` on `ty` if it is a struct or an enum with payloads of
+/// the program whose fields are all copy, so that the attribute would be
+/// accepted; `None` for any other type.
+pub fn suggest_copy(q: &mut Queries, ty: Ty) -> Option<String> {
+    let hir = q.hir;
+    let fields: Vec<Ty> = match ty {
+        Ty::Struct(s) => hir.struct_(s.id).fields.iter().map(|f| f.ty).collect(),
+        Ty::Enum(e) if e.payloads && q.builtin_enum(e.id).is_none() => {
+            payload_types(&q.enum_def(e.id).variants).collect()
+        }
+        _ => return None,
+    };
+    let all_copy = fields.into_iter().all(|field| {
+        let field = q.normalize(field);
+        is_copy(q, field)
+    });
+    all_copy.then(|| format!("mark `{ty}` with `#[copy]` if its values may be duplicated"))
+}
+
 impl Checker<'_, '_> {
     /// A `const` of a non-copy type: its value would be evaluated at each
     /// use, which forges what the type stands for (ADR 0096). `f` is the

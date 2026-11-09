@@ -605,6 +605,7 @@ fn tree_hash(from: u8) -> u64 {
     h
 }
 
+#[copy]
 enum Lamp: u8 { Off = 0, Led(bool) = 1, Write(u8, u8) = 2 }
 
 // A `Lamp` whose tag, 9, is no variant.

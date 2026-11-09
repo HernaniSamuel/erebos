@@ -5584,6 +5584,8 @@ Every error has a stable code, shown with the message.
 | `ty::copy-field-not-copy` | a field of a `#[copy]` struct, or a payload value of a `#[copy]` enum, whose type is not copy |
 | `ty::non-copy-constant` | a `const` whose type is not copy, or a `comptime` expression of a type that is not copy; a static's initializer is neither |
 | `ty::non-copy-repeat` | `[v; N]` with `v` of a type that is not copy, whatever `N` is, unless `v` is a variant written without payload values |
+| `ty::move-out-of-place` | a value of a type that is not copy read whole from an array element, a place through a pointer (`*p`, `p[i]`, `(*p).f`, `(*s)[i]`) or a static, or bound by a `match` on such a place; a place rooted in a temporary, and a place that is only named (a discarded place, a `match` scrutinee), are not one |
+| `ty::non-copy-binding-in-or-pattern` | a binding of a type that is not copy inside an or-pattern nested in a payload; the alternatives of an arm are not nested |
 | `ty::never-in-memory` | `!` as a pointee, slice element, field, payload type, type argument of `Option` or `Result`, array element, register type, the type of a static, `extern static`, `const` or `comptime` value, a layout query operand, or under `&raw` |
 | `ty::invalid-align` | `#[align(N)]` on a struct, static or function with `N` not a power of two, too large or below the natural alignment |
 | `ty::aligned-in-packed` | a packed struct containing a type with `#[align(N)]`, at any depth, such as an enum with such a payload |

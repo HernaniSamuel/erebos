@@ -1062,6 +1062,105 @@ impl Checker<'_, '_> {
     }
 }
 
+/// Why a value of a non-copy type cannot be moved out of a place (ADR 0097).
+#[derive(Clone, Copy)]
+pub(super) enum Unmovable {
+    ArrayElement,
+    Pointer,
+    Static,
+}
+
+impl Unmovable {
+    fn what(self) -> &'static str {
+        match self {
+            Unmovable::ArrayElement => "an array element",
+            Unmovable::Pointer => "a place through a pointer",
+            Unmovable::Static => "a static",
+        }
+    }
+}
+
+/// Where the path of a place starts, or the first thing on it that forbids
+/// moving out of it.
+enum Root {
+    Local,
+    Temporary,
+    Unmovable(Unmovable),
+}
+
+/// Whether `expr` is a place expression, one `place_info` types.
+pub(super) fn is_place(expr: &Expr) -> bool {
+    matches!(
+        expr.kind,
+        ExprKind::Local(_)
+            | ExprKind::Static(_)
+            | ExprKind::Peripheral(_)
+            | ExprKind::ByteString(_)
+            | ExprKind::Deref(_)
+            | ExprKind::Field(..)
+            | ExprKind::Index(..)
+    )
+}
+
+impl Checker<'_, '_> {
+    /// What forbids moving a non-copy value out of the place `expr`, which
+    /// has been typed: its path from the root goes through an array element,
+    /// a pointer or a static. A place rooted in a temporary (`f().x`) is a
+    /// part of a value, not a place (ADR 0097).
+    pub(super) fn unmovable(&self, expr: &Expr) -> Option<Unmovable> {
+        match self.root(expr) {
+            Root::Unmovable(why) => Some(why),
+            Root::Local | Root::Temporary => None,
+        }
+    }
+
+    fn root(&self, expr: &Expr) -> Root {
+        match &expr.kind {
+            ExprKind::Static(_) => Root::Unmovable(Unmovable::Static),
+            ExprKind::Deref(_) => Root::Unmovable(Unmovable::Pointer),
+            ExprKind::Field(base, ..) if is_place(base) => self.root(base),
+            ExprKind::Index(base, ..) => match self.q.tables.expr_types[base.id.0 as usize] {
+                Ty::Array(..) if is_place(base) => match self.root(base) {
+                    Root::Local => Root::Unmovable(Unmovable::ArrayElement),
+                    root => root,
+                },
+                Ty::Array(..) => Root::Temporary,
+                // A pointer to a slice's elements, or a slice place `(*s)`.
+                _ => Root::Unmovable(Unmovable::Pointer),
+            },
+            ExprKind::Local(_) => Root::Local,
+            _ => Root::Temporary,
+        }
+    }
+
+    /// `ty::move-out-of-place`: a value of the non-copy type `ty` is read
+    /// whole from the place `why` names, at `at`; `scrutinee` is the place of
+    /// the `match` a binding takes it from, if it does.
+    pub(super) fn report_unmovable(
+        &mut self,
+        ty: Ty,
+        at: Span,
+        why: Unmovable,
+        scrutinee: Option<Span>,
+    ) {
+        let what = why.what();
+        let help = super::suggest_copy(self.q, ty).unwrap_or_else(|| {
+            "a non-copy value is moved out of a local, a parameter or their fields, and out of the payloads a `match` binds from them".to_owned()
+        });
+        let mut diag = Diagnostic::error(
+            "ty::move-out-of-place",
+            format!("cannot move a value of the non-copy type `{ty}` out of {what}"),
+        );
+        diag = match scrutinee {
+            Some(scrutinee) => diag
+                .label(at, format!("`{ty}` is not copy, so this binding moves it"))
+                .label(scrutinee, format!("this is {what}")),
+            None => diag.label(at, format!("`{ty}` is not copy, and this is {what}")),
+        };
+        self.q.diags.push(diag.help(format!("{help} (ADR 0097)")));
+    }
+}
+
 /// The fields of a struct or a bit-field struct (ADR 0059), as a field
 /// access or `offset_of` written in `module` names them (ADR 0050).
 struct Fields<'h> {

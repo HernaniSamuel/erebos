@@ -9,6 +9,7 @@ mod board;
 use board::{exit, putc};
 
 enum Mode: u8 { Off = 0, Run = 1 }
+#[copy]
 enum Msg: u8 { Nop = 0, Wide(u32) = 1, SetMode(Mode) = 2 }
 
 // `Msg::Wide(5)`, then the tag 9.

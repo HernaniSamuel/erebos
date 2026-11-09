@@ -6,6 +6,7 @@
 // first likewise, and goes to the `_` arm of the second. The values are read through a cast pointer from a
 // static byte array aligned as `Msg` is.
 enum Mode: u8 { Off = 0, Run = 1 }
+#[copy]
 enum Msg: u8 { Nop = 0, Wide(u32) = 1, SetMode(Mode) = 2 }
 
 // `Msg::SetMode` holding the byte 7, then the tag 9.

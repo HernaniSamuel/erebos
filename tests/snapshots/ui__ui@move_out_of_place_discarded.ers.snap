@@ -1,0 +1,50 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/move_out_of_place_discarded.ers
+---
+--- typeck ---
+struct Handle { n: u32 at 0 } size 4, align 4
+struct Holder { h: Handle at 0, items: [Handle; 2] at 4 } size 12, align 4
+fn discarded(a: [Handle; 2], p: *mut Holder, i: usize) -> ()
+    expr 0 index 379..383: Handle
+    expr 1 local a 379..380: [Handle; 2]
+    expr 2 local i 381..382: usize
+    expr 3 index 389..393: Handle
+    expr 4 local a 389..390: [Handle; 2]
+    expr 5 int 0 391..392: usize
+    expr 6 field h 399..405: Handle
+    expr 7 deref 399..403: Holder
+    expr 8 local p 401..402: *mut Holder
+    expr 9 index 411..424: Handle
+    expr 10 field items 411..421: [Handle; 2]
+    expr 11 deref 411..415: Holder
+    expr 12 local p 413..414: *mut Holder
+    expr 13 local i 422..423: usize
+    expr 14 static SH 430..432: Handle
+    expr 15 block 438..446: Holder
+    expr 16 deref 440..444: Holder
+    expr 17 local p 442..443: *mut Holder
+    expr 18 block 452..462: Handle
+    expr 19 block 454..460: Handle
+    expr 20 static SH 456..458: Handle
+    expr 21 critical 468..483: Handle
+    expr 22 static SH 479..481: Handle
+    expr 23 block 489..497: Handle
+    expr 24 index 491..495: Handle
+    expr 25 local a 491..492: [Handle; 2]
+    expr 26 int 1 493..494: usize
+fn copies(p: *mut u32) -> ()
+    expr 27 deref 531..533: u32
+    expr 28 local p 532..533: *mut u32
+    expr 29 binary + 539..547: u32
+    expr 30 deref 539..543: u32
+    expr 31 local p 541..542: *mut u32
+    expr 32 int 1 546..547: u32
+entry fn main() -> !
+    expr 33 loop 579..586: !
+panic fn on_panic() -> !
+    expr 34 loop 621..628: !
+comptime fn SH() -> Handle
+    expr 35 struct Handle 300..315: Handle
+    expr 36 int 1 312..313: u32

@@ -1,0 +1,61 @@
+// emit: typeck
+// A binding of a non-copy type inside an or-pattern nested in a payload is
+// an error: the positions after the or-pattern are tested once for all its
+// alternatives, so the place to move from is unknown at the end of an
+// alternative. The alternatives of an arm are not nested, and bindings of a
+// copy type are unrestricted (ADR 0097).
+struct Handle { n: u32 }
+
+enum Inner: u8 { A(Handle) = 0, B(Handle) = 1, C(u32) = 2 }
+
+enum Small: u8 { A(u32) = 0, B(u32) = 1 }
+
+enum Outer: u8 {
+    Pair(Inner, u32) = 0,
+    Deep(Option(Inner), u32) = 1,
+    Mixed(Small, Handle) = 2,
+    Copies(Small, u32) = 3,
+}
+
+// Rejected: nested, one error for each binding.
+fn nested(o: Outer) -> u32 {
+    match o {
+        .Pair(.A(let b: Handle) | .B(let b: Handle), 0) => b.n,
+        _ => 0,
+    }
+}
+
+// Rejected: nested two payloads deep.
+fn deeper(o: Outer) -> u32 {
+    match o {
+        .Deep(.Some(.A(let b: Handle) | .B(let b: Handle)), _) => b.n,
+        _ => 0,
+    }
+}
+
+// Accepted: the alternatives of the arm bind non-copy values.
+fn top_level(i: Inner) -> u32 {
+    match i {
+        .A(let b: Handle) | .B(let b: Handle) => b.n,
+        .C(let n: u32) => n,
+    }
+}
+
+// Accepted: a copy binding in a nested or-pattern, a non-copy binding next
+// to one, and a nested or-pattern with no binding.
+fn copies(o: Outer) -> u32 {
+    match o {
+        .Copies(.A(let n: u32) | .B(let n: u32), 0) => n,
+        .Mixed(.A(_) | .B(_), let h: Handle) => h.n,
+        .Pair(.A(_) | .B(_), let n: u32) => n,
+        _ => 0,
+    }
+}
+
+entry fn main() -> ! {
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    loop {}
+}

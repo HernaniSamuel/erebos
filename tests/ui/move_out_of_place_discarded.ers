@@ -1,0 +1,34 @@
+// emit: typeck
+// A discarded place is computed, neither moved nor used, so it is not a
+// move out of an array element, a pointer or a static (ADR 0097). A place of
+// a copy type is read as before.
+struct Handle { n: u32 }
+
+struct Holder { h: Handle, items: [Handle; 2] }
+
+static mut SH: Handle = Handle { n: 1 };
+
+fn discarded(a: [Handle; 2], p: *mut Holder, i: usize) {
+    a[i];
+    a[0];
+    (*p).h;
+    (*p).items[i];
+    SH;
+    { (*p) };
+    { { SH } };
+    critical { SH };
+    { a[1] };
+}
+
+fn copies(p: *mut u32) {
+    *p;
+    (*p) + 1;
+}
+
+entry fn main() -> ! {
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    loop {}
+}

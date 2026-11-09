@@ -2,6 +2,7 @@
 // The type of `critical BLOCK` is the block's (ADR 0086): a value of any type
 // leaves it, the block can have type `!`, and as a statement without `;` its
 // type must be `()` or `!`. Mismatches are reported as a block's are.
+#[copy]
 struct Pair {
     a: u8,
     b: u8,

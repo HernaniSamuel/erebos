@@ -33,6 +33,7 @@ const HEX_DIGITS: *const [u8] = &raw const b"0123456789abcdef";
 
 enum Mode: u8 { Off = 0, Run = 1, Sleep = 2 }
 
+#[copy]
 enum Cmd: u8 {
     Nop = 0,
     Led(bool) = 1,

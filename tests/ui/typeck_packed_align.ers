@@ -2,6 +2,7 @@
 // `#[packed]`: alignment 1, no padding. `#[align(N)]`: alignment N, size
 // rounded up to it (ADR 0022).
 #[packed]
+#[copy]
 struct Header { kind: u8, len: u32 }
 
 #[align(64)]

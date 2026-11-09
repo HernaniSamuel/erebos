@@ -13,6 +13,7 @@ mod board;
 use board::{exit, putc};
 
 enum Mode: u8 { Off = 0, Run = 1 }
+#[copy]
 enum Msg: u8 { Nop = 0, Wide(u32) = 1, SetMode(Mode) = 2 }
 
 // The tag 9, `Msg::SetMode` holding the byte 7, then `Msg::SetMode(Mode::Run)`.

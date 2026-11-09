@@ -566,6 +566,29 @@ fn injected_f() {
 }"
     ),
     s!(
+        "ty::move-out-of-place",
+        Typeck,
+        Items,
+        "struct InjHandle4 { id: u32 }
+fn injected_f(injected_p: *mut InjHandle4) {
+    let injected_h: InjHandle4 = *injected_p;
+}"
+    ),
+    s!(
+        "ty::non-copy-binding-in-or-pattern",
+        Typeck,
+        Items,
+        "struct InjHandle5 { id: u32 }
+enum InjInner: u8 { A(InjHandle5) = 0, B(InjHandle5) = 1 }
+enum InjOuter: u8 { Pair(InjInner, u32) = 0 }
+fn injected_f(injected_o: InjOuter) -> u32 {
+    match injected_o {
+        .Pair(.A(let injected_b: InjHandle5) | .B(let injected_b: InjHandle5), 0) => 1,
+        _ => 0,
+    }
+}"
+    ),
+    s!(
         "ty::invalid-align",
         Typeck,
         Items,

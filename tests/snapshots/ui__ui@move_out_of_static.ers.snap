@@ -1,0 +1,52 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/move_out_of_static.ers
+---
+--- errors ---
+ty::move-out-of-place
+
+  × cannot move a value of the non-copy type `Driver` out of a static
+    ╭─[move_out_of_static.ers:25:21]
+ 24 │ fn whole() -> Driver {
+ 25 │     let a: Driver = DRIVER;
+    ·                     ───┬──
+    ·                        ╰── `Driver` is not copy, and this is a static
+ 26 │     let b: Handle = DRIVER.handle;
+    ╰────
+  help: a non-copy value is moved out of a local, a parameter or their fields, and out of the
+        payloads a `match` binds from them (ADR 0097)
+ty::move-out-of-place
+
+  × cannot move a value of the non-copy type `Handle` out of a static
+    ╭─[move_out_of_static.ers:26:21]
+ 25 │     let a: Driver = DRIVER;
+ 26 │     let b: Handle = DRIVER.handle;
+    ·                     ──────┬──────
+    ·                           ╰── `Handle` is not copy, and this is a static
+ 27 │     take(HANDLE);
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated (ADR 0097)
+ty::move-out-of-place
+
+  × cannot move a value of the non-copy type `Handle` out of a static
+    ╭─[move_out_of_static.ers:27:10]
+ 26 │     let b: Handle = DRIVER.handle;
+ 27 │     take(HANDLE);
+    ·          ───┬──
+    ·             ╰── `Handle` is not copy, and this is a static
+ 28 │     DRIVER
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated (ADR 0097)
+ty::move-out-of-place
+
+  × cannot move a value of the non-copy type `Driver` out of a static
+    ╭─[move_out_of_static.ers:28:5]
+ 27 │     take(HANDLE);
+ 28 │     DRIVER
+    ·     ───┬──
+    ·        ╰── `Driver` is not copy, and this is a static
+ 29 │ }
+    ╰────
+  help: a non-copy value is moved out of a local, a parameter or their fields, and out of the
+        payloads a `match` binds from them (ADR 0097)

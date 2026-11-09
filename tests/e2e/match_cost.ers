@@ -71,6 +71,7 @@
 mod board;
 use board::exit;
 
+#[copy]
 enum P: u8 {
     A(
         bool, bool, bool, bool, bool, bool, bool, bool,
@@ -160,6 +161,7 @@ const PAIRS_ARMS: [u8; 23] = [
     0, 7, 15,
 ];
 
+#[copy]
 enum Q: u8 { A(u8, u8, u8, u8, u8, u8, u8, u8, u8, u8, u8, u8) = 0 }
 
 fn ors_arm(q: Q) -> u8 {
@@ -209,8 +211,11 @@ static ORS: [Q; 11] = [
 
 const ORS_ARMS: [u8; 11] = [0, 0, 0, 1, 1, 2, 2, 2, 2, 2, 2];
 
+#[copy]
 enum N2: u8 { A(u8) = 0, B(u8) = 1 }
+#[copy]
 enum N1: u8 { A(N2) = 0, B(N2) = 1 }
+#[copy]
 enum N: u8 { A(N1, u8) = 0, B(N1) = 1 }
 
 // The arm taken, and the value it bound, 0 for none.
