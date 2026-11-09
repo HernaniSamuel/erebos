@@ -177,6 +177,8 @@ Agreed as useful, not yet scheduled:
   `-O0` and `-O`, and the outputs must agree. Today's fuzzing only checks
   that the compiler does not panic; this is what finds miscompilations.
   It can start with a small part of the language and grow with it.
+  The generator of ADR 0068 has only scalar types; structs, and with them
+  moves of non-copy values (ADR 0097), are a way for it to grow.
 - Deferred formatting for logs, as `defmt` does in Rust: the program sends
   the index of a format string and its arguments, and the strings stay on
   the host, in a section that is not loaded. `comptime` can build the
@@ -334,12 +336,20 @@ ADRs:
   linear opt-in, `#[copy]` opt-in, second-class references, the analyses
   of one body before evaluation, no `const` of a non-copy type and no move
   out of a static. ADR 0095 is the validator of M5.1. Left to each step:
-  - M5.2: which places a value may be moved out of (a field, leaving the
-    struct partly moved; an array element; a payload bound by `match`; a
-    place through a raw pointer, which no check can follow); the
-    diagnostics; the edge from `query` to `analysis`, amending ADR 0063;
-    the rules of ADR 0095 for moves in MIR, amending it;
-    the migration of the tests and `core` to `#[copy]`.
+  - M5.2: settled by ADR 0096 (`#[copy]` on structs and enums with
+    payloads, which types are copy, no `const`, `comptime` value or `[v; N]`
+    of a non-copy type), 0097 (moves out of locals and their fields and out
+    of payloads bound by `match`, not out of array elements, places through
+    pointers or statics; `match` does not move its scrutinee; assignments
+    and `&raw` after a move; the diagnostics), 0098 (`move` operands with
+    their spans, kinds in MIR types, `match` on a non-copy place, the rules
+    M1 to M4, amending ADR 0095 and 0042) and 0099 (`query` runs the
+    analyses of one body after building it, amending ADR 0063; the analysis
+    of moves). The tests get `#[copy]` only where they need it.
+  - Not yet scheduled: a binding of a non-copy type inside an or-pattern
+    nested in a payload, an error from M5.2 (ADR 0097), allowed once a
+    program needs it, for instance through a hidden local recording which
+    alternative passed.
   - M5.3: how a type is marked linear; assigning over a place holding a
     linear value; statics of linear types; how the module that defines a
     linear type ends a value (taking it apart).
