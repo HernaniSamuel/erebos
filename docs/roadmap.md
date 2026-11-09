@@ -94,6 +94,34 @@ provide namespacing. Method receivers are references (`&self`,
 implicit conversion (ADR 0008), so methods wait for references instead of
 being designed twice.
 
+## M5 steps
+
+M5 is split into steps like M4's, each ending with ADRs, the reference
+updated where the language changes (M5.1 changes none), and a program on
+QEMU. The ownership model they share is ADR 0094.
+
+| Step | Delivers | Program on QEMU |
+|------|----------|-----------------|
+| **M5.1** MIR validation | the rules of MIR checked after each body is built, after the program is assembled and after `leave_out` (ADR 0095); no change to the language | every program of the tests, on both targets at both levels, passes the validator |
+| **M5.2** Moves | `#[copy]`; moves in MIR; use after a move rejected, per body, before evaluation; constants and statics of non-copy types; the tests and `core` migrated | pins in typestate: a pin taken from disabled to output by functions that consume it |
+| **M5.3** Linear values | types that must be consumed; the check on every path that returns | a transfer to a device whose handle must be waited for |
+| **M5.4** References | `&T`, `&mut T`, `&place`, `*r`; second-class references; the borrow check; `&[T]`; references and statics, `critical` and handlers | a driver writing and filling buffers passed as `&[u8]` and `&mut [u8]` |
+| **M5.5** Methods | `impl`, `self`, `&self`, `&mut self`, `x.f()`, functions of a type | the ring buffer and the UART driver written as methods |
+| **M5.6** Ownership of peripherals | handles to peripherals that one context owns; races on registers between contexts (ADR 0078) | a UART owned by its handler, with the thread context sending through it |
+| **M5.7** Fewer raw pointers | `core` and the tests moved to references where they can; what stays raw, measured | the e2e programs with references, the same output |
+
+Decisions already agreed for the later steps (ADR 0094 holds them):
+
+- Types are affine by default; linear is opt-in, by marking a type (M5.3).
+- Copy is opt-in, with `#[copy]` on a struct or an enum with payloads; scalars,
+  raw pointers, slices and arrays of copy types are copy.
+- References are second-class: parameters and `let` without `mut`, never in
+  fields, returns, statics or `Option`; no lifetime is written; the analyses
+  are the compiler's own, with no dependency.
+- The analyses of one body run before compile-time evaluation runs it.
+- A `const` or `comptime` value of a non-copy type is an error; a static of
+  one is never moved out of.
+
 ## Deferred ideas
 
 Agreed as useful, not yet scheduled:
@@ -169,8 +197,8 @@ Agreed as useful, not yet scheduled:
     memory model of their own, and the rule for shared statics would gain
     a kind of context for code running on another core. On
     microcontrollers concurrency is mostly interrupts, which M4 covers.
-  The M5 ADRs on ownership and references should say how they extend to
-  both, as ADR 0078 says for its own rule, before they are accepted.
+  ADR 0094 says how ownership and references extend to both, as ADR 0078
+  says for its own rule.
 - Ada-inspired types for hardware. Representation clauses are bit-field
   structs (ADR 0059), whose fields are checked against their bits at
   run time through the panic function; what remains is range types
@@ -186,18 +214,8 @@ Agreed as useful, not yet scheduled:
 - Typestate for hardware, as Rust's `Pin<Input>` / `Pin<Output>` pattern:
   a conversion consumes the old value and returns the new type, so using
   an input pin as an output is a compile error. It needs the moves of
-  M5 and no new type-system feature; revisit when M5 lands.
-- Affine or linear ownership, to decide with the moves of M5 (ADR 0009).
-  Rust's types are affine: a value is used at most once and may be
-  dropped, with `Drop` running implicitly at the end of the scope.
-  Linear types, as Haskell's `LinearTypes` (`a %1 -> b`), require exactly
-  one use, so forgetting a value is a compile error. That fits hardware
-  tokens that must be given back, such as "interrupts disabled" for a
-  critical section, or exclusive ownership of a peripheral. Questions for
-  the M5 ADR: affine or linear, or both by marking some types; what
-  happens to an unconsumed value; and no implicit code at scope end,
-  given ADR 0008 and the no-runtime rule. Typestate (above) depends on
-  this choice.
+  M5 and no new type-system feature; M5.2's program is one, with a struct
+  per state until M6 gives `Pin(comptime state: PinState)`.
 - Placing a static in a named region of the memory map, for DMA buffers
   or memory with other properties, and statics left uninitialized so that
   they survive a reset. A region other than `data`'s holding initial
@@ -312,24 +330,37 @@ ADRs:
     so a pointer from a `const` is a raw pointer, and the way out).
   - Not in M4: priorities and nesting (ADR 0078, "What later steps may
     add"); function pointers.
-- **M5:**
-  - Constants and statics of types that must not be copied: duplicating a
-    peripheral handle is a bug ownership should catch (ADR 0021), but a
-    constant is copied at each use and reading a static copies it.
-  - Copy versus move (ADR 0021), and borrow checking (ADR 0009). A direction
-    to weigh, not decided: references as second-class values, allowed as
-    parameters (and perhaps locals) but not stored in struct fields and not
-    returned, so that no lifetime is ever written and the check stays inside
-    one function, an in-house analysis in place of Polonius (ADR 0009). It
-    costs accessors that return references, structs that hold views and
-    chaining on `&mut self`; raw pointers and slices (ADR 0013, 0031) stay
-    the unchecked way out for those. The aim behind it is that the compiler
-    checks everything that can be checked, and what cannot (raw pointers,
-    what a register does) stays visibly marked. Open: a `&mut` parameter that
-    aliases a `static mut` its callee also names (M4.5's check sees only
-    statics), references in locals, and how this meets the choice between
-    affine and linear values below.
-  - Fewer raw pointers, a goal to measure once references exist: parameters
+- **M5** (M5.1 to M5.7). The model is ADR 0094: affine by default and
+  linear opt-in, `#[copy]` opt-in, second-class references, the analyses
+  of one body before evaluation, no `const` of a non-copy type and no move
+  out of a static. ADR 0095 is the validator of M5.1. Left to each step:
+  - M5.2: which places a value may be moved out of (a field, leaving the
+    struct partly moved; an array element; a payload bound by `match`; a
+    place through a raw pointer, which no check can follow); the
+    diagnostics; the edge from `query` to `analysis`, amending ADR 0063;
+    the rules of ADR 0095 for moves in MIR, amending it;
+    the migration of the tests and `core` to `#[copy]`.
+  - M5.3: how a type is marked linear; assigning over a place holding a
+    linear value; statics of linear types; how the module that defines a
+    linear type ends a value (taking it apart).
+  - M5.4: how long the borrow of a `let` lasts (its last use or its
+    scope); when two places overlap (fields of one struct, elements of
+    one array); references in the signatures of `extern fn`, `#[export]`,
+    naked functions, the entry function and handlers, and their ABI
+    (ADR 0006, 0025, 0075); a `&mut` passed for a `static mut` that its callee also names
+    (M4.5's check sees only statics); references to volatile places and to
+    registers; a reference made from a raw pointer (`&*p`); sub-slices of a
+    `&[T]`; indexing and fields through a reference, and so the
+    `(*s)[i]` syntax of ADR 0031; an `if` or block whose value is a
+    reference.
+  - M5.5: `x.f()` borrowing its receiver, as an amendment of ADR 0008;
+    functions of a type without a receiver (`T::new()`); where an `impl`
+    may be and its visibility.
+  - M5.6: handles to peripherals and how a program gets them once; how a
+    context comes to own a value a static holds; the races on registers
+    that ADR 0078 left to M5; what happens to programs that name
+    peripherals directly.
+  - M5.7: fewer raw pointers, measured once references exist: parameters
     by address and slices move to references; a static placed in a named
     region (deferred ideas) replaces a computed address for a DMA buffer;
     handles into static arrays, with range-typed indexes (deferred ideas),
@@ -339,16 +370,11 @@ ADRs:
     lifetime or region, leave it raw. Whether to mark the dereference of a
     raw pointer (the language has no `unsafe`, ADR 0030) waits until it is
     clear what remains.
-  - The `(*s)[i]` syntax for slice elements (ADR 0031).
-  - Whether the MIR analyses run before compile-time evaluation, which
-    today runs MIR they have not checked (ADR 0033).
-  - Affine or linear values. Affine values, used at most once but free
-    to drop, are enough for typestate (a pin taken from `Disabled` to
-    `Output`, written `Pin(comptime state: PinState)` once M6 exists).
-    Linear values must be used, which also catches a DMA transfer whose
-    handle is dropped without waiting for it; Rust cannot, since
-    forgetting a value is safe there. Erebos has no destructors, so
-    requiring a value to be used costs less than it would in Rust.
+  - Typestate written `Pin(comptime state: PinState)` waits for M6; M5.2's
+    program uses one struct per state.
+  - Not in M5: references returned or stored in structs (ADR 0094); function
+    pointers; priorities and several cores, to which ADR 0094 says how it
+    extends.
 - **M6:**
   - `compile_error` (ADR 0031).
   - `!` as a type argument, such as `Result(T, !)` for generic code
@@ -359,6 +385,8 @@ ADRs:
     `S` computed by a `comptime` function that only takes a `*const S`
     is a false `ty::cycle`; `comptime` functions over self-referential
     types make this common.
+  - Whether a type made by a `comptime` function is copy, depending on its
+    arguments as `Option(T)` and `Result(T, E)` are (ADR 0094).
   - Requirements on type arguments (ADR 0027). The direction discussed:
     a requirement is a `comptime` function returning `bool`, named in the
     signature (as `where is_bus(B)`) and checked at each instantiation,
@@ -371,14 +399,6 @@ ADRs:
   - ADR 0027 writes return types Zig-style (`fn max(comptime T: type,
     a: T, b: T) T`); by ADR 0015 a function without `->` returns `()`, so
     the M6 ADR writes `-> T`.
-
-Work owed:
-
-- A MIR validator, before M5: a pass that checks the invariants of MIR
-  (the types of places, a well-formed control flow graph) after MIR
-  building and after each pass over MIR, as rustc's MIR validation and
-  the LLVM verifier do. The borrow checker of M5 relies on those
-  invariants, and each new pass makes the validator costlier to add.
 
 Documentation owed:
 
@@ -795,5 +815,5 @@ Documentation owed:
   `enable_interrupts` or after the last interrupt (ADR 0078), function
   pointers, handlers in the generator of ADR 0068, and whether the analyses of
   M5 run before compile-time evaluation.
-- **Next: M5** (moves, ownership, references and methods), the milestone after M4 in
-  the table above.
+- **Next: M5.1** (MIR validation), the first step of M5 (moves, ownership,
+  references and methods), whose steps and model are above (ADR 0094).
