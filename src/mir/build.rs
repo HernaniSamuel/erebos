@@ -4,6 +4,7 @@ use std::collections::HashMap;
 
 use crate::eval::ConstValue;
 use crate::hir;
+use crate::mir::validate;
 use crate::mir::{
     BasicBlock, BasicBlockData, BinOp, Body, BodyId, Const, DataId, Local, LocalDecl, Operand,
     PanicCause, PanicInfoAt, PanicSite, Place, PlaceElem, Rvalue, Statement, StaticRef, Terminator,
@@ -232,7 +233,7 @@ impl<'a, 'h> Builder<'a, 'h> {
         } else {
             self.q.fn_align(self.fn_id)
         };
-        Some(Body {
+        let body = Body {
             name,
             span,
             comptime,
@@ -257,7 +258,10 @@ impl<'a, 'h> Builder<'a, 'h> {
                     }
                 })
                 .collect(),
-        })
+        };
+        // Before the body is stored or evaluated (ADR 0095, point 1).
+        validate::assert_valid_body(&body);
+        Some(body)
     }
 }
 

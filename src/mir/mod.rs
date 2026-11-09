@@ -10,9 +10,13 @@
 
 mod asm;
 mod build;
+mod validate;
 
 pub use asm::{AsmOperand, AsmOperandKind, AsmOptions, AsmPiece, AsmReg, AsmSym, InlineAsm};
 pub use build::{build_body, build_expr_body};
+#[cfg(test)]
+pub use validate::bodies_checked;
+pub use validate::{Location, Violation, check_body};
 
 use std::fmt::{self, Write as _};
 use std::ptr;

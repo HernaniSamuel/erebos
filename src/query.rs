@@ -2077,3 +2077,33 @@ impl<'h> Queries<'h> {
         VectorTable { words, defaults }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::target::DEFAULT;
+
+    /// The validator runs on every body as it is built, `comptime` ones
+    /// included, through the queries and not by being called (ADR 0095,
+    /// point 1): valid MIR passes silently, so only its count tells.
+    #[test]
+    fn every_body_built_is_validated() {
+        let hir = crate::driver::hir_of(
+            "const K: u32 = 21;\n\
+             fn twice(x: u32) -> u32 { x * 2 }\n\
+             entry fn main() -> ! { let a: u32 = comptime twice(K); loop {} }\n\
+             panic fn on_panic() -> ! { loop {} }\n",
+        )
+        .expect("the program is well formed");
+        let before = mir::bodies_checked();
+        let mut queries = Queries::new(&hir, DEFAULT);
+        queries.check_all();
+        queries.lower_all();
+        assert!(!queries.diags.has_errors());
+        let validated = mir::bodies_checked() - before;
+        // The bodies of the program, `core` and the constants, then the
+        // body of the one `comptime` expression, which is run and dropped.
+        let mir = queries.into_mir();
+        assert_eq!(validated, mir.bodies.len() + 1);
+    }
+}

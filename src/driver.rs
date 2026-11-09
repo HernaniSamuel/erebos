@@ -595,66 +595,9 @@ fn front_end(
     sources: &mut SourceMap,
     diags: &mut Diagnostics,
 ) -> FrontEnd {
-    let file = sources.add(&program.name, program.text);
-
-    // Syntax phases keep going after errors to report as much as possible.
-    let tokens = lexer::lex(file, program.text, diags);
-    if stop == Some(Stage::Tokens) {
-        let dump = tokens
-            .iter()
-            .map(|t| format!("{t:?} {:?}\n", sources.snippet(t.span)))
-            .collect();
-        return FrontEnd::Dump(dump);
-    }
-
-    let mut ast = parser::parse(program.text, &tokens, diags);
-    if stop == Some(Stage::Ast) {
-        return FrontEnd::Dump(format!("{ast:#?}\n"));
-    }
-
-    let mut file_errors = Diagnostics::default();
-    load_modules(
-        &mut ast.items,
-        "",
-        "",
-        program,
-        sources,
-        diags,
-        &mut file_errors,
-    );
-
-    let core = Program::core(target);
-    let core_file = sources.add(&core.name, core.text);
-    let tokens = lexer::lex(core_file, core.text, diags);
-    let mut core_ast = parser::parse(core.text, &tokens, diags);
-    load_modules(
-        &mut core_ast.items,
-        "rt",
-        "core",
-        &core,
-        sources,
-        diags,
-        &mut file_errors,
-    );
-
-    // Semantic phases need a well-formed input. A module whose file could
-    // not be read is resolved as empty, and its error reported with the
-    // resolver's.
-    let syntax_errors = diags.has_errors();
-    diags.append(file_errors);
-    if syntax_errors {
-        return FrontEnd::Failed;
-    }
-
-    // Later layers locate the compiler's checks without the text (ADR 0053).
-    let files = sources
-        .files()
-        .map(|file| hir::FileDef::new(&file.name, &file.text))
-        .collect();
-    let hir = match hir::lower(&ast, &core_ast, files, core_file.index(), diags) {
-        // Type checking needs every name resolved.
-        Some(hir) if !diags.has_errors() || stop == Some(Stage::Hir) => hir,
-        _ => return FrontEnd::Failed,
+    let hir = match to_hir(program, stop, target, sources, diags) {
+        Ok(hir) => hir,
+        Err(end) => return end,
     };
     if stop == Some(Stage::Hir) {
         return FrontEnd::Dump(hir.dump());
@@ -693,6 +636,95 @@ fn front_end(
         return FrontEnd::Dump(mir.to_string());
     }
     FrontEnd::Mir(Box::new(mir))
+}
+
+/// The front end up to the HIR: `Err` with what `front_end` returns when it
+/// stops earlier, at the `tokens` or `ast` stage or on an error. At the
+/// `hir` stage the HIR is returned even with errors in the diagnostics.
+fn to_hir(
+    program: &Program,
+    stop: Option<Stage>,
+    target: &'static Target,
+    sources: &mut SourceMap,
+    diags: &mut Diagnostics,
+) -> Result<hir::Hir, FrontEnd> {
+    let file = sources.add(&program.name, program.text);
+
+    // Syntax phases keep going after errors to report as much as possible.
+    let tokens = lexer::lex(file, program.text, diags);
+    if stop == Some(Stage::Tokens) {
+        let dump = tokens
+            .iter()
+            .map(|t| format!("{t:?} {:?}\n", sources.snippet(t.span)))
+            .collect();
+        return Err(FrontEnd::Dump(dump));
+    }
+
+    let mut ast = parser::parse(program.text, &tokens, diags);
+    if stop == Some(Stage::Ast) {
+        return Err(FrontEnd::Dump(format!("{ast:#?}\n")));
+    }
+
+    let mut file_errors = Diagnostics::default();
+    load_modules(
+        &mut ast.items,
+        "",
+        "",
+        program,
+        sources,
+        diags,
+        &mut file_errors,
+    );
+
+    let core = Program::core(target);
+    let core_file = sources.add(&core.name, core.text);
+    let tokens = lexer::lex(core_file, core.text, diags);
+    let mut core_ast = parser::parse(core.text, &tokens, diags);
+    load_modules(
+        &mut core_ast.items,
+        "rt",
+        "core",
+        &core,
+        sources,
+        diags,
+        &mut file_errors,
+    );
+
+    // Semantic phases need a well-formed input. A module whose file could
+    // not be read is resolved as empty, and its error reported with the
+    // resolver's.
+    let syntax_errors = diags.has_errors();
+    diags.append(file_errors);
+    if syntax_errors {
+        return Err(FrontEnd::Failed);
+    }
+
+    // Later layers locate the compiler's checks without the text (ADR 0053).
+    let files = sources
+        .files()
+        .map(|file| hir::FileDef::new(&file.name, &file.text))
+        .collect();
+    match hir::lower(&ast, &core_ast, files, core_file.index(), diags) {
+        // Type checking needs every name resolved.
+        Some(hir) if !diags.has_errors() || stop == Some(Stage::Hir) => Ok(hir),
+        _ => Err(FrontEnd::Failed),
+    }
+}
+
+/// The HIR of the program whose root file `main.ers` holds `text`, with
+/// `core` for the default target, for the tests of the layers after it;
+/// `None` if a stage before the HIR stopped.
+#[cfg(test)]
+pub(crate) fn hir_of(text: &'static str) -> Option<hir::Hir> {
+    let program = Program {
+        name: "main.ers".to_owned(),
+        text,
+        loader: Loader::Memory(Vec::new()),
+        arch: None,
+    };
+    let mut sources = SourceMap::default();
+    let mut diags = Diagnostics::default();
+    to_hir(&program, None, target::DEFAULT, &mut sources, &mut diags).ok()
 }
 
 #[cfg(test)]
