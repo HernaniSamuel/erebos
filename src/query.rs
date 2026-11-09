@@ -1926,7 +1926,7 @@ impl<'h> Queries<'h> {
             self.memory_map()
                 .expect("every value of a program without errors is computed")
         });
-        Mir {
+        let mir = Mir {
             structs,
             bit_structs,
             enums,
@@ -1950,7 +1950,9 @@ impl<'h> Queries<'h> {
             handlers,
             vector_table: self.vector_table,
             memory,
-        }
+        };
+        mir::assert_valid_program(&mir);
+        mir
     }
 
     /// The program's interrupt handlers, in the order of their bodies, each
@@ -2085,7 +2087,8 @@ mod tests {
 
     /// The validator runs on every body as it is built, `comptime` ones
     /// included, through the queries and not by being called (ADR 0095,
-    /// point 1): valid MIR passes silently, so only its count tells.
+    /// point 1), and the program once `into_mir` assembles it (point 2):
+    /// valid MIR passes silently, so only the counts tell.
     #[test]
     fn every_body_built_is_validated() {
         let hir = crate::driver::hir_of(
@@ -2096,6 +2099,7 @@ mod tests {
         )
         .expect("the program is well formed");
         let before = mir::bodies_checked();
+        let programs = mir::programs_checked();
         let mut queries = Queries::new(&hir, DEFAULT);
         queries.check_all();
         queries.lower_all();
@@ -2103,7 +2107,12 @@ mod tests {
         let validated = mir::bodies_checked() - before;
         // The bodies of the program, `core` and the constants, then the
         // body of the one `comptime` expression, which is run and dropped.
+        assert_eq!(mir::programs_checked(), programs);
         let mir = queries.into_mir();
         assert_eq!(validated, mir.bodies.len() + 1);
+        // `into_mir` validates the program it assembles (point 2), which
+        // checks each of its bodies again.
+        assert_eq!(mir::programs_checked(), programs + 1);
+        assert_eq!(mir::bodies_checked() - before, validated + mir.bodies.len());
     }
 }

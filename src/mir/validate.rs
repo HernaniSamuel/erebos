@@ -11,16 +11,22 @@
 
 use std::collections::HashSet;
 use std::fmt;
+use std::ptr;
 
 use super::{
-    AsmOperandKind, AsmPiece, BasicBlock, BinOp, Body, Const, InlineAsm, IntTy, Local, Operand,
-    PanicCause, PanicInfoAt, PeripheralTypeRef, Place, PlaceElem, Ptr, Rvalue, Statement,
-    Terminator, Ty, UnOp,
+    AsmOperandKind, AsmPiece, AsmSym, BasicBlock, BinOp, Body, BodyId, Const, ConstData, DataId,
+    InlineAsm, IntTy, Local, Mir, Operand, PanicCause, PanicInfoAt, PanicSite, PeripheralDef,
+    PeripheralRef, PeripheralTypeRef, Place, PlaceElem, Ptr, Relocation, Rvalue, Statement,
+    StaticRef, Terminator, Ty, UnOp, VectorWord,
 };
+use crate::target;
 
 /// Where in a body a rule is broken.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Location {
+    /// Not in a body but in what the violation's `body` names: a static,
+    /// read-only data, a handler or the program as a whole (P2, P6, P7).
+    Program,
     /// The body as a whole: its locals, its list of blocks.
     Body,
     /// A block as a whole: its spans (S4), and the statements of `bb0` of a
@@ -37,7 +43,7 @@ impl Location {
     /// last; what concerns the body or a whole block comes before them.
     fn key(self) -> (u32, usize) {
         match self {
-            Location::Body => (0, 0),
+            Location::Program | Location::Body => (0, 0),
             Location::Block(block) => (block.0 + 1, 0),
             Location::Statement(block, index) => (block.0 + 1, index + 1),
             Location::Terminator(block) => (block.0 + 1, usize::MAX),
@@ -48,6 +54,7 @@ impl Location {
 impl fmt::Display for Location {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Location::Program => f.write_str("program"),
             Location::Body => f.write_str("body"),
             Location::Block(block) => write!(f, "{block}"),
             Location::Statement(block, index) => write!(f, "{block}, statement {index}"),
@@ -70,6 +77,11 @@ pub struct Violation {
 
 impl fmt::Display for Violation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // What a program-level violation concerns is already described,
+        // as in "static `x`".
+        if self.at == Location::Program {
+            return write!(f, "{}: {}: {}", self.body, self.rule, self.text);
+        }
         write!(
             f,
             "`{}`, {}: {}: {}",
@@ -83,12 +95,20 @@ thread_local! {
     /// How many bodies `check_body` has looked at on this thread, for the
     /// tests that show the validator runs where ADR 0095 says.
     static BODIES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// How many programs `check_program` has looked at on this thread.
+    static PROGRAMS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// How many bodies `check_body` has looked at on this thread.
 #[cfg(test)]
 pub fn bodies_checked() -> usize {
     BODIES.with(std::cell::Cell::get)
+}
+
+/// How many programs `check_program` has looked at on this thread.
+#[cfg(test)]
+pub fn programs_checked() -> usize {
+    PROGRAMS.with(std::cell::Cell::get)
 }
 
 /// Panics with every violation, if there is one. The only panic of the
@@ -108,7 +128,10 @@ fn report(violations: &[Violation]) -> String {
         violations.len()
     );
     for violation in violations {
-        text += &format!("\n  {violation}");
+        text += &format!(
+            "
+  {violation}"
+        );
     }
     text
 }
@@ -119,48 +142,116 @@ pub fn assert_valid_body(body: &Body) {
     assert_valid(&check_body(body));
 }
 
-/// Every violation of the rules of one body, in the order of ADR 0095.
+/// Checks the rules of the program, and panics with the list of violations
+/// if it breaks any (ADR 0095, points 2 and 3).
+pub fn assert_valid_program(mir: &Mir) {
+    assert_valid(&check_program(mir));
+}
+
+/// Every violation of the rules of one body, in the order of ADR 0095. The
+/// rules that need the rest of the program (P2 to P4 and P8) are the
+/// program's: see [`check_program`].
 pub fn check_body(body: &Body) -> Vec<Violation> {
-    #[cfg(test)]
-    BODIES.with(|count| count.set(count.get() + 1));
-    let mut checker = Checker {
-        body,
-        at: Location::Body,
-        found: Vec::new(),
-    };
-    checker.shape();
-    for (block, data) in body.blocks() {
-        checker.at = Location::Block(block);
-        if data.spans.len() != data.statements.len() {
-            checker.violation(
-                "S4",
-                format!(
-                    "{} statements but {} spans",
-                    data.statements.len(),
-                    data.spans.len()
-                ),
-            );
-        }
-        for (index, statement) in data.statements.iter().enumerate() {
-            checker.at = Location::Statement(block, index);
-            checker.statement(statement);
-        }
-        checker.at = Location::Terminator(block);
-        checker.terminator(&data.terminator);
-    }
-    checker.critical();
-    let mut found = checker.found;
+    sorted(Checker::run(body, None))
+}
+
+/// The fixed order of ADR 0095 for the violations of one body: by block,
+/// statement (the terminator last) and rule id. The sort is stable.
+fn sorted(mut found: Vec<Violation>) -> Vec<Violation> {
     found.sort_by_key(|violation| (violation.at.key(), violation.rule));
     found
 }
 
+/// Every violation of the rules of the program (ADR 0095): those of what
+/// concerns the program as a whole, a static or read-only data first, by rule
+/// id, then those of each body in the order of `Mir::bodies`, in the order of
+/// [`check_body`]. P1 is `check_body` on every body, which also checks, now
+/// that the other bodies are known, what a body names (P2), its calls (P3,
+/// P4) and its panics (P8).
+pub fn check_program(mir: &Mir) -> Vec<Violation> {
+    #[cfg(test)]
+    PROGRAMS.with(|count| count.set(count.get() + 1));
+    let program = Program {
+        mir,
+        peripherals: mir
+            .peripherals
+            .iter()
+            .map(|&p| ptr::from_ref(p.def()))
+            .collect(),
+    };
+    let mut rules = Rules {
+        mir,
+        whole: Vec::new(),
+        bodies: mir
+            .bodies
+            .iter()
+            .map(|body| Checker::run(body, Some(&program)))
+            .collect(),
+    };
+    rules.roles();
+    rules.vector_table();
+    rules.statics();
+    rules.data();
+    let mut found = rules.whole;
+    found.sort_by_key(|violation| violation.rule);
+    found.extend(rules.bodies.into_iter().flat_map(sorted));
+    found
+}
+
+/// What the rules of the program that look inside a body need to know of the
+/// rest of it.
+struct Program<'a> {
+    mir: &'a Mir,
+    /// The peripherals of `Mir::peripherals`, by the address of their leaked
+    /// definition.
+    peripherals: HashSet<*const PeripheralDef>,
+}
+
 struct Checker<'a> {
     body: &'a Body,
+    /// The program the body is in, for the rules that look outside it (P2 to
+    /// P4, P8); `None` when only the body is known.
+    program: Option<&'a Program<'a>>,
     at: Location,
     found: Vec<Violation>,
 }
 
-impl Checker<'_> {
+impl<'a> Checker<'a> {
+    /// Every violation of the rules of one body, in the order found.
+    fn run(body: &'a Body, program: Option<&'a Program<'a>>) -> Vec<Violation> {
+        #[cfg(test)]
+        BODIES.with(|count| count.set(count.get() + 1));
+        let mut checker = Checker {
+            body,
+            program,
+            at: Location::Body,
+            found: Vec::new(),
+        };
+        checker.shape();
+        checker.data_of_locals();
+        for (block, data) in body.blocks() {
+            checker.at = Location::Block(block);
+            if data.spans.len() != data.statements.len() {
+                checker.violation(
+                    "S4",
+                    format!(
+                        "{} statements but {} spans",
+                        data.statements.len(),
+                        data.spans.len()
+                    ),
+                );
+            }
+            for (index, statement) in data.statements.iter().enumerate() {
+                checker.at = Location::Statement(block, index);
+                checker.statement(statement);
+            }
+            checker.at = Location::Terminator(block);
+            checker.terminator(&data.terminator);
+        }
+        checker.critical();
+        checker.found
+    }
+
     fn violation(&mut self, rule: &'static str, text: String) {
         self.found.push(Violation {
             body: self.body.name.clone(),
@@ -401,8 +492,216 @@ impl Checker<'_> {
             }
             Operand::Const(Const::Bool(_)) => Some(Ty::Bool),
             Operand::Const(Const::Unit) => Some(Ty::Unit),
-            Operand::Const(Const::Static(s)) => Some(s.def().address_ty()),
-            Operand::Const(Const::Peripheral(p)) => Some(p.def().address_ty()),
+            Operand::Const(Const::Static(s)) => {
+                self.static_named(*s, "an operand");
+                Some(s.def().address_ty())
+            }
+            Operand::Const(Const::Peripheral(p)) => {
+                self.peripheral_named(*p);
+                Some(p.def().address_ty())
+            }
+        }
+    }
+
+    /// P2: `s` is the static of `Mir::statics` at its id, as the same leaked
+    /// definition, so that a reference left from before a renumbering is
+    /// caught.
+    fn static_named(&mut self, s: StaticRef, what: &str) {
+        let Some(program) = self.program else {
+            return;
+        };
+        let def = s.def();
+        match program.mir.statics.get(def.id.0 as usize) {
+            None => self.violation(
+                "P2",
+                format!(
+                    "{what} names the static `{}` (id {}), but the program has {} statics",
+                    def.name,
+                    def.id.0,
+                    program.mir.statics.len()
+                ),
+            ),
+            Some(held) if !ptr::eq(held.def.def(), def) => self.violation(
+                "P2",
+                format!(
+                    "{what} holds another definition of the static `{}` (id {}) than the one in `Mir::statics`, `{}`",
+                    def.name,
+                    def.id.0,
+                    held.def.def().name
+                ),
+            ),
+            Some(_) => {}
+        }
+    }
+
+    /// P2: `p` is a peripheral of `Mir::peripherals`.
+    fn peripheral_named(&mut self, p: PeripheralRef) {
+        let Some(program) = self.program else {
+            return;
+        };
+        if !program.peripherals.contains(&ptr::from_ref(p.def())) {
+            self.violation(
+                "P2",
+                format!(
+                    "an operand names the peripheral `{}`, which is not in `Mir::peripherals`",
+                    p.def().name
+                ),
+            );
+        }
+    }
+
+    /// P2: `data` is read-only data of the program.
+    fn data_named(&mut self, data: DataId, what: &str) {
+        let Some(program) = self.program else {
+            return;
+        };
+        if data.0 as usize >= program.mir.data.len() {
+            self.violation(
+                "P2",
+                format!(
+                    "{what} names data {}, but the program has {} pieces",
+                    data.0,
+                    program.mir.data.len()
+                ),
+            );
+        }
+    }
+
+    /// P2 for the read-only data the locals are bound to.
+    fn data_of_locals(&mut self) {
+        let body = self.body;
+        for (local, decl) in body.locals() {
+            if let Some(data) = decl.constant {
+                self.data_named(data, &format!("the local `{local}`"));
+            }
+        }
+    }
+
+    /// P2 and P4 for a body that a call or a `sym` names; the body, if the
+    /// program has it.
+    fn callee(&mut self, id: BodyId, what: &str) -> Option<&'a Body> {
+        let program = self.program?;
+        let Some(callee) = program.mir.bodies.get(id.0 as usize) else {
+            self.violation(
+                "P2",
+                format!(
+                    "{what} names body {}, but the program has {} bodies",
+                    id.0,
+                    program.mir.bodies.len()
+                ),
+            );
+            return None;
+        };
+        if callee.comptime && !self.body.comptime {
+            self.violation(
+                "P4",
+                format!(
+                    "{what} names `{}`, which runs only at compile time, in a body of the program",
+                    callee.name
+                ),
+            );
+        }
+        Some(callee)
+    }
+
+    /// P2 to P4 for a call, whose destination and arguments are of the types
+    /// given if they are valid.
+    fn call(&mut self, id: BodyId, dest: Option<Ty>, args: &[Option<Ty>]) {
+        let Some(callee) = self.callee(id, "a call") else {
+            return;
+        };
+        // A callee short of locals is its own S1.
+        let Some(params) = callee.locals.get(1..=callee.param_count) else {
+            return;
+        };
+        if args.len() != params.len() {
+            self.violation(
+                "P3",
+                format!(
+                    "a call to `{}` passes {} arguments, but it has {} parameters",
+                    callee.name,
+                    args.len(),
+                    params.len()
+                ),
+            );
+        } else {
+            for (index, (arg, param)) in args.iter().zip(params).enumerate() {
+                if let Some(arg) = *arg
+                    && !fits(arg, param.ty)
+                {
+                    self.violation(
+                        "P3",
+                        format!(
+                            "argument {index} of a call to `{}` has type `{arg}`, which does not fit the parameter's `{}`",
+                            callee.name, param.ty
+                        ),
+                    );
+                }
+            }
+        }
+        if let Some(dest) = dest
+            && !fits(callee.ret, dest)
+        {
+            self.violation(
+                "P3",
+                format!(
+                    "a call to `{}` returns `{}`, which does not fit the destination's `{dest}`",
+                    callee.name, callee.ret
+                ),
+            );
+        }
+    }
+
+    /// P2 and P8 for where a `panic` says it is, if it does.
+    fn panic_site(&mut self, site: Option<PanicSite>) {
+        if let Some(site) = site {
+            match site.info {
+                PanicInfoAt::Local(local) => {
+                    self.local(local, "a panic site");
+                }
+                PanicInfoAt::Data(data) => self.data_named(data, "a panic site"),
+            }
+            self.static_named(site.file, "a panic site's file");
+        }
+        let Some(program) = self.program else {
+            return;
+        };
+        // The panic function's parameter, if it takes one; a body that does
+        // not exist, or has none to name, is for P2 and P5.
+        let Some(panic) = program.mir.bodies.get(program.mir.panic.0 as usize) else {
+            return;
+        };
+        let takes = panic.param_count > 0;
+        match (self.body.comptime, site, takes) {
+            (true, None, _) | (false, None, false) => {}
+            (true, Some(_), _) => self.violation(
+                "P8",
+                "a `panic` of a `comptime` body carries a site, but code run at compile time never calls the panic function"
+                    .to_owned(),
+            ),
+            (false, None, true) => self.violation(
+                "P8",
+                "a `panic` carries no site, but the panic function takes a parameter".to_owned(),
+            ),
+            (false, Some(_), false) => self.violation(
+                "P8",
+                "a `panic` carries a site, but the panic function takes no parameter".to_owned(),
+            ),
+            (false, Some(site), true) => {
+                if let PanicInfoAt::Local(local) = site.info
+                    && let Some(have) = self.local_ty(local)
+                    && let Some(Ty::Ptr(param)) = panic.locals.get(1).map(|decl| decl.ty)
+                    && have != *param.pointee
+                {
+                    self.violation(
+                        "P8",
+                        format!(
+                            "the site is in `{local}` of type `{have}`, but the panic function's parameter points to `{}`",
+                            param.pointee
+                        ),
+                    );
+                }
+            }
         }
     }
 
@@ -412,13 +711,10 @@ impl Checker<'_> {
                 let dest = self.written(*dest, "an assignment writes");
                 self.rvalue(rvalue, dest);
             }
-            Statement::Call { dest, args, .. } => {
-                if let Some(dest) = dest {
-                    self.written(*dest, "a call's destination is");
-                }
-                for arg in args {
-                    self.operand(arg);
-                }
+            Statement::Call { dest, callee, args } => {
+                let dest = dest.and_then(|dest| self.written(dest, "a call's destination is"));
+                let args: Vec<Option<Ty>> = args.iter().map(|arg| self.operand(arg)).collect();
+                self.call(*callee, dest, &args);
             }
             Statement::InlineAsm(asm) => self.asm(asm, false),
             Statement::CriticalEnter(local) | Statement::CriticalExit(local) => {
@@ -704,14 +1000,7 @@ impl Checker<'_> {
                     | PanicCause::NoVariant
                     | PanicCause::FieldOutOfRange => {}
                 }
-                if let Some(site) = site {
-                    match site.info {
-                        PanicInfoAt::Local(local) => {
-                            self.local(local, "a panic site");
-                        }
-                        PanicInfoAt::Data(_) => {}
-                    }
-                }
+                self.panic_site(*site);
             }
             Terminator::InlineAsm(asm) => self.asm(asm, true),
         }
@@ -892,7 +1181,10 @@ impl Checker<'_> {
                         self.asm_value(ty, "an `asm` output");
                     }
                 }
-                AsmOperandKind::Sym(_) => {}
+                AsmOperandKind::Sym(AsmSym::Body(id)) => {
+                    self.callee(*id, "an `asm` `sym`");
+                }
+                AsmOperandKind::Sym(AsmSym::Static(s)) => self.static_named(*s, "an `asm` `sym`"),
                 AsmOperandKind::Const(bits, int) => self.int_const(*bits, *int),
             }
         }
@@ -923,6 +1215,275 @@ impl Checker<'_> {
                 ),
             );
         }
+    }
+}
+
+/// What a body is for in the program, which fixes the shape it must have
+/// (P4, P5).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Role {
+    Entry,
+    Panic,
+    Reset,
+    CriticalEnter,
+    CriticalExit,
+    Handler,
+}
+
+/// The rules of the program that do not look inside a body: the roles bodies
+/// have (P2, P4, P5), the vector table (P2), statics (P6, P7) and read-only
+/// data (P7). The rules that do are the `Checker`'s, which ran on each body.
+struct Rules<'a> {
+    mir: &'a Mir,
+    /// The violations that concern no body.
+    whole: Vec<Violation>,
+    /// The violations of each body, by index, as the `Checker` found them.
+    bodies: Vec<Vec<Violation>>,
+}
+
+impl Rules<'_> {
+    /// A violation of what `subject` describes, which is no body.
+    fn of(&mut self, subject: &str, rule: &'static str, text: String) {
+        self.whole.push(Violation {
+            body: subject.to_owned(),
+            at: Location::Program,
+            rule,
+            text,
+        });
+    }
+
+    /// A violation of the body at `index`, as a whole.
+    fn of_body(&mut self, index: usize, rule: &'static str, text: String) {
+        let violation = Violation {
+            body: self.mir.bodies[index].name.clone(),
+            at: Location::Body,
+            rule,
+            text,
+        };
+        self.bodies[index].push(violation);
+    }
+
+    /// P2, P4 and P5 for `entry`, `panic`, `reset`, the two functions of a
+    /// `critical` block and the handlers.
+    fn roles(&mut self) {
+        let mir = self.mir;
+        let mut roles = vec![
+            (Role::Entry, "`entry`".to_owned(), mir.entry),
+            (Role::Panic, "`panic`".to_owned(), mir.panic),
+        ];
+        roles.extend(mir.reset.map(|id| (Role::Reset, "`reset`".to_owned(), id)));
+        roles.extend(
+            (mir.critical_enter).map(|id| (Role::CriticalEnter, "`critical_enter`".to_owned(), id)),
+        );
+        roles.extend(
+            (mir.critical_exit).map(|id| (Role::CriticalExit, "`critical_exit`".to_owned(), id)),
+        );
+        for handler in &mir.handlers {
+            let what = format!("the handler of `{}`", handler.vector);
+            roles.push((Role::Handler, what, handler.body));
+        }
+        for (role, what, id) in roles {
+            self.role(role, &what, id);
+        }
+    }
+
+    fn role(&mut self, role: Role, what: &str, id: BodyId) {
+        let Some(body) = self.mir.bodies.get(id.0 as usize) else {
+            let text = format!(
+                "{what} is body {}, but the program has {} bodies",
+                id.0,
+                self.mir.bodies.len()
+            );
+            self.of("the program", "P2", text);
+            return;
+        };
+        let index = id.0 as usize;
+        let params = body.param_count;
+        let first = body.locals.get(1).map(|decl| decl.ty);
+        let runs = !matches!(role, Role::CriticalEnter | Role::CriticalExit);
+        if runs && body.comptime {
+            self.of_body(
+                index,
+                "P4",
+                format!("{what} runs only at compile time, but it is part of the program"),
+            );
+        }
+        let mut wrong = Vec::new();
+        let never = matches!(role, Role::Entry | Role::Panic);
+        if never && body.ret != Ty::Never {
+            wrong.push(format!("{what} returns `{}`, not `!`", body.ret));
+        }
+        match role {
+            Role::Entry | Role::Handler | Role::CriticalEnter if params != 0 => {
+                wrong.push(format!("{what} takes {params} parameters, not none"));
+            }
+            Role::Panic if params > 1 => {
+                wrong.push(format!("{what} takes {params} parameters, not none or one"));
+            }
+            Role::Panic if params == 1 && !matches!(first, Some(Ty::Ptr(ptr)) if thin(&ptr)) => {
+                wrong.push(format!(
+                    "{what} takes a parameter of type `{}`, not a thin pointer",
+                    first.map_or("?".to_owned(), |ty| ty.to_string())
+                ));
+            }
+            Role::CriticalExit if params != 1 => {
+                wrong.push(format!("{what} takes {params} parameters, not one"));
+            }
+            Role::CriticalExit if first != Some(Ty::Int(IntTy::U32)) => {
+                wrong.push(format!("{what} takes a parameter that is not a `u32`"));
+            }
+            Role::Entry
+            | Role::Panic
+            | Role::Reset
+            | Role::CriticalEnter
+            | Role::CriticalExit
+            | Role::Handler => {}
+        }
+        if role == Role::CriticalEnter && body.ret != Ty::Int(IntTy::U32) {
+            wrong.push(format!("{what} returns `{}`, not `u32`", body.ret));
+        }
+        for text in wrong {
+            self.of_body(index, "P5", text);
+        }
+    }
+
+    /// P2 for the words of the vector table and its default handlers.
+    fn vector_table(&mut self) {
+        let mir = self.mir;
+        let Some(table) = &mir.vector_table else {
+            return;
+        };
+        for (index, word) in table.words.iter().enumerate() {
+            match word {
+                VectorWord::Handler(id) if id.0 as usize >= mir.bodies.len() => {
+                    let text = format!(
+                        "word {index} is the handler body {}, but the program has {} bodies",
+                        id.0,
+                        mir.bodies.len()
+                    );
+                    self.of("the vector table", "P2", text);
+                }
+                VectorWord::Default(default) if *default >= table.defaults.len() => {
+                    let text = format!(
+                        "word {index} is the default handler {default}, but the table has {}",
+                        table.defaults.len()
+                    );
+                    self.of("the vector table", "P2", text);
+                }
+                VectorWord::Handler(_)
+                | VectorWord::Default(_)
+                | VectorWord::StackEnd
+                | VectorWord::Reset
+                | VectorWord::Reserved => {}
+            }
+        }
+        for default in &table.defaults {
+            if let Some(info) = default.info
+                && info.0 as usize >= mir.data.len()
+            {
+                let text = format!(
+                    "its information is data {}, but the program has {} pieces",
+                    info.0,
+                    mir.data.len()
+                );
+                self.of(&format!("default handler `{}`", default.symbol), "P2", text);
+            }
+        }
+    }
+
+    /// The size of the static at `id`, if it exists and has a type of values.
+    fn static_size(&self, id: usize) -> Option<u64> {
+        let ty = self.mir.statics.get(id)?.def.def().ty;
+        values(ty).then(|| ty.layout().size)
+    }
+
+    /// P6 and P7 for the statics, and P2 for the targets of their relocations.
+    fn statics(&mut self) {
+        let mir = self.mir;
+        for (index, held) in mir.statics.iter().enumerate() {
+            let def = held.def.def();
+            let subject = format!("static `{}`", def.name);
+            if def.id.0 as usize != index {
+                let text = format!("its id is {}, but it is at index {index}", def.id.0);
+                self.of(&subject, "P6", text);
+            }
+            let size = self.static_size(index);
+            if size.is_none() {
+                let text = format!("its type `{}` is not a type of values", def.ty);
+                self.of(&subject, "P6", text);
+            }
+            if def.external {
+                if !held.bytes.is_empty() {
+                    let text = format!("it is external but has {} bytes", held.bytes.len());
+                    self.of(&subject, "P6", text);
+                }
+            } else if let Some(size) = size
+                && held.bytes.len() as u64 != size
+            {
+                let text = format!(
+                    "it has {} bytes, but its type `{}` has size {size}",
+                    held.bytes.len(),
+                    def.ty
+                );
+                self.of(&subject, "P6", text);
+            }
+            self.relocations(&subject, held.bytes.len(), &held.relocations);
+        }
+    }
+
+    /// P7 for the read-only data, and P2 for the targets of its relocations.
+    fn data(&mut self) {
+        let mir = self.mir;
+        for (
+            index,
+            ConstData {
+                bytes, relocations, ..
+            },
+        ) in mir.data.iter().enumerate()
+        {
+            self.relocations(&format!("data {index}"), bytes.len(), relocations);
+        }
+    }
+
+    /// P2 and P7 for the relocations of `subject`, which has `len` bytes.
+    fn relocations(&mut self, subject: &str, len: usize, relocations: &[Relocation]) {
+        for relocation in relocations {
+            let target = relocation.target.0 as usize;
+            let end = u64::from(relocation.offset) + target::POINTER_BYTES;
+            if end > len as u64 {
+                let text = format!(
+                    "the relocation at {} ends at byte {end}, past its {len} bytes",
+                    relocation.offset
+                );
+                self.of(subject, "P7", text);
+            }
+            if target >= self.mir.statics.len() {
+                let text = format!(
+                    "the relocation at {} points to static {target}, but the program has {}",
+                    relocation.offset,
+                    self.mir.statics.len()
+                );
+                self.of(subject, "P2", text);
+            } else if let Some(size) = self.static_size(target)
+                && u64::from(relocation.addend) > size
+            {
+                let text = format!(
+                    "the relocation at {} has addend {}, past the {size} bytes of its target",
+                    relocation.offset, relocation.addend
+                );
+                self.of(subject, "P7", text);
+            }
+        }
+    }
+}
+
+/// Whether a static of this type is a type of values (as in T3) of a size:
+/// not `!`, `[T]` or a peripheral type, nor an array of the last two.
+fn values(ty: Ty) -> bool {
+    match ty {
+        Ty::Never | Ty::Slice(_) | Ty::Peripheral(_) => false,
+        Ty::Array(item, _) => values(*item),
+        Ty::Unit | Ty::Bool | Ty::Int(_) | Ty::Ptr(_) | Ty::Struct(_) | Ty::Enum(_) => true,
     }
 }
 
@@ -1069,9 +1630,9 @@ fn thin(ptr: &Ptr) -> bool {
 mod tests {
     use super::*;
     use crate::mir::{
-        AsmOperand, AsmOptions, AsmReg, BasicBlockData, BodyId, DataId, EnumId, EnumRef, Field,
-        Layout, LocalDecl, PanicSite, PeripheralLayout, Register, StaticId, StaticRef, StructRef,
-        Variant,
+        AsmOperand, AsmOptions, AsmReg, BasicBlockData, DataId, DefaultHandler, EnumId, EnumRef,
+        Field, Handler, Layout, LocalDecl, PanicSite, PeripheralLayout, Register, Static, StaticId,
+        StructRef, Variant, VectorTable,
     };
     use crate::span::{SourceMap, Span};
 
@@ -2643,5 +3204,675 @@ mod tests {
             )]),
             "C3",
         );
+    }
+
+    // ---- The program (ADR 0095, P1 to P8) ----
+
+    /// `fn name(params) -> ret` with `extra` locals after the parameters, which
+    /// returns at once (diverges, for `!`).
+    fn fun(name: &str, params: &[Ty], ret: Ty, extra: &[Ty]) -> Body {
+        let mut body = valid();
+        body.name = name.to_owned();
+        body.ret = ret;
+        body.param_count = params.len();
+        body.locals = std::iter::once(ret)
+            .chain(params.iter().copied())
+            .chain(extra.iter().copied())
+            .map(decl)
+            .collect();
+        let end = if ret == Ty::Never {
+            Terminator::Unreachable
+        } else {
+            Terminator::Return
+        };
+        body.blocks = vec![block(Vec::new(), end)];
+        body
+    }
+
+    fn call(callee: u32, dest: Option<Place>, args: Vec<Operand>) -> Statement {
+        Statement::Call {
+            dest,
+            callee: BodyId(callee),
+            args,
+        }
+    }
+
+    // The bodies of `program`.
+    const ENTRY: usize = 0;
+    const PANIC: usize = 1;
+    const CALLEE: usize = 2;
+    const COMPILE_TIME: usize = 3;
+    const TICK: usize = 4;
+    const CALLER: usize = 5;
+    const READS: usize = 6;
+    const START: usize = 7;
+    const ENTER: usize = 8;
+    const EXIT: usize = 9;
+
+    /// A program that follows every rule:
+    /// 0 `entry() -> !`, 1 `panic() -> !`, 2 `callee(u32) -> u32`,
+    /// 3 `compile_time() -> u32` (`comptime`), 4 `tick()` (a handler),
+    /// 5 `caller()` with the locals `_1: u32`, `_2: *mut u32` and
+    /// `_3: *const u32`, which calls 2 and 6, 6 `reads(*const u32)`,
+    /// 7 `start() -> !` (`reset`), 8 `enter() -> u32` and 9 `exit(u32)`;
+    /// the statics 0 `S: u32`, 1 `extern X: u32`, 2 `P: *const u32` pointing
+    /// to `S` and 3 the byte string `b"hi"`; one piece of data of 8 bytes that
+    /// points to `S` at its end; one peripheral; a vector table.
+    fn program() -> Mir {
+        let u = u32_ty();
+        let mut compile_time = fun("compile_time", &[], u, &[]);
+        compile_time.comptime = true;
+        let mut caller = fun(
+            "caller",
+            &[],
+            Ty::Unit,
+            &[u, ptr(true, false, u), ptr(false, false, u)],
+        );
+        for statement in [
+            call(CALLEE as u32, Some(local(1)), vec![copy(1)]),
+            call(READS as u32, None, vec![copy(2)]),
+        ] {
+            statement_of(&mut caller, statement);
+        }
+        let stat = |id, name: &str, ty, external| {
+            StaticRef::new(StaticId(id), name.to_owned(), ty, false, external)
+        };
+        let held = |def, bytes: usize, relocations| Static {
+            def,
+            bytes: vec![0; bytes],
+            align: 4,
+            relocations,
+        };
+        let s = stat(0, "S", u, false);
+        let hi = StaticRef::byte_string(StaticId(3), b"hi".to_vec());
+        Mir {
+            structs: Vec::new(),
+            bit_structs: Vec::new(),
+            enums: Vec::new(),
+            peripheral_types: Vec::new(),
+            peripherals: vec![PeripheralRef::new(
+                "UART".to_owned(),
+                0x4000_0000,
+                peripheral(),
+            )],
+            data: vec![ConstData {
+                bytes: vec![0; 8],
+                align: 4,
+                relocations: vec![Relocation {
+                    offset: 4,
+                    target: StaticId(0),
+                    addend: 4,
+                }],
+            }],
+            statics: vec![
+                held(s, 4, Vec::new()),
+                held(stat(1, "X", u, true), 0, Vec::new()),
+                held(
+                    stat(2, "P", ptr(false, false, u), false),
+                    4,
+                    vec![Relocation {
+                        offset: 0,
+                        target: StaticId(0),
+                        addend: 4,
+                    }],
+                ),
+                Static {
+                    def: hi,
+                    bytes: b"hi".to_vec(),
+                    align: 1,
+                    relocations: Vec::new(),
+                },
+            ],
+            bodies: vec![
+                fun("entry", &[], Ty::Never, &[]),
+                fun("panic", &[], Ty::Never, &[]),
+                fun("callee", &[u], u, &[]),
+                compile_time,
+                fun("tick", &[], Ty::Unit, &[]),
+                caller,
+                fun("reads", &[ptr(false, false, u)], Ty::Unit, &[]),
+                fun("start", &[], Ty::Never, &[]),
+                fun("enter", &[], u, &[]),
+                fun("exit", &[u], Ty::Unit, &[]),
+            ],
+            entry: BodyId(ENTRY as u32),
+            panic: BodyId(PANIC as u32),
+            reset: Some(BodyId(START as u32)),
+            critical_enter: Some(BodyId(ENTER as u32)),
+            critical_exit: Some(BodyId(EXIT as u32)),
+            handlers: vec![Handler {
+                vector: "SysTick".to_owned(),
+                word: 2,
+                kind: crate::target::VectorKind::Maskable,
+                body: BodyId(TICK as u32),
+            }],
+            vector_table: Some(VectorTable {
+                words: vec![
+                    VectorWord::StackEnd,
+                    VectorWord::Reset,
+                    VectorWord::Handler(BodyId(TICK as u32)),
+                    VectorWord::Default(0),
+                ],
+                defaults: vec![DefaultHandler {
+                    symbol: "__erebos_unhandled".to_owned(),
+                    info: Some(DataId(0)),
+                }],
+            }),
+            memory: None,
+        }
+    }
+
+    /// `program` whose panic function takes a `*const Info`, and `caller` has
+    /// a local `_4: Info`; the type `Info`.
+    fn with_panic_info() -> (Mir, Ty) {
+        let mut mir = program();
+        let info = Ty::Struct(pair());
+        mir.bodies[PANIC] = fun("panic", &[ptr(false, false, info)], Ty::Never, &[]);
+        mir.bodies[CALLER].locals.push(decl(info));
+        (mir, info)
+    }
+
+    /// The rules of the violations of the program, in order.
+    fn program_rules(mir: &Mir) -> Vec<&'static str> {
+        check_program(mir).iter().map(|v| v.rule).collect()
+    }
+
+    #[track_caller]
+    fn program_breaks_only(mir: &Mir, rule: &str) {
+        assert_eq!(program_rules(mir), [rule], "{:#?}", check_program(mir));
+    }
+
+    #[test]
+    fn a_valid_program_reports_nothing() {
+        assert!(check_program(&program()).is_empty());
+        // After `leave_out` these may be `None`.
+        let mut mir = program();
+        mir.reset = None;
+        mir.critical_enter = None;
+        mir.critical_exit = None;
+        mir.vector_table = None;
+        mir.handlers.clear();
+        assert!(check_program(&mir).is_empty());
+        let (mir, _) = with_panic_info();
+        assert!(check_program(&mir).is_empty());
+    }
+
+    #[test]
+    fn p1_every_body_follows_the_rules_of_one_body() {
+        let mut mir = program();
+        mir.bodies[CALLEE].blocks[0].terminator = Terminator::Goto(BasicBlock(7));
+        mir.bodies[CALLER].blocks[0].terminator = Terminator::Goto(BasicBlock(8));
+        let found = check_program(&mir);
+        assert_eq!(found.len(), 2, "{found:#?}");
+        assert_eq!((found[0].body.as_str(), found[0].rule), ("callee", "S5"));
+        assert_eq!((found[1].body.as_str(), found[1].rule), ("caller", "S5"));
+
+        // Each body is looked at once, and the program once.
+        let bodies = bodies_checked();
+        let programs = programs_checked();
+        check_program(&program());
+        assert_eq!(bodies_checked() - bodies, 10);
+        assert_eq!(programs_checked() - programs, 1);
+    }
+
+    #[test]
+    fn the_program_s_violations_come_before_those_of_the_bodies_by_index() {
+        let mut mir = program();
+        mir.bodies[CALLER].blocks[0].terminator = Terminator::Goto(BasicBlock(8));
+        mir.bodies[CALLEE].blocks[0].terminator = Terminator::Goto(BasicBlock(7));
+        mir.statics[1].bytes = vec![0];
+        mir.data[0].relocations[0].addend = 9;
+        let found = check_program(&mir);
+        let order: Vec<(&str, &str)> = found.iter().map(|v| (v.body.as_str(), v.rule)).collect();
+        assert_eq!(
+            order,
+            [
+                ("static `X`", "P6"),
+                ("data 0", "P7"),
+                ("callee", "S5"),
+                ("caller", "S5")
+            ]
+        );
+        assert_eq!(
+            found[0].to_string(),
+            "static `X`: P6: it is external but has 1 bytes"
+        );
+        assert_eq!(
+            found[2].to_string(),
+            "`callee`, bb0, terminator: S5: a terminator jumps to bb7, but the body has 1 blocks"
+        );
+    }
+
+    #[test]
+    fn p2_a_body_named_exists() {
+        // A callee, and a `sym`.
+        let mut mir = program();
+        statement_of(&mut mir.bodies[CALLER], call(99, None, Vec::new()));
+        program_breaks_only(&mir, "P2");
+        let mut mir = program();
+        let sym = |sym| {
+            Statement::InlineAsm(Box::new(asm(
+                AsmOptions::default(),
+                Vec::new(),
+                vec![AsmOperand {
+                    reg: AsmReg::Any,
+                    kind: AsmOperandKind::Sym(sym),
+                }],
+            )))
+        };
+        statement_of(&mut mir.bodies[CALLER], sym(AsmSym::Body(BodyId(99))));
+        program_breaks_only(&mir, "P2");
+        // A `sym` of a static that is the program's, and of a body.
+        let mut mir = program();
+        statement_of(&mut mir.bodies[CALLER], sym(AsmSym::Body(BodyId(2))));
+        let held = mir.statics[0].def;
+        statement_of(&mut mir.bodies[CALLER], sym(AsmSym::Static(held)));
+        assert!(check_program(&mir).is_empty());
+        statement_of(
+            &mut mir.bodies[CALLER],
+            sym(AsmSym::Static(StaticRef::new(
+                StaticId(0),
+                "S".to_owned(),
+                u32_ty(),
+                false,
+                false,
+            ))),
+        );
+        program_breaks_only(&mir, "P2");
+
+        // The roles, each past the end.
+        let past = BodyId(99);
+        let roles: [fn(&mut Mir, BodyId); 6] = [
+            |mir, id| mir.entry = id,
+            |mir, id| mir.panic = id,
+            |mir, id| mir.reset = Some(id),
+            |mir, id| mir.critical_enter = Some(id),
+            |mir, id| mir.critical_exit = Some(id),
+            |mir, id| mir.handlers[0].body = id,
+        ];
+        for role in roles {
+            let mut mir = program();
+            role(&mut mir, past);
+            program_breaks_only(&mir, "P2");
+        }
+
+        // The vector table.
+        let mut mir = program();
+        mir.vector_table.as_mut().unwrap().words[2] = VectorWord::Handler(past);
+        program_breaks_only(&mir, "P2");
+        let mut mir = program();
+        mir.vector_table.as_mut().unwrap().words[3] = VectorWord::Default(5);
+        program_breaks_only(&mir, "P2");
+        let mut mir = program();
+        mir.vector_table.as_mut().unwrap().defaults[0].info = Some(DataId(9));
+        program_breaks_only(&mir, "P2");
+    }
+
+    #[test]
+    fn p2_a_static_named_is_that_static() {
+        let into = |mir: &mut Mir, operand| {
+            let target = ptr(false, false, u32_ty());
+            let caller = &mut mir.bodies[CALLER];
+            caller.locals.push(decl(target));
+            let last = caller.locals.len() as u32 - 1;
+            statement_of(
+                caller,
+                Statement::Assign(local(last), Rvalue::Use(Operand::Const(operand))),
+            );
+        };
+        let mut mir = program();
+        let held = mir.statics[0].def;
+        into(&mut mir, Const::Static(held));
+        assert!(check_program(&mir).is_empty());
+
+        // Same id, another definition: what is left from before a renumbering.
+        let stale = StaticRef::new(StaticId(0), "S".to_owned(), u32_ty(), false, false);
+        into(&mut mir, Const::Static(stale));
+        program_breaks_only(&mir, "P2");
+
+        let mut mir = program();
+        let beyond = StaticRef::new(StaticId(99), "Z".to_owned(), u32_ty(), false, false);
+        into(&mut mir, Const::Static(beyond));
+        program_breaks_only(&mir, "P2");
+
+        // A panic site's file.
+        let (mut mir, _) = with_panic_info();
+        let site = |file| PanicSite {
+            info: PanicInfoAt::Data(DataId(0)),
+            file,
+            line: 1,
+            column: 1,
+        };
+        let held = mir.statics[3].def;
+        mir.bodies[CALLER].blocks[0].terminator =
+            Terminator::Panic(PanicCause::DivisionByZero, Some(site(held)));
+        assert!(check_program(&mir).is_empty());
+        mir.bodies[CALLER].blocks[0].terminator =
+            Terminator::Panic(PanicCause::DivisionByZero, Some(site(beyond)));
+        program_breaks_only(&mir, "P2");
+    }
+
+    #[test]
+    fn p2_a_peripheral_named_is_in_the_programs() {
+        let mut mir = program();
+        let uart = mir.peripherals[0];
+        let target = uart.def().address_ty();
+        mir.bodies[CALLER].locals.push(decl(target));
+        let last = mir.bodies[CALLER].locals.len() as u32 - 1;
+        let assign = |peripheral| {
+            Statement::Assign(
+                local(last),
+                Rvalue::Use(Operand::Const(Const::Peripheral(peripheral))),
+            )
+        };
+        statement_of(&mut mir.bodies[CALLER], assign(uart));
+        assert!(check_program(&mir).is_empty());
+        // Another peripheral of the same name and address, not in the list.
+        let other = PeripheralRef::new("UART".to_owned(), 0x4000_0000, peripheral());
+        mir.bodies[CALLER].blocks[0].statements.pop();
+        mir.bodies[CALLER].blocks[0].spans.pop();
+        statement_of(&mut mir.bodies[CALLER], assign(other));
+        // Its address type is another pointer to another peripheral type, so
+        // T5 would also speak: give the local the type of the other.
+        mir.bodies[CALLER].locals[last as usize].ty = other.def().address_ty();
+        program_breaks_only(&mir, "P2");
+    }
+
+    #[test]
+    fn p2_read_only_data_named_exists() {
+        // A local's.
+        let mut mir = program();
+        mir.bodies[CALLER].locals[2].constant = Some(DataId(0));
+        assert!(check_program(&mir).is_empty());
+        mir.bodies[CALLER].locals[2].constant = Some(DataId(9));
+        program_breaks_only(&mir, "P2");
+        // A panic site's.
+        let (mut mir, _) = with_panic_info();
+        let file = mir.statics[3].def;
+        let site = |info| PanicSite {
+            info,
+            file,
+            line: 1,
+            column: 1,
+        };
+        mir.bodies[CALLER].blocks[0].terminator = Terminator::Panic(
+            PanicCause::DivisionByZero,
+            Some(site(PanicInfoAt::Data(DataId(9)))),
+        );
+        program_breaks_only(&mir, "P2");
+        // The targets of relocations, of a static and of data.
+        let mut mir = program();
+        mir.statics[2].relocations[0].target = StaticId(9);
+        program_breaks_only(&mir, "P2");
+        let mut mir = program();
+        mir.data[0].relocations[0].target = StaticId(9);
+        program_breaks_only(&mir, "P2");
+    }
+
+    #[test]
+    fn p3_a_call_passes_what_the_callee_takes() {
+        // One argument too many, and one too few.
+        let mut mir = program();
+        mir.bodies[CALLER].blocks[0].statements[0] =
+            call(CALLEE as u32, Some(local(1)), vec![copy(1), copy(1)]);
+        program_breaks_only(&mir, "P3");
+        let mut mir = program();
+        mir.bodies[CALLER].blocks[0].statements[0] =
+            call(CALLEE as u32, Some(local(1)), Vec::new());
+        program_breaks_only(&mir, "P3");
+        // An argument of the wrong type, and a `*mut u32` where `*const u32` is
+        // taken (the program has the second already).
+        let mut mir = program();
+        mir.bodies[CALLER].blocks[0].statements[0] =
+            call(CALLEE as u32, Some(local(1)), vec![copy(2)]);
+        program_breaks_only(&mir, "P3");
+        let mut mir = program();
+        mir.bodies[CALLER].blocks[0].statements[1] = call(READS as u32, None, vec![copy(3)]);
+        assert!(check_program(&mir).is_empty());
+        // `*const u32` where `*mut u32` is taken is not.
+        mir.bodies[READS].locals[1].ty = ptr(true, false, u32_ty());
+        program_breaks_only(&mir, "P3");
+        // A destination the return type does not fit; none is fine.
+        let mut mir = program();
+        mir.bodies[CALLER].blocks[0].statements[0] =
+            call(CALLEE as u32, Some(local(2)), vec![copy(1)]);
+        program_breaks_only(&mir, "P3");
+        let mut mir = program();
+        mir.bodies[CALLER].blocks[0].statements[0] = call(CALLEE as u32, None, vec![copy(1)]);
+        assert!(check_program(&mir).is_empty());
+    }
+
+    #[test]
+    fn p3_does_not_cascade_from_an_argument_or_a_callee_that_is_wrong() {
+        // The argument is a place that does not fit its type: T1 speaks, and
+        // its type is not compared with the parameter's.
+        let mut mir = program();
+        mir.bodies[CALLER].blocks[0].statements[0] = call(
+            CALLEE as u32,
+            Some(local(1)),
+            vec![Operand::Copy(projected(1, &[PlaceElem::Deref]))],
+        );
+        program_breaks_only(&mir, "T1");
+        // The callee does not exist: P2 only, with no arity to compare.
+        let mut mir = program();
+        mir.bodies[CALLER].blocks[0].statements[0] =
+            call(99, Some(local(1)), vec![copy(1), copy(1)]);
+        program_breaks_only(&mir, "P2");
+    }
+
+    #[test]
+    fn p4_a_body_of_the_program_does_not_use_one_for_compile_time() {
+        let mut mir = program();
+        statement_of(
+            &mut mir.bodies[CALLER],
+            call(COMPILE_TIME as u32, None, Vec::new()),
+        );
+        program_breaks_only(&mir, "P4");
+        let mut mir = program();
+        statement_of(
+            &mut mir.bodies[CALLER],
+            Statement::InlineAsm(Box::new(asm(
+                AsmOptions::default(),
+                Vec::new(),
+                vec![AsmOperand {
+                    reg: AsmReg::Any,
+                    kind: AsmOperandKind::Sym(AsmSym::Body(BodyId(COMPILE_TIME as u32))),
+                }],
+            ))),
+        );
+        program_breaks_only(&mir, "P4");
+        // A body for compile time may call one, and itself.
+        let mut mir = program();
+        mir.bodies[CALLER].comptime = true;
+        statement_of(
+            &mut mir.bodies[CALLER],
+            call(COMPILE_TIME as u32, None, Vec::new()),
+        );
+        assert!(check_program(&mir).is_empty());
+
+        // The roles that run in the program.
+        let roles: [fn(&mut Mir); 4] = [
+            |mir| mir.bodies[ENTRY].comptime = true,
+            |mir| mir.bodies[PANIC].comptime = true,
+            |mir| mir.bodies[START].comptime = true,
+            |mir| mir.bodies[TICK].comptime = true,
+        ];
+        for role in roles {
+            let mut mir = program();
+            role(&mut mir);
+            program_breaks_only(&mir, "P4");
+        }
+    }
+
+    #[test]
+    fn p5_the_roles_have_their_shapes() {
+        let u = u32_ty();
+        let (_, info) = with_panic_info();
+        type Change = fn(&mut Mir, Ty, Ty);
+        let cases: [(&str, Change); 11] = [
+            ("entry returns u32", |mir, u, _| {
+                mir.bodies[ENTRY] = fun("entry", &[], u, &[]);
+            }),
+            ("entry takes a parameter", |mir, u, _| {
+                mir.bodies[ENTRY] = fun("entry", &[u], Ty::Never, &[]);
+            }),
+            ("panic returns ()", |mir, _, _| {
+                mir.bodies[PANIC] = fun("panic", &[], Ty::Unit, &[]);
+            }),
+            ("panic takes two", |mir, _, info| {
+                let p = ptr(false, false, info);
+                mir.bodies[PANIC] = fun("panic", &[p, p], Ty::Never, &[]);
+            }),
+            ("panic takes a u32", |mir, u, _| {
+                mir.bodies[PANIC] = fun("panic", &[u], Ty::Never, &[]);
+            }),
+            ("panic takes a slice", |mir, _, _| {
+                let slice = ptr(
+                    false,
+                    false,
+                    Ty::Slice(Box::leak(Box::new(Ty::Int(IntTy::U8)))),
+                );
+                mir.bodies[PANIC] = fun("panic", &[slice], Ty::Never, &[]);
+            }),
+            ("a handler takes a parameter", |mir, u, _| {
+                mir.bodies[TICK] = fun("tick", &[u], Ty::Unit, &[]);
+            }),
+            ("critical_enter returns ()", |mir, _, _| {
+                mir.bodies[ENTER] = fun("enter", &[], Ty::Unit, &[]);
+            }),
+            ("critical_enter takes a parameter", |mir, u, _| {
+                mir.bodies[ENTER] = fun("enter", &[u], u, &[]);
+            }),
+            ("critical_exit takes none", |mir, _, _| {
+                mir.bodies[EXIT] = fun("exit", &[], Ty::Unit, &[]);
+            }),
+            ("critical_exit takes a u64", |mir, _, _| {
+                let wide = Ty::Int(IntTy::U64);
+                mir.bodies[EXIT] = fun("exit", &[wide], Ty::Unit, &[]);
+            }),
+        ];
+        for (what, change) in cases {
+            let mut mir = program();
+            change(&mut mir, u, info);
+            assert_eq!(
+                program_rules(&mir),
+                ["P5"],
+                "{what}: {:#?}",
+                check_program(&mir)
+            );
+        }
+        // The shapes that are allowed: a panic function with no parameter or
+        // one thin pointer, and a `reset` of any shape.
+        let (mir, _) = with_panic_info();
+        assert!(check_program(&mir).is_empty());
+        let mut mir = program();
+        mir.bodies[START] = fun("start", &[u], u, &[]);
+        assert!(check_program(&mir).is_empty());
+    }
+
+    #[test]
+    fn p6_a_static_has_its_index_a_type_of_values_and_its_bytes() {
+        // Its id is not its index.
+        let mut mir = program();
+        mir.statics[1].def = StaticRef::new(StaticId(5), "X".to_owned(), u32_ty(), false, true);
+        program_breaks_only(&mir, "P6");
+        // An external static with bytes.
+        let mut mir = program();
+        mir.statics[1].bytes = vec![0; 4];
+        program_breaks_only(&mir, "P6");
+        // One byte too few, and one too many.
+        let mut mir = program();
+        mir.statics[0].bytes.pop();
+        program_breaks_only(&mir, "P6");
+        let mut mir = program();
+        mir.statics[0].bytes.push(0);
+        program_breaks_only(&mir, "P6");
+        // A type with no value: reported once, whatever its bytes, and the
+        // relocation that points to it is not also at fault.
+        for ty in [
+            Ty::Slice(Box::leak(Box::new(u32_ty()))),
+            Ty::Never,
+            Ty::Peripheral(peripheral()),
+        ] {
+            let mut mir = program();
+            mir.statics[0].def = StaticRef::new(StaticId(0), "S".to_owned(), ty, false, false);
+            program_breaks_only(&mir, "P6");
+        }
+    }
+
+    #[test]
+    fn p7_a_relocation_lies_inside_its_bytes_and_its_target() {
+        // Past the end of a static's bytes, and of data's.
+        let mut mir = program();
+        mir.statics[2].relocations[0].offset = 1;
+        program_breaks_only(&mir, "P7");
+        let mut mir = program();
+        mir.data[0].relocations[0].offset = 5;
+        program_breaks_only(&mir, "P7");
+        // The last place there is room for it is fine.
+        let mut mir = program();
+        mir.data[0].relocations[0].offset = 4;
+        assert!(check_program(&mir).is_empty());
+        // An addend past the target's size, from a static and from data;
+        // the size itself is fine (the program has it).
+        let mut mir = program();
+        mir.statics[2].relocations[0].addend = 5;
+        program_breaks_only(&mir, "P7");
+        let mut mir = program();
+        mir.data[0].relocations[0].addend = 5;
+        program_breaks_only(&mir, "P7");
+        // An external target has its type's size, though it has no bytes.
+        let mut mir = program();
+        mir.data[0].relocations[0].target = StaticId(1);
+        assert!(check_program(&mir).is_empty());
+        mir.data[0].relocations[0].addend = 5;
+        program_breaks_only(&mir, "P7");
+    }
+
+    #[test]
+    fn p8_a_panic_carries_a_site_when_the_panic_function_takes_one() {
+        let panics = |mir: &mut Mir, comptime: bool, site| {
+            mir.bodies[CALLER].comptime = comptime;
+            mir.bodies[CALLER].blocks[0].terminator =
+                Terminator::Panic(PanicCause::DivisionByZero, site);
+        };
+        let at = |mir: &Mir, info| PanicSite {
+            info,
+            file: mir.statics[3].def,
+            line: 1,
+            column: 1,
+        };
+        // A function that takes none: no site.
+        let mut mir = program();
+        panics(&mut mir, false, None);
+        assert!(check_program(&mir).is_empty());
+        let site = at(&mir, PanicInfoAt::Data(DataId(0)));
+        panics(&mut mir, false, Some(site));
+        program_breaks_only(&mir, "P8");
+
+        // A function that takes one: a runtime body carries a site, in data
+        // or in a local of the type the parameter points to.
+        let (mut mir, _) = with_panic_info();
+        panics(&mut mir, false, None);
+        program_breaks_only(&mir, "P8");
+        let data = at(&mir, PanicInfoAt::Data(DataId(0)));
+        panics(&mut mir, false, Some(data));
+        assert!(check_program(&mir).is_empty());
+        let local = at(&mir, PanicInfoAt::Local(Local(4)));
+        panics(&mut mir, false, Some(local));
+        assert!(check_program(&mir).is_empty());
+        // In a local of another type.
+        let other = at(&mir, PanicInfoAt::Local(Local(1)));
+        panics(&mut mir, false, Some(other));
+        program_breaks_only(&mir, "P8");
+
+        // Code for compile time never calls it: no site, whatever the function.
+        panics(&mut mir, true, None);
+        assert!(check_program(&mir).is_empty());
+        panics(&mut mir, true, Some(data));
+        program_breaks_only(&mir, "P8");
+        let mut plain = program();
+        panics(&mut plain, true, None);
+        assert!(check_program(&plain).is_empty());
     }
 }
