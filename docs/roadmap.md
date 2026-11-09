@@ -102,7 +102,7 @@ QEMU. The ownership model they share is ADR 0094.
 
 | Step | Delivers | Program on QEMU |
 |------|----------|-----------------|
-| **M5.1** MIR validation | the rules of MIR checked after each body is built, after the program is assembled and after `leave_out` (ADR 0095); no change to the language | every program of the tests, on both targets at both levels, passes the validator |
+| **M5.1** ✅ MIR validation | the rules of MIR checked after each body is built, after the program is assembled and after `leave_out` (ADR 0095); no change to the language | every program of the tests, on both targets at both levels, passes the validator |
 | **M5.2** Moves | `#[copy]`; moves in MIR; use after a move rejected, per body, before evaluation; constants and statics of non-copy types; the tests and `core` migrated | pins in typestate: a pin taken from disabled to output by functions that consume it |
 | **M5.3** Linear values | types that must be consumed; the check on every path that returns | a transfer to a device whose handle must be waited for |
 | **M5.4** References | `&T`, `&mut T`, `&place`, `*r`; second-class references; the borrow check; `&[T]`; references and statics, `critical` and handlers | a driver writing and filling buffers passed as `&[u8]` and `&mut [u8]` |
@@ -815,5 +815,32 @@ Documentation owed:
   `enable_interrupts` or after the last interrupt (ADR 0078), function
   pointers, handlers in the generator of ADR 0068, and whether the analyses of
   M5 run before compile-time evaluation.
-- **Next: M5.1** (MIR validation), the first step of M5 (moves, ownership,
+- **M5.1 done.** MIR is validated (ADR 0095, `src/mir/validate.rs`), and the
+  language does not change. The validator states the rules MIR must keep, and
+  later passes (moves, borrows, `critical` analyses) can rely on them. It
+  checks the shape of each body (blocks, edges, locals, constant locals not
+  written, the `asm` placeholders; S1 to S9), the types of places, operands
+  and rvalues (projections that apply, no value of an unsized type, no
+  aggregate through a volatile place, the types of rvalues, `switch` cases,
+  `asm` operands; T1 to T9), the depth of `critical` blocks along every path
+  (a join agrees on the open blocks, an exit closes the innermost one, a
+  `return` is at depth 0; C1 to C3) and the program as a whole (ids and roles
+  in range, calls against their callees, `comptime` callers, the shape of
+  `entry`, panic and handlers, statics, relocations, panic sites; P1 to P8).
+  It runs at three points: at the end of building each body, `comptime`
+  expression bodies included; on the program `Queries::into_mir` assembles;
+  and on what `Mir::leave_out` leaves. A violation is a bug of the compiler,
+  never of the user's program, so it panics with the whole list, in a fixed
+  order, one violation per fault and no cascade; the one `panic!` is counted
+  in `tests/architecture.rs`. Running it over every program of the tests
+  found one bug of MIR building, fixed in the same step: `Builder::cast` built
+  a slice cast to a thin pointer of another pointee (`s as *mut u16`) as an
+  address of the slice assigned to a temporary of the target type, so the
+  statement read one pointer type and wrote another; it now assigns the
+  address to a temporary of the slice's own address type and casts that when
+  the target differs (the ui test `mir_slice_address_casts`). No other rule
+  was broken by the MIR of any test, so the ADR's rules stand as written.
+  The analyses that run before evaluation, which ADR 0094 requires, come
+  with the first of them, in M5.2.
+- **Next: M5.2** (moves), the second step of M5 (moves, ownership,
   references and methods), whose steps and model are above (ADR 0094).
