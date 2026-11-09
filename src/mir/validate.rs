@@ -148,6 +148,7 @@ pub fn check_body(body: &Body) -> Vec<Violation> {
         checker.at = Location::Terminator(block);
         checker.terminator(&data.terminator);
     }
+    checker.critical();
     let mut found = checker.found;
     found.sort_by_key(|violation| (violation.at.key(), violation.rule));
     found
@@ -716,6 +717,104 @@ impl Checker<'_> {
         }
     }
 
+    /// C1 to C3: walks the blocks reached from `bb0`, giving each the stack
+    /// of `critical_enter` locals open at its start and comparing it at every
+    /// edge into it. A block nothing reaches is not looked at (ADR 0093), and
+    /// an edge to a block that does not exist or to `bb0` was reported by S5.
+    /// A block whose stack another edge contradicts is walked once, with the
+    /// stack of the first edge found, so that one fault is one violation.
+    fn critical(&mut self) {
+        let body = self.body;
+        if body.blocks.is_empty() {
+            return;
+        }
+        let mut entry: Vec<Option<Vec<Local>>> = vec![None; body.blocks.len()];
+        entry[0] = Some(Vec::new());
+        let mut work = vec![BasicBlock::START];
+        while let Some(block) = work.pop() {
+            let Some(mut open) = entry[block.0 as usize].clone() else {
+                continue;
+            };
+            let data = &body.blocks[block.0 as usize];
+            for (index, statement) in data.statements.iter().enumerate() {
+                self.at = Location::Statement(block, index);
+                match statement {
+                    Statement::CriticalEnter(local) => open.push(*local),
+                    Statement::CriticalExit(local) => self.critical_exit(&mut open, *local),
+                    Statement::Assign(..) | Statement::Call { .. } | Statement::InlineAsm(_) => {}
+                }
+            }
+            self.at = Location::Terminator(block);
+            if matches!(data.terminator, Terminator::Return) && !open.is_empty() {
+                self.violation(
+                    "C3",
+                    format!("a `return` with {} `critical` blocks open", open.len()),
+                );
+            }
+            for next in data.terminator.successors() {
+                if next == BasicBlock::START {
+                    continue;
+                }
+                let Some(slot) = entry.get_mut(next.0 as usize) else {
+                    continue;
+                };
+                match slot {
+                    None => {
+                        *slot = Some(open.clone());
+                        work.push(next);
+                    }
+                    Some(first) if *first != open => {
+                        let text = format!(
+                            "{next} is entered with the open blocks {} and with {}",
+                            stack(first),
+                            stack(&open)
+                        );
+                        self.violation("C1", text);
+                    }
+                    Some(_) => {}
+                }
+            }
+        }
+        self.at = Location::Body;
+    }
+
+    /// C2 for a `critical_exit` of `local` with the blocks `open`. The walk
+    /// goes on from a stack that makes one fault one violation: an exit of a
+    /// local open further down closes it and the blocks above it (the likely
+    /// fault is the exits of the inner ones that are missing), and an exit of
+    /// a local that is not open closes nothing. When `local` does not exist S7
+    /// spoke already, and that it is not open is not reported again; at depth
+    /// 0 it is, since that is a fault of its own.
+    fn critical_exit(&mut self, open: &mut Vec<Local>, local: Local) {
+        let Some(&top) = open.last() else {
+            self.violation(
+                "C2",
+                format!("`critical_exit {local}` with no `critical` block open"),
+            );
+            return;
+        };
+        let exists = (local.0 as usize) < self.body.locals.len();
+        match open.iter().rposition(|&was| was == local) {
+            Some(position) if position + 1 == open.len() => {
+                open.pop();
+            }
+            Some(position) => {
+                open.truncate(position);
+                self.violation(
+                    "C2",
+                    format!("`critical_exit {local}` while the innermost open block is `{top}`"),
+                );
+            }
+            None if exists => self.violation(
+                "C2",
+                format!(
+                    "`critical_exit {local}` of a local that is not open, the innermost open block is `{top}`"
+                ),
+            ),
+            None => {}
+        }
+    }
+
     /// T7 for the cases of a `switch` on a value of type `ty`.
     fn switch(&mut self, ty: Ty, cases: &[(u64, BasicBlock)]) {
         let mask = match ty {
@@ -953,6 +1052,12 @@ fn entry(p: PeripheralTypeRef, index: u32) -> Result<(Ty, Option<(u64, u64)>), S
         .ok_or_else(|| format!("`{}` has no layout", def.name))?;
     let array = layout.arrays.get(index as usize).copied().flatten();
     Ok((register.ty, array))
+}
+
+/// A stack of open blocks, as `[_2, _5]` (outermost first).
+fn stack(open: &[Local]) -> String {
+    let locals: Vec<String> = open.iter().map(ToString::to_string).collect();
+    format!("[{}]", locals.join(", "))
 }
 
 /// A pointer to a sized type, or to a slice's elements: one address.
@@ -1296,8 +1401,6 @@ mod tests {
                     &[PlaceElem::Deref, PlaceElem::Element(1, Local(ghost))],
                 ))),
             ),
-            Statement::CriticalEnter(Local(ghost)),
-            Statement::CriticalExit(Local(ghost)),
             Statement::Call {
                 dest: Some(local(ghost)),
                 callee: BodyId(0),
@@ -1367,6 +1470,13 @@ mod tests {
             statement_of(&mut body, statement);
             breaks_only(&body, "S7");
         }
+        // The local of a `critical` statement: an enter alone would leave a
+        // block open at the `return` (C3), so the two go together, one
+        // violation for each.
+        let mut body = valid();
+        statement_of(&mut body, Statement::CriticalEnter(Local(ghost)));
+        statement_of(&mut body, Statement::CriticalExit(Local(ghost)));
+        assert_eq!(rules(&body), ["S7", "S7"]);
         // The operands of a terminator.
         let terminators = [
             Terminator::If {
@@ -1836,22 +1946,17 @@ mod tests {
             );
             breaks_only(&body, "T2");
         }
-        for statement in [
-            Statement::CriticalEnter(Local(8)),
-            Statement::CriticalExit(Local(8)),
-        ] {
+        // An enter and its exit (an enter alone is left open, C3), the local
+        // wrong in one of them or in both.
+        let critical = |enter: u32, exit: u32| {
             let mut body = valid();
-            statement_of(&mut body, statement);
-            breaks_only(&body, "T2");
-        }
-        for statement in [
-            Statement::CriticalEnter(Local(1)),
-            Statement::CriticalExit(Local(3)),
-        ] {
-            let mut body = valid();
-            statement_of(&mut body, statement);
-            assert!(check_body(&body).is_empty());
-        }
+            statement_of(&mut body, Statement::CriticalEnter(Local(enter)));
+            statement_of(&mut body, Statement::CriticalExit(Local(exit)));
+            body
+        };
+        assert_eq!(rules(&critical(8, 8)), ["T2", "T2"]);
+        assert!(check_body(&critical(1, 1)).is_empty());
+        assert!(check_body(&critical(3, 3)).is_empty());
     }
 
     #[test]
@@ -2371,5 +2476,172 @@ mod tests {
             }],
         ))));
         breaks_only(&body, "T9");
+    }
+
+    // ---- `critical` blocks (ADR 0095, C1 to C3) ----
+
+    /// A body of the blocks given as statements and a terminator, with the
+    /// locals of `typed`: `_1` and `_3` are `u32`, the locals of `critical`
+    /// blocks, and `_11` is the `bool` an `if` tests.
+    fn flow(blocks: Vec<(Vec<Statement>, Terminator)>) -> Body {
+        let mut body = typed();
+        body.blocks = blocks
+            .into_iter()
+            .map(|(statements, terminator)| block(statements, terminator))
+            .collect();
+        body
+    }
+
+    fn enter(n: u32) -> Statement {
+        Statement::CriticalEnter(Local(n))
+    }
+
+    fn exit(n: u32) -> Statement {
+        Statement::CriticalExit(Local(n))
+    }
+
+    fn goto(n: u32) -> Terminator {
+        Terminator::Goto(BasicBlock(n))
+    }
+
+    fn branch(then: u32, else_: u32) -> Terminator {
+        Terminator::If {
+            cond: Operand::Copy(local(BOOL)),
+            then: BasicBlock(then),
+            else_: BasicBlock(else_),
+        }
+    }
+
+    fn fails() -> Terminator {
+        Terminator::Panic(PanicCause::DivisionByZero, None)
+    }
+
+    #[test]
+    fn critical_blocks_that_are_left_on_every_path_are_valid() {
+        // Nested, and a join where both paths have the same blocks open.
+        accepts(rules(&flow(vec![
+            (vec![enter(1), enter(3)], branch(1, 2)),
+            (vec![], goto(3)),
+            (vec![], goto(3)),
+            (vec![exit(3), exit(1)], Terminator::Return),
+        ])));
+        // A `break` leaving two blocks, in a loop that enters them again.
+        accepts(rules(&flow(vec![
+            (vec![], goto(1)),
+            (vec![enter(1), enter(3)], branch(2, 3)),
+            (vec![exit(3), exit(1)], goto(1)),
+            (vec![exit(3), exit(1)], goto(4)),
+            (vec![], Terminator::Return),
+        ])));
+        // A `return` inside a block, which leaves it first.
+        accepts(rules(&flow(vec![
+            (vec![enter(1)], branch(1, 2)),
+            (vec![exit(1)], Terminator::Return),
+            (vec![exit(1)], Terminator::Return),
+        ])));
+        // A panic inside a block: nothing returns to close it.
+        accepts(rules(&flow(vec![(vec![enter(1)], fails())])));
+        // The same block entered again, by a loop, after it was left.
+        accepts(rules(&flow(vec![
+            (vec![], goto(1)),
+            (vec![enter(1), exit(1)], branch(1, 2)),
+            (vec![], Terminator::Return),
+        ])));
+        // A block nothing reaches, with an exit that closes nothing and a
+        // `return` at depth 1.
+        accepts(rules(&flow(vec![
+            (vec![], Terminator::Return),
+            (vec![exit(1)], Terminator::Return),
+            (vec![enter(3)], Terminator::Return),
+        ])));
+    }
+
+    #[test]
+    fn c1_a_block_has_one_stack_of_open_blocks_whatever_the_path() {
+        // Entered at depth 0 and at depth 1.
+        let body = flow(vec![
+            (vec![], branch(1, 2)),
+            (vec![enter(1)], goto(3)),
+            (vec![], goto(3)),
+            (vec![], fails()),
+        ]);
+        breaks_only(&body, "C1");
+        let found = check_body(&body);
+        assert_eq!(found[0].at, Location::Terminator(BasicBlock(1)));
+        // Entered at depth 1 through two different locals.
+        breaks_only(
+            &flow(vec![
+                (vec![], branch(1, 2)),
+                (vec![enter(1)], goto(3)),
+                (vec![enter(3)], goto(3)),
+                (vec![], fails()),
+            ]),
+            "C1",
+        );
+        // A loop that opens a block on every turn.
+        breaks_only(
+            &flow(vec![(vec![], goto(1)), (vec![enter(1)], goto(1))]),
+            "C1",
+        );
+        // The fault is reported once, not again in what follows the join.
+        breaks_only(
+            &flow(vec![
+                (vec![], branch(1, 2)),
+                (vec![enter(1)], goto(3)),
+                (vec![], goto(3)),
+                (vec![], goto(4)),
+                (vec![], fails()),
+            ]),
+            "C1",
+        );
+    }
+
+    #[test]
+    fn c2_an_exit_closes_the_innermost_open_block() {
+        // At depth 0.
+        let body = flow(vec![(vec![exit(1)], Terminator::Return)]);
+        breaks_only(&body, "C2");
+        assert_eq!(
+            check_body(&body)[0].at,
+            Location::Statement(BasicBlock(0), 0)
+        );
+        // The outer local named while the inner is open: one violation, the
+        // exit closes both.
+        breaks_only(
+            &flow(vec![(
+                vec![enter(1), enter(3), exit(1)],
+                Terminator::Return,
+            )]),
+            "C2",
+        );
+        // A local that is not open, while another is.
+        breaks_only(
+            &flow(vec![(vec![enter(1), exit(3), exit(1)], Terminator::Return)]),
+            "C2",
+        );
+    }
+
+    #[test]
+    fn c2_does_not_repeat_a_missing_local() {
+        // S7 spoke of the local; the exit is not also a mismatch.
+        let body = flow(vec![(vec![enter(1), exit(GHOST)], Terminator::Return)]);
+        assert_eq!(rules(&body), ["S7", "C3"]);
+        // At depth 0 it still is a fault of its own.
+        let body = flow(vec![(vec![exit(GHOST)], Terminator::Return)]);
+        assert_eq!(rules(&body), ["C2", "S7"]);
+    }
+
+    #[test]
+    fn c3_a_return_is_at_depth_0() {
+        let body = flow(vec![(vec![enter(1)], Terminator::Return)]);
+        breaks_only(&body, "C3");
+        assert_eq!(check_body(&body)[0].at, Location::Terminator(BasicBlock(0)));
+        breaks_only(
+            &flow(vec![(
+                vec![enter(1), enter(3), exit(3)],
+                Terminator::Return,
+            )]),
+            "C3",
+        );
     }
 }
