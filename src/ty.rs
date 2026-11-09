@@ -22,9 +22,11 @@ use crate::query::Queries;
 use crate::span::Span;
 
 pub use asm::{AsmChecked, AsmPiece};
+pub use copy::{is_copy, report_copy_fields};
 pub use dump::dump;
 
 mod asm;
+mod copy;
 mod dump;
 mod expr;
 mod pattern;

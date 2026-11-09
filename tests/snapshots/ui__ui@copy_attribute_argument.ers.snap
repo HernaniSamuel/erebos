@@ -1,0 +1,26 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/copy_attribute_argument.ers
+---
+--- errors ---
+resolve::attribute-argument
+
+  × `#[copy]` takes no argument
+   ╭─[copy_attribute_argument.ers:3:8]
+ 2 │ // `#[copy]` takes no argument (ADR 0096).
+ 3 │ #[copy(1)]
+   ·        ┬
+   ·        ╰── remove this
+ 4 │ struct A { x: u8 }
+   ╰────
+resolve::attribute-argument
+
+  × `#[copy]` takes no argument
+   ╭─[copy_attribute_argument.ers:6:8]
+ 5 │ 
+ 6 │ #[copy(Eq)]
+   ·        ─┬
+   ·         ╰── remove this
+ 7 │ enum B: u8 { X(u8) = 0 }
+   ╰────

@@ -542,6 +542,14 @@ const CATALOG: &[Snippet] = &[
     ),
     s!("ty::unsized", Typeck, Items, "struct InjU { a: [u8] }"),
     s!(
+        "ty::copy-field-not-copy",
+        Typeck,
+        Items,
+        "struct InjHandle { id: u32 }
+#[copy]
+struct InjCopy { h: InjHandle }"
+    ),
+    s!(
         "ty::invalid-align",
         Typeck,
         Items,

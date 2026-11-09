@@ -1,0 +1,12 @@
+// emit: hir
+// `#[copy]` is given at most once (ADR 0096).
+#[copy]
+#[copy]
+struct A { x: u8 }
+
+#[copy]
+#[copy]
+enum B: u8 { X(u8) = 0 }
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

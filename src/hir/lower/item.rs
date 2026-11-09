@@ -18,10 +18,11 @@ use super::{Lowerer, Named, visibility, written};
 impl Lowerer<'_> {
     pub(super) fn struct_decl(&mut self, decl: &ast::StructDecl) -> StructDef {
         self.duplicate_fields(decl.fields.iter().map(|field| &field.name));
-        let (packed, align) = self.struct_attrs(&decl.attrs);
+        let (packed, align, copy) = self.struct_attrs(&decl.attrs);
         StructDef {
             packed,
             align,
+            copy,
             name: self.path_of(self.module, &decl.name.name),
             name_span: decl.name.span,
             module: self.module,
@@ -159,7 +160,7 @@ impl Lowerer<'_> {
                     .label(attr.span, "not allowed on a bit-field struct")
                     .help("a bit-field struct has the size and alignment of its integer type, which it is stored as (ADR 0059)"),
                 ),
-                "export" | "naked" | "interrupts" => {
+                "export" | "naked" | "interrupts" | "copy" => {
                     self.misplaced_attr(attr, "a bit-field struct")
                 }
                 _ => self.unknown_attr(attr),
@@ -168,13 +169,22 @@ impl Lowerer<'_> {
     }
 
     /// Layout attributes (ADR 0022): `#[packed]` and `#[align(N)]`, at
-    /// most once each, and not together. Returns them.
-    fn struct_attrs(&mut self, attrs: &[ast::Attr]) -> (bool, Option<(ArrayLen, Span)>) {
+    /// most once each, and not together; and `#[copy]` (ADR 0096), which
+    /// goes with them. Returns them.
+    fn struct_attrs(
+        &mut self,
+        attrs: &[ast::Attr],
+    ) -> (bool, Option<(ArrayLen, Span)>, Option<Span>) {
         let mut packed: Option<Span> = None;
         let mut align: Option<(ArrayLen, Span)> = None;
         let mut align_attr: Option<Span> = None;
+        let mut copy: Option<Span> = None;
         for attr in attrs {
             let first = match attr.name.name.as_str() {
+                "copy" => {
+                    self.flag_attr(attr, &mut copy);
+                    None
+                }
                 "packed" => {
                     if let Some(arg) = &attr.arg {
                         self.attr_error(arg.span, "`#[packed]` takes no argument", "remove this");
@@ -223,7 +233,7 @@ impl Lowerer<'_> {
                 .help("`#[packed]` lowers alignment and `#[align]` raises it (ADR 0022)"),
             );
         }
-        (packed.is_some(), align)
+        (packed.is_some(), align, copy)
     }
 
     /// Items other than structs, enums, statics and functions with a body take
@@ -231,7 +241,7 @@ impl Lowerer<'_> {
     pub(super) fn no_attrs(&mut self, attrs: &[ast::Attr], what: &str) {
         for attr in attrs {
             match attr.name.name.as_str() {
-                "packed" | "align" | "export" | "naked" | "interrupts" => {
+                "packed" | "align" | "export" | "naked" | "interrupts" | "copy" => {
                     self.misplaced_attr(attr, what)
                 }
                 _ => self.unknown_attr(attr),
@@ -239,17 +249,23 @@ impl Lowerer<'_> {
         }
     }
 
-    /// `#[interrupts]` is the one attribute of an enum (ADR 0089); the chip's
-    /// list is found by `lower`, which is told whether the enum has it.
-    fn enum_attrs(&mut self, attrs: &[ast::Attr]) {
+    /// `#[interrupts]` (ADR 0089) and, on an enum with payloads, `#[copy]`
+    /// (ADR 0096) are the attributes of an enum; the chip's list is found
+    /// by `lower`, which is told whether the enum has the first. Returns the
+    /// span of `#[copy]`.
+    fn enum_attrs(&mut self, attrs: &[ast::Attr], payloads: bool) -> Option<Span> {
         let mut interrupts = None;
+        let mut copy = None;
         for attr in attrs {
             match attr.name.name.as_str() {
                 "interrupts" => self.flag_attr(attr, &mut interrupts),
+                "copy" if payloads => self.flag_attr(attr, &mut copy),
+                "copy" => self.misplaced_attr(attr, "an enum without payloads"),
                 "packed" | "align" | "export" | "naked" => self.misplaced_attr(attr, "an enum"),
                 _ => self.unknown_attr(attr),
             }
         }
+        copy
     }
 
     fn misplaced_attr(&mut self, attr: &ast::Attr, what: &str) {
@@ -260,6 +276,7 @@ impl Lowerer<'_> {
                 "functions with a body, other than the entry function, the panic function and interrupt handlers"
             }
             "interrupts" => "an enum declared in the program",
+            "copy" => "structs, other than bit-field structs, and enums with payloads",
             _ => "structs",
         };
         let mut diag = Diagnostic::error(
@@ -276,12 +293,15 @@ impl Lowerer<'_> {
         if attr.name.name == "interrupts" {
             diag = diag.help("`#[interrupts]` makes an enum the list of the chip's interrupts, whose variants are their numbers; it is not a property of other items (ADR 0089)");
         }
+        if attr.name.name == "copy" {
+            diag = diag.help("`#[copy]` lets the values of a struct or of an enum with payloads be copied; a bit-field struct and an enum without payloads are copy already, and no other item has values (ADR 0096)");
+        }
         self.diags.push(diag);
     }
 
     /// An attribute that takes no argument and is given at most once
     /// (`#[export]`, ADR 0051; `#[naked]`, ADR 0079; `#[interrupts]`,
-    /// ADR 0089); `given` holds the span
+    /// ADR 0089; `#[copy]`, ADR 0096); `given` holds the span
     /// of the one already given.
     fn flag_attr(&mut self, attr: &ast::Attr, given: &mut Option<Span>) {
         let name = &attr.name.name;
@@ -352,7 +372,7 @@ impl Lowerer<'_> {
                         );
                     }
                 }
-                "packed" | "interrupts" => self.misplaced_attr(attr, "a function"),
+                "packed" | "interrupts" | "copy" => self.misplaced_attr(attr, "a function"),
                 _ => self.unknown_attr(attr),
             }
         }
@@ -398,7 +418,7 @@ impl Lowerer<'_> {
                     }
                 }
                 "export" => self.flag_attr(attr, &mut export),
-                "packed" | "naked" | "interrupts" => self.misplaced_attr(attr, "a static"),
+                "packed" | "naked" | "interrupts" | "copy" => self.misplaced_attr(attr, "a static"),
                 _ => self.unknown_attr(attr),
             }
         }
@@ -515,7 +535,11 @@ impl Lowerer<'_> {
         id: EnumId,
         first_body: u32,
     ) -> (EnumDef, Vec<Fn>) {
-        self.enum_attrs(&decl.attrs);
+        let payloads = decl
+            .variants
+            .iter()
+            .any(|variant| !variant.payload.is_empty());
+        let copy = self.enum_attrs(&decl.attrs, payloads);
         let mut seen: HashMap<&str, Span> = HashMap::new();
         for variant in &decl.variants {
             if let Some(&first) = seen.get(variant.name.name.as_str()) {
@@ -595,6 +619,7 @@ impl Lowerer<'_> {
             reachable: Vec::new(),
             ty,
             variants,
+            copy,
         };
         (def, bodies)
     }
@@ -738,7 +763,7 @@ impl Lowerer<'_> {
                 format!("unknown attribute `#[{}]`", attr.name.name),
             )
             .label(attr.name.span, "not an attribute")
-            .help("the attributes are `#[packed]` and `#[align(N)]` on structs (ADR 0022), `#[align(N)]` on statics (ADR 0030) and on functions (ADR 0087), `#[export]` on functions and statics (ADR 0051), `#[naked]` on functions (ADR 0079), and `#[interrupts]` on an enum (ADR 0089)"),
+            .help("the attributes are `#[packed]` and `#[align(N)]` on structs (ADR 0022), `#[align(N)]` on statics (ADR 0030) and on functions (ADR 0087), `#[copy]` on structs and on enums with payloads (ADR 0096), `#[export]` on functions and statics (ADR 0051), `#[naked]` on functions (ADR 0079), and `#[interrupts]` on an enum (ADR 0089)"),
         );
     }
 

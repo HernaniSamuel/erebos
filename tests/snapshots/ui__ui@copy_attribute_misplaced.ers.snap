@@ -1,0 +1,84 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/copy_attribute_misplaced.ers
+---
+--- errors ---
+resolve::misplaced-attribute
+
+  × `#[copy]` applies only to structs, other than bit-field structs, and enums with payloads
+   ╭─[copy_attribute_misplaced.ers:4:1]
+ 3 │ // struct and an enum without payloads are copy already (ADR 0096).
+ 4 │ #[copy]
+   · ───┬───
+   ·    ╰── not allowed on a bit-field struct
+ 5 │ struct Flags: u8 { ready: bool at 0 }
+   ╰────
+  help: `#[copy]` lets the values of a struct or of an enum with payloads be copied; a bit-field
+        struct and an enum without payloads are copy already, and no other item has values (ADR
+        0096)
+resolve::misplaced-attribute
+
+  × `#[copy]` applies only to structs, other than bit-field structs, and enums with payloads
+   ╭─[copy_attribute_misplaced.ers:7:1]
+ 6 │ 
+ 7 │ #[copy]
+   · ───┬───
+   ·    ╰── not allowed on an enum without payloads
+ 8 │ enum Color: u8 { Red = 0, Green = 1 }
+   ╰────
+  help: `#[copy]` lets the values of a struct or of an enum with payloads be copied; a bit-field
+        struct and an enum without payloads are copy already, and no other item has values (ADR
+        0096)
+resolve::misplaced-attribute
+
+  × `#[copy]` applies only to structs, other than bit-field structs, and enums with payloads
+    ╭─[copy_attribute_misplaced.ers:10:1]
+  9 │ 
+ 10 │ #[copy]
+    · ───┬───
+    ·    ╰── not allowed on a function
+ 11 │ fn f() {}
+    ╰────
+  help: `#[copy]` lets the values of a struct or of an enum with payloads be copied; a bit-field
+        struct and an enum without payloads are copy already, and no other item has values (ADR
+        0096)
+resolve::misplaced-attribute
+
+  × `#[copy]` applies only to structs, other than bit-field structs, and enums with payloads
+    ╭─[copy_attribute_misplaced.ers:13:1]
+ 12 │ 
+ 13 │ #[copy]
+    · ───┬───
+    ·    ╰── not allowed on a static
+ 14 │ static COUNT: u32 = 0;
+    ╰────
+  help: `#[copy]` lets the values of a struct or of an enum with payloads be copied; a bit-field
+        struct and an enum without payloads are copy already, and no other item has values (ADR
+        0096)
+resolve::misplaced-attribute
+
+  × `#[copy]` applies only to structs, other than bit-field structs, and enums with payloads
+    ╭─[copy_attribute_misplaced.ers:16:1]
+ 15 │ 
+ 16 │ #[copy]
+    · ───┬───
+    ·    ╰── not allowed on a constant
+ 17 │ const LIMIT: u32 = 4;
+    ╰────
+  help: `#[copy]` lets the values of a struct or of an enum with payloads be copied; a bit-field
+        struct and an enum without payloads are copy already, and no other item has values (ADR
+        0096)
+resolve::misplaced-attribute
+
+  × `#[copy]` applies only to structs, other than bit-field structs, and enums with payloads
+    ╭─[copy_attribute_misplaced.ers:19:1]
+ 18 │ 
+ 19 │ #[copy]
+    · ───┬───
+    ·    ╰── not allowed on a module
+ 20 │ mod m {}
+    ╰────
+  help: `#[copy]` lets the values of a struct or of an enum with payloads be copied; a bit-field
+        struct and an enum without payloads are copy already, and no other item has values (ADR
+        0096)

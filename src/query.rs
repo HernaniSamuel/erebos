@@ -324,6 +324,7 @@ impl<'h> Queries<'h> {
         ty::report_unsized_types(self);
         ty::report_peripherals_by_value(self);
         ty::report_volatile_peripherals(self);
+        ty::report_copy_fields(self);
         for id in 0..hir.structs.len() {
             self.struct_layout(StructId(id as u32));
         }

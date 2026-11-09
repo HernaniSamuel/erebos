@@ -1,0 +1,25 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/copy_attribute.ers
+---
+--- typeck ---
+struct Point { x: i32 at 0, y: i32 at 4 } size 8, align 4
+#[packed] struct Header { kind: u8 at 0, len: u32 at 1 } size 5, align 1
+#[align(16)] struct Aligned { a: u32 at 0, b: u32 at 4 } size 16, align 16
+struct Pair { first: Point at 0, second: Point at 8 } size 16, align 4
+struct Table { rows: [Point; 4] at 0, header: Header at 32, next: *const Table at 40 } size 44, align 4
+struct Maybe { value: Option(Point) at 0, result: Result(Header, u8) at 12 } size 20, align 4
+enum Shape: u8 { Dot(Point at 4) = 0, Line(Point at 4, Point at 12) = 1, Empty = 2 } size 20, align 4
+enum Option(Point): u8 { None = 0, Some(Point at 4) = 1 } size 12, align 4
+enum Result(Header, u8): u8 { Ok(Header at 1) = 0, Err(u8 at 1) = 1 } size 6, align 1
+entry fn main() -> !
+    expr 0 loop 634..641: !
+panic fn on_panic() -> !
+    expr 1 loop 671..678: !
+comptime fn Shape::Dot() -> u8
+    expr 2 int 0 571..572: u8
+comptime fn Shape::Line() -> u8
+    expr 3 int 1 595..596: u8
+comptime fn Shape::Empty() -> u8
+    expr 4 int 2 606..607: u8

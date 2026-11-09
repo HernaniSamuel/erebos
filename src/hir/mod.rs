@@ -742,6 +742,9 @@ pub struct StructDef {
     pub packed: bool,
     /// `#[align(N)]`, with the span of `N` (ADR 0022).
     pub align: Option<(ArrayLen, Span)>,
+    /// `#[copy]`, with the span of the attribute: its values are copy, which
+    /// `ty::copy-field-not-copy` makes true (ADR 0096).
+    pub copy: Option<Span>,
 }
 
 impl StructDef {
@@ -842,6 +845,11 @@ pub struct EnumDef {
     pub reachable: Vec<ModuleId>,
     pub ty: EnumTy,
     pub variants: Vec<VariantDef>,
+    /// `#[copy]` on an enum with payloads, with the span of the attribute
+    /// (ADR 0096). `None` for an `Option(T)` or a `Result(T, E)`, which are
+    /// copy when their arguments are, and for an enum without payloads, which
+    /// is copy whatever this says.
+    pub copy: Option<Span>,
 }
 
 impl EnumDef {
@@ -1001,6 +1009,7 @@ impl BuiltinEnum {
             reachable: Vec::new(),
             ty,
             variants,
+            copy: None,
         }
     }
 }

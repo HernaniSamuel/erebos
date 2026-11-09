@@ -5529,7 +5529,7 @@ Every error has a stable code, shown with the message.
 | `resolve::inconsistent-binding` | a name not bound by every alternative of an or-pattern, or bound with `let mut` by only some |
 | `resolve::reserved-name` | an item, module or `use` named `_start`, `core`, with a name starting with `__`, or like a built-in function (`assert`, `len`, `slice`); a module of the root module named `llvm` or `rt`; a region named `INCLUDE` |
 | `resolve::unknown-attribute` | an attribute that does not exist |
-| `resolve::misplaced-attribute` | an attribute on an item it does not apply to, as `#[packed]` or `#[align(N)]` on a bit-field struct, `#[align(N)]` on an `extern fn`, or `#[naked]` on an `extern fn`, the entry function, the panic function, an interrupt handler or anything but a function with a body, or `#[interrupts]` on anything but an enum |
+| `resolve::misplaced-attribute` | an attribute on an item it does not apply to, as `#[packed]` or `#[align(N)]` on a bit-field struct, `#[align(N)]` on an `extern fn`, or `#[naked]` on an `extern fn`, the entry function, the panic function, an interrupt handler or anything but a function with a body, `#[interrupts]` on anything but an enum, or `#[copy]` on a bit-field struct, an enum without payloads or anything but a struct or an enum |
 | `resolve::attribute-argument` | an attribute with a missing or extra argument |
 | `resolve::duplicate-attribute` | an attribute given twice |
 | `resolve::conflicting-attributes` | `#[packed]` with `#[align(N)]` |
@@ -5581,6 +5581,7 @@ Every error has a stable code, shown with the message.
 | `ty::too-large` | a value larger than half the address space |
 | `ty::infinite-size` | structs and enums that contain themselves, directly, through each other or through `Option` and `Result`; peripheral types that contain themselves through clusters |
 | `ty::unsized` | `[T]` where a size is needed, or `*s` read or written whole |
+| `ty::copy-field-not-copy` | a field of a `#[copy]` struct, or a payload value of a `#[copy]` enum, whose type is not copy |
 | `ty::never-in-memory` | `!` as a pointee, slice element, field, payload type, type argument of `Option` or `Result`, array element, register type, the type of a static, `extern static`, `const` or `comptime` value, a layout query operand, or under `&raw` |
 | `ty::invalid-align` | `#[align(N)]` on a struct, static or function with `N` not a power of two, too large or below the natural alignment |
 | `ty::aligned-in-packed` | a packed struct containing a type with `#[align(N)]`, at any depth, such as an enum with such a payload |
