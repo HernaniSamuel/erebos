@@ -279,10 +279,6 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   `comptime_differential` run them). (M5.2)
 - No ui test pins several `consume(a)` after one move (two errors);
   `use_after_move_once.ers` uses reads on purpose. (M5.2)
-- The snippets of the catalog in `tests/rejected.rs` that stop at `Typeck`
-  lower no body, so they may hide a panic like the one fixed for
-  `ty::copy-field-not-copy` (a `#[copy]` type with a non-copy field, named by
-  a body); not looked into. (M5.2)
 
 ## Docs
 
@@ -381,3 +377,11 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   pattern (`.A(let b) | .B(let b)` gives two). They also do not mention that
   `is_place` in `src/ty/place.rs` includes `Peripheral` and `ByteString` (both
   copy, so no behavior changes). (M5.2)
+- ADR 0069, section 1, says the stage of a snippet is "the layer whose output
+  is needed to see the error"; the catalog now runs every `ty::` snippet to `Mir`
+  on purpose, so that the bodies ADR 0032 lowers are checked too. One line in the
+  ADR, or a note in its catalog. The `register-*` and `step-*` `injected_use`
+  functions name their parameter `p`, not `injected_p`; and the check
+  `injections >= programs.min(CATALOG.len())` is global, so a `Mir` snippet
+  skipped on most bases goes unnoticed (nobody measured how many bases compile
+  to `Mir`). (M5.2)

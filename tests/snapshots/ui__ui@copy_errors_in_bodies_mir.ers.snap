@@ -1,0 +1,155 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/copy_errors_in_bodies_mir.ers
+---
+--- errors ---
+ty::copy-field-not-copy
+
+  × `Bad` is `#[copy]`, but the field `h` is not copy
+    ╭─[copy_errors_in_bodies_mir.ers:14:1]
+ 13 │ 
+ 14 │ #[copy]
+    · ───┬───
+    ·    ╰── declared copy here
+ 15 │ struct Bad { h: Handle }
+    ·              ┬
+    ·              ╰── `Handle` is not copy
+ 16 │ 
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated, or remove `#[copy]` from
+        `Bad` (ADR 0096)
+ty::non-copy-constant
+
+  × the constant `HANDLE` is of the non-copy type `Handle`
+    ╭─[copy_errors_in_bodies_mir.ers:24:15]
+ 23 │ // `ty::non-copy-constant`: the uses are built.
+ 24 │ const HANDLE: Handle = Handle { id: 1 };
+    ·               ───┬──
+    ·                  ╰── `Handle` is not copy
+ 25 │ const HANDLES: [Handle; 2] = [Handle { id: 1 }, Handle { id: 2 }];
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated, or declare a `static`, whose
+        initializer may be of any type (ADR 0096)
+ty::non-copy-constant
+
+  × the constant `HANDLES` is of the non-copy type `[Handle; 2]`
+    ╭─[copy_errors_in_bodies_mir.ers:25:16]
+ 24 │ const HANDLE: Handle = Handle { id: 1 };
+ 25 │ const HANDLES: [Handle; 2] = [Handle { id: 1 }, Handle { id: 2 }];
+    ·                ─────┬─────
+    ·                     ╰── `[Handle; 2]` is not copy
+ 26 │ const EVENT: Event = .Idle;
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated, or declare a `static`, whose
+        initializer may be of any type (ADR 0096)
+ty::non-copy-constant
+
+  × the constant `EVENT` is of the non-copy type `Event`
+    ╭─[copy_errors_in_bodies_mir.ers:26:14]
+ 25 │ const HANDLES: [Handle; 2] = [Handle { id: 1 }, Handle { id: 2 }];
+ 26 │ const EVENT: Event = .Idle;
+    ·              ──┬──
+    ·                ╰── `Event` is not copy
+ 27 │ 
+    ╰────
+  help: mark `Event` with `#[copy]` if its values may be duplicated, or declare a `static`, whose
+        initializer may be of any type (ADR 0096)
+ty::non-copy-constant
+
+  × a `comptime` expression cannot be of the non-copy type `Handle`
+    ╭─[copy_errors_in_bodies_mir.ers:55:21]
+ 54 │ fn comptime_value() -> u32 {
+ 55 │     let h: Handle = comptime { Handle { id: 1 } };
+    ·                     ──────────────┬──────────────
+    ·                                   ╰── `Handle` is not copy
+ 56 │     h.id
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated, or build the value at run
+        time (ADR 0096)
+ty::non-copy-constant
+
+  × the constant `REPEATED` is of the non-copy type `[Handle; 2]`
+    ╭─[copy_errors_in_bodies_mir.ers:60:17]
+ 59 │ // `ty::non-copy-repeat`, also in a constant and in a static.
+ 60 │ const REPEATED: [Handle; 2] = [Handle { id: 1 }; 2];
+    ·                 ─────┬─────
+    ·                      ╰── `[Handle; 2]` is not copy
+ 61 │ static REPEATED_STATIC: [Handle; 2] = [Handle { id: 1 }; 2];
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated, or declare a `static`, whose
+        initializer may be of any type (ADR 0096)
+ty::non-copy-repeat
+
+  × `[v; N]` would copy a value of the non-copy type `Handle`
+    ╭─[copy_errors_in_bodies_mir.ers:60:32]
+ 59 │ // `ty::non-copy-repeat`, also in a constant and in a static.
+ 60 │ const REPEATED: [Handle; 2] = [Handle { id: 1 }; 2];
+    ·                                ────────┬───────
+    ·                                        ╰── `Handle` is not copy
+ 61 │ static REPEATED_STATIC: [Handle; 2] = [Handle { id: 1 }; 2];
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated, or list each element in an
+        array literal (ADR 0096)
+ty::non-copy-repeat
+
+  × `[v; N]` would copy a value of the non-copy type `Handle`
+    ╭─[copy_errors_in_bodies_mir.ers:61:40]
+ 60 │ const REPEATED: [Handle; 2] = [Handle { id: 1 }; 2];
+ 61 │ static REPEATED_STATIC: [Handle; 2] = [Handle { id: 1 }; 2];
+    ·                                        ────────┬───────
+    ·                                                ╰── `Handle` is not copy
+ 62 │ 
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated, or list each element in an
+        array literal (ADR 0096)
+ty::move-out-of-place
+
+  × cannot move a value of the non-copy type `Handle` out of a place through a pointer
+    ╭─[copy_errors_in_bodies_mir.ers:69:5]
+ 68 │ fn from_pointer(p: *mut Handle) -> Handle {
+ 69 │     *p
+    ·     ─┬
+    ·      ╰── `Handle` is not copy, and this is a place through a pointer
+ 70 │ }
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated (ADR 0097)
+ty::move-out-of-place
+
+  × cannot move a value of the non-copy type `Handle` out of a static
+    ╭─[copy_errors_in_bodies_mir.ers:73:5]
+ 72 │ fn from_static() -> Handle {
+ 73 │     SHARED
+    ·     ───┬──
+    ·        ╰── `Handle` is not copy, and this is a static
+ 74 │ }
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated (ADR 0097)
+ty::non-copy-binding-in-or-pattern
+
+  × cannot bind the non-copy `h` inside an or-pattern nested in a payload
+    ╭─[copy_errors_in_bodies_mir.ers:79:20]
+ 78 │     match o {
+ 79 │         .Pair(.Got(let h: Handle) | .Lost(let h: Handle), 0) => h.id,
+    ·               ─────────────────────┬────────────────────┬
+    ·                                    │                    ╰── binds a `Handle`, which is not copy
+    ·                                    ╰── this or-pattern is nested in a payload
+ 80 │         _ => 0,
+    ╰────
+  help: the positions after a nested or-pattern are tested once for all its alternatives, so the
+        place to move from is not known at the end of one; make the alternatives those of the arm
+        (`.A(let b: T) | .B(let b: T) => ...`), or bind a copy value (ADR 0097)
+ty::non-copy-binding-in-or-pattern
+
+  × cannot bind the non-copy `h` inside an or-pattern nested in a payload
+    ╭─[copy_errors_in_bodies_mir.ers:79:43]
+ 78 │     match o {
+ 79 │         .Pair(.Got(let h: Handle) | .Lost(let h: Handle), 0) => h.id,
+    ·               ─────────────────────┬────────────────────┬
+    ·                                    │                    ╰── binds a `Handle`, which is not copy
+    ·                                    ╰── this or-pattern is nested in a payload
+ 80 │         _ => 0,
+    ╰────
+  help: the positions after a nested or-pattern are tested once for all its alternatives, so the
+        place to move from is not known at the end of one; make the alternatives those of the arm
+        (`.A(let b: T) | .B(let b: T) => ...`), or bind a copy value (ADR 0097)
