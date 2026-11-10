@@ -3,6 +3,7 @@
 mod digits;
 
 // The total of a group of readings, and how many there were.
+#[copy]
 pub struct Sum {
     pub total: u32,
     pub count: u32,

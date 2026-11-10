@@ -1,0 +1,65 @@
+// emit: mir
+// One fault is one error (ADR 0097, 0099): once a use is reported, the moves
+// that reached it are dropped on the paths through it, so the uses that
+// follow are not reported again. A use reached by two moves is one error with
+// a label for each, in the order of the source.
+struct Handle { n: u32 }
+
+struct Pair { f: Handle, g: u32, h: u32 }
+
+fn consume(h: Handle) {}
+
+fn whole(p: Pair) {}
+
+// Rejected once: three reads after one move.
+fn three_uses(a: Handle) -> u32 {
+    consume(a);
+    let x: u32 = a.n;
+    let y: u32 = a.n;
+    let z: u32 = a.n;
+    x + y + z
+}
+
+// Rejected once: after the error on `p.f`, with `p` moved whole, the reads of
+// `p.g` and `p.h` are no faults.
+fn other_fields(p: Pair) -> u32 {
+    whole(p);
+    let f: u32 = p.f.n;
+    p.g + p.h
+}
+
+// Rejected once, with two labels: the two moves of the two branches reach the
+// use.
+fn two_moves(a: Handle, c: bool) -> u32 {
+    if c {
+        consume(a);
+    } else {
+        consume(a);
+    }
+    a.n
+}
+
+// Rejected once, with two labels: the move before the loop and the one in it
+// (reaching the read through the back edge) both reach the first read; the
+// second read is no fault.
+fn moved_before_and_in_the_loop(a: Handle, c: bool) {
+    consume(a);
+    while c {
+        let n: u32 = a.n;
+        let m: u32 = a.n;
+        consume(a);
+    }
+}
+
+// Accepted: moved in one branch, read in the other.
+fn never_moved(a: Handle, c: bool) -> u32 {
+    if c {
+        consume(a);
+        0
+    } else {
+        a.n
+    }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

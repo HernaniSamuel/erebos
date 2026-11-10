@@ -1,4 +1,4 @@
-# Erebos language reference (M4.4)
+# Erebos language reference (M5.2)
 
 This describes the language as the compiler implements it today. The
 reasoning behind each rule lives in the ADRs (`docs/adr/`), cited as
@@ -163,7 +163,10 @@ Every `let`, parameter and return type is written explicitly; there is no
 inference (ADR 0008). `-> ()` may be omitted (ADR 0015). Arrays, structs
 and enums with payloads are **aggregates**, and so are slices where a rule
 depends on it. A bit-field struct is not: it is a **scalar**, stored,
-passed and accessed as its integer type (ADR 0059).
+passed and accessed as its integer type (ADR 0059). Every type with values is
+**copy** or **non-copy**: a struct or an enum with payloads is non-copy
+unless declared `#[copy]`, and a non-copy value is moved, not copied (see
+"Copies and moves").
 
 The names of the built-in types, `bool`, the integer types, `Option` and
 `Result`, are no item's: a struct, enum, function, constant, static,
@@ -335,7 +338,8 @@ buf[i] = buf[0];
   built with a literal (ADR 0050, see "Visibility"), except that a literal
   of a bit-field struct may leave out invisible fields with `..`.
 - `[a, b, c]` lists every element. `[v; N]` evaluates `v` exactly once,
-  even for `N` of 0, and copies it into every element.
+  even for `N` of 0, and copies it into every element, so `v` must be of a
+  copy type (`ty::non-copy-repeat`, see "Copies and moves").
 - `s.field` and `a[i]` are places when `s` and `a` are: reading or writing
   one reaches only that field or element. `(*p).field` and `(*p)[i]` reach
   one part through a pointer without copying the whole; there is no
@@ -349,8 +353,10 @@ buf[i] = buf[0];
   as in C. `(*p)[i]` with `p: *mut [T; N]` is the checked form, and so is
   `(*s)[i]` with a slice `s` (see "Slices"). A pointer to a peripheral
   type cannot be indexed (see "Pointers").
-- `let`, assignment and reading a place copy aggregates whole. `==` and
-  `!=` do not apply to them; compare their parts.
+- `let`, assignment and reading a place copy aggregates whole when their
+  type is copy, and move them when it is not: a struct is non-copy unless
+  it is declared `#[copy]` (see "Copies and moves"). `==` and `!=` do not
+  apply to them; compare their parts.
 - A struct may contain itself only behind a pointer (`next: *mut Node`).
 - In the condition of `if` and `while`, a `{` opens the body, so a struct
   literal there needs parentheses: `if (Point { x: 0, y: 0 }).x == 0 { }`.
@@ -461,7 +467,7 @@ gives it its default. The `typeck` and `mir` dumps show a field's mode.
   `:` other than the four integers is `resolve::bit-struct-type`. Two
   fields with one name are `resolve::duplicate-field`. `#[packed]` and
   `#[align(N)]` are `resolve::misplaced-attribute`: the layout is the
-  integer's.
+  integer's. So is `#[copy]`: a bit-field struct is copy already.
 - A bit position or a field type that needs the struct's own bits is
   `ty::cycle`: `at L as u32` with `const L: Lcr`, `size_of(Lcr)` in its
   bit positions or field types (also through a struct holding an `Lcr`),
@@ -629,12 +635,15 @@ extern static crc_lookup: [u32; 256];
 
 - A static is an item of a module with an explicit type and an initializer,
   which runs at compile time (see "Compile-time execution"). Its type is
-  any type a constant may have: sized, and not `!`. A static without an
+  sized and not `!`, and, unlike a constant's, may be non-copy (see "Copies
+  and moves"). A static without an
   initializer is a `parser::unexpected-token`; one inside a function body
   is a `parser::local-static`.
 - A static is a **place**: one object in memory, with an address
   (`&raw const CRC_TABLE`). Using it reads that memory; it is not copied
-  into each use, as a constant is.
+  into each use, as a constant is. A non-copy value is never moved out of a
+  static, whole or in part (`ty::move-out-of-place`); a `static mut` of a
+  non-copy type may be assigned whole, and its copy fields read.
 - A `static` cannot be assigned (`ty::assign-immutable`) nor have its
   address taken with `&raw mut` (`ty::address-of-immutable`). A
   `static mut` is read and written like a `mut` variable (`TICKS += 1`,
@@ -814,10 +823,11 @@ let w: Msg = Msg::Write(3, 0x1234);
 - A value that fails to evaluate is reported once, like a constant, and so
   is a value given twice; uses of the enum report nothing more because of
   it (see "`match`" for what a `match` on it does).
-- One attribute applies to an enum, `#[interrupts]` (see "The chip's
-  interrupts"), which declares the program's list of the chip's interrupts.
-  `#[packed]`, `#[align(N)]` and the others are
-  `resolve::misplaced-attribute`.
+- Two attributes apply to an enum: `#[interrupts]` (see "The chip's
+  interrupts"), which declares the program's list of the chip's interrupts,
+  and `#[copy]`, on an enum with payloads only (see "Copies and moves").
+  `#[packed]`, `#[align(N)]` and the others, and `#[copy]` on an enum
+  without payloads, are `resolve::misplaced-attribute`.
 
 **Payloads (ADR 0039).**
 
@@ -967,7 +977,8 @@ if m == .Off { ... }
 **Operations on an enum with payloads.** It is an aggregate, as a struct
 is:
 
-- `let`, assignment and reading a place copy the whole value.
+- `let`, assignment and reading a place copy the whole value when the enum
+  is `#[copy]`, and move it when it is not (see "Copies and moves").
 - `==`, `!=`, ordering, arithmetic, bitwise and shift operators, unary
   `-` and `!`, and the compound assignments are `ty::invalid-operand`;
   tell its variants apart with a `match`. `&&` and `||` need `bool`
@@ -1145,7 +1156,7 @@ an enclosing position, whose type that variant's declaration gives.
 | Pattern | Matches |
 |---------|---------|
 | `_` | every value |
-| `let name: T`, `let mut name: T` | every value, copied into a new variable |
+| `let name: T`, `let mut name: T` | every value, copied (a copy type) or moved (a non-copy type) into a new variable |
 | an integer literal, `-` and an integer literal | that value |
 | a byte literal (`b'q'`) | that byte, at a `u8` position |
 | `true`, `false` | that value |
@@ -1221,13 +1232,14 @@ an enclosing position, whose type that variant's declaration gives.
 - **A new variable is always written with `let` and its type**, which must
   be its position's type, with no conversion (`ty::mismatched-types`);
   without the type, the pattern is `parser::let-without-type`. The variable
-  holds a copy of the value at its position and, with `let mut`, may be
-  assigned. It exists in its arm's expression only, where it shadows, as a
-  value, any item or variable of the same name; it is not visible in the
-  rest of the pattern: in `Msg::Pair(let X: u8, X)`, the second `X` is a
-  constant named `X`. One name bound twice in one pattern, or in one
-  alternative of an or-pattern, as in `Msg::Write(let a: u8, let a: u16)`,
-  is `resolve::duplicate-binding`.
+  holds the value at its position, a copy of it when its type is copy and
+  a move out of the scrutinee when it is not (see "Copies and moves"), and,
+  with `let mut`, may be assigned. It exists in its arm's expression only,
+  where it shadows, as a value, any item or variable of the same name; it is
+  not visible in the rest of the pattern: in `Msg::Pair(let X: u8, X)`, the
+  second `X` is a constant named `X`. One name bound twice in one pattern,
+  or in one alternative of an or-pattern, as in
+  `Msg::Write(let a: u8, let a: u16)`, is `resolve::duplicate-binding`.
 - **Or-patterns** list alternatives of any pattern, at any position:
   `Msg::Write(0x10 | 0x11, _)`. There are no parentheses around patterns.
 - A **catch-all arm** is one whose pattern is `_`, a `let`, or an
@@ -1241,10 +1253,10 @@ in an alternative or inside one at any depth, when every alternative binds
 the same names, each with the same type and mutability:
 
 - Each alternative writes its own `let` with its type. Together they
-  declare one variable per name, in the arm's expression, which holds a
-  copy of the value at the position where the alternative that matched
-  binds it. When several alternatives match, the first one, left to right,
-  binds it: with `Msg::Pair(let a: u8, 7) | Msg::Pair(5, let a: u8)`,
+  declare one variable per name, in the arm's expression, which holds the
+  value at the position where the alternative that matched binds it. When
+  several alternatives match, the first one, left to right, binds it: with
+  `Msg::Pair(let a: u8, 7) | Msg::Pair(5, let a: u8)`,
   `Msg::Pair(5, 7)` gives `a` the value 5.
 - A name that some alternatives bind and others do not, or that some bind
   with `let mut` and others with `let`, is `resolve::inconsistent-binding`,
@@ -1286,7 +1298,9 @@ an enum without one, and unreachable on a `bool` or an integer whose every
 value is listed.
 
 On an enum with payloads, a `match` tests its arms in order (ADR 0042).
-It compiles to a switch on the tag of the scrutinee's copy, with a case
+It compiles to a switch on the tag of the scrutinee's copy (the scrutinee
+itself when it is a place of a non-copy type, which a `match` does not move;
+see "Copies and moves"), with a case
 for each variant that an arm names at the top, as its pattern or as an
 alternative of its or-pattern. Under each case is the **chain** of that
 variant: in arm order, each top-level alternative that is the variant,
@@ -1343,6 +1357,14 @@ copies 5 into `r` before the `0` fails, and the arm's expression runs
 only when a whole alternative passed, which copied every variable it
 binds on its way. So when several alternatives match, the first one, left
 to right, binds, since it is tested first.
+
+This is for a binding of a copy type. A binding of a non-copy type is not
+copied where its position is reached: it is moved out of the scrutinee at the
+end of its alternative, once the whole alternative has matched and before the
+jump to the arm, so an alternative that fails after it moves nothing; a
+catch-all `let` arm moves the whole scrutinee where the arm is entered. The
+alternatives of one arm may each bind a non-copy name, each moving at its
+own end (see "Copies and moves").
 
 **Typing.** As for `if`: with an expected type, each arm's expression is
 checked against it, with the implicit conversions of "Typing"; without
@@ -1623,9 +1645,11 @@ fn two_digits(a: u8, b: u8) -> Result(u32, ParseError) {
   return type is not checked. An erroneous return type, or one whose type
   arguments are in error, reports nothing more either.
 - **Meaning.** `e?` runs `e` once, where it is written, then reads its
-  tag. On `Some` or `Ok`, its value is a copy of the payload. On `None`,
+  tag. On `Some` or `Ok`, its value is the payload. On `None`,
   the function returns `.None`; on `Err`, it returns `.Err(x)`, `x` being
-  a copy of the payload. On a tag that is no variant, it calls the panic
+  the payload. The payload is copied when its type is copy; when it is not,
+  the operand is moved, and cannot be used whole afterwards (see "Copies and
+  moves"). On a tag that is no variant, it calls the panic
   function, as a `match` without a catch-all arm does; at compile time,
   that is an `eval::panic` whose cause is "enum value is no variant". So
   `e?` behaves as
@@ -1649,6 +1673,239 @@ fn two_digits(a: u8, b: u8) -> Result(u32, ParseError) {
 - **Code.** A switch on the operand's tag with two cases, whose default
   calls the panic function; as for a `match`, nothing tells LLVM that the
   tag holds a variant.
+
+## Copies and moves (ADR 0094, 0096 to 0099)
+
+```
+struct Disabled { pin: u32 }
+struct Output { pin: u32 }
+
+#[copy]
+struct Point { x: i32, y: i32 }
+
+fn into_output(p: Disabled) -> Output {
+    Output { pin: p.pin }
+}
+
+fn f(d: Disabled, p: Point) {
+    let o: Output = into_output(d);     // `d` is moved
+    let q: Point = p;                   // `p` is copied
+    let r: Point = p;                   // fine: `p` is still there
+    let e: Output = into_output(d);     // error: analysis::use-after-move
+}
+```
+
+Every type with values is **copy** or **non-copy**. Using a value of a copy
+type copies it, as always (ADR 0021). Reading a whole value of a non-copy
+type **moves** it: the place it came from cannot be used again until it is
+assigned a new value, and the compiler rejects the program when it is. A
+non-copy value is used at most once, which is how a value that stands for a
+resource (a pin in one state, a handle) is consumed by the function that
+changes its state. Moving and copying are the same machine operation: a move
+writes nothing to the place it leaves, and nothing runs when a value is moved
+from, goes out of scope or is overwritten. A value that goes out of scope
+moved, partly moved or not is valid.
+
+### Which types are copy (ADR 0096)
+
+Copy are: integers, `bool` and `()`; enums without payloads; bit-field
+structs; raw pointers, slice pointers included; an array whose element type
+is copy; `Option(T)` with `T` copy; `Result(T, E)` with `T` and `E` copy; and
+a struct or an enum with payloads declared `#[copy]`. Every other type with
+values is non-copy: a struct or an enum with payloads without the attribute,
+and the arrays, `Option` and `Result` that contain one. `!`, `[T]` and
+peripheral types have no values and no kind.
+
+Whether a struct or an enum is copy is what it declares. A type is never
+copy because its fields are: a handle made of integers is non-copy until its
+author says otherwise.
+
+- `#[copy]` goes before a struct that is not a bit-field struct, or an enum
+  with payloads, with `#[packed]` and `#[align(N)]` if they are there. It
+  changes neither the layout nor the calling convention. It takes no
+  argument (`resolve::attribute-argument`) and is given once
+  (`resolve::duplicate-attribute`). On a bit-field struct, an enum without
+  payloads, which are copy already, or any other item it is
+  `resolve::misplaced-attribute`.
+- Every field of a `#[copy]` struct and every payload value of a `#[copy]`
+  enum must be of a copy type: one that is not is `ty::copy-field-not-copy`,
+  at the attribute, once per field or payload value, labelling it and naming
+  its type. The help suggests `#[copy]` on the struct or enum that makes the
+  type non-copy, found inside arrays, `Option` and `Result` arguments. The
+  declaration decides: a field whose type is reported is not reported
+  again where it is used as a field of another `#[copy]` type.
+
+### What moves
+
+A **use** of a place reads it, takes its address or names a part of it. A use
+that reads a whole value of a non-copy type moves it:
+
+- the initializer of a `let` and the right side of an assignment;
+- an argument of a call;
+- a returned value, a `break` value, the value of a block, an `if` or a
+  `match` arm;
+- a field of a struct literal, an element of an array literal and a payload
+  value of a variant;
+- the operand of `?` (its payload is then a value like any other).
+
+A use of a copy type copies. A **discarded place** computes a place and
+neither moves nor uses it: the expression of an expression statement when it
+is a place of a non-copy type, or a block (`{ ... }` or `critical { ... }`)
+whose tail is a discarded place, recursively. So `a;`, `a.f;`, `{ a };`,
+`{ { a } };` and `critical { a };` do not move `a`, and are valid after `a`
+was moved. An index in the place is evaluated and checked, and the place is
+typed as for any use (a discarded `*p` of a volatile aggregate is still
+`ty::volatile-aggregate`). A statement is therefore no way to consume a
+value. Any other discarded expression computes its value: a call, a literal
+and also an `if` or a `match`, which choose a value and so move what their
+arms give (`if c { a } else { b };` moves `a` or `b`). A place of a copy type
+is read as before, so a volatile read written as a statement
+(`UART0.lsr;`, see "Volatile accesses") still happens.
+
+### Places a value is moved out of (ADR 0097)
+
+A non-copy value may be moved out of a place whose path from its root goes
+only through fields, and whose root is a local, a parameter or a temporary:
+
+- `a`, `a.f`, `a.f.g` with `a` a local or a parameter. Moving `a.f` moves
+  that field only, and `a` is then **partly moved**.
+- A payload value bound by a pattern of `match` (see below), at any depth of
+  payloads and fields: out of that part of the scrutinee.
+- A field of a temporary, as `make().h`.
+
+It may not be moved out of:
+
+- an element of an array, by `a[i]` whatever `i` is, also when the array is a
+  temporary's (`make().items[i]`);
+- a place through a pointer: `*p`, `p[i]`, `(*p).f`, `(*s)[i]`;
+- a static, or a part of one.
+
+Reading such a place whole when its type is non-copy is
+`ty::move-out-of-place`, at the use, whose message says which of the three
+the place is, and whose help suggests `#[copy]` when the type is a struct or
+an enum with payloads whose fields are all copy. Copy parts of those places
+are read as usual (`DRIVER.count`, `p[i].n`, `make().items[1].n`), and so is
+a place that is only named: a discarded place or a `match` scrutinee. An
+array of a non-copy type is moved whole only. A pointer to a non-copy type is
+valid, and a non-copy value is written through it (`*p = v` moves `v`); the
+whole value is not read back through it. A `static mut` of a non-copy type
+may be assigned whole, have its copy fields read and its address taken with
+`&raw`.
+
+### `match` and moves
+
+A `match` on a place reads the tags and the values its patterns test, which
+are copy, and moves only what its bindings of non-copy types bind. So
+`match state { .Idle => ..., .Busy(let n: u32) => ... }` leaves `state`
+usable, and `match msg { .Data(let h: Handle) => ... }` moves the payload
+value `h` out of `msg` in that arm only, leaving `msg` partly moved. A `let`
+arm binds the whole scrutinee and moves it whole. A scrutinee that is not a
+place is a temporary, as always.
+
+- A binding of a non-copy type moves from a scrutinee that is a static, an
+  array element or a place through a pointer as a read of it would:
+  `ty::move-out-of-place`, labelled at the binding and at the scrutinee.
+  A `match` on such a place that binds only copy values is valid.
+- A binding moves its value once the whole alternative it belongs to has
+  matched, so an alternative that binds a value and then fails a later test
+  moves nothing.
+- For that, a binding of a non-copy type inside an or-pattern that is nested
+  in a payload, as `b` in `.Pair(.A(let b: Buf) | .B(let b: Buf), 0)`, is
+  `ty::non-copy-binding-in-or-pattern`, at the binding: the positions after
+  such an or-pattern are tested once for all its alternatives, so at the end
+  of the alternative the place to move from is not known. The alternatives
+  of an arm (`.A(let b: Buf) | .B(let b: Buf) => ...`) are not nested and may
+  bind non-copy values; so may a binding next to a nested or-pattern, and
+  bindings of copy types anywhere.
+
+### Uses after a move (ADR 0097, 0099)
+
+At each point, a part of a place is **moved** if a path from the start of the
+function reaches the point through a move of that part, or of a place
+containing it, and through no assignment to it since. Then:
+
+- Reading, moving or taking the address (`&raw const`, `&raw mut`) of a place
+  is an error when the place, a place containing it, or a part of it is
+  moved. Reading a copy field that was not moved out of a partly moved struct
+  is valid, and so is a `match` that reads the tag of an enum whose payload
+  value was moved, the tag being untouched.
+- Assigning a whole place (`a = v;`, `a.f = v;`) gives it a value again, with
+  every part of it: after `a.f` is moved, `a.f = v;` makes `a` whole again,
+  and `a = f(a)` moves `a` into the call and gives it the result. An
+  assignment to a part of a place that was moved whole is an error: after
+  `a` is moved, `a.f = v;` does not rebuild it.
+- A move in a loop reaches the next iteration through the loop's back edge,
+  so a value moved in a loop and not assigned again in it is an error at its
+  use in the next iteration, including its own move.
+- The same holds on the paths of `if`, `match`, `while`, `loop` and `?`: a
+  value moved on one path is moved after the paths join.
+
+Each fault is `analysis::use-after-move`, at the use. The message is `use of
+moved value`, `use of partly moved value` (a part of the used place was
+moved) or `assignment to a part of the moved value`, with the place. The use
+is labelled, and so is each move that reaches it, in the order of the
+source: "moved here", or "moved here, in an earlier iteration of the loop"
+for a move that comes after the use in the source. The help suggests
+`#[copy]` as for `ty::move-out-of-place`, or says that a moved place is valid
+again once assigned.
+
+One fault is one error. Once a use is reported, the moves that reached it are
+dropped on the paths through it, so a later use that does not move, such as
+two more reads of `a.n` after `consume(a)`, is not reported again. A use that
+is itself a move makes its own move: after `consume(a)`, each further
+`consume(a)` is an error, since it moves a value that its predecessor moved.
+A use reached by two moves, one on each branch of an `if`, is one error with
+two labels.
+
+**What the analysis follows.** Only named variables and parameters: a local
+the source names. A value in a temporary the compiler makes (the result of a
+call, a literal or variant being built, the elements of `[.None; N]`) is not
+named by any text and is never reported. Statics and places through pointers
+are never moved from, so what they hold is always valid.
+
+**When it runs.** On the MIR of each body, once it is built and before
+anything evaluates it: functions, the initializers of constants and statics,
+`comptime` expressions and blocks, and `core`. A body that fails is not
+evaluated: a `const` whose initializer calls a `comptime` function with a use
+after a move reports `analysis::use-after-move` and nothing from the
+evaluation, and a `comptime` expression used twice reports its errors once.
+`--emit=typeck` analyses only the bodies that compile-time evaluation reaches,
+since type checking evaluates constants and so makes `query` build them;
+`--emit=mir` and the stages after it analyse every body. A body that already
+failed to lower to MIR, to type check or to pass the checks of "Checks on
+values known at compile time" is not analysed, and reports only its own
+errors.
+
+### Constants, `comptime` and `[v; N]` (ADR 0096)
+
+- A `const` of a non-copy type is `ty::non-copy-constant`, at its type: using
+  a constant copies its value into each use, which would forge the value
+  that the type stands for. So is a `comptime` expression of a non-copy
+  type, at the expression. A `comptime` function may build, move and return
+  non-copy values while it runs; only a value that leaves compile-time
+  evaluation as a constant must be copy: a `const` of a copy type may be
+  computed by a function that builds a handle on the way.
+- The initializer of a `static` is not one: `static S: Driver = ...;` with
+  `Driver` non-copy is valid, a `static mut` of one may be assigned, and its
+  copy fields read, as above.
+- `[v; N]` with `v` of a non-copy type is `ty::non-copy-repeat`, at `v`,
+  whatever `N` is (it is computed at compile time and may be 0 or 1). The
+  one exception is a `v` that is a variant written without payload values,
+  as `.None` or `State::Free` (a block or parentheses around it do not
+  count): it holds no non-copy value, so repeating it forges nothing, and
+  `static mut SLOTS: [Option(Handle); 32] = [.None; 32];` is valid, where
+  `[.Some(h); 32]` is not. The helps suggest `#[copy]`, and listing each
+  element in an array literal.
+
+### In MIR (ADR 0098)
+
+`--emit=mir` prints `move _3` where a whole value of a non-copy type is read
+from a local or a part of one, and `copy _3` for a copy type. Evaluation and
+code generation read the two alike. A `match` on a place of a non-copy type
+is tested in the place itself, with no copy of the scrutinee, and a binding
+of a non-copy type is moved at the end of its alternative, before the jump to
+its arm. The elements of `[v; N]` of a non-copy enum are filled by writing
+the tag of the variant into each, with no value moved.
 
 ## Layout (ADR 0022, 0039)
 
@@ -1709,6 +1966,9 @@ unspecified values.
   `resolve::misplaced-attribute`, and `#[packed]` stays misplaced on a
   function. `--emit=mir` shows it on the line before the function, and
   `--emit=llvm-ir` as the function's `align`.
+- `#[copy]` before a struct (not a bit-field struct) or an enum with payloads
+  declares it copy, and may go with `#[packed]` and `#[align(N)]`. It changes
+  neither the layout nor how the type crosses calls (see "Copies and moves").
 - `#[packed]` and `#[align(N)]` cannot be combined, and a packed struct
   cannot contain a type with `#[align(N)]`, at any depth: through fields,
   array elements or payload values.
@@ -1745,7 +2005,8 @@ fn f() -> u32 {
 }
 ```
 
-- **`const` items** have an explicit type and any initializer. A constant
+- **`const` items** have an explicit type, which must be copy
+  (`ty::non-copy-constant`), and any initializer. A constant
   is a value, not a place: it has no address (`&raw const` of it, or of
   any element or field of it, is an error) and cannot be assigned. Using it
   whole copies it; indexing it or reading a field reads only that part,
@@ -1756,7 +2017,7 @@ fn f() -> u32 {
   covers the whole expression to its right: `comptime f(1) + y` is
   `comptime (f(1) + y)`; write `(comptime f(1)) + y` to limit it. It passes
   the expected type through. Its value is a value like the call it
-  replaces, not a place.
+  replaces, not a place, and of a copy type (`ty::non-copy-constant`).
 - **`comptime { ... }`** items run their block when the program is
   compiled, typically for checks with `assert`.
 - **`assert(cond)`** and **`assert(cond, msg)`**, built in: at run time a
@@ -5529,7 +5790,7 @@ Every error has a stable code, shown with the message.
 | `resolve::inconsistent-binding` | a name not bound by every alternative of an or-pattern, or bound with `let mut` by only some |
 | `resolve::reserved-name` | an item, module or `use` named `_start`, `core`, with a name starting with `__`, or like a built-in function (`assert`, `len`, `slice`); a module of the root module named `llvm` or `rt`; a region named `INCLUDE` |
 | `resolve::unknown-attribute` | an attribute that does not exist |
-| `resolve::misplaced-attribute` | an attribute on an item it does not apply to, as `#[packed]` or `#[align(N)]` on a bit-field struct, `#[align(N)]` on an `extern fn`, or `#[naked]` on an `extern fn`, the entry function, the panic function, an interrupt handler or anything but a function with a body, or `#[interrupts]` on anything but an enum |
+| `resolve::misplaced-attribute` | an attribute on an item it does not apply to, as `#[packed]` or `#[align(N)]` on a bit-field struct, `#[align(N)]` on an `extern fn`, or `#[naked]` on an `extern fn`, the entry function, the panic function, an interrupt handler or anything but a function with a body, `#[interrupts]` on anything but an enum, or `#[copy]` on a bit-field struct, an enum without payloads or anything but a struct or an enum |
 | `resolve::attribute-argument` | an attribute with a missing or extra argument |
 | `resolve::duplicate-attribute` | an attribute given twice |
 | `resolve::conflicting-attributes` | `#[packed]` with `#[align(N)]` |
@@ -5581,6 +5842,11 @@ Every error has a stable code, shown with the message.
 | `ty::too-large` | a value larger than half the address space |
 | `ty::infinite-size` | structs and enums that contain themselves, directly, through each other or through `Option` and `Result`; peripheral types that contain themselves through clusters |
 | `ty::unsized` | `[T]` where a size is needed, or `*s` read or written whole |
+| `ty::copy-field-not-copy` | a field of a `#[copy]` struct, or a payload value of a `#[copy]` enum, whose type is not copy |
+| `ty::non-copy-constant` | a `const` whose type is not copy, or a `comptime` expression of a type that is not copy; a static's initializer is neither |
+| `ty::non-copy-repeat` | `[v; N]` with `v` of a type that is not copy, whatever `N` is, unless `v` is a variant written without payload values |
+| `ty::move-out-of-place` | a value of a type that is not copy read whole from an array element (of a temporary's array too, `f().items[i]`), a place through a pointer (`*p`, `p[i]`, `(*p).f`, `(*s)[i]`) or a static, or bound by a `match` on such a place; a field of a temporary (`f().x`), and a place that is only named (a discarded place, a `match` scrutinee), are not one |
+| `ty::non-copy-binding-in-or-pattern` | a binding of a type that is not copy inside an or-pattern nested in a payload; the alternatives of an arm are not nested |
 | `ty::never-in-memory` | `!` as a pointee, slice element, field, payload type, type argument of `Option` or `Result`, array element, register type, the type of a static, `extern static`, `const` or `comptime` value, a layout query operand, or under `&raw` |
 | `ty::invalid-align` | `#[align(N)]` on a struct, static or function with `N` not a power of two, too large or below the natural alignment |
 | `ty::aligned-in-packed` | a packed struct containing a type with `#[align(N)]`, at any depth, such as an enum with such a payload |
@@ -5659,6 +5925,7 @@ Every error has a stable code, shown with the message.
 | `eval::uninit-read` | reading bytes never written, such as padding |
 | `eval::pointer-escapes` | a compile-time result holding a pointer into the evaluation's own memory |
 | `eval::pointer-out-of-bounds` | a compile-time result holding a pointer outside its object and not one past its end, or a slice not inside its object |
+| `analysis::use-after-move` | a place read, moved, assigned a part of or whose address is taken, after the value in it, in a part of it or in a place that contains it was moved, on some path from the move and with no assignment to it since, in a loop's next iteration too; each move that reaches the use is a label; once a use is reported, a later use that does not itself move is not reported again, while one that is a move makes its own move and so is reported after it; only named variables and parameters are followed, not temporaries (ADR 0097, 0099) |
 | `analysis::unprotected-static` | a place in the thread context, outside `critical`, naming a `static mut` or `extern static mut` that the handler context also reaches (ADR 0078, 0093) |
 | `analysis::unmaskable-static` | a place in the context of an unmaskable handler, naming a `static mut` or `extern static mut` that another context also reaches; being inside `critical` changes nothing (ADR 0078, 0093) |
 | `codegen::asm` | an instruction LLVM's assembler rejects, at the `asm` expression with the assembler's message, or without a label when the error exists only in the whole object (a non-local label defined twice by inlining, no register left for the operands) |

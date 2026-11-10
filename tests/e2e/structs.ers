@@ -45,11 +45,13 @@ fn next(counter: *mut u32) -> u32 {
     *counter
 }
 
+#[copy]
 struct Point {
     x: u32,
     y: u32,
 }
 
+#[copy]
 struct Segment {
     from: Point,
     to: Point,

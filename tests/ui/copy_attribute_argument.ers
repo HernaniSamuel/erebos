@@ -1,0 +1,10 @@
+// emit: hir
+// `#[copy]` takes no argument (ADR 0096).
+#[copy(1)]
+struct A { x: u8 }
+
+#[copy(Eq)]
+enum B: u8 { X(u8) = 0 }
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

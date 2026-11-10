@@ -1,0 +1,115 @@
+// emit: mir
+// The parts of a place are moved on their own (ADR 0097, 0099): moving a
+// field leaves the struct partly moved, so the struct cannot be used whole
+// but its other fields can be read; assigning the field back makes the struct
+// whole again; and a part of a struct moved whole cannot be assigned, since a
+// struct is not rebuilt field by field. Functions marked `Accepted` report
+// nothing.
+struct Handle { n: u32 }
+
+struct Pair { a: Handle, b: Handle, n: u32 }
+
+struct Nested { inner: Pair, h: Handle }
+
+fn make() -> Handle { Handle { n: 1 } }
+
+fn consume(h: Handle) {}
+
+fn whole(p: Pair) {}
+
+// Rejected: the struct is used whole after a field was moved.
+fn whole_after_field(p: Pair) {
+    consume(p.a);
+    whole(p);
+}
+
+// Rejected: the field, then the same field again.
+fn field_twice(p: Pair) {
+    consume(p.a);
+    consume(p.a);
+}
+
+// Rejected: a field of a field, then the field that holds it.
+fn deep_then_shallow(n: Nested) {
+    consume(n.inner.a);
+    whole(n.inner);
+}
+
+// Rejected: a field of the struct moved whole.
+fn field_after_whole(p: Pair) {
+    whole(p);
+    consume(p.b);
+}
+
+// Rejected: the copy field of a struct moved whole.
+fn copy_field_after_whole(p: Pair) -> u32 {
+    whole(p);
+    p.n
+}
+
+// Rejected: a part of a struct moved whole is assigned.
+fn assign_after_whole(mut p: Pair) {
+    whole(p);
+    p.a = make();
+}
+
+// Rejected: the part, a deeper one, of a field moved whole is assigned.
+fn assign_deep_after_field(mut n: Nested) {
+    consume(n.inner.a);
+    let moved: Pair = n.inner;
+    n.inner.a = make();
+}
+
+// Rejected: one of two fields moved is assigned back, the other still moved.
+fn one_field_back(mut p: Pair) {
+    consume(p.a);
+    consume(p.b);
+    p.a = make();
+    whole(p);
+}
+
+// Accepted: the other fields are read after one is moved.
+fn other_fields(p: Pair) -> u32 {
+    consume(p.a);
+    consume(p.b);
+    p.n
+}
+
+// Accepted: the field assigned back makes the struct whole again.
+fn assigned_back(mut p: Pair) {
+    consume(p.a);
+    p.a = make();
+    whole(p);
+}
+
+// Accepted: all the fields moved and assigned back, the struct assigned whole.
+fn rebuilt(mut p: Pair, q: Pair) {
+    consume(p.a);
+    consume(p.b);
+    p = q;
+    whole(p);
+}
+
+// Accepted: a field of a field assigned back.
+fn deep_back(mut n: Nested) {
+    consume(n.inner.a);
+    n.inner.a = make();
+    whole(n.inner);
+}
+
+// Accepted: the struct assigned whole after it was moved.
+fn whole_back(mut p: Pair, q: Pair) {
+    whole(p);
+    p = q;
+    p.a = make();
+    whole(p);
+}
+
+// Accepted: different fields moved in different statements.
+fn taken_apart(p: Pair) {
+    consume(p.a);
+    consume(p.b);
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

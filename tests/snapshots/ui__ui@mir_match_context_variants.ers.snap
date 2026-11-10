@@ -12,33 +12,31 @@ fn with_dots(_1: Msg) -> u16 {
     let _1: Msg; // m
     let _2: u8; // mode
     let _3: u16; // v
-    let _4: Msg;
-    let _5: u16;
-    let _6: u8;
-    let _7: u16;
+    let _4: u16;
+    let _5: u8;
+    let _6: u16;
 
     bb0: {
-        _4 = copy _1;
-        switch copy _4.tag -> [0_u8: bb1, 1_u8: bb6, 2_u8: bb9, otherwise: bb5];
+        switch copy _1.tag -> [0_u8: bb1, 1_u8: bb6, 2_u8: bb9, otherwise: bb5];
     }
 
     bb1: {
-        _5 = const 0_u16;
+        _4 = const 0_u16;
         goto -> bb15;
     }
 
     bb2: {
-        _5 = const 1_u16;
+        _4 = const 1_u16;
         goto -> bb15;
     }
 
     bb3: {
-        _6 = copy _2;
-        switch copy _6 -> [0_u8: bb12, otherwise: bb13];
+        _5 = copy _2;
+        switch copy _5 -> [0_u8: bb12, otherwise: bb13];
     }
 
     bb4: {
-        _5 = copy _3;
+        _4 = copy _3;
         goto -> bb15;
     }
 
@@ -47,11 +45,11 @@ fn with_dots(_1: Msg) -> u16 {
     }
 
     bb6: {
-        switch copy (_4 as 1).0 -> [3_u8: bb8, otherwise: bb7];
+        switch copy (_1 as 1).0 -> [3_u8: bb8, otherwise: bb7];
     }
 
     bb7: {
-        _2 = copy (_4 as 1).0;
+        _2 = copy (_1 as 1).0;
         goto -> bb3;
     }
 
@@ -60,11 +58,11 @@ fn with_dots(_1: Msg) -> u16 {
     }
 
     bb9: {
-        switch copy (_4 as 2).0 -> [16_u8: bb11, otherwise: bb10];
+        switch copy (_1 as 2).0 -> [16_u8: bb11, otherwise: bb10];
     }
 
     bb10: {
-        _3 = copy (_4 as 2).1;
+        _3 = copy (_1 as 2).1;
         goto -> bb4;
     }
 
@@ -73,22 +71,22 @@ fn with_dots(_1: Msg) -> u16 {
     }
 
     bb12: {
-        _7 = const 2_u16;
+        _6 = const 2_u16;
         goto -> bb14;
     }
 
     bb13: {
-        _7 = const 3_u16;
+        _6 = const 3_u16;
         goto -> bb14;
     }
 
     bb14: {
-        _5 = copy _7;
+        _4 = copy _6;
         goto -> bb15;
     }
 
     bb15: {
-        _0 = copy _5;
+        _0 = copy _4;
         return;
     }
 }
@@ -98,33 +96,31 @@ fn with_paths(_1: Msg) -> u16 {
     let _1: Msg; // m
     let _2: u8; // mode
     let _3: u16; // v
-    let _4: Msg;
-    let _5: u16;
-    let _6: u8;
-    let _7: u16;
+    let _4: u16;
+    let _5: u8;
+    let _6: u16;
 
     bb0: {
-        _4 = copy _1;
-        switch copy _4.tag -> [0_u8: bb1, 1_u8: bb6, 2_u8: bb9, otherwise: bb5];
+        switch copy _1.tag -> [0_u8: bb1, 1_u8: bb6, 2_u8: bb9, otherwise: bb5];
     }
 
     bb1: {
-        _5 = const 0_u16;
+        _4 = const 0_u16;
         goto -> bb15;
     }
 
     bb2: {
-        _5 = const 1_u16;
+        _4 = const 1_u16;
         goto -> bb15;
     }
 
     bb3: {
-        _6 = copy _2;
-        switch copy _6 -> [0_u8: bb12, otherwise: bb13];
+        _5 = copy _2;
+        switch copy _5 -> [0_u8: bb12, otherwise: bb13];
     }
 
     bb4: {
-        _5 = copy _3;
+        _4 = copy _3;
         goto -> bb15;
     }
 
@@ -133,11 +129,11 @@ fn with_paths(_1: Msg) -> u16 {
     }
 
     bb6: {
-        switch copy (_4 as 1).0 -> [3_u8: bb8, otherwise: bb7];
+        switch copy (_1 as 1).0 -> [3_u8: bb8, otherwise: bb7];
     }
 
     bb7: {
-        _2 = copy (_4 as 1).0;
+        _2 = copy (_1 as 1).0;
         goto -> bb3;
     }
 
@@ -146,11 +142,11 @@ fn with_paths(_1: Msg) -> u16 {
     }
 
     bb9: {
-        switch copy (_4 as 2).0 -> [16_u8: bb11, otherwise: bb10];
+        switch copy (_1 as 2).0 -> [16_u8: bb11, otherwise: bb10];
     }
 
     bb10: {
-        _3 = copy (_4 as 2).1;
+        _3 = copy (_1 as 2).1;
         goto -> bb4;
     }
 
@@ -159,22 +155,22 @@ fn with_paths(_1: Msg) -> u16 {
     }
 
     bb12: {
-        _7 = const 2_u16;
+        _6 = const 2_u16;
         goto -> bb14;
     }
 
     bb13: {
-        _7 = const 3_u16;
+        _6 = const 3_u16;
         goto -> bb14;
     }
 
     bb14: {
-        _5 = copy _7;
+        _4 = copy _6;
         goto -> bb15;
     }
 
     bb15: {
-        _0 = copy _5;
+        _0 = copy _4;
         return;
     }
 }

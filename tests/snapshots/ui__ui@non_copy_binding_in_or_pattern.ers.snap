@@ -1,0 +1,62 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/non_copy_binding_in_or_pattern.ers
+---
+--- errors ---
+ty::non-copy-binding-in-or-pattern
+
+  × cannot bind the non-copy `b` inside an or-pattern nested in a payload
+    ╭─[non_copy_binding_in_or_pattern.ers:23:18]
+ 22 │     match o {
+ 23 │         .Pair(.A(let b: Handle) | .B(let b: Handle), 0) => b.n,
+    ·               ──────────────────┬──────────────────┬
+    ·                                 │                  ╰── binds a `Handle`, which is not copy
+    ·                                 ╰── this or-pattern is nested in a payload
+ 24 │         _ => 0,
+    ╰────
+  help: the positions after a nested or-pattern are tested once for all its alternatives, so the
+        place to move from is not known at the end of one; make the alternatives those of the arm
+        (`.A(let b: T) | .B(let b: T) => ...`), or bind a copy value (ADR 0097)
+ty::non-copy-binding-in-or-pattern
+
+  × cannot bind the non-copy `b` inside an or-pattern nested in a payload
+    ╭─[non_copy_binding_in_or_pattern.ers:23:38]
+ 22 │     match o {
+ 23 │         .Pair(.A(let b: Handle) | .B(let b: Handle), 0) => b.n,
+    ·               ──────────────────┬──────────────────┬
+    ·                                 │                  ╰── binds a `Handle`, which is not copy
+    ·                                 ╰── this or-pattern is nested in a payload
+ 24 │         _ => 0,
+    ╰────
+  help: the positions after a nested or-pattern are tested once for all its alternatives, so the
+        place to move from is not known at the end of one; make the alternatives those of the arm
+        (`.A(let b: T) | .B(let b: T) => ...`), or bind a copy value (ADR 0097)
+ty::non-copy-binding-in-or-pattern
+
+  × cannot bind the non-copy `b` inside an or-pattern nested in a payload
+    ╭─[non_copy_binding_in_or_pattern.ers:31:24]
+ 30 │     match o {
+ 31 │         .Deep(.Some(.A(let b: Handle) | .B(let b: Handle)), _) => b.n,
+    ·                     ──────────────────┬──────────────────┬
+    ·                                       │                  ╰── binds a `Handle`, which is not copy
+    ·                                       ╰── this or-pattern is nested in a payload
+ 32 │         _ => 0,
+    ╰────
+  help: the positions after a nested or-pattern are tested once for all its alternatives, so the
+        place to move from is not known at the end of one; make the alternatives those of the arm
+        (`.A(let b: T) | .B(let b: T) => ...`), or bind a copy value (ADR 0097)
+ty::non-copy-binding-in-or-pattern
+
+  × cannot bind the non-copy `b` inside an or-pattern nested in a payload
+    ╭─[non_copy_binding_in_or_pattern.ers:31:44]
+ 30 │     match o {
+ 31 │         .Deep(.Some(.A(let b: Handle) | .B(let b: Handle)), _) => b.n,
+    ·                     ──────────────────┬──────────────────┬
+    ·                                       │                  ╰── binds a `Handle`, which is not copy
+    ·                                       ╰── this or-pattern is nested in a payload
+ 32 │         _ => 0,
+    ╰────
+  help: the positions after a nested or-pattern are tested once for all its alternatives, so the
+        place to move from is not known at the end of one; make the alternatives those of the arm
+        (`.A(let b: T) | .B(let b: T) => ...`), or bind a copy value (ADR 0097)

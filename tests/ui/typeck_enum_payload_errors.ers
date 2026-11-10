@@ -5,6 +5,7 @@
 // in a variant's value; it has no fields; through a volatile pointer it
 // is an aggregate; and one whose payload asks for an alignment through
 // `#[align(N)]` cannot be a field of a packed struct.
+#[copy]
 enum Msg: u8 { Nop = 0, Led(bool) = 1, Write(u8, u16) = 2, Wide(u32) = 3 }
 enum Mode: u8 { Off = 0, On = 1 }
 enum Next: u8 { First = 0, Second = Msg::Nop as u8 + 1 }

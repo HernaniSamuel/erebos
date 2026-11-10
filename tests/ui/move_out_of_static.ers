@@ -1,0 +1,39 @@
+// emit: typeck
+// A `static mut` of a non-copy type is assigned whole, its copy fields are
+// read, and its address is taken with `&raw`; reading it whole is a move out
+// of a static (ADR 0097).
+struct Handle { n: u32 }
+
+struct Driver { handle: Handle, count: u32 }
+
+static mut DRIVER: Driver = Driver { handle: Handle { n: 1 }, count: 0 };
+static mut HANDLE: Handle = Handle { n: 2 };
+
+// Accepted.
+fn fine(d: Driver) -> u32 {
+    DRIVER = d;
+    DRIVER.count = DRIVER.count + 1;
+    HANDLE = Handle { n: 3 };
+    let p: *mut Driver = &raw mut DRIVER;
+    let q: *const Handle = &raw const HANDLE;
+    let h: *mut Handle = &raw mut DRIVER.handle;
+    DRIVER.count + HANDLE.n
+}
+
+// Rejected: the whole value, whatever the use.
+fn whole() -> Driver {
+    let a: Driver = DRIVER;
+    let b: Handle = DRIVER.handle;
+    take(HANDLE);
+    DRIVER
+}
+
+fn take(h: Handle) {}
+
+entry fn main() -> ! {
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    loop {}
+}

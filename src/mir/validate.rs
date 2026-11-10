@@ -7,7 +7,8 @@
 //! another rule found invalid is skipped for that input, so that one fault is
 //! one violation. The `match`es on `Statement`, `Terminator`, `Rvalue`,
 //! `Operand`, `PlaceElem` and `AsmOperandKind` name every variant and have
-//! no `_` arm, so that a new variant fails to compile here.
+//! no `_` arm, so that a new variant fails to compile here. The rules M1 to M4
+//! of ADR 0098 come after the rules of types.
 
 use std::collections::HashSet;
 use std::fmt;
@@ -249,6 +250,8 @@ impl<'a> Checker<'a> {
             checker.terminator(&data.terminator);
         }
         checker.critical();
+        checker.at = Location::Body;
+        checker.copy_kinds();
         checker.found
     }
 
@@ -485,7 +488,30 @@ impl<'a> Checker<'a> {
     /// An operand: S7, T1 to T4, T6. Its type, if it is valid.
     fn operand(&mut self, operand: &Operand) -> Option<Ty> {
         match operand {
-            Operand::Copy(place) => self.read(*place),
+            Operand::Copy(place) => {
+                let ty = self.read(*place)?;
+                if !ty.is_copy() {
+                    self.violation(
+                        "M1",
+                        format!("`copy` reads a place of the non-copy type `{ty}`"),
+                    );
+                }
+                Some(ty)
+            }
+            Operand::Move(place, _) => {
+                let typed = self.place(*place);
+                if typed.is_some() {
+                    self.move_place(*place);
+                }
+                let ty = self.whole(typed, "read")?;
+                if ty.is_copy() {
+                    self.violation(
+                        "M2",
+                        format!("`move` reads a place of the copy type `{ty}`"),
+                    );
+                }
+                Some(ty)
+            }
             Operand::Const(Const::Int(bits, int)) => {
                 self.int_const(*bits, *int);
                 Some(Ty::Int(*int))
@@ -500,6 +526,116 @@ impl<'a> Checker<'a> {
                 self.peripheral_named(*p);
                 Some(p.def().address_ty())
             }
+        }
+    }
+
+    /// M3 for the place of a `move`, whose projections T1 accepted: a local
+    /// not bound to read-only data, followed by `Field` and `Payload`
+    /// projections only.
+    fn move_place(&mut self, place: Place) {
+        let constant = self
+            .body
+            .locals
+            .get(place.local.0 as usize)
+            .is_some_and(|decl| decl.constant.is_some());
+        if constant {
+            self.violation(
+                "M3",
+                format!(
+                    "`move` of the local `{}`, which holds read-only data",
+                    place.local
+                ),
+            );
+        }
+        for elem in place.projection {
+            match elem {
+                PlaceElem::Field(_) | PlaceElem::Payload { .. } => {}
+                PlaceElem::Deref
+                | PlaceElem::Offset(_)
+                | PlaceElem::Index(_)
+                | PlaceElem::ConstIndex(_)
+                | PlaceElem::Element(..)
+                | PlaceElem::ConstElement(..)
+                | PlaceElem::Tag => {
+                    self.violation(
+                        "M3",
+                        format!("`move` of a place through `{elem:?}`, not a field or a payload"),
+                    );
+                    break;
+                }
+            }
+        }
+    }
+
+    /// M4 for the type of every local: a struct or an enum with payloads
+    /// marked copy has copy fields and payload values only, looked for
+    /// through arrays, fields and payload values, each definition once.
+    fn copy_kinds(&mut self) {
+        let body = self.body;
+        let mut seen = HashSet::new();
+        for decl in &body.locals {
+            self.copy_kind(decl.ty, &mut seen);
+        }
+    }
+
+    fn copy_kind(&mut self, ty: Ty, seen: &mut HashSet<*const ()>) {
+        // The leaked definitions, by address: a struct and an enum are told
+        // apart by their type, not by the address alone.
+        match ty {
+            Ty::Array(elem, _) => self.copy_kind(*elem, seen),
+            Ty::Struct(s) => {
+                let def = s.def();
+                // A struct whose fields were never set is S-rule territory
+                // of its users; it has nothing to check here.
+                let Some(fields) = def.fields.get() else {
+                    return;
+                };
+                if !seen.insert(ptr::from_ref(def).cast()) {
+                    return;
+                }
+                for field in fields {
+                    if def.copy && !field.ty.is_copy() {
+                        self.violation(
+                            "M4",
+                            format!(
+                                "`{}` is marked copy, but its field `{}` has the non-copy type `{}`",
+                                def.name, field.name, field.ty
+                            ),
+                        );
+                    }
+                    self.copy_kind(field.ty, seen);
+                }
+            }
+            Ty::Enum(e) => {
+                let def = e.def();
+                let Some(variants) = def.variants.get() else {
+                    return;
+                };
+                if !seen.insert(ptr::from_ref(def).cast()) {
+                    return;
+                }
+                for variant in variants {
+                    for value in &variant.payload {
+                        if def.copy && !value.ty.is_copy() {
+                            self.violation(
+                                "M4",
+                                format!(
+                                    "`{}` is marked copy, but the payload value {} of `{}` has the non-copy type `{}`",
+                                    def.name, value.name, variant.name, value.ty
+                                ),
+                            );
+                        }
+                        self.copy_kind(value.ty, seen);
+                    }
+                }
+            }
+            Ty::Unit
+            | Ty::Never
+            | Ty::Bool
+            | Ty::Int(_)
+            | Ty::Ptr(_)
+            | Ty::Slice(_)
+            | Ty::Peripheral(_) => {}
         }
     }
 
@@ -2267,7 +2403,7 @@ mod tests {
 
     /// `struct Pair { a: u32, b: u32 }`.
     fn pair() -> StructRef {
-        let s = StructRef::new("Pair".to_owned(), Layout { size: 8, align: 4 }, false);
+        let s = StructRef::new("Pair".to_owned(), Layout { size: 8, align: 4 }, false, true);
         let field = |name: &str, offset| Field {
             name: name.to_owned(),
             ty: u32_ty(),
@@ -2284,6 +2420,7 @@ mod tests {
             "E".to_owned(),
             IntTy::U8,
             Layout { size: 8, align: 4 },
+            true,
         );
         e.def().set_variants(vec![
             Variant {
@@ -2304,7 +2441,12 @@ mod tests {
 
     /// `struct Holder { q: *mut Pair }`.
     fn holder() -> StructRef {
-        let s = StructRef::new("Holder".to_owned(), Layout { size: 4, align: 4 }, false);
+        let s = StructRef::new(
+            "Holder".to_owned(),
+            Layout { size: 4, align: 4 },
+            false,
+            true,
+        );
         s.def().set_fields(vec![Field {
             name: "q".to_owned(),
             ty: ptr(true, false, Ty::Struct(pair())),
@@ -2444,7 +2586,7 @@ mod tests {
         read(option, &payload(0, 0), Some("T1"));
         read(u32_ty(), &payload(0, 0), Some("T1"));
         // A struct whose fields were never set.
-        let unset = StructRef::new("U".to_owned(), Layout { size: 0, align: 1 }, false);
+        let unset = StructRef::new("U".to_owned(), Layout { size: 0, align: 1 }, false, true);
         read(Ty::Struct(unset), &[PlaceElem::Field(0)], Some("T1"));
 
         // The walk stops at the first projection that does not apply.
@@ -2616,7 +2758,7 @@ mod tests {
             &[PlaceElem::Deref, PlaceElem::Field(0)],
         ));
         // And a volatile pointer after a non-volatile one makes it volatile.
-        let volatile = StructRef::new("VH".to_owned(), Layout { size: 4, align: 4 }, false);
+        let volatile = StructRef::new("VH".to_owned(), Layout { size: 4, align: 4 }, false, true);
         volatile.def().set_fields(vec![Field {
             name: "q".to_owned(),
             ty: ptr(true, true, pair),
@@ -3037,6 +3179,277 @@ mod tests {
             }],
         ))));
         breaks_only(&body, "T9");
+    }
+
+    // ---- Moves (ADR 0098, M1 to M4) ----
+
+    /// `struct Handle { n: u32 }`, not copy.
+    fn handle() -> StructRef {
+        let s = StructRef::new(
+            "Handle".to_owned(),
+            Layout { size: 4, align: 4 },
+            false,
+            false,
+        );
+        s.def().set_fields(vec![Field {
+            name: "n".to_owned(),
+            ty: u32_ty(),
+            offset: 0,
+        }]);
+        s
+    }
+
+    /// `struct Wrapper { h: Handle, n: u32, items: [Handle; 2] }`, not copy.
+    fn wrapper() -> StructRef {
+        let s = StructRef::new(
+            "Wrapper".to_owned(),
+            Layout { size: 16, align: 4 },
+            false,
+            false,
+        );
+        let field = |name: &str, ty, offset| Field {
+            name: name.to_owned(),
+            ty,
+            offset,
+        };
+        s.def().set_fields(vec![
+            field("h", Ty::Struct(handle()), 0),
+            field("n", u32_ty(), 4),
+            field("items", handles(2), 8),
+        ]);
+        s
+    }
+
+    /// `[Handle; len]`.
+    fn handles(len: u64) -> Ty {
+        Ty::Array(Box::leak(Box::new(Ty::Struct(handle()))), len)
+    }
+
+    /// `enum Slot { Free, Full(Handle) }`, not copy, with a `u8` tag.
+    fn slot() -> EnumRef {
+        let e = EnumRef::new(
+            EnumId(1),
+            "Slot".to_owned(),
+            IntTy::U8,
+            Layout { size: 8, align: 4 },
+            false,
+        );
+        e.def().set_variants(vec![
+            Variant {
+                name: "Free".to_owned(),
+                payload: Vec::new(),
+            },
+            Variant {
+                name: "Full".to_owned(),
+                payload: vec![Field {
+                    name: "0".to_owned(),
+                    ty: Ty::Struct(handle()),
+                    offset: 4,
+                }],
+            },
+        ]);
+        e
+    }
+
+    /// `struct Marked { h: Handle }` declared `#[copy]`, which it must not
+    /// be: its field is not copy.
+    fn marked() -> StructRef {
+        let s = StructRef::new(
+            "Marked".to_owned(),
+            Layout { size: 4, align: 4 },
+            false,
+            true,
+        );
+        s.def().set_fields(vec![Field {
+            name: "h".to_owned(),
+            ty: Ty::Struct(handle()),
+            offset: 0,
+        }]);
+        s
+    }
+
+    fn moved(place: Place) -> Operand {
+        Operand::Move(place, span())
+    }
+
+    /// The rules broken by a call that passes, as `operand` reads it,
+    /// `projection` of a new local of type `ty`.
+    fn passing(
+        ty: Ty,
+        projection: &[PlaceElem],
+        operand: fn(Place) -> Operand,
+    ) -> Vec<&'static str> {
+        let mut body = valid();
+        body.locals.push(decl(ty));
+        let n = body.locals.len() as u32 - 1;
+        statement_of(
+            &mut body,
+            Statement::Call {
+                dest: None,
+                callee: BodyId(0),
+                args: vec![operand(projected(n, projection))],
+            },
+        );
+        rules(&body)
+    }
+
+    /// The rules broken by a body with a new local of type `ty`.
+    fn declaring(ty: Ty) -> Vec<&'static str> {
+        let mut body = valid();
+        body.locals.push(decl(ty));
+        rules(&body)
+    }
+
+    #[test]
+    fn m1_a_copy_reads_a_place_of_a_copy_type() {
+        let copying = |ty, projection: &[PlaceElem]| passing(ty, projection, Operand::Copy);
+        let array = |ty| Ty::Array(Box::leak(Box::new(ty)), 2);
+        accepts(copying(u32_ty(), &[]));
+        accepts(copying(Ty::Struct(pair()), &[]));
+        accepts(copying(Ty::Enum(option()), &[]));
+        accepts(copying(array(u32_ty()), &[]));
+        accepts(copying(ptr(true, false, Ty::Struct(handle())), &[]));
+        // A copy part of a non-copy struct.
+        accepts(copying(Ty::Struct(wrapper()), &[PlaceElem::Field(1)]));
+        rejects(copying(Ty::Struct(handle()), &[]), "M1");
+        rejects(copying(Ty::Enum(slot()), &[]), "M1");
+        rejects(copying(handles(2), &[]), "M1");
+        rejects(copying(array(handles(2)), &[]), "M1");
+        rejects(copying(Ty::Struct(wrapper()), &[PlaceElem::Field(0)]), "M1");
+        // Valid MIR beside: the value of a non-copy parameter moved.
+        let held = Ty::Struct(handle());
+        let mut body = valid();
+        body.ret = held;
+        body.locals[0] = decl(held);
+        body.locals[1] = decl(held);
+        body.blocks[0].statements = vec![Statement::Assign(local(0), Rvalue::Use(moved(local(1))))];
+        assert!(check_body(&body).is_empty(), "{:#?}", check_body(&body));
+    }
+
+    #[test]
+    fn m2_a_move_reads_a_place_of_a_non_copy_type() {
+        let moving = |ty, projection: &[PlaceElem]| passing(ty, projection, moved);
+        let payload = PlaceElem::Payload {
+            variant: 1,
+            index: 0,
+        };
+        accepts(moving(Ty::Struct(handle()), &[]));
+        accepts(moving(Ty::Enum(slot()), &[]));
+        accepts(moving(handles(2), &[]));
+        accepts(moving(Ty::Struct(wrapper()), &[PlaceElem::Field(0)]));
+        accepts(moving(Ty::Enum(slot()), &[payload]));
+        rejects(moving(u32_ty(), &[]), "M2");
+        rejects(moving(Ty::Struct(pair()), &[]), "M2");
+        rejects(moving(Ty::Enum(option()), &[]), "M2");
+        rejects(moving(ptr(true, false, Ty::Struct(handle())), &[]), "M2");
+        rejects(moving(Ty::Struct(wrapper()), &[PlaceElem::Field(1)]), "M2");
+    }
+
+    #[test]
+    fn m3_the_place_of_a_move_is_a_local_followed_by_fields_and_payloads() {
+        let moving = |ty, projection: &[PlaceElem]| passing(ty, projection, moved);
+        let to_handle = ptr(true, false, Ty::Struct(handle()));
+        // Through a pointer, in an array, after a field.
+        rejects(moving(to_handle, &[PlaceElem::Deref]), "M3");
+        rejects(
+            moving(
+                ptr(true, false, handles(2)),
+                &[PlaceElem::Deref, PlaceElem::ConstIndex(1)],
+            ),
+            "M3",
+        );
+        rejects(moving(handles(2), &[PlaceElem::ConstIndex(1)]), "M3");
+        rejects(moving(handles(2), &[PlaceElem::Index(Local(8))]), "M3");
+        rejects(
+            moving(
+                Ty::Struct(wrapper()),
+                &[PlaceElem::Field(2), PlaceElem::ConstIndex(0)],
+            ),
+            "M3",
+        );
+        rejects(moving(to_handle, &[PlaceElem::Offset(Local(8))]), "M3");
+        // A local bound to read-only data.
+        let mut body = valid();
+        body.locals.push(LocalDecl {
+            ty: Ty::Struct(handle()),
+            name: None,
+            constant: Some(DataId(0)),
+        });
+        let n = body.locals.len() as u32 - 1;
+        statement_of(
+            &mut body,
+            Statement::Call {
+                dest: None,
+                callee: BodyId(0),
+                args: vec![moved(local(n))],
+            },
+        );
+        breaks_only(&body, "M3");
+        // A projection T1 rejects is not checked against M3, nor M2.
+        rejects(moving(Ty::Struct(handle()), &[PlaceElem::Deref]), "T1");
+        rejects(moving(Ty::Struct(handle()), &[PlaceElem::Tag]), "T1");
+        rejects(moving(Ty::Struct(handle()), &[PlaceElem::Field(5)]), "T1");
+    }
+
+    #[test]
+    fn m4_a_type_marked_copy_has_copy_parts_only() {
+        accepts(declaring(Ty::Struct(pair())));
+        accepts(declaring(Ty::Enum(option())));
+        accepts(declaring(Ty::Struct(wrapper())));
+        accepts(declaring(Ty::Enum(slot())));
+        // A pointer to it is not looked into: nothing contains it by value.
+        accepts(declaring(ptr(true, false, Ty::Struct(marked()))));
+        rejects(declaring(Ty::Struct(marked())), "M4");
+        // Through an array, and as a field of a type that is not marked.
+        rejects(
+            declaring(Ty::Array(Box::leak(Box::new(Ty::Struct(marked()))), 3)),
+            "M4",
+        );
+        let outer = StructRef::new(
+            "Outer".to_owned(),
+            Layout { size: 4, align: 4 },
+            false,
+            false,
+        );
+        outer.def().set_fields(vec![Field {
+            name: "m".to_owned(),
+            ty: Ty::Struct(marked()),
+            offset: 0,
+        }]);
+        rejects(declaring(Ty::Struct(outer)), "M4");
+        // An enum with payloads, at a payload value.
+        let flagged = EnumRef::new(
+            EnumId(2),
+            "Flagged".to_owned(),
+            IntTy::U8,
+            Layout { size: 8, align: 4 },
+            true,
+        );
+        flagged.def().set_variants(vec![Variant {
+            name: "Held".to_owned(),
+            payload: vec![
+                Field {
+                    name: "0".to_owned(),
+                    ty: u32_ty(),
+                    offset: 4,
+                },
+                Field {
+                    name: "1".to_owned(),
+                    ty: Ty::Struct(handle()),
+                    offset: 8,
+                },
+            ],
+        }]);
+        rejects(declaring(Ty::Enum(flagged)), "M4");
+        // Each definition once, however many locals have its type.
+        let shared = marked();
+        let mut body = valid();
+        body.locals.extend([
+            decl(Ty::Struct(shared)),
+            decl(Ty::Struct(shared)),
+            decl(Ty::Array(Box::leak(Box::new(Ty::Struct(shared))), 2)),
+        ]);
+        breaks_only(&body, "M4");
     }
 
     // ---- `critical` blocks (ADR 0095, C1 to C3) ----

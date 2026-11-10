@@ -6,6 +6,7 @@ const BASE: *mut u32 = 0x2000_0000 as *mut u32;
 const T: [u32; 4] = [1, 2, 3, 4];
 const S: Pair = Pair { f: 5, a: [6, 7, 8] };
 struct Regs { data: u32, ctrl: u32 }
+#[copy]
 struct Pair { f: u32, a: [u16; 3] }
 
 fn through_pointers() -> *mut u32 {

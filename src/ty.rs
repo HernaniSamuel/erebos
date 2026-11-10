@@ -22,9 +22,12 @@ use crate::query::Queries;
 use crate::span::Span;
 
 pub use asm::{AsmChecked, AsmPiece};
+pub use copy::{copy_declaration_fails, is_copy, report_copy_fields, suggest_copy};
 pub use dump::dump;
+use place::{Unmovable, is_place};
 
 mod asm;
+mod copy;
 mod dump;
 mod expr;
 mod pattern;
@@ -310,6 +313,10 @@ pub fn check_fn(q: &mut Queries, f: &Fn) -> usize {
         loops: Vec::new(),
         equality: None,
         elsewhere: 0,
+        unread: HashSet::new(),
+        scrutinee: None,
+        payload_depth: 0,
+        nested_or: None,
     };
     checker.fn_(f);
     checker.elsewhere
@@ -405,6 +412,19 @@ struct Checker<'a, 'h> {
     /// The diagnostics pushed while evaluating the constants of patterns,
     /// which belong to those constants.
     elsewhere: usize,
+    /// The place expressions that are named but not read as a whole value:
+    /// a discarded place (`a;`, `{ a };`) and a `match` scrutinee, which
+    /// moves nothing by itself (ADR 0097).
+    unread: HashSet<ExprId>,
+    /// While the patterns of a `match` are checked, why the non-copy
+    /// values its bindings bind cannot be moved out of the scrutinee, and
+    /// the scrutinee's span; `None` when they can, or it is no place.
+    scrutinee: Option<(Unmovable, Span)>,
+    /// How many payload patterns enclose the pattern being checked.
+    payload_depth: u32,
+    /// The outermost or-pattern nested in a payload that encloses the
+    /// pattern being checked.
+    nested_or: Option<Span>,
 }
 
 /// A `==` or `!=`: its operator and the ids of its operands, in order.
@@ -526,6 +546,7 @@ impl Checker<'_, '_> {
             FnKind::Plain | FnKind::Naked | FnKind::Interrupt(_) => None,
         };
         self.ret = self.norm(f.ret);
+        self.check_constant_copy(f);
         if let Some((code, what, why)) = special
             && f.ret != Ty::Never
         {
@@ -772,6 +793,23 @@ impl Checker<'_, '_> {
         self.q.diags.push(diag);
     }
 
+    /// Marks the place `expr`, an expression statement, or the tail of a
+    /// block that is one, recursively, as discarded: it is computed, and
+    /// neither moved nor used (ADR 0097).
+    fn discard(&mut self, expr: &Expr) {
+        match &expr.kind {
+            ExprKind::Block(block) | ExprKind::Critical(block) => {
+                if let Some(tail) = &block.tail {
+                    self.discard(tail);
+                }
+            }
+            _ if is_place(expr) => {
+                self.unread.insert(expr.id);
+            }
+            _ => {}
+        }
+    }
+
     /// A block's type is its tail's, or `()` without one; a block that cannot
     /// reach its end has type `!`.
     fn block(&mut self, f: &Fn, block: &Block, expected: Option<Ty>) -> Ty {
@@ -784,8 +822,14 @@ impl Checker<'_, '_> {
                 }
                 // A statement without `;` (`if`, `loop`, ...) must not
                 // silently drop a value (ADR 0015).
-                Stmt::Expr { expr, semi: None } => self.check(f, expr, Some(Ty::Unit)),
-                Stmt::Expr { expr, .. } => self.check(f, expr, None),
+                Stmt::Expr { expr, semi: None } => {
+                    self.discard(expr);
+                    self.check(f, expr, Some(Ty::Unit))
+                }
+                Stmt::Expr { expr, .. } => {
+                    self.discard(expr);
+                    self.check(f, expr, None)
+                }
             };
             diverges |= ty == Ty::Never;
         }
@@ -879,6 +923,7 @@ impl Checker<'_, '_> {
             ExprKind::Repeat(value, len) => {
                 let want = element_of(expected);
                 let ty = self.check(f, value, want);
+                self.check_repeat_copy(value, ty);
                 match (ty, self.q.array_len(*len)) {
                     (Ty::Error, _) | (_, None) => Ty::Error,
                     // Like a block that does not finish (ADR 0034).
@@ -913,7 +958,10 @@ impl Checker<'_, '_> {
                     ));
                     Ty::Error
                 }
-                ty => ty,
+                ty => {
+                    self.check_comptime_copy(expr, ty);
+                    ty
+                }
             },
             ExprKind::SizeOf(ty) | ExprKind::AlignOf(ty) => {
                 self.queried_layout(*ty, expr.span);
@@ -1030,6 +1078,14 @@ impl Checker<'_, '_> {
                     return Ty::Error;
                 }
                 self.access(&info, expr, AccessMode::Read);
+                // Reading the whole value moves it (ADR 0097), unless the
+                // place is only named.
+                if !self.unread.contains(&expr.id)
+                    && !is_copy(self.q, info.ty)
+                    && let Some(why) = self.unmovable(expr)
+                {
+                    self.report_unmovable(info.ty, expr.span, why, None);
+                }
                 info.ty
             }
             ExprKind::AddrOf { mutable, place } => self.addr_of(f, *mutable, place),

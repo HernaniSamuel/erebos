@@ -4,6 +4,7 @@
 const TABLE: [u16; 4] = [1, 2, 3, 4];
 const SCALE: u32 = 1000;
 const PADDED: Padded = Padded { a: 0xAA, b: 0xBBBB_BBBB };
+#[copy]
 struct Padded { a: u8, b: u32 }
 
 fn element(i: usize) -> u16 {

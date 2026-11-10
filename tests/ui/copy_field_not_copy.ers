@@ -1,0 +1,40 @@
+// emit: typeck
+// Every field of a `#[copy]` struct and every payload value of a `#[copy]`
+// enum is copy (ADR 0096). One that is not is reported at the attribute,
+// once each, with a help naming the type to mark.
+struct Handle { id: u32 }
+
+#[copy]
+enum Token: u8 { Open(Handle) = 0, Closed = 1 }
+
+struct Plain { a: u8 }
+
+enum Event: u8 { Fired(u8) = 0, Idle = 1 }
+
+#[copy]
+struct Field { h: Handle }
+
+#[copy]
+struct Payload { e: Token, plain: Plain }
+
+#[copy]
+struct Array { slots: [Handle; 4] }
+
+#[copy]
+struct Optional { slot: Option(Handle), other: Result(u8, Event) }
+
+#[copy]
+struct Twice { first: Handle, ok: u32, second: Handle }
+
+#[copy]
+enum Many: u8 { One(u8, Handle, Plain) = 0, Two(Handle) = 1, Zero = 2 }
+
+// The help names the type that is not copy, not a sibling that is.
+#[copy]
+struct Sibling { r: Result(Token, Handle), o: Option(Plain), a: [Token; 2], p: Result(Handle, Token) }
+
+#[copy]
+struct Fine { a: u8, b: [u32; 2], c: *const Handle, d: Option(Token), e: Result(u8, bool) }
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

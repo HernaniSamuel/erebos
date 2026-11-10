@@ -6,51 +6,51 @@ input_file: tests/ui/critical_types.ers
 --- typeck ---
 struct Pair { a: u8 at 0, b: u8 at 1 } size 2, align 1
 fn value() -> u32
-    expr 0 critical 380..398: u32
-    expr 1 static COUNT 391..396: u32
+    expr 0 critical 388..406: u32
+    expr 1 static COUNT 399..404: u32
 fn aggregate() -> Pair
-    expr 2 critical 431..448: Pair
-    expr 3 static PAIR 442..446: Pair
+    expr 2 critical 439..456: Pair
+    expr 3 static PAIR 450..454: Pair
 fn unit() -> ()
-    expr 4 critical 468..504: ()
-    expr 5 assign += 487..497: ()
-    expr 6 static COUNT 487..492: u32
-    expr 7 int 1 496..497: u32
+    expr 4 critical 476..512: ()
+    expr 5 assign += 495..505: ()
+    expr 6 static COUNT 495..500: u32
+    expr 7 int 1 504..505: u32
 fn diverges() -> u32
-    expr 8 critical 535..557: !
-    expr 9 return 546..554: !
-    expr 10 int 1 553..554: u32
+    expr 8 critical 543..565: !
+    expr 9 return 554..562: !
+    expr 10 int 1 561..562: u32
 fn never() -> !
-    expr 11 critical 583..603: !
-    expr 12 loop 594..601: !
+    expr 11 critical 591..611: !
+    expr 12 loop 602..609: !
 fn in_loop() -> u32
     let found: u32
-    expr 13 loop 633..772: u32
-    expr 14 critical 665..742: u32
-    expr 15 if 688..714: ()
-    expr 16 binary == 691..701: bool
-    expr 17 static COUNT 691..696: u32
-    expr 18 int 3 700..701: u32
-    expr 19 break 704..711: !
-    expr 20 int 4 710..711: u32
-    expr 21 static COUNT 727..732: u32
-    expr 22 assign 752..765: ()
-    expr 23 static COUNT 752..757: u32
-    expr 24 local found 760..765: u32
+    expr 13 loop 641..780: u32
+    expr 14 critical 673..750: u32
+    expr 15 if 696..722: ()
+    expr 16 binary == 699..709: bool
+    expr 17 static COUNT 699..704: u32
+    expr 18 int 3 708..709: u32
+    expr 19 break 712..719: !
+    expr 20 int 4 718..719: u32
+    expr 21 static COUNT 735..740: u32
+    expr 22 assign 760..773: ()
+    expr 23 static COUNT 760..765: u32
+    expr 24 local found 768..773: u32
 fn as_condition() -> ()
-    expr 25 while 800..833: ()
-    expr 26 not 806..830: bool
-    expr 27 critical 807..830: bool
-    expr 28 binary == 818..828: bool
-    expr 29 static COUNT 818..823: u32
-    expr 30 int 0 827..828: u32
+    expr 25 while 808..841: ()
+    expr 26 not 814..838: bool
+    expr 27 critical 815..838: bool
+    expr 28 binary == 826..836: bool
+    expr 29 static COUNT 826..831: u32
+    expr 30 int 0 835..836: u32
 entry fn main() -> !
-    expr 31 loop 860..867: !
+    expr 31 loop 868..875: !
 panic fn on_panic() -> !
-    expr 32 loop 898..905: !
+    expr 32 loop 906..913: !
 comptime fn COUNT() -> u32
-    expr 33 int 0 307..308: u32
+    expr 33 int 0 315..316: u32
 comptime fn PAIR() -> Pair
-    expr 34 struct Pair 334..353: Pair
-    expr 35 int 1 344..345: u8
-    expr 36 int 2 350..351: u8
+    expr 34 struct Pair 342..361: Pair
+    expr 35 int 1 352..353: u8
+    expr 36 int 2 358..359: u8

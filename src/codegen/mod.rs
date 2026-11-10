@@ -896,7 +896,7 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
         }
         for (arg, &(ty, mode)) in args.iter().zip(&abi.params) {
             let place = || match arg {
-                Operand::Copy(place) => *place,
+                Operand::Copy(place) | Operand::Move(place, _) => *place,
                 Operand::Const(_) => unreachable!("aggregates are places"),
             };
             match mode {
@@ -959,7 +959,9 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                 }
                 if self.body.place_ty(*place).is_aggregate() {
                     match rvalue {
-                        Rvalue::Use(Operand::Copy(source)) => self.copy(*place, *source),
+                        Rvalue::Use(Operand::Copy(source) | Operand::Move(source, _)) => {
+                            self.copy(*place, *source)
+                        }
                         Rvalue::Slice { ptr, len } => {
                             self.write_slice_part(*place, 0, self.operand(ptr));
                             self.write_slice_part(*place, 1, self.operand(len));
@@ -1483,7 +1485,9 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
 
     fn operand(&self, operand: &Operand) -> BasicValueEnum<'ctx> {
         match operand {
-            Operand::Copy(place) => self.read(*place),
+            // A move reads as a copy: the machine operation is the same
+            // (ADR 0098).
+            Operand::Copy(place) | Operand::Move(place, _) => self.read(*place),
             Operand::Const(Const::Int(value, int)) => {
                 int_type(self.context, *int).const_int(*value, false).into()
             }

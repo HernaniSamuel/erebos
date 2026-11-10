@@ -12,18 +12,18 @@ struct Ring { slots: [Descriptor; 2] at 0, head: u8 at 128 } size 192, align 64
 fn copies(h: *const Header) -> u32
     let local: Header
     let kind: *const u8
-    expr 0 deref 432..434: Header
-    expr 1 local h 433..434: *const Header
-    expr 2 &raw const 462..483: *const u8
-    expr 3 field kind 473..483: u8
-    expr 4 local local 473..478: Header
-    expr 5 binary + 489..509: u32
-    expr 6 field len 489..498: u32
-    expr 7 local local 489..494: Header
-    expr 8 field len 501..509: u32
-    expr 9 deref 501..505: Header
-    expr 10 local h 503..504: *const Header
+    expr 0 deref 440..442: Header
+    expr 1 local h 441..442: *const Header
+    expr 2 &raw const 470..491: *const u8
+    expr 3 field kind 481..491: u8
+    expr 4 local local 481..486: Header
+    expr 5 binary + 497..517: u32
+    expr 6 field len 497..506: u32
+    expr 7 local local 497..502: Header
+    expr 8 field len 509..517: u32
+    expr 9 deref 509..513: Header
+    expr 10 local h 511..512: *const Header
 entry fn main() -> !
-    expr 11 loop 536..543: !
+    expr 11 loop 544..551: !
 panic fn on_panic() -> !
-    expr 12 loop 573..580: !
+    expr 12 loop 581..588: !

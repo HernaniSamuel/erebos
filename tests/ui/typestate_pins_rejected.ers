@@ -1,0 +1,51 @@
+// emit: mir
+// The wrong uses of a pin in typestate (tests/e2e/typestate_pins.ers): a
+// disabled pin driven as an output is a type error, and a pin used after the
+// transition that consumed it, or passed to two transitions, is a use after a
+// move (ADR 0097, 0099). `right` is valid and reports nothing.
+struct Disabled { pin: u32 }
+
+struct Input { pin: u32 }
+
+struct Output { pin: u32 }
+
+fn into_input(p: Disabled) -> Input { Input { pin: p.pin } }
+
+fn into_output(p: Input) -> Output { Output { pin: p.pin } }
+
+fn set(p: Output, high: bool) -> Output { p }
+
+fn read(p: Input) -> bool { true }
+
+// Accepted: each state is consumed once, by the next transition.
+fn right(d: Disabled) -> Output {
+    let i: Input = into_input(d);
+    let o: Output = into_output(i);
+    set(o, true)
+}
+
+// Rejected: `set` takes an `Output`, not a `Disabled`.
+fn drive_disabled(d: Disabled) -> Output {
+    set(d, true)
+}
+
+// Rejected: `i` was consumed by `into_output`.
+fn read_after_output(i: Input) -> bool {
+    let o: Output = into_output(i);
+    read(i)
+}
+
+// Rejected: the pin goes to two transitions.
+fn two_transitions(d: Disabled) -> Input {
+    let i: Input = into_input(d);
+    let j: Input = into_input(d);
+    i
+}
+
+entry fn main() -> ! {
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    loop {}
+}

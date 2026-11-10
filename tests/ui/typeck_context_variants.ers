@@ -10,6 +10,7 @@
 // earlier branch, arm, `break` or element. Each has the type and value of
 // its `E::V`.
 enum Mode: u8 { Off = 0, Run = 3 }
+#[copy]
 enum Msg: u8 { Nop = 0, Set(Mode) = 1, Write(u8, u16) = 2 }
 
 struct Holder { mode: Mode, msg: Msg }

@@ -191,7 +191,7 @@ mod tests {
     /// included) whose fields have the given types, at offsets that do not
     /// matter to the ABI.
     fn strukt(fields: &[Ty], size: u64, align: u64, packed: bool) -> Ty {
-        let def = StructRef::new("S".to_owned(), Layout { size, align }, packed);
+        let def = StructRef::new("S".to_owned(), Layout { size, align }, packed, true);
         def.def().set_fields(
             fields
                 .iter()

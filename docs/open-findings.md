@@ -142,6 +142,18 @@ M3.1 to M3.3 on 2026-10-28; these remain.
 - The `Display` arm of `Location::Program` in `src/mir/validate.rs` is never
   reached, since `Violation::fmt` returns early for it; drop its text or say
   that it is a placeholder. (M5.1)
+- `src/mir/build/asm.rs` and `src/mir/build/bit_struct.rs` still test
+  `matches!(.., Operand::Copy(_))`; they only see integers and pointers, so it
+  is harmless, but the plan says to use `Operand::place()`. (M5.2)
+- `diagnostic` in `src/analysis/moves.rs` names the first site by span when a
+  fault is reached by sites of different depth (`a.f.g` and `a` moved, `a.f`
+  used), which may not be the place that holds the use; `describe` can name a
+  place `m.One.0`, which no source can write. (M5.2)
+- A type error in a file without `entry` and `panic fn` shows
+  `resolve::missing-entry` and `resolve::missing-panic` instead of the type
+  error; nobody looked into why. (M5.2)
+- The enum arm of `lacks_layout` in `src/query.rs` clones the payload `Vec`
+  only to call `copy_declaration_fails`, which could take a slice. (M5.2)
 
 ## Tests
 
@@ -260,6 +272,13 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   `Mir::critical_enter` is `None`, is not a P2 (a reading of ADR 0095 that
   the step 4 `Decisions` record); one line in `a_valid_program_reports_nothing`
   in `src/mir/validate.rs`. (M5.1)
+- No test covers a binding both inside a nested or-pattern and moved out of a
+  static (both errors are reported); none for `match make().items[i]` with a
+  non-copy binding (only the `let` form); no MIR snapshot of a `match` in
+  place on a `Deref`, `Static` or `Index` scrutinee (the e2e ids 121 to 125 of
+  `comptime_differential` run them). (M5.2)
+- No ui test pins several `consume(a)` after one move (two errors);
+  `use_after_move_once.ers` uses reads on purpose. (M5.2)
 
 ## Docs
 
@@ -353,3 +372,16 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   re-exports that step adds to `src/mir/mod.rs` (`check_program`,
   `assert_valid_program`, `programs_checked`); only step 1 lists the ones it
   added. (M5.1)
+- The step 3 `Decisions` of `.claude/plans/M5.2.md` say the nested or-pattern
+  error is reported "once, at the binding"; it is once for each binding
+  pattern (`.A(let b) | .B(let b)` gives two). They also do not mention that
+  `is_place` in `src/ty/place.rs` includes `Peripheral` and `ByteString` (both
+  copy, so no behavior changes). (M5.2)
+- ADR 0069, section 1, says the stage of a snippet is "the layer whose output
+  is needed to see the error"; the catalog now runs every `ty::` snippet to `Mir`
+  on purpose, so that the bodies ADR 0032 lowers are checked too. One line in the
+  ADR, or a note in its catalog. The `register-*` and `step-*` `injected_use`
+  functions name their parameter `p`, not `injected_p`; and the check
+  `injections >= programs.min(CATALOG.len())` is global, so a `Mir` snippet
+  skipped on most bases goes unnoticed (nobody measured how many bases compile
+  to `Mir`). (M5.2)

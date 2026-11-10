@@ -1,0 +1,72 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/use_after_move_once.ers
+---
+--- errors ---
+analysis::use-after-move
+
+  × use of moved value `a`
+    ╭─[use_after_move_once.ers:17:18]
+ 15 │ fn three_uses(a: Handle) -> u32 {
+ 16 │     consume(a);
+    ·             ┬
+    ·             ╰── moved here
+ 17 │     let x: u32 = a.n;
+    ·                  ─┬─
+    ·                   ╰── used here, after it was moved
+ 18 │     let y: u32 = a.n;
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated (ADR 0097)
+analysis::use-after-move
+
+  × use of moved value `p`
+    ╭─[use_after_move_once.ers:27:18]
+ 25 │ fn other_fields(p: Pair) -> u32 {
+ 26 │     whole(p);
+    ·           ┬
+    ·           ╰── moved here
+ 27 │     let f: u32 = p.f.n;
+    ·                  ──┬──
+    ·                    ╰── used here, after it was moved
+ 28 │     p.g + p.h
+    ╰────
+  help: a place that was moved is valid again once it is assigned a new value (ADR 0097)
+analysis::use-after-move
+
+  × use of moved value `a`
+    ╭─[use_after_move_once.ers:39:5]
+ 34 │     if c {
+ 35 │         consume(a);
+    ·                 ┬
+    ·                 ╰── moved here
+ 36 │     } else {
+ 37 │         consume(a);
+    ·                 ┬
+    ·                 ╰── moved here
+ 38 │     }
+ 39 │     a.n
+    ·     ─┬─
+    ·      ╰── used here, after it was moved
+ 40 │ }
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated (ADR 0097)
+analysis::use-after-move
+
+  × use of moved value `a`
+    ╭─[use_after_move_once.ers:48:22]
+ 45 │ fn moved_before_and_in_the_loop(a: Handle, c: bool) {
+ 46 │     consume(a);
+    ·             ┬
+    ·             ╰── moved here
+ 47 │     while c {
+ 48 │         let n: u32 = a.n;
+    ·                      ─┬─
+    ·                       ╰── used here, after it was moved
+ 49 │         let m: u32 = a.n;
+ 50 │         consume(a);
+    ·                 ┬
+    ·                 ╰── moved here, in an earlier iteration of the loop
+ 51 │     }
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated (ADR 0097)

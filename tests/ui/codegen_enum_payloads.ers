@@ -6,6 +6,7 @@
 // initializer, so it goes to `.bss`, and the enum crosses calls as an
 // aggregate of its size and alignment (ADR 0025): one register, a pair
 // of alignment 4, a pair of alignment 8, and memory.
+#[copy]
 enum Msg: u8 { Nop = 0, Led(bool) = 1, Write(u8, u16) = 2, Wide(u32) = 3 }
 enum Small: u8 { A = 0, B(u8, u16) = 1 }
 enum Long: u64 { A = 0, B(()) = 1 }

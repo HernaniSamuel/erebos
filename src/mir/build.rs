@@ -118,6 +118,10 @@ struct Builder<'a, 'h> {
     /// The hidden local of each enclosing `critical` block, innermost last:
     /// what a jump out of the blocks puts back (ADR 0086).
     criticals: Vec<Local>,
+    /// The bindings of a non-copy type of the alternative being tested: the
+    /// variable, the place it takes the value from and the span of the
+    /// binding. The alternative moves them when it has all matched.
+    moves: Vec<(Local, Place, Span)>,
 }
 
 /// Whether `pattern` names one value of its position, as a literal, a
@@ -200,6 +204,7 @@ impl<'a, 'h> Builder<'a, 'h> {
             current: None,
             loops: Vec::new(),
             criticals: Vec::new(),
+            moves: Vec::new(),
         };
         // HIR locals become MIR locals `_1..`, in declaration order.
         for local in &f.locals {
@@ -330,7 +335,10 @@ impl Builder<'_, '_> {
                 Ty::Int(int) => Operand::Const(Const::Int(0, int)),
                 Ty::Bool => Operand::Const(Const::Bool(false)),
                 Ty::Unit | Ty::Never => Operand::Const(Const::Unit),
-                ty => Operand::Copy(Place::local(self.new_local(ty, None))),
+                ty => {
+                    let place = Place::local(self.new_local(ty, None));
+                    self.read(place)
+                }
             };
         };
         match ty {
@@ -341,7 +349,8 @@ impl Builder<'_, '_> {
             // so it is data the linker completes (ADR 0030). A slice is an
             // aggregate, read from its data likewise (ADR 0031).
             Ty::Ptr(_) if !value.relocations.is_empty() || ty.is_aggregate() => {
-                Operand::Copy(Place::local(self.const_local(ty, source, &value)))
+                let place = Place::local(self.const_local(ty, source, &value));
+                self.read(place)
             }
             // Made from an integer.
             Ty::Ptr(_) => {
@@ -351,7 +360,8 @@ impl Builder<'_, '_> {
                 self.temp(ty, Rvalue::Cast(address, ty))
             }
             Ty::Array(..) | Ty::Struct(_) | Ty::Enum(_) => {
-                Operand::Copy(Place::local(self.const_local(ty, source, &value)))
+                let place = Place::local(self.const_local(ty, source, &value));
+                self.read(place)
             }
             Ty::Slice(_) => unreachable!("`[T]` is unsized, and no value has it (ADR 0031)"),
             Ty::Peripheral(_) => unreachable!("no value has a peripheral type (ADR 0058)"),
@@ -360,12 +370,60 @@ impl Builder<'_, '_> {
 
     /// Stores `rvalue` in a new temporary and returns a read of it.
     fn temp(&mut self, ty: Ty, rvalue: Rvalue) -> Operand {
+        let place = self.temp_place(ty, rvalue);
+        self.read(place)
+    }
+
+    /// Stores `rvalue` in a new temporary and returns its place.
+    fn temp_place(&mut self, ty: Ty, rvalue: Rvalue) -> Place {
         let place = Place::local(self.new_local(ty, None));
         self.assign(place, rvalue);
-        Operand::Copy(place)
+        place
+    }
+
+    /// An operand reading the whole value in `place`, by `move` if its type
+    /// is not copy and by `copy` otherwise, the one place where MIR building
+    /// chooses (ADR 0098). A move carries the span of the expression being
+    /// built.
+    fn read(&self, place: Place) -> Operand {
+        self.read_at(place, self.span)
+    }
+
+    /// [`Builder::read`], with the span of the expression whose value is
+    /// moved.
+    fn read_at(&self, place: Place, span: Span) -> Operand {
+        // The place of code that cannot run may have no type, as `*p` with
+        // `p` of type `!`; it is read as a copy, and nothing runs it.
+        let ty = (place.projection.iter())
+            .try_fold(self.locals[place.local.0 as usize].ty, |ty, elem| {
+                try_projected_ty(ty, elem)
+            });
+        if ty.is_none_or(Ty::is_copy) {
+            Operand::Copy(place)
+        } else {
+            Operand::Move(place, span)
+        }
+    }
+
+    /// Stores the value of `operand` in a new temporary and returns a read
+    /// of it, which keeps the span of the operand if it moves.
+    fn spill(&mut self, operand: Operand) -> Operand {
+        let ty = self.operand_ty(operand);
+        let span = match operand {
+            Operand::Move(_, span) => span,
+            Operand::Copy(_) | Operand::Const(_) => self.span,
+        };
+        let place = self.temp_place(ty, Rvalue::Use(operand));
+        self.read_at(place, span)
     }
 
     fn block(&mut self, block: &hir::Block) -> Operand {
+        self.block_then(block, false)
+    }
+
+    /// A block's statements and its value. With `discarded`, its tail is a
+    /// discarded place (ADR 0097), computed and not read.
+    fn block_then(&mut self, block: &hir::Block, discarded: bool) -> Operand {
         for stmt in &block.stmts {
             if self.current.is_none() {
                 // Unreachable code: nothing to emit.
@@ -378,14 +436,72 @@ impl Builder<'_, '_> {
                     self.assign(Place::local(local), Rvalue::Use(value));
                 }
                 hir::Stmt::Expr { expr, .. } => {
-                    self.expr(expr);
+                    if self.is_discarded(expr) {
+                        self.discard(expr);
+                    } else {
+                        self.expr(expr);
+                    }
                 }
             }
         }
         match &block.tail {
+            Some(tail) if self.current.is_some() && discarded => {
+                self.discard(tail);
+                Operand::Const(Const::Unit)
+            }
             Some(tail) if self.current.is_some() => self.expr(tail),
             _ => Operand::Const(Const::Unit),
         }
+    }
+
+    /// Whether `expr`, an expression statement, is a discarded place
+    /// (ADR 0097): a place of a non-copy type, or a block, `critical` block
+    /// included, whose tail is one. A place of a copy type is read as any
+    /// expression, so that a volatile read written as a statement happens.
+    fn is_discarded(&mut self, expr: &hir::Expr) -> bool {
+        match &expr.kind {
+            hir::ExprKind::Block(block) | hir::ExprKind::Critical(block) => block
+                .tail
+                .as_ref()
+                .is_some_and(|tail| self.is_discarded(tail)),
+            _ => is_place_expr(expr) && !self.ty_of(expr).is_copy(),
+        }
+    }
+
+    /// Computes the discarded place `expr` and reads nothing (ADR 0098): an
+    /// index in it is evaluated and checked, and no operand is made.
+    fn discard(&mut self, expr: &hir::Expr) {
+        if self.current.is_none() {
+            return;
+        }
+        let outer = std::mem::replace(&mut self.span, expr.span);
+        match &expr.kind {
+            hir::ExprKind::Block(block) => {
+                self.block_then(block, true);
+            }
+            hir::ExprKind::Critical(block) => {
+                self.critical(block, true);
+            }
+            _ => {
+                self.place(expr);
+            }
+        }
+        self.span = outer;
+    }
+
+    /// A `critical` block: masks where it starts and puts back what it
+    /// recorded where it ends (ADR 0086). The value is an operand read
+    /// before the exit: a static is read into a temporary where it is
+    /// written, and a local is no one else's. With `discarded`, the block's
+    /// tail is a discarded place.
+    fn critical(&mut self, block: &hir::Block, discarded: bool) -> Operand {
+        let was = self.new_local(Ty::Int(hir::IntTy::U32), None);
+        self.push(Statement::CriticalEnter(was));
+        self.criticals.push(was);
+        let value = self.block_then(block, discarded);
+        self.criticals.pop();
+        self.push(Statement::CriticalExit(was));
+        value
     }
 
     /// Lowers an expression and returns its value. Expressions of type `()`
@@ -484,20 +600,50 @@ impl Builder<'_, '_> {
                     let place = array.project(PlaceElem::ConstIndex(i as u64));
                     self.assign(place, Rvalue::Use(value));
                 }
-                Operand::Copy(array)
+                self.read(array)
             }
             hir::ExprKind::Repeat(value, len) => {
                 let len = &self
                     .q
                     .array_len(*len)
                     .expect("well-typed programs have their lengths");
-                // Evaluated exactly once, whatever the length (ADR 0021).
-                let value = self.expr(value);
-                let array = Place::local(self.new_local(ty, None));
-                self.fill(array, value, *len);
-                Operand::Copy(array)
+                // A non-copy element is a variant written without payload
+                // values (ADR 0096): each element gets its tag, and no value
+                // is evaluated or copied (ADR 0098).
+                let tagged = match ty {
+                    Ty::Array(Ty::Enum(e), _) if !e.def().copy => self
+                        .payload_free_variant(value)
+                        .map(|(id, index)| (id, index, e.def().int)),
+                    _ => None,
+                };
+                if let Some((id, index, int)) = tagged {
+                    let tag = match self.discriminant(id, index) {
+                        Some(value) => Operand::Const(Const::Int(value, int)),
+                        None => {
+                            // Reported where it failed; the body is not used.
+                            self.failed = true;
+                            Operand::Const(Const::Int(0, int))
+                        }
+                    };
+                    let array = Place::local(self.new_local(ty, None));
+                    self.fill_with(array, *len, |this, elem| {
+                        this.assign(elem.project(PlaceElem::Tag), Rvalue::Use(tag));
+                    });
+                    self.read(array)
+                } else {
+                    // Evaluated exactly once, whatever the length (ADR 0021).
+                    let value = self.expr(value);
+                    let array = Place::local(self.new_local(ty, None));
+                    self.fill_with(array, *len, |this, elem| {
+                        this.assign(elem, Rvalue::Use(value));
+                    });
+                    self.read(array)
+                }
             }
-            hir::ExprKind::Local(local) => Operand::Copy(self.local(*local)),
+            hir::ExprKind::Local(local) => {
+                let place = self.local(*local);
+                self.read(place)
+            }
             hir::ExprKind::Call { callee, args } => {
                 let args = self.operands(args);
                 let dest = self.result_place(ty);
@@ -513,7 +659,7 @@ impl Builder<'_, '_> {
                     let init = self.expr(init);
                     self.assign(value.project(PlaceElem::Field(*index)), Rvalue::Use(init));
                 }
-                Operand::Copy(value)
+                self.read(value)
             }
             hir::ExprKind::BitStructLit(s, fields, rest) => self.bit_struct_lit(*s, fields, *rest),
             // A bit field is no place in memory: the whole value is read,
@@ -532,12 +678,14 @@ impl Builder<'_, '_> {
                 if matches!(ty, Ty::Unit | Ty::Never) {
                     // Read all the same, to check it at compile time: it
                     // may be a static that cannot be read (ADR 0030).
-                    self.temp(ty, Rvalue::Use(Operand::Copy(place)));
+                    let read = self.read(place);
+                    self.temp(ty, Rvalue::Use(read));
                     Operand::Const(Const::Unit)
                 } else {
                     // Read now: a volatile read must happen exactly here, and
                     // a later write must not change what was read.
-                    self.temp(ty, Rvalue::Use(Operand::Copy(place)))
+                    let read = self.read(place);
+                    self.temp(ty, Rvalue::Use(read))
                 }
             }
             // A negative literal is a constant, so `x / -1` is known to divide
@@ -556,8 +704,8 @@ impl Builder<'_, '_> {
                 let mut lhs_value = self.expr(lhs);
                 // Reading a local is deferred to where its operand is used;
                 // if evaluating the right side could assign it, read now.
-                if matches!(lhs_value, Operand::Copy(_)) && !is_simple(rhs) {
-                    lhs_value = self.temp(self.operand_ty(lhs_value), Rvalue::Use(lhs_value));
+                if lhs_value.place().is_some() && !is_simple(rhs) {
+                    lhs_value = self.spill(lhs_value);
                 }
                 let lhs_ty = self.operand_ty(lhs_value);
                 let lhs = lhs_value;
@@ -614,18 +762,16 @@ impl Builder<'_, '_> {
                 self.cast(operand, ty)
             }
             // Reads the slice, never what it points to (ADR 0031).
-            hir::ExprKind::Len(slice) => match self.expr(slice) {
-                Operand::Copy(place) if self.current.is_some() => {
-                    self.temp(ty, Rvalue::SliceLen(place))
-                }
+            hir::ExprKind::Len(slice) => match self.expr(slice).place() {
+                Some(place) if self.current.is_some() => self.temp(ty, Rvalue::SliceLen(place)),
                 // The slice did not finish, and nothing follows.
                 _ => usize_const(0),
             },
             hir::ExprKind::Slice(pointer, len) => {
                 let mut ptr = self.expr(pointer);
                 // Read now if evaluating the length could assign it.
-                if matches!(ptr, Operand::Copy(_)) && !is_simple(len) {
-                    ptr = self.temp(self.operand_ty(ptr), Rvalue::Use(ptr));
+                if ptr.place().is_some() && !is_simple(len) {
+                    ptr = self.spill(ptr);
                 }
                 let len = self.expr(len);
                 if ty == Ty::Never {
@@ -659,12 +805,12 @@ impl Builder<'_, '_> {
                 let value = self.expr(value_expr);
                 let place = self.place(place);
                 if op.is_shift() {
-                    let shifted = self.operand_ty(Operand::Copy(place));
+                    let shifted = self.place_ty(place);
                     self.check_shift(shifted, value_expr);
                 }
                 let reported = self.check_divisor(*op, value_expr);
                 if matches!(op, BinOp::Div | BinOp::Rem) && !reported {
-                    let ty = self.operand_ty(Operand::Copy(place));
+                    let ty = self.place_ty(place);
                     let quotient = self.divide(*op, Operand::Copy(place), value, ty, *op_span);
                     self.assign(place, Rvalue::Use(quotient));
                 } else {
@@ -704,19 +850,9 @@ impl Builder<'_, '_> {
                 Operand::Const(Const::Unit)
             }
             hir::ExprKind::Block(block) => self.block(block),
-            // Masks where it starts and puts back what it recorded where it
-            // ends, and before each jump that leaves it (ADR 0086). The value
-            // is an operand read before the exit: a static is read into a
-            // temporary where it is written, and a local is no one else's.
-            hir::ExprKind::Critical(block) => {
-                let was = self.new_local(Ty::Int(hir::IntTy::U32), None);
-                self.push(Statement::CriticalEnter(was));
-                self.criticals.push(was);
-                let value = self.block(block);
-                self.criticals.pop();
-                self.push(Statement::CriticalExit(was));
-                value
-            }
+            // Puts back what it recorded before each jump that leaves it too
+            // (ADR 0086).
+            hir::ExprKind::Critical(block) => self.critical(block, false),
             hir::ExprKind::Logical(op, lhs, rhs) => self.logical(*op, lhs, rhs),
             hir::ExprKind::If { cond, then, else_ } => {
                 let cond_expr = cond;
@@ -867,7 +1003,17 @@ impl Builder<'_, '_> {
     ) -> Operand {
         let scrutinee_ty = self.ty_of(scrutinee);
         let hir_ty = self.q.tables.expr_ty(scrutinee.id);
-        let value = self.expr(scrutinee);
+        let chains = matches!(hir_ty, hir::Ty::Enum(e) if e.payloads);
+        // A place of a non-copy type is tested where it is, with no copy of
+        // it, and its bindings move out of it (ADR 0098). Type checking has
+        // rejected a `match` on a struct or an array, so it is an enum with
+        // payloads.
+        let in_place = (chains && !scrutinee_ty.is_copy() && is_place_expr(scrutinee))
+            .then(|| self.place_at(scrutinee));
+        let value = match in_place {
+            Some(_) => Operand::Const(Const::Unit),
+            None => self.expr(scrutinee),
+        };
         if self.current.is_none() {
             // The scrutinee did not finish, and nothing follows.
             return Operand::Const(Const::Unit);
@@ -884,19 +1030,18 @@ impl Builder<'_, '_> {
         }
         // Read where it is written (ADR 0018), into a temporary that the
         // tests and the variables the arms bind share, unless it is one.
-        let discr = match value {
-            Operand::Copy(place)
+        let discr = match value.place() {
+            Some(place)
                 if !place.projection.is_empty()
                     || self.locals[place.local.0 as usize].name.is_some() =>
             {
-                self.temp(scrutinee_ty, Rvalue::Use(value))
+                self.spill(value)
             }
             _ => value,
         };
         let blocks: Vec<BasicBlock> = arms.iter().map(|_| self.new_block()).collect();
-        let chains = matches!(hir_ty, hir::Ty::Enum(e) if e.payloads);
         let taken = if chains {
-            let Operand::Copy(place) = discr else {
+            let Some(place) = in_place.or(discr.place()) else {
                 unreachable!("an enum with payloads is an aggregate, read from a place")
             };
             self.chains(place, hir_ty, arms, &blocks, keyword);
@@ -946,8 +1091,8 @@ impl Builder<'_, '_> {
         if self.current.is_none() {
             return Operand::Const(Const::Unit);
         }
-        let place = match value {
-            Operand::Copy(place)
+        let place = match value.place() {
+            Some(place)
                 if place.projection.is_empty()
                     && self.locals[place.local.0 as usize].name.is_none() =>
             {
@@ -1003,7 +1148,8 @@ impl Builder<'_, '_> {
                 variant: failure,
                 index: 0,
             });
-            self.assign(returned, Rvalue::Use(Operand::Copy(error)));
+            let error = self.read(error);
+            self.assign(returned, Rvalue::Use(error));
         }
         let ret_tag = tag(self, r.id, failure);
         self.assign(
@@ -1021,7 +1167,8 @@ impl Builder<'_, '_> {
         if matches!(ty, Ty::Unit) {
             Operand::Const(Const::Unit)
         } else {
-            self.temp(ty, Rvalue::Use(Operand::Copy(payload)))
+            let payload = self.read(payload);
+            self.temp(ty, Rvalue::Use(payload))
         }
     }
 
@@ -1135,7 +1282,10 @@ impl Builder<'_, '_> {
                 let block = self.new_block();
                 self.current = Some(block);
                 let local = self.hir_locals[local.0 as usize];
-                self.assign(Place::local(local), Rvalue::Use(Operand::Copy(scrutinee)));
+                // A non-copy scrutinee moves whole into the variable where the
+                // arm is entered (ADR 0098).
+                let value = self.read_at(scrutinee, alternative.span);
+                self.assign(Place::local(local), Rvalue::Use(value));
                 self.terminate(Terminator::Goto(blocks[arm]));
                 block
             }
@@ -1205,6 +1355,12 @@ impl Builder<'_, '_> {
                 let fail = next.map_or(end, |(next, _)| next);
                 // The tag was switched on already.
                 self.payload(scrutinee, id, variant, patterns, &[], fail);
+                // The alternative has matched: what it binds of a non-copy
+                // type moves now, and not before (ADR 0098).
+                for (local, place, span) in std::mem::take(&mut self.moves) {
+                    let value = self.read_at(place, span);
+                    self.assign(Place::local(local), Rvalue::Use(value));
+                }
                 self.terminate(Terminator::Goto(blocks[arm]));
             }
             if let Some(next) = next {
@@ -1255,8 +1411,14 @@ impl Builder<'_, '_> {
             hir::PatternKind::Wildcard => {}
             hir::PatternKind::Binding { local, .. } => {
                 let local = self.hir_locals[local.0 as usize];
-                let value = Operand::Copy(position_place(scrutinee, position));
-                self.assign(Place::local(local), Rvalue::Use(value));
+                let place = position_place(scrutinee, position);
+                if self.place_ty(place).is_copy() {
+                    self.assign(Place::local(local), Rvalue::Use(Operand::Copy(place)));
+                } else {
+                    // Moved at the end of its alternative, once all of it has
+                    // matched (ADR 0098).
+                    self.moves.push((local, place, pattern.span));
+                }
             }
             hir::PatternKind::Or(alternatives) => {
                 self.or_pattern(scrutinee, alternatives, position, ty, fail)
@@ -1454,7 +1616,7 @@ impl Builder<'_, '_> {
             self.assign(place, Rvalue::Use(payload));
         }
         self.assign(value.project(PlaceElem::Tag), Rvalue::Use(tag));
-        Operand::Copy(value)
+        self.read(value)
     }
 
     /// The enum and the variant a variant pattern names, by its path or,
@@ -1614,7 +1776,7 @@ impl Builder<'_, '_> {
         match (operand, from.slice_address_ty(), ty.slice_elem()) {
             // The address part has the slice's own pointee, mutability and
             // volatility; another pointer type is a cast of that (ADR 0095, T5).
-            (Operand::Copy(place), Some(address_ty), None) => {
+            (Operand::Copy(place) | Operand::Move(place, _), Some(address_ty), None) => {
                 let address = self.temp(address_ty, Rvalue::SliceAddress(place));
                 if address_ty == ty {
                     address
@@ -1644,8 +1806,8 @@ impl Builder<'_, '_> {
         let mut operands = Vec::with_capacity(exprs.len());
         for (i, expr) in exprs.iter().enumerate() {
             let mut operand = self.expr(expr);
-            if matches!(operand, Operand::Copy(_)) && !exprs[i + 1..].iter().all(is_simple) {
-                operand = self.temp(self.operand_ty(operand), Rvalue::Use(operand));
+            if operand.place().is_some() && !exprs[i + 1..].iter().all(is_simple) {
+                operand = self.spill(operand);
             }
             operands.push(operand);
         }
@@ -1706,12 +1868,13 @@ impl Builder<'_, '_> {
         (!matches!(ty, Ty::Unit | Ty::Never)).then(|| Place::local(self.new_local(ty, None)))
     }
 
-    /// Stores `value` in every element of the array `array`: a loop over
-    /// the indices, which LLVM turns into `memset` where it can.
-    fn fill(&mut self, array: Place, value: Operand, len: u64) {
+    /// Stores in every element of the array `array`, with `store`, which is
+    /// given the element's place: a loop over the indices, which LLVM turns
+    /// into `memset` where it can.
+    fn fill_with(&mut self, array: Place, len: u64, store: impl Fn(&mut Self, Place)) {
         let usize_ty = hir::IntTy::Usize;
         if len == 1 {
-            self.assign(array.project(PlaceElem::ConstIndex(0)), Rvalue::Use(value));
+            store(self, array.project(PlaceElem::ConstIndex(0)));
             return;
         }
         if len == 0 || self.current.is_none() {
@@ -1740,7 +1903,7 @@ impl Builder<'_, '_> {
         });
         self.current = Some(body);
         // `i < len`, so the element exists.
-        self.assign(array.project(PlaceElem::Index(i)), Rvalue::Use(value));
+        store(self, array.project(PlaceElem::Index(i)));
         self.assign(
             index,
             Rvalue::Binary(
@@ -1751,6 +1914,25 @@ impl Builder<'_, '_> {
         );
         self.terminate(Terminator::Goto(head));
         self.current = Some(exit);
+    }
+
+    /// The enum and the variant of an expression that is a variant written
+    /// without payload values, `E::V`, `.V` or `E::V()`: the only value of a
+    /// non-copy type that `[v; N]` repeats (ADR 0096).
+    fn payload_free_variant(&mut self, expr: &hir::Expr) -> Option<(hir::EnumId, u32)> {
+        match &expr.kind {
+            hir::ExprKind::Variant(id, index, args)
+                if args.as_ref().is_none_or(|args| args.is_empty()) =>
+            {
+                Some((*id, *index))
+            }
+            hir::ExprKind::ContextVariant(_, _, args)
+                if args.as_ref().is_none_or(|args| args.is_empty()) =>
+            {
+                Some(self.q.tables.variant(expr.id))
+            }
+            _ => None,
+        }
     }
 
     /// Continues only if `ok` is true; otherwise calls the panic function,
@@ -1779,7 +1961,7 @@ impl Builder<'_, '_> {
     }
 
     fn read_result(&self, result: Option<Place>) -> Operand {
-        result.map_or(Operand::Const(Const::Unit), Operand::Copy)
+        result.map_or(Operand::Const(Const::Unit), |place| self.read(place))
     }
 
     fn in_loop(
@@ -1886,7 +2068,7 @@ impl Builder<'_, '_> {
 
     fn operand_ty(&self, operand: Operand) -> Ty {
         match operand {
-            Operand::Copy(place) => self.place_ty(place),
+            Operand::Copy(place) | Operand::Move(place, _) => self.place_ty(place),
             Operand::Const(Const::Int(_, int)) => Ty::Int(int),
             Operand::Const(Const::Bool(_)) => Ty::Bool,
             Operand::Const(Const::Unit) => Ty::Unit,
@@ -1927,14 +2109,21 @@ impl Builder<'_, '_> {
     /// later could assign the pointer, it is read now (ADR 0018).
     fn pointer_place(&mut self, pointer: &hir::Expr, later_writes: bool) -> Place {
         let pointer_ty = self.ty_of(pointer);
-        match self.expr(pointer) {
-            Operand::Copy(place) if !later_writes => place,
+        let value = self.expr(pointer);
+        match value.place() {
+            Some(place) if !later_writes => place,
             // Computed (e.g. a cast), or about to be read late: store it.
-            other => match self.temp(pointer_ty, Rvalue::Use(other)) {
-                Operand::Copy(place) => place,
-                Operand::Const(_) => unreachable!("temporaries are places"),
-            },
+            _ => self.temp_place(pointer_ty, Rvalue::Use(value)),
         }
+    }
+
+    /// [`Builder::place`], for a place that is built on its own and not as
+    /// part of an expression: what it emits is located at the place.
+    fn place_at(&mut self, expr: &hir::Expr) -> Place {
+        let outer = std::mem::replace(&mut self.span, expr.span);
+        let place = self.place(expr);
+        self.span = outer;
+        place
     }
 
     /// Lowers a place expression: a local, a static, a byte string, a
@@ -1969,10 +2158,8 @@ impl Builder<'_, '_> {
             hir::ExprKind::Peripheral(id) => {
                 let p = self.q.mir_peripheral(*id);
                 let address = Rvalue::Use(Operand::Const(Const::Peripheral(p)));
-                match self.temp(p.def().address_ty(), address) {
-                    Operand::Copy(place) => place.project(PlaceElem::Deref),
-                    Operand::Const(_) => unreachable!("temporaries are places"),
-                }
+                self.temp_place(p.def().address_ty(), address)
+                    .project(PlaceElem::Deref)
             }
             hir::ExprKind::Deref(pointer) => self
                 .pointer_place(pointer, later_writes)
@@ -2035,12 +2222,10 @@ impl Builder<'_, '_> {
             // where it is, as with a call's result.
             _ => {
                 let ty = self.ty_of(expr);
-                match self.expr(expr) {
-                    Operand::Copy(place) if !self.must_copy(place, address) => place,
-                    other => match self.temp(ty, Rvalue::Use(other)) {
-                        Operand::Copy(place) => place,
-                        Operand::Const(_) => unreachable!("temporaries are places"),
-                    },
+                let value = self.expr(expr);
+                match value.place() {
+                    Some(place) if !self.must_copy(place, address) => place,
+                    _ => self.temp_place(ty, Rvalue::Use(value)),
                 }
             }
         }
@@ -2058,10 +2243,8 @@ impl Builder<'_, '_> {
     /// The place of a static, reached through its address.
     fn static_place(&mut self, s: StaticRef) -> Place {
         let address = Rvalue::Use(Operand::Const(Const::Static(s)));
-        match self.temp(s.def().address_ty(), address) {
-            Operand::Copy(place) => place.project(PlaceElem::Deref),
-            Operand::Const(_) => unreachable!("temporaries are places"),
-        }
+        self.temp_place(s.def().address_ty(), address)
+            .project(PlaceElem::Deref)
     }
 
     /// Evaluates an index into a new local, so that a later write to its
@@ -2122,12 +2305,23 @@ impl Builder<'_, '_> {
         let address_ty = slice_ty
             .slice_address_ty()
             .expect("only slices point to a `[T]`");
-        match self.temp(address_ty, Rvalue::SliceAddress(slice)) {
-            // `index < len`, so the element is inside the slice.
-            Operand::Copy(address) => address.project(PlaceElem::Offset(index)),
-            Operand::Const(_) => unreachable!("temporaries are places"),
-        }
+        // `index < len`, so the element is inside the slice.
+        self.temp_place(address_ty, Rvalue::SliceAddress(slice))
+            .project(PlaceElem::Offset(index))
     }
+}
+
+/// Whether `expr` is a place: a local, a static, `*pointer`, `base[index]` or
+/// `base.field`. A bit field is a value, and so are the other expressions.
+fn is_place_expr(expr: &hir::Expr) -> bool {
+    matches!(
+        expr.kind,
+        hir::ExprKind::Local(_)
+            | hir::ExprKind::Static(_)
+            | hir::ExprKind::Deref(_)
+            | hir::ExprKind::Index(..)
+            | hir::ExprKind::Field(..)
+    )
 }
 
 fn usize_const(value: u64) -> Operand {
@@ -2137,7 +2331,13 @@ fn usize_const(value: u64) -> Operand {
 /// The type of the place one projection `elem` reaches from a place of
 /// type `ty`.
 fn projected_ty(ty: Ty, elem: &PlaceElem) -> Ty {
-    match (elem, ty) {
+    try_projected_ty(ty, elem).unwrap_or_else(|| unreachable!("projection {elem:?} of `{ty}`"))
+}
+
+/// [`projected_ty`], or `None` when the projection does not apply to `ty`:
+/// code that cannot run may hold a place through a pointer of type `!`.
+fn try_projected_ty(ty: Ty, elem: &PlaceElem) -> Option<Ty> {
+    Some(match (elem, ty) {
         (PlaceElem::Deref | PlaceElem::Offset(_), Ty::Ptr(ptr)) => *ptr.pointee,
         (PlaceElem::Index(_) | PlaceElem::ConstIndex(_), Ty::Array(elem, _)) => *elem,
         (PlaceElem::Field(index), Ty::Struct(s)) => s.def().fields()[*index as usize].ty,
@@ -2151,8 +2351,8 @@ fn projected_ty(ty: Ty, elem: &PlaceElem) -> Ty {
         (PlaceElem::Payload { variant, index }, Ty::Enum(e)) => {
             e.def().payload(*variant, *index).ty
         }
-        (elem, ty) => unreachable!("projection {elem:?} of `{ty}`"),
-    }
+        _ => return None,
+    })
 }
 
 /// Expressions whose evaluation cannot write to any place.

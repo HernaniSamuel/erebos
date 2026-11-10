@@ -26,8 +26,10 @@ mod board;
 use board::{exit, putc};
 
 enum ParseError: u8 { Empty = 0, BadDigit(u8) = 1, Overflow = 2 }
+#[copy]
 enum Mode: u8 { Off = 0, Run(u8) = 1 }
 
+#[copy]
 struct Point { x: u16, y: u16 }
 
 // An option of each kind: of an enum with payloads, of a struct, and a

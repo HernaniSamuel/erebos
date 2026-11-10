@@ -1,0 +1,152 @@
+// emit: typeck
+// A value of a non-copy type is moved out of a local, a parameter and their
+// fields, never out of an array element, a place through a pointer or a
+// static (ADR 0097). Fields of a copy type are read from any of those
+// places, a value is written through a pointer, a part of a temporary is
+// not a place, and a `match` binding a non-copy payload moves it out of the
+// scrutinee.
+struct Handle { n: u32 }
+
+#[copy]
+struct Plain { n: u32 }
+
+struct Holder { h: Handle, n: u32, items: [Handle; 2], plain: Plain }
+
+enum Msg: u8 { Empty = 0, Data(Handle) = 1, Num(u32) = 2 }
+
+static mut SH: Handle = Handle { n: 1 };
+static mut SHOLDER: Holder = Holder {
+    h: Handle { n: 1 },
+    n: 2,
+    items: [Handle { n: 3 }, Handle { n: 4 }],
+    plain: Plain { n: 5 },
+};
+static mut SMSG: Msg = Msg::Empty;
+
+fn make() -> Holder {
+    Holder { h: Handle { n: 1 }, n: 2, items: [Handle { n: 3 }, Handle { n: 4 }], plain: Plain { n: 5 } }
+}
+
+// Rejected: an array element.
+fn array_elements(a: [Handle; 2], i: usize) {
+    let x: Handle = a[i];
+    let y: Handle = a[0];
+}
+
+// Rejected: a place through a pointer.
+fn pointers(p: *mut Handle, q: *mut [Handle; 2], s: *mut [Handle], h: *mut Holder, i: usize) {
+    let a: Handle = *p;
+    let b: Handle = (*q)[i];
+    let c: Handle = (*s)[i];
+    let d: Handle = (*h).h;
+    let e: Handle = p[i];
+    let f: Handle = (*h).items[1];
+}
+
+// Rejected: a static, or a part of one.
+fn statics() {
+    let a: Handle = SH;
+    let b: Handle = SHOLDER.h;
+    let c: Handle = SHOLDER.items[0];
+}
+
+// Rejected: the arguments, the returned value and a literal's field read
+// the whole value as well.
+fn uses(p: *mut Handle) -> Handle {
+    take(*p);
+    let h: Holder = Holder { h: *p, n: 0, items: [*p, *p], plain: Plain { n: 0 } };
+    *p
+}
+
+fn take(h: Handle) {}
+
+// Accepted: the copy fields of each of those places.
+fn copy_fields(a: [Holder; 2], p: *mut Holder, i: usize) {
+    let a1: u32 = a[i].n;
+    let a2: Plain = a[0].plain;
+    let b1: u32 = (*p).n;
+    let b2: Plain = (*p).plain;
+    let c1: u32 = SHOLDER.n;
+    let c2: Plain = SHOLDER.plain;
+    let c3: u32 = SH.n;
+    let d: u32 = (*p).items[0].n;
+}
+
+// Accepted: a value is written through a pointer, an element or a static.
+fn writes(p: *mut Handle, mut a: [Handle; 2], v: Handle) {
+    *p = v;
+    a[0] = Handle { n: 1 };
+    SH = Handle { n: 2 };
+}
+
+// Accepted: the field of a call is a field of a value, not of a place; its
+// copy fields too, through an element. Rejected: an element of its array,
+// which MIR does not move out of (ADR 0098, rule M3).
+fn temporaries(i: usize) {
+    let h: Handle = make().h;
+    let n: u32 = make().items[1].n;
+    let e: Handle = make().items[i];
+}
+
+// Accepted: a local, a parameter and their fields.
+fn locals(a: [Handle; 2], h: Holder) {
+    let x: Holder = h;
+    let y: Handle = x.h;
+    let z: [Handle; 2] = x.items;
+    take(y);
+}
+
+// Rejected: a binding of a non-copy payload moves it out of a scrutinee that
+// is a static, through a pointer or an array element. Accepted: a copy
+// payload, no binding, and a local scrutinee.
+fn matches(p: *mut Msg, a: [Msg; 2], m: Msg) -> u32 {
+    let from_static: u32 = match SMSG {
+        .Data(let h: Handle) => h.n,
+        .Num(let n: u32) => n,
+        .Empty => 0,
+    };
+    let from_pointer: u32 = match *p {
+        .Data(let h: Handle) => h.n,
+        _ => 0,
+    };
+    let from_element: u32 = match a[1] {
+        .Data(let h: Handle) => h.n,
+        _ => 0,
+    };
+    let copy_payload: u32 = match SMSG {
+        .Num(let n: u32) => n,
+        _ => 0,
+    };
+    let no_binding: u32 = match *p {
+        .Data(_) => 1,
+        .Num(7) => 2,
+        _ => 0,
+    };
+    match m {
+        .Data(let h: Handle) => h.n,
+        _ => copy_payload,
+    }
+}
+
+// Rejected: only a place, or a block ending with one, is discarded without
+// being read; an `if` chooses a value, and a block that is a value moves it.
+fn read(p: *mut Handle) {
+    if true { *p } else { *p };
+    let h: Handle = { *p };
+}
+
+// Rejected as a volatile read of an aggregate, as it is today.
+fn volatile_match(p: *mut volatile Msg) -> u32 {
+    match *p {
+        .Num(let n: u32) => n,
+        _ => 0,
+    }
+}
+
+entry fn main() -> ! {
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    loop {}
+}

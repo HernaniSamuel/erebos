@@ -1,0 +1,175 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/use_after_move.ers
+---
+--- errors ---
+analysis::use-after-move
+
+  × use of moved value `a`
+    ╭─[use_after_move.ers:22:13]
+ 20 │ fn second(a: Handle) {
+ 21 │     consume(a);
+    ·             ┬
+    ·             ╰── moved here
+ 22 │     consume(a);
+    ·             ┬
+    ·             ╰── used here, after it was moved
+ 23 │ }
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated (ADR 0097)
+analysis::use-after-move
+
+  × use of moved value `a`
+    ╭─[use_after_move.ers:30:13]
+ 27 │     if c {
+ 28 │         consume(a);
+    ·                 ┬
+    ·                 ╰── moved here
+ 29 │     }
+ 30 │     consume(a);
+    ·             ┬
+    ·             ╰── used here, after it was moved
+ 31 │ }
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated (ADR 0097)
+analysis::use-after-move
+
+  × use of moved value `a`
+    ╭─[use_after_move.ers:40:13]
+ 35 │     if c {
+ 36 │         consume(a);
+    ·                 ┬
+    ·                 ╰── moved here
+ 37 │     } else {
+ 38 │         consume(a);
+    ·                 ┬
+    ·                 ╰── moved here
+ 39 │     }
+ 40 │     consume(a);
+    ·             ┬
+    ·             ╰── used here, after it was moved
+ 41 │ }
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated (ADR 0097)
+analysis::use-after-move
+
+  × use of moved value `a`
+    ╭─[use_after_move.ers:46:17]
+ 45 │     while c {
+ 46 │         consume(a);
+    ·                 ┬┬
+    ·                 │╰── moved here, in an earlier iteration of the loop
+    ·                 ╰── used here, after it was moved
+ 47 │     }
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated (ADR 0097)
+analysis::use-after-move
+
+  × use of moved value `h`
+    ╭─[use_after_move.ers:53:17]
+ 52 │     loop {
+ 53 │         consume(h);
+    ·                 ┬┬
+    ·                 │╰── moved here, in an earlier iteration of the loop
+    ·                 ╰── used here, after it was moved
+ 54 │     }
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated (ADR 0097)
+analysis::use-after-move
+
+  × use of moved value `a`
+    ╭─[use_after_move.ers:61:22]
+ 60 │     while c {
+ 61 │         let n: u32 = a.n;
+    ·                      ─┬─
+    ·                       ╰── used here, after it was moved
+ 62 │         consume(a);
+    ·                 ┬
+    ·                 ╰── moved here, in an earlier iteration of the loop
+ 63 │     }
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated (ADR 0097)
+analysis::use-after-move
+
+  × use of moved value `a`
+    ╭─[use_after_move.ers:72:13]
+ 67 │ fn assigned_in_one_branch(mut a: Handle, c: bool) {
+ 68 │     consume(a);
+    ·             ┬
+    ·             ╰── moved here
+ 69 │     if c {
+ 70 │         a = make();
+ 71 │     }
+ 72 │     consume(a);
+    ·             ┬
+    ·             ╰── used here, after it was moved
+ 73 │ }
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated (ADR 0097)
+analysis::use-after-move
+
+  × use of moved value `a`
+    ╭─[use_after_move.ers:78:12]
+ 77 │ fn arguments(a: Handle) {
+ 78 │     two(a, a);
+    ·         ┬  ┬
+    ·         │  ╰── used here, after it was moved
+    ·         ╰── moved here
+ 79 │ }
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated (ADR 0097)
+analysis::use-after-move
+
+  × use of moved value `a`
+    ╭─[use_after_move.ers:82:15]
+ 81 │ fn nested_call(a: Handle) {
+ 82 │     two(a, id(a));
+    ·         ┬     ┬
+    ·         │     ╰── used here, after it was moved
+    ·         ╰── moved here
+ 83 │ }
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated (ADR 0097)
+analysis::use-after-move
+
+  × use of moved value `a`
+    ╭─[use_after_move.ers:88:13]
+ 86 │ fn block_value(a: Handle) {
+ 87 │     let b: Handle = { a };
+    ·                       ┬
+    ·                       ╰── moved here
+ 88 │     consume(a);
+    ·             ┬
+    ·             ╰── used here, after it was moved
+ 89 │ }
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated (ADR 0097)
+analysis::use-after-move
+
+  × use of moved value `a`
+    ╭─[use_after_move.ers:95:18]
+ 93 │ fn kinds_of_uses(a: Handle) {
+ 94 │     consume(a);
+    ·             ┬
+    ·             ╰── moved here
+ 95 │     let n: u32 = a.n;
+    ·                  ─┬─
+    ·                   ╰── used here, after it was moved
+ 96 │ }
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated (ADR 0097)
+analysis::use-after-move
+
+  × assignment to a part of the moved value `a`
+     ╭─[use_after_move.ers:100:5]
+  98 │ fn part_of_the_whole(mut a: Pair) {
+  99 │     let moved: Pair = a;
+     ·                       ┬
+     ·                       ╰── moved here
+ 100 │     a.a = make();
+     ·     ──────┬─────
+     ·           ╰── assigned here
+ 101 │ }
+     ╰────
+  help: a place that was moved is valid again once it is assigned a new value (ADR 0097)

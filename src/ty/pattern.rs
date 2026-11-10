@@ -6,7 +6,7 @@ use crate::hir::{self, Arm, EnumId, EnumTy, Expr, Fn, IntTy, ModuleId, Pattern, 
 use crate::span::Span;
 
 use super::usefulness::{self, Column, Enums, Pat, Search, Variant};
-use super::{Checker, payload_count, such_as_variant, unknown_variant};
+use super::{Checker, is_copy, is_place, payload_count, such_as_variant, unknown_variant};
 
 impl Checker<'_, '_> {
     /// `match scrutinee { arms }` (ADR 0037, 0040). The scrutinee is typed
@@ -21,7 +21,18 @@ impl Checker<'_, '_> {
         arms: &[Arm],
         expected: Option<Ty>,
     ) -> Ty {
+        // A place is named, not read: the `match` moves only what its
+        // bindings bind (ADR 0097).
+        let place = is_place(scrutinee);
+        if place {
+            self.unread.insert(scrutinee.id);
+        }
         let ty = self.check(f, scrutinee, None);
+        let moved_from = if place {
+            self.unmovable(scrutinee).map(|why| (why, scrutinee.span))
+        } else {
+            None
+        };
         let matched = match ty {
             Ty::Int(_) | Ty::Bool | Ty::Error => ty,
             Ty::Enum(e) if !e.payloads => ty,
@@ -82,7 +93,10 @@ impl Checker<'_, '_> {
         let mut first = None;
         let mut never = true;
         for arm in arms {
-            match (&mut values, self.pattern(f, &arm.pattern, matched)) {
+            let outer = std::mem::replace(&mut self.scrutinee, moved_from);
+            let pattern = self.pattern(f, &arm.pattern, matched);
+            self.scrutinee = outer;
+            match (&mut values, pattern) {
                 (Some(list), Some(pattern)) => list.push(pattern),
                 _ => values = None,
             }
@@ -173,6 +187,7 @@ impl Checker<'_, '_> {
                     );
                     return None;
                 }
+                self.binding_moves(f, pattern, *local, ty);
                 Some(Pat::Wild)
             }
             PatternKind::Int { value, negated } => {
@@ -339,6 +354,12 @@ impl Checker<'_, '_> {
             }
             PatternKind::ContextVariant(..) => self.context_variant_pattern(f, pattern, ty),
             PatternKind::Or(alternatives) => {
+                // The alternatives of an arm are not nested; those in a
+                // payload are (ADR 0097).
+                let outer = self.nested_or;
+                if self.payload_depth > 0 {
+                    self.nested_or.get_or_insert(pattern.span);
+                }
                 let mut matched = Some(Vec::new());
                 for alternative in alternatives {
                     match (&mut matched, self.pattern(f, alternative, ty)) {
@@ -346,8 +367,37 @@ impl Checker<'_, '_> {
                         _ => matched = None,
                     }
                 }
+                self.nested_or = outer;
                 matched.map(Pat::Or)
             }
+        }
+    }
+
+    /// A binding of the non-copy type `ty` moves it out of the scrutinee
+    /// (ADR 0097): it cannot if the scrutinee is an array element, a place
+    /// through a pointer or a static, nor inside an or-pattern nested in a
+    /// payload, where the place to move from is not known at the end of the
+    /// alternative.
+    fn binding_moves(&mut self, f: &Fn, pattern: &Pattern, local: hir::LocalId, ty: Ty) {
+        if is_copy(self.q, ty) {
+            return;
+        }
+        if let Some((why, scrutinee)) = self.scrutinee {
+            self.report_unmovable(ty, pattern.span, why, Some(scrutinee));
+        }
+        if let Some(or) = self.nested_or {
+            let name = &f.local(local).name;
+            self.q.diags.push(
+                Diagnostic::error(
+                    "ty::non-copy-binding-in-or-pattern",
+                    format!("cannot bind the non-copy `{name}` inside an or-pattern nested in a payload"),
+                )
+                .label(pattern.span, format!("binds a `{ty}`, which is not copy"))
+                .label(or, "this or-pattern is nested in a payload")
+                .help(
+                    "the positions after a nested or-pattern are tested once for all its alternatives, so the place to move from is not known at the end of one; make the alternatives those of the arm (`.A(let b: T) | .B(let b: T) => ...`), or bind a copy value (ADR 0097)",
+                ),
+            );
         }
     }
 
@@ -396,7 +446,10 @@ impl Checker<'_, '_> {
                 Some(value) if !erroneous => self.norm(value.ty),
                 _ => Ty::Error,
             };
-            match (&mut payload, self.pattern(f, sub, sub_ty)) {
+            self.payload_depth += 1;
+            let sub = self.pattern(f, sub, sub_ty);
+            self.payload_depth -= 1;
+            match (&mut payload, sub) {
                 (Some(list), Some(sub)) => list.push(sub),
                 _ => payload = None,
             }

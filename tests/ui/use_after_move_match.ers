@@ -1,0 +1,150 @@
+// emit: mir
+// A `match` on a place moves only what its bindings of non-copy types bind,
+// and only in the arm it enters (ADR 0097, 0098, 0099): the scrutinee is
+// partly moved there, its tag is still readable, and a `match` with no such
+// binding leaves it whole. Functions marked `Accepted` report nothing.
+struct Handle { n: u32 }
+
+enum Msg: u8 { Empty = 0, One(Handle) = 1, Two(Handle, u32) = 2, Num(u32) = 3, Wide(Handle) = 4 }
+
+fn consume(h: Handle) {}
+
+fn whole(m: Msg) {}
+
+fn id(m: Msg) -> Msg { m }
+
+// Rejected: the payload is bound in the arm, so the scrutinee is partly moved
+// there, and is used whole after the `match`.
+fn bound_then_whole(m: Msg) {
+    match m {
+        .One(let h: Handle) => consume(h),
+        _ => {},
+    }
+    whole(m);
+}
+
+// Rejected: the same, inside the arm.
+fn bound_then_whole_in_the_arm(m: Msg) {
+    match m {
+        .One(let h: Handle) => {
+            consume(h);
+            whole(m);
+        },
+        _ => {},
+    }
+}
+
+// Rejected: the alternatives of one arm each bind the value, and the
+// scrutinee is used whole after the `match`.
+fn alternatives_then_whole(m: Msg) {
+    match m {
+        .One(let b: Handle) | .Wide(let b: Handle) => consume(b),
+        _ => {},
+    }
+    whole(m);
+}
+
+// Rejected: the payload bound by a `match` in a loop is moved at the next
+// iteration too.
+fn bound_in_a_loop(m: Msg, c: bool) {
+    while c {
+        match m {
+            .One(let h: Handle) => consume(h),
+            _ => {},
+        }
+    }
+}
+
+// Rejected: `?` moves its operand, whose payload it returns.
+fn question_then_operand(r: Result(Handle, u8)) -> Result(Handle, u8) {
+    let h: Handle = r?;
+    let again: Result(Handle, u8) = r;
+    .Ok(h)
+}
+
+// Rejected: `?` on an `Option`, then the operand again.
+fn question_option(o: Option(Handle)) -> Option(Handle) {
+    let h: Handle = o?;
+    let again: Option(Handle) = o;
+    .Some(h)
+}
+
+// Accepted: the tag is read again by another `match` after the payload was
+// moved; the payload is the only part moved.
+fn tag_again(m: Msg) -> u32 {
+    match m {
+        .One(let h: Handle) => consume(h),
+        _ => {},
+    }
+    match m {
+        .Empty => 0,
+        .Num(let n: u32) => n,
+        _ => 1,
+    }
+}
+
+// Accepted: an alternative that binds a payload and then fails a later test
+// moves nothing; the next one binds the same payload.
+fn failing_then_binding(m: Msg) -> u32 {
+    match m {
+        .Two(let h: Handle, 0) => 0,
+        .Two(let h: Handle, 1) => 1,
+        .Two(let h: Handle, let n: u32) => n,
+        _ => 3,
+    }
+}
+
+// Accepted: no binding of a non-copy type, so the scrutinee stays whole.
+fn no_binding(m: Msg) -> u32 {
+    let n: u32 = match m {
+        .Empty => 0,
+        .One(_) => 1,
+        .Two(_, let n: u32) => n,
+        .Num(let n: u32) => n,
+        .Wide(_) => 4,
+    };
+    whole(m);
+    n
+}
+
+// Accepted: the moved payload is in the arm that does not use the scrutinee,
+// and the other arm uses it whole.
+fn exclusive_arms(m: Msg) {
+    match m {
+        .One(let h: Handle) => consume(h),
+        .Num(_) => whole(m),
+        _ => {},
+    }
+}
+
+// Accepted: a `let` arm moves the whole scrutinee, once.
+fn let_arm(m: Msg) {
+    match m {
+        .Empty => {},
+        let other: Msg => whole(other),
+    }
+}
+
+// Accepted: the payload of a `Result` used after `?`.
+fn question_payload(r: Result(Handle, u8)) -> Result(Handle, u8) {
+    let h: Handle = r?;
+    .Ok(h)
+}
+
+// Accepted: the operand assigned again after `?`.
+fn question_then_assigned(mut r: Result(Handle, u8)) -> Result(Handle, u8) {
+    let h: Handle = r?;
+    r = .Err(1);
+    r
+}
+
+// Accepted: a scrutinee that is not a place is a temporary.
+fn temporary() -> u32 {
+    match id(.Num(1)) {
+        .One(let h: Handle) => h.n,
+        _ => 0,
+    }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

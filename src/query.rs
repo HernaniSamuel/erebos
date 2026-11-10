@@ -6,6 +6,7 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
+use crate::analysis;
 use crate::diag::{Diagnostic, Diagnostics};
 use crate::eval::{self, ConstValue, Origin};
 use crate::hir::{
@@ -324,6 +325,7 @@ impl<'h> Queries<'h> {
         ty::report_unsized_types(self);
         ty::report_peripherals_by_value(self);
         ty::report_volatile_peripherals(self);
+        ty::report_copy_fields(self);
         for id in 0..hir.structs.len() {
             self.struct_layout(StructId(id as u32));
         }
@@ -733,7 +735,10 @@ impl<'h> Queries<'h> {
             return None;
         }
         self.comptime.insert(expr.id, State::InProgress);
-        let value = mir::build_expr_body(self, id, expr).and_then(|body| {
+        // A body the analyses reject is not evaluated (ADR 0099).
+        let body = mir::build_expr_body(self, id, expr)
+            .filter(|body| analysis::check_body(body, &mut self.diags));
+        let value = body.and_then(|body| {
             let origin = Origin {
                 what,
                 span: expr.span,
@@ -1282,7 +1287,13 @@ impl<'h> Queries<'h> {
         let layout = self
             .struct_layout(id)
             .expect("MIR is only built for well-typed programs");
-        let s = StructRef::new(def.name.clone(), layout.layout, def.packed);
+        // The kind is what type checking reads (`ty::is_copy`, ADR 0098).
+        let s = StructRef::new(
+            def.name.clone(),
+            layout.layout,
+            def.packed,
+            def.copy.is_some(),
+        );
         self.mir_structs[id.0 as usize] = Some(s);
         let fields = def
             .fields
@@ -1311,11 +1322,15 @@ impl<'h> Queries<'h> {
         let layout = self
             .enum_layout(id)
             .expect("MIR is only built for well-typed programs");
+        // `Option(T)` and `Result(T, E)` are copy when their arguments are,
+        // which `ty::is_copy` reads from their payload types (ADR 0098).
+        let copy = ty::is_copy(self, hir::Ty::Enum(def.ty));
         let e = EnumRef::new(
             mir::EnumId(id.0),
             def.name.clone(),
             def.ty.int,
             layout.layout,
+            copy,
         );
         self.mir_enums[id.0 as usize] = Some(e);
         let variants = def
@@ -1659,7 +1674,11 @@ impl<'h> Queries<'h> {
             return None;
         }
         self.bodies[id.0 as usize] = State::InProgress;
-        let body = mir::build_body(self, id).map(Rc::new);
+        // A body the analyses reject is stored as one that failed to build
+        // (ADR 0099).
+        let body = mir::build_body(self, id)
+            .filter(|body| analysis::check_body(body, &mut self.diags))
+            .map(Rc::new);
         if tracked {
             self.finish(Item::Body(id));
         }
@@ -1755,8 +1774,14 @@ impl<'h> Queries<'h> {
                     Some(_) => {}
                 }
                 let hir = self.hir;
-                hir.struct_(s.id)
-                    .fields
+                let def = hir.struct_(s.id);
+                // A `#[copy]` that `ty::copy-field-not-copy` rejected: MIR
+                // would mark the type copy with a part that is not.
+                let fields = def.fields.iter().map(|field| field.ty).collect();
+                if ty::copy_declaration_fails(self, def.copy.is_some(), fields) {
+                    return true;
+                }
+                def.fields
                     .iter()
                     .any(|field| self.lacks_layout(field.ty, seen, peripherals))
             }
@@ -1768,11 +1793,18 @@ impl<'h> Queries<'h> {
                 if self.enum_layout(e.id).is_none() {
                     return true;
                 }
-                self.enum_def(e.id)
-                    .variants
-                    .iter()
+                let def = self.enum_def(e.id);
+                let values: Vec<hir::Ty> = (def.variants.iter())
                     .flat_map(|variant| &variant.payload)
-                    .any(|value| self.lacks_layout(value.ty, seen, peripherals))
+                    .map(|value| value.ty)
+                    .collect();
+                // As for a struct: a `#[copy]` that was rejected.
+                if ty::copy_declaration_fails(self, def.copy.is_some(), values.clone()) {
+                    return true;
+                }
+                values
+                    .into_iter()
+                    .any(|value| self.lacks_layout(value, seen, peripherals))
             }
             hir::Ty::Applied(_) => {
                 let ty = self.normalize(ty);

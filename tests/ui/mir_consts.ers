@@ -6,6 +6,7 @@ const TOTAL: u32 = BASE + OFFSETS[1];
 const BASE: u32 = 100;
 const OFFSETS: [u32; 3] = offsets();
 const ORIGIN: Point = Point { x: 3, y: 4 };
+#[copy]
 struct Point { x: u32, y: u32 }
 
 fn offsets() -> [u32; 3] {

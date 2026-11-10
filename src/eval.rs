@@ -404,7 +404,8 @@ impl Interp<'_, '_> {
                     return self.write_at(len_part, len, span);
                 }
                 if ty.is_aggregate() {
-                    let Rvalue::Use(Operand::Copy(source)) = rvalue else {
+                    let Rvalue::Use(Operand::Copy(source) | Operand::Move(source, _)) = rvalue
+                    else {
                         unreachable!("aggregates are only copied, and slices made")
                     };
                     let to = self.place(*place)?;
@@ -466,7 +467,9 @@ impl Interp<'_, '_> {
         for arg in args {
             let ty = self.frame().body.operand_ty(arg);
             values.push(match (arg, ty.is_aggregate()) {
-                (Operand::Copy(place), true) => Arg::Bytes(self.place(*place)?),
+                (Operand::Copy(place) | Operand::Move(place, _), true) => {
+                    Arg::Bytes(self.place(*place)?)
+                }
                 _ => Arg::Scalar(self.operand(arg, span)?),
             });
         }
@@ -537,7 +540,7 @@ impl Interp<'_, '_> {
     /// printable ASCII as it is, any other byte as `\xNN` (ADR 0031). A
     /// byte that cannot be read fails at `span`, the message's.
     fn message(&mut self, message: Operand, span: Span) -> EvalResult<String> {
-        let Operand::Copy(place) = message else {
+        let Some(place) = message.place() else {
             unreachable!("a slice is an aggregate, read from its place")
         };
         let (address, len) = slice_parts(self.place(place)?);
@@ -1163,7 +1166,8 @@ impl Interp<'_, '_> {
 
     fn operand(&mut self, operand: &Operand, span: Span) -> EvalResult<Scalar> {
         match operand {
-            Operand::Copy(place) => {
+            // A move reads as a copy (ADR 0098).
+            Operand::Copy(place) | Operand::Move(place, _) => {
                 let place = self.place(*place)?;
                 self.read_at(place, span)
             }

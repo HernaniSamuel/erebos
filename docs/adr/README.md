@@ -71,7 +71,7 @@ Do not write one for local implementation details that the code already explains
 | 0039 | [Enum variants with payloads](0039-enum-variants-with-payloads.md) | Accepted, amended by 0044 |
 | 0040 | [Patterns in payloads](0040-patterns-in-payloads.md) | Accepted, amended by 0042, 0043, 0044 |
 | 0041 | [Bindings in or-patterns](0041-bindings-in-or-patterns.md) | Accepted, amended by 0042 |
-| 0042 | [`match` code tested arm by arm](0042-match-code-tested-arm-by-arm.md) | Accepted |
+| 0042 | [`match` code tested arm by arm](0042-match-code-tested-arm-by-arm.md) | Accepted, amended by 0098 |
 | 0043 | [At most four witnesses searched](0043-at-most-four-witnesses.md) | Accepted |
 | 0044 | [Variants named by the expected type](0044-variants-named-by-the-expected-type.md) | Accepted |
 | 0045 | [`Option(T)` and `Result(T, E)`](0045-option-and-result.md) | Accepted, amended by 0047 |
@@ -92,7 +92,7 @@ Do not write one for local implementation details that the code already explains
 | 0060 | [Register fields](0060-register-fields.md) | Accepted, amended by 0064, 0065 |
 | 0061 | [Alternate registers](0061-alternate-registers.md) | Accepted, amended by 0064 |
 | 0062 | [Bit-field defaults are no part of the bit layout](0062-bit-field-defaults-are-no-part-of-the-bit-layout.md) | Accepted |
-| 0063 | [Architecture rules checked by tests](0063-architecture-rules-checked-by-tests.md) | Accepted, amended by 0070, 0082, 0093 |
+| 0063 | [Architecture rules checked by tests](0063-architecture-rules-checked-by-tests.md) | Accepted, amended by 0070, 0082, 0093, 0099 |
 | 0064 | [Register arrays and clusters](0064-register-arrays-and-clusters.md) | Accepted |
 | 0065 | [Field access modes](0065-field-access-modes.md) | Accepted |
 | 0066 | [Peripherals over others](0066-peripherals-over-others.md) | Accepted |
@@ -124,4 +124,9 @@ Do not write one for local implementation details that the code already explains
 | 0092 | [Interrupts generated from SVD](0092-interrupts-generated-from-svd.md) | Accepted |
 | 0093 | [Shared statics checked](0093-shared-statics-checked.md) | Accepted |
 | 0094 | [Ownership: copies, moves and references](0094-ownership-moves-and-references.md) | Accepted |
-| 0095 | [MIR validation](0095-mir-validation.md) | Accepted |
+| 0095 | [MIR validation](0095-mir-validation.md) | Accepted, amended by 0098 |
+| 0096 | [Copy types and `#[copy]`](0096-copy-types.md) | Accepted |
+| 0097 | [Moves](0097-moves.md) | Accepted, amended by 0100 |
+| 0098 | [Moves in MIR](0098-moves-in-mir.md) | Accepted |
+| 0099 | [The analyses of one body](0099-analyses-of-one-body.md) | Accepted, amended by 0100 |
+| 0100 | [Moves as built in M5.2](0100-moves-as-built.md) | Accepted |

@@ -1,0 +1,96 @@
+// emit: mir
+// The errors of ADR 0096 stop the program at the diagnostic when a body that
+// type checks names the item they are about: every function that type checks
+// is lowered whatever errors the others have (ADR 0032), so MIR building and
+// the validator (ADR 0095) must not panic on a constant, a repeat, a place or
+// a pattern the checks rejected. Each function below uses one, and the
+// program gets the diagnostics of the faults and no other.
+struct Handle { id: u32 }
+
+enum Event: u8 { Got(Handle) = 0, Lost(Handle) = 1, Idle = 2 }
+
+enum Outer: u8 { Pair(Event, u32) = 0 }
+
+#[copy]
+struct Bad { h: Handle }
+
+fn take(h: Handle) {}
+
+fn make() -> Handle {
+    Handle { id: 1 }
+}
+
+// `ty::non-copy-constant`: the uses are built.
+const HANDLE: Handle = Handle { id: 1 };
+const HANDLES: [Handle; 2] = [Handle { id: 1 }, Handle { id: 2 }];
+const EVENT: Event = .Idle;
+
+fn const_whole() {
+    take(HANDLE);
+    take(HANDLE);
+}
+
+fn const_field() -> u32 {
+    HANDLE.id
+}
+
+fn const_element(i: usize) -> u32 {
+    HANDLES[i].id
+}
+
+fn const_match() -> u32 {
+    match EVENT {
+        .Got(let h: Handle) => h.id,
+        _ => 0,
+    }
+}
+
+fn const_in_static() -> u32 {
+    SHARED.id
+}
+
+static SHARED: Handle = HANDLE;
+
+fn comptime_value() -> u32 {
+    let h: Handle = comptime { Handle { id: 1 } };
+    h.id
+}
+
+// `ty::non-copy-repeat`, also in a constant and in a static.
+const REPEATED: [Handle; 2] = [Handle { id: 1 }; 2];
+static REPEATED_STATIC: [Handle; 2] = [Handle { id: 1 }; 2];
+
+fn repeat_use() -> u32 {
+    REPEATED[0].id + REPEATED_STATIC[1].id
+}
+
+// `ty::move-out-of-place`, in bodies that also name the faults above.
+fn from_pointer(p: *mut Handle) -> Handle {
+    *p
+}
+
+fn from_static() -> Handle {
+    SHARED
+}
+
+// `ty::non-copy-binding-in-or-pattern`.
+fn or_pattern(o: Outer) -> u32 {
+    match o {
+        .Pair(.Got(let h: Handle) | .Lost(let h: Handle), 0) => h.id,
+        _ => 0,
+    }
+}
+
+// `ty::copy-field-not-copy`, named by a constant, a static and a pointer.
+const BAD: Bad = Bad { h: Handle { id: 1 } };
+static BAD_STATIC: Bad = Bad { h: Handle { id: 1 } };
+
+fn bad_uses(p: *mut Bad) -> u32 {
+    let a: Bad = BAD;
+    let b: Bad = BAD_STATIC;
+    let c: Bad = *p;
+    BAD.h.id
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

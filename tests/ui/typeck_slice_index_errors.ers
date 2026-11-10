@@ -23,6 +23,7 @@ fn fields(s: *const [u8]) -> usize {
 
 // A volatile access through a slice is one access of the element
 // (ADR 0023): never one of a whole aggregate, nor a too wide one.
+#[copy]
 struct Pair { a: u32, b: u32 }
 
 fn volatile_elements(pairs: *const volatile [Pair], wide: *mut volatile [u64]) {

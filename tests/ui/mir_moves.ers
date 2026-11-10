@@ -1,0 +1,97 @@
+// emit: mir
+// A read of a whole non-copy value is a `move`, with the span of its
+// expression, and a read of a copy value stays a `copy` (ADR 0098): `let`,
+// assignment, arguments, the returned value, the fields of a literal, `?` on
+// an `Option` and a `Result` of a non-copy type, a field of a local, a block's
+// value, and the temporaries MIR building makes (`two(a, id(make()))` moves
+// `a` into a temporary before the call that follows it runs, which keeps the
+// order of ADR 0018). A discarded place (ADR 0097), as `a;`, `p.a;`,
+// `{ { a } };` and `critical { a };`, is computed and reads nothing, while
+// `if c { a } else { b };` moves. `[v; N]` of a non-copy type writes the tag
+// of a variant into each element, with no temporary and no operand: nothing
+// for 0, one store for 1, a loop for 32.
+struct Handle { n: u32 }
+
+struct Pair { a: Handle, b: Handle, n: u32 }
+
+#[copy]
+struct Plain { n: u32 }
+
+enum Slot: u8 { Empty = 0, Full(Handle) = 1 }
+
+fn make() -> Handle { Handle { n: 1 } }
+
+fn take(h: Handle) {}
+
+fn pass(a: Handle) -> Handle { a }
+
+fn two(a: Handle, b: Handle) {}
+
+fn id(a: Handle) -> Handle { a }
+
+fn lets(a: Handle) {
+    let b: Handle = a;
+}
+
+fn assigns(a: Handle) {
+    let mut b: Handle = make();
+    b = a;
+}
+
+fn arguments(a: Handle, b: Handle) {
+    take(a);
+    two(b, make());
+}
+
+fn literal(a: Handle, b: Handle, n: u32) -> Pair {
+    Pair { a: a, b: b, n: n }
+}
+
+fn fields(p: Pair, q: Plain) -> Handle {
+    let n: u32 = p.n;
+    let c: Plain = q;
+    p.a
+}
+
+fn temporary_first(a: Handle) {
+    two(a, id(make()));
+}
+
+fn option(o: Option(Handle)) -> Option(Handle) {
+    let h: Handle = o?;
+    .Some(h)
+}
+
+fn result(r: Result(Handle, u8)) -> Result(Handle, u8) {
+    let h: Handle = r?;
+    .Ok(h)
+}
+
+fn block_value(a: Handle) -> Handle {
+    let b: Handle = { a };
+    b
+}
+
+fn discarded(a: Handle, p: Pair, c: bool, b: Handle) {
+    a;
+    p.a;
+    { { a } };
+    critical { a };
+    if c { a } else { b };
+}
+
+fn copies(q: Plain, n: u32, o: Option(u32)) -> Plain {
+    let m: u32 = n;
+    let r: Plain = q;
+    let p: Option(u32) = o;
+    q
+}
+
+fn repeats() {
+    let none0: [Option(Handle); 0] = [.None; 0];
+    let none1: [Option(Handle); 1] = [.None; 1];
+    let none32: [Option(Handle); 32] = [.None; 32];
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

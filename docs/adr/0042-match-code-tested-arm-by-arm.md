@@ -1,6 +1,8 @@
 # 0042. `match` code tested arm by arm
 
-- Status: Accepted
+- Status: Accepted; amended by 0098 (a `match` on a place of a non-copy type
+  tests the place; a non-copy binding is moved at the end of its
+  alternative)
 - Date: 2026-10-18
 - Amends: 0040 (code generation of a `match` on an enum with payloads:
   the arms are tested in order, its size is linear in its patterns, and

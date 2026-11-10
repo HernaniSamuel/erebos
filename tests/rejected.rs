@@ -440,229 +440,296 @@ const CATALOG: &[Snippet] = &[
         Items,
         "const INJ_C: u32 = comptime { return 1; };"
     ),
-    // Types and checks on bodies.
+    // Types and checks on bodies. They are compiled to `Mir`, the last stage
+    // an erroneous program reaches, and not to `Typeck`: every function that
+    // type checks is lowered whatever errors the items have (ADR 0032), so a
+    // snippet that declares an item names it in a function of its own
+    // (`injected_use`), and a panic of MIR building or of the validator on the
+    // faulty item fails the test (see `ty::copy-field-not-copy`, whose panic
+    // the `Typeck` stage hid).
     s!(
         "ty::mismatched-types",
-        Typeck,
+        Mir,
         Statements,
         "let injected_a: u8 = true;"
     ),
-    s!("ty::untyped-literal", Typeck, Statements, "1;"),
+    s!("ty::untyped-literal", Mir, Statements, "1;"),
     s!(
         "ty::literal-out-of-range",
-        Typeck,
+        Mir,
         Statements,
         "let injected_a: u8 = 256;"
     ),
     s!(
         "ty::invalid-operand",
-        Typeck,
+        Mir,
         Statements,
         "let injected_a: bool = true + false;"
     ),
     s!(
         "ty::negate-unsigned",
-        Typeck,
+        Mir,
         Statements,
         "let injected_n: u32 = 1;\nlet injected_a: u32 = -injected_n;"
     ),
     s!(
         "ty::invalid-cast",
-        Typeck,
+        Mir,
         Statements,
         "let injected_n: u32 = 1;\nlet injected_a: bool = injected_n as bool;"
     ),
     s!(
         "ty::pointer-cast-width",
-        Typeck,
+        Mir,
         Statements,
         "let injected_n: u32 = 1;\nlet injected_p: *const u8 = injected_n as *const u8;"
     ),
     s!(
         "ty::deref-non-pointer",
-        Typeck,
+        Mir,
         Statements,
         "let injected_n: u32 = 1;\nlet injected_a: u32 = *injected_n;"
     ),
     s!(
         "ty::cannot-index",
-        Typeck,
+        Mir,
         Statements,
         "let injected_n: u32 = 1;\nlet injected_a: u32 = injected_n[0];"
     ),
     s!(
         "ty::no-fields",
-        Typeck,
+        Mir,
         Statements,
         "let injected_n: u32 = 1;\nlet injected_a: u32 = injected_n.x;"
     ),
     s!(
         "ty::unknown-field",
-        Typeck,
+        Mir,
         Items,
         "struct InjS { a: u8 }\nfn injected_f(s: InjS) -> u8 {\n    s.b\n}"
     ),
     s!(
         "ty::write-through-const",
-        Typeck,
+        Mir,
         Statements,
         "let injected_n: u32 = 1;\nlet injected_p: *const u32 = &raw const injected_n;\n*injected_p = 2;"
     ),
-    s!("ty::not-assignable", Typeck, Statements, "1 = 2;"),
+    s!("ty::not-assignable", Mir, Statements, "1 = 2;"),
     s!(
         "ty::assign-immutable",
-        Typeck,
+        Mir,
         Statements,
         "let injected_n: u32 = 1;\ninjected_n = 2;"
     ),
     s!(
         "ty::not-a-place",
-        Typeck,
+        Mir,
         Statements,
         "let injected_p: *const u32 = &raw const 1;"
     ),
     s!(
         "ty::address-of-immutable",
-        Typeck,
+        Mir,
         Statements,
         "let injected_n: u32 = 1;\nlet injected_p: *mut u32 = &raw mut injected_n;"
     ),
-    s!("ty::never-in-memory", Typeck, Items, "struct InjN { a: ! }"),
+    s!(
+        "ty::never-in-memory",
+        Mir,
+        Items,
+        "struct InjN { a: ! }\nfn injected_use(injected_n: InjN) {}"
+    ),
     s!(
         "ty::too-large",
-        Typeck,
+        Mir,
         Items,
-        "struct InjBig { a: [u8; 0x8000_0000] }"
+        "struct InjBig { a: [u8; 0x8000_0000] }\nfn injected_use(injected_b: InjBig) {}"
     ),
     s!(
         "ty::infinite-size",
-        Typeck,
+        Mir,
         Items,
-        "struct InjI { a: InjI }"
+        "struct InjI { a: InjI }\nfn injected_use(injected_i: InjI) {}"
     ),
-    s!("ty::unsized", Typeck, Items, "struct InjU { a: [u8] }"),
+    s!(
+        "ty::unsized",
+        Mir,
+        Items,
+        "struct InjU { a: [u8] }\nfn injected_use(injected_u: InjU) {}"
+    ),
+    s!(
+        "ty::copy-field-not-copy",
+        Mir,
+        Items,
+        "struct InjHandle { id: u32 }
+#[copy]
+struct InjCopy { h: InjHandle }
+fn injected_copy(injected_c: InjCopy) {}"
+    ),
+    s!(
+        "ty::non-copy-constant",
+        Mir,
+        Items,
+        "struct InjHandle2 { id: u32 }
+const INJ_C: InjHandle2 = InjHandle2 { id: 1 };
+fn injected_use() -> u32 {
+    INJ_C.id
+}"
+    ),
+    s!(
+        "ty::non-copy-repeat",
+        Mir,
+        Items,
+        "struct InjHandle3 { id: u32 }
+fn injected_f() {
+    let injected_a: [InjHandle3; 2] = [InjHandle3 { id: 1 }; 2];
+}"
+    ),
+    s!(
+        "ty::move-out-of-place",
+        Mir,
+        Items,
+        "struct InjHandle4 { id: u32 }
+fn injected_f(injected_p: *mut InjHandle4) {
+    let injected_h: InjHandle4 = *injected_p;
+}"
+    ),
+    s!(
+        "ty::non-copy-binding-in-or-pattern",
+        Mir,
+        Items,
+        "struct InjHandle5 { id: u32 }
+enum InjInner: u8 { A(InjHandle5) = 0, B(InjHandle5) = 1 }
+enum InjOuter: u8 { Pair(InjInner, u32) = 0 }
+fn injected_f(injected_o: InjOuter) -> u32 {
+    match injected_o {
+        .Pair(.A(let injected_b: InjHandle5) | .B(let injected_b: InjHandle5), 0) => 1,
+        _ => 0,
+    }
+}"
+    ),
     s!(
         "ty::invalid-align",
-        Typeck,
+        Mir,
         Items,
-        "#[align(3)]\nstruct InjA { a: u8 }"
+        "#[align(3)]\nstruct InjA { a: u8 }\nfn injected_use(injected_a: InjA) {}"
     ),
     s!(
         "ty::aligned-in-packed",
-        Typeck,
+        Mir,
         Items,
-        "#[align(8)]\nstruct InjA { a: u8 }\n#[packed]\nstruct InjP { a: InjA }"
+        "#[align(8)]\nstruct InjA { a: u8 }\n#[packed]\nstruct InjP { a: InjA }\nfn injected_use(injected_p: InjP) {}"
     ),
     s!(
         "ty::not-comptime",
-        Typeck,
+        Mir,
         Statements,
         "let injected_n: u32 = 1;\nlet injected_a: u32 = comptime { injected_n };"
     ),
     s!(
         "ty::cycle",
-        Typeck,
+        Mir,
         Items,
-        "const INJ_A: u32 = INJ_B;\nconst INJ_B: u32 = INJ_A;"
+        "const INJ_A: u32 = INJ_B;\nconst INJ_B: u32 = INJ_A;\nfn injected_use() -> u32 {\n    INJ_A\n}"
     ),
     s!(
         "ty::duplicate-discriminant",
-        Typeck,
+        Mir,
         Items,
-        "enum InjE: u8 { A = 1, B = 1 }"
+        "enum InjE: u8 { A = 1, B = 1 }\nfn injected_use(injected_e: InjE) -> u32 {\n    match injected_e {\n        .A => 1,\n        .B => 2,\n    }\n}"
     ),
     s!(
         "ty::match-type",
-        Typeck,
+        Mir,
         Statements,
         "let injected_a: [u8; 1] = [1];\nmatch injected_a {\n    _ => {}\n}"
     ),
     s!(
         "ty::non-exhaustive-match",
-        Typeck,
+        Mir,
         Statements,
         "let injected_n: u8 = 1;\nmatch injected_n {\n    1 => {}\n}"
     ),
     s!(
         "ty::unreachable-pattern",
-        Typeck,
+        Mir,
         Statements,
         "let injected_n: u8 = 1;\nmatch injected_n {\n    _ => {}\n    1 => {}\n}"
     ),
     s!(
         "ty::try-operand",
-        Typeck,
+        Mir,
         Items,
         "fn injected_f() -> Option(u8) {\n    let injected_n: u32 = 1;\n    let injected_a: u32 = injected_n?;\n    .None\n}"
     ),
     s!(
         "ty::try-return",
-        Typeck,
+        Mir,
         Items,
         "fn injected_f() {\n    let injected_o: Option(u8) = .None;\n    let injected_a: u8 = injected_o?;\n}"
     ),
     s!(
         "ty::if-without-else",
-        Typeck,
+        Mir,
         Statements,
         "let injected_a: u32 = if true { 1 };"
     ),
     s!(
         "ty::wrong-arg-count",
-        Typeck,
+        Mir,
         Items,
         "fn injected_g() {}\nfn injected_f() {\n    injected_g(1);\n}"
     ),
-    s!("ty::param-type", Typeck, Items, "fn injected_f(a: ()) {}"),
-    s!("ty::untyped-variant", Typeck, Statements, ".V;"),
+    s!("ty::param-type", Mir, Items, "fn injected_f(a: ()) {}"),
+    s!("ty::untyped-variant", Mir, Statements, ".V;"),
     s!(
         "ty::wrong-payload-count",
-        Typeck,
+        Mir,
         Items,
         "enum InjE: u8 { A(u8) = 1 }\nfn injected_f() {\n    let injected_e: InjE = InjE::A(1, 2);\n}"
     ),
     s!(
         "ty::private-field",
-        Typeck,
+        Mir,
         Items,
         "mod injected_m {\n    pub struct S { pub a: u8, b: u8 }\n    pub fn make() -> S {\n        S { a: 1, b: 2 }\n    }\n}\n\
          fn injected_f() -> u8 {\n    injected_m::make().b\n}"
     ),
     s!(
         "ty::private-variant",
-        Typeck,
+        Mir,
         Items,
         "mod injected_m {\n    enum InjE: u8 { A = 1 }\n    pub fn injected_g(e: InjE) {}\n}\n\
          fn injected_f() {\n    injected_m::injected_g(.A);\n}"
     ),
     s!(
         "ty::slice-pointer-index",
-        Typeck,
+        Mir,
         Items,
         "fn injected_f(s: *const [u8]) -> u8 {\n    s[0]\n}"
     ),
     s!(
         "ty::packed-field-address",
-        Typeck,
+        Mir,
         Items,
         "#[packed]\nstruct InjS { a: u8, b: u32 }\nfn injected_f(p: *const InjS) {\n    \
          let injected_q: *const u32 = &raw const (*p).b;\n}"
     ),
     s!(
         "ty::volatile-too-wide",
-        Typeck,
+        Mir,
         Items,
         "fn injected_f(p: *mut volatile u64) -> u64 {\n    *p\n}"
     ),
     s!(
         "ty::volatile-aggregate",
-        Typeck,
+        Mir,
         Items,
         "struct InjS { a: u8 }\nfn injected_f(p: *const volatile InjS) -> InjS {\n    *p\n}"
     ),
     s!(
         "ty::volatile-packed-field",
-        Typeck,
+        Mir,
         Items,
         "#[packed]\nstruct InjS { a: u8, b: u32 }\nfn injected_f(p: *const volatile InjS) -> u32 {\n    (*p).b\n}"
     ),
@@ -775,15 +842,27 @@ const CATALOG: &[Snippet] = &[
     ),
     s!(
         "ty::unknown-variant",
-        Typeck,
+        Mir,
         Items,
         "enum InjE: u8 { A = 1 }\nfn injected_f() {\n    let injected_e: InjE = .B;\n}"
     ),
     s!(
         "ty::constant-pattern-type",
-        Typeck,
+        Mir,
         Items,
         "const INJ_P: *const u8 = 0 as *const u8;\nfn injected_f(p: *const u8) {\n    match p {\n        INJ_P => {}\n        _ => {}\n    }\n}"
+    ),
+    // The analyses of one body.
+    s!(
+        "analysis::use-after-move",
+        Mir,
+        Items,
+        "struct InjHandle6 { id: u32 }
+fn injected_take(injected_h: InjHandle6) {}
+fn injected_f(injected_h: InjHandle6) {
+    injected_take(injected_h);
+    injected_take(injected_h);
+}"
     ),
     // Compile-time evaluation.
     s!(
@@ -854,22 +933,22 @@ const CATALOG: &[Snippet] = &[
     ),
     // Inline assembly (ADR 0079). The templates are never assembled: the
     // stages stop before the object (`codegen::asm` is exempt below).
-    s!("ty::asm-template", Typeck, Statements, "asm(\"nop {}\");"),
+    s!("ty::asm-template", Mir, Statements, "asm(\"nop {}\");"),
     s!(
         "ty::asm-register",
-        Typeck,
+        Mir,
         Statements,
         "asm(\"nop\", in(\"injected_register\") 1 as u32);"
     ),
     s!(
         "ty::asm-operand-type",
-        Typeck,
+        Mir,
         Statements,
         "asm(\"nop {}\", in(reg) true);"
     ),
     s!(
         "ty::asm-sym",
-        Typeck,
+        Mir,
         Items,
         "const INJ_C: u32 = 1;
 fn injected_f() {
@@ -878,13 +957,13 @@ fn injected_f() {
     ),
     s!(
         "ty::asm-options",
-        Typeck,
+        Mir,
         Statements,
         "asm(\"nop\", options(nomem, readonly));"
     ),
     s!(
         "ty::naked-body",
-        Typeck,
+        Mir,
         Items,
         "#[naked]
 fn injected_f() {
@@ -906,43 +985,43 @@ const INJ_C: u32 = comptime {
     // Bit-field structs.
     s!(
         "ty::bit-field-type",
-        Typeck,
+        Mir,
         Items,
-        "struct InjB: u8 {\n    a: i8 at 0..=3,\n}"
+        "struct InjB: u8 {\n    a: i8 at 0..=3,\n}\nfn injected_use(injected_b: InjB) {}"
     ),
     s!(
         "ty::reversed-bit-range",
-        Typeck,
+        Mir,
         Items,
-        "struct InjB: u8 {\n    a: u8 at 3..=0,\n}"
+        "struct InjB: u8 {\n    a: u8 at 3..=0,\n}\nfn injected_use(injected_b: InjB) {}"
     ),
     s!(
         "ty::bit-field-outside",
-        Typeck,
+        Mir,
         Items,
-        "struct InjB: u8 {\n    a: u8 at 4..=9,\n}"
+        "struct InjB: u8 {\n    a: u8 at 4..=9,\n}\nfn injected_use(injected_b: InjB) {}"
     ),
     s!(
         "ty::bit-field-width",
-        Typeck,
+        Mir,
         Items,
-        "struct InjB: u8 {\n    a: bool at 0..=1,\n}"
+        "struct InjB: u8 {\n    a: bool at 0..=1,\n}\nfn injected_use(injected_b: InjB) {}"
     ),
     s!(
         "ty::bit-field-overlap",
-        Typeck,
+        Mir,
         Items,
-        "struct InjB: u8 {\n    a: u8 at 0..=3,\n    b: u8 at 3..=5,\n}"
+        "struct InjB: u8 {\n    a: u8 at 0..=3,\n    b: u8 at 3..=5,\n}\nfn injected_use(injected_b: InjB) {}"
     ),
     s!(
         "ty::bit-field-offset",
-        Typeck,
+        Mir,
         Items,
         "struct InjB: u8 {\n    a: u8 at 0..=3,\n}\nfn injected_f() -> usize {\n    offset_of(InjB, a)\n}"
     ),
     s!(
         "ty::bit-field-address",
-        Typeck,
+        Mir,
         Items,
         "struct InjB: u8 {\n    a: u8 at 0..=3,\n}\nfn injected_f(p: *mut InjB) {\n    \
          let injected_q: *mut u8 = &raw mut (*p).a;\n}"
@@ -962,102 +1041,102 @@ const INJ_C: u32 = comptime {
     ),
     s!(
         "ty::register-type",
-        Typeck,
+        Mir,
         Items,
-        "peripheral InjP {\n    read a: u64 at 0,\n}"
+        "peripheral InjP {\n    read a: u64 at 0,\n}\nfn injected_use(p: *mut InjP) -> u64 {\n    (*p).a\n}"
     ),
     s!(
         "ty::misaligned-register",
-        Typeck,
+        Mir,
         Items,
-        "peripheral InjP {\n    read a: u32 at 1,\n}"
+        "peripheral InjP {\n    read a: u32 at 1,\n}\nfn injected_use(p: *mut InjP) -> u32 {\n    (*p).a\n}"
     ),
     s!(
         "ty::register-overlap",
-        Typeck,
+        Mir,
         Items,
-        "peripheral InjP {\n    read write a: u8 at 0,\n    read write b: u8 at 0,\n}"
+        "peripheral InjP {\n    read write a: u8 at 0,\n    read write b: u8 at 0,\n}\nfn injected_use(p: *mut InjP) -> u8 {\n    (*p).a\n}"
     ),
     s!(
         "ty::misaligned-peripheral",
-        Typeck,
+        Mir,
         Items,
-        "peripheral InjP {\n    read a: u32 at 0,\n}\nperipheral INJ_P: InjP at 0x1001;"
+        "peripheral InjP {\n    read a: u32 at 0,\n}\nperipheral INJ_P: InjP at 0x1001;\nfn injected_use() -> u32 {\n    INJ_P.a\n}"
     ),
     s!(
         "ty::peripheral-out-of-range",
-        Typeck,
+        Mir,
         Items,
         "peripheral InjP {\n    read a: u32 at 0,\n}\nperipheral INJ_P: InjP at 0xFFFF_FFFC;\n\
-         peripheral INJ_Q: InjP at 0xFFFF_FFFE;"
+         peripheral INJ_Q: InjP at 0xFFFF_FFFE;\nfn injected_use() -> u32 {\n    INJ_Q.a\n}"
     ),
     s!(
         "ty::peripheral-overlap",
-        Typeck,
+        Mir,
         Items,
         "peripheral InjP {\n    read a: u32 at 0,\n}\nperipheral INJ_P: InjP at 0xE000_0000;\n\
-         peripheral INJ_Q: InjP at 0xE000_0000;"
+         peripheral INJ_Q: InjP at 0xE000_0000;\nfn injected_use() -> u32 {\n    INJ_Q.a\n}"
     ),
     s!(
         "ty::peripheral-by-value",
-        Typeck,
+        Mir,
         Items,
         "peripheral InjP {\n    read a: u32 at 0,\n}\nfn injected_f(p: InjP) {}"
     ),
     s!(
         "ty::volatile-peripheral",
-        Typeck,
+        Mir,
         Items,
         "peripheral InjP {\n    read a: u32 at 0,\n}\nfn injected_f(p: *mut volatile InjP) {}"
     ),
     s!(
         "ty::peripheral-index",
-        Typeck,
+        Mir,
         Items,
         "peripheral InjP {\n    read a: u32 at 0,\n}\nfn injected_f(p: *mut InjP) {\n    let injected_x: InjP = p[1];\n}"
     ),
     s!(
         "ty::unknown-register",
-        Typeck,
+        Mir,
         Items,
         "peripheral InjP {\n    read a: u32 at 0,\n}\nfn injected_f(p: *mut InjP) -> u32 {\n    (*p).zz\n}"
     ),
     s!(
         "ty::private-register",
-        Typeck,
+        Mir,
         Items,
         "mod injected_m {\n    pub peripheral InjP {\n        read a: u32 at 0,\n    }\n}\n\
          fn injected_f(p: *mut injected_m::InjP) -> u32 {\n    (*p).a\n}"
     ),
     s!(
         "ty::write-to-read-only",
-        Typeck,
+        Mir,
         Items,
         "peripheral InjP {\n    read a: u32 at 0,\n}\nfn injected_f(p: *mut InjP) {\n    (*p).a = 1;\n}"
     ),
     s!(
         "ty::read-of-write-only",
-        Typeck,
+        Mir,
         Items,
         "peripheral InjP {\n    write a: u32 at 0,\n}\nfn injected_f(p: *mut InjP) -> u32 {\n    (*p).a\n}"
     ),
     s!(
         "ty::register-address",
-        Typeck,
+        Mir,
         Items,
         "peripheral InjP {\n    read a: u32 at 0,\n}\nfn injected_f(p: *mut InjP) {\n    \
          let injected_q: *const u32 = &raw const (*p).a;\n}"
     ),
     s!(
         "ty::read-with-effects",
-        Typeck,
+        Mir,
         Items,
         "struct InjB: u8 {\n    f: bool at 0,\n}\nperipheral InjP {\n    read write r: InjB at 0 read clears,\n}\n\
          fn injected_f(p: *mut InjP) {\n    (*p).r.f = true;\n}"
     ),
     s!(
         "ty::compound-write-effect",
-        Typeck,
+        Mir,
         Items,
         "struct InjB: u8 {\n    f: bool at 0 write 1 clears,\n}\nperipheral InjP {\n    read write r: InjB at 0,\n}\n\
          fn injected_f(p: *mut InjP) {\n    (*p).r.f |= true;\n}"
@@ -1090,15 +1169,15 @@ const INJ_C: u32 = comptime {
     ),
     s!(
         "ty::misaligned-step",
-        Typeck,
+        Mir,
         Items,
-        "peripheral InjP {\n    read a: [u32; 2] at 0 step 6,\n}"
+        "peripheral InjP {\n    read a: [u32; 2] at 0 step 6,\n}\nfn injected_use(p: *mut InjP) -> u32 {\n    (*p).a[1]\n}"
     ),
     s!(
         "ty::step-too-small",
-        Typeck,
+        Mir,
         Items,
-        "peripheral InjP {\n    read a: [u32; 2] at 0 step 0,\n}"
+        "peripheral InjP {\n    read a: [u32; 2] at 0 step 0,\n}\nfn injected_use(p: *mut InjP) -> u32 {\n    (*p).a[1]\n}"
     ),
 ];
 

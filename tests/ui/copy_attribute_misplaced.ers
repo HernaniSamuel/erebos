@@ -1,0 +1,23 @@
+// emit: hir
+// `#[copy]` applies to structs and to enums with payloads; a bit-field
+// struct and an enum without payloads are copy already (ADR 0096).
+#[copy]
+struct Flags: u8 { ready: bool at 0 }
+
+#[copy]
+enum Color: u8 { Red = 0, Green = 1 }
+
+#[copy]
+fn f() {}
+
+#[copy]
+static COUNT: u32 = 0;
+
+#[copy]
+const LIMIT: u32 = 4;
+
+#[copy]
+mod m {}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

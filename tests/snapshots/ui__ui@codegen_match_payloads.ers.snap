@@ -14,11 +14,9 @@ define zeroext i16 @decode(i32 %0) #0 {
 bb0:
   %1 = alloca i32, align 8
   %_1 = alloca [4 x i8], align 2
-  %_3 = alloca [4 x i8], align 2
   store i32 %0, ptr %1, align 4
   call void @llvm.memcpy.p0.p0.i32(ptr align 2 %_1, ptr align 8 %1, i32 4, i1 false)
-  call void @llvm.memcpy.p0.p0.i32(ptr align 2 %_3, ptr align 2 %_1, i32 4, i1 false)
-  %2 = load i8, ptr %_3, align 1
+  %2 = load i8, ptr %_1, align 1
   switch i8 %2, label %bb9 [
     i8 0, label %bb1
     i8 1, label %bb10
@@ -55,14 +53,14 @@ bb9:                                              ; preds = %bb20, %bb16, %bb0
   unreachable
 
 bb10:                                             ; preds = %bb0
-  %3 = getelementptr i8, ptr %_3, i32 1
+  %3 = getelementptr i8, ptr %_1, i32 1
   %4 = load i8, ptr %3, align 1
   switch i8 %4, label %bb11 [
     i8 16, label %bb12
   ]
 
 bb11:                                             ; preds = %bb12, %bb10
-  %5 = getelementptr i8, ptr %_3, i32 1
+  %5 = getelementptr i8, ptr %_1, i32 1
   %6 = load i8, ptr %5, align 1
   switch i8 %6, label %bb4 [
     i8 16, label %bb14
@@ -70,7 +68,7 @@ bb11:                                             ; preds = %bb12, %bb10
   ]
 
 bb12:                                             ; preds = %bb10
-  %7 = getelementptr i8, ptr %_3, i32 2
+  %7 = getelementptr i8, ptr %_1, i32 2
   %8 = load i16, ptr %7, align 2
   switch i16 %8, label %bb11 [
     i16 7, label %bb13
@@ -80,19 +78,19 @@ bb13:                                             ; preds = %bb12
   br label %bb2
 
 bb14:                                             ; preds = %bb11, %bb11
-  %9 = getelementptr i8, ptr %_3, i32 2
+  %9 = getelementptr i8, ptr %_1, i32 2
   %10 = load i16, ptr %9, align 2
   br label %bb3
 
 bb15:                                             ; preds = %bb0
-  %11 = getelementptr i8, ptr %_3, i32 1
+  %11 = getelementptr i8, ptr %_1, i32 1
   %12 = load i8, ptr %11, align 1
   switch i8 %12, label %bb16 [
     i8 0, label %bb17
   ]
 
 bb16:                                             ; preds = %bb15
-  %13 = getelementptr i8, ptr %_3, i32 1
+  %13 = getelementptr i8, ptr %_1, i32 1
   %14 = load i8, ptr %13, align 1
   switch i8 %14, label %bb9 [
     i8 1, label %bb18
@@ -105,7 +103,7 @@ bb18:                                             ; preds = %bb16
   br label %bb6
 
 bb19:                                             ; preds = %bb0
-  %15 = getelementptr i8, ptr %_3, i32 1
+  %15 = getelementptr i8, ptr %_1, i32 1
   %16 = load i8, ptr %15, align 1
   %17 = icmp ne i8 %16, 0
   switch i1 %17, label %bb20 [
@@ -113,7 +111,7 @@ bb19:                                             ; preds = %bb0
   ]
 
 bb20:                                             ; preds = %bb19
-  %18 = getelementptr i8, ptr %_3, i32 1
+  %18 = getelementptr i8, ptr %_1, i32 1
   %19 = load i8, ptr %18, align 1
   %20 = icmp ne i8 %19, 0
   switch i1 %20, label %bb9 [
@@ -127,8 +125,8 @@ bb22:                                             ; preds = %bb20
   br label %bb8
 
 bb23:                                             ; preds = %bb8, %bb7, %bb6, %bb5, %bb4, %bb3, %bb2, %bb1
-  %_4.0 = phi i16 [ 0, %bb1 ], [ 2, %bb4 ], [ %10, %bb3 ], [ 1, %bb2 ], [ 4, %bb6 ], [ 3, %bb5 ], [ 6, %bb8 ], [ 5, %bb7 ]
-  ret i16 %_4.0
+  %_3.0 = phi i16 [ 0, %bb1 ], [ 2, %bb4 ], [ %10, %bb3 ], [ 1, %bb2 ], [ 4, %bb6 ], [ 3, %bb5 ], [ 6, %bb8 ], [ 5, %bb7 ]
+  ret i16 %_3.0
 }
 
 ; Function Attrs: nounwind null_pointer_is_valid
@@ -136,11 +134,9 @@ define zeroext i16 @wildcard(i32 %0) #0 {
 bb0:
   %1 = alloca i32, align 8
   %_1 = alloca [4 x i8], align 2
-  %_2 = alloca [4 x i8], align 2
   store i32 %0, ptr %1, align 4
   call void @llvm.memcpy.p0.p0.i32(ptr align 2 %_1, ptr align 8 %1, i32 4, i1 false)
-  call void @llvm.memcpy.p0.p0.i32(ptr align 2 %_2, ptr align 2 %_1, i32 4, i1 false)
-  %2 = load i8, ptr %_2, align 1
+  %2 = load i8, ptr %_1, align 1
   switch i8 %2, label %bb3 [
     i8 2, label %bb4
   ]
@@ -155,7 +151,7 @@ bb3:                                              ; preds = %bb0
   br label %bb6
 
 bb4:                                              ; preds = %bb0
-  %3 = getelementptr i8, ptr %_2, i32 1
+  %3 = getelementptr i8, ptr %_1, i32 1
   %4 = load i8, ptr %3, align 1
   switch i8 %4, label %bb2 [
     i8 1, label %bb5
@@ -165,8 +161,8 @@ bb5:                                              ; preds = %bb4
   br label %bb1
 
 bb6:                                              ; preds = %bb3, %bb2, %bb1
-  %_3.0 = phi i16 [ 0, %bb3 ], [ 2, %bb2 ], [ 1, %bb1 ]
-  ret i16 %_3.0
+  %_2.0 = phi i16 [ 0, %bb3 ], [ 2, %bb2 ], [ 1, %bb1 ]
+  ret i16 %_2.0
 }
 
 ; Function Attrs: noreturn nounwind null_pointer_is_valid

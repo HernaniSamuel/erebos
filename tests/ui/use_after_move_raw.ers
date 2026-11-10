@@ -1,0 +1,61 @@
+// emit: mir
+// Taking the address of a moved place, or of a place with a moved part, is a
+// use like any other (ADR 0097, 0099): the pointer could be written through,
+// which would give the place a value the analysis cannot see. Functions
+// marked `Accepted` report nothing.
+struct Handle { n: u32 }
+
+struct Pair { a: Handle, b: Handle, n: u32 }
+
+fn consume(h: Handle) {}
+
+fn whole(p: Pair) {}
+
+// Rejected: the address of a moved place.
+fn address_of_moved(a: Handle) -> *const Handle {
+    consume(a);
+    &raw const a
+}
+
+fn mutable_address_of_moved(mut a: Handle) -> *mut Handle {
+    consume(a);
+    &raw mut a
+}
+
+// Rejected: the address of a place with a moved part, and of a part of a place
+// moved whole.
+fn address_of_partly_moved(mut p: Pair) -> *mut Pair {
+    consume(p.a);
+    &raw mut p
+}
+
+fn address_of_part_of_moved(p: Pair) -> *const Handle {
+    whole(p);
+    &raw const p.b
+}
+
+// Rejected: the address of a copy field of a place moved whole.
+fn address_of_copy_field_of_moved(p: Pair) -> *const u32 {
+    whole(p);
+    &raw const p.n
+}
+
+// Accepted: the address of the copy field of a partly moved place, and of
+// the field that is still there.
+fn address_of_what_is_there(mut p: Pair) -> *const u32 {
+    consume(p.a);
+    let b: *const Handle = &raw const p.b;
+    &raw const p.n
+}
+
+// Accepted: the address taken before the move, and after the place is
+// assigned again.
+fn before_and_after(mut a: Handle) {
+    let before: *const Handle = &raw const a;
+    consume(a);
+    a = Handle { n: 2 };
+    let after: *mut Handle = &raw mut a;
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

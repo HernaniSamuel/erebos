@@ -1,0 +1,50 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/copy_field_not_copy_mir.ers
+---
+--- errors ---
+ty::copy-field-not-copy
+
+  × `Bad` is `#[copy]`, but the field `h` is not copy
+    ╭─[copy_field_not_copy_mir.ers:9:1]
+  8 │ 
+  9 │ #[copy]
+    · ───┬───
+    ·    ╰── declared copy here
+ 10 │ struct Bad { h: Handle }
+    ·              ┬
+    ·              ╰── `Handle` is not copy
+ 11 │ 
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated, or remove `#[copy]` from
+        `Bad` (ADR 0096)
+ty::copy-field-not-copy
+
+  × `BadEvent` is `#[copy]`, but the payload value of `BadEvent::Got` is not copy
+    ╭─[copy_field_not_copy_mir.ers:12:1]
+ 11 │ 
+ 12 │ #[copy]
+    · ───┬───
+    ·    ╰── declared copy here
+ 13 │ enum BadEvent: u8 { Got(Handle) = 0, Idle = 1 }
+    ·                         ───┬──
+    ·                            ╰── `Handle` is not copy
+ 14 │ 
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated, or remove `#[copy]` from
+        `BadEvent` (ADR 0096)
+analysis::use-after-move
+
+  × use of moved value `h`
+    ╭─[copy_field_not_copy_mir.ers:43:21]
+ 41 │ fn unrelated(h: Handle) {
+ 42 │     let a: Handle = h;
+    ·                     ┬
+    ·                     ╰── moved here
+ 43 │     let b: Handle = h;
+    ·                     ┬
+    ·                     ╰── used here, after it was moved
+ 44 │ }
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated (ADR 0097)

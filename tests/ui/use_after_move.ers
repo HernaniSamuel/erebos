@@ -1,0 +1,186 @@
+// emit: mir
+// A place whose value was moved cannot be used until it is assigned a new
+// value, on any path from the move (ADR 0097, 0099). Every function
+// marked `Accepted` is valid and reports nothing.
+struct Handle { n: u32 }
+
+struct Pair { a: Handle, b: Handle }
+
+fn make() -> Handle { Handle { n: 1 } }
+
+fn consume(h: Handle) {}
+
+fn two(a: Handle, b: Handle) {}
+
+fn id(h: Handle) -> Handle { h }
+
+fn pair() -> Pair { Pair { a: make(), b: make() } }
+
+// Rejected: a second use after a move.
+fn second(a: Handle) {
+    consume(a);
+    consume(a);
+}
+
+// Rejected: moved in one branch, used after the join.
+fn one_branch(a: Handle, c: bool) {
+    if c {
+        consume(a);
+    }
+    consume(a);
+}
+
+// Rejected: moved in both branches, used after the join, so two moves reach it.
+fn both_branches(a: Handle, c: bool) {
+    if c {
+        consume(a);
+    } else {
+        consume(a);
+    }
+    consume(a);
+}
+
+// Rejected: moved in a loop, so the next iteration uses it again.
+fn in_a_loop(a: Handle, c: bool) {
+    while c {
+        consume(a);
+    }
+}
+
+// Rejected: the move of `h` reaches itself through the back edge.
+fn forever(h: Handle) {
+    loop {
+        consume(h);
+    }
+}
+
+// Rejected: the move is after the use in the source, and reaches it through
+// the back edge.
+fn later_in_the_loop(a: Handle, c: bool) {
+    while c {
+        let n: u32 = a.n;
+        consume(a);
+    }
+}
+
+// Rejected: assigned in one branch only.
+fn assigned_in_one_branch(mut a: Handle, c: bool) {
+    consume(a);
+    if c {
+        a = make();
+    }
+    consume(a);
+}
+
+// Rejected: the arguments are evaluated left to right, so the second `a` is
+// moved already, and so is the one a call in an argument uses.
+fn arguments(a: Handle) {
+    two(a, a);
+}
+
+fn nested_call(a: Handle) {
+    two(a, id(a));
+}
+
+// Rejected: a block that is a value moves what it ends with.
+fn block_value(a: Handle) {
+    let b: Handle = { a };
+    consume(a);
+}
+
+// Rejected: a copy field read, and an assignment to a part of a place moved
+// whole.
+fn kinds_of_uses(a: Handle) {
+    consume(a);
+    let n: u32 = a.n;
+}
+
+fn part_of_the_whole(mut a: Pair) {
+    let moved: Pair = a;
+    a.a = make();
+}
+
+// Accepted: used again after it is assigned.
+fn reassigned(mut a: Handle) {
+    consume(a);
+    a = make();
+    consume(a);
+}
+
+// Accepted: `a = f(a)` moves `a` in the call, then assigns it.
+fn threaded(mut a: Handle) -> Handle {
+    a = id(a);
+    a = id(a);
+    a
+}
+
+// Accepted: assigned in both branches.
+fn assigned_in_both(mut a: Handle, c: bool) {
+    consume(a);
+    if c {
+        a = make();
+    } else {
+        a = make();
+    }
+    consume(a);
+}
+
+// Accepted: assigned in the loop before the next use.
+fn assigned_in_the_loop(mut a: Handle, c: bool) {
+    while c {
+        consume(a);
+        a = make();
+    }
+}
+
+// Accepted: a loop that builds the value each time, as a literal does.
+fn built_in_the_loop(c: bool) {
+    while c {
+        consume(make());
+        let p: Pair = pair();
+        consume(p.a);
+        consume(p.b);
+        let q: Pair = Pair { a: make(), b: make() };
+        let m: Option(Handle) = .Some(make());
+        let r: [Option(Handle); 4] = [.None; 4];
+    }
+}
+
+// Accepted: a moved value that goes out of scope, and one never used.
+fn out_of_scope(a: Handle, b: Handle) {
+    consume(a);
+}
+
+// Accepted: a place that is only named, as a discarded place is, is no use.
+fn discarded(a: Handle) {
+    consume(a);
+    a;
+    { { a } };
+    critical { a };
+}
+
+// Accepted: a value moved in only one of two exclusive branches.
+fn exclusive(a: Handle, c: bool) {
+    if c {
+        consume(a);
+    } else {
+        let n: u32 = a.n;
+        consume(a);
+    }
+}
+
+// Accepted: a repeat of a variant with no payload values, of a non-copy type.
+fn repeats() -> u32 {
+    let none: [Option(Handle); 32] = [.None; 32];
+    0
+}
+
+// Accepted: code that cannot run moves and uses freely.
+fn unreachable_code(a: Handle) {
+    return;
+    consume(a);
+    consume(a);
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

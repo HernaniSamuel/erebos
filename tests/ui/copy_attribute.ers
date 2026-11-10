@@ -1,0 +1,29 @@
+// emit: typeck
+// `#[copy]` goes on a struct and on an enum with payloads, alone or with
+// `#[packed]` and `#[align(N)]`; it changes neither layout nor ABI
+// (ADR 0096).
+#[copy]
+struct Point { x: i32, y: i32 }
+
+#[copy]
+#[packed]
+struct Header { kind: u8, len: u32 }
+
+#[align(16)]
+#[copy]
+struct Aligned { a: u32, b: u32 }
+
+#[copy]
+struct Pair { first: Point, second: Point }
+
+#[copy]
+struct Table { rows: [Point; 4], header: Header, next: *const Table }
+
+#[copy]
+struct Maybe { value: Option(Point), result: Result(Header, u8) }
+
+#[copy]
+enum Shape: u8 { Dot(Point) = 0, Line(Point, Point) = 1, Empty = 2 }
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

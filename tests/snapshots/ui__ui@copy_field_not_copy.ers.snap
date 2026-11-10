@@ -1,0 +1,216 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/copy_field_not_copy.ers
+---
+--- errors ---
+ty::copy-field-not-copy
+
+  × `Token` is `#[copy]`, but the payload value of `Token::Open` is not copy
+   ╭─[copy_field_not_copy.ers:7:1]
+ 6 │ 
+ 7 │ #[copy]
+   · ───┬───
+   ·    ╰── declared copy here
+ 8 │ enum Token: u8 { Open(Handle) = 0, Closed = 1 }
+   ·                       ───┬──
+   ·                          ╰── `Handle` is not copy
+ 9 │ 
+   ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated, or remove `#[copy]` from
+        `Token` (ADR 0096)
+ty::copy-field-not-copy
+
+  × `Field` is `#[copy]`, but the field `h` is not copy
+    ╭─[copy_field_not_copy.ers:14:1]
+ 13 │ 
+ 14 │ #[copy]
+    · ───┬───
+    ·    ╰── declared copy here
+ 15 │ struct Field { h: Handle }
+    ·                ┬
+    ·                ╰── `Handle` is not copy
+ 16 │ 
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated, or remove `#[copy]` from
+        `Field` (ADR 0096)
+ty::copy-field-not-copy
+
+  × `Payload` is `#[copy]`, but the field `plain` is not copy
+    ╭─[copy_field_not_copy.ers:17:1]
+ 16 │ 
+ 17 │ #[copy]
+    · ───┬───
+    ·    ╰── declared copy here
+ 18 │ struct Payload { e: Token, plain: Plain }
+    ·                            ──┬──
+    ·                              ╰── `Plain` is not copy
+ 19 │ 
+    ╰────
+  help: mark `Plain` with `#[copy]` if its values may be duplicated, or remove `#[copy]` from
+        `Payload` (ADR 0096)
+ty::copy-field-not-copy
+
+  × `Array` is `#[copy]`, but the field `slots` is not copy
+    ╭─[copy_field_not_copy.ers:20:1]
+ 19 │ 
+ 20 │ #[copy]
+    · ───┬───
+    ·    ╰── declared copy here
+ 21 │ struct Array { slots: [Handle; 4] }
+    ·                ──┬──
+    ·                  ╰── `[Handle; 4]` is not copy
+ 22 │ 
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated, or remove `#[copy]` from
+        `Array` (ADR 0096)
+ty::copy-field-not-copy
+
+  × `Optional` is `#[copy]`, but the field `slot` is not copy
+    ╭─[copy_field_not_copy.ers:23:1]
+ 22 │ 
+ 23 │ #[copy]
+    · ───┬───
+    ·    ╰── declared copy here
+ 24 │ struct Optional { slot: Option(Handle), other: Result(u8, Event) }
+    ·                   ──┬─
+    ·                     ╰── `Option(Handle)` is not copy
+ 25 │ 
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated, or remove `#[copy]` from
+        `Optional` (ADR 0096)
+ty::copy-field-not-copy
+
+  × `Optional` is `#[copy]`, but the field `other` is not copy
+    ╭─[copy_field_not_copy.ers:23:1]
+ 22 │ 
+ 23 │ #[copy]
+    · ───┬───
+    ·    ╰── declared copy here
+ 24 │ struct Optional { slot: Option(Handle), other: Result(u8, Event) }
+    ·                                         ──┬──
+    ·                                           ╰── `Result(u8, Event)` is not copy
+ 25 │ 
+    ╰────
+  help: mark `Event` with `#[copy]` if its values may be duplicated, or remove `#[copy]` from
+        `Optional` (ADR 0096)
+ty::copy-field-not-copy
+
+  × `Twice` is `#[copy]`, but the field `first` is not copy
+    ╭─[copy_field_not_copy.ers:26:1]
+ 25 │ 
+ 26 │ #[copy]
+    · ───┬───
+    ·    ╰── declared copy here
+ 27 │ struct Twice { first: Handle, ok: u32, second: Handle }
+    ·                ──┬──
+    ·                  ╰── `Handle` is not copy
+ 28 │ 
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated, or remove `#[copy]` from
+        `Twice` (ADR 0096)
+ty::copy-field-not-copy
+
+  × `Twice` is `#[copy]`, but the field `second` is not copy
+    ╭─[copy_field_not_copy.ers:26:1]
+ 25 │ 
+ 26 │ #[copy]
+    · ───┬───
+    ·    ╰── declared copy here
+ 27 │ struct Twice { first: Handle, ok: u32, second: Handle }
+    ·                                        ───┬──
+    ·                                           ╰── `Handle` is not copy
+ 28 │ 
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated, or remove `#[copy]` from
+        `Twice` (ADR 0096)
+ty::copy-field-not-copy
+
+  × `Many` is `#[copy]`, but payload value 2 of `Many::One` is not copy
+    ╭─[copy_field_not_copy.ers:29:1]
+ 28 │ 
+ 29 │ #[copy]
+    · ───┬───
+    ·    ╰── declared copy here
+ 30 │ enum Many: u8 { One(u8, Handle, Plain) = 0, Two(Handle) = 1, Zero = 2 }
+    ·                         ───┬──
+    ·                            ╰── `Handle` is not copy
+ 31 │ 
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated, or remove `#[copy]` from
+        `Many` (ADR 0096)
+ty::copy-field-not-copy
+
+  × `Many` is `#[copy]`, but payload value 3 of `Many::One` is not copy
+    ╭─[copy_field_not_copy.ers:29:1]
+ 28 │ 
+ 29 │ #[copy]
+    · ───┬───
+    ·    ╰── declared copy here
+ 30 │ enum Many: u8 { One(u8, Handle, Plain) = 0, Two(Handle) = 1, Zero = 2 }
+    ·                                 ──┬──
+    ·                                   ╰── `Plain` is not copy
+ 31 │ 
+    ╰────
+  help: mark `Plain` with `#[copy]` if its values may be duplicated, or remove `#[copy]` from
+        `Many` (ADR 0096)
+ty::copy-field-not-copy
+
+  × `Many` is `#[copy]`, but the payload value of `Many::Two` is not copy
+    ╭─[copy_field_not_copy.ers:29:1]
+ 28 │ 
+ 29 │ #[copy]
+    · ───┬───
+    ·    ╰── declared copy here
+ 30 │ enum Many: u8 { One(u8, Handle, Plain) = 0, Two(Handle) = 1, Zero = 2 }
+    ·                                                 ───┬──
+    ·                                                    ╰── `Handle` is not copy
+ 31 │ 
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated, or remove `#[copy]` from
+        `Many` (ADR 0096)
+ty::copy-field-not-copy
+
+  × `Sibling` is `#[copy]`, but the field `r` is not copy
+    ╭─[copy_field_not_copy.ers:33:1]
+ 32 │ // The help names the type that is not copy, not a sibling that is.
+ 33 │ #[copy]
+    · ───┬───
+    ·    ╰── declared copy here
+ 34 │ struct Sibling { r: Result(Token, Handle), o: Option(Plain), a: [Token; 2], p: Result(Handle, Token) }
+    ·                  ┬
+    ·                  ╰── `Result(Token, Handle)` is not copy
+ 35 │ 
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated, or remove `#[copy]` from
+        `Sibling` (ADR 0096)
+ty::copy-field-not-copy
+
+  × `Sibling` is `#[copy]`, but the field `o` is not copy
+    ╭─[copy_field_not_copy.ers:33:1]
+ 32 │ // The help names the type that is not copy, not a sibling that is.
+ 33 │ #[copy]
+    · ───┬───
+    ·    ╰── declared copy here
+ 34 │ struct Sibling { r: Result(Token, Handle), o: Option(Plain), a: [Token; 2], p: Result(Handle, Token) }
+    ·                                            ┬
+    ·                                            ╰── `Option(Plain)` is not copy
+ 35 │ 
+    ╰────
+  help: mark `Plain` with `#[copy]` if its values may be duplicated, or remove `#[copy]` from
+        `Sibling` (ADR 0096)
+ty::copy-field-not-copy
+
+  × `Sibling` is `#[copy]`, but the field `p` is not copy
+    ╭─[copy_field_not_copy.ers:33:1]
+ 32 │ // The help names the type that is not copy, not a sibling that is.
+ 33 │ #[copy]
+    · ───┬───
+    ·    ╰── declared copy here
+ 34 │ struct Sibling { r: Result(Token, Handle), o: Option(Plain), a: [Token; 2], p: Result(Handle, Token) }
+    ·                                                                             ┬
+    ·                                                                             ╰── `Result(Handle, Token)` is not copy
+ 35 │ 
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated, or remove `#[copy]` from
+        `Sibling` (ADR 0096)

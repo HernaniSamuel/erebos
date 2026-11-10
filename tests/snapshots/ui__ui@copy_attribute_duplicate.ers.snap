@@ -1,0 +1,32 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/copy_attribute_duplicate.ers
+---
+--- errors ---
+resolve::duplicate-attribute
+
+  × `#[copy]` is given more than once
+   ╭─[copy_attribute_duplicate.ers:4:1]
+ 2 │ // `#[copy]` is given at most once (ADR 0096).
+ 3 │ #[copy]
+   · ───┬───
+   ·    ╰── first given here
+ 4 │ #[copy]
+   · ───┬───
+   ·    ╰── given again here
+ 5 │ struct A { x: u8 }
+   ╰────
+resolve::duplicate-attribute
+
+  × `#[copy]` is given more than once
+   ╭─[copy_attribute_duplicate.ers:8:1]
+ 6 │ 
+ 7 │ #[copy]
+   · ───┬───
+   ·    ╰── first given here
+ 8 │ #[copy]
+   · ───┬───
+   ·    ╰── given again here
+ 9 │ enum B: u8 { X(u8) = 0 }
+   ╰────

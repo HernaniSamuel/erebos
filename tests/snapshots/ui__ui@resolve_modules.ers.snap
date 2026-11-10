@@ -22,35 +22,35 @@ entry fn main() -> !
 panic fn on_panic() -> !
     expr 6 loop 795..802: !
 fn uart::default_config() -> uart::Config
-    expr 7 struct uart::Config 1019..1028: uart::Config
+    expr 7 struct uart::Config 1031..1040: uart::Config
 fn uart::init(c: uart::Config) -> ()
     let m: uart::Mode
-    expr 8 call 1083..1095: uart::Mode
-    expr 9 assign 1105..1136: ()
-    expr 10 static COUNT 1105..1117: u32
-    expr 11 binary + 1120..1136: u32
-    expr 12 static COUNT 1120..1132: u32
-    expr 13 int 1 1135..1136: u32
-    expr 14 assign 1146..1161: ()
-    expr 15 static uart::LAST 1146..1150: Option(uart::Mode)
-    expr 16 variant .Some (Option(uart::Mode)::Some) 1153..1161: Option(uart::Mode)
-    expr 17 local m 1159..1160: uart::Mode
+    expr 8 call 1095..1107: uart::Mode
+    expr 9 assign 1117..1148: ()
+    expr 10 static COUNT 1117..1129: u32
+    expr 11 binary + 1132..1148: u32
+    expr 12 static COUNT 1132..1144: u32
+    expr 13 int 1 1147..1148: u32
+    expr 14 assign 1158..1173: ()
+    expr 15 static uart::LAST 1158..1162: Option(uart::Mode)
+    expr 16 variant .Some (Option(uart::Mode)::Some) 1165..1173: Option(uart::Mode)
+    expr 17 local m 1171..1172: uart::Mode
 fn uart::regs::mode() -> uart::Mode
-    expr 18 variant uart::Mode::Run 1361..1392: uart::Mode
-    expr 19 call 1378..1391: u8
+    expr 18 variant uart::Mode::Run 1373..1404: uart::Mode
+    expr 19 call 1390..1403: u8
 fn uart::regs::limit() -> u32
-    expr 20 const LIMIT 1427..1446: u32
+    expr 20 const LIMIT 1439..1458: u32
 fn uart::regs::block() -> uart::regs::Block
-    expr 21 struct uart::regs::Block 1483..1505: uart::regs::Block
-    expr 22 int 0 1495..1496: u8
-    expr 23 int 1 1502..1503: u8
+    expr 21 struct uart::regs::Block 1495..1517: uart::regs::Block
+    expr 22 int 0 1507..1508: u8
+    expr 23 int 1 1514..1515: u8
 fn uart::regs::rx_at() -> usize
-    expr 24 offset_of(uart::regs::Block, rx) 1542..1581: usize
+    expr 24 offset_of(uart::regs::Block, rx) 1554..1593: usize
 extern fn timer::source() -> u32
 fn timer::now() -> timer::Tick
-    expr 25 struct timer::Tick 1778..1785: timer::Tick
+    expr 25 struct timer::Tick 1790..1797: timer::Tick
 fn timer::init() -> u16
-    expr 26 int 1 1815..1816: u16
+    expr 26 int 1 1827..1828: u16
 fn timer::uses(m: uart::Mode) -> u8
     let configs: [uart::Config; 2]
     let last: Option(uart::Mode)
@@ -60,50 +60,50 @@ fn timer::uses(m: uart::Mode) -> u8
     let built: uart::Mode
     let ticks: u32
     let x: u8
-    expr 27 array 1910..1965: [uart::Config; 2]
-    expr 28 struct uart::Config 1911..1933: uart::Config
-    expr 29 call 1935..1964: uart::Config
-    expr 30 variant .Some (Option(uart::Mode)::Some) 2013..2037: Option(uart::Mode)
-    expr 31 const uart::MODE 2019..2036: uart::Mode
-    expr 32 call 2085..2111: uart::regs::Block
-    expr 33 &raw const 2162..2178: *const uart::regs::Block
-    expr 34 local block 2173..2178: uart::regs::Block
-    expr 35 binary + 2206..2271: usize
-    expr 36 size_of(uart::Config) 2206..2234: usize
-    expr 37 align_of(uart::regs::Block) 2237..2271: usize
-    expr 38 variant uart::Mode::Run 2312..2341: uart::Mode
-    expr 39 const timer::SMALL 2335..2340: u8
-    expr 40 binary + 2368..2384: u32
-    expr 41 static timer::TICKS 2368..2373: u32
-    expr 42 call 2376..2384: u32
-    expr 43 match 2394..2580: u8
-    expr 44 local m 2400..2401: uart::Mode
-    expr 45 call 2442..2455: u8
-    expr 46 int 1 2516..2517: u8
-    expr 47 local x 2568..2569: u8
+    expr 27 array 1922..1977: [uart::Config; 2]
+    expr 28 struct uart::Config 1923..1945: uart::Config
+    expr 29 call 1947..1976: uart::Config
+    expr 30 variant .Some (Option(uart::Mode)::Some) 2025..2049: Option(uart::Mode)
+    expr 31 const uart::MODE 2031..2048: uart::Mode
+    expr 32 call 2097..2123: uart::regs::Block
+    expr 33 &raw const 2174..2190: *const uart::regs::Block
+    expr 34 local block 2185..2190: uart::regs::Block
+    expr 35 binary + 2218..2283: usize
+    expr 36 size_of(uart::Config) 2218..2246: usize
+    expr 37 align_of(uart::regs::Block) 2249..2283: usize
+    expr 38 variant uart::Mode::Run 2324..2353: uart::Mode
+    expr 39 const timer::SMALL 2347..2352: u8
+    expr 40 binary + 2380..2396: u32
+    expr 41 static timer::TICKS 2380..2385: u32
+    expr 42 call 2388..2396: u32
+    expr 43 match 2406..2592: u8
+    expr 44 local m 2412..2413: uart::Mode
+    expr 45 call 2454..2467: u8
+    expr 46 int 1 2528..2529: u8
+    expr 47 local x 2580..2581: u8
 comptime fn LIMIT() -> u32
     expr 48 binary + 527..566: u32
     expr 49 as u32 527..550: u32
     expr 50 const uart::regs::BASE 527..543: usize
     expr 51 const timer::PERIOD 553..566: u32
 comptime fn uart::MODE() -> uart::Mode
-    expr 52 variant uart::Mode::Off 920..929: uart::Mode
+    expr 52 variant uart::Mode::Off 932..941: uart::Mode
 comptime fn uart::regs::BASE() -> usize
-    expr 53 int 268435456 1264..1275: usize
+    expr 53 int 268435456 1276..1287: usize
 comptime fn timer::PERIOD() -> u32
-    expr 54 int 10 1660..1662: u32
+    expr 54 int 10 1672..1674: u32
 comptime fn timer::SMALL() -> u8
-    expr 55 int 2 1686..1687: u8
+    expr 55 int 2 1698..1699: u8
 comptime fn COUNT() -> u32
     expr 56 int 0 592..593: u32
 comptime fn uart::LAST() -> Option(uart::Mode)
-    expr 57 variant .None (Option(uart::Mode)::None) 971..976: Option(uart::Mode)
+    expr 57 variant .None (Option(uart::Mode)::None) 983..988: Option(uart::Mode)
 comptime fn comptime() -> ()
-    expr 58 assert 1185..1208: ()
-    expr 59 binary != 1192..1207: bool
-    expr 60 const uart::regs::BASE 1192..1202: usize
-    expr 61 int 0 1206..1207: usize
+    expr 58 assert 1197..1220: ()
+    expr 59 binary != 1204..1219: bool
+    expr 60 const uart::regs::BASE 1204..1214: usize
+    expr 61 int 0 1218..1219: usize
 comptime fn uart::Mode::Off() -> u8
-    expr 62 int 0 876..877: u8
+    expr 62 int 0 888..889: u8
 comptime fn uart::Mode::Run() -> u8
-    expr 63 int 1 889..890: u8
+    expr 63 int 1 901..902: u8
