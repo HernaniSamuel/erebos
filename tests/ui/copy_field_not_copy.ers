@@ -36,5 +36,19 @@ struct Sibling { r: Result(Token, Handle), o: Option(Plain), a: [Token; 2], p: R
 #[copy]
 struct Fine { a: u8, b: [u32; 2], c: *const Handle, d: Option(Token), e: Result(u8, bool) }
 
+// A linear type is never copy: the field or payload value is reported as for
+// any type that is not copy (ADR 0101).
+#[linear]
+struct Ticket { id: u32 }
+
+#[copy]
+struct HoldsLinear { t: Ticket }
+
+#[copy]
+struct HoldsOptionLinear { slot: Option(Ticket) }
+
+#[copy]
+enum LinearPayload: u8 { Has(Ticket) = 0, Nothing = 1 }
+
 entry fn main() -> ! { loop {} }
 panic fn on_panic() -> ! { loop {} }

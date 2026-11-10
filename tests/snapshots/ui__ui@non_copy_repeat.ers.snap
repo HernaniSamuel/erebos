@@ -7,84 +7,95 @@ input_file: tests/ui/non_copy_repeat.ers
 ty::non-copy-repeat
 
   × `[v; N]` would copy a value of the non-copy type `Handle`
-    ╭─[non_copy_repeat.ers:17:30]
- 16 │ fn rejected(h: Handle) {
- 17 │     let zero: [Handle; 0] = [open(0); 0];
+    ╭─[non_copy_repeat.ers:21:30]
+ 20 │ fn rejected(h: Handle) {
+ 21 │     let zero: [Handle; 0] = [open(0); 0];
     ·                              ───┬───
     ·                                 ╰── `Handle` is not copy
- 18 │     let one: [Handle; 1] = [open(1); 1];
+ 22 │     let one: [Handle; 1] = [open(1); 1];
     ╰────
   help: mark `Handle` with `#[copy]` if its values may be duplicated, or list each element in an
         array literal (ADR 0096)
 ty::non-copy-repeat
 
   × `[v; N]` would copy a value of the non-copy type `Handle`
-    ╭─[non_copy_repeat.ers:18:29]
- 17 │     let zero: [Handle; 0] = [open(0); 0];
- 18 │     let one: [Handle; 1] = [open(1); 1];
+    ╭─[non_copy_repeat.ers:22:29]
+ 21 │     let zero: [Handle; 0] = [open(0); 0];
+ 22 │     let one: [Handle; 1] = [open(1); 1];
     ·                             ───┬───
     ·                                ╰── `Handle` is not copy
- 19 │     let four: [Handle; 4] = [open(2); 4];
+ 23 │     let four: [Handle; 4] = [open(2); 4];
     ╰────
   help: mark `Handle` with `#[copy]` if its values may be duplicated, or list each element in an
         array literal (ADR 0096)
 ty::non-copy-repeat
 
   × `[v; N]` would copy a value of the non-copy type `Handle`
-    ╭─[non_copy_repeat.ers:19:30]
- 18 │     let one: [Handle; 1] = [open(1); 1];
- 19 │     let four: [Handle; 4] = [open(2); 4];
+    ╭─[non_copy_repeat.ers:23:30]
+ 22 │     let one: [Handle; 1] = [open(1); 1];
+ 23 │     let four: [Handle; 4] = [open(2); 4];
     ·                              ───┬───
     ·                                 ╰── `Handle` is not copy
- 20 │     let by_const: [Handle; 4] = [open(3); FOUR];
+ 24 │     let by_const: [Handle; 4] = [open(3); FOUR];
     ╰────
   help: mark `Handle` with `#[copy]` if its values may be duplicated, or list each element in an
         array literal (ADR 0096)
 ty::non-copy-repeat
 
   × `[v; N]` would copy a value of the non-copy type `Handle`
-    ╭─[non_copy_repeat.ers:20:34]
- 19 │     let four: [Handle; 4] = [open(2); 4];
- 20 │     let by_const: [Handle; 4] = [open(3); FOUR];
+    ╭─[non_copy_repeat.ers:24:34]
+ 23 │     let four: [Handle; 4] = [open(2); 4];
+ 24 │     let by_const: [Handle; 4] = [open(3); FOUR];
     ·                                  ───┬───
     ·                                     ╰── `Handle` is not copy
- 21 │     let nested: [[Handle; 2]; 2] = [[open(4), open(5)]; 2];
+ 25 │     let nested: [[Handle; 2]; 2] = [[open(4), open(5)]; 2];
     ╰────
   help: mark `Handle` with `#[copy]` if its values may be duplicated, or list each element in an
         array literal (ADR 0096)
 ty::non-copy-repeat
 
   × `[v; N]` would copy a value of the non-copy type `[Handle; 2]`
-    ╭─[non_copy_repeat.ers:21:37]
- 20 │     let by_const: [Handle; 4] = [open(3); FOUR];
- 21 │     let nested: [[Handle; 2]; 2] = [[open(4), open(5)]; 2];
+    ╭─[non_copy_repeat.ers:25:37]
+ 24 │     let by_const: [Handle; 4] = [open(3); FOUR];
+ 25 │     let nested: [[Handle; 2]; 2] = [[open(4), open(5)]; 2];
     ·                                     ─────────┬────────
     ·                                              ╰── `[Handle; 2]` is not copy
- 22 │     let some: [Option(Handle); 2] = [.Some(h); 2];
+ 26 │     let some: [Option(Handle); 2] = [.Some(h); 2];
     ╰────
   help: mark `Handle` with `#[copy]` if its values may be duplicated, or list each element in an
         array literal (ADR 0096)
 ty::non-copy-repeat
 
   × `[v; N]` would copy a value of the non-copy type `Option(Handle)`
-    ╭─[non_copy_repeat.ers:22:38]
- 21 │     let nested: [[Handle; 2]; 2] = [[open(4), open(5)]; 2];
- 22 │     let some: [Option(Handle); 2] = [.Some(h); 2];
+    ╭─[non_copy_repeat.ers:26:38]
+ 25 │     let nested: [[Handle; 2]; 2] = [[open(4), open(5)]; 2];
+ 26 │     let some: [Option(Handle); 2] = [.Some(h); 2];
     ·                                      ────┬───
     ·                                          ╰── `Option(Handle)` is not copy
- 23 │     let taken: [State; 2] = [State::Taken(open(6)); 2];
+ 27 │     let taken: [State; 2] = [State::Taken(open(6)); 2];
     ╰────
   help: mark `Handle` with `#[copy]` if its values may be duplicated, or list each element in an
         array literal (ADR 0096)
 ty::non-copy-repeat
 
   × `[v; N]` would copy a value of the non-copy type `State`
-    ╭─[non_copy_repeat.ers:23:30]
- 22 │     let some: [Option(Handle); 2] = [.Some(h); 2];
- 23 │     let taken: [State; 2] = [State::Taken(open(6)); 2];
+    ╭─[non_copy_repeat.ers:27:30]
+ 26 │     let some: [Option(Handle); 2] = [.Some(h); 2];
+ 27 │     let taken: [State; 2] = [State::Taken(open(6)); 2];
     ·                              ──────────┬──────────
     ·                                        ╰── `State` is not copy
- 24 │ }
+ 28 │     let tickets: [Ticket; 2] = [Ticket { id: 7 }; 2];
     ╰────
   help: mark `State` with `#[copy]` if its values may be duplicated, or list each element in an
         array literal (ADR 0096)
+ty::non-copy-repeat
+
+  × `[v; N]` would copy a value of the non-copy type `Ticket`
+    ╭─[non_copy_repeat.ers:28:33]
+ 27 │     let taken: [State; 2] = [State::Taken(open(6)); 2];
+ 28 │     let tickets: [Ticket; 2] = [Ticket { id: 7 }; 2];
+    ·                                 ────────┬───────
+    ·                                         ╰── `Ticket` is not copy
+ 29 │ }
+    ╰────
+  help: `Ticket` is linear, so it cannot be copy: list each element in an array literal (ADR 0096)

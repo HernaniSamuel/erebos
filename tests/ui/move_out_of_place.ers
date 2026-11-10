@@ -14,6 +14,11 @@ struct Holder { h: Handle, n: u32, items: [Handle; 2], plain: Plain }
 
 enum Msg: u8 { Empty = 0, Data(Handle) = 1, Num(u32) = 2 }
 
+// A linear struct whose fields are all copy: `#[copy]` would be rejected, so
+// the help is the general one, not a suggestion (ADR 0101).
+#[linear]
+struct Ticket { id: u32 }
+
 static mut SH: Handle = Handle { n: 1 };
 static mut SHOLDER: Holder = Holder {
     h: Handle { n: 1 },
@@ -41,6 +46,11 @@ fn pointers(p: *mut Handle, q: *mut [Handle; 2], s: *mut [Handle], h: *mut Holde
     let d: Handle = (*h).h;
     let e: Handle = p[i];
     let f: Handle = (*h).items[1];
+}
+
+// Rejected: a place through a pointer, of a linear type.
+fn linear_pointer(p: *mut Ticket) {
+    let t: Ticket = *p;
 }
 
 // Rejected: a static, or a part of one.

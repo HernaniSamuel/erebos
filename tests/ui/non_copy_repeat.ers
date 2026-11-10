@@ -8,6 +8,10 @@ struct Point { x: u32, y: u32 }
 
 enum State: u8 { Free = 0, Taken(Handle) = 1 }
 
+// A linear type is never copy; its help offers no `#[copy]` (ADR 0101).
+#[linear]
+struct Ticket { id: u32 }
+
 const FOUR: usize = 4;
 
 fn open(id: u32) -> Handle { Handle { id: id } }
@@ -21,6 +25,7 @@ fn rejected(h: Handle) {
     let nested: [[Handle; 2]; 2] = [[open(4), open(5)]; 2];
     let some: [Option(Handle); 2] = [.Some(h); 2];
     let taken: [State; 2] = [State::Taken(open(6)); 2];
+    let tickets: [Ticket; 2] = [Ticket { id: 7 }; 2];
 }
 
 // Accepted: the type is copy.

@@ -1,0 +1,34 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/linear_attribute_copy.ers
+---
+--- errors ---
+resolve::conflicting-attributes
+
+  × `#[copy]` and `#[linear]` cannot be combined
+   ╭─[linear_attribute_copy.ers:5:1]
+ 3 │ // value must not be duplicated (ADR 0101).
+ 4 │ #[linear]
+   · ────┬────
+   ·     ╰── its values must not be copied
+ 5 │ #[copy]
+   · ───┬───
+   ·    ╰── its values are copied
+ 6 │ struct A { x: u8 }
+   ╰────
+  help: a linear value must be consumed exactly once, which a copy would defeat (ADR 0101)
+resolve::conflicting-attributes
+
+  × `#[copy]` and `#[linear]` cannot be combined
+    ╭─[linear_attribute_copy.ers:8:1]
+  7 │ 
+  8 │ #[copy]
+    · ───┬───
+    ·    ╰── its values are copied
+  9 │ #[linear]
+    · ────┬────
+    ·     ╰── its values must not be copied
+ 10 │ struct B {}
+    ╰────
+  help: a linear value must be consumed exactly once, which a copy would defeat (ADR 0101)

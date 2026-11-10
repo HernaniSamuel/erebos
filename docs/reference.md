@@ -5790,10 +5790,10 @@ Every error has a stable code, shown with the message.
 | `resolve::inconsistent-binding` | a name not bound by every alternative of an or-pattern, or bound with `let mut` by only some |
 | `resolve::reserved-name` | an item, module or `use` named `_start`, `core`, with a name starting with `__`, or like a built-in function (`assert`, `len`, `slice`); a module of the root module named `llvm` or `rt`; a region named `INCLUDE` |
 | `resolve::unknown-attribute` | an attribute that does not exist |
-| `resolve::misplaced-attribute` | an attribute on an item it does not apply to, as `#[packed]` or `#[align(N)]` on a bit-field struct, `#[align(N)]` on an `extern fn`, or `#[naked]` on an `extern fn`, the entry function, the panic function, an interrupt handler or anything but a function with a body, `#[interrupts]` on anything but an enum, or `#[copy]` on a bit-field struct, an enum without payloads or anything but a struct or an enum |
+| `resolve::misplaced-attribute` | an attribute on an item it does not apply to, as `#[packed]` or `#[align(N)]` on a bit-field struct, `#[align(N)]` on an `extern fn`, or `#[naked]` on an `extern fn`, the entry function, the panic function, an interrupt handler or anything but a function with a body, `#[interrupts]` on anything but an enum, `#[copy]` on a bit-field struct, an enum without payloads or anything but a struct or an enum, or `#[linear]` on anything but a struct that is not a bit-field struct (an enum included) |
 | `resolve::attribute-argument` | an attribute with a missing or extra argument |
 | `resolve::duplicate-attribute` | an attribute given twice |
-| `resolve::conflicting-attributes` | `#[packed]` with `#[align(N)]` |
+| `resolve::conflicting-attributes` | `#[packed]` with `#[align(N)]`, or `#[copy]` with `#[linear]` |
 | `resolve::missing-entry`, `resolve::multiple-entries` | not exactly one `entry fn` in the program |
 | `resolve::missing-panic`, `resolve::multiple-panics` | not exactly one `panic fn` in the program |
 | `resolve::duplicate-memory` | a second `memory` block in the program |

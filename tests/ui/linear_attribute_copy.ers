@@ -1,0 +1,13 @@
+// emit: hir
+// `#[linear]` and `#[copy]` cannot be combined, in either order: a linear
+// value must not be duplicated (ADR 0101).
+#[linear]
+#[copy]
+struct A { x: u8 }
+
+#[copy]
+#[linear]
+struct B {}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

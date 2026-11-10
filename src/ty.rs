@@ -24,12 +24,14 @@ use crate::span::Span;
 pub use asm::{AsmChecked, AsmPiece};
 pub use copy::{copy_declaration_fails, is_copy, report_copy_fields, suggest_copy};
 pub use dump::dump;
+pub use linear::is_linear;
 use place::{Unmovable, is_place};
 
 mod asm;
 mod copy;
 mod dump;
 mod expr;
+mod linear;
 mod pattern;
 mod place;
 mod usefulness;

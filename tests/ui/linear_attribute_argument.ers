@@ -1,0 +1,10 @@
+// emit: hir
+// `#[linear]` takes no argument (ADR 0101).
+#[linear(1)]
+struct A { x: u8 }
+
+#[linear(Eq)]
+struct B {}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

@@ -745,6 +745,9 @@ pub struct StructDef {
     /// `#[copy]`, with the span of the attribute: its values are copy, which
     /// `ty::copy-field-not-copy` makes true (ADR 0096).
     pub copy: Option<Span>,
+    /// `#[linear]`, with the span of the attribute: its values must be
+    /// consumed (ADR 0101).
+    pub linear: Option<Span>,
 }
 
 impl StructDef {

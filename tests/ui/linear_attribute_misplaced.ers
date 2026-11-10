@@ -1,0 +1,33 @@
+// emit: hir
+// `#[linear]` applies to structs other than bit-field structs. An enum is
+// not marked, with or without payloads: it is linear by holding a linear
+// value (ADR 0101).
+#[linear]
+struct Flags: u8 { ready: bool at 0 }
+
+#[linear]
+enum Color: u8 { Red = 0, Green = 1 }
+
+#[linear]
+enum Shape: u8 { Dot(u8) = 0, Empty = 1 }
+
+#[linear]
+fn f() {}
+
+#[linear]
+static COUNT: u32 = 0;
+
+#[linear]
+const LIMIT: u32 = 4;
+
+#[linear]
+mod m {}
+
+#[linear]
+extern fn c();
+
+#[linear]
+extern static OUTSIDE: u32;
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

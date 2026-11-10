@@ -15,14 +15,23 @@ use crate::syntax::ast;
 
 use super::{Lowerer, Named, visibility, written};
 
+/// The attributes of a struct, as `struct_attrs` found them.
+struct StructAttrs {
+    packed: bool,
+    align: Option<(ArrayLen, Span)>,
+    copy: Option<Span>,
+    linear: Option<Span>,
+}
+
 impl Lowerer<'_> {
     pub(super) fn struct_decl(&mut self, decl: &ast::StructDecl) -> StructDef {
         self.duplicate_fields(decl.fields.iter().map(|field| &field.name));
-        let (packed, align, copy) = self.struct_attrs(&decl.attrs);
+        let attrs = self.struct_attrs(&decl.attrs);
         StructDef {
-            packed,
-            align,
-            copy,
+            packed: attrs.packed,
+            align: attrs.align,
+            copy: attrs.copy,
+            linear: attrs.linear,
             name: self.path_of(self.module, &decl.name.name),
             name_span: decl.name.span,
             module: self.module,
@@ -160,7 +169,7 @@ impl Lowerer<'_> {
                     .label(attr.span, "not allowed on a bit-field struct")
                     .help("a bit-field struct has the size and alignment of its integer type, which it is stored as (ADR 0059)"),
                 ),
-                "export" | "naked" | "interrupts" | "copy" => {
+                "export" | "naked" | "interrupts" | "copy" | "linear" => {
                     self.misplaced_attr(attr, "a bit-field struct")
                 }
                 _ => self.unknown_attr(attr),
@@ -169,20 +178,23 @@ impl Lowerer<'_> {
     }
 
     /// Layout attributes (ADR 0022): `#[packed]` and `#[align(N)]`, at
-    /// most once each, and not together; and `#[copy]` (ADR 0096), which
-    /// goes with them. Returns them.
-    fn struct_attrs(
-        &mut self,
-        attrs: &[ast::Attr],
-    ) -> (bool, Option<(ArrayLen, Span)>, Option<Span>) {
+    /// most once each, and not together; and `#[copy]` (ADR 0096) and
+    /// `#[linear]` (ADR 0101), which go with them, once each and not
+    /// together. Returns them.
+    fn struct_attrs(&mut self, attrs: &[ast::Attr]) -> StructAttrs {
         let mut packed: Option<Span> = None;
         let mut align: Option<(ArrayLen, Span)> = None;
         let mut align_attr: Option<Span> = None;
         let mut copy: Option<Span> = None;
+        let mut linear: Option<Span> = None;
         for attr in attrs {
             let first = match attr.name.name.as_str() {
                 "copy" => {
                     self.flag_attr(attr, &mut copy);
+                    None
+                }
+                "linear" => {
+                    self.flag_attr(attr, &mut linear);
                     None
                 }
                 "packed" => {
@@ -233,7 +245,23 @@ impl Lowerer<'_> {
                 .help("`#[packed]` lowers alignment and `#[align]` raises it (ADR 0022)"),
             );
         }
-        (packed.is_some(), align, copy)
+        if let (Some(copy), Some(linear)) = (copy, linear) {
+            self.diags.push(
+                Diagnostic::error(
+                    "resolve::conflicting-attributes",
+                    "`#[copy]` and `#[linear]` cannot be combined",
+                )
+                .label(copy, "its values are copied")
+                .label(linear, "its values must not be copied")
+                .help("a linear value must be consumed exactly once, which a copy would defeat (ADR 0101)"),
+            );
+        }
+        StructAttrs {
+            packed: packed.is_some(),
+            align,
+            copy,
+            linear,
+        }
     }
 
     /// Items other than structs, enums, statics and functions with a body take
@@ -241,7 +269,7 @@ impl Lowerer<'_> {
     pub(super) fn no_attrs(&mut self, attrs: &[ast::Attr], what: &str) {
         for attr in attrs {
             match attr.name.name.as_str() {
-                "packed" | "align" | "export" | "naked" | "interrupts" | "copy" => {
+                "packed" | "align" | "export" | "naked" | "interrupts" | "copy" | "linear" => {
                     self.misplaced_attr(attr, what)
                 }
                 _ => self.unknown_attr(attr),
@@ -261,7 +289,9 @@ impl Lowerer<'_> {
                 "interrupts" => self.flag_attr(attr, &mut interrupts),
                 "copy" if payloads => self.flag_attr(attr, &mut copy),
                 "copy" => self.misplaced_attr(attr, "an enum without payloads"),
-                "packed" | "align" | "export" | "naked" => self.misplaced_attr(attr, "an enum"),
+                "packed" | "align" | "export" | "naked" | "linear" => {
+                    self.misplaced_attr(attr, "an enum")
+                }
                 _ => self.unknown_attr(attr),
             }
         }
@@ -277,6 +307,7 @@ impl Lowerer<'_> {
             }
             "interrupts" => "an enum declared in the program",
             "copy" => "structs, other than bit-field structs, and enums with payloads",
+            "linear" => "structs, other than bit-field structs",
             _ => "structs",
         };
         let mut diag = Diagnostic::error(
@@ -296,12 +327,19 @@ impl Lowerer<'_> {
         if attr.name.name == "copy" {
             diag = diag.help("`#[copy]` lets the values of a struct or of an enum with payloads be copied; a bit-field struct and an enum without payloads are copy already, and no other item has values (ADR 0096)");
         }
+        if attr.name.name == "linear" {
+            diag = diag.help(if what.contains("enum") {
+                "`#[linear]` would bind nobody on an enum: its variants are as visible as the enum, so any module that sees it could build a value and take it apart with `match`; an enum is linear by holding a linear value (ADR 0101)"
+            } else {
+                "`#[linear]` makes the values of a struct linear: each must be consumed before the function holding it returns, and none is overwritten; no other item has values (ADR 0101)"
+            });
+        }
         self.diags.push(diag);
     }
 
     /// An attribute that takes no argument and is given at most once
     /// (`#[export]`, ADR 0051; `#[naked]`, ADR 0079; `#[interrupts]`,
-    /// ADR 0089; `#[copy]`, ADR 0096); `given` holds the span
+    /// ADR 0089; `#[copy]`, ADR 0096; `#[linear]`, ADR 0101); `given` holds the span
     /// of the one already given.
     fn flag_attr(&mut self, attr: &ast::Attr, given: &mut Option<Span>) {
         let name = &attr.name.name;
@@ -372,7 +410,9 @@ impl Lowerer<'_> {
                         );
                     }
                 }
-                "packed" | "interrupts" | "copy" => self.misplaced_attr(attr, "a function"),
+                "packed" | "interrupts" | "copy" | "linear" => {
+                    self.misplaced_attr(attr, "a function")
+                }
                 _ => self.unknown_attr(attr),
             }
         }
@@ -418,7 +458,9 @@ impl Lowerer<'_> {
                     }
                 }
                 "export" => self.flag_attr(attr, &mut export),
-                "packed" | "naked" | "interrupts" | "copy" => self.misplaced_attr(attr, "a static"),
+                "packed" | "naked" | "interrupts" | "copy" | "linear" => {
+                    self.misplaced_attr(attr, "a static")
+                }
                 _ => self.unknown_attr(attr),
             }
         }
@@ -763,7 +805,7 @@ impl Lowerer<'_> {
                 format!("unknown attribute `#[{}]`", attr.name.name),
             )
             .label(attr.name.span, "not an attribute")
-            .help("the attributes are `#[packed]` and `#[align(N)]` on structs (ADR 0022), `#[align(N)]` on statics (ADR 0030) and on functions (ADR 0087), `#[copy]` on structs and on enums with payloads (ADR 0096), `#[export]` on functions and statics (ADR 0051), `#[naked]` on functions (ADR 0079), and `#[interrupts]` on an enum (ADR 0089)"),
+            .help("the attributes are `#[packed]` and `#[align(N)]` on structs (ADR 0022), `#[align(N)]` on statics (ADR 0030) and on functions (ADR 0087), `#[copy]` on structs and on enums with payloads (ADR 0096), `#[linear]` on structs (ADR 0101), `#[export]` on functions and statics (ADR 0051), `#[naked]` on functions (ADR 0079), and `#[interrupts]` on an enum (ADR 0089)"),
         );
     }
 
