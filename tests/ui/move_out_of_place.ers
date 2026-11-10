@@ -79,11 +79,13 @@ fn writes(p: *mut Handle, mut a: [Handle; 2], v: Handle) {
     SH = Handle { n: 2 };
 }
 
-// Accepted: the field of a call is a field of a value, not of a place.
+// Accepted: the field of a call is a field of a value, not of a place; its
+// copy fields too, through an element. Rejected: an element of its array,
+// which MIR does not move out of (ADR 0098, rule M3).
 fn temporaries(i: usize) {
     let h: Handle = make().h;
-    let e: Handle = make().items[i];
     let n: u32 = make().items[1].n;
+    let e: Handle = make().items[i];
 }
 
 // Accepted: a local, a parameter and their fields.

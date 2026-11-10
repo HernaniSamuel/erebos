@@ -944,6 +944,83 @@ fn frame(x: u8, y: u32) -> Frame {
     f
 }
 
+// Values of non-copy types (ADR 0098) are moved where others are copied, and
+// both executions read a move as a copy: a struct without fields moved,
+// passed and returned, and arrays of an enum with payloads of a non-copy
+// type that repeat a variant written without payload values, which writes
+// the tag of each element, in a local and in the initializer of a static.
+struct Idle {}
+struct Token { n: u32 }
+enum Slot: u8 { Full(Token) = 3, Free = 5 }
+
+static FREE_SLOTS: [Slot; 4] = [.Free; 4];
+
+fn idle(i: Idle) -> Idle {
+    i
+}
+
+fn wake(i: Idle, n: u32) -> Token {
+    Token { n: n }
+}
+
+fn zero_sized(n: u32) -> u64 {
+    let a: Idle = Idle {};
+    let b: Idle = idle(a);
+    let t: Token = wake(b, n);
+    let c: Idle = idle(Idle {});
+    mix(t.n as u64, 9)
+}
+
+fn slot_tag(slots: *const [Slot; 4], i: usize) -> u64 {
+    match (*slots)[i] {
+        .Full(_) => 1,
+        .Free => 2,
+    }
+}
+
+fn slots_hash(slots: *const [Slot; 4]) -> u64 {
+    let mut h: u64 = 0;
+    let mut i: usize = 0;
+    while i < 4 {
+        h = mix(h, slot_tag(slots, i));
+        i += 1;
+    }
+    h
+}
+
+fn local_slots(n: u32) -> u64 {
+    let mut slots: [Slot; 4] = [.Free; 4];
+    let before: u64 = slots_hash(&raw const slots);
+    slots[2] = .Full(Token { n: n });
+    mix(before, slots_hash(&raw const slots))
+}
+
+fn static_slots(unused: u32) -> u64 {
+    slots_hash(&raw const FREE_SLOTS)
+}
+
+static NO_TOKENS: [Option(Token); 3] = [.None; 3];
+
+fn option_tags(slots: *const [Option(Token); 3]) -> u64 {
+    let mut h: u64 = 0;
+    let mut i: usize = 0;
+    while i < 3 {
+        let tag: u64 = match (*slots)[i] {
+            .Some(_) => 1,
+            .None => 2,
+        };
+        h = mix(h, tag);
+        i += 1;
+    }
+    h
+}
+
+fn option_slots(n: u32) -> u64 {
+    let mut slots: [Option(Token); 3] = [.None; 3];
+    slots[1] = .Some(Token { n: n });
+    option_tags(&raw const slots)
+}
+
 fn print_u64(n: u64) {
     if n >= 10 {
         print_u64(n / 10);
@@ -1095,6 +1172,12 @@ entry fn main() -> ! {
     // Built by a `comptime` expression and read at run time.
     failures += check(119, (comptime frame(200, 0xABC0_0000)) as u64, frame(opaque_u8(200), opaque_u32(0xABC0_0000)) as u64);
     failures += check(120, (comptime frame(7, 0x1230_0000)).low as u64, frame(opaque_u8(7), opaque_u32(0x1230_0000)).low as u64);
+    failures += check(121, comptime zero_sized(7), zero_sized(opaque_u32(7)));
+    failures += check(122, comptime local_slots(5), local_slots(opaque_u32(5)));
+    // The initializer of the static wrote the tag of each element.
+    failures += check(123, static_slots(opaque_u32(0)), mix(mix(mix(mix(0, 2), 2), 2), 2));
+    failures += check(124, comptime option_slots(5), option_slots(opaque_u32(5)));
+    failures += check(125, option_tags(&raw const NO_TOKENS), mix(mix(mix(0, 2), 2), 2));
     if failures == 0 {
         putc(b'd'); putc(b'i'); putc(b'f'); putc(b'f'); putc(b'e'); putc(b'r'); putc(b'e');
         putc(b'n'); putc(b't'); putc(b'i'); putc(b'a'); putc(b'l'); putc(b' '); putc(b'o');

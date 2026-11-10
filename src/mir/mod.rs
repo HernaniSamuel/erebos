@@ -604,7 +604,7 @@ impl Body {
 
     pub fn operand_ty(&self, operand: &Operand) -> Ty {
         match operand {
-            Operand::Copy(place) => self.place_ty(*place),
+            Operand::Copy(place) | Operand::Move(place, _) => self.place_ty(*place),
             Operand::Const(Const::Int(_, int)) => Ty::Int(*int),
             Operand::Const(Const::Bool(_)) => Ty::Bool,
             Operand::Const(Const::Unit) => Ty::Unit,
@@ -825,6 +825,9 @@ pub struct StructDef {
     pub layout: Layout,
     /// `#[packed]`: its fields may be misaligned (ADR 0022).
     pub packed: bool,
+    /// Whether its values are copied rather than moved: declared `#[copy]`
+    /// (ADR 0096, 0098).
+    pub copy: bool,
     /// Set once every struct exists, since a field may point back to the
     /// struct that contains it.
     fields: OnceLock<Vec<Field>>,
@@ -857,11 +860,12 @@ pub struct StructRef(&'static StructDef);
 
 impl StructRef {
     /// Defines a struct; its fields are set later, with `set_fields`.
-    pub fn new(name: String, layout: Layout, packed: bool) -> StructRef {
+    pub fn new(name: String, layout: Layout, packed: bool, copy: bool) -> StructRef {
         StructRef(Box::leak(Box::new(StructDef {
             name,
             layout,
             packed,
+            copy,
             fields: OnceLock::new(),
         })))
     }
@@ -902,6 +906,10 @@ pub struct EnumDef {
     /// The type of the tag.
     pub int: IntTy,
     pub layout: Layout,
+    /// Whether its values are copied rather than moved: declared `#[copy]`,
+    /// or, for `Option(T)` and `Result(T, E)`, of copy arguments
+    /// (ADR 0096, 0098).
+    pub copy: bool,
     /// Set once the type exists, since a payload may point back to the
     /// enum that contains it.
     variants: OnceLock<Vec<Variant>>,
@@ -941,12 +949,13 @@ pub struct EnumRef(&'static EnumDef);
 
 impl EnumRef {
     /// Defines an enum; its variants are set later, with `set_variants`.
-    pub fn new(id: EnumId, name: String, int: IntTy, layout: Layout) -> EnumRef {
+    pub fn new(id: EnumId, name: String, int: IntTy, layout: Layout, copy: bool) -> EnumRef {
         EnumRef(Box::leak(Box::new(EnumDef {
             id,
             name,
             int,
             layout,
+            copy,
             variants: OnceLock::new(),
         })))
     }
@@ -1128,6 +1137,24 @@ impl fmt::Debug for PeripheralRef {
 }
 
 impl Ty {
+    /// Whether the values of the type are copied rather than moved
+    /// (ADR 0096, 0098): a struct or an enum with payloads by its flag, an
+    /// array by its element, and the other types, which have no flag, always.
+    pub fn is_copy(self) -> bool {
+        match self {
+            Ty::Array(elem, _) => elem.is_copy(),
+            Ty::Struct(s) => s.def().copy,
+            Ty::Enum(e) => e.def().copy,
+            Ty::Unit
+            | Ty::Never
+            | Ty::Bool
+            | Ty::Int(_)
+            | Ty::Ptr(_)
+            | Ty::Slice(_)
+            | Ty::Peripheral(_) => true,
+        }
+    }
+
     /// Arrays, structs, slices and enums with payloads: values made of
     /// other values, which are copied in memory rather than held in
     /// registers. A slice is an address and a length (ADR 0031); an enum
@@ -1396,8 +1423,23 @@ impl Place {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Operand {
+    /// Reads the value in a place of a copy type (ADR 0096).
     Copy(Place),
+    /// Reads the value in a place of a non-copy type, and says that the place
+    /// is moved (ADR 0098). The span is that of the expression whose value
+    /// is moved. Evaluation and code generation read it as a `Copy`.
+    Move(Place, Span),
     Const(Const),
+}
+
+impl Operand {
+    /// The place read, by `copy` or by `move`.
+    pub fn place(self) -> Option<Place> {
+        match self {
+            Operand::Copy(place) | Operand::Move(place, _) => Some(place),
+            Operand::Const(_) => None,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1599,6 +1641,7 @@ impl fmt::Display for Operand {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Operand::Copy(place) => write!(f, "copy {place}"),
+            Operand::Move(place, _) => write!(f, "move {place}"),
             Operand::Const(Const::Int(bits, int)) => {
                 write!(f, "const {}_{int}", int.display_bits(*bits))
             }

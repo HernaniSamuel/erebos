@@ -123,7 +123,7 @@ const PANICS: &[(&str, usize)] = &[
     ("src/hir/lower/resolve.rs", 7),
     ("src/hir/mod.rs", 3),
     ("src/layout.rs", 2),
-    ("src/mir/build.rs", 40),
+    ("src/mir/build.rs", 35),
     ("src/mir/build/bit_struct.rs", 3),
     ("src/mir/mod.rs", 16),
     ("src/mir/validate.rs", 1),

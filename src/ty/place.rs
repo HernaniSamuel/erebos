@@ -1120,11 +1120,14 @@ impl Checker<'_, '_> {
             ExprKind::Deref(_) => Root::Unmovable(Unmovable::Pointer),
             ExprKind::Field(base, ..) if is_place(base) => self.root(base),
             ExprKind::Index(base, ..) => match self.q.tables.expr_types[base.id.0 as usize] {
+                // An element of an array, of a place or of a temporary alike
+                // (`f().items[i]`): MIR moves only out of a local followed by
+                // fields and payloads (ADR 0098, M3).
                 Ty::Array(..) if is_place(base) => match self.root(base) {
-                    Root::Local => Root::Unmovable(Unmovable::ArrayElement),
+                    Root::Local | Root::Temporary => Root::Unmovable(Unmovable::ArrayElement),
                     root => root,
                 },
-                Ty::Array(..) => Root::Temporary,
+                Ty::Array(..) => Root::Unmovable(Unmovable::ArrayElement),
                 // A pointer to a slice's elements, or a slice place `(*s)`.
                 _ => Root::Unmovable(Unmovable::Pointer),
             },

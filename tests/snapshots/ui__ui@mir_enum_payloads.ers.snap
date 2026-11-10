@@ -30,7 +30,7 @@ fn write(_1: u8, _2: u16) -> Msg {
         (_4 as 2).0 = copy _3;
         (_4 as 2).1 = copy _2;
         _4.tag = const 2_u8;
-        _0 = copy _4;
+        _0 = move _4;
         return;
     }
 }
@@ -41,7 +41,7 @@ fn nop() -> Msg {
 
     bb0: {
         _1.tag = const 0_u8;
-        _0 = copy _1;
+        _0 = move _1;
         return;
     }
 }

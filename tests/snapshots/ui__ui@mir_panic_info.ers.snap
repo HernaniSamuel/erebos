@@ -214,15 +214,14 @@ fn checks(_1: u32, _2: u8, _3: Msg, _4: Option(u32)) -> Option(u32) {
     let _8: bool;
     let _9: u8;
     let _10: u32;
-    let _11: Msg;
+    let _11: u32;
     let _12: u32;
     let _13: u32;
     let _14: u32;
-    let _15: u32;
-    let _16: Option(u32);
+    let _15: Option(u32);
+    let _16: u32;
     let _17: u32;
-    let _18: u32;
-    let _19: Option(u32);
+    let _18: Option(u32);
 
     bb0: {
         _8 = Lt(copy _1, const 10_u32);
@@ -254,18 +253,17 @@ fn checks(_1: u32, _2: u8, _3: Msg, _4: Option(u32)) -> Option(u32) {
 
     bb6: {
         _5 = copy _10;
-        _11 = copy _3;
-        switch copy _11.tag -> [0_u8: bb7, 1_u8: bb10, otherwise: bb9];
+        switch copy _3.tag -> [0_u8: bb7, 1_u8: bb10, otherwise: bb9];
     }
 
     bb7: {
-        _12 = const 0_u32;
+        _11 = const 0_u32;
         goto -> bb11;
     }
 
     bb8: {
-        _13 = copy _6 as u32;
-        _12 = copy _13;
+        _12 = copy _6 as u32;
+        _11 = copy _12;
         goto -> bb11;
     }
 
@@ -274,24 +272,24 @@ fn checks(_1: u32, _2: u8, _3: Msg, _4: Option(u32)) -> Option(u32) {
     }
 
     bb10: {
-        _6 = copy (_11 as 1).0;
+        _6 = copy (_3 as 1).0;
         goto -> bb8;
     }
 
     bb11: {
-        _7 = copy _12;
-        _14 = Add(copy _5, copy _7);
-        _15 = copy _14;
-        _16 = copy _4;
-        switch copy _16.tag -> [1_u8: bb12, 0_u8: bb13, otherwise: bb14];
+        _7 = copy _11;
+        _13 = Add(copy _5, copy _7);
+        _14 = copy _13;
+        _15 = copy _4;
+        switch copy _15.tag -> [1_u8: bb12, 0_u8: bb13, otherwise: bb14];
     }
 
     bb12: {
-        _17 = copy (_16 as 1).0;
-        _18 = Add(copy _15, copy _17);
-        (_19 as 1).0 = copy _18;
-        _19.tag = const 1_u8;
-        _0 = copy _19;
+        _16 = copy (_15 as 1).0;
+        _17 = Add(copy _14, copy _16);
+        (_18 as 1).0 = copy _17;
+        _18.tag = const 1_u8;
+        _0 = copy _18;
         return;
     }
 

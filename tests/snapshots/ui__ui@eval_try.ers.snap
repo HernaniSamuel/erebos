@@ -163,9 +163,9 @@ fn digit(_1: u8) -> Result(u32, ParseError) {
     bb4: {
         (_5 as 1).0 = copy _1;
         _5.tag = const 1_u8;
-        (_6 as 1).0 = copy _5;
+        (_6 as 1).0 = move _5;
         _6.tag = const 1_u8;
-        _0 = copy _6;
+        _0 = move _6;
         return;
     }
 
@@ -178,7 +178,7 @@ fn digit(_1: u8) -> Result(u32, ParseError) {
         _8 = copy _7 as u32;
         (_9 as 0).0 = copy _8;
         _9.tag = const 0_u8;
-        _0 = copy _9;
+        _0 = move _9;
         return;
     }
 }
@@ -210,7 +210,7 @@ fn two(_1: u8, _2: u8) -> Result(u32, ParseError) {
     }
 
     bb2: {
-        (_0 as 1).0 = copy (_3 as 1).0;
+        (_0 as 1).0 = move (_3 as 1).0;
         _0.tag = const 1_u8;
         return;
     }
@@ -224,12 +224,12 @@ fn two(_1: u8, _2: u8) -> Result(u32, ParseError) {
         _9 = Add(copy _6, copy _8);
         (_10 as 0).0 = copy _9;
         _10.tag = const 0_u8;
-        _0 = copy _10;
+        _0 = move _10;
         return;
     }
 
     bb5: {
-        (_0 as 1).0 = copy (_7 as 1).0;
+        (_0 as 1).0 = move (_7 as 1).0;
         _0.tag = const 1_u8;
         return;
     }
@@ -244,30 +244,28 @@ fn code(_1: Result(u32, ParseError)) -> u32 {
     let _1: Result(u32, ParseError); // r
     let _2: u32; // v
     let _3: u8; // c
-    let _4: Result(u32, ParseError);
+    let _4: u32;
     let _5: u32;
     let _6: u32;
-    let _7: u32;
 
     bb0: {
-        _4 = copy _1;
-        switch copy _4.tag -> [0_u8: bb5, 1_u8: bb6, otherwise: bb4];
+        switch copy _1.tag -> [0_u8: bb5, 1_u8: bb6, otherwise: bb4];
     }
 
     bb1: {
-        _5 = copy _2;
+        _4 = copy _2;
         goto -> bb10;
     }
 
     bb2: {
-        _6 = copy _3 as u32;
-        _7 = Add(const 1000_u32, copy _6);
-        _5 = copy _7;
+        _5 = copy _3 as u32;
+        _6 = Add(const 1000_u32, copy _5);
+        _4 = copy _6;
         goto -> bb10;
     }
 
     bb3: {
-        _5 = const 2000_u32;
+        _4 = const 2000_u32;
         goto -> bb10;
     }
 
@@ -276,20 +274,20 @@ fn code(_1: Result(u32, ParseError)) -> u32 {
     }
 
     bb5: {
-        _2 = copy (_4 as 0).0;
+        _2 = copy (_1 as 0).0;
         goto -> bb1;
     }
 
     bb6: {
-        switch copy (_4 as 1).0.tag -> [1_u8: bb8, otherwise: bb7];
+        switch copy (_1 as 1).0.tag -> [1_u8: bb8, otherwise: bb7];
     }
 
     bb7: {
-        switch copy (_4 as 1).0.tag -> [0_u8: bb9, otherwise: bb4];
+        switch copy (_1 as 1).0.tag -> [0_u8: bb9, otherwise: bb4];
     }
 
     bb8: {
-        _3 = copy ((_4 as 1).0 as 1).0;
+        _3 = copy ((_1 as 1).0 as 1).0;
         goto -> bb2;
     }
 
@@ -298,7 +296,7 @@ fn code(_1: Result(u32, ParseError)) -> u32 {
     }
 
     bb10: {
-        _0 = copy _5;
+        _0 = copy _4;
         return;
     }
 }
@@ -388,7 +386,7 @@ comptime fn comptime() -> () {
 
     bb5: {
         _8 = call two(const 52_u8, const 50_u8);
-        _9 = call code(copy _8);
+        _9 = call code(move _8);
         _10 = Eq(copy _9, const 42_u32);
         if copy _10 -> [true: bb7, false: bb8];
     }
@@ -399,7 +397,7 @@ comptime fn comptime() -> () {
 
     bb7: {
         _11 = call two(const 120_u8, const 50_u8);
-        _12 = call code(copy _11);
+        _12 = call code(move _11);
         _13 = Eq(copy _12, const 1120_u32);
         if copy _13 -> [true: bb9, false: bb10];
     }
@@ -410,7 +408,7 @@ comptime fn comptime() -> () {
 
     bb9: {
         _14 = call two(const 52_u8, const 121_u8);
-        _15 = call code(copy _14);
+        _15 = call code(move _14);
         _16 = Eq(copy _15, const 1121_u32);
         if copy _16 -> [true: bb11, false: bb12];
     }

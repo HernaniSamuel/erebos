@@ -136,7 +136,7 @@ comptime fn PADDED() -> Padded {
     bb0: {
         _1.0 = const 170_u8;
         _1.1 = const 3149642683_u32;
-        _0 = copy _1;
+        _0 = move _1;
         return;
     }
 }

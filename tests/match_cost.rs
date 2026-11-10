@@ -324,3 +324,41 @@ fn nested_or_pattern_of_variants_code_is_linear() {
     ]);
     assert_linear(&program(decls, "N", &[arm, leaf("_")]), 2);
 }
+
+#[test]
+fn bindings_of_non_copy_payloads_code_is_linear() {
+    // The shapes above with a non-copy payload value bound by every arm
+    // (ADR 0098): the move is made at the end of its alternative, in the
+    // block that ends it, so it adds no block.
+    let handle = "struct Handle { n: u32 }";
+    let bind = || leaf("let h: Handle");
+    let n = 32;
+    // pairs(n), the first position a `Handle`.
+    let mut arms: Vec<Pat> = (0..n)
+        .map(|i| {
+            let flags = (0..2 * n).map(|j| leaf(if j == i || j == i + n { "true" } else { "_" }));
+            variant("P::A", std::iter::once(bind()).chain(flags).collect())
+        })
+        .collect();
+    arms.push(leaf("_"));
+    let positions = vec!["bool"; 2 * n].join(", ");
+    let decls = format!("{handle} enum P: u8 {{ A(Handle, {positions}) = 0 }}");
+    assert_linear(&program(&decls, "P", &arms), 1);
+
+    // ors(n), the first position a `Handle`.
+    let subs = std::iter::once(bind())
+        .chain(std::iter::repeat_with(one_to_three).take(n))
+        .collect();
+    let arms = [variant("Q::A", subs), leaf("_")];
+    let positions = vec!["u8"; n].join(", ");
+    let decls = format!("{handle} enum Q: u8 {{ A(Handle, {positions}) = 0 }}");
+    assert_linear(&program(&decls, "Q", &arms), 1);
+
+    // Alternatives of one arm, each binding its own: `R::A(let h, _) | R::B(let h, 1 | 2)`.
+    let arm = or(vec![
+        variant("R::A", vec![bind(), leaf("_")]),
+        variant("R::B", vec![bind(), leaf("1 | 2")]),
+    ]);
+    let decls = format!("{handle} enum R: u8 {{ A(Handle, u8) = 0, B(Handle, u8) = 1 }}");
+    assert_linear(&program(&decls, "R", &[arm, leaf("_")]), 2);
+}

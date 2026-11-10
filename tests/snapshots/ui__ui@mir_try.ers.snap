@@ -84,7 +84,7 @@ fn tens(_1: Result(u8, ParseError)) -> Result(u32, ParseError) {
     let _6: Result(u32, ParseError);
 
     bb0: {
-        _2 = copy _1;
+        _2 = move _1;
         switch copy _2.tag -> [0_u8: bb1, 1_u8: bb2, otherwise: bb3];
     }
 
@@ -94,12 +94,12 @@ fn tens(_1: Result(u8, ParseError)) -> Result(u32, ParseError) {
         _5 = Mul(copy _4, const 10_u32);
         (_6 as 0).0 = copy _5;
         _6.tag = const 0_u8;
-        _0 = copy _6;
+        _0 = move _6;
         return;
     }
 
     bb2: {
-        (_0 as 1).0 = copy (_2 as 1).0;
+        (_0 as 1).0 = move (_2 as 1).0;
         _0.tag = const 1_u8;
         return;
     }

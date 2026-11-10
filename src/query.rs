@@ -1283,7 +1283,13 @@ impl<'h> Queries<'h> {
         let layout = self
             .struct_layout(id)
             .expect("MIR is only built for well-typed programs");
-        let s = StructRef::new(def.name.clone(), layout.layout, def.packed);
+        // The kind is what type checking reads (`ty::is_copy`, ADR 0098).
+        let s = StructRef::new(
+            def.name.clone(),
+            layout.layout,
+            def.packed,
+            def.copy.is_some(),
+        );
         self.mir_structs[id.0 as usize] = Some(s);
         let fields = def
             .fields
@@ -1312,11 +1318,15 @@ impl<'h> Queries<'h> {
         let layout = self
             .enum_layout(id)
             .expect("MIR is only built for well-typed programs");
+        // `Option(T)` and `Result(T, E)` are copy when their arguments are,
+        // which `ty::is_copy` reads from their payload types (ADR 0098).
+        let copy = ty::is_copy(self, hir::Ty::Enum(def.ty));
         let e = EnumRef::new(
             mir::EnumId(id.0),
             def.name.clone(),
             def.ty.int,
             layout.layout,
+            copy,
         );
         self.mir_enums[id.0 as usize] = Some(e);
         let variants = def

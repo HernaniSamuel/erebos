@@ -182,88 +182,99 @@ ty::move-out-of-place
   help: mark `Handle` with `#[copy]` if its values may be duplicated (ADR 0097)
 ty::move-out-of-place
 
+  × cannot move a value of the non-copy type `Handle` out of an array element
+    ╭─[move_out_of_place.ers:88:21]
+ 87 │     let n: u32 = make().items[1].n;
+ 88 │     let e: Handle = make().items[i];
+    ·                     ───────┬───────
+    ·                            ╰── `Handle` is not copy, and this is an array element
+ 89 │ }
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated (ADR 0097)
+ty::move-out-of-place
+
   × cannot move a value of the non-copy type `Handle` out of a static
-     ╭─[move_out_of_place.ers:102:15]
- 100 │ fn matches(p: *mut Msg, a: [Msg; 2], m: Msg) -> u32 {
- 101 │     let from_static: u32 = match SMSG {
+     ╭─[move_out_of_place.ers:104:15]
+ 102 │ fn matches(p: *mut Msg, a: [Msg; 2], m: Msg) -> u32 {
+ 103 │     let from_static: u32 = match SMSG {
      ·                                  ──┬─
      ·                                    ╰── this is a static
- 102 │         .Data(let h: Handle) => h.n,
+ 104 │         .Data(let h: Handle) => h.n,
      ·               ──────┬──────
      ·                     ╰── `Handle` is not copy, so this binding moves it
- 103 │         .Num(let n: u32) => n,
+ 105 │         .Num(let n: u32) => n,
      ╰────
   help: mark `Handle` with `#[copy]` if its values may be duplicated (ADR 0097)
 ty::move-out-of-place
 
   × cannot move a value of the non-copy type `Handle` out of a place through a pointer
-     ╭─[move_out_of_place.ers:107:15]
- 105 │     };
- 106 │     let from_pointer: u32 = match *p {
+     ╭─[move_out_of_place.ers:109:15]
+ 107 │     };
+ 108 │     let from_pointer: u32 = match *p {
      ·                                   ─┬
      ·                                    ╰── this is a place through a pointer
- 107 │         .Data(let h: Handle) => h.n,
+ 109 │         .Data(let h: Handle) => h.n,
      ·               ──────┬──────
      ·                     ╰── `Handle` is not copy, so this binding moves it
- 108 │         _ => 0,
+ 110 │         _ => 0,
      ╰────
   help: mark `Handle` with `#[copy]` if its values may be duplicated (ADR 0097)
 ty::move-out-of-place
 
   × cannot move a value of the non-copy type `Handle` out of an array element
-     ╭─[move_out_of_place.ers:111:15]
- 109 │     };
- 110 │     let from_element: u32 = match a[1] {
+     ╭─[move_out_of_place.ers:113:15]
+ 111 │     };
+ 112 │     let from_element: u32 = match a[1] {
      ·                                   ──┬─
      ·                                     ╰── this is an array element
- 111 │         .Data(let h: Handle) => h.n,
+ 113 │         .Data(let h: Handle) => h.n,
      ·               ──────┬──────
      ·                     ╰── `Handle` is not copy, so this binding moves it
- 112 │         _ => 0,
+ 114 │         _ => 0,
      ╰────
   help: mark `Handle` with `#[copy]` if its values may be duplicated (ADR 0097)
 ty::move-out-of-place
 
   × cannot move a value of the non-copy type `Handle` out of a place through a pointer
-     ╭─[move_out_of_place.ers:132:15]
- 131 │ fn read(p: *mut Handle) {
- 132 │     if true { *p } else { *p };
+     ╭─[move_out_of_place.ers:134:15]
+ 133 │ fn read(p: *mut Handle) {
+ 134 │     if true { *p } else { *p };
      ·               ─┬
      ·                ╰── `Handle` is not copy, and this is a place through a pointer
- 133 │     let h: Handle = { *p };
+ 135 │     let h: Handle = { *p };
      ╰────
   help: mark `Handle` with `#[copy]` if its values may be duplicated (ADR 0097)
 ty::move-out-of-place
 
   × cannot move a value of the non-copy type `Handle` out of a place through a pointer
-     ╭─[move_out_of_place.ers:132:27]
- 131 │ fn read(p: *mut Handle) {
- 132 │     if true { *p } else { *p };
+     ╭─[move_out_of_place.ers:134:27]
+ 133 │ fn read(p: *mut Handle) {
+ 134 │     if true { *p } else { *p };
      ·                           ─┬
      ·                            ╰── `Handle` is not copy, and this is a place through a pointer
- 133 │     let h: Handle = { *p };
+ 135 │     let h: Handle = { *p };
      ╰────
   help: mark `Handle` with `#[copy]` if its values may be duplicated (ADR 0097)
 ty::move-out-of-place
 
   × cannot move a value of the non-copy type `Handle` out of a place through a pointer
-     ╭─[move_out_of_place.ers:133:23]
- 132 │     if true { *p } else { *p };
- 133 │     let h: Handle = { *p };
+     ╭─[move_out_of_place.ers:135:23]
+ 134 │     if true { *p } else { *p };
+ 135 │     let h: Handle = { *p };
      ·                       ─┬
      ·                        ╰── `Handle` is not copy, and this is a place through a pointer
- 134 │ }
+ 136 │ }
      ╰────
   help: mark `Handle` with `#[copy]` if its values may be duplicated (ADR 0097)
 ty::volatile-aggregate
 
   × a volatile `Msg` cannot be accessed as a whole
-     ╭─[move_out_of_place.ers:138:11]
- 137 │ fn volatile_match(p: *mut volatile Msg) -> u32 {
- 138 │     match *p {
+     ╭─[move_out_of_place.ers:140:11]
+ 139 │ fn volatile_match(p: *mut volatile Msg) -> u32 {
+ 140 │     match *p {
      ·           ─┬
      ·            ╰── an enum with payloads is an aggregate, without fields to access one at a time
- 139 │         .Num(let n: u32) => n,
+ 141 │         .Num(let n: u32) => n,
      ╰────
   help: the width and number of the bus accesses would be up to the compiler; device registers are
         described with structs, integers and enums without payloads (ADR 0023, 0039)

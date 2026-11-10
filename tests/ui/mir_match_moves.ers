@@ -1,0 +1,77 @@
+// emit: mir
+// A `match` on a place of a non-copy type tests the place itself, with no
+// copy of it (ADR 0098): the tags and the values tested are copy. A binding
+// of a copy type is copied where its position is reached, as before. A
+// binding of a non-copy type is moved after the last test of its alternative
+// has passed, just before the jump to its arm, so an alternative that binds
+// and then fails a later test (`.Two(let h: Handle, 0)` on a pair whose
+// number is 1) moves nothing, and the next alternative moves the same payload
+// value. Two alternatives of one arm each move their binding at their own
+// end, then jump to the arm. A `let` arm moves the whole scrutinee into its
+// variable where the arm is entered. A scrutinee that is not a place is
+// tested in its temporary.
+struct Handle { n: u32 }
+
+enum Msg: u8 { Empty = 0, One(Handle) = 1, Two(Handle, u32) = 2, Num(u32) = 3, Wide(Handle) = 4 }
+
+struct Holder { msg: Msg, n: u32 }
+
+fn make() -> Msg { .Num(7) }
+
+fn consume(m: Msg) -> u32 { 0 }
+
+fn in_place(m: Msg) -> u32 {
+    match m {
+        .Empty => 0,
+        .Num(let n: u32) => n,
+        _ => 1,
+    }
+}
+
+fn bound(m: Msg) -> u32 {
+    match m {
+        .One(let h: Handle) => h.n,
+        _ => 0,
+    }
+}
+
+fn after_the_last_test(m: Msg) -> u32 {
+    match m {
+        .Two(let h: Handle, 0) => h.n,
+        .Two(let h: Handle, 1) => h.n + 1,
+        .Two(_, let n: u32) => n,
+        _ => 0,
+    }
+}
+
+fn alternatives(m: Msg) -> u32 {
+    match m {
+        .One(let h: Handle) | .Wide(let h: Handle) => h.n,
+        _ => 0,
+    }
+}
+
+fn let_arm(m: Msg) -> u32 {
+    match m {
+        .Empty => 0,
+        let other: Msg => consume(other),
+    }
+}
+
+fn a_field(h: Holder) -> u32 {
+    match h.msg {
+        .One(let inner: Handle) => inner.n,
+        .Num(let n: u32) => n,
+        _ => h.n,
+    }
+}
+
+fn a_temporary() -> u32 {
+    match make() {
+        .Num(let n: u32) => n,
+        _ => 0,
+    }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

@@ -11,51 +11,49 @@ fn decode(_1: Msg) -> u16 {
     let _0: u16;
     let _1: Msg; // m
     let _2: u16; // v
-    let _3: Msg;
-    let _4: u16;
+    let _3: u16;
 
     bb0: {
-        _3 = copy _1;
-        switch copy _3.tag -> [0_u8: bb1, 1_u8: bb10, 2_u8: bb15, 3_u8: bb19, otherwise: bb9];
+        switch copy _1.tag -> [0_u8: bb1, 1_u8: bb10, 2_u8: bb15, 3_u8: bb19, otherwise: bb9];
     }
 
     bb1: {
-        _4 = const 0_u16;
+        _3 = const 0_u16;
         goto -> bb23;
     }
 
     bb2: {
-        _4 = const 1_u16;
+        _3 = const 1_u16;
         goto -> bb23;
     }
 
     bb3: {
-        _4 = copy _2;
+        _3 = copy _2;
         goto -> bb23;
     }
 
     bb4: {
-        _4 = const 2_u16;
+        _3 = const 2_u16;
         goto -> bb23;
     }
 
     bb5: {
-        _4 = const 3_u16;
+        _3 = const 3_u16;
         goto -> bb23;
     }
 
     bb6: {
-        _4 = const 4_u16;
+        _3 = const 4_u16;
         goto -> bb23;
     }
 
     bb7: {
-        _4 = const 5_u16;
+        _3 = const 5_u16;
         goto -> bb23;
     }
 
     bb8: {
-        _4 = const 6_u16;
+        _3 = const 6_u16;
         goto -> bb23;
     }
 
@@ -64,15 +62,15 @@ fn decode(_1: Msg) -> u16 {
     }
 
     bb10: {
-        switch copy (_3 as 1).0 -> [16_u8: bb12, otherwise: bb11];
+        switch copy (_1 as 1).0 -> [16_u8: bb12, otherwise: bb11];
     }
 
     bb11: {
-        switch copy (_3 as 1).0 -> [16_u8: bb14, 17_u8: bb14, otherwise: bb4];
+        switch copy (_1 as 1).0 -> [16_u8: bb14, 17_u8: bb14, otherwise: bb4];
     }
 
     bb12: {
-        switch copy (_3 as 1).1 -> [7_u16: bb13, otherwise: bb11];
+        switch copy (_1 as 1).1 -> [7_u16: bb13, otherwise: bb11];
     }
 
     bb13: {
@@ -80,16 +78,16 @@ fn decode(_1: Msg) -> u16 {
     }
 
     bb14: {
-        _2 = copy (_3 as 1).1;
+        _2 = copy (_1 as 1).1;
         goto -> bb3;
     }
 
     bb15: {
-        switch copy (_3 as 2).0 -> [0_u8: bb17, otherwise: bb16];
+        switch copy (_1 as 2).0 -> [0_u8: bb17, otherwise: bb16];
     }
 
     bb16: {
-        switch copy (_3 as 2).0 -> [1_u8: bb18, otherwise: bb9];
+        switch copy (_1 as 2).0 -> [1_u8: bb18, otherwise: bb9];
     }
 
     bb17: {
@@ -101,11 +99,11 @@ fn decode(_1: Msg) -> u16 {
     }
 
     bb19: {
-        switch copy (_3 as 3).0 -> [true: bb21, otherwise: bb20];
+        switch copy (_1 as 3).0 -> [true: bb21, otherwise: bb20];
     }
 
     bb20: {
-        switch copy (_3 as 3).0 -> [false: bb22, otherwise: bb9];
+        switch copy (_1 as 3).0 -> [false: bb22, otherwise: bb9];
     }
 
     bb21: {
@@ -117,7 +115,7 @@ fn decode(_1: Msg) -> u16 {
     }
 
     bb23: {
-        _0 = copy _4;
+        _0 = copy _3;
         return;
     }
 }
@@ -125,31 +123,29 @@ fn decode(_1: Msg) -> u16 {
 fn wildcard(_1: Msg) -> u16 {
     let _0: u16;
     let _1: Msg; // m
-    let _2: Msg;
-    let _3: u16;
+    let _2: u16;
 
     bb0: {
-        _2 = copy _1;
-        switch copy _2.tag -> [2_u8: bb4, otherwise: bb3];
+        switch copy _1.tag -> [2_u8: bb4, otherwise: bb3];
     }
 
     bb1: {
-        _3 = const 1_u16;
+        _2 = const 1_u16;
         goto -> bb6;
     }
 
     bb2: {
-        _3 = const 2_u16;
+        _2 = const 2_u16;
         goto -> bb6;
     }
 
     bb3: {
-        _3 = const 0_u16;
+        _2 = const 0_u16;
         goto -> bb6;
     }
 
     bb4: {
-        switch copy (_2 as 2).0 -> [1_u8: bb5, otherwise: bb2];
+        switch copy (_1 as 2).0 -> [1_u8: bb5, otherwise: bb2];
     }
 
     bb5: {
@@ -157,7 +153,7 @@ fn wildcard(_1: Msg) -> u16 {
     }
 
     bb6: {
-        _0 = copy _3;
+        _0 = copy _2;
         return;
     }
 }
