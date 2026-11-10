@@ -1,0 +1,159 @@
+// Pins in typestate (ADR 0094, 0096 to 0099): a pin goes from disabled to
+// input to output by functions that consume it, one struct per state. The
+// structs are not copy, so a transition moves the pin and the old state can
+// no longer be named. The port is simulated by `static mut` words (the boards
+// have no GPIO), and each transition prints its state over the UART.
+// expect-output: pin 3: disabled
+// expect-output: pin 3: input
+// expect-output: pin 3: input reads low
+// expect-output: pin 3: output
+// expect-output: pin 3: output high
+// expect-output: pin 3: output low
+// expect-output: pin 3: output high
+// expect-output: pin 3: input
+// expect-output: pin 3: input reads high
+// expect-output: pin 3: disabled
+// expect-output: pin 5: disabled
+// expect-output: pin 5: input
+// expect-output: pin 5: output
+// expect-output: pin 5: output high
+// expect-output: port 32 32 40
+// expect-exit: 0
+
+mod board;
+use board::{exit, putc};
+
+// The simulated port: one bit per pin in each word.
+static mut ENABLED: u32 = 0;
+static mut DIRECTION: u32 = 0;
+static mut LEVEL: u32 = 0;
+
+struct Disabled { pin: u32 }
+
+struct Input { pin: u32 }
+
+struct Output { pin: u32 }
+
+// What `read` gives back: the pin, still an input, and the level it saw.
+struct Reading { pin: Input, high: bool }
+
+fn puts(s: *const [u8]) {
+    let mut i: usize = 0;
+    while i < len(s) {
+        putc((*s)[i]);
+        i += 1;
+    }
+}
+
+fn print_u32(n: u32) {
+    if n >= 10 {
+        print_u32(n / 10);
+    }
+    putc(b'0' + (n % 10) as u8);
+}
+
+// Starts a line: `pin N: `.
+fn line(pin: u32) {
+    puts(&raw const b"pin ");
+    print_u32(pin);
+    puts(&raw const b": ");
+}
+
+fn bit(pin: u32) -> u32 {
+    1 << pin
+}
+
+fn disabled(pin: u32) -> Disabled {
+    ENABLED &= !bit(pin);
+    DIRECTION &= !bit(pin);
+    line(pin);
+    puts(&raw const b"disabled\n");
+    Disabled { pin: pin }
+}
+
+fn into_input(p: Disabled) -> Input {
+    ENABLED |= bit(p.pin);
+    DIRECTION &= !bit(p.pin);
+    line(p.pin);
+    puts(&raw const b"input\n");
+    Input { pin: p.pin }
+}
+
+fn into_output(p: Input) -> Output {
+    DIRECTION |= bit(p.pin);
+    line(p.pin);
+    puts(&raw const b"output\n");
+    Output { pin: p.pin }
+}
+
+fn set(p: Output, high: bool) -> Output {
+    line(p.pin);
+    if high {
+        LEVEL |= bit(p.pin);
+        puts(&raw const b"output high\n");
+    } else {
+        LEVEL &= !bit(p.pin);
+        puts(&raw const b"output low\n");
+    }
+    p
+}
+
+fn read(p: Input) -> Reading {
+    let high: bool = (LEVEL & bit(p.pin)) != 0;
+    line(p.pin);
+    if high {
+        puts(&raw const b"input reads high\n");
+    } else {
+        puts(&raw const b"input reads low\n");
+    }
+    Reading { pin: p, high: high }
+}
+
+// An output goes back to an input; the level stays on the pin.
+fn release(p: Output) -> Input {
+    DIRECTION &= !bit(p.pin);
+    line(p.pin);
+    puts(&raw const b"input\n");
+    Input { pin: p.pin }
+}
+
+fn disable(p: Input) -> Disabled {
+    ENABLED &= !bit(p.pin);
+    line(p.pin);
+    puts(&raw const b"disabled\n");
+    Disabled { pin: p.pin }
+}
+
+entry fn main() -> ! {
+    // Pin 3 goes through every state.
+    let d3: Disabled = disabled(3);
+    let i3: Input = into_input(d3);
+    let r3: Reading = read(i3);
+    // `r3.pin` is moved, `r3.high` is still there to read.
+    let o3: Output = set(into_output(r3.pin), !r3.high);
+    let o3_low: Output = set(o3, false);
+    let o3_high: Output = set(o3_low, true);
+    let i3_again: Input = release(o3_high);
+    let r3_again: Reading = read(i3_again);
+    let d3_again: Disabled = disable(r3_again.pin);
+
+    // Pin 5 is left as an output.
+    let d5: Disabled = disabled(5);
+    let i5: Input = into_input(d5);
+    let o5: Output = into_output(i5);
+    let o5_high: Output = set(o5, true);
+
+    puts(&raw const b"port ");
+    print_u32(ENABLED);
+    putc(b' ');
+    print_u32(DIRECTION);
+    putc(b' ');
+    print_u32(LEVEL);
+    putc(b'\n');
+
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    loop {}
+}
