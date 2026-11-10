@@ -119,7 +119,10 @@ impl Scan {
                 match statement {
                     Statement::CriticalEnter(_) => depth += 1,
                     Statement::CriticalExit(_) => depth = depth.saturating_sub(1),
-                    Statement::Assign(..) | Statement::Call { .. } | Statement::InlineAsm(_) => {}
+                    Statement::Assign(..)
+                    | Statement::Call { .. }
+                    | Statement::InlineAsm(_)
+                    | Statement::New(..) => {}
                 }
             }
             let terminator = &block.terminator;

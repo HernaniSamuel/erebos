@@ -659,6 +659,14 @@ impl Builder<'_, '_> {
                     let init = self.expr(init);
                     self.assign(value.project(PlaceElem::Field(*index)), Rvalue::Use(init));
                 }
+                // The value is complete after its last field, and before it
+                // is moved: a `?` among the fields returns before it exists
+                // (ADR 0103).
+                if let Ty::Struct(s) = ty
+                    && s.def().linear
+                {
+                    self.push(Statement::New(value, self.span));
+                }
                 self.read(value)
             }
             hir::ExprKind::BitStructLit(s, fields, rest) => self.bit_struct_lit(*s, fields, *rest),

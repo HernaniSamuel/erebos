@@ -1,0 +1,28 @@
+// emit: mir
+// The help of `analysis::use-after-move` suggests `#[copy]` for a struct whose
+// fields are all copy, unless it is `#[linear]`: `#[copy]` on a linear struct
+// is `resolve::conflicting-attributes` (ADR 0101, 0103). `Ticket` and `Plain`
+// have the same fields.
+#[linear]
+struct Ticket { n: u32 }
+
+struct Plain { n: u32 }
+
+fn take_ticket(t: Ticket) {}
+
+fn take_plain(p: Plain) {}
+
+// Rejected, and the help does not suggest `#[copy]`.
+fn ticket(t: Ticket) {
+    take_ticket(t);
+    take_ticket(t);
+}
+
+// Rejected, and the help suggests `#[copy]`.
+fn plain(p: Plain) {
+    take_plain(p);
+    take_plain(p);
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

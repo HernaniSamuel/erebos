@@ -199,7 +199,7 @@ impl Mir {
                                 called[id.0 as usize] = true;
                             }
                         }
-                        Statement::Assign(..) => {}
+                        Statement::Assign(..) | Statement::New(..) => {}
                     }
                 }
                 if let Terminator::InlineAsm(asm) = &block.terminator {
@@ -534,7 +534,8 @@ impl Body {
                     Statement::Call { args, .. } => args.iter_mut().for_each(&mut *f),
                     Statement::InlineAsm(_)
                     | Statement::CriticalEnter(_)
-                    | Statement::CriticalExit(_) => {}
+                    | Statement::CriticalExit(_)
+                    | Statement::New(..) => {}
                 }
             }
             match &mut block.terminator {
@@ -828,6 +829,9 @@ pub struct StructDef {
     /// Whether its values are copied rather than moved: declared `#[copy]`
     /// (ADR 0096, 0098).
     pub copy: bool,
+    /// Whether it is declared `#[linear]` (ADR 0101, 0103). Never together
+    /// with `copy` (rule L2 of ADR 0103).
+    pub linear: bool,
     /// Set once every struct exists, since a field may point back to the
     /// struct that contains it.
     fields: OnceLock<Vec<Field>>,
@@ -860,12 +864,13 @@ pub struct StructRef(&'static StructDef);
 
 impl StructRef {
     /// Defines a struct; its fields are set later, with `set_fields`.
-    pub fn new(name: String, layout: Layout, packed: bool, copy: bool) -> StructRef {
+    pub fn new(name: String, layout: Layout, packed: bool, copy: bool, linear: bool) -> StructRef {
         StructRef(Box::leak(Box::new(StructDef {
             name,
             layout,
             packed,
             copy,
+            linear,
             fields: OnceLock::new(),
         })))
     }
@@ -1155,6 +1160,143 @@ impl Ty {
         }
     }
 
+    /// Whether the values of the type are linear (ADR 0101, 0103): a struct
+    /// declared `#[linear]`, or a type that holds one by value, as a field,
+    /// a payload value, or the element of an array or of the unsized slice
+    /// type `[T]`. A pointer is not linear, whatever it points to.
+    pub fn is_linear(self) -> bool {
+        self.is_linear_in(true, &mut Vec::new())
+    }
+
+    /// [`Ty::is_linear`], but an array or a slice never makes a type linear:
+    /// one with linear elements breaks rule L3, which the rules about where a
+    /// linear value is held (L3 for a static, L4) leave to it, so that one
+    /// fault is one violation.
+    pub(crate) fn is_linear_outside_arrays(self) -> bool {
+        self.is_linear_in(false, &mut Vec::new())
+    }
+
+    /// [`Ty::is_linear`]; `arrays` says whether an array or a slice of
+    /// linear elements is linear, and `open` holds the structs and enums
+    /// being looked into, which a type by value never reaches again, so that
+    /// the walk ends even for a type built by hand that contains itself.
+    fn is_linear_in(self, arrays: bool, open: &mut Vec<*const ()>) -> bool {
+        match self {
+            Ty::Array(elem, _) | Ty::Slice(elem) => arrays && elem.is_linear_in(arrays, open),
+            Ty::Struct(s) => {
+                let def = s.def();
+                if def.linear {
+                    return true;
+                }
+                let this = ptr::from_ref(def).cast();
+                let Some(fields) = def.fields.get() else {
+                    return false;
+                };
+                if open.contains(&this) {
+                    return false;
+                }
+                open.push(this);
+                let found = fields
+                    .iter()
+                    .any(|field| field.ty.is_linear_in(arrays, open));
+                open.pop();
+                found
+            }
+            Ty::Enum(e) => {
+                let def = e.def();
+                let this = ptr::from_ref(def).cast();
+                let Some(variants) = def.variants.get() else {
+                    return false;
+                };
+                if open.contains(&this) {
+                    return false;
+                }
+                open.push(this);
+                let found = variants
+                    .iter()
+                    .flat_map(|variant| &variant.payload)
+                    .any(|value| value.ty.is_linear_in(arrays, open));
+                open.pop();
+                found
+            }
+            Ty::Unit | Ty::Never | Ty::Bool | Ty::Int(_) | Ty::Ptr(_) | Ty::Peripheral(_) => false,
+        }
+    }
+
+    /// The linear parts of the type (ADR 0103): the paths of `Field` and
+    /// `Payload` projections, from a place of the type, that reach a struct
+    /// declared `#[linear]`, the empty path included when the type is one.
+    /// The paths go through the fields of a linear struct too, so a linear
+    /// struct holding another has both. Not through arrays or pointers: an
+    /// array of linear elements is never held (rule L3), and a pointer holds
+    /// no value. The order is that of a walk in declaration order, a part
+    /// before the parts it holds.
+    pub fn linear_parts(self) -> Vec<Vec<PlaceElem>> {
+        let mut parts = Vec::new();
+        self.linear_parts_in(&mut Vec::new(), &mut Vec::new(), &mut parts);
+        parts
+    }
+
+    fn linear_parts_in(
+        self,
+        path: &mut Vec<PlaceElem>,
+        open: &mut Vec<*const ()>,
+        parts: &mut Vec<Vec<PlaceElem>>,
+    ) {
+        match self {
+            Ty::Struct(s) => {
+                let def = s.def();
+                let this = ptr::from_ref(def).cast();
+                if open.contains(&this) {
+                    return;
+                }
+                if def.linear {
+                    parts.push(path.clone());
+                }
+                let Some(fields) = def.fields.get() else {
+                    return;
+                };
+                open.push(this);
+                for (index, field) in fields.iter().enumerate() {
+                    path.push(PlaceElem::Field(index as u32));
+                    field.ty.linear_parts_in(path, open, parts);
+                    path.pop();
+                }
+                open.pop();
+            }
+            Ty::Enum(e) => {
+                let def = e.def();
+                let this = ptr::from_ref(def).cast();
+                let Some(variants) = def.variants.get() else {
+                    return;
+                };
+                if open.contains(&this) {
+                    return;
+                }
+                open.push(this);
+                for (variant, data) in variants.iter().enumerate() {
+                    for (index, value) in data.payload.iter().enumerate() {
+                        path.push(PlaceElem::Payload {
+                            variant: variant as u32,
+                            index: index as u32,
+                        });
+                        value.ty.linear_parts_in(path, open, parts);
+                        path.pop();
+                    }
+                }
+                open.pop();
+            }
+            Ty::Unit
+            | Ty::Never
+            | Ty::Bool
+            | Ty::Int(_)
+            | Ty::Ptr(_)
+            | Ty::Array(..)
+            | Ty::Slice(_)
+            | Ty::Peripheral(_) => {}
+        }
+    }
+
     /// Arrays, structs, slices and enums with payloads: values made of
     /// other values, which are copied in memory rather than held in
     /// registers. A slice is an address and a length (ADR 0031); an enum
@@ -1262,6 +1404,12 @@ pub enum Statement {
     /// `core::arch::__critical_exit(_n)`, which puts back what the local
     /// holds.
     CriticalExit(Local),
+    /// A value of a struct declared `#[linear]` is complete in the place,
+    /// with the span of the literal that built it (ADR 0103). It sits after
+    /// the write of the literal's last field and before the value is moved
+    /// anywhere; for a literal with no fields, where the literal is.
+    /// Compile-time evaluation and code generation do nothing for it.
+    New(Place, Span),
 }
 
 impl Statement {
@@ -1287,7 +1435,7 @@ impl Statement {
             },
             Statement::Call { args, .. } => args.iter().for_each(f),
             Statement::InlineAsm(asm) => asm.inputs().for_each(f),
-            Statement::CriticalEnter(_) | Statement::CriticalExit(_) => {}
+            Statement::CriticalEnter(_) | Statement::CriticalExit(_) | Statement::New(..) => {}
         }
     }
 
@@ -1298,7 +1446,8 @@ impl Statement {
             Statement::Assign(..)
             | Statement::Call { .. }
             | Statement::CriticalEnter(_)
-            | Statement::CriticalExit(_) => None,
+            | Statement::CriticalExit(_)
+            | Statement::New(..) => None,
         }
     }
 }
@@ -1752,6 +1901,7 @@ impl Mir {
             Statement::InlineAsm(asm) => self.fmt_asm(asm, f),
             Statement::CriticalEnter(was) => write!(f, "critical_enter {was}"),
             Statement::CriticalExit(was) => write!(f, "critical_exit {was}"),
+            Statement::New(place, _) => write!(f, "new {place}"),
         }
     }
 
@@ -2318,5 +2468,152 @@ mod tests {
         ));
         entry.blocks[0].spans.push(at);
         mir.leave_out(&core_out());
+    }
+
+    // ---- Linear types (ADR 0101, 0103) ----
+
+    fn plain_struct(name: &str, linear: bool, fields: Vec<Ty>) -> Ty {
+        let s = StructRef::new(
+            name.to_owned(),
+            Layout { size: 4, align: 4 },
+            false,
+            false,
+            linear,
+        );
+        s.def().set_fields(
+            fields
+                .into_iter()
+                .enumerate()
+                .map(|(i, ty)| Field {
+                    name: format!("f{i}"),
+                    ty,
+                    offset: 4 * i as u64,
+                })
+                .collect(),
+        );
+        Ty::Struct(s)
+    }
+
+    /// `enum Slot { Empty, Full(payload) }`, like `Option(payload)`.
+    fn slot_of(payload: Ty) -> Ty {
+        let e = EnumRef::new(
+            EnumId(1),
+            "Slot".to_owned(),
+            IntTy::U8,
+            Layout { size: 8, align: 4 },
+            false,
+        );
+        e.def().set_variants(vec![
+            Variant {
+                name: "Empty".to_owned(),
+                payload: Vec::new(),
+            },
+            Variant {
+                name: "Full".to_owned(),
+                payload: vec![Field {
+                    name: "0".to_owned(),
+                    ty: payload,
+                    offset: 4,
+                }],
+            },
+        ]);
+        Ty::Enum(e)
+    }
+
+    fn pointer(pointee: Ty) -> Ty {
+        Ty::Ptr(Ptr {
+            mutable: true,
+            volatile: false,
+            pointee: Box::leak(Box::new(pointee)),
+        })
+    }
+
+    fn array(elem: Ty, len: u64) -> Ty {
+        Ty::Array(Box::leak(Box::new(elem)), len)
+    }
+
+    fn slice(elem: Ty) -> Ty {
+        Ty::Slice(Box::leak(Box::new(elem)))
+    }
+
+    const FULL: PlaceElem = PlaceElem::Payload {
+        variant: 1,
+        index: 0,
+    };
+
+    #[test]
+    fn a_type_is_linear_by_its_flag_or_by_what_it_holds() {
+        let u = Ty::Int(IntTy::U32);
+        let transfer = plain_struct("Transfer", true, vec![u]);
+        let token = plain_struct("Token", true, Vec::new());
+        let plain = plain_struct("Plain", false, vec![u]);
+        let holder = plain_struct("Holder", false, vec![u, transfer]);
+        assert!(transfer.is_linear());
+        assert!(token.is_linear());
+        assert!(!plain.is_linear());
+        assert!(!u.is_linear());
+        assert!(!Ty::Unit.is_linear());
+        // A struct or an enum holding one, however deep.
+        assert!(holder.is_linear());
+        assert!(plain_struct("Outer", false, vec![holder]).is_linear());
+        assert!(slot_of(transfer).is_linear());
+        assert!(slot_of(holder).is_linear());
+        assert!(!slot_of(plain).is_linear());
+        // An array and the unsized slice type of linear elements.
+        assert!(array(transfer, 2).is_linear());
+        assert!(slice(transfer).is_linear());
+        assert!(!array(u, 2).is_linear());
+        // Never a pointer, to a slice either.
+        assert!(!pointer(transfer).is_linear());
+        assert!(!pointer(slice(transfer)).is_linear());
+        assert!(!pointer(array(transfer, 2)).is_linear());
+    }
+
+    #[test]
+    fn an_array_makes_a_type_linear_outside_arrays_only_when_asked() {
+        let transfer = plain_struct("Transfer", true, Vec::new());
+        assert!(array(transfer, 2).is_linear());
+        assert!(!array(transfer, 2).is_linear_outside_arrays());
+        let table = plain_struct("Table", false, vec![array(transfer, 2)]);
+        assert!(table.is_linear());
+        assert!(!table.is_linear_outside_arrays());
+        assert!(transfer.is_linear_outside_arrays());
+        assert!(slot_of(transfer).is_linear_outside_arrays());
+    }
+
+    #[test]
+    fn linear_parts_are_the_paths_to_the_structs_marked_linear() {
+        let u = Ty::Int(IntTy::U32);
+        let transfer = plain_struct("Transfer", true, vec![u]);
+        let field = |i| PlaceElem::Field(i);
+        // A marked struct: the empty path.
+        assert_eq!(transfer.linear_parts(), [Vec::<PlaceElem>::new()]);
+        assert_eq!(
+            plain_struct("Token", true, Vec::new()).linear_parts().len(),
+            1
+        );
+        // A struct with a marked field, not marked itself: the field only.
+        let holder = plain_struct("Holder", false, vec![u, transfer, transfer]);
+        assert_eq!(holder.linear_parts(), [vec![field(1)], vec![field(2)]]);
+        // `Option(Transfer)`: the payload of the variant that holds it.
+        assert_eq!(slot_of(transfer).linear_parts(), [vec![FULL]]);
+        // A marked struct holding another: both, the outer first.
+        let link = plain_struct("Link", true, vec![u, transfer]);
+        assert_eq!(link.linear_parts(), [vec![], vec![field(1)]]);
+        // Through a field and a payload value.
+        let outer = plain_struct("Outer", false, vec![slot_of(link)]);
+        assert_eq!(
+            outer.linear_parts(),
+            [vec![field(0), FULL], vec![field(0), FULL, field(1)]]
+        );
+        // None for a type with no linear part, a pointer, or an array.
+        assert!(
+            plain_struct("Plain", false, vec![u])
+                .linear_parts()
+                .is_empty()
+        );
+        assert!(u.linear_parts().is_empty());
+        assert!(pointer(transfer).linear_parts().is_empty());
+        assert!(array(transfer, 2).linear_parts().is_empty());
     }
 }

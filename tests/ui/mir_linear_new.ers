@@ -1,0 +1,60 @@
+// emit: mir
+// `new` says that a value of a `#[linear]` struct is complete in a place
+// (ADR 0103). It sits after the write of the literal's last field and before
+// the value is moved anywhere; after the last `?` among the fields, since a
+// `?` returns before the value exists; for a literal with no fields, where the
+// literal is, and for a literal that is discarded. A struct that is not marked
+// has none, whatever it holds.
+#[linear]
+pub struct Transfer { channel: u32, len: u32 }
+
+#[linear]
+struct Tok {}
+
+#[linear]
+struct Outer { t: Transfer, n: u32 }
+
+struct Holder { t: Transfer, n: u32 }
+
+fn make(n: u32) -> u32 { n }
+
+fn fallible(n: u32) -> Option(u32) { .Some(n) }
+
+// `new` after the two field writes, before the move into the return value.
+fn fields(a: u32) -> Transfer {
+    Transfer { channel: a, len: 4 }
+}
+
+// After the last `?`: `fallible(2)?` can return, and then no value exists.
+fn question(a: u32) -> Option(Transfer) {
+    let t: Transfer = Transfer { channel: fallible(a)?, len: fallible(2)? };
+    .Some(t)
+}
+
+// No fields: `new` is where the literal is.
+fn token() -> Tok {
+    Tok {}
+}
+
+// Discarded: the literal still has its `new`.
+fn discarded() {
+    Tok {};
+}
+
+// A literal inside `.Some(...)`: `new` before the variant is built.
+fn inside() -> Option(Transfer) {
+    .Some(Transfer { channel: make(1), len: 2 })
+}
+
+// A literal holding a literal: each has its own `new`, the inner first.
+fn nested() -> Outer {
+    Outer { t: Transfer { channel: 1, len: 2 }, n: 3 }
+}
+
+// Not marked, holding a linear field: no `new` of its own, only the field's.
+fn holder() -> Holder {
+    Holder { t: Transfer { channel: 1, len: 2 }, n: 3 }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

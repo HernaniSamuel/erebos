@@ -212,7 +212,9 @@ impl<'b> Flow<'b> {
                     }
                 }
                 Statement::InlineAsm(asm) => self.asm(at, asm),
-                Statement::CriticalEnter(_) | Statement::CriticalExit(_) => {}
+                // Names a temporary the analysis of moves does not follow
+                // (ADR 0103).
+                Statement::CriticalEnter(_) | Statement::CriticalExit(_) | Statement::New(..) => {}
             }
         }
         let at = At {
@@ -516,8 +518,12 @@ fn key(span: Span) -> (crate::span::FileId, u32, u32) {
 
 /// The help of ADR 0097: `#[copy]` on the type of the moved place when it is
 /// a struct or an enum with payloads whose fields and payload values are all
-/// copy, so that the attribute would be accepted.
+/// copy, so that the attribute would be accepted. A linear type is never
+/// copy: `#[copy]` on a `#[linear]` struct is an error (ADR 0101, 0103).
 fn suggest_copy(ty: Ty) -> Option<String> {
+    if ty.is_linear() {
+        return None;
+    }
     let (name, all_copy) = match ty {
         Ty::Struct(s) => (
             &s.def().name,
@@ -552,6 +558,7 @@ mod tests {
         let s = StructRef::new(
             "Handle".to_owned(),
             Layout { size: 4, align: 4 },
+            false,
             false,
             false,
         );
@@ -858,5 +865,30 @@ mod tests {
         let mut diags = Diagnostics::default();
         assert!(check(&body, &mut diags));
         assert!(diags.is_empty());
+    }
+
+    /// A struct with a `u32` field, copy or linear as asked.
+    fn kinded(linear: bool) -> Ty {
+        let s = StructRef::new(
+            "Ticket".to_owned(),
+            Layout { size: 4, align: 4 },
+            false,
+            false,
+            linear,
+        );
+        s.def().set_fields(vec![Field {
+            name: "n".to_owned(),
+            ty: Ty::Int(IntTy::U32),
+            offset: 0,
+        }]);
+        Ty::Struct(s)
+    }
+
+    #[test]
+    fn copy_is_not_suggested_for_a_linear_type() {
+        // The same fields: `#[copy]` would be accepted on the one that is not
+        // linear, and on a linear one it is `resolve::conflicting-attributes`.
+        assert!(suggest_copy(kinded(false)).is_some_and(|help| help.contains("`#[copy]`")));
+        assert_eq!(suggest_copy(kinded(true)), None);
     }
 }

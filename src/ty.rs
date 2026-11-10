@@ -24,7 +24,7 @@ use crate::span::Span;
 pub use asm::{AsmChecked, AsmPiece};
 pub use copy::{copy_declaration_fails, is_copy, report_copy_fields, suggest_copy};
 pub use dump::dump;
-pub use linear::{is_linear, report_linear_arrays, report_linear_statics};
+pub use linear::{has_linear_elements, is_linear, report_linear_arrays, report_linear_statics};
 use place::{Unmovable, is_place};
 
 mod asm;

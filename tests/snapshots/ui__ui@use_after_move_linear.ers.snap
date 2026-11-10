@@ -1,0 +1,34 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/use_after_move_linear.ers
+---
+--- errors ---
+analysis::use-after-move
+
+  × use of moved value `t`
+    ╭─[use_after_move_linear.ers:18:17]
+ 16 │ fn ticket(t: Ticket) {
+ 17 │     take_ticket(t);
+    ·                 ┬
+    ·                 ╰── moved here
+ 18 │     take_ticket(t);
+    ·                 ┬
+    ·                 ╰── used here, after it was moved
+ 19 │ }
+    ╰────
+  help: a place that was moved is valid again once it is assigned a new value (ADR 0097)
+analysis::use-after-move
+
+  × use of moved value `p`
+    ╭─[use_after_move_linear.ers:24:16]
+ 22 │ fn plain(p: Plain) {
+ 23 │     take_plain(p);
+    ·                ┬
+    ·                ╰── moved here
+ 24 │     take_plain(p);
+    ·                ┬
+    ·                ╰── used here, after it was moved
+ 25 │ }
+    ╰────
+  help: mark `Plain` with `#[copy]` if its values may be duplicated (ADR 0097)

@@ -108,6 +108,13 @@ fn linear_elements(q: &Queries, ty: Ty) -> Option<Ty> {
     }
 }
 
+/// Whether `ty` is an array or a slice whose elements are linear, apart from
+/// arrays: the type `ty::linear-array` rejects. A body whose types reach one
+/// is not lowered to MIR, where rule L3 would not hold (ADR 0103).
+pub fn has_linear_elements(q: &Queries, ty: Ty) -> bool {
+    linear_elements(q, ty).is_some()
+}
+
 /// Appends to `out`, once each, the arrays and slices of linear elements in
 /// `ty` and in the types it reaches: through arrays, fields, payload values
 /// and pointees (ADR 0101). Types are normalized on the way.

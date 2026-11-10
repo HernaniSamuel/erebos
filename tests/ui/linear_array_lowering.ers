@@ -1,0 +1,32 @@
+// emit: mir
+// An array or a slice of a linear type is `ty::linear-array`, reported where
+// the type is written (ADR 0101). A function whose parameter, return type,
+// local or pointee reaches one still type checks, but is not built into MIR,
+// where rule L3 (ADR 0103) would not hold: no function below panics the
+// validator, and only the errors of the types are reported. `fine` is built,
+// which the `7 / 0` shows.
+#[linear]
+pub struct Transfer { channel: u32 }
+
+struct Table { slots: [Transfer; 2], n: u8 }
+
+enum Row: u8 { Full([Transfer; 3]) = 0, Empty = 1 }
+
+fn param(a: [Transfer; 4]) {}
+
+fn pointee(a: *const [Transfer; 5]) {}
+
+fn sliced(a: *const [Transfer]) {}
+
+fn field(t: Table) -> u8 { t.n }
+
+fn payload(r: Row) {}
+
+fn caller(a: [Transfer; 4]) {
+    param(a);
+}
+
+fn fine() -> u32 { 7 / 0 }
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

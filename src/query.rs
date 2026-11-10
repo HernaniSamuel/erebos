@@ -1294,12 +1294,14 @@ impl<'h> Queries<'h> {
         let layout = self
             .struct_layout(id)
             .expect("MIR is only built for well-typed programs");
-        // The kind is what type checking reads (`ty::is_copy`, ADR 0098).
+        // The kind is what type checking reads (`ty::is_copy`, ADR 0098), and
+        // whether the struct is `#[linear]` (ADR 0103).
         let s = StructRef::new(
             def.name.clone(),
             layout.layout,
             def.packed,
             def.copy.is_some(),
+            def.linear.is_some(),
         );
         self.mir_structs[id.0 as usize] = Some(s);
         let fields = def
@@ -1765,9 +1767,13 @@ impl<'h> Queries<'h> {
             // length is checked wherever it is reached, behind pointers
             // too.
             hir::Ty::Array(elem, len) => {
-                self.lacks_layout(*elem, seen, peripherals) || self.array_len(len).is_none()
+                self.lacks_layout(*elem, seen, peripherals)
+                    || self.array_len(len).is_none()
+                    || ty::has_linear_elements(self, ty)
             }
-            hir::Ty::Slice(elem) => self.lacks_layout(*elem, seen, peripherals),
+            hir::Ty::Slice(elem) => {
+                self.lacks_layout(*elem, seen, peripherals) || ty::has_linear_elements(self, ty)
+            }
             hir::Ty::Struct(s) => {
                 if seen.contains(&Composite::Struct(s.id)) {
                     return false;
