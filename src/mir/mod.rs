@@ -10,9 +10,13 @@
 
 mod asm;
 mod build;
+mod validate;
 
 pub use asm::{AsmOperand, AsmOperandKind, AsmOptions, AsmPiece, AsmReg, AsmSym, InlineAsm};
 pub use build::{build_body, build_expr_body};
+pub use validate::{Location, Violation, assert_valid_program, check_body, check_program};
+#[cfg(test)]
+pub use validate::{bodies_checked, programs_checked};
 
 use std::fmt::{self, Write as _};
 use std::ptr;
@@ -415,6 +419,7 @@ impl Mir {
         }
         self.statics = statics;
         self.data = data;
+        validate::assert_valid_program(self);
     }
 }
 
@@ -2025,6 +2030,30 @@ mod tests {
         }
     }
 
+    /// A block that ends in `terminator`.
+    fn ending(terminator: Terminator) -> BasicBlockData {
+        let at = body("", Vec::new()).span;
+        BasicBlockData {
+            statements: Vec::new(),
+            spans: Vec::new(),
+            terminator,
+            terminator_span: at,
+        }
+    }
+
+    /// A body that returns `()` at once.
+    fn returning(name: &str) -> Body {
+        body(name, vec![ending(Terminator::Return)])
+    }
+
+    /// A body that returns `!`, as the entry and the panic function do.
+    fn diverging(name: &str) -> Body {
+        let mut body = body(name, vec![ending(Terminator::Unreachable)]);
+        body.ret = Ty::Never;
+        body.locals[0].ty = Ty::Never;
+        body
+    }
+
     fn asm_naming(callee: u32, span: Span) -> InlineAsm {
         InlineAsm {
             pieces: vec![AsmPiece::Operand(0)],
@@ -2047,8 +2076,10 @@ mod tests {
         // The entry names the body 3 in a statement, then ends in an asm that
         // names the body 3 too; the bodies 1 and 2 are left out for good.
         let statement = Statement::InlineAsm(Box::new(asm_naming(3, at)));
-        let ends = Terminator::InlineAsm(Box::leak(Box::new(asm_naming(3, at))));
-        let entry = body(
+        let mut diverging_asm = asm_naming(3, at);
+        diverging_asm.options.noreturn = true;
+        let ends = Terminator::InlineAsm(Box::leak(Box::new(diverging_asm)));
+        let mut entry = body(
             "entry",
             vec![
                 BasicBlockData {
@@ -2065,6 +2096,8 @@ mod tests {
                 },
             ],
         );
+        entry.ret = Ty::Never;
+        entry.locals[0].ty = Ty::Never;
         let mut mir = Mir {
             structs: Vec::new(),
             bit_structs: Vec::new(),
@@ -2130,11 +2163,7 @@ mod tests {
             peripherals: Vec::new(),
             data: vec![data(1), data(2)],
             statics: Vec::new(),
-            bodies: vec![
-                body("core_fn", Vec::new()),
-                body("entry", Vec::new()),
-                body("tick", Vec::new()),
-            ],
+            bodies: vec![returning("core_fn"), diverging("entry"), returning("tick")],
             entry: BodyId(1),
             panic: BodyId(1),
             reset: None,
@@ -2208,5 +2237,43 @@ mod tests {
         assert!(mir.vector_table.is_none());
         assert_eq!(mir.data.len(), 1);
         assert_eq!(mir.data[0].bytes, [1]);
+    }
+
+    /// A program that follows every rule of the program, `core` included,
+    /// has none left after `leave_out` leaves it out.
+    #[test]
+    fn a_program_is_valid_before_and_after_leaving_core_out() {
+        let mut mir = with_table(true);
+        assert!(check_program(&mir).is_empty());
+        mir.leave_out(&core_out());
+        assert!(check_program(&mir).is_empty());
+    }
+
+    /// `leave_out` validates what it leaves (ADR 0095, point 3), as the call
+    /// shows: the body kept names a peripheral that `Mir::peripherals` lacks.
+    /// A call to a body past the end would panic in `leave_out` itself, which
+    /// indexes by body.
+    #[test]
+    #[should_panic(expected = "P2: an operand names the peripheral `UART`")]
+    fn leaving_out_validates_what_it_leaves() {
+        let mut mir = with_table(false);
+        let uart = PeripheralRef::new(
+            "UART".to_owned(),
+            0x4000_0000,
+            PeripheralTypeRef::new("Uart".to_owned(), Vec::new()),
+        );
+        let entry = &mut mir.bodies[1];
+        entry.locals.push(LocalDecl {
+            ty: uart.def().address_ty(),
+            name: None,
+            constant: None,
+        });
+        let at = entry.span;
+        entry.blocks[0].statements.push(Statement::Assign(
+            Place::local(Local(1)),
+            Rvalue::Use(Operand::Const(Const::Peripheral(uart))),
+        ));
+        entry.blocks[0].spans.push(at);
+        mir.leave_out(&core_out());
     }
 }

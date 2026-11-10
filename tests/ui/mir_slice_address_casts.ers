@@ -1,0 +1,15 @@
+// emit: mir
+// A slice cast to a thin pointer reads its address part, which has the
+// slice's pointee, mutability and volatility (ADR 0031); a pointer of another
+// type is a cast of that part, so that every statement has the type MIR
+// validation expects (ADR 0095, rule T5).
+fn same(s: *mut [u8]) -> *mut u8 { s as *mut u8 }
+
+fn other_pointee(s: *const [u8]) -> *mut u16 { s as *mut u16 }
+
+fn to_array(s: *const [u8]) -> *const [u8; 4] { s as *const [u8; 4] }
+
+fn volatile_slice(s: *const volatile [u8]) -> *const u8 { s as *const u8 }
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

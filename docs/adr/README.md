@@ -62,7 +62,7 @@ Do not write one for local implementation details that the code already explains
 | 0030 | [Statics and startup initialization](0030-statics-and-startup-initialization.md) | Accepted, amended by 0034, 0051, 0057, 0074, 0083, 0085, 0086 |
 | 0031 | [Byte strings and slices](0031-byte-strings-and-slices.md) | Accepted, amended by 0053 |
 | 0032 | [Checks on values known at compile time](0032-checks-on-values-known-at-compile-time.md) | Accepted, amended by 0035, 0037, 0039, 0059 |
-| 0033 | [The compiler pipeline with compile-time evaluation](0033-compiler-pipeline-with-evaluation.md) | Accepted, amended by 0063 |
+| 0033 | [The compiler pipeline with compile-time evaluation](0033-compiler-pipeline-with-evaluation.md) | Accepted, amended by 0063, 0094 |
 | 0034 | [`!` is not a type of memory](0034-never-is-not-a-type-of-memory.md) | Accepted, amended by 0039 |
 | 0035 | [Enums with explicit discriminants](0035-enums-with-explicit-discriminants.md) | Accepted, amended by 0038, 0039, 0044, 0049, 0059 |
 | 0036 | [Enum values that are no variant](0036-enum-values-that-are-no-variant.md) | Accepted, amended by 0039, 0040, 0053, 0059 |
@@ -123,3 +123,5 @@ Do not write one for local implementation details that the code already explains
 | 0091 | [Enabling and dispatching external interrupts](0091-enabling-and-dispatching-external-interrupts.md) | Accepted |
 | 0092 | [Interrupts generated from SVD](0092-interrupts-generated-from-svd.md) | Accepted |
 | 0093 | [Shared statics checked](0093-shared-statics-checked.md) | Accepted |
+| 0094 | [Ownership: copies, moves and references](0094-ownership-moves-and-references.md) | Accepted |
+| 0095 | [MIR validation](0095-mir-validation.md) | Accepted |

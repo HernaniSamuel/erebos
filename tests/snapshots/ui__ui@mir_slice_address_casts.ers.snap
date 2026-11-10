@@ -1,0 +1,83 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/mir_slice_address_casts.ers
+---
+--- mir ---
+fn same(_1: *mut [u8]) -> *mut u8 {
+    let _0: *mut u8;
+    let _1: *mut [u8]; // s
+    let _2: *mut u8;
+
+    bb0: {
+        _2 = address(_1);
+        _0 = copy _2;
+        return;
+    }
+}
+
+fn other_pointee(_1: *const [u8]) -> *mut u16 {
+    let _0: *mut u16;
+    let _1: *const [u8]; // s
+    let _2: *const u8;
+    let _3: *mut u16;
+
+    bb0: {
+        _2 = address(_1);
+        _3 = copy _2 as *mut u16;
+        _0 = copy _3;
+        return;
+    }
+}
+
+fn to_array(_1: *const [u8]) -> *const [u8; 4] {
+    let _0: *const [u8; 4];
+    let _1: *const [u8]; // s
+    let _2: *const u8;
+    let _3: *const [u8; 4];
+
+    bb0: {
+        _2 = address(_1);
+        _3 = copy _2 as *const [u8; 4];
+        _0 = copy _3;
+        return;
+    }
+}
+
+fn volatile_slice(_1: *const volatile [u8]) -> *const u8 {
+    let _0: *const u8;
+    let _1: *const volatile [u8]; // s
+    let _2: *const volatile u8;
+    let _3: *const u8;
+
+    bb0: {
+        _2 = address(_1);
+        _3 = copy _2 as *const u8;
+        _0 = copy _3;
+        return;
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
