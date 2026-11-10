@@ -44,7 +44,9 @@ exactly that step, well tested, following AGENTS.md and CONTRIBUTING.md.
   versioned; this list is how the reasoning outlives your run. Without a
   plan (a bug fix), put the list in your report, for the commit body.
 - Run the gates until they pass:
-  `cargo fmt --all && cargo clippy --all-targets -- -D warnings && cargo test`.
+  `cargo fmt --all && cargo clippy --all-targets -- -D warnings && cargo test`,
+  in the foreground with a timeout of 600000 ms: it takes 4 to 6 minutes,
+  and background commands and `Monitor` are refused in this project.
   Your run is checked again when you stop (`scripts/check.sh`); while it
   fails you are sent back. `tests/architecture.rs` (ADR 0063) fails when
   a layer uses a module it may not, or when the count of panics in a

@@ -56,6 +56,17 @@ its review approves it. Commit nothing else, and never push.
    (Conventional Commits, CONTRIBUTING.md). The plan is versioned: its
    changes for the step (status, `Decisions`) go in the step's commit.
 
+## An agent that does not come back
+
+Commands run in the foreground (a hook refuses background commands and
+`Monitor`), so an agent should never wait on work of its own. If a
+notification says one stopped "waiting on its own background work", or
+its report was refused, do not wait for it: check for `cargo`, `rustc` and
+`qemu` processes and for the step's diff. With nothing running, stop the
+agent (`TaskStop`) and send the reviewer to check the diff, which reruns
+the gates anyway. Never run a reviewer while the implementer of the same
+step still runs: two `cargo test` runs share `target/`.
+
 ## After the last step
 
 Spawn a fresh code-reviewer over the range from `Base` to `HEAD`, against

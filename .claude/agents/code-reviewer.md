@@ -70,7 +70,9 @@ function is still read.
    wrong or vague entry is **should fix**. Without a plan, list such
    choices in your report, so they reach the commit body.
 7. Gates: run `sh scripts/check.sh` (`cargo fmt --all --check`,
-   `cargo clippy --all-targets -- -D warnings` and `cargo test`).
+   `cargo clippy --all-targets -- -D warnings` and `cargo test`), in
+   the foreground with a timeout of 600000 ms: it takes 4 to 6 minutes,
+   and background commands and `Monitor` are refused in this project.
    `tests/architecture.rs` already checks the layer edges, where
    `inkwell` and `miette` are used, wrap flags and the panic count
    (ADR 0063); spend your reading on what it cannot see, above all what
