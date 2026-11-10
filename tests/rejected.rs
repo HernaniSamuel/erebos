@@ -609,6 +609,33 @@ fn injected_f(injected_o: InjOuter) -> u32 {
 }"
     ),
     s!(
+        "ty::linear-static",
+        Mir,
+        Items,
+        "#[linear]
+struct InjLinear { id: u32 }
+static INJ_S: InjLinear = InjLinear { id: 1 };
+fn injected_use() {}"
+    ),
+    s!(
+        "ty::linear-array",
+        Mir,
+        Items,
+        "#[linear]
+struct InjLinear2 { id: u32 }
+fn injected_use(injected_a: [InjLinear2; 2]) {}"
+    ),
+    s!(
+        "ty::linear-through-pointer",
+        Mir,
+        Items,
+        "#[linear]
+struct InjLinear3 { id: u32 }
+fn injected_f(injected_p: *mut InjLinear3, injected_t: InjLinear3) {
+    *injected_p = injected_t;
+}"
+    ),
+    s!(
         "ty::invalid-align",
         Mir,
         Items,

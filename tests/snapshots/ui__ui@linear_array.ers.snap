@@ -1,0 +1,240 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/linear_array.ers
+---
+--- errors ---
+ty::linear-array
+
+  × `[Transfer; 4]` has elements of the linear type `Transfer`
+    ╭─[linear_array.ers:12:23]
+ 11 │ // Written in a field and in a payload value.
+ 12 │ struct Table { slots: [Transfer; 4], n: u8 }
+    ·                       ──────┬──────
+    ·                             ╰── its elements are linear, of type `Transfer`
+ 13 │ enum Ring: u8 { Full([Transfer; 3]) = 0, Empty = 1 }
+    ╰────
+  help: no element of an array or a slice is ever moved out (ADR 0097, 0100), so none could be
+        consumed, only forgotten; keep each linear value in a variable of its own, or in a field
+        of a struct (ADR 0101)
+ty::linear-array
+
+  × `[Transfer; 3]` has elements of the linear type `Transfer`
+    ╭─[linear_array.ers:13:22]
+ 12 │ struct Table { slots: [Transfer; 4], n: u8 }
+ 13 │ enum Ring: u8 { Full([Transfer; 3]) = 0, Empty = 1 }
+    ·                      ──────┬──────
+    ·                            ╰── its elements are linear, of type `Transfer`
+ 14 │ 
+    ╰────
+  help: no element of an array or a slice is ever moved out (ADR 0097, 0100), so none could be
+        consumed, only forgotten; keep each linear value in a variable of its own, or in a field
+        of a struct (ADR 0101)
+ty::linear-array
+
+  × `[Transfer; 5]` has elements of the linear type `Transfer`
+    ╭─[linear_array.ers:16:14]
+ 15 │ // Written in a parameter, a return type and a `let`.
+ 16 │ fn take(all: [Transfer; 5]) {}
+    ·              ──────┬──────
+    ·                    ╰── its elements are linear, of type `Transfer`
+ 17 │ fn give() -> [Transfer; 6] { loop {} }
+    ╰────
+  help: no element of an array or a slice is ever moved out (ADR 0097, 0100), so none could be
+        consumed, only forgotten; keep each linear value in a variable of its own, or in a field
+        of a struct (ADR 0101)
+ty::linear-array
+
+  × `[Transfer; 6]` has elements of the linear type `Transfer`
+    ╭─[linear_array.ers:17:14]
+ 16 │ fn take(all: [Transfer; 5]) {}
+ 17 │ fn give() -> [Transfer; 6] { loop {} }
+    ·              ──────┬──────
+    ·                    ╰── its elements are linear, of type `Transfer`
+ 18 │ fn local() {
+    ╰────
+  help: no element of an array or a slice is ever moved out (ADR 0097, 0100), so none could be
+        consumed, only forgotten; keep each linear value in a variable of its own, or in a field
+        of a struct (ADR 0101)
+ty::linear-array
+
+  × `[Transfer; 7]` has elements of the linear type `Transfer`
+    ╭─[linear_array.ers:19:16]
+ 18 │ fn local() {
+ 19 │     let seven: [Transfer; 7] = loop {};
+    ·                ──────┬──────
+    ·                      ╰── its elements are linear, of type `Transfer`
+ 20 │ }
+    ╰────
+  help: no element of an array or a slice is ever moved out (ADR 0097, 0100), so none could be
+        consumed, only forgotten; keep each linear value in a variable of its own, or in a field
+        of a struct (ADR 0101)
+ty::linear-array
+
+  × `[Transfer; 8]` has elements of the linear type `Transfer`
+    ╭─[linear_array.ers:23:25]
+ 22 │ // Written in a static, and with `Option`.
+ 23 │ extern static EXTERNAL: [Transfer; 8];
+    ·                         ──────┬──────
+    ·                               ╰── its elements are linear, of type `Transfer`
+ 24 │ static mut OPTIONS: [Option(Transfer); 9] = [.None; 9];
+    ╰────
+  help: no element of an array or a slice is ever moved out (ADR 0097, 0100), so none could be
+        consumed, only forgotten; keep each linear value in a variable of its own, or in a field
+        of a struct (ADR 0101)
+ty::linear-array
+
+  × `[Option(Transfer); 9]` has elements of the linear type `Option(Transfer)`
+    ╭─[linear_array.ers:24:21]
+ 23 │ extern static EXTERNAL: [Transfer; 8];
+ 24 │ static mut OPTIONS: [Option(Transfer); 9] = [.None; 9];
+    ·                     ──────────┬──────────
+    ·                               ╰── its elements are linear, of type `Option(Transfer)`
+ 25 │ fn repeat() {
+    ╰────
+  help: no element of an array or a slice is ever moved out (ADR 0097, 0100), so none could be
+        consumed, only forgotten; keep each linear value in a variable of its own, or in a field
+        of a struct (ADR 0101)
+ty::linear-array
+
+  × `[Option(Transfer); 10]` has elements of the linear type `Option(Transfer)`
+    ╭─[linear_array.ers:26:15]
+ 25 │ fn repeat() {
+ 26 │     let none: [Option(Transfer); 10] = [.None; 10];
+    ·               ───────────┬──────────
+    ·                          ╰── its elements are linear, of type `Option(Transfer)`
+ 27 │ }
+    ╰────
+  help: no element of an array or a slice is ever moved out (ADR 0097, 0100), so none could be
+        consumed, only forgotten; keep each linear value in a variable of its own, or in a field
+        of a struct (ADR 0101)
+ty::linear-array
+
+  × `[Transfer; 11]` has elements of the linear type `Transfer`
+    ╭─[linear_array.ers:30:23]
+ 29 │ // Written in a type argument, a layout query and a cast.
+ 30 │ fn argument(o: Option([Transfer; 11])) {}
+    ·                       ───────┬──────
+    ·                              ╰── its elements are linear, of type `Transfer`
+ 31 │ fn layout() -> usize {
+    ╰────
+  help: no element of an array or a slice is ever moved out (ADR 0097, 0100), so none could be
+        consumed, only forgotten; keep each linear value in a variable of its own, or in a field
+        of a struct (ADR 0101)
+ty::linear-array
+
+  × `[Transfer; 12]` has elements of the linear type `Transfer`
+    ╭─[linear_array.ers:32:13]
+ 31 │ fn layout() -> usize {
+ 32 │     size_of([Transfer; 12]) + align_of([Option(Transfer); 13])
+    ·             ───────┬──────
+    ·                    ╰── its elements are linear, of type `Transfer`
+ 33 │ }
+    ╰────
+  help: no element of an array or a slice is ever moved out (ADR 0097, 0100), so none could be
+        consumed, only forgotten; keep each linear value in a variable of its own, or in a field
+        of a struct (ADR 0101)
+ty::linear-array
+
+  × `[Option(Transfer); 13]` has elements of the linear type `Option(Transfer)`
+    ╭─[linear_array.ers:32:40]
+ 31 │ fn layout() -> usize {
+ 32 │     size_of([Transfer; 12]) + align_of([Option(Transfer); 13])
+    ·                                        ───────────┬──────────
+    ·                                                   ╰── its elements are linear, of type `Option(Transfer)`
+ 33 │ }
+    ╰────
+  help: no element of an array or a slice is ever moved out (ADR 0097, 0100), so none could be
+        consumed, only forgotten; keep each linear value in a variable of its own, or in a field
+        of a struct (ADR 0101)
+ty::linear-array
+
+  × `[Transfer; 14]` has elements of the linear type `Transfer`
+    ╭─[linear_array.ers:34:33]
+ 33 │ }
+ 34 │ fn cast(p: *const u8) -> *const [Transfer; 14] {
+    ·                                 ───────┬──────
+    ·                                        ╰── its elements are linear, of type `Transfer`
+ 35 │     p as *const [Transfer; 14]
+    ╰────
+  help: no element of an array or a slice is ever moved out (ADR 0097, 0100), so none could be
+        consumed, only forgotten; keep each linear value in a variable of its own, or in a field
+        of a struct (ADR 0101)
+ty::linear-array
+
+  × `[Transfer; 30]` has elements of the linear type `Transfer`
+    ╭─[linear_array.ers:39:18]
+ 38 │ // Nested: reported once, at the innermost array.
+ 39 │ fn nested(grid: [[Transfer; 30]; 2]) {}
+    ·                  ───────┬──────
+    ·                         ╰── its elements are linear, of type `Transfer`
+ 40 │ 
+    ╰────
+  help: no element of an array or a slice is ever moved out (ADR 0097, 0100), so none could be
+        consumed, only forgotten; keep each linear value in a variable of its own, or in a field
+        of a struct (ADR 0101)
+ty::linear-array
+
+  × `[Transfer; 15]` has elements of the linear type `Transfer`
+    ╭─[linear_array.ers:42:23]
+ 41 │ // Behind a pointer, an array and a slice.
+ 42 │ fn pointers(a: *const [Transfer; 15], b: *const [Transfer], c: *mut [Option(Transfer)]) {}
+    ·                       ───────┬──────
+    ·                              ╰── its elements are linear, of type `Transfer`
+ 43 │ 
+    ╰────
+  help: no element of an array or a slice is ever moved out (ADR 0097, 0100), so none could be
+        consumed, only forgotten; keep each linear value in a variable of its own, or in a field
+        of a struct (ADR 0101)
+ty::linear-array
+
+  × `[Transfer]` has elements of the linear type `Transfer`
+    ╭─[linear_array.ers:42:49]
+ 41 │ // Behind a pointer, an array and a slice.
+ 42 │ fn pointers(a: *const [Transfer; 15], b: *const [Transfer], c: *mut [Option(Transfer)]) {}
+    ·                                                 ─────┬────
+    ·                                                      ╰── its elements are linear, of type `Transfer`
+ 43 │ 
+    ╰────
+  help: no element of an array or a slice is ever moved out (ADR 0097, 0100), so none could be
+        consumed, only forgotten; keep each linear value in a variable of its own, or in a field
+        of a struct (ADR 0101)
+ty::linear-array
+
+  × `[Option(Transfer)]` has elements of the linear type `Option(Transfer)`
+    ╭─[linear_array.ers:42:69]
+ 41 │ // Behind a pointer, an array and a slice.
+ 42 │ fn pointers(a: *const [Transfer; 15], b: *const [Transfer], c: *mut [Option(Transfer)]) {}
+    ·                                                                     ─────────┬────────
+    ·                                                                              ╰── its elements are linear, of type `Option(Transfer)`
+ 43 │ 
+    ╰────
+  help: no element of an array or a slice is ever moved out (ADR 0097, 0100), so none could be
+        consumed, only forgotten; keep each linear value in a variable of its own, or in a field
+        of a struct (ADR 0101)
+ty::linear-array
+
+  × `[Transfer; 18]` has elements of the linear type `Transfer`
+    ╭─[linear_array.ers:46:31]
+ 45 │ // them: a variable, a call, an array literal, a repeat expression.
+ 46 │ fn pass(a: [Transfer; 18]) -> [Transfer; 18] { a }
+    ·                               ───────┬──────
+    ·                                      ╰── its elements are linear, of type `Transfer`
+ 47 │ fn expressions(a: [Transfer; 18], p: *const [Transfer; 15]) -> [Transfer; 18] {
+    ╰────
+  help: no element of an array or a slice is ever moved out (ADR 0097, 0100), so none could be
+        consumed, only forgotten; keep each linear value in a variable of its own, or in a field
+        of a struct (ADR 0101)
+ty::linear-array
+
+  × `[Transfer; 1]` has elements of the linear type `Transfer`
+    ╭─[linear_array.ers:48:14]
+ 47 │ fn expressions(a: [Transfer; 18], p: *const [Transfer; 15]) -> [Transfer; 18] {
+ 48 │     let one: [Transfer; 1] = [start(1)];
+    ·              ──────┬──────
+    ·                    ╰── its elements are linear, of type `Transfer`
+ 49 │     let none: [Option(Transfer); 10] = [.None; 10];
+    ╰────
+  help: no element of an array or a slice is ever moved out (ADR 0097, 0100), so none could be
+        consumed, only forgotten; keep each linear value in a variable of its own, or in a field
+        of a struct (ADR 0101)

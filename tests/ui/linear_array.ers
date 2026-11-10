@@ -1,0 +1,65 @@
+// emit: typeck
+// An array or a slice of a linear type is an error, once per type written:
+// in a field, a payload value, a parameter, a return type, a `let`, a static,
+// a type argument, a pointee, a layout query or a cast (ADR 0101). The
+// expressions that have such a type are not reported again.
+#[linear]
+pub struct Transfer { channel: u32 }
+
+fn start(channel: u32) -> Transfer { Transfer { channel: channel } }
+
+// Written in a field and in a payload value.
+struct Table { slots: [Transfer; 4], n: u8 }
+enum Ring: u8 { Full([Transfer; 3]) = 0, Empty = 1 }
+
+// Written in a parameter, a return type and a `let`.
+fn take(all: [Transfer; 5]) {}
+fn give() -> [Transfer; 6] { loop {} }
+fn local() {
+    let seven: [Transfer; 7] = loop {};
+}
+
+// Written in a static, and with `Option`.
+extern static EXTERNAL: [Transfer; 8];
+static mut OPTIONS: [Option(Transfer); 9] = [.None; 9];
+fn repeat() {
+    let none: [Option(Transfer); 10] = [.None; 10];
+}
+
+// Written in a type argument, a layout query and a cast.
+fn argument(o: Option([Transfer; 11])) {}
+fn layout() -> usize {
+    size_of([Transfer; 12]) + align_of([Option(Transfer); 13])
+}
+fn cast(p: *const u8) -> *const [Transfer; 14] {
+    p as *const [Transfer; 14]
+}
+
+// Nested: reported once, at the innermost array.
+fn nested(grid: [[Transfer; 30]; 2]) {}
+
+// Behind a pointer, an array and a slice.
+fn pointers(a: *const [Transfer; 15], b: *const [Transfer], c: *mut [Option(Transfer)]) {}
+
+// The types written above are not reported again where an expression has
+// them: a variable, a call, an array literal, a repeat expression.
+fn pass(a: [Transfer; 18]) -> [Transfer; 18] { a }
+fn expressions(a: [Transfer; 18], p: *const [Transfer; 15]) -> [Transfer; 18] {
+    let one: [Transfer; 1] = [start(1)];
+    let none: [Option(Transfer); 10] = [.None; 10];
+    let again: [Transfer; 18] = pass(a);
+    let slot: *const [Transfer; 15] = p;
+    pass(a)
+}
+
+// Accepted: a pointer to a linear type is not linear, nor is an array of
+// pointers, nor an array without a linear type.
+fn accepted(p: *const Transfer) -> u32 {
+    let pointers: [*const Transfer; 2] = [p, p];
+    let bytes: [u8; 4] = [1, 2, 3, 4];
+    let words: *const [u8] = slice(&raw const bytes as *const u8, 1);
+    start(1).channel
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

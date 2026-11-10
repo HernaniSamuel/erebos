@@ -240,6 +240,10 @@ pub struct Queries<'h> {
     /// handlers in `data` and their names among the byte strings: made once
     /// every body is lowered, before `core_parts` marks what dumps leave out.
     vector_table: Option<VectorTable>,
+    /// The arrays and slices of linear elements reported so far, normalized:
+    /// those written, then those an expression made (ADR 0101). Each is
+    /// reported once.
+    pub linear_arrays: Vec<hir::Ty>,
     /// Items being computed, outermost first.
     in_progress: Vec<InProgress>,
 }
@@ -297,6 +301,7 @@ impl<'h> Queries<'h> {
             data: Vec::new(),
             data_ids: HashMap::new(),
             vector_table: None,
+            linear_arrays: Vec::new(),
             in_progress: Vec::new(),
         };
         // Every file, whether or not it holds a check: that is only known
@@ -326,6 +331,8 @@ impl<'h> Queries<'h> {
         ty::report_peripherals_by_value(self);
         ty::report_volatile_peripherals(self);
         ty::report_copy_fields(self);
+        ty::report_linear_arrays(self);
+        ty::report_linear_statics(self);
         for id in 0..hir.structs.len() {
             self.struct_layout(StructId(id as u32));
         }

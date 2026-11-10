@@ -1,0 +1,35 @@
+// emit: typeck
+// An array or a slice of a linear type that no written type has is an error
+// at the expression that makes it, once per type: an array literal, a repeat
+// expression, `slice(p, n)` (ADR 0101). An expression that has a type from an
+// operand is not reported.
+#[linear]
+pub struct Transfer { channel: u32 }
+
+fn start(channel: u32) -> Transfer { Transfer { channel: channel } }
+
+fn made(h: Transfer, p: *const Transfer) -> u32 {
+    [start(1), start(2)];
+    let channel: u32 = ([start(3), h, start(5)])[0].channel;
+    let n: usize = len(slice(p, 2));
+    channel
+}
+
+// Nested literals: the inner one, once; the outer one has its type from it.
+fn nested() {
+    [[start(6), start(7), start(8), start(9)], [start(10), start(11), start(12), start(13)]];
+}
+
+// Once per type: this literal of two elements is not reported, the first one is.
+fn again() {
+    [start(14), start(15)];
+}
+
+// Accepted: the elements are not linear.
+fn accepted(p: *const u8) -> usize {
+    let bytes: [u8; 3] = [1, 2, 3];
+    len(slice(p, 2))
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

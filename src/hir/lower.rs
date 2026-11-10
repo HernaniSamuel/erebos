@@ -294,6 +294,7 @@ pub fn lower(
         peripherals_by_value: Vec::new(),
         volatile_peripherals: Vec::new(),
         applications: Vec::new(),
+        array_types: Vec::new(),
         next_expr: 0,
         next_pattern: 0,
         diags,
@@ -426,6 +427,7 @@ pub fn lower(
     let peripherals_by_value = lowerer.peripherals_by_value;
     let volatile_peripherals = lowerer.volatile_peripherals;
     let applications = lowerer.applications;
+    let array_types = lowerer.array_types;
     let modules = lowerer.modules;
     let namespaces = lowerer.namespaces;
     let uses = lowerer.uses;
@@ -469,6 +471,7 @@ pub fn lower(
         peripherals_by_value,
         volatile_peripherals,
         applications,
+        array_types,
         entry: entry?,
         panic: panic?,
         reset,
@@ -1403,6 +1406,9 @@ struct Lowerer<'a> {
     volatile_peripherals: Vec<VolatilePeripheral>,
     /// Each `Option(T)` and `Result(T, E)` written (ADR 0045).
     applications: Vec<(Span, Ty)>,
+    /// Each array type written, and each slice type written behind a
+    /// pointer (ADR 0101).
+    array_types: Vec<(Span, Ty)>,
     next_expr: u32,
     /// The next `.V` pattern's id (ADR 0044).
     next_pattern: u32,

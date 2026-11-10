@@ -24,7 +24,7 @@ use crate::span::Span;
 pub use asm::{AsmChecked, AsmPiece};
 pub use copy::{copy_declaration_fails, is_copy, report_copy_fields, suggest_copy};
 pub use dump::dump;
-pub use linear::is_linear;
+pub use linear::{is_linear, report_linear_arrays, report_linear_statics};
 use place::{Unmovable, is_place};
 
 mod asm;
@@ -581,6 +581,7 @@ impl Checker<'_, '_> {
 
         if let Some(body) = &f.body {
             self.checked_block(f, body, self.ret, because);
+            self.report_made_arrays(body);
             if f.kind == FnKind::Naked {
                 self.naked_body(f, body);
             }
@@ -1093,8 +1094,9 @@ impl Checker<'_, '_> {
             ExprKind::AddrOf { mutable, place } => self.addr_of(f, *mutable, place),
             ExprKind::Try(operand, _) => self.try_(f, expr, operand),
             ExprKind::Assign(place, value) => {
-                let place_ty = self.place(f, place, AccessMode::Write);
-                self.check(f, value, Some(place_ty));
+                let (place_ty, through_pointer) = self.place_via(f, place, AccessMode::Write);
+                let value_ty = self.check(f, value, Some(place_ty));
+                self.check_linear_write(expr, through_pointer, value_ty);
                 Ty::Unit
             }
             ExprKind::CompoundAssign(op, place, value, _) => {

@@ -88,6 +88,19 @@ ty::non-copy-repeat
     ╰────
   help: mark `State` with `#[copy]` if its values may be duplicated, or list each element in an
         array literal (ADR 0096)
+ty::linear-array
+
+  × `[Ticket; 2]` has elements of the linear type `Ticket`
+    ╭─[non_copy_repeat.ers:28:18]
+ 27 │     let taken: [State; 2] = [State::Taken(open(6)); 2];
+ 28 │     let tickets: [Ticket; 2] = [Ticket { id: 7 }; 2];
+    ·                  ─────┬─────
+    ·                       ╰── its elements are linear, of type `Ticket`
+ 29 │ }
+    ╰────
+  help: no element of an array or a slice is ever moved out (ADR 0097, 0100), so none could be
+        consumed, only forgotten; keep each linear value in a variable of its own, or in a field
+        of a struct (ADR 0101)
 ty::non-copy-repeat
 
   × `[v; N]` would copy a value of the non-copy type `Ticket`
