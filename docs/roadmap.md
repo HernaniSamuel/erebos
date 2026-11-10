@@ -104,7 +104,7 @@ QEMU. The ownership model they share is ADR 0094.
 |------|----------|-----------------|
 | **M5.1** ✅ MIR validation | the rules of MIR checked after each body is built, after the program is assembled and after `leave_out` (ADR 0095); no change to the language | every program of the tests, on both targets at both levels, passes the validator |
 | **M5.2** ✅ Moves | `#[copy]`; moves in MIR; use after a move rejected, per body, before evaluation; constants and statics of non-copy types; the tests and `core` migrated | pins in typestate: a pin taken from disabled to output by functions that consume it |
-| **M5.3** Linear values | types that must be consumed; the check on every path that returns | a transfer to a device whose handle must be waited for |
+| **M5.3** ✅ Linear values | types that must be consumed; the check on every path that returns | a transfer to a device whose handle must be waited for |
 | **M5.4** References | `&T`, `&mut T`, `&place`, `*r`; second-class references; the borrow check; `&[T]`; references and statics, `critical` and handlers | a driver writing and filling buffers passed as `&[u8]` and `&mut [u8]` |
 | **M5.5** Methods | `impl`, `self`, `&self`, `&mut self`, `x.f()`, functions of a type | the ring buffer and the UART driver written as methods |
 | **M5.6** Ownership of peripherals | handles to peripherals that one context owns; races on registers between contexts (ADR 0078) | a UART owned by its handler, with the thread context sending through it |
@@ -900,5 +900,38 @@ Documentation owed:
   only; and why a type error in a file replaces its other errors with
   `resolve::missing-entry` and `missing-panic` when the file has no entry
   function was not looked into.
-- **Next: M5.3** (linear values), the third step of M5 (moves, ownership,
+- **M5.3 done.** A struct declared `#[linear]` (not a bit-field struct; not with
+  `#[copy]`) has values that must be consumed; a struct, an enum, `Option` or
+  `Result` that holds one is linear without a mark (ADR 0101). A linear value
+  is held from where it comes in (a parameter, a call, a struct literal) until
+  it is moved, ended by the built-in `end` (a reserved name; the struct's
+  fields must be visible where it is written) or shown absent by a test of a
+  tag; one still held at a return is `analysis::linear-not-consumed`, one
+  written over is `analysis::linear-overwritten`, and paths that do not return
+  owe nothing, so the entry function is checked for overwrites only (ADR
+  0102). A static of a linear type, an array or slice of one and a write of
+  one through a pointer are type errors (`ty::linear-static`,
+  `ty::linear-array`, `ty::linear-through-pointer`); `ty::end-type` and
+  `ty::end-private-field` are `end`'s. MIR has the flag of a linear struct,
+  `new` where a literal of one is complete, `end`, and the rules L1 to L4 (ADR
+  0103); the analysis of linearity follows facts, a linear path with the origin
+  of its value, over every local, temporaries included, in `src/analysis/linear.rs`,
+  after the analysis of moves and only on a body that passed it. It needed the
+  value of each variant in the MIR type of an enum, so that a `switch` edge
+  tells which variant is possible; it is stored when known and never waited
+  for (ADR 0104, amending ADR 0039 and 0095, rule E1). `tests/e2e/linear_transfer.ers`
+  starts two transfers to a simulated device, waits for them in the other
+  order and tries a third through an `Option`, on both targets at both levels;
+  the wrong uses are ui tests. Left open, for the planner: `#[linear]` on enums
+  with payloads, statics of linear types (M5.6 may relax the rule) and arrays
+  of linear types (once elements can be moved out), as above; a value of one
+  origin with several linear paths, overwritten by another of its paths, is
+  reported as not consumed, not as overwritten, which precise origins per part
+  would change (an ADR amending 0103); MIR building gives the write of a `let`
+  the span of its initializer, so the label of a value that comes round a loop
+  sits there, since HIR keeps no span for a `let`; whether a function of a type
+  (M5.5) may be named `end` is M5.5's, with how `impl` items are
+  named; the generated programs of ADR 0068 have only scalar types, so
+  linear values are tested by hand-written ui and e2e programs only.
+- **Next: M5.4** (references), the fourth step of M5 (moves, ownership,
   references and methods), whose steps and model are above (ADR 0094).
