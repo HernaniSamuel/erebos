@@ -1774,8 +1774,14 @@ impl<'h> Queries<'h> {
                     Some(_) => {}
                 }
                 let hir = self.hir;
-                hir.struct_(s.id)
-                    .fields
+                let def = hir.struct_(s.id);
+                // A `#[copy]` that `ty::copy-field-not-copy` rejected: MIR
+                // would mark the type copy with a part that is not.
+                let fields = def.fields.iter().map(|field| field.ty).collect();
+                if ty::copy_declaration_fails(self, def.copy.is_some(), fields) {
+                    return true;
+                }
+                def.fields
                     .iter()
                     .any(|field| self.lacks_layout(field.ty, seen, peripherals))
             }
@@ -1787,11 +1793,18 @@ impl<'h> Queries<'h> {
                 if self.enum_layout(e.id).is_none() {
                     return true;
                 }
-                self.enum_def(e.id)
-                    .variants
-                    .iter()
+                let def = self.enum_def(e.id);
+                let values: Vec<hir::Ty> = (def.variants.iter())
                     .flat_map(|variant| &variant.payload)
-                    .any(|value| self.lacks_layout(value.ty, seen, peripherals))
+                    .map(|value| value.ty)
+                    .collect();
+                // As for a struct: a `#[copy]` that was rejected.
+                if ty::copy_declaration_fails(self, def.copy.is_some(), values.clone()) {
+                    return true;
+                }
+                values
+                    .into_iter()
+                    .any(|value| self.lacks_layout(value, seen, peripherals))
             }
             hir::Ty::Applied(_) => {
                 let ty = self.normalize(ty);

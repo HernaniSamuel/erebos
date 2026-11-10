@@ -1,0 +1,47 @@
+// emit: mir
+// A `#[copy]` declaration that ADR 0096 rejects stops the program at the
+// diagnostic, also when a body names the type: MIR would hold a copy type
+// with a part that is not (ADR 0095, rule M4), a bug of the compiler, so a
+// body that reaches such a type is left out like one that reaches a failed
+// layout (ADR 0032, 0048). The bodies that do not name one are still built.
+struct Handle { id: u32 }
+
+#[copy]
+struct Bad { h: Handle }
+
+#[copy]
+enum BadEvent: u8 { Got(Handle) = 0, Idle = 1 }
+
+// Copy by its own declaration, whose field type is rejected above.
+#[copy]
+struct Wraps { b: Bad }
+
+fn takes_struct(b: Bad) {}
+
+fn takes_enum(e: BadEvent) -> BadEvent {
+    e
+}
+
+fn nested(w: Wraps) -> u32 {
+    let a: Wraps = w;
+    let b: Wraps = w;
+    1
+}
+
+fn in_array(a: [Bad; 2]) -> Option(Bad) {
+    .None
+}
+
+fn local() -> u32 {
+    let b: Bad = Bad { h: Handle { id: 1 } };
+    2
+}
+
+// Names none of them: built and checked as usual, with its own error.
+fn unrelated(h: Handle) {
+    let a: Handle = h;
+    let b: Handle = h;
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

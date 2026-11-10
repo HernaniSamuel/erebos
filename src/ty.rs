@@ -22,7 +22,7 @@ use crate::query::Queries;
 use crate::span::Span;
 
 pub use asm::{AsmChecked, AsmPiece};
-pub use copy::{is_copy, report_copy_fields, suggest_copy};
+pub use copy::{copy_declaration_fails, is_copy, report_copy_fields, suggest_copy};
 pub use dump::dump;
 use place::{Unmovable, is_place};
 

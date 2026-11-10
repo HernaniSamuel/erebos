@@ -170,6 +170,17 @@ impl Checker<'_, '_> {
     }
 }
 
+/// Whether a type declared `#[copy]`, with `fields` as its field types or its
+/// payload values, breaks its declaration: one of them is not copy. That is
+/// reported by `report_copy_fields`; the type then counts as one that failed,
+/// since MIR would hold a copy type with a part that is not (ADR 0095, M4).
+pub fn copy_declaration_fails(q: &mut Queries, copy: bool, fields: Vec<Ty>) -> bool {
+    copy && fields.into_iter().any(|field| {
+        let field = q.normalize(field);
+        !is_copy(q, field)
+    })
+}
+
 /// Reports, once per field or payload value, the types declared `#[copy]`
 /// that hold one which is not copy (ADR 0096).
 pub fn report_copy_fields(q: &mut Queries) {

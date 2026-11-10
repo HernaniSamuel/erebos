@@ -543,11 +543,12 @@ const CATALOG: &[Snippet] = &[
     s!("ty::unsized", Typeck, Items, "struct InjU { a: [u8] }"),
     s!(
         "ty::copy-field-not-copy",
-        Typeck,
+        Mir,
         Items,
         "struct InjHandle { id: u32 }
 #[copy]
-struct InjCopy { h: InjHandle }"
+struct InjCopy { h: InjHandle }
+fn injected_copy(injected_c: InjCopy) {}"
     ),
     s!(
         "ty::non-copy-constant",
