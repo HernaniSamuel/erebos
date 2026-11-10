@@ -350,9 +350,19 @@ ADRs:
     nested in a payload, an error from M5.2 (ADR 0097), allowed once a
     program needs it, for instance through a hidden local recording which
     alternative passed.
-  - M5.3: how a type is marked linear; assigning over a place holding a
-    linear value; statics of linear types; how the module that defines a
-    linear type ends a value (taking it apart).
+  - M5.3: settled by ADR 0101 (`#[linear]` on structs only, enums linear by
+    holding a linear value; no static, array or write through a pointer of a
+    linear type; `extern fn` and `#[export]` may take and give them), 0102
+    (what gives and consumes a linear value, a test of the tag included;
+    owed at returns only, not on paths that do not return; overwrites
+    rejected; the built-in `end`, where every field is visible) and 0103
+    (`new` and `end` in MIR, the rules L1 to L4, the analysis of linearity
+    over every local, temporaries included; amending 0095, 0097, 0098 and
+    0099).
+  - Not yet scheduled, from M5.3: `#[linear]` on enums with payloads, if a
+    program needs it (ADR 0101); statics of linear types, for M5.6 to
+    reconsider with how a context owns what a static holds; arrays of linear
+    types, once elements can be moved out.
   - M5.4: how long the borrow of a `let` lasts (its last use or its
     scope); when two places overlap (fields of one struct, elements of
     one array); references in the signatures of `extern fn`, `#[export]`,
@@ -365,7 +375,9 @@ ADRs:
     reference.
   - M5.5: `x.f()` borrowing its receiver, as an amendment of ADR 0008;
     functions of a type without a receiver (`T::new()`); where an `impl`
-    may be and its visibility.
+    may be and its visibility; whether a function of a type may be named
+    after a built-in such as `end` or `len` (ADR 0102 reserves `end` for
+    items).
   - M5.6: handles to peripherals and how a program gets them once; how a
     context comes to own a value a static holds; the races on registers
     that ADR 0078 left to M5; what happens to programs that name

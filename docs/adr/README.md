@@ -124,9 +124,12 @@ Do not write one for local implementation details that the code already explains
 | 0092 | [Interrupts generated from SVD](0092-interrupts-generated-from-svd.md) | Accepted |
 | 0093 | [Shared statics checked](0093-shared-statics-checked.md) | Accepted |
 | 0094 | [Ownership: copies, moves and references](0094-ownership-moves-and-references.md) | Accepted |
-| 0095 | [MIR validation](0095-mir-validation.md) | Accepted, amended by 0098 |
+| 0095 | [MIR validation](0095-mir-validation.md) | Accepted, amended by 0098, 0103 |
 | 0096 | [Copy types and `#[copy]`](0096-copy-types.md) | Accepted |
-| 0097 | [Moves](0097-moves.md) | Accepted, amended by 0100 |
-| 0098 | [Moves in MIR](0098-moves-in-mir.md) | Accepted |
-| 0099 | [The analyses of one body](0099-analyses-of-one-body.md) | Accepted, amended by 0100 |
+| 0097 | [Moves](0097-moves.md) | Accepted, amended by 0100, 0103 |
+| 0098 | [Moves in MIR](0098-moves-in-mir.md) | Accepted, amended by 0103 |
+| 0099 | [The analyses of one body](0099-analyses-of-one-body.md) | Accepted, amended by 0100, 0103 |
 | 0100 | [Moves as built in M5.2](0100-moves-as-built.md) | Accepted |
+| 0101 | [Linear types and `#[linear]`](0101-linear-types.md) | Accepted |
+| 0102 | [Consuming linear values, and `end`](0102-consuming-linear-values.md) | Accepted |
+| 0103 | [Linear values in MIR, and their analysis](0103-linear-values-in-mir.md) | Accepted |

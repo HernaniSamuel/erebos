@@ -1,7 +1,8 @@
 # 0097. Moves
 
 - Status: Accepted; amended by 0100 (the elements of a temporary's array do not
-  move; one error per fault holds for uses that do not move)
+  move; one error per fault holds for uses that do not move), 0103 (`end`
+  may use a partly moved place)
 - Date: 2026-11-09
 
 ## Context
