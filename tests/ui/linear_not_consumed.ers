@@ -1,0 +1,179 @@
+// emit: mir
+// A linear value still held where the function returns is
+// `analysis::linear-not-consumed`, one error per value, at the point where it
+// came into the function (ADR 0102, 0103): the call, the literal, or the
+// function for a parameter, with a label at each return it reaches. Every
+// function here returns, so that each is checked for returns.
+#[linear]
+struct Transfer { channel: u32 }
+
+#[linear]
+struct Tok {}
+
+struct Pair { a: Transfer, b: Transfer }
+
+struct Wrapper { inner: Transfer, n: u32 }
+
+fn start(channel: u32) -> Transfer {
+    Transfer { channel: channel }
+}
+
+fn pair() -> Pair {
+    Pair { a: start(1), b: start(2) }
+}
+
+fn consume(t: Transfer) {
+    end(t);
+}
+
+fn consume_with(t: Transfer, n: u32) {
+    end(t);
+}
+
+fn number() -> Option(u32) {
+    .Some(1)
+}
+
+// A variable never moved.
+fn never() {
+    let t: Transfer = start(1);
+}
+
+// A parameter never moved.
+fn parameter(t: Transfer) {}
+
+// A discarded call: the temporary that holds its result is never moved.
+fn discarded() {
+    start(1);
+}
+
+// A discarded literal with no fields, and one kept in a variable.
+fn token() {
+    Tok {};
+}
+
+fn forgotten_token() {
+    let t: Tok = Tok {};
+}
+
+// Consumed on one branch only.
+fn one_branch(c: bool) {
+    let t: Transfer = start(1);
+    if c {
+        consume(t);
+    }
+}
+
+// An early `return`.
+fn early(c: bool) {
+    let t: Transfer = start(1);
+    if c {
+        return;
+    }
+    consume(t);
+}
+
+// A `?` that returns.
+fn question() -> Option(u32) {
+    let t: Transfer = start(1);
+    let n: u32 = number()?;
+    consume(t);
+    .Some(n)
+}
+
+// A `?` while the arguments are built: the first argument exists by then.
+fn arguments() -> Option(u32) {
+    consume_with(start(1), number()?);
+    .Some(0)
+}
+
+// `.Some(_)` leaves the payload held, and so does a `_` arm that covers `.Some`.
+fn wildcard(o: Option(Transfer)) {
+    match o {
+        .Some(_) => {},
+        .None => {},
+    }
+}
+
+fn catch_all(o: Option(Transfer)) {
+    match o {
+        .None => {},
+        _ => {},
+    }
+}
+
+// A part consumed, the other forgotten: the error names `p.b` only.
+fn partly() {
+    let p: Pair = pair();
+    consume(p.a);
+}
+
+// Both forgotten: one error, naming both.
+fn both() {
+    let p: Pair = pair();
+}
+
+// One value reaching two returns: one error, a label at each.
+fn two_returns(c: bool) {
+    let t: Transfer = start(1);
+    if c {
+        return;
+    }
+    return;
+}
+
+// Moved on, then forgotten: reported where it came in, naming the variable
+// that holds it, with a label where it moved there.
+fn moved_then_forgotten() {
+    let a: Transfer = start(1);
+    let b: Transfer = a;
+}
+
+// A discarded call in a loop that is left by `break`: one error.
+fn loop_break() {
+    loop {
+        start(1);
+        break;
+    }
+}
+
+// A variable made in a loop that does not consume it: the value comes round
+// the loop. One error, labelled at the `let`.
+fn loop_let(n: u32) {
+    let mut i: u32 = 0;
+    while i < n {
+        let t: Transfer = start(1);
+        i = i + 1;
+    }
+}
+
+// A discarded call in a loop that goes round: the value of the previous
+// iteration is still held when the call comes again.
+fn loop_discarded(n: u32) {
+    let mut i: u32 = 0;
+    while i < n {
+        start(i);
+        i = i + 1;
+    }
+}
+
+// Two parts of one value: `p.b` is written over `x`, which holds `p.a`, a
+// value of the same origin (the call of `pair`). No loop is involved, and it
+// is reported as not consumed, not as overwritten (ADR 0103).
+fn same_origin() {
+    let p: Pair = pair();
+    let mut x: Transfer = p.a;
+    x = p.b;
+    consume(x);
+}
+
+// The transfer is moved into a literal whose later field returns by `?`: the
+// incomplete literal holds it there.
+fn literal(t: Transfer) -> Option(u32) {
+    let w: Wrapper = Wrapper { inner: t, n: number()? };
+    consume(w.inner);
+    .Some(w.n)
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

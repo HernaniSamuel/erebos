@@ -1,0 +1,42 @@
+// emit: typeck
+// A value of a linear type moved into a place reached through a pointer is an
+// error: it could never be moved back out (ADR 0101).
+#[linear]
+pub struct Transfer { channel: u32 }
+
+struct Slot { h: Transfer, n: u32 }
+
+struct Slots { first: Slot }
+
+fn start(channel: u32) -> Transfer { Transfer { channel: channel } }
+
+// Rejected, at the assignment.
+fn through(p: *mut Transfer, s: *mut Slot, a: *mut Option(Transfer), t: Transfer, i: usize) {
+    *p = t;
+    p[i] = start(0);
+    (*s).h = start(1);
+    *a = .Some(start(2));
+}
+
+fn nested(n: *mut Slots) {
+    (*n).first.h = start(3);
+}
+
+// A slice of a linear type is `ty::linear-array`, and the write is an error
+// of its own.
+fn sliced(s: *mut [Transfer], i: usize) {
+    (*s)[i] = start(4);
+}
+
+// Accepted: a variable, or a copy field through a pointer.
+fn accepted(s: *mut Slot) -> u32 {
+    let mut t: Transfer = start(5);
+    t = start(6);
+    let q: *mut Transfer = &raw mut t;
+    (*q).channel = 7;
+    (*s).n = 8;
+    t.channel
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

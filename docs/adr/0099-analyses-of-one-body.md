@@ -1,7 +1,8 @@
 # 0099. The analyses of one body
 
 - Status: Accepted; amended by 0100 (the analysis of moves follows only
-  variables and parameters)
+  variables and parameters), 0103 (`end` is an event of the analysis of
+  moves)
 - Date: 2026-11-09
 - Amends: 0063 (the module `query` uses `analysis`)
 

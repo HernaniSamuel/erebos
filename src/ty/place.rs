@@ -706,19 +706,24 @@ impl Checker<'_, '_> {
     /// Checks that `place` can be assigned to, by `=` or, with `kind`
     /// `ReadWrite`, by a compound assignment, and returns its type.
     pub(super) fn place(&mut self, f: &Fn, place: &Expr, kind: AccessMode) -> Ty {
+        self.place_via(f, place, kind).0
+    }
+
+    /// `place`, and whether the place is reached through a pointer.
+    pub(super) fn place_via(&mut self, f: &Fn, place: &Expr, kind: AccessMode) -> (Ty, bool) {
         let Some(info) = self.place_info(f, place) else {
             self.check_not_a_place(f, place);
             self.q.diags.push(
                 Diagnostic::error("ty::not-assignable", "cannot assign to this expression")
                     .label(place.span, "not a variable, `*pointer` or `a[index]`"),
             );
-            return Ty::Error;
+            return (Ty::Error, false);
         };
         if let Ty::Slice(_) = info.ty {
             self.q
                 .diags
                 .push(whole_slice(info.ty, place.span, "written"));
-            return Ty::Error;
+            return (Ty::Error, false);
         }
         // A register array or a cluster array is reached through an index
         // (ADR 0064).
@@ -729,7 +734,7 @@ impl Checker<'_, '_> {
             };
             let diag = self.whole_entry(register, place.span, accessed);
             self.q.diags.push(diag);
-            return Ty::Error;
+            return (Ty::Error, false);
         }
         if let Ty::Peripheral(_) = info.ty {
             let accessed = match kind {
@@ -739,7 +744,7 @@ impl Checker<'_, '_> {
             self.q
                 .diags
                 .push(whole_peripheral(info.ty, place.span, accessed));
-            return Ty::Error;
+            return (Ty::Error, false);
         }
         match info.immutable {
             Some(Immutable::Local(id)) => {
@@ -801,7 +806,7 @@ impl Checker<'_, '_> {
         }
         self.access(&info, place, kind);
         self.assignment_effects(place, &info, kind);
-        info.ty
+        (info.ty, info.via.is_some())
     }
 
     /// Checks the effects of assigning `place`, at `info`, as `kind` says,

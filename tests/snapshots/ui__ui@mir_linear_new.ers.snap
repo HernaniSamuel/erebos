@@ -1,0 +1,199 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/mir_linear_new.ers
+---
+--- mir ---
+struct Transfer { 0 channel: u32 at 0, 1 len: u32 at 4 } // size 8, align 4
+struct Tok {} // size 0, align 1
+struct Outer { 0 t: Transfer at 0, 1 n: u32 at 8 } // size 12, align 4
+struct Holder { 0 t: Transfer at 0, 1 n: u32 at 8 } // size 12, align 4
+enum Option(Transfer): u8 { 0 None = 0, 1 Some(0 Transfer at 4) = 1 } // size 12, align 4
+enum Option(u32): u8 { 0 None = 0, 1 Some(0 u32 at 4) = 1 } // size 8, align 4
+
+fn make(_1: u32) -> u32 {
+    let _0: u32;
+    let _1: u32; // n
+
+    bb0: {
+        _0 = copy _1;
+        return;
+    }
+}
+
+fn fallible(_1: u32) -> Option(u32) {
+    let _0: Option(u32);
+    let _1: u32; // n
+    let _2: Option(u32);
+
+    bb0: {
+        (_2 as 1).0 = copy _1;
+        _2.tag = const 1_u8;
+        _0 = copy _2;
+        return;
+    }
+}
+
+fn fields(_1: u32) -> Transfer {
+    let _0: Transfer;
+    let _1: u32; // a
+    let _2: Transfer;
+
+    bb0: {
+        _2.0 = copy _1;
+        _2.1 = const 4_u32;
+        new _2;
+        _0 = move _2;
+        return;
+    }
+}
+
+fn question(_1: u32) -> Option(Transfer) {
+    let _0: Option(Transfer);
+    let _1: u32; // a
+    let _2: Transfer; // t
+    let _3: Transfer;
+    let _4: Option(u32);
+    let _5: u32;
+    let _6: Option(u32);
+    let _7: u32;
+    let _8: Option(Transfer);
+
+    bb0: {
+        _4 = call fallible(copy _1);
+        switch copy _4.tag -> [1_u8: bb1, 0_u8: bb2, otherwise: bb3];
+    }
+
+    bb1: {
+        _5 = copy (_4 as 1).0;
+        _3.0 = copy _5;
+        _6 = call fallible(const 2_u32);
+        switch copy _6.tag -> [1_u8: bb4, 0_u8: bb5, otherwise: bb6];
+    }
+
+    bb2: {
+        _0.tag = const 0_u8;
+        return;
+    }
+
+    bb3: {
+        panic(enum value is no variant);
+    }
+
+    bb4: {
+        _7 = copy (_6 as 1).0;
+        _3.1 = copy _7;
+        new _3;
+        _2 = move _3;
+        (_8 as 1).0 = move _2;
+        _8.tag = const 1_u8;
+        _0 = move _8;
+        return;
+    }
+
+    bb5: {
+        _0.tag = const 0_u8;
+        return;
+    }
+
+    bb6: {
+        panic(enum value is no variant);
+    }
+}
+
+fn token() -> Tok {
+    let _0: Tok;
+    let _1: Tok;
+
+    bb0: {
+        new _1;
+        _0 = move _1;
+        return;
+    }
+}
+
+fn discarded() -> () {
+    let _0: ();
+    let _1: Tok;
+
+    bb0: {
+        new _1;
+        end _1;
+        return;
+    }
+}
+
+fn inside() -> Option(Transfer) {
+    let _0: Option(Transfer);
+    let _1: Transfer;
+    let _2: u32;
+    let _3: Option(Transfer);
+
+    bb0: {
+        _2 = call make(const 1_u32);
+        _1.0 = copy _2;
+        _1.1 = const 2_u32;
+        new _1;
+        (_3 as 1).0 = move _1;
+        _3.tag = const 1_u8;
+        _0 = move _3;
+        return;
+    }
+}
+
+fn nested() -> Outer {
+    let _0: Outer;
+    let _1: Outer;
+    let _2: Transfer;
+
+    bb0: {
+        _2.0 = const 1_u32;
+        _2.1 = const 2_u32;
+        new _2;
+        _1.0 = move _2;
+        _1.1 = const 3_u32;
+        new _1;
+        _0 = move _1;
+        return;
+    }
+}
+
+fn holder() -> Holder {
+    let _0: Holder;
+    let _1: Holder;
+    let _2: Transfer;
+
+    bb0: {
+        _2.0 = const 1_u32;
+        _2.1 = const 2_u32;
+        new _2;
+        _1.0 = move _2;
+        _1.1 = const 3_u32;
+        _0 = move _1;
+        return;
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}

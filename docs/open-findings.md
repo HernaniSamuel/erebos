@@ -155,6 +155,30 @@ M3.1 to M3.3 on 2026-10-28; these remain.
 - The enum arm of `lacks_layout` in `src/query.rs` clones the payload `Vec`
   only to call `copy_declaration_fails`, which could take a slice. (M5.2)
 
+- A value of one origin with several linear paths (`let p: Pair = pair();
+  let mut x = p.a; x = p.b;`) written over by another of its paths is
+  `analysis::linear-not-consumed`, not `linear-overwritten`: ADR 0103 takes
+  "same origin" as "came round a loop". Precise origins per linear part need
+  an ADR amending 0103; pinned by `same_origin` in
+  `tests/ui/linear_not_consumed.ers`. (M5.3)
+- `is_linear` in `src/ty/linear.rs` keeps no memo of finished types, so a
+  non-linear acyclic nest (A holds two B, B two C, ...) is walked 2^depth
+  times. (M5.3)
+- `report_made_arrays` in `src/ty/linear.rs` walks the whole type of every
+  expression of a program with a `#[linear]` struct; quadratic in the worst
+  case. (M5.3)
+- The L1 violation for a bad projection in `linear_place`
+  (`src/mir/validate.rs`) prints the `Debug` form of `PlaceElem`, where other
+  violations print the MIR dump form. (M5.3)
+- `hop_labels` in `src/analysis/linear.rs` compares the description with
+  `THIS` to tell "moved here" from "moved into `x` here"; the local's
+  `name.is_none()` would not depend on `describe`. `type Key` there repeats
+  what `bits::key` returns; export the alias from `bits.rs`. (M5.3)
+- `is_reserved` in `src/svd/names.rs` renames no built-in function name
+  (`assert`, `len`, `slice`, `end`), so an SVD item named `end` would give
+  `resolve::reserved-name` in the generated program; not confirmed with an
+  SVD. (M5.3)
+
 ## Tests
 
 - The `bss` check of `tests/e2e/memory_map.ers` and `memory_map_ram.ers`
@@ -280,6 +304,14 @@ M3.1 to M3.3 on 2026-10-28; these remain.
 - No ui test pins several `consume(a)` after one move (two errors);
   `use_after_move_once.ers` uses reads on purpose. (M5.2)
 
+- `linear_array_made.ers` has no array literal inside an `if`, `match` or
+  `loop` (they work, checked by hand). (M5.3)
+- `end.ers` lost the shape `end(if c { t } else { make(2) })` with a
+  parameter moved inside the `if`; `EnumDef::set_value` and
+  `Queries::known_discriminant` have no unit test of their own (covered by ui
+  tests); the `debug_assert_eq!` in `into_mir` that the list of enum values
+  agrees with the MIR type mostly checks the wiring of `set_value`. (M5.3)
+
 ## Docs
 
 - `docs/reference.md`: two paragraphs of the M3.4a text are wrapped wider
@@ -385,3 +417,8 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   `injections >= programs.min(CATALOG.len())` is global, so a `Mir` snippet
   skipped on most bases goes unnoticed (nobody measured how many bases compile
   to `Mir`). (M5.2)
+- `docs/reference.md`, "In MIR": the L3 summary leaves out "through fields,
+  payloads and pointees" (ADR 0103), and the L1 phrasing "a local, followed
+  by fields and payloads, of a `#[linear]` struct" is ambiguous. A few lines
+  of the "M5.3 done" entry in `docs/roadmap.md` run past the usual wrap.
+  (M5.3)

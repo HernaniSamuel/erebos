@@ -1,0 +1,587 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/linear_consumed.ers
+---
+--- mir ---
+struct Transfer { 0 channel: u32 at 0 } // size 4, align 4
+struct Wide { 0 a: u32 at 0, 1 b: u32 at 4 } // size 8, align 4
+struct Pair { 0 a: Transfer at 0, 1 b: Transfer at 4 } // size 8, align 4
+enum Option(Transfer): u8 { 0 None = 0, 1 Some(0 Transfer at 4) = 1 } // size 8, align 4
+enum Option(Wide): u8 { 0 None = 0, 1 Some(0 Wide at 4) = 1 } // size 12, align 4
+enum Option(u32): u8 { 0 None = 0, 1 Some(0 u32 at 4) = 1 } // size 8, align 4
+enum Result(Transfer, u32): u8 { 0 Ok(0 Transfer at 4) = 0, 1 Err(0 u32 at 4) = 1 } // size 8, align 4
+enum Result(u32, Transfer): u8 { 0 Ok(0 u32 at 4) = 0, 1 Err(0 Transfer at 4) = 1 } // size 8, align 4
+enum Result(u32, u32): u8 { 0 Ok(0 u32 at 4) = 0, 1 Err(0 u32 at 4) = 1 } // size 8, align 4
+
+fn start(_1: u32) -> Transfer {
+    let _0: Transfer;
+    let _1: u32; // channel
+    let _2: Transfer;
+
+    bb0: {
+        _2.0 = copy _1;
+        new _2;
+        _0 = move _2;
+        return;
+    }
+}
+
+fn number() -> Option(u32) {
+    let _0: Option(u32);
+    let _1: Option(u32);
+
+    bb0: {
+        (_1 as 1).0 = const 1_u32;
+        _1.tag = const 1_u8;
+        _0 = copy _1;
+        return;
+    }
+}
+
+fn consume(_1: Transfer) -> () {
+    let _0: ();
+    let _1: Transfer; // t
+
+    bb0: {
+        end _1;
+        return;
+    }
+}
+
+fn consume_pair(_1: Pair) -> () {
+    let _0: ();
+    let _1: Pair; // p
+    let _2: Transfer;
+    let _3: Transfer;
+
+    bb0: {
+        _2 = move _1.0;
+        call consume(move _2);
+        _3 = move _1.1;
+        call consume(move _3);
+        return;
+    }
+}
+
+fn moved_to_a_call() -> () {
+    let _0: ();
+    let _1: Transfer; // t
+    let _2: Transfer;
+
+    bb0: {
+        _2 = call start(const 1_u32);
+        _1 = move _2;
+        call consume(move _1);
+        return;
+    }
+}
+
+fn returned() -> Transfer {
+    let _0: Transfer;
+    let _1: Transfer; // t
+    let _2: Transfer;
+
+    bb0: {
+        _2 = call start(const 1_u32);
+        _1 = move _2;
+        _0 = move _1;
+        return;
+    }
+}
+
+fn returned_at_once() -> Transfer {
+    let _0: Transfer;
+    let _1: Transfer;
+
+    bb0: {
+        _1 = call start(const 1_u32);
+        _0 = move _1;
+        return;
+    }
+}
+
+fn ended() -> () {
+    let _0: ();
+    let _1: Transfer; // t
+    let _2: Transfer;
+
+    bb0: {
+        _2 = call start(const 1_u32);
+        _1 = move _2;
+        end _1;
+        return;
+    }
+}
+
+fn ended_at_once() -> () {
+    let _0: ();
+    let _1: Transfer;
+
+    bb0: {
+        _1 = call start(const 1_u32);
+        end _1;
+        return;
+    }
+}
+
+fn moved_twice() -> () {
+    let _0: ();
+    let _1: Transfer; // a
+    let _2: Transfer; // b
+    let _3: Transfer;
+
+    bb0: {
+        _3 = call start(const 1_u32);
+        _1 = move _3;
+        _2 = move _1;
+        call consume(move _2);
+        return;
+    }
+}
+
+fn both_branches(_1: bool) -> () {
+    let _0: ();
+    let _1: bool; // c
+    let _2: Transfer; // t
+    let _3: Transfer;
+
+    bb0: {
+        _3 = call start(const 1_u32);
+        _2 = move _3;
+        if copy _1 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        call consume(move _2);
+        goto -> bb3;
+    }
+
+    bb2: {
+        end _2;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn matched(_1: Option(Transfer)) -> () {
+    let _0: ();
+    let _1: Option(Transfer); // o
+    let _2: Transfer; // t
+
+    bb0: {
+        switch copy _1.tag -> [1_u8: bb4, 0_u8: bb2, otherwise: bb3];
+    }
+
+    bb1: {
+        call consume(move _2);
+        goto -> bb5;
+    }
+
+    bb2: {
+        goto -> bb5;
+    }
+
+    bb3: {
+        panic(enum value is no variant);
+    }
+
+    bb4: {
+        _2 = move (_1 as 1).0;
+        goto -> bb1;
+    }
+
+    bb5: {
+        return;
+    }
+}
+
+fn none_returned() -> Option(Transfer) {
+    let _0: Option(Transfer);
+    let _1: Option(Transfer);
+
+    bb0: {
+        _1.tag = const 0_u8;
+        _0 = move _1;
+        return;
+    }
+}
+
+fn none_kept() -> Option(Transfer) {
+    let _0: Option(Transfer);
+    let _1: Option(Transfer); // o
+    let _2: Option(Transfer);
+
+    bb0: {
+        _2.tag = const 0_u8;
+        _1 = move _2;
+        _0 = move _1;
+        return;
+    }
+}
+
+fn through_an_option(_1: Transfer) -> () {
+    let _0: ();
+    let _1: Transfer; // t
+    let _2: Option(Transfer); // o
+    let _3: Transfer; // u
+    let _4: Option(Transfer);
+
+    bb0: {
+        (_4 as 1).0 = move _1;
+        _4.tag = const 1_u8;
+        _2 = move _4;
+        switch copy _2.tag -> [1_u8: bb4, 0_u8: bb2, otherwise: bb3];
+    }
+
+    bb1: {
+        call consume(move _3);
+        goto -> bb5;
+    }
+
+    bb2: {
+        goto -> bb5;
+    }
+
+    bb3: {
+        panic(enum value is no variant);
+    }
+
+    bb4: {
+        _3 = move (_2 as 1).0;
+        goto -> bb1;
+    }
+
+    bb5: {
+        return;
+    }
+}
+
+fn wrapped(_1: Transfer) -> Option(Transfer) {
+    let _0: Option(Transfer);
+    let _1: Transfer; // t
+    let _2: Option(Transfer);
+
+    bb0: {
+        (_2 as 1).0 = move _1;
+        _2.tag = const 1_u8;
+        _0 = move _2;
+        return;
+    }
+}
+
+fn question_option(_1: Option(Transfer)) -> Option(u32) {
+    let _0: Option(u32);
+    let _1: Option(Transfer); // o
+    let _2: Transfer; // t
+    let _3: Option(Transfer);
+    let _4: Transfer;
+    let _5: Option(u32);
+
+    bb0: {
+        _3 = move _1;
+        switch copy _3.tag -> [1_u8: bb1, 0_u8: bb2, otherwise: bb3];
+    }
+
+    bb1: {
+        _4 = move (_3 as 1).0;
+        _2 = move _4;
+        call consume(move _2);
+        (_5 as 1).0 = const 1_u32;
+        _5.tag = const 1_u8;
+        _0 = copy _5;
+        return;
+    }
+
+    bb2: {
+        _0.tag = const 0_u8;
+        return;
+    }
+
+    bb3: {
+        panic(enum value is no variant);
+    }
+}
+
+fn question_value(_1: Result(Transfer, u32)) -> Result(u32, u32) {
+    let _0: Result(u32, u32);
+    let _1: Result(Transfer, u32); // r
+    let _2: Transfer; // t
+    let _3: Result(Transfer, u32);
+    let _4: Transfer;
+    let _5: Result(u32, u32);
+
+    bb0: {
+        _3 = move _1;
+        switch copy _3.tag -> [0_u8: bb1, 1_u8: bb2, otherwise: bb3];
+    }
+
+    bb1: {
+        _4 = move (_3 as 0).0;
+        _2 = move _4;
+        call consume(move _2);
+        (_5 as 0).0 = const 1_u32;
+        _5.tag = const 0_u8;
+        _0 = copy _5;
+        return;
+    }
+
+    bb2: {
+        (_0 as 1).0 = copy (_3 as 1).0;
+        _0.tag = const 1_u8;
+        return;
+    }
+
+    bb3: {
+        panic(enum value is no variant);
+    }
+}
+
+fn question_error(_1: Result(u32, Transfer)) -> Result(u32, Transfer) {
+    let _0: Result(u32, Transfer);
+    let _1: Result(u32, Transfer); // r
+    let _2: u32; // n
+    let _3: Result(u32, Transfer);
+    let _4: u32;
+    let _5: Result(u32, Transfer);
+
+    bb0: {
+        _3 = move _1;
+        switch copy _3.tag -> [0_u8: bb1, 1_u8: bb2, otherwise: bb3];
+    }
+
+    bb1: {
+        _4 = copy (_3 as 0).0;
+        _2 = copy _4;
+        (_5 as 0).0 = copy _2;
+        _5.tag = const 0_u8;
+        _0 = move _5;
+        return;
+    }
+
+    bb2: {
+        (_0 as 1).0 = move (_3 as 1).0;
+        _0.tag = const 1_u8;
+        return;
+    }
+
+    bb3: {
+        panic(enum value is no variant);
+    }
+}
+
+fn loop_consumes(_1: u32) -> () {
+    let _0: ();
+    let _1: u32; // n
+    let _2: u32; // i
+    let _3: bool;
+    let _4: Transfer;
+    let _5: u32;
+
+    bb0: {
+        _2 = const 0_u32;
+        goto -> bb1;
+    }
+
+    bb1: {
+        _3 = Lt(copy _2, copy _1);
+        if copy _3 -> [true: bb2, false: bb3];
+    }
+
+    bb2: {
+        _4 = call start(copy _2);
+        call consume(move _4);
+        _5 = Add(copy _2, const 1_u32);
+        _2 = copy _5;
+        goto -> bb1;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn loop_pairs() -> () {
+    let _0: ();
+    let _1: u32; // i
+    let _2: Pair;
+    let _3: Transfer;
+    let _4: Transfer;
+    let _5: bool;
+    let _6: u32;
+
+    bb0: {
+        _1 = const 0_u32;
+        goto -> bb1;
+    }
+
+    bb1: {
+        _3 = call start(const 1_u32);
+        _2.0 = move _3;
+        _4 = call start(const 2_u32);
+        _2.1 = move _4;
+        call consume_pair(move _2);
+        _5 = Gt(copy _1, const 3_u32);
+        if copy _5 -> [true: bb2, false: bb3];
+    }
+
+    bb2: {
+        goto -> bb4;
+    }
+
+    bb3: {
+        goto -> bb5;
+    }
+
+    bb4: {
+        return;
+    }
+
+    bb5: {
+        _6 = Add(copy _1, const 1_u32);
+        _1 = copy _6;
+        goto -> bb1;
+    }
+}
+
+fn after_the_loop(_1: u32) -> () {
+    let _0: ();
+    let _1: u32; // n
+    let _2: Transfer; // t
+    let _3: u32; // i
+    let _4: Transfer;
+    let _5: bool;
+    let _6: u32;
+
+    bb0: {
+        _4 = call start(const 1_u32);
+        _2 = move _4;
+        _3 = const 0_u32;
+        goto -> bb1;
+    }
+
+    bb1: {
+        _5 = Lt(copy _3, copy _1);
+        if copy _5 -> [true: bb2, false: bb3];
+    }
+
+    bb2: {
+        _6 = Add(copy _3, const 1_u32);
+        _3 = copy _6;
+        goto -> bb1;
+    }
+
+    bb3: {
+        call consume(move _2);
+        return;
+    }
+}
+
+fn fields(_1: Wide) -> u32 {
+    let _0: u32;
+    let _1: Wide; // w
+    let _2: u32; // sum
+    let _3: u32;
+    let _4: u32;
+    let _5: u32;
+    let _6: u32;
+
+    bb0: {
+        _1.0 = const 5_u32;
+        _3 = copy _1.0;
+        _4 = copy _3;
+        _5 = copy _1.1;
+        _6 = Add(copy _4, copy _5);
+        _2 = copy _6;
+        end _1;
+        _0 = copy _2;
+        return;
+    }
+}
+
+fn literal() -> Option(Wide) {
+    let _0: Option(Wide);
+    let _1: Wide;
+    let _2: Option(u32);
+    let _3: u32;
+    let _4: Option(u32);
+    let _5: u32;
+    let _6: Option(Wide);
+
+    bb0: {
+        _2 = call number();
+        switch copy _2.tag -> [1_u8: bb1, 0_u8: bb2, otherwise: bb3];
+    }
+
+    bb1: {
+        _3 = copy (_2 as 1).0;
+        _1.0 = copy _3;
+        _4 = call number();
+        switch copy _4.tag -> [1_u8: bb4, 0_u8: bb5, otherwise: bb6];
+    }
+
+    bb2: {
+        _0.tag = const 0_u8;
+        return;
+    }
+
+    bb3: {
+        panic(enum value is no variant);
+    }
+
+    bb4: {
+        _5 = copy (_4 as 1).0;
+        _1.1 = copy _5;
+        new _1;
+        (_6 as 1).0 = move _1;
+        _6.tag = const 1_u8;
+        _0 = move _6;
+        return;
+    }
+
+    bb5: {
+        _0.tag = const 0_u8;
+        return;
+    }
+
+    bb6: {
+        panic(enum value is no variant);
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+comptime fn LEN() -> u32 {
+    let _0: u32;
+    let _1: Transfer; // t
+
+    bb0: {
+        _0 = const 4_u32;
+        return;
+    }
+}

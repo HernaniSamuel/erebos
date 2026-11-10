@@ -1,0 +1,84 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/linear_static.ers
+---
+--- errors ---
+ty::linear-static
+
+  × the static `ONE` is of the linear type `Transfer`
+    ╭─[linear_static.ers:13:13]
+ 12 │ // enum that hold one, and an `extern static`.
+ 13 │ static ONE: Transfer = Transfer { channel: 1 };
+    ·             ────┬───
+    ·                 ╰── `Transfer` is linear
+ 14 │ static mut TWO: Transfer = Transfer { channel: 2 };
+    ╰────
+  help: the value a static holds is never moved out (ADR 0094), so it could only be overwritten,
+        which forgets it; keep it in a variable and pass it on; how a context owns what a static
+        holds is decided in M5.6 (ADR 0101)
+ty::linear-static
+
+  × the static mut `TWO` is of the linear type `Transfer`
+    ╭─[linear_static.ers:14:17]
+ 13 │ static ONE: Transfer = Transfer { channel: 1 };
+ 14 │ static mut TWO: Transfer = Transfer { channel: 2 };
+    ·                 ────┬───
+    ·                     ╰── `Transfer` is linear
+ 15 │ static mut MAYBE: Option(Transfer) = .None;
+    ╰────
+  help: the value a static holds is never moved out (ADR 0094), so it could only be overwritten,
+        which forgets it; keep it in a variable and pass it on; how a context owns what a static
+        holds is decided in M5.6 (ADR 0101)
+ty::linear-static
+
+  × the static mut `MAYBE` is of the linear type `Option(Transfer)`
+    ╭─[linear_static.ers:15:19]
+ 14 │ static mut TWO: Transfer = Transfer { channel: 2 };
+ 15 │ static mut MAYBE: Option(Transfer) = .None;
+    ·                   ────────┬───────
+    ·                           ╰── `Option(Transfer)` is linear
+ 16 │ static HELD: Holder = Holder { n: 0, t: Transfer { channel: 3 } };
+    ╰────
+  help: the value a static holds is never moved out (ADR 0094), so it could only be overwritten,
+        which forgets it; keep it in a variable and pass it on; how a context owns what a static
+        holds is decided in M5.6 (ADR 0101)
+ty::linear-static
+
+  × the static `HELD` is of the linear type `Holder`
+    ╭─[linear_static.ers:16:14]
+ 15 │ static mut MAYBE: Option(Transfer) = .None;
+ 16 │ static HELD: Holder = Holder { n: 0, t: Transfer { channel: 3 } };
+    ·              ───┬──
+    ·                 ╰── `Holder` is linear
+ 17 │ static mut SLOT: Slot = Slot::Empty;
+    ╰────
+  help: the value a static holds is never moved out (ADR 0094), so it could only be overwritten,
+        which forgets it; keep it in a variable and pass it on; how a context owns what a static
+        holds is decided in M5.6 (ADR 0101)
+ty::linear-static
+
+  × the static mut `SLOT` is of the linear type `Slot`
+    ╭─[linear_static.ers:17:18]
+ 16 │ static HELD: Holder = Holder { n: 0, t: Transfer { channel: 3 } };
+ 17 │ static mut SLOT: Slot = Slot::Empty;
+    ·                  ──┬─
+    ·                    ╰── `Slot` is linear
+ 18 │ extern static OUTSIDE: Transfer;
+    ╰────
+  help: the value a static holds is never moved out (ADR 0094), so it could only be overwritten,
+        which forgets it; keep it in a variable and pass it on; how a context owns what a static
+        holds is decided in M5.6 (ADR 0101)
+ty::linear-static
+
+  × the static `OUTSIDE` is of the linear type `Transfer`
+    ╭─[linear_static.ers:18:24]
+ 17 │ static mut SLOT: Slot = Slot::Empty;
+ 18 │ extern static OUTSIDE: Transfer;
+    ·                        ────┬───
+    ·                            ╰── `Transfer` is linear
+ 19 │ 
+    ╰────
+  help: the value a static holds is never moved out (ADR 0094), so it could only be overwritten,
+        which forgets it; keep it in a variable and pass it on; how a context owns what a static
+        holds is decided in M5.6 (ADR 0101)

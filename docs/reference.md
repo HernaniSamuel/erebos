@@ -1,4 +1,4 @@
-# Erebos language reference (M5.2)
+# Erebos language reference (M5.3)
 
 This describes the language as the compiler implements it today. The
 reasoning behind each rule lives in the ADRs (`docs/adr/`), cited as
@@ -119,10 +119,10 @@ block.
   variant of the expected enum (`.Run`, see "Enums"); after an
   expression, it reaches a field (`p.x`).
 - **`?`** is the postfix operator of "The `?` operator".
-- **Built-in functions:** `assert`, `len` and `slice` are reserved names:
+- **Built-in functions:** `assert`, `len`, `slice` and `end` are reserved names:
   no item, module or `use` may have one of them, in any module. A call to
   one of these names is always the built-in; variables may still be named
-  so (ADR 0031).
+  so (ADR 0031, 0102).
 - **Integer literals** (ADR 0016): `42`, `0x2A`, `0o52`, `0b10_1010`; `_`
   separates digits. A decimal literal with a leading zero (`017`) is an
   error. Values must fit in 64 bits. There are no suffixes (`1u8`).
@@ -166,7 +166,8 @@ depends on it. A bit-field struct is not: it is a **scalar**, stored,
 passed and accessed as its integer type (ADR 0059). Every type with values is
 **copy** or **non-copy**: a struct or an enum with payloads is non-copy
 unless declared `#[copy]`, and a non-copy value is moved, not copied (see
-"Copies and moves").
+"Copies and moves"). A non-copy type may also be **linear**: its values must be
+consumed (see "Linear values").
 
 The names of the built-in types, `bool`, the integer types, `Option` and
 `Result`, are no item's: a struct, enum, function, constant, static,
@@ -467,7 +468,8 @@ gives it its default. The `typeck` and `mir` dumps show a field's mode.
   `:` other than the four integers is `resolve::bit-struct-type`. Two
   fields with one name are `resolve::duplicate-field`. `#[packed]` and
   `#[align(N)]` are `resolve::misplaced-attribute`: the layout is the
-  integer's. So is `#[copy]`: a bit-field struct is copy already.
+  integer's. So is `#[copy]`: a bit-field struct is copy already. So is
+  `#[linear]`: a bit-field struct is copy, and a linear value is never copied.
 - A bit position or a field type that needs the struct's own bits is
   `ty::cycle`: `at L as u32` with `const L: Lcr`, `size_of(Lcr)` in its
   bit positions or field types (also through a struct holding an `Lcr`),
@@ -827,7 +829,9 @@ let w: Msg = Msg::Write(3, 0x1234);
   interrupts"), which declares the program's list of the chip's interrupts,
   and `#[copy]`, on an enum with payloads only (see "Copies and moves").
   `#[packed]`, `#[align(N)]` and the others, and `#[copy]` on an enum
-  without payloads, are `resolve::misplaced-attribute`.
+  without payloads, are `resolve::misplaced-attribute`, and so is
+  `#[linear]`: an enum is linear by holding a linear value (see "Linear
+  values").
 
 **Payloads (ADR 0039).**
 
@@ -1907,6 +1911,216 @@ of a non-copy type is moved at the end of its alternative, before the jump to
 its arm. The elements of `[v; N]` of a non-copy enum are filled by writing
 the tag of the variant into each, with no value moved.
 
+## Linear values (ADR 0101 to 0103)
+
+```
+mod dma {
+    #[linear]
+    pub struct Transfer { channel: u32 }        // private field
+
+    pub fn start(channel: u32) -> Transfer {
+        Transfer { channel: channel }
+    }
+
+    pub fn wait(t: Transfer) -> u32 {
+        let channel: u32 = t.channel;
+        end(t);                                 // only here, where `channel` is visible
+        channel
+    }
+}
+
+fn run() -> u32 {
+    let a: dma::Transfer = dma::start(1);
+    let b: dma::Transfer = dma::start(2);
+    dma::wait(b) + dma::wait(a)                 // both consumed: fine
+}
+
+fn forgets() {
+    let a: dma::Transfer = dma::start(1);       // error: analysis::linear-not-consumed
+}
+```
+
+A **linear** type is a non-copy type whose values must be consumed: a linear
+value is moved before every point where the function holding it returns, and
+is never overwritten. It is how a handle that must be given back (a transfer
+to wait for, a token to return) is kept from being forgotten. A linear type is
+never copy, so every rule of moves applies to it.
+
+### `#[linear]` and which types are linear (ADR 0101)
+
+- `#[linear]` goes before a struct that is not a bit-field struct, with
+  `#[packed]` and `#[align(N)]` if they are there. It changes neither the
+  layout nor the calling convention. It takes no argument
+  (`resolve::attribute-argument`) and is given once
+  (`resolve::duplicate-attribute`). With `#[copy]` on the same struct it is
+  `resolve::conflicting-attributes`. On a bit-field struct, an enum with or
+  without payloads, or any other item it is `resolve::misplaced-attribute`.
+- A type is linear when it is a struct declared `#[linear]`, or holds a linear
+  type: a struct with a field of one, an enum with a payload value of one,
+  `Option(T)` with `T` linear, `Result(T, E)` with `T` or `E` linear, and an
+  array or a slice whose element type is linear. It is computed from the
+  parts, not declared: an enum is never marked, since any module that sees it
+  builds its values and takes them apart with `match`, so a mark would bind
+  nobody. A raw pointer to a linear type is copy and not linear.
+- A `#[copy]` struct or enum with a field or payload value of a linear type is
+  `ty::copy-field-not-copy`, as for any non-copy field. The helps of the
+  errors of moves do not suggest `#[copy]` for a linear type.
+- The mark says that a value must be consumed, not who may build or end one:
+  that is visibility's. A struct literal is allowed only where every field is
+  visible (ADR 0050), and so is `end`. A `#[linear]` struct with a private
+  field, even of type `()`, is built and ended by its module only; one with
+  only `pub` fields, or with none, by any module that sees it.
+
+### Where a linear value may not be held (ADR 0101)
+
+No element of an array, no place through a pointer and no static is ever moved
+out of (see "Places a value is moved out of"), so a linear value put there
+could never be consumed. These are rejected by type checking:
+
+- **A static** whose type is linear, `extern static` included, is
+  `ty::linear-static`, at its type. A static of a pointer to a linear type is
+  valid.
+- **An array or a slice type whose element type is linear** is
+  `ty::linear-array`, once per type, at the first place that has it: where the
+  type is written (a field, a payload value, a parameter, a return type, a
+  `let`, a static, a type argument, the pointee of a pointer such as
+  `*const [Transfer; 4]` or `*const [Transfer]`, a cast, a layout query), or
+  an expression whose type reaches it while the types of its operands do not
+  and no type was written for it: an array literal, a repeat expression such
+  as `[.None; 4]` of `Option(Transfer)`, `slice(p, n)` with `p: *const
+  Transfer`. A nested array (`[[Transfer; 2]; 2]`) is reported once, at the
+  inner one. A body whose types include such an array is not built into MIR:
+  the error is the one at the written type.
+- **A write through a pointer of a value of a linear type** (`*p = t`,
+  `p[i] = t`, `(*p).f = t`, `*p = .Some(t)`) is `ty::linear-through-pointer`,
+  at the assignment. Taking the address of a place that holds a linear value
+  with `&raw` is valid, and so is reading or writing its copy fields through
+  the pointer: raw pointers are unchecked.
+
+`extern fn` and `#[export]` functions may take and return linear types. C is
+outside every check (ADR 0026): a value passed to an `extern fn` counts as
+consumed, and one it returns, or one that C passes to an `#[export]` function,
+is a new value the function must consume.
+
+### What gives a value, and what consumes it (ADR 0102)
+
+The **linear parts** of a value are the values of `#[linear]` structs in it:
+the value itself if its type is one, and those that its fields and payload
+values hold at any depth. A part is **held** by a place from when a value is
+written into it until it is consumed; at a point it is held if some path from
+the start of the function reaches the point holding it.
+
+A value comes into a function as a parameter, as the result of a call, or as
+a struct literal of a `#[linear]` type, with fields or none (`Tok {}`).
+Wherever it is moved (a `let`, an assignment, a binding, an argument), the
+place it is moved into holds it. A value that is moved nowhere stays held
+where it was made: `make();` and `Tok {};` leave a temporary holding it, and
+the analysis follows temporaries, which the analysis of moves does not. A
+literal gives a value only once all its fields are written, so
+`Transfer { a: f()?, b: g()? }` owes nothing at its `?`.
+
+A linear part is **consumed** when it, or a place that contains it, is:
+
+- **moved**: passed as an argument, returned, assigned or bound to another
+  place, given to a literal, a `break`, the value of a block or an arm, or the
+  operand of `?`. What it is moved into holds it now;
+- **ended** by `end`;
+- shown not to be there by a test of a tag: in the arm `.None` of a `match`
+  on an `Option(Transfer)`, the payload of `.Some` holds nothing, so nothing
+  is owed. Every test of the tag counts, the arms of a `match` and the tests
+  of `?`.
+
+A discarded place (`t;`), reading a copy field (`t.channel`) and `&raw` of
+the place consume nothing. `.Some(_)` and a `_` arm that covers `.Some`
+leave the payload held. A value that is known to be `.None` is precise when
+it is written as `.None` in the function and reaches its variable by moves;
+the result of a call or a parameter is known only after a test of its tag.
+The refinement is done by the tests of the tag of the place itself, as
+`match` and `?` build them (see "In MIR"), and uses the value of each variant
+(ADR 0104).
+
+### Returns, paths that do not return, and overwrites
+
+- **Returns.** At every `return`, at the end of the body and at every `?` that
+  returns, no linear part may be held by a variable, a parameter or a
+  temporary. The value being returned is moved to the caller, so it is not
+  held. One that is still held is `analysis::linear-not-consumed`. A linear
+  value that reaches the statement that made it again through a loop without
+  being consumed (`start(1);` or `let t: Transfer = start(1);` in a loop) is
+  this error too.
+- **Paths that do not return owe nothing**: a call to a function returning
+  `!`, a check that panics, an `asm` with `noreturn`, a loop with no exit.
+  So the entry function and the handlers that return `!` are checked for
+  overwrites only, and a program keeps its handles in functions that return,
+  which it calls from them.
+- **Overwrites.** Writing a place while a linear part of it, or the place
+  itself, is held is `analysis::linear-overwritten`, at the write: `t =
+  start(2);` over an unconsumed `t`, `s.h = v` over a held field. Writing a
+  copy field of a held `#[linear]` struct is no overwrite. A value written
+  over a place that holds one of the same origin, as when it comes round a
+  loop, is reported as not consumed.
+- A use of a value after it was moved or ended is `analysis::use-after-move`.
+  The analysis of linearity runs on a body only when the analysis of moves
+  accepted it, so a use after a move is not reported again as a value never
+  consumed.
+
+One value is one error, whatever the number of returns and writes it reaches,
+at the point where it came in (the call, the literal, or the function for a
+parameter). The message names the place that holds it (`t`, `s.h`, `o` (in
+`.Some`), and "this value" for a temporary) and its type; there is a label at
+each return it reaches and where it was moved to the place that holds it. A
+call that gives several parts at once (a struct of two transfers) is one
+error naming the parts still held. The helps say how to consume the value.
+Like the analysis of moves, it runs on the MIR of each body, `comptime`
+bodies and the initializers of constants included, before anything evaluates
+it, so a `const` whose initializer calls a `comptime` function that forgets a
+value reports `analysis::linear-not-consumed` and nothing from the evaluation.
+
+### `end` (ADR 0102)
+
+`end(e)` ends the value of a `#[linear]` struct: it is the way a module that
+may build one takes it out of the program. It is a built-in like `len`: a call
+by that name is always it, no item (a function, a static, a module, a `use`)
+may be named `end` (`resolve::reserved-name`), while locals, parameters and
+fields may. It is an expression of type `()` and does nothing at run time.
+
+- `e` must be of a `#[linear]` struct, else `ty::end-type`: not an integer, a
+  pointer, a struct that is not marked, nor an `Option`, a `Result`, an enum
+  or a struct that merely holds a linear value, whose value is taken out with
+  `match` or by moving the field first.
+- Every field of that struct must be visible where `end` is written, by the
+  rule of struct literals, else `ty::end-private-field`, labelling the first
+  field that is not. Whoever may build a value may end it. A struct with no
+  field is ended anywhere.
+- `e` is moved: it must be a place a value may be moved out of, or a
+  temporary (`end(start(1))`), else `ty::move-out-of-place`. A call with a
+  number of arguments other than one is `ty::wrong-arg-count`.
+- `end` consumes the value whole. Its linear fields must be consumed before,
+  by moving them out (`let inner: Token = t.inner;` and then passing `inner`
+  on): one still held when `end` runs is `analysis::linear-not-consumed`, at
+  `end`. Its fields that are only affine are let go. So `e` may be partly
+  moved, which is how a struct with linear fields is ended; this is the one
+  use of a partly moved place that is no `analysis::use-after-move`. A use of
+  `e` after `end` is one, labelled at the `end`.
+
+### In MIR (ADR 0103, 0104)
+
+`--emit=mir` prints `new _3;` where a struct literal of a `#[linear]` type is
+complete, after the write of its last field and before the value is moved (for
+a literal with no fields, where the literal is), and `end _3;` for `end(e)`,
+after `e` is written to a temporary when it is not a local. Neither generates
+code nor is evaluated at compile time; they are what the analysis follows: a
+literal with no fields writes nothing else, and leaves no other trace.
+
+The validator (ADR 0095) has the rules L1 to L4 and E1: `new` and `end` name a
+local, followed by fields and payloads, of a `#[linear]` struct (L1); no struct
+is both `#[copy]` and `#[linear]` (L2); no local or static has a type that
+reaches an array or slice of a linear type, and no static a linear type (L3);
+nothing of a linear type is written through a pointer (L4); and each case of a
+`switch` on the tag of an enum with payloads is the value of exactly one of its
+variants (E1). They judge the compiler, as every rule of the validator does:
+type checking rejects the programs that would break them.
+
 ## Layout (ADR 0022, 0039)
 
 | Type | Size | Alignment |
@@ -1969,6 +2183,9 @@ unspecified values.
 - `#[copy]` before a struct (not a bit-field struct) or an enum with payloads
   declares it copy, and may go with `#[packed]` and `#[align(N)]`. It changes
   neither the layout nor how the type crosses calls (see "Copies and moves").
+- `#[linear]` before a struct (not a bit-field struct) declares it linear, and
+  may go with `#[packed]` and `#[align(N)]`, not with `#[copy]`. It changes
+  neither the layout nor how the type crosses calls (see "Linear values").
 - `#[packed]` and `#[align(N)]` cannot be combined, and a packed struct
   cannot contain a type with `#[align(N)]`, at any depth: through fields,
   array elements or payload values.
@@ -2847,7 +3064,7 @@ fn base() -> usize {
   The names of a peripheral type's entries (registers, register arrays and
   clusters) belong to it, as field names to their struct.
 - The **built-in names**, the types `bool`, the integer types, `Option`
-  and `Result`, and the functions `assert`, `len` and `slice`, are seen
+  and `Result`, and the functions `assert`, `len`, `slice` and `end`, are seen
   from every module, as single names, and no item, module or `use` may
   take one (`resolve::duplicate-type`, `resolve::reserved-name`). Nor may
   any take `core`, the name by which every module names the module `core`
@@ -5498,7 +5715,7 @@ the compiler binary, and compiled and checked with every program.
   only the compiler does, by the path `core::arch::_start`, to put it in the
   section `.text.start`. A file of `core::arch` without it is a bug of the
   compiler, not a diagnostic.
-- `Option`, `Result`, `assert`, `len` and `slice` are not in `core`: they
+- `Option`, `Result`, `assert`, `len`, `slice` and `end` are not in `core`: they
   stay built-in names, seen from every module.
 - A program item whose symbol is one of `core`'s, such as a root `fn
   memcpy` or an `#[export] fn memset` in any module, is
@@ -5788,12 +6005,12 @@ Every error has a stable code, shown with the message.
 | `resolve::not-a-constant` | a name or path in a pattern that is not a constant: a local variable, parameter, static, peripheral, function, struct or enum |
 | `resolve::duplicate-binding` | one name bound twice in one pattern, or in one alternative of an or-pattern |
 | `resolve::inconsistent-binding` | a name not bound by every alternative of an or-pattern, or bound with `let mut` by only some |
-| `resolve::reserved-name` | an item, module or `use` named `_start`, `core`, with a name starting with `__`, or like a built-in function (`assert`, `len`, `slice`); a module of the root module named `llvm` or `rt`; a region named `INCLUDE` |
+| `resolve::reserved-name` | an item, module or `use` named `_start`, `core`, with a name starting with `__`, or like a built-in function (`assert`, `len`, `slice`, `end`); a module of the root module named `llvm` or `rt`; a region named `INCLUDE` |
 | `resolve::unknown-attribute` | an attribute that does not exist |
-| `resolve::misplaced-attribute` | an attribute on an item it does not apply to, as `#[packed]` or `#[align(N)]` on a bit-field struct, `#[align(N)]` on an `extern fn`, or `#[naked]` on an `extern fn`, the entry function, the panic function, an interrupt handler or anything but a function with a body, `#[interrupts]` on anything but an enum, or `#[copy]` on a bit-field struct, an enum without payloads or anything but a struct or an enum |
+| `resolve::misplaced-attribute` | an attribute on an item it does not apply to, as `#[packed]` or `#[align(N)]` on a bit-field struct, `#[align(N)]` on an `extern fn`, or `#[naked]` on an `extern fn`, the entry function, the panic function, an interrupt handler or anything but a function with a body, `#[interrupts]` on anything but an enum, `#[copy]` on a bit-field struct, an enum without payloads or anything but a struct or an enum, or `#[linear]` on anything but a struct that is not a bit-field struct (an enum included) |
 | `resolve::attribute-argument` | an attribute with a missing or extra argument |
 | `resolve::duplicate-attribute` | an attribute given twice |
-| `resolve::conflicting-attributes` | `#[packed]` with `#[align(N)]` |
+| `resolve::conflicting-attributes` | `#[packed]` with `#[align(N)]`, or `#[copy]` with `#[linear]` |
 | `resolve::missing-entry`, `resolve::multiple-entries` | not exactly one `entry fn` in the program |
 | `resolve::missing-panic`, `resolve::multiple-panics` | not exactly one `panic fn` in the program |
 | `resolve::duplicate-memory` | a second `memory` block in the program |
@@ -5847,6 +6064,11 @@ Every error has a stable code, shown with the message.
 | `ty::non-copy-repeat` | `[v; N]` with `v` of a type that is not copy, whatever `N` is, unless `v` is a variant written without payload values |
 | `ty::move-out-of-place` | a value of a type that is not copy read whole from an array element (of a temporary's array too, `f().items[i]`), a place through a pointer (`*p`, `p[i]`, `(*p).f`, `(*s)[i]`) or a static, or bound by a `match` on such a place; a field of a temporary (`f().x`), and a place that is only named (a discarded place, a `match` scrutinee), are not one |
 | `ty::non-copy-binding-in-or-pattern` | a binding of a type that is not copy inside an or-pattern nested in a payload; the alternatives of an arm are not nested |
+| `ty::linear-static` | a `static` or `extern static` whose type is linear, at its type: a `#[linear]` struct, or a struct, an enum with payloads, `Option` or `Result` that holds one; a pointer to one is not |
+| `ty::linear-array` | an array or a slice of a linear type, once per type: at the type where it is written (field, payload value, parameter, return type, `let`, static, type argument, pointee, layout query, cast), or at the array literal, repeat expression or `slice(p, n)` that makes a type no one wrote; a nested array is reported at the innermost |
+| `ty::linear-through-pointer` | an assignment of a value of a linear type to a place reached through a pointer (`*p`, `p[i]`, `(*p).f`, `(*s)[i]`); a copy field written through one is not |
+| `ty::end-type` | `end(e)` with `e` of a type that is not a `#[linear]` struct: a scalar, a pointer, a struct that is not marked, an `Option` or a `Result` that holds a linear value |
+| `ty::end-private-field` | `end(e)` of a `#[linear]` struct with a field that is not visible where `end` is written (ADR 0050); the first such field is labeled |
 | `ty::never-in-memory` | `!` as a pointee, slice element, field, payload type, type argument of `Option` or `Result`, array element, register type, the type of a static, `extern static`, `const` or `comptime` value, a layout query operand, or under `&raw` |
 | `ty::invalid-align` | `#[align(N)]` on a struct, static or function with `N` not a power of two, too large or below the natural alignment |
 | `ty::aligned-in-packed` | a packed struct containing a type with `#[align(N)]`, at any depth, such as an enum with such a payload |
@@ -5926,6 +6148,8 @@ Every error has a stable code, shown with the message.
 | `eval::pointer-escapes` | a compile-time result holding a pointer into the evaluation's own memory |
 | `eval::pointer-out-of-bounds` | a compile-time result holding a pointer outside its object and not one past its end, or a slice not inside its object |
 | `analysis::use-after-move` | a place read, moved, assigned a part of or whose address is taken, after the value in it, in a part of it or in a place that contains it was moved, on some path from the move and with no assignment to it since, in a loop's next iteration too; each move that reaches the use is a label; once a use is reported, a later use that does not itself move is not reported again, while one that is a move makes its own move and so is reported after it; only named variables and parameters are followed, not temporaries (ADR 0097, 0099) |
+| `analysis::linear-not-consumed` | a linear value still held where the function returns (a `return`, the end of the body, a `?` that returns), by a variable, a parameter or a temporary: a variable never moved, a parameter, the result of a call that is discarded, a literal that is discarded, a value consumed on some paths only, a `.Some(_)` or `_` arm that leaves a payload held, a value that comes round a loop (`let t: Transfer = start(1);` or `start(1);` in a loop) before it is consumed, or a value written over a place that holds one of the same origin (two parts of one call's result); or a linear field still held when its struct is ended by `end`; one error per value, at the call, the literal or the function (a parameter) where it came in, naming the place that holds it, with a label at each return it reaches, and where it was moved to that place; paths that do not return owe nothing (ADR 0102, 0103) |
+| `analysis::linear-overwritten` | a write to a place that holds a linear value, or a part of it, made elsewhere: `t = start(2);` over the `t` of `start(1)`, `s.h = v` over a held field; at the write, labeling where the value it would overwrite came in; a copy field written is no overwrite; a value already reported as not consumed is not reported again; the analysis runs only on a body with no use after a move (ADR 0102, 0103) |
 | `analysis::unprotected-static` | a place in the thread context, outside `critical`, naming a `static mut` or `extern static mut` that the handler context also reaches (ADR 0078, 0093) |
 | `analysis::unmaskable-static` | a place in the context of an unmaskable handler, naming a `static mut` or `extern static mut` that another context also reaches; being inside `critical` changes nothing (ADR 0078, 0093) |
 | `codegen::asm` | an instruction LLVM's assembler rejects, at the `asm` expression with the assembler's message, or without a label when the error exists only in the whole object (a non-local label defined twice by inlining, no register left for the operands) |

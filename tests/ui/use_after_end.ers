@@ -1,0 +1,74 @@
+// emit: mir
+// A use of a value after `end` ended it is `analysis::use-after-move`, with
+// "moved here" at `end` (ADR 0102, 0103). So is `end` of a value already
+// ended or moved, and a use of a struct whose linear field was moved out. `end`
+// of a struct whose linear field was moved out is no fault: that is how it
+// is taken apart.
+#[linear]
+struct Transfer { channel: u32 }
+
+#[linear]
+struct Outer { t: Transfer, n: u32 }
+
+fn give_back(t: Transfer) {
+    end(t);
+}
+
+// A use after `end`.
+fn used(t: Transfer) -> u32 {
+    end(t);
+    t.channel
+}
+
+// `end` twice.
+fn twice(t: Transfer) {
+    end(t);
+    end(t);
+}
+
+// `end` after the whole value was moved.
+fn after_move(t: Transfer) {
+    give_back(t);
+    end(t);
+}
+
+// A use of the whole value after `end` took what was left of it.
+fn after_part(o: Outer) -> u32 {
+    let inner: Transfer = o.t;
+    give_back(inner);
+    end(o);
+    o.n
+}
+
+// `end` of a part after the whole was ended.
+fn part_after_whole(o: Outer) {
+    end(o);
+    give_back(o.t);
+}
+
+// `end` in a loop reaches itself.
+fn looped(t: Transfer, n: u32) {
+    let mut i: u32 = 0;
+    while i < n {
+        end(t);
+        i = i + 1;
+    }
+}
+
+// Not faults: `end` of a struct partly moved, and `end` of a value that
+// was ended and then assigned a new one.
+fn fine(o: Outer, t: Transfer) -> Transfer {
+    let inner: Transfer = o.t;
+    give_back(inner);
+    end(o);
+    t
+}
+
+fn reassigned(mut t: Transfer) -> Transfer {
+    end(t);
+    t = Transfer { channel: 2 };
+    t
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

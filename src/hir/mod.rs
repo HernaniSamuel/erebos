@@ -120,6 +120,12 @@ pub struct Hir {
     /// large for the target is reported at each, having no declaration to
     /// be reported at (ADR 0045).
     pub applications: Vec<(Span, Ty)>,
+    /// Each array type written, `[T; N]`, and each slice type written behind a
+    /// pointer, `[T]`, with its span and its type as lowered: the type checker
+    /// reports those whose elements are linear, at the type (ADR 0101). The
+    /// dump of the HIR leaves it out: nothing in it is a fact about the
+    /// program that its other lists do not say.
+    pub array_types: Vec<(Span, Ty)>,
     pub entry: FnId,
     pub panic: FnId,
     /// `core::arch::_start`, the reset entry, which the compiler places by
@@ -223,8 +229,8 @@ impl Hir {
     /// (ADR 0052). Its fields are those of `Hir`, in its order, but for
     /// those about `core` (where it starts, the ids of `PanicInfo` and
     /// `PanicReason`, `Vector`, `chip_interrupts`), the table of files, which only turns the spans
-    /// shown into lines and columns, and `handlers`, which the `kind` of
-    /// each function says.
+    /// shown into lines and columns, `handlers`, which the `kind` of
+    /// each function says, and `array_types`.
     pub fn dump(&self) -> String {
         #[derive(Debug)]
         #[expect(dead_code, reason = "only its `Debug` output is read")]
@@ -745,6 +751,9 @@ pub struct StructDef {
     /// `#[copy]`, with the span of the attribute: its values are copy, which
     /// `ty::copy-field-not-copy` makes true (ADR 0096).
     pub copy: Option<Span>,
+    /// `#[linear]`, with the span of the attribute: its values must be
+    /// consumed (ADR 0101).
+    pub linear: Option<Span>,
 }
 
 impl StructDef {
@@ -1389,6 +1398,8 @@ pub enum ExprKind {
     Assert(Box<Expr>, Option<Box<Expr>>, Span),
     /// `len(s)`, built in (ADR 0031): the length of a slice.
     Len(Box<Expr>),
+    /// `end(e)`, built in (ADR 0102): ends the value of a `#[linear]` struct.
+    End(Box<Expr>),
     /// `slice(p, n)`, built in (ADR 0031): a slice of `n` elements from `p`.
     Slice(Box<Expr>, Box<Expr>),
     /// `size_of(T)`, a `usize` constant.
@@ -1634,6 +1645,7 @@ impl Expr {
             | ExprKind::Field(e, _, _)
             | ExprKind::Assert(e, None, _)
             | ExprKind::Len(e)
+            | ExprKind::End(e)
             | ExprKind::Comptime(e)
             | ExprKind::Try(e, _) => e.walk(f),
             ExprKind::StructLit(_, fields) => {

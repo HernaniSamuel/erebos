@@ -1,0 +1,58 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/linear_array_made.ers
+---
+--- errors ---
+ty::linear-array
+
+  × `[Transfer; 2]` has elements of the linear type `Transfer`
+    ╭─[linear_array_made.ers:12:5]
+ 11 │ fn made(h: Transfer, p: *const Transfer) -> u32 {
+ 12 │     [start(1), start(2)];
+    ·     ──────────┬─────────
+    ·               ╰── makes `[Transfer; 2]`, whose elements are linear
+ 13 │     let channel: u32 = ([start(3), h, start(5)])[0].channel;
+    ╰────
+  help: no element of an array or a slice is ever moved out (ADR 0097, 0100), so none could be
+        consumed, only forgotten; keep each linear value in a variable of its own, or in a field
+        of a struct (ADR 0101)
+ty::linear-array
+
+  × `[Transfer; 3]` has elements of the linear type `Transfer`
+    ╭─[linear_array_made.ers:13:24]
+ 12 │     [start(1), start(2)];
+ 13 │     let channel: u32 = ([start(3), h, start(5)])[0].channel;
+    ·                        ────────────┬────────────
+    ·                                    ╰── makes `[Transfer; 3]`, whose elements are linear
+ 14 │     let n: usize = len(slice(p, 2));
+    ╰────
+  help: no element of an array or a slice is ever moved out (ADR 0097, 0100), so none could be
+        consumed, only forgotten; keep each linear value in a variable of its own, or in a field
+        of a struct (ADR 0101)
+ty::linear-array
+
+  × `[Transfer]` has elements of the linear type `Transfer`
+    ╭─[linear_array_made.ers:14:24]
+ 13 │     let channel: u32 = ([start(3), h, start(5)])[0].channel;
+ 14 │     let n: usize = len(slice(p, 2));
+    ·                        ─────┬─────
+    ·                             ╰── makes `[Transfer]`, whose elements are linear
+ 15 │     channel
+    ╰────
+  help: no element of an array or a slice is ever moved out (ADR 0097, 0100), so none could be
+        consumed, only forgotten; keep each linear value in a variable of its own, or in a field
+        of a struct (ADR 0101)
+ty::linear-array
+
+  × `[Transfer; 4]` has elements of the linear type `Transfer`
+    ╭─[linear_array_made.ers:20:6]
+ 19 │ fn nested() {
+ 20 │     [[start(6), start(7), start(8), start(9)], [start(10), start(11), start(12), start(13)]];
+    ·      ────────────────────┬───────────────────
+    ·                          ╰── makes `[Transfer; 4]`, whose elements are linear
+ 21 │ }
+    ╰────
+  help: no element of an array or a slice is ever moved out (ADR 0097, 0100), so none could be
+        consumed, only forgotten; keep each linear value in a variable of its own, or in a field
+        of a struct (ADR 0101)

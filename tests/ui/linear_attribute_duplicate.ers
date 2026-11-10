@@ -1,0 +1,8 @@
+// emit: hir
+// `#[linear]` is given at most once (ADR 0101).
+#[linear]
+#[linear]
+struct A { x: u8 }
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

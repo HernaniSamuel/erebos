@@ -1,0 +1,31 @@
+// emit: mir
+// The analysis of linearity runs on a body before compile-time evaluation can
+// run it, as the analysis of moves does (ADR 0094, 0099, 0103). A function
+// that forgets a transfer and is called from a `const` gets that error and
+// none of evaluation (here a division by zero the body would reach), and so
+// does a `comptime` expression.
+#[linear]
+struct Transfer { channel: u32 }
+
+fn zero() -> u32 { 0 }
+
+// Rejected: the transfer is forgotten; the division by zero is not reached.
+fn forgets() -> u32 {
+    let t: Transfer = Transfer { channel: 1 };
+    10 / zero()
+}
+
+const FROM_BODY: u32 = forgets();
+
+// Rejected: the body of the `comptime` expression is analysed before it is
+// evaluated.
+fn expression() -> u32 {
+    let a: u32 = comptime {
+        let t: Transfer = Transfer { channel: 2 };
+        7
+    };
+    a
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

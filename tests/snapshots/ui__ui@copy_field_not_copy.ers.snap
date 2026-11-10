@@ -214,3 +214,46 @@ ty::copy-field-not-copy
     ╰────
   help: mark `Handle` with `#[copy]` if its values may be duplicated, or remove `#[copy]` from
         `Sibling` (ADR 0096)
+ty::copy-field-not-copy
+
+  × `HoldsLinear` is `#[copy]`, but the field `t` is not copy
+    ╭─[copy_field_not_copy.ers:44:1]
+ 43 │ 
+ 44 │ #[copy]
+    · ───┬───
+    ·    ╰── declared copy here
+ 45 │ struct HoldsLinear { t: Ticket }
+    ·                      ┬
+    ·                      ╰── `Ticket` is not copy
+ 46 │ 
+    ╰────
+  help: `Ticket` is linear, so it cannot be copy: remove `#[copy]` from `HoldsLinear` (ADR 0096)
+ty::copy-field-not-copy
+
+  × `HoldsOptionLinear` is `#[copy]`, but the field `slot` is not copy
+    ╭─[copy_field_not_copy.ers:47:1]
+ 46 │ 
+ 47 │ #[copy]
+    · ───┬───
+    ·    ╰── declared copy here
+ 48 │ struct HoldsOptionLinear { slot: Option(Ticket) }
+    ·                            ──┬─
+    ·                              ╰── `Option(Ticket)` is not copy
+ 49 │ 
+    ╰────
+  help: `Ticket` is linear, so it cannot be copy: remove `#[copy]` from `HoldsOptionLinear` (ADR
+        0096)
+ty::copy-field-not-copy
+
+  × `LinearPayload` is `#[copy]`, but the payload value of `LinearPayload::Has` is not copy
+    ╭─[copy_field_not_copy.ers:50:1]
+ 49 │ 
+ 50 │ #[copy]
+    · ───┬───
+    ·    ╰── declared copy here
+ 51 │ enum LinearPayload: u8 { Has(Ticket) = 0, Nothing = 1 }
+    ·                              ───┬──
+    ·                                 ╰── `Ticket` is not copy
+ 52 │ 
+    ╰────
+  help: `Ticket` is linear, so it cannot be copy: remove `#[copy]` from `LinearPayload` (ADR 0096)

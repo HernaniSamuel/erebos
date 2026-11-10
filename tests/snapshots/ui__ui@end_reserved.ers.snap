@@ -1,0 +1,136 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/end_reserved.ers
+---
+--- errors ---
+resolve::reserved-name
+
+  × `end` is a reserved name
+   ╭─[end_reserved.ers:7:4]
+ 6 │ 
+ 7 │ fn end() {}
+   ·    ─┬─
+   ·     ╰── a built-in function has this name
+ 8 │ 
+   ╰────
+  help: `end(e)` is built in (ADR 0102)
+resolve::reserved-name
+
+  × `end` is a reserved name
+    ╭─[end_reserved.ers:9:8]
+  8 │ 
+  9 │ static end: u32 = 0;
+    ·        ─┬─
+    ·         ╰── a built-in function has this name
+ 10 │ 
+    ╰────
+  help: `end(e)` is built in (ADR 0102)
+resolve::duplicate-item
+
+  × `end` is defined more than once
+    ╭─[end_reserved.ers:9:8]
+  6 │ 
+  7 │ fn end() {}
+    ·    ─┬─
+    ·     ╰── first defined here
+  8 │ 
+  9 │ static end: u32 = 0;
+    ·        ─┬─
+    ·         ╰── redefined here
+ 10 │ 
+    ╰────
+  help: functions, structs, enums, constants, statics, peripheral types and peripherals share one
+        namespace (ADR 0029, 0030, 0035, 0058)
+resolve::reserved-name
+
+  × `end` is a reserved name
+    ╭─[end_reserved.ers:11:5]
+ 10 │ 
+ 11 │ mod end {}
+    ·     ─┬─
+    ·      ╰── a built-in function has this name
+ 12 │ 
+    ╰────
+  help: `end(e)` is built in (ADR 0102)
+resolve::duplicate-item
+
+  × `end` is defined more than once
+    ╭─[end_reserved.ers:11:5]
+  6 │ 
+  7 │ fn end() {}
+    ·    ─┬─
+    ·     ╰── first defined here
+  8 │ 
+  9 │ static end: u32 = 0;
+ 10 │ 
+ 11 │ mod end {}
+    ·     ─┬─
+    ·      ╰── redefined here
+ 12 │ 
+    ╰────
+  help: the items and modules of a module share one namespace (ADR 0049)
+resolve::reserved-name
+
+  × `end` is a reserved name
+    ╭─[end_reserved.ers:13:12]
+ 12 │ 
+ 13 │ use token::end;
+    ·            ─┬─
+    ·             ╰── a built-in function has this name
+ 14 │ 
+    ╰────
+  help: `end(e)` is built in (ADR 0102)
+resolve::duplicate-item
+
+  × `end` is defined more than once
+    ╭─[end_reserved.ers:13:12]
+  6 │ 
+  7 │ fn end() {}
+    ·    ─┬─
+    ·     ╰── first defined here
+  8 │ 
+  9 │ static end: u32 = 0;
+ 10 │ 
+ 11 │ mod end {}
+ 12 │ 
+ 13 │ use token::end;
+    ·            ─┬─
+    ·             ╰── redefined here
+ 14 │ 
+    ╰────
+  help: a module's items, its modules and the names its `use` declarations bring in share one
+        namespace (ADR 0049)
+resolve::reserved-name
+
+  × `end` is a reserved name
+    ╭─[end_reserved.ers:16:12]
+ 15 │ mod token {
+ 16 │     pub fn end() {}
+    ·            ─┬─
+    ·             ╰── a built-in function has this name
+ 17 │ }
+    ╰────
+  help: `end(e)` is built in (ADR 0102)
+ty::wrong-arg-count
+
+  × `end` takes 1 argument, but 2 were given
+    ╭─[end_reserved.ers:20:5]
+ 19 │ fn arguments(t: Token) {
+ 20 │     end(t, t);
+    ·     ────┬────
+    ·         ╰── in this call
+ 21 │     end();
+    ╰────
+  help: `end(e)` ends one value of a `#[linear]` struct (ADR 0102)
+ty::wrong-arg-count
+
+  × `end` takes 1 argument, but 0 were given
+    ╭─[end_reserved.ers:21:5]
+ 20 │     end(t, t);
+ 21 │     end();
+    ·     ──┬──
+    ·       ╰── in this call
+ 22 │ }
+    ╰────
+  help: `end(e)` ends one value of a `#[linear]` struct (ADR 0102)

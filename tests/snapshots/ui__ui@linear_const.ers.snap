@@ -1,0 +1,38 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/linear_const.ers
+---
+--- errors ---
+analysis::linear-not-consumed
+
+  × linear value `t` of type `Transfer` is not consumed
+    ╭─[linear_const.ers:14:23]
+ 12 │     // Rejected: the transfer is forgotten; the division by zero is not reached.
+ 13 │ ╭─▶ fn forgets() -> u32 {
+ 14 │ │       let t: Transfer = Transfer { channel: 1 };
+    · │                         ───────────┬───────────
+    · │                                    ╰── linear value is made here
+ 15 │ │       10 / zero()
+ 16 │ ├─▶ }
+    · ╰──── `t` is still held when the function returns here
+ 17 │     
+    ╰────
+  help: consume it: pass it to a function that does, return it, or end it with `end` where its
+        fields are visible (ADR 0102)
+analysis::linear-not-consumed
+
+  × linear value `t` of type `Transfer` is not consumed
+    ╭─[linear_const.ers:24:27]
+ 22 │     fn expression() -> u32 {
+ 23 │ ╭─▶     let a: u32 = comptime {
+ 24 │ │           let t: Transfer = Transfer { channel: 2 };
+    · │                             ───────────┬───────────
+    · │                                        ╰── linear value is made here
+ 25 │ │           7
+ 26 │ ├─▶     };
+    · ╰──── `t` is still held when the function returns here
+ 27 │         a
+    ╰────
+  help: consume it: pass it to a function that does, return it, or end it with `end` where its
+        fields are visible (ADR 0102)

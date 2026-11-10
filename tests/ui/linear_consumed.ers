@@ -1,0 +1,175 @@
+// emit: mir
+// Accepted: every linear value is consumed before each return, in every way
+// ADR 0102 lists: moved to a call, returned, ended, bound by a `match` arm,
+// carried through an `Option` and back, tested by `?`. Where a path does not
+// hold the value, nothing is owed: the `.None` arm, the failing edge of `?`.
+#[linear]
+struct Transfer { channel: u32 }
+
+#[linear]
+struct Wide { a: u32, b: u32 }
+
+struct Pair { a: Transfer, b: Transfer }
+
+fn start(channel: u32) -> Transfer {
+    Transfer { channel: channel }
+}
+
+fn number() -> Option(u32) {
+    .Some(1)
+}
+
+fn consume(t: Transfer) {
+    end(t);
+}
+
+fn consume_pair(p: Pair) {
+    consume(p.a);
+    consume(p.b);
+}
+
+// Moved to a call, returned, ended.
+fn moved_to_a_call() {
+    let t: Transfer = start(1);
+    consume(t);
+}
+
+fn returned() -> Transfer {
+    let t: Transfer = start(1);
+    t
+}
+
+fn returned_at_once() -> Transfer {
+    start(1)
+}
+
+fn ended() {
+    let t: Transfer = start(1);
+    end(t);
+}
+
+fn ended_at_once() {
+    end(start(1));
+}
+
+// Moved on, and on again.
+fn moved_twice() {
+    let a: Transfer = start(1);
+    let b: Transfer = a;
+    consume(b);
+}
+
+// Consumed on both branches.
+fn both_branches(c: bool) {
+    let t: Transfer = start(1);
+    if c {
+        consume(t);
+    } else {
+        end(t);
+    }
+}
+
+// A `match` that binds the payload: the `.None` arm owes nothing.
+fn matched(o: Option(Transfer)) {
+    match o {
+        .Some(let t: Transfer) => consume(t),
+        .None => {},
+    }
+}
+
+// A `.None` written in the function and returned without a test.
+fn none_returned() -> Option(Transfer) {
+    .None
+}
+
+fn none_kept() -> Option(Transfer) {
+    let o: Option(Transfer) = .None;
+    o
+}
+
+// A transfer carried through an `Option` and back.
+fn through_an_option(t: Transfer) {
+    let o: Option(Transfer) = .Some(t);
+    match o {
+        .Some(let u: Transfer) => consume(u),
+        .None => {},
+    }
+}
+
+fn wrapped(t: Transfer) -> Option(Transfer) {
+    .Some(t)
+}
+
+// `?` over an `Option` of a transfer: on the failing edge the payload is not there.
+fn question_option(o: Option(Transfer)) -> Option(u32) {
+    let t: Transfer = o?;
+    consume(t);
+    .Some(1)
+}
+
+// `?` over a `Result`, with the transfer as the value and as the error.
+fn question_value(r: Result(Transfer, u32)) -> Result(u32, u32) {
+    let t: Transfer = r?;
+    consume(t);
+    .Ok(1)
+}
+
+fn question_error(r: Result(u32, Transfer)) -> Result(u32, Transfer) {
+    let n: u32 = r?;
+    .Ok(n)
+}
+
+// A loop that consumes each value it makes.
+fn loop_consumes(n: u32) {
+    let mut i: u32 = 0;
+    while i < n {
+        consume(start(i));
+        i = i + 1;
+    }
+}
+
+// Temporaries reused across the iterations of a loop.
+fn loop_pairs() {
+    let mut i: u32 = 0;
+    loop {
+        consume_pair(Pair { a: start(1), b: start(2) });
+        if i > 3 {
+            break;
+        }
+        i = i + 1;
+    }
+}
+
+// A transfer made before the loop and consumed after it.
+fn after_the_loop(n: u32) {
+    let t: Transfer = start(1);
+    let mut i: u32 = 0;
+    while i < n {
+        i = i + 1;
+    }
+    consume(t);
+}
+
+// The copy fields of a held transfer are read and written, and it is
+// consumed.
+fn fields(mut w: Wide) -> u32 {
+    w.a = 5;
+    let sum: u32 = w.a + w.b;
+    end(w);
+    sum
+}
+
+// A literal whose fields use `?`: it returns before the value exists.
+fn literal() -> Option(Wide) {
+    .Some(Wide { a: number()?, b: number()? })
+}
+
+// A value made and ended where it was made, in a `comptime` block.
+const LEN: u32 = comptime {
+    let t: Transfer = Transfer { channel: 1 };
+    end(t);
+    4
+};
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

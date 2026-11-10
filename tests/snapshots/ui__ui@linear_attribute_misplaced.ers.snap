@@ -1,0 +1,116 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/linear_attribute_misplaced.ers
+---
+--- errors ---
+resolve::misplaced-attribute
+
+  × `#[linear]` applies only to structs, other than bit-field structs
+   ╭─[linear_attribute_misplaced.ers:5:1]
+ 4 │ // value (ADR 0101).
+ 5 │ #[linear]
+   · ────┬────
+   ·     ╰── not allowed on a bit-field struct
+ 6 │ struct Flags: u8 { ready: bool at 0 }
+   ╰────
+  help: `#[linear]` makes the values of a struct linear: each must be consumed before the function
+        holding it returns, and none is overwritten; no other item has values (ADR 0101)
+resolve::misplaced-attribute
+
+  × `#[linear]` applies only to structs, other than bit-field structs
+   ╭─[linear_attribute_misplaced.ers:8:1]
+ 7 │ 
+ 8 │ #[linear]
+   · ────┬────
+   ·     ╰── not allowed on an enum
+ 9 │ enum Color: u8 { Red = 0, Green = 1 }
+   ╰────
+  help: `#[linear]` would bind nobody on an enum: its variants are as visible as the enum, so any
+        module that sees it could build a value and take it apart with `match`; an enum is linear
+        by holding a linear value (ADR 0101)
+resolve::misplaced-attribute
+
+  × `#[linear]` applies only to structs, other than bit-field structs
+    ╭─[linear_attribute_misplaced.ers:11:1]
+ 10 │ 
+ 11 │ #[linear]
+    · ────┬────
+    ·     ╰── not allowed on an enum
+ 12 │ enum Shape: u8 { Dot(u8) = 0, Empty = 1 }
+    ╰────
+  help: `#[linear]` would bind nobody on an enum: its variants are as visible as the enum, so any
+        module that sees it could build a value and take it apart with `match`; an enum is linear
+        by holding a linear value (ADR 0101)
+resolve::misplaced-attribute
+
+  × `#[linear]` applies only to structs, other than bit-field structs
+    ╭─[linear_attribute_misplaced.ers:14:1]
+ 13 │ 
+ 14 │ #[linear]
+    · ────┬────
+    ·     ╰── not allowed on a function
+ 15 │ fn f() {}
+    ╰────
+  help: `#[linear]` makes the values of a struct linear: each must be consumed before the function
+        holding it returns, and none is overwritten; no other item has values (ADR 0101)
+resolve::misplaced-attribute
+
+  × `#[linear]` applies only to structs, other than bit-field structs
+    ╭─[linear_attribute_misplaced.ers:17:1]
+ 16 │ 
+ 17 │ #[linear]
+    · ────┬────
+    ·     ╰── not allowed on a static
+ 18 │ static COUNT: u32 = 0;
+    ╰────
+  help: `#[linear]` makes the values of a struct linear: each must be consumed before the function
+        holding it returns, and none is overwritten; no other item has values (ADR 0101)
+resolve::misplaced-attribute
+
+  × `#[linear]` applies only to structs, other than bit-field structs
+    ╭─[linear_attribute_misplaced.ers:20:1]
+ 19 │ 
+ 20 │ #[linear]
+    · ────┬────
+    ·     ╰── not allowed on a constant
+ 21 │ const LIMIT: u32 = 4;
+    ╰────
+  help: `#[linear]` makes the values of a struct linear: each must be consumed before the function
+        holding it returns, and none is overwritten; no other item has values (ADR 0101)
+resolve::misplaced-attribute
+
+  × `#[linear]` applies only to structs, other than bit-field structs
+    ╭─[linear_attribute_misplaced.ers:23:1]
+ 22 │ 
+ 23 │ #[linear]
+    · ────┬────
+    ·     ╰── not allowed on a module
+ 24 │ mod m {}
+    ╰────
+  help: `#[linear]` makes the values of a struct linear: each must be consumed before the function
+        holding it returns, and none is overwritten; no other item has values (ADR 0101)
+resolve::misplaced-attribute
+
+  × `#[linear]` applies only to structs, other than bit-field structs
+    ╭─[linear_attribute_misplaced.ers:26:1]
+ 25 │ 
+ 26 │ #[linear]
+    · ────┬────
+    ·     ╰── not allowed on an `extern fn`
+ 27 │ extern fn c();
+    ╰────
+  help: `#[linear]` makes the values of a struct linear: each must be consumed before the function
+        holding it returns, and none is overwritten; no other item has values (ADR 0101)
+resolve::misplaced-attribute
+
+  × `#[linear]` applies only to structs, other than bit-field structs
+    ╭─[linear_attribute_misplaced.ers:29:1]
+ 28 │ 
+ 29 │ #[linear]
+    · ────┬────
+    ·     ╰── not allowed on an `extern static`
+ 30 │ extern static OUTSIDE: u32;
+    ╰────
+  help: `#[linear]` makes the values of a struct linear: each must be consumed before the function
+        holding it returns, and none is overwritten; no other item has values (ADR 0101)

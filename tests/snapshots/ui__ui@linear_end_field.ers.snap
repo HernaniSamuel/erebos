@@ -1,0 +1,52 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/linear_end_field.ers
+---
+--- errors ---
+analysis::linear-not-consumed
+
+  × linear value `o.inner` of type `Token` is not consumed before `end`
+    ╭─[linear_end_field.ers:22:9]
+ 20 │     // Rejected: the field of a parameter is still held.
+ 21 │ ╭─▶ fn parameter(o: Outer) {
+ 22 │ │       end(o);
+    · │           ┬
+    · │           ╰── `o.inner` is still held when `end` runs
+ 23 │ ├─▶ }
+    · ╰──── linear value comes in as the parameter `o`
+ 24 │     
+    ╰────
+  help: move the linear field out of the struct and consume it before `end`; `end` consumes only
+        the struct (ADR 0102)
+analysis::linear-not-consumed
+
+  × linear value `o.inner` of type `Token` is not consumed before `end`
+    ╭─[linear_end_field.ers:28:9]
+ 26 │ fn made() {
+ 27 │     let o: Outer = make();
+    ·                    ───┬──
+    ·                       ╰── linear value comes from this call
+ 28 │     end(o);
+    ·         ┬
+    ·         ╰── `o.inner` is still held when `end` runs
+ 29 │ }
+    ╰────
+  help: move the linear field out of the struct and consume it before `end`; `end` consumes only
+        the struct (ADR 0102)
+analysis::linear-not-consumed
+
+  × linear value `inner` of type `Token` is not consumed
+    ╭─[linear_end_field.ers:39:1]
+ 38 │     // Rejected: the field was moved out, but into a variable that is forgotten.
+ 39 │ ╭─▶ fn field_forgotten(o: Outer) {
+ 40 │ │       let inner: Token = o.inner;
+    · │                          ───┬───
+    · │                             ╰── moved into `inner` here
+ 41 │ │       end(o);
+ 42 │ ├─▶ }
+    · ╰──── linear value comes in as the parameter `o`; `inner` is still held when the function returns here
+ 43 │     
+    ╰────
+  help: consume it: pass it to a function that does, return it, or end it with `end` where its
+        fields are visible (ADR 0102)

@@ -1,0 +1,47 @@
+// emit: mir
+// The analysis of linearity tells the variant a `switch` edge is for by the
+// variant's value, stored in the MIR type (ADR 0103, 0104): the values are
+// not the positions, and one is computed by a function.
+#[linear]
+struct Transfer { channel: u32 }
+
+enum Slot: u8 { Empty = 7, Full(Transfer) = 3, Spare(Transfer) = pick() }
+
+fn pick() -> u8 {
+    5
+}
+
+fn consume(t: Transfer) {
+    end(t);
+}
+
+// Accepted: each arm consumes what its variant holds, and `Empty` holds
+// nothing.
+fn matched(s: Slot) {
+    match s {
+        .Empty => {},
+        .Full(let t: Transfer) => consume(t),
+        .Spare(let t: Transfer) => consume(t),
+    }
+}
+
+// Accepted: the arm of `Full` consumes it; on the other edge it is not there.
+fn catch_all(s: Slot) {
+    match s {
+        .Full(let t: Transfer) => consume(t),
+        .Spare(let t: Transfer) => consume(t),
+        _ => {},
+    }
+}
+
+// Rejected: the arm of `Spare` forgets its transfer.
+fn forgets(s: Slot) {
+    match s {
+        .Empty => {},
+        .Full(let t: Transfer) => consume(t),
+        .Spare(_) => {},
+    }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

@@ -10,6 +10,10 @@ struct Point { x: u32, y: u32 }
 
 enum Token: u8 { Open(Handle) = 0, Closed = 1 }
 
+// A linear type is never copy; its help offers no `#[copy]` (ADR 0101).
+#[linear]
+struct Ticket { id: u32 }
+
 #[copy]
 enum Mark: u8 { On(u32) = 0, Off = 1 }
 
@@ -19,6 +23,8 @@ const T: Token = Token::Closed;
 const O: Option(Handle) = .None;
 const A: [Handle; 2] = [Handle { id: 1 }, Handle { id: 2 }];
 const NESTED: Option([Token; 2]) = .None;
+const L: Ticket = Ticket { id: 1 };
+const LO: Option(Ticket) = .None;
 
 // Accepted: the types are copy.
 const P: Point = Point { x: 1, y: 2 };
@@ -42,6 +48,7 @@ fn uses() {
     let a: Handle = comptime Handle { id: 2 };
     let b: Token = comptime Token::Closed;
     let c: Option(Handle) = comptime .None;
+    let l: Ticket = comptime Ticket { id: 2 };
     // Accepted: the value that leaves evaluation is copy.
     let d: u32 = comptime id_of(open(4));
     let e: Point = comptime Point { x: 1, y: 2 };

@@ -1,0 +1,24 @@
+// emit: mir
+// The MIR type of an enum with payloads is made without waiting for the
+// values of its variants (ADR 0038, 0104): the value of `E::A` is computed by
+// a function that builds another variant of `E`, so the type exists while the
+// value is being computed and takes it when it is done. The `match` below
+// switches on the tag, and the validator checks that each case is the stored
+// value of one variant (rule E1), so a value that was not stored would be
+// rejected.
+enum E: u8 { A(u8) = first(), B = 1 }
+
+fn first() -> u8 {
+    let e: E = E::B;
+    5
+}
+
+fn tag(e: E) -> u8 {
+    match e {
+        .A(_) => 10,
+        .B => 20,
+    }
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

@@ -1,0 +1,25 @@
+// `end` is a built-in name, as `len` is (ADR 0102): no item, module or `use`
+// may have it, and `end` takes one argument. Locals, parameters and fields
+// may be named `end` (`end.ers`).
+#[linear]
+struct Token {}
+
+fn end() {}
+
+static end: u32 = 0;
+
+mod end {}
+
+use token::end;
+
+mod token {
+    pub fn end() {}
+}
+
+fn arguments(t: Token) {
+    end(t, t);
+    end();
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

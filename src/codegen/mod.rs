@@ -987,6 +987,9 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                 let args = [Operand::Copy(Place::local(*was))];
                 self.call(None, self.critical_callee(false), &args);
             }
+            // Say where a linear value is complete and where it is ended,
+            // for the analyses (ADR 0103).
+            Statement::New(..) | Statement::End(..) => {}
         }
     }
 

@@ -8,7 +8,8 @@
 //! one violation. The `match`es on `Statement`, `Terminator`, `Rvalue`,
 //! `Operand`, `PlaceElem` and `AsmOperandKind` name every variant and have
 //! no `_` arm, so that a new variant fails to compile here. The rules M1 to M4
-//! of ADR 0098 come after the rules of types.
+//! of ADR 0098 come after the rules of types, and L1 to L4 of ADR 0103 after
+//! them.
 
 use std::collections::HashSet;
 use std::fmt;
@@ -252,6 +253,7 @@ impl<'a> Checker<'a> {
         checker.critical();
         checker.at = Location::Body;
         checker.copy_kinds();
+        checker.linear_kinds();
         checker.found
     }
 
@@ -355,6 +357,47 @@ impl<'a> Checker<'a> {
             );
         }
         exists
+    }
+
+    /// E1: when a `switch` tests the tag of an enum with payloads, each case
+    /// is the stored value of exactly one variant of the enum (ADR 0104).
+    /// The analysis of linearity tells the variant of an edge by it.
+    fn variant_cases(&mut self, discr: &Operand, cases: &[(u64, BasicBlock)]) {
+        let Operand::Copy(place) = discr else {
+            return;
+        };
+        let [head @ .., PlaceElem::Tag] = place.projection else {
+            return;
+        };
+        let Some(decl) = self.body.locals.get(place.local.0 as usize) else {
+            return;
+        };
+        let mut ty = decl.ty;
+        for elem in head {
+            match project(ty, elem) {
+                Ok(next) => ty = next,
+                Err(_) => return,
+            }
+        }
+        let Ty::Enum(e) = ty else {
+            return;
+        };
+        let Some(variants) = e.def().variants.get() else {
+            return;
+        };
+        for &(value, _) in cases {
+            let named = (variants.iter())
+                .filter(|variant| variant.value.get() == Some(&value))
+                .count();
+            if named != 1 {
+                self.violation(
+                    "E1",
+                    format!(
+                        "the case {value:#x} is the value of {named} variants of `{ty}`, not one"
+                    ),
+                );
+            }
+        }
     }
 
     /// S7, T1 and T2 for a place: its type and whether accessing it is
@@ -593,6 +636,12 @@ impl<'a> Checker<'a> {
                 if !seen.insert(ptr::from_ref(def).cast()) {
                     return;
                 }
+                if def.copy && def.linear {
+                    self.violation(
+                        "L2",
+                        format!("`{}` is marked both copy and linear", def.name),
+                    );
+                }
                 for field in fields {
                     if def.copy && !field.ty.is_copy() {
                         self.violation(
@@ -636,6 +685,27 @@ impl<'a> Checker<'a> {
             | Ty::Ptr(_)
             | Ty::Slice(_)
             | Ty::Peripheral(_) => {}
+        }
+    }
+
+    /// L3 for the type of every local: it reaches no array or slice of linear
+    /// elements, through arrays, slices, fields, payload values and the
+    /// pointees of pointers, each definition once.
+    fn linear_kinds(&mut self) {
+        let body = self.body;
+        let mut seen = HashSet::new();
+        for (local, decl) in body.locals() {
+            let mut found = Vec::new();
+            linear_arrays(decl.ty, &mut seen, &mut found);
+            for (array, elem) in found {
+                self.violation(
+                    "L3",
+                    format!(
+                        "the local `{local}` of type `{}` reaches `{array}`, whose elements have the linear type `{elem}`",
+                        decl.ty
+                    ),
+                );
+            }
         }
     }
 
@@ -843,12 +913,17 @@ impl<'a> Checker<'a> {
 
     fn statement(&mut self, statement: &Statement) {
         match statement {
-            Statement::Assign(dest, rvalue) => {
-                let dest = self.written(*dest, "an assignment writes");
+            Statement::Assign(place, rvalue) => {
+                let dest = self.written(*place, "an assignment writes");
+                self.linear_write(*place, dest, "an assignment");
                 self.rvalue(rvalue, dest);
             }
             Statement::Call { dest, callee, args } => {
-                let dest = dest.and_then(|dest| self.written(dest, "a call's destination is"));
+                let dest = dest.and_then(|place| {
+                    let ty = self.written(place, "a call's destination is");
+                    self.linear_write(place, ty, "a call's destination");
+                    ty
+                });
                 let args: Vec<Option<Ty>> = args.iter().map(|arg| self.operand(arg)).collect();
                 self.call(*callee, dest, &args);
             }
@@ -856,6 +931,71 @@ impl<'a> Checker<'a> {
             Statement::CriticalEnter(local) | Statement::CriticalExit(local) => {
                 self.critical_local(*local);
             }
+            Statement::New(place, _) => self.linear_place(*place, "`new`"),
+            Statement::End(place, _) => self.linear_place(*place, "`end`"),
+        }
+    }
+
+    /// L1: the place of `new` and of `end` is a local not bound to read-only data,
+    /// followed by `Field` and `Payload` projections only, of a struct
+    /// marked linear. `what` names the statement.
+    fn linear_place(&mut self, place: Place, what: &str) {
+        let typed = self.place(place);
+        let constant = (self.body.locals.get(place.local.0 as usize))
+            .is_some_and(|decl| decl.constant.is_some());
+        if constant {
+            self.violation(
+                "L1",
+                format!(
+                    "{what} of the local `{}`, which holds read-only data",
+                    place.local
+                ),
+            );
+        }
+        for elem in place.projection {
+            match elem {
+                PlaceElem::Field(_) | PlaceElem::Payload { .. } => {}
+                PlaceElem::Deref
+                | PlaceElem::Offset(_)
+                | PlaceElem::Index(_)
+                | PlaceElem::ConstIndex(_)
+                | PlaceElem::Element(..)
+                | PlaceElem::ConstElement(..)
+                | PlaceElem::Tag => {
+                    self.violation(
+                        "L1",
+                        format!("{what} of a place through `{elem:?}`, not a field or a payload"),
+                    );
+                    break;
+                }
+            }
+        }
+        // A projection T1 rejected leaves no type to judge.
+        if let Some(typed) = typed
+            && !matches!(typed.ty, Ty::Struct(s) if s.def().linear)
+        {
+            self.violation(
+                "L1",
+                format!(
+                    "{what} of a place of type `{}`, not a struct marked linear",
+                    typed.ty
+                ),
+            );
+        }
+    }
+
+    /// L4: what `how` writes to `place`, of type `ty` if it is a valid type
+    /// of values, goes through a pointer and is linear, where it could never
+    /// be moved out again. An array of linear elements is L3's.
+    fn linear_write(&mut self, place: Place, ty: Option<Ty>, how: &str) {
+        if let Some(ty) = ty
+            && place.is_indirect()
+            && ty.is_linear_outside_arrays()
+        {
+            self.violation(
+                "L4",
+                format!("{how} writes a value of the linear type `{ty}` through a pointer"),
+            );
         }
     }
 
@@ -1109,6 +1249,7 @@ impl<'a> Checker<'a> {
             Terminator::Switch { discr, cases, .. } => {
                 if let Some(ty) = self.operand(discr) {
                     self.switch(ty, cases);
+                    self.variant_cases(discr, cases);
                 }
             }
             Terminator::Return => {
@@ -1166,7 +1307,11 @@ impl<'a> Checker<'a> {
                 match statement {
                     Statement::CriticalEnter(local) => open.push(*local),
                     Statement::CriticalExit(local) => self.critical_exit(&mut open, *local),
-                    Statement::Assign(..) | Statement::Call { .. } | Statement::InlineAsm(_) => {}
+                    Statement::Assign(..)
+                    | Statement::Call { .. }
+                    | Statement::InlineAsm(_)
+                    | Statement::New(..)
+                    | Statement::End(..) => {}
                 }
             }
             self.at = Location::Terminator(block);
@@ -1306,6 +1451,7 @@ impl<'a> Checker<'a> {
                 AsmOperandKind::Out { place, .. } => {
                     if let Some(place) = place {
                         let ty = self.written(*place, "an `asm` output is");
+                        self.linear_write(*place, ty, "an `asm` output");
                         self.asm_value(ty, "an `asm` output");
                     }
                 }
@@ -1314,6 +1460,7 @@ impl<'a> Checker<'a> {
                     self.asm_value(ty, "an `asm` input");
                     if let Some(place) = place {
                         let ty = self.written(*place, "an `asm` output is");
+                        self.linear_write(*place, ty, "an `asm` output");
                         self.asm_value(ty, "an `asm` output");
                     }
                 }
@@ -1533,12 +1680,32 @@ impl Rules<'_> {
         values(ty).then(|| ty.layout().size)
     }
 
+    /// L3 for the type of a static: it is not linear, and reaches no array
+    /// or slice of linear elements (see `linear_kinds`). An array of linear
+    /// elements is reported as such, and not also as a linear type.
+    fn linear_static(&mut self, subject: &str, ty: Ty, seen: &mut HashSet<*const ()>) {
+        if ty.is_linear_outside_arrays() {
+            let text = format!("its type `{ty}` is linear");
+            self.of(subject, "L3", text);
+        }
+        let mut found = Vec::new();
+        linear_arrays(ty, seen, &mut found);
+        for (array, elem) in found {
+            let text = format!(
+                "its type `{ty}` reaches `{array}`, whose elements have the linear type `{elem}`"
+            );
+            self.of(subject, "L3", text);
+        }
+    }
+
     /// P6 and P7 for the statics, and P2 for the targets of their relocations.
     fn statics(&mut self) {
         let mir = self.mir;
+        let mut seen = HashSet::new();
         for (index, held) in mir.statics.iter().enumerate() {
             let def = held.def.def();
             let subject = format!("static `{}`", def.name);
+            self.linear_static(&subject, def.ty, &mut seen);
             if def.id.0 as usize != index {
                 let text = format!("its id is {}, but it is at index {index}", def.id.0);
                 self.of(&subject, "P6", text);
@@ -1610,6 +1777,46 @@ impl Rules<'_> {
                 self.of(subject, "P7", text);
             }
         }
+    }
+}
+
+/// L3: appends to `found`, each with the type of its elements, the arrays and
+/// slices of linear elements that `ty` reaches, through arrays, slices,
+/// fields, payload values and the pointees of pointers. The structs and enums
+/// in `seen` were looked into already. An array whose elements are arrays is
+/// reported at the inner one, so that a fault is one violation.
+fn linear_arrays(ty: Ty, seen: &mut HashSet<*const ()>, found: &mut Vec<(Ty, Ty)>) {
+    match ty {
+        Ty::Array(elem, _) | Ty::Slice(elem) => {
+            linear_arrays(*elem, seen, found);
+            if elem.is_linear_outside_arrays() {
+                found.push((ty, *elem));
+            }
+        }
+        Ty::Ptr(ptr) => linear_arrays(*ptr.pointee, seen, found),
+        Ty::Struct(s) => {
+            let def = s.def();
+            let Some(fields) = def.fields.get() else {
+                return;
+            };
+            if seen.insert(ptr::from_ref(def).cast()) {
+                for field in fields {
+                    linear_arrays(field.ty, seen, found);
+                }
+            }
+        }
+        Ty::Enum(e) => {
+            let def = e.def();
+            let Some(variants) = def.variants.get() else {
+                return;
+            };
+            if seen.insert(ptr::from_ref(def).cast()) {
+                for value in variants.iter().flat_map(|variant| &variant.payload) {
+                    linear_arrays(value.ty, seen, found);
+                }
+            }
+        }
+        Ty::Unit | Ty::Never | Ty::Bool | Ty::Int(_) | Ty::Peripheral(_) => {}
     }
 }
 
@@ -2403,7 +2610,13 @@ mod tests {
 
     /// `struct Pair { a: u32, b: u32 }`.
     fn pair() -> StructRef {
-        let s = StructRef::new("Pair".to_owned(), Layout { size: 8, align: 4 }, false, true);
+        let s = StructRef::new(
+            "Pair".to_owned(),
+            Layout { size: 8, align: 4 },
+            false,
+            true,
+            false,
+        );
         let field = |name: &str, offset| Field {
             name: name.to_owned(),
             ty: u32_ty(),
@@ -2425,10 +2638,12 @@ mod tests {
         e.def().set_variants(vec![
             Variant {
                 name: "None".to_owned(),
+                value: std::sync::OnceLock::from(0),
                 payload: Vec::new(),
             },
             Variant {
                 name: "Some".to_owned(),
+                value: std::sync::OnceLock::from(1),
                 payload: vec![Field {
                     name: "0".to_owned(),
                     ty: u32_ty(),
@@ -2446,6 +2661,7 @@ mod tests {
             Layout { size: 4, align: 4 },
             false,
             true,
+            false,
         );
         s.def().set_fields(vec![Field {
             name: "q".to_owned(),
@@ -2586,7 +2802,13 @@ mod tests {
         read(option, &payload(0, 0), Some("T1"));
         read(u32_ty(), &payload(0, 0), Some("T1"));
         // A struct whose fields were never set.
-        let unset = StructRef::new("U".to_owned(), Layout { size: 0, align: 1 }, false, true);
+        let unset = StructRef::new(
+            "U".to_owned(),
+            Layout { size: 0, align: 1 },
+            false,
+            true,
+            false,
+        );
         read(Ty::Struct(unset), &[PlaceElem::Field(0)], Some("T1"));
 
         // The walk stops at the first projection that does not apply.
@@ -2758,7 +2980,13 @@ mod tests {
             &[PlaceElem::Deref, PlaceElem::Field(0)],
         ));
         // And a volatile pointer after a non-volatile one makes it volatile.
-        let volatile = StructRef::new("VH".to_owned(), Layout { size: 4, align: 4 }, false, true);
+        let volatile = StructRef::new(
+            "VH".to_owned(),
+            Layout { size: 4, align: 4 },
+            false,
+            true,
+            false,
+        );
         volatile.def().set_fields(vec![Field {
             name: "q".to_owned(),
             ty: ptr(true, true, pair),
@@ -3105,6 +3333,70 @@ mod tests {
     }
 
     #[test]
+    fn e1_each_case_on_the_tag_of_an_enum_is_the_value_of_one_variant() {
+        const ONE: BasicBlock = BasicBlock(1);
+        let on_tag = |e: EnumRef, cases: &'static [(u64, BasicBlock)]| {
+            let mut body = valid();
+            body.locals.push(decl(Ty::Enum(e)));
+            let n = body.locals.len() as u32 - 1;
+            body.blocks[0].terminator = Terminator::Switch {
+                discr: Operand::Copy(projected(n, &[PlaceElem::Tag])),
+                cases,
+                otherwise: ONE,
+            };
+            rules(&body)
+        };
+        // `None` is 0 and `Some` is 1.
+        accepts(on_tag(option(), &[(0, ONE), (1, ONE)]));
+        accepts(on_tag(option(), &[(1, ONE)]));
+        accepts(on_tag(option(), &[]));
+        // A case that no variant has.
+        rejects(on_tag(option(), &[(0, ONE), (2, ONE)]), "E1");
+        // Two variants with one value, and a variant with none stored.
+        let valued = |none: Option<u64>, some: Option<u64>| {
+            let e = EnumRef::new(
+                EnumId(2),
+                "V".to_owned(),
+                IntTy::U8,
+                Layout { size: 1, align: 1 },
+                true,
+            );
+            let value = |v: Option<u64>| v.map_or_else(Default::default, std::sync::OnceLock::from);
+            e.def().set_variants(vec![
+                Variant {
+                    name: "None".to_owned(),
+                    value: value(none),
+                    payload: Vec::new(),
+                },
+                Variant {
+                    name: "Some".to_owned(),
+                    value: value(some),
+                    payload: Vec::new(),
+                },
+            ]);
+            e
+        };
+        rejects(on_tag(valued(Some(1), Some(1)), &[(1, ONE)]), "E1");
+        rejects(on_tag(valued(Some(0), None), &[(1, ONE)]), "E1");
+        accepts(on_tag(valued(Some(0), None), &[(0, ONE)]));
+        // One violation for each case at fault; a tag copied elsewhere and a
+        // `switch` on an integer are not looked at.
+        assert_eq!(on_tag(option(), &[(2, ONE), (3, ONE)]), ["E1", "E1"]);
+        accepts(on_tag_copy());
+    }
+
+    /// A `switch` on a `u8` local, with a case no enum has.
+    fn on_tag_copy() -> Vec<&'static str> {
+        let mut body = typed();
+        body.blocks[0].terminator = Terminator::Switch {
+            discr: copy(U8),
+            cases: &[(9, BasicBlock(1))],
+            otherwise: BasicBlock(1),
+        };
+        rules(&body)
+    }
+
+    #[test]
     fn t8_the_message_of_an_assert_is_a_const_slice_of_bytes() {
         let assertion = |message| {
             let mut body = typed();
@@ -3190,6 +3482,7 @@ mod tests {
             Layout { size: 4, align: 4 },
             false,
             false,
+            false,
         );
         s.def().set_fields(vec![Field {
             name: "n".to_owned(),
@@ -3204,6 +3497,7 @@ mod tests {
         let s = StructRef::new(
             "Wrapper".to_owned(),
             Layout { size: 16, align: 4 },
+            false,
             false,
             false,
         );
@@ -3237,10 +3531,12 @@ mod tests {
         e.def().set_variants(vec![
             Variant {
                 name: "Free".to_owned(),
+                value: std::sync::OnceLock::from(0),
                 payload: Vec::new(),
             },
             Variant {
                 name: "Full".to_owned(),
+                value: std::sync::OnceLock::from(1),
                 payload: vec![Field {
                     name: "0".to_owned(),
                     ty: Ty::Struct(handle()),
@@ -3259,6 +3555,7 @@ mod tests {
             Layout { size: 4, align: 4 },
             false,
             true,
+            false,
         );
         s.def().set_fields(vec![Field {
             name: "h".to_owned(),
@@ -3410,6 +3707,7 @@ mod tests {
             Layout { size: 4, align: 4 },
             false,
             false,
+            false,
         );
         outer.def().set_fields(vec![Field {
             name: "m".to_owned(),
@@ -3427,6 +3725,7 @@ mod tests {
         );
         flagged.def().set_variants(vec![Variant {
             name: "Held".to_owned(),
+            value: std::sync::OnceLock::from(0),
             payload: vec![
                 Field {
                     name: "0".to_owned(),
@@ -3450,6 +3749,397 @@ mod tests {
             decl(Ty::Array(Box::leak(Box::new(Ty::Struct(shared))), 2)),
         ]);
         breaks_only(&body, "M4");
+    }
+
+    // ---- Linear values (ADR 0103, L1 to L4) ----
+
+    /// A struct of the given kind, with a `u32` field `n` and the fields
+    /// `more` after it.
+    fn kind(name: &str, copy: bool, linear: bool, more: Vec<(&str, Ty)>) -> StructRef {
+        let s = StructRef::new(
+            name.to_owned(),
+            Layout { size: 4, align: 4 },
+            false,
+            copy,
+            linear,
+        );
+        let mut fields = vec![Field {
+            name: "n".to_owned(),
+            ty: u32_ty(),
+            offset: 0,
+        }];
+        fields.extend(more.into_iter().map(|(name, ty)| Field {
+            name: name.to_owned(),
+            ty,
+            offset: 4,
+        }));
+        s.def().set_fields(fields);
+        s
+    }
+
+    /// `#[linear] struct Transfer { n: u32 }`.
+    fn transfer() -> StructRef {
+        thread_local! {
+            static MADE: StructRef = kind("Transfer", false, true, Vec::new());
+        }
+        MADE.with(|s| *s)
+    }
+
+    /// `[Transfer; len]`.
+    fn transfers(len: u64) -> Ty {
+        Ty::Array(Box::leak(Box::new(Ty::Struct(transfer()))), len)
+    }
+
+    /// `struct Holds { n: u32, t: Transfer }`, not marked, linear by its field.
+    fn holds() -> StructRef {
+        thread_local! {
+            static MADE: StructRef =
+                kind("Holds", false, false, vec![("t", Ty::Struct(transfer()))]);
+        }
+        MADE.with(|s| *s)
+    }
+
+    /// `#[linear] struct Link { n: u32, t: Transfer }`: a linear struct
+    /// holding another.
+    fn link() -> StructRef {
+        thread_local! {
+            static MADE: StructRef =
+                kind("Link", false, true, vec![("t", Ty::Struct(transfer()))]);
+        }
+        MADE.with(|s| *s)
+    }
+
+    /// `enum Lent { Free, Full(Transfer) }`, a `u8` tag, linear by its payload.
+    fn lent() -> EnumRef {
+        thread_local! {
+            static MADE: EnumRef = made_lent();
+        }
+        MADE.with(|e| *e)
+    }
+
+    fn made_lent() -> EnumRef {
+        let e = EnumRef::new(
+            EnumId(3),
+            "Lent".to_owned(),
+            IntTy::U8,
+            Layout { size: 8, align: 4 },
+            false,
+        );
+        e.def().set_variants(vec![
+            Variant {
+                name: "Free".to_owned(),
+                value: std::sync::OnceLock::from(0),
+                payload: Vec::new(),
+            },
+            Variant {
+                name: "Full".to_owned(),
+                value: std::sync::OnceLock::from(1),
+                payload: vec![Field {
+                    name: "0".to_owned(),
+                    ty: Ty::Struct(transfer()),
+                    offset: 4,
+                }],
+            },
+        ]);
+        e
+    }
+
+    /// The rules broken by `new` of `projection` of a new local of type `ty`.
+    fn newing(ty: Ty, projection: &[PlaceElem]) -> Vec<&'static str> {
+        let mut body = valid();
+        body.locals.push(decl(ty));
+        let n = body.locals.len() as u32 - 1;
+        statement_of(&mut body, Statement::New(projected(n, projection), span()));
+        rules(&body)
+    }
+
+    #[test]
+    fn l1_new_names_a_place_of_a_struct_marked_linear() {
+        let payload = PlaceElem::Payload {
+            variant: 1,
+            index: 0,
+        };
+        accepts(newing(Ty::Struct(transfer()), &[]));
+        accepts(newing(Ty::Struct(link()), &[]));
+        // A part of a place, through fields and payload values.
+        accepts(newing(Ty::Struct(link()), &[PlaceElem::Field(1)]));
+        accepts(newing(Ty::Struct(holds()), &[PlaceElem::Field(1)]));
+        accepts(newing(Ty::Enum(lent()), &[payload]));
+        // A struct that is not marked, whatever it holds, and other types.
+        rejects(newing(Ty::Struct(holds()), &[]), "L1");
+        rejects(newing(Ty::Struct(handle()), &[]), "L1");
+        rejects(newing(u32_ty(), &[]), "L1");
+        rejects(newing(Ty::Enum(lent()), &[]), "L1");
+        rejects(newing(Ty::Struct(link()), &[PlaceElem::Field(0)]), "L1");
+        // Through a pointer, once, though the pointee is a linear struct.
+        let to = ptr(true, false, Ty::Struct(transfer()));
+        rejects(newing(to, &[PlaceElem::Deref]), "L1");
+        rejects(newing(to, &[PlaceElem::Offset(Local(8))]), "L1");
+        // A local bound to read-only data.
+        let mut body = valid();
+        body.locals.push(LocalDecl {
+            ty: Ty::Struct(transfer()),
+            name: None,
+            constant: Some(DataId(0)),
+        });
+        let n = body.locals.len() as u32 - 1;
+        statement_of(&mut body, Statement::New(local(n), span()));
+        breaks_only(&body, "L1");
+        // A local that does not exist, or a projection T1 rejects, is not
+        // judged again.
+        let mut body = valid();
+        statement_of(&mut body, Statement::New(local(99), span()));
+        breaks_only(&body, "S7");
+        rejects(newing(Ty::Struct(transfer()), &[PlaceElem::Field(5)]), "T1");
+    }
+
+    /// The rules broken by `end` of `projection` of a new local of type `ty`.
+    fn ending(ty: Ty, projection: &[PlaceElem]) -> Vec<&'static str> {
+        let mut body = valid();
+        body.locals.push(decl(ty));
+        let n = body.locals.len() as u32 - 1;
+        statement_of(&mut body, Statement::End(projected(n, projection), span()));
+        rules(&body)
+    }
+
+    #[test]
+    fn l1_end_names_a_place_of_a_struct_marked_linear() {
+        let payload = PlaceElem::Payload {
+            variant: 1,
+            index: 0,
+        };
+        accepts(ending(Ty::Struct(transfer()), &[]));
+        accepts(ending(Ty::Struct(link()), &[]));
+        // A part of a place, through fields and payload values.
+        accepts(ending(Ty::Struct(link()), &[PlaceElem::Field(1)]));
+        accepts(ending(Ty::Struct(holds()), &[PlaceElem::Field(1)]));
+        accepts(ending(Ty::Enum(lent()), &[payload]));
+        // A struct that is not marked, whatever it holds, and other types.
+        rejects(ending(Ty::Struct(holds()), &[]), "L1");
+        rejects(ending(Ty::Struct(handle()), &[]), "L1");
+        rejects(ending(u32_ty(), &[]), "L1");
+        rejects(ending(Ty::Enum(lent()), &[]), "L1");
+        // Through a pointer, once, though the pointee is a linear struct.
+        let to = ptr(true, false, Ty::Struct(transfer()));
+        rejects(ending(to, &[PlaceElem::Deref]), "L1");
+        rejects(ending(to, &[PlaceElem::Offset(Local(8))]), "L1");
+        // A local bound to read-only data.
+        let mut body = valid();
+        body.locals.push(LocalDecl {
+            ty: Ty::Struct(transfer()),
+            name: None,
+            constant: Some(DataId(0)),
+        });
+        let n = body.locals.len() as u32 - 1;
+        statement_of(&mut body, Statement::End(local(n), span()));
+        breaks_only(&body, "L1");
+        // A local that does not exist is not judged again.
+        let mut body = valid();
+        statement_of(&mut body, Statement::End(local(99), span()));
+        breaks_only(&body, "S7");
+    }
+
+    #[test]
+    fn l2_no_struct_is_marked_both_copy_and_linear() {
+        accepts(declaring(Ty::Struct(transfer())));
+        let both = kind("Both", true, true, Vec::new());
+        rejects(declaring(Ty::Struct(both)), "L2");
+        // Through a field, and a pointer that is not looked into: each
+        // definition once.
+        let outer = kind("Outer", false, false, vec![("b", Ty::Struct(both))]);
+        let mut body = valid();
+        body.locals.extend([
+            decl(Ty::Struct(both)),
+            decl(Ty::Struct(outer)),
+            decl(ptr(true, false, Ty::Struct(both))),
+        ]);
+        breaks_only(&body, "L2");
+    }
+
+    #[test]
+    fn l3_no_local_reaches_an_array_or_a_slice_of_linear_elements() {
+        let slice = |elem| Ty::Slice(Box::leak(Box::new(elem)));
+        let array = |elem, len| Ty::Array(Box::leak(Box::new(elem)), len);
+        accepts(declaring(Ty::Struct(transfer())));
+        accepts(declaring(Ty::Enum(lent())));
+        accepts(declaring(ptr(true, false, Ty::Struct(transfer()))));
+        accepts(declaring(array(u32_ty(), 2)));
+        accepts(declaring(ptr(false, false, slice(u32_ty()))));
+        rejects(declaring(transfers(2)), "L3");
+        // An element that is linear by what it holds.
+        rejects(declaring(array(Ty::Struct(holds()), 2)), "L3");
+        rejects(declaring(array(Ty::Enum(lent()), 2)), "L3");
+        // A pointer to a slice, and to an array.
+        rejects(
+            declaring(ptr(false, false, slice(Ty::Struct(transfer())))),
+            "L3",
+        );
+        rejects(declaring(ptr(true, false, transfers(3))), "L3");
+        // Nested arrays are one fault, at the inner array.
+        rejects(declaring(array(transfers(2), 2)), "L3");
+        // Through a field and a payload value.
+        let table = kind("Table", false, false, vec![("slots", transfers(2))]);
+        rejects(declaring(Ty::Struct(table)), "L3");
+        let row = EnumRef::new(
+            EnumId(4),
+            "Row".to_owned(),
+            IntTy::U8,
+            Layout { size: 12, align: 4 },
+            false,
+        );
+        row.def().set_variants(vec![Variant {
+            name: "Full".to_owned(),
+            value: std::sync::OnceLock::from(0),
+            payload: vec![Field {
+                name: "0".to_owned(),
+                ty: transfers(2),
+                offset: 4,
+            }],
+        }]);
+        rejects(declaring(Ty::Enum(row)), "L3");
+        // Through the pointee of a field.
+        let aims = kind(
+            "Aims",
+            false,
+            false,
+            vec![("to", ptr(true, false, transfers(2)))],
+        );
+        rejects(declaring(Ty::Struct(aims)), "L3");
+        // Each definition once, however many locals reach it.
+        let mut body = valid();
+        body.locals.extend([
+            decl(Ty::Struct(table)),
+            decl(Ty::Struct(table)),
+            decl(ptr(true, false, Ty::Struct(table))),
+        ]);
+        breaks_only(&body, "L3");
+    }
+
+    #[test]
+    fn l3_no_static_is_linear_or_reaches_an_array_of_linear_elements() {
+        let with = |ty| {
+            let mut mir = program();
+            let id = mir.statics.len() as u32;
+            mir.statics.push(Static {
+                def: StaticRef::new(StaticId(id), "L".to_owned(), ty, false, true),
+                bytes: Vec::new(),
+                align: 4,
+                relocations: Vec::new(),
+            });
+            program_rules(&mir)
+        };
+        assert_eq!(with(u32_ty()), Vec::<&str>::new());
+        // A pointer to a linear struct is held, and nothing else.
+        assert_eq!(
+            with(ptr(false, false, Ty::Struct(transfer()))),
+            Vec::<&str>::new()
+        );
+        assert_eq!(with(Ty::Struct(transfer())), ["L3"]);
+        assert_eq!(with(Ty::Struct(holds())), ["L3"]);
+        assert_eq!(with(Ty::Enum(lent())), ["L3"]);
+        // An array of linear elements is the array's fault, once, and not
+        // also a static of a linear type.
+        assert_eq!(with(transfers(2)), ["L3"]);
+        let table = kind("Table", false, false, vec![("slots", transfers(2))]);
+        assert_eq!(with(Ty::Struct(table)), ["L3"]);
+    }
+
+    /// The rules broken by a write to `projection` of a new local of type
+    /// `pointer`, of a new local of type `value`, as an assignment or as the
+    /// destination of a call.
+    fn writing(pointer: Ty, projection: &[PlaceElem], value: Ty, call: bool) -> Vec<&'static str> {
+        let mut body = valid();
+        body.locals.extend([decl(pointer), decl(value)]);
+        let n = body.locals.len() as u32 - 2;
+        let place = projected(n, projection);
+        let statement = if call {
+            Statement::Call {
+                dest: Some(place),
+                callee: BodyId(0),
+                args: Vec::new(),
+            }
+        } else {
+            let from = local(n + 1);
+            let operand = if value.is_copy() {
+                Operand::Copy(from)
+            } else {
+                moved(from)
+            };
+            Statement::Assign(place, Rvalue::Use(operand))
+        };
+        statement_of(&mut body, statement);
+        rules(&body)
+    }
+
+    #[test]
+    fn l4_no_linear_value_is_written_through_a_pointer() {
+        let to = |ty| ptr(true, false, ty);
+        let deref = [PlaceElem::Deref];
+        for call in [false, true] {
+            // A copy value, and a copy field of a linear struct.
+            accepts(writing(to(u32_ty()), &deref, u32_ty(), call));
+            accepts(writing(
+                to(Ty::Struct(link())),
+                &[PlaceElem::Deref, PlaceElem::Field(0)],
+                u32_ty(),
+                call,
+            ));
+            // A pointer to a linear value, written whole, or the value itself.
+            accepts(writing(
+                to(to(Ty::Struct(transfer()))),
+                &deref,
+                to(Ty::Struct(transfer())),
+                call,
+            ));
+            rejects(
+                writing(
+                    to(Ty::Struct(transfer())),
+                    &deref,
+                    Ty::Struct(transfer()),
+                    call,
+                ),
+                "L4",
+            );
+            rejects(
+                writing(to(Ty::Struct(holds())), &deref, Ty::Struct(holds()), call),
+                "L4",
+            );
+            rejects(
+                writing(
+                    to(Ty::Struct(holds())),
+                    &[PlaceElem::Deref, PlaceElem::Field(1)],
+                    Ty::Struct(transfer()),
+                    call,
+                ),
+                "L4",
+            );
+            rejects(
+                writing(to(Ty::Enum(lent())), &deref, Ty::Enum(lent()), call),
+                "L4",
+            );
+            rejects(
+                writing(
+                    to(Ty::Struct(transfer())),
+                    &[PlaceElem::Offset(Local(8))],
+                    Ty::Struct(transfer()),
+                    call,
+                ),
+                "L4",
+            );
+        }
+        // Into a local, and into a part of a local: no pointer.
+        let mut body = valid();
+        body.locals
+            .extend([decl(Ty::Struct(holds())), decl(Ty::Struct(transfer()))]);
+        let n = body.locals.len() as u32 - 2;
+        statement_of(
+            &mut body,
+            Statement::Assign(
+                projected(n, &[PlaceElem::Field(1)]),
+                Rvalue::Use(moved(local(n + 1))),
+            ),
+        );
+        accepts(rules(&body));
     }
 
     // ---- `critical` blocks (ADR 0095, C1 to C3) ----

@@ -1,0 +1,23 @@
+// emit: mir
+// The analysis of linearity runs only on a body that passed the analysis of
+// moves (ADR 0103): a use after a move is reported once, as such, and the
+// same body's forgotten value is not reported until it is fixed. A body with
+// only the forgotten value is reported as such.
+#[linear]
+struct Transfer { channel: u32 }
+
+fn consume(t: Transfer) {
+    end(t);
+}
+
+// Rejected as a use after a move only; `u` is forgotten too.
+fn both(t: Transfer, u: Transfer) {
+    consume(t);
+    consume(t);
+}
+
+// Rejected as a value never consumed.
+fn forgets(u: Transfer) {}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

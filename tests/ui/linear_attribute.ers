@@ -1,0 +1,45 @@
+// emit: mir
+// `#[linear]` goes on a struct, alone or with `#[packed]` and `#[align(N)]`;
+// it changes neither layout nor ABI: each struct below has the size, the
+// alignment and the offsets of the same struct without it (ADR 0101).
+#[linear]
+pub struct Transfer { channel: u32 }
+
+#[linear]
+#[packed]
+struct Header { kind: u8, len: u32 }
+
+#[align(16)]
+#[linear]
+struct Aligned { a: u32, b: u32 }
+
+#[linear]
+struct Token {}
+
+#[linear]
+pub struct Pair { pub a: u8, pub b: u32 }
+
+struct Plain { channel: u32 }
+
+#[packed]
+struct PlainHeader { kind: u8, len: u32 }
+
+#[align(16)]
+struct PlainAligned { a: u32, b: u32 }
+
+fn layouts() -> usize {
+    size_of(Transfer) + align_of(Transfer)
+        + size_of(Header) + align_of(Header) + offset_of(Header, len)
+        + size_of(Aligned) + align_of(Aligned) + offset_of(Aligned, b)
+        + size_of(Token)
+        + size_of(Pair) + offset_of(Pair, b)
+}
+
+fn plain_layouts() -> usize {
+    size_of(Plain) + align_of(Plain)
+        + size_of(PlainHeader) + align_of(PlainHeader) + offset_of(PlainHeader, len)
+        + size_of(PlainAligned) + align_of(PlainAligned) + offset_of(PlainAligned, b)
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

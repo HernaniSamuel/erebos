@@ -1,0 +1,333 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/linear_not_consumed.ers
+---
+--- errors ---
+analysis::linear-not-consumed
+
+  × linear value `t` of type `Transfer` is not consumed
+    ╭─[linear_not_consumed.ers:39:23]
+ 37 │     // A variable never moved.
+ 38 │ ╭─▶ fn never() {
+ 39 │ │       let t: Transfer = start(1);
+    · │                         ────┬───
+    · │                             ╰── linear value comes from this call
+ 40 │ ├─▶ }
+    · ╰──── `t` is still held when the function returns here
+ 41 │     
+    ╰────
+  help: consume it: pass it to a function that does, return it, or end it with `end` where its
+        fields are visible (ADR 0102)
+analysis::linear-not-consumed
+
+  × linear value `t` of type `Transfer` is not consumed
+    ╭─[linear_not_consumed.ers:43:1]
+ 42 │ // A parameter never moved.
+ 43 │ fn parameter(t: Transfer) {}
+    · ──────────────┬─────────────
+    ·               ╰── linear value comes in as the parameter `t`; `t` is still held when the function returns here
+ 44 │ 
+    ╰────
+  help: consume it: pass it to a function that does, return it, or end it with `end` where its
+        fields are visible (ADR 0102)
+analysis::linear-not-consumed
+
+  × linear value of type `Transfer` is not consumed
+    ╭─[linear_not_consumed.ers:47:5]
+ 45 │     // A discarded call: the temporary that holds its result is never moved.
+ 46 │ ╭─▶ fn discarded() {
+ 47 │ │       start(1);
+    · │       ────┬───
+    · │           ╰── linear value comes from this call
+ 48 │ ├─▶ }
+    · ╰──── this value is still held when the function returns here
+ 49 │     
+    ╰────
+  help: consume it: pass it to a function that does, return it, or end it with `end` where its
+        fields are visible (ADR 0102)
+analysis::linear-not-consumed
+
+  × linear value of type `Tok` is not consumed
+    ╭─[linear_not_consumed.ers:52:5]
+ 50 │     // A discarded literal with no fields, and one kept in a variable.
+ 51 │ ╭─▶ fn token() {
+ 52 │ │       Tok {};
+    · │       ───┬──
+    · │          ╰── linear value is made here
+ 53 │ ├─▶ }
+    · ╰──── this value is still held when the function returns here
+ 54 │     
+    ╰────
+  help: consume it: pass it to a function that does, return it, or end it with `end` where its
+        fields are visible (ADR 0102)
+analysis::linear-not-consumed
+
+  × linear value `t` of type `Tok` is not consumed
+    ╭─[linear_not_consumed.ers:56:18]
+ 54 │     
+ 55 │ ╭─▶ fn forgotten_token() {
+ 56 │ │       let t: Tok = Tok {};
+    · │                    ───┬──
+    · │                       ╰── linear value is made here
+ 57 │ ├─▶ }
+    · ╰──── `t` is still held when the function returns here
+ 58 │     
+    ╰────
+  help: consume it: pass it to a function that does, return it, or end it with `end` where its
+        fields are visible (ADR 0102)
+analysis::linear-not-consumed
+
+  × linear value `t` of type `Transfer` is not consumed
+    ╭─[linear_not_consumed.ers:61:23]
+ 59 │     // Consumed on one branch only.
+ 60 │ ╭─▶ fn one_branch(c: bool) {
+ 61 │ │       let t: Transfer = start(1);
+    · │                         ────┬───
+    · │                             ╰── linear value comes from this call
+ 62 │ │       if c {
+ 63 │ │           consume(t);
+ 64 │ │       }
+ 65 │ ├─▶ }
+    · ╰──── `t` is still held when the function returns here
+ 66 │     
+    ╰────
+  help: consume it: pass it to a function that does, return it, or end it with `end` where its
+        fields are visible (ADR 0102)
+analysis::linear-not-consumed
+
+  × linear value `t` of type `Transfer` is not consumed
+    ╭─[linear_not_consumed.ers:69:23]
+ 68 │ fn early(c: bool) {
+ 69 │     let t: Transfer = start(1);
+    ·                       ────┬───
+    ·                           ╰── linear value comes from this call
+ 70 │     if c {
+ 71 │         return;
+    ·         ───┬──
+    ·            ╰── `t` is still held when the function returns here
+ 72 │     }
+    ╰────
+  help: consume it: pass it to a function that does, return it, or end it with `end` where its
+        fields are visible (ADR 0102)
+analysis::linear-not-consumed
+
+  × linear value `t` of type `Transfer` is not consumed
+    ╭─[linear_not_consumed.ers:78:23]
+ 77 │ fn question() -> Option(u32) {
+ 78 │     let t: Transfer = start(1);
+    ·                       ────┬───
+    ·                           ╰── linear value comes from this call
+ 79 │     let n: u32 = number()?;
+    ·                  ────┬────
+    ·                      ╰── `t` is still held when the function returns here
+ 80 │     consume(t);
+    ╰────
+  help: consume it: pass it to a function that does, return it, or end it with `end` where its
+        fields are visible (ADR 0102)
+analysis::linear-not-consumed
+
+  × linear value of type `Transfer` is not consumed
+    ╭─[linear_not_consumed.ers:86:18]
+ 85 │ fn arguments() -> Option(u32) {
+ 86 │     consume_with(start(1), number()?);
+    ·                  ────┬───  ────┬────
+    ·                      │         ╰── this value is still held when the function returns here
+    ·                      ╰── linear value comes from this call
+ 87 │     .Some(0)
+    ╰────
+  help: consume it: pass it to a function that does, return it, or end it with `end` where its
+        fields are visible (ADR 0102)
+analysis::linear-not-consumed
+
+  × linear value `o` (in `.Some`) of type `Transfer` is not consumed
+    ╭─[linear_not_consumed.ers:91:1]
+ 90 │     // `.Some(_)` leaves the payload held, and so does a `_` arm that covers `.Some`.
+ 91 │ ╭─▶ fn wildcard(o: Option(Transfer)) {
+ 92 │ │       match o {
+ 93 │ │           .Some(_) => {},
+ 94 │ │           .None => {},
+ 95 │ │       }
+ 96 │ ├─▶ }
+    · ╰──── linear value comes in as the parameter `o`; `o` (in `.Some`) is still held when the function returns here
+ 97 │     
+    ╰────
+  help: consume it: pass it to a function that does, return it, or end it with `end` where its
+        fields are visible (ADR 0102)
+analysis::linear-not-consumed
+
+  × linear value `o` (in `.Some`) of type `Transfer` is not consumed
+     ╭─[linear_not_consumed.ers:98:1]
+  97 │     
+  98 │ ╭─▶ fn catch_all(o: Option(Transfer)) {
+  99 │ │       match o {
+ 100 │ │           .None => {},
+ 101 │ │           _ => {},
+ 102 │ │       }
+ 103 │ ├─▶ }
+     · ╰──── linear value comes in as the parameter `o`; `o` (in `.Some`) is still held when the function returns here
+ 104 │     
+     ╰────
+  help: consume it: pass it to a function that does, return it, or end it with `end` where its
+        fields are visible (ADR 0102)
+analysis::linear-not-consumed
+
+  × linear value `p.b` of type `Transfer` is not consumed
+     ╭─[linear_not_consumed.ers:107:19]
+ 105 │     // A part consumed, the other forgotten: the error names `p.b` only.
+ 106 │ ╭─▶ fn partly() {
+ 107 │ │       let p: Pair = pair();
+     · │                     ───┬──
+     · │                        ╰── linear value comes from this call
+ 108 │ │       consume(p.a);
+ 109 │ ├─▶ }
+     · ╰──── `p.b` is still held when the function returns here
+ 110 │     
+     ╰────
+  help: consume it: pass it to a function that does, return it, or end it with `end` where its
+        fields are visible (ADR 0102)
+analysis::linear-not-consumed
+
+  × linear values `p.a` and `p.b` are not consumed
+     ╭─[linear_not_consumed.ers:113:19]
+ 111 │     // Both forgotten: one error, naming both.
+ 112 │ ╭─▶ fn both() {
+ 113 │ │       let p: Pair = pair();
+     · │                     ───┬──
+     · │                        ╰── linear value comes from this call
+ 114 │ ├─▶ }
+     · ╰──── `p.a` and `p.b` are still held when the function returns here
+ 115 │     
+     ╰────
+  help: consume it: pass it to a function that does, return it, or end it with `end` where its
+        fields are visible (ADR 0102)
+analysis::linear-not-consumed
+
+  × linear value `t` of type `Transfer` is not consumed
+     ╭─[linear_not_consumed.ers:118:23]
+ 117 │ fn two_returns(c: bool) {
+ 118 │     let t: Transfer = start(1);
+     ·                       ────┬───
+     ·                           ╰── linear value comes from this call
+ 119 │     if c {
+ 120 │         return;
+     ·         ───┬──
+     ·            ╰── `t` is still held when the function returns here
+ 121 │     }
+ 122 │     return;
+     ·     ───┬──
+     ·        ╰── `t` is still held when the function returns here
+ 123 │ }
+     ╰────
+  help: consume it: pass it to a function that does, return it, or end it with `end` where its
+        fields are visible (ADR 0102)
+analysis::linear-not-consumed
+
+  × linear value `b` of type `Transfer` is not consumed
+     ╭─[linear_not_consumed.ers:128:23]
+ 126 │     // that holds it, with a label where it moved there.
+ 127 │ ╭─▶ fn moved_then_forgotten() {
+ 128 │ │       let a: Transfer = start(1);
+     · │                         ────┬───
+     · │                             ╰── linear value comes from this call
+ 129 │ │       let b: Transfer = a;
+     · │                         ┬
+     · │                         ╰── moved into `b` here
+ 130 │ ├─▶ }
+     · ╰──── `b` is still held when the function returns here
+ 131 │     
+     ╰────
+  help: consume it: pass it to a function that does, return it, or end it with `end` where its
+        fields are visible (ADR 0102)
+analysis::linear-not-consumed
+
+  × linear value of type `Transfer` is not consumed
+     ╭─[linear_not_consumed.ers:135:9]
+ 132 │     // A discarded call in a loop that is left by `break`: one error.
+ 133 │ ╭─▶ fn loop_break() {
+ 134 │ │       loop {
+ 135 │ │           start(1);
+     · │           ────┬───
+     · │               ╰── linear value comes from this call
+ 136 │ │           break;
+ 137 │ │       }
+ 138 │ ├─▶ }
+     · ╰──── this value is still held when the function returns here
+ 139 │     
+     ╰────
+  help: consume it: pass it to a function that does, return it, or end it with `end` where its
+        fields are visible (ADR 0102)
+analysis::linear-not-consumed
+
+  × linear value `t` of type `Transfer` is not consumed
+     ╭─[linear_not_consumed.ers:145:27]
+ 141 │     // the loop. One error, labelled at the `let`.
+ 142 │ ╭─▶ fn loop_let(n: u32) {
+ 143 │ │       let mut i: u32 = 0;
+ 144 │ │       while i < n {
+ 145 │ │           let t: Transfer = start(1);
+     · │                             ────┬───
+     · │                                 ╰── linear value comes from this call; `t` is still held when a value of the same origin is written here
+ 146 │ │           i = i + 1;
+ 147 │ │       }
+ 148 │ ├─▶ }
+     · ╰──── `t` is still held when the function returns here
+ 149 │     
+     ╰────
+  help: consume it: pass it to a function that does, return it, or end it with `end` where its
+        fields are visible (ADR 0102)
+analysis::linear-not-consumed
+
+  × linear value of type `Transfer` is not consumed
+     ╭─[linear_not_consumed.ers:155:9]
+ 151 │     // iteration is still held when the call comes again.
+ 152 │ ╭─▶ fn loop_discarded(n: u32) {
+ 153 │ │       let mut i: u32 = 0;
+ 154 │ │       while i < n {
+ 155 │ │           start(i);
+     · │           ────┬───
+     · │               ╰── linear value comes from this call; this value is still held when a value of the same origin is written here
+ 156 │ │           i = i + 1;
+ 157 │ │       }
+ 158 │ ├─▶ }
+     · ╰──── this value is still held when the function returns here
+ 159 │     
+     ╰────
+  help: consume it: pass it to a function that does, return it, or end it with `end` where its
+        fields are visible (ADR 0102)
+analysis::linear-not-consumed
+
+  × linear value `x` of type `Transfer` is not consumed
+     ╭─[linear_not_consumed.ers:164:19]
+ 163 │ fn same_origin() {
+ 164 │     let p: Pair = pair();
+     ·                   ───┬──
+     ·                      ╰── linear value comes from this call
+ 165 │     let mut x: Transfer = p.a;
+     ·                           ─┬─
+     ·                            ╰── moved into `x` here
+ 166 │     x = p.b;
+     ·         ─┬─
+     ·          ╰── `x` is still held when a value of the same origin is written here; moved into `x` here
+ 167 │     consume(x);
+     ╰────
+  help: consume it: pass it to a function that does, return it, or end it with `end` where its
+        fields are visible (ADR 0102)
+analysis::linear-not-consumed
+
+  × linear value of type `Transfer` is not consumed
+     ╭─[linear_not_consumed.ers:172:1]
+ 171 │     // incomplete literal holds it there.
+ 172 │ ╭─▶ fn literal(t: Transfer) -> Option(u32) {
+ 173 │ │       let w: Wrapper = Wrapper { inner: t, n: number()? };
+     · │                                         ┬     ────┬────
+     · │                                         │         ╰── this value is still held when the function returns here
+     · │                                         ╰── moved here
+ 174 │ │       consume(w.inner);
+ 175 │ │       .Some(w.n)
+ 176 │ ├─▶ }
+     · ╰──── linear value comes in as the parameter `t`
+ 177 │     
+     ╰────
+  help: consume it: pass it to a function that does, return it, or end it with `end` where its
+        fields are visible (ADR 0102)

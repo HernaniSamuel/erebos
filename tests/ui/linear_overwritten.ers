@@ -1,0 +1,97 @@
+// emit: mir
+// Writing a place while it holds a linear value is
+// `analysis::linear-overwritten`, at the write, labeling where the value it
+// would overwrite came in (ADR 0102, 0103). Writing a copy field of a held
+// value is no overwrite, and a place whose value was consumed is written
+// freely.
+#[linear]
+struct Transfer { channel: u32 }
+
+#[linear]
+struct Wide { a: u32, b: u32 }
+
+struct Holder { h: Transfer, n: u32 }
+
+fn start(channel: u32) -> Transfer {
+    Transfer { channel: channel }
+}
+
+fn consume(t: Transfer) {
+    end(t);
+}
+
+// Rejected: a parameter assigned over.
+fn parameter(mut t: Transfer) {
+    t = start(2);
+    consume(t);
+}
+
+// Rejected: a variable assigned over.
+fn variable() {
+    let mut t: Transfer = start(1);
+    t = start(2);
+    consume(t);
+}
+
+// Rejected: a field of a struct that is not linear.
+fn field(mut s: Holder) {
+    s.h = start(2);
+    consume(s.h);
+}
+
+// Rejected: on one branch only; the value is consumed on the other path, so
+// it is not also reported as never consumed.
+fn branch(c: bool) {
+    let mut t: Transfer = start(1);
+    if c {
+        t = start(2);
+    }
+    consume(t);
+}
+
+// Rejected: the value of a variable moved from another is overwritten, and
+// the error is where the value came in.
+fn moved_first() {
+    let a: Transfer = start(1);
+    let mut b: Transfer = a;
+    b = start(2);
+    consume(b);
+}
+
+// Rejected: written twice; each value that is lost is one error.
+fn twice() {
+    let mut t: Transfer = start(1);
+    t = start(2);
+    t = start(3);
+    consume(t);
+}
+
+// Accepted: a copy field of a held value.
+fn copy_field(mut w: Wide) {
+    w.a = 5;
+    w.b = w.a + 1;
+    end(w);
+}
+
+// Accepted: written after it was consumed.
+fn after_consumed() {
+    let mut t: Transfer = start(1);
+    consume(t);
+    t = start(2);
+    consume(t);
+}
+
+// Accepted: the value of each iteration is consumed before the next.
+fn in_a_loop(n: u32) {
+    let mut t: Transfer = start(0);
+    let mut i: u32 = 1;
+    while i < n {
+        consume(t);
+        t = start(i);
+        i = i + 1;
+    }
+    consume(t);
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

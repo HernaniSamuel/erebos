@@ -1,0 +1,29 @@
+// emit: typeck
+// A static whose type is linear is an error, at its type: the value a static
+// holds is never moved out, so it could only be forgotten (ADR 0101).
+#[linear]
+pub struct Transfer { channel: u32 }
+
+struct Holder { n: u8, t: Transfer }
+
+enum Slot: u8 { Full(u8, Transfer) = 0, Empty = 1 }
+
+// Rejected: a linear type, a `static mut`, an `Option` of one, a struct and an
+// enum that hold one, and an `extern static`.
+static ONE: Transfer = Transfer { channel: 1 };
+static mut TWO: Transfer = Transfer { channel: 2 };
+static mut MAYBE: Option(Transfer) = .None;
+static HELD: Holder = Holder { n: 0, t: Transfer { channel: 3 } };
+static mut SLOT: Slot = Slot::Empty;
+extern static OUTSIDE: Transfer;
+
+// Accepted: a pointer to a linear type is copy and not linear (ADR 0096).
+static mut POINTER: *mut Transfer = 0 as *mut Transfer;
+static AIM: *const Holder = 0 as *const Holder;
+static mut POINTERS: *const Option(Transfer) = 0 as *const Option(Transfer);
+
+// Accepted: not linear.
+static mut COUNT: u32 = 0;
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

@@ -1,8 +1,9 @@
 // emit: typeck
-// The MIR type of an enum with payloads does not hold the values of its
-// variants (ADR 0038, 0039): a variant's value may be computed by a
-// function that builds another variant of the enum, whose MIR needs the
-// type while the values are computed.
+// The MIR type of an enum with payloads does not wait for the values of its
+// variants (ADR 0038, 0104): a variant's value may be computed by a function
+// that builds another variant of the enum, whose MIR needs the type while the
+// values are computed. The type stores a value when it is done
+// (`enum_values_late.ers`).
 enum E: u8 { A(u8) = first(), B = 1 }
 
 fn first() -> u8 {

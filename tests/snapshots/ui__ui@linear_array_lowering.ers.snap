@@ -1,0 +1,82 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/linear_array_lowering.ers
+---
+--- errors ---
+ty::linear-array
+
+  × `[Transfer; 2]` has elements of the linear type `Transfer`
+    ╭─[linear_array_lowering.ers:11:23]
+ 10 │ 
+ 11 │ struct Table { slots: [Transfer; 2], n: u8 }
+    ·                       ──────┬──────
+    ·                             ╰── its elements are linear, of type `Transfer`
+ 12 │ 
+    ╰────
+  help: no element of an array or a slice is ever moved out (ADR 0097, 0100), so none could be
+        consumed, only forgotten; keep each linear value in a variable of its own, or in a field
+        of a struct (ADR 0101)
+ty::linear-array
+
+  × `[Transfer; 3]` has elements of the linear type `Transfer`
+    ╭─[linear_array_lowering.ers:13:21]
+ 12 │ 
+ 13 │ enum Row: u8 { Full([Transfer; 3]) = 0, Empty = 1 }
+    ·                     ──────┬──────
+    ·                           ╰── its elements are linear, of type `Transfer`
+ 14 │ 
+    ╰────
+  help: no element of an array or a slice is ever moved out (ADR 0097, 0100), so none could be
+        consumed, only forgotten; keep each linear value in a variable of its own, or in a field
+        of a struct (ADR 0101)
+ty::linear-array
+
+  × `[Transfer; 4]` has elements of the linear type `Transfer`
+    ╭─[linear_array_lowering.ers:15:13]
+ 14 │ 
+ 15 │ fn param(a: [Transfer; 4]) {}
+    ·             ──────┬──────
+    ·                   ╰── its elements are linear, of type `Transfer`
+ 16 │ 
+    ╰────
+  help: no element of an array or a slice is ever moved out (ADR 0097, 0100), so none could be
+        consumed, only forgotten; keep each linear value in a variable of its own, or in a field
+        of a struct (ADR 0101)
+ty::linear-array
+
+  × `[Transfer; 5]` has elements of the linear type `Transfer`
+    ╭─[linear_array_lowering.ers:17:22]
+ 16 │ 
+ 17 │ fn pointee(a: *const [Transfer; 5]) {}
+    ·                      ──────┬──────
+    ·                            ╰── its elements are linear, of type `Transfer`
+ 18 │ 
+    ╰────
+  help: no element of an array or a slice is ever moved out (ADR 0097, 0100), so none could be
+        consumed, only forgotten; keep each linear value in a variable of its own, or in a field
+        of a struct (ADR 0101)
+ty::linear-array
+
+  × `[Transfer]` has elements of the linear type `Transfer`
+    ╭─[linear_array_lowering.ers:19:21]
+ 18 │ 
+ 19 │ fn sliced(a: *const [Transfer]) {}
+    ·                     ─────┬────
+    ·                          ╰── its elements are linear, of type `Transfer`
+ 20 │ 
+    ╰────
+  help: no element of an array or a slice is ever moved out (ADR 0097, 0100), so none could be
+        consumed, only forgotten; keep each linear value in a variable of its own, or in a field
+        of a struct (ADR 0101)
+ty::division-by-zero
+
+  × division by zero
+    ╭─[linear_array_lowering.ers:29:24]
+ 28 │ 
+ 29 │ fn fine() -> u32 { 7 / 0 }
+    ·                        ┬
+    ·                        ╰── this divisor is zero
+ 30 │ 
+    ╰────
+  help: at run time this would call the panic function (ADR 0007)

@@ -1,0 +1,45 @@
+// emit: mir
+// `end` consumes the struct whole, so a linear field still held when it runs
+// is `analysis::linear-not-consumed`, at the `end`, labeling where the field
+// came in (ADR 0102, 0103). Once the field is moved out and consumed, `end`
+// takes what is left.
+#[linear]
+struct Token { n: u32 }
+
+#[linear]
+struct Outer { inner: Token, n: u32 }
+
+fn give_back(t: Token) {
+    end(t);
+}
+
+fn make() -> Outer {
+    Outer { inner: Token { n: 1 }, n: 2 }
+}
+
+// Rejected: the field of a parameter is still held.
+fn parameter(o: Outer) {
+    end(o);
+}
+
+// Rejected: the field of a value that came from a call.
+fn made() {
+    let o: Outer = make();
+    end(o);
+}
+
+// Accepted: the field is moved out and consumed first.
+fn field_first(o: Outer) {
+    let inner: Token = o.inner;
+    give_back(inner);
+    end(o);
+}
+
+// Rejected: the field was moved out, but into a variable that is forgotten.
+fn field_forgotten(o: Outer) {
+    let inner: Token = o.inner;
+    end(o);
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

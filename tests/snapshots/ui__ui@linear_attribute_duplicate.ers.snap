@@ -1,0 +1,19 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/linear_attribute_duplicate.ers
+---
+--- errors ---
+resolve::duplicate-attribute
+
+  × `#[linear]` is given more than once
+   ╭─[linear_attribute_duplicate.ers:4:1]
+ 2 │ // `#[linear]` is given at most once (ADR 0101).
+ 3 │ #[linear]
+   · ────┬────
+   ·     ╰── first given here
+ 4 │ #[linear]
+   · ────┬────
+   ·     ╰── given again here
+ 5 │ struct A { x: u8 }
+   ╰────

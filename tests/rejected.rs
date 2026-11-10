@@ -609,6 +609,53 @@ fn injected_f(injected_o: InjOuter) -> u32 {
 }"
     ),
     s!(
+        "ty::linear-static",
+        Mir,
+        Items,
+        "#[linear]
+struct InjLinear { id: u32 }
+static INJ_S: InjLinear = InjLinear { id: 1 };
+fn injected_use() {}"
+    ),
+    s!(
+        "ty::linear-array",
+        Mir,
+        Items,
+        "#[linear]
+struct InjLinear2 { id: u32 }
+fn injected_use(injected_a: [InjLinear2; 2]) {}"
+    ),
+    s!(
+        "ty::linear-through-pointer",
+        Mir,
+        Items,
+        "#[linear]
+struct InjLinear3 { id: u32 }
+fn injected_f(injected_p: *mut InjLinear3, injected_t: InjLinear3) {
+    *injected_p = injected_t;
+}"
+    ),
+    s!(
+        "ty::end-type",
+        Mir,
+        Items,
+        "fn injected_f(injected_n: u32) {
+    end(injected_n);
+}"
+    ),
+    s!(
+        "ty::end-private-field",
+        Mir,
+        Items,
+        "mod injected_dma {
+    #[linear]
+    pub struct InjTransfer { injected_channel: u32 }
+}
+fn injected_f(injected_t: injected_dma::InjTransfer) {
+    end(injected_t);
+}"
+    ),
+    s!(
         "ty::invalid-align",
         Mir,
         Items,
@@ -862,6 +909,28 @@ fn injected_take(injected_h: InjHandle6) {}
 fn injected_f(injected_h: InjHandle6) {
     injected_take(injected_h);
     injected_take(injected_h);
+}"
+    ),
+    s!(
+        "analysis::linear-not-consumed",
+        Mir,
+        Items,
+        "#[linear]
+struct InjLinear4 { id: u32 }
+fn injected_f(injected_t: InjLinear4) {}"
+    ),
+    s!(
+        "analysis::linear-overwritten",
+        Mir,
+        Items,
+        "#[linear]
+struct InjLinear5 { id: u32 }
+fn injected_take(injected_t: InjLinear5) {
+    end(injected_t);
+}
+fn injected_f(mut injected_t: InjLinear5) {
+    injected_t = InjLinear5 { id: 2 };
+    injected_take(injected_t);
 }"
     ),
     // Compile-time evaluation.

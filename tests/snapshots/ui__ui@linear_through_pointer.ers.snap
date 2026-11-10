@@ -1,0 +1,92 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/linear_through_pointer.ers
+---
+--- errors ---
+ty::linear-through-pointer
+
+  × cannot move a value of the linear type `Transfer` into a place reached through a pointer
+    ╭─[linear_through_pointer.ers:15:5]
+ 14 │ fn through(p: *mut Transfer, s: *mut Slot, a: *mut Option(Transfer), t: Transfer, i: usize) {
+ 15 │     *p = t;
+    ·     ───┬──
+    ·        ╰── `Transfer` is linear
+ 16 │     p[i] = start(0);
+    ╰────
+  help: a value put there could never be moved out again (ADR 0097), so it would be forgotten;
+        keep the value in a variable, or write its copy fields through the pointer (ADR 0101)
+ty::linear-through-pointer
+
+  × cannot move a value of the linear type `Transfer` into a place reached through a pointer
+    ╭─[linear_through_pointer.ers:16:5]
+ 15 │     *p = t;
+ 16 │     p[i] = start(0);
+    ·     ───────┬───────
+    ·            ╰── `Transfer` is linear
+ 17 │     (*s).h = start(1);
+    ╰────
+  help: a value put there could never be moved out again (ADR 0097), so it would be forgotten;
+        keep the value in a variable, or write its copy fields through the pointer (ADR 0101)
+ty::linear-through-pointer
+
+  × cannot move a value of the linear type `Transfer` into a place reached through a pointer
+    ╭─[linear_through_pointer.ers:17:5]
+ 16 │     p[i] = start(0);
+ 17 │     (*s).h = start(1);
+    ·     ────────┬────────
+    ·             ╰── `Transfer` is linear
+ 18 │     *a = .Some(start(2));
+    ╰────
+  help: a value put there could never be moved out again (ADR 0097), so it would be forgotten;
+        keep the value in a variable, or write its copy fields through the pointer (ADR 0101)
+ty::linear-through-pointer
+
+  × cannot move a value of the linear type `Option(Transfer)` into a place reached through a
+  │ pointer
+    ╭─[linear_through_pointer.ers:18:5]
+ 17 │     (*s).h = start(1);
+ 18 │     *a = .Some(start(2));
+    ·     ──────────┬─────────
+    ·               ╰── `Option(Transfer)` is linear
+ 19 │ }
+    ╰────
+  help: a value put there could never be moved out again (ADR 0097), so it would be forgotten;
+        keep the value in a variable, or write its copy fields through the pointer (ADR 0101)
+ty::linear-through-pointer
+
+  × cannot move a value of the linear type `Transfer` into a place reached through a pointer
+    ╭─[linear_through_pointer.ers:22:5]
+ 21 │ fn nested(n: *mut Slots) {
+ 22 │     (*n).first.h = start(3);
+    ·     ───────────┬───────────
+    ·                ╰── `Transfer` is linear
+ 23 │ }
+    ╰────
+  help: a value put there could never be moved out again (ADR 0097), so it would be forgotten;
+        keep the value in a variable, or write its copy fields through the pointer (ADR 0101)
+ty::linear-array
+
+  × `[Transfer]` has elements of the linear type `Transfer`
+    ╭─[linear_through_pointer.ers:27:19]
+ 26 │ // of its own.
+ 27 │ fn sliced(s: *mut [Transfer], i: usize) {
+    ·                   ─────┬────
+    ·                        ╰── its elements are linear, of type `Transfer`
+ 28 │     (*s)[i] = start(4);
+    ╰────
+  help: no element of an array or a slice is ever moved out (ADR 0097, 0100), so none could be
+        consumed, only forgotten; keep each linear value in a variable of its own, or in a field
+        of a struct (ADR 0101)
+ty::linear-through-pointer
+
+  × cannot move a value of the linear type `Transfer` into a place reached through a pointer
+    ╭─[linear_through_pointer.ers:28:5]
+ 27 │ fn sliced(s: *mut [Transfer], i: usize) {
+ 28 │     (*s)[i] = start(4);
+    ·     ─────────┬────────
+    ·              ╰── `Transfer` is linear
+ 29 │ }
+    ╰────
+  help: a value put there could never be moved out again (ADR 0097), so it would be forgotten;
+        keep the value in a variable, or write its copy fields through the pointer (ADR 0101)

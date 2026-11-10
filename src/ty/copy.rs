@@ -5,7 +5,7 @@ use crate::hir::{Comptime, Expr, ExprKind, Fn, Ty, VariantDef};
 use crate::query::Queries;
 use crate::span::Span;
 
-use super::Checker;
+use super::{Checker, is_linear};
 
 /// Whether the values of `ty` are copied rather than moved (ADR 0096): an
 /// integer, `bool`, `()`, an enum without payloads, a bit-field struct, a
@@ -66,20 +66,27 @@ fn culprit(q: &Queries, ty: Ty) -> Option<Ty> {
     }
 }
 
-/// The start of a help suggesting `#[copy]` on the type that makes the
-/// non-copy `ty` non-copy.
-fn mark_copy(q: &Queries, ty: Ty) -> String {
+/// A help saying what to do instead of copying a value of the non-copy
+/// `ty`: mark the type that makes it non-copy `#[copy]`, or `instead`. A
+/// linear type is never copy, so the mark is not offered for it (ADR 0101).
+fn copy_help(q: &Queries, ty: Ty, instead: &str) -> String {
     // Whatever is not copy holds a struct or an enum with payloads of the
     // program, which `#[copy]` would make copy.
     let inner = culprit(q, ty).unwrap_or(ty);
-    format!("mark `{inner}` with `#[copy]` if its values may be duplicated")
+    if is_linear(q, inner) {
+        return format!("`{inner}` is linear, so it cannot be copy: {instead}");
+    }
+    format!("mark `{inner}` with `#[copy]` if its values may be duplicated, or {instead}")
 }
 
 /// The help of a use that would duplicate a value of the non-copy `ty`
 /// (ADR 0097): `#[copy]` on `ty` if it is a struct or an enum with payloads of
-/// the program whose fields are all copy, so that the attribute would be
-/// accepted; `None` for any other type.
+/// the program whose fields are all copy and that is not linear, so that the
+/// attribute would be accepted; `None` for any other type.
 pub fn suggest_copy(q: &mut Queries, ty: Ty) -> Option<String> {
+    if is_linear(q, ty) {
+        return None;
+    }
     let hir = q.hir;
     let fields: Vec<Ty> = match ty {
         Ty::Struct(s) => hir.struct_(s.id).fields.iter().map(|f| f.ty).collect(),
@@ -105,9 +112,10 @@ impl Checker<'_, '_> {
             return;
         }
         let ty = self.ret;
-        let help = format!(
-            "{}, or declare a `static`, whose initializer may be of any type (ADR 0096)",
-            mark_copy(self.q, ty)
+        let help = copy_help(
+            self.q,
+            ty,
+            "declare a `static`, whose initializer may be of any type (ADR 0096)",
         );
         self.q.diags.push(
             Diagnostic::error(
@@ -129,10 +137,7 @@ impl Checker<'_, '_> {
         if is_copy(self.q, ty) {
             return;
         }
-        let help = format!(
-            "{}, or build the value at run time (ADR 0096)",
-            mark_copy(self.q, ty)
-        );
+        let help = copy_help(self.q, ty, "build the value at run time (ADR 0096)");
         self.q.diags.push(
             Diagnostic::error(
                 "ty::non-copy-constant",
@@ -155,9 +160,10 @@ impl Checker<'_, '_> {
         {
             return;
         }
-        let help = format!(
-            "{}, or list each element in an array literal (ADR 0096)",
-            mark_copy(self.q, ty)
+        let help = copy_help(
+            self.q,
+            ty,
+            "list each element in an array literal (ADR 0096)",
         );
         self.q.diags.push(
             Diagnostic::error(
@@ -221,12 +227,7 @@ fn report(q: &mut Queries, attr: Span, name: &str, what: &str, span: Span, decla
     if is_copy(q, ty) {
         return;
     }
-    // Whatever is not copy holds a struct or an enum with payloads of the
-    // program, which `#[copy]` would make copy.
-    let help = format!(
-        "{}, or remove `#[copy]` from `{name}` (ADR 0096)",
-        mark_copy(q, ty)
-    );
+    let help = copy_help(q, ty, &format!("remove `#[copy]` from `{name}` (ADR 0096)"));
     q.diags.push(
         Diagnostic::error(
             "ty::copy-field-not-copy",

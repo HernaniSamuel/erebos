@@ -1,0 +1,145 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/linear_diverging.ers
+---
+--- mir ---
+struct Transfer { 0 channel: u32 at 0 } // size 4, align 4
+
+fn start(_1: u32) -> Transfer {
+    let _0: Transfer;
+    let _1: u32; // channel
+    let _2: Transfer;
+
+    bb0: {
+        _2.0 = copy _1;
+        new _2;
+        _0 = move _2;
+        return;
+    }
+}
+
+fn consume(_1: Transfer) -> () {
+    let _0: ();
+    let _1: Transfer; // t
+
+    bb0: {
+        end _1;
+        return;
+    }
+}
+
+fn stop() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+fn halts() -> ! {
+    let _0: !;
+    let _1: Transfer; // t
+    let _2: Transfer;
+
+    bb0: {
+        _2 = call start(const 1_u32);
+        _1 = move _2;
+        call stop();
+        unreachable;
+    }
+}
+
+fn halts_on_one_path(_1: bool) -> () {
+    let _0: ();
+    let _1: bool; // c
+    let _2: Transfer; // t
+    let _3: Transfer;
+
+    bb0: {
+        _3 = call start(const 1_u32);
+        _2 = move _3;
+        if copy _1 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        call stop();
+        unreachable;
+    }
+
+    bb2: {
+        goto -> bb3;
+    }
+
+    bb3: {
+        call consume(move _2);
+        return;
+    }
+}
+
+fn asserts(_1: bool) -> () {
+    let _0: ();
+    let _1: bool; // c
+    let _2: Transfer; // t
+    let _3: Transfer;
+
+    bb0: {
+        _3 = call start(const 1_u32);
+        _2 = move _3;
+        if copy _1 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        call consume(move _2);
+        return;
+    }
+
+    bb2: {
+        panic(assertion failed);
+    }
+}
+
+fn spins(_1: Transfer) -> () {
+    let _0: ();
+    let _1: Transfer; // t
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+    let _1: Transfer; // t
+    let _2: Transfer;
+
+    bb0: {
+        _2 = call start(const 1_u32);
+        _1 = move _2;
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}

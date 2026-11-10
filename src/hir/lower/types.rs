@@ -55,6 +55,7 @@ impl Lowerer<'_> {
                 volatile,
                 pointee,
             } => {
+                let pointee_span = pointee.span;
                 let pointee = match &pointee.kind {
                     ast::TyKind::Slice(elem) => {
                         match self.memory_ty(elem, NeverPosition::SliceElement) {
@@ -64,6 +65,9 @@ impl Lowerer<'_> {
                     }
                     _ => self.memory_ty(pointee, NeverPosition::Pointee),
                 };
+                if let Ty::Slice(_) = pointee {
+                    self.array_types.push((pointee_span, pointee));
+                }
                 match pointee {
                     Ty::Error => Ty::Error,
                     // Accesses through it are volatile already (ADR 0058):
@@ -84,7 +88,11 @@ impl Lowerer<'_> {
                 let len = self.array_len(len);
                 match elem {
                     Ty::Error => Ty::Error,
-                    elem => Ty::array_of(elem, len),
+                    elem => {
+                        let lowered = Ty::array_of(elem, len);
+                        self.array_types.push((ty.span, lowered));
+                        lowered
+                    }
                 }
             }
             ast::TyKind::Applied(path, args) => self.applied_ty(ty, path, args),
