@@ -376,19 +376,6 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   re-exports that step adds to `src/mir/mod.rs` (`check_program`,
   `assert_valid_program`, `programs_checked`); only step 1 lists the ones it
   added. (M5.1)
-- ADR 0097, "Places": "a field or element of a temporary is a field of a
-  value" contradicts the rule that no element of an array moves; the compiler
-  rejects `make().items[i]` as `ty::move-out-of-place`, since rule M3 of ADR
-  0098 forbids a `move` through `Index`. Accepted while building M5.2; the ADR
-  needs a clarification. (M5.2)
-- ADR 0099 does not say that the analysis of moves follows only variables and
-  parameters, not temporaries (MIR building writes temporaries by parts and
-  reuses them in loops). Accepted while building M5.2; the ADR needs a
-  sentence. (M5.2)
-- ADR 0097's "three uses after one move, one error" holds for uses that do not
-  move; a use that is a `move` makes its own site, so three `consume(a)` after
-  one move give two errors. Accepted while building M5.2; the ADR needs a
-  clarification. (M5.2)
 - The step 3 `Decisions` of `.claude/plans/M5.2.md` say the nested or-pattern
   error is reported "once, at the binding"; it is once for each binding
   pattern (`.A(let b) | .B(let b)` gives two). They also do not mention that

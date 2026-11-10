@@ -1,6 +1,7 @@
 # 0099. The analyses of one body
 
-- Status: Accepted
+- Status: Accepted; amended by 0100 (the analysis of moves follows only
+  variables and parameters)
 - Date: 2026-11-09
 - Amends: 0063 (the module `query` uses `analysis`)
 
