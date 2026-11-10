@@ -1,0 +1,45 @@
+// emit: mir
+// The analysis of linearity tells which variant a value is by the tests of
+// its tag (ADR 0103): the `switch` of a `match` on a place of an enum that
+// holds a linear value reads `copy p.tag` of the place itself, and so does
+// the one of `?`, after the operand is moved to a temporary. A change to MIR
+// building that tested a copy of the tag would make valid programs fail, and
+// shows in this snapshot.
+#[linear]
+struct Transfer { channel: u32 }
+
+fn consume(t: Transfer) {
+    end(t);
+}
+
+// The `switch` reads `_1.tag`: the variable that is matched.
+fn matched(o: Option(Transfer)) {
+    match o {
+        .Some(let t: Transfer) => consume(t),
+        .None => {},
+    }
+}
+
+// The same, with the arms the other way round.
+fn reversed(o: Option(Transfer)) {
+    match o {
+        .None => {},
+        .Some(let t: Transfer) => consume(t),
+    }
+}
+
+// `?`: the operand is moved to a temporary, whose tag is read.
+fn question(o: Option(Transfer)) -> Option(u32) {
+    let t: Transfer = o?;
+    consume(t);
+    .Some(1)
+}
+
+// `?` on a `Result` that holds a transfer as its error.
+fn question_result(r: Result(u32, Transfer)) -> Result(u32, Transfer) {
+    let n: u32 = r?;
+    .Ok(n)
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

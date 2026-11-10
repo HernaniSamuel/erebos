@@ -1,0 +1,23 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/linear_enum_values.ers
+---
+--- errors ---
+analysis::linear-not-consumed
+
+  × linear value `s` (in `.Spare`) of type `Transfer` is not consumed
+    ╭─[linear_enum_values.ers:38:1]
+ 37 │     // Rejected: the arm of `Spare` forgets its transfer.
+ 38 │ ╭─▶ fn forgets(s: Slot) {
+ 39 │ │       match s {
+ 40 │ │           .Empty => {},
+ 41 │ │           .Full(let t: Transfer) => consume(t),
+ 42 │ │           .Spare(_) => {},
+ 43 │ │       }
+ 44 │ ├─▶ }
+    · ╰──── linear value comes in as the parameter `s`; `s` (in `.Spare`) is still held when the function returns here
+ 45 │     
+    ╰────
+  help: consume it: pass it to a function that does, return it, or end it with `end` where its
+        fields are visible (ADR 0102)

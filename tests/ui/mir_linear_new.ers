@@ -36,9 +36,11 @@ fn token() -> Tok {
     Tok {}
 }
 
-// Discarded: the literal still has its `new`.
+// Not moved anywhere: the literal still has its `new`, and is ended where it
+// is. A literal that is discarded (`Tok {};`) is an error of the analysis of
+// linearity, which keeps the body out of the dump (`linear_not_consumed.ers`).
 fn discarded() {
-    Tok {};
+    end(Tok {});
 }
 
 // A literal inside `.Some(...)`: `new` before the variant is built.

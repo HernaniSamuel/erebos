@@ -14,10 +14,6 @@ fn give_back(t: Transfer) {
     end(t);
 }
 
-fn read(t: Transfer) -> u32 {
-    t.channel
-}
-
 // A use after `end`.
 fn used(t: Transfer) -> u32 {
     end(t);

@@ -903,9 +903,10 @@ pub struct EnumId(pub u32);
 
 /// An enum with payloads (ADR 0039): a tag of its integer type at offset
 /// 0, and the payload values of the variant the tag names, each variant
-/// laid out as a struct. Leaked like struct definitions. The values of its
-/// variants are not part of the type; building a variant writes its value
-/// as a constant.
+/// laid out as a struct. Leaked like struct definitions. The value of each
+/// variant is stored in the type once it is known, which is not when the type
+/// is made, since computing it may run code that needs the type (ADR 0038,
+/// 0104); building a variant writes its value as a constant.
 pub struct EnumDef {
     pub id: EnumId,
     pub name: String,
@@ -921,11 +922,16 @@ pub struct EnumDef {
     variants: OnceLock<Vec<Variant>>,
 }
 
-/// A variant of an enum with payloads: its payload values, each at its
-/// offset from the start of the enum, named by index.
+/// A variant of an enum with payloads: its value, its payload values, each at
+/// its offset from the start of the enum, named by index.
 #[derive(Debug)]
 pub struct Variant {
     pub name: String,
+    /// The tag that names the variant, as the bits of the enum's integer type
+    /// (ADR 0035, 0104). Set when the value is known: at once for a literal or
+    /// implicit one, otherwise once it is computed, so it may be missing while
+    /// it is being computed, or for good when it failed, which was reported.
+    pub value: OnceLock<u64>,
     pub payload: Vec<Field>,
 }
 
@@ -940,6 +946,17 @@ impl EnumDef {
         self.variants
             .set(variants)
             .expect("the variants of an enum are set once");
+    }
+
+    /// Records the value of variant `variant`, if the variants are set. The
+    /// first value stays: a variant has one value, so a second must be the
+    /// same (ADR 0104).
+    pub fn set_value(&self, variant: u32, value: u64) {
+        let slot = self.variants.get().and_then(|v| v.get(variant as usize));
+        if let Some(slot) = slot {
+            let _ = slot.value.set(value);
+            debug_assert_eq!(slot.value.get(), Some(&value), "a variant has one value");
+        }
     }
 
     /// Payload value `index` of variant `variant`.
@@ -2517,10 +2534,12 @@ mod tests {
         e.def().set_variants(vec![
             Variant {
                 name: "Empty".to_owned(),
+                value: OnceLock::from(0),
                 payload: Vec::new(),
             },
             Variant {
                 name: "Full".to_owned(),
+                value: OnceLock::from(1),
                 payload: vec![Field {
                     name: "0".to_owned(),
                     ty: payload,

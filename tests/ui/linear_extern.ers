@@ -1,0 +1,34 @@
+// emit: mir
+// An `extern fn` that takes a transfer consumes it: the argument is moved
+// into the call, as for any function. The result of one that returns a
+// transfer is a value that came into the function, and so is a parameter of
+// an `#[export]` function (ADR 0102, 0103).
+#[linear]
+struct Transfer { channel: u32 }
+
+extern fn send(t: Transfer);
+
+extern fn open() -> Transfer;
+
+// Accepted: handed to the foreign function.
+fn sends() {
+    let t: Transfer = Transfer { channel: 1 };
+    send(t);
+}
+
+// Accepted: the result of the foreign function is handed back to it.
+fn forwards() {
+    send(open());
+}
+
+// Rejected: the result is forgotten.
+fn forgets_the_result() {
+    open();
+}
+
+// Rejected: the foreign caller gave a transfer, and the function drops it.
+#[export]
+fn exported(t: Transfer) {}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

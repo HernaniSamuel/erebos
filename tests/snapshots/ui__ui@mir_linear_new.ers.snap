@@ -118,6 +118,7 @@ fn discarded() -> () {
 
     bb0: {
         new _1;
+        end _1;
         return;
     }
 }

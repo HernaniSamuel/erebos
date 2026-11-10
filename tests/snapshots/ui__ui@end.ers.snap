@@ -45,30 +45,41 @@ fn variable() -> () {
     }
 }
 
-fn parameter(_1: Transfer, _2: bool) -> () {
+fn parameter(_1: Transfer) -> () {
     let _0: ();
     let _1: Transfer; // t
-    let _2: bool; // c
+
+    bb0: {
+        end _1;
+        return;
+    }
+}
+
+fn expression(_1: bool) -> () {
+    let _0: ();
+    let _1: bool; // c
+    let _2: Transfer;
     let _3: Transfer;
     let _4: Transfer;
 
     bb0: {
-        if copy _2 -> [true: bb1, false: bb2];
+        if copy _1 -> [true: bb1, false: bb2];
     }
 
     bb1: {
-        _3 = move _1;
+        _3 = call make(const 1_u32);
+        _2 = move _3;
         goto -> bb3;
     }
 
     bb2: {
         _4 = call make(const 2_u32);
-        _3 = move _4;
+        _2 = move _4;
         goto -> bb3;
     }
 
     bb3: {
-        end _3;
+        end _2;
         return;
     }
 }

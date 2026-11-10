@@ -16,6 +16,7 @@
 
 use std::collections::{HashMap, HashSet};
 
+use super::bits::{Bits, key, reachable};
 use crate::diag::{Diagnostic, Diagnostics};
 use crate::mir::{
     AsmOperandKind, Body, InlineAsm, Local, Operand, PanicCause, Place, PlaceElem, Rvalue,
@@ -83,45 +84,6 @@ struct At {
     span: Span,
 }
 
-/// The sets of sites that reach a point.
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct Bits(Vec<u64>);
-
-impl Bits {
-    fn new(len: usize) -> Bits {
-        Bits(vec![0; len.div_ceil(64)])
-    }
-
-    fn contains(&self, i: usize) -> bool {
-        self.0
-            .get(i / 64)
-            .is_some_and(|word| word >> (i % 64) & 1 == 1)
-    }
-
-    fn insert(&mut self, i: usize) {
-        if let Some(word) = self.0.get_mut(i / 64) {
-            *word |= 1 << (i % 64);
-        }
-    }
-
-    fn remove(&mut self, i: usize) {
-        if let Some(word) = self.0.get_mut(i / 64) {
-            *word &= !(1 << (i % 64));
-        }
-    }
-
-    /// Adds what `other` holds; whether that changed anything.
-    fn union(&mut self, other: &Bits) -> bool {
-        let mut changed = false;
-        for (word, &more) in self.0.iter_mut().zip(&other.0) {
-            let joined = *word | more;
-            changed |= joined != *word;
-            *word = joined;
-        }
-        changed
-    }
-}
-
 /// A use or a write that a site reaches.
 struct Fault {
     place: Place,
@@ -148,24 +110,7 @@ struct Flow<'b> {
 
 impl<'b> Flow<'b> {
     fn of(body: &'b Body) -> Flow<'b> {
-        let successors: Vec<Vec<usize>> = body
-            .blocks
-            .iter()
-            .map(|block| {
-                (block.terminator.successors().into_iter())
-                    .map(|next| next.0 as usize)
-                    .filter(|&next| next < body.blocks.len())
-                    .collect()
-            })
-            .collect();
-        let mut reached = vec![false; body.blocks.len()];
-        let mut work = vec![0];
-        while let Some(block) = work.pop() {
-            if !std::mem::replace(&mut reached[block], true) {
-                work.extend(&successors[block]);
-            }
-        }
-        let blocks: Vec<usize> = (0..body.blocks.len()).filter(|&b| reached[b]).collect();
+        let (blocks, successors) = reachable(body);
         let mut flow = Flow {
             body,
             sites: Vec::new(),
@@ -541,11 +486,6 @@ fn related(site: &[PlaceElem], place: &[PlaceElem]) -> bool {
     site.iter().zip(place).all(|(a, b)| a == b)
 }
 
-/// Spans are ordered by their start, then their end (ADR 0099).
-fn key(span: Span) -> (crate::span::FileId, u32, u32) {
-    (span.file, span.lo, span.hi)
-}
-
 /// The help of ADR 0097: `#[copy]` on the type of the moved place when it is
 /// a struct or an enum with payloads whose fields and payload values are all
 /// copy, so that the attribute would be accepted. A linear type is never
@@ -612,10 +552,12 @@ mod tests {
         e.def().set_variants(vec![
             Variant {
                 name: "Free".to_owned(),
+                value: std::sync::OnceLock::from(0),
                 payload: Vec::new(),
             },
             Variant {
                 name: "Full".to_owned(),
+                value: std::sync::OnceLock::from(1),
                 payload: vec![Field {
                     name: "0".to_owned(),
                     ty: handle(),

@@ -1,0 +1,33 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/linear_extern.ers
+---
+--- errors ---
+analysis::linear-not-consumed
+
+  × linear value of type `Transfer` is not consumed
+    ╭─[linear_extern.ers:26:5]
+ 24 │     // Rejected: the result is forgotten.
+ 25 │ ╭─▶ fn forgets_the_result() {
+ 26 │ │       open();
+    · │       ───┬──
+    · │          ╰── linear value comes from this call
+ 27 │ ├─▶ }
+    · ╰──── this value is still held when the function returns here
+ 28 │     
+    ╰────
+  help: consume it: pass it to a function that does, return it, or end it with `end` where its
+        fields are visible (ADR 0102)
+analysis::linear-not-consumed
+
+  × linear value `t` of type `Transfer` is not consumed
+    ╭─[linear_extern.ers:31:1]
+ 30 │ #[export]
+ 31 │ fn exported(t: Transfer) {}
+    · ─────────────┬─────────────
+    ·              ╰── linear value comes in as the parameter `t`; `t` is still held when the function returns here
+ 32 │ 
+    ╰────
+  help: consume it: pass it to a function that does, return it, or end it with `end` where its
+        fields are visible (ADR 0102)

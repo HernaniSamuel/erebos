@@ -359,6 +359,47 @@ impl<'a> Checker<'a> {
         exists
     }
 
+    /// E1: when a `switch` tests the tag of an enum with payloads, each case
+    /// is the stored value of exactly one variant of the enum (ADR 0104).
+    /// The analysis of linearity tells the variant of an edge by it.
+    fn variant_cases(&mut self, discr: &Operand, cases: &[(u64, BasicBlock)]) {
+        let Operand::Copy(place) = discr else {
+            return;
+        };
+        let [head @ .., PlaceElem::Tag] = place.projection else {
+            return;
+        };
+        let Some(decl) = self.body.locals.get(place.local.0 as usize) else {
+            return;
+        };
+        let mut ty = decl.ty;
+        for elem in head {
+            match project(ty, elem) {
+                Ok(next) => ty = next,
+                Err(_) => return,
+            }
+        }
+        let Ty::Enum(e) = ty else {
+            return;
+        };
+        let Some(variants) = e.def().variants.get() else {
+            return;
+        };
+        for &(value, _) in cases {
+            let named = (variants.iter())
+                .filter(|variant| variant.value.get() == Some(&value))
+                .count();
+            if named != 1 {
+                self.violation(
+                    "E1",
+                    format!(
+                        "the case {value:#x} is the value of {named} variants of `{ty}`, not one"
+                    ),
+                );
+            }
+        }
+    }
+
     /// S7, T1 and T2 for a place: its type and whether accessing it is
     /// volatile, if its base exists and every projection applies to the type
     /// before it. Each index local that exists is checked for T2, whatever
@@ -1208,6 +1249,7 @@ impl<'a> Checker<'a> {
             Terminator::Switch { discr, cases, .. } => {
                 if let Some(ty) = self.operand(discr) {
                     self.switch(ty, cases);
+                    self.variant_cases(discr, cases);
                 }
             }
             Terminator::Return => {
@@ -2596,10 +2638,12 @@ mod tests {
         e.def().set_variants(vec![
             Variant {
                 name: "None".to_owned(),
+                value: std::sync::OnceLock::from(0),
                 payload: Vec::new(),
             },
             Variant {
                 name: "Some".to_owned(),
+                value: std::sync::OnceLock::from(1),
                 payload: vec![Field {
                     name: "0".to_owned(),
                     ty: u32_ty(),
@@ -3289,6 +3333,70 @@ mod tests {
     }
 
     #[test]
+    fn e1_each_case_on_the_tag_of_an_enum_is_the_value_of_one_variant() {
+        const ONE: BasicBlock = BasicBlock(1);
+        let on_tag = |e: EnumRef, cases: &'static [(u64, BasicBlock)]| {
+            let mut body = valid();
+            body.locals.push(decl(Ty::Enum(e)));
+            let n = body.locals.len() as u32 - 1;
+            body.blocks[0].terminator = Terminator::Switch {
+                discr: Operand::Copy(projected(n, &[PlaceElem::Tag])),
+                cases,
+                otherwise: ONE,
+            };
+            rules(&body)
+        };
+        // `None` is 0 and `Some` is 1.
+        accepts(on_tag(option(), &[(0, ONE), (1, ONE)]));
+        accepts(on_tag(option(), &[(1, ONE)]));
+        accepts(on_tag(option(), &[]));
+        // A case that no variant has.
+        rejects(on_tag(option(), &[(0, ONE), (2, ONE)]), "E1");
+        // Two variants with one value, and a variant with none stored.
+        let valued = |none: Option<u64>, some: Option<u64>| {
+            let e = EnumRef::new(
+                EnumId(2),
+                "V".to_owned(),
+                IntTy::U8,
+                Layout { size: 1, align: 1 },
+                true,
+            );
+            let value = |v: Option<u64>| v.map_or_else(Default::default, std::sync::OnceLock::from);
+            e.def().set_variants(vec![
+                Variant {
+                    name: "None".to_owned(),
+                    value: value(none),
+                    payload: Vec::new(),
+                },
+                Variant {
+                    name: "Some".to_owned(),
+                    value: value(some),
+                    payload: Vec::new(),
+                },
+            ]);
+            e
+        };
+        rejects(on_tag(valued(Some(1), Some(1)), &[(1, ONE)]), "E1");
+        rejects(on_tag(valued(Some(0), None), &[(1, ONE)]), "E1");
+        accepts(on_tag(valued(Some(0), None), &[(0, ONE)]));
+        // One violation for each case at fault; a tag copied elsewhere and a
+        // `switch` on an integer are not looked at.
+        assert_eq!(on_tag(option(), &[(2, ONE), (3, ONE)]), ["E1", "E1"]);
+        accepts(on_tag_copy());
+    }
+
+    /// A `switch` on a `u8` local, with a case no enum has.
+    fn on_tag_copy() -> Vec<&'static str> {
+        let mut body = typed();
+        body.blocks[0].terminator = Terminator::Switch {
+            discr: copy(U8),
+            cases: &[(9, BasicBlock(1))],
+            otherwise: BasicBlock(1),
+        };
+        rules(&body)
+    }
+
+    #[test]
     fn t8_the_message_of_an_assert_is_a_const_slice_of_bytes() {
         let assertion = |message| {
             let mut body = typed();
@@ -3423,10 +3531,12 @@ mod tests {
         e.def().set_variants(vec![
             Variant {
                 name: "Free".to_owned(),
+                value: std::sync::OnceLock::from(0),
                 payload: Vec::new(),
             },
             Variant {
                 name: "Full".to_owned(),
+                value: std::sync::OnceLock::from(1),
                 payload: vec![Field {
                     name: "0".to_owned(),
                     ty: Ty::Struct(handle()),
@@ -3615,6 +3725,7 @@ mod tests {
         );
         flagged.def().set_variants(vec![Variant {
             name: "Held".to_owned(),
+            value: std::sync::OnceLock::from(0),
             payload: vec![
                 Field {
                     name: "0".to_owned(),
@@ -3717,10 +3828,12 @@ mod tests {
         e.def().set_variants(vec![
             Variant {
                 name: "Free".to_owned(),
+                value: std::sync::OnceLock::from(0),
                 payload: Vec::new(),
             },
             Variant {
                 name: "Full".to_owned(),
+                value: std::sync::OnceLock::from(1),
                 payload: vec![Field {
                     name: "0".to_owned(),
                     ty: Ty::Struct(transfer()),
@@ -3876,6 +3989,7 @@ mod tests {
         );
         row.def().set_variants(vec![Variant {
             name: "Full".to_owned(),
+            value: std::sync::OnceLock::from(0),
             payload: vec![Field {
                 name: "0".to_owned(),
                 ty: transfers(2),

@@ -1,0 +1,51 @@
+// emit: mir
+// Accepted: a path that does not return owes nothing (ADR 0102): a call to a
+// function returning `!`, a check that panics, and a function that never
+// returns, such as the entry function, which is checked for overwrites only.
+#[linear]
+struct Transfer { channel: u32 }
+
+fn start(channel: u32) -> Transfer {
+    Transfer { channel: channel }
+}
+
+fn consume(t: Transfer) {
+    end(t);
+}
+
+fn stop() -> ! {
+    loop {}
+}
+
+// Held at a call to a function that does not return.
+fn halts() -> ! {
+    let t: Transfer = start(1);
+    stop()
+}
+
+fn halts_on_one_path(c: bool) {
+    let t: Transfer = start(1);
+    if c {
+        stop();
+    }
+    consume(t);
+}
+
+// Held at a check that fails.
+fn asserts(c: bool) {
+    let t: Transfer = start(1);
+    assert(c);
+    consume(t);
+}
+
+// A function that loops forever never returns.
+fn spins(t: Transfer) {
+    loop {}
+}
+
+entry fn main() -> ! {
+    let t: Transfer = start(1);
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

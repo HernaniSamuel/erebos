@@ -8,7 +8,9 @@ struct Ticket { n: u32 }
 
 struct Plain { n: u32 }
 
-fn take_ticket(t: Ticket) {}
+fn take_ticket(t: Ticket) {
+    end(t);
+}
 
 fn take_plain(p: Plain) {}
 

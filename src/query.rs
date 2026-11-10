@@ -5,6 +5,7 @@
 
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::sync::OnceLock;
 
 use crate::analysis;
 use crate::diag::{Diagnostic, Diagnostics};
@@ -556,7 +557,27 @@ impl<'h> Queries<'h> {
         self.finish(Item::Discriminant(id, index));
         let value = value.map(|value| value.int(def.ty.int.bytes() as usize));
         self.discriminants[slot.0][slot.1] = State::Done(value);
+        // The MIR type of the enum stores the value once it is known
+        // (ADR 0104); it may not exist yet, and then takes it when it does.
+        if let (Some(value), Some(e)) = (value, self.mir_enums[id.0 as usize]) {
+            e.def().set_value(index, value);
+        }
         value
+    }
+
+    /// The value of a variant if it is known without evaluating anything: a
+    /// literal or implicit one, or one already computed.
+    fn known_discriminant(&self, id: EnumId, index: u32) -> Option<u64> {
+        let variant = self.enum_def(id).variants.get(index as usize)?;
+        match variant.value {
+            VariantValue::Known(value) => Some(value),
+            VariantValue::Comptime(_) => {
+                match self.discriminants.get(id.0 as usize)?.get(index as usize)? {
+                    State::Done(value) => *value,
+                    State::InProgress | State::NotStarted => None,
+                }
+            }
+        }
     }
 
     /// Computes the value of every variant of an enum, once, and reports
@@ -1320,9 +1341,9 @@ impl<'h> Queries<'h> {
 
     /// The MIR type of an enum with payloads, with its layout (ADR 0039).
     /// The payload values of its variants are set after it exists, since
-    /// they may point back to it. The values of its variants are not part
-    /// of it: they are asked for where they are needed, so that the type
-    /// never waits for them (ADR 0038).
+    /// they may point back to it. The type never waits for the values of its
+    /// variants (ADR 0038): it stores those known when it is made, and
+    /// `discriminant` stores the others when it computes them (ADR 0104).
     pub fn mir_enum(&mut self, id: EnumId) -> EnumRef {
         if let Some(e) = self.mir_enums[id.0 as usize] {
             return e;
@@ -1348,6 +1369,7 @@ impl<'h> Queries<'h> {
             .zip(&layout.offsets)
             .map(|(variant, offsets)| mir::Variant {
                 name: variant.name.clone(),
+                value: OnceLock::new(),
                 payload: variant
                     .payload
                     .iter()
@@ -1362,6 +1384,13 @@ impl<'h> Queries<'h> {
             })
             .collect();
         e.def().set_variants(variants);
+        // The values the type does not wait for (ADR 0038, 0104): those known
+        // now. The others are stored when `discriminant` computes them.
+        for index in 0..def.variants.len() as u32 {
+            if let Some(value) = self.known_discriminant(id, index) {
+                e.def().set_value(index, value);
+            }
+        }
         e
     }
 
@@ -1879,10 +1908,11 @@ impl<'h> Queries<'h> {
             .into_iter()
             .map(|id| {
                 let def = self.enum_def(id);
+                let mir_def = def.ty.payloads.then(|| self.mir_enum(id));
                 mir::Enum {
                     name: def.name.clone(),
                     int: def.ty.int,
-                    def: def.ty.payloads.then(|| self.mir_enum(id)),
+                    def: mir_def,
                     variants: def
                         .variants
                         .iter()
@@ -1891,6 +1921,17 @@ impl<'h> Queries<'h> {
                             let value = self
                                 .discriminant(id, index as u32)
                                 .expect("every variant of a program without errors has a value");
+                            // The list and the type agree (ADR 0104): the
+                            // type stores every value of such a program.
+                            if let Some(e) = mir_def {
+                                debug_assert_eq!(
+                                    e.def().variants()[index].value.get(),
+                                    Some(&value),
+                                    "the MIR type of `{}` stores the value of `{}`",
+                                    def.name,
+                                    variant.name
+                                );
+                            }
                             (variant.name.clone(), value)
                         })
                         .collect(),

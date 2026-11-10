@@ -911,6 +911,28 @@ fn injected_f(injected_h: InjHandle6) {
     injected_take(injected_h);
 }"
     ),
+    s!(
+        "analysis::linear-not-consumed",
+        Mir,
+        Items,
+        "#[linear]
+struct InjLinear4 { id: u32 }
+fn injected_f(injected_t: InjLinear4) {}"
+    ),
+    s!(
+        "analysis::linear-overwritten",
+        Mir,
+        Items,
+        "#[linear]
+struct InjLinear5 { id: u32 }
+fn injected_take(injected_t: InjLinear5) {
+    end(injected_t);
+}
+fn injected_f(mut injected_t: InjLinear5) {
+    injected_t = InjLinear5 { id: 2 };
+    injected_take(injected_t);
+}"
+    ),
     // Compile-time evaluation.
     s!(
         "eval::assertion-failed",

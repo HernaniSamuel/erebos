@@ -1,0 +1,117 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/linear_overwritten.ers
+---
+--- errors ---
+analysis::linear-overwritten
+
+  × linear value `t` of type `Transfer` is overwritten
+    ╭─[linear_overwritten.ers:25:5]
+ 23 │     // Rejected: a parameter assigned over.
+ 24 │ ╭─▶ fn parameter(mut t: Transfer) {
+ 25 │ │       t = start(2);
+    · │       ──────┬─────
+    · │             ╰── overwrites the value held by `t`
+ 26 │ │       consume(t);
+ 27 │ ├─▶ }
+    · ╰──── linear value comes in as the parameter `t`
+ 28 │     
+    ╰────
+  help: consume the value before writing the place: pass it to a function that does, return it, or
+        end it with `end` where its fields are visible (ADR 0102)
+analysis::linear-overwritten
+
+  × linear value `t` of type `Transfer` is overwritten
+    ╭─[linear_overwritten.ers:32:5]
+ 30 │ fn variable() {
+ 31 │     let mut t: Transfer = start(1);
+    ·                           ────┬───
+    ·                               ╰── linear value comes from this call
+ 32 │     t = start(2);
+    ·     ──────┬─────
+    ·           ╰── overwrites the value held by `t`
+ 33 │     consume(t);
+    ╰────
+  help: consume the value before writing the place: pass it to a function that does, return it, or
+        end it with `end` where its fields are visible (ADR 0102)
+analysis::linear-overwritten
+
+  × linear value `s.h` of type `Transfer` is overwritten
+    ╭─[linear_overwritten.ers:38:5]
+ 36 │     // Rejected: a field of a struct that is not linear.
+ 37 │ ╭─▶ fn field(mut s: Holder) {
+ 38 │ │       s.h = start(2);
+    · │       ───────┬──────
+    · │              ╰── overwrites the value held by `s.h`
+ 39 │ │       consume(s.h);
+ 40 │ ├─▶ }
+    · ╰──── linear value comes in as the parameter `s`
+ 41 │     
+    ╰────
+  help: consume the value before writing the place: pass it to a function that does, return it, or
+        end it with `end` where its fields are visible (ADR 0102)
+analysis::linear-overwritten
+
+  × linear value `t` of type `Transfer` is overwritten
+    ╭─[linear_overwritten.ers:47:9]
+ 44 │ fn branch(c: bool) {
+ 45 │     let mut t: Transfer = start(1);
+    ·                           ────┬───
+    ·                               ╰── linear value comes from this call
+ 46 │     if c {
+ 47 │         t = start(2);
+    ·         ──────┬─────
+    ·               ╰── overwrites the value held by `t`
+ 48 │     }
+    ╰────
+  help: consume the value before writing the place: pass it to a function that does, return it, or
+        end it with `end` where its fields are visible (ADR 0102)
+analysis::linear-overwritten
+
+  × linear value `b` of type `Transfer` is overwritten
+    ╭─[linear_overwritten.ers:57:5]
+ 54 │ fn moved_first() {
+ 55 │     let a: Transfer = start(1);
+    ·                       ────┬───
+    ·                           ╰── linear value comes from this call
+ 56 │     let mut b: Transfer = a;
+    ·                           ┬
+    ·                           ╰── moved into `b` here
+ 57 │     b = start(2);
+    ·     ──────┬─────
+    ·           ╰── overwrites the value held by `b`
+ 58 │     consume(b);
+    ╰────
+  help: consume the value before writing the place: pass it to a function that does, return it, or
+        end it with `end` where its fields are visible (ADR 0102)
+analysis::linear-overwritten
+
+  × linear value `t` of type `Transfer` is overwritten
+    ╭─[linear_overwritten.ers:64:5]
+ 62 │ fn twice() {
+ 63 │     let mut t: Transfer = start(1);
+    ·                           ────┬───
+    ·                               ╰── linear value comes from this call
+ 64 │     t = start(2);
+    ·     ──────┬─────
+    ·           ╰── overwrites the value held by `t`
+ 65 │     t = start(3);
+    ╰────
+  help: consume the value before writing the place: pass it to a function that does, return it, or
+        end it with `end` where its fields are visible (ADR 0102)
+analysis::linear-overwritten
+
+  × linear value `t` of type `Transfer` is overwritten
+    ╭─[linear_overwritten.ers:65:5]
+ 63 │     let mut t: Transfer = start(1);
+ 64 │     t = start(2);
+    ·         ────┬───
+    ·             ╰── linear value comes from this call
+ 65 │     t = start(3);
+    ·     ──────┬─────
+    ·           ╰── overwrites the value held by `t`
+ 66 │     consume(t);
+    ╰────
+  help: consume the value before writing the place: pass it to a function that does, return it, or
+        end it with `end` where its fields are visible (ADR 0102)

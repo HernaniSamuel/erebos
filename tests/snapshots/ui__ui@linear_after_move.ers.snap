@@ -1,0 +1,32 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/linear_after_move.ers
+---
+--- errors ---
+analysis::use-after-move
+
+  × use of moved value `t`
+    ╭─[linear_after_move.ers:16:13]
+ 14 │ fn both(t: Transfer, u: Transfer) {
+ 15 │     consume(t);
+    ·             ┬
+    ·             ╰── moved here
+ 16 │     consume(t);
+    ·             ┬
+    ·             ╰── used here, after it was moved
+ 17 │ }
+    ╰────
+  help: a place that was moved is valid again once it is assigned a new value (ADR 0097)
+analysis::linear-not-consumed
+
+  × linear value `u` of type `Transfer` is not consumed
+    ╭─[linear_after_move.ers:20:1]
+ 19 │ // Rejected as a value never consumed.
+ 20 │ fn forgets(u: Transfer) {}
+    · ─────────────┬────────────
+    ·              ╰── linear value comes in as the parameter `u`; `u` is still held when the function returns here
+ 21 │ 
+    ╰────
+  help: consume it: pass it to a function that does, return it, or end it with `end` where its
+        fields are visible (ADR 0102)

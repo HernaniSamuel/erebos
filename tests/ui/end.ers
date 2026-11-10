@@ -26,9 +26,14 @@ fn variable() {
     end(t);
 }
 
-// A parameter, and the value of an expression that is not a place.
-fn parameter(t: Transfer, c: bool) {
-    end(if c { t } else { make(2) });
+// A parameter.
+fn parameter(t: Transfer) {
+    end(t);
+}
+
+// The value of an expression that is not a place.
+fn expression(c: bool) {
+    end(if c { make(1) } else { make(2) });
 }
 
 // A field of a struct that is not linear.
