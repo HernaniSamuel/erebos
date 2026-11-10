@@ -1,0 +1,149 @@
+// The M5.3 milestone program: a transfer to a device that must be waited for
+// (ADR 0094, 0101 to 0103). `dma::Transfer` is `#[linear]` with a private
+// field, so a transfer is made by `dma::start` and ended only by `dma::wait`,
+// with `end`; the rest of the program can only hold it and pass it on. The
+// device is simulated by `static mut` words (the boards have no DMA): every
+// poll copies one byte on each channel in flight.
+//
+// `run` starts two transfers, tries a third on a busy channel (`.None`),
+// waits for them in the other order, and tries the third again (`.Some`). It
+// returns, so the rule on returns checks that each handle it holds is
+// consumed on every path (ADR 0102, "Consequences").
+// expect-output: erebos dma!
+// expect-output: polls 8
+// expect-exit: 0
+
+mod board;
+use board::{exit, putc};
+
+mod dma {
+    // `channel` is private: only this module builds a transfer and takes one
+    // apart.
+    #[linear]
+    pub struct Transfer { channel: u32 }
+
+    // The device: where each channel reads and writes next, and how many
+    // bytes it still has to copy (zero when it is free).
+    static mut SRC: [usize; 4] = [0; 4];
+    static mut DST: [usize; 4] = [0; 4];
+    static mut LEFT: [u32; 4] = [0; 4];
+    static mut POLLS: u32 = 0;
+
+    // The device runs: one byte on every channel in flight.
+    fn poll() {
+        POLLS += 1;
+        let mut c: usize = 0;
+        while c < 4 {
+            if LEFT[c] != 0 {
+                let from: *const u8 = SRC[c] as *const u8;
+                let to: *mut u8 = DST[c] as *mut u8;
+                *to = *from;
+                SRC[c] += 1;
+                DST[c] += 1;
+                LEFT[c] -= 1;
+            }
+            c += 1;
+        }
+    }
+
+    pub fn start(channel: u32, src: *const [u8], dst: *mut u8) -> Transfer {
+        let c: usize = channel as usize;
+        SRC[c] = src as *const u8 as usize;
+        DST[c] = dst as usize;
+        LEFT[c] = len(src) as u32;
+        Transfer { channel: channel }
+    }
+
+    // `.None` when the channel is busy.
+    pub fn try_start(channel: u32, src: *const [u8], dst: *mut u8) -> Option(Transfer) {
+        if LEFT[channel as usize] != 0 {
+            return .None;
+        }
+        .Some(start(channel, src, dst))
+    }
+
+    // Polls until the channel is done, then ends the transfer. The channel is
+    // read before: `end` takes the whole value.
+    pub fn wait(t: Transfer) -> u32 {
+        let channel: u32 = t.channel;
+        while LEFT[channel as usize] != 0 {
+            poll();
+        }
+        end(t);
+        channel
+    }
+
+    pub fn polls() -> u32 {
+        POLLS
+    }
+}
+
+fn puts(s: *const [u8]) {
+    let mut i: usize = 0;
+    while i < len(s) {
+        putc((*s)[i]);
+        i += 1;
+    }
+}
+
+fn print_u32(n: u32) {
+    if n >= 10 {
+        print_u32(n / 10);
+    }
+    putc(b'0' + (n % 10) as u8);
+}
+
+// Writes "erebos dma!" at `out`, through three transfers, and returns how
+// many times the device was polled.
+fn run(out: *mut u8) -> u32 {
+    let a: dma::Transfer = dma::start(2, &raw const b"erebos ", out);
+    let b: dma::Transfer = dma::start(1, &raw const b"dma", &raw mut out[7]);
+
+    // Channel 2 is in flight: this one is refused, and holds nothing.
+    let mut refused: bool = false;
+    let third: Option(dma::Transfer) = dma::try_start(2, &raw const b"?", &raw mut out[10]);
+    match third {
+        .Some(let t: dma::Transfer) => {
+            dma::wait(t);
+        }
+        .None => {
+            refused = true;
+        }
+    }
+    assert(refused);
+
+    // In the other order: the device finishes `a` while `b` is waited for.
+    let channel_b: u32 = dma::wait(b);
+    let channel_a: u32 = dma::wait(a);
+    assert(channel_b == 1);
+    assert(channel_a == 2);
+
+    // The channel is free again.
+    let mut accepted: bool = false;
+    let again: Option(dma::Transfer) = dma::try_start(2, &raw const b"!", &raw mut out[10]);
+    match again {
+        .Some(let t: dma::Transfer) => {
+            dma::wait(t);
+            accepted = true;
+        }
+        .None => {}
+    }
+    assert(accepted);
+
+    dma::polls()
+}
+
+entry fn main() -> ! {
+    let mut out: [u8; 16] = [0; 16];
+    let polls: u32 = run(&raw mut out as *mut u8);
+    puts(slice(&raw const out as *const u8, 11));
+    putc(b'\n');
+    puts(&raw const b"polls ");
+    print_u32(polls);
+    putc(b'\n');
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(1)
+}
