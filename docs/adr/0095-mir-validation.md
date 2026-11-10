@@ -1,7 +1,7 @@
 # 0095. MIR validation
 
 - Status: Accepted; amended by 0098 (the operand `move` and the rules M1 to
-  M4), 0103 (the rules L1 to L4)
+  M4), 0103 (the rules L1 to L4), 0104 (the rule E1)
 - Date: 2026-11-09
 
 ## Context

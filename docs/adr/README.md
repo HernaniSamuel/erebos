@@ -68,7 +68,7 @@ Do not write one for local implementation details that the code already explains
 | 0036 | [Enum values that are no variant](0036-enum-values-that-are-no-variant.md) | Accepted, amended by 0039, 0040, 0053, 0059 |
 | 0037 | [`match` and patterns](0037-match-and-patterns.md) | Accepted, amended by 0038, 0040, 0041, 0044 |
 | 0038 | [The enum values a `match` needs](0038-enum-values-a-match-needs.md) | Accepted, amended by 0040 |
-| 0039 | [Enum variants with payloads](0039-enum-variants-with-payloads.md) | Accepted, amended by 0044 |
+| 0039 | [Enum variants with payloads](0039-enum-variants-with-payloads.md) | Accepted, amended by 0044, 0104 |
 | 0040 | [Patterns in payloads](0040-patterns-in-payloads.md) | Accepted, amended by 0042, 0043, 0044 |
 | 0041 | [Bindings in or-patterns](0041-bindings-in-or-patterns.md) | Accepted, amended by 0042 |
 | 0042 | [`match` code tested arm by arm](0042-match-code-tested-arm-by-arm.md) | Accepted, amended by 0098 |
@@ -124,7 +124,7 @@ Do not write one for local implementation details that the code already explains
 | 0092 | [Interrupts generated from SVD](0092-interrupts-generated-from-svd.md) | Accepted |
 | 0093 | [Shared statics checked](0093-shared-statics-checked.md) | Accepted |
 | 0094 | [Ownership: copies, moves and references](0094-ownership-moves-and-references.md) | Accepted |
-| 0095 | [MIR validation](0095-mir-validation.md) | Accepted, amended by 0098, 0103 |
+| 0095 | [MIR validation](0095-mir-validation.md) | Accepted, amended by 0098, 0103, 0104 |
 | 0096 | [Copy types and `#[copy]`](0096-copy-types.md) | Accepted |
 | 0097 | [Moves](0097-moves.md) | Accepted, amended by 0100, 0103 |
 | 0098 | [Moves in MIR](0098-moves-in-mir.md) | Accepted, amended by 0103 |
@@ -133,3 +133,4 @@ Do not write one for local implementation details that the code already explains
 | 0101 | [Linear types and `#[linear]`](0101-linear-types.md) | Accepted |
 | 0102 | [Consuming linear values, and `end`](0102-consuming-linear-values.md) | Accepted |
 | 0103 | [Linear values in MIR, and their analysis](0103-linear-values-in-mir.md) | Accepted |
+| 0104 | [Variant values in MIR](0104-variant-values-in-mir.md) | Accepted |
