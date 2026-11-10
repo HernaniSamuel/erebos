@@ -1,0 +1,88 @@
+// `end` takes a value of a `#[linear]` struct (`ty::end-type`) whose fields
+// are visible where it is written (`ty::end-private-field`), and the value is
+// moved as any other, so a place it cannot be moved out of is
+// `ty::move-out-of-place` (ADR 0102).
+mod dma {
+    #[linear]
+    pub struct Transfer { channel: u32 }
+
+    #[linear]
+    pub struct Open { pub channel: u32 }
+
+    pub fn start(channel: u32) -> Transfer {
+        Transfer { channel: channel }
+    }
+}
+
+// A `pub` field of a struct that no path written in the root module can name.
+mod hidden {
+    mod inner {
+        #[linear]
+        pub struct Sealed { pub x: u32 }
+
+        pub fn make() -> Sealed {
+            Sealed { x: 1 }
+        }
+    }
+
+    pub fn reexported() -> inner::Sealed {
+        inner::make()
+    }
+}
+
+struct Plain { n: u32 }
+
+#[linear]
+struct Token {}
+
+#[linear]
+struct Wrapper { pub t: dma::Open }
+
+static mut HELD: Wrapper = Wrapper { t: dma::Open { channel: 1 } };
+
+// Not a `#[linear]` struct.
+fn not_linear(n: u32, p: Plain, o: Option(dma::Open), q: *mut dma::Open) {
+    end(n);
+    end(p);
+    end(o);
+    end(q);
+    end(());
+}
+
+// Holding a linear value is not being one.
+fn holds(r: Result(dma::Open, u32)) {
+    end(r);
+}
+
+// A private field of another module.
+fn private(t: dma::Transfer) {
+    end(t);
+}
+
+fn private_temporary() {
+    end(dma::start(1));
+}
+
+// Visible: `Open` has only `pub` fields, `Token` none.
+fn visible(o: dma::Open, k: Token) {
+    end(o);
+    end(k);
+}
+
+fn unnameable() {
+    end(hidden::reexported());
+}
+
+// Not linear and moved out of a pointer: both errors are true.
+fn plain_through_pointer(p: *mut Plain) {
+    end(*p);
+}
+
+// Moved out of a pointer, or out of a static.
+fn unmovable(p: *mut dma::Open) {
+    end(*p);
+    end(HELD.t);
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

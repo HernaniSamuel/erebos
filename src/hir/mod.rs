@@ -1398,6 +1398,8 @@ pub enum ExprKind {
     Assert(Box<Expr>, Option<Box<Expr>>, Span),
     /// `len(s)`, built in (ADR 0031): the length of a slice.
     Len(Box<Expr>),
+    /// `end(e)`, built in (ADR 0102): ends the value of a `#[linear]` struct.
+    End(Box<Expr>),
     /// `slice(p, n)`, built in (ADR 0031): a slice of `n` elements from `p`.
     Slice(Box<Expr>, Box<Expr>),
     /// `size_of(T)`, a `usize` constant.
@@ -1643,6 +1645,7 @@ impl Expr {
             | ExprKind::Field(e, _, _)
             | ExprKind::Assert(e, None, _)
             | ExprKind::Len(e)
+            | ExprKind::End(e)
             | ExprKind::Comptime(e)
             | ExprKind::Try(e, _) => e.walk(f),
             ExprKind::StructLit(_, fields) => {

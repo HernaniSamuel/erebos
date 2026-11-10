@@ -1,0 +1,66 @@
+// emit: mir
+// `end(e)` ends the value of a `#[linear]` struct (ADR 0102): `end _n;` in
+// MIR, with the place of the value (ADR 0103). A variable or a parameter is
+// ended in place, and so is a field of one; a value that is computed is first
+// written to a temporary. A struct whose linear field was moved out is ended
+// with what is left.
+#[linear]
+struct Transfer { channel: u32 }
+
+#[linear]
+struct Outer { t: Transfer, n: u32 }
+
+struct Holder { t: Transfer, n: u32 }
+
+fn make(channel: u32) -> Transfer {
+    Transfer { channel: channel }
+}
+
+fn give_back(t: Transfer) {
+    end(t);
+}
+
+// A variable.
+fn variable() {
+    let t: Transfer = make(1);
+    end(t);
+}
+
+// A parameter, and the value of an expression that is not a place.
+fn parameter(t: Transfer, c: bool) {
+    end(if c { t } else { make(2) });
+}
+
+// A field of a struct that is not linear.
+fn field(h: Holder) {
+    end(h.t);
+}
+
+// A temporary.
+fn temporary() {
+    end(make(3));
+}
+
+// A struct partly moved: its linear field was moved out and given back; `end`
+// takes what is left.
+fn partly(o: Outer) {
+    let inner: Transfer = o.t;
+    give_back(inner);
+    end(o);
+}
+
+// A local, a parameter and a field named `end` are no obstacle: a call by
+// that name is the built-in.
+#[linear]
+struct Span { end: u32 }
+
+fn named(end: u32) -> u32 {
+    let end: u32 = end + 1;
+    let s: Span = Span { end: end };
+    let copy: u32 = s.end;
+    end(s);
+    copy
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

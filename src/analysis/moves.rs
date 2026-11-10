@@ -61,6 +61,9 @@ enum Access {
     Use(Option<usize>),
     /// The destination of an assignment, a call or an `asm` output.
     Write,
+    /// `end` of a place, and the site it generates, which moves the place
+    /// whole (ADR 0103).
+    End(usize),
 }
 
 /// A use or a write of a place, in the order they happen.
@@ -212,6 +215,7 @@ impl<'b> Flow<'b> {
                     }
                 }
                 Statement::InlineAsm(asm) => self.asm(at, asm),
+                Statement::End(place, span) => self.end(at, *place, *span),
                 // Names a temporary the analysis of moves does not follow
                 // (ADR 0103).
                 Statement::CriticalEnter(_) | Statement::CriticalExit(_) | Statement::New(..) => {}
@@ -279,6 +283,26 @@ impl<'b> Flow<'b> {
         }
     }
 
+    /// `end(e)` of `place`, with the span of `e`: a use that moves the place
+    /// whole, so it is a site, but one that sites of the place's parts do not
+    /// make a fault (ADR 0103).
+    fn end(&mut self, at: At, place: Place, span: Span) {
+        if !self.named(place.local) {
+            return;
+        }
+        let site = self.sites.len();
+        self.sites.push(Site {
+            local: place.local,
+            path: place.projection.to_vec(),
+            span,
+            at: (at.block, at.index),
+            ty: self.body.place_ty(place),
+        });
+        self.by_local.entry(place.local.0).or_default().push(site);
+        let at = At { span, ..at };
+        self.event(at, place, Access::End(site));
+    }
+
     /// Whether the local is a variable or a parameter. The analysis follows
     /// only those: a temporary is made by MIR building, which writes it by
     /// parts, as a literal or a variant, and reuses it at each iteration of a
@@ -339,7 +363,7 @@ impl<'b> Flow<'b> {
                 state.remove(site);
             }
         }
-        if let Access::Use(Some(site)) = event.access {
+        if let Access::Use(Some(site)) | Access::End(site) = event.access {
             state.insert(site);
         }
     }
@@ -351,12 +375,17 @@ impl<'b> Flow<'b> {
 
     /// The sites that reach `event` and make it a fault: for a use, those
     /// related to its place; for a write, those whose path is a proper prefix
-    /// of the destination (a part of a place moved whole).
+    /// of the destination (a part of a place moved whole); for `end`, those
+    /// whose path is a prefix of the place, itself included, since the parts
+    /// of an ended place are the moved fields it is taken apart by.
     fn reaching(&self, state: &Bits, event: &Event) -> Vec<usize> {
         let projection = event.place.projection;
         let fault = |site: &Site| match event.access {
             Access::Use(_) => related(&site.path, projection),
             Access::Write => site.path.len() < projection.len() && related(&site.path, projection),
+            Access::End(_) => {
+                site.path.len() <= projection.len() && related(&site.path, projection)
+            }
         };
         (self.of_local(event.place).iter().copied())
             .filter(|&site| state.contains(site) && fault(&self.sites[site]))
@@ -382,6 +411,7 @@ impl<'b> Flow<'b> {
                         at: event.at,
                         own: match event.access {
                             Access::Use(own) => own,
+                            Access::End(own) => Some(own),
                             Access::Write => None,
                         },
                         sites,
@@ -865,6 +895,97 @@ mod tests {
         let mut diags = Diagnostics::default();
         assert!(check(&body, &mut diags));
         assert!(diags.is_empty());
+    }
+
+    fn end(place: Place, at: usize) -> Statement {
+        Statement::End(place, span(at))
+    }
+
+    #[test]
+    fn end_of_a_partly_moved_place_is_no_fault_and_moves_it_whole() {
+        let field = projected(1, &[PlaceElem::Field(0)]);
+        // A part moved, then `end` of the whole: that is how it is taken apart.
+        let ended = body(vec![block(
+            vec![assign(2, mv(field, 10)), end(local(1), 20)],
+            Terminator::Return,
+        )]);
+        assert!(errors_of(&ended).is_empty());
+        // Then a use of the whole, or of the part: after `end`, labelled there.
+        let used = body(vec![block(
+            vec![
+                assign(2, mv(field, 10)),
+                end(local(1), 20),
+                assign(3, Operand::Copy(field)),
+            ],
+            Terminator::Return,
+        )]);
+        let errors = errors_of(&used);
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        assert_eq!(errors[0].0, "use of moved value `a`");
+        assert_eq!(
+            errors[0].1,
+            ["used here, after it was moved", "moved here"],
+            "{errors:?}"
+        );
+    }
+
+    #[test]
+    fn end_of_a_moved_place_or_of_one_ended_is_a_fault() {
+        let moved = body(vec![block(
+            vec![assign(2, mv(local(1), 10)), end(local(1), 20)],
+            Terminator::Return,
+        )]);
+        let errors = errors_of(&moved);
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        assert_eq!(errors[0].0, "use of moved value `a`");
+        let twice = body(vec![block(
+            vec![end(local(1), 10), end(local(1), 20)],
+            Terminator::Return,
+        )]);
+        assert_eq!(errors_of(&twice).len(), 1);
+        // A part of a place ended whole, then `end` of the part.
+        let field = projected(1, &[PlaceElem::Field(0)]);
+        let part = body(vec![block(
+            vec![end(local(1), 10), end(field, 20)],
+            Terminator::Return,
+        )]);
+        assert_eq!(errors_of(&part).len(), 1);
+    }
+
+    #[test]
+    fn end_in_a_loop_reaches_itself_and_an_assignment_makes_the_place_valid_again() {
+        let looped = body(vec![
+            block(vec![], goto(1)),
+            block(vec![end(local(1), 10)], branch(1, 2)),
+            block(vec![], Terminator::Return),
+        ]);
+        let errors = errors_of(&looped);
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        assert_eq!(
+            errors[0].1,
+            [
+                "used here, after it was moved",
+                "moved here, in an earlier iteration of the loop"
+            ]
+        );
+        let assigned = body(vec![block(
+            vec![
+                end(local(1), 10),
+                assign(1, Operand::Copy(local(4))),
+                end(local(1), 20),
+            ],
+            Terminator::Return,
+        )]);
+        assert!(errors_of(&assigned).is_empty());
+    }
+
+    #[test]
+    fn end_of_a_temporary_is_never_followed() {
+        let body = body(vec![block(
+            vec![end(local(2), 10), end(local(2), 20)],
+            Terminator::Return,
+        )]);
+        assert!(errors_of(&body).is_empty());
     }
 
     /// A struct with a `u32` field, copy or linear as asked.

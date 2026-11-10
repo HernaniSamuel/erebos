@@ -2,7 +2,7 @@
 //! be held: a static, an array or slice, a place reached through a pointer.
 
 use crate::diag::Diagnostic;
-use crate::hir::{Block, EnumId, Expr, ExprKind, Stmt, StructId, Ty};
+use crate::hir::{self, Block, EnumId, Expr, ExprKind, Fn, Stmt, StructId, Ty};
 use crate::query::Queries;
 
 use super::Checker;
@@ -244,6 +244,73 @@ pub fn report_linear_statics(q: &mut Queries) {
 }
 
 impl Checker<'_, '_> {
+    /// `end(operand)`, built in (ADR 0102): of type `()`. The operand is read
+    /// whole, so it is moved as any value is (`ty::move-out-of-place` for a
+    /// place it cannot be moved out of), and must be a value of a `#[linear]`
+    /// struct (`ty::end-type`) whose fields are all visible in the module of
+    /// `f`, as for a struct literal (`ty::end-private-field`, ADR 0050).
+    pub(super) fn end(&mut self, f: &Fn, expr: &Expr, operand: &Expr) {
+        let ty = self.check(f, operand, None);
+        if matches!(ty, Ty::Never | Ty::Error) {
+            return;
+        }
+        let hir = self.hir;
+        let linear_struct = match ty {
+            Ty::Struct(s) if hir.struct_(s.id).linear.is_some() => s,
+            _ => {
+                let help = if is_linear(self.q, ty) {
+                    format!(
+                        "`{ty}` holds a linear value but is not a `#[linear]` struct itself: take the value out of it, with `match` or by moving the field, and end that; only a `#[linear]` struct is ended (ADR 0102)"
+                    )
+                } else if let Ty::Struct(_) = ty {
+                    format!(
+                        "`{ty}` is not marked `#[linear]`, so its values need no ending: they can be let go; mark the struct `#[linear]` if each value must be consumed (ADR 0101, 0102)"
+                    )
+                } else {
+                    "`end(e)` ends a value of a `#[linear]` struct, the only values that must be consumed (ADR 0101, 0102)".to_owned()
+                };
+                self.q.diags.push(
+                    Diagnostic::error(
+                        "ty::end-type",
+                        format!("`end` takes a value of a `#[linear]` struct, found `{ty}`"),
+                    )
+                    .label(operand.span, format!("`{ty}` is not a `#[linear]` struct"))
+                    .help(help),
+                );
+                return;
+            }
+        };
+        let def = hir.struct_(linear_struct.id);
+        let hidden = (def.fields.iter().enumerate())
+            .find(|(index, _)| !hir.field_visible(linear_struct.id, *index, f.module));
+        let Some((_, field)) = hidden else {
+            return;
+        };
+        let mut diag = Diagnostic::error(
+            "ty::end-private-field",
+            format!(
+                "cannot end a `{ty}` here: its field `{}` is not visible",
+                field.name
+            ),
+        )
+        .label(expr.span, "cannot end it here");
+        diag = match field.vis {
+            hir::Visibility::Private => diag
+                .label(field.span, "declared here without `pub`")
+                .help(format!(
+                    "whoever may build a value may end it (ADR 0102), and a private field is visible only in {} and the modules inside it: end it there, with a function that takes the value, or declare the field `pub` (ADR 0050)",
+                    hir.module(def.module).describe()
+                )),
+            hir::Visibility::Pub => diag
+                .label(def.name_span, format!("`{ty}` is declared here"))
+                .help(format!(
+                    "a `pub` field is visible wherever a path can name its struct, and none written in {} can name `{ty}`; whoever may build a value may end it (ADR 0050, 0102)",
+                    hir.module(f.module).describe()
+                )),
+        };
+        self.q.diags.push(diag);
+    }
+
     /// `ty::linear-through-pointer` for the assignment `expr`, if it moves a
     /// value of the linear type `value` into a place reached through a pointer
     /// (`*p = v`, `p[i] = v`, `(*p).f = v`): the value could never be moved
@@ -350,6 +417,7 @@ fn operands_of<'a>(expr: &'a Expr, operands: &mut Vec<&'a Expr>, blocks: &mut Ve
         | ExprKind::Field(e, _, _)
         | ExprKind::Assert(e, None, _)
         | ExprKind::Len(e)
+        | ExprKind::End(e)
         | ExprKind::Comptime(e)
         | ExprKind::Try(e, _)
         | ExprKind::Unary(_, e)

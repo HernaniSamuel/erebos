@@ -1043,6 +1043,7 @@ fn builtin_fn(name: &str) -> Option<&'static str> {
         "assert" => Some("`assert(cond)` and `assert(cond, msg)` are built in (ADR 0029, 0031)"),
         "len" => Some("`len(s)` is built in (ADR 0031)"),
         "slice" => Some("`slice(p, n)` is built in (ADR 0031)"),
+        "end" => Some("`end(e)` is built in (ADR 0102)"),
         _ => None,
     }
 }

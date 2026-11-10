@@ -421,9 +421,9 @@ impl Interp<'_, '_> {
             // There are no interrupts to mask at compile time (ADR 0078): the
             // block runs as a block, and the local is never read.
             Statement::CriticalEnter(_) | Statement::CriticalExit(_) => Ok(()),
-            // Says where a linear value is complete, for the analyses
-            // (ADR 0103).
-            Statement::New(..) => Ok(()),
+            // Say where a linear value is complete and where it is ended,
+            // for the analyses (ADR 0103).
+            Statement::New(..) | Statement::End(..) => Ok(()),
         }
     }
 

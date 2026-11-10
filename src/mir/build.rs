@@ -775,6 +775,17 @@ impl Builder<'_, '_> {
                 // The slice did not finish, and nothing follows.
                 _ => usize_const(0),
             },
+            // The place of the value ended: a local or a field of one, or the
+            // temporary that holds a value computed here (ADR 0103).
+            hir::ExprKind::End(operand) => {
+                if self.ty_of(operand) == Ty::Never {
+                    self.expr(operand);
+                } else {
+                    let place = self.place(operand);
+                    self.push(Statement::End(place, operand.span));
+                }
+                Operand::Const(Const::Unit)
+            }
             hir::ExprKind::Slice(pointer, len) => {
                 let mut ptr = self.expr(pointer);
                 // Read now if evaluating the length could assign it.

@@ -119,10 +119,10 @@ block.
   variant of the expected enum (`.Run`, see "Enums"); after an
   expression, it reaches a field (`p.x`).
 - **`?`** is the postfix operator of "The `?` operator".
-- **Built-in functions:** `assert`, `len` and `slice` are reserved names:
+- **Built-in functions:** `assert`, `len`, `slice` and `end` are reserved names:
   no item, module or `use` may have one of them, in any module. A call to
   one of these names is always the built-in; variables may still be named
-  so (ADR 0031).
+  so (ADR 0031, 0102).
 - **Integer literals** (ADR 0016): `42`, `0x2A`, `0o52`, `0b10_1010`; `_`
   separates digits. A decimal literal with a leading zero (`017`) is an
   error. Values must fit in 64 bits. There are no suffixes (`1u8`).
@@ -2847,7 +2847,7 @@ fn base() -> usize {
   The names of a peripheral type's entries (registers, register arrays and
   clusters) belong to it, as field names to their struct.
 - The **built-in names**, the types `bool`, the integer types, `Option`
-  and `Result`, and the functions `assert`, `len` and `slice`, are seen
+  and `Result`, and the functions `assert`, `len`, `slice` and `end`, are seen
   from every module, as single names, and no item, module or `use` may
   take one (`resolve::duplicate-type`, `resolve::reserved-name`). Nor may
   any take `core`, the name by which every module names the module `core`
@@ -5498,7 +5498,7 @@ the compiler binary, and compiled and checked with every program.
   only the compiler does, by the path `core::arch::_start`, to put it in the
   section `.text.start`. A file of `core::arch` without it is a bug of the
   compiler, not a diagnostic.
-- `Option`, `Result`, `assert`, `len` and `slice` are not in `core`: they
+- `Option`, `Result`, `assert`, `len`, `slice` and `end` are not in `core`: they
   stay built-in names, seen from every module.
 - A program item whose symbol is one of `core`'s, such as a root `fn
   memcpy` or an `#[export] fn memset` in any module, is
@@ -5788,7 +5788,7 @@ Every error has a stable code, shown with the message.
 | `resolve::not-a-constant` | a name or path in a pattern that is not a constant: a local variable, parameter, static, peripheral, function, struct or enum |
 | `resolve::duplicate-binding` | one name bound twice in one pattern, or in one alternative of an or-pattern |
 | `resolve::inconsistent-binding` | a name not bound by every alternative of an or-pattern, or bound with `let mut` by only some |
-| `resolve::reserved-name` | an item, module or `use` named `_start`, `core`, with a name starting with `__`, or like a built-in function (`assert`, `len`, `slice`); a module of the root module named `llvm` or `rt`; a region named `INCLUDE` |
+| `resolve::reserved-name` | an item, module or `use` named `_start`, `core`, with a name starting with `__`, or like a built-in function (`assert`, `len`, `slice`, `end`); a module of the root module named `llvm` or `rt`; a region named `INCLUDE` |
 | `resolve::unknown-attribute` | an attribute that does not exist |
 | `resolve::misplaced-attribute` | an attribute on an item it does not apply to, as `#[packed]` or `#[align(N)]` on a bit-field struct, `#[align(N)]` on an `extern fn`, or `#[naked]` on an `extern fn`, the entry function, the panic function, an interrupt handler or anything but a function with a body, `#[interrupts]` on anything but an enum, `#[copy]` on a bit-field struct, an enum without payloads or anything but a struct or an enum, or `#[linear]` on anything but a struct that is not a bit-field struct (an enum included) |
 | `resolve::attribute-argument` | an attribute with a missing or extra argument |
@@ -5850,6 +5850,8 @@ Every error has a stable code, shown with the message.
 | `ty::linear-static` | a `static` or `extern static` whose type is linear, at its type: a `#[linear]` struct, or a struct, an enum with payloads, `Option` or `Result` that holds one; a pointer to one is not |
 | `ty::linear-array` | an array or a slice of a linear type, once per type: at the type where it is written (field, payload value, parameter, return type, `let`, static, type argument, pointee, layout query, cast), or at the array literal, repeat expression or `slice(p, n)` that makes a type no one wrote; a nested array is reported at the innermost |
 | `ty::linear-through-pointer` | an assignment of a value of a linear type to a place reached through a pointer (`*p`, `p[i]`, `(*p).f`, `(*s)[i]`); a copy field written through one is not |
+| `ty::end-type` | `end(e)` with `e` of a type that is not a `#[linear]` struct: a scalar, a pointer, a struct that is not marked, an `Option` or a `Result` that holds a linear value |
+| `ty::end-private-field` | `end(e)` of a `#[linear]` struct with a field that is not visible where `end` is written (ADR 0050); the first such field is labeled |
 | `ty::never-in-memory` | `!` as a pointee, slice element, field, payload type, type argument of `Option` or `Result`, array element, register type, the type of a static, `extern static`, `const` or `comptime` value, a layout query operand, or under `&raw` |
 | `ty::invalid-align` | `#[align(N)]` on a struct, static or function with `N` not a power of two, too large or below the natural alignment |
 | `ty::aligned-in-packed` | a packed struct containing a type with `#[align(N)]`, at any depth, such as an enum with such a payload |

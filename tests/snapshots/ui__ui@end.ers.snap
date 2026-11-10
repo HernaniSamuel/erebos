@@ -1,0 +1,158 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/end.ers
+---
+--- mir ---
+struct Transfer { 0 channel: u32 at 0 } // size 4, align 4
+struct Outer { 0 t: Transfer at 0, 1 n: u32 at 4 } // size 8, align 4
+struct Holder { 0 t: Transfer at 0, 1 n: u32 at 4 } // size 8, align 4
+struct Span { 0 end: u32 at 0 } // size 4, align 4
+
+fn make(_1: u32) -> Transfer {
+    let _0: Transfer;
+    let _1: u32; // channel
+    let _2: Transfer;
+
+    bb0: {
+        _2.0 = copy _1;
+        new _2;
+        _0 = move _2;
+        return;
+    }
+}
+
+fn give_back(_1: Transfer) -> () {
+    let _0: ();
+    let _1: Transfer; // t
+
+    bb0: {
+        end _1;
+        return;
+    }
+}
+
+fn variable() -> () {
+    let _0: ();
+    let _1: Transfer; // t
+    let _2: Transfer;
+
+    bb0: {
+        _2 = call make(const 1_u32);
+        _1 = move _2;
+        end _1;
+        return;
+    }
+}
+
+fn parameter(_1: Transfer, _2: bool) -> () {
+    let _0: ();
+    let _1: Transfer; // t
+    let _2: bool; // c
+    let _3: Transfer;
+    let _4: Transfer;
+
+    bb0: {
+        if copy _2 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _3 = move _1;
+        goto -> bb3;
+    }
+
+    bb2: {
+        _4 = call make(const 2_u32);
+        _3 = move _4;
+        goto -> bb3;
+    }
+
+    bb3: {
+        end _3;
+        return;
+    }
+}
+
+fn field(_1: Holder) -> () {
+    let _0: ();
+    let _1: Holder; // h
+
+    bb0: {
+        end _1.0;
+        return;
+    }
+}
+
+fn temporary() -> () {
+    let _0: ();
+    let _1: Transfer;
+
+    bb0: {
+        _1 = call make(const 3_u32);
+        end _1;
+        return;
+    }
+}
+
+fn partly(_1: Outer) -> () {
+    let _0: ();
+    let _1: Outer; // o
+    let _2: Transfer; // inner
+    let _3: Transfer;
+
+    bb0: {
+        _3 = move _1.0;
+        _2 = move _3;
+        call give_back(move _2);
+        end _1;
+        return;
+    }
+}
+
+fn named(_1: u32) -> u32 {
+    let _0: u32;
+    let _1: u32; // end
+    let _2: u32; // end
+    let _3: Span; // s
+    let _4: u32; // copy
+    let _5: u32;
+    let _6: Span;
+    let _7: u32;
+
+    bb0: {
+        _5 = Add(copy _1, const 1_u32);
+        _2 = copy _5;
+        _6.0 = copy _2;
+        new _6;
+        _3 = move _6;
+        _7 = copy _3.0;
+        _4 = copy _7;
+        end _3;
+        _0 = copy _4;
+        return;
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}

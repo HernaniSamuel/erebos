@@ -399,6 +399,7 @@ fn expr_label(q: &Queries, f: &Fn, expr: &Expr) -> String {
         ExprKind::Critical(_) => "critical".to_owned(),
         ExprKind::Assert(..) => "assert".to_owned(),
         ExprKind::Len(_) => "len".to_owned(),
+        ExprKind::End(_) => "end".to_owned(),
         ExprKind::Slice(..) => "slice".to_owned(),
         ExprKind::Loop(_) => "loop".to_owned(),
         ExprKind::Match { .. } => "match".to_owned(),

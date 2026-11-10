@@ -1,0 +1,200 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/end_errors.ers
+---
+--- errors ---
+ty::linear-static
+
+  × the static mut `HELD` is of the linear type `Wrapper`
+    ╭─[end_errors.ers:41:18]
+ 40 │ 
+ 41 │ static mut HELD: Wrapper = Wrapper { t: dma::Open { channel: 1 } };
+    ·                  ───┬───
+    ·                     ╰── `Wrapper` is linear
+ 42 │ 
+    ╰────
+  help: the value a static holds is never moved out (ADR 0094), so it could only be overwritten,
+        which forgets it; keep it in a variable and pass it on; how a context owns what a static
+        holds is decided in M5.6 (ADR 0101)
+ty::end-type
+
+  × `end` takes a value of a `#[linear]` struct, found `u32`
+    ╭─[end_errors.ers:45:9]
+ 44 │ fn not_linear(n: u32, p: Plain, o: Option(dma::Open), q: *mut dma::Open) {
+ 45 │     end(n);
+    ·         ┬
+    ·         ╰── `u32` is not a `#[linear]` struct
+ 46 │     end(p);
+    ╰────
+  help: `end(e)` ends a value of a `#[linear]` struct, the only values that must be consumed (ADR
+        0101, 0102)
+ty::end-type
+
+  × `end` takes a value of a `#[linear]` struct, found `Plain`
+    ╭─[end_errors.ers:46:9]
+ 45 │     end(n);
+ 46 │     end(p);
+    ·         ┬
+    ·         ╰── `Plain` is not a `#[linear]` struct
+ 47 │     end(o);
+    ╰────
+  help: `Plain` is not marked `#[linear]`, so its values need no ending: they can be let go; mark
+        the struct `#[linear]` if each value must be consumed (ADR 0101, 0102)
+ty::end-type
+
+  × `end` takes a value of a `#[linear]` struct, found `Option(dma::Open)`
+    ╭─[end_errors.ers:47:9]
+ 46 │     end(p);
+ 47 │     end(o);
+    ·         ┬
+    ·         ╰── `Option(dma::Open)` is not a `#[linear]` struct
+ 48 │     end(q);
+    ╰────
+  help: `Option(dma::Open)` holds a linear value but is not a `#[linear]` struct itself: take the
+        value out of it, with `match` or by moving the field, and end that; only a `#[linear]`
+        struct is ended (ADR 0102)
+ty::end-type
+
+  × `end` takes a value of a `#[linear]` struct, found `*mut dma::Open`
+    ╭─[end_errors.ers:48:9]
+ 47 │     end(o);
+ 48 │     end(q);
+    ·         ┬
+    ·         ╰── `*mut dma::Open` is not a `#[linear]` struct
+ 49 │     end(());
+    ╰────
+  help: `end(e)` ends a value of a `#[linear]` struct, the only values that must be consumed (ADR
+        0101, 0102)
+ty::end-type
+
+  × `end` takes a value of a `#[linear]` struct, found `()`
+    ╭─[end_errors.ers:49:9]
+ 48 │     end(q);
+ 49 │     end(());
+    ·         ─┬
+    ·          ╰── `()` is not a `#[linear]` struct
+ 50 │ }
+    ╰────
+  help: `end(e)` ends a value of a `#[linear]` struct, the only values that must be consumed (ADR
+        0101, 0102)
+ty::end-type
+
+  × `end` takes a value of a `#[linear]` struct, found `Result(dma::Open, u32)`
+    ╭─[end_errors.ers:54:9]
+ 53 │ fn holds(r: Result(dma::Open, u32)) {
+ 54 │     end(r);
+    ·         ┬
+    ·         ╰── `Result(dma::Open, u32)` is not a `#[linear]` struct
+ 55 │ }
+    ╰────
+  help: `Result(dma::Open, u32)` holds a linear value but is not a `#[linear]` struct itself: take
+        the value out of it, with `match` or by moving the field, and end that; only a `#[linear]`
+        struct is ended (ADR 0102)
+ty::end-private-field
+
+  × cannot end a `dma::Transfer` here: its field `channel` is not visible
+   ╭─[end_errors.ers:7:27]
+ 6 │     #[linear]
+ 7 │     pub struct Transfer { channel: u32 }
+   ·                           ───┬───
+   ·                              ╰── declared here without `pub`
+ 8 │ 
+   ╰────
+    ╭─[end_errors.ers:59:5]
+ 58 │ fn private(t: dma::Transfer) {
+ 59 │     end(t);
+    ·     ───┬──
+    ·        ╰── cannot end it here
+ 60 │ }
+    ╰────
+  help: whoever may build a value may end it (ADR 0102), and a private field is visible only in
+        module `dma` and the modules inside it: end it there, with a function that takes the
+        value, or declare the field `pub` (ADR 0050)
+ty::end-private-field
+
+  × cannot end a `dma::Transfer` here: its field `channel` is not visible
+   ╭─[end_errors.ers:7:27]
+ 6 │     #[linear]
+ 7 │     pub struct Transfer { channel: u32 }
+   ·                           ───┬───
+   ·                              ╰── declared here without `pub`
+ 8 │ 
+   ╰────
+    ╭─[end_errors.ers:63:5]
+ 62 │ fn private_temporary() {
+ 63 │     end(dma::start(1));
+    ·     ─────────┬────────
+    ·              ╰── cannot end it here
+ 64 │ }
+    ╰────
+  help: whoever may build a value may end it (ADR 0102), and a private field is visible only in
+        module `dma` and the modules inside it: end it there, with a function that takes the
+        value, or declare the field `pub` (ADR 0050)
+ty::end-private-field
+
+  × cannot end a `hidden::inner::Sealed` here: its field `x` is not visible
+    ╭─[end_errors.ers:21:20]
+ 20 │         #[linear]
+ 21 │         pub struct Sealed { pub x: u32 }
+    ·                    ───┬──
+    ·                       ╰── `hidden::inner::Sealed` is declared here
+ 22 │ 
+    ╰────
+    ╭─[end_errors.ers:73:5]
+ 72 │ fn unnameable() {
+ 73 │     end(hidden::reexported());
+    ·     ────────────┬────────────
+    ·                 ╰── cannot end it here
+ 74 │ }
+    ╰────
+  help: a `pub` field is visible wherever a path can name its struct, and none written in the root
+        module can name `hidden::inner::Sealed`; whoever may build a value may end it (ADR 0050,
+        0102)
+ty::move-out-of-place
+
+  × cannot move a value of the non-copy type `Plain` out of a place through a pointer
+    ╭─[end_errors.ers:78:9]
+ 77 │ fn plain_through_pointer(p: *mut Plain) {
+ 78 │     end(*p);
+    ·         ─┬
+    ·          ╰── `Plain` is not copy, and this is a place through a pointer
+ 79 │ }
+    ╰────
+  help: mark `Plain` with `#[copy]` if its values may be duplicated (ADR 0097)
+ty::end-type
+
+  × `end` takes a value of a `#[linear]` struct, found `Plain`
+    ╭─[end_errors.ers:78:9]
+ 77 │ fn plain_through_pointer(p: *mut Plain) {
+ 78 │     end(*p);
+    ·         ─┬
+    ·          ╰── `Plain` is not a `#[linear]` struct
+ 79 │ }
+    ╰────
+  help: `Plain` is not marked `#[linear]`, so its values need no ending: they can be let go; mark
+        the struct `#[linear]` if each value must be consumed (ADR 0101, 0102)
+ty::move-out-of-place
+
+  × cannot move a value of the non-copy type `dma::Open` out of a place through a pointer
+    ╭─[end_errors.ers:83:9]
+ 82 │ fn unmovable(p: *mut dma::Open) {
+ 83 │     end(*p);
+    ·         ─┬
+    ·          ╰── `dma::Open` is not copy, and this is a place through a pointer
+ 84 │     end(HELD.t);
+    ╰────
+  help: a non-copy value is moved out of a local, a parameter or their fields, and out of the
+        payloads a `match` binds from them (ADR 0097)
+ty::move-out-of-place
+
+  × cannot move a value of the non-copy type `dma::Open` out of a static
+    ╭─[end_errors.ers:84:9]
+ 83 │     end(*p);
+ 84 │     end(HELD.t);
+    ·         ───┬──
+    ·            ╰── `dma::Open` is not copy, and this is a static
+ 85 │ }
+    ╰────
+  help: a non-copy value is moved out of a local, a parameter or their fields, and out of the
+        payloads a `match` binds from them (ADR 0097)

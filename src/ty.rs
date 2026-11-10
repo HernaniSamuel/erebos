@@ -1128,6 +1128,10 @@ impl Checker<'_, '_> {
                 self.len(f, slice);
                 Ty::Int(IntTy::Usize)
             }
+            ExprKind::End(operand) => {
+                self.end(f, expr, operand);
+                Ty::Unit
+            }
             ExprKind::Slice(pointer, len) => self.make_slice(f, pointer, len),
             // The block's type, as any block's: the mask changes no type
             // (ADR 0086).

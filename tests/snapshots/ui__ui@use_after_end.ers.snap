@@ -1,0 +1,88 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/use_after_end.ers
+---
+--- errors ---
+analysis::use-after-move
+
+  × use of moved value `t`
+    ╭─[use_after_end.ers:24:5]
+ 22 │ fn used(t: Transfer) -> u32 {
+ 23 │     end(t);
+    ·         ┬
+    ·         ╰── moved here
+ 24 │     t.channel
+    ·     ────┬────
+    ·         ╰── used here, after it was moved
+ 25 │ }
+    ╰────
+  help: a place that was moved is valid again once it is assigned a new value (ADR 0097)
+analysis::use-after-move
+
+  × use of moved value `t`
+    ╭─[use_after_end.ers:30:9]
+ 28 │ fn twice(t: Transfer) {
+ 29 │     end(t);
+    ·         ┬
+    ·         ╰── moved here
+ 30 │     end(t);
+    ·         ┬
+    ·         ╰── used here, after it was moved
+ 31 │ }
+    ╰────
+  help: a place that was moved is valid again once it is assigned a new value (ADR 0097)
+analysis::use-after-move
+
+  × use of moved value `t`
+    ╭─[use_after_end.ers:36:9]
+ 34 │ fn after_move(t: Transfer) {
+ 35 │     give_back(t);
+    ·               ┬
+    ·               ╰── moved here
+ 36 │     end(t);
+    ·         ┬
+    ·         ╰── used here, after it was moved
+ 37 │ }
+    ╰────
+  help: a place that was moved is valid again once it is assigned a new value (ADR 0097)
+analysis::use-after-move
+
+  × use of moved value `o`
+    ╭─[use_after_end.ers:44:5]
+ 42 │     give_back(inner);
+ 43 │     end(o);
+    ·         ┬
+    ·         ╰── moved here
+ 44 │     o.n
+    ·     ─┬─
+    ·      ╰── used here, after it was moved
+ 45 │ }
+    ╰────
+  help: a place that was moved is valid again once it is assigned a new value (ADR 0097)
+analysis::use-after-move
+
+  × use of moved value `o`
+    ╭─[use_after_end.ers:50:15]
+ 48 │ fn part_after_whole(o: Outer) {
+ 49 │     end(o);
+    ·         ┬
+    ·         ╰── moved here
+ 50 │     give_back(o.t);
+    ·               ─┬─
+    ·                ╰── used here, after it was moved
+ 51 │ }
+    ╰────
+  help: a place that was moved is valid again once it is assigned a new value (ADR 0097)
+analysis::use-after-move
+
+  × use of moved value `t`
+    ╭─[use_after_end.ers:57:13]
+ 56 │     while i < n {
+ 57 │         end(t);
+    ·             ┬┬
+    ·             │╰── moved here, in an earlier iteration of the loop
+    ·             ╰── used here, after it was moved
+ 58 │         i = i + 1;
+    ╰────
+  help: a place that was moved is valid again once it is assigned a new value (ADR 0097)

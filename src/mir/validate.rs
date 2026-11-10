@@ -891,10 +891,11 @@ impl<'a> Checker<'a> {
                 self.critical_local(*local);
             }
             Statement::New(place, _) => self.linear_place(*place, "`new`"),
+            Statement::End(place, _) => self.linear_place(*place, "`end`"),
         }
     }
 
-    /// L1: the place of `new` is a local not bound to read-only data,
+    /// L1: the place of `new` and of `end` is a local not bound to read-only data,
     /// followed by `Field` and `Payload` projections only, of a struct
     /// marked linear. `what` names the statement.
     fn linear_place(&mut self, place: Place, what: &str) {
@@ -1267,7 +1268,8 @@ impl<'a> Checker<'a> {
                     Statement::Assign(..)
                     | Statement::Call { .. }
                     | Statement::InlineAsm(_)
-                    | Statement::New(..) => {}
+                    | Statement::New(..)
+                    | Statement::End(..) => {}
                 }
             }
             self.at = Location::Terminator(block);
@@ -3776,6 +3778,52 @@ mod tests {
         statement_of(&mut body, Statement::New(local(99), span()));
         breaks_only(&body, "S7");
         rejects(newing(Ty::Struct(transfer()), &[PlaceElem::Field(5)]), "T1");
+    }
+
+    /// The rules broken by `end` of `projection` of a new local of type `ty`.
+    fn ending(ty: Ty, projection: &[PlaceElem]) -> Vec<&'static str> {
+        let mut body = valid();
+        body.locals.push(decl(ty));
+        let n = body.locals.len() as u32 - 1;
+        statement_of(&mut body, Statement::End(projected(n, projection), span()));
+        rules(&body)
+    }
+
+    #[test]
+    fn l1_end_names_a_place_of_a_struct_marked_linear() {
+        let payload = PlaceElem::Payload {
+            variant: 1,
+            index: 0,
+        };
+        accepts(ending(Ty::Struct(transfer()), &[]));
+        accepts(ending(Ty::Struct(link()), &[]));
+        // A part of a place, through fields and payload values.
+        accepts(ending(Ty::Struct(link()), &[PlaceElem::Field(1)]));
+        accepts(ending(Ty::Struct(holds()), &[PlaceElem::Field(1)]));
+        accepts(ending(Ty::Enum(lent()), &[payload]));
+        // A struct that is not marked, whatever it holds, and other types.
+        rejects(ending(Ty::Struct(holds()), &[]), "L1");
+        rejects(ending(Ty::Struct(handle()), &[]), "L1");
+        rejects(ending(u32_ty(), &[]), "L1");
+        rejects(ending(Ty::Enum(lent()), &[]), "L1");
+        // Through a pointer, once, though the pointee is a linear struct.
+        let to = ptr(true, false, Ty::Struct(transfer()));
+        rejects(ending(to, &[PlaceElem::Deref]), "L1");
+        rejects(ending(to, &[PlaceElem::Offset(Local(8))]), "L1");
+        // A local bound to read-only data.
+        let mut body = valid();
+        body.locals.push(LocalDecl {
+            ty: Ty::Struct(transfer()),
+            name: None,
+            constant: Some(DataId(0)),
+        });
+        let n = body.locals.len() as u32 - 1;
+        statement_of(&mut body, Statement::End(local(n), span()));
+        breaks_only(&body, "L1");
+        // A local that does not exist is not judged again.
+        let mut body = valid();
+        statement_of(&mut body, Statement::End(local(99), span()));
+        breaks_only(&body, "S7");
     }
 
     #[test]

@@ -636,6 +636,26 @@ fn injected_f(injected_p: *mut InjLinear3, injected_t: InjLinear3) {
 }"
     ),
     s!(
+        "ty::end-type",
+        Mir,
+        Items,
+        "fn injected_f(injected_n: u32) {
+    end(injected_n);
+}"
+    ),
+    s!(
+        "ty::end-private-field",
+        Mir,
+        Items,
+        "mod injected_dma {
+    #[linear]
+    pub struct InjTransfer { injected_channel: u32 }
+}
+fn injected_f(injected_t: injected_dma::InjTransfer) {
+    end(injected_t);
+}"
+    ),
+    s!(
         "ty::invalid-align",
         Mir,
         Items,

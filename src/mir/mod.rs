@@ -199,7 +199,7 @@ impl Mir {
                                 called[id.0 as usize] = true;
                             }
                         }
-                        Statement::Assign(..) | Statement::New(..) => {}
+                        Statement::Assign(..) | Statement::New(..) | Statement::End(..) => {}
                     }
                 }
                 if let Terminator::InlineAsm(asm) = &block.terminator {
@@ -535,7 +535,8 @@ impl Body {
                     Statement::InlineAsm(_)
                     | Statement::CriticalEnter(_)
                     | Statement::CriticalExit(_)
-                    | Statement::New(..) => {}
+                    | Statement::New(..)
+                    | Statement::End(..) => {}
                 }
             }
             match &mut block.terminator {
@@ -1410,6 +1411,11 @@ pub enum Statement {
     /// anywhere; for a literal with no fields, where the literal is.
     /// Compile-time evaluation and code generation do nothing for it.
     New(Place, Span),
+    /// `end(e)` (ADR 0102, 0103): the value of a struct declared `#[linear]`
+    /// in the place is ended, with the span of the expression `e`. The place
+    /// is a local, or a field or payload of one (rule L1). Compile-time
+    /// evaluation and code generation do nothing for it.
+    End(Place, Span),
 }
 
 impl Statement {
@@ -1435,7 +1441,10 @@ impl Statement {
             },
             Statement::Call { args, .. } => args.iter().for_each(f),
             Statement::InlineAsm(asm) => asm.inputs().for_each(f),
-            Statement::CriticalEnter(_) | Statement::CriticalExit(_) | Statement::New(..) => {}
+            Statement::CriticalEnter(_)
+            | Statement::CriticalExit(_)
+            | Statement::New(..)
+            | Statement::End(..) => {}
         }
     }
 
@@ -1447,7 +1456,8 @@ impl Statement {
             | Statement::Call { .. }
             | Statement::CriticalEnter(_)
             | Statement::CriticalExit(_)
-            | Statement::New(..) => None,
+            | Statement::New(..)
+            | Statement::End(..) => None,
         }
     }
 }
@@ -1902,6 +1912,7 @@ impl Mir {
             Statement::CriticalEnter(was) => write!(f, "critical_enter {was}"),
             Statement::CriticalExit(was) => write!(f, "critical_exit {was}"),
             Statement::New(place, _) => write!(f, "new {place}"),
+            Statement::End(place, _) => write!(f, "end {place}"),
         }
     }
 

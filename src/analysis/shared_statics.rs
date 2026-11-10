@@ -122,7 +122,8 @@ impl Scan {
                     Statement::Assign(..)
                     | Statement::Call { .. }
                     | Statement::InlineAsm(_)
-                    | Statement::New(..) => {}
+                    | Statement::New(..)
+                    | Statement::End(..) => {}
                 }
             }
             let terminator = &block.terminator;

@@ -499,13 +499,16 @@ impl Lowerer<'_> {
             // Built in, whatever else has the name (ADR 0031).
             ast::ExprKind::Call(path, args)
                 if let Some(name) = plain_name(path)
-                    && matches!(name.name.as_str(), "len" | "slice") =>
+                    && matches!(name.name.as_str(), "len" | "slice" | "end") =>
             {
                 let mut args: Vec<Expr> = args.iter().map(|arg| self.expr(arg)).collect();
-                let (params, help) = if name.name == "len" {
-                    (1, "`len(s)` gives the length of one slice (ADR 0031)")
-                } else {
-                    (2, "`slice(p, n)` takes a pointer and a length (ADR 0031)")
+                let (params, help) = match name.name.as_str() {
+                    "len" => (1, "`len(s)` gives the length of one slice (ADR 0031)"),
+                    "end" => (
+                        1,
+                        "`end(e)` ends one value of a `#[linear]` struct (ADR 0102)",
+                    ),
+                    _ => (2, "`slice(p, n)` takes a pointer and a length (ADR 0031)"),
                 };
                 if args.len() != params {
                     let plural = if params == 1 { "" } else { "s" };
@@ -531,6 +534,7 @@ impl Lowerer<'_> {
                 let first = Box::new(args.remove(0));
                 match args.pop() {
                     Some(len) => ExprKind::Slice(first, Box::new(len)),
+                    None if name.name == "end" => ExprKind::End(first),
                     None => ExprKind::Len(first),
                 }
             }

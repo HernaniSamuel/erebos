@@ -6,7 +6,7 @@ static mut COUNT: u32 = 0;
 static mut DONE: bool = false;
 
 // The end of the block: the value is read under the mask.
-fn end() -> u32 {
+fn finish() -> u32 {
     critical { COUNT }
 }
 
