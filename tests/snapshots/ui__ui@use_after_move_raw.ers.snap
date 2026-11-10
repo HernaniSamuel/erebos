@@ -1,0 +1,76 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/use_after_move_raw.ers
+---
+--- errors ---
+analysis::use-after-move
+
+  × use of moved value `a`
+    ╭─[use_after_move_raw.ers:17:5]
+ 15 │ fn address_of_moved(a: Handle) -> *const Handle {
+ 16 │     consume(a);
+    ·             ┬
+    ·             ╰── moved here
+ 17 │     &raw const a
+    ·     ──────┬─────
+    ·           ╰── used here, after it was moved
+ 18 │ }
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated (ADR 0097)
+analysis::use-after-move
+
+  × use of moved value `a`
+    ╭─[use_after_move_raw.ers:22:5]
+ 20 │ fn mutable_address_of_moved(mut a: Handle) -> *mut Handle {
+ 21 │     consume(a);
+    ·             ┬
+    ·             ╰── moved here
+ 22 │     &raw mut a
+    ·     ─────┬────
+    ·          ╰── used here, after it was moved
+ 23 │ }
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated (ADR 0097)
+analysis::use-after-move
+
+  × use of partly moved value `p`
+    ╭─[use_after_move_raw.ers:29:5]
+ 27 │ fn address_of_partly_moved(mut p: Pair) -> *mut Pair {
+ 28 │     consume(p.a);
+    ·             ─┬─
+    ·              ╰── moved here
+ 29 │     &raw mut p
+    ·     ─────┬────
+    ·          ╰── used here, after a part of it was moved
+ 30 │ }
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated (ADR 0097)
+analysis::use-after-move
+
+  × use of moved value `p`
+    ╭─[use_after_move_raw.ers:34:5]
+ 32 │ fn address_of_part_of_moved(p: Pair) -> *const Handle {
+ 33 │     whole(p);
+    ·           ┬
+    ·           ╰── moved here
+ 34 │     &raw const p.b
+    ·     ───────┬──────
+    ·            ╰── used here, after it was moved
+ 35 │ }
+    ╰────
+  help: a place that was moved is valid again once it is assigned a new value (ADR 0097)
+analysis::use-after-move
+
+  × use of moved value `p`
+    ╭─[use_after_move_raw.ers:40:5]
+ 38 │ fn address_of_copy_field_of_moved(p: Pair) -> *const u32 {
+ 39 │     whole(p);
+    ·           ┬
+    ·           ╰── moved here
+ 40 │     &raw const p.n
+    ·     ───────┬──────
+    ·            ╰── used here, after it was moved
+ 41 │ }
+    ╰────
+  help: a place that was moved is valid again once it is assigned a new value (ADR 0097)

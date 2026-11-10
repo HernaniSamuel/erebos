@@ -832,6 +832,18 @@ fn injected_f(injected_o: InjOuter) -> u32 {
         Items,
         "const INJ_P: *const u8 = 0 as *const u8;\nfn injected_f(p: *const u8) {\n    match p {\n        INJ_P => {}\n        _ => {}\n    }\n}"
     ),
+    // The analyses of one body.
+    s!(
+        "analysis::use-after-move",
+        Mir,
+        Items,
+        "struct InjHandle6 { id: u32 }
+fn injected_take(injected_h: InjHandle6) {}
+fn injected_f(injected_h: InjHandle6) {
+    injected_take(injected_h);
+    injected_take(injected_h);
+}"
+    ),
     // Compile-time evaluation.
     s!(
         "eval::assertion-failed",

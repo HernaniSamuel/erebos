@@ -1,0 +1,61 @@
+// emit: mir
+// The analysis of moves runs on a body before compile-time evaluation can run
+// it (ADR 0094, 0099). A body with a use after a move is not evaluated, so a
+// `const` that calls it gets that error and none of evaluation (here a
+// division by zero the body would reach); a `comptime` expression with the
+// error in it is analysed once, however often its value is asked for; and a
+// body that fails to build, as one whose `comptime` expression fails, is not
+// analysed, so only the first of the two errors is reported.
+struct Handle { n: u32 }
+
+fn consume(h: Handle) {}
+
+fn zero() -> u32 { 0 }
+
+// Rejected: the use after the move; the division by zero is not reached.
+fn twice() -> u32 {
+    let h: Handle = Handle { n: 1 };
+    consume(h);
+    consume(h);
+    10 / zero()
+}
+
+const FROM_BODY: u32 = twice();
+
+// Rejected: the body of the `comptime` expression is analysed before it is
+// evaluated, and the function's own body has no error of its own.
+fn expression() -> u32 {
+    let a: u32 = comptime {
+        let h: Handle = Handle { n: 1 };
+        consume(h);
+        consume(h);
+        7
+    };
+    a
+}
+
+// Rejected once, though the constant is used four times below.
+const LEN: u32 = comptime { let h: Handle = Handle { n: 2 }; consume(h); consume(h); 4 };
+
+fn lengths() -> [u32; 4] {
+    let a: [u32; 4] = [LEN, LEN, LEN, LEN];
+    a
+}
+
+// Rejected: the `comptime` expression fails to evaluate, so the body is not
+// built and not analysed.
+fn first_error(h: Handle) -> u32 {
+    consume(h);
+    consume(h);
+    comptime 10 / zero()
+}
+
+// Accepted: the same body without a use after a move.
+fn evaluated() -> u32 {
+    let h: Handle = Handle { n: 3 };
+    consume(h);
+    comptime 6 / 2
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

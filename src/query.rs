@@ -6,6 +6,7 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
+use crate::analysis;
 use crate::diag::{Diagnostic, Diagnostics};
 use crate::eval::{self, ConstValue, Origin};
 use crate::hir::{
@@ -734,7 +735,10 @@ impl<'h> Queries<'h> {
             return None;
         }
         self.comptime.insert(expr.id, State::InProgress);
-        let value = mir::build_expr_body(self, id, expr).and_then(|body| {
+        // A body the analyses reject is not evaluated (ADR 0099).
+        let body = mir::build_expr_body(self, id, expr)
+            .filter(|body| analysis::check_body(body, &mut self.diags));
+        let value = body.and_then(|body| {
             let origin = Origin {
                 what,
                 span: expr.span,
@@ -1670,7 +1674,11 @@ impl<'h> Queries<'h> {
             return None;
         }
         self.bodies[id.0 as usize] = State::InProgress;
-        let body = mir::build_body(self, id).map(Rc::new);
+        // A body the analyses reject is stored as one that failed to build
+        // (ADR 0099).
+        let body = mir::build_body(self, id)
+            .filter(|body| analysis::check_body(body, &mut self.diags))
+            .map(Rc::new);
         if tracked {
             self.finish(Item::Body(id));
         }

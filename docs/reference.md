@@ -5664,6 +5664,7 @@ Every error has a stable code, shown with the message.
 | `eval::uninit-read` | reading bytes never written, such as padding |
 | `eval::pointer-escapes` | a compile-time result holding a pointer into the evaluation's own memory |
 | `eval::pointer-out-of-bounds` | a compile-time result holding a pointer outside its object and not one past its end, or a slice not inside its object |
+| `analysis::use-after-move` | a place read, moved, assigned a part of or whose address is taken, after the value in it, in a part of it or in a place that contains it was moved, on some path from the move and with no assignment to it since, in a loop's next iteration too; each move that reaches the use is a label, and a second use after the same move is not reported (ADR 0097, 0099) |
 | `analysis::unprotected-static` | a place in the thread context, outside `critical`, naming a `static mut` or `extern static mut` that the handler context also reaches (ADR 0078, 0093) |
 | `analysis::unmaskable-static` | a place in the context of an unmaskable handler, naming a `static mut` or `extern static mut` that another context also reaches; being inside `critical` changes nothing (ADR 0078, 0093) |
 | `codegen::asm` | an instruction LLVM's assembler rejects, at the `asm` expression with the assembler's message, or without a label when the error exists only in the whole object (a non-local label defined twice by inlining, no register left for the operands) |

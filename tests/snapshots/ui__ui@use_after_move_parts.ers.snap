@@ -1,0 +1,133 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/use_after_move_parts.ers
+---
+--- errors ---
+analysis::use-after-move
+
+  × use of partly moved value `p`
+    ╭─[use_after_move_parts.ers:23:11]
+ 21 │ fn whole_after_field(p: Pair) {
+ 22 │     consume(p.a);
+    ·             ─┬─
+    ·              ╰── moved here
+ 23 │     whole(p);
+    ·           ┬
+    ·           ╰── used here, after a part of it was moved
+ 24 │ }
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated (ADR 0097)
+analysis::use-after-move
+
+  × use of moved value `p.a`
+    ╭─[use_after_move_parts.ers:29:13]
+ 27 │ fn field_twice(p: Pair) {
+ 28 │     consume(p.a);
+    ·             ─┬─
+    ·              ╰── moved here
+ 29 │     consume(p.a);
+    ·             ─┬─
+    ·              ╰── used here, after it was moved
+ 30 │ }
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated (ADR 0097)
+analysis::use-after-move
+
+  × use of partly moved value `n.inner`
+    ╭─[use_after_move_parts.ers:35:11]
+ 33 │ fn deep_then_shallow(n: Nested) {
+ 34 │     consume(n.inner.a);
+    ·             ────┬────
+    ·                 ╰── moved here
+ 35 │     whole(n.inner);
+    ·           ───┬───
+    ·              ╰── used here, after a part of it was moved
+ 36 │ }
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated (ADR 0097)
+analysis::use-after-move
+
+  × use of moved value `p`
+    ╭─[use_after_move_parts.ers:41:13]
+ 39 │ fn field_after_whole(p: Pair) {
+ 40 │     whole(p);
+    ·           ┬
+    ·           ╰── moved here
+ 41 │     consume(p.b);
+    ·             ─┬─
+    ·              ╰── used here, after it was moved
+ 42 │ }
+    ╰────
+  help: a place that was moved is valid again once it is assigned a new value (ADR 0097)
+analysis::use-after-move
+
+  × use of moved value `p`
+    ╭─[use_after_move_parts.ers:47:5]
+ 45 │ fn copy_field_after_whole(p: Pair) -> u32 {
+ 46 │     whole(p);
+    ·           ┬
+    ·           ╰── moved here
+ 47 │     p.n
+    ·     ─┬─
+    ·      ╰── used here, after it was moved
+ 48 │ }
+    ╰────
+  help: a place that was moved is valid again once it is assigned a new value (ADR 0097)
+analysis::use-after-move
+
+  × assignment to a part of the moved value `p`
+    ╭─[use_after_move_parts.ers:53:5]
+ 51 │ fn assign_after_whole(mut p: Pair) {
+ 52 │     whole(p);
+    ·           ┬
+    ·           ╰── moved here
+ 53 │     p.a = make();
+    ·     ──────┬─────
+    ·           ╰── assigned here
+ 54 │ }
+    ╰────
+  help: a place that was moved is valid again once it is assigned a new value (ADR 0097)
+analysis::use-after-move
+
+  × use of partly moved value `n.inner`
+    ╭─[use_after_move_parts.ers:59:23]
+ 57 │ fn assign_deep_after_field(mut n: Nested) {
+ 58 │     consume(n.inner.a);
+    ·             ────┬────
+    ·                 ╰── moved here
+ 59 │     let moved: Pair = n.inner;
+    ·                       ───┬───
+    ·                          ╰── used here, after a part of it was moved
+ 60 │     n.inner.a = make();
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated (ADR 0097)
+analysis::use-after-move
+
+  × assignment to a part of the moved value `n.inner`
+    ╭─[use_after_move_parts.ers:60:5]
+ 58 │     consume(n.inner.a);
+ 59 │     let moved: Pair = n.inner;
+    ·                       ───┬───
+    ·                          ╰── moved here
+ 60 │     n.inner.a = make();
+    ·     ─────────┬────────
+    ·              ╰── assigned here
+ 61 │ }
+    ╰────
+  help: a place that was moved is valid again once it is assigned a new value (ADR 0097)
+analysis::use-after-move
+
+  × use of partly moved value `p`
+    ╭─[use_after_move_parts.ers:68:11]
+ 65 │     consume(p.a);
+ 66 │     consume(p.b);
+    ·             ─┬─
+    ·              ╰── moved here
+ 67 │     p.a = make();
+ 68 │     whole(p);
+    ·           ┬
+    ·           ╰── used here, after a part of it was moved
+ 69 │ }
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated (ADR 0097)

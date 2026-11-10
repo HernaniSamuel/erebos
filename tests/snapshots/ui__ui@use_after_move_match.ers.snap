@@ -1,0 +1,94 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/use_after_move_match.ers
+---
+--- errors ---
+analysis::use-after-move
+
+  × use of partly moved value `m`
+    ╭─[use_after_move_match.ers:23:11]
+ 19 │     match m {
+ 20 │         .One(let h: Handle) => consume(h),
+    ·              ──────┬──────
+    ·                    ╰── moved here
+ 21 │         _ => {},
+ 22 │     }
+ 23 │     whole(m);
+    ·           ┬
+    ·           ╰── used here, after a part of it was moved
+ 24 │ }
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated (ADR 0097)
+analysis::use-after-move
+
+  × use of partly moved value `m`
+    ╭─[use_after_move_match.ers:31:19]
+ 28 │     match m {
+ 29 │         .One(let h: Handle) => {
+    ·              ──────┬──────
+    ·                    ╰── moved here
+ 30 │             consume(h);
+ 31 │             whole(m);
+    ·                   ┬
+    ·                   ╰── used here, after a part of it was moved
+ 32 │         },
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated (ADR 0097)
+analysis::use-after-move
+
+  × use of partly moved value `m`
+    ╭─[use_after_move_match.ers:44:11]
+ 40 │     match m {
+ 41 │         .One(let b: Handle) | .Wide(let b: Handle) => consume(b),
+    ·              ──────┬──────          ──────┬──────
+    ·                    │                      ╰── moved here
+    ·                    ╰── moved here
+ 42 │         _ => {},
+ 43 │     }
+ 44 │     whole(m);
+    ·           ┬
+    ·           ╰── used here, after a part of it was moved
+ 45 │ }
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated (ADR 0097)
+analysis::use-after-move
+
+  × use of moved value `m.One.0`
+    ╭─[use_after_move_match.ers:52:18]
+ 51 │         match m {
+ 52 │             .One(let h: Handle) => consume(h),
+    ·                  ──────┬──────┬
+    ·                        │      ╰── moved here, in an earlier iteration of the loop
+    ·                        ╰── used here, after it was moved
+ 53 │             _ => {},
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated (ADR 0097)
+analysis::use-after-move
+
+  × use of moved value `r`
+    ╭─[use_after_move_match.ers:61:37]
+ 59 │ fn question_then_operand(r: Result(Handle, u8)) -> Result(Handle, u8) {
+ 60 │     let h: Handle = r?;
+    ·                     ┬
+    ·                     ╰── moved here
+ 61 │     let again: Result(Handle, u8) = r;
+    ·                                     ┬
+    ·                                     ╰── used here, after it was moved
+ 62 │     .Ok(h)
+    ╰────
+  help: a place that was moved is valid again once it is assigned a new value (ADR 0097)
+analysis::use-after-move
+
+  × use of moved value `o`
+    ╭─[use_after_move_match.ers:68:33]
+ 66 │ fn question_option(o: Option(Handle)) -> Option(Handle) {
+ 67 │     let h: Handle = o?;
+    ·                     ┬
+    ·                     ╰── moved here
+ 68 │     let again: Option(Handle) = o;
+    ·                                 ┬
+    ·                                 ╰── used here, after it was moved
+ 69 │     .Some(h)
+    ╰────
+  help: a place that was moved is valid again once it is assigned a new value (ADR 0097)

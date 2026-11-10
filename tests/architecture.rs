@@ -50,7 +50,16 @@ const LAYERS: &[(&str, &[&str])] = &[
     ("eval", &["hir", "mir", "query"]),
     (
         "query",
-        &["hir", "ty", "layout", "memory", "mir", "mir::build", "eval"],
+        &[
+            "hir",
+            "ty",
+            "layout",
+            "memory",
+            "mir",
+            "mir::build",
+            "eval",
+            "analysis",
+        ],
     ),
     ("codegen", &["mir"]),
     ("link", &["mir"]),

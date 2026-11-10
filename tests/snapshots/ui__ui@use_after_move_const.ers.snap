@@ -1,0 +1,58 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/use_after_move_const.ers
+---
+--- errors ---
+analysis::use-after-move
+
+  × use of moved value `h`
+    ╭─[use_after_move_const.ers:19:13]
+ 17 │     let h: Handle = Handle { n: 1 };
+ 18 │     consume(h);
+    ·             ┬
+    ·             ╰── moved here
+ 19 │     consume(h);
+    ·             ┬
+    ·             ╰── used here, after it was moved
+ 20 │     10 / zero()
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated (ADR 0097)
+analysis::use-after-move
+
+  × use of moved value `h`
+    ╭─[use_after_move_const.ers:31:17]
+ 29 │         let h: Handle = Handle { n: 1 };
+ 30 │         consume(h);
+    ·                 ┬
+    ·                 ╰── moved here
+ 31 │         consume(h);
+    ·                 ┬
+    ·                 ╰── used here, after it was moved
+ 32 │         7
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated (ADR 0097)
+analysis::use-after-move
+
+  × use of moved value `h`
+    ╭─[use_after_move_const.ers:38:82]
+ 37 │ // Rejected once, though the constant is used four times below.
+ 38 │ const LEN: u32 = comptime { let h: Handle = Handle { n: 2 }; consume(h); consume(h); 4 };
+    ·                                                                      ┬           ┬
+    ·                                                                      │           ╰── used here, after it was moved
+    ·                                                                      ╰── moved here
+ 39 │ 
+    ╰────
+  help: mark `Handle` with `#[copy]` if its values may be duplicated (ADR 0097)
+eval::panic
+
+  × the evaluation called the panic function: division by zero
+    ╭─[use_after_move_const.ers:50:14]
+ 49 │     consume(h);
+ 50 │     comptime 10 / zero()
+    ·              ─────┬─────┬
+    ·                   │     ╰── while evaluating this `comptime` expression
+    ·                   ╰── division by zero
+ 51 │ }
+    ╰────
+  help: this code runs at compile time (ADR 0027)
