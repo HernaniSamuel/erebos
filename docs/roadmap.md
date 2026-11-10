@@ -103,7 +103,7 @@ QEMU. The ownership model they share is ADR 0094.
 | Step | Delivers | Program on QEMU |
 |------|----------|-----------------|
 | **M5.1** ✅ MIR validation | the rules of MIR checked after each body is built, after the program is assembled and after `leave_out` (ADR 0095); no change to the language | every program of the tests, on both targets at both levels, passes the validator |
-| **M5.2** Moves | `#[copy]`; moves in MIR; use after a move rejected, per body, before evaluation; constants and statics of non-copy types; the tests and `core` migrated | pins in typestate: a pin taken from disabled to output by functions that consume it |
+| **M5.2** ✅ Moves | `#[copy]`; moves in MIR; use after a move rejected, per body, before evaluation; constants and statics of non-copy types; the tests and `core` migrated | pins in typestate: a pin taken from disabled to output by functions that consume it |
 | **M5.3** Linear values | types that must be consumed; the check on every path that returns | a transfer to a device whose handle must be waited for |
 | **M5.4** References | `&T`, `&mut T`, `&place`, `*r`; second-class references; the borrow check; `&[T]`; references and statics, `critical` and handlers | a driver writing and filling buffers passed as `&[u8]` and `&mut [u8]` |
 | **M5.5** Methods | `impl`, `self`, `&self`, `&mut self`, `x.f()`, functions of a type | the ring buffer and the UART driver written as methods |
@@ -852,5 +852,41 @@ Documentation owed:
   was broken by the MIR of any test, so the ADR's rules stand as written.
   The analyses that run before evaluation, which ADR 0094 requires, come
   with the first of them, in M5.2.
-- **Next: M5.2** (moves), the second step of M5 (moves, ownership,
+- **M5.2 done.** Types are copy or non-copy (ADR 0096): a struct or an enum
+  with payloads is copy only when declared `#[copy]`, whose fields and payload
+  values must be copy (`ty::copy-field-not-copy`); a `const` or `comptime`
+  value of a non-copy type and `[v; N]` of one, but for a variant written
+  without payload values, are errors (`ty::non-copy-constant`,
+  `ty::non-copy-repeat`). A non-copy value moves out of locals, parameters,
+  their fields and the payloads a `match` binds, not out of an array element, a
+  place through a pointer or a static (`ty::move-out-of-place`), and a non-copy
+  binding in an or-pattern nested in a payload is an error
+  (`ty::non-copy-binding-in-or-pattern`; ADR 0097). MIR has the operand `move`
+  with the span of its expression, the kind of a type in its definitions, a
+  `match` on a non-copy place tested in place and bindings moved at the end of
+  their alternative, and four more rules in the validator, M1 to M4 (ADR 0098).
+  `analysis::use-after-move` runs on each body when `query` has built it, before
+  anything evaluates it, so a `const` or `comptime` expression whose body
+  uses a value after moving it reports that and nothing from evaluation (ADR
+  0099, amending ADR 0063: `query` uses `analysis`). `tests/e2e/typestate_pins.ers`
+  takes a pin from disabled to input to output and back with functions that
+  consume it, on both targets at both levels; the wrong uses are ui tests.
+  `#[copy]` went only to the types of the tests that needed it, in `tests/e2e`
+  and `tests/ui`; `core`, `tests/layout`,
+  `tests/boards` and the chips of `tests/svd` needed none. Left open, for the
+  planner: ADR 0097 says an array element is not movable "whatever `i`", and
+  type checking also rejects the element of a temporary's array
+  (`make().items[i]`), because MIR's rule M3 allows no `Index` in a `move`; ADR
+  0099 should say that the analysis follows only named variables and
+  parameters, since MIR building writes literals, variants and the tags of
+  `[.None; N]` into reused temporaries by parts, which its rules would take for
+  uses after a move; ADR 0097's "a second use after the same move is not
+  reported" holds only for uses that do not move, since a use that is a `move`
+  makes its own site; a binding of a non-copy type inside a nested or-pattern
+  stays an error until a program needs it; the generated programs of ADR 0068
+  have no structs, so moves are tested by hand-written ui and e2e programs
+  only; and why a type error in a file replaces its other errors with
+  `resolve::missing-entry` and `missing-panic` when the file has no entry
+  function was not looked into.
+- **Next: M5.3** (linear values), the third step of M5 (moves, ownership,
   references and methods), whose steps and model are above (ADR 0094).
