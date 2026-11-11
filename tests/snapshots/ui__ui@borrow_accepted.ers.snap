@@ -1,0 +1,525 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/borrow_accepted.ers
+---
+--- mir ---
+struct Pair { 0 a: u32 at 0, 1 b: u32 at 4 } // size 8, align 4
+
+static LIMIT: u32; // align 4
+
+fn consume(_1: Pair) -> () {
+    let _0: ();
+    let _1: Pair; // p
+
+    bb0: {
+        return;
+    }
+}
+
+fn bump(_1: &mut u32) -> () {
+    let _0: ();
+    let _1: &mut u32; // p
+    let _2: u32;
+    let _3: u32;
+
+    bb0: {
+        _2 = copy (*_1);
+        _3 = Add(copy _2, const 1_u32);
+        (*_1) = copy _3;
+        return;
+    }
+}
+
+fn next(_1: &u32) -> u32 {
+    let _0: u32;
+    let _1: &u32; // p
+    let _2: u32;
+    let _3: u32;
+
+    bb0: {
+        _2 = copy (*_1);
+        _3 = Add(copy _2, const 1_u32);
+        _0 = copy _3;
+        return;
+    }
+}
+
+fn grow(_1: &Pair) -> Pair {
+    let _0: Pair;
+    let _1: &Pair; // p
+    let _2: Pair;
+    let _3: u32;
+    let _4: u32;
+    let _5: u32;
+
+    bb0: {
+        _3 = copy (*_1).0;
+        _4 = Add(copy _3, const 1_u32);
+        _2.0 = copy _4;
+        _5 = copy (*_1).1;
+        _2.1 = copy _5;
+        _0 = move _2;
+        return;
+    }
+}
+
+fn two_mut(_1: &mut u32, _2: &mut u32) -> () {
+    let _0: ();
+    let _1: &mut u32; // a
+    let _2: &mut u32; // b
+
+    bb0: {
+        return;
+    }
+}
+
+fn mut_and_shared(_1: &mut u32, _2: &u32) -> () {
+    let _0: ();
+    let _1: &mut u32; // a
+    let _2: &u32; // b
+
+    bb0: {
+        return;
+    }
+}
+
+fn mut_and_value(_1: &mut u32, _2: u32) -> () {
+    let _0: ();
+    let _1: &mut u32; // a
+    let _2: u32; // n
+
+    bb0: {
+        return;
+    }
+}
+
+fn value_and_pair(_1: u32, _2: &mut Pair) -> () {
+    let _0: ();
+    let _1: u32; // n
+    let _2: &mut Pair; // p
+
+    bb0: {
+        return;
+    }
+}
+
+fn bytes(_1: &[u8; 3]) -> u8 {
+    let _0: u8;
+    let _1: &[u8; 3]; // b
+    let _2: u8;
+
+    bb0: {
+        _2 = copy (*_1)[0];
+        _0 = copy _2;
+        return;
+    }
+}
+
+fn last_use(_1: u32) -> u32 {
+    let _0: u32;
+    let _1: u32; // x
+    let _2: &mut u32; // r
+    let _3: &mut u32;
+
+    bb0: {
+        _3 = &mut _1;
+        _2 = move _3;
+        (*_2) = const 1_u32;
+        _1 = const 2_u32;
+        _0 = copy _1;
+        return;
+    }
+}
+
+fn shared_then_write(_1: u32) -> u32 {
+    let _0: u32;
+    let _1: u32; // x
+    let _2: &u32; // a
+    let _3: &u32; // b
+    let _4: u32; // n
+    let _5: &u32;
+    let _6: &u32;
+    let _7: u32;
+    let _8: u32;
+    let _9: u32;
+    let _10: u32;
+    let _11: u32;
+
+    bb0: {
+        _5 = &_1;
+        _2 = copy _5;
+        _6 = &_1;
+        _3 = copy _6;
+        _7 = copy (*_2);
+        _8 = copy _7;
+        _9 = copy (*_3);
+        _10 = Add(copy _8, copy _9);
+        _11 = Add(copy _10, copy _1);
+        _4 = copy _11;
+        _1 = const 3_u32;
+        _0 = copy _4;
+        return;
+    }
+}
+
+fn read_then_borrow(_1: Pair) -> () {
+    let _0: ();
+    let _1: Pair; // p
+    let _2: u32;
+    let _3: u32;
+    let _4: &mut Pair;
+
+    bb0: {
+        _2 = copy _1.0;
+        _3 = copy _2;
+        _4 = &mut _1;
+        call value_and_pair(copy _3, move _4);
+        return;
+    }
+}
+
+fn ordered(_1: Pair) -> () {
+    let _0: ();
+    let _1: Pair; // p
+    let _2: u32; // n
+    let _3: u32;
+    let _4: u32;
+    let _5: &mut Pair;
+
+    bb0: {
+        _3 = copy _1.0;
+        _2 = copy _3;
+        _4 = copy _2;
+        _5 = &mut _1;
+        call value_and_pair(copy _4, move _5);
+        return;
+    }
+}
+
+fn fields(_1: Pair) -> () {
+    let _0: ();
+    let _1: Pair; // s
+    let _2: &mut u32;
+    let _3: &mut u32;
+    let _4: &mut u32;
+    let _5: &mut u32;
+    let _6: &mut u32;
+    let _7: &u32;
+
+    bb0: {
+        _2 = &mut _1.0;
+        _3 = move _2;
+        _4 = &mut _1.1;
+        call two_mut(move _3, move _4);
+        _5 = &mut _1.0;
+        _6 = move _5;
+        _7 = &_1.1;
+        call mut_and_shared(move _6, copy _7);
+        return;
+    }
+}
+
+fn result(_1: u32, _2: Pair) -> u32 {
+    let _0: u32;
+    let _1: u32; // x
+    let _2: Pair; // p
+    let _3: &u32;
+    let _4: u32;
+    let _5: &Pair;
+    let _6: Pair;
+    let _7: u32;
+    let _8: u32;
+    let _9: u32;
+
+    bb0: {
+        _3 = &_1;
+        _4 = call next(copy _3);
+        _1 = copy _4;
+        _5 = &_2;
+        _6 = call grow(copy _5);
+        _2 = move _6;
+        _7 = copy _1;
+        _8 = copy _2.0;
+        _9 = Add(copy _7, copy _8);
+        _0 = copy _9;
+        return;
+    }
+}
+
+fn through(_1: u32) -> u32 {
+    let _0: u32;
+    let _1: u32; // x
+    let _2: &mut u32; // r
+    let _3: &mut u32; // q
+    let _4: &mut u32;
+    let _5: &mut u32;
+    let _6: u32;
+
+    bb0: {
+        _4 = &mut _1;
+        _2 = move _4;
+        (*_2) = const 1_u32;
+        _5 = &mut (*_2);
+        _3 = move _5;
+        (*_3) = const 2_u32;
+        (*_2) = const 3_u32;
+        _6 = copy (*_2);
+        _0 = copy _6;
+        return;
+    }
+}
+
+fn lent(_1: &mut u32) -> u32 {
+    let _0: u32;
+    let _1: &mut u32; // r
+    let _2: u32; // n
+    let _3: &mut u32;
+    let _4: &mut u32;
+    let _5: &u32;
+    let _6: u32;
+    let _7: &mut u32;
+
+    bb0: {
+        _3 = &mut (*_1);
+        call bump(move _3);
+        _4 = &mut (*_1);
+        call bump(move _4);
+        _5 = &(*_1);
+        _6 = call next(copy _5);
+        _2 = copy _6;
+        (*_1) = copy _2;
+        _7 = &mut (*_1);
+        call mut_and_value(move _7, copy _2);
+        _0 = copy _2;
+        return;
+    }
+}
+
+fn looped(_1: &mut u32, _2: u32) -> () {
+    let _0: ();
+    let _1: &mut u32; // r
+    let _2: u32; // n
+    let _3: u32; // i
+    let _4: bool;
+    let _5: &mut u32;
+    let _6: u32;
+
+    bb0: {
+        _3 = const 0_u32;
+        goto -> bb1;
+    }
+
+    bb1: {
+        _4 = Lt(copy _3, copy _2);
+        if copy _4 -> [true: bb2, false: bb3];
+    }
+
+    bb2: {
+        _5 = &mut (*_1);
+        call bump(move _5);
+        _6 = Add(copy _3, const 1_u32);
+        _3 = copy _6;
+        goto -> bb1;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn per_iteration(_1: u32, _2: u32) -> () {
+    let _0: ();
+    let _1: u32; // x
+    let _2: u32; // n
+    let _3: u32; // i
+    let _4: &mut u32; // r
+    let _5: bool;
+    let _6: &mut u32;
+    let _7: u32;
+    let _8: u32;
+
+    bb0: {
+        _3 = const 0_u32;
+        goto -> bb1;
+    }
+
+    bb1: {
+        _5 = Lt(copy _3, copy _2);
+        if copy _5 -> [true: bb2, false: bb3];
+    }
+
+    bb2: {
+        _6 = &mut _1;
+        _4 = move _6;
+        (*_4) = copy _3;
+        _7 = Add(copy _1, const 1_u32);
+        _1 = copy _7;
+        _8 = Add(copy _3, const 1_u32);
+        _3 = copy _8;
+        goto -> bb1;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn raw(_1: u32) -> () {
+    let _0: ();
+    let _1: u32; // x
+    let _2: *mut u32; // p
+    let _3: &mut u32; // q
+    let _4: *mut u32;
+    let _5: &mut u32;
+
+    bb0: {
+        _4 = &raw mut _1;
+        _2 = copy _4;
+        _5 = &mut (*_2);
+        _3 = move _5;
+        _1 = const 5_u32;
+        (*_3) = const 1_u32;
+        return;
+    }
+}
+
+fn read_only() -> u32 {
+    let _0: u32;
+    let _1: &u32; // a
+    let _2: &u32; // b
+    let _3: &[u8; 3]; // s
+    let _4: &[u8; 3]; // t
+    let _5: *const u32;
+    let _6: &u32;
+    let _7: *const u32;
+    let _8: &u32;
+    let _9: *const [u8; 3];
+    let _10: &[u8; 3];
+    let _11: *const [u8; 3];
+    let _12: &[u8; 3];
+    let _13: u32;
+    let _14: u32;
+    let _15: u32;
+    let _16: u32;
+    let _17: u32;
+    let _18: u8;
+    let _19: u8;
+    let _20: u8;
+    let _21: u8;
+    let _22: u32;
+    let _23: u32;
+
+    bb0: {
+        _5 = const static LIMIT;
+        _6 = &(*_5);
+        _1 = copy _6;
+        _7 = const static LIMIT;
+        _8 = &(*_7);
+        _2 = copy _8;
+        _9 = const b"abc";
+        _10 = &(*_9);
+        _3 = copy _10;
+        _11 = const b"abc";
+        _12 = &(*_11);
+        _4 = copy _12;
+        _13 = copy (*_1);
+        _14 = copy _13;
+        _15 = copy (*_2);
+        _16 = Add(copy _14, copy _15);
+        _17 = copy _16;
+        _18 = call bytes(copy _3);
+        _19 = copy _18;
+        _20 = call bytes(copy _4);
+        _21 = Add(copy _19, copy _20);
+        _22 = copy _21 as u32;
+        _23 = Add(copy _17, copy _22);
+        _0 = copy _23;
+        return;
+    }
+}
+
+fn never(_1: u32, _2: bool) -> u32 {
+    let _0: u32;
+    let _1: u32; // x
+    let _2: bool; // c
+    let _3: &mut u32; // r
+    let _4: &mut u32;
+
+    bb0: {
+        _4 = &mut _1;
+        _3 = move _4;
+        if copy _2 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _1 = const 1_u32;
+        goto -> bb3;
+    }
+
+    bb2: {
+        goto -> bb4;
+    }
+
+    bb3: {
+        goto -> bb3;
+    }
+
+    bb4: {
+        (*_3) = const 2_u32;
+        _0 = copy _1;
+        return;
+    }
+}
+
+fn moved_after(_1: Pair) -> u32 {
+    let _0: u32;
+    let _1: Pair; // p
+    let _2: &Pair; // r
+    let _3: u32; // n
+    let _4: &Pair;
+    let _5: u32;
+
+    bb0: {
+        _4 = &_1;
+        _2 = copy _4;
+        _5 = copy (*_2).0;
+        _3 = copy _5;
+        call consume(move _1);
+        _0 = copy _3;
+        return;
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+comptime fn LIMIT() -> u32 {
+    let _0: u32;
+
+    bb0: {
+        _0 = const 7_u32;
+        return;
+    }
+}

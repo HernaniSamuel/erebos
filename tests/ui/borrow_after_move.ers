@@ -1,0 +1,29 @@
+// emit: mir
+// A borrow of a moved place is `analysis::use-after-move`: the borrow check
+// runs only on a body the analysis of moves accepted (ADR 0106, 0107), so the
+// borrow that would conflict with a later use is not reported as well.
+struct Pair {
+    a: u32,
+    b: u32,
+}
+
+fn consume(p: Pair) {}
+
+// Only the use after the move: the later write of `p.a` while `r` is used
+// would be a conflict on its own.
+fn borrowed_after_move(mut p: Pair) -> u32 {
+    consume(p);
+    let r: &Pair = &p;
+    p.a = 1;
+    (*r).b
+}
+
+// Only the conflict: the same body without the move.
+fn conflict(mut p: Pair) -> u32 {
+    let r: &Pair = &p;
+    p.a = 1;
+    (*r).b
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

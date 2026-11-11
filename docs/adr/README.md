@@ -135,5 +135,5 @@ Do not write one for local implementation details that the code already explains
 | 0103 | [Linear values in MIR, and their analysis](0103-linear-values-in-mir.md) | Accepted |
 | 0104 | [Variant values in MIR](0104-variant-values-in-mir.md) | Accepted |
 | 0105 | [References](0105-references.md) | Accepted |
-| 0106 | [The borrow check](0106-the-borrow-check.md) | Accepted |
-| 0107 | [References in MIR, and the borrow analysis](0107-references-in-mir-and-the-borrow-analysis.md) | Accepted |
+| 0106 | [The borrow check](0106-the-borrow-check.md) | Accepted, amended 2026-11-11 |
+| 0107 | [References in MIR, and the borrow analysis](0107-references-in-mir-and-the-borrow-analysis.md) | Accepted, amended 2026-11-11 |

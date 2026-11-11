@@ -1,6 +1,6 @@
 # 0107. References in MIR, and the borrow analysis
 
-- Status: Accepted
+- Status: Accepted; amended on 2026-11-11 (which later use is labelled)
 - Date: 2026-11-11
 - Amends: 0095 (T1 and T5 for references; the rules R1 to R3), 0098 ("Kinds
   in MIR": the kind of a reference; "Where MIR building moves": a `&mut`
@@ -181,14 +181,31 @@ every access in conflict, and reports `analysis::borrow-conflict` as ADR 0106
 says: the span of the access, a label at each site in conflict, and for each
 one later use. That use is chosen among the reads of a local holding the site,
 at a point where the site is in use, that a forward search from the access
-reaches: the one whose span starts first at or after the access's span start;
-if every one starts before it (reached only round a loop), the one whose span
-starts first, marked "in the next iteration of the loop". Spans that start
+reaches. A read **comes after** the access when it is in the access's own block
+at a later place (a later statement, or a later access of the same statement),
+or when it is a read by the call that the access is an argument of (not the
+write of the call's result): whatever their spans, since a call reads its
+arguments when it runs, after all of them are evaluated, and its span starts at
+the callee, before them. A read by a call is placed at the call's span, not at
+its argument's. Among the reads that come after the access, or whose span
+starts at or after the access's span start, the one whose span starts first is
+chosen. If there is none (every one is reached only round a loop), the one
+whose span starts first is chosen, marked "in the next iteration of the loop":
+only a read reached through a back edge is marked, so `f(&mut x, &x)` outside
+any loop is not. Spans that start
 together are ordered by their end, then by location (block, statement index,
 the terminator last), as the analysis of moves orders them. The names of places follow `analysis::moves` (a local's
 name, `.f`, `[_]`, `*`), with "this value" for a temporary; a site that MIR
 building made to lend an argument or for a conversion is described as such.
 Errors are ordered and deduplicated as the analysis of moves orders them.
+
+**Note, 2026-11-11:** the rule for the later use said only "the first whose
+span starts at or after the access, else the first, marked as in the next
+iteration of the loop". For `f(&mut x, &x)` the read of the first borrow is
+the call, whose span starts at `f`, before the access `&x`, so a function with
+no loop said "in the next iteration of the loop". The reads that come after
+the access in the program (above) are now ahead whatever their spans; ADR 0106
+says the same in its "Diagnostics".
 
 ### `check_body`
 

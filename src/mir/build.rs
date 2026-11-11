@@ -437,7 +437,12 @@ impl Builder<'_, '_> {
                 hir::Stmt::Let { local, init } => {
                     let value = self.expr(init);
                     let local = self.hir_locals[local.0 as usize];
+                    // The write is at the initializer, not at the block: a
+                    // read of a variable has no statement of its own, and the
+                    // analyses that name the access point at this one.
+                    let outer = std::mem::replace(&mut self.span, init.span);
                     self.assign(Place::local(local), Rvalue::Use(value));
+                    self.span = outer;
                 }
                 hir::Stmt::Expr { expr, .. } => {
                     if self.is_discarded(expr) {

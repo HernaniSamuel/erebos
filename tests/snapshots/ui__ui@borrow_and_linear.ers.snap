@@ -1,0 +1,76 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/borrow_and_linear.ers
+---
+--- errors ---
+analysis::linear-not-consumed
+
+  × linear value `t` of type `Ticket` is not consumed
+    ╭─[borrow_and_linear.ers:16:21]
+ 14 │     // Both: `x` is written while `r` is used later, and the ticket is dropped.
+ 15 │ ╭─▶ fn both(mut x: u32) -> u32 {
+ 16 │ │       let t: Ticket = make();
+    · │                       ───┬──
+    · │                          ╰── linear value comes from this call
+ 17 │ │       let r: &mut u32 = &mut x;
+ 18 │ │       x = 2;
+ 19 │ │       *r = 3;
+ 20 │ │       x
+ 21 │ ├─▶ }
+    · ╰──── `t` is still held when the function returns here
+ 22 │     
+    ╰────
+  help: consume it: pass it to a function that does, return it, or end it with `end` where its
+        fields are visible (ADR 0102)
+analysis::borrow-conflict
+
+  × cannot assign to `x` while it is borrowed
+    ╭─[borrow_and_linear.ers:18:5]
+ 16 │     let t: Ticket = make();
+ 17 │     let r: &mut u32 = &mut x;
+    ·                       ───┬──
+    ·                          ╰── `x` is borrowed as mutable here
+ 18 │     x = 2;
+    ·     ──┬──
+    ·       ╰── assigned here
+ 19 │     *r = 3;
+    ·     ───┬──
+    ·        ╰── the borrow is used later here
+ 20 │     x
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot assign to `x` while it is borrowed
+    ╭─[borrow_and_linear.ers:26:5]
+ 24 │ fn conflict(mut x: u32) -> u32 {
+ 25 │     let r: &mut u32 = &mut x;
+    ·                       ───┬──
+    ·                          ╰── `x` is borrowed as mutable here
+ 26 │     x = 2;
+    ·     ──┬──
+    ·       ╰── assigned here
+ 27 │     *r = 3;
+    ·     ───┬──
+    ·        ╰── the borrow is used later here
+ 28 │     x
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::linear-not-consumed
+
+  × linear value `t` of type `Ticket` is not consumed
+    ╭─[borrow_and_linear.ers:32:21]
+ 30 │     
+ 31 │ ╭─▶ fn forgotten() {
+ 32 │ │       let t: Ticket = make();
+    · │                       ───┬──
+    · │                          ╰── linear value comes from this call
+ 33 │ ├─▶ }
+    · ╰──── `t` is still held when the function returns here
+ 34 │     
+    ╰────
+  help: consume it: pass it to a function that does, return it, or end it with `end` where its
+        fields are visible (ADR 0102)

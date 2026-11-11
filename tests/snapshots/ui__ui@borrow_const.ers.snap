@@ -1,0 +1,42 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/borrow_const.ers
+---
+--- errors ---
+analysis::borrow-conflict
+
+  × cannot assign to `x` while it is borrowed
+    ╭─[borrow_const.ers:13:5]
+ 11 │     let mut x: u32 = 1;
+ 12 │     let r: &mut u32 = &mut x;
+    ·                       ───┬──
+    ·                          ╰── `x` is borrowed as mutable here
+ 13 │     x = 2;
+    ·     ──┬──
+    ·       ╰── assigned here
+ 14 │     *r = 3;
+    ·     ───┬──
+    ·        ╰── the borrow is used later here
+ 15 │     10 / zero()
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot assign to `x` while it is borrowed
+    ╭─[borrow_const.ers:26:9]
+ 24 │         let mut x: u32 = 1;
+ 25 │         let r: &mut u32 = &mut x;
+    ·                           ───┬──
+    ·                              ╰── `x` is borrowed as mutable here
+ 26 │         x = 2;
+    ·         ──┬──
+    ·           ╰── assigned here
+ 27 │         *r = 3;
+    ·         ───┬──
+    ·            ╰── the borrow is used later here
+ 28 │         7
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)

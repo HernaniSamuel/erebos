@@ -1,6 +1,6 @@
 # 0106. The borrow check
 
-- Status: Accepted
+- Status: Accepted; amended on 2026-11-11 (which later use is labelled)
 - Date: 2026-11-11
 
 ## Context
@@ -132,15 +132,27 @@ the access, with:
 - a label at each borrow in use that the access conflicts with ("`x` is
   borrowed as mutable here");
 - for each, a label at one later use that keeps it in use ("the borrow is used
-  later here"): the first in source order after the access, or, when the
-  access reaches every one only round a loop, the first of those, labelled
-  "in the next iteration of the loop" (ADR 0107 orders them exactly);
+  later here"): a use that comes after the access in the program, the first
+  of those in source order, or, when the access reaches every one only round a
+  loop, the first of those, labelled "in the next iteration of the loop" (ADR
+  0107 orders them exactly);
 - a help on how to end the borrow first: use the reference before, or take the
   value out into a `let` before borrowing.
 
 A place the compiler keeps is "this value" in labels, as ADR 0103 names
 temporaries. Errors are ordered by the span of the access, and an error with
 the same span, message and labels as another is dropped, as for moves.
+
+**Note, 2026-11-11:** the text said the later use is the first in source order
+after the access, and "in the next iteration of the loop" otherwise. Source
+order cannot tell a use that comes after the access in the program from one
+that comes first in the source: a call reads its arguments when it runs, after
+all of them are evaluated, but its span starts at the callee, before them. So
+`f(&mut x, &x)`, with no loop in the function, would have said "in the next
+iteration of the loop". A use in the access's own block after it, and every
+use by the call the access is an argument of, come after the access whatever
+their spans; the label of the loop is for a use reached only through a back
+edge. ADR 0107, "Errors", has the exact rule.
 
 ## Consequences
 

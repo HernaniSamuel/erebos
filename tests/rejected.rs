@@ -943,6 +943,17 @@ fn injected_f(injected_h: InjHandle6) {
 }"
     ),
     s!(
+        "analysis::borrow-conflict",
+        Mir,
+        Items,
+        "fn injected_f(mut injected_x: u32) -> u32 {
+    let injected_r: &mut u32 = &mut injected_x;
+    injected_x = 2;
+    *injected_r = 3;
+    injected_x
+}"
+    ),
+    s!(
         "analysis::linear-not-consumed",
         Mir,
         Items,
