@@ -126,6 +126,10 @@ pub struct Hir {
     /// dump of the HIR leaves it out: nothing in it is a fact about the
     /// program that its other lists do not say.
     pub array_types: Vec<(Span, Ty)>,
+    /// Each reference type written where none may be, `core`'s included
+    /// (ADR 0105): the type checker reports them. Left out of the dump, like
+    /// `array_types`.
+    pub reference_types: Vec<ReferenceType>,
     pub entry: FnId,
     pub panic: FnId,
     /// `core::arch::_start`, the reset entry, which the compiler places by
@@ -230,7 +234,7 @@ impl Hir {
     /// those about `core` (where it starts, the ids of `PanicInfo` and
     /// `PanicReason`, `Vector`, `chip_interrupts`), the table of files, which only turns the spans
     /// shown into lines and columns, `handlers`, which the `kind` of
-    /// each function says, and `array_types`.
+    /// each function says, `array_types` and `reference_types`.
     pub fn dump(&self) -> String {
         #[derive(Debug)]
         #[expect(dead_code, reason = "only its `Debug` output is read")]
@@ -684,6 +688,31 @@ pub enum NeverPosition {
     BitField,
     /// The operand of `size_of`, `align_of` or `offset_of`, named.
     LayoutQuery(&'static str),
+}
+
+/// A reference type written where none may be (ADR 0105, "Where a
+/// reference may be"): the outermost reference of a written type that is in
+/// such a position, so a type written once is recorded once.
+#[derive(Clone, Copy, Debug)]
+pub struct ReferenceType {
+    /// The span of the reference type.
+    pub span: Span,
+    /// The reference type, as lowered.
+    pub ty: Ty,
+    pub position: ReferencePosition,
+}
+
+/// Where a reference type may not be written.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ReferencePosition {
+    /// Any position of memory: a field, an element, a static, a pointee.
+    Memory(NeverPosition),
+    /// A return type.
+    Return,
+    /// The type of a `mut` parameter: a reference is bound once (ADR 0094).
+    MutParameter,
+    /// The type of a `let mut`, or of a `mut` binding in a pattern.
+    MutVariable,
 }
 
 /// A `[T]` written where a size is needed (ADR 0031).

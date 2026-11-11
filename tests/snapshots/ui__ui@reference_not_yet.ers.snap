@@ -1,0 +1,198 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/reference_not_yet.ers
+---
+--- errors ---
+ty::reference-to-static-mut
+
+  × cannot borrow the static mut `COUNTER`
+   ╭─[reference_not_yet.ers:6:12]
+ 5 │ // not `volatile` can; so can the address of any of these with `&raw`.
+ 6 │ static mut COUNTER: u32 = 0;
+   ·            ───┬───
+   ·               ╰── declared `static mut COUNTER`
+ 7 │ static mut TABLE: [u32; 2] = [1, 2];
+   ╰────
+    ╭─[reference_not_yet.ers:37:6]
+ 36 │ fn statics_mut() {
+ 37 │     &COUNTER;
+    ·      ───┬───
+    ·         ╰── borrowed here
+ 38 │     &mut COUNTER;
+    ╰────
+  help: an interrupt can change a `static mut` while the reference to it is in use; inside a
+        `critical` block, take its address with `&raw const` or `&raw mut` (ADR 0078, 0093, 0105)
+ty::reference-to-static-mut
+
+  × cannot borrow the static mut `COUNTER`
+   ╭─[reference_not_yet.ers:6:12]
+ 5 │ // not `volatile` can; so can the address of any of these with `&raw`.
+ 6 │ static mut COUNTER: u32 = 0;
+   ·            ───┬───
+   ·               ╰── declared `static mut COUNTER`
+ 7 │ static mut TABLE: [u32; 2] = [1, 2];
+   ╰────
+    ╭─[reference_not_yet.ers:38:10]
+ 37 │     &COUNTER;
+ 38 │     &mut COUNTER;
+    ·          ───┬───
+    ·             ╰── borrowed here
+ 39 │     &TABLE[1];
+    ╰────
+  help: an interrupt can change a `static mut` while the reference to it is in use; inside a
+        `critical` block, take its address with `&raw const` or `&raw mut` (ADR 0078, 0093, 0105)
+ty::reference-to-static-mut
+
+  × cannot borrow the static mut `TABLE`
+   ╭─[reference_not_yet.ers:7:12]
+ 6 │ static mut COUNTER: u32 = 0;
+ 7 │ static mut TABLE: [u32; 2] = [1, 2];
+   ·            ──┬──
+   ·              ╰── declared `static mut TABLE`
+ 8 │ static FIXED: u32 = 4;
+   ╰────
+    ╭─[reference_not_yet.ers:39:6]
+ 38 │     &mut COUNTER;
+ 39 │     &TABLE[1];
+    ·      ────┬───
+    ·          ╰── borrowed here
+ 40 │     &mut TABLE;
+    ╰────
+  help: an interrupt can change a `static mut` while the reference to it is in use; inside a
+        `critical` block, take its address with `&raw const` or `&raw mut` (ADR 0078, 0093, 0105)
+ty::reference-to-static-mut
+
+  × cannot borrow the static mut `TABLE`
+   ╭─[reference_not_yet.ers:7:12]
+ 6 │ static mut COUNTER: u32 = 0;
+ 7 │ static mut TABLE: [u32; 2] = [1, 2];
+   ·            ──┬──
+   ·              ╰── declared `static mut TABLE`
+ 8 │ static FIXED: u32 = 4;
+   ╰────
+    ╭─[reference_not_yet.ers:40:10]
+ 39 │     &TABLE[1];
+ 40 │     &mut TABLE;
+    ·          ──┬──
+    ·            ╰── borrowed here
+ 41 │     &PAIR.a;
+    ╰────
+  help: an interrupt can change a `static mut` while the reference to it is in use; inside a
+        `critical` block, take its address with `&raw const` or `&raw mut` (ADR 0078, 0093, 0105)
+ty::reference-to-static-mut
+
+  × cannot borrow the static mut `PAIR`
+    ╭─[reference_not_yet.ers:17:12]
+ 16 │ 
+ 17 │ static mut PAIR: Pair = Pair { a: 1, b: 2 };
+    ·            ──┬─
+    ·              ╰── declared `static mut PAIR`
+ 18 │ 
+    ╰────
+    ╭─[reference_not_yet.ers:41:6]
+ 40 │     &mut TABLE;
+ 41 │     &PAIR.a;
+    ·      ───┬──
+    ·         ╰── borrowed here
+ 42 │     &OUTSIDE;
+    ╰────
+  help: an interrupt can change a `static mut` while the reference to it is in use; inside a
+        `critical` block, take its address with `&raw const` or `&raw mut` (ADR 0078, 0093, 0105)
+ty::reference-to-static-mut
+
+  × cannot borrow the extern static mut `OUTSIDE`
+    ╭─[reference_not_yet.ers:9:19]
+  8 │ static FIXED: u32 = 4;
+  9 │ extern static mut OUTSIDE: u32;
+    ·                   ───┬───
+    ·                      ╰── declared `extern static mut OUTSIDE`
+ 10 │ extern static CONST_OUTSIDE: u32;
+    ╰────
+    ╭─[reference_not_yet.ers:42:6]
+ 41 │     &PAIR.a;
+ 42 │     &OUTSIDE;
+    ·      ───┬───
+    ·         ╰── borrowed here
+ 43 │ }
+    ╰────
+  help: an interrupt can change a `static mut` while the reference to it is in use; inside a
+        `critical` block, take its address with `&raw const` or `&raw mut` (ADR 0078, 0093, 0105)
+ty::reference-to-volatile
+
+  × cannot borrow a place reached through a `volatile` pointer
+    ╭─[reference_not_yet.ers:46:6]
+ 45 │ fn volatile_pointer(v: *mut volatile u32, w: *const volatile Pair) {
+ 46 │     &*v;
+    ·      ─┬
+    ·       ╰── reached through a `*mut volatile u32`
+ 47 │     &mut *v;
+    ╰────
+  help: a reference lets the compiler assume the memory behind it only changes when the program
+        changes it, which a volatile access does not (ADR 0023); read and write through the
+        pointer, as `*p`, or take its address with `&raw` (ADR 0105)
+ty::reference-to-volatile
+
+  × cannot borrow a place reached through a `volatile` pointer
+    ╭─[reference_not_yet.ers:47:10]
+ 46 │     &*v;
+ 47 │     &mut *v;
+    ·          ─┬
+    ·           ╰── reached through a `*mut volatile u32`
+ 48 │     &(*w).a;
+    ╰────
+  help: a reference lets the compiler assume the memory behind it only changes when the program
+        changes it, which a volatile access does not (ADR 0023); read and write through the
+        pointer, as `*p`, or take its address with `&raw` (ADR 0105)
+ty::reference-to-volatile
+
+  × cannot borrow a place reached through a `volatile` pointer
+    ╭─[reference_not_yet.ers:48:6]
+ 47 │     &mut *v;
+ 48 │     &(*w).a;
+    ·      ───┬──
+    ·         ╰── reached through a `*const volatile Pair`
+ 49 │ }
+    ╰────
+  help: a reference lets the compiler assume the memory behind it only changes when the program
+        changes it, which a volatile access does not (ADR 0023); read and write through the
+        pointer, as `*p`, or take its address with `&raw` (ADR 0105)
+ty::reference-to-volatile
+
+  × cannot borrow a peripheral or a cluster of type `Uart`
+    ╭─[reference_not_yet.ers:52:6]
+ 51 │ fn devices() {
+ 52 │     &UART0;
+    ·      ──┬──
+    ·        ╰── its registers are accessed volatile
+ 53 │     &PLIC.ctx[1];
+    ╰────
+  help: a reference lets the compiler assume the memory behind it only changes when the program
+        changes it, which a device does not keep to (ADR 0058); use a pointer to it, such as a
+        `*mut Uart`, `&raw mut P` (ADR 0105)
+ty::reference-to-volatile
+
+  × cannot borrow a peripheral or a cluster of type `Context`
+    ╭─[reference_not_yet.ers:53:6]
+ 52 │     &UART0;
+ 53 │     &PLIC.ctx[1];
+    ·      ─────┬─────
+    ·           ╰── its registers are accessed volatile
+ 54 │     &PLIC.first;
+    ╰────
+  help: a reference lets the compiler assume the memory behind it only changes when the program
+        changes it, which a device does not keep to (ADR 0058); use a pointer to it, such as a
+        `*mut Context`, `&raw mut P` (ADR 0105)
+ty::reference-to-volatile
+
+  × cannot borrow a peripheral or a cluster of type `Context`
+    ╭─[reference_not_yet.ers:54:6]
+ 53 │     &PLIC.ctx[1];
+ 54 │     &PLIC.first;
+    ·      ─────┬────
+    ·           ╰── its registers are accessed volatile
+ 55 │ }
+    ╰────
+  help: a reference lets the compiler assume the memory behind it only changes when the program
+        changes it, which a device does not keep to (ADR 0058); use a pointer to it, such as a
+        `*mut Context`, `&raw mut P` (ADR 0105)

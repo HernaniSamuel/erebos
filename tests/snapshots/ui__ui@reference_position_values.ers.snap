@@ -1,0 +1,164 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/reference_position_values.ers
+---
+--- errors ---
+ty::reference-position
+
+  × a reference cannot be an array element
+    ╭─[reference_position_values.ers:18:5]
+ 17 │     let b: u32 = 2;
+ 18 │     [&a, &b];
+    ·     ────┬───
+    ·         ╰── makes `[&u32; 2]`, an array of references
+ 19 │     [[&a], [&b]];
+    ╰────
+  help: a reference is held only by a parameter or a `let` without `mut`, and lent to calls (ADR
+        0094, 0105); to keep an address, use a raw pointer, `*const T` or `*mut T`
+ty::reference-position
+
+  × a reference cannot be an array element
+    ╭─[reference_position_values.ers:19:6]
+ 18 │     [&a, &b];
+ 19 │     [[&a], [&b]];
+    ·      ──┬─
+    ·        ╰── makes `[&u32; 1]`, an array of references
+ 20 │     [&a; 3];
+    ╰────
+  help: a reference is held only by a parameter or a `let` without `mut`, and lent to calls (ADR
+        0094, 0105); to keep an address, use a raw pointer, `*const T` or `*mut T`
+ty::reference-position
+
+  × a reference cannot be an array element
+    ╭─[reference_position_values.ers:19:12]
+ 18 │     [&a, &b];
+ 19 │     [[&a], [&b]];
+    ·            ──┬─
+    ·              ╰── makes `[&u32; 1]`, an array of references
+ 20 │     [&a; 3];
+    ╰────
+  help: a reference is held only by a parameter or a `let` without `mut`, and lent to calls (ADR
+        0094, 0105); to keep an address, use a raw pointer, `*const T` or `*mut T`
+ty::reference-position
+
+  × a reference cannot be an array element
+    ╭─[reference_position_values.ers:20:5]
+ 19 │     [[&a], [&b]];
+ 20 │     [&a; 3];
+    ·     ───┬───
+    ·        ╰── makes `[&u32; 3]`, an array of references
+ 21 │     0
+    ╰────
+  help: a reference is held only by a parameter or a `let` without `mut`, and lent to calls (ADR
+        0094, 0105); to keep an address, use a raw pointer, `*const T` or `*mut T`
+ty::reference-position
+
+  × a reference cannot be the referent of a reference
+    ╭─[reference_position_values.ers:30:5]
+ 29 │     let q: &mut u32 = &mut m;
+ 30 │     &r;
+    ·     ─┬
+    ·      ╰── makes `&&u32`, a reference to a reference
+ 31 │     &mut q;
+    ╰────
+  help: a reference is held only by a parameter or a `let` without `mut`, and lent to calls (ADR
+        0094, 0105); to keep an address, use a raw pointer, `*const T` or `*mut T`
+ty::mut-borrow-of-immutable
+
+  × cannot borrow `q` as `&mut`, which is not `mut`
+    ╭─[reference_position_values.ers:31:10]
+ 28 │     let mut m: u32 = 3;
+ 29 │     let q: &mut u32 = &mut m;
+    ·         ┬
+    ·         ╰── help: declare it `let mut q`
+ 30 │     &r;
+ 31 │     &mut q;
+    ·          ┬
+    ·          ╰── borrowed here
+ 32 │     &&a;
+    ╰────
+ty::reference-position
+
+  × a reference cannot be the referent of a reference
+    ╭─[reference_position_values.ers:32:5]
+ 31 │     &mut q;
+ 32 │     &&a;
+    ·     ─┬─
+    ·      ╰── makes `&&u32`, a reference to a reference
+ 33 │     let four: &u32 = *&r;
+    ╰────
+  help: a reference is held only by a parameter or a `let` without `mut`, and lent to calls (ADR
+        0094, 0105); to keep an address, use a raw pointer, `*const T` or `*mut T`
+ty::reference-position
+
+  × a reference cannot be the referent of a reference
+    ╭─[reference_position_values.ers:33:23]
+ 32 │     &&a;
+ 33 │     let four: &u32 = *&r;
+    ·                       ─┬
+    ·                        ╰── makes `&&u32`, a reference to a reference
+ 34 │     &(if c { &a } else { &b });
+    ╰────
+  help: a reference is held only by a parameter or a `let` without `mut`, and lent to calls (ADR
+        0094, 0105); to keep an address, use a raw pointer, `*const T` or `*mut T`
+ty::reference-position
+
+  × a reference cannot be the referent of a reference
+    ╭─[reference_position_values.ers:34:5]
+ 33 │     let four: &u32 = *&r;
+ 34 │     &(if c { &a } else { &b });
+    ·     ─────────────┬────────────
+    ·                  ╰── makes `&&u32`, a reference to a reference
+ 35 │     take(four)
+    ╰────
+  help: a reference is held only by a parameter or a `let` without `mut`, and lent to calls (ADR
+        0094, 0105); to keep an address, use a raw pointer, `*const T` or `*mut T`
+ty::reference-position
+
+  × a reference cannot be the pointee of a pointer
+    ╭─[reference_position_values.ers:41:5]
+ 40 │     let r: &u32 = &a;
+ 41 │     &raw const r;
+    ·     ──────┬─────
+    ·           ╰── makes `*const &u32`, a pointer to a reference
+ 42 │     (&raw const r) as *const u8;
+    ╰────
+  help: a reference is held only by a parameter or a `let` without `mut`, and lent to calls (ADR
+        0094, 0105); to keep an address, use a raw pointer, `*const T` or `*mut T`
+ty::reference-position
+
+  × a reference cannot be the pointee of a pointer
+    ╭─[reference_position_values.ers:42:5]
+ 41 │     &raw const r;
+ 42 │     (&raw const r) as *const u8;
+    ·     ───────┬──────
+    ·            ╰── makes `*const &u32`, a pointer to a reference
+ 43 │     take(r)
+    ╰────
+  help: a reference is held only by a parameter or a `let` without `mut`, and lent to calls (ADR
+        0094, 0105); to keep an address, use a raw pointer, `*const T` or `*mut T`
+ty::reference-position
+
+  × a reference cannot be the value of a `critical` block
+    ╭─[reference_position_values.ers:48:30]
+ 47 │     let a: u32 = 1;
+ 48 │     let r: &u32 = critical { &a };
+    ·                              ─┬
+    ·                               ╰── `&u32` would outlive the critical section
+ 49 │     let s: &u32 = comptime &X;
+    ╰────
+  help: a reference must not outlive the protection it was taken in (ADR 0094, 0105); use the
+        value inside the block, or end the block with a copy of what it refers to
+ty::reference-position
+
+  × a reference cannot be the value of a `comptime` expression
+    ╭─[reference_position_values.ers:49:19]
+ 48 │     let r: &u32 = critical { &a };
+ 49 │     let s: &u32 = comptime &X;
+    ·                   ─────┬─────
+    ·                        ╰── `&u32` is a reference
+ 50 │     *r
+    ╰────
+  help: a value computed at compile time is data, never a reference (ADR 0094, 0105); compute the
+        value, and borrow it where it is used

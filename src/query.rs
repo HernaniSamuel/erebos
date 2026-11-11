@@ -333,6 +333,7 @@ impl<'h> Queries<'h> {
         ty::report_volatile_peripherals(self);
         ty::report_copy_fields(self);
         ty::report_linear_arrays(self);
+        ty::report_reference_types(self);
         ty::report_linear_statics(self);
         for id in 0..hir.structs.len() {
             self.struct_layout(StructId(id as u32));
@@ -1748,18 +1749,24 @@ impl<'h> Queries<'h> {
 
     /// Whether lowering function `id` needs the layout of a struct that has
     /// none, or of a type that failed, both reported where they failed, or
-    /// names an erroneous peripheral (ADR 0058). Like a body that does not
+    /// names an erroneous peripheral (ADR 0058), or a reference where none may
+    /// be (ADR 0105). Like a body that does not
     /// type check, it is then left out without a new diagnostic.
     fn needs_missing_layout(&mut self, id: FnId) -> bool {
         let f = self.hir.fn_(id);
         let mut types = vec![f.ret];
         types.extend(f.locals.iter().map(|local| local.ty));
+        // A reference returned, bound `mut` or asked the layout of was
+        // reported at its type (ADR 0105): MIR holds none (rule R1).
+        let mut references = matches!(f.ret, hir::Ty::Ref(_))
+            || (f.locals.iter()).any(|local| local.mutable && matches!(local.ty, hir::Ty::Ref(_)));
         let mut peripherals = Vec::new();
         if let Some(body) = &f.body {
             body.walk(&mut |e| {
                 types.push(self.tables.expr_ty(e.id));
                 match &e.kind {
                     ExprKind::SizeOf(ty) | ExprKind::AlignOf(ty) | ExprKind::OffsetOf(ty, _, _) => {
+                        references |= matches!(ty, hir::Ty::Ref(_));
                         types.push(*ty);
                     }
                     ExprKind::Peripheral(id) => peripherals.push(*id),
@@ -1768,9 +1775,10 @@ impl<'h> Queries<'h> {
             });
         }
         let mut seen = Vec::new();
-        types
-            .into_iter()
-            .any(|ty| self.lacks_layout(ty, &mut seen, PeripheralFailures::All))
+        references
+            || types
+                .into_iter()
+                .any(|ty| self.lacks_layout(ty, &mut seen, PeripheralFailures::All))
             || (peripherals.into_iter()).any(|id| self.peripheral_erroneous(id))
     }
 
@@ -1784,7 +1792,8 @@ impl<'h> Queries<'h> {
     }
 
     /// Whether the MIR type of `ty` needs a struct or an enum with payloads
-    /// without a layout, or a type that failed; the types in `seen` were
+    /// without a layout, or a type that failed, or a reference below its top
+    /// (`lacks_layout_in`); the types in `seen` were
     /// looked at already. The types of fields and payload values are not
     /// normalized, so an array length that failed is found here: `ty` is
     /// in error wherever `normalize` would make it `{error}`. So is a
@@ -1798,19 +1807,19 @@ impl<'h> Queries<'h> {
         peripherals: PeripheralFailures,
     ) -> bool {
         match ty {
-            hir::Ty::Ptr(ptr) => self.lacks_layout(*ptr.pointee, seen, peripherals),
-            hir::Ty::Ref(r) => self.lacks_layout(*r.referent, seen, peripherals),
+            hir::Ty::Ptr(ptr) => self.lacks_layout_in(*ptr.pointee, seen, peripherals),
+            hir::Ty::Ref(r) => self.lacks_layout_in(*r.referent, seen, peripherals),
             // A struct or enum lays out a field whose length failed as
             // empty, keeping its own layout (see `layout::of`), so a
             // length is checked wherever it is reached, behind pointers
             // too.
             hir::Ty::Array(elem, len) => {
-                self.lacks_layout(*elem, seen, peripherals)
+                self.lacks_layout_in(*elem, seen, peripherals)
                     || self.array_len(len).is_none()
                     || ty::has_linear_elements(self, ty)
             }
             hir::Ty::Slice(elem) => {
-                self.lacks_layout(*elem, seen, peripherals) || ty::has_linear_elements(self, ty)
+                self.lacks_layout_in(*elem, seen, peripherals) || ty::has_linear_elements(self, ty)
             }
             hir::Ty::Struct(s) => {
                 if seen.contains(&Composite::Struct(s.id)) {
@@ -1834,7 +1843,7 @@ impl<'h> Queries<'h> {
                 }
                 def.fields
                     .iter()
-                    .any(|field| self.lacks_layout(field.ty, seen, peripherals))
+                    .any(|field| self.lacks_layout_in(field.ty, seen, peripherals))
             }
             hir::Ty::Enum(e) if e.payloads => {
                 if seen.contains(&Composite::Enum(e.id)) {
@@ -1855,7 +1864,7 @@ impl<'h> Queries<'h> {
                 }
                 values
                     .into_iter()
-                    .any(|value| self.lacks_layout(value, seen, peripherals))
+                    .any(|value| self.lacks_layout_in(value, seen, peripherals))
             }
             hir::Ty::Applied(_) => {
                 let ty = self.normalize(ty);
@@ -1871,6 +1880,19 @@ impl<'h> Queries<'h> {
             hir::Ty::Error => true,
             _ => false,
         }
+    }
+
+    /// `lacks_layout` for `ty` as a part of another type: a pointee, a
+    /// referent, an element, a field or a payload value. A reference there
+    /// was reported where it is written or made, and MIR has none (ADR 0105,
+    /// 0107, rule R1).
+    fn lacks_layout_in(
+        &mut self,
+        ty: hir::Ty,
+        seen: &mut Vec<Composite>,
+        peripherals: PeripheralFailures,
+    ) -> bool {
+        matches!(ty, hir::Ty::Ref(_)) || self.lacks_layout(ty, seen, peripherals)
     }
 
     /// What dumps leave out of the MIR that `into_mir` makes: the bodies,

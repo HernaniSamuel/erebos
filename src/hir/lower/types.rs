@@ -2,8 +2,8 @@
 
 use crate::diag::Diagnostic;
 use crate::hir::{
-    BuiltinEnum, IntTy, NeverInMemory, NeverPosition, PeripheralByValue, Ty, UnsizedPosition,
-    UnsizedType, VolatilePeripheral,
+    BuiltinEnum, IntTy, NeverInMemory, NeverPosition, PeripheralByValue, ReferencePosition,
+    ReferenceType, Ty, UnsizedPosition, UnsizedType, VolatilePeripheral,
 };
 use crate::span::Span;
 use crate::syntax::ast;
@@ -22,6 +22,25 @@ impl Lowerer<'_> {
             return Ty::Error;
         }
         self.ty(ty, UnsizedPosition::Memory(position))
+    }
+
+    /// The type of a parameter or a variable, `mutable` or not. A reference
+    /// may be bound only without `mut`: it is bound once (ADR 0094, 0105).
+    pub(super) fn binding_ty(
+        &mut self,
+        ty: &ast::Ty,
+        position: UnsizedPosition,
+        mutable: bool,
+    ) -> Ty {
+        if mutable && let ast::TyKind::Ref { .. } = ty.kind {
+            self.mut_binding = Some(match position {
+                UnsizedPosition::Parameter => ReferencePosition::MutParameter,
+                _ => ReferencePosition::MutVariable,
+            });
+        }
+        let lowered = self.ty(ty, position);
+        self.mut_binding = None;
+        lowered
     }
 
     /// `[elem]` written where a size is needed, at `position`: `{error}`,
@@ -84,9 +103,33 @@ impl Lowerer<'_> {
                 }
             }
             ast::TyKind::Ref { mutable, referent } => {
-                match self.memory_ty(referent, NeverPosition::Referent) {
+                // Where none may be (ADR 0105), once per written type: what
+                // is inside a reference recorded is not recorded again.
+                let forbidden = match position {
+                    UnsizedPosition::Memory(position) => Some(ReferencePosition::Memory(position)),
+                    UnsizedPosition::Return => Some(ReferencePosition::Return),
+                    UnsizedPosition::Variable
+                    | UnsizedPosition::Parameter
+                    | UnsizedPosition::Cast => None,
+                }
+                .or(self.mut_binding.take())
+                .filter(|_| self.reference_reported == 0);
+                self.reference_reported += u32::from(forbidden.is_some());
+                let referent = self.memory_ty(referent, NeverPosition::Referent);
+                self.reference_reported -= u32::from(forbidden.is_some());
+                match referent {
                     Ty::Error => Ty::Error,
-                    referent => Ty::reference(*mutable, referent),
+                    referent => {
+                        let lowered = Ty::reference(*mutable, referent);
+                        if let Some(position) = forbidden {
+                            self.reference_types.push(ReferenceType {
+                                span: ty.span,
+                                ty: lowered,
+                                position,
+                            });
+                        }
+                        lowered
+                    }
                 }
             }
             ast::TyKind::Array { elem, len } => {

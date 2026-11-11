@@ -67,7 +67,7 @@ impl Lowerer<'_> {
                         .help("each variable of a pattern has a name of its own (ADR 0040)"),
                     );
                 }
-                let local_ty = self.ty(ty, UnsizedPosition::Variable);
+                let local_ty = self.binding_ty(ty, UnsizedPosition::Variable, *mutable);
                 // A later alternative's `let` is the variable the first
                 // alternative declared, whose type type checking compares
                 // with the one written here (ADR 0041).

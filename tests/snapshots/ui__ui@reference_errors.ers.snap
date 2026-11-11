@@ -422,18 +422,19 @@ ty::unsized
     ╰────
   help: it can only be indexed, as in `(*s)[i]`, or passed to `&raw`; its length, known only at
         run time, is `len(s)` (ADR 0031)
-ty::peripheral-by-value
+ty::reference-to-volatile
 
-  × `Timer` is a peripheral type, which no value has
+  × cannot borrow a peripheral or a cluster of type `Timer`
     ╭─[reference_errors.ers:96:20]
  95 │     let b: &mut u32 = &mut *s;
  96 │     let c: &u32 = &TIMER;
     ·                    ──┬──
-    ·                      ╰── a device, borrowed as a whole
+    ·                      ╰── its registers are accessed volatile
  97 │ }
     ╰────
-  help: its registers are read and written one at a time, as in `P.NAME` or `(*u).NAME`; a
-        function is given the device as a `*mut Timer`, such as `&raw mut P` (ADR 0058)
+  help: a reference lets the compiler assume the memory behind it only changes when the program
+        changes it, which a device does not keep to (ADR 0058); use a pointer to it, such as a
+        `*mut Timer`, `&raw mut P` (ADR 0105)
 ty::never-in-memory
 
   × `!` is not a type of memory

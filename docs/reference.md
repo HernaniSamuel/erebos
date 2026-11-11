@@ -6053,6 +6053,9 @@ Every error has a stable code, shown with the message.
 | `ty::not-a-place` | `&raw` of a value that is not a place, or of a constant or any element or field of it |
 | `ty::address-of-immutable` | `&raw mut` of a place that cannot be written, one through a `&` reference included |
 | `ty::mut-borrow-of-immutable` | `&mut` of a place that cannot be written (a variable or parameter without `mut`, a `static`, an `extern static` without `mut`, a byte string, a place through a `&` reference or a `*const` pointer), of a value that is not a place, or of a part of one (`&mut f().x`) |
+| `ty::reference-position` | a reference type written as the type of a field, a payload value, an array or slice element, a type argument, a layout query operand, a return type, a `static`, `extern static` or `const`, a pointee or a referent (`&&T`), or of a `mut` parameter or `let mut`, once per type at the outermost reference; an expression that makes an array of references, `&`, `&mut` or `&raw` of a reference, the value of a `critical` block, or a `comptime` expression of a reference type, at the innermost |
+| `ty::reference-to-static-mut` | `&` or `&mut` of a `static mut` or `extern static mut`, or of a field or element of one; use `&raw` inside `critical` (M5.4c) |
+| `ty::reference-to-volatile` | `&` or `&mut` of a place reached through a `volatile` pointer, or of a peripheral or a cluster (M5.4c) |
 | `ty::packed-field-address` | `&raw`, `&` or `&mut` of a possibly misaligned place inside a packed struct |
 | `ty::volatile-too-wide` | volatile access wider than the target's widest access, a bit-field struct on `u64` included |
 | `ty::volatile-aggregate` | volatile access to a whole struct, array or enum with payloads, or to a slice stored in memory |

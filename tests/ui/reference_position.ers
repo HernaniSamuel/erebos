@@ -1,0 +1,93 @@
+// emit: mir
+// Where a reference may not be written (ADR 0094, 0105): a field, a payload
+// value, an array or slice element, a type argument, the operand of a layout
+// query, a return type, a static, an `extern static`, a constant, a pointee
+// and a referent. Each is reported at the written type, once, at the
+// outermost reference. The functions at the end use what was rejected, so that
+// nothing of it reaches MIR (rule R1 of ADR 0107): a constant of a reference
+// type read, a function returning a reference, a struct with a reference field.
+static VALUE: u32 = 3;
+static PAIR: Pair = Pair { a: 1, b: 2 };
+
+struct Pair {
+    a: u32,
+    b: u32,
+}
+
+struct Holder {
+    r: &u32,
+}
+
+struct Nested {
+    r: &&u32,
+}
+
+struct Elements {
+    items: [&u32; 2],
+}
+
+struct Behind {
+    p: *const &u32,
+    s: *const [&u32],
+}
+
+enum Slot: u8 {
+    Full(&u32) = 0,
+    Empty = 1,
+}
+
+static HELD: &u32 = &VALUE;
+extern static OUTSIDE: &u32;
+const KEPT: &u32 = &VALUE;
+
+fn argument(o: Option(&u32)) {}
+
+fn wrapped() -> Option(&&u32) {
+    .None
+}
+
+fn pick() -> &u32 {
+    &VALUE
+}
+
+fn through(r: &&u32) {}
+
+fn layout() -> usize {
+    size_of(&u32) + align_of(&Pair) + offset_of(&Pair, a)
+}
+
+fn read_constant() -> u32 {
+    &KEPT;
+    *KEPT
+}
+
+fn read_static() -> u32 {
+    *HELD + *OUTSIDE
+}
+
+fn call() -> u32 {
+    *pick()
+}
+
+fn hold(r: &u32) -> Holder {
+    Holder { r: r }
+}
+
+fn read_holder(h: Holder) -> u32 {
+    *h.r
+}
+
+fn use_slot(s: Slot) -> u32 {
+    match s {
+        .Full(let r: &u32) => *r,
+        .Empty => 0,
+    }
+}
+
+entry fn main() -> ! {
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    loop {}
+}

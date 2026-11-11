@@ -541,6 +541,30 @@ const CATALOG: &[Snippet] = &[
 let injected_r: &mut u32 = &mut injected_n;"
     ),
     s!(
+        "ty::reference-position",
+        Mir,
+        Items,
+        "struct InjHolder { injected_r: &u32 }
+fn injected_use(injected_h: InjHolder) {}"
+    ),
+    s!(
+        "ty::reference-to-static-mut",
+        Mir,
+        Items,
+        "static mut INJ_COUNTER: u32 = 0;
+fn injected_use() {
+    let injected_r: &u32 = &INJ_COUNTER;
+}"
+    ),
+    s!(
+        "ty::reference-to-volatile",
+        Mir,
+        Items,
+        "fn injected_use(injected_p: *mut volatile u32) {
+    let injected_r: &u32 = &*injected_p;
+}"
+    ),
+    s!(
         "ty::never-in-memory",
         Mir,
         Items,

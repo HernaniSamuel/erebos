@@ -26,6 +26,8 @@ pub use copy::{copy_declaration_fails, is_copy, report_copy_fields, suggest_copy
 pub use dump::dump;
 pub use linear::{has_linear_elements, is_linear, report_linear_arrays, report_linear_statics};
 use place::{Unmovable, is_place};
+use reference::is_reference;
+pub use reference::report_reference_types;
 
 mod asm;
 mod copy;
@@ -34,6 +36,7 @@ mod expr;
 mod linear;
 mod pattern;
 mod place;
+mod reference;
 mod usefulness;
 
 /// What type checking found out about expressions, for every function
@@ -464,6 +467,10 @@ struct PlaceInfo {
     /// The path to the place goes through the `*` of a reference (ADR 0105):
     /// a value is not moved out of it, and a linear value not written to it.
     via_ref: bool,
+    /// The place is a `static mut`, or part of one, with no pointer or
+    /// reference between: a reference to it is `ty::reference-to-static-mut`
+    /// until M5.4c (ADR 0105).
+    static_mut: Option<StaticId>,
 }
 
 /// The register `index` of the peripheral type `id`.
@@ -484,6 +491,7 @@ impl PlaceInfo {
         register: None,
         bit_field: None,
         via_ref: false,
+        static_mut: None,
     };
 
     /// The value of `base`, which is not a place expression, indexed or
@@ -498,6 +506,7 @@ impl PlaceInfo {
             register: None,
             bit_field: None,
             via_ref: false,
+            static_mut: None,
         }
     }
 
@@ -513,6 +522,7 @@ impl PlaceInfo {
             register: None,
             bit_field: None,
             via_ref: false,
+            static_mut: None,
         }
     }
 
@@ -529,6 +539,7 @@ impl PlaceInfo {
             register: None,
             bit_field: None,
             via_ref: true,
+            static_mut: None,
         }
     }
 }
@@ -607,6 +618,7 @@ impl Checker<'_, '_> {
         if let Some(body) = &f.body {
             self.checked_block(f, body, self.ret, because);
             self.report_made_arrays(body);
+            self.report_made_references(body);
             if f.kind == FnKind::Naked {
                 self.naked_body(f, body);
             }
@@ -967,7 +979,12 @@ impl Checker<'_, '_> {
                 }
             }
             ExprKind::Local(local) => self.local_ty(f, *local),
-            ExprKind::Const(id) => self.norm(self.hir.const_(*id).ty),
+            // A constant of a reference type was reported at its type; its
+            // uses report nothing more (ADR 0105).
+            ExprKind::Const(id) => match self.norm(self.hir.const_(*id).ty) {
+                ty if is_reference(ty) => Ty::Error,
+                ty => ty,
+            },
             ExprKind::Variant(id, index, args) => {
                 self.variant(f, expr, *id, *index, args.as_deref())
             }

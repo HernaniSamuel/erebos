@@ -916,7 +916,7 @@ impl Lowerer<'_> {
                     .help("remove `mut` (ADR 0026)"),
                 );
             }
-            let ty = self.ty(&param.ty, UnsizedPosition::Parameter);
+            let ty = self.binding_ty(&param.ty, UnsizedPosition::Parameter, param.mutable);
             self.declare(&param.name, ty, param.mutable);
         }
         let body = decl.body.as_ref().map(|body| self.block(body));

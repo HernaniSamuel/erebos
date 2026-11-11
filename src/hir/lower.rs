@@ -7,8 +7,8 @@ use crate::hir::{
     self, BitStructDef, BitStructId, BitStructTy, BuiltinEnum, ConstId, CoreStart, EnumDef, EnumId,
     EnumTy, ExprId, FileDef, Fn, FnId, FnKind, Hir, IntTy, Local, LocalId, ModuleDef, ModuleId,
     NeverInMemory, PeripheralByValue, PeripheralId, PeripheralTy, PeripheralTypeDef,
-    PeripheralTypeId, StaticDef, StaticId, StructDef, StructId, StructTy, Ty, UnsizedType,
-    Visibility, VolatilePeripheral,
+    PeripheralTypeId, ReferenceType, StaticDef, StaticId, StructDef, StructId, StructTy, Ty,
+    UnsizedType, Visibility, VolatilePeripheral,
 };
 use crate::span::Span;
 use crate::syntax::ast;
@@ -295,6 +295,9 @@ pub fn lower(
         volatile_peripherals: Vec::new(),
         applications: Vec::new(),
         array_types: Vec::new(),
+        reference_types: Vec::new(),
+        reference_reported: 0,
+        mut_binding: None,
         next_expr: 0,
         next_pattern: 0,
         diags,
@@ -428,6 +431,7 @@ pub fn lower(
     let volatile_peripherals = lowerer.volatile_peripherals;
     let applications = lowerer.applications;
     let array_types = lowerer.array_types;
+    let reference_types = lowerer.reference_types;
     let modules = lowerer.modules;
     let namespaces = lowerer.namespaces;
     let uses = lowerer.uses;
@@ -472,6 +476,7 @@ pub fn lower(
         volatile_peripherals,
         applications,
         array_types,
+        reference_types,
         entry: entry?,
         panic: panic?,
         reset,
@@ -1410,6 +1415,14 @@ struct Lowerer<'a> {
     /// Each array type written, and each slice type written behind a
     /// pointer (ADR 0101).
     array_types: Vec<(Span, Ty)>,
+    /// Each reference type written where none may be (ADR 0105).
+    reference_types: Vec<ReferenceType>,
+    /// How many references recorded in `reference_types` enclose the type
+    /// being lowered: what is inside one is not recorded again.
+    reference_reported: u32,
+    /// Where a reference type about to be lowered is bound `mut`, if its
+    /// type is the outermost of a binding (`binding_ty`).
+    mut_binding: Option<hir::ReferencePosition>,
     next_expr: u32,
     /// The next `.V` pattern's id (ADR 0044).
     next_pattern: u32,

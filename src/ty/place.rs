@@ -10,6 +10,7 @@ use crate::hir::{
 use crate::span::Span;
 use crate::target;
 
+use super::reference::is_reference;
 use super::{
     Checker, Immutable, NeverHelp, PlaceInfo, Register, never_in_memory, payload_values_help,
     whole_peripheral, whole_slice,
@@ -332,6 +333,7 @@ impl Checker<'_, '_> {
                     register: None,
                     bit_field: None,
                     via_ref: false,
+                    static_mut: None,
                 }
             }
             ExprKind::ByteString(bytes) => PlaceInfo {
@@ -343,11 +345,17 @@ impl Checker<'_, '_> {
                 register: None,
                 bit_field: None,
                 via_ref: false,
+                static_mut: None,
             },
             ExprKind::Static(id) => {
                 let def = self.hir.static_(*id);
                 PlaceInfo {
-                    ty: self.norm(def.ty),
+                    // A static of a reference type was reported at its type;
+                    // its uses report nothing more (ADR 0105).
+                    ty: match self.norm(def.ty) {
+                        ty if is_reference(ty) => Ty::Error,
+                        ty => ty,
+                    },
                     immutable: (!def.mutable).then_some(Immutable::Static(*id)),
                     via: None,
                     misaligned: false,
@@ -355,6 +363,7 @@ impl Checker<'_, '_> {
                     register: None,
                     bit_field: None,
                     via_ref: false,
+                    static_mut: def.mutable.then_some(*id),
                 }
             }
             // Not `mut`: what may be written is its registers' business, so
@@ -368,6 +377,7 @@ impl Checker<'_, '_> {
                 register: None,
                 bit_field: None,
                 via_ref: false,
+                static_mut: None,
             },
             ExprKind::Deref(pointer) => {
                 let ty = self.check(f, pointer, None);
@@ -1179,23 +1189,19 @@ impl Checker<'_, '_> {
         if !self.has_address(place, &info, borrow_op(mutable)) {
             return Ty::Error;
         }
-        // What a slice points to, and a peripheral, have no reference yet:
-        // slices behind references are M5.4b's, and references to volatile
-        // places M5.4c's.
-        match info.ty {
-            Ty::Slice(_) => {
-                self.q
-                    .diags
-                    .push(whole_slice(info.ty, place.span, "borrowed"));
-                return Ty::Error;
-            }
-            Ty::Peripheral(_) => {
-                self.q
-                    .diags
-                    .push(whole_peripheral(info.ty, place.span, "borrowed"));
-                return Ty::Error;
-            }
-            _ => {}
+        // What a slice points to has no reference yet: slices behind
+        // references are M5.4b's.
+        if let Ty::Slice(_) = info.ty {
+            self.q
+                .diags
+                .push(whole_slice(info.ty, place.span, "borrowed"));
+            return Ty::Error;
+        }
+        // Nor have the places accessed volatile, or changed by interrupts:
+        // M5.4c's (ADR 0105).
+        if let Some(diag) = self.not_borrowed_yet(place, &info) {
+            self.q.diags.push(diag);
+            return Ty::Error;
         }
         if mutable && let Some(immutable) = info.immutable {
             self.report_mut_borrow(f, place, immutable);
@@ -1206,6 +1212,56 @@ impl Checker<'_, '_> {
             Ty::Error => Ty::Error,
             ty => Ty::reference(mutable, ty),
         }
+    }
+
+    /// `ty::reference-to-volatile` for a peripheral or a cluster, or a place
+    /// reached through a `volatile` pointer, and `ty::reference-to-static-mut`
+    /// for a `static mut` or part of one: what a reference to it would let
+    /// the program assume, M5.4c settles (ADR 0105, 0106).
+    fn not_borrowed_yet(&self, place: &Expr, info: &PlaceInfo) -> Option<Diagnostic> {
+        if let Ty::Peripheral(_) = info.ty {
+            return Some(
+                Diagnostic::error(
+                    "ty::reference-to-volatile",
+                    format!("cannot borrow a peripheral or a cluster of type `{}`", info.ty),
+                )
+                .label(place.span, "its registers are accessed volatile")
+                .help(format!(
+                    "a reference lets the compiler assume the memory behind it only changes when the program changes it, which a device does not keep to (ADR 0058); use a pointer to it, such as a `*mut {}`, `&raw mut P` (ADR 0105)",
+                    info.ty
+                )),
+            );
+        }
+        if let Some(ptr) = info.via
+            && ptr.volatile
+        {
+            return Some(
+                Diagnostic::error(
+                    "ty::reference-to-volatile",
+                    "cannot borrow a place reached through a `volatile` pointer",
+                )
+                .label(place.span, format!("reached through a `{}`", Ty::Ptr(ptr)))
+                .help("a reference lets the compiler assume the memory behind it only changes when the program changes it, which a volatile access does not (ADR 0023); read and write through the pointer, as `*p`, or take its address with `&raw` (ADR 0105)"),
+            );
+        }
+        if let Some(id) = info.static_mut {
+            let def = self.hir.static_(id);
+            let what = if def.init.is_none() {
+                "extern static mut"
+            } else {
+                "static mut"
+            };
+            return Some(
+                Diagnostic::error(
+                    "ty::reference-to-static-mut",
+                    format!("cannot borrow the {what} `{}`", def.path),
+                )
+                .label(place.span, "borrowed here")
+                .label(def.name_span, format!("declared `{}`", mutable_static(def)))
+                .help("an interrupt can change a `static mut` while the reference to it is in use; inside a `critical` block, take its address with `&raw const` or `&raw mut` (ADR 0078, 0093, 0105)"),
+            );
+        }
+        None
     }
 
     /// `ty::mut-borrow-of-immutable` for `&mut` of a value that is not a

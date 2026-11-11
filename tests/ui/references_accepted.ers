@@ -1,0 +1,89 @@
+// emit: mir
+// Where a reference may be (ADR 0094, 0105): the type of a parameter or of a
+// `let` that is not `mut`, of any function (with a body, `extern`, `#[export]`,
+// `#[naked]`), and as the value of an `if`, a `match`, a block and a `loop`
+// through its `break`, an argument and an initializer. Nothing here is
+// reported, and the MIR holds a reference only as the type of a local.
+static VALUE: u32 = 7;
+
+struct Pair {
+    a: u32,
+    b: u32,
+}
+
+extern fn outside(r: &u32, p: &mut Pair);
+
+#[export]
+fn exported(r: &u32, p: &Pair) -> u32 {
+    *r + (*p).a
+}
+
+// The body cannot name its parameters; the signature is what is checked.
+#[naked]
+fn naked(r: &u32, p: &mut Pair) {
+    asm("ret", options(noreturn))
+}
+
+fn pick(c: bool, a: &u32, b: &u32) -> u32 {
+    let r: &u32 = if c { a } else { b };
+    *r
+}
+
+fn arm(o: Option(u8), a: &u32, b: &u32) -> u32 {
+    let r: &u32 = match o {
+        .Some(let n: u8) => a,
+        .None => b,
+    };
+    *r
+}
+
+fn block(a: &u32) -> u32 {
+    let r: &u32 = {
+        let s: &u32 = a;
+        s
+    };
+    *r
+}
+
+fn search(a: &u32, b: &u32) -> u32 {
+    let r: &u32 = loop {
+        if *a > *b {
+            break a;
+        }
+        break b;
+    };
+    *r
+}
+
+fn nested(c: bool, a: &u32, b: &u32) -> u32 {
+    let r: &u32 = if c {
+        if *a > 0 { a } else { b }
+    } else {
+        b
+    };
+    pick(c, r, &VALUE) + pick(!c, if c { a } else { b }, r)
+}
+
+fn copies(a: &u32) -> u32 {
+    let b: &u32 = a;
+    let c: &u32 = a;
+    *b + *c
+}
+
+fn raw(a: &u32, p: &mut Pair) -> u32 {
+    let q: *const u32 = a as *const u32;
+    let m: *mut Pair = p as *mut Pair;
+    *a
+}
+
+entry fn main() -> ! {
+    let mut pair: Pair = Pair { a: 1, b: 2 };
+    let x: u32 = 3;
+    pick(true, &x, &VALUE);
+    exported(&x, &pair);
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    loop {}
+}
