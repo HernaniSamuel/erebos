@@ -829,6 +829,10 @@ impl<'h> Queries<'h> {
                 hir::Ty::Error => hir::Ty::Error,
                 pointee => hir::Ty::ptr(ptr.mutable, ptr.volatile, pointee),
             },
+            hir::Ty::Ref(r) => match self.normalize(*r.referent) {
+                hir::Ty::Error => hir::Ty::Error,
+                referent => hir::Ty::reference(r.mutable, referent),
+            },
             hir::Ty::Slice(elem) => match self.normalize(*elem) {
                 hir::Ty::Error => hir::Ty::Error,
                 elem => hir::Ty::slice(elem),
@@ -1652,6 +1656,10 @@ impl<'h> Queries<'h> {
                 // Leaked like HIR pointee types; see `hir::Ty::ptr`.
                 pointee: Box::leak(Box::new(self.mir_ty(*ptr.pointee))),
             }),
+            hir::Ty::Ref(r) => mir::Ty::Ref(mir::Ref {
+                mutable: r.mutable,
+                referent: Box::leak(Box::new(self.mir_ty(*r.referent))),
+            }),
             hir::Ty::Array(elem, len) => {
                 let len = self
                     .array_len(len)
@@ -1791,6 +1799,7 @@ impl<'h> Queries<'h> {
     ) -> bool {
         match ty {
             hir::Ty::Ptr(ptr) => self.lacks_layout(*ptr.pointee, seen, peripherals),
+            hir::Ty::Ref(r) => self.lacks_layout(*r.referent, seen, peripherals),
             // A struct or enum lays out a field whose length failed as
             // empty, keeping its own layout (see `layout::of`), so a
             // length is checked wherever it is reached, behind pointers

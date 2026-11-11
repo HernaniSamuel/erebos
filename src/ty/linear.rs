@@ -6,6 +6,7 @@ use crate::hir::{self, Block, EnumId, Expr, ExprKind, Fn, Stmt, StructId, Ty};
 use crate::query::Queries;
 
 use super::Checker;
+use super::place::Through;
 
 /// Whether the values of `ty` are linear (ADR 0101): a struct declared
 /// `#[linear]`, or a type that holds one by value, as a field of a struct,
@@ -90,6 +91,7 @@ impl Walk<'_, '_> {
             | Ty::Bool
             | Ty::Int(_)
             | Ty::Ptr(_)
+            | Ty::Ref(_)
             | Ty::BitStruct(_)
             | Ty::Enum(_)
             | Ty::Peripheral(_)
@@ -313,20 +315,25 @@ impl Checker<'_, '_> {
 
     /// `ty::linear-through-pointer` for the assignment `expr`, if it moves a
     /// value of the linear type `value` into a place reached through a pointer
-    /// (`*p = v`, `p[i] = v`, `(*p).f = v`): the value could never be moved
-    /// back out (ADR 0097, 0101). An array of linear elements was reported at
-    /// its type, and does not count here.
-    pub(super) fn check_linear_write(&mut self, expr: &Expr, through_pointer: bool, value: Ty) {
-        if !through_pointer || !is_linear_outside_arrays(self.q, value) {
+    /// or a reference (`*p = v`, `p[i] = v`, `(*p).f = v`, `*r = v`): the
+    /// value could never be moved back out (ADR 0097, 0101, 0105). An array of
+    /// linear elements was reported at its type, and does not count here.
+    pub(super) fn check_linear_write(&mut self, expr: &Expr, through: Option<Through>, value: Ty) {
+        let Some(through) = through else { return };
+        if !is_linear_outside_arrays(self.q, value) {
             return;
         }
+        let (through, the) = match through {
+            Through::Pointer => ("a pointer", "the pointer"),
+            Through::Reference => ("a reference", "the reference"),
+        };
         self.q.diags.push(
             Diagnostic::error(
                 "ty::linear-through-pointer",
-                format!("cannot move a value of the linear type `{value}` into a place reached through a pointer"),
+                format!("cannot move a value of the linear type `{value}` into a place reached through {through}"),
             )
             .label(expr.span, format!("`{value}` is linear"))
-            .help("a value put there could never be moved out again (ADR 0097), so it would be forgotten; keep the value in a variable, or write its copy fields through the pointer (ADR 0101)"),
+            .help(format!("a value put there could never be moved out again (ADR 0097), so it would be forgotten; keep the value in a variable, or write its copy fields through {the} (ADR 0101)")),
         );
     }
 
@@ -423,7 +430,8 @@ fn operands_of<'a>(expr: &'a Expr, operands: &mut Vec<&'a Expr>, blocks: &mut Ve
         | ExprKind::Unary(_, e)
         | ExprKind::Deref(e)
         | ExprKind::Cast(e, _, _)
-        | ExprKind::AddrOf { place: e, .. } => operands.push(e),
+        | ExprKind::AddrOf { place: e, .. }
+        | ExprKind::Ref { place: e, .. } => operands.push(e),
         ExprKind::Call { args, .. }
         | ExprKind::Array(args)
         | ExprKind::Variant(_, _, Some(args))

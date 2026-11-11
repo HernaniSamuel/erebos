@@ -124,7 +124,7 @@ const PANICS: &[(&str, usize)] = &[
     ("src/codegen/mod.rs", 71),
     ("src/codegen/vectors.rs", 3),
     ("src/diag.rs", 2),
-    ("src/eval.rs", 28),
+    ("src/eval.rs", 27),
     ("src/hir/lower.rs", 8),
     ("src/hir/lower/expr.rs", 3),
     ("src/hir/lower/hardware.rs", 1),

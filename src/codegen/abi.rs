@@ -240,6 +240,36 @@ mod tests {
         assert_eq!(classify(slice()), PassMode::Cast(Cast::Words(2)));
     }
 
+    /// A reference is passed as a raw pointer to its referent is: one word,
+    /// whatever the referent, on both targets (ADR 0105).
+    #[test]
+    fn a_reference_is_passed_as_a_thin_pointer() {
+        let big = strukt(&[], 64, 4, false);
+        for referent in [Ty::Int(IntTy::U8), big, bytes(0), bytes(3), Ty::Unit] {
+            let pointer = Ty::Ptr(Ptr {
+                mutable: true,
+                volatile: false,
+                pointee: Box::leak(Box::new(referent)),
+            });
+            for mutable in [false, true] {
+                let reference = Ty::Ref(crate::mir::Ref {
+                    mutable,
+                    referent: Box::leak(Box::new(referent)),
+                });
+                for arch in [Arch::Riscv32, Arch::Armv7m] {
+                    for position in [Position::Param, Position::Return] {
+                        assert_eq!(
+                            super::classify(arch, reference, position),
+                            super::classify(arch, pointer, position),
+                            "{reference} on {arch:?}"
+                        );
+                        assert_eq!(super::classify(arch, reference, position), PassMode::Direct);
+                    }
+                }
+            }
+        }
+    }
+
     /// riscv32 passes and returns an aggregate the same way.
     #[test]
     fn riscv32_does_not_tell_parameters_from_returns() {

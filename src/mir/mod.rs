@@ -528,6 +528,7 @@ impl Body {
                             f(len);
                         }
                         Rvalue::AddressOf { .. }
+                        | Rvalue::Ref { .. }
                         | Rvalue::SliceAddress(_)
                         | Rvalue::SliceLen(_) => {}
                     },
@@ -588,6 +589,7 @@ impl Body {
             .iter()
             .fold(self.local_ty(place.local), |ty, elem| match (elem, ty) {
                 (PlaceElem::Deref | PlaceElem::Offset(_), Ty::Ptr(ptr)) => *ptr.pointee,
+                (PlaceElem::Deref, Ty::Ref(r)) => *r.referent,
                 (PlaceElem::Index(_) | PlaceElem::ConstIndex(_), Ty::Array(elem, _)) => *elem,
                 (PlaceElem::Field(index), Ty::Struct(s)) => s.def().fields()[*index as usize].ty,
                 (
@@ -773,6 +775,8 @@ pub enum Ty {
     Bool,
     Int(IntTy),
     Ptr(Ptr),
+    /// `&T` or `&mut T` (ADR 0107): a thin pointer that only a local has.
+    Ref(Ref),
     /// `[T; N]`; the element type is leaked like pointee types.
     Array(&'static Ty, u64),
     /// `[T]`, unsized: only the pointee of a slice (ADR 0031). Leaked
@@ -1168,6 +1172,8 @@ impl Ty {
             Ty::Array(elem, _) => elem.is_copy(),
             Ty::Struct(s) => s.def().copy,
             Ty::Enum(e) => e.def().copy,
+            // A shared reference is copied, a mutable one moved (ADR 0105).
+            Ty::Ref(r) => !r.mutable,
             Ty::Unit
             | Ty::Never
             | Ty::Bool
@@ -1237,7 +1243,13 @@ impl Ty {
                 open.pop();
                 found
             }
-            Ty::Unit | Ty::Never | Ty::Bool | Ty::Int(_) | Ty::Ptr(_) | Ty::Peripheral(_) => false,
+            Ty::Unit
+            | Ty::Never
+            | Ty::Bool
+            | Ty::Int(_)
+            | Ty::Ptr(_)
+            | Ty::Ref(_)
+            | Ty::Peripheral(_) => false,
         }
     }
 
@@ -1309,6 +1321,7 @@ impl Ty {
             | Ty::Bool
             | Ty::Int(_)
             | Ty::Ptr(_)
+            | Ty::Ref(_)
             | Ty::Array(..)
             | Ty::Slice(_)
             | Ty::Peripheral(_) => {}
@@ -1364,7 +1377,7 @@ impl Ty {
                 size: 2 * target::POINTER_BYTES,
                 align: target::POINTER_BYTES,
             },
-            Ty::Ptr(_) => Layout {
+            Ty::Ptr(_) | Ty::Ref(_) => Layout {
                 size: target::POINTER_BYTES,
                 align: target::POINTER_BYTES,
             },
@@ -1390,6 +1403,13 @@ pub struct Ptr {
     pub mutable: bool,
     pub volatile: bool,
     pub pointee: &'static Ty,
+}
+
+/// A reference type (ADR 0107), leaked like pointees.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Ref {
+    pub mutable: bool,
+    pub referent: &'static Ty,
 }
 
 #[derive(Clone, Debug)]
@@ -1454,7 +1474,10 @@ impl Statement {
                     f(ptr);
                     f(len);
                 }
-                Rvalue::AddressOf { .. } | Rvalue::SliceAddress(_) | Rvalue::SliceLen(_) => {}
+                Rvalue::AddressOf { .. }
+                | Rvalue::Ref { .. }
+                | Rvalue::SliceAddress(_)
+                | Rvalue::SliceLen(_) => {}
             },
             Statement::Call { args, .. } => args.iter().for_each(f),
             Statement::InlineAsm(asm) => asm.inputs().for_each(f),
@@ -1645,6 +1668,12 @@ pub enum Rvalue {
         mutable: bool,
         place: Place,
     },
+    /// `&place` or `&mut place` (ADR 0107): the reference to the place's
+    /// type.
+    Ref {
+        mutable: bool,
+        place: Place,
+    },
     /// A slice of `len` elements, a `usize`, from where the thin pointer
     /// `ptr` points (ADR 0031). Assigned to a slice place, it writes both
     /// parts.
@@ -1772,6 +1801,10 @@ impl fmt::Display for Ty {
                 let volatile = if ptr.volatile { " volatile" } else { "" };
                 write!(f, "*{mutability}{volatile} {}", ptr.pointee)
             }
+            Ty::Ref(r) => {
+                let mutability = if r.mutable { "mut " } else { "" };
+                write!(f, "&{mutability}{}", r.referent)
+            }
             Ty::Array(elem, len) => write!(f, "[{elem}; {len}]"),
             Ty::Slice(elem) => write!(f, "[{elem}]"),
             Ty::Struct(s) => f.write_str(&s.def().name),
@@ -1842,6 +1875,10 @@ impl fmt::Display for Rvalue {
             Rvalue::AddressOf { mutable, place } => {
                 let mutability = if *mutable { "mut" } else { "const" };
                 write!(f, "&raw {mutability} {place}")
+            }
+            Rvalue::Ref { mutable, place } => {
+                let mutability = if *mutable { "mut " } else { "" };
+                write!(f, "&{mutability}{place}")
             }
             Rvalue::Slice { ptr, len } => write!(f, "slice({ptr}, {len})"),
             Rvalue::SliceAddress(place) => write!(f, "address({place})"),

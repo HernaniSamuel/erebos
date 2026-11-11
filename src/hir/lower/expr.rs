@@ -575,6 +575,10 @@ impl Lowerer<'_> {
                 mutable: *mutable,
                 place: self.boxed(place),
             },
+            ast::ExprKind::Ref { mutable, expr } => ExprKind::Ref {
+                mutable: *mutable,
+                place: self.boxed(expr),
+            },
             ast::ExprKind::Binary(op, lhs, rhs, op_span) => {
                 ExprKind::Binary(*op, self.boxed(lhs), self.boxed(rhs), *op_span)
             }

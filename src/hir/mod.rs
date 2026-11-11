@@ -664,6 +664,8 @@ pub struct NeverInMemory {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NeverPosition {
     Pointee,
+    /// The referent of a reference (ADR 0105).
+    Referent,
     /// The element type of a slice, `[T]` (ADR 0031).
     SliceElement,
     Element,
@@ -1119,6 +1121,8 @@ pub enum Ty {
     Bool,
     Int(IntTy),
     Ptr(Ptr),
+    /// `&T` or `&mut T` (ADR 0105); the referent is leaked like pointees.
+    Ref(Ref),
     /// `[T; N]`; the element type is leaked like pointee types.
     Array(&'static Ty, ArrayLen),
     /// `[T]`, of a length known only at run time; only the pointee of a
@@ -1221,7 +1225,22 @@ pub struct Ptr {
     pub pointee: &'static Ty,
 }
 
+/// A reference type (ADR 0105).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Ref {
+    pub mutable: bool,
+    pub referent: &'static Ty,
+}
+
 impl Ty {
+    /// `&referent` or `&mut referent`; leaked like `ptr`.
+    pub fn reference(mutable: bool, referent: Ty) -> Ty {
+        Ty::Ref(Ref {
+            mutable,
+            referent: Box::leak(Box::new(referent)),
+        })
+    }
+
     /// Pointee types are leaked so that `Ty` stays `Copy`; a compiler run is
     /// short and the number of distinct pointer types is tiny.
     pub fn ptr(mutable: bool, volatile: bool, pointee: Ty) -> Ty {
@@ -1271,6 +1290,7 @@ impl Ty {
             Ty::Array(elem, len) => matches!(len, ArrayLen::Known(_)) && elem.is_normal(),
             Ty::Slice(elem) => elem.is_normal(),
             Ty::Ptr(ptr) => ptr.pointee.is_normal(),
+            Ty::Ref(r) => r.referent.is_normal(),
             Ty::Applied(_) => false,
             _ => true,
         }
@@ -1299,6 +1319,13 @@ impl fmt::Display for Ptr {
     }
 }
 
+impl fmt::Display for Ref {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mutability = if self.mutable { "mut " } else { "" };
+        write!(f, "&{mutability}{}", self.referent)
+    }
+}
+
 impl fmt::Display for Ty {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -1307,6 +1334,7 @@ impl fmt::Display for Ty {
             Ty::Bool => f.write_str("bool"),
             Ty::Int(int) => write!(f, "{int}"),
             Ty::Ptr(ptr) => write!(f, "{ptr}"),
+            Ty::Ref(r) => write!(f, "{r}"),
             Ty::Array(elem, len) => write!(f, "[{elem}; {len}]"),
             Ty::Slice(elem) => write!(f, "[{elem}]"),
             Ty::Struct(s) => f.write_str(s.name),
@@ -1422,6 +1450,11 @@ pub enum ExprKind {
     Try(Box<Expr>, Span),
     /// `&raw const place` or `&raw mut place`
     AddrOf {
+        mutable: bool,
+        place: Box<Expr>,
+    },
+    /// `&place` or `&mut place` (ADR 0105)
+    Ref {
         mutable: bool,
         place: Box<Expr>,
     },
@@ -1661,7 +1694,8 @@ impl Expr {
             ExprKind::Unary(_, e)
             | ExprKind::Deref(e)
             | ExprKind::Cast(e, _, _)
-            | ExprKind::AddrOf { place: e, .. } => e.walk(f),
+            | ExprKind::AddrOf { place: e, .. }
+            | ExprKind::Ref { place: e, .. } => e.walk(f),
             ExprKind::Binary(_, a, b, _)
             | ExprKind::Index(a, b, _)
             | ExprKind::Slice(a, b)

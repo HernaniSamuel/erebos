@@ -9,9 +9,9 @@ use super::{Checker, is_linear};
 
 /// Whether the values of `ty` are copied rather than moved (ADR 0096): an
 /// integer, `bool`, `()`, an enum without payloads, a bit-field struct, a
-/// raw pointer, an array of a copy type, `Option(T)` and `Result(T, E)` of
-/// copy arguments, and a struct or an enum with payloads declared
-/// `#[copy]`. What declares itself is not looked into: the check of
+/// raw pointer, a shared reference, an array of a copy type, `Option(T)` and
+/// `Result(T, E)` of copy arguments, and a struct or an enum with payloads
+/// declared `#[copy]`. What declares itself is not looked into: the check of
 /// `#[copy]` makes the declaration true. `!`, peripheral types, `[T]` and
 /// `{error}` have no values to move, and are copy here so that they report
 /// nothing more.
@@ -26,6 +26,8 @@ pub fn is_copy(q: &Queries, ty: Ty) -> bool {
         | Ty::BitStruct(_)
         | Ty::Peripheral(_)
         | Ty::Error => true,
+        // A shared reference is copy, a mutable one is not (ADR 0105).
+        Ty::Ref(r) => !r.mutable,
         Ty::Array(elem, _) => is_copy(q, *elem),
         Ty::Struct(s) => q.hir.struct_(s.id).copy.is_some(),
         Ty::Applied(applied) => applied.args.iter().all(|&arg| is_copy(q, arg)),

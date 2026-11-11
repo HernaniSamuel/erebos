@@ -5136,8 +5136,8 @@ When code is type checked:
 | `ty::private-register` | an entry not visible where it is named |
 | `ty::write-to-read-only` | a write, a compound assignment or a field assignment to a `read` register; a field assignment or a compound assignment to a `read` field in a volatile place |
 | `ty::read-of-write-only` | a read, a compound assignment or a field assignment of a `write` register, or a field read from one; a read of a `write` field, or a compound assignment to one, in a volatile place |
-| `ty::register-address` | `&raw` of a register, of a register array or a cluster array taken whole, or of an element of a register array |
-| `ty::bit-field-address` | `&raw` of a bit field, a register's too |
+| `ty::register-address` | `&raw`, `&` or `&mut` of a register, of a register array or a cluster array taken whole, or of an element of a register array |
+| `ty::bit-field-address` | `&raw`, `&` or `&mut` of a bit field, a register's too |
 | `ty::read-with-effects` | a field assignment or a compound assignment to a place whose reads have effects, or to one of its fields |
 | `ty::compound-write-effect` | a compound assignment to a field with a write effect in a volatile place |
 | `ty::index-out-of-bounds` | an index known at compile time not below the length of a register array or a cluster array |
@@ -6033,26 +6033,27 @@ Every error has a stable code, shown with the message.
 | `ty::untyped-variant` | a `.V` with no expected type, as a `match` scrutinee, the operand of `as` or `?`, or an expression statement |
 | `ty::unknown-variant` | a `.V` where the expected enum, or the position's enum, has no variant of that name |
 | `ty::literal-out-of-range` | literal does not fit its type |
-| `ty::invalid-operand` | operator applied to a type it does not accept, such as a comparison of slices or of enums with payloads, or any operator on bit-field structs |
+| `ty::invalid-operand` | operator applied to a type it does not accept, such as a comparison of slices, of references or of enums with payloads, or any operator on bit-field structs |
 | `ty::negate-unsigned` | unary `-` on an unsigned value |
 | `ty::shift-out-of-range` | shift amount known at compile time outside 0 to the width minus 1 |
 | `ty::division-by-zero` | divisor known at compile time to be zero |
-| `ty::invalid-cast` | `as` between types that do not convert, a slice cast the table refuses, any cast to `!` or to an enum, or from an enum with payloads; to a bit-field struct from anything but its integer type (itself included), or from one to anything but an integer type |
+| `ty::invalid-cast` | `as` between types that do not convert, a slice cast the table refuses, any cast to `!`, to an enum or to a reference, or from an enum with payloads; a reference to anything but a raw pointer; to a bit-field struct from anything but its integer type (itself included), or from one to anything but an integer type |
 | `ty::pointer-cast-width` | thin pointer cast to or from an integer type other than `usize` |
-| `ty::deref-non-pointer` | `*` on a value that is not a pointer |
-| `ty::cannot-index` | indexing a value that is not an array or a pointer, a register or a single cluster included |
+| `ty::deref-non-pointer` | `*` on a value that is not a pointer or a reference |
+| `ty::cannot-index` | indexing a value that is not an array or a pointer, a register, a single cluster or a reference included |
 | `ty::index-out-of-bounds` | index known at compile time not below the array's length, a register array's or a cluster array's included |
 | `ty::slice-pointer-index` | indexing a slice pointer directly (`s[i]`); write `(*s)[i]` |
-| `ty::no-fields` | field access on a value with neither fields nor registers |
+| `ty::no-fields` | field access on a value with neither fields nor registers, a reference included |
 | `ty::unknown-field` | field access to a field the struct does not have |
 | `ty::private-field` | a place or `offset_of` naming a field that is not visible here |
 | `ty::private-variant` | `.V` naming a variant of an enum that is not reachable here |
-| `ty::write-through-const` | assignment through a `*const` pointer |
+| `ty::write-through-const` | assignment through a `*const` pointer or a `&` reference |
 | `ty::not-assignable` | assignment to something that is not a place, or to part of a temporary; an `inout` operand of `asm` without `=>` whose expression is not a place |
 | `ty::assign-immutable` | assignment to a variable without `mut`, a `static`, an `extern static` without `mut`, or a byte string |
 | `ty::not-a-place` | `&raw` of a value that is not a place, or of a constant or any element or field of it |
-| `ty::address-of-immutable` | `&raw mut` of a place that cannot be written |
-| `ty::packed-field-address` | `&raw` of a possibly misaligned place inside a packed struct |
+| `ty::address-of-immutable` | `&raw mut` of a place that cannot be written, one through a `&` reference included |
+| `ty::mut-borrow-of-immutable` | `&mut` of a place that cannot be written (a variable or parameter without `mut`, a `static`, an `extern static` without `mut`, a byte string, a place through a `&` reference or a `*const` pointer), of a value that is not a place, or of a part of one (`&mut f().x`) |
+| `ty::packed-field-address` | `&raw`, `&` or `&mut` of a possibly misaligned place inside a packed struct |
 | `ty::volatile-too-wide` | volatile access wider than the target's widest access, a bit-field struct on `u64` included |
 | `ty::volatile-aggregate` | volatile access to a whole struct, array or enum with payloads, or to a slice stored in memory |
 | `ty::volatile-packed-field` | volatile access to a possibly misaligned place inside a packed struct, a bit-field struct on `u16` or `u32` included |
@@ -6062,14 +6063,14 @@ Every error has a stable code, shown with the message.
 | `ty::copy-field-not-copy` | a field of a `#[copy]` struct, or a payload value of a `#[copy]` enum, whose type is not copy |
 | `ty::non-copy-constant` | a `const` whose type is not copy, or a `comptime` expression of a type that is not copy; a static's initializer is neither |
 | `ty::non-copy-repeat` | `[v; N]` with `v` of a type that is not copy, whatever `N` is, unless `v` is a variant written without payload values |
-| `ty::move-out-of-place` | a value of a type that is not copy read whole from an array element (of a temporary's array too, `f().items[i]`), a place through a pointer (`*p`, `p[i]`, `(*p).f`, `(*s)[i]`) or a static, or bound by a `match` on such a place; a field of a temporary (`f().x`), and a place that is only named (a discarded place, a `match` scrutinee), are not one |
+| `ty::move-out-of-place` | a value of a type that is not copy read whole from an array element (of a temporary's array too, `f().items[i]`), a place through a pointer or a reference (`*p`, `p[i]`, `(*p).f`, `(*s)[i]`, `*r`, `(*r).f`) or a static, or bound by a `match` on such a place; a field of a temporary (`f().x`), and a place that is only named (a discarded place, a `match` scrutinee), are not one |
 | `ty::non-copy-binding-in-or-pattern` | a binding of a type that is not copy inside an or-pattern nested in a payload; the alternatives of an arm are not nested |
 | `ty::linear-static` | a `static` or `extern static` whose type is linear, at its type: a `#[linear]` struct, or a struct, an enum with payloads, `Option` or `Result` that holds one; a pointer to one is not |
 | `ty::linear-array` | an array or a slice of a linear type, once per type: at the type where it is written (field, payload value, parameter, return type, `let`, static, type argument, pointee, layout query, cast), or at the array literal, repeat expression or `slice(p, n)` that makes a type no one wrote; a nested array is reported at the innermost |
-| `ty::linear-through-pointer` | an assignment of a value of a linear type to a place reached through a pointer (`*p`, `p[i]`, `(*p).f`, `(*s)[i]`); a copy field written through one is not |
+| `ty::linear-through-pointer` | an assignment of a value of a linear type to a place reached through a pointer or a reference (`*p`, `p[i]`, `(*p).f`, `(*s)[i]`, `*r`); a copy field written through one is not |
 | `ty::end-type` | `end(e)` with `e` of a type that is not a `#[linear]` struct: a scalar, a pointer, a struct that is not marked, an `Option` or a `Result` that holds a linear value |
 | `ty::end-private-field` | `end(e)` of a `#[linear]` struct with a field that is not visible where `end` is written (ADR 0050); the first such field is labeled |
-| `ty::never-in-memory` | `!` as a pointee, slice element, field, payload type, type argument of `Option` or `Result`, array element, register type, the type of a static, `extern static`, `const` or `comptime` value, a layout query operand, or under `&raw` |
+| `ty::never-in-memory` | `!` as a pointee, slice element, field, payload type, type argument of `Option` or `Result`, array element, register type, the type of a static, `extern static`, `const` or `comptime` value, a layout query operand, the referent of a reference, or under `&raw`, `&` or `&mut` |
 | `ty::invalid-align` | `#[align(N)]` on a struct, static or function with `N` not a power of two, too large or below the natural alignment |
 | `ty::aligned-in-packed` | a packed struct containing a type with `#[align(N)]`, at any depth, such as an enum with such a payload |
 | `ty::not-comptime` | a run-time variable where a compile-time value is required, in a `const` operand of `asm` too |
@@ -6113,8 +6114,8 @@ Every error has a stable code, shown with the message.
 | `ty::private-register` | an entry that is not visible here |
 | `ty::write-to-read-only` | a write, a compound assignment or a field assignment to a `read` register; a field assignment or a compound assignment to a `read` field in a volatile place |
 | `ty::read-of-write-only` | a read, a compound assignment or a field assignment of a `write` register, or a field read from one; a read of a `write` field, or a compound assignment to one, in a volatile place |
-| `ty::register-address` | `&raw` of a register, of a register array or a cluster array taken whole, or of an element of a register array |
-| `ty::bit-field-address` | `&raw` of a bit field, a register's too |
+| `ty::register-address` | `&raw`, `&` or `&mut` of a register, of a register array or a cluster array taken whole, or of an element of a register array |
+| `ty::bit-field-address` | `&raw`, `&` or `&mut` of a bit field, a register's too |
 | `ty::read-with-effects` | a field assignment or a compound assignment to a place whose reads have effects, or to one of its fields |
 | `ty::compound-write-effect` | a compound assignment to a field with a write effect in a volatile place |
 | `ty::bit-field-type` | a bit field whose type is not `bool`, `u8`, `u16`, `u32`, `u64` or an enum without payloads on one of these four |

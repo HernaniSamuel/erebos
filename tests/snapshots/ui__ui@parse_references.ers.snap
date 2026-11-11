@@ -1,0 +1,1252 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/parse_references.ers
+---
+--- ast ---
+File {
+    items: [
+        Fn(
+            FnDecl {
+                attrs: [],
+                vis: Private,
+                kind: Plain,
+                name: Ident {
+                    name: "types",
+                    span: 307..312,
+                },
+                params: [
+                    Param {
+                        mutable: false,
+                        name: Ident {
+                            name: "a",
+                            span: 313..314,
+                        },
+                        ty: Ty {
+                            kind: Ref {
+                                mutable: false,
+                                referent: Ty {
+                                    kind: Named(
+                                        Path {
+                                            segments: [
+                                                Ident {
+                                                    name: "u32",
+                                                    span: 317..320,
+                                                },
+                                            ],
+                                            span: 317..320,
+                                        },
+                                    ),
+                                    span: 317..320,
+                                },
+                            },
+                            span: 316..320,
+                        },
+                    },
+                    Param {
+                        mutable: false,
+                        name: Ident {
+                            name: "b",
+                            span: 322..323,
+                        },
+                        ty: Ty {
+                            kind: Ref {
+                                mutable: true,
+                                referent: Ty {
+                                    kind: Named(
+                                        Path {
+                                            segments: [
+                                                Ident {
+                                                    name: "u32",
+                                                    span: 330..333,
+                                                },
+                                            ],
+                                            span: 330..333,
+                                        },
+                                    ),
+                                    span: 330..333,
+                                },
+                            },
+                            span: 325..333,
+                        },
+                    },
+                    Param {
+                        mutable: false,
+                        name: Ident {
+                            name: "c",
+                            span: 335..336,
+                        },
+                        ty: Ty {
+                            kind: Ref {
+                                mutable: false,
+                                referent: Ty {
+                                    kind: Array {
+                                        elem: Ty {
+                                            kind: Named(
+                                                Path {
+                                                    segments: [
+                                                        Ident {
+                                                            name: "u8",
+                                                            span: 340..342,
+                                                        },
+                                                    ],
+                                                    span: 340..342,
+                                                },
+                                            ),
+                                            span: 340..342,
+                                        },
+                                        len: Expr {
+                                            kind: Int(
+                                                Some(
+                                                    4,
+                                                ),
+                                            ),
+                                            span: 344..345,
+                                        },
+                                    },
+                                    span: 339..346,
+                                },
+                            },
+                            span: 338..346,
+                        },
+                    },
+                    Param {
+                        mutable: false,
+                        name: Ident {
+                            name: "d",
+                            span: 348..349,
+                        },
+                        ty: Ty {
+                            kind: Ptr {
+                                mutable: false,
+                                volatile: false,
+                                pointee: Ty {
+                                    kind: Ref {
+                                        mutable: false,
+                                        referent: Ty {
+                                            kind: Named(
+                                                Path {
+                                                    segments: [
+                                                        Ident {
+                                                            name: "u32",
+                                                            span: 359..362,
+                                                        },
+                                                    ],
+                                                    span: 359..362,
+                                                },
+                                            ),
+                                            span: 359..362,
+                                        },
+                                    },
+                                    span: 358..362,
+                                },
+                            },
+                            span: 351..362,
+                        },
+                    },
+                    Param {
+                        mutable: false,
+                        name: Ident {
+                            name: "e",
+                            span: 364..365,
+                        },
+                        ty: Ty {
+                            kind: Ref {
+                                mutable: false,
+                                referent: Ty {
+                                    kind: Ref {
+                                        mutable: false,
+                                        referent: Ty {
+                                            kind: Named(
+                                                Path {
+                                                    segments: [
+                                                        Ident {
+                                                            name: "u32",
+                                                            span: 369..372,
+                                                        },
+                                                    ],
+                                                    span: 369..372,
+                                                },
+                                            ),
+                                            span: 369..372,
+                                        },
+                                    },
+                                    span: 368..372,
+                                },
+                            },
+                            span: 367..372,
+                        },
+                    },
+                    Param {
+                        mutable: false,
+                        name: Ident {
+                            name: "f",
+                            span: 374..375,
+                        },
+                        ty: Ty {
+                            kind: Ref {
+                                mutable: true,
+                                referent: Ty {
+                                    kind: Ref {
+                                        mutable: false,
+                                        referent: Ty {
+                                            kind: Named(
+                                                Path {
+                                                    segments: [
+                                                        Ident {
+                                                            name: "u32",
+                                                            span: 383..386,
+                                                        },
+                                                    ],
+                                                    span: 383..386,
+                                                },
+                                            ),
+                                            span: 383..386,
+                                        },
+                                    },
+                                    span: 382..386,
+                                },
+                            },
+                            span: 377..386,
+                        },
+                    },
+                ],
+                ret: None,
+                body: Some(
+                    Block {
+                        stmts: [],
+                        tail: None,
+                        span: 388..390,
+                    },
+                ),
+                span: 304..390,
+            },
+        ),
+        Fn(
+            FnDecl {
+                attrs: [],
+                vis: Private,
+                kind: Plain,
+                name: Ident {
+                    name: "expressions",
+                    span: 395..406,
+                },
+                params: [
+                    Param {
+                        mutable: false,
+                        name: Ident {
+                            name: "x",
+                            span: 407..408,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Path {
+                                    segments: [
+                                        Ident {
+                                            name: "u32",
+                                            span: 410..413,
+                                        },
+                                    ],
+                                    span: 410..413,
+                                },
+                            ),
+                            span: 410..413,
+                        },
+                    },
+                    Param {
+                        mutable: false,
+                        name: Ident {
+                            name: "raw",
+                            span: 415..418,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Path {
+                                    segments: [
+                                        Ident {
+                                            name: "u32",
+                                            span: 420..423,
+                                        },
+                                    ],
+                                    span: 420..423,
+                                },
+                            ),
+                            span: 420..423,
+                        },
+                    },
+                    Param {
+                        mutable: true,
+                        name: Ident {
+                            name: "p",
+                            span: 429..430,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Path {
+                                    segments: [
+                                        Ident {
+                                            name: "Pair",
+                                            span: 432..436,
+                                        },
+                                    ],
+                                    span: 432..436,
+                                },
+                            ),
+                            span: 432..436,
+                        },
+                    },
+                ],
+                ret: None,
+                body: Some(
+                    Block {
+                        stmts: [
+                            Let(
+                                Let {
+                                    mutable: false,
+                                    name: Ident {
+                                        name: "a",
+                                        span: 448..449,
+                                    },
+                                    ty: Ty {
+                                        kind: Ref {
+                                            mutable: false,
+                                            referent: Ty {
+                                                kind: Named(
+                                                    Path {
+                                                        segments: [
+                                                            Ident {
+                                                                name: "u32",
+                                                                span: 452..455,
+                                                            },
+                                                        ],
+                                                        span: 452..455,
+                                                    },
+                                                ),
+                                                span: 452..455,
+                                            },
+                                        },
+                                        span: 451..455,
+                                    },
+                                    init: Expr {
+                                        kind: Ref {
+                                            mutable: false,
+                                            expr: Expr {
+                                                kind: Name(
+                                                    Path {
+                                                        segments: [
+                                                            Ident {
+                                                                name: "x",
+                                                                span: 459..460,
+                                                            },
+                                                        ],
+                                                        span: 459..460,
+                                                    },
+                                                ),
+                                                span: 459..460,
+                                            },
+                                        },
+                                        span: 458..460,
+                                    },
+                                    span: 444..461,
+                                },
+                            ),
+                            Let(
+                                Let {
+                                    mutable: false,
+                                    name: Ident {
+                                        name: "b",
+                                        span: 470..471,
+                                    },
+                                    ty: Ty {
+                                        kind: Ref {
+                                            mutable: true,
+                                            referent: Ty {
+                                                kind: Named(
+                                                    Path {
+                                                        segments: [
+                                                            Ident {
+                                                                name: "u32",
+                                                                span: 478..481,
+                                                            },
+                                                        ],
+                                                        span: 478..481,
+                                                    },
+                                                ),
+                                                span: 478..481,
+                                            },
+                                        },
+                                        span: 473..481,
+                                    },
+                                    init: Expr {
+                                        kind: Ref {
+                                            mutable: true,
+                                            expr: Expr {
+                                                kind: Name(
+                                                    Path {
+                                                        segments: [
+                                                            Ident {
+                                                                name: "x",
+                                                                span: 489..490,
+                                                            },
+                                                        ],
+                                                        span: 489..490,
+                                                    },
+                                                ),
+                                                span: 489..490,
+                                            },
+                                        },
+                                        span: 484..490,
+                                    },
+                                    span: 466..491,
+                                },
+                            ),
+                            Let(
+                                Let {
+                                    mutable: false,
+                                    name: Ident {
+                                        name: "c",
+                                        span: 500..501,
+                                    },
+                                    ty: Ty {
+                                        kind: Ptr {
+                                            mutable: false,
+                                            volatile: false,
+                                            pointee: Ty {
+                                                kind: Named(
+                                                    Path {
+                                                        segments: [
+                                                            Ident {
+                                                                name: "u32",
+                                                                span: 510..513,
+                                                            },
+                                                        ],
+                                                        span: 510..513,
+                                                    },
+                                                ),
+                                                span: 510..513,
+                                            },
+                                        },
+                                        span: 503..513,
+                                    },
+                                    init: Expr {
+                                        kind: AddrOf {
+                                            mutable: false,
+                                            place: Expr {
+                                                kind: Name(
+                                                    Path {
+                                                        segments: [
+                                                            Ident {
+                                                                name: "x",
+                                                                span: 527..528,
+                                                            },
+                                                        ],
+                                                        span: 527..528,
+                                                    },
+                                                ),
+                                                span: 527..528,
+                                            },
+                                        },
+                                        span: 516..528,
+                                    },
+                                    span: 496..529,
+                                },
+                            ),
+                            Let(
+                                Let {
+                                    mutable: false,
+                                    name: Ident {
+                                        name: "d",
+                                        span: 538..539,
+                                    },
+                                    ty: Ty {
+                                        kind: Ptr {
+                                            mutable: true,
+                                            volatile: false,
+                                            pointee: Ty {
+                                                kind: Named(
+                                                    Path {
+                                                        segments: [
+                                                            Ident {
+                                                                name: "u32",
+                                                                span: 546..549,
+                                                            },
+                                                        ],
+                                                        span: 546..549,
+                                                    },
+                                                ),
+                                                span: 546..549,
+                                            },
+                                        },
+                                        span: 541..549,
+                                    },
+                                    init: Expr {
+                                        kind: AddrOf {
+                                            mutable: true,
+                                            place: Expr {
+                                                kind: Name(
+                                                    Path {
+                                                        segments: [
+                                                            Ident {
+                                                                name: "x",
+                                                                span: 561..562,
+                                                            },
+                                                        ],
+                                                        span: 561..562,
+                                                    },
+                                                ),
+                                                span: 561..562,
+                                            },
+                                        },
+                                        span: 552..562,
+                                    },
+                                    span: 534..563,
+                                },
+                            ),
+                            Let(
+                                Let {
+                                    mutable: false,
+                                    name: Ident {
+                                        name: "e",
+                                        span: 572..573,
+                                    },
+                                    ty: Ty {
+                                        kind: Ref {
+                                            mutable: false,
+                                            referent: Ty {
+                                                kind: Named(
+                                                    Path {
+                                                        segments: [
+                                                            Ident {
+                                                                name: "u32",
+                                                                span: 576..579,
+                                                            },
+                                                        ],
+                                                        span: 576..579,
+                                                    },
+                                                ),
+                                                span: 576..579,
+                                            },
+                                        },
+                                        span: 575..579,
+                                    },
+                                    init: Expr {
+                                        kind: Ref {
+                                            mutable: false,
+                                            expr: Expr {
+                                                kind: Name(
+                                                    Path {
+                                                        segments: [
+                                                            Ident {
+                                                                name: "raw",
+                                                                span: 583..586,
+                                                            },
+                                                        ],
+                                                        span: 583..586,
+                                                    },
+                                                ),
+                                                span: 583..586,
+                                            },
+                                        },
+                                        span: 582..586,
+                                    },
+                                    span: 568..587,
+                                },
+                            ),
+                            Let(
+                                Let {
+                                    mutable: false,
+                                    name: Ident {
+                                        name: "f",
+                                        span: 596..597,
+                                    },
+                                    ty: Ty {
+                                        kind: Ref {
+                                            mutable: false,
+                                            referent: Ty {
+                                                kind: Named(
+                                                    Path {
+                                                        segments: [
+                                                            Ident {
+                                                                name: "u32",
+                                                                span: 600..603,
+                                                            },
+                                                        ],
+                                                        span: 600..603,
+                                                    },
+                                                ),
+                                                span: 600..603,
+                                            },
+                                        },
+                                        span: 599..603,
+                                    },
+                                    init: Expr {
+                                        kind: Ref {
+                                            mutable: false,
+                                            expr: Expr {
+                                                kind: Field(
+                                                    Expr {
+                                                        kind: Name(
+                                                            Path {
+                                                                segments: [
+                                                                    Ident {
+                                                                        name: "raw",
+                                                                        span: 607..610,
+                                                                    },
+                                                                ],
+                                                                span: 607..610,
+                                                            },
+                                                        ),
+                                                        span: 607..610,
+                                                    },
+                                                    Ident {
+                                                        name: "field",
+                                                        span: 611..616,
+                                                    },
+                                                ),
+                                                span: 607..616,
+                                            },
+                                        },
+                                        span: 606..616,
+                                    },
+                                    span: 592..617,
+                                },
+                            ),
+                            Let(
+                                Let {
+                                    mutable: false,
+                                    name: Ident {
+                                        name: "g",
+                                        span: 626..627,
+                                    },
+                                    ty: Ty {
+                                        kind: Ref {
+                                            mutable: true,
+                                            referent: Ty {
+                                                kind: Named(
+                                                    Path {
+                                                        segments: [
+                                                            Ident {
+                                                                name: "u32",
+                                                                span: 634..637,
+                                                            },
+                                                        ],
+                                                        span: 634..637,
+                                                    },
+                                                ),
+                                                span: 634..637,
+                                            },
+                                        },
+                                        span: 629..637,
+                                    },
+                                    init: Expr {
+                                        kind: Ref {
+                                            mutable: true,
+                                            expr: Expr {
+                                                kind: Name(
+                                                    Path {
+                                                        segments: [
+                                                            Ident {
+                                                                name: "raw",
+                                                                span: 645..648,
+                                                            },
+                                                        ],
+                                                        span: 645..648,
+                                                    },
+                                                ),
+                                                span: 645..648,
+                                            },
+                                        },
+                                        span: 640..648,
+                                    },
+                                    span: 622..649,
+                                },
+                            ),
+                            Let(
+                                Let {
+                                    mutable: false,
+                                    name: Ident {
+                                        name: "h",
+                                        span: 658..659,
+                                    },
+                                    ty: Ty {
+                                        kind: Ref {
+                                            mutable: false,
+                                            referent: Ty {
+                                                kind: Ref {
+                                                    mutable: false,
+                                                    referent: Ty {
+                                                        kind: Named(
+                                                            Path {
+                                                                segments: [
+                                                                    Ident {
+                                                                        name: "u32",
+                                                                        span: 663..666,
+                                                                    },
+                                                                ],
+                                                                span: 663..666,
+                                                            },
+                                                        ),
+                                                        span: 663..666,
+                                                    },
+                                                },
+                                                span: 662..666,
+                                            },
+                                        },
+                                        span: 661..666,
+                                    },
+                                    init: Expr {
+                                        kind: Ref {
+                                            mutable: false,
+                                            expr: Expr {
+                                                kind: Ref {
+                                                    mutable: false,
+                                                    expr: Expr {
+                                                        kind: Name(
+                                                            Path {
+                                                                segments: [
+                                                                    Ident {
+                                                                        name: "x",
+                                                                        span: 671..672,
+                                                                    },
+                                                                ],
+                                                                span: 671..672,
+                                                            },
+                                                        ),
+                                                        span: 671..672,
+                                                    },
+                                                },
+                                                span: 670..672,
+                                            },
+                                        },
+                                        span: 669..672,
+                                    },
+                                    span: 654..673,
+                                },
+                            ),
+                            Let(
+                                Let {
+                                    mutable: false,
+                                    name: Ident {
+                                        name: "i",
+                                        span: 682..683,
+                                    },
+                                    ty: Ty {
+                                        kind: Ref {
+                                            mutable: false,
+                                            referent: Ty {
+                                                kind: Ref {
+                                                    mutable: true,
+                                                    referent: Ty {
+                                                        kind: Named(
+                                                            Path {
+                                                                segments: [
+                                                                    Ident {
+                                                                        name: "u32",
+                                                                        span: 691..694,
+                                                                    },
+                                                                ],
+                                                                span: 691..694,
+                                                            },
+                                                        ),
+                                                        span: 691..694,
+                                                    },
+                                                },
+                                                span: 686..694,
+                                            },
+                                        },
+                                        span: 685..694,
+                                    },
+                                    init: Expr {
+                                        kind: Ref {
+                                            mutable: false,
+                                            expr: Expr {
+                                                kind: Ref {
+                                                    mutable: true,
+                                                    expr: Expr {
+                                                        kind: Name(
+                                                            Path {
+                                                                segments: [
+                                                                    Ident {
+                                                                        name: "x",
+                                                                        span: 703..704,
+                                                                    },
+                                                                ],
+                                                                span: 703..704,
+                                                            },
+                                                        ),
+                                                        span: 703..704,
+                                                    },
+                                                },
+                                                span: 698..704,
+                                            },
+                                        },
+                                        span: 697..704,
+                                    },
+                                    span: 678..705,
+                                },
+                            ),
+                            Let(
+                                Let {
+                                    mutable: false,
+                                    name: Ident {
+                                        name: "j",
+                                        span: 714..715,
+                                    },
+                                    ty: Ty {
+                                        kind: Ref {
+                                            mutable: true,
+                                            referent: Ty {
+                                                kind: Ref {
+                                                    mutable: false,
+                                                    referent: Ty {
+                                                        kind: Named(
+                                                            Path {
+                                                                segments: [
+                                                                    Ident {
+                                                                        name: "u32",
+                                                                        span: 723..726,
+                                                                    },
+                                                                ],
+                                                                span: 723..726,
+                                                            },
+                                                        ),
+                                                        span: 723..726,
+                                                    },
+                                                },
+                                                span: 722..726,
+                                            },
+                                        },
+                                        span: 717..726,
+                                    },
+                                    init: Expr {
+                                        kind: Ref {
+                                            mutable: true,
+                                            expr: Expr {
+                                                kind: Ref {
+                                                    mutable: false,
+                                                    expr: Expr {
+                                                        kind: Name(
+                                                            Path {
+                                                                segments: [
+                                                                    Ident {
+                                                                        name: "x",
+                                                                        span: 735..736,
+                                                                    },
+                                                                ],
+                                                                span: 735..736,
+                                                            },
+                                                        ),
+                                                        span: 735..736,
+                                                    },
+                                                },
+                                                span: 734..736,
+                                            },
+                                        },
+                                        span: 729..736,
+                                    },
+                                    span: 710..737,
+                                },
+                            ),
+                            Let(
+                                Let {
+                                    mutable: false,
+                                    name: Ident {
+                                        name: "k",
+                                        span: 746..747,
+                                    },
+                                    ty: Ty {
+                                        kind: Ref {
+                                            mutable: false,
+                                            referent: Ty {
+                                                kind: Named(
+                                                    Path {
+                                                        segments: [
+                                                            Ident {
+                                                                name: "u32",
+                                                                span: 750..753,
+                                                            },
+                                                        ],
+                                                        span: 750..753,
+                                                    },
+                                                ),
+                                                span: 750..753,
+                                            },
+                                        },
+                                        span: 749..753,
+                                    },
+                                    init: Expr {
+                                        kind: Ref {
+                                            mutable: false,
+                                            expr: Expr {
+                                                kind: Deref(
+                                                    Expr {
+                                                        kind: Name(
+                                                            Path {
+                                                                segments: [
+                                                                    Ident {
+                                                                        name: "r",
+                                                                        span: 758..759,
+                                                                    },
+                                                                ],
+                                                                span: 758..759,
+                                                            },
+                                                        ),
+                                                        span: 758..759,
+                                                    },
+                                                ),
+                                                span: 757..759,
+                                            },
+                                        },
+                                        span: 756..759,
+                                    },
+                                    span: 742..760,
+                                },
+                            ),
+                            Let(
+                                Let {
+                                    mutable: false,
+                                    name: Ident {
+                                        name: "l",
+                                        span: 769..770,
+                                    },
+                                    ty: Ty {
+                                        kind: Ref {
+                                            mutable: true,
+                                            referent: Ty {
+                                                kind: Named(
+                                                    Path {
+                                                        segments: [
+                                                            Ident {
+                                                                name: "u32",
+                                                                span: 777..780,
+                                                            },
+                                                        ],
+                                                        span: 777..780,
+                                                    },
+                                                ),
+                                                span: 777..780,
+                                            },
+                                        },
+                                        span: 772..780,
+                                    },
+                                    init: Expr {
+                                        kind: Ref {
+                                            mutable: true,
+                                            expr: Expr {
+                                                kind: Field(
+                                                    Expr {
+                                                        kind: Name(
+                                                            Path {
+                                                                segments: [
+                                                                    Ident {
+                                                                        name: "p",
+                                                                        span: 788..789,
+                                                                    },
+                                                                ],
+                                                                span: 788..789,
+                                                            },
+                                                        ),
+                                                        span: 788..789,
+                                                    },
+                                                    Ident {
+                                                        name: "a",
+                                                        span: 790..791,
+                                                    },
+                                                ),
+                                                span: 788..791,
+                                            },
+                                        },
+                                        span: 783..791,
+                                    },
+                                    span: 765..792,
+                                },
+                            ),
+                            Let(
+                                Let {
+                                    mutable: false,
+                                    name: Ident {
+                                        name: "m",
+                                        span: 801..802,
+                                    },
+                                    ty: Ty {
+                                        kind: Ref {
+                                            mutable: false,
+                                            referent: Ty {
+                                                kind: Named(
+                                                    Path {
+                                                        segments: [
+                                                            Ident {
+                                                                name: "u32",
+                                                                span: 805..808,
+                                                            },
+                                                        ],
+                                                        span: 805..808,
+                                                    },
+                                                ),
+                                                span: 805..808,
+                                            },
+                                        },
+                                        span: 804..808,
+                                    },
+                                    init: Expr {
+                                        kind: Ref {
+                                            mutable: false,
+                                            expr: Expr {
+                                                kind: Index(
+                                                    Expr {
+                                                        kind: Field(
+                                                            Expr {
+                                                                kind: Deref(
+                                                                    Expr {
+                                                                        kind: Name(
+                                                                            Path {
+                                                                                segments: [
+                                                                                    Ident {
+                                                                                        name: "r",
+                                                                                        span: 814..815,
+                                                                                    },
+                                                                                ],
+                                                                                span: 814..815,
+                                                                            },
+                                                                        ),
+                                                                        span: 814..815,
+                                                                    },
+                                                                ),
+                                                                span: 812..816,
+                                                            },
+                                                            Ident {
+                                                                name: "items",
+                                                                span: 817..822,
+                                                            },
+                                                        ),
+                                                        span: 812..822,
+                                                    },
+                                                    Expr {
+                                                        kind: Int(
+                                                            Some(
+                                                                1,
+                                                            ),
+                                                        ),
+                                                        span: 823..824,
+                                                    },
+                                                    822..823,
+                                                ),
+                                                span: 812..825,
+                                            },
+                                        },
+                                        span: 811..825,
+                                    },
+                                    span: 797..826,
+                                },
+                            ),
+                            Let(
+                                Let {
+                                    mutable: false,
+                                    name: Ident {
+                                        name: "n",
+                                        span: 835..836,
+                                    },
+                                    ty: Ty {
+                                        kind: Named(
+                                            Path {
+                                                segments: [
+                                                    Ident {
+                                                        name: "bool",
+                                                        span: 838..842,
+                                                    },
+                                                ],
+                                                span: 838..842,
+                                            },
+                                        ),
+                                        span: 838..842,
+                                    },
+                                    init: Expr {
+                                        kind: Logical(
+                                            And,
+                                            Expr {
+                                                kind: Binary(
+                                                    Eq,
+                                                    Expr {
+                                                        kind: Name(
+                                                            Path {
+                                                                segments: [
+                                                                    Ident {
+                                                                        name: "a",
+                                                                        span: 845..846,
+                                                                    },
+                                                                ],
+                                                                span: 845..846,
+                                                            },
+                                                        ),
+                                                        span: 845..846,
+                                                    },
+                                                    Expr {
+                                                        kind: Ref {
+                                                            mutable: false,
+                                                            expr: Expr {
+                                                                kind: Name(
+                                                                    Path {
+                                                                        segments: [
+                                                                            Ident {
+                                                                                name: "x",
+                                                                                span: 851..852,
+                                                                            },
+                                                                        ],
+                                                                        span: 851..852,
+                                                                    },
+                                                                ),
+                                                                span: 851..852,
+                                                            },
+                                                        },
+                                                        span: 850..852,
+                                                    },
+                                                    847..849,
+                                                ),
+                                                span: 845..852,
+                                            },
+                                            Expr {
+                                                kind: Binary(
+                                                    Eq,
+                                                    Expr {
+                                                        kind: Ref {
+                                                            mutable: false,
+                                                            expr: Expr {
+                                                                kind: Name(
+                                                                    Path {
+                                                                        segments: [
+                                                                            Ident {
+                                                                                name: "x",
+                                                                                span: 857..858,
+                                                                            },
+                                                                        ],
+                                                                        span: 857..858,
+                                                                    },
+                                                                ),
+                                                                span: 857..858,
+                                                            },
+                                                        },
+                                                        span: 856..858,
+                                                    },
+                                                    Expr {
+                                                        kind: Name(
+                                                            Path {
+                                                                segments: [
+                                                                    Ident {
+                                                                        name: "b",
+                                                                        span: 862..863,
+                                                                    },
+                                                                ],
+                                                                span: 862..863,
+                                                            },
+                                                        ),
+                                                        span: 862..863,
+                                                    },
+                                                    859..861,
+                                                ),
+                                                span: 856..863,
+                                            },
+                                        ),
+                                        span: 845..863,
+                                    },
+                                    span: 831..864,
+                                },
+                            ),
+                            Let(
+                                Let {
+                                    mutable: false,
+                                    name: Ident {
+                                        name: "o",
+                                        span: 873..874,
+                                    },
+                                    ty: Ty {
+                                        kind: Named(
+                                            Path {
+                                                segments: [
+                                                    Ident {
+                                                        name: "u32",
+                                                        span: 876..879,
+                                                    },
+                                                ],
+                                                span: 876..879,
+                                            },
+                                        ),
+                                        span: 876..879,
+                                    },
+                                    init: Expr {
+                                        kind: Cast(
+                                            Expr {
+                                                kind: Cast(
+                                                    Expr {
+                                                        kind: Ref {
+                                                            mutable: false,
+                                                            expr: Expr {
+                                                                kind: Name(
+                                                                    Path {
+                                                                        segments: [
+                                                                            Ident {
+                                                                                name: "x",
+                                                                                span: 883..884,
+                                                                            },
+                                                                        ],
+                                                                        span: 883..884,
+                                                                    },
+                                                                ),
+                                                                span: 883..884,
+                                                            },
+                                                        },
+                                                        span: 882..884,
+                                                    },
+                                                    Ty {
+                                                        kind: Ptr {
+                                                            mutable: false,
+                                                            volatile: false,
+                                                            pointee: Ty {
+                                                                kind: Named(
+                                                                    Path {
+                                                                        segments: [
+                                                                            Ident {
+                                                                                name: "u32",
+                                                                                span: 895..898,
+                                                                            },
+                                                                        ],
+                                                                        span: 895..898,
+                                                                    },
+                                                                ),
+                                                                span: 895..898,
+                                                            },
+                                                        },
+                                                        span: 888..898,
+                                                    },
+                                                ),
+                                                span: 882..898,
+                                            },
+                                            Ty {
+                                                kind: Named(
+                                                    Path {
+                                                        segments: [
+                                                            Ident {
+                                                                name: "u32",
+                                                                span: 902..905,
+                                                            },
+                                                        ],
+                                                        span: 902..905,
+                                                    },
+                                                ),
+                                                span: 902..905,
+                                            },
+                                        ),
+                                        span: 882..905,
+                                    },
+                                    span: 869..906,
+                                },
+                            ),
+                        ],
+                        tail: None,
+                        span: 438..908,
+                    },
+                ),
+                span: 392..908,
+            },
+        ),
+    ],
+}

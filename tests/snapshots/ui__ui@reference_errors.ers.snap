@@ -1,0 +1,460 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/reference_errors.ers
+---
+--- errors ---
+ty::mut-borrow-of-immutable
+
+  × cannot borrow `x` as `&mut`, which is not `mut`
+    ╭─[reference_errors.ers:38:28]
+ 36 │ fn mut_borrows(r: &u32, p: *const u32, pair: Pair) {
+ 37 │     let x: u32 = 1;
+    ·         ┬
+    ·         ╰── help: declare it `let mut x`
+ 38 │     let a: &mut u32 = &mut x;
+    ·                            ┬
+    ·                            ╰── borrowed here
+ 39 │     let b: &mut [u32; 2] = &mut TABLE;
+    ╰────
+ty::mut-borrow-of-immutable
+
+  × cannot borrow `TABLE` as `&mut`, which is not `mut`
+   ╭─[reference_errors.ers:8:8]
+ 7 │ extern static EXTERNAL: u32;
+ 8 │ static TABLE: [u32; 2] = [1, 2];
+   ·        ──┬──
+   ·          ╰── help: declare it `static mut TABLE`
+ 9 │ 
+   ╰────
+    ╭─[reference_errors.ers:39:33]
+ 38 │     let a: &mut u32 = &mut x;
+ 39 │     let b: &mut [u32; 2] = &mut TABLE;
+    ·                                 ──┬──
+    ·                                   ╰── borrowed here
+ 40 │     let c: &mut [u8; 3] = &mut b"abc";
+    ╰────
+ty::mut-borrow-of-immutable
+
+  × cannot borrow a byte string as `&mut`
+    ╭─[reference_errors.ers:40:32]
+ 39 │     let b: &mut [u32; 2] = &mut TABLE;
+ 40 │     let c: &mut [u8; 3] = &mut b"abc";
+    ·                                ───┬──
+    ·                                   ╰── in read-only memory
+ 41 │     let d: &mut Pair = &mut make();
+    ╰────
+  help: copy it into a `let mut` to change it (ADR 0031)
+ty::mut-borrow-of-immutable
+
+  × cannot borrow a temporary value as `&mut`
+    ╭─[reference_errors.ers:41:29]
+ 40 │     let c: &mut [u8; 3] = &mut b"abc";
+ 41 │     let d: &mut Pair = &mut make();
+    ·                             ───┬──
+    ·                                ╰── this value lives in no variable
+ 42 │     let e: &mut u32 = &mut *r;
+    ╰────
+  help: a write through the reference would reach nothing the program can read; store it in a `let
+        mut` first and borrow that (ADR 0105)
+ty::mut-borrow-of-immutable
+
+  × cannot borrow as `&mut` through a `&` reference
+    ╭─[reference_errors.ers:42:29]
+ 41 │     let d: &mut Pair = &mut make();
+ 42 │     let e: &mut u32 = &mut *r;
+    ·                             ┬
+    ·                             ╰── has type `&u32`
+ 43 │     let f: &mut u32 = &mut *p;
+    ╰────
+  help: only `&mut` references can be borrowed through as `&mut` (ADR 0105)
+ty::mut-borrow-of-immutable
+
+  × cannot borrow as `&mut` through a `*const` pointer
+    ╭─[reference_errors.ers:43:29]
+ 42 │     let e: &mut u32 = &mut *r;
+ 43 │     let f: &mut u32 = &mut *p;
+    ·                             ┬
+    ·                             ╰── has type `*const u32`
+ 44 │     let g: &mut u32 = &mut EXTERNAL;
+    ╰────
+  help: only `*mut` pointers can be borrowed through as `&mut`
+ty::mut-borrow-of-immutable
+
+  × cannot borrow `EXTERNAL` as `&mut`, which is not `mut`
+   ╭─[reference_errors.ers:7:15]
+ 6 │ // misaligned field, or a place of type `!` (ADR 0105).
+ 7 │ extern static EXTERNAL: u32;
+   ·               ────┬───
+   ·                   ╰── help: declare it `extern static mut EXTERNAL`
+ 8 │ static TABLE: [u32; 2] = [1, 2];
+   ╰────
+    ╭─[reference_errors.ers:44:28]
+ 43 │     let f: &mut u32 = &mut *p;
+ 44 │     let g: &mut u32 = &mut EXTERNAL;
+    ·                            ────┬───
+    ·                                ╰── borrowed here
+ 45 │     let h: &mut u32 = &mut make().a;
+    ╰────
+ty::mut-borrow-of-immutable
+
+  × cannot borrow a temporary value as `&mut`
+    ╭─[reference_errors.ers:45:28]
+ 44 │     let g: &mut u32 = &mut EXTERNAL;
+ 45 │     let h: &mut u32 = &mut make().a;
+    ·                            ───┬──
+    ·                               ╰── this value lives in no variable
+ 46 │     let i: &mut u32 = &mut pair.a;
+    ╰────
+  help: a write through the reference would reach nothing the program can read; store it in a `let
+        mut` first and borrow that (ADR 0105)
+ty::mut-borrow-of-immutable
+
+  × cannot borrow `pair` as `&mut`, which is not `mut`
+    ╭─[reference_errors.ers:46:28]
+ 35 │ 
+ 36 │ fn mut_borrows(r: &u32, p: *const u32, pair: Pair) {
+    ·                                        ──┬─
+    ·                                          ╰── help: declare it `let mut pair`
+ 37 │     let x: u32 = 1;
+ 38 │     let a: &mut u32 = &mut x;
+ 39 │     let b: &mut [u32; 2] = &mut TABLE;
+ 40 │     let c: &mut [u8; 3] = &mut b"abc";
+ 41 │     let d: &mut Pair = &mut make();
+ 42 │     let e: &mut u32 = &mut *r;
+ 43 │     let f: &mut u32 = &mut *p;
+ 44 │     let g: &mut u32 = &mut EXTERNAL;
+ 45 │     let h: &mut u32 = &mut make().a;
+ 46 │     let i: &mut u32 = &mut pair.a;
+    ·                            ───┬──
+    ·                               ╰── borrowed here
+ 47 │     let j: &mut u32 = &mut 5;
+    ╰────
+ty::mut-borrow-of-immutable
+
+  × cannot borrow a temporary value as `&mut`
+    ╭─[reference_errors.ers:47:28]
+ 46 │     let i: &mut u32 = &mut pair.a;
+ 47 │     let j: &mut u32 = &mut 5;
+    ·                            ┬
+    ·                            ╰── this value lives in no variable
+ 48 │ }
+    ╰────
+  help: a write through the reference would reach nothing the program can read; store it in a `let
+        mut` first and borrow that (ADR 0105)
+ty::write-through-const
+
+  × cannot write through a `&` reference
+    ╭─[reference_errors.ers:51:6]
+ 50 │ fn writes(r: &u32, s: &mut u32) {
+ 51 │     *r = 5;
+    ·      ┬
+    ·      ╰── has type `&u32`
+ 52 │     (*r) += 1;
+    ╰────
+  help: only `&mut` references can be written through (ADR 0105)
+ty::write-through-const
+
+  × cannot write through a `&` reference
+    ╭─[reference_errors.ers:52:7]
+ 51 │     *r = 5;
+ 52 │     (*r) += 1;
+    ·       ┬
+    ·       ╰── has type `&u32`
+ 53 │     *s = 5;
+    ╰────
+  help: only `&mut` references can be written through (ADR 0105)
+ty::no-fields
+
+  × `&Pair` has no fields
+    ╭─[reference_errors.ers:57:20]
+ 56 │ fn not_automatic(r: &Pair, a: &[u32; 2], n: u32) {
+ 57 │     let x: u32 = r.a;
+    ·                    ┬
+    ·                    ╰── no such field
+ 58 │     let y: u32 = a[0];
+    ╰────
+  help: dereference the reference first: `(*r).a` (ADR 0105)
+ty::cannot-index
+
+  × cannot index a value of type `&[u32; 2]`
+    ╭─[reference_errors.ers:58:18]
+ 57 │     let x: u32 = r.a;
+ 58 │     let y: u32 = a[0];
+    ·                  ┬
+    ·                  ╰── a reference, not an array or a pointer
+ 59 │     let z: u32 = *n;
+    ╰────
+  help: dereference the reference first: `(*r)[i]`, which indexes the `[u32; 2]` it refers to (ADR
+        0105)
+ty::deref-non-pointer
+
+  × cannot dereference `u32`
+    ╭─[reference_errors.ers:59:19]
+ 58 │     let y: u32 = a[0];
+ 59 │     let z: u32 = *n;
+    ·                   ┬
+    ·                   ╰── not a pointer or a reference
+ 60 │ }
+    ╰────
+ty::invalid-operand
+
+  × `==` needs integers, pointers, `bool` or enums, found `&u32`
+    ╭─[reference_errors.ers:63:19]
+ 62 │ fn comparisons(a: &u32, b: &u32) {
+ 63 │     let x: bool = a == b;
+    ·                   ───┬──
+    ·                      ╰── has type `&u32`
+ 64 │     let y: bool = a < b;
+    ╰────
+  help: neither meaning is implied: compare the values with `*a == *b`, or the addresses with `a
+        as *const u32 == b as *const u32` (ADR 0105)
+ty::invalid-operand
+
+  × `<` needs integers or pointers, found `&u32`
+    ╭─[reference_errors.ers:64:19]
+ 63 │     let x: bool = a == b;
+ 64 │     let y: bool = a < b;
+    ·                   ──┬──
+    ·                     ╰── has type `&u32`
+ 65 │ }
+    ╰────
+  help: neither meaning is implied: compare the values with `*a == *b`, or the addresses with `a
+        as *const u32 == b as *const u32` (ADR 0105)
+ty::invalid-cast
+
+  × cannot cast `&u32` to `usize`
+    ╭─[reference_errors.ers:68:25]
+ 67 │ fn casts(r: &u32, p: *const u32) {
+ 68 │     let a: usize = r as usize;
+    ·                         ──┬──
+    ·                           ╰── a reference converts only to raw pointers
+ 69 │     let b: bool = r as bool;
+    ╰────
+  help: cast it to a raw pointer first, as in `r as *const u32 as usize` (ADR 0105)
+ty::invalid-cast
+
+  × cannot cast `&u32` to `bool`
+    ╭─[reference_errors.ers:69:24]
+ 68 │     let a: usize = r as usize;
+ 69 │     let b: bool = r as bool;
+    ·                        ──┬─
+    ·                          ╰── a reference converts only to raw pointers
+ 70 │     let c: u8 = r as u8;
+    ╰────
+  help: cast it to a raw pointer first, as in `r as *const u32 as usize` (ADR 0105)
+ty::invalid-cast
+
+  × cannot cast `&u32` to `u8`
+    ╭─[reference_errors.ers:70:22]
+ 69 │     let b: bool = r as bool;
+ 70 │     let c: u8 = r as u8;
+    ·                      ─┬
+    ·                       ╰── a reference converts only to raw pointers
+ 71 │     let d: &u32 = 5 as &u32;
+    ╰────
+  help: cast it to a raw pointer first, as in `r as *const u32 as usize` (ADR 0105)
+ty::invalid-cast
+
+  × cannot cast to `&u32`
+    ╭─[reference_errors.ers:71:24]
+ 70 │     let c: u8 = r as u8;
+ 71 │     let d: &u32 = 5 as &u32;
+    ·                        ──┬─
+    ·                          ╰── nothing converts to a reference
+ 72 │     let e: &u32 = (&raw const *r) as &u32;
+    ╰────
+  help: a reference is made with `&place` or `&mut place`; to borrow what a raw pointer `p` points
+        to, write `&*p` or `&mut *p` (ADR 0105)
+ty::invalid-cast
+
+  × cannot cast to `&u32`
+    ╭─[reference_errors.ers:72:38]
+ 71 │     let d: &u32 = 5 as &u32;
+ 72 │     let e: &u32 = (&raw const *r) as &u32;
+    ·                                      ──┬─
+    ·                                        ╰── nothing converts to a reference
+ 73 │     let f: &u32 = p as &u32;
+    ╰────
+  help: a reference is made with `&place` or `&mut place`; to borrow what a raw pointer `p` points
+        to, write `&*p` or `&mut *p` (ADR 0105)
+ty::invalid-cast
+
+  × cannot cast to `&u32`
+    ╭─[reference_errors.ers:73:24]
+ 72 │     let e: &u32 = (&raw const *r) as &u32;
+ 73 │     let f: &u32 = p as &u32;
+    ·                        ──┬─
+    ·                          ╰── nothing converts to a reference
+ 74 │ }
+    ╰────
+  help: a reference is made with `&place` or `&mut place`; to borrow what a raw pointer `p` points
+        to, write `&*p` or `&mut *p` (ADR 0105)
+ty::bit-field-address
+
+  × cannot take the address of a field of `Flags`
+    ╭─[reference_errors.ers:77:19]
+ 76 │ fn addresses(f: Flags, p: &Packed) {
+ 77 │     let a: &u8 = &f.low;
+    ·                   ──┬──
+    ·                     ╰── a bit field, not a place in memory
+ 78 │     let b: &u32 = &(*p).word;
+    ╰────
+  help: a field of a bit-field struct is a range of bits of its `u8`; copy it into a `let` and
+        take that address, or take the address of the whole value (ADR 0059)
+ty::packed-field-address
+
+  × cannot take the address of a `u32` that may be misaligned
+    ╭─[reference_errors.ers:78:20]
+ 77 │     let a: &u8 = &f.low;
+ 78 │     let b: &u32 = &(*p).word;
+    ·                    ────┬────
+    ·                        ╰── reached through a field of a `#[packed]` struct
+ 79 │     let c: &u32 = &TIMER.count;
+    ╰────
+  help: a `*const u32` promises alignment, and dereferencing a misaligned one may trap; copy the
+        value into a `let` first (ADR 0022)
+ty::register-address
+
+  × cannot take the address of the register `count` of `Timer`
+    ╭─[reference_errors.ers:79:20]
+ 78 │     let b: &u32 = &(*p).word;
+ 79 │     let c: &u32 = &TIMER.count;
+    ·                    ─────┬─────
+    ·                         ╰── a register
+ 80 │     let d: &u32 = &*loop {};
+    ╰────
+  help: a pointer to it would reach it without its access mode, `read write`; read or write it
+        where it is named, or pass the whole device with a pointer to its peripheral, as `&raw mut
+        P` (ADR 0058)
+ty::never-in-memory
+
+  × `!` is not a type of memory
+    ╭─[reference_errors.ers:80:20]
+ 79 │     let c: &u32 = &TIMER.count;
+ 80 │     let d: &u32 = &*loop {};
+    ·                    ────┬───
+    ·                        ╰── `!` as the type of a place under `&`
+ 81 │ }
+    ╰────
+  help: `!` is the type of expressions that do not finish, so no memory holds one; for a type
+        without data, use `()` (ADR 0034)
+ty::asm-operand-type
+
+  × `&u32` cannot be the operand of a register
+    ╭─[reference_errors.ers:84:23]
+ 83 │ fn asm_operand(r: &u32) {
+ 84 │     asm("{}", in(reg) r);
+    ·                       ┬
+    ·                       ╰── has type `&u32`
+ 85 │ }
+    ╰────
+  help: an operand is an integer of at most 32 bits or a thin pointer; convert other values with
+        `as` (ADR 0008, 0079)
+ty::address-of-immutable
+
+  × cannot take a `*mut` address through a `&` reference
+    ╭─[reference_errors.ers:88:33]
+ 87 │ fn raw_mut_through_shared(r: &u32) {
+ 88 │     let p: *mut u32 = &raw mut *r;
+    ·                                 ┬
+    ·                                 ╰── has type `&u32`
+ 89 │ }
+    ╰────
+  help: use `&raw const`, or a `&mut` reference (ADR 0105)
+ty::never-in-memory
+
+  × `!` is not a type of memory
+    ╭─[reference_errors.ers:91:18]
+ 90 │ 
+ 91 │ fn referents(a: &!, b: &[u8], c: &Timer) {}
+    ·                  ┬
+    ·                  ╰── `!` as the referent of a reference
+ 92 │ 
+    ╰────
+  help: `!` is the type of expressions that do not finish, so no memory holds one; for a type
+        without data, use `()` (ADR 0034)
+ty::unsized
+
+  × `[u8]` has no size known at compile time
+    ╭─[reference_errors.ers:91:25]
+ 90 │ 
+ 91 │ fn referents(a: &!, b: &[u8], c: &Timer) {}
+    ·                         ──┬─
+    ·                           ╰── `[u8]` as the referent of a reference
+ 92 │ 
+    ╰────
+  help: its length is known only at run time, so it exists only behind a pointer, as a slice:
+        `*const [T]` or `*mut [T]` (ADR 0031)
+ty::peripheral-by-value
+
+  × `Timer` is a peripheral type, which no value has
+    ╭─[reference_errors.ers:91:35]
+ 90 │ 
+ 91 │ fn referents(a: &!, b: &[u8], c: &Timer) {}
+    ·                                   ──┬──
+    ·                                     ╰── `Timer` as the referent of a reference
+ 92 │ 
+    ╰────
+  help: a peripheral type describes a device's registers, reached one at a time from a peripheral
+        or through a pointer, such as `*mut Timer` (ADR 0058)
+ty::unsized
+
+  × `[u32]` has no size known at compile time
+    ╭─[reference_errors.ers:94:20]
+ 93 │ fn borrowed_whole(s: *mut [u32]) {
+ 94 │     let a: &u32 = &*s;
+    ·                    ─┬
+    ·                     ╰── what a slice points to, borrowed whole
+ 95 │     let b: &mut u32 = &mut *s;
+    ╰────
+  help: it can only be indexed, as in `(*s)[i]`, or passed to `&raw`; its length, known only at
+        run time, is `len(s)` (ADR 0031)
+ty::unsized
+
+  × `[u32]` has no size known at compile time
+    ╭─[reference_errors.ers:95:28]
+ 94 │     let a: &u32 = &*s;
+ 95 │     let b: &mut u32 = &mut *s;
+    ·                            ─┬
+    ·                             ╰── what a slice points to, borrowed whole
+ 96 │     let c: &u32 = &TIMER;
+    ╰────
+  help: it can only be indexed, as in `(*s)[i]`, or passed to `&raw`; its length, known only at
+        run time, is `len(s)` (ADR 0031)
+ty::peripheral-by-value
+
+  × `Timer` is a peripheral type, which no value has
+    ╭─[reference_errors.ers:96:20]
+ 95 │     let b: &mut u32 = &mut *s;
+ 96 │     let c: &u32 = &TIMER;
+    ·                    ──┬──
+    ·                      ╰── a device, borrowed as a whole
+ 97 │ }
+    ╰────
+  help: its registers are read and written one at a time, as in `P.NAME` or `(*u).NAME`; a
+        function is given the device as a `*mut Timer`, such as `&raw mut P` (ADR 0058)
+ty::never-in-memory
+
+  × `!` is not a type of memory
+     ╭─[reference_errors.ers:100:20]
+  99 │ fn never_values() {
+ 100 │     let a: &u32 = &loop {};
+     ·                    ───┬───
+     ·                       ╰── `!` as the type of a value under `&`
+ 101 │     let b: &mut u32 = &mut loop {};
+     ╰────
+  help: `!` is the type of expressions that do not finish, so no memory holds one; for a type
+        without data, use `()` (ADR 0034)
+ty::never-in-memory
+
+  × `!` is not a type of memory
+     ╭─[reference_errors.ers:101:28]
+ 100 │     let a: &u32 = &loop {};
+ 101 │     let b: &mut u32 = &mut loop {};
+     ·                            ───┬───
+     ·                               ╰── `!` as the type of a value under `&mut`
+ 102 │ }
+     ╰────
+  help: `!` is the type of expressions that do not finish, so no memory holds one; for a type
+        without data, use `()` (ADR 0034)

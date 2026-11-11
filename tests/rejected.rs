@@ -534,6 +534,13 @@ const CATALOG: &[Snippet] = &[
         "let injected_n: u32 = 1;\nlet injected_p: *mut u32 = &raw mut injected_n;"
     ),
     s!(
+        "ty::mut-borrow-of-immutable",
+        Mir,
+        Statements,
+        "let injected_n: u32 = 1;
+let injected_r: &mut u32 = &mut injected_n;"
+    ),
+    s!(
         "ty::never-in-memory",
         Mir,
         Items,

@@ -1,4 +1,0 @@
-// `&` alone is reserved for references (M5); addresses use `&raw`.
-fn f(x: u32) -> *const u32 {
-    &x
-}

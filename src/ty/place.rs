@@ -16,13 +16,15 @@ use super::{
 };
 
 impl Checker<'_, '_> {
-    /// The place a pointer of type `ty` leads to, for `*` and `[]`. A
-    /// pointer of type `!` is never computed, so neither is the place.
+    /// The place a pointer or reference of type `ty` leads to, for `*` and
+    /// `[]` (a reference only for `*`, ADR 0105). A pointer of type `!` is
+    /// never computed, so neither is the place.
     /// What a slice points to is a place of type `[T]`, which can only be
     /// indexed or passed to `&raw` (ADR 0031).
     fn through_pointer(&mut self, ty: Ty, pointer: &Expr, error: Diagnostic) -> PlaceInfo {
         match ty {
             Ty::Ptr(ptr) => PlaceInfo::through(ptr, pointer.span),
+            Ty::Ref(r) => PlaceInfo::through_ref(r, pointer.span),
             Ty::Never => PlaceInfo {
                 ty: Ty::Never,
                 ..PlaceInfo::ERROR
@@ -329,6 +331,7 @@ impl Checker<'_, '_> {
                     constant: false,
                     register: None,
                     bit_field: None,
+                    via_ref: false,
                 }
             }
             ExprKind::ByteString(bytes) => PlaceInfo {
@@ -339,6 +342,7 @@ impl Checker<'_, '_> {
                 constant: false,
                 register: None,
                 bit_field: None,
+                via_ref: false,
             },
             ExprKind::Static(id) => {
                 let def = self.hir.static_(*id);
@@ -350,6 +354,7 @@ impl Checker<'_, '_> {
                     constant: false,
                     register: None,
                     bit_field: None,
+                    via_ref: false,
                 }
             }
             // Not `mut`: what may be written is its registers' business, so
@@ -362,6 +367,7 @@ impl Checker<'_, '_> {
                 constant: false,
                 register: None,
                 bit_field: None,
+                via_ref: false,
             },
             ExprKind::Deref(pointer) => {
                 let ty = self.check(f, pointer, None);
@@ -369,7 +375,7 @@ impl Checker<'_, '_> {
                     "ty::deref-non-pointer",
                     format!("cannot dereference `{ty}`"),
                 )
-                .label(pointer.span, "not a pointer");
+                .label(pointer.span, "not a pointer or a reference");
                 self.through_pointer(ty, pointer, error)
             }
             ExprKind::Field(base, name, name_span) => {
@@ -433,6 +439,24 @@ impl Checker<'_, '_> {
                         .label(base.span, "a slice, not a pointer to its elements")
                         .help(format!(
                             "index what it points to, checked against its length: `(*s)[i]`; or, unchecked, a pointer to its first element: `(s as {first})[i]` (ADR 0031)"
+                        )),
+                    );
+                    PlaceInfo::ERROR
+                } else if let Ty::Ref(r) = ty {
+                    if let Some(info) = base_place {
+                        self.access_place(&info, base.span, AccessMode::Read, None);
+                    }
+                    // Fields and elements through a reference are written as
+                    // through a pointer (ADR 0105).
+                    self.q.diags.push(
+                        Diagnostic::error(
+                            "ty::cannot-index",
+                            format!("cannot index a value of type `{ty}`"),
+                        )
+                        .label(base.span, "a reference, not an array or a pointer")
+                        .help(format!(
+                            "dereference the reference first: `(*r)[i]`, which indexes the `{}` it refers to (ADR 0105)",
+                            r.referent
                         )),
                     );
                     PlaceInfo::ERROR
@@ -537,6 +561,13 @@ impl Checker<'_, '_> {
                 {
                     diag = diag.help(format!(
                         "dereference the pointer first: `(*p).{name}` (ADR 0021)"
+                    ));
+                }
+                if let Ty::Ref(r) = other
+                    && let Ty::Struct(_) | Ty::BitStruct(_) | Ty::Peripheral(_) = *r.referent
+                {
+                    diag = diag.help(format!(
+                        "dereference the reference first: `(*r).{name}` (ADR 0105)"
                     ));
                 }
                 if (other.slice_elem().is_some() || matches!(other, Ty::Slice(_))) && name == "len"
@@ -709,21 +740,27 @@ impl Checker<'_, '_> {
         self.place_via(f, place, kind).0
     }
 
-    /// `place`, and whether the place is reached through a pointer.
-    pub(super) fn place_via(&mut self, f: &Fn, place: &Expr, kind: AccessMode) -> (Ty, bool) {
+    /// `place`, and whether the place is reached through a pointer or a
+    /// reference.
+    pub(super) fn place_via(
+        &mut self,
+        f: &Fn,
+        place: &Expr,
+        kind: AccessMode,
+    ) -> (Ty, Option<Through>) {
         let Some(info) = self.place_info(f, place) else {
             self.check_not_a_place(f, place);
             self.q.diags.push(
                 Diagnostic::error("ty::not-assignable", "cannot assign to this expression")
                     .label(place.span, "not a variable, `*pointer` or `a[index]`"),
             );
-            return (Ty::Error, false);
+            return (Ty::Error, None);
         };
         if let Ty::Slice(_) = info.ty {
             self.q
                 .diags
                 .push(whole_slice(info.ty, place.span, "written"));
-            return (Ty::Error, false);
+            return (Ty::Error, None);
         }
         // A register array or a cluster array is reached through an index
         // (ADR 0064).
@@ -734,7 +771,7 @@ impl Checker<'_, '_> {
             };
             let diag = self.whole_entry(register, place.span, accessed);
             self.q.diags.push(diag);
-            return (Ty::Error, false);
+            return (Ty::Error, None);
         }
         if let Ty::Peripheral(_) = info.ty {
             let accessed = match kind {
@@ -744,7 +781,7 @@ impl Checker<'_, '_> {
             self.q
                 .diags
                 .push(whole_peripheral(info.ty, place.span, accessed));
-            return (Ty::Error, false);
+            return (Ty::Error, None);
         }
         match info.immutable {
             Some(Immutable::Local(id)) => {
@@ -769,6 +806,16 @@ impl Checker<'_, '_> {
                     )
                     .label(pointer, format!("has type `{}`", Ty::Ptr(ptr)))
                     .help("only `*mut` pointers can be written through"),
+                );
+            }
+            Some(Immutable::SharedRef(r, reference)) => {
+                self.q.diags.push(
+                    Diagnostic::error(
+                        "ty::write-through-const",
+                        "cannot write through a `&` reference",
+                    )
+                    .label(reference, format!("has type `{}`", Ty::Ref(r)))
+                    .help("only `&mut` references can be written through (ADR 0105)"),
                 );
             }
             Some(Immutable::Temporary(base)) => {
@@ -806,7 +853,12 @@ impl Checker<'_, '_> {
         }
         self.access(&info, place, kind);
         self.assignment_effects(place, &info, kind);
-        (info.ty, info.via.is_some())
+        let through = if info.via_ref {
+            Some(Through::Reference)
+        } else {
+            info.via.map(|_| Through::Pointer)
+        };
+        (info.ty, through)
     }
 
     /// Checks the effects of assigning `place`, at `info`, as `kind` says,
@@ -900,6 +952,106 @@ impl Checker<'_, '_> {
             self.q.diags.push(not_a_place);
             return Ty::Error;
         };
+        if !self.has_address(place, &info, "&raw") {
+            return Ty::Error;
+        }
+        // An element or field of a constant is read where the constant's
+        // data is, but has no address of its own (ADR 0029).
+        if info.constant {
+            self.q.diags.push(not_a_place);
+            return Ty::Error;
+        }
+        if mutable {
+            match info.immutable {
+                Some(Immutable::Local(id)) => {
+                    let local = f.local(id);
+                    self.q.diags.push(
+                        Diagnostic::error(
+                            "ty::address-of-immutable",
+                            format!(
+                                "cannot take a `*mut` address of `{}`, which is not `mut`",
+                                local.name
+                            ),
+                        )
+                        .label(place.span, "address taken here")
+                        .label(
+                            local.span,
+                            format!("help: declare it `let mut {}`", local.name),
+                        ),
+                    );
+                }
+                Some(Immutable::ConstPointer(ptr, pointer)) => {
+                    self.q.diags.push(
+                        Diagnostic::error(
+                            "ty::address-of-immutable",
+                            "cannot take a `*mut` address through a `*const` pointer",
+                        )
+                        .label(pointer, format!("has type `{}`", Ty::Ptr(ptr)))
+                        .help("use `&raw const`, or a `*mut` pointer"),
+                    );
+                }
+                Some(Immutable::SharedRef(r, reference)) => {
+                    self.q.diags.push(
+                        Diagnostic::error(
+                            "ty::address-of-immutable",
+                            "cannot take a `*mut` address through a `&` reference",
+                        )
+                        .label(reference, format!("has type `{}`", Ty::Ref(r)))
+                        .help("use `&raw const`, or a `&mut` reference (ADR 0105)"),
+                    );
+                }
+                Some(Immutable::Temporary(base)) => {
+                    self.q.diags.push(
+                        Diagnostic::error(
+                            "ty::address-of-immutable",
+                            "cannot take a `*mut` address of part of a temporary value",
+                        )
+                        .label(base, "this value lives in no variable")
+                        .help("store it in a `let mut` first"),
+                    );
+                }
+                Some(Immutable::Static(id)) => {
+                    let def = self.hir.static_(id);
+                    self.q.diags.push(
+                        Diagnostic::error(
+                            "ty::address-of-immutable",
+                            format!(
+                                "cannot take a `*mut` address of `{}`, which is not `mut`",
+                                def.path
+                            ),
+                        )
+                        .label(place.span, "address taken here")
+                        .label(
+                            def.name_span,
+                            format!("help: declare it `{}`", mutable_static(def)),
+                        ),
+                    );
+                }
+                Some(Immutable::ByteString(span)) => {
+                    self.q.diags.push(
+                        Diagnostic::error(
+                            "ty::address-of-immutable",
+                            "cannot take a `*mut` address of a byte string",
+                        )
+                        .label(span, "in read-only memory")
+                        .help("use `&raw const`, or copy it into a `let mut` (ADR 0031)"),
+                    );
+                }
+                None => {}
+            }
+        }
+        self.check_aligned_address(&info, place);
+        match info.ty {
+            Ty::Error => Ty::Error,
+            ty => Ty::ptr(mutable, false, ty),
+        }
+    }
+
+    /// The checks that a place has an address, which `&raw` and `&` share
+    /// (ADR 0105): not a bit field, a register, nor of type `!`. `under` is
+    /// the operator, for the message about `!`. Reports and returns false if
+    /// it has none.
+    fn has_address(&mut self, place: &Expr, info: &PlaceInfo, under: &str) -> bool {
         // Bits have no address, in a register too, which is then not also
         // reported: what is addressed is the bit field (ADR 0059).
         if let Some(s) = info.bit_field {
@@ -914,7 +1066,7 @@ impl Checker<'_, '_> {
                     s.int
                 )),
             );
-            return Ty::Error;
+            return false;
         }
         // The pointer would reach the register without its access mode
         // (ADR 0058). An array of them has a step no pointer holds
@@ -961,93 +1113,23 @@ impl Checker<'_, '_> {
                 ))
             };
             self.q.diags.push(diag);
-            return Ty::Error;
+            return false;
         }
-        // Its result would be a `*const !` (ADR 0034).
+        // Its result would be a pointer or a reference to `!` (ADR 0034).
         if info.ty == Ty::Never {
             self.q.diags.push(never_in_memory(
                 place.span,
-                "the type of a place under `&raw`",
+                &format!("the type of a place under `{under}`"),
                 NeverHelp::Unit,
             ));
-            return Ty::Error;
+            return false;
         }
-        // An element or field of a constant is read where the constant's
-        // data is, but has no address of its own (ADR 0029).
-        if info.constant {
-            self.q.diags.push(not_a_place);
-            return Ty::Error;
-        }
-        if mutable {
-            match info.immutable {
-                Some(Immutable::Local(id)) => {
-                    let local = f.local(id);
-                    self.q.diags.push(
-                        Diagnostic::error(
-                            "ty::address-of-immutable",
-                            format!(
-                                "cannot take a `*mut` address of `{}`, which is not `mut`",
-                                local.name
-                            ),
-                        )
-                        .label(place.span, "address taken here")
-                        .label(
-                            local.span,
-                            format!("help: declare it `let mut {}`", local.name),
-                        ),
-                    );
-                }
-                Some(Immutable::ConstPointer(ptr, pointer)) => {
-                    self.q.diags.push(
-                        Diagnostic::error(
-                            "ty::address-of-immutable",
-                            "cannot take a `*mut` address through a `*const` pointer",
-                        )
-                        .label(pointer, format!("has type `{}`", Ty::Ptr(ptr)))
-                        .help("use `&raw const`, or a `*mut` pointer"),
-                    );
-                }
-                Some(Immutable::Temporary(base)) => {
-                    self.q.diags.push(
-                        Diagnostic::error(
-                            "ty::address-of-immutable",
-                            "cannot take a `*mut` address of part of a temporary value",
-                        )
-                        .label(base, "this value lives in no variable")
-                        .help("store it in a `let mut` first"),
-                    );
-                }
-                Some(Immutable::Static(id)) => {
-                    let def = self.hir.static_(id);
-                    self.q.diags.push(
-                        Diagnostic::error(
-                            "ty::address-of-immutable",
-                            format!(
-                                "cannot take a `*mut` address of `{}`, which is not `mut`",
-                                def.path
-                            ),
-                        )
-                        .label(place.span, "address taken here")
-                        .label(
-                            def.name_span,
-                            format!("help: declare it `{}`", mutable_static(def)),
-                        ),
-                    );
-                }
-                Some(Immutable::ByteString(span)) => {
-                    self.q.diags.push(
-                        Diagnostic::error(
-                            "ty::address-of-immutable",
-                            "cannot take a `*mut` address of a byte string",
-                        )
-                        .label(span, "in read-only memory")
-                        .help("use `&raw const`, or copy it into a `let mut` (ADR 0031)"),
-                    );
-                }
-                None => {}
-            }
-        }
-        if self.may_be_misaligned(&info) {
+        true
+    }
+
+    /// `ty::packed-field-address` for a place that may be misaligned.
+    fn check_aligned_address(&mut self, info: &PlaceInfo, place: &Expr) {
+        if self.may_be_misaligned(info) {
             self.q.diags.push(
                 Diagnostic::error(
                     "ty::packed-field-address",
@@ -1060,11 +1142,154 @@ impl Checker<'_, '_> {
                 )),
             );
         }
+    }
+
+    /// `&place` or `&mut place` (ADR 0105): a reference to a place, with the
+    /// rules of `&raw` that hold for any address. A value that is not a place
+    /// is borrowed `&` from a variable of its own, and so is a part of one
+    /// (`&f().x`, `&TABLE[i]`); `&mut` of either is
+    /// `ty::mut-borrow-of-immutable`. `expected` is the type the value is
+    /// expected to have, which gives a literal its type.
+    pub(super) fn borrow(
+        &mut self,
+        f: &Fn,
+        mutable: bool,
+        place: &Expr,
+        expected: Option<Ty>,
+    ) -> Ty {
+        let Some(info) = self.place_info(f, place) else {
+            let ty = self.check(f, place, expected);
+            if ty == Ty::Never {
+                self.q.diags.push(never_in_memory(
+                    place.span,
+                    &format!("the type of a value under `{}`", borrow_op(mutable)),
+                    NeverHelp::Unit,
+                ));
+                return Ty::Error;
+            }
+            if mutable {
+                self.mut_borrow_of_temporary(place.span);
+                return Ty::Error;
+            }
+            return match ty {
+                Ty::Error => Ty::Error,
+                ty => Ty::reference(false, ty),
+            };
+        };
+        if !self.has_address(place, &info, borrow_op(mutable)) {
+            return Ty::Error;
+        }
+        // What a slice points to, and a peripheral, have no reference yet:
+        // slices behind references are M5.4b's, and references to volatile
+        // places M5.4c's.
+        match info.ty {
+            Ty::Slice(_) => {
+                self.q
+                    .diags
+                    .push(whole_slice(info.ty, place.span, "borrowed"));
+                return Ty::Error;
+            }
+            Ty::Peripheral(_) => {
+                self.q
+                    .diags
+                    .push(whole_peripheral(info.ty, place.span, "borrowed"));
+                return Ty::Error;
+            }
+            _ => {}
+        }
+        if mutable && let Some(immutable) = info.immutable {
+            self.report_mut_borrow(f, place, immutable);
+            return Ty::Error;
+        }
+        self.check_aligned_address(&info, place);
         match info.ty {
             Ty::Error => Ty::Error,
-            ty => Ty::ptr(mutable, false, ty),
+            ty => Ty::reference(mutable, ty),
         }
     }
+
+    /// `ty::mut-borrow-of-immutable` for `&mut` of a value that is not a
+    /// place, written at `span`.
+    fn mut_borrow_of_temporary(&mut self, span: Span) {
+        self.q.diags.push(
+            Diagnostic::error(
+                "ty::mut-borrow-of-immutable",
+                "cannot borrow a temporary value as `&mut`",
+            )
+            .label(span, "this value lives in no variable")
+            .help("a write through the reference would reach nothing the program can read; store it in a `let mut` first and borrow that (ADR 0105)"),
+        );
+    }
+
+    /// `ty::mut-borrow-of-immutable` for `&mut place`, a place that cannot
+    /// be written for the reason `immutable` says.
+    fn report_mut_borrow(&mut self, f: &Fn, place: &Expr, immutable: Immutable) {
+        let diag = match immutable {
+            Immutable::Local(id) => {
+                let local = f.local(id);
+                Diagnostic::error(
+                    "ty::mut-borrow-of-immutable",
+                    format!(
+                        "cannot borrow `{}` as `&mut`, which is not `mut`",
+                        local.name
+                    ),
+                )
+                .label(place.span, "borrowed here")
+                .label(
+                    local.span,
+                    format!("help: declare it `let mut {}`", local.name),
+                )
+            }
+            Immutable::ConstPointer(ptr, pointer) => Diagnostic::error(
+                "ty::mut-borrow-of-immutable",
+                "cannot borrow as `&mut` through a `*const` pointer",
+            )
+            .label(pointer, format!("has type `{}`", Ty::Ptr(ptr)))
+            .help("only `*mut` pointers can be borrowed through as `&mut`"),
+            Immutable::SharedRef(r, reference) => Diagnostic::error(
+                "ty::mut-borrow-of-immutable",
+                "cannot borrow as `&mut` through a `&` reference",
+            )
+            .label(reference, format!("has type `{}`", Ty::Ref(r)))
+            .help("only `&mut` references can be borrowed through as `&mut` (ADR 0105)"),
+            Immutable::Temporary(base) => {
+                self.mut_borrow_of_temporary(base);
+                return;
+            }
+            Immutable::Static(id) => {
+                let def = self.hir.static_(id);
+                Diagnostic::error(
+                    "ty::mut-borrow-of-immutable",
+                    format!("cannot borrow `{}` as `&mut`, which is not `mut`", def.path),
+                )
+                .label(place.span, "borrowed here")
+                .label(
+                    def.name_span,
+                    format!("help: declare it `{}`", mutable_static(def)),
+                )
+            }
+            Immutable::ByteString(span) => Diagnostic::error(
+                "ty::mut-borrow-of-immutable",
+                "cannot borrow a byte string as `&mut`",
+            )
+            .label(span, "in read-only memory")
+            .help("copy it into a `let mut` to change it (ADR 0031)"),
+        };
+        self.q.diags.push(diag);
+    }
+}
+
+/// How `&` and `&mut` are written, for messages.
+fn borrow_op(mutable: bool) -> &'static str {
+    if mutable { "&mut" } else { "&" }
+}
+
+/// Whether a place is reached through a pointer or through a reference, which
+/// a linear value is not written to (ADR 0101, 0105).
+#[derive(Clone, Copy)]
+pub(super) enum Through {
+    Pointer,
+    Reference,
 }
 
 /// Why a value of a non-copy type cannot be moved out of a place (ADR 0097).
@@ -1072,6 +1297,7 @@ impl Checker<'_, '_> {
 pub(super) enum Unmovable {
     ArrayElement,
     Pointer,
+    Reference,
     Static,
 }
 
@@ -1080,6 +1306,7 @@ impl Unmovable {
         match self {
             Unmovable::ArrayElement => "an array element",
             Unmovable::Pointer => "a place through a pointer",
+            Unmovable::Reference => "a place through a reference",
             Unmovable::Static => "a static",
         }
     }
@@ -1122,7 +1349,10 @@ impl Checker<'_, '_> {
     fn root(&self, expr: &Expr) -> Root {
         match &expr.kind {
             ExprKind::Static(_) => Root::Unmovable(Unmovable::Static),
-            ExprKind::Deref(_) => Root::Unmovable(Unmovable::Pointer),
+            ExprKind::Deref(pointer) => match self.q.tables.expr_types[pointer.id.0 as usize] {
+                Ty::Ref(_) => Root::Unmovable(Unmovable::Reference),
+                _ => Root::Unmovable(Unmovable::Pointer),
+            },
             ExprKind::Field(base, ..) if is_place(base) => self.root(base),
             ExprKind::Index(base, ..) => match self.q.tables.expr_types[base.id.0 as usize] {
                 // An element of an array, of a place or of a temporary alike

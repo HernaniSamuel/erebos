@@ -246,7 +246,8 @@ fn basic_type(context: &Context, ty: Ty) -> Option<BasicTypeEnum<'_>> {
         Ty::Int(int) => Some(int_type(context, int).into()),
         // A slice is an aggregate (ADR 0031).
         Ty::Ptr(_) if ty.slice_elem().is_some() => None,
-        Ty::Ptr(_) => Some(context.ptr_type(AddressSpace::default()).into()),
+        // A reference is a thin pointer (ADR 0105, 0107).
+        Ty::Ptr(_) | Ty::Ref(_) => Some(context.ptr_type(AddressSpace::default()).into()),
         Ty::Unit
         | Ty::Never
         | Ty::Array(..)
@@ -682,7 +683,11 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
         let mut in_memory = vec![false; body.locals.len()];
         for (_, data) in body.blocks() {
             for statement in &data.statements {
-                if let Statement::Assign(_, Rvalue::AddressOf { place, .. }) = statement {
+                if let Statement::Assign(
+                    _,
+                    Rvalue::AddressOf { place, .. } | Rvalue::Ref { place, .. },
+                ) = statement
+                {
                     in_memory[place.local.0 as usize] = true;
                 }
             }
@@ -883,17 +888,27 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
         let abi = &self.abis[callee];
         let mut values: Vec<BasicMetadataValueEnum> = Vec::new();
         // An aggregate result is written straight into its destination, a
-        // fresh temporary, or into a slot of its own if it is unused.
-        if abi.ret_mode == PassMode::Indirect {
+        // fresh temporary, or into a slot of its own if it is unused. A call
+        // with an argument of a reference type writes it to a slot of its own
+        // and copies it to the destination after the call: the borrow check
+        // accepts `x = f(&x)`, so the callee must not be handed one address as
+        // both its result and its argument (ADR 0107).
+        let result_slot = if abi.ret_mode == PassMode::Indirect {
+            let lent = args
+                .iter()
+                .any(|arg| matches!(self.body.operand_ty(arg), Ty::Ref(_)));
             let result = match dest {
-                Some(dest) => self.address(dest).ptr,
-                None => {
+                Some(dest) if !lent => self.address(dest).ptr,
+                _ => {
                     let memory = memory_type(self.context, abi.ret).expect("an aggregate");
                     self.entry_alloca(memory, abi.ret.layout().align)
                 }
             };
             values.push(result.into());
-        }
+            (lent && dest.is_some()).then_some(result)
+        } else {
+            None
+        };
         for (arg, &(ty, mode)) in args.iter().zip(&abi.params) {
             let place = || match arg {
                 Operand::Copy(place) | Operand::Move(place, _) => *place,
@@ -939,6 +954,13 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
         let Some(dest) = dest else {
             return;
         };
+        if let Some(result) = result_slot {
+            // The slot is at least as aligned as the destination, whose
+            // alignment is the one both are copied with.
+            let to = self.address(dest);
+            let align = to.align(abi.ret);
+            self.copy_bytes(to.ptr, align, result, align, abi.ret.layout().size);
+        }
         let value = || match call.try_as_basic_value() {
             ValueKind::Basic(value) => value,
             _ => unreachable!("the callee returns a value"),
@@ -1036,6 +1058,18 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                 (PlaceElem::Deref, Ty::Ptr(ptr)) => {
                     address = self.through(address, ptr);
                     ty = *ptr.pointee;
+                    continue;
+                }
+                // A reference holds an address as a pointer does, and is never
+                // volatile (ADR 0107).
+                (PlaceElem::Deref, Ty::Ref(r)) => {
+                    let ptr = Ptr {
+                        mutable: r.mutable,
+                        volatile: false,
+                        pointee: r.referent,
+                    };
+                    address = self.through(address, ptr);
+                    ty = *r.referent;
                     continue;
                 }
                 (PlaceElem::Offset(index), Ty::Ptr(ptr)) => {
@@ -1353,7 +1387,9 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                 }
             }
             Rvalue::Cast(operand, to) => return self.cast(operand, *to),
-            Rvalue::AddressOf { place, .. } => return self.address(*place).ptr.into(),
+            Rvalue::AddressOf { place, .. } | Rvalue::Ref { place, .. } => {
+                return self.address(*place).ptr.into();
+            }
             Rvalue::SliceAddress(place) => return self.read_slice_part(*place, 0),
             Rvalue::SliceLen(place) => return self.read_slice_part(*place, 1),
             Rvalue::Slice { .. } => unreachable!("a slice is written to its place whole"),
@@ -1460,6 +1496,8 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
             // All pointers share one LLVM type; mutability, volatility and
             // pointee only matter to the type checker and to accesses.
             (Ty::Ptr(_), Ty::Ptr(_)) => return value,
+            // A reference casts to the raw pointer to its referent (ADR 0105).
+            (Ty::Ref(_), Ty::Ptr(_)) => return value,
             (from, to) => unreachable!("cast from `{from}` to `{to}`"),
         };
         cast.expect("builder is positioned")
@@ -1589,7 +1627,7 @@ mod tests {
 
     use super::OptLevel;
     use crate::driver::{self, Stage};
-    use crate::target::{RISCV32IMAC, Target};
+    use crate::target::{RISCV32IMAC, THUMBV7M, Target};
 
     /// riscv32's description, but for LLVM's 64-bit division: the code path
     /// of a target whose `div64` is false (ADR 0076), which no target
@@ -1614,9 +1652,13 @@ panic fn on_panic() -> ! { loop {} }
 ";
 
     fn ir(target: &'static Target, opt: OptLevel) -> String {
+        ir_of(DIVISIONS, target, opt)
+    }
+
+    fn ir_of(source: &str, target: &'static Target, opt: OptLevel) -> String {
         driver::dump(
             Path::new("main.ers"),
-            DIVISIONS,
+            source,
             Stage::LlvmIr,
             target,
             opt,
@@ -1686,6 +1728,67 @@ memory {
         for opt in [OptLevel::None, OptLevel::Speed] {
             driver::build(&input, &output, &[], without_div64(), opt, false)
                 .unwrap_or_else(|e| panic!("{opt:?}: {e}"));
+        }
+    }
+
+    /// A struct returned through memory, by a call with an argument of a
+    /// reference type: the callee is handed a slot of its own for the result,
+    /// copied to the destination after the call, so that it never gets one
+    /// address as both its result and its argument (ADR 0107). A call with no
+    /// reference argument writes into the destination, as before.
+    #[test]
+    fn a_call_lending_a_reference_returns_through_a_slot_of_its_own() {
+        const SOURCE: &str = "\
+struct Big { a: u32, b: u32, c: u32, d: u32 }
+fn grow(p: &Big) -> Big { Big { a: (*p).a, b: (*p).b, c: (*p).c, d: (*p).d } }
+fn fresh(n: u32) -> Big { Big { a: n, b: n, c: n, d: n } }
+fn again(x: Big) -> Big {
+    let mut y: Big = x;
+    y = grow(&y);
+    y = fresh(1);
+    y
+}
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }
+";
+        for target in [&RISCV32IMAC, &THUMBV7M] {
+            let ir = ir_of(SOURCE, target, OptLevel::None);
+            let lines: Vec<&str> = ir.lines().collect();
+            // The pointer a call passes as its result, and the line after.
+            let sret = |callee: &str| -> (String, String) {
+                let at = lines
+                    .iter()
+                    .position(|line| line.contains(&format!("call void @{callee}(ptr sret")))
+                    .unwrap_or_else(|| panic!("no call of {callee}:\n{ir}"));
+                let result = lines[at]
+                    .split("align 4 ")
+                    .nth(1)
+                    .and_then(|rest| rest.split([',', ')']).next())
+                    .expect("a result pointer")
+                    .to_owned();
+                (result, lines[at + 1].to_owned())
+            };
+            // `grow` takes a borrow of `y`: its result is an anonymous slot,
+            // copied to the destination by the next instruction.
+            let (slot, next) = sret("grow");
+            assert!(
+                !slot.starts_with("%_"),
+                "{}: the result of `grow` is a local:\n{ir}",
+                target.name
+            );
+            assert!(
+                next.contains("llvm.memcpy") && next.contains(&format!("ptr align 4 {slot},")),
+                "{}: the result of `grow` is not copied from its slot:\n{ir}",
+                target.name
+            );
+            // `fresh` borrows nothing: it writes into the destination, a
+            // local of the function.
+            let (destination, _) = sret("fresh");
+            assert!(
+                destination.starts_with("%_"),
+                "{}: the result of `fresh` is not a local:\n{ir}",
+                target.name
+            );
         }
     }
 }

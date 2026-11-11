@@ -1,0 +1,245 @@
+// References (ADR 0105 to 0107): `&` and `&mut` of a variable, a parameter, a
+// field, an element, a `static`, a byte string, `*p` and a value that is not
+// a place; reads and writes through them; casts to raw pointers; a struct
+// returned through memory by a function that is given a borrow of its
+// destination. Every borrow ends before the next conflicting use.
+// expect-output: 42 21 1 9 3
+// expect-output: 7 a
+// expect-output: 5 6 8 10
+// expect-output: 3 4 20 5
+// expect-output: 9 11 12 6
+// expect-output: 2 3 8 8
+// expect-output: 4 4
+// expect-output: 2 4 7 7
+// expect-exit: 0
+
+mod board;
+use board::{exit, putc};
+
+struct Pair {
+    a: u32,
+    b: u32,
+}
+
+struct Empty {}
+
+struct Wrapper {
+    pair: Pair,
+    items: [u32; 3],
+}
+
+struct Big {
+    a: u32,
+    b: u32,
+    c: u32,
+    d: u32,
+}
+
+const TABLE: [u32; 3] = [10, 20, 30];
+static LIMIT: u32 = 7;
+static WORDS: [u32; 2] = [3, 8];
+
+fn print_u32(n: u32) {
+    if n >= 10 {
+        print_u32(n / 10);
+    }
+    putc(b'0' + (n % 10) as u8);
+}
+
+fn space() {
+    putc(b' ');
+}
+
+fn newline() {
+    putc(b'\n');
+}
+
+fn read(p: &u32) -> u32 {
+    *p
+}
+
+fn write(p: &mut u32, value: u32) {
+    *p = value;
+}
+
+fn increment(p: &mut u32) {
+    *p = *p + 1;
+}
+
+fn make() -> Pair {
+    Pair { a: 3, b: 4 }
+}
+
+fn first(p: &Pair) -> u32 {
+    (*p).a
+}
+
+fn sum(p: &Pair) -> u32 {
+    (*p).a + (*p).b
+}
+
+fn first_byte(s: &[u8; 3]) -> u8 {
+    (*s)[0]
+}
+
+fn third(a: &[u32; 3]) -> u32 {
+    (*a)[2]
+}
+
+fn touch(unit: &()) -> u32 {
+    1
+}
+
+fn touch_empty(empty: &Empty) -> u32 {
+    1
+}
+
+fn touch_none(none: &[u8; 0]) -> u32 {
+    1
+}
+
+// A `&mut` moved by a `let` into a new binding, and a `&` copied.
+fn rebind(a: &mut u32, b: &u32) {
+    let c: &mut u32 = a;
+    let d: &u32 = b;
+    let e: &u32 = d;
+    write(c, read(d) + read(e));
+}
+
+fn through(w: &mut Wrapper) {
+    let pair: &mut Pair = &mut (*w).pair;
+    write(&mut (*pair).a, 9);
+    let item: &mut u32 = &mut (*w).items[1];
+    write(item, 11);
+    let whole: &Wrapper = &*w;
+    (*w).items[2] = read(&(*whole).items[1]) + 1;
+}
+
+fn print_wrapper(w: &Wrapper) {
+    print_u32((*w).pair.a);
+    space();
+    print_u32((*w).items[1]);
+    space();
+    print_u32((*w).items[2]);
+    space();
+    print_u32(6);
+    newline();
+}
+
+// The result goes through memory on both targets. `grow` writes part of its
+// result before it reads `*p`, which is the caller's `x`.
+fn grow(p: &Big) -> Big {
+    let mut r: Big = Big { a: 0, b: 0, c: 0, d: 0 };
+    r.a = (*p).a * 2;
+    r.b = (*p).b * 2;
+    r.c = (*p).c * 2 + (*p).a;
+    r.d = (*p).d * 2 - (*p).a;
+    r
+}
+
+fn print_big(b: &Big) {
+    print_u32((*b).a);
+    space();
+    print_u32((*b).b);
+    space();
+    print_u32((*b).c);
+    space();
+    print_u32((*b).d);
+    newline();
+}
+
+entry fn main() -> ! {
+    // A scalar local and a field.
+    let mut x: u32 = 1;
+    write(&mut x, 40);
+    increment(&mut x);
+    increment(&mut x);
+    print_u32(read(&x));
+    space();
+    let mut pair: Pair = Pair { a: 1, b: 2 };
+    write(&mut pair.b, 20);
+    print_u32(read(&pair.a) + read(&pair.b));
+    space();
+    let mut array: [u32; 3] = [1, 2, 3];
+    let i: usize = 1;
+    write(&mut array[i], 9);
+    print_u32(read(&array[0]));
+    space();
+    print_u32(read(&array[1]));
+    space();
+    print_u32(read(&array[2]));
+    newline();
+
+    // A static, a byte string.
+    print_u32(read(&LIMIT));
+    space();
+    putc(first_byte(&b"abc"));
+    newline();
+
+    // `&mut` moved by a `let`; `&` copied; `&*r`.
+    let mut c: u32 = 0;
+    let mut d: u32 = 4;
+    rebind(&mut c, &d);
+    print_u32(read(&c) - 3);
+    space();
+    let r: &mut u32 = &mut d;
+    write(&mut *r, 6);
+    print_u32(read(&*r));
+    space();
+    let q: *mut u32 = &raw mut c;
+    let t: &mut u32 = &mut *q;
+    increment(&mut *t);
+    print_u32(*t - 1);
+    space();
+    print_u32(read(&c) + 1);
+    newline();
+
+    // Values that are not places, parts of them, and a `const`.
+    print_u32(first(&make()) + sum(&Pair { a: 0, b: 0 }));
+    space();
+    print_u32(read(&make().b));
+    space();
+    print_u32(read(&TABLE[1]));
+    space();
+    print_u32(read(&5));
+    newline();
+
+    // Through a reference to a struct, and shared views of the same place.
+    let mut w: Wrapper = Wrapper { pair: Pair { a: 0, b: 0 }, items: [1, 2, 3] };
+    through(&mut w);
+    print_wrapper(&w);
+
+    // Casts to raw pointers, from `&` and from `&mut`.
+    let mut m: u32 = 7;
+    let n: u32 = 2;
+    let p: *mut u32 = &mut m as *mut u32;
+    *p = *p + 1;
+    let s: *const u32 = &n as *const u32;
+    let u: *const u32 = &mut m as *const u32;
+    print_u32(*s);
+    space();
+    print_u32(read(&WORDS[0]));
+    space();
+    print_u32(read(&WORDS[1]));
+    space();
+    print_u32(*u);
+    newline();
+
+    // Referents of zero size.
+    let none: [u8; 0] = [];
+    print_u32(touch(&()) + touch_empty(&Empty {}) + touch_none(&none) + 1);
+    space();
+    print_u32(third(&[1, 2, 4]));
+    newline();
+
+    // The destination of a call is borrowed by it.
+    let mut big: Big = Big { a: 1, b: 2, c: 3, d: 4 };
+    big = grow(&big);
+    print_big(&big);
+
+    exit(0);
+}
+
+panic fn on_panic() -> ! {
+    exit(1);
+}

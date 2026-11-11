@@ -83,6 +83,12 @@ impl Lowerer<'_> {
                     pointee => Ty::ptr(*mutable, *volatile, pointee),
                 }
             }
+            ast::TyKind::Ref { mutable, referent } => {
+                match self.memory_ty(referent, NeverPosition::Referent) {
+                    Ty::Error => Ty::Error,
+                    referent => Ty::reference(*mutable, referent),
+                }
+            }
             ast::TyKind::Array { elem, len } => {
                 let elem = self.memory_ty(elem, NeverPosition::Element);
                 let len = self.array_len(len);
