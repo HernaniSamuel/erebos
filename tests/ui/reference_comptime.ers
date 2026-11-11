@@ -38,10 +38,25 @@ fn same_address() -> bool {
 
 const SAME: bool = same_address();
 
-// Expected: 8 + 50; true.
+// A `&mut` lent to two calls, then converted to a `&` (ADR 0106, 0107).
+fn total(r: &[u32; 4]) -> u32 {
+    (*r)[0] + (*r)[3]
+}
+
+fn lent() -> u32 {
+    let mut a: [u32; 4] = [0; 4];
+    let r: &mut [u32; 4] = &mut a;
+    fill(r, 1);
+    fill(r, 2);
+    total(r)
+}
+
+const LENT: u32 = lent();
+
+// Expected: 8 + 50 + 7; true.
 fn answers() -> u32 {
     let same: bool = SAME;
-    FILLED[3] + SUM
+    FILLED[3] + SUM + LENT
 }
 
 entry fn main() -> ! { loop {} }

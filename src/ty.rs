@@ -330,9 +330,10 @@ pub fn check_fn(q: &mut Queries, f: &Fn) -> usize {
 
 /// Whether a value of type `from` may be used where `to` is expected.
 /// `!` has no values, so it fits anywhere; `{error}` was already reported.
-/// The conversions are from `*mut T` to `*const T` (ADR 0024), and from a
+/// The conversions are from `*mut T` to `*const T` (ADR 0024), from a
 /// pointer to an array to a slice of its elements (ADR 0031), both of the
-/// outermost pointer only and keeping volatility.
+/// outermost pointer only and keeping volatility, and from `&mut T` to `&T`
+/// (ADR 0105).
 fn coerces(from: Ty, to: Ty) -> bool {
     from == to
         || matches!(from, Ty::Never | Ty::Error)
@@ -342,6 +343,15 @@ fn coerces(from: Ty, to: Ty) -> bool {
                 && from_ptr.volatile == to_ptr.volatile
                 && from_ptr.pointee == to_ptr.pointee)
         || unsizes(from, to)
+        || shares(from, to)
+}
+
+/// Whether `from` is a `&mut T` that converts to the `&T` `to` (ADR 0105):
+/// the one conversion that is not free, since it is a borrow of `*from` that
+/// MIR building writes (ADR 0107).
+fn shares(from: Ty, to: Ty) -> bool {
+    matches!((from, to), (Ty::Ref(from), Ty::Ref(to))
+        if from.mutable && !to.mutable && from.referent == to.referent)
 }
 
 /// Whether `from` is a pointer to an array that converts to the slice `to`
@@ -891,7 +901,7 @@ impl Checker<'_, '_> {
             ExprKind::Block(b) | ExprKind::Critical(b) if b.tail.is_some()
         ) || matches!(expr.kind, ExprKind::Comptime(_));
         if let Some(expected) = expected
-            && unsizes(ty, expected)
+            && (unsizes(ty, expected) || shares(ty, expected))
         {
             if reported_inside {
                 // Converted inside, so this value is the slice.
@@ -944,6 +954,14 @@ impl Checker<'_, '_> {
         {
             diag = diag.help(
                 "a `*const` pointer never becomes `*mut` implicitly; cast with `as` if writing through it is allowed",
+            );
+        }
+        if let (Ty::Ref(want), Ty::Ref(have)) = (expected, found)
+            && want.mutable
+            && !have.mutable
+        {
+            diag = diag.help(
+                "a `&` reference never becomes `&mut`; borrow the place with `&mut` if it may be written",
             );
         }
         if expected == Ty::Never && matches!(expr.kind, ExprKind::While { .. }) {
@@ -1534,6 +1552,32 @@ mod tests {
         assert!(!coerces(
             Ty::ptr(true, false, mut_),
             Ty::ptr(true, false, const_)
+        ));
+    }
+
+    #[test]
+    fn mut_references_coerce_to_shared() {
+        let u8_ = Ty::Int(IntTy::U8);
+        let mut_ = Ty::reference(true, u8_);
+        let shared = Ty::reference(false, u8_);
+        assert!(coerces(mut_, shared));
+        assert!(shares(mut_, shared));
+        // Never the other way, and a reference is not its own conversion.
+        assert!(!coerces(shared, mut_));
+        assert!(!shares(shared, shared));
+        assert!(!shares(mut_, mut_));
+        // Not to another referent, nor to or from a raw pointer.
+        assert!(!coerces(mut_, Ty::reference(false, Ty::Int(IntTy::I8))));
+        assert!(!coerces(mut_, Ty::ptr(false, false, u8_)));
+        assert!(!coerces(Ty::ptr(true, false, u8_), shared));
+        // Only the outermost reference converts.
+        assert!(coerces(
+            Ty::reference(true, mut_),
+            Ty::reference(false, mut_)
+        ));
+        assert!(!coerces(
+            Ty::reference(true, mut_),
+            Ty::reference(false, shared)
         ));
     }
 

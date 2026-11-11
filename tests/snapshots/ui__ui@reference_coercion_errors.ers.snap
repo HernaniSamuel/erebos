@@ -1,0 +1,59 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/reference_coercion_errors.ers
+---
+--- errors ---
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[reference_coercion_errors.ers:15:15]
+ 14 │ fn errors(a: &u32, b: &mut u32, c: &mut i32, mut x: u32) {
+ 15 │     takes_mut(a);
+    ·               ┬
+    ·               ╰── expected `&mut u32`, found `&u32`
+ 16 │     takes_other(b);
+    ╰────
+  help: a `&` reference never becomes `&mut`; borrow the place with `&mut` if it may be written
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[reference_coercion_errors.ers:16:17]
+ 15 │     takes_mut(a);
+ 16 │     takes_other(b);
+    ·                 ┬
+    ·                 ╰── expected `&i32`, found `&mut u32`
+ 17 │     takes_other(c);
+    ╰────
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[reference_coercion_errors.ers:18:15]
+ 17 │     takes_other(c);
+ 18 │     takes_raw(b);
+    ·               ┬
+    ·               ╰── expected `*const u32`, found `&mut u32`
+ 19 │     let d: &mut u32 = a;
+    ╰────
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[reference_coercion_errors.ers:19:23]
+ 18 │     takes_raw(b);
+ 19 │     let d: &mut u32 = a;
+    ·                       ┬
+    ·                       ╰── expected `&mut u32`, found `&u32`
+ 20 │     let e: &u32 = &x;
+    ╰────
+  help: a `&` reference never becomes `&mut`; borrow the place with `&mut` if it may be written
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[reference_coercion_errors.ers:21:15]
+ 20 │     let e: &u32 = &x;
+ 21 │     takes_mut(e);
+    ·               ┬
+    ·               ╰── expected `&mut u32`, found `&u32`
+ 22 │     takes_shared(&mut x);
+    ╰────
+  help: a `&` reference never becomes `&mut`; borrow the place with `&mut` if it may be written

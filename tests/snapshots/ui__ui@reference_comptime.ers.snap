@@ -117,6 +117,68 @@ fn same_address() -> bool {
     }
 }
 
+fn total(_1: &[u32; 4]) -> u32 {
+    let _0: u32;
+    let _1: &[u32; 4]; // r
+    let _2: u32;
+    let _3: u32;
+    let _4: u32;
+    let _5: u32;
+
+    bb0: {
+        _2 = copy (*_1)[0];
+        _3 = copy _2;
+        _4 = copy (*_1)[3];
+        _5 = Add(copy _3, copy _4);
+        _0 = copy _5;
+        return;
+    }
+}
+
+fn lent() -> u32 {
+    let _0: u32;
+    let _1: [u32; 4]; // a
+    let _2: &mut [u32; 4]; // r
+    let _3: [u32; 4];
+    let _4: usize;
+    let _5: bool;
+    let _6: &mut [u32; 4];
+    let _7: &mut [u32; 4];
+    let _8: &mut [u32; 4];
+    let _9: &[u32; 4];
+    let _10: u32;
+
+    bb0: {
+        _4 = const 0_usize;
+        goto -> bb1;
+    }
+
+    bb1: {
+        _5 = Lt(copy _4, const 4_usize);
+        if copy _5 -> [true: bb2, false: bb3];
+    }
+
+    bb2: {
+        _3[_4] = const 0_u32;
+        _4 = Add(copy _4, const 1_usize);
+        goto -> bb1;
+    }
+
+    bb3: {
+        _1 = copy _3;
+        _6 = &mut _1;
+        _2 = move _6;
+        _7 = &mut (*_2);
+        call fill(move _7, const 1_u32);
+        _8 = &mut (*_2);
+        call fill(move _8, const 2_u32);
+        _9 = &(*_2);
+        _10 = call total(copy _9);
+        _0 = copy _10;
+        return;
+    }
+}
+
 fn answers() -> u32 {
     let _0: u32;
     let _1: bool; // same
@@ -124,13 +186,17 @@ fn answers() -> u32 {
     let _3: u32;
     let _4: u32;
     let _5: u32;
+    let _6: u32;
+    let _7: u32;
 
     bb0: {
         _1 = const true;
         _3 = copy _2[3];
         _4 = copy _3;
         _5 = Add(copy _4, const 50_u32);
-        _0 = copy _5;
+        _6 = copy _5;
+        _7 = Add(copy _6, const 7_u32);
+        _0 = copy _7;
         return;
     }
 }
@@ -187,6 +253,17 @@ comptime fn SAME() -> bool {
 
     bb0: {
         _1 = call same_address();
+        _0 = copy _1;
+        return;
+    }
+}
+
+comptime fn LENT() -> u32 {
+    let _0: u32;
+    let _1: u32;
+
+    bb0: {
+        _1 = call lent();
         _0 = copy _1;
         return;
     }

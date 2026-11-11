@@ -520,15 +520,74 @@ impl Builder<'_, '_> {
         let outer = std::mem::replace(&mut self.span, expr.span);
         let mut value = self.expr_kind(expr);
         // A pointer to an array converted to a slice, with its length
-        // (ADR 0031).
-        if let Some(slice_ty) = self.q.tables.coercion(expr.id)
+        // (ADR 0031), or a `&mut T` to a `&T` (ADR 0105).
+        if let Some(target) = self.q.tables.coercion(expr.id)
             && self.current.is_some()
         {
-            let slice_ty = self.q.mir_ty(slice_ty);
-            value = self.array_slice(value, slice_ty);
+            let target = self.q.mir_ty(target);
+            value = match target {
+                Ty::Ref(_) => self.share(value, target),
+                _ => self.array_slice(value, target),
+            };
         }
         self.span = outer;
         value
+    }
+
+    /// The `&T` of type `ty` that a `&mut T` converts to: a shared borrow of
+    /// `*q`, with `q` the place holding the `&mut` (the variable or parameter,
+    /// or the temporary holding the value converted), which is not moved
+    /// (ADR 0105, 0107).
+    fn share(&mut self, mutable: Operand, ty: Ty) -> Operand {
+        // A `&mut` is never a constant: a body that breaks this is caught by
+        // the validator (T5), not here.
+        let Some(q) = mutable.place() else {
+            return mutable;
+        };
+        self.temp(
+            ty,
+            Rvalue::Ref {
+                mutable: false,
+                place: q.project(PlaceElem::Deref),
+            },
+        )
+    }
+
+    /// An argument of a call. A variable or a parameter `r` of type `&mut T`
+    /// is lent to the call, not moved (ADR 0094, 0106): the call receives a
+    /// reborrow `&mut *r`, and `r` is usable again after it (ADR 0107). Any
+    /// other `&mut` is a value, moved as any value is.
+    fn argument(&mut self, arg: &hir::Expr) -> Operand {
+        match &arg.kind {
+            hir::ExprKind::Local(local)
+                if self.is_mut_variable(arg)
+                    && self.q.tables.coercion(arg.id).is_none()
+                    && self.current.is_some() =>
+            {
+                let outer = std::mem::replace(&mut self.span, arg.span);
+                let r = self.local(*local);
+                let ty = self.ty_of(arg);
+                let lent = self.temp(
+                    ty,
+                    Rvalue::Ref {
+                        mutable: true,
+                        place: r.project(PlaceElem::Deref),
+                    },
+                );
+                self.span = outer;
+                lent
+            }
+            _ => self.expr(arg),
+        }
+    }
+
+    /// Whether `arg` is a variable or a parameter of type `&mut T`: as an
+    /// argument it is borrowed (lent to the call, or converted to a `&T`), so
+    /// it is a fresh temporary that nothing else writes, and it is not a
+    /// simple expression (ADR 0107).
+    fn is_mut_variable(&mut self, arg: &hir::Expr) -> bool {
+        matches!(arg.kind, hir::ExprKind::Local(_))
+            && matches!(self.ty_of(arg), Ty::Ref(r) if r.mutable)
     }
 
     /// The slice of type `slice_ty` of the whole array `pointer` points to.
@@ -1864,13 +1923,21 @@ impl Builder<'_, '_> {
         }
     }
 
-    /// Lowers expressions left to right. A deferred local read is taken
+    /// Lowers the arguments of a call left to right (a `&mut` variable is
+    /// lent, see [`Builder::argument`]; a variant's payload holds no
+    /// reference, so it is never lent there). A deferred local read is taken
     /// before any later expression that could assign it.
     fn operands(&mut self, exprs: &[hir::Expr]) -> Vec<Operand> {
         let mut operands = Vec::with_capacity(exprs.len());
         for (i, expr) in exprs.iter().enumerate() {
-            let mut operand = self.expr(expr);
-            if operand.place().is_some() && !exprs[i + 1..].iter().all(is_simple) {
+            let mut operand = self.argument(expr);
+            // A borrow made for the call is a temporary no one else writes.
+            if operand.place().is_some()
+                && !self.is_mut_variable(expr)
+                && !exprs[i + 1..]
+                    .iter()
+                    .all(|e| !self.is_mut_variable(e) && is_simple(e))
+            {
                 operand = self.spill(operand);
             }
             operands.push(operand);
