@@ -2143,11 +2143,14 @@ impl Parser<'_> {
     }
 
     /// Whether the next token ends an expression, so `break`/`return` have
-    /// no value.
+    /// no value. The `,` ends it where one separates items: the arms of a
+    /// `match`, the arguments of a call, the elements of an array, the
+    /// fields of a struct literal.
     fn at_expr_end(&self) -> bool {
         matches!(
             self.peek().kind,
             TokenKind::Semi
+                | TokenKind::Comma
                 | TokenKind::RBrace
                 | TokenKind::RParen
                 | TokenKind::RBracket

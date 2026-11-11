@@ -1,0 +1,45 @@
+// emit: ast
+// A bare `return` or `break` ends before a `,` (ADR 0037): as the body of a
+// `match` arm, `State::Done => return,`, and wherever else a comma separates
+// items, an argument, an array element or a struct field. With a value, the
+// value is the expression after the keyword; before `;`, `}`, `)` or `]`, a
+// bare one has none, as before.
+struct S { a: u8, b: u8 }
+
+fn take(a: u8, b: u8) -> u8 { a }
+
+fn arms(x: u8) {
+    loop {
+        match x {
+            0 => return,
+            1 => break,
+            2 => return 5,
+            3 => break 6,
+            4 => return,
+            _ => break
+        }
+    }
+}
+
+fn last_arm_without_comma(x: u8) {
+    match x {
+        0 => return,
+        _ => return
+    }
+}
+
+fn neighbours(x: u8) -> u8 {
+    take(return, 1);
+    take(1, return);
+    let a: [u8; 2] = [return, 1];
+    let s: S = S { a: return, b: 2 };
+    let t: S = S { a: 1, b: return };
+    if x == 0 { return; }
+    (return);
+    [return];
+    loop { break; }
+    return
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }
