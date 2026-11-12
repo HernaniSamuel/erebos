@@ -996,7 +996,10 @@ Documentation owed:
   M5.4c must give when it allows a borrow of a `static mut`; the debug type of
   a reference (`&T`) is not emitted, since `src/codegen/` emits no debug
   types; and the generated programs of ADR 0068 have only scalar types, so
-  references are tested by hand-written ui and e2e programs only.
+  references are tested by hand-written ui and e2e programs only; and two
+  labels say "iteration of the loop" in a body with no loop (the later use of
+  a borrow in a forward block, and a move after the use in the text), which is
+  wording only, not what is accepted.
 - **Next: M5.4b** (slices behind references), the second of the three parts
   of M5.4 (references, then slices behind them, then statics and handlers),
   in the fourth step of M5 (moves, ownership, references and methods), whose

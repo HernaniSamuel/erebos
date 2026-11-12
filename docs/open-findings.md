@@ -178,6 +178,44 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   (`assert`, `len`, `slice`, `end`), so an SVD item named `end` would give
   `resolve::reserved-name` in the generated program; not confirmed with an
   SVD. (M5.3)
+- `src/analysis/borrows.rs`, `later_use`: `reach_from` marks every block
+  reachable from the fault's successors and does not tell a forward edge from
+  a back edge, so a later use in a forward block whose span starts before the
+  access is labelled "in the next iteration of the loop" in a body with no
+  loop (the bounds check of an index splits `(*r).buf[(*r).head]` into two
+  blocks). ADR 0106 and 0107, as amended on 2026-11-11, say only a read
+  reached through a back edge gets that mark; the fix is to use the wording
+  only when the fault's block is reachable from the use's block. The label is
+  the only thing wrong, not what is accepted. (M5.4a, step 4 and the fix to
+  `pointer_place`)
+- `src/analysis/moves.rs`, `diagnostic` (around line 387): a move whose span
+  starts after the start of the use is called "in an earlier iteration of the
+  loop" whether or not the body has a loop, so
+  `(*r).buf[{ let q: &mut Ring = r; (*q).head }]` says so. The rule is
+  textual and dates from the analysis of moves (ADR 0097, 0099). (M5.4a)
+- `src/analysis/borrows.rs`: a static has no path, since its place is a
+  `Deref` of the pointer from a `Const::Static` temporary. That is sound only
+  while a `static mut` cannot be borrowed; M5.4c, which allows it, must give
+  statics a path. (M5.4a)
+- References have no debug type (`&T` named in the pointer type): there is no
+  debug-info emission in `src/codegen/` to attach it to. The `comptime`
+  parameter and `comptime T: type` positions of ADR 0105 have no check or test,
+  since the language has neither. (M5.4a)
+- `src/ty.rs` (around lines 959-966): the help "a `&` reference never becomes
+  `&mut`..." is also given when the referents differ (`&i32` where `&mut u32`
+  is expected), where it misleads; add `want.referent == have.referent` to the
+  condition. `src/ty/place.rs`, `not_borrowed_yet`: the help for a peripheral
+  reads "use a pointer to it, such as a `*mut {}`, `&raw mut P`", with `P` a
+  placeholder; the two snapshots `reference_errors` and `reference_not_yet`
+  change with it. (M5.4a)
+- `src/mir/build.rs`: `argument` falls back to `self.expr` when
+  `self.current` is `None`, a path that cannot happen and that no Decision
+  records; `is_mut_variable` takes `&mut self` only because `ty_of` does.
+  The `Const` guard of step 2 (a use of a constant of reference type has type
+  `{error}`) is redundant with the return check; it is kept because
+  `read_constant` fails without it. (M5.4a)
+- The generated programs of ADR 0068 have only scalar types, so no generated
+  program holds a reference. (M5.4a)
 
 ## Tests
 
@@ -422,3 +460,10 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   by fields and payloads, of a `#[linear]` struct" is ambiguous. A few lines
   of the "M5.3 done" entry in `docs/roadmap.md` run past the usual wrap.
   (M5.3)
+- `docs/reference.md` (around line 2564), the borrow check's "The error": one
+  line of the paragraph about ties is not wrapped like its neighbours. The
+  `.claude/plans/M5.4a.md` Decisions of steps 3 and 6 have a badly wrapped
+  line (step 3, first bullet) and a `\n` split across two lines inside
+  backticks, and the Decisions of step 6 say "as the interrupted run left it",
+  which a later reader cannot place; the `Changes` list of step 2 still names
+  the `comptime` positions that the Decisions say do not exist. (M5.4a)
