@@ -106,7 +106,7 @@ QEMU. The ownership model they share is ADR 0094.
 | **M5.2** ✅ Moves | `#[copy]`; moves in MIR; use after a move rejected, per body, before evaluation; constants and statics of non-copy types; the tests and `core` migrated | pins in typestate: a pin taken from disabled to output by functions that consume it |
 | **M5.3** ✅ Linear values | types that must be consumed; the check on every path that returns | a transfer to a device whose handle must be waited for |
 | **M5.4a** ✅ References | `&T`, `&mut T`, `&place`, `*r`; second-class references; the borrow check; references to places that are not volatile and not `static mut`, `&*p`; references across the C ABI | a ring buffer with free functions over `&mut Ring` and `&Ring` |
-| **M5.4b** Slices behind references | `&[T]`, `&mut [T]`, `len`, `(*s)[i]`, arrays to slices, sub-slices | a driver writing and filling buffers passed as `&[u8]` and `&mut [u8]` |
+| **M5.4b** ✅ Slices behind references | `&[T]`, `&mut [T]`, `len`, `(*s)[i]`, arrays to slices, sub-slices | a driver writing and filling buffers passed as `&[u8]` and `&mut [u8]` |
 | **M5.4c** References, statics and handlers | references to `static mut` inside `critical`; a `&mut` passed for a static its callee also names; references to volatile places, peripherals and registers | a buffer in a `static mut` filled by a handler and read by the thread through a reference taken in `critical` |
 | **M5.5** Methods | `impl`, `self`, `&self`, `&mut self`, `x.f()`, functions of a type | the ring buffer and the UART driver written as methods |
 | **M5.6** Ownership of peripherals | handles to peripherals that one context owns; races on registers between contexts (ADR 0078) | a UART owned by its handler, with the thread context sending through it |
@@ -1068,7 +1068,53 @@ Documentation owed:
   labels say "iteration of the loop" in a body with no loop (the later use of
   a borrow in a forward block, and a move after the use in the text), which is
   wording only, not what is accepted.
-- **Next: M5.4b** (slices behind references), the second of the three parts
-  of M5.4 (references, then slices behind them, then statics and handlers),
-  in the fourth step of M5 (moves, ownership, references and methods), whose
-  steps and model are above (ADR 0094).
+- **M5.4b done.** `&[T]` and `&mut [T]` are types, laid out and passed as the
+  raw slice of their mutability on both targets, across the C ABI in `extern
+  fn`, `#[export]` and `#[naked]` signatures included (ADR 0108). They are made
+  by `&*s` and `&mut *s` from a raw slice that is not volatile or from another
+  reference, by the implicit conversion of `&[T; N]` to `&[T]` and of `&mut [T;
+  N]` to `&mut [T]` or `&[T]` where ADR 0024 converts (amending ADR 0008), and
+  by a sub-slice. `(*s)[i]` is checked against the length, `s[i]` is
+  `ty::cannot-index`, `len` takes a reference to a slice or to an array and
+  moves nothing, and a reference to a slice casts as the raw slice of its
+  mutability. A range in an index, `a..b`, `a..` and `..b`, makes a place of
+  type `[T]` of an array or a slice, borrowed with `&`, `&mut` or `&raw` and
+  checked with the cause `IndexOutOfBounds` (a range with literal bounds on an
+  array at no cost, a bound known at compile time past the length
+  `ty::index-out-of-bounds`); `base[..]` and `base[a..=b]` are
+  `parser::unexpected-token`. The borrow check gives the elements and
+  sub-slices of one array or slice the overlap arrays had, so `f(&mut buf[0..4],
+  &mut buf[4..8])` is `analysis::borrow-conflict`, `len(s)` is a read of `s`,
+  and a reference to an array that is converted is lent or described as
+  "converted to a slice here" (ADR 0106, 0108, 0109). MIR has places of type
+  `[T]`, `Index` on them and the projections `Subslice` and `ConstSubslice`, and
+  the rules S7, T1, T2, T5, R3 and the new U1 (ADR 0109, amending 0095 and 0107;
+  ADR 0109 was amended on 2026-11-12 to say which rule reports each use of a
+  place of type `[T]`). Code generation and the evaluator lower a place of type
+  `[T]` to an address and a length; `PANICS` rose by one in `src/codegen/mod.rs`
+  and one in `src/eval.rs`, for a length no valid MIR leaves out. The borrow
+  analysis's label for a later use in a function with no loop was fixed on the
+  way (a read it reaches is "used later", wherever its span starts).
+  `tests/e2e/slice_driver.ers` is a driver that encodes byte strings into a
+  `[u8; 32]` lent as `&mut [u8]` and writes them through `&[u8]`, with
+  sub-slices of `*out` and of the buffer, on both targets at both levels;
+  `slice_references_c.ers` crosses the C ABI both ways; five programs
+  (`subslice_*.ers`) each reach the panic function by a way a range fails, and
+  `slice_reference_index_out_of_bounds.ers` by an index; the wrong uses are ui
+  tests. Left open, for the planner: splitting a `&mut [T]` in two halves in use
+  together, and `base[..]` and `base[a..=b]`, as above; `core` and the tests
+  keep their raw slices and `assert` its `*const [u8]` message until M5.7; `s[i]`
+  on a reference to a slice keeps M5.4a's `ty::cannot-index` text, whose help
+  writes `(*r)[i]` for any reference; a written `&buf[0..N]` over a whole array
+  has the MIR of the conversion of `&buf` and is told "`buf` is borrowed here",
+  where ADR 0108 names a sub-slice `[_.._]`; `touch(&mut (*s)[0], &(*s)[1])` on
+  a slice is two errors and on an array one, because the check of the second
+  index reads `s`; an index into a sub-slice is checked at run time even when
+  its length is known while building, where ADR 0108 is silent; a range on an
+  array of `!` has no code, since the array type is `ty::never-in-memory` first;
+  and the generated programs of ADR 0068 have only scalar types, so slices are
+  tested by hand-written ui and e2e programs only.
+- **Next: M5.4c** (references, statics and handlers), the last of the three
+  parts of M5.4 (references, then slices behind them, then statics and
+  handlers), in the fourth step of M5 (moves, ownership, references and
+  methods), whose steps and model are above (ADR 0094).

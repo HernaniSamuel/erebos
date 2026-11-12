@@ -1,4 +1,4 @@
-# Erebos language reference (M5.4a)
+# Erebos language reference (M5.4b)
 
 This describes the language as the compiler implements it today. The
 reasoning behind each rule lives in the ADRs (`docs/adr/`), cited as
@@ -151,6 +151,7 @@ block.
 | `!` | never: the type of an expression that does not finish, never of memory (ADR 0034) |
 | `*const T`, `*mut T` | raw pointers |
 | `&T`, `&mut T` | a shared and a mutable reference to a `T`: a thin pointer that the compiler checks (ADR 0105, see "References") |
+| `&[T]`, `&mut [T]` | a shared and a mutable reference to a slice: the address of `T` values and how many there are, laid out and passed as the slice `*const [T]` or `*mut [T]` (ADR 0108, see "Slices behind references") |
 | `*const volatile T`, `*mut volatile T` | raw pointers whose accesses are volatile (ADR 0013, 0023); never to a peripheral type, whose pointers are volatile without the word (ADR 0058) |
 | `[T; N]` | an array of `N` values of type `T`; `N` is a `usize` computed at compile time (ADR 0021, 0029), so a literal too large for `usize` is `ty::literal-out-of-range`, as it is in `#[align(N)]` |
 | `*const [T]`, `*mut [T]` | slices: the address of `T` values and how many there are (ADR 0031); `volatile` as for any pointer |
@@ -162,8 +163,8 @@ block.
 
 Every `let`, parameter and return type is written explicitly; there is no
 inference (ADR 0008). `-> ()` may be omitted (ADR 0015). Arrays, structs
-and enums with payloads are **aggregates**, and so are slices where a rule
-depends on it. A bit-field struct is not: it is a **scalar**, stored,
+and enums with payloads are **aggregates**, and so are slices and references to
+slices where a rule depends on it. A bit-field struct is not: it is a **scalar**, stored,
 passed and accessed as its integer type (ADR 0059). Every type with values is
 **copy** or **non-copy**: a struct or an enum with payloads is non-copy
 unless declared `#[copy]`, and a non-copy value is moved, not copied (see
@@ -178,11 +179,14 @@ from every module, as a single name: `uart::u32` is no type.
 
 A pointer to a sized type, or to a peripheral type, is a **thin
 pointer**: a plain address. `[T]` on its own is **unsized**: it exists
-only behind a pointer, and a variable, parameter, return value, field,
-array element or payload value of type `[T]`, a `static`, `extern static`
-or `const` of that type, a layout query (`size_of`, `align_of`,
-`offset_of`) of it, and a slice of `[T]` are errors (`ty::unsized`).
-`[[u8; 4]]` is a slice of arrays, and fine.
+only behind a pointer or a reference, and a variable, parameter, return value,
+field, array element or payload value of type `[T]`, a `static`, `extern
+static` or `const` of that type, a layout query (`size_of`, `align_of`,
+`offset_of`) of it, and a slice of `[T]` are errors (`ty::unsized`). The place
+`*s` of a slice `s`, raw or a reference, and a sub-slice are places of type
+`[T]`: they are indexed, sub-sliced, borrowed and given to `&raw`, and never
+read or written whole (see "Slices"). `[[u8; 4]]` is a slice of arrays, and
+fine.
 
 **A peripheral type is no type of a value** (ADR 0058). Like `[T]`, it
 exists only behind a pointer (`*mut Uart`, a thin pointer), and as the
@@ -202,7 +206,7 @@ of a peripheral type anywhere else, `*const [Context; 2]` included, is
 **`!` is not a type of memory** (ADR 0034, 0039). No value of type `!`
 exists, so it is an error (`ty::never-in-memory`) as the pointee of a
 pointer (`*const !`), the element of an array or slice type (`[!; 0]`,
-`*const [!]`), a field type (a bit field's too), a payload type, a
+`*const [!]`, `&[!]`), a field type (a bit field's too), a payload type, a
 register's type, the type of a `static`, `extern static`, `const` or
 `comptime` value, an operand of `size_of`, `align_of` or `offset_of`, and
 under `&raw` (`&raw const x` with `x: !`). Each `!` written there is
@@ -280,7 +284,9 @@ never changes the caller's value. Arrays pass like a struct of the same
 layout; C, which has no arrays by value, wraps them in a struct. A slice
 passes like the C struct `struct { const T *ptr; size_t len; }`: on riscv32
 in a register pair, and returned in `a0`, `a1` (ADR 0031); on thumbv7m as
-two words, and returned through memory. An enum with payloads passes by its
+two words, and returned through memory. A reference to a slice passes exactly
+as the slice of its mutability does, as an argument (no function returns a
+reference; ADR 0108, see "Slices behind references"). An enum with payloads passes by its
 size and alignment, as its C twin, a union, does (see "Enums"); it is
 never of size 0, since its tag has a size. Enums without payloads and
 bit-field structs are not aggregates: they pass as their integer type
@@ -353,8 +359,11 @@ buf[i] = buf[0];
 - **Pointer indexing is not.** With `p: *const T` or `*mut T`, `p[i]` is the
   place at address `p + i * size_of(T)`, computed with wrapping arithmetic,
   as in C. `(*p)[i]` with `p: *mut [T; N]` is the checked form, and so is
-  `(*s)[i]` with a slice `s` (see "Slices"). A pointer to a peripheral
-  type cannot be indexed (see "Pointers").
+  `(*s)[i]` with a slice `s`, raw or a reference (see "Slices"). A pointer to
+  a peripheral type cannot be indexed (see "Pointers").
+- **A range in an index** makes a part of an array, `a[2..5]`, `a[n..]` or
+  `a[..n]`: a place of type `[T]`, checked against the length and borrowed
+  with `&`, `&mut` or `&raw` (see "Sub-slices").
 - `let`, assignment and reading a place copy aggregates whole when their
   type is copy, and move them when it is not: a struct is non-copy unless
   it is declared `#[copy]` (see "Copies and moves"). `==` and `!=` do not
@@ -367,7 +376,8 @@ buf[i] = buf[0];
 
 `&raw const place` and `&raw mut place` give a `*const T` or `*mut T` to a
 place: a variable, a static, a peripheral, a byte string, `*pointer`,
-`a[i]`, `p[i]`, `(*s)[i]` or a field. `&raw mut` needs a mutable place:
+`a[i]`, `p[i]`, `(*s)[i]`, a range `a[x..y]` or a field (a range, like
+`*s` for a slice `s`, gives a slice; see "Slices"). `&raw mut` needs a mutable place:
 not a variable without `mut`, a `static`, an `extern static` without
 `mut`, a byte string, part of a temporary, nor anything reached through a
 `*const` pointer (`ty::address-of-immutable`). A peripheral is not `mut`,
@@ -383,13 +393,13 @@ bit-field struct, which is no place in memory (`ty::bit-field-address`,
 see "Bit-field structs"). A plain `&` makes a reference, not a raw pointer
 (see "References").
 
-A constant has no address, and neither does any element or field of it:
-`&raw const T`, `&raw const T[1]` and `&raw const S.f` are
-`ty::not-a-place` (ADR 0029). Through a pointer held in a constant, places
+A constant has no address, and neither does any element, range or field of it:
+`&raw const T`, `&raw const T[1]`, `&raw const T[1..3]` and `&raw const S.f` are
+`ty::not-a-place` (ADR 0029, 0108). Through a pointer held in a constant, places
 are as usual: `&raw mut (*UART).ctrl` and `&raw mut BASE[1]` are fine.
 
-An element or field of a value that is not a place, such as `(f())[1]`,
-`({ x })[0]` or `(comptime t())[1]`, is part of a temporary: `&raw const`
+An element, range or field of a value that is not a place, such as `(f())[1]`,
+`f()[1..3]`, `({ x })[0]` or `(comptime t())[1]`, is part of a temporary: `&raw const`
 of it points into a temporary holding the value where the expression runs,
 never into a variable the value came from, nor into the data of a
 constant. Such a part cannot be assigned, nor have a `*mut` address
@@ -716,11 +726,13 @@ let p: *const [u8; 2] = &raw const b"ok"; // no copy
   strings may share memory, with each other and with other read-only data,
   so whether two of them have the same address is not defined.
 
-## Slices (ADR 0031)
+## Slices (ADR 0031, 0108)
 
 A slice, `*const [T]` or `*mut [T]`, is the address of its first element
 and its length in elements: 8 bytes with alignment 4, exactly the C struct
-`struct { const T *ptr; size_t len; }`.
+`struct { const T *ptr; size_t len; }`. A reference to a slice, `&[T]` or
+`&mut [T]`, is the same two words under the borrow check (see "Slices behind
+references").
 
 ```
 fn print(s: *const [u8]) {
@@ -744,25 +756,30 @@ print(&raw const b"hello\n");
 - `slice(p, n)`, built in, is the slice of `n` elements (a `usize`)
   starting at `p`: a `*const T` gives a `*const [T]` and a `*mut T` a
   `*mut [T]`, with the same volatility. Nothing is checked; the program
-  vouches for it, as for a pointer made from an integer. Sub-slices are
-  made with it: `slice(&raw const (*s)[2], 3)`.
+  vouches for it, as for a pointer made from an integer. Nothing ties `n`
+  to the length of another slice: the checked way to take part of a slice or
+  of an array is a range in an index (see "Sub-slices").
 
 **Using a slice.**
 
 - `len(s)`, built in, is the length of `s`, a `usize`, and reads no
   memory. Its argument is any slice, `*const` or `*mut`, volatile or not,
   or a pointer to an array, converted as above: `len(&raw const b"hi")`
-  is 2.
+  is 2. It takes a reference to a slice or to an array as well (see "Slices
+  behind references").
 - `(*s)[i]` is the place of element `i`, **checked**: an index not below
   `len(s)` calls the panic function, as for arrays. It can be read,
   written through a `*mut [T]` (`ty::write-through-const` through a
-  `*const [T]`), and passed to `&raw`.
+  `*const [T]`), borrowed (see "References") and passed to `&raw`. `s` may
+  be a reference to a slice as well as a raw one.
 - `s[i]` on a slice is an error (`ty::slice-pointer-index`): indexing a
   pointer steps over whole pointees, and `[T]` has no size. Write
   `(*s)[i]`, or `(s as *const T)[i]` for an unchecked access.
-- `*s` can only be indexed or passed to `&raw` (`&raw const *s` is the
-  slice again); reading, writing or copying all of it is a `ty::unsized`.
-  A slice has no fields: its length is `len(s)`, not `s.len`.
+- `*s` is a place of type `[T]`. It can be indexed, sub-sliced, borrowed
+  (`&*s` and `&mut *s` are references to a slice, see "Slices behind
+  references") and passed to `&raw` (`&raw const *s` is the slice again);
+  reading, writing or copying all of it is a `ty::unsized`. A slice has no
+  fields: its length is `len(s)`, not `s.len`.
 
 **A slice is not an address.** Only thin pointers are plain addresses;
 a slice is an aggregate of two scalars wherever a rule depends on it:
@@ -783,6 +800,102 @@ a slice is an aggregate of two scalars wherever a rule depends on it:
 | slice of `T` | slice of `U`, `U` not `T` | `ty::invalid-cast` |
 | thin pointer, other than to an array of `T` | slice of `T` | `ty::invalid-cast`; use `slice(p, n)` |
 | slice, or integer | integer, or slice | `ty::invalid-cast` |
+
+### Sub-slices (ADR 0108)
+
+```
+struct Frame { data: [u8; 16], used: usize }
+static MSG: [u8; 6] = b"header";
+const NAME: [u8; 4] = b"erbs";
+
+fn write(bytes: &[u8]) { }
+fn fill(out: &mut [u8], b: u8) { }
+
+fn forms(mut line: [u8; 8], f: &mut Frame, s: &mut [u8], n: usize) {
+    write(&line[2..5]);                         // elements 2, 3 and 4
+    write(&line[n..]);                          // `line[n..8]`
+    write(&line[..n]);                          // `line[0..n]`
+    write(&(*f).data[4..8]);                    // an array field
+    write(&MSG[1..3]);                          // a `static`
+    write(&b"hello"[1..]);                      // a byte string
+    write(&NAME[1..3]);                         // a part of a `const`
+    write(&(*s)[1..]);                          // the slice a reference refers to
+    write(&(*s)[n + 1..n + 3][1..]);            // a sub-slice of a sub-slice
+    fill(&mut line[n..], b' ');                 // `&mut` needs a place that can be written
+    fill(&mut (*s)[..2], b' ');
+    let raw: *const [u8] = &raw const (*s)[..4];    // the checked `slice(&raw const (*s)[0], 4)`
+    let empty: &[u8] = &line[8..];              // empty, at the length
+}
+```
+
+A **range in an index** makes a place of type `[T]` that is part of an array or
+of a slice. It has no value, no type of its own and no meaning outside `[ ]`:
+`a..b` is no expression.
+
+- **Forms.** `base[a..b]` is the elements from `a` up to but not including `b`;
+  `base[a..]` is `base[a..L]` and `base[..b]` is `base[0..b]`, with `L` the
+  length of `base`. The range is half-open. `a` and `b` are `usize`
+  expressions (`ty::mismatched-types` otherwise); a literal takes `usize`. `..`
+  binds more loosely than every operator and `as`, so `base[a + 1..b as usize]`
+  is `base[(a + 1)..(b as usize)]`. `base[a..=b]` and `base[..]` are
+  `parser::unexpected-token`, the first with a help giving `a..b + 1`, the
+  second with one giving `&*s` for a slice and the conversion for an array.
+- **Bases.** An array place (a variable, a field, an element, `*p` or `*r` with
+  `p` or `r` pointing to or referring to an array, a `static`, a byte string),
+  or a place of type `[T]`: `*s` for a slice `s`, raw or a reference, or
+  another sub-slice (`(*s)[1..][..2]`). A part of a value that is not a place,
+  of an array type (`NAME[1..3]` with `NAME` a `const`, `f()[1..3]`, an array
+  literal), is a base too, under `&`: the whole value is written to a new
+  local and borrowed there, as in "References". `&mut` of it is
+  `ty::mut-borrow-of-immutable`; `&raw const` of a part of a `const` is
+  `ty::not-a-place`, and of a part of a call's result or an array literal it
+  points into a temporary, where `&raw mut` is `ty::address-of-immutable`.
+  A range on a slice that is not dereferenced is the error an index there is:
+  `ty::slice-pointer-index` on a raw slice, `ty::cannot-index` on a reference,
+  each with the help `(*s)[a..b]`. A range on anything else (a thin pointer, a
+  reference or a pointer to an array, an integer) is `ty::cannot-index`, with a
+  label saying a range needs the length of an array or a slice, and the help
+  `(*p)[a..b]` for a pointer or reference to an array or `slice(p, n)` for a
+  thin pointer to another type.
+- **What a sub-slice is.** A place of type `[T]`, like `*s`: it is indexed,
+  sub-sliced again, borrowed with `&` or `&mut` (giving `&[T]` or `&mut [T]`)
+  and given to `&raw` (giving `*const [T]` or `*mut [T]`, not volatile, as
+  `&raw` of any place). Read, written or matched whole it is `ty::unsized`.
+  Whether it can be written is its base's business, as for an element: not
+  through a `&[T]`, a `*const [T]`, a variable without `mut`, a `static` or a
+  byte string (`ty::mut-borrow-of-immutable` under `&mut`,
+  `ty::address-of-immutable` under `&raw mut`).
+- **Addresses.** A sub-slice has an address where its elements do, by the rules
+  of `&raw`, with the same codes: a range on a register array or a cluster
+  array is `ty::register-address`, on an array field of a `#[packed]` struct
+  that may be misaligned `ty::packed-field-address`. `&` and `&mut` of a range
+  on an array behind a volatile pointer, a volatile raw slice, a peripheral or
+  a `static mut` are `ty::reference-to-volatile` and
+  `ty::reference-to-static-mut` until M5.4c, while `&raw` of it is allowed.
+- **Checks.** The base is evaluated first, and with it its length (the length
+  of a slice is read then, so code in the bounds that assigns the variable
+  holding a raw slice does not change it); then `a`, then `b`. The place
+  exists when `a <= b` and `b <= L`, with `L` the length of the base: `N` for
+  an array, the slice's for `*s`, and `b - a` of the inner range for a
+  sub-slice, so `(*s)[2..4][3]` panics whatever `len(s)` is. Otherwise the
+  panic function is called, with the cause `IndexOutOfBounds` located at the
+  `[`; no variant is added to `core::PanicReason`. An empty sub-slice (`a == b`,
+  and `a == L`) is valid. An index into a sub-slice is checked at run time,
+  against its length, even when that length is known while building.
+- **Bounds known at compile time** (see "Checks on values known at compile
+  time"). On an array, a known bound past `N` is `ty::index-out-of-bounds` on
+  its own, and so is a known `a` past a known `b`. A range whose two bounds are
+  integer literals inside the array, an omitted bound counting as the literal
+  `0` or `N` (`arr[2..]`, `arr[..4]`), costs nothing at run time; any other
+  range, a `const` bound included, is checked at run time. On a slice nothing
+  is known of the length, and every range is checked at run time.
+- **Through a raw slice or pointer** a range is checked against the length the
+  raw slice carries and no further: `&raw const (*s)[2..5]` is the checked form
+  of `slice(&raw const (*s)[2], 3)`, and `&(*s)[a..b]` through a raw slice that
+  is not volatile is a reference the program vouches for, as `&*s` is.
+- **At compile time** a sub-slice is evaluated as at run time; one of a
+  `static` or a byte string is a slice inside that object, and an out-of-range
+  one is `eval::panic`.
 
 ## Enums (ADR 0035, 0036, 0039, 0044)
 
@@ -1716,11 +1829,12 @@ moved, partly moved or not is valid.
 
 Copy are: integers, `bool` and `()`; enums without payloads; bit-field
 structs; raw pointers, slice pointers included; shared references `&T`,
-whatever `T` is; an array whose element type is copy; `Option(T)` with `T`
+whatever `T` is, a reference to a slice `&[T]` included; an array whose element type is copy; `Option(T)` with `T`
 copy; `Result(T, E)` with `T` and `E` copy; and a struct or an enum with
 payloads declared `#[copy]`. Every other type with values is non-copy: a
 struct or an enum with payloads without the attribute, the arrays, `Option`
-and `Result` that contain one, and the mutable references `&mut T`. `!`,
+and `Result` that contain one, and the mutable references `&mut T` and
+`&mut [T]`. `!`,
 `[T]` and peripheral types have no values and no kind.
 
 Whether a struct or an enum is copy is what it declares. A type is never
@@ -2125,7 +2239,7 @@ nothing of a linear type is written through a pointer (L4); and each case of a
 variants (E1). They judge the compiler, as every rule of the validator does:
 type checking rejects the programs that would break them.
 
-## References (ADR 0105 to 0107)
+## References (ADR 0105 to 0109)
 
 ```
 struct Ring {
@@ -2163,7 +2277,9 @@ fn demo() -> usize {
 A **reference** is an address the compiler checks. `&T` is a **shared**
 reference to a `T`, which reads it; `&mut T` is a **mutable** reference, which
 reads and writes it. Both are passed and stored as a thin pointer, 4 bytes
-with an alignment of 4, so a reference costs what a raw pointer costs. What
+with an alignment of 4, so a reference costs what a raw pointer costs; a
+reference to a slice, `&[T]` or `&mut [T]`, is a slice, 8 bytes (see "Slices
+behind references"). What
 the compiler adds is a check that, while a reference is used, the place it
 refers to is used only in ways that cannot disagree with it (see "The borrow
 check"). References are **second-class** (ADR 0094): they are held by a
@@ -2189,10 +2305,12 @@ that made it and no lifetime is ever written.
   writes `(*r)`; `*e` on a value that is neither a pointer nor a reference is
   `ty::deref-non-pointer`. `(*r)[i]` with `r: &[T; N]` is checked as an array
   index is (see "Structs and arrays").
-- The referent is a sized type with values. `&!` is `ty::never-in-memory`,
-  `&[T]` is `ty::unsized` and `&Timer`, with `Timer` a peripheral type, is
-  `ty::peripheral-by-value`, each labeled "as the referent of a reference".
-  A reference to a slice is M5.4b's.
+- The referent is a sized type with values, or `[T]`, a slice (see "Slices
+  behind references"). `&!` is `ty::never-in-memory` and `&Timer`, with `Timer`
+  a peripheral type, is `ty::peripheral-by-value`, each labeled "as the
+  referent of a reference". `[T]` follows the rules of the slice behind a
+  pointer for its element: `&[&u8]` is `ty::reference-position`, `&[Timer]` is
+  `ty::peripheral-by-value` and `&[!]` is `ty::never-in-memory`.
 - A literal under `&` takes the referent of the expected type
   (`let c: &u32 = &5;`, `let c: &[u8; 0] = &[];`); a value of type `!` under
   `&` or `&mut` is `ty::never-in-memory`.
@@ -2227,7 +2345,9 @@ fn values() {
 `&place` borrows a place: a variable, a parameter, a field or an element of
 one, a `static` or an `extern static` without `mut`, a byte string, or a place
 through a reference or through a raw pointer that is not `volatile` (`&*p`,
-`&(*p).f`, `&p[i]`). A reference made through a raw pointer is the program's
+`&(*p).f`, `&p[i]`). A place of type `[T]` can be borrowed too, `&*s` for a
+slice `s` or a sub-slice `&a[2..5]`, and gives a reference to a slice (see
+"Slices behind references"). A reference made through a raw pointer is the program's
 word, as `slice(p, n)` is: the borrow check follows nothing through a raw
 pointer.
 
@@ -2291,7 +2411,7 @@ A `comptime` parameter and a `comptime T: type` argument are forbidden as
 well; the language has neither yet, so nothing checks them. A type that
 holds a reference is reported once, at the outermost reference that is in a
 forbidden position (`&&u32` as a field is one error, at the whole), and a type
-that failed already, as `&[u8]`, is not reported again.
+that failed already, as `&!`, is not reported again.
 
 The expressions of a reference type are an argument of a call, the initializer
 of a `let`, the operand of `*`, `as` or an expression statement, and the value
@@ -2355,6 +2475,9 @@ fn casts(r: &u32, m: &mut u32) -> usize {
   is not moved: `let seen: &Ring = r;` and `count(r)` with `count(r: &Ring)`.
   Only the outermost reference converts; a `&T` never becomes a `&mut T`
   (`ty::mismatched-types`, with a help).
+- **A reference to an array converts to a reference to a slice**, `&[T; N]` to
+  `&[T]` and `&mut [T; N]` to `&mut [T]` or `&[T]`, at the same places (see
+  "Slices behind references").
 - **Casts.** `r as P`, with `P` a raw pointer type, is allowed where `p as P`
   is for `p` of type `*const T` (from a `&T`) or `*mut T` (from a `&mut T`),
   so `&T as *mut T` is allowed, as `*const T as *mut T` is. It ends what the
@@ -2368,6 +2491,148 @@ fn casts(r: &u32, m: &mut u32) -> usize {
   `ty::invalid-operand`, with a help giving `*a == *b` to compare the values
   and `a as *const T == b as *const T` to compare the addresses. Neither
   meaning is implied.
+
+### Slices behind references (ADR 0108, 0109)
+
+```
+fn sum(bytes: &[u8]) -> u32 {
+    let mut total: u32 = 0;
+    let mut i: usize = 0;
+    while i < len(bytes) {
+        total += (*bytes)[i] as u32;
+        i += 1;
+    }
+    total
+}
+
+fn fill(out: &mut [u8], b: u8) {
+    let mut i: usize = 0;
+    while i < len(out) {
+        (*out)[i] = b;
+        i += 1;
+    }
+}
+
+fn demo(raw: *mut [u8]) -> u32 {
+    let mut buf: [u8; 8] = [0; 8];
+    fill(&mut buf, 7);                      // `&mut [u8; 8]` becomes `&mut [u8]`
+    let a: u32 = sum(&buf);                 // `&[u8; 8]` becomes `&[u8]`
+    let b: u32 = sum(&b"hello");            // so does a byte string
+    let c: u32 = sum(&buf[2..6]);           // a sub-slice
+    let whole: &[u8] = &*raw;               // from a raw slice that is not volatile
+    a + b + c + sum(whole)
+}
+```
+
+`&[T]` is a **shared reference to a slice** and `&mut [T]` a **mutable reference
+to a slice**: `[T]` is the referent of a reference as it is the pointee of a
+raw pointer. Everything said of references holds for them: where they may be
+written and made (`ty::reference-position` elsewhere), `&[T]` is copy and
+`&mut [T]` is not, a `&mut [T]` variable is lent to a call, no comparison, no
+move out of and no linear write through one. A reference to a slice is a slice:
+the address of the first element and the length, two words, 8 bytes with an
+alignment of 4, with the layout of `*const [T]`; like every reference, its
+debug type is not emitted.
+
+**Making one.**
+
+- **From a place of type `[T]`.** `&*s` and `&mut *s` borrow the slice `s`
+  points to or refers to, whole. Through a raw slice the reference is the
+  program's word, as `&*p` is for a thin pointer, and the borrow check follows
+  nothing; through a volatile one it is `ty::reference-to-volatile` until
+  M5.4c. Through a reference it is a reborrow. `&mut *s` needs a `*mut [T]` or
+  a `&mut [T]` (`ty::mut-borrow-of-immutable` otherwise). `&a[2..5]` and
+  `&mut a[2..5]` borrow a sub-slice (see "Sub-slices").
+- **Conversion.** A reference to an array **converts implicitly** to a
+  reference to a slice of the same elements, with length `N`: `&[T; N]` to
+  `&[T]`, and `&mut [T; N]` to `&mut [T]` or `&[T]`. It applies where `&mut T`
+  converts to `&T` (see "Typing"), converts only the outermost reference, and
+  is a borrow like that conversion: a `&mut [T; N]` variable or parameter
+  converted is lent, not moved. `&b"hello\n"` is a `&[u8]` where one is
+  expected, and `&[1 as u8, 2, 3]` is one too (`&[1, 2, 3]` is
+  `ty::untyped-literal`, as an array literal is anywhere no type is
+  expected). A conversion that changes the element type, a `&[T; N]` to a
+  `&mut [T]`, and a reference to an array to a raw slice (`let p: *const [u8] =
+  a;`) are `ty::mismatched-types`. `slice(p, n)` takes a raw pointer and
+  gives a raw slice; given a reference it is `ty::mismatched-types`, with a help
+  naming `&(*s)[a..b]`.
+- **Casts.** A reference to a slice casts as the raw slice of its mutability
+  does, by the table in "Slices": `s as *const [T]` (from `&[T]`), `s as *mut
+  [T]` (from `&mut [T]`) and `s as *const T`, with the length dropped, are
+  allowed, and `s as usize` is `ty::invalid-cast`. A reference to an array
+  casts as the pointer to an array does, so `&[T; N] as *const [T]` is allowed
+  with length `N`. Nothing casts to a reference.
+
+**Using one.**
+
+- `(*s)[i]` is the place of element `i`, **checked** against the length, as
+  through a raw slice: an index not below `len(s)` calls the panic function,
+  with the cause `IndexOutOfBounds`. It can be read, written through a `&mut
+  [T]` (`ty::write-through-const` through a `&[T]`), borrowed and given to
+  `&raw`. `s[i]` is `ty::cannot-index`, with the help `(*s)[i]`: there is no
+  automatic dereference.
+- `*s` can be indexed, sub-sliced, borrowed (`&*s`, `&mut *s`) and given to
+  `&raw`; reading or copying all of it is `ty::unsized`.
+- `len(s)` takes a reference to a slice, as it takes a raw slice, and a
+  reference to an array, whose length is `N` (the operand is evaluated for its
+  effects). It reads the reference, never the elements, and moves nothing:
+  `len(s)` with `s: &mut [T]` leaves `s` usable.
+- `&(*s)[i]` and `&*s` through a raw slice that is not volatile are allowed;
+  through a volatile one they are `ty::reference-to-volatile` until M5.4c.
+
+```
+fn casts(s: &[u32], m: &mut [u32]) {
+    let a: *const [u32] = s as *const [u32];
+    let b: *const u32 = s as *const u32;    // the length is dropped
+    let c: *mut [u32] = m as *mut [u32];
+    let d: *const [u8] = &b"ok" as *const [u8];
+}
+
+fn lengths(buf: [u8; 4], r: &[u8; 4], s: &mut [u8]) -> usize {
+    len(&buf) + len(r) + len(s) + len(s)    // `len(s)` moves nothing
+}
+
+fn errors(s: &[u8], raw: *const [u8]) {
+    let a: u8 = s[0];                       // error: ty::cannot-index
+    let b: [u8; 4] = *s;                    // error: ty::unsized
+    let c: &mut [u8] = &mut *s;             // error: ty::mut-borrow-of-immutable
+    (*s)[0] = 1;                            // error: ty::write-through-const
+    let d: usize = s as usize;              // error: ty::invalid-cast
+    let e: bool = s == s;                   // error: ty::invalid-operand
+    let f: &mut [u8] = s;                   // error: ty::mismatched-types
+}
+```
+
+**Across the C ABI.** A reference to a slice is passed, at every call and on
+every target, exactly as the raw slice of its mutability is: the C struct
+`struct { const T *ptr; size_t len; }`, by the rules of "Aggregates by value".
+`extern fn`, `#[export]` and `#[naked]` functions may take `&[T]` and `&mut
+[T]`, as they may take references; the C side vouches for the address and the
+length. A reference to a slice is never returned, and code generation gives it
+no attribute a raw slice lacks.
+
+```
+extern fn c_sum(bytes: &[u8]) -> u32;        // C sees `struct { const uint8_t *ptr; size_t len; }`
+
+#[export]
+fn erebos_fill(out: &mut [u8], b: u8) { }
+```
+
+**What does not change.** Raw slices, `slice` and `len` of a raw slice are as
+"Slices" says. The message of `assert` is still a `*const [u8]`: `assert(c,
+&b"...")` is `ty::mismatched-types`, since `&[u8; N]` does not convert to a raw
+slice. The panic function keeps its `*const core::PanicInfo`.
+
+At compile time a reference to a slice is used as a reference is: a `static`
+or a byte string converts, a sub-slice of one is a slice inside it, and a
+function taking one runs in the evaluator (it is never a result).
+
+```
+static TABLE: [u32; 4] = [1, 2, 3, 4];
+fn first_and_last(s: &[u32]) -> u32 { (*s)[0] + (*s)[len(s) - 1] }
+const TOTAL: u32 = first_and_last(&TABLE);              // 5
+const MIDDLE: u32 = first_and_last(&TABLE[1..3]);       // 5
+```
 
 ### Moves and linear values through a reference (ADR 0105)
 
@@ -2389,7 +2654,9 @@ fn casts(r: &u32, m: &mut u32) -> usize {
 
 A reference is passed, at every call and on every target, exactly as a raw
 pointer to its referent is: one register or stack word, whatever the size of
-the referent. A struct behind a reference crosses by address, where a struct by
+the referent. A reference to a slice is the exception that is not one: it is
+passed as the slice of its mutability, two words (see "Slices behind
+references"). A struct behind a reference crosses by address, where a struct by
 value would go in registers (see "Aggregates by value"). `extern fn`,
 `#[export]` and `#[naked]` functions may take references; the C side
 vouches for what it does with the address, as it does for raw pointers and
@@ -2465,11 +2732,12 @@ dereferences of a reference. Two places **overlap** when one contains the
 other or both are the same, compared part by part from their root. Two
 different fields of one struct do not overlap (`&mut s.a` and `&s.b` may be in
 use together); two elements of one array always do, whatever their indexes,
-even constant ones (`&mut a[0]` and `&a[1]` may not). `*r` and the places
-through it are places of their own, rooted at `r`: using `*r` is using the
-borrow `r` holds, never a conflict with it. A place through a **raw pointer**
-is not followed: borrowing it makes a reference the check holds nothing for,
-and accessing it conflicts with no borrow.
+even constant ones (`&mut a[0]` and `&a[1]` may not), and so do the elements
+and sub-slices of one array or slice (see "Slices and sub-slices", below).
+`*r` and the places through it are places of their own, rooted at `r`: using
+`*r` is using the borrow `r` holds, never a conflict with it. A place through a
+**raw pointer** is not followed: borrowing it makes a reference the check holds
+nothing for, and accessing it conflicts with no borrow.
 
 **Conflicts.** An access to a place conflicts with a borrow in use of an
 overlapping place:
@@ -2477,10 +2745,10 @@ overlapping place:
 | Access | conflicts with a borrow in use that is |
 |--------|-----------------------------------------|
 | a read (a copy, a test of a tag, `&raw const`, `len`) | mutable |
-| a `&` borrow, or the conversion of a `&mut` to a `&` | mutable |
+| a `&` borrow, the conversion of a `&mut` to a `&`, or of a reference to an array to a `&[T]` | mutable |
 | a write (an assignment, a call's result, an `asm` output, `&raw mut`) | shared or mutable |
 | a move, or `end` | shared or mutable |
-| a `&mut` borrow | shared or mutable |
+| a `&mut` borrow, a `&mut [T; N]` converted to a `&mut [T]` included | shared or mutable |
 
 The access through the reference itself is never a conflict: `*r = 1` while `r`
 holds a `&mut x` writes through the borrow. A borrow of `*r` (a **reborrow**) is
@@ -2536,28 +2804,103 @@ fn lent(r: &mut Ring) -> usize {
 }
 ```
 
+**Slices and sub-slices.** The places gain the parts of a slice by the rule that
+holds for arrays (ADR 0108, 0109):
+
+- two elements of one slice always overlap, whatever their indexes;
+- a sub-slice overlaps every element and every sub-slice of the same base,
+  whatever its bounds, and the base itself: `&mut buf[0..4]` and `&buf[4..8]`
+  are not in use together, as `&mut (*s)[0..2]` and `&(*s)[3]` are not;
+- `*s` and the places through it are rooted at `s`, as for any reference: an
+  access through `s`, or a reborrow of a part of `*s`, is an access through the
+  borrows `s` holds, and `len(s)` is a read of `s`. A reborrow of a slice
+  through a reference keeps in use the borrows the reference holds, so `len(s)`
+  while a `&mut (*s)[1..]` is used later is a conflict. Through a raw slice
+  nothing is followed.
+
+A `&mut [T]` or a `&mut [T; N]` is **not split** into two halves in use
+together: that would need a function that returns two references, which the
+language does not have (ADR 0094), or literal bounds compared, which the check
+does not do for indexes either. A program that needs both halves borrows them
+one after the other.
+
+```
+fn write(bytes: &[u8]) { }
+fn two(a: &mut [u8], b: &mut [u8]) { }
+fn touch(a: &mut u8, b: &u8) { }
+fn fill(out: &mut [u8], n: usize) { }
+fn fill_to(n: usize, out: &mut [u8]) { }
+
+fn halves(mut buf: [u8; 8]) {
+    two(&mut buf[0..4], &mut buf[4..8]);        // error: two sub-slices of one array overlap
+}
+
+fn elements(s: &mut [u8]) {
+    touch(&mut (*s)[0], &(*s)[1]);              // error: two elements always overlap
+}
+
+fn reborrow(s: &mut [u8]) {
+    let t: &mut [u8] = &mut (*s)[1..];
+    let n: usize = len(s);                      // error: `len(s)` reads `s` while `t` is in use
+    fill(t, n);
+}
+
+fn lent(s: &mut [u8]) {
+    fill(s, len(s));                            // error: `s` is lent to the call, then read
+    fill_to(len(s), s);                         // fine: the length is read first
+}
+
+fn converted(mut buf: [u8; 4], m: &mut [u8; 4]) {
+    let r: &[u8; 4] = &buf;
+    let s: &[u8] = r;
+    buf[0] = 1;                                 // error: `s` is used later
+    write(s);
+    let t: &mut [u8] = m;
+    let u: &[u8] = m;                           // error: `t` is used later
+    fill(t, 0);
+}
+```
+
+`fill(s, len(s))` is the case of `f(&mut x, x.a)`: the first argument lends `s`
+to the call, and the second reads it while the loan is in use. The help says
+to take the value into a `let` before. `touch(&mut (*s)[0], &(*s)[1])` on a
+slice is two errors, since the check of the second index reads `s` before the
+second element is borrowed; on an array it is one.
+
 **What the check does not change.** A use after a move stays the analysis of
 moves': the borrow check runs only on a body that analysis accepted, and the
 analysis of linearity runs on the same bodies (a borrow neither gives nor
 consumes a linear value). Paths that do not return use nothing after them, so no
 borrow is in use there. `critical` blocks change nothing: a borrow taken inside
 one is checked like any other. Elements of one array cannot be borrowed `&mut`
-together; a program that needs two borrows the array whole or copies one out.
+together, nor two sub-slices of it; a program that needs two borrows the array
+whole or copies one out.
 
 **The error.** `analysis::borrow-conflict`, one per access, at the access. The
 message names the access and the place, as the analysis of moves names places
-(`x`, `s.f`, `a[_]`, `*r`, `(*r).f`): "cannot assign to `x` while it is
+(`x`, `s.f`, `a[_]`, `*r`, `(*r).f`, and `a[_.._]` for a sub-slice): "cannot assign to `x` while it is
 borrowed", "cannot use `x` while it is borrowed as mutable", "cannot borrow `x`
 as mutable while it is borrowed", "cannot borrow `x` while it is borrowed as
 mutable", "cannot move out of `x` while it is borrowed", "cannot end `x` while
 it is borrowed", "cannot take `&raw const` of `x` while it is borrowed as
 mutable", "cannot take `&raw mut` of `x` while it is borrowed"; for a borrow
 the compiler made, "cannot lend `r` to this call while it is borrowed" and
-"cannot convert `r` to `&` while it is borrowed as mutable". A place the
-compiler keeps is "this value". The labels are the access, each borrow in
+"cannot convert `r` to `&` while it is borrowed as mutable", "cannot convert `r`
+to a slice while it is borrowed as mutable" (a reference to an array to a
+`&[T]`) and "cannot convert `r` to a mutable slice while it is borrowed" (to a
+`&mut [T]`). A place the compiler keeps is "this value". The labels are the access, each borrow in
 conflict ("`x` is borrowed as mutable here", "`r` is lent to this call", "`r` is
-converted to `&` here") and, for each, one later use that keeps it in use ("the
-borrow is used later here"). A use comes after the access in the program when
+converted to `&` here", "`r` is converted to a slice here") and, for each, one later use that keeps it in use ("the
+borrow is used later here"). A borrow the program wrote keeps its own
+description: `&buf` converted to a `&[u8]` is the one borrow of `buf`, "`buf` is
+borrowed here". The conversion of a reference to an array that is already held
+(a variable, a parameter or another value of a reference type) is a reborrow
+described as "lent to this call" when a `&mut [T; N]` variable or parameter is an
+argument for a `&mut [T]` parameter, and as "converted to a slice here" in every
+other case; a shared one from a `&mut [T; N]` is "converted to a slice here" and
+not "converted to `&` here". A `&(*r)[0..N]` the program wrote, over the whole
+of an array, is told the same way, since its MIR is the same. A use comes after
+the access in the program when
 it is in the access's own block after it, or is the call that the access is an
 argument of, which reads its arguments when it runs, after all of them are
 evaluated, whatever the span of the call; the first of those in source order is
@@ -2567,10 +2910,10 @@ says to end the borrow first: use the reference before, or take the value out
 into a `let` before borrowing it. Errors are ordered by the span of the access,
 and those with the same span, message and labels are dropped.
 
-### References in MIR (ADR 0107)
+### References in MIR (ADR 0107, 0109)
 
-`--emit=mir` prints a reference type as `&T` or `&mut T` and a borrow as
-`&_1` or `&mut (*_2).0`:
+`--emit=mir` prints a reference type as `&T`, `&mut T`, `&[T]` or `&mut [T]`
+and a borrow as `&_1` or `&mut (*_2).0`:
 
 ```
 fn lend(r: &mut u32, mut x: Pair) -> u32 {
@@ -2589,6 +2932,26 @@ fn lend(r: &mut u32, mut x: Pair) -> u32 {
   conversion of a `&mut` is `_t = &*q`. A borrow is never a simple operand: a
   place argument before it is read into a temporary first, so `first(p.a, &mut
   p)` reads `p.a`, then borrows `p`.
+- **Slices.** A place of type `[T]` is reached by the `Deref` of a slice, raw or
+  a reference, or by a sub-slice, and is followed by `Index` or a sub-slice, or
+  is the whole place of a `Ref` or an `AddressOf`, which then gives a reference
+  to a slice or a raw slice. `Index` applies to an array or a `[T]`; the
+  projection `Subslice(from, to)` is dumped `[_8.._9]`, with two `usize` locals,
+  and `ConstSubslice(from, to)`, for bounds known to be inside an array, `[0..4]`.
+  Through a reference to a slice `(*s)[i]` is `len(s)`, a check of `_i < _n`,
+  then the place `(*_1)[_13]`, so it has a path rooted at `s`; through a raw
+  slice it stays `(*_a).Offset(_i)`, with no path. `&*s` and `&mut *s` are a
+  `Ref` of `*s`, and `&raw const *s` is still a copy of `s`. A sub-slice
+  `base[a..b]` is `base`'s length, then `a` and `b` into new locals, the two
+  checks `a <= b` and `b <= L` with the cause `IndexOutOfBounds` at the `[`, and
+  the place `base[_a.._b]`; a range of an array with two literal bounds in range
+  is `ConstSubslice` and has no check. The conversion of a reference to an array
+  is one `Ref` of `ConstSubslice(0, N)`: `_6 = &_2[0..4]` for `&buf` converted,
+  `&(*_q)[0..4]` for a reference `q` already held, which is lent by it when it is
+  a `&mut` variable passed to a call. `len` of a reference to a slice is
+  `SliceLen` of the place, which moves nothing, and of a reference to an array
+  the constant `N`. A cast from `&[T]` to `*const [T]`, or from `&mut [T]` to
+  `*mut [T]`, is a `Cast`.
 - **A `&mut` base is read in place.** When a variable `r` of type `&mut T` is
   the base of a place whose index is not simple, as `(*r).buf[(*r).head]`, the
   place is built on `r` itself: `r` is neither moved nor reborrowed to hold the
@@ -2603,25 +2966,42 @@ fn lend(r: &mut u32, mut x: Pair) -> u32 {
   reference, giving its referent; `Offset` does not), T5 (the type of a borrow
   is the reference to its place's type with the same mutability, the place is
   not volatile, a `&mut T` does not fit a `&T`, a cast goes from a reference to
-  a thin raw pointer and never to a reference) and three rules: R1, a reference
+  a thin raw pointer and never to a reference; for a slice, a `Ref` or an
+  `AddressOf` of a place of type `[T]` gives a reference to a slice or a raw
+  slice, a reference to a slice fits only its own type, and a `Cast` goes from
+  `&[T]` or `&mut [T]` to the raw slice of the same mutability and elements)
+  and the rules: R1, a reference
   type is only the type of a local, never reached by another type (not a field,
   a payload value, an array or slice element, a pointee or a referent), nor the
   type of a static, nor a body's return type; R2, no place that is written,
   borrowed `&mut` or given to `&raw mut` goes through the `Deref` of a shared
   reference; R3, the place of a borrow is a local or a static followed by
-  `Field`, `Index`, `ConstIndex`, `Deref` and `Offset` projections only. Type
-  checking rejects the programs that would break them.
+  `Field`, `Index`, `ConstIndex`, `Subslice`, `ConstSubslice`, `Deref` and
+  `Offset` projections only; U1, a place of type `[T]` is followed only by
+  `Index` or a sub-slice, or is the whole place of a `Ref` or an `AddressOf`,
+  and no operand, destination, `asm` operand, `SliceAddress`, `SliceLen` or
+  `switch` names one. T1 says where `Index`, `Subslice` and `ConstSubslice`
+  apply (an array or a `[T]`; a `ConstSubslice` with `from <= to <= N`), S7 and
+  T2 that the two locals of a `Subslice` exist and are `usize`. Type checking
+  rejects the programs that would break them.
 - **The analysis** is `src/analysis/borrows.rs`, run by `check_body` after the
   analysis of moves and, with the analysis of linearity, only on a body that
   passed it; a body with no borrow does no work. It computes which borrows each
   local of a reference type may hold, which locals are live, and which borrows
-  are in use at each access, and reports the conflicts above. Like the analysis
+  are in use at each access, and reports the conflicts above. `Index` of a
+  `[T]`, `Subslice` and `ConstSubslice` are each one element step in a path, so
+  they overlap every element and sub-slice of the same base and the base. Like
+  the analysis
   of moves it runs on the MIR of each body before anything evaluates it, so a
   `const` that calls a function with a conflict reports
   `analysis::borrow-conflict` and nothing from the evaluation.
 - **Code generation** lowers a reference as a pointer (`ptr` in LLVM IR), a
   borrow as the address of its place, and keeps in memory a local whose place a
-  borrow names, as it does for `&raw`.
+  borrow names, as it does for `&raw`. A reference to a slice is the slice
+  struct of two words; a place of type `[T]` is lowered to an address and a
+  length (the slice's for a `Deref`, `to - from` for a sub-slice), and a `Ref`
+  or an `AddressOf` of one stores both. The length is loaded only where it is
+  stored, so `(*s)[i]` loads none.
 
 ## Layout (ADR 0022, 0039)
 
@@ -2629,9 +3009,9 @@ fn lend(r: &mut u32, mut x: Pair) -> u32 {
 |------|------|-----------|
 | `u8 i8 bool` | 1 | 1 |
 | `u16 i16` | 2 | 2 |
-| `u32 i32 usize isize`, thin pointers, references | 4 | 4 |
+| `u32 i32 usize isize`, thin pointers, references to sized types | 4 | 4 |
 | `u64 i64` | 8 | 8 |
-| slices (`*const [T]`, `*mut [T]`) | 8 | 4 |
+| slices (`*const [T]`, `*mut [T]`), references to slices (`&[T]`, `&mut [T]`) | 8 | 4 |
 | `[T; N]` | `N * size(T)` | `align(T)` |
 | an enum without payloads on the integer type `T` (ADR 0035) | `size(T)` | `align(T)` |
 | a bit-field struct on the integer type `T` (ADR 0059) | `size(T)` | `align(T)` |
@@ -2948,7 +3328,8 @@ comptime {
 ```
 
 - The message is a `*const [u8]`, or a pointer that converts to one (see
-  "Slices").
+  "Slices"). A reference does not: `assert(c, &b"...")` is
+  `ty::mismatched-types`.
 - The message runs **only when the condition is false**, like the right
   operand of `||`: an exception to the left-to-right order of arguments.
 - At compile time, `eval::assertion-failed` shows the message: printable
@@ -2987,13 +3368,15 @@ So `flags & MASK == 0` means `(flags & MASK) == 0`, `*p.x` means `*(p.x)`,
 ### Typing
 
 - Both operands of an arithmetic, bitwise or comparison operator have the
-  same type; nothing converts implicitly (ADR 0008), with three exceptions:
+  same type; nothing converts implicitly (ADR 0008), with four exceptions:
   where a `*const T` is expected, a `*mut T` with the same `T` and
   volatility is accepted, since it only loses permission to write (ADR
   0024); where a `&T` is expected, a `&mut T` with the same `T` is accepted
-  for the same reason (ADR 0105, see "References"); and where a slice is
+  for the same reason (ADR 0105, see "References"); where a slice is
   expected, a pointer to an array of its elements is accepted, with the
-  array's length (ADR 0031, see "Slices").
+  array's length (ADR 0031, see "Slices"); and where a `&[T]` or a `&mut [T]`
+  is expected, a reference to an array of its elements is accepted, with the
+  array's length (ADR 0108, see "Slices behind references").
   These apply wherever an expected type is known, such as a `let`, an
   argument (including an `assert` message), an assignment, `return`,
   `break` values, struct fields, payload values, array elements, `if`
@@ -3136,7 +3519,9 @@ run at compile time: an evaluation that needs it reports nothing more.
   may change mutability, volatility and pointee. Casts involving slices
   follow the table in "Slices".
 - A reference converts to a raw pointer only, and nothing converts to a
-  reference (see "References").
+  reference (see "References"). A reference to a slice casts as the slice of
+  its mutability does, and a reference to an array as the pointer to it does
+  (see "Slices behind references").
 - Structs and arrays do not convert.
 - Nothing converts to `!`: no value of that type exists (ADR 0034).
 
@@ -6536,7 +6921,7 @@ Every error has a stable code, shown with the message.
 | `resolve::outside-loop` | `break`/`continue` outside a loop |
 | `resolve::break-value-in-while` | `break value` in a `while` |
 | `resolve::return-in-comptime` | `return` or `?` in code run at compile time on its own: a `comptime` expression or block, the initializer of a constant or static, a variant's value, an array length, a repeat count, an `#[align(N)]` argument, a value of a `memory` block, a register's offset or a peripheral's address |
-| `ty::mismatched-types` | a value of the wrong type, a `&T` where a `&mut T` is expected, or a `.V` where the expected type, or the position's type, is not an enum |
+| `ty::mismatched-types` | a value of the wrong type, a `&T` where a `&mut T` is expected, a reference to an array that does not convert (another element type, a `&[T; N]` for a `&mut [T]`, a raw slice for a reference), a bound of a range that is not a `usize`, a reference given to `slice`, or a `.V` where the expected type, or the position's type, is not an enum |
 | `ty::untyped-literal` | a literal or array literal with no expected type |
 | `ty::untyped-variant` | a `.V` with no expected type, as a `match` scrutinee, the operand of `as` or `?`, or an expression statement |
 | `ty::unknown-variant` | a `.V` where the expected enum, or the position's enum, has no variant of that name |
@@ -6560,10 +6945,10 @@ Every error has a stable code, shown with the message.
 | `ty::assign-immutable` | assignment to a variable without `mut`, a `static`, an `extern static` without `mut`, or a byte string |
 | `ty::not-a-place` | `&raw` of a value that is not a place, or of a constant or any element, range or field of it |
 | `ty::address-of-immutable` | `&raw mut` of a place that cannot be written, one through a `&` reference included |
-| `ty::mut-borrow-of-immutable` | `&mut` of a place that cannot be written (a variable or parameter without `mut`, a `static`, an `extern static` without `mut`, a byte string, a place through a `&` reference or a `*const` pointer), of a value that is not a place, or of a part of one (`&mut f().x`) |
+| `ty::mut-borrow-of-immutable` | `&mut` of a place that cannot be written (a variable or parameter without `mut`, a `static`, an `extern static` without `mut`, a byte string, a place through a `&` reference or a `*const` pointer), of a value that is not a place, or of a part of one (`&mut f().x`, `&mut f()[1..3]`) |
 | `ty::reference-position` | a reference type written as the type of a field, a payload value, an array or slice element, a type argument, a layout query operand, a return type, a `static`, `extern static` or `const`, a pointee or a referent (`&&T`), or of a `mut` parameter or `let mut`, once per type at the outermost reference; an expression that makes an array of references, `&`, `&mut` or `&raw` of a reference, the value of a `critical` block, or a `comptime` expression of a reference type, at the innermost |
-| `ty::reference-to-static-mut` | `&` or `&mut` of a `static mut` or `extern static mut`, or of a field or element of one; use `&raw` inside `critical` (M5.4c) |
-| `ty::reference-to-volatile` | `&` or `&mut` of a place reached through a `volatile` pointer, or of a peripheral or a cluster (M5.4c) |
+| `ty::reference-to-static-mut` | `&` or `&mut` of a `static mut` or `extern static mut`, or of a field, an element or a range of one; use `&raw` inside `critical` (M5.4c) |
+| `ty::reference-to-volatile` | `&` or `&mut` of a place reached through a `volatile` pointer or a volatile raw slice (`&*v`, `&(*v)[i]`, a range of one), or of a peripheral or a cluster (M5.4c) |
 | `ty::packed-field-address` | `&raw`, `&` or `&mut` of a possibly misaligned place inside a packed struct |
 | `ty::volatile-too-wide` | volatile access wider than the target's widest access, a bit-field struct on `u64` included |
 | `ty::volatile-aggregate` | volatile access to a whole struct, array or enum with payloads, or to a slice stored in memory |
@@ -6642,7 +7027,7 @@ Every error has a stable code, shown with the message.
 | `ty::asm-sym` | `sym` naming something other than a function or a static: a constant, a struct, a module, an enum, a variant, a peripheral |
 | `ty::asm-options` | options of `asm` that contradict each other or the operands (`nomem` with `readonly`; `pure` without an output or without `nomem` or `readonly`; `noreturn` with an output), an option or `clobber_abi` given twice, an ABI other than `"C"` |
 | `ty::naked-body` | the body of a `#[naked]` function that is not exactly one `asm` expression with `noreturn` and only `sym` and `const` operands |
-| `eval::panic` | compile-time code reached the panic function: a zero divisor, an index out of bounds, an enum value that is no variant in a `match` that no arm matches or under `?`, a value that does not fit the bit field it is written to, an explicit call |
+| `eval::panic` | compile-time code reached the panic function: a zero divisor, an index or a range out of bounds, an enum value that is no variant in a `match` that no arm matches or under `?`, a value that does not fit the bit field it is written to, an explicit call |
 | `eval::assertion-failed` | `assert` with a false condition at compile time, with its message if it has one |
 | `eval::step-limit` | compile-time code ran more than 10,000,000 steps |
 | `eval::call-depth` | compile-time code nested more than 256 calls |
@@ -6660,7 +7045,7 @@ Every error has a stable code, shown with the message.
 | `eval::pointer-escapes` | a compile-time result holding a pointer into the evaluation's own memory |
 | `eval::pointer-out-of-bounds` | a compile-time result holding a pointer outside its object and not one past its end, or a slice not inside its object |
 | `analysis::use-after-move` | a place read, moved, assigned a part of, borrowed or whose address is taken, after the value in it, in a part of it or in a place that contains it was moved, on some path from the move and with no assignment to it since, in a loop's next iteration too; each move that reaches the use is a label; once a use is reported, a later use that does not itself move is not reported again, while one that is a move makes its own move and so is reported after it; only named variables and parameters are followed, not temporaries (ADR 0097, 0099) |
-| `analysis::borrow-conflict` | an access to a place while a borrow of an overlapping place is in use, with a borrow in use as long as what holds the reference, or a reference made through it, is used later: a read, a `&` borrow, a `&raw const` or a conversion of a `&mut` to a `&`, or of a reference to an array to a `&[T]`, while a `&mut` borrow is in use; a write (an assignment, a call's result, an `asm` output, `&raw mut`), a move, an `end` or a `&mut` borrow (a `&mut` lent to a call, or a `&mut [T; N]` converted to a `&mut [T]`, too) while a `&` or a `&mut` borrow is in use; two arguments of one call are held until it returns, so `f(&mut x, &x)` and `f(&mut x, x.a)` are errors and `f(x.a, &mut x)` and `x = f(&x)` are not; two different fields do not overlap and two elements of an array always do; a place through a raw pointer is not followed; one error per access, at the access, labeling each borrow in conflict and one later use that keeps it in use, or the use in the next iteration of the loop when it comes only round one, with a help to end the borrow first; the analysis runs only on a body with no use after a move, and the analysis of linearity runs on the same bodies (ADR 0106, 0107) |
+| `analysis::borrow-conflict` | an access to a place while a borrow of an overlapping place is in use, with a borrow in use as long as what holds the reference, or a reference made through it, is used later: a read, a `&` borrow, a `&raw const` or a conversion of a `&mut` to a `&`, or of a reference to an array to a `&[T]`, while a `&mut` borrow is in use; a write (an assignment, a call's result, an `asm` output, `&raw mut`), a move, an `end` or a `&mut` borrow (a `&mut` lent to a call, or a `&mut [T; N]` converted to a `&mut [T]`, too) while a `&` or a `&mut` borrow is in use; two arguments of one call are held until it returns, so `f(&mut x, &x)` and `f(&mut x, x.a)` are errors and `f(x.a, &mut x)` and `x = f(&x)` are not; two different fields do not overlap, two elements of an array or a slice always do, and so does a sub-slice with every element and sub-slice of its base; a place through a raw pointer is not followed; one error per access, at the access, labeling each borrow in conflict and one later use that keeps it in use, or the use in the next iteration of the loop when it comes only round one, with a help to end the borrow first; the analysis runs only on a body with no use after a move, and the analysis of linearity runs on the same bodies (ADR 0106, 0107) |
 | `analysis::linear-not-consumed` | a linear value still held where the function returns (a `return`, the end of the body, a `?` that returns), by a variable, a parameter or a temporary: a variable never moved, a parameter, the result of a call that is discarded, a literal that is discarded, a value consumed on some paths only, a `.Some(_)` or `_` arm that leaves a payload held, a value that comes round a loop (`let t: Transfer = start(1);` or `start(1);` in a loop) before it is consumed, or a value written over a place that holds one of the same origin (two parts of one call's result); or a linear field still held when its struct is ended by `end`; one error per value, at the call, the literal or the function (a parameter) where it came in, naming the place that holds it, with a label at each return it reaches, and where it was moved to that place; paths that do not return owe nothing (ADR 0102, 0103) |
 | `analysis::linear-overwritten` | a write to a place that holds a linear value, or a part of it, made elsewhere: `t = start(2);` over the `t` of `start(1)`, `s.h = v` over a held field; at the write, labeling where the value it would overwrite came in; a copy field written is no overwrite; a value already reported as not consumed is not reported again; the analysis runs only on a body with no use after a move (ADR 0102, 0103) |
 | `analysis::unprotected-static` | a place in the thread context, outside `critical`, naming a `static mut` or `extern static mut` that the handler context also reaches (ADR 0078, 0093) |
