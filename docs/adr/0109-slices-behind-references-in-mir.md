@@ -1,6 +1,7 @@
 # 0109. Slices behind references in MIR
 
-- Status: Accepted
+- Status: Accepted; amended on 2026-11-12 (which rule reports each use of a
+  place of type `[T]`: U1)
 - Date: 2026-11-12
 - Amends: 0095 (S7, T1, T2 and T5 for places of type `[T]` and for casts
   from a reference to a slice; the rule U1), 0107 ("Types, rvalues and
@@ -166,6 +167,14 @@ And gains:
 | Id | Rule |
 |----|------|
 | U1 | a place of type `[T]` is followed only by `Index`, `Subslice` or `ConstSubslice`, or is the whole place of a `Ref` or an `AddressOf`; no operand, destination, `asm` operand, `SliceAddress`, `SliceLen` or `switch` names one |
+
+U1 states the invariant; it does not make U1 the only rule that fires. ADR
+0095's T3 already refuses an operand, a destination, an `asm` operand and a
+`switch` of an unsized type, and T1 refuses any projection other than the
+three above, so the validator reports those uses with T3 and T1 and one fault
+yields one violation. U1 itself is reported for `SliceAddress` and `SliceLen`
+of a place of type `[T]`, which no other rule covers (amended 2026-11-12,
+while building M5.4b step 1).
 
 ADR 0107's **R3** gains `Subslice` and `ConstSubslice` among the projections
 of the place of a `Ref`. R1 is unchanged: `[T]` holds no reference (ADR 0108),

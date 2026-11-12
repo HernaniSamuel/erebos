@@ -138,4 +138,4 @@ Do not write one for local implementation details that the code already explains
 | 0106 | [The borrow check](0106-the-borrow-check.md) | Accepted, amended 2026-11-11, amended by 0108 |
 | 0107 | [References in MIR, and the borrow analysis](0107-references-in-mir-and-the-borrow-analysis.md) | Accepted, amended 2026-11-11, amended by 0109 |
 | 0108 | [Slices behind references](0108-slices-behind-references.md) | Accepted |
-| 0109 | [Slices behind references in MIR](0109-slices-behind-references-in-mir.md) | Accepted |
+| 0109 | [Slices behind references in MIR](0109-slices-behind-references-in-mir.md) | Accepted, amended 2026-11-12 |
