@@ -592,6 +592,7 @@ impl Body {
                 (PlaceElem::Deref, Ty::Ref(r)) => *r.referent,
                 (PlaceElem::Index(_) | PlaceElem::ConstIndex(_), Ty::Array(elem, _)) => *elem,
                 (PlaceElem::Index(_), Ty::Slice(elem)) => *elem,
+                (PlaceElem::ConstSubslice(..), Ty::Array(elem, _)) => Ty::Slice(elem),
                 (PlaceElem::Field(index), Ty::Struct(s)) => s.def().fields()[*index as usize].ty,
                 (
                     PlaceElem::Field(index)
@@ -1592,6 +1593,10 @@ pub enum PlaceElem {
     Index(Local),
     /// Element `i` of the array in the place, for an `i` known in bounds.
     ConstIndex(u64),
+    /// Elements `from` up to but not including `to` of the array in the place,
+    /// for bounds known in range: `from <= to <= N`. Its type is `[T]`, a
+    /// place that is only followed by `Index` or borrowed (ADR 0109).
+    ConstSubslice(u64, u64),
     /// Field `i` of the struct in the place, or register `i` of the
     /// peripheral type, in declaration order.
     Field(u32),
@@ -1852,6 +1857,7 @@ impl fmt::Display for Place {
                 PlaceElem::Offset(index) => format!("(*({text} + {index}))"),
                 PlaceElem::Index(index) => format!("{text}[{index}]"),
                 PlaceElem::ConstIndex(index) => format!("{text}[{index}]"),
+                PlaceElem::ConstSubslice(from, to) => format!("{text}[{from}..{to}]"),
                 PlaceElem::Field(index) => format!("{text}.{index}"),
                 PlaceElem::Element(entry, index) => format!("{text}.{entry}[{index}]"),
                 PlaceElem::ConstElement(entry, index) => format!("{text}.{entry}[{index}]"),

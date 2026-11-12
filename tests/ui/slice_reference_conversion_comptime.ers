@@ -1,0 +1,46 @@
+// emit: mir
+// The conversion of a reference to an array runs at compile time: the
+// evaluator finds the elements `ConstSubslice(0, N)` from the address of the
+// array and gives them the length `N` (ADR 0108, 0109).
+fn sum(s: &[u8]) -> u32 {
+    let mut total: u32 = 0;
+    let mut i: usize = 0;
+    while i < len(s) {
+        total += (*s)[i] as u32;
+        i += 1;
+    }
+    total
+}
+
+fn bytes_of_a_byte_string() -> u32 {
+    sum(&b"abc") + sum(&b"")
+}
+
+const TEXT: u32 = bytes_of_a_byte_string();
+
+fn through_a_variable() -> u32 {
+    let buf: [u8; 4] = [1, 2, 3, 4];
+    let r: &[u8; 4] = &buf;
+    sum(r) + sum(&buf) + len(r) as u32
+}
+
+const VARIABLE: u32 = through_a_variable();
+
+fn written_through_a_mutable_slice() -> u32 {
+    let mut buf: [u8; 3] = [0; 3];
+    let m: &mut [u8; 3] = &mut buf;
+    let s: &mut [u8] = m;
+    (*s)[2] = 5;
+    (*m)[0] = 1;
+    buf[0] as u32 + buf[2] as u32
+}
+
+const WRITTEN: u32 = written_through_a_mutable_slice();
+
+// Expected: 294, 24 and 6.
+fn answers() -> u32 {
+    TEXT + VARIABLE + WRITTEN
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

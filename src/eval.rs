@@ -146,9 +146,17 @@ struct PlaceRef {
     ptr: Pointer,
     volatile: bool,
     ty: Ty,
-    /// For a place of type `[T]`: where the length of the slice it was
-    /// reached through is, and whether that place is volatile (ADR 0109).
-    len: Option<(Pointer, bool)>,
+    /// For a place of type `[T]`: its length (ADR 0109).
+    len: Option<Length>,
+}
+
+/// The length of a place of type `[T]`: held by the slice it was reached
+/// through, or known from the bounds of a `ConstSubslice`.
+#[derive(Clone, Copy)]
+enum Length {
+    /// Where the length is, and whether that place is volatile.
+    Stored(Pointer, bool),
+    Known(u64),
 }
 
 struct Frame {
@@ -423,15 +431,21 @@ impl Interp<'_, '_> {
                             let borrowed = self.place(*borrowed)?;
                             let (address_part, len_part) = slice_parts(to);
                             self.write_at(address_part, Scalar::Ptr(borrowed.ptr), span)?;
-                            let (len_at, volatile) =
-                                borrowed.len.expect("a place of type `[T]` has a length");
-                            let len = PlaceRef {
-                                ptr: len_at,
-                                volatile,
-                                ty: Ty::Int(IntTy::Usize),
-                                len: None,
+                            let len = match borrowed
+                                .len
+                                .expect("a place of type `[T]` has a length")
+                            {
+                                Length::Stored(ptr, volatile) => {
+                                    let len = PlaceRef {
+                                        ptr,
+                                        volatile,
+                                        ty: Ty::Int(IntTy::Usize),
+                                        len: None,
+                                    };
+                                    self.read_at(len, span)?
+                                }
+                                Length::Known(len) => Scalar::Int(len),
                             };
-                            let len = self.read_at(len, span)?;
                             self.write_at(len_part, len, span)
                         }
                         _ => unreachable!(
@@ -892,6 +906,14 @@ impl Interp<'_, '_> {
                         ..current
                     }
                 }
+                // The elements of an array from `from` to `to`, whose bounds
+                // MIR building checked (ADR 0109).
+                (PlaceElem::ConstSubslice(from, to), Ty::Array(elem, _)) => PlaceRef {
+                    ptr: current.ptr.add(from.wrapping_mul(elem.layout().size)),
+                    ty: Ty::Slice(elem),
+                    len: Some(Length::Known(to - from)),
+                    ..current
+                },
                 (PlaceElem::Field(index), Ty::Struct(s)) => {
                     let field = &s.def().fields()[index as usize];
                     PlaceRef {
@@ -967,11 +989,11 @@ impl Interp<'_, '_> {
         place: PlaceRef,
         pointee: Ty,
         span: Span,
-    ) -> EvalResult<(Pointer, Option<(Pointer, bool)>)> {
+    ) -> EvalResult<(Pointer, Option<Length>)> {
         if let Ty::Slice(_) = pointee {
             let (address, len) = slice_parts(place);
             let target = self.read_address(address, span)?;
-            return Ok((target, Some((len.ptr, len.volatile))));
+            return Ok((target, Some(Length::Stored(len.ptr, len.volatile))));
         }
         Ok((self.read_address(place, span)?, None))
     }

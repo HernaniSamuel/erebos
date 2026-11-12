@@ -1,0 +1,71 @@
+// emit: mir
+// A reference to an array converts to a reference to a slice of the same
+// elements, in the positions of ADR 0024 (ADR 0108, 0109): a `Ref` of
+// `ConstSubslice(0, N)`. `&buf` and `&mut buf` borrow `buf[0..N]` directly, so
+// the conversion adds no borrow; any other reference to an array is borrowed
+// through, `(*q)[0..N]`, and a `&mut [T; N]` variable is lent, not moved.
+fn read(s: &[u8]) -> usize {
+    len(s)
+}
+
+fn fill(s: &mut [u8], b: u8) {}
+
+// `&buf`, `&mut buf`, `&b"text"` and an array literal as arguments.
+fn places(mut buf: [u8; 4]) {
+    read(&buf);
+    read(&mut buf);
+    fill(&mut buf, 1);
+    read(&b"text");
+    read(&[1 as u8, 2, 3]);
+}
+
+// A `&[T; N]` variable and a `&mut [T; N]` variable, to a `&[T]` parameter, a
+// `&mut [T]` parameter and a `let`; the `&mut` is usable after each.
+fn variables(r: &[u8; 4], m: &mut [u8; 4]) {
+    read(r);
+    read(m);
+    fill(m, 2);
+    let a: &[u8] = r;
+    let b: &mut [u8] = m;
+    fill(m, 3);
+    read(m);
+}
+
+// In a `let` with a type, and in the value of an `if`, a `match` and a block.
+fn positions(mut buf: [u8; 4], c: bool, n: u32) {
+    let a: &[u8] = &buf;
+    let b: &mut [u8] = &mut buf;
+    read(if c { &buf } else { &b"four" });
+    read(match n {
+        0 => &buf,
+        _ => &b"abcd",
+    });
+    read({
+        let x: u32 = 1;
+        &buf
+    });
+    let d: &[u8] = if c { &b"abcd" } else { &buf };
+}
+
+// Empty arrays: `&[u8; 0]` and `&b""`.
+fn empty(e: &[u8; 0]) -> usize {
+    read(e) + read(&b"")
+}
+
+// The length of a reference to an array is the array's, a constant; the
+// reference is evaluated and not moved.
+fn lengths(buf: [u8; 4], r: &[u8; 4], m: &mut [u8; 4]) -> usize {
+    let a: usize = len(&buf);
+    let b: usize = len(r);
+    let c: usize = len(m);
+    fill(m, 0);
+    a + b + c
+}
+
+// A reference to an array cast to a raw slice has the array's length.
+fn cast(r: &[u8; 4]) -> *const [u8] {
+    r as *const [u8]
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

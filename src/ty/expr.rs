@@ -270,11 +270,12 @@ impl Checker<'_, '_> {
 
     /// `len(s)` takes any slice, or a pointer to an array, which converts
     /// to one with its mutability and volatility (ADR 0031), or a reference
-    /// to a slice (ADR 0108).
+    /// to a slice or to an array (ADR 0108); a reference to an array is not
+    /// converted: its length is the array's, a constant.
     pub(super) fn len(&mut self, f: &Fn, slice: &Expr) {
         let ty = self.check(f, slice, None);
         if let Ty::Ref(r) = ty
-            && let Ty::Slice(_) = *r.referent
+            && let Ty::Slice(_) | Ty::Array(..) = *r.referent
         {
             return;
         }
@@ -283,7 +284,7 @@ impl Checker<'_, '_> {
                 self.q.diags.push(
                     Diagnostic::error("ty::mismatched-types", "mismatched types")
                         .label(slice.span, format!("expected a slice, found `{ty}`"))
-                        .help("`len(s)` takes a slice, such as a `*const [u8]` or a `&[u8]`, or a pointer to an array (ADR 0031, 0108)"),
+                        .help("`len(s)` takes a slice, such as a `*const [u8]` or a `&[u8]`, or a pointer or a reference to an array (ADR 0031, 0108)"),
                 );
             }
             return;

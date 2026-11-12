@@ -1,0 +1,80 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/slice_reference_conversion_errors.ers
+---
+--- errors ---
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[slice_reference_conversion_errors.ers:14:11]
+ 13 │ fn errors(a: &[u8; 4], b: [u8; 4], c: bool, d: &[u8; 2]) {
+ 14 │     words(a);
+    ·           ┬
+    ·           ╰── expected `&[u16]`, found `&[u8; 4]`
+ 15 │     bytes_mut(a);
+    ╰────
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[slice_reference_conversion_errors.ers:15:15]
+ 14 │     words(a);
+ 15 │     bytes_mut(a);
+    ·               ┬
+    ·               ╰── expected `&mut [u8]`, found `&[u8; 4]`
+ 16 │     raw(a);
+    ╰────
+  help: a `&` reference never becomes `&mut`; borrow the place with `&mut` if it may be written
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[slice_reference_conversion_errors.ers:16:9]
+ 15 │     bytes_mut(a);
+ 16 │     raw(a);
+    ·         ┬
+    ·         ╰── expected `*const [u8]`, found `&[u8; 4]`
+ 17 │     let e: &mut [u8] = &b;
+    ╰────
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[slice_reference_conversion_errors.ers:17:24]
+ 16 │     raw(a);
+ 17 │     let e: &mut [u8] = &b;
+    ·                        ─┬
+    ·                         ╰── expected `&mut [u8]`, found `&[u8; 4]`
+ 18 │     let f: &[u16] = &b;
+    ╰────
+  help: a `&` reference never becomes `&mut`; borrow the place with `&mut` if it may be written
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[slice_reference_conversion_errors.ers:18:21]
+ 17 │     let e: &mut [u8] = &b;
+ 18 │     let f: &[u16] = &b;
+    ·                     ─┬
+    ·                      ╰── expected `&[u16]`, found `&[u8; 4]`
+ 19 │     let g: &[u8] = d as &[u8];
+    ╰────
+ty::invalid-cast
+
+  × cannot cast to `&[u8]`
+    ╭─[slice_reference_conversion_errors.ers:19:25]
+ 18 │     let f: &[u16] = &b;
+ 19 │     let g: &[u8] = d as &[u8];
+    ·                         ──┬──
+    ·                           ╰── nothing converts to a reference
+ 20 │     assert(c, &b"msg");
+    ╰────
+  help: a reference is made with `&place` or `&mut place`; to borrow what a raw pointer `p` points
+        to, write `&*p` or `&mut *p` (ADR 0105)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[slice_reference_conversion_errors.ers:20:15]
+ 19 │     let g: &[u8] = d as &[u8];
+ 20 │     assert(c, &b"msg");
+    ·               ───┬───
+    ·                  ╰── expected `*const [u8]`, found `&[u8; 3]`
+ 21 │ }
+    ╰────

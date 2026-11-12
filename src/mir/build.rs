@@ -7,7 +7,7 @@ use crate::hir;
 use crate::mir::validate;
 use crate::mir::{
     BasicBlock, BasicBlockData, BinOp, Body, BodyId, Const, DataId, Local, LocalDecl, Operand,
-    PanicCause, PanicInfoAt, PanicSite, Place, PlaceElem, Ptr, Rvalue, Statement, StaticRef,
+    PanicCause, PanicInfoAt, PanicSite, Place, PlaceElem, Ptr, Ref, Rvalue, Statement, StaticRef,
     Terminator, Ty, UnOp,
 };
 use crate::query::{DataSource, Queries};
@@ -523,13 +523,25 @@ impl Builder<'_, '_> {
             return Operand::Const(Const::Unit);
         }
         let outer = std::mem::replace(&mut self.span, expr.span);
+        let coercion = self.q.tables.coercion(expr.id);
+        let target = coercion.map(|target| self.q.mir_ty(target));
+        // A reference to an array converted to a reference to a slice is a
+        // borrow of the elements, made in place of the reference
+        // (ADR 0108, 0109).
+        if let Some(target @ Ty::Ref(to)) = target
+            && let Ty::Slice(_) = to.referent
+            && let Some(len) = reference_array_len(self.ty_of(expr))
+        {
+            let value = self.unsize_reference(expr, target, to.mutable, len);
+            self.span = outer;
+            return value;
+        }
         let mut value = self.expr_kind(expr);
         // A pointer to an array converted to a slice, with its length
         // (ADR 0031), or a `&mut T` to a `&T` (ADR 0105).
-        if let Some(target) = self.q.tables.coercion(expr.id)
+        if let Some(target) = target
             && self.current.is_some()
         {
-            let target = self.q.mir_ty(target);
             value = match target {
                 Ty::Ref(_) => self.share(value, target),
                 _ => self.array_slice(value, target),
@@ -537,6 +549,59 @@ impl Builder<'_, '_> {
         }
         self.span = outer;
         value
+    }
+
+    /// The reference to a slice of type `target` that the reference to an
+    /// array of `len` elements `expr` converts to (ADR 0108, 0109): a borrow
+    /// of `ConstSubslice(0, len)`. Of `place[0..len]` when `expr` is `&place`
+    /// or `&mut place`, so that the conversion adds no borrow; else of
+    /// `(*q)[0..len]`, with `q` the place holding the reference, which is not
+    /// moved: a `&mut` is lent (ADR 0106).
+    fn unsize_reference(
+        &mut self,
+        expr: &hir::Expr,
+        target: Ty,
+        mutable: bool,
+        len: u64,
+    ) -> Operand {
+        let elements = PlaceElem::ConstSubslice(0, len);
+        let place = if let hir::ExprKind::Ref { place, .. } = &expr.kind {
+            match self.borrowed_place(place) {
+                Some(place) => place.project(elements),
+                // The value did not finish, and nothing follows.
+                None => return Operand::Const(Const::Unit),
+            }
+        } else {
+            let reference_ty = self.ty_of(expr);
+            let value = self.expr_kind(expr);
+            if self.current.is_none() {
+                return Operand::Const(Const::Unit);
+            }
+            let q = match value.place() {
+                Some(place) => place,
+                None => self.temp_place(reference_ty, Rvalue::Use(value)),
+            };
+            q.project(PlaceElem::Deref).project(elements)
+        };
+        self.temp(target, Rvalue::Ref { mutable, place })
+    }
+
+    /// The place `&place` or `&mut place` borrows (ADR 0105, 0107): the place
+    /// itself, or a variable of its own holding the value when `place` is not
+    /// one. `None` when the value did not finish.
+    fn borrowed_place(&mut self, place: &hir::Expr) -> Option<Place> {
+        if is_borrowed_place(place) {
+            return Some(self.place_then(place, false, true));
+        }
+        let referent = self.ty_of(place);
+        let value = self.expr(place);
+        // The value did not finish, and nothing follows.
+        self.current?;
+        // Never a temporary that is written again: the analysis would report
+        // the compiler's own write while the borrow is in use.
+        let local = Place::local(self.new_local(referent, None));
+        self.assign(local, Rvalue::Use(value));
+        Some(local)
     }
 
     /// The `&T` of type `ty` that a `&mut T` converts to: a shared borrow of
@@ -589,7 +654,8 @@ impl Builder<'_, '_> {
     /// Whether `arg` is a variable or a parameter of type `&mut T`: as an
     /// argument it is borrowed (lent to the call, or converted to a `&T`), so
     /// it is a fresh temporary that nothing else writes, and it is not a
-    /// simple expression (ADR 0107).
+    /// simple expression (ADR 0107). A `&mut [T; N]` variable converted to a
+    /// slice is borrowed the same way (ADR 0109).
     fn is_mut_variable(&mut self, arg: &hir::Expr) -> bool {
         matches!(arg.kind, hir::ExprKind::Local(_))
             && matches!(self.ty_of(arg), Ty::Ref(r) if r.mutable)
@@ -839,21 +905,9 @@ impl Builder<'_, '_> {
             // A reference to a place, or to the value in a variable of its own
             // (ADR 0105, 0107).
             hir::ExprKind::Ref { mutable, place } => {
-                let place = if is_borrowed_place(place) {
-                    self.place_then(place, false, true)
-                } else {
-                    let referent = self.ty_of(place);
-                    let value = self.expr(place);
-                    if self.current.is_none() {
-                        // The value did not finish, and nothing follows.
-                        return Operand::Const(Const::Unit);
-                    }
-                    // Never a temporary that is written again: the analysis
-                    // would report the compiler's own write while the borrow
-                    // is in use.
-                    let local = Place::local(self.new_local(referent, None));
-                    self.assign(local, Rvalue::Use(value));
-                    local
+                let Some(place) = self.borrowed_place(place) else {
+                    // The value did not finish, and nothing follows.
+                    return Operand::Const(Const::Unit);
                 };
                 self.temp(
                     ty,
@@ -866,6 +920,12 @@ impl Builder<'_, '_> {
             hir::ExprKind::Cast(operand, _, _) => {
                 let operand = self.expr(operand);
                 self.cast(operand, ty)
+            }
+            // The length of a reference to an array is the array's: the
+            // reference is evaluated, and not moved (ADR 0109).
+            hir::ExprKind::Len(slice) if let Some(len) = reference_array_len(self.ty_of(slice)) => {
+                self.expr(slice);
+                usize_const(if self.current.is_some() { len } else { 0 })
             }
             // Reads the slice, never what it points to (ADR 0031).
             hir::ExprKind::Len(slice) => match self.expr(slice).place() {
@@ -2506,6 +2566,17 @@ fn is_place_expr(expr: &hir::Expr) -> bool {
     )
 }
 
+/// The length of the array `ty` refers to, if `ty` is a reference to an array.
+fn reference_array_len(ty: Ty) -> Option<u64> {
+    match ty {
+        Ty::Ref(Ref {
+            referent: Ty::Array(_, len),
+            ..
+        }) => Some(*len),
+        _ => None,
+    }
+}
+
 fn usize_const(value: u64) -> Operand {
     Operand::Const(Const::Int(value, hir::IntTy::Usize))
 }
@@ -2524,6 +2595,7 @@ fn try_projected_ty(ty: Ty, elem: &PlaceElem) -> Option<Ty> {
         (PlaceElem::Deref, Ty::Ref(r)) => *r.referent,
         (PlaceElem::Index(_) | PlaceElem::ConstIndex(_), Ty::Array(elem, _)) => *elem,
         (PlaceElem::Index(_), Ty::Slice(elem)) => *elem,
+        (PlaceElem::ConstSubslice(..), Ty::Array(elem, _)) => Ty::Slice(elem),
         (PlaceElem::Field(index), Ty::Struct(s)) => s.def().fields()[*index as usize].ty,
         (
             PlaceElem::Field(index)

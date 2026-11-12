@@ -1,0 +1,72 @@
+// emit: mir
+// The borrow check over the conversion of a reference to an array to a
+// reference to a slice (ADR 0108, 0109). `&buf` converted is the one borrow
+// of `buf` the program wrote and is told as any `&buf` is; a reference to an
+// array that is held, converted, is "converted to a slice here"; a `&mut [T;
+// N]` variable passed to a call is "lent to this call".
+fn read(s: &[u8]) -> usize {
+    len(s)
+}
+
+fn fill(s: &mut [u8], b: u8) {}
+
+fn two(a: &mut [u8], b: &mut [u8]) {}
+
+// The `&[u8]` converted from `&buf` is used after the write to `buf`.
+fn directly(mut buf: [u8; 4]) {
+    let s: &[u8] = &buf;
+    buf[0] = 1;
+    read(s);
+}
+
+// The `&[u8]` converted from a `let r: &[u8; 4] = &buf;` is used after it.
+fn held(mut buf: [u8; 4]) {
+    let r: &[u8; 4] = &buf;
+    let s: &[u8] = r;
+    buf[0] = 1;
+    read(s);
+}
+
+// The same with a `&mut [u8; 4]`, converted to a shared and to a mutable
+// slice, and written through itself while the slice is in use.
+fn held_mut(mut buf: [u8; 4]) {
+    let m: &mut [u8; 4] = &mut buf;
+    let s: &[u8] = m;
+    (*m)[0] = 1;
+    read(s);
+}
+
+fn held_unique(mut buf: [u8; 4]) {
+    let m: &mut [u8; 4] = &mut buf;
+    let s: &mut [u8] = m;
+    (*m)[0] = 1;
+    fill(s, 0);
+}
+
+// A `&mut [u8; 4]` variable lent twice to one call.
+fn lent_twice(m: &mut [u8; 4]) {
+    two(m, m);
+}
+
+// A `&mut [u8; 4]` variable lent to a `&mut [u8]` parameter and read by a
+// later argument of the same call.
+fn lent_and_read(m: &mut [u8; 4]) {
+    fill(m, (*m)[0]);
+}
+
+// A `&mut [u8; 4]` converted to a `&[u8]` while a `&mut [u8]` converted from
+// it is used later, and the other way round: the conversion is the access.
+fn converted_while_mutable(m: &mut [u8; 4]) {
+    let s: &mut [u8] = m;
+    let t: &[u8] = m;
+    fill(s, 0);
+}
+
+fn converted_to_mutable_while_shared(m: &mut [u8; 4]) {
+    let s: &[u8] = m;
+    let t: &mut [u8] = m;
+    read(s);
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

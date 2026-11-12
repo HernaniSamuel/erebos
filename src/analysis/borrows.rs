@@ -20,7 +20,7 @@ use std::collections::HashSet;
 use super::bits::{Bits, key, reachable};
 use crate::diag::{Diagnostic, Diagnostics};
 use crate::mir::{
-    AsmOperandKind, Body, InlineAsm, Local, Operand, PanicCause, Place, PlaceElem, Rvalue,
+    AsmOperandKind, Body, InlineAsm, Local, Operand, PanicCause, Place, PlaceElem, Ref, Rvalue,
     Statement, Terminator, Ty,
 };
 use crate::span::Span;
@@ -102,18 +102,27 @@ enum How {
     BorrowMut,
     /// The `&mut *r` that lends a `&mut` argument to a call (ADR 0106).
     Lend,
+    /// The `&(*q)[0..N]` of a reference to an array converted to a `&[T]`
+    /// (ADR 0108).
+    ConvertSlice,
+    /// The `&mut (*q)[0..N]` of a `&mut [T; N]` converted to a `&mut [T]`
+    /// that is not lent to a call (ADR 0108).
+    ConvertSliceMut,
 }
 
 impl How {
     /// Whether it conflicts with a shared borrow in use too: every access but
     /// those that read (ADR 0106).
     fn writes(self) -> bool {
-        !matches!(self, How::Use | How::RawConst | How::Borrow | How::Convert)
+        !matches!(
+            self,
+            How::Use | How::RawConst | How::Borrow | How::Convert | How::ConvertSlice
+        )
     }
 
     /// Whether it makes a mutable borrow.
     fn mutable(self) -> bool {
-        matches!(self, How::BorrowMut | How::Lend)
+        matches!(self, How::BorrowMut | How::Lend | How::ConvertSliceMut)
     }
 }
 
@@ -417,6 +426,7 @@ impl<'b> Flow<'b> {
                 PlaceElem::Field(index) => Step::Field(*index),
                 PlaceElem::Index(_)
                 | PlaceElem::ConstIndex(_)
+                | PlaceElem::ConstSubslice(..)
                 | PlaceElem::Element(..)
                 | PlaceElem::ConstElement(..) => Step::Elem,
                 PlaceElem::Tag | PlaceElem::Payload { .. } => Step::Other,
@@ -437,11 +447,24 @@ impl<'b> Flow<'b> {
     /// is the lending of ADR 0106, and `_t = &*q` with `q` a `&mut` is the
     /// conversion of ADR 0105. An explicit `&mut *r` passed to a call, or
     /// `&*q` written out, has the same MIR and is told the same.
+    ///
+    /// The same holds when the referent is an array and the place goes on with
+    /// `ConstSubslice(0, N)`, `N` the array's length: the conversion of ADR
+    /// 0108. It is the lending when a `&mut` variable or parameter is passed to
+    /// a call, and "converted to a slice" otherwise (ADR 0109).
     fn borrow_how(&self, mutable: bool, dest: Place, place: Place) -> How {
+        let local_ty = self.body.local_ty(place.local);
         let through = place.projection == [PlaceElem::Deref];
+        let through_array = matches!(
+            (place.projection, local_ty),
+            (
+                [PlaceElem::Deref, PlaceElem::ConstSubslice(0, to)],
+                Ty::Ref(Ref { referent: Ty::Array(_, len), .. }),
+            ) if to == len
+        );
         let temporary = dest.projection.is_empty() && !self.named(dest.local);
-        if through && temporary {
-            match self.body.local_ty(place.local) {
+        if (through || through_array) && temporary {
+            match local_ty {
                 Ty::Ref(_)
                     if mutable
                         && self.named(place.local)
@@ -449,6 +472,8 @@ impl<'b> Flow<'b> {
                 {
                     return How::Lend;
                 }
+                Ty::Ref(_) if through_array && mutable => return How::ConvertSliceMut,
+                Ty::Ref(_) if through_array => return How::ConvertSlice,
                 Ty::Ref(r) if !mutable && r.mutable => return How::Convert,
                 _ => {}
             }
@@ -839,6 +864,14 @@ impl<'b> Flow<'b> {
                 format!("cannot lend {holder} to this call while it is borrowed"),
                 "lent to this call here",
             ),
+            How::ConvertSlice => (
+                format!("cannot convert {holder} to a slice while it is borrowed as mutable"),
+                "converted to a slice here",
+            ),
+            How::ConvertSliceMut => (
+                format!("cannot convert {holder} to a mutable slice while it is borrowed"),
+                "converted to a slice here",
+            ),
         }
     }
 
@@ -848,6 +881,9 @@ impl<'b> Flow<'b> {
         match site.how {
             How::Lend => format!("{holder} is lent to this call"),
             How::Convert => format!("{holder} is converted to `&` here"),
+            How::ConvertSlice | How::ConvertSliceMut => {
+                format!("{holder} is converted to a slice here")
+            }
             _ if site.how.mutable() => format!("{name} is borrowed as mutable here"),
             _ => format!("{name} is borrowed here"),
         }
@@ -901,6 +937,10 @@ impl<'b> Flow<'b> {
                     | PlaceElem::Offset(_),
                     _,
                 ) => format!("{}[_]", paren(text)),
+                // All the elements of an array are the array, as a name tells:
+                // the conversion of a `&buf` is a borrow of `buf` (ADR 0108).
+                (PlaceElem::ConstSubslice(0, to), Ty::Array(_, len)) if *to == len => text,
+                (PlaceElem::ConstSubslice(..), _) => format!("{}[_.._]", paren(text)),
                 (PlaceElem::Tag | PlaceElem::Payload { .. }, _) => text,
             };
         }

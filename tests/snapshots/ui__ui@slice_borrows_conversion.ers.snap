@@ -1,0 +1,143 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/slice_borrows_conversion.ers
+---
+--- errors ---
+analysis::borrow-conflict
+
+  × cannot assign to `buf[_]` while it is borrowed
+    ╭─[slice_borrows_conversion.ers:18:5]
+ 16 │ fn directly(mut buf: [u8; 4]) {
+ 17 │     let s: &[u8] = &buf;
+    ·                    ──┬─
+    ·                      ╰── `buf` is borrowed here
+ 18 │     buf[0] = 1;
+    ·     ─────┬────
+    ·          ╰── assigned here
+ 19 │     read(s);
+    ·     ───┬───
+    ·        ╰── the borrow is used later here
+ 20 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot assign to `buf[_]` while it is borrowed
+    ╭─[slice_borrows_conversion.ers:26:5]
+ 23 │ fn held(mut buf: [u8; 4]) {
+ 24 │     let r: &[u8; 4] = &buf;
+    ·                       ──┬─
+    ·                         ╰── `buf` is borrowed here
+ 25 │     let s: &[u8] = r;
+ 26 │     buf[0] = 1;
+    ·     ─────┬────
+    ·          ╰── assigned here
+ 27 │     read(s);
+    ·     ───┬───
+    ·        ╰── the borrow is used later here
+ 28 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot assign to `(*m)[_]` while it is borrowed
+    ╭─[slice_borrows_conversion.ers:35:5]
+ 33 │     let m: &mut [u8; 4] = &mut buf;
+ 34 │     let s: &[u8] = m;
+    ·                    ┬
+    ·                    ╰── `m` is converted to a slice here
+ 35 │     (*m)[0] = 1;
+    ·     ─────┬─────
+    ·          ╰── assigned here
+ 36 │     read(s);
+    ·     ───┬───
+    ·        ╰── the borrow is used later here
+ 37 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot assign to `(*m)[_]` while it is borrowed
+    ╭─[slice_borrows_conversion.ers:42:5]
+ 40 │     let m: &mut [u8; 4] = &mut buf;
+ 41 │     let s: &mut [u8] = m;
+    ·                        ┬
+    ·                        ╰── `m` is converted to a slice here
+ 42 │     (*m)[0] = 1;
+    ·     ─────┬─────
+    ·          ╰── assigned here
+ 43 │     fill(s, 0);
+    ·     ─────┬────
+    ·          ╰── the borrow is used later here
+ 44 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot lend `m` to this call while it is borrowed
+    ╭─[slice_borrows_conversion.ers:48:12]
+ 47 │ fn lent_twice(m: &mut [u8; 4]) {
+ 48 │     two(m, m);
+    ·     ────┬────┬┬
+    ·         │    │╰── lent to this call here
+    ·         │    ╰── `m` is lent to this call
+    ·         ╰── the borrow is used later here
+ 49 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot use `(*m)[_]` while it is borrowed as mutable
+    ╭─[slice_borrows_conversion.ers:54:13]
+ 53 │ fn lent_and_read(m: &mut [u8; 4]) {
+ 54 │     fill(m, (*m)[0]);
+    ·     ────────┬───────┬┬
+    ·             │       │╰── used here
+    ·             │       ╰── `m` is lent to this call
+    ·             ╰── the borrow is used later here
+ 55 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot convert `m` to a slice while it is borrowed as mutable
+    ╭─[slice_borrows_conversion.ers:61:20]
+ 59 │ fn converted_while_mutable(m: &mut [u8; 4]) {
+ 60 │     let s: &mut [u8] = m;
+    ·                        ┬
+    ·                        ╰── `m` is converted to a slice here
+ 61 │     let t: &[u8] = m;
+    ·                    ┬
+    ·                    ╰── converted to a slice here
+ 62 │     fill(s, 0);
+    ·     ─────┬────
+    ·          ╰── the borrow is used later here
+ 63 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot convert `m` to a mutable slice while it is borrowed
+    ╭─[slice_borrows_conversion.ers:67:24]
+ 65 │ fn converted_to_mutable_while_shared(m: &mut [u8; 4]) {
+ 66 │     let s: &[u8] = m;
+    ·                    ┬
+    ·                    ╰── `m` is converted to a slice here
+ 67 │     let t: &mut [u8] = m;
+    ·                        ┬
+    ·                        ╰── converted to a slice here
+ 68 │     read(s);
+    ·     ───┬───
+    ·        ╰── the borrow is used later here
+ 69 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)

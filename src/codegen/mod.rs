@@ -290,7 +290,7 @@ fn memory_type(context: &Context, ty: Ty) -> Option<BasicTypeEnum<'_>> {
 /// Where the length of the place of type `[T]` that a slice at `address`
 /// points to is, if `pointee` is one (ADR 0109).
 fn length_through(address: Address<'_>, pointee: Ty) -> Option<Length<'_>> {
-    matches!(pointee, Ty::Slice(_)).then_some(Length {
+    matches!(pointee, Ty::Slice(_)).then_some(Length::Stored {
         slice: address.ptr,
         volatile: address.volatile,
     })
@@ -600,17 +600,21 @@ struct Address<'ctx> {
     /// The path from that pointer goes through a field of a `#[packed]`
     /// struct, so the place may be misaligned (ADR 0022).
     misaligned: bool,
-    /// For a place of type `[T]`: where the length of the slice it was reached
-    /// through is (ADR 0109).
+    /// For a place of type `[T]`: its length (ADR 0109).
     len: Option<Length<'ctx>>,
 }
 
-/// The slice a place of type `[T]` was reached through: its length is the
-/// second part of the slice at `slice`.
+/// The length of a place of type `[T]`.
 #[derive(Clone, Copy)]
-struct Length<'ctx> {
-    slice: PointerValue<'ctx>,
-    volatile: bool,
+enum Length<'ctx> {
+    /// The slice the place was reached through: the length is the second part
+    /// of the slice at `slice`.
+    Stored {
+        slice: PointerValue<'ctx>,
+        volatile: bool,
+    },
+    /// The bounds of a `ConstSubslice`.
+    Known(u64),
 }
 
 impl Address<'_> {
@@ -1136,6 +1140,16 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                     let index = self.read(Place::local(*index)).into_int_value();
                     (element_type(self.context, ty), index)
                 }
+                // The elements of an array from `from` to `to`, whose bounds
+                // MIR building checked; its length is `to - from` (ADR 0109).
+                (PlaceElem::ConstSubslice(from, to), Ty::Array(elem, _)) => {
+                    ty = Ty::Slice(elem);
+                    address.len = Some(Length::Known(to - from));
+                    (
+                        element_type(self.context, *elem),
+                        usize_type.const_int(*from, false),
+                    )
+                }
                 (PlaceElem::Field(index), Ty::Struct(s)) => {
                     let field = &s.def().fields()[*index as usize];
                     ty = field.ty;
@@ -1267,16 +1281,24 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
     }
 
     /// The length of the place of type `[T]` at `address`: the second part of
-    /// the slice it was reached through (ADR 0109).
+    /// the slice it was reached through, or the one a `ConstSubslice` gives
+    /// (ADR 0109).
     fn place_length(&self, address: Address<'ctx>) -> BasicValueEnum<'ctx> {
         let length = address.len.expect("a place of type `[T]` has a length");
-        let slice = Address {
-            ptr: length.slice,
-            volatile: length.volatile,
-            misaligned: false,
-            len: None,
-        };
-        self.load_part(self.part_of(slice, 1), Ty::Int(IntTy::Usize))
+        match length {
+            Length::Stored { slice, volatile } => {
+                let slice = Address {
+                    ptr: slice,
+                    volatile,
+                    misaligned: false,
+                    len: None,
+                };
+                self.load_part(self.part_of(slice, 1), Ty::Int(IntTy::Usize))
+            }
+            Length::Known(len) => int_type(self.context, IntTy::Usize)
+                .const_int(len, false)
+                .into(),
+        }
     }
 
     /// The type of part `index` of a slice of type `ty`.

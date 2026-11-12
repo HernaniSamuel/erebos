@@ -1,0 +1,24 @@
+// emit: typeck
+// What a reference to an array does not convert to (ADR 0108): a slice of
+// other elements, a `&mut` slice from a `&` array, a raw slice, and the
+// message of `assert`, which is still a raw slice (ADR 0031).
+fn bytes(s: &[u8]) {}
+
+fn bytes_mut(s: &mut [u8]) {}
+
+fn raw(s: *const [u8]) {}
+
+fn words(s: &[u16]) {}
+
+fn errors(a: &[u8; 4], b: [u8; 4], c: bool, d: &[u8; 2]) {
+    words(a);
+    bytes_mut(a);
+    raw(a);
+    let e: &mut [u8] = &b;
+    let f: &[u16] = &b;
+    let g: &[u8] = d as &[u8];
+    assert(c, &b"msg");
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

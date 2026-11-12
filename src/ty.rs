@@ -355,16 +355,23 @@ fn shares(from: Ty, to: Ty) -> bool {
         if from.mutable && !to.mutable && from.referent == to.referent)
 }
 
-/// Whether `from` is a pointer to an array that converts to the slice `to`
-/// (ADR 0031): of the same elements, mutability and volatility, or from
-/// `*mut` to `*const`.
+/// Whether `from` is a pointer or a reference to an array that converts to
+/// the slice `to`: of the same elements, mutability and volatility, or from
+/// `*mut` to `*const` (ADR 0031); from `&[T; N]` to `&[T]` and from `&mut [T;
+/// N]` to `&mut [T]` or `&[T]` (ADR 0108).
 fn unsizes(from: Ty, to: Ty) -> bool {
-    let (Ty::Ptr(from), Ty::Ptr(to)) = (from, to) else {
-        return false;
-    };
-    matches!((*from.pointee, *to.pointee), (Ty::Array(elem, _), Ty::Slice(want)) if elem == want)
-        && (from.mutable || !to.mutable)
-        && from.volatile == to.volatile
+    match (from, to) {
+        (Ty::Ptr(from), Ty::Ptr(to)) => {
+            matches!((*from.pointee, *to.pointee), (Ty::Array(elem, _), Ty::Slice(want)) if elem == want)
+                && (from.mutable || !to.mutable)
+                && from.volatile == to.volatile
+        }
+        (Ty::Ref(from), Ty::Ref(to)) => {
+            matches!((*from.referent, *to.referent), (Ty::Array(elem, _), Ty::Slice(want)) if elem == want)
+                && (from.mutable || !to.mutable)
+        }
+        _ => false,
+    }
 }
 
 /// The type that accepts `ty` and, if it is a pointer, the pointer with the
@@ -1154,9 +1161,11 @@ impl Checker<'_, '_> {
             }
             ExprKind::AddrOf { mutable, place } => self.addr_of(f, *mutable, place),
             ExprKind::Ref { mutable, place } => {
-                // A literal under `&` takes the referent type expected.
+                // A literal under `&` takes the referent type expected,
+                // except a slice, which no value has: the array under it is
+                // typed on its own, and converts (ADR 0108).
                 let want = match expected {
-                    Some(Ty::Ref(r)) => Some(*r.referent),
+                    Some(Ty::Ref(r)) if !matches!(r.referent, Ty::Slice(_)) => Some(*r.referent),
                     _ => None,
                 };
                 self.borrow(f, *mutable, place, want)
@@ -1608,5 +1617,38 @@ mod tests {
             ptr(false, false, ptr(false, false, slice))
         ));
         assert!(!coerces(ptr(false, false, slice), ptr(false, false, array)));
+    }
+
+    #[test]
+    fn array_references_coerce_to_slice_references() {
+        let u8_ = Ty::Int(IntTy::U8);
+        let array = Ty::array(u8_, 4);
+        let slice = Ty::slice(u8_);
+        let reference = Ty::reference;
+        assert!(unsizes(reference(false, array), reference(false, slice)));
+        assert!(unsizes(reference(true, array), reference(true, slice)));
+        assert!(unsizes(reference(true, array), reference(false, slice)));
+        assert!(coerces(reference(true, array), reference(false, slice)));
+        // Never to `&mut` from `&`, nor to another element, nor back.
+        assert!(!coerces(reference(false, array), reference(true, slice)));
+        let u16_slice = Ty::slice(Ty::Int(IntTy::U16));
+        assert!(!coerces(
+            reference(false, array),
+            reference(false, u16_slice)
+        ));
+        assert!(!coerces(reference(false, slice), reference(false, array)));
+        // Not to or from a raw pointer, and only the outermost converts.
+        assert!(!coerces(
+            reference(false, array),
+            Ty::ptr(false, false, slice)
+        ));
+        assert!(!coerces(
+            Ty::ptr(false, false, array),
+            reference(false, slice)
+        ));
+        assert!(!coerces(
+            reference(false, reference(false, array)),
+            reference(false, reference(false, slice))
+        ));
     }
 }

@@ -3,12 +3,18 @@
 // `{ T *ptr; size_t len; }` in two registers (ADR 0025, 0075). An `extern fn`
 // takes a `&[u8]` (a sum), a `&mut [u8]` (a fill) and a `&[u32]`; an
 // `#[export]` function takes a `&[u32]` and one a `&[u8]`, and C calls both.
+// A reference to an array converts to the slice (`&buf`, `&b"..."`) in the
+// calls of both sides (ADR 0108).
 // link-c: slice_references_c.c
 // expect-output: sum 21
 // expect-output: filled 54
 // expect-output: words 600000
 // expect-output: empty 0
 // expect-output: from c 1010
+// expect-output: array 54
+// expect-output: literal 294
+// expect-output: erebos 600000
+// expect-output: blank 0
 // expect-exit: 0
 
 mod board;
@@ -86,6 +92,21 @@ entry fn main() -> ! {
 
     print(&raw const b"from c ");
     print_u32(c_calls_erebos());
+    putc(b'\n');
+
+    // The array behind `buf` and a byte string, converted where a `&[u8]` is
+    // taken; an Erebos function and an empty byte string too.
+    print(&raw const b"array ");
+    print_u32(c_sum(&buf));
+    putc(b'\n');
+    print(&raw const b"literal ");
+    print_u32(c_sum(&b"abc"));
+    putc(b'\n');
+    print(&raw const b"erebos ");
+    print_u32(erebos_sum(&words));
+    putc(b'\n');
+    print(&raw const b"blank ");
+    print_u32(c_sum(&b""));
     putc(b'\n');
     exit(0)
 }
