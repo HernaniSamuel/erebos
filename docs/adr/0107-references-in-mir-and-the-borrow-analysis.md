@@ -1,6 +1,6 @@
 # 0107. References in MIR, and the borrow analysis
 
-- Status: Accepted; amended on 2026-11-11 (which later use is labelled)
+- Status: Accepted; amended on 2026-11-11 (which later use is labelled; a `&mut` base is read in place)
 - Date: 2026-11-11
 - Amends: 0095 (T1 and T5 for references; the rules R1 to R3), 0098 ("Kinds
   in MIR": the kind of a reference; "Where MIR building moves": a `&mut`
@@ -90,6 +90,20 @@ treats a `Ref` as it treats `&raw`: it neither gives nor consumes a value.
   for an argument that lends a `&mut`, so a place argument before one is read
   into a temporary first, as ADR 0098 requires of operands before anything that
   could write. `f(x.a, &mut x)` reads `x.a`, then borrows `x`.
+- **A place reached through a `&mut` variable**: when a variable `r` of type
+  `&mut T` is the base of a place whose index is not simple (ADR 0018, 0098:
+  `(*r).buf[(*r).head]`), the place is built on `r` itself. `r` is neither
+  moved nor reborrowed to hold its value until the access.
+
+**Note, 2026-11-11:** MIR building stored the base of such a place in a
+temporary when the index was not simple, because code evaluated before the
+access may assign a variable (ADR 0018). For a `&mut` that was `_t = move r`,
+and the index `(*r).head` then used a moved `r`. A reference variable is bound
+once (`mut` on one is `ty::reference-position`, ADR 0094, 0105), so nothing
+evaluated before the access can assign it: reading it late is reading it now,
+and the place stays `(*r).buf[_i]`. A reborrow `_t = &mut *r` instead would
+keep `*r` borrowed while the index reads `(*r).head`, which the borrow check
+rejects (ADR 0106). A `&` reference is copied, as before.
 
 ### Rules of the validator
 

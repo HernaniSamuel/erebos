@@ -1,0 +1,344 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/reference_index_through.ers
+---
+--- mir ---
+struct Ring { 0 buf: [u8; 4] at 0, 1 head: usize at 4 } // size 8, align 4
+struct Outer { 0 ring: Ring at 0, 1 n: u8 at 8 } // size 12, align 4
+
+fn read(_1: &mut Ring) -> u8 {
+    let _0: u8;
+    let _1: &mut Ring; // r
+    let _2: usize;
+    let _3: usize;
+    let _4: bool;
+    let _5: u8;
+
+    bb0: {
+        _2 = copy (*_1).1;
+        _3 = copy _2;
+        _4 = Lt(copy _3, const 4_usize);
+        if copy _4 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _5 = copy (*_1).0[_3];
+        _0 = copy _5;
+        return;
+    }
+
+    bb2: {
+        panic(index out of bounds);
+    }
+}
+
+fn write(_1: &mut Ring, _2: u8) -> () {
+    let _0: ();
+    let _1: &mut Ring; // r
+    let _2: u8; // v
+    let _3: usize;
+    let _4: usize;
+    let _5: bool;
+
+    bb0: {
+        _3 = copy (*_1).1;
+        _4 = copy _3;
+        _5 = Lt(copy _4, const 4_usize);
+        if copy _5 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        (*_1).0[_4] = copy _2;
+        return;
+    }
+
+    bb2: {
+        panic(index out of bounds);
+    }
+}
+
+fn compound(_1: &mut Ring, _2: u8) -> () {
+    let _0: ();
+    let _1: &mut Ring; // r
+    let _2: u8; // v
+    let _3: usize;
+    let _4: usize;
+    let _5: bool;
+
+    bb0: {
+        _3 = copy (*_1).1;
+        _4 = copy _3;
+        _5 = Lt(copy _4, const 4_usize);
+        if copy _5 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        (*_1).0[_4] = Add(copy (*_1).0[_4], copy _2);
+        return;
+    }
+
+    bb2: {
+        panic(index out of bounds);
+    }
+}
+
+fn nested_read(_1: &mut Outer) -> u8 {
+    let _0: u8;
+    let _1: &mut Outer; // o
+    let _2: usize;
+    let _3: usize;
+    let _4: bool;
+    let _5: u8;
+
+    bb0: {
+        _2 = copy (*_1).0.1;
+        _3 = copy _2;
+        _4 = Lt(copy _3, const 4_usize);
+        if copy _4 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _5 = copy (*_1).0.0[_3];
+        _0 = copy _5;
+        return;
+    }
+
+    bb2: {
+        panic(index out of bounds);
+    }
+}
+
+fn nested_write(_1: &mut Outer, _2: u8) -> () {
+    let _0: ();
+    let _1: &mut Outer; // o
+    let _2: u8; // v
+    let _3: usize;
+    let _4: usize;
+    let _5: bool;
+
+    bb0: {
+        _3 = copy (*_1).0.1;
+        _4 = copy _3;
+        _5 = Lt(copy _4, const 4_usize);
+        if copy _5 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        (*_1).0.0[_4] = copy _2;
+        return;
+    }
+
+    bb2: {
+        panic(index out of bounds);
+    }
+}
+
+fn borrow(_1: &mut Ring) -> u8 {
+    let _0: u8;
+    let _1: &mut Ring; // r
+    let _2: &mut u8; // p
+    let _3: usize;
+    let _4: usize;
+    let _5: bool;
+    let _6: &mut u8;
+    let _7: u8;
+
+    bb0: {
+        _3 = copy (*_1).1;
+        _4 = copy _3;
+        _5 = Lt(copy _4, const 4_usize);
+        if copy _5 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _6 = &mut (*_1).0[_4];
+        _2 = move _6;
+        (*_2) = const 3_u8;
+        _7 = copy (*_2);
+        _0 = copy _7;
+        return;
+    }
+
+    bb2: {
+        panic(index out of bounds);
+    }
+}
+
+fn borrow_shared(_1: &Ring) -> u8 {
+    let _0: u8;
+    let _1: &Ring; // r
+    let _2: &u8; // p
+    let _3: &Ring;
+    let _4: usize;
+    let _5: usize;
+    let _6: bool;
+    let _7: &u8;
+    let _8: u8;
+
+    bb0: {
+        _3 = copy _1;
+        _4 = copy (*_1).1;
+        _5 = copy _4;
+        _6 = Lt(copy _5, const 4_usize);
+        if copy _6 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _7 = &(*_3).0[_5];
+        _2 = copy _7;
+        _8 = copy (*_2);
+        _0 = copy _8;
+        return;
+    }
+
+    bb2: {
+        panic(index out of bounds);
+    }
+}
+
+fn read_shared(_1: &Ring) -> u8 {
+    let _0: u8;
+    let _1: &Ring; // r
+    let _2: &Ring;
+    let _3: usize;
+    let _4: usize;
+    let _5: bool;
+    let _6: u8;
+
+    bb0: {
+        _2 = copy _1;
+        _3 = copy (*_1).1;
+        _4 = copy _3;
+        _5 = Lt(copy _4, const 4_usize);
+        if copy _5 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _6 = copy (*_2).0[_4];
+        _0 = copy _6;
+        return;
+    }
+
+    bb2: {
+        panic(index out of bounds);
+    }
+}
+
+fn then_used(_1: &mut Ring) -> usize {
+    let _0: usize;
+    let _1: &mut Ring; // r
+    let _2: usize;
+    let _3: usize;
+    let _4: bool;
+    let _5: usize;
+
+    bb0: {
+        _2 = copy (*_1).1;
+        _3 = copy _2;
+        _4 = Lt(copy _3, const 4_usize);
+        if copy _4 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        (*_1).0[_3] = const 1_u8;
+        _5 = copy (*_1).1;
+        _0 = copy _5;
+        return;
+    }
+
+    bb2: {
+        panic(index out of bounds);
+    }
+}
+
+fn take(_1: &mut Ring) -> usize {
+    let _0: usize;
+    let _1: &mut Ring; // r
+    let _2: usize;
+
+    bb0: {
+        _2 = copy (*_1).1;
+        _0 = copy _2;
+        return;
+    }
+}
+
+fn read_lent(_1: &mut Ring) -> u8 {
+    let _0: u8;
+    let _1: &mut Ring; // r
+    let _2: &mut Ring;
+    let _3: usize;
+    let _4: usize;
+    let _5: bool;
+    let _6: u8;
+
+    bb0: {
+        _2 = &mut (*_1);
+        _3 = call take(move _2);
+        _4 = copy _3;
+        _5 = Lt(copy _4, const 4_usize);
+        if copy _5 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _6 = copy (*_1).0[_4];
+        _0 = copy _6;
+        return;
+    }
+
+    bb2: {
+        panic(index out of bounds);
+    }
+}
+
+fn write_lent(_1: &mut Ring, _2: u8) -> () {
+    let _0: ();
+    let _1: &mut Ring; // r
+    let _2: u8; // v
+    let _3: &mut Ring;
+    let _4: usize;
+    let _5: usize;
+    let _6: bool;
+
+    bb0: {
+        _3 = &mut (*_1);
+        _4 = call take(move _3);
+        _5 = copy _4;
+        _6 = Lt(copy _5, const 4_usize);
+        if copy _6 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        (*_1).0[_5] = copy _2;
+        return;
+    }
+
+    bb2: {
+        panic(index out of bounds);
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}

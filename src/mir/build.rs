@@ -2250,6 +2250,11 @@ impl Builder<'_, '_> {
         let value = self.expr(pointer);
         match value.place() {
             Some(place) if !later_writes => place,
+            // A variable of type `&mut T` is bound once and never assigned
+            // (ADR 0094, 0105): code evaluated later cannot change it, so it
+            // is read in place. Storing it would move it, and reborrowing it
+            // would hold `*r` while that code reads through `r`.
+            Some(place) if self.is_mut_variable(pointer) => place,
             // Computed (e.g. a cast), or about to be read late: store it.
             _ => self.temp_place(pointer_ty, Rvalue::Use(value)),
         }

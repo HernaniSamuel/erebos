@@ -1,0 +1,22 @@
+// emit: mir
+// An element reached through a reference, at an index that lends the same
+// reference (`(*r).buf[take(r)]`): a borrow of such a place is in use while
+// the next access lends `r` again (ADR 0106, 0107). `reference_index_through.ers`
+// has what is accepted.
+struct Ring {
+    buf: [u8; 4],
+    head: usize,
+}
+
+fn take(r: &mut Ring) -> usize {
+    (*r).head
+}
+
+fn conflict(r: &mut Ring) -> u8 {
+    let p: &mut u8 = &mut (*r).buf[take(r)];
+    let x: u8 = (*r).buf[take(r)];
+    *p
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }
