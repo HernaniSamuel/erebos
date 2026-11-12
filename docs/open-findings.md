@@ -216,6 +216,26 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   `read_constant` fails without it. (M5.4a)
 - The generated programs of ADR 0068 have only scalar types, so no generated
   program holds a reference. (M5.4a)
+- `touch(&mut (*s)[0], &(*s)[1])` on a slice gives two errors (the index check
+  reads `s` through `len(s)`, then the elements overlap), one on an array; it
+  follows ADR 0108 and is only noisy. In `two(&mut (*s)[..4], &mut (*s)[4..])`
+  the message is "cannot use `s`", where "cannot borrow `(*s)[_.._]`" would
+  match the other cases. `s[i]` on a reference to a slice keeps the
+  `ty::cannot-index` help that writes `(*r)[i]` for any reference. (M5.4b)
+- `src/layout.rs`: `layout::of` works on `hir::Ty`, whose `slice_elem` and
+  `is_aggregate` stay raw-only, so a HIR `&[T]` would get a thin pointer's
+  layout; no input reaches it today, a latent trap if references become
+  layout operands. (M5.4b)
+- `len(&buf)` leaves a dead `_7 = &_1` in MIR, so `len(&mut buf)` takes a
+  `&mut` borrow that can conflict with a live one. `name()` writes
+  `ConstSubslice(0, N)` of an `N`-element array as the array, so `&buf[0..N]`
+  reads "`buf` is borrowed here" like the converted `&buf`; `&raw const
+  (*v)[n..]` through a volatile pointer has a non-volatile type, as `&raw
+  const (*v)[n]` does. (M5.4b)
+- `src/mir/build.rs`: `slice_index` and `reference_slice_index` evaluate the
+  index before reading `len(s)`, where ADR 0109 writes `len(s)` first
+  (ranges do it as the ADR says); observable only through a raw-slice
+  variable reassigned inside the index. (M5.4b)
 
 ## Tests
 
@@ -349,6 +369,11 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   `Queries::known_discriminant` have no unit test of their own (covered by ui
   tests); the `debug_assert_eq!` in `into_mir` that the list of enum values
   agrees with the MIR type mostly checks the wiring of `set_value`. (M5.3)
+- The `later_use` fix in `src/analysis/borrows.rs` (a use outside a loop is
+  "used later") has no test on an array, `touch(&mut a[i], &a[j])`.
+  The comment in `tests/e2e/slice_driver.ers` says the checksum wraps in 32
+  bits, but no payload wraps; drop the word or add a payload that does.
+  (M5.4b)
 
 ## Docs
 
@@ -467,3 +492,13 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   backticks, and the Decisions of step 6 say "as the interrupted run left it",
   which a later reader cannot place; the `Changes` list of step 2 still names
   the `comptime` positions that the Decisions say do not exist. (M5.4a)
+- `docs/reference.md`: a reference to a slice "casts as the raw slice of its
+  mutability does" (around line 2559) reads as if `&[T] as *mut [T]` were
+  rejected, and the compiler accepts it; a few lines of the M5.4b text are
+  broken or overlong (around lines 166, 287, 1832, 2279, 2349, 2881, 2893) and
+  "the exception that is not one" (around line 2657) is cryptic. The
+  `.claude/plans/M5.4b.md` Decisions of step 4 describe `number` as used "once
+  for the length and once for the checksum" and the ui file's `copy` as taking
+  a `&[u8]` (it takes a `&mut [u8]`); the plan's test bullet for
+  `slice_borrows_conversion.ers` expects "converted to a slice here" for
+  `held`, where the snapshot has "`buf` is borrowed here". (M5.4b)
