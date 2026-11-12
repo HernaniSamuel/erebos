@@ -1,0 +1,56 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/slice_driver_errors.ers
+---
+--- errors ---
+analysis::borrow-conflict
+
+  × cannot borrow `line[_.._]` as mutable while it is borrowed
+    ╭─[slice_driver_errors.ers:13:27]
+ 12 │     let mut line: [u8; 32] = [0; 32];
+ 13 │     copy(&mut line[..16], &mut line[16..]);
+    ·     ───────────────────┬──────────────────┬┬
+    ·                        │                  │╰── borrowed as mutable here
+    ·                        │                  ╰── `line[_.._]` is borrowed as mutable here
+    ·                        ╰── the borrow is used later here
+ 14 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot assign to `line[_]` while it is borrowed
+    ╭─[slice_driver_errors.ers:19:5]
+ 17 │     let mut line: [u8; 32] = [0; 32];
+ 18 │     let head: &[u8] = &line[..8];
+    ·                       ─────┬────
+    ·                            ╰── `line[_.._]` is borrowed here
+ 19 │     line[0] = b'x';
+    ·     ───────┬──────
+    ·            ╰── assigned here
+ 20 │     write(head);
+    ·     ─────┬─────
+    ·          ╰── the borrow is used later here
+ 21 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot use `s` while it is borrowed as mutable
+    ╭─[slice_driver_errors.ers:25:20]
+ 23 │ fn length_of_a_reborrowed(s: &mut [u8]) {
+ 24 │     let rest: &mut [u8] = &mut (*s)[1..];
+    ·                           ───────┬──────
+    ·                                  ╰── `(*s)[_.._]` is borrowed as mutable here
+ 25 │     let n: usize = len(s);
+    ·                    ───┬──
+    ·                       ╰── used here
+ 26 │     fill(rest, n as u8);
+    ·     ─────────┬─────────
+    ·              ╰── the borrow is used later here
+ 27 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)

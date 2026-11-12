@@ -1,0 +1,158 @@
+// The M5.4b milestone program: a driver that writes and fills buffers passed
+// as `&[u8]` and `&mut [u8]` (ADR 0108, 0109). Module `uart` writes the bytes
+// of a slice; module `fmt` fills, copies and formats into a `&mut [u8]`;
+// module `frame` encodes a payload as `<length>:<payload>;<checksum>` into
+// a buffer, each part through a sub-slice of it (`&mut (*out)[at..]`).
+//
+// `main` lends a `[u8; 32]` as `&mut line` (converted to `&mut [u8]`), writes
+// `&line[..n]`, fills the rest of it with dots through `&mut line[n..]` and
+// writes a part of that, encodes a second payload over the first, then an
+// empty one (the bytes after it are the second's, left where they were), and
+// last holds a `&mut [u8]` to a buffer that it lends to calls in a loop and
+// reads through the same reference, converted to `&[u8]` by `uart::write(r)`.
+//
+// The checksum is `h = h * 31 + byte` over the payload, wrapping in 32 bits:
+// "abc" is (97 * 31 + 98) * 31 + 99 = 96354, "Erebos" is 2083799438, "" is 0.
+// expect-output: 3:abc;96354
+// expect-output: 96354...
+// expect-output: 6:Erebos;2083799438
+// expect-output: 0:;0
+// expect-output: ebos
+// expect-output: aaaaaaa7
+// expect-output: 7
+// expect-output: bbbbb407
+// expect-output: 407
+// expect-output: ccccc807
+// expect-output: 807
+// expect-exit: 0
+
+mod board;
+use board::{exit, putc};
+
+mod uart {
+    // Writes each byte through the board's `putc`.
+    pub fn write(bytes: &[u8]) {
+        let mut i: usize = 0;
+        while i < len(bytes) {
+            crate::board::putc((*bytes)[i]);
+            i += 1;
+        }
+    }
+}
+
+mod fmt {
+    // Sets every byte of `out` to `b`.
+    pub fn fill(out: &mut [u8], b: u8) {
+        let mut i: usize = 0;
+        while i < len(out) {
+            (*out)[i] = b;
+            i += 1;
+        }
+    }
+
+    // Copies `src` to the start of `dst`, which is at least as long.
+    pub fn copy(dst: &mut [u8], src: &[u8]) {
+        let mut i: usize = 0;
+        while i < len(src) {
+            (*dst)[i] = (*src)[i];
+            i += 1;
+        }
+    }
+
+    // Writes the decimal digits of `n` at the end of `out` and returns where
+    // they start.
+    pub fn decimal(n: u32, out: &mut [u8]) -> usize {
+        let mut at: usize = len(out);
+        let mut rest: u32 = n;
+        loop {
+            at -= 1;
+            (*out)[at] = b'0' + (rest % 10) as u8;
+            rest /= 10;
+            if rest == 0 {
+                break;
+            }
+        }
+        at
+    }
+}
+
+mod frame {
+    use super::fmt::{copy, decimal};
+
+    pub fn checksum(bytes: &[u8]) -> u32 {
+        let mut h: u32 = 0;
+        let mut i: usize = 0;
+        while i < len(bytes) {
+            h = h * 31 + (*bytes)[i] as u32;
+            i += 1;
+        }
+        h
+    }
+
+    // Writes the decimal digits of `n` at the start of `out`; returns how many.
+    fn number(n: u32, out: &mut [u8]) -> usize {
+        let mut scratch: [u8; 10] = [0; 10];
+        let digits: &mut [u8] = &mut scratch;
+        let start: usize = decimal(n, digits);
+        copy(out, &(*digits)[start..]);
+        len(digits) - start
+    }
+
+    // Writes the length of `payload` in decimal, `:`, the payload, `;` and its
+    // checksum in decimal at the start of `out`; returns how many bytes.
+    pub fn encode(payload: &[u8], out: &mut [u8]) -> usize {
+        let mut at: usize = 0;
+        let digits: usize = number(len(payload) as u32, &mut (*out)[at..]);
+        at += digits;
+        (*out)[at] = b':';
+        at += 1;
+        copy(&mut (*out)[at..], payload);
+        at += len(payload);
+        (*out)[at] = b';';
+        at += 1;
+        let digits: usize = number(checksum(payload), &mut (*out)[at..]);
+        at + digits
+    }
+}
+
+fn show(bytes: &[u8]) {
+    uart::write(bytes);
+    putc(b'\n');
+}
+
+entry fn main() -> ! {
+    let mut line: [u8; 32] = [0; 32];
+
+    // "3:abc;96354" is 11 bytes.
+    let n: usize = frame::encode(&b"abc", &mut line);
+    show(&line[..n]);
+    fmt::fill(&mut line[n..], b'.');
+    // The last five digits and the first three dots.
+    show(&line[n - 5..n + 3]);
+
+    // "6:Erebos;2083799438" is 19 bytes, written over the first.
+    let n: usize = frame::encode(&b"Erebos", &mut line);
+    show(&line[..n]);
+
+    // "0:;0" is 4 bytes; the next four are those of the second, "ebos".
+    let n: usize = frame::encode(&b"", &mut line);
+    show(&line[..n]);
+    show(&line[n..n + 4]);
+
+    // One `&mut [u8]` lent to calls in a loop and read through `uart::write`.
+    let mut small: [u8; 8] = [0; 8];
+    let r: &mut [u8] = &mut small;
+    let mut i: u32 = 0;
+    while i < 3 {
+        fmt::fill(r, b'a' + i as u8);
+        let start: usize = fmt::decimal(i * 400 + 7, r);
+        show(r);
+        show(&(*r)[start..]);
+        i += 1;
+    }
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(1)
+}

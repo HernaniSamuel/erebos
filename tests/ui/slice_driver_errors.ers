@@ -1,0 +1,30 @@
+// emit: mir
+// The wrong uses of the buffers of `tests/e2e/slice_driver.ers` (ADR 0108):
+// two `&mut` sub-slices of `line` in one call, a write to `line` while a
+// `&[u8]` of it is used later, and `len(s)` while a reborrow of `*s` is in use.
+fn copy(dst: &mut [u8], src: &mut [u8]) {}
+
+fn write(bytes: &[u8]) {}
+
+fn fill(out: &mut [u8], b: u8) {}
+
+fn halves() {
+    let mut line: [u8; 32] = [0; 32];
+    copy(&mut line[..16], &mut line[16..]);
+}
+
+fn write_while_read() {
+    let mut line: [u8; 32] = [0; 32];
+    let head: &[u8] = &line[..8];
+    line[0] = b'x';
+    write(head);
+}
+
+fn length_of_a_reborrowed(s: &mut [u8]) {
+    let rest: &mut [u8] = &mut (*s)[1..];
+    let n: usize = len(s);
+    fill(rest, n as u8);
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }
