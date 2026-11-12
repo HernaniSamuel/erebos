@@ -1,6 +1,6 @@
 # 0093. Shared statics checked
 
-- Status: Accepted
+- Status: Accepted; amended by 0110 (a borrow is a place), 0112 (the analyses of the whole program gain the conflicts across calls; the walk of the call graph is shared)
 - Date: 2026-11-06
 - Amends: 0063 (the tables gain the module `analysis`, which uses `mir` and
   which `driver` uses), 0078 (a `&raw` evaluated at compile time names no static)

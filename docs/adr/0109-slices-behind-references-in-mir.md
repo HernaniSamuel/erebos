@@ -1,7 +1,6 @@
 # 0109. Slices behind references in MIR
 
-- Status: Accepted; amended on 2026-11-12 (which rule reports each use of a
-  place of type `[T]`: U1)
+- Status: Accepted; amended on 2026-11-12 (which rule reports each use of a place of type `[T]`: U1); amended by 0112 (a volatile reference to a slice: layout, `SliceAddress`, `SliceLen`)
 - Date: 2026-11-12
 - Amends: 0095 (S7, T1, T2 and T5 for places of type `[T]` and for casts
   from a reference to a slice; the rule U1), 0107 ("Types, rvalues and

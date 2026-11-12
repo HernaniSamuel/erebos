@@ -1,6 +1,6 @@
 # 0094. Ownership: copies, moves and references
 
-- Status: Accepted
+- Status: Accepted; amended by 0110 (no reference leaves a `critical` block by `break`)
 - Date: 2026-11-09
 - Amends: 0033 (the analyses that look at one body run before that body is
   evaluated)

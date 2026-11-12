@@ -1,9 +1,6 @@
 # 0095. MIR validation
 
-- Status: Accepted; amended by 0098 (the operand `move` and the rules M1 to
-  M4), 0103 (the rules L1 to L4), 0104 (the rule E1), 0107 (T1 and T5 for
-  references; the rules R1 to R3), 0109 (S7, T1, T2 and T5 for places of type `[T]` and casts from a
-  reference to a slice; the rule U1)
+- Status: Accepted; amended by 0098 (the operand `move` and the rules M1 to M4), 0103 (the rules L1 to L4), 0104 (the rule E1), 0107 (T1 and T5 for references; the rules R1 to R3), 0109 (S7, T1, T2 and T5 for places of type `[T]` and casts from a reference to a slice; the rule U1), 0112 (T5 for a `Ref` of a volatile place and of a cluster; the rule R4)
 - Date: 2026-11-09
 
 ## Context
