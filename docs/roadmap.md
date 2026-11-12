@@ -454,14 +454,27 @@ ADRs:
   - Not yet scheduled, from M5.4b: splitting a `&mut [T]` in two halves in
     use together (deferred ideas, with returning a reference); `base[..]` and
     `base[a..=b]`, which can be added without breaking programs (ADR 0108).
-  - M5.4c: references to a `static mut` or an `extern static mut` (an error
-    in M5.4a, `ty::reference-to-static-mut`), inside `critical` and in
-    handlers, with ADR 0093 amended so that a borrow names the static as
-    `&raw` does; a `&mut` passed for a `static mut` that its callee also
-    names (M4.5's check sees only statics); references to volatile places,
-    peripherals and clusters (an error in M5.4a,
-    `ty::reference-to-volatile`); registers and bit fields stay without an
-    address (ADR 0105).
+  - M5.4c: settled by ADR 0110 (`&` and `&mut` of a `static mut` and an
+    `extern static mut`, a borrow being a place of ADR 0093 and a use of the
+    reference none; a `break` with a reference out of a `critical` block is
+    `ty::reference-position`, closing ADR 0094's argument; references to
+    peripherals, clusters and elements of cluster arrays, of the peripheral
+    type; volatile references `&volatile T` and `&mut volatile T`, made by
+    borrowing a volatile place, with no conversion to or from references that
+    are not volatile; registers, register arrays and bit fields stay without
+    an address), 0111 (statics and peripherals are roots of the borrow check,
+    parts of one peripheral always overlap, two peripherals when their bytes
+    meet; a call conflicts with a borrow of a static or a peripheral in use
+    when a function it reaches accesses it against ADR 0106's table,
+    `analysis::borrow-conflict-in-call`) and 0112 (`Ref` carries volatility,
+    T5 and R3 changed, the rule R4 for the temporaries holding a static's or
+    a peripheral's address; the roots of the borrow analysis; the analysis
+    `call_borrows` over the whole program).
+  - Not yet scheduled, from M5.4c: registers and clusters of one peripheral
+    compared by their bytes in the borrow check, instead of always
+    overlapping (ADR 0111); a `break` with a reference out of `critical`
+    accepted when the reference holds no borrow of a static (ADR 0110).
+    Either can be added without breaking programs.
   - M5.5: `x.f()` borrowing its receiver, as an amendment of ADR 0008;
     functions of a type without a receiver (`T::new()`); where an `impl`
     may be and its visibility; whether a function of a type may be named

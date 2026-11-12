@@ -139,3 +139,6 @@ Do not write one for local implementation details that the code already explains
 | 0107 | [References in MIR, and the borrow analysis](0107-references-in-mir-and-the-borrow-analysis.md) | Accepted, amended 2026-11-11, amended by 0109 |
 | 0108 | [Slices behind references](0108-slices-behind-references.md) | Accepted |
 | 0109 | [Slices behind references in MIR](0109-slices-behind-references-in-mir.md) | Accepted, amended 2026-11-12 |
+| 0110 | [References to statics, peripherals and volatile places](0110-references-to-statics-peripherals-and-volatile-places.md) | Accepted |
+| 0111 | [Borrows of statics and peripherals, across calls](0111-borrows-of-statics-and-peripherals-across-calls.md) | Accepted |
+| 0112 | [Borrows of statics, peripherals and volatile places in MIR](0112-borrows-of-statics-in-mir-and-the-analyses.md) | Accepted |
