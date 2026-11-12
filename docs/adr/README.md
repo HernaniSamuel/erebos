@@ -37,7 +37,7 @@ Do not write one for local implementation details that the code already explains
 | 0005 | [LLVM backend via inkwell](0005-llvm-backend-via-inkwell.md)     | Accepted |
 | 0006 | [C ABI as the only ABI](0006-c-abi-as-the-only-abi.md)           | Accepted |
 | 0007 | [Wrapping integer arithmetic](0007-wrapping-integer-arithmetic.md) | Accepted, amended by 0032 |
-| 0008 | [Explicit types, no inference](0008-explicit-types-no-inference.md) | Accepted, amended by 0024, 0031 |
+| 0008 | [Explicit types, no inference](0008-explicit-types-no-inference.md) | Accepted, amended by 0024, 0031, 0105 |
 | 0009 | [Defer borrow checking](0009-defer-borrow-checking.md)           | Accepted |
 | 0010 | [First target: riscv32 on QEMU `virt`](0010-first-target-riscv32-qemu-virt.md) | Accepted, amended by 0073, 0077 |
 | 0011 | [Development environment: native Windows with prebuilt LLVM 22](0011-development-environment.md) | Accepted |
@@ -124,13 +124,16 @@ Do not write one for local implementation details that the code already explains
 | 0092 | [Interrupts generated from SVD](0092-interrupts-generated-from-svd.md) | Accepted |
 | 0093 | [Shared statics checked](0093-shared-statics-checked.md) | Accepted |
 | 0094 | [Ownership: copies, moves and references](0094-ownership-moves-and-references.md) | Accepted |
-| 0095 | [MIR validation](0095-mir-validation.md) | Accepted, amended by 0098, 0103, 0104 |
+| 0095 | [MIR validation](0095-mir-validation.md) | Accepted, amended by 0098, 0103, 0104, 0107 |
 | 0096 | [Copy types and `#[copy]`](0096-copy-types.md) | Accepted |
-| 0097 | [Moves](0097-moves.md) | Accepted, amended by 0100, 0103 |
-| 0098 | [Moves in MIR](0098-moves-in-mir.md) | Accepted, amended by 0103 |
-| 0099 | [The analyses of one body](0099-analyses-of-one-body.md) | Accepted, amended by 0100, 0103 |
+| 0097 | [Moves](0097-moves.md) | Accepted, amended by 0100, 0103, 0105 |
+| 0098 | [Moves in MIR](0098-moves-in-mir.md) | Accepted, amended by 0103, 0107 |
+| 0099 | [The analyses of one body](0099-analyses-of-one-body.md) | Accepted, amended by 0100, 0103, 0107 |
 | 0100 | [Moves as built in M5.2](0100-moves-as-built.md) | Accepted |
-| 0101 | [Linear types and `#[linear]`](0101-linear-types.md) | Accepted |
+| 0101 | [Linear types and `#[linear]`](0101-linear-types.md) | Accepted, amended by 0105 |
 | 0102 | [Consuming linear values, and `end`](0102-consuming-linear-values.md) | Accepted |
 | 0103 | [Linear values in MIR, and their analysis](0103-linear-values-in-mir.md) | Accepted |
 | 0104 | [Variant values in MIR](0104-variant-values-in-mir.md) | Accepted |
+| 0105 | [References](0105-references.md) | Accepted |
+| 0106 | [The borrow check](0106-the-borrow-check.md) | Accepted, amended 2026-11-11 |
+| 0107 | [References in MIR, and the borrow analysis](0107-references-in-mir-and-the-borrow-analysis.md) | Accepted, amended 2026-11-11 |

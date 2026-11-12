@@ -1,0 +1,283 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/reference_comptime.ers
+---
+--- mir ---
+static TABLE: [u32; 3]; // align 4
+
+fn fill(_1: &mut [u32; 4], _2: u32) -> () {
+    let _0: ();
+    let _1: &mut [u32; 4]; // out
+    let _2: u32; // first
+    let _3: u32;
+    let _4: u32;
+    let _5: u32;
+
+    bb0: {
+        (*_1)[0] = copy _2;
+        _3 = Add(copy _2, const 1_u32);
+        (*_1)[1] = copy _3;
+        _4 = Add(copy _2, const 2_u32);
+        (*_1)[2] = copy _4;
+        _5 = Add(copy _2, const 3_u32);
+        (*_1)[3] = copy _5;
+        return;
+    }
+}
+
+fn filled() -> [u32; 4] {
+    let _0: [u32; 4];
+    let _1: [u32; 4]; // a
+    let _2: [u32; 4];
+    let _3: usize;
+    let _4: bool;
+    let _5: &mut [u32; 4];
+
+    bb0: {
+        _3 = const 0_usize;
+        goto -> bb1;
+    }
+
+    bb1: {
+        _4 = Lt(copy _3, const 4_usize);
+        if copy _4 -> [true: bb2, false: bb3];
+    }
+
+    bb2: {
+        _2[_3] = const 0_u32;
+        _3 = Add(copy _3, const 1_usize);
+        goto -> bb1;
+    }
+
+    bb3: {
+        _1 = copy _2;
+        _5 = &mut _1;
+        call fill(move _5, const 5_u32);
+        _0 = copy _1;
+        return;
+    }
+}
+
+fn sum_of(_1: &[u32; 3]) -> u32 {
+    let _0: u32;
+    let _1: &[u32; 3]; // r
+    let _2: u32;
+    let _3: u32;
+    let _4: u32;
+    let _5: u32;
+
+    bb0: {
+        _2 = copy (*_1)[1];
+        _3 = copy _2;
+        _4 = copy (*_1)[2];
+        _5 = Add(copy _3, copy _4);
+        _0 = copy _5;
+        return;
+    }
+}
+
+fn through_static() -> u32 {
+    let _0: u32;
+    let _1: *const [u32; 3];
+    let _2: &[u32; 3];
+    let _3: u32;
+
+    bb0: {
+        _1 = const static TABLE;
+        _2 = &(*_1);
+        _3 = call sum_of(copy _2);
+        _0 = copy _3;
+        return;
+    }
+}
+
+fn same_address() -> bool {
+    let _0: bool;
+    let _1: &[u32; 3]; // r
+    let _2: *const [u32; 3]; // p
+    let _3: *const [u32; 3];
+    let _4: &[u32; 3];
+    let _5: *const [u32; 3];
+    let _6: *const [u32; 3];
+    let _7: *const [u32; 3];
+    let _8: bool;
+
+    bb0: {
+        _3 = const static TABLE;
+        _4 = &(*_3);
+        _1 = copy _4;
+        _5 = const static TABLE;
+        _6 = &raw const (*_5);
+        _2 = copy _6;
+        _7 = copy _1 as *const [u32; 3];
+        _8 = Eq(copy _7, copy _2);
+        _0 = copy _8;
+        return;
+    }
+}
+
+fn total(_1: &[u32; 4]) -> u32 {
+    let _0: u32;
+    let _1: &[u32; 4]; // r
+    let _2: u32;
+    let _3: u32;
+    let _4: u32;
+    let _5: u32;
+
+    bb0: {
+        _2 = copy (*_1)[0];
+        _3 = copy _2;
+        _4 = copy (*_1)[3];
+        _5 = Add(copy _3, copy _4);
+        _0 = copy _5;
+        return;
+    }
+}
+
+fn lent() -> u32 {
+    let _0: u32;
+    let _1: [u32; 4]; // a
+    let _2: &mut [u32; 4]; // r
+    let _3: [u32; 4];
+    let _4: usize;
+    let _5: bool;
+    let _6: &mut [u32; 4];
+    let _7: &mut [u32; 4];
+    let _8: &mut [u32; 4];
+    let _9: &[u32; 4];
+    let _10: u32;
+
+    bb0: {
+        _4 = const 0_usize;
+        goto -> bb1;
+    }
+
+    bb1: {
+        _5 = Lt(copy _4, const 4_usize);
+        if copy _5 -> [true: bb2, false: bb3];
+    }
+
+    bb2: {
+        _3[_4] = const 0_u32;
+        _4 = Add(copy _4, const 1_usize);
+        goto -> bb1;
+    }
+
+    bb3: {
+        _1 = copy _3;
+        _6 = &mut _1;
+        _2 = move _6;
+        _7 = &mut (*_2);
+        call fill(move _7, const 1_u32);
+        _8 = &mut (*_2);
+        call fill(move _8, const 2_u32);
+        _9 = &(*_2);
+        _10 = call total(copy _9);
+        _0 = copy _10;
+        return;
+    }
+}
+
+fn answers() -> u32 {
+    let _0: u32;
+    let _1: bool; // same
+    let _2: [u32; 4] = data0;
+    let _3: u32;
+    let _4: u32;
+    let _5: u32;
+    let _6: u32;
+    let _7: u32;
+
+    bb0: {
+        _1 = const true;
+        _3 = copy _2[3];
+        _4 = copy _3;
+        _5 = Add(copy _4, const 50_u32);
+        _6 = copy _5;
+        _7 = Add(copy _6, const 7_u32);
+        _0 = copy _7;
+        return;
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+comptime fn FILLED() -> [u32; 4] {
+    let _0: [u32; 4];
+    let _1: [u32; 4];
+
+    bb0: {
+        _1 = call filled();
+        _0 = copy _1;
+        return;
+    }
+}
+
+comptime fn SUM() -> u32 {
+    let _0: u32;
+    let _1: u32;
+
+    bb0: {
+        _1 = call through_static();
+        _0 = copy _1;
+        return;
+    }
+}
+
+comptime fn SAME() -> bool {
+    let _0: bool;
+    let _1: bool;
+
+    bb0: {
+        _1 = call same_address();
+        _0 = copy _1;
+        return;
+    }
+}
+
+comptime fn LENT() -> u32 {
+    let _0: u32;
+    let _1: u32;
+
+    bb0: {
+        _1 = call lent();
+        _0 = copy _1;
+        return;
+    }
+}
+
+comptime fn TABLE() -> [u32; 3] {
+    let _0: [u32; 3];
+    let _1: [u32; 3];
+
+    bb0: {
+        _1[0] = const 10_u32;
+        _1[1] = const 20_u32;
+        _1[2] = const 30_u32;
+        _0 = copy _1;
+        return;
+    }
+}

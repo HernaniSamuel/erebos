@@ -105,7 +105,9 @@ QEMU. The ownership model they share is ADR 0094.
 | **M5.1** ✅ MIR validation | the rules of MIR checked after each body is built, after the program is assembled and after `leave_out` (ADR 0095); no change to the language | every program of the tests, on both targets at both levels, passes the validator |
 | **M5.2** ✅ Moves | `#[copy]`; moves in MIR; use after a move rejected, per body, before evaluation; constants and statics of non-copy types; the tests and `core` migrated | pins in typestate: a pin taken from disabled to output by functions that consume it |
 | **M5.3** ✅ Linear values | types that must be consumed; the check on every path that returns | a transfer to a device whose handle must be waited for |
-| **M5.4** References | `&T`, `&mut T`, `&place`, `*r`; second-class references; the borrow check; `&[T]`; references and statics, `critical` and handlers | a driver writing and filling buffers passed as `&[u8]` and `&mut [u8]` |
+| **M5.4a** ✅ References | `&T`, `&mut T`, `&place`, `*r`; second-class references; the borrow check; references to places that are not volatile and not `static mut`, `&*p`; references across the C ABI | a ring buffer with free functions over `&mut Ring` and `&Ring` |
+| **M5.4b** Slices behind references | `&[T]`, `&mut [T]`, `len`, `(*s)[i]`, arrays to slices, sub-slices | a driver writing and filling buffers passed as `&[u8]` and `&mut [u8]` |
+| **M5.4c** References, statics and handlers | references to `static mut` inside `critical`; a `&mut` passed for a static its callee also names; references to volatile places, peripherals and registers | a buffer in a `static mut` filled by a handler and read by the thread through a reference taken in `critical` |
 | **M5.5** Methods | `impl`, `self`, `&self`, `&mut self`, `x.f()`, functions of a type | the ring buffer and the UART driver written as methods |
 | **M5.6** Ownership of peripherals | handles to peripherals that one context owns; races on registers between contexts (ADR 0078) | a UART owned by its handler, with the thread context sending through it |
 | **M5.7** Fewer raw pointers | `core` and the tests moved to references where they can; what stays raw, measured | the e2e programs with references, the same output |
@@ -363,16 +365,38 @@ ADRs:
     program needs it (ADR 0101); statics of linear types, for M5.6 to
     reconsider with how a context owns what a static holds; arrays of linear
     types, once elements can be moved out.
-  - M5.4: how long the borrow of a `let` lasts (its last use or its
-    scope); when two places overlap (fields of one struct, elements of
-    one array); references in the signatures of `extern fn`, `#[export]`,
-    naked functions, the entry function and handlers, and their ABI
-    (ADR 0006, 0025, 0075); a `&mut` passed for a `static mut` that its callee also names
-    (M4.5's check sees only statics); references to volatile places and to
-    registers; a reference made from a raw pointer (`&*p`); sub-slices of a
-    `&[T]`; indexing and fields through a reference, and so the
-    `(*s)[i]` syntax of ADR 0031; an `if` or block whose value is a
-    reference.
+  - M5.4 is split in three (M5.4a to M5.4c), each with its ADRs and its
+    program.
+  - M5.4a: settled by ADR 0105 (the types and expressions; `(*r).f` and
+    `(*r)[i]`, no automatic dereference; `&` of a value that is not a place
+    borrows a local of its own, `&mut` of one an error; where a reference may
+    be written, and the `if`, `match` or block whose value is one; `&mut T` to
+    `&T` where ADR 0024 converts, amending ADR 0008; casts to raw pointers
+    only; no comparison; `&*p` through a pointer that is not volatile;
+    references in `extern fn`, `#[export]` and `#[naked]` signatures, passed
+    as pointers; no move out of and no linear write through a reference),
+    0106 (a borrow lasts until the last use of what holds it; fields of one
+    struct do not overlap, elements of one array always do; the conflicts;
+    a `&mut` argument lent by a reborrow; raw pointers not followed;
+    `analysis::borrow-conflict`) and 0107 (`Ty::Ref`, `Rvalue::Ref`, the
+    rules R1 to R3, what MIR building writes, the analysis over the locals
+    that may hold a borrow and their liveness; amending 0095, 0098, 0099).
+  - M5.4b: sub-slices of a `&[T]` (a built-in, a range syntax) and whether
+    a `&mut` to an array or a slice can be split in two disjoint halves;
+    `(*s)[i]` through a reference to a slice (ADR 0105 writes fields and
+    elements through a reference as through a pointer); the conversion of
+    `&[T; N]` to `&[T]` (as ADR 0031's for pointers); `len` of a reference;
+    `&*s` and `&(*s)[i]` from a raw slice; slices behind references across
+    the C ABI (two words, ADR 0025, 0075); whether elements of a slice
+    overlap as array elements do (ADR 0106).
+  - M5.4c: references to a `static mut` or an `extern static mut` (an error
+    in M5.4a, `ty::reference-to-static-mut`), inside `critical` and in
+    handlers, with ADR 0093 amended so that a borrow names the static as
+    `&raw` does; a `&mut` passed for a `static mut` that its callee also
+    names (M4.5's check sees only statics); references to volatile places,
+    peripherals and clusters (an error in M5.4a,
+    `ty::reference-to-volatile`); registers and bit fields stay without an
+    address (ADR 0105).
   - M5.5: `x.f()` borrowing its receiver, as an amendment of ADR 0008;
     functions of a type without a receiver (`T::new()`); where an `impl`
     may be and its visibility; whether a function of a type may be named
@@ -933,5 +957,50 @@ Documentation owed:
   (M5.5) may be named `end` is M5.5's, with how `impl` items are
   named; the generated programs of ADR 0068 have only scalar types, so
   linear values are tested by hand-written ui and e2e programs only.
-- **Next: M5.4** (references), the fourth step of M5 (moves, ownership,
-  references and methods), whose steps and model are above (ADR 0094).
+- **M5.4a done.** `&T` and `&mut T` are types, `&place` and `&mut place`
+  make them and `*r` is the place they refer to, with `(*r).f` and `(*r)[i]`
+  and no automatic dereference (ADR 0105). A reference is held by a parameter
+  or a `let` without `mut` and lent to calls; it is never a field, an
+  element, a payload value, a type argument, a return type, a `static` or a
+  `const`, the pointee of a pointer or the referent of a reference, and not the
+  value of a `critical` block or a `comptime` expression
+  (`ty::reference-position`). `&T` is copy and `&mut T` is not; a `&mut T`
+  converts to a `&T` where a `*mut T` converts to a `*const T`; a reference
+  casts to a raw pointer only and is not compared; a value is not moved out of
+  `*r` and a linear one is not written through it. A value that is not a place
+  is borrowed `&` from a local of its own, `&mut` of one is
+  `ty::mut-borrow-of-immutable`; a `static mut`, a volatile place, a peripheral
+  and a cluster are errors until M5.4c (`ty::reference-to-static-mut`,
+  `ty::reference-to-volatile`). A reference crosses the C ABI as a pointer, in
+  `extern fn`, `#[export]` and `#[naked]` signatures. The borrow check is an
+  analysis of each body in `src/analysis/borrows.rs`, run by `check_body` after
+  the analysis of moves and with the analysis of linearity: a borrow lasts until
+  the last use of what holds it, two fields of one struct do not overlap and two
+  elements of one array always do, a `&mut` argument is lent by a reborrow, raw
+  pointers are not followed, and a conflict is `analysis::borrow-conflict` (ADR
+  0106, 0107). MIR has `Ty::Ref` and `Rvalue::Ref` and the rules R1 to R3 (ADR
+  0107, amending 0095, 0098, 0099); the references of a call whose result
+  returns through memory get a temporary result slot. ADR 0106 and 0107 were
+  amended in place on 2026-11-11 for the later use the error labels, and ADR
+  0107 for a `&mut` base read in place under a non-simple index; a bare
+  `return` or `break` before a `,` parsed wrongly and was fixed on the way.
+  `tests/e2e/references.ers`, `references_c.ers` and `ring_references.ers` run
+  on both targets at both levels, the last being the ring buffer with free
+  functions over `&mut Ring` and `&Ring`; the wrong uses are ui tests. Left
+  open, for the planner: references returned or stored (ADR 0094), comparing
+  constant indexes (ADR 0106), `&mut` of a temporary, comparisons of
+  references and LLVM attributes on references (ADR 0105) are errors or
+  unused, to lift later without breaking programs; the `comptime` parameter and
+  `comptime T: type` positions of ADR 0105 have no code, since the language has
+  neither parameter yet; a static has no path in the borrow analysis, which
+  M5.4c must give when it allows a borrow of a `static mut`; the debug type of
+  a reference (`&T`) is not emitted, since `src/codegen/` emits no debug
+  types; and the generated programs of ADR 0068 have only scalar types, so
+  references are tested by hand-written ui and e2e programs only; and two
+  labels say "iteration of the loop" in a body with no loop (the later use of
+  a borrow in a forward block, and a move after the use in the text), which is
+  wording only, not what is accepted.
+- **Next: M5.4b** (slices behind references), the second of the three parts
+  of M5.4 (references, then slices behind them, then statics and handlers),
+  in the fourth step of M5 (moves, ownership, references and methods), whose
+  steps and model are above (ADR 0094).

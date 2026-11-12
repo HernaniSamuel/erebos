@@ -1,0 +1,187 @@
+// emit: mir
+// The borrow check (ADR 0106, 0107): an access to a place while a borrow of an
+// overlapping place is in use is `analysis::borrow-conflict`, at the access,
+// with the borrow and a later use that keeps it in use labelled. Each function
+// is one case; every one is rejected. `borrow_accepted.ers` has what is not.
+struct Pair {
+    a: u32,
+    b: u32,
+}
+
+#[linear]
+struct Ticket {
+    n: u32,
+}
+
+fn consume(p: Pair) {}
+
+fn two_mut(a: &mut u32, b: &mut u32) {}
+
+fn mut_and_shared(a: &mut u32, b: &u32) {}
+
+fn pair_and_value(p: &mut Pair, n: u32) {}
+
+// A read while a `&mut` borrow is in use.
+fn read_while_mut(mut x: u32) -> u32 {
+    let r: &mut u32 = &mut x;
+    let n: u32 = x;
+    *r = 1;
+    n
+}
+
+// A `&` borrow while a `&mut` borrow is in use.
+fn shared_while_mut(mut x: u32) -> u32 {
+    let r: &mut u32 = &mut x;
+    let q: &u32 = &x;
+    *r = 1;
+    *q
+}
+
+// A write while a `&` borrow is in use, and the same after its last use.
+fn write_while_shared(mut x: u32) -> u32 {
+    let r: &u32 = &x;
+    x = 2;
+    *r
+}
+
+// A move while a borrow is in use.
+fn move_while_borrowed(p: Pair) -> u32 {
+    let r: &Pair = &p;
+    consume(p);
+    (*r).a
+}
+
+// `end` while a borrow is in use.
+fn end_while_borrowed(t: Ticket) -> u32 {
+    let r: &Ticket = &t;
+    end(t);
+    (*r).n
+}
+
+// A `&mut` borrow while a `&` borrow is in use.
+fn mut_while_shared(mut x: u32) -> u32 {
+    let q: &u32 = &x;
+    let r: &mut u32 = &mut x;
+    *r = 1;
+    *q
+}
+
+// Two `&mut` borrows of one place in one call, and a `&mut` and a `&`.
+fn twice_mut(mut x: u32) {
+    two_mut(&mut x, &mut x);
+}
+
+fn mut_then_shared(mut x: u32) {
+    mut_and_shared(&mut x, &x);
+}
+
+// `x.a` is read while the `&mut x` held for the call is in use.
+fn mut_then_part(mut p: Pair) {
+    pair_and_value(&mut p, p.a);
+}
+
+// A reborrow keeps its base in use: `*r` is used while `q` is.
+fn reborrow(r: &mut u32) {
+    let q: &mut u32 = &mut *r;
+    *r = 1;
+    *q = 2;
+}
+
+// A reborrow keeps what its base borrows in use: `x` is written while `q`,
+// made through `r`, is used later.
+fn reborrow_of_a_borrow(mut x: u32) {
+    let r: &mut u32 = &mut x;
+    let q: &mut u32 = &mut *r;
+    x = 1;
+    *q = 2;
+}
+
+// Two elements of an array always overlap.
+fn elements(mut a: [u32; 2]) {
+    let p: &mut u32 = &mut a[0];
+    let q: &u32 = &a[1];
+    *p = *q;
+}
+
+// A use only round a loop keeps the borrow in use.
+fn in_a_loop(mut x: u32, n: u32) {
+    let r: &mut u32 = &mut x;
+    let mut i: u32 = 0;
+    while i < n {
+        *r = 1;
+        x = 2;
+        i = i + 1;
+    }
+}
+
+// A reference that may hold either borrow keeps both in use.
+fn either(c: bool, mut a: u32, mut b: u32) -> u32 {
+    let r: &u32 = if c { &a } else { &b };
+    a = 1;
+    b = 2;
+    *r
+}
+
+// A copy of a reference to `x` keeps the borrow in use: a `&mut` moved by a
+// `let`, a `&` copied.
+fn moved_reference(mut x: Pair) -> u32 {
+    let a: &mut Pair = &mut x;
+    let b: &mut Pair = a;
+    let n: u32 = x.a;
+    (*b).b = n;
+    n
+}
+
+fn copied_reference(mut x: Pair) -> u32 {
+    let a: &Pair = &x;
+    let b: &Pair = a;
+    x.a = 1;
+    (*b).b
+}
+
+// A `&mut` lent to a call twice in the same call, and lent and then converted
+// to a `&`.
+fn lent_twice(r: &mut u32) {
+    two_mut(r, r);
+}
+
+fn lent_and_converted(r: &mut u32) {
+    mut_and_shared(r, r);
+}
+
+// A `&mut` converted to a `&` that is used while the `&mut` is written.
+fn converted(r: &mut u32) -> u32 {
+    let q: &u32 = r;
+    *r = 1;
+    *q
+}
+
+// A borrow through a field of a reference, and the whole.
+fn through_a_field(p: &mut Pair) {
+    let a: &mut u32 = &mut (*p).a;
+    let q: &Pair = &*p;
+    *a = (*q).b;
+}
+
+// The address of a place taken while a borrow of it is in use: `&raw const`
+// is a read, `&raw mut` a write, and so is an `asm` output.
+fn raw_const_while_mut(mut x: u32) {
+    let r: &mut u32 = &mut x;
+    let p: *const u32 = &raw const x;
+    *r = 1;
+}
+
+fn raw_mut_while_shared(mut x: u32) -> u32 {
+    let r: &u32 = &x;
+    let p: *mut u32 = &raw mut x;
+    *r
+}
+
+fn asm_output_while_shared(mut x: u32) -> u32 {
+    let r: &u32 = &x;
+    asm("li {}, 7", out(reg) x);
+    *r
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

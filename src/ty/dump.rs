@@ -391,6 +391,8 @@ fn expr_label(q: &Queries, f: &Fn, expr: &Expr) -> String {
         ExprKind::Try(..) => "try".to_owned(),
         ExprKind::AddrOf { mutable: true, .. } => "&raw mut".to_owned(),
         ExprKind::AddrOf { mutable: false, .. } => "&raw const".to_owned(),
+        ExprKind::Ref { mutable: true, .. } => "&mut".to_owned(),
+        ExprKind::Ref { mutable: false, .. } => "&".to_owned(),
         ExprKind::Binary(op, _, _, _) => format!("binary {}", op.symbol()),
         ExprKind::Cast(_, ty, _) => format!("as {ty}"),
         ExprKind::Assign(..) => "assign".to_owned(),

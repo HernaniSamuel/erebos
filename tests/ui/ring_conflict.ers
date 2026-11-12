@@ -1,0 +1,94 @@
+// emit: mir
+// The wrong uses of the ring buffer of `tests/e2e/ring_references.ers` (M5.4a):
+// two `&mut` of the ring in one call, a `&` of it beside a `&mut`, and a write
+// of the ring (a `&mut` lent to a call) while a reference to it is used later.
+// Each is `analysis::borrow-conflict` (ADR 0106), the fields of `Ring` being
+// private to module `ring`. Every function is one case; the e2e program has the
+// right uses.
+mod ring {
+    pub struct Ring {
+        buf: [u8; 8],
+        head: usize,
+        count: usize,
+    }
+
+    pub fn new() -> Ring {
+        Ring { buf: [0; 8], head: 0, count: 0 }
+    }
+
+    pub fn push(r: &mut Ring, b: u8) -> bool {
+        if (*r).count == 8 {
+            return false;
+        }
+        let at: usize = ((*r).head + (*r).count) % 8;
+        (*r).buf[at] = b;
+        (*r).count += 1;
+        true
+    }
+
+    pub fn count(r: &Ring) -> usize {
+        (*r).count
+    }
+
+    // Moves what `from` holds to `to`.
+    pub fn transfer(from: &mut Ring, to: &mut Ring) {}
+
+    // Pushes the bytes of `from` to `to`, leaving `from` as it is.
+    pub fn append(to: &mut Ring, from: &Ring) {}
+}
+
+use ring::{Ring, append, count, push, transfer};
+
+// Two `&mut` of the ring in one call.
+fn transfer_to_itself() {
+    let mut buffer: Ring = ring::new();
+    transfer(&mut buffer, &mut buffer);
+}
+
+// A `&mut` and a `&` of the ring in one call.
+fn append_to_itself() {
+    let mut buffer: Ring = ring::new();
+    append(&mut buffer, &buffer);
+}
+
+// The same through one `&mut` parameter lent twice.
+fn transfer_through_one(r: &mut Ring) {
+    transfer(r, r);
+}
+
+// A write of the ring while a `&` of it is used later.
+fn push_while_shared() -> usize {
+    let mut buffer: Ring = ring::new();
+    let seen: &Ring = &buffer;
+    push(&mut buffer, 1);
+    count(seen)
+}
+
+// The same, the ring being written through the `&mut` that `seen` was converted
+// from: the conversion keeps `*r` borrowed.
+fn push_while_converted(r: &mut Ring) -> usize {
+    let seen: &Ring = r;
+    push(r, 1);
+    count(seen)
+}
+
+// A write of the ring while a `&mut` of it is used later.
+fn push_while_mut() -> usize {
+    let mut buffer: Ring = ring::new();
+    let held: &mut Ring = &mut buffer;
+    push(&mut buffer, 1);
+    count(held)
+}
+
+// A use of the ring after the last use of the reference is accepted: only the
+// functions above are rejected.
+fn push_after_last_use() -> usize {
+    let mut buffer: Ring = ring::new();
+    let seen: &Ring = &buffer;
+    let n: usize = count(seen);
+    push(&mut buffer, 1);
+    n
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

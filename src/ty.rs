@@ -15,7 +15,7 @@ use crate::diag::Diagnostic;
 use crate::hir::{
     self, AccessMode, BinOp, BitStructId, BitStructTy, Block, EnumId, EnumTy, Expr, ExprId,
     ExprKind, Fn, FnKind, HandlerVector, Hir, IntTy, LocalId, ModuleId, NeverPosition, PatternId,
-    PeripheralTypeId, Ptr, StaticId, Stmt, Ty, UnsizedPosition,
+    PeripheralTypeId, Ptr, Ref, StaticId, Stmt, Ty, UnsizedPosition,
 };
 use crate::layout;
 use crate::query::Queries;
@@ -26,6 +26,8 @@ pub use copy::{copy_declaration_fails, is_copy, report_copy_fields, suggest_copy
 pub use dump::dump;
 pub use linear::{has_linear_elements, is_linear, report_linear_arrays, report_linear_statics};
 use place::{Unmovable, is_place};
+use reference::is_reference;
+pub use reference::report_reference_types;
 
 mod asm;
 mod copy;
@@ -34,6 +36,7 @@ mod expr;
 mod linear;
 mod pattern;
 mod place;
+mod reference;
 mod usefulness;
 
 /// What type checking found out about expressions, for every function
@@ -223,6 +226,7 @@ fn position(position: UnsizedPosition) -> String {
 fn memory_position(position: NeverPosition) -> String {
     match position {
         NeverPosition::Pointee => "the pointee of a pointer".to_owned(),
+        NeverPosition::Referent => "the referent of a reference".to_owned(),
         NeverPosition::SliceElement => "the element type of a slice".to_owned(),
         NeverPosition::Element => "an array element".to_owned(),
         NeverPosition::Field => "the type of a field".to_owned(),
@@ -326,9 +330,10 @@ pub fn check_fn(q: &mut Queries, f: &Fn) -> usize {
 
 /// Whether a value of type `from` may be used where `to` is expected.
 /// `!` has no values, so it fits anywhere; `{error}` was already reported.
-/// The conversions are from `*mut T` to `*const T` (ADR 0024), and from a
+/// The conversions are from `*mut T` to `*const T` (ADR 0024), from a
 /// pointer to an array to a slice of its elements (ADR 0031), both of the
-/// outermost pointer only and keeping volatility.
+/// outermost pointer only and keeping volatility, and from `&mut T` to `&T`
+/// (ADR 0105).
 fn coerces(from: Ty, to: Ty) -> bool {
     from == to
         || matches!(from, Ty::Never | Ty::Error)
@@ -338,6 +343,15 @@ fn coerces(from: Ty, to: Ty) -> bool {
                 && from_ptr.volatile == to_ptr.volatile
                 && from_ptr.pointee == to_ptr.pointee)
         || unsizes(from, to)
+        || shares(from, to)
+}
+
+/// Whether `from` is a `&mut T` that converts to the `&T` `to` (ADR 0105):
+/// the one conversion that is not free, since it is a borrow of `*from` that
+/// MIR building writes (ADR 0107).
+fn shares(from: Ty, to: Ty) -> bool {
+    matches!((from, to), (Ty::Ref(from), Ty::Ref(to))
+        if from.mutable && !to.mutable && from.referent == to.referent)
 }
 
 /// Whether `from` is a pointer to an array that converts to the slice `to`
@@ -460,6 +474,13 @@ struct PlaceInfo {
     /// (ADR 0059): it has no address, and is read and written with the
     /// whole value, which volatile accesses are checked as.
     bit_field: Option<BitStructTy>,
+    /// The path to the place goes through the `*` of a reference (ADR 0105):
+    /// a value is not moved out of it, and a linear value not written to it.
+    via_ref: bool,
+    /// The place is a `static mut`, or part of one, with no pointer or
+    /// reference between: a reference to it is `ty::reference-to-static-mut`
+    /// until M5.4c (ADR 0105).
+    static_mut: Option<StaticId>,
 }
 
 /// The register `index` of the peripheral type `id`.
@@ -479,6 +500,8 @@ impl PlaceInfo {
         constant: false,
         register: None,
         bit_field: None,
+        via_ref: false,
+        static_mut: None,
     };
 
     /// The value of `base`, which is not a place expression, indexed or
@@ -492,6 +515,8 @@ impl PlaceInfo {
             constant: matches!(base.kind, ExprKind::Const(_)),
             register: None,
             bit_field: None,
+            via_ref: false,
+            static_mut: None,
         }
     }
 
@@ -506,6 +531,25 @@ impl PlaceInfo {
             constant: false,
             register: None,
             bit_field: None,
+            via_ref: false,
+            static_mut: None,
+        }
+    }
+
+    /// The place a reference refers to; `reference` is the reference's
+    /// expression. It is not volatile (ADR 0105), and written only through a
+    /// `&mut`.
+    fn through_ref(r: Ref, reference: Span) -> PlaceInfo {
+        PlaceInfo {
+            ty: *r.referent,
+            immutable: (!r.mutable).then_some(Immutable::SharedRef(r, reference)),
+            via: None,
+            misaligned: false,
+            constant: false,
+            register: None,
+            bit_field: None,
+            via_ref: true,
+            static_mut: None,
         }
     }
 }
@@ -522,6 +566,8 @@ enum Immutable {
     Static(StaticId),
     /// A byte string, in read-only memory (ADR 0031), written at the span.
     ByteString(Span),
+    /// A place reached through a `&T`, written at the span (ADR 0105).
+    SharedRef(Ref, Span),
 }
 
 struct LoopCtx {
@@ -582,6 +628,7 @@ impl Checker<'_, '_> {
         if let Some(body) = &f.body {
             self.checked_block(f, body, self.ret, because);
             self.report_made_arrays(body);
+            self.report_made_references(body);
             if f.kind == FnKind::Naked {
                 self.naked_body(f, body);
             }
@@ -854,7 +901,7 @@ impl Checker<'_, '_> {
             ExprKind::Block(b) | ExprKind::Critical(b) if b.tail.is_some()
         ) || matches!(expr.kind, ExprKind::Comptime(_));
         if let Some(expected) = expected
-            && unsizes(ty, expected)
+            && (unsizes(ty, expected) || shares(ty, expected))
         {
             if reported_inside {
                 // Converted inside, so this value is the slice.
@@ -909,6 +956,14 @@ impl Checker<'_, '_> {
                 "a `*const` pointer never becomes `*mut` implicitly; cast with `as` if writing through it is allowed",
             );
         }
+        if let (Ty::Ref(want), Ty::Ref(have)) = (expected, found)
+            && want.mutable
+            && !have.mutable
+        {
+            diag = diag.help(
+                "a `&` reference never becomes `&mut`; borrow the place with `&mut` if it may be written",
+            );
+        }
         if expected == Ty::Never && matches!(expr.kind, ExprKind::While { .. }) {
             diag =
                 diag.help("a `while` loop can finish even with `true`; use `loop` to run forever");
@@ -942,7 +997,12 @@ impl Checker<'_, '_> {
                 }
             }
             ExprKind::Local(local) => self.local_ty(f, *local),
-            ExprKind::Const(id) => self.norm(self.hir.const_(*id).ty),
+            // A constant of a reference type was reported at its type; its
+            // uses report nothing more (ADR 0105).
+            ExprKind::Const(id) => match self.norm(self.hir.const_(*id).ty) {
+                ty if is_reference(ty) => Ty::Error,
+                ty => ty,
+            },
             ExprKind::Variant(id, index, args) => {
                 self.variant(f, expr, *id, *index, args.as_deref())
             }
@@ -1092,11 +1152,19 @@ impl Checker<'_, '_> {
                 info.ty
             }
             ExprKind::AddrOf { mutable, place } => self.addr_of(f, *mutable, place),
+            ExprKind::Ref { mutable, place } => {
+                // A literal under `&` takes the referent type expected.
+                let want = match expected {
+                    Some(Ty::Ref(r)) => Some(*r.referent),
+                    _ => None,
+                };
+                self.borrow(f, *mutable, place, want)
+            }
             ExprKind::Try(operand, _) => self.try_(f, expr, operand),
             ExprKind::Assign(place, value) => {
-                let (place_ty, through_pointer) = self.place_via(f, place, AccessMode::Write);
+                let (place_ty, through) = self.place_via(f, place, AccessMode::Write);
                 let value_ty = self.check(f, value, Some(place_ty));
-                self.check_linear_write(expr, through_pointer, value_ty);
+                self.check_linear_write(expr, through, value_ty);
                 Ty::Unit
             }
             ExprKind::CompoundAssign(op, place, value, _) => {
@@ -1233,6 +1301,8 @@ impl Checker<'_, '_> {
             // Aggregates compare part by part (ADR 0021); an `Option(T)`
             // is checked as the enum it is (ADR 0045).
             Ty::Unit | Ty::Array(..) | Ty::Slice(_) | Ty::Struct(_) | Ty::Applied(_) => false,
+            // Neither the values nor the addresses are meant (ADR 0105).
+            Ty::Ref(_) => false,
             // A device, reached one register at a time (ADR 0058).
             Ty::Peripheral(_) => false,
             // Compared field by field, or as an integer made with `as`
@@ -1261,6 +1331,12 @@ impl Checker<'_, '_> {
                 );
             }
             match ty {
+                Ty::Ref(r) => {
+                    diag = diag.help(format!(
+                        "neither meaning is implied: compare the values with `*a == *b`, or the addresses with `a as *const {} == b as *const {}` (ADR 0105)",
+                        r.referent, r.referent
+                    ));
+                }
                 Ty::Enum(EnumTy { payloads: true, .. }) => {
                     diag = diag.help(
                         "an enum with payloads is an aggregate, which operators do not apply to; tell its variants apart with a `match` (ADR 0039)",
@@ -1476,6 +1552,32 @@ mod tests {
         assert!(!coerces(
             Ty::ptr(true, false, mut_),
             Ty::ptr(true, false, const_)
+        ));
+    }
+
+    #[test]
+    fn mut_references_coerce_to_shared() {
+        let u8_ = Ty::Int(IntTy::U8);
+        let mut_ = Ty::reference(true, u8_);
+        let shared = Ty::reference(false, u8_);
+        assert!(coerces(mut_, shared));
+        assert!(shares(mut_, shared));
+        // Never the other way, and a reference is not its own conversion.
+        assert!(!coerces(shared, mut_));
+        assert!(!shares(shared, shared));
+        assert!(!shares(mut_, mut_));
+        // Not to another referent, nor to or from a raw pointer.
+        assert!(!coerces(mut_, Ty::reference(false, Ty::Int(IntTy::I8))));
+        assert!(!coerces(mut_, Ty::ptr(false, false, u8_)));
+        assert!(!coerces(Ty::ptr(true, false, u8_), shared));
+        // Only the outermost reference converts.
+        assert!(coerces(
+            Ty::reference(true, mut_),
+            Ty::reference(false, mut_)
+        ));
+        assert!(!coerces(
+            Ty::reference(true, mut_),
+            Ty::reference(false, shared)
         ));
     }
 

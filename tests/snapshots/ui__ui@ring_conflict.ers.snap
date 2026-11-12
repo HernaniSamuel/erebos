@@ -1,0 +1,102 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/ring_conflict.ers
+---
+--- errors ---
+analysis::borrow-conflict
+
+  × cannot borrow `buffer` as mutable while it is borrowed
+    ╭─[ring_conflict.ers:45:27]
+ 44 │     let mut buffer: Ring = ring::new();
+ 45 │     transfer(&mut buffer, &mut buffer);
+    ·     ─────────────────┬────────────────┬┬
+    ·                      │                │╰── borrowed as mutable here
+    ·                      │                ╰── `buffer` is borrowed as mutable here
+    ·                      ╰── the borrow is used later here
+ 46 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot borrow `buffer` while it is borrowed as mutable
+    ╭─[ring_conflict.ers:51:25]
+ 50 │     let mut buffer: Ring = ring::new();
+ 51 │     append(&mut buffer, &buffer);
+    ·     ──────────────┬─────────────┬┬
+    ·                   │             │╰── borrowed here
+    ·                   │             ╰── `buffer` is borrowed as mutable here
+    ·                   ╰── the borrow is used later here
+ 52 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot lend `r` to this call while it is borrowed
+    ╭─[ring_conflict.ers:56:17]
+ 55 │ fn transfer_through_one(r: &mut Ring) {
+ 56 │     transfer(r, r);
+    ·     ───────┬──────┬┬
+    ·            │      │╰── lent to this call here
+    ·            │      ╰── `r` is lent to this call
+    ·            ╰── the borrow is used later here
+ 57 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot borrow `buffer` as mutable while it is borrowed
+    ╭─[ring_conflict.ers:63:10]
+ 61 │     let mut buffer: Ring = ring::new();
+ 62 │     let seen: &Ring = &buffer;
+    ·                       ───┬───
+    ·                          ╰── `buffer` is borrowed here
+ 63 │     push(&mut buffer, 1);
+    ·          ─────┬─────
+    ·               ╰── borrowed as mutable here
+ 64 │     count(seen)
+    ·     ─────┬─────
+    ·          ╰── the borrow is used later here
+ 65 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot lend `r` to this call while it is borrowed
+    ╭─[ring_conflict.ers:71:10]
+ 69 │ fn push_while_converted(r: &mut Ring) -> usize {
+ 70 │     let seen: &Ring = r;
+    ·                       ┬
+    ·                       ╰── `r` is converted to `&` here
+ 71 │     push(r, 1);
+    ·          ┬
+    ·          ╰── lent to this call here
+ 72 │     count(seen)
+    ·     ─────┬─────
+    ·          ╰── the borrow is used later here
+ 73 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot borrow `buffer` as mutable while it is borrowed
+    ╭─[ring_conflict.ers:79:10]
+ 77 │     let mut buffer: Ring = ring::new();
+ 78 │     let held: &mut Ring = &mut buffer;
+    ·                           ─────┬─────
+    ·                                ╰── `buffer` is borrowed as mutable here
+ 79 │     push(&mut buffer, 1);
+    ·          ─────┬─────
+    ·               ╰── borrowed as mutable here
+ 80 │     count(held)
+    ·     ─────┬─────
+    ·          ╰── the borrow is used later here
+ 81 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)

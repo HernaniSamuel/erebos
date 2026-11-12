@@ -268,7 +268,8 @@ pub fn of(ty: Ty, composite: &mut impl FnMut(Composite) -> Option<Layout>) -> Op
             size: 2 * target::POINTER_BYTES,
             align: target::POINTER_BYTES,
         },
-        Ty::Ptr(_) => Layout {
+        // A reference is a thin pointer (ADR 0105).
+        Ty::Ptr(_) | Ty::Ref(_) => Layout {
             size: target::POINTER_BYTES,
             align: target::POINTER_BYTES,
         },

@@ -534,6 +534,37 @@ const CATALOG: &[Snippet] = &[
         "let injected_n: u32 = 1;\nlet injected_p: *mut u32 = &raw mut injected_n;"
     ),
     s!(
+        "ty::mut-borrow-of-immutable",
+        Mir,
+        Statements,
+        "let injected_n: u32 = 1;
+let injected_r: &mut u32 = &mut injected_n;"
+    ),
+    s!(
+        "ty::reference-position",
+        Mir,
+        Items,
+        "struct InjHolder { injected_r: &u32 }
+fn injected_use(injected_h: InjHolder) {}"
+    ),
+    s!(
+        "ty::reference-to-static-mut",
+        Mir,
+        Items,
+        "static mut INJ_COUNTER: u32 = 0;
+fn injected_use() {
+    let injected_r: &u32 = &INJ_COUNTER;
+}"
+    ),
+    s!(
+        "ty::reference-to-volatile",
+        Mir,
+        Items,
+        "fn injected_use(injected_p: *mut volatile u32) {
+    let injected_r: &u32 = &*injected_p;
+}"
+    ),
+    s!(
         "ty::never-in-memory",
         Mir,
         Items,
@@ -909,6 +940,17 @@ fn injected_take(injected_h: InjHandle6) {}
 fn injected_f(injected_h: InjHandle6) {
     injected_take(injected_h);
     injected_take(injected_h);
+}"
+    ),
+    s!(
+        "analysis::borrow-conflict",
+        Mir,
+        Items,
+        "fn injected_f(mut injected_x: u32) -> u32 {
+    let injected_r: &mut u32 = &mut injected_x;
+    injected_x = 2;
+    *injected_r = 3;
+    injected_x
 }"
     ),
     s!(

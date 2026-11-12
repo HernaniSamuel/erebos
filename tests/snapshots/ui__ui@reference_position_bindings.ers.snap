@@ -1,0 +1,65 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/reference_position_bindings.ers
+---
+--- errors ---
+ty::reference-position
+
+  × a reference cannot be the type of a `mut` parameter
+    ╭─[reference_position_bindings.ers:10:21]
+  9 │ 
+ 10 │ fn parameter(mut r: &u32) -> u32 {
+    ·                     ──┬─
+    ·                       ╰── `&u32` is a reference
+ 11 │     *r
+    ╰────
+  help: a reference is bound once (ADR 0094, 0105); declare a new `let` or parameter without `mut`
+        instead of changing this one
+ty::reference-position
+
+  × a reference cannot be the type of a `mut` variable
+    ╭─[reference_position_bindings.ers:15:16]
+ 14 │ fn variable() -> u32 {
+ 15 │     let mut r: &u32 = &VALUE;
+    ·                ──┬─
+    ·                  ╰── `&u32` is a reference
+ 16 │     *r
+    ╰────
+  help: a reference is bound once (ADR 0094, 0105); declare a new `let` or parameter without `mut`
+        instead of changing this one
+ty::reference-position
+
+  × a reference cannot be the type of a `mut` parameter
+    ╭─[reference_position_bindings.ers:19:17]
+ 18 │ 
+ 19 │ fn twice(mut r: &&u32) {}
+    ·                 ──┬──
+    ·                   ╰── `&&u32` is a reference
+ 20 │ 
+    ╰────
+  help: a reference is bound once (ADR 0094, 0105); declare a new `let` or parameter without `mut`
+        instead of changing this one
+ty::reference-position
+
+  × a reference cannot be the type of a `mut` variable
+    ╭─[reference_position_bindings.ers:23:26]
+ 22 │     match o {
+ 23 │         .Some(let mut r: &u32) => 1,
+    ·                          ──┬─
+    ·                            ╰── `&u32` is a reference
+ 24 │         .None => 0,
+    ╰────
+  help: a reference is bound once (ADR 0094, 0105); declare a new `let` or parameter without `mut`
+        instead of changing this one
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[reference_position_bindings.ers:23:26]
+ 22 │     match o {
+ 23 │         .Some(let mut r: &u32) => 1,
+    ·                          ──┬─
+    ·                            ╰── expected `u8`, found `&u32`
+ 24 │         .None => 0,
+    ╰────
+  help: the variable holds the value matched, a `u8`, which a pattern never converts (ADR 0037)

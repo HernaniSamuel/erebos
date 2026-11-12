@@ -1,0 +1,63 @@
+// emit: mir
+// A function that takes and uses references runs at compile time: the
+// evaluator runs a borrow as it runs `&raw` and a read through it as a read
+// through that pointer (ADR 0105, 0107). A borrow of a `static` is what
+// `&raw const` of it is: it compares with it.
+static TABLE: [u32; 3] = [10, 20, 30];
+
+fn fill(out: &mut [u32; 4], first: u32) {
+    (*out)[0] = first;
+    (*out)[1] = first + 1;
+    (*out)[2] = first + 2;
+    (*out)[3] = first + 3;
+}
+
+fn filled() -> [u32; 4] {
+    let mut a: [u32; 4] = [0; 4];
+    fill(&mut a, 5);
+    a
+}
+
+const FILLED: [u32; 4] = filled();
+
+fn sum_of(r: &[u32; 3]) -> u32 {
+    (*r)[1] + (*r)[2]
+}
+
+fn through_static() -> u32 {
+    sum_of(&TABLE)
+}
+
+const SUM: u32 = through_static();
+
+fn same_address() -> bool {
+    let r: &[u32; 3] = &TABLE;
+    let p: *const [u32; 3] = &raw const TABLE;
+    (r as *const [u32; 3]) == p
+}
+
+const SAME: bool = same_address();
+
+// A `&mut` lent to two calls, then converted to a `&` (ADR 0106, 0107).
+fn total(r: &[u32; 4]) -> u32 {
+    (*r)[0] + (*r)[3]
+}
+
+fn lent() -> u32 {
+    let mut a: [u32; 4] = [0; 4];
+    let r: &mut [u32; 4] = &mut a;
+    fill(r, 1);
+    fill(r, 2);
+    total(r)
+}
+
+const LENT: u32 = lent();
+
+// Expected: 8 + 50 + 7; true.
+fn answers() -> u32 {
+    let same: bool = SAME;
+    FILLED[3] + SUM + LENT
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

@@ -1,0 +1,30 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/reference_linear.ers
+---
+--- errors ---
+ty::linear-through-pointer
+
+  × cannot move a value of the linear type `Guard` into a place reached through a reference
+    ╭─[reference_linear.ers:24:5]
+ 23 │ fn replace(slot: &mut Guard) {
+ 24 │     *slot = make();
+    ·     ───────┬──────
+    ·            ╰── `Guard` is linear
+ 25 │ }
+    ╰────
+  help: a value put there could never be moved out again (ADR 0097), so it would be forgotten;
+        keep the value in a variable, or write its copy fields through the reference (ADR 0101)
+ty::linear-through-pointer
+
+  × cannot move a value of the linear type `Guard` into a place reached through a reference
+    ╭─[reference_linear.ers:28:5]
+ 27 │ fn replace_field(slot: &mut Pair) {
+ 28 │     (*slot).guard = make();
+    ·     ───────────┬──────────
+    ·                ╰── `Guard` is linear
+ 29 │ }
+    ╰────
+  help: a value put there could never be moved out again (ADR 0097), so it would be forgotten;
+        keep the value in a variable, or write its copy fields through the reference (ADR 0101)

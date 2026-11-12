@@ -1,0 +1,23 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/reference_comptime_errors.ers
+---
+--- errors ---
+eval::pointer-to-int
+
+  × this pointer's address only exists after linking
+    ╭─[reference_comptime_errors.ers:8:5]
+  7 │     let r: &[u32; 3] = &TABLE;
+  8 │     r as *const [u32; 3] as usize
+    ·     ──────────────┬──────────────
+    ·                   ╰── converted here
+  9 │ }
+ 10 │ 
+ 11 │ const ADDRESS: usize = address_of_static();
+    ·       ───┬───          ─────────┬─────────
+    ·          │                      ╰── called here
+    ·          ╰── while evaluating the constant `ADDRESS`
+ 12 │ 
+    ╰────
+  help: this code runs at compile time (ADR 0027)

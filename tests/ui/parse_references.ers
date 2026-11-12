@@ -1,0 +1,24 @@
+// emit: ast
+// `&T` and `&mut T` are types, `&e` and `&mut e` prefix expressions. `&raw`
+// followed by `const` or `mut` is still an address; followed by anything else
+// it borrows a place whose path starts with a variable named `raw`. `&&x` and
+// `&&T` are two borrows and two references (ADR 0105).
+fn types(a: &u32, b: &mut u32, c: &[u8; 4], d: *const &u32, e: &&u32, f: &mut &u32) {}
+
+fn expressions(x: u32, raw: u32, mut p: Pair) {
+    let a: &u32 = &x;
+    let b: &mut u32 = &mut x;
+    let c: *const u32 = &raw const x;
+    let d: *mut u32 = &raw mut x;
+    let e: &u32 = &raw;
+    let f: &u32 = &raw.field;
+    let g: &mut u32 = &mut raw;
+    let h: &&u32 = &&x;
+    let i: &&mut u32 = &&mut x;
+    let j: &mut &u32 = &mut &x;
+    let k: &u32 = &*r;
+    let l: &mut u32 = &mut p.a;
+    let m: &u32 = &(*r).items[1];
+    let n: bool = a == &x && &x == b;
+    let o: u32 = &x as *const u32 as u32;
+}

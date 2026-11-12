@@ -1,0 +1,35 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/reference_lending_moved.ers
+---
+--- errors ---
+analysis::use-after-move
+
+  × use of moved value `r`
+    ╭─[reference_lending_moved.ers:11:10]
+  8 │ fn moved_by_let(r: &mut u32) {
+  9 │     let q: &mut u32 = r;
+    ·                       ┬
+    ·                       ╰── moved here
+ 10 │     bump(q);
+ 11 │     bump(r);
+    ·          ┬
+    ·          ╰── used here, after it was moved
+ 12 │ }
+    ╰────
+  help: a place that was moved is valid again once it is assigned a new value (ADR 0097)
+analysis::use-after-move
+
+  × use of moved value `a`
+    ╭─[reference_lending_moved.ers:16:10]
+ 14 │ fn moved_by_argument_value(a: &mut u32, b: &mut u32, c: bool) {
+ 15 │     let n: &mut u32 = if c { a } else { b };
+    ·                              ┬
+    ·                              ╰── moved here
+ 16 │     bump(a);
+    ·          ┬
+    ·          ╰── used here, after it was moved
+ 17 │ }
+    ╰────
+  help: a place that was moved is valid again once it is assigned a new value (ADR 0097)

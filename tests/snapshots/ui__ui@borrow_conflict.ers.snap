@@ -1,0 +1,426 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/borrow_conflict.ers
+---
+--- errors ---
+analysis::borrow-conflict
+
+  × cannot use `x` while it is borrowed as mutable
+    ╭─[borrow_conflict.ers:27:18]
+ 25 │ fn read_while_mut(mut x: u32) -> u32 {
+ 26 │     let r: &mut u32 = &mut x;
+    ·                       ───┬──
+    ·                          ╰── `x` is borrowed as mutable here
+ 27 │     let n: u32 = x;
+    ·                  ┬
+    ·                  ╰── used here
+ 28 │     *r = 1;
+    ·     ───┬──
+    ·        ╰── the borrow is used later here
+ 29 │     n
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot borrow `x` while it is borrowed as mutable
+    ╭─[borrow_conflict.ers:35:19]
+ 33 │ fn shared_while_mut(mut x: u32) -> u32 {
+ 34 │     let r: &mut u32 = &mut x;
+    ·                       ───┬──
+    ·                          ╰── `x` is borrowed as mutable here
+ 35 │     let q: &u32 = &x;
+    ·                   ─┬
+    ·                    ╰── borrowed here
+ 36 │     *r = 1;
+    ·     ───┬──
+    ·        ╰── the borrow is used later here
+ 37 │     *q
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot assign to `x` while it is borrowed
+    ╭─[borrow_conflict.ers:43:5]
+ 41 │ fn write_while_shared(mut x: u32) -> u32 {
+ 42 │     let r: &u32 = &x;
+    ·                   ─┬
+    ·                    ╰── `x` is borrowed here
+ 43 │     x = 2;
+    ·     ──┬──
+    ·       ╰── assigned here
+ 44 │     *r
+    ·     ─┬
+    ·      ╰── the borrow is used later here
+ 45 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot move out of `p` while it is borrowed
+    ╭─[borrow_conflict.ers:50:13]
+ 48 │ fn move_while_borrowed(p: Pair) -> u32 {
+ 49 │     let r: &Pair = &p;
+    ·                    ─┬
+    ·                     ╰── `p` is borrowed here
+ 50 │     consume(p);
+    ·             ┬
+    ·             ╰── moved here
+ 51 │     (*r).a
+    ·     ───┬──
+    ·        ╰── the borrow is used later here
+ 52 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot end `t` while it is borrowed
+    ╭─[borrow_conflict.ers:57:9]
+ 55 │ fn end_while_borrowed(t: Ticket) -> u32 {
+ 56 │     let r: &Ticket = &t;
+    ·                      ─┬
+    ·                       ╰── `t` is borrowed here
+ 57 │     end(t);
+    ·         ┬
+    ·         ╰── ended here
+ 58 │     (*r).n
+    ·     ───┬──
+    ·        ╰── the borrow is used later here
+ 59 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot borrow `x` as mutable while it is borrowed
+    ╭─[borrow_conflict.ers:64:23]
+ 62 │ fn mut_while_shared(mut x: u32) -> u32 {
+ 63 │     let q: &u32 = &x;
+    ·                   ─┬
+    ·                    ╰── `x` is borrowed here
+ 64 │     let r: &mut u32 = &mut x;
+    ·                       ───┬──
+    ·                          ╰── borrowed as mutable here
+ 65 │     *r = 1;
+ 66 │     *q
+    ·     ─┬
+    ·      ╰── the borrow is used later here
+ 67 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot borrow `x` as mutable while it is borrowed
+    ╭─[borrow_conflict.ers:71:21]
+ 70 │ fn twice_mut(mut x: u32) {
+ 71 │     two_mut(&mut x, &mut x);
+    ·     ───────────┬───────────┬┬
+    ·                │           │╰── borrowed as mutable here
+    ·                │           ╰── `x` is borrowed as mutable here
+    ·                ╰── the borrow is used later here
+ 72 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot borrow `x` while it is borrowed as mutable
+    ╭─[borrow_conflict.ers:75:28]
+ 74 │ fn mut_then_shared(mut x: u32) {
+ 75 │     mut_and_shared(&mut x, &x);
+    ·     ─────────────┬────────────┬┬
+    ·                  │            │╰── borrowed here
+    ·                  │            ╰── `x` is borrowed as mutable here
+    ·                  ╰── the borrow is used later here
+ 76 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot use `p.a` while it is borrowed as mutable
+    ╭─[borrow_conflict.ers:80:28]
+ 79 │ fn mut_then_part(mut p: Pair) {
+ 80 │     pair_and_value(&mut p, p.a);
+    ·     ─────────────┬─────────────┬┬
+    ·                  │             │╰── used here
+    ·                  │             ╰── `p` is borrowed as mutable here
+    ·                  ╰── the borrow is used later here
+ 81 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot assign to `*r` while it is borrowed
+    ╭─[borrow_conflict.ers:86:5]
+ 84 │ fn reborrow(r: &mut u32) {
+ 85 │     let q: &mut u32 = &mut *r;
+    ·                       ───┬───
+    ·                          ╰── `*r` is borrowed as mutable here
+ 86 │     *r = 1;
+    ·     ───┬──
+    ·        ╰── assigned here
+ 87 │     *q = 2;
+    ·     ───┬──
+    ·        ╰── the borrow is used later here
+ 88 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot assign to `x` while it is borrowed
+    ╭─[borrow_conflict.ers:95:5]
+ 92 │ fn reborrow_of_a_borrow(mut x: u32) {
+ 93 │     let r: &mut u32 = &mut x;
+    ·                       ───┬──
+    ·                          ╰── `x` is borrowed as mutable here
+ 94 │     let q: &mut u32 = &mut *r;
+ 95 │     x = 1;
+    ·     ──┬──
+    ·       ╰── assigned here
+ 96 │     *q = 2;
+    ·     ───┬──
+    ·        ╰── the borrow is used later here
+ 97 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot borrow `a[_]` while it is borrowed as mutable
+     ╭─[borrow_conflict.ers:102:19]
+ 100 │ fn elements(mut a: [u32; 2]) {
+ 101 │     let p: &mut u32 = &mut a[0];
+     ·                       ────┬────
+     ·                           ╰── `a[_]` is borrowed as mutable here
+ 102 │     let q: &u32 = &a[1];
+     ·                   ──┬──
+     ·                     ╰── borrowed here
+ 103 │     *p = *q;
+     ·     ───┬───
+     ·        ╰── the borrow is used later here
+ 104 │ }
+     ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot assign to `x` while it is borrowed
+     ╭─[borrow_conflict.ers:112:9]
+ 107 │ fn in_a_loop(mut x: u32, n: u32) {
+ 108 │     let r: &mut u32 = &mut x;
+     ·                       ───┬──
+     ·                          ╰── `x` is borrowed as mutable here
+ 109 │     let mut i: u32 = 0;
+ 110 │     while i < n {
+ 111 │         *r = 1;
+     ·         ───┬──
+     ·            ╰── the borrow is used in the next iteration of the loop
+ 112 │         x = 2;
+     ·         ──┬──
+     ·           ╰── assigned here
+ 113 │         i = i + 1;
+     ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot assign to `a` while it is borrowed
+     ╭─[borrow_conflict.ers:120:5]
+ 118 │ fn either(c: bool, mut a: u32, mut b: u32) -> u32 {
+ 119 │     let r: &u32 = if c { &a } else { &b };
+     ·                          ─┬
+     ·                           ╰── `a` is borrowed here
+ 120 │     a = 1;
+     ·     ──┬──
+     ·       ╰── assigned here
+ 121 │     b = 2;
+ 122 │     *r
+     ·     ─┬
+     ·      ╰── the borrow is used later here
+ 123 │ }
+     ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot assign to `b` while it is borrowed
+     ╭─[borrow_conflict.ers:121:5]
+ 118 │ fn either(c: bool, mut a: u32, mut b: u32) -> u32 {
+ 119 │     let r: &u32 = if c { &a } else { &b };
+     ·                                      ─┬
+     ·                                       ╰── `b` is borrowed here
+ 120 │     a = 1;
+ 121 │     b = 2;
+     ·     ──┬──
+     ·       ╰── assigned here
+ 122 │     *r
+     ·     ─┬
+     ·      ╰── the borrow is used later here
+ 123 │ }
+     ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot use `x.a` while it is borrowed as mutable
+     ╭─[borrow_conflict.ers:130:18]
+ 127 │ fn moved_reference(mut x: Pair) -> u32 {
+ 128 │     let a: &mut Pair = &mut x;
+     ·                        ───┬──
+     ·                           ╰── `x` is borrowed as mutable here
+ 129 │     let b: &mut Pair = a;
+ 130 │     let n: u32 = x.a;
+     ·                  ─┬─
+     ·                   ╰── used here
+ 131 │     (*b).b = n;
+     ·     ─────┬────
+     ·          ╰── the borrow is used later here
+ 132 │     n
+     ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot assign to `x.a` while it is borrowed
+     ╭─[borrow_conflict.ers:138:5]
+ 135 │ fn copied_reference(mut x: Pair) -> u32 {
+ 136 │     let a: &Pair = &x;
+     ·                    ─┬
+     ·                     ╰── `x` is borrowed here
+ 137 │     let b: &Pair = a;
+ 138 │     x.a = 1;
+     ·     ───┬───
+     ·        ╰── assigned here
+ 139 │     (*b).b
+     ·     ───┬──
+     ·        ╰── the borrow is used later here
+ 140 │ }
+     ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot lend `r` to this call while it is borrowed
+     ╭─[borrow_conflict.ers:145:16]
+ 144 │ fn lent_twice(r: &mut u32) {
+ 145 │     two_mut(r, r);
+     ·     ──────┬──────┬┬
+     ·           │      │╰── lent to this call here
+     ·           │      ╰── `r` is lent to this call
+     ·           ╰── the borrow is used later here
+ 146 │ }
+     ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot convert `r` to `&` while it is borrowed as mutable
+     ╭─[borrow_conflict.ers:149:23]
+ 148 │ fn lent_and_converted(r: &mut u32) {
+ 149 │     mut_and_shared(r, r);
+     ·     ──────────┬─────────┬┬
+     ·               │         │╰── converted to `&` here
+     ·               │         ╰── `r` is lent to this call
+     ·               ╰── the borrow is used later here
+ 150 │ }
+     ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot assign to `*r` while it is borrowed
+     ╭─[borrow_conflict.ers:155:5]
+ 153 │ fn converted(r: &mut u32) -> u32 {
+ 154 │     let q: &u32 = r;
+     ·                   ┬
+     ·                   ╰── `r` is converted to `&` here
+ 155 │     *r = 1;
+     ·     ───┬──
+     ·        ╰── assigned here
+ 156 │     *q
+     ·     ─┬
+     ·      ╰── the borrow is used later here
+ 157 │ }
+     ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot convert `p` to `&` while it is borrowed as mutable
+     ╭─[borrow_conflict.ers:162:20]
+ 160 │ fn through_a_field(p: &mut Pair) {
+ 161 │     let a: &mut u32 = &mut (*p).a;
+     ·                       ─────┬─────
+     ·                            ╰── `(*p).a` is borrowed as mutable here
+ 162 │     let q: &Pair = &*p;
+     ·                    ─┬─
+     ·                     ╰── converted to `&` here
+ 163 │     *a = (*q).b;
+     ·     ─────┬─────
+     ·          ╰── the borrow is used later here
+ 164 │ }
+     ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot take `&raw const` of `x` while it is borrowed as mutable
+     ╭─[borrow_conflict.ers:170:25]
+ 168 │ fn raw_const_while_mut(mut x: u32) {
+ 169 │     let r: &mut u32 = &mut x;
+     ·                       ───┬──
+     ·                          ╰── `x` is borrowed as mutable here
+ 170 │     let p: *const u32 = &raw const x;
+     ·                         ──────┬─────
+     ·                               ╰── address taken here
+ 171 │     *r = 1;
+     ·     ───┬──
+     ·        ╰── the borrow is used later here
+ 172 │ }
+     ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot take `&raw mut` of `x` while it is borrowed
+     ╭─[borrow_conflict.ers:176:23]
+ 174 │ fn raw_mut_while_shared(mut x: u32) -> u32 {
+ 175 │     let r: &u32 = &x;
+     ·                   ─┬
+     ·                    ╰── `x` is borrowed here
+ 176 │     let p: *mut u32 = &raw mut x;
+     ·                       ─────┬────
+     ·                            ╰── address taken here
+ 177 │     *r
+     ·     ─┬
+     ·      ╰── the borrow is used later here
+ 178 │ }
+     ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot assign to `x` while it is borrowed
+     ╭─[borrow_conflict.ers:182:5]
+ 180 │ fn asm_output_while_shared(mut x: u32) -> u32 {
+ 181 │     let r: &u32 = &x;
+     ·                   ─┬
+     ·                    ╰── `x` is borrowed here
+ 182 │     asm("li {}, 7", out(reg) x);
+     ·     ─────────────┬─────────────
+     ·                  ╰── assigned here
+ 183 │     *r
+     ·     ─┬
+     ·      ╰── the borrow is used later here
+ 184 │ }
+     ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)

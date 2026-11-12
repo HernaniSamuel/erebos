@@ -1,0 +1,105 @@
+// emit: typeck
+// What a reference cannot do. `&mut` needs a place that can be written; `*r`
+// through a `&T` cannot be; `r.f` and `r[i]` are not automatic; a reference
+// casts to a raw pointer and to nothing else, is never the target of a cast,
+// and is not compared; it has no address in a bit field, a register, a
+// misaligned field, or a place of type `!` (ADR 0105).
+extern static EXTERNAL: u32;
+static TABLE: [u32; 2] = [1, 2];
+
+struct Pair {
+    a: u32,
+    b: u32,
+}
+
+#[packed]
+struct Packed {
+    byte: u8,
+    word: u32,
+}
+
+struct Flags: u8 {
+    low: u8 at 0..=3,
+    high: u8 at 4..=7,
+}
+
+peripheral Timer {
+    read write count: u32 at 0,
+}
+
+peripheral TIMER: Timer at 0x4000_0000;
+
+fn make() -> Pair {
+    Pair { a: 1, b: 2 }
+}
+
+fn mut_borrows(r: &u32, p: *const u32, pair: Pair) {
+    let x: u32 = 1;
+    let a: &mut u32 = &mut x;
+    let b: &mut [u32; 2] = &mut TABLE;
+    let c: &mut [u8; 3] = &mut b"abc";
+    let d: &mut Pair = &mut make();
+    let e: &mut u32 = &mut *r;
+    let f: &mut u32 = &mut *p;
+    let g: &mut u32 = &mut EXTERNAL;
+    let h: &mut u32 = &mut make().a;
+    let i: &mut u32 = &mut pair.a;
+    let j: &mut u32 = &mut 5;
+}
+
+fn writes(r: &u32, s: &mut u32) {
+    *r = 5;
+    (*r) += 1;
+    *s = 5;
+}
+
+fn not_automatic(r: &Pair, a: &[u32; 2], n: u32) {
+    let x: u32 = r.a;
+    let y: u32 = a[0];
+    let z: u32 = *n;
+}
+
+fn comparisons(a: &u32, b: &u32) {
+    let x: bool = a == b;
+    let y: bool = a < b;
+}
+
+fn casts(r: &u32, p: *const u32) {
+    let a: usize = r as usize;
+    let b: bool = r as bool;
+    let c: u8 = r as u8;
+    let d: &u32 = 5 as &u32;
+    let e: &u32 = (&raw const *r) as &u32;
+    let f: &u32 = p as &u32;
+}
+
+fn addresses(f: Flags, p: &Packed) {
+    let a: &u8 = &f.low;
+    let b: &u32 = &(*p).word;
+    let c: &u32 = &TIMER.count;
+    let d: &u32 = &*loop {};
+}
+
+fn asm_operand(r: &u32) {
+    asm("{}", in(reg) r);
+}
+
+fn raw_mut_through_shared(r: &u32) {
+    let p: *mut u32 = &raw mut *r;
+}
+
+fn referents(a: &!, b: &[u8], c: &Timer) {}
+
+fn borrowed_whole(s: *mut [u32]) {
+    let a: &u32 = &*s;
+    let b: &mut u32 = &mut *s;
+    let c: &u32 = &TIMER;
+}
+
+fn never_values() {
+    let a: &u32 = &loop {};
+    let b: &mut u32 = &mut loop {};
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

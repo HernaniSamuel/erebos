@@ -1,0 +1,70 @@
+// emit: mir
+// Expressions that make a type holding a reference below its top (ADR 0105),
+// reported at the innermost one and not again at those above it: an array of
+// references, `&` and `&mut` of a reference, `&raw` of one; and the value of a
+// `critical` block or of a `comptime` expression that is a reference. None
+// reaches MIR (rule R1 of ADR 0107). The references themselves, as arguments,
+// initializers and operands of `*` and `as`, are not reported.
+static X: u32 = 1;
+static Y: u32 = 2;
+
+fn take(r: &u32) -> u32 {
+    *r
+}
+
+fn arrays(c: bool) -> u32 {
+    let a: u32 = 1;
+    let b: u32 = 2;
+    [&a, &b];
+    [[&a], [&b]];
+    [&a; 3];
+    0
+}
+
+fn references(c: bool) -> u32 {
+    let a: u32 = 1;
+    let b: u32 = 2;
+    let r: &u32 = &a;
+    let mut m: u32 = 3;
+    let q: &mut u32 = &mut m;
+    &r;
+    &mut q;
+    &&a;
+    let four: &u32 = *&r;
+    &(if c { &a } else { &b });
+    take(four)
+}
+
+fn pointers() -> u32 {
+    let a: u32 = 1;
+    let r: &u32 = &a;
+    &raw const r;
+    (&raw const r) as *const u8;
+    take(r)
+}
+
+fn scopes() -> u32 {
+    let a: u32 = 1;
+    let r: &u32 = critical { &a };
+    let s: &u32 = comptime &X;
+    *r
+}
+
+fn accepted(c: bool) -> u32 {
+    let a: u32 = 1;
+    let b: u32 = 2;
+    let r: &u32 = if c { &a } else { &b };
+    let p: *const u32 = r as *const u32;
+    let s: &u32 = loop {
+        break &b;
+    };
+    take(r) + take(&*p) + take(s)
+}
+
+entry fn main() -> ! {
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    loop {}
+}

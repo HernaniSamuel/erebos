@@ -1,0 +1,77 @@
+// References across the C ABI (ADR 0105, "Signatures and the ABI"): a
+// reference is a thin pointer, so an `extern fn` taking a `&mut u32` and a
+// `&Pair` is called by C with addresses, and an `#[export]` function taking a
+// `&mut u32` and a `&u32` is called by C with addresses. A struct behind a
+// reference crosses by address on both targets, unlike a struct by value
+// (ADR 0025, 0075).
+// link-c: references_c.c
+// expect-output: 17 17
+// expect-output: 31
+// expect-output: 15 5
+// expect-output: 28 7
+// expect-exit: 0
+
+mod board;
+use board::{exit, putc};
+
+struct Pair {
+    a: u32,
+    b: u32,
+}
+
+// C adds `p.a + p.b` to `*acc` and returns the new `*acc`.
+extern fn c_add_pair(acc: &mut u32, p: &Pair) -> u32;
+// C calls `erebos_scale` with the two references it is given.
+extern fn c_forward(out: &mut u32, input: &u32);
+// C calls `erebos_scale` with the addresses of two locals of its own.
+extern fn c_roundtrip(seed: u32) -> u32;
+
+// Called from C: `*out = 3 * *input`.
+#[export]
+fn erebos_scale(out: &mut u32, input: &u32) {
+    *out = *input * 3;
+}
+
+fn print_u32(n: u32) {
+    if n >= 10 {
+        print_u32(n / 10);
+    }
+    putc(b'0' + (n % 10) as u8);
+}
+
+// `acc` is lent to the first call and to the second.
+fn add_twice(acc: &mut u32, p: &Pair) {
+    c_add_pair(acc, p);
+    c_add_pair(acc, p);
+}
+
+entry fn main() -> ! {
+    let mut total: u32 = 10;
+    let pair: Pair = Pair { a: 3, b: 4 };
+    print_u32(c_add_pair(&mut total, &pair));
+    putc(b' ');
+    print_u32(total);
+    putc(b'\n');
+
+    add_twice(&mut total, &pair);
+    print_u32(total);
+    putc(b'\n');
+
+    let mut out: u32 = 0;
+    let input: u32 = 5;
+    c_forward(&mut out, &input);
+    print_u32(out);
+    putc(b' ');
+    print_u32(input);
+    putc(b'\n');
+
+    print_u32(c_roundtrip(7));
+    putc(b' ');
+    print_u32(pair.a + pair.b);
+    putc(b'\n');
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(1)
+}

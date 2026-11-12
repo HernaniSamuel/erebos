@@ -1,0 +1,345 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/reference_lending.ers
+---
+--- mir ---
+struct Pair { 0 a: u32 at 0, 1 b: u32 at 4 } // size 8, align 4
+
+fn read(_1: &u32) -> u32 {
+    let _0: u32;
+    let _1: &u32; // p
+    let _2: u32;
+
+    bb0: {
+        _2 = copy (*_1);
+        _0 = copy _2;
+        return;
+    }
+}
+
+fn bump(_1: &mut u32) -> () {
+    let _0: ();
+    let _1: &mut u32; // p
+    let _2: u32;
+    let _3: u32;
+
+    bb0: {
+        _2 = copy (*_1);
+        _3 = Add(copy _2, const 1_u32);
+        (*_1) = copy _3;
+        return;
+    }
+}
+
+fn sum(_1: &Pair) -> u32 {
+    let _0: u32;
+    let _1: &Pair; // p
+    let _2: u32;
+    let _3: u32;
+    let _4: u32;
+    let _5: u32;
+
+    bb0: {
+        _2 = copy (*_1).0;
+        _3 = copy _2;
+        _4 = copy (*_1).1;
+        _5 = Add(copy _3, copy _4);
+        _0 = copy _5;
+        return;
+    }
+}
+
+fn add(_1: u32, _2: &mut u32) -> () {
+    let _0: ();
+    let _1: u32; // n
+    let _2: &mut u32; // p
+    let _3: u32;
+    let _4: u32;
+
+    bb0: {
+        _3 = copy (*_2);
+        _4 = Add(copy _3, copy _1);
+        (*_2) = copy _4;
+        return;
+    }
+}
+
+fn twice(_1: &mut u32) -> () {
+    let _0: ();
+    let _1: &mut u32; // r
+    let _2: &mut u32;
+    let _3: &mut u32;
+
+    bb0: {
+        _2 = &mut (*_1);
+        call bump(move _2);
+        _3 = &mut (*_1);
+        call bump(move _3);
+        return;
+    }
+}
+
+fn looped(_1: &mut u32, _2: u32) -> () {
+    let _0: ();
+    let _1: &mut u32; // r
+    let _2: u32; // n
+    let _3: u32; // i
+    let _4: bool;
+    let _5: &mut u32;
+    let _6: u32;
+
+    bb0: {
+        _3 = const 0_u32;
+        goto -> bb1;
+    }
+
+    bb1: {
+        _4 = Lt(copy _3, copy _2);
+        if copy _4 -> [true: bb2, false: bb3];
+    }
+
+    bb2: {
+        _5 = &mut (*_1);
+        call bump(move _5);
+        _6 = Add(copy _3, const 1_u32);
+        _3 = copy _6;
+        goto -> bb1;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn variable(_1: u32) -> u32 {
+    let _0: u32;
+    let _1: u32; // x
+    let _2: &mut u32; // r
+    let _3: &mut u32;
+    let _4: &mut u32;
+    let _5: &mut u32;
+    let _6: u32;
+    let _7: u32;
+
+    bb0: {
+        _3 = &mut _1;
+        _2 = move _3;
+        _4 = &mut (*_2);
+        call bump(move _4);
+        _5 = &mut (*_2);
+        call bump(move _5);
+        _6 = copy (*_2);
+        _7 = Add(copy _6, const 1_u32);
+        (*_2) = copy _7;
+        _0 = copy _1;
+        return;
+    }
+}
+
+fn shared_variable(_1: u32) -> u32 {
+    let _0: u32;
+    let _1: u32; // x
+    let _2: &mut u32; // r
+    let _3: u32; // n
+    let _4: &mut u32;
+    let _5: &u32;
+    let _6: u32;
+    let _7: &mut u32;
+
+    bb0: {
+        _4 = &mut _1;
+        _2 = move _4;
+        _5 = &(*_2);
+        _6 = call read(copy _5);
+        _3 = copy _6;
+        _7 = &mut (*_2);
+        call bump(move _7);
+        _0 = copy _3;
+        return;
+    }
+}
+
+fn shared_parameter(_1: &mut u32) -> u32 {
+    let _0: u32;
+    let _1: &mut u32; // r
+    let _2: &u32;
+    let _3: u32;
+    let _4: u32;
+    let _5: &u32;
+    let _6: u32;
+    let _7: u32;
+
+    bb0: {
+        _2 = &(*_1);
+        _3 = call read(copy _2);
+        _4 = copy _3;
+        _5 = &(*_1);
+        _6 = call read(copy _5);
+        _7 = Add(copy _4, copy _6);
+        _0 = copy _7;
+        return;
+    }
+}
+
+fn shared_borrow(_1: Pair) -> u32 {
+    let _0: u32;
+    let _1: Pair; // p
+    let _2: &mut Pair;
+    let _3: &Pair;
+    let _4: u32;
+
+    bb0: {
+        _2 = &mut _1;
+        _3 = &(*_2);
+        _4 = call sum(copy _3);
+        _0 = copy _4;
+        return;
+    }
+}
+
+fn shared_if(_1: &mut u32, _2: &mut u32, _3: bool) -> u32 {
+    let _0: u32;
+    let _1: &mut u32; // a
+    let _2: &mut u32; // b
+    let _3: bool; // c
+    let _4: &u32;
+    let _5: &u32;
+    let _6: &u32;
+    let _7: u32;
+
+    bb0: {
+        if copy _3 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _5 = &(*_1);
+        _4 = copy _5;
+        goto -> bb3;
+    }
+
+    bb2: {
+        _6 = &(*_2);
+        _4 = copy _6;
+        goto -> bb3;
+    }
+
+    bb3: {
+        _7 = call read(copy _4);
+        _0 = copy _7;
+        return;
+    }
+}
+
+fn shared_let(_1: &mut u32) -> u32 {
+    let _0: u32;
+    let _1: &mut u32; // r
+    let _2: &u32; // q
+    let _3: u32; // n
+    let _4: &u32;
+    let _5: u32;
+
+    bb0: {
+        _4 = &(*_1);
+        _2 = copy _4;
+        _5 = call read(copy _2);
+        _3 = copy _5;
+        (*_1) = copy _3;
+        _0 = copy _3;
+        return;
+    }
+}
+
+fn moved_if(_1: &mut u32, _2: &mut u32, _3: bool) -> () {
+    let _0: ();
+    let _1: &mut u32; // a
+    let _2: &mut u32; // b
+    let _3: bool; // c
+    let _4: &mut u32;
+
+    bb0: {
+        if copy _3 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _4 = move _1;
+        goto -> bb3;
+    }
+
+    bb2: {
+        _4 = move _2;
+        goto -> bb3;
+    }
+
+    bb3: {
+        call bump(move _4);
+        return;
+    }
+}
+
+fn ordered(_1: u32, _2: &mut u32) -> () {
+    let _0: ();
+    let _1: u32; // n
+    let _2: &mut u32; // r
+    let _3: u32;
+    let _4: &mut u32;
+
+    bb0: {
+        _3 = copy _1;
+        _4 = &mut (*_2);
+        call add(copy _3, move _4);
+        return;
+    }
+}
+
+fn set(_1: u32, _2: &mut Pair) -> () {
+    let _0: ();
+    let _1: u32; // n
+    let _2: &mut Pair; // p
+
+    bb0: {
+        (*_2).0 = copy _1;
+        return;
+    }
+}
+
+fn lent_after_place(_1: Pair, _2: &mut Pair) -> () {
+    let _0: ();
+    let _1: Pair; // x
+    let _2: &mut Pair; // r
+    let _3: u32;
+    let _4: u32;
+    let _5: &mut Pair;
+
+    bb0: {
+        _3 = copy _1.0;
+        _4 = copy _3;
+        _5 = &mut (*_2);
+        call set(copy _4, move _5);
+        return;
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}

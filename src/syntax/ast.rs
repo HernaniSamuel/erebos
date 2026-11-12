@@ -473,6 +473,8 @@ pub enum TyKind {
         volatile: bool,
         pointee: Box<Ty>,
     },
+    /// `&T` or `&mut T` (ADR 0105). `&&T` is two of them.
+    Ref { mutable: bool, referent: Box<Ty> },
     /// `[T; N]`, where `N` is computed at compile time (ADR 0029).
     Array { elem: Box<Ty>, len: Box<Expr> },
     /// `[T]`, of a length known only at run time: it exists only behind a
@@ -569,6 +571,11 @@ pub enum ExprKind {
     AddrOf {
         mutable: bool,
         place: Box<Expr>,
+    },
+    /// `&expr` or `&mut expr` (ADR 0105). `&&expr` is two of them.
+    Ref {
+        mutable: bool,
+        expr: Box<Expr>,
     },
     /// `lhs op rhs`, with the span of the operator, where a division's
     /// check is located (ADR 0053).

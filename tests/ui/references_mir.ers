@@ -1,0 +1,116 @@
+// emit: mir
+// `&place` and `&mut place` are `Ref` rvalues of the place as type checking
+// resolved it. A value that is not a place, or a part of one, is written to a
+// new local of its own first, and borrowed from there; `*r` is a place of the
+// referent (ADR 0105, 0107).
+struct Pair {
+    a: u32,
+    b: u32,
+}
+
+struct Empty {}
+
+struct Wrapper {
+    pair: Pair,
+    items: [u32; 3],
+}
+
+const TABLE: [u32; 3] = [10, 20, 30];
+static LIMIT: u32 = 7;
+
+fn make() -> Pair {
+    Pair { a: 1, b: 2 }
+}
+
+fn id(p: &Pair) -> u32 {
+    (*p).a
+}
+
+fn read(p: &u32) -> u32 {
+    *p
+}
+
+fn write(p: &mut u32, value: u32) {
+    *p = value;
+}
+
+// A variable, a parameter, a field and an element, shared and mutable.
+fn places(param: u32, mut pair: Pair, mut array: [u32; 3], i: usize) {
+    let mut x: u32 = 1;
+    let a: &u32 = &x;
+    let b: &mut u32 = &mut x;
+    let c: &u32 = &param;
+    let d: &u32 = &pair.a;
+    let e: &mut u32 = &mut pair.b;
+    let f: &mut u32 = &mut array[i];
+    let g: &u32 = &array[1];
+}
+
+// A static and a byte string.
+fn read_only() {
+    let s: &u32 = &LIMIT;
+    let b: &[u8; 3] = &b"abc";
+}
+
+// Through a reference: `*p`, `&*r`, `&(*r).f`, a write and reads.
+fn through(r: &mut Wrapper, p: *mut u32, q: &u32) {
+    let a: &mut u32 = &mut *p;
+    let b: &Wrapper = &*r;
+    let c: &Pair = &(*r).pair;
+    let d: &u32 = &(*r).pair.a;
+    let e: &mut u32 = &mut (*r).items[1];
+    *e = *q;
+    (*r).pair.b = *d;
+}
+
+// A value that is not a place: each is written to a local of its own.
+fn values() {
+    let a: &Pair = &make();
+    let b: &Pair = &Pair { a: 3, b: 4 };
+    let c: &u32 = &5;
+    let d: &u32 = &id(&make());
+    let e: &Pair = &Pair { a: id(a), b: 0 };
+}
+
+// A part of a value that is not a place: the whole goes to a new local.
+fn parts() {
+    let a: &u32 = &make().a;
+    let b: &u32 = &TABLE[1];
+    let c: &[u32; 3] = &TABLE;
+}
+
+// A referent of zero size.
+fn zero_sized() {
+    let a: &() = &();
+    let b: &Empty = &Empty {};
+    let c: &[u8; 0] = &[];
+}
+
+// Casts to raw pointers, from `&T` and from `&mut T`.
+fn casts(a: &u32, b: &mut u32, c: &mut u32) {
+    let p: *const u32 = a as *const u32;
+    let q: *mut u32 = b as *mut u32;
+    let r: *const u32 = c as *const u32;
+    let s: *mut u32 = a as *mut u32;
+    let t: usize = a as *const u32 as usize;
+}
+
+// A reference moved by a `let`; a shared one is copied.
+fn moved(a: &mut u32, b: &u32) {
+    let c: &mut u32 = a;
+    let d: &u32 = b;
+    let e: &u32 = b;
+    write(c, read(d) + read(e));
+}
+
+fn takes(n: u32, p: &mut Pair) {
+    (*p).a = n;
+}
+
+// `f(x.a, &mut x)` reads `x.a` into a temporary before the borrow.
+fn ordered(mut x: Pair) {
+    takes(x.a, &mut x);
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

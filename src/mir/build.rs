@@ -7,8 +7,8 @@ use crate::hir;
 use crate::mir::validate;
 use crate::mir::{
     BasicBlock, BasicBlockData, BinOp, Body, BodyId, Const, DataId, Local, LocalDecl, Operand,
-    PanicCause, PanicInfoAt, PanicSite, Place, PlaceElem, Rvalue, Statement, StaticRef, Terminator,
-    Ty, UnOp,
+    PanicCause, PanicInfoAt, PanicSite, Place, PlaceElem, Ptr, Rvalue, Statement, StaticRef,
+    Terminator, Ty, UnOp,
 };
 use crate::query::{DataSource, Queries};
 use crate::span::Span;
@@ -363,7 +363,11 @@ impl Builder<'_, '_> {
                 let place = Place::local(self.const_local(ty, source, &value));
                 self.read(place)
             }
-            Ty::Slice(_) => unreachable!("`[T]` is unsized, and no value has it (ADR 0031)"),
+            Ty::Slice(_) | Ty::Ref(_) => {
+                unreachable!(
+                    "`{ty}` is unsized or a reference, and no constant has it (ADR 0031, 0105)"
+                )
+            }
             Ty::Peripheral(_) => unreachable!("no value has a peripheral type (ADR 0058)"),
         }
     }
@@ -433,7 +437,12 @@ impl Builder<'_, '_> {
                 hir::Stmt::Let { local, init } => {
                     let value = self.expr(init);
                     let local = self.hir_locals[local.0 as usize];
+                    // The write is at the initializer, not at the block: a
+                    // read of a variable has no statement of its own, and the
+                    // analyses that name the access point at this one.
+                    let outer = std::mem::replace(&mut self.span, init.span);
                     self.assign(Place::local(local), Rvalue::Use(value));
+                    self.span = outer;
                 }
                 hir::Stmt::Expr { expr, .. } => {
                     if self.is_discarded(expr) {
@@ -516,15 +525,74 @@ impl Builder<'_, '_> {
         let outer = std::mem::replace(&mut self.span, expr.span);
         let mut value = self.expr_kind(expr);
         // A pointer to an array converted to a slice, with its length
-        // (ADR 0031).
-        if let Some(slice_ty) = self.q.tables.coercion(expr.id)
+        // (ADR 0031), or a `&mut T` to a `&T` (ADR 0105).
+        if let Some(target) = self.q.tables.coercion(expr.id)
             && self.current.is_some()
         {
-            let slice_ty = self.q.mir_ty(slice_ty);
-            value = self.array_slice(value, slice_ty);
+            let target = self.q.mir_ty(target);
+            value = match target {
+                Ty::Ref(_) => self.share(value, target),
+                _ => self.array_slice(value, target),
+            };
         }
         self.span = outer;
         value
+    }
+
+    /// The `&T` of type `ty` that a `&mut T` converts to: a shared borrow of
+    /// `*q`, with `q` the place holding the `&mut` (the variable or parameter,
+    /// or the temporary holding the value converted), which is not moved
+    /// (ADR 0105, 0107).
+    fn share(&mut self, mutable: Operand, ty: Ty) -> Operand {
+        // A `&mut` is never a constant: a body that breaks this is caught by
+        // the validator (T5), not here.
+        let Some(q) = mutable.place() else {
+            return mutable;
+        };
+        self.temp(
+            ty,
+            Rvalue::Ref {
+                mutable: false,
+                place: q.project(PlaceElem::Deref),
+            },
+        )
+    }
+
+    /// An argument of a call. A variable or a parameter `r` of type `&mut T`
+    /// is lent to the call, not moved (ADR 0094, 0106): the call receives a
+    /// reborrow `&mut *r`, and `r` is usable again after it (ADR 0107). Any
+    /// other `&mut` is a value, moved as any value is.
+    fn argument(&mut self, arg: &hir::Expr) -> Operand {
+        match &arg.kind {
+            hir::ExprKind::Local(local)
+                if self.is_mut_variable(arg)
+                    && self.q.tables.coercion(arg.id).is_none()
+                    && self.current.is_some() =>
+            {
+                let outer = std::mem::replace(&mut self.span, arg.span);
+                let r = self.local(*local);
+                let ty = self.ty_of(arg);
+                let lent = self.temp(
+                    ty,
+                    Rvalue::Ref {
+                        mutable: true,
+                        place: r.project(PlaceElem::Deref),
+                    },
+                );
+                self.span = outer;
+                lent
+            }
+            _ => self.expr(arg),
+        }
+    }
+
+    /// Whether `arg` is a variable or a parameter of type `&mut T`: as an
+    /// argument it is borrowed (lent to the call, or converted to a `&T`), so
+    /// it is a fresh temporary that nothing else writes, and it is not a
+    /// simple expression (ADR 0107).
+    fn is_mut_variable(&mut self, arg: &hir::Expr) -> bool {
+        matches!(arg.kind, hir::ExprKind::Local(_))
+            && matches!(self.ty_of(arg), Ty::Ref(r) if r.mutable)
     }
 
     /// The slice of type `slice_ty` of the whole array `pointer` points to.
@@ -760,6 +828,33 @@ impl Builder<'_, '_> {
                 self.temp(
                     ty,
                     Rvalue::AddressOf {
+                        mutable: *mutable,
+                        place,
+                    },
+                )
+            }
+            // A reference to a place, or to the value in a variable of its own
+            // (ADR 0105, 0107).
+            hir::ExprKind::Ref { mutable, place } => {
+                let place = if is_borrowed_place(place) {
+                    self.place_then(place, false, true)
+                } else {
+                    let referent = self.ty_of(place);
+                    let value = self.expr(place);
+                    if self.current.is_none() {
+                        // The value did not finish, and nothing follows.
+                        return Operand::Const(Const::Unit);
+                    }
+                    // Never a temporary that is written again: the analysis
+                    // would report the compiler's own write while the borrow
+                    // is in use.
+                    let local = Place::local(self.new_local(referent, None));
+                    self.assign(local, Rvalue::Use(value));
+                    local
+                };
+                self.temp(
+                    ty,
+                    Rvalue::Ref {
                         mutable: *mutable,
                         place,
                     },
@@ -1783,15 +1878,29 @@ impl Builder<'_, '_> {
         }
     }
 
-    /// `operand as ty` (ADR 0019, 0031): a slice converts to the address of
-    /// its first element, or to a slice of other mutability or volatility;
-    /// a pointer to an array to a slice of its elements.
+    /// `operand as ty` (ADR 0019, 0031, 0105): a slice converts to the
+    /// address of its first element, or to a slice of other mutability or
+    /// volatility; a pointer to an array to a slice of its elements.
     fn cast(&mut self, operand: Operand, ty: Ty) -> Operand {
         // The operand did not finish, and nothing follows.
         if self.current.is_none() {
             return Operand::Const(Const::Unit);
         }
-        let from = self.operand_ty(operand);
+        let mut from = self.operand_ty(operand);
+        // A reference casts as the raw pointer to its referent (ADR 0105): the
+        // rest of the cast, to a slice among them, is that pointer's.
+        let mut operand = operand;
+        if let Ty::Ref(r) = from {
+            from = Ty::Ptr(Ptr {
+                mutable: r.mutable,
+                volatile: false,
+                pointee: r.referent,
+            });
+            operand = self.temp(from, Rvalue::Cast(operand, from));
+            if from == ty {
+                return operand;
+            }
+        }
         match (operand, from.slice_address_ty(), ty.slice_elem()) {
             // The address part has the slice's own pointee, mutability and
             // volatility; another pointer type is a cast of that (ADR 0095, T5).
@@ -1819,13 +1928,21 @@ impl Builder<'_, '_> {
         }
     }
 
-    /// Lowers expressions left to right. A deferred local read is taken
+    /// Lowers the arguments of a call left to right (a `&mut` variable is
+    /// lent, see [`Builder::argument`]; a variant's payload holds no
+    /// reference, so it is never lent there). A deferred local read is taken
     /// before any later expression that could assign it.
     fn operands(&mut self, exprs: &[hir::Expr]) -> Vec<Operand> {
         let mut operands = Vec::with_capacity(exprs.len());
         for (i, expr) in exprs.iter().enumerate() {
-            let mut operand = self.expr(expr);
-            if operand.place().is_some() && !exprs[i + 1..].iter().all(is_simple) {
+            let mut operand = self.argument(expr);
+            // A borrow made for the call is a temporary no one else writes.
+            if operand.place().is_some()
+                && !self.is_mut_variable(expr)
+                && !exprs[i + 1..]
+                    .iter()
+                    .all(|e| !self.is_mut_variable(e) && is_simple(e))
+            {
                 operand = self.spill(operand);
             }
             operands.push(operand);
@@ -2113,6 +2230,8 @@ impl Builder<'_, '_> {
         for elem in place.projection {
             match (elem, ty) {
                 (PlaceElem::Deref | PlaceElem::Offset(_), Ty::Ptr(ptr)) => volatile = ptr.volatile,
+                // A reference is never volatile (ADR 0105).
+                (PlaceElem::Deref, Ty::Ref(_)) => volatile = false,
                 (
                     PlaceElem::Field(_) | PlaceElem::Element(..) | PlaceElem::ConstElement(..),
                     Ty::Peripheral(_),
@@ -2131,6 +2250,11 @@ impl Builder<'_, '_> {
         let value = self.expr(pointer);
         match value.place() {
             Some(place) if !later_writes => place,
+            // A variable of type `&mut T` is bound once and never assigned
+            // (ADR 0094, 0105): code evaluated later cannot change it, so it
+            // is read in place. Storing it would move it, and reborrowing it
+            // would hold `*r` while that code reads through `r`.
+            Some(place) if self.is_mut_variable(pointer) => place,
             // Computed (e.g. a cast), or about to be read late: store it.
             _ => self.temp_place(pointer_ty, Rvalue::Use(value)),
         }
@@ -2330,6 +2454,13 @@ impl Builder<'_, '_> {
     }
 }
 
+/// Whether the operand of `&` or `&mut` is a place (or a part of a value,
+/// which `place_then` holds in a local), rather than a value to be written to
+/// a new local first (ADR 0105, 0107).
+fn is_borrowed_place(expr: &hir::Expr) -> bool {
+    is_place_expr(expr) || matches!(expr.kind, hir::ExprKind::ByteString(_))
+}
+
 /// Whether `expr` is a place: a local, a static, `*pointer`, `base[index]` or
 /// `base.field`. A bit field is a value, and so are the other expressions.
 fn is_place_expr(expr: &hir::Expr) -> bool {
@@ -2358,6 +2489,7 @@ fn projected_ty(ty: Ty, elem: &PlaceElem) -> Ty {
 fn try_projected_ty(ty: Ty, elem: &PlaceElem) -> Option<Ty> {
     Some(match (elem, ty) {
         (PlaceElem::Deref | PlaceElem::Offset(_), Ty::Ptr(ptr)) => *ptr.pointee,
+        (PlaceElem::Deref, Ty::Ref(r)) => *r.referent,
         (PlaceElem::Index(_) | PlaceElem::ConstIndex(_), Ty::Array(elem, _)) => *elem,
         (PlaceElem::Field(index), Ty::Struct(s)) => s.def().fields()[*index as usize].ty,
         (

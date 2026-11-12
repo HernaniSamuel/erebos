@@ -1,0 +1,36 @@
+// emit: mir
+// A body with a borrow in conflict and a linear value never consumed reports
+// both: the borrow check and the analysis of linearity both run on a body the
+// analysis of moves accepted (ADR 0107).
+#[linear]
+struct Ticket {
+    n: u32,
+}
+
+fn make() -> Ticket {
+    Ticket { n: 1 }
+}
+
+// Both: `x` is written while `r` is used later, and the ticket is dropped.
+fn both(mut x: u32) -> u32 {
+    let t: Ticket = make();
+    let r: &mut u32 = &mut x;
+    x = 2;
+    *r = 3;
+    x
+}
+
+// Only the conflict, and only the linear value.
+fn conflict(mut x: u32) -> u32 {
+    let r: &mut u32 = &mut x;
+    x = 2;
+    *r = 3;
+    x
+}
+
+fn forgotten() {
+    let t: Ticket = make();
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

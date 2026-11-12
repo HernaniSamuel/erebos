@@ -1,0 +1,36 @@
+// emit: mir
+// A linear value is not written through a reference
+// (`ty::linear-through-pointer`), whether the place is `*r` or a field of
+// it: the value already there would be dropped without being consumed
+// (ADR 0101, 0105).
+#[linear]
+struct Guard {
+    pub id: u32,
+}
+
+fn make() -> Guard {
+    Guard { id: 1 }
+}
+
+fn inspect(g: &Guard) -> u32 {
+    (*g).id
+}
+
+fn bump(g: &mut Guard) {
+    (*g).id = (*g).id + 1;
+}
+
+fn replace(slot: &mut Guard) {
+    *slot = make();
+}
+
+fn replace_field(slot: &mut Pair) {
+    (*slot).guard = make();
+}
+
+struct Pair {
+    pub guard: Guard,
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

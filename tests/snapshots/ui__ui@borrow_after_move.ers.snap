@@ -1,0 +1,38 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/borrow_after_move.ers
+---
+--- errors ---
+analysis::use-after-move
+
+  × use of moved value `p`
+    ╭─[borrow_after_move.ers:16:20]
+ 14 │ fn borrowed_after_move(mut p: Pair) -> u32 {
+ 15 │     consume(p);
+    ·             ┬
+    ·             ╰── moved here
+ 16 │     let r: &Pair = &p;
+    ·                    ─┬
+    ·                     ╰── used here, after it was moved
+ 17 │     p.a = 1;
+    ╰────
+  help: mark `Pair` with `#[copy]` if its values may be duplicated (ADR 0097)
+analysis::borrow-conflict
+
+  × cannot assign to `p.a` while it is borrowed
+    ╭─[borrow_after_move.ers:24:5]
+ 22 │ fn conflict(mut p: Pair) -> u32 {
+ 23 │     let r: &Pair = &p;
+    ·                    ─┬
+    ·                     ╰── `p` is borrowed here
+ 24 │     p.a = 1;
+    ·     ───┬───
+    ·        ╰── assigned here
+ 25 │     (*r).b
+    ·     ───┬──
+    ·        ╰── the borrow is used later here
+ 26 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)

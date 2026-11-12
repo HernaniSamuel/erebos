@@ -1,0 +1,20 @@
+// emit: mir
+// A `let` of a `&mut` variable still moves it: only an argument is lent
+// (ADR 0094, 0105, 0107).
+fn bump(p: &mut u32) {
+    *p = *p + 1;
+}
+
+fn moved_by_let(r: &mut u32) {
+    let q: &mut u32 = r;
+    bump(q);
+    bump(r);
+}
+
+fn moved_by_argument_value(a: &mut u32, b: &mut u32, c: bool) {
+    let n: &mut u32 = if c { a } else { b };
+    bump(a);
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

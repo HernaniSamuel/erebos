@@ -1,6 +1,7 @@
 # 0101. Linear types and `#[linear]`
 
-- Status: Accepted
+- Status: Accepted; amended by 0105 (no linear value written through a
+  reference)
 - Date: 2026-11-10
 
 ## Context

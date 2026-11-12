@@ -1516,11 +1516,41 @@ impl Parser<'_> {
                     },
                 });
             }
+            TokenKind::Amp => {
+                self.bump();
+                return self.ref_ty(token.span);
+            }
+            TokenKind::AndAnd => {
+                // `&&T` is `& &T`, rejected later (ADR 0105).
+                self.bump();
+                let (outer, inner) = split_double_amp(token.span);
+                let referent = self.ref_ty(inner)?;
+                return Ok(Ty {
+                    span: outer.to(referent.span),
+                    kind: TyKind::Ref {
+                        mutable: false,
+                        referent: Box::new(referent),
+                    },
+                });
+            }
             _ => return Err(self.error_expected("a type")),
         };
         Ok(Ty {
             kind,
             span: token.span,
+        })
+    }
+
+    /// The rest of `&T` or `&mut T` after its `&`, which spans `amp`.
+    fn ref_ty(&mut self, amp: Span) -> PResult<Ty> {
+        let mutable = self.eat(TokenKind::Mut).is_some();
+        let referent = self.ty()?;
+        Ok(Ty {
+            span: amp.to(referent.span),
+            kind: TyKind::Ref {
+                mutable,
+                referent: Box::new(referent),
+            },
         })
     }
 
@@ -1808,7 +1838,32 @@ impl Parser<'_> {
             TokenKind::Minus => Some(UnOp::Neg),
             TokenKind::Bang => Some(UnOp::Not),
             TokenKind::Star => None,
-            TokenKind::Amp => return self.addr_of(),
+            TokenKind::Amp => {
+                // `&raw const` and `&raw mut` are addresses (ADR 0021);
+                // any other `&` borrows (ADR 0105).
+                if self.word_at(self.pos + 1) == Some("raw")
+                    && matches!(
+                        self.tokens.get(self.pos + 2).map(|token| token.kind),
+                        Some(TokenKind::Const | TokenKind::Mut)
+                    )
+                {
+                    return self.addr_of();
+                }
+                return self.borrow(token.span);
+            }
+            TokenKind::AndAnd => {
+                // `&&e` is `& &e`, rejected later (ADR 0105).
+                let (outer, inner) = split_double_amp(token.span);
+                self.bump();
+                let borrowed = self.borrow_after(inner)?;
+                return Ok(Expr {
+                    span: outer.to(borrowed.span),
+                    kind: ExprKind::Ref {
+                        mutable: false,
+                        expr: Box::new(borrowed),
+                    },
+                });
+            }
             _ => return self.postfix(),
         };
         self.bump();
@@ -1822,23 +1877,26 @@ impl Parser<'_> {
         })
     }
 
-    /// `&raw const place` or `&raw mut place`. A plain `&` is left for
-    /// references (M5), so that its meaning never changes (ADR 0021).
+    /// `&e` or `&mut e`, at the `&`, which spans `amp` (ADR 0105).
+    fn borrow(&mut self, amp: Span) -> PResult<Expr> {
+        self.bump();
+        self.borrow_after(amp)
+    }
+
+    /// The rest of `&e` or `&mut e` after its `&`, which spans `amp`.
+    fn borrow_after(&mut self, amp: Span) -> PResult<Expr> {
+        let mutable = self.eat(TokenKind::Mut).is_some();
+        let expr = Box::new(self.expr_bp(PREFIX_BP)?);
+        Ok(Expr {
+            span: amp.to(expr.span),
+            kind: ExprKind::Ref { mutable, expr },
+        })
+    }
+
+    /// `&raw const place` or `&raw mut place`, at the `&`, which `prefix`
+    /// has checked is followed by `raw` and `const` or `mut` (ADR 0021).
     fn addr_of(&mut self) -> PResult<Expr> {
         let amp = self.bump();
-        let raw = self.peek();
-        if raw.kind != TokenKind::Ident || &self.text[raw.span.range()] != "raw" {
-            let found = raw.kind.describe();
-            self.diags.push(
-                Diagnostic::error(
-                    "parser::unexpected-token",
-                    format!("expected `raw`, found {found}"),
-                )
-                .label(self.missing_token_span(), "expected `raw`")
-                .help("addresses are taken with `&raw const place` or `&raw mut place`; `&` alone is reserved for references (ADR 0021)"),
-            );
-            return Err(Reported);
-        }
         self.bump();
         let mutable = match self.peek().kind {
             TokenKind::Mut => true,
@@ -2085,11 +2143,14 @@ impl Parser<'_> {
     }
 
     /// Whether the next token ends an expression, so `break`/`return` have
-    /// no value.
+    /// no value. The `,` ends it where one separates items: the arms of a
+    /// `match`, the arguments of a call, the elements of an array, the
+    /// fields of a struct literal.
     fn at_expr_end(&self) -> bool {
         matches!(
             self.peek().kind,
             TokenKind::Semi
+                | TokenKind::Comma
                 | TokenKind::RBrace
                 | TokenKind::RParen
                 | TokenKind::RBracket
@@ -2690,6 +2751,12 @@ const ASSIGN_BP: (u8, u8) = (2, 1);
 const COMPARE_BP: u8 = 7;
 const AS_BP: u8 = 21;
 const PREFIX_BP: u8 = 23;
+
+/// The spans of the two `&` of an `&&` token.
+fn split_double_amp(span: Span) -> (Span, Span) {
+    let mid = span.lo + 1;
+    (Span { hi: mid, ..span }, Span { lo: mid, ..span })
+}
 
 fn infix(kind: TokenKind) -> Option<(u8, u8, Infix)> {
     use Infix::{Assign, Binary, CompoundAssign};

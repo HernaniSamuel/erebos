@@ -1,0 +1,146 @@
+// The M5.4a milestone program: the ring buffer of `ring_buffer.ers` written
+// with references (ADR 0105 to 0107) instead of raw pointers. The functions
+// of module `ring` take a `&mut Ring` or a `&Ring`; the fields are private, so
+// the rest of the program can only borrow the ring and call them.
+//
+// `fill` reads a byte string through a `&[u8; 10]` and lends its `&mut Ring`
+// to `push` in a loop; `drain` lends it to `pop` the same way; `cycle` holds
+// one `&mut Ring`, lends it to calls, and reads it through the `&Ring` that
+// `show` takes, converted from the `&mut`. The second fill wraps around the
+// end of the array. Every borrow ends before the next use of the ring that
+// conflicts with it (ADR 0106).
+// expect-output: 8 8 F
+// expect-output: ref
+// expect-output: 5 -
+// expect-output: 3 8 F
+// expect-output: erenc012
+// expect-output: 0 -
+// expect-output: empty
+// expect-exit: 0
+
+mod board;
+use board::{exit, putc};
+
+mod ring {
+    pub struct Ring {
+        buf: [u8; 8],
+        // Where the oldest byte is.
+        head: usize,
+        count: usize,
+    }
+
+    pub fn new() -> Ring {
+        Ring { buf: [0; 8], head: 0, count: 0 }
+    }
+
+    pub fn push(r: &mut Ring, b: u8) -> bool {
+        if (*r).count == 8 {
+            return false;
+        }
+        let at: usize = ((*r).head + (*r).count) % 8;
+        (*r).buf[at] = b;
+        (*r).count += 1;
+        true
+    }
+
+    pub fn pop(r: &mut Ring) -> Option(u8) {
+        if (*r).count == 0 {
+            return .None;
+        }
+        let b: u8 = (*r).buf[(*r).head];
+        (*r).head = ((*r).head + 1) % 8;
+        (*r).count -= 1;
+        .Some(b)
+    }
+
+    pub fn count(r: &Ring) -> usize {
+        (*r).count
+    }
+
+    pub fn is_full(r: &Ring) -> bool {
+        (*r).count == 8
+    }
+}
+
+use ring::{Ring, count, is_full, pop, push};
+
+fn print_u32(n: u32) {
+    if n >= 10 {
+        print_u32(n / 10);
+    }
+    putc(b'0' + (n % 10) as u8);
+}
+
+// Pushes the bytes of `text` until the ring is full; returns how many went in.
+fn fill(r: &mut Ring, text: &[u8; 10]) -> usize {
+    let mut i: usize = 0;
+    while i < 10 {
+        if !push(r, (*text)[i]) {
+            return i;
+        }
+        i += 1;
+    }
+    10
+}
+
+// Prints up to `n` bytes, as the ring gives them.
+fn drain(r: &mut Ring, n: usize) {
+    let mut i: usize = 0;
+    while i < n {
+        match pop(r) {
+            .Some(let b: u8) => putc(b),
+            .None => return,
+        }
+        i += 1;
+    }
+}
+
+// The count, then `F` for a full ring and `-` for one that is not.
+fn show(r: &Ring) {
+    print_u32(count(r) as u32);
+    putc(b' ');
+    if is_full(r) {
+        putc(b'F');
+    } else {
+        putc(b'-');
+    }
+    putc(b'\n');
+}
+
+// One `&mut Ring`, lent to the calls that write and converted for the ones
+// that read.
+fn cycle(r: &mut Ring) {
+    drain(r, 3);
+    putc(b'\n');
+    show(r);
+    print_u32(fill(r, &b"0123456789") as u32);
+    putc(b' ');
+    show(r);
+    drain(r, 100);
+    putc(b'\n');
+    show(r);
+}
+
+entry fn main() -> ! {
+    let mut buffer: Ring = ring::new();
+    print_u32(fill(&mut buffer, &b"references") as u32);
+    putc(b' ');
+    show(&buffer);
+    cycle(&mut buffer);
+    match pop(&mut buffer) {
+        .Some(let b: u8) => putc(b),
+        .None => {
+            putc(b'e');
+            putc(b'm');
+            putc(b'p');
+            putc(b't');
+            putc(b'y');
+            putc(b'\n');
+        }
+    }
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(1)
+}

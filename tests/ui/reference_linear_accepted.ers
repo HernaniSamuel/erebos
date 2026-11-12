@@ -1,0 +1,33 @@
+// emit: mir
+// A linear value may be borrowed, `&` and `&mut`, and a borrow consumes
+// nothing: the value is still there to be ended afterwards (ADR 0101, 0105,
+// 0107). Reading and writing its copy fields through the reference is
+// allowed.
+#[linear]
+struct Guard {
+    pub id: u32,
+}
+
+fn make() -> Guard {
+    Guard { id: 1 }
+}
+
+fn inspect(g: &Guard) -> u32 {
+    (*g).id
+}
+
+fn bump(g: &mut Guard) {
+    (*g).id = (*g).id + 1;
+}
+
+fn borrowed_then_ended() -> u32 {
+    let mut g: Guard = make();
+    let n: u32 = inspect(&g);
+    bump(&mut g);
+    let m: u32 = inspect(&g);
+    end(g);
+    n + m
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

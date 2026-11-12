@@ -273,7 +273,7 @@ impl Lowerer<'_> {
                 // The initializer is resolved before the new name exists, so
                 // `let x: u32 = x;` refers to an outer `x`.
                 let init = self.expr(&let_.init);
-                let ty = self.ty(&let_.ty, UnsizedPosition::Variable);
+                let ty = self.binding_ty(&let_.ty, UnsizedPosition::Variable, let_.mutable);
                 let local = self.declare(&let_.name, ty, let_.mutable);
                 Stmt::Let { local, init }
             }
@@ -574,6 +574,10 @@ impl Lowerer<'_> {
             ast::ExprKind::AddrOf { mutable, place } => ExprKind::AddrOf {
                 mutable: *mutable,
                 place: self.boxed(place),
+            },
+            ast::ExprKind::Ref { mutable, expr } => ExprKind::Ref {
+                mutable: *mutable,
+                place: self.boxed(expr),
             },
             ast::ExprKind::Binary(op, lhs, rhs, op_span) => {
                 ExprKind::Binary(*op, self.boxed(lhs), self.boxed(rhs), *op_span)

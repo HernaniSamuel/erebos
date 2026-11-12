@@ -1,4 +1,4 @@
-# Erebos language reference (M5.3)
+# Erebos language reference (M5.4a)
 
 This describes the language as the compiler implements it today. The
 reasoning behind each rule lives in the ADRs (`docs/adr/`), cited as
@@ -150,6 +150,7 @@ block.
 | `()` | the unit type: no value to speak of |
 | `!` | never: the type of an expression that does not finish, never of memory (ADR 0034) |
 | `*const T`, `*mut T` | raw pointers |
+| `&T`, `&mut T` | a shared and a mutable reference to a `T`: a thin pointer that the compiler checks (ADR 0105, see "References") |
 | `*const volatile T`, `*mut volatile T` | raw pointers whose accesses are volatile (ADR 0013, 0023); never to a peripheral type, whose pointers are volatile without the word (ADR 0058) |
 | `[T; N]` | an array of `N` values of type `T`; `N` is a `usize` computed at compile time (ADR 0021, 0029), so a literal too large for `usize` is `ty::literal-out-of-range`, as it is in `#[align(N)]` |
 | `*const [T]`, `*mut [T]` | slices: the address of `T` values and how many there are (ADR 0031); `volatile` as for any pointer |
@@ -227,7 +228,7 @@ fn add(a: u32, mut b: u32) -> u32 {
   than the pointer conversions of "Typing".
 - Parameters cannot have type `()` or `!`.
 - There are no methods: functions take their receiver explicitly, such as
-  `fn area(r: *const Rect) -> u32` (methods come with references, M5).
+  `fn area(r: &Rect) -> u32` (methods come in M5.5).
 - All functions use the C ABI of the target (ADR 0006): the riscv32 one or
   the AAPCS (see "Targets"). A function of the root module has its own
   name as its symbol, and so has one marked `#[export]`, so C code can call
@@ -343,8 +344,8 @@ buf[i] = buf[0];
   copy type (`ty::non-copy-repeat`, see "Copies and moves").
 - `s.field` and `a[i]` are places when `s` and `a` are: reading or writing
   one reaches only that field or element. `(*p).field` and `(*p)[i]` reach
-  one part through a pointer without copying the whole; there is no
-  automatic dereference (`p.field` is an error).
+  one part through a pointer, or a reference, without copying the whole;
+  there is no automatic dereference (`p.field` and `r.field` are errors).
 - **Array indexing is checked.** The index has type `usize`; if it is not
   below the length, the program calls the panic function. An index known
   at compile time that is out of bounds is a compile-time error (see
@@ -379,7 +380,8 @@ a cluster array taken whole; a cluster, single or an element of a cluster
 array, has one: `&raw mut PLIC.ctx[1]` is a pointer to the cluster's
 peripheral type (ADR 0064). Nor has a bit field, a field of a
 bit-field struct, which is no place in memory (`ty::bit-field-address`,
-see "Bit-field structs"). A plain `&` is reserved for references (M5).
+see "Bit-field structs"). A plain `&` makes a reference, not a raw pointer
+(see "References").
 
 A constant has no address, and neither does any element or field of it:
 `&raw const T`, `&raw const T[1]` and `&raw const S.f` are
@@ -1713,12 +1715,13 @@ moved, partly moved or not is valid.
 ### Which types are copy (ADR 0096)
 
 Copy are: integers, `bool` and `()`; enums without payloads; bit-field
-structs; raw pointers, slice pointers included; an array whose element type
-is copy; `Option(T)` with `T` copy; `Result(T, E)` with `T` and `E` copy; and
-a struct or an enum with payloads declared `#[copy]`. Every other type with
-values is non-copy: a struct or an enum with payloads without the attribute,
-and the arrays, `Option` and `Result` that contain one. `!`, `[T]` and
-peripheral types have no values and no kind.
+structs; raw pointers, slice pointers included; shared references `&T`,
+whatever `T` is; an array whose element type is copy; `Option(T)` with `T`
+copy; `Result(T, E)` with `T` and `E` copy; and a struct or an enum with
+payloads declared `#[copy]`. Every other type with values is non-copy: a
+struct or an enum with payloads without the attribute, the arrays, `Option`
+and `Result` that contain one, and the mutable references `&mut T`. `!`,
+`[T]` and peripheral types have no values and no kind.
 
 Whether a struct or an enum is copy is what it declares. A type is never
 copy because its fields are: a handle made of integers is non-copy until its
@@ -1781,7 +1784,8 @@ It may not be moved out of:
 
 - an element of an array, by `a[i]` whatever `i` is, also when the array is a
   temporary's (`make().items[i]`);
-- a place through a pointer: `*p`, `p[i]`, `(*p).f`, `(*s)[i]`;
+- a place through a pointer or a reference: `*p`, `p[i]`, `(*p).f`, `(*s)[i]`,
+  `*r`, `(*r).f`;
 - a static, or a part of one.
 
 Reading such a place whole when its type is non-copy is
@@ -1790,11 +1794,11 @@ the place is, and whose help suggests `#[copy]` when the type is a struct or
 an enum with payloads whose fields are all copy. Copy parts of those places
 are read as usual (`DRIVER.count`, `p[i].n`, `make().items[1].n`), and so is
 a place that is only named: a discarded place or a `match` scrutinee. An
-array of a non-copy type is moved whole only. A pointer to a non-copy type is
-valid, and a non-copy value is written through it (`*p = v` moves `v`); the
-whole value is not read back through it. A `static mut` of a non-copy type
-may be assigned whole, have its copy fields read and its address taken with
-`&raw`.
+array of a non-copy type is moved whole only. A pointer or a reference to a
+non-copy type is valid, and a non-copy value is written through it (`*p = v`
+moves `v`, and so does `*r = v` with `r: &mut T`); the whole value is not read
+back through it. A `static mut` of a non-copy type may be assigned whole, have
+its copy fields read and its address taken with `&raw`.
 
 ### `match` and moves
 
@@ -1828,9 +1832,9 @@ At each point, a part of a place is **moved** if a path from the start of the
 function reaches the point through a move of that part, or of a place
 containing it, and through no assignment to it since. Then:
 
-- Reading, moving or taking the address (`&raw const`, `&raw mut`) of a place
-  is an error when the place, a place containing it, or a part of it is
-  moved. Reading a copy field that was not moved out of a partly moved struct
+- Reading, moving, borrowing (`&`, `&mut`) or taking the address (`&raw
+  const`, `&raw mut`) of a place is an error when the place, a place
+  containing it, or a part of it is moved. Reading a copy field that was not moved out of a partly moved struct
   is valid, and so is a `match` that reads the tag of an enum whose payload
   value was moved, the tag being untouched.
 - Assigning a whole place (`a = v;`, `a.f = v;`) gives it a value again, with
@@ -1973,9 +1977,9 @@ never copy, so every rule of moves applies to it.
 
 ### Where a linear value may not be held (ADR 0101)
 
-No element of an array, no place through a pointer and no static is ever moved
-out of (see "Places a value is moved out of"), so a linear value put there
-could never be consumed. These are rejected by type checking:
+No element of an array, no place through a pointer or a reference and no
+static is ever moved out of (see "Places a value is moved out of"), so a
+linear value put there could never be consumed. These are rejected by type checking:
 
 - **A static** whose type is linear, `extern static` included, is
   `ty::linear-static`, at its type. A static of a pointer to a linear type is
@@ -1991,10 +1995,10 @@ could never be consumed. These are rejected by type checking:
   Transfer`. A nested array (`[[Transfer; 2]; 2]`) is reported once, at the
   inner one. A body whose types include such an array is not built into MIR:
   the error is the one at the written type.
-- **A write through a pointer of a value of a linear type** (`*p = t`,
-  `p[i] = t`, `(*p).f = t`, `*p = .Some(t)`) is `ty::linear-through-pointer`,
-  at the assignment. Taking the address of a place that holds a linear value
-  with `&raw` is valid, and so is reading or writing its copy fields through
+- **A write through a pointer or a reference of a value of a linear type**
+  (`*p = t`, `p[i] = t`, `(*p).f = t`, `*p = .Some(t)`, `*r = t`) is
+  `ty::linear-through-pointer`, at the assignment. Taking the address of a
+  place that holds a linear value with `&raw` is valid, and so is reading or writing its copy fields through
   the pointer: raw pointers are unchecked.
 
 `extern fn` and `#[export]` functions may take and return linear types. C is
@@ -2030,9 +2034,9 @@ A linear part is **consumed** when it, or a place that contains it, is:
   is owed. Every test of the tag counts, the arms of a `match` and the tests
   of `?`.
 
-A discarded place (`t;`), reading a copy field (`t.channel`) and `&raw` of
-the place consume nothing. `.Some(_)` and a `_` arm that covers `.Some`
-leave the payload held. A value that is known to be `.None` is precise when
+A discarded place (`t;`), reading a copy field (`t.channel`), `&raw` of the
+place and a borrow of it, `&t` or `&mut t`, consume nothing. `.Some(_)` and a
+`_` arm that covers `.Some` leave the payload held. A value that is known to be `.None` is precise when
 it is written as `.None` in the function and reaches its variable by moves;
 the result of a call or a parameter is known only after a test of its tag.
 The refinement is done by the tests of the tag of the place itself, as
@@ -2121,13 +2125,511 @@ nothing of a linear type is written through a pointer (L4); and each case of a
 variants (E1). They judge the compiler, as every rule of the validator does:
 type checking rejects the programs that would break them.
 
+## References (ADR 0105 to 0107)
+
+```
+struct Ring {
+    buf: [u8; 8],
+    head: usize,
+    count: usize,
+}
+
+fn push(r: &mut Ring, b: u8) -> bool {
+    if (*r).count == 8 {
+        return false;
+    }
+    let at: usize = ((*r).head + (*r).count) % 8;
+    (*r).buf[at] = b;
+    (*r).count += 1;
+    true
+}
+
+fn peek(r: &Ring) -> u8 {
+    (*r).buf[(*r).head]
+}
+
+fn count(r: &Ring) -> usize {
+    (*r).count
+}
+
+fn demo() -> usize {
+    let mut ring: Ring = Ring { buf: [0; 8], head: 0, count: 0 };
+    let ok: bool = push(&mut ring, 7);      // `ring` is lent to `push` for the call
+    let shared: &Ring = &ring;
+    count(shared) + count(shared)           // `&Ring` is copy
+}
+```
+
+A **reference** is an address the compiler checks. `&T` is a **shared**
+reference to a `T`, which reads it; `&mut T` is a **mutable** reference, which
+reads and writes it. Both are passed and stored as a thin pointer, 4 bytes
+with an alignment of 4, so a reference costs what a raw pointer costs. What
+the compiler adds is a check that, while a reference is used, the place it
+refers to is used only in ways that cannot disagree with it (see "The borrow
+check"). References are **second-class** (ADR 0094): they are held by a
+parameter or a `let` and lent to calls, and they are never stored in a field,
+returned, or held in a variable that changes, so none outlives the function
+that made it and no lifetime is ever written.
+
+### Types and expressions (ADR 0105)
+
+- `&T` and `&mut T` are types. `&e` and `&mut e` make a reference to the place
+  `e`; they are prefix operators at the precedence of `*` and `&raw`, so
+  `&a.b` borrows the field and `&x as *const u32` casts the reference. `&raw`
+  followed by `const` or `mut` is still a raw address (see "Addresses:
+  `&raw`"); `&raw` followed by anything else borrows a place whose path
+  starts with a variable named `raw`. `&&T` and `&&e` are read as two `&`, and
+  rejected below, not as a syntax error.
+- `*r` is the place `r` refers to, as `*p` is for a pointer: it is read, it is
+  written when `r` is a `&mut`, it is borrowed again, and it is given to
+  `&raw`. Writing through a `&` is `ty::write-through-const`.
+- Fields and elements through a reference are written as through a pointer,
+  `(*r).f` and `(*r)[i]`; there is no automatic dereference. `r.f` is
+  `ty::no-fields` and `r[i]` is `ty::cannot-index`, each with a help that
+  writes `(*r)`; `*e` on a value that is neither a pointer nor a reference is
+  `ty::deref-non-pointer`. `(*r)[i]` with `r: &[T; N]` is checked as an array
+  index is (see "Structs and arrays").
+- The referent is a sized type with values. `&!` is `ty::never-in-memory`,
+  `&[T]` is `ty::unsized` and `&Timer`, with `Timer` a peripheral type, is
+  `ty::peripheral-by-value`, each labeled "as the referent of a reference".
+  A reference to a slice is M5.4b's.
+- A literal under `&` takes the referent of the expected type
+  (`let c: &u32 = &5;`, `let c: &[u8; 0] = &[];`); a value of type `!` under
+  `&` or `&mut` is `ty::never-in-memory`.
+
+### What may be borrowed (ADR 0105)
+
+```
+struct Pair { a: u32, b: u32 }
+static LIMIT: u32 = 8;
+const TABLE: [u32; 3] = [1, 2, 3];
+fn make() -> Pair { Pair { a: 1, b: 2 } }
+
+fn places(p: *mut Pair, mut v: Pair, arr: [u32; 4]) {
+    let a: &Pair = &v;                  // a variable, a parameter
+    let b: &u32 = &v.a;                 // a field
+    let c: &u32 = &arr[2];              // an element
+    let d: &u32 = &LIMIT;               // a static without `mut`
+    let e: &[u8; 2] = &b"ok";           // a byte string
+    let f: &Pair = &*p;                 // through a raw pointer
+    let g: &mut u32 = &mut (*p).b;
+    let h: &mut u32 = &mut v.b;
+}
+
+fn values() {
+    let i: &Pair = &make();             // a value that is not a place
+    let j: &u32 = &make().a;            // a part of one
+    let k: &u32 = &TABLE[1];            // a part of a constant
+    let m: &() = &();                   // a zero-sized referent
+}
+```
+
+`&place` borrows a place: a variable, a parameter, a field or an element of
+one, a `static` or an `extern static` without `mut`, a byte string, or a place
+through a reference or through a raw pointer that is not `volatile` (`&*p`,
+`&(*p).f`, `&p[i]`). A reference made through a raw pointer is the program's
+word, as `slice(p, n)` is: the borrow check follows nothing through a raw
+pointer.
+
+- `&mut place` needs a place that can be written, by the rules of `&raw mut`:
+  not a variable or parameter without `mut`, a `static`, an `extern static`
+  without `mut`, a byte string, nor a place through a `&` reference or a
+  `*const` pointer. Otherwise it is `ty::mut-borrow-of-immutable`, with a
+  message and a help for each reason.
+- **A value that is not a place** (`&f()`, `&Pair { a: 1, b: 2 }`, `&5`,
+  `&CONST`) is borrowed `&` from a variable of its own: the value is written to
+  a new local that nothing else uses, and borrowed. It lives as long as any
+  local does, the whole call of the function, so the reference never outlives
+  it. `&mut` of such a value is `ty::mut-borrow-of-immutable` ("a temporary
+  value"): a write through it would reach nothing the program can read.
+- **A part of a value that is not a place** (`&f().a`, `&TABLE[i]` with `TABLE`
+  a `const`, `&(comptime t())[1]`) is borrowed the same way, from the new local
+  that holds the whole value; the constant's data is copied there. `&mut` of
+  such a part is `ty::mut-borrow-of-immutable` too.
+- A **zero-sized referent** (`&()`, an empty struct, `&[u8; 0]`) is an address
+  that is never read or written through, as `&raw` gives one.
+- The rules of `&raw` that hold for any address hold for `&` and `&mut`, with
+  the same codes: a bit field is `ty::bit-field-address`, a register, a
+  register array or a cluster array `ty::register-address`, a possibly
+  misaligned field of a `#[packed]` struct `ty::packed-field-address`, and a
+  place of type `!` `ty::never-in-memory`.
+- **Not yet** (M5.4c), and errors until then: `&` or `&mut` of a `static mut`
+  or an `extern static mut`, or of a field or an element of one, is
+  `ty::reference-to-static-mut`; the help says to use `&raw` inside
+  `critical` (ADR 0078, 0093). `&` or `&mut` of a place reached through a
+  `volatile` pointer, or of a peripheral or a cluster, is
+  `ty::reference-to-volatile`; the help says to use the pointer. A register
+  has no address and is `ty::register-address` first.
+
+### Where a reference may be (ADR 0105)
+
+A reference type may be written only as the type of a parameter that is not
+`mut`, of any function (with a body, an `extern fn`, a `#[export]` or a
+`#[naked]` function), and as the type of a `let` without `mut`. Anywhere else
+it is `ty::reference-position`, at the written type, with a label naming the
+position:
+
+```
+// each of these is ty::reference-position
+struct Holder { r: &u32 }                       // a field
+fn returns(r: &u32) -> &u32 { r }               // a return type
+fn mutable(mut r: &u32) { }                     // a `mut` parameter
+fn array(a: u32, b: u32) {
+    let both: [&u32; 2] = [&a, &b];             // an element; and the literal
+    let mut r: &u32 = &a;                       // a `let mut`
+    let n: &&u32 = &&a;                         // a referent
+    let p: *const &u32 = &raw const r;          // a pointee
+}
+```
+
+The positions are: the type of a field, a payload value, an array or slice
+element, a type argument (`Option(&u32)`, `size_of(&u32)`, which asks a layout
+no reference has), a return type, a `static`, `extern static` or `const`, the
+pointee of a pointer, the referent of a reference, and a `mut` parameter or a
+`let mut` (a reference is bound once, and a help says to declare a new `let`).
+A `comptime` parameter and a `comptime T: type` argument are forbidden as
+well; the language has neither yet, so nothing checks them. A type that
+holds a reference is reported once, at the outermost reference that is in a
+forbidden position (`&&u32` as a field is one error, at the whole), and a type
+that failed already, as `&[u8]`, is not reported again.
+
+The expressions of a reference type are an argument of a call, the initializer
+of a `let`, the operand of `*`, `as` or an expression statement, and the value
+of an `if`, a `match`, a block or a `loop` through its `break` values, itself
+in one of these positions:
+
+```
+fn positions(a: u32, b: u32, c: bool) -> u32 {
+    let r: &u32 = if c { &a } else { &b };
+    let s: &u32 = loop { break &a; };
+    &a;
+    *r + *s + read(&a) + read(if c { &a } else { &b })
+}
+fn read(p: &u32) -> u32 { *p }
+```
+
+Those that would make a type with a reference below its top are
+`ty::reference-position` at the expression, at the innermost one that makes the
+type and not at those above it: an array literal of references (`[&a, &b]`),
+and `&`, `&mut` or `&raw` of an operand that is a reference (`&r`, `&&a`,
+`&raw const r`). So are the value of a `critical` block, which would outlive the
+protection it was taken in, and a `comptime` expression of a reference type,
+since a value computed at compile time is never a reference. `&f(&x)` is not
+one of these: no function returns a reference, so `f`'s result is borrowed.
+Each place is reported: `let a: [&u32; 2] = [&x, &y];` has an error at the
+written type and another at the literal. A constant or a static of a reference
+type has no value, and its uses report nothing more. The panic function keeps
+its `*const core::PanicInfo` (ADR 0053), and the entry function and the
+handlers take no parameters, so none holds a reference from its caller.
+
+### Kinds, conversions, casts and comparisons (ADR 0105)
+
+```
+fn read(p: &u32) -> u32 { *p }
+fn bump(p: &mut u32) { *p += 1; }
+
+fn kinds(a: &mut u32, b: &u32) -> u32 {
+    let c: &u32 = b;                    // `&T` is copy: `b` is still there
+    bump(a);                            // an argument is lent: `a` is still there
+    bump(a);
+    let d: &mut u32 = a;                // a `let` moves `a`
+    *d = read(c) + read(b);
+    *a                                  // error: analysis::use-after-move
+}
+
+fn casts(r: &u32, m: &mut u32) -> usize {
+    let p: *const u32 = r as *const u32;
+    let w: *mut u32 = r as *mut u32;    // allowed, as `*const u32 as *mut u32` is
+    let q: *mut u32 = m as *mut u32;
+    r as *const u32 as usize
+}
+```
+
+- `&T` is copy, whatever `T` is. `&mut T` is not copy, and not linear. A `let
+  d: &mut T = a;` moves `a`. Passing a variable or a parameter of type
+  `&mut T` as an argument **lends** it for the call and does not move it
+  (see "The borrow check").
+- **`&mut T` converts to `&T`**, where `*mut T` converts to `*const T`
+  (ADR 0024), at the same places (see "Typing"). The `&` it gives is a shared
+  borrow of `*r` that lasts as long as it is used, so the `&mut` it came from
+  is not moved: `let seen: &Ring = r;` and `count(r)` with `count(r: &Ring)`.
+  Only the outermost reference converts; a `&T` never becomes a `&mut T`
+  (`ty::mismatched-types`, with a help).
+- **Casts.** `r as P`, with `P` a raw pointer type, is allowed where `p as P`
+  is for `p` of type `*const T` (from a `&T`) or `*mut T` (from a `&mut T`),
+  so `&T as *mut T` is allowed, as `*const T as *mut T` is. It ends what the
+  borrow check follows: the raw pointer is unchecked from there. A reference
+  casts to nothing else: `r as usize` and every other target is
+  `ty::invalid-cast`, with a help giving `r as *const T as usize`. A cast
+  to a reference, from any type, is `ty::invalid-cast`, with a help giving
+  `&*p`. A `&mut` that is cast is moved. An operand of `asm` is not a
+  reference (`ty::asm-operand-type`): cast it to a raw pointer first.
+- **Comparisons.** `==`, `!=` and the orderings on references are
+  `ty::invalid-operand`, with a help giving `*a == *b` to compare the values
+  and `a as *const T == b as *const T` to compare the addresses. Neither
+  meaning is implied.
+
+### Moves and linear values through a reference (ADR 0105)
+
+- A value of a non-copy type is not moved out of `*r` or a place through it,
+  as it is not out of a place through a pointer: the owner would hold a value
+  that is gone. It is `ty::move-out-of-place`, whose label names the
+  reference. A copy value is read as from any place, and a non-copy value is
+  written through a `&mut` (`*r = v` moves `v`).
+- A value of a linear type is not written to `*r` or a place through it: the
+  value already there would be dropped without being consumed. It is
+  `ty::linear-through-pointer`, whose message says "through a reference". A
+  linear value may be borrowed, `&` or `&mut`, and a borrow consumes nothing:
+  the value is still held and is consumed later as before; its copy fields are
+  read and written through the reference.
+- Borrowing a moved place is `analysis::use-after-move`, and the borrow check
+  runs only on a body that analysis accepted.
+
+### Signatures, the C ABI and compile time (ADR 0105)
+
+A reference is passed, at every call and on every target, exactly as a raw
+pointer to its referent is: one register or stack word, whatever the size of
+the referent. A struct behind a reference crosses by address, where a struct by
+value would go in registers (see "Aggregates by value"). `extern fn`,
+`#[export]` and `#[naked]` functions may take references; the C side
+vouches for what it does with the address, as it does for raw pointers and
+linear values, and on the Erebos side the call lends the reference for its
+duration:
+
+```
+extern fn c_add_pair(acc: &mut u32, p: &Pair) -> u32;      // C sees `uint32_t *`, `const struct Pair *`
+
+#[export]
+fn erebos_scale(out: &mut u32, input: &u32) {
+    *out = *input * 3;
+}
+```
+
+No function returns a reference, and code generation gives references no LLVM
+attribute that a raw pointer lacks (`noalias`, `nonnull`, `dereferenceable`):
+what the borrow check proves is not passed to the optimizer.
+
+A function that takes and uses references runs at compile time as any
+function does, and the evaluator runs a borrow as it runs `&raw`: a borrow of a
+`static` is what `&raw const` of it is (see "Compile-time execution"), and a
+read through it is what a read through that pointer is. The address of a
+static cannot become an integer before linking (`eval::pointer-to-int`). No
+evaluation gives a reference as its result.
+
+```
+static TABLE: [u32; 3] = [10, 20, 30];
+fn middle(r: &[u32; 3]) -> u32 { (*r)[1] }
+const MIDDLE: u32 = middle(&TABLE);             // 20
+```
+
+### The borrow check (ADR 0106)
+
+Each `&place` and `&mut place` that runs makes a **borrow** of the place,
+shared or mutable. The check is an analysis of one function (ADR 0107), with no
+lifetime written, that finds the accesses that conflict with a borrow in use.
+
+**How long a borrow lasts.** A borrow is **in use** at a point when a variable,
+a parameter or a value the compiler keeps that may hold the reference, or a
+reference made through it, is used after that point. It lasts until the **last
+use**, not to the end of a scope:
+
+```
+fn last_use() {
+    let mut x: u32 = 1;
+    let r: &mut u32 = &mut x;
+    *r = 1;
+    x = 2;                              // fine: `r` is not used again
+}
+
+fn late_use() {
+    let mut x: u32 = 1;
+    let r: &mut u32 = &mut x;
+    x = 2;                              // error: analysis::borrow-conflict
+    *r = 1;
+}
+```
+
+- A borrow passed to a call, `f(&mut x)`, is in use until the call returns; no
+  call returns a reference, so nothing holds it afterwards.
+- A reference copied (`let b: &u32 = a;`) or moved keeps the borrows it may hold
+  in use while either copy is used. One that may hold one of several, such as
+  `if c { &a } else { &b }`, keeps all of them in use.
+- A borrow through a reference, `&mut *r` or `&(*r).f`, keeps in use the borrows
+  `r` may hold for as long as it is itself in use.
+- Uses follow control flow: a use in a later iteration of a loop keeps a borrow
+  in use across the back edge.
+
+**Places and overlap.** The check follows places made of a variable, a
+parameter, a value the compiler keeps or a static, then fields, elements, and
+dereferences of a reference. Two places **overlap** when one contains the
+other or both are the same, compared part by part from their root. Two
+different fields of one struct do not overlap (`&mut s.a` and `&s.b` may be in
+use together); two elements of one array always do, whatever their indexes,
+even constant ones (`&mut a[0]` and `&a[1]` may not). `*r` and the places
+through it are places of their own, rooted at `r`: using `*r` is using the
+borrow `r` holds, never a conflict with it. A place through a **raw pointer**
+is not followed: borrowing it makes a reference the check holds nothing for,
+and accessing it conflicts with no borrow.
+
+**Conflicts.** An access to a place conflicts with a borrow in use of an
+overlapping place:
+
+| Access | conflicts with a borrow in use that is |
+|--------|-----------------------------------------|
+| a read (a copy, a test of a tag, `&raw const`, `len`) | mutable |
+| a `&` borrow, or the conversion of a `&mut` to a `&` | mutable |
+| a write (an assignment, a call's result, an `asm` output, `&raw mut`) | shared or mutable |
+| a move, or `end` | shared or mutable |
+| a `&mut` borrow | shared or mutable |
+
+The access through the reference itself is never a conflict: `*r = 1` while `r`
+holds a `&mut x` writes through the borrow. A borrow of `*r` (a **reborrow**) is
+in conflict with the uses of `r` and `*r` while it is in use:
+
+```
+fn reborrow(r: &mut u32) {
+    let q: &mut u32 = &mut *r;
+    *r = 1;                             // error: analysis::borrow-conflict
+    *q = 2;
+}
+```
+
+**Calls.** The arguments of a call are evaluated left to right, each before the
+call starts, and the borrows they make are held until it returns:
+
+```
+struct Pair { a: u32, b: u32 }
+fn two(p: &mut u32, q: &u32) { }
+fn pair(p: &mut Pair, q: &Pair) { }
+fn first(n: u32, p: &mut Pair) { }
+fn last(p: &mut Pair, n: u32) { }
+fn inc(p: &u32) -> u32 { *p + 1 }
+
+fn calls(mut x: u32, mut p: Pair, mut a: [u32; 4]) {
+    pair(&mut p, &p);                   // error: analysis::borrow-conflict
+    last(&mut p, p.a);                  // error: `p.a` is read while `&mut p` is held
+    first(p.a, &mut p);                 // fine: `p.a` is read first
+    two(&mut p.a, &p.b);                // fine: different fields
+    two(&mut a[0], &a[1]);              // error: two elements always overlap
+    x = inc(&x);                        // fine: the result is written after the call
+}
+```
+
+**Lending.** An argument that is a variable or a parameter of type `&mut T` is
+lent, not moved: the call receives a reborrow `&mut *r`, in use until it
+returns. So `r` is usable again after the call and not by a later argument of
+the same call, and the conversion of a `&mut T` to a `&T` is a shared reborrow
+in the same way, wherever it happens. A `&mut` that is anything else, such as
+the value of an `if` or a block, is moved, as any value is.
+
+```
+struct Ring { buf: [u8; 8], head: usize, count: usize }
+fn push(r: &mut Ring, b: u8) -> bool { true }
+fn count(r: &Ring) -> usize { (*r).count }
+
+fn lent(r: &mut Ring) -> usize {
+    push(r, 1);                         // lent
+    push(r, 2);                         // lent again
+    let seen: &Ring = r;                // a shared borrow of `*r`
+    push(r, 3);                         // error: analysis::borrow-conflict
+    count(seen)                         // the use that keeps it in use
+}
+```
+
+**What the check does not change.** A use after a move stays the analysis of
+moves': the borrow check runs only on a body that analysis accepted, and the
+analysis of linearity runs on the same bodies (a borrow neither gives nor
+consumes a linear value). Paths that do not return use nothing after them, so no
+borrow is in use there. `critical` blocks change nothing: a borrow taken inside
+one is checked like any other. Elements of one array cannot be borrowed `&mut`
+together; a program that needs two borrows the array whole or copies one out.
+
+**The error.** `analysis::borrow-conflict`, one per access, at the access. The
+message names the access and the place, as the analysis of moves names places
+(`x`, `s.f`, `a[_]`, `*r`, `(*r).f`): "cannot assign to `x` while it is
+borrowed", "cannot use `x` while it is borrowed as mutable", "cannot borrow `x`
+as mutable while it is borrowed", "cannot borrow `x` while it is borrowed as
+mutable", "cannot move out of `x` while it is borrowed", "cannot end `x` while
+it is borrowed", "cannot take `&raw const` of `x` while it is borrowed as
+mutable", "cannot take `&raw mut` of `x` while it is borrowed"; for a borrow
+the compiler made, "cannot lend `r` to this call while it is borrowed" and
+"cannot convert `r` to `&` while it is borrowed as mutable". A place the
+compiler keeps is "this value". The labels are the access, each borrow in
+conflict ("`x` is borrowed as mutable here", "`r` is lent to this call", "`r` is
+converted to `&` here") and, for each, one later use that keeps it in use ("the
+borrow is used later here"). A use comes after the access in the program when
+it is in the access's own block after it, or is the call that the access is an
+argument of, which reads its arguments when it runs, after all of them are
+evaluated, whatever the span of the call; the first of those in source order is
+the one labeled (ADR 0107 orders ties exactly). When every use is reached only round a loop, the first of
+them is labeled "the borrow is used in the next iteration of the loop". The help
+says to end the borrow first: use the reference before, or take the value out
+into a `let` before borrowing it. Errors are ordered by the span of the access,
+and those with the same span, message and labels are dropped.
+
+### References in MIR (ADR 0107)
+
+`--emit=mir` prints a reference type as `&T` or `&mut T` and a borrow as
+`&_1` or `&mut (*_2).0`:
+
+```
+fn lend(r: &mut u32, mut x: Pair) -> u32 {
+    bump(r);                            // _5 = &mut (*_1); call bump(move _5)
+    let n: u32 = read(r);               // _6 = &(*_1); _7 = call read(copy _6)
+    let m: u32 = *&make().b;            // _8 = call make(); _9 = &_8.1
+    bump(&mut x.a);                     // _11 = &mut _2.0; call bump(move _11)
+    n + m
+}
+```
+
+- **Building.** `&place` and `&mut place` are one assignment from the place
+  type checking resolved. A value that is not a place is written to a **new**
+  local, never a reused temporary, and borrowed from there (`_8 = call make();
+  _9 = &_8.1`). A lent argument is `_t = &mut *r` and `move _t`, and the
+  conversion of a `&mut` is `_t = &*q`. A borrow is never a simple operand: a
+  place argument before it is read into a temporary first, so `first(p.a, &mut
+  p)` reads `p.a`, then borrows `p`.
+- **A `&mut` base is read in place.** When a variable `r` of type `&mut T` is
+  the base of a place whose index is not simple, as `(*r).buf[(*r).head]`, the
+  place is built on `r` itself: `r` is neither moved nor reborrowed to hold the
+  base while the index is evaluated, since nothing evaluated before the access
+  can assign a reference variable (it is bound once). A `&` base is copied.
+- **Calls that return through memory.** When a call has an argument of a
+  reference type and its result is returned through memory (ADR 0025, 0075), the
+  result goes to a temporary slot that is copied to the destination after the
+  call, so that `x = f(&x)` never gives the callee one address as both its
+  result and its argument.
+- **The validator** (ADR 0095) has, for references, T1 (`Deref` applies to a
+  reference, giving its referent; `Offset` does not), T5 (the type of a borrow
+  is the reference to its place's type with the same mutability, the place is
+  not volatile, a `&mut T` does not fit a `&T`, a cast goes from a reference to
+  a thin raw pointer and never to a reference) and three rules: R1, a reference
+  type is only the type of a local, never reached by another type (not a field,
+  a payload value, an array or slice element, a pointee or a referent), nor the
+  type of a static, nor a body's return type; R2, no place that is written,
+  borrowed `&mut` or given to `&raw mut` goes through the `Deref` of a shared
+  reference; R3, the place of a borrow is a local or a static followed by
+  `Field`, `Index`, `ConstIndex`, `Deref` and `Offset` projections only. Type
+  checking rejects the programs that would break them.
+- **The analysis** is `src/analysis/borrows.rs`, run by `check_body` after the
+  analysis of moves and, with the analysis of linearity, only on a body that
+  passed it; a body with no borrow does no work. It computes which borrows each
+  local of a reference type may hold, which locals are live, and which borrows
+  are in use at each access, and reports the conflicts above. Like the analysis
+  of moves it runs on the MIR of each body before anything evaluates it, so a
+  `const` that calls a function with a conflict reports
+  `analysis::borrow-conflict` and nothing from the evaluation.
+- **Code generation** lowers a reference as a pointer (`ptr` in LLVM IR), a
+  borrow as the address of its place, and keeps in memory a local whose place a
+  borrow names, as it does for `&raw`.
+
 ## Layout (ADR 0022, 0039)
 
 | Type | Size | Alignment |
 |------|------|-----------|
 | `u8 i8 bool` | 1 | 1 |
 | `u16 i16` | 2 | 2 |
-| `u32 i32 usize isize`, thin pointers | 4 | 4 |
+| `u32 i32 usize isize`, thin pointers, references | 4 | 4 |
 | `u64 i64` | 8 | 8 |
 | slices (`*const [T]`, `*mut [T]`) | 8 | 4 |
 | `[T; N]` | `N * size(T)` | `align(T)` |
@@ -2465,7 +2967,7 @@ comptime {
 | Precedence | Operators | Associativity |
 |------------|-----------|---------------|
 | 1 | calls `f(x)`, indexing `a[i]`, fields `s.f`, `?` (ADR 0046) | left |
-| 2 | unary `-` `!` `*` (deref), `&raw const`, `&raw mut` | prefix |
+| 2 | unary `-` `!` `*` (deref), `&`, `&mut`, `&raw const`, `&raw mut` | prefix |
 | 3 | `as` | left |
 | 4 | `*` `/` `%` | left |
 | 5 | `+` `-` | left |
@@ -2485,17 +2987,19 @@ So `flags & MASK == 0` means `(flags & MASK) == 0`, `*p.x` means `*(p.x)`,
 ### Typing
 
 - Both operands of an arithmetic, bitwise or comparison operator have the
-  same type; nothing converts implicitly (ADR 0008), with two exceptions:
+  same type; nothing converts implicitly (ADR 0008), with three exceptions:
   where a `*const T` is expected, a `*mut T` with the same `T` and
   volatility is accepted, since it only loses permission to write (ADR
-  0024); and where a slice is expected, a pointer to an array of its
-  elements is accepted, with the array's length (ADR 0031, see "Slices").
+  0024); where a `&T` is expected, a `&mut T` with the same `T` is accepted
+  for the same reason (ADR 0105, see "References"); and where a slice is
+  expected, a pointer to an array of its elements is accepted, with the
+  array's length (ADR 0031, see "Slices").
   These apply wherever an expected type is known, such as a `let`, an
   argument (including an `assert` message), an assignment, `return`,
   `break` values, struct fields, payload values, array elements, `if`
   branches, `match` arms, the tail of a block and the operand of
-  `comptime`. Only the outermost pointer converts, volatility never
-  changes, and comparisons accept a `*mut T` and a `*const T` in either
+  `comptime`. Only the outermost pointer or reference converts, volatility
+  never changes, and comparisons accept a `*mut T` and a `*const T` in either
   order.
 - A literal takes the type expected where it appears; with no expected type
   it is an error. In `x + 1` the `1` takes the type of `x`. A literal
@@ -2521,7 +3025,8 @@ So `flags & MASK == 0` means `(flags & MASK) == 0`, `*p.x` means `*(p.x)`,
 - `== !=` work on integers, thin pointers, `bool` and enums without
   payloads (two values of one enum type); `< <= > >=` on integers and thin
   pointers. Slices and enums with payloads cannot be compared, and enums
-  without payloads only with `== !=` (ADR 0035, 0039).
+  without payloads only with `== !=` (ADR 0035, 0039). References cannot be
+  compared at all (`ty::invalid-operand`, see "References").
 - A literal is never an enum: `m == 3` is `ty::mismatched-types`.
 - A value may be at most 2147483647 bytes, half the address space.
 
@@ -2630,13 +3135,16 @@ run at compile time: an evaluation that needs it reports nothing more.
 - Thin pointers convert only to and from `usize`; pointer-to-pointer casts
   may change mutability, volatility and pointee. Casts involving slices
   follow the table in "Slices".
+- A reference converts to a raw pointer only, and nothing converts to a
+  reference (see "References").
 - Structs and arrays do not convert.
 - Nothing converts to `!`: no value of that type exists (ADR 0034).
 
 ### Pointers
 
 - `*p` reads or, as an assignment target, writes through `p`. Writing needs
-  `*mut`.
+  `*mut`. `*r` does the same through a reference, and writing needs `&mut`
+  (see "References").
 - A thin pointer is a plain address (`p as usize` is its address); a slice
   is an address and a length. Converting an integer to a pointer does not
   make it valid to dereference; alignment, existence and permissions are
@@ -5136,8 +5644,8 @@ When code is type checked:
 | `ty::private-register` | an entry not visible where it is named |
 | `ty::write-to-read-only` | a write, a compound assignment or a field assignment to a `read` register; a field assignment or a compound assignment to a `read` field in a volatile place |
 | `ty::read-of-write-only` | a read, a compound assignment or a field assignment of a `write` register, or a field read from one; a read of a `write` field, or a compound assignment to one, in a volatile place |
-| `ty::register-address` | `&raw` of a register, of a register array or a cluster array taken whole, or of an element of a register array |
-| `ty::bit-field-address` | `&raw` of a bit field, a register's too |
+| `ty::register-address` | `&raw`, `&` or `&mut` of a register, of a register array or a cluster array taken whole, or of an element of a register array |
+| `ty::bit-field-address` | `&raw`, `&` or `&mut` of a bit field, a register's too |
 | `ty::read-with-effects` | a field assignment or a compound assignment to a place whose reads have effects, or to one of its fields |
 | `ty::compound-write-effect` | a compound assignment to a field with a write effect in a volatile place |
 | `ty::index-out-of-bounds` | an index known at compile time not below the length of a register array or a cluster array |
@@ -6028,31 +6536,35 @@ Every error has a stable code, shown with the message.
 | `resolve::outside-loop` | `break`/`continue` outside a loop |
 | `resolve::break-value-in-while` | `break value` in a `while` |
 | `resolve::return-in-comptime` | `return` or `?` in code run at compile time on its own: a `comptime` expression or block, the initializer of a constant or static, a variant's value, an array length, a repeat count, an `#[align(N)]` argument, a value of a `memory` block, a register's offset or a peripheral's address |
-| `ty::mismatched-types` | a value of the wrong type, or a `.V` where the expected type, or the position's type, is not an enum |
+| `ty::mismatched-types` | a value of the wrong type, a `&T` where a `&mut T` is expected, or a `.V` where the expected type, or the position's type, is not an enum |
 | `ty::untyped-literal` | a literal or array literal with no expected type |
 | `ty::untyped-variant` | a `.V` with no expected type, as a `match` scrutinee, the operand of `as` or `?`, or an expression statement |
 | `ty::unknown-variant` | a `.V` where the expected enum, or the position's enum, has no variant of that name |
 | `ty::literal-out-of-range` | literal does not fit its type |
-| `ty::invalid-operand` | operator applied to a type it does not accept, such as a comparison of slices or of enums with payloads, or any operator on bit-field structs |
+| `ty::invalid-operand` | operator applied to a type it does not accept, such as a comparison of slices, of references or of enums with payloads, or any operator on bit-field structs |
 | `ty::negate-unsigned` | unary `-` on an unsigned value |
 | `ty::shift-out-of-range` | shift amount known at compile time outside 0 to the width minus 1 |
 | `ty::division-by-zero` | divisor known at compile time to be zero |
-| `ty::invalid-cast` | `as` between types that do not convert, a slice cast the table refuses, any cast to `!` or to an enum, or from an enum with payloads; to a bit-field struct from anything but its integer type (itself included), or from one to anything but an integer type |
+| `ty::invalid-cast` | `as` between types that do not convert, a slice cast the table refuses, any cast to `!`, to an enum or to a reference, or from an enum with payloads; a reference to anything but a raw pointer; to a bit-field struct from anything but its integer type (itself included), or from one to anything but an integer type |
 | `ty::pointer-cast-width` | thin pointer cast to or from an integer type other than `usize` |
-| `ty::deref-non-pointer` | `*` on a value that is not a pointer |
-| `ty::cannot-index` | indexing a value that is not an array or a pointer, a register or a single cluster included |
+| `ty::deref-non-pointer` | `*` on a value that is not a pointer or a reference |
+| `ty::cannot-index` | indexing a value that is not an array or a pointer, a register, a single cluster or a reference included |
 | `ty::index-out-of-bounds` | index known at compile time not below the array's length, a register array's or a cluster array's included |
 | `ty::slice-pointer-index` | indexing a slice pointer directly (`s[i]`); write `(*s)[i]` |
-| `ty::no-fields` | field access on a value with neither fields nor registers |
+| `ty::no-fields` | field access on a value with neither fields nor registers, a reference included |
 | `ty::unknown-field` | field access to a field the struct does not have |
 | `ty::private-field` | a place or `offset_of` naming a field that is not visible here |
 | `ty::private-variant` | `.V` naming a variant of an enum that is not reachable here |
-| `ty::write-through-const` | assignment through a `*const` pointer |
+| `ty::write-through-const` | assignment through a `*const` pointer or a `&` reference |
 | `ty::not-assignable` | assignment to something that is not a place, or to part of a temporary; an `inout` operand of `asm` without `=>` whose expression is not a place |
 | `ty::assign-immutable` | assignment to a variable without `mut`, a `static`, an `extern static` without `mut`, or a byte string |
 | `ty::not-a-place` | `&raw` of a value that is not a place, or of a constant or any element or field of it |
-| `ty::address-of-immutable` | `&raw mut` of a place that cannot be written |
-| `ty::packed-field-address` | `&raw` of a possibly misaligned place inside a packed struct |
+| `ty::address-of-immutable` | `&raw mut` of a place that cannot be written, one through a `&` reference included |
+| `ty::mut-borrow-of-immutable` | `&mut` of a place that cannot be written (a variable or parameter without `mut`, a `static`, an `extern static` without `mut`, a byte string, a place through a `&` reference or a `*const` pointer), of a value that is not a place, or of a part of one (`&mut f().x`) |
+| `ty::reference-position` | a reference type written as the type of a field, a payload value, an array or slice element, a type argument, a layout query operand, a return type, a `static`, `extern static` or `const`, a pointee or a referent (`&&T`), or of a `mut` parameter or `let mut`, once per type at the outermost reference; an expression that makes an array of references, `&`, `&mut` or `&raw` of a reference, the value of a `critical` block, or a `comptime` expression of a reference type, at the innermost |
+| `ty::reference-to-static-mut` | `&` or `&mut` of a `static mut` or `extern static mut`, or of a field or element of one; use `&raw` inside `critical` (M5.4c) |
+| `ty::reference-to-volatile` | `&` or `&mut` of a place reached through a `volatile` pointer, or of a peripheral or a cluster (M5.4c) |
+| `ty::packed-field-address` | `&raw`, `&` or `&mut` of a possibly misaligned place inside a packed struct |
 | `ty::volatile-too-wide` | volatile access wider than the target's widest access, a bit-field struct on `u64` included |
 | `ty::volatile-aggregate` | volatile access to a whole struct, array or enum with payloads, or to a slice stored in memory |
 | `ty::volatile-packed-field` | volatile access to a possibly misaligned place inside a packed struct, a bit-field struct on `u16` or `u32` included |
@@ -6062,14 +6574,14 @@ Every error has a stable code, shown with the message.
 | `ty::copy-field-not-copy` | a field of a `#[copy]` struct, or a payload value of a `#[copy]` enum, whose type is not copy |
 | `ty::non-copy-constant` | a `const` whose type is not copy, or a `comptime` expression of a type that is not copy; a static's initializer is neither |
 | `ty::non-copy-repeat` | `[v; N]` with `v` of a type that is not copy, whatever `N` is, unless `v` is a variant written without payload values |
-| `ty::move-out-of-place` | a value of a type that is not copy read whole from an array element (of a temporary's array too, `f().items[i]`), a place through a pointer (`*p`, `p[i]`, `(*p).f`, `(*s)[i]`) or a static, or bound by a `match` on such a place; a field of a temporary (`f().x`), and a place that is only named (a discarded place, a `match` scrutinee), are not one |
+| `ty::move-out-of-place` | a value of a type that is not copy read whole from an array element (of a temporary's array too, `f().items[i]`), a place through a pointer or a reference (`*p`, `p[i]`, `(*p).f`, `(*s)[i]`, `*r`, `(*r).f`) or a static, or bound by a `match` on such a place; a field of a temporary (`f().x`), and a place that is only named (a discarded place, a `match` scrutinee), are not one |
 | `ty::non-copy-binding-in-or-pattern` | a binding of a type that is not copy inside an or-pattern nested in a payload; the alternatives of an arm are not nested |
 | `ty::linear-static` | a `static` or `extern static` whose type is linear, at its type: a `#[linear]` struct, or a struct, an enum with payloads, `Option` or `Result` that holds one; a pointer to one is not |
 | `ty::linear-array` | an array or a slice of a linear type, once per type: at the type where it is written (field, payload value, parameter, return type, `let`, static, type argument, pointee, layout query, cast), or at the array literal, repeat expression or `slice(p, n)` that makes a type no one wrote; a nested array is reported at the innermost |
-| `ty::linear-through-pointer` | an assignment of a value of a linear type to a place reached through a pointer (`*p`, `p[i]`, `(*p).f`, `(*s)[i]`); a copy field written through one is not |
+| `ty::linear-through-pointer` | an assignment of a value of a linear type to a place reached through a pointer or a reference (`*p`, `p[i]`, `(*p).f`, `(*s)[i]`, `*r`); a copy field written through one is not |
 | `ty::end-type` | `end(e)` with `e` of a type that is not a `#[linear]` struct: a scalar, a pointer, a struct that is not marked, an `Option` or a `Result` that holds a linear value |
 | `ty::end-private-field` | `end(e)` of a `#[linear]` struct with a field that is not visible where `end` is written (ADR 0050); the first such field is labeled |
-| `ty::never-in-memory` | `!` as a pointee, slice element, field, payload type, type argument of `Option` or `Result`, array element, register type, the type of a static, `extern static`, `const` or `comptime` value, a layout query operand, or under `&raw` |
+| `ty::never-in-memory` | `!` as a pointee, slice element, field, payload type, type argument of `Option` or `Result`, array element, register type, the type of a static, `extern static`, `const` or `comptime` value, a layout query operand, the referent of a reference, or under `&raw`, `&` or `&mut` |
 | `ty::invalid-align` | `#[align(N)]` on a struct, static or function with `N` not a power of two, too large or below the natural alignment |
 | `ty::aligned-in-packed` | a packed struct containing a type with `#[align(N)]`, at any depth, such as an enum with such a payload |
 | `ty::not-comptime` | a run-time variable where a compile-time value is required, in a `const` operand of `asm` too |
@@ -6113,8 +6625,8 @@ Every error has a stable code, shown with the message.
 | `ty::private-register` | an entry that is not visible here |
 | `ty::write-to-read-only` | a write, a compound assignment or a field assignment to a `read` register; a field assignment or a compound assignment to a `read` field in a volatile place |
 | `ty::read-of-write-only` | a read, a compound assignment or a field assignment of a `write` register, or a field read from one; a read of a `write` field, or a compound assignment to one, in a volatile place |
-| `ty::register-address` | `&raw` of a register, of a register array or a cluster array taken whole, or of an element of a register array |
-| `ty::bit-field-address` | `&raw` of a bit field, a register's too |
+| `ty::register-address` | `&raw`, `&` or `&mut` of a register, of a register array or a cluster array taken whole, or of an element of a register array |
+| `ty::bit-field-address` | `&raw`, `&` or `&mut` of a bit field, a register's too |
 | `ty::read-with-effects` | a field assignment or a compound assignment to a place whose reads have effects, or to one of its fields |
 | `ty::compound-write-effect` | a compound assignment to a field with a write effect in a volatile place |
 | `ty::bit-field-type` | a bit field whose type is not `bool`, `u8`, `u16`, `u32`, `u64` or an enum without payloads on one of these four |
@@ -6147,7 +6659,8 @@ Every error has a stable code, shown with the message.
 | `eval::uninit-read` | reading bytes never written, such as padding |
 | `eval::pointer-escapes` | a compile-time result holding a pointer into the evaluation's own memory |
 | `eval::pointer-out-of-bounds` | a compile-time result holding a pointer outside its object and not one past its end, or a slice not inside its object |
-| `analysis::use-after-move` | a place read, moved, assigned a part of or whose address is taken, after the value in it, in a part of it or in a place that contains it was moved, on some path from the move and with no assignment to it since, in a loop's next iteration too; each move that reaches the use is a label; once a use is reported, a later use that does not itself move is not reported again, while one that is a move makes its own move and so is reported after it; only named variables and parameters are followed, not temporaries (ADR 0097, 0099) |
+| `analysis::use-after-move` | a place read, moved, assigned a part of, borrowed or whose address is taken, after the value in it, in a part of it or in a place that contains it was moved, on some path from the move and with no assignment to it since, in a loop's next iteration too; each move that reaches the use is a label; once a use is reported, a later use that does not itself move is not reported again, while one that is a move makes its own move and so is reported after it; only named variables and parameters are followed, not temporaries (ADR 0097, 0099) |
+| `analysis::borrow-conflict` | an access to a place while a borrow of an overlapping place is in use, with a borrow in use as long as what holds the reference, or a reference made through it, is used later: a read, a `&` borrow, a `&raw const` or a conversion of a `&mut` to a `&` while a `&mut` borrow is in use; a write (an assignment, a call's result, an `asm` output, `&raw mut`), a move, an `end` or a `&mut` borrow (a `&mut` lent to a call too) while a `&` or a `&mut` borrow is in use; two arguments of one call are held until it returns, so `f(&mut x, &x)` and `f(&mut x, x.a)` are errors and `f(x.a, &mut x)` and `x = f(&x)` are not; two different fields do not overlap and two elements of an array always do; a place through a raw pointer is not followed; one error per access, at the access, labeling each borrow in conflict and one later use that keeps it in use, or the use in the next iteration of the loop when it comes only round one, with a help to end the borrow first; the analysis runs only on a body with no use after a move, and the analysis of linearity runs on the same bodies (ADR 0106, 0107) |
 | `analysis::linear-not-consumed` | a linear value still held where the function returns (a `return`, the end of the body, a `?` that returns), by a variable, a parameter or a temporary: a variable never moved, a parameter, the result of a call that is discarded, a literal that is discarded, a value consumed on some paths only, a `.Some(_)` or `_` arm that leaves a payload held, a value that comes round a loop (`let t: Transfer = start(1);` or `start(1);` in a loop) before it is consumed, or a value written over a place that holds one of the same origin (two parts of one call's result); or a linear field still held when its struct is ended by `end`; one error per value, at the call, the literal or the function (a parameter) where it came in, naming the place that holds it, with a label at each return it reaches, and where it was moved to that place; paths that do not return owe nothing (ADR 0102, 0103) |
 | `analysis::linear-overwritten` | a write to a place that holds a linear value, or a part of it, made elsewhere: `t = start(2);` over the `t` of `start(1)`, `s.h = v` over a held field; at the write, labeling where the value it would overwrite came in; a copy field written is no overwrite; a value already reported as not consumed is not reported again; the analysis runs only on a body with no use after a move (ADR 0102, 0103) |
 | `analysis::unprotected-static` | a place in the thread context, outside `critical`, naming a `static mut` or `extern static mut` that the handler context also reaches (ADR 0078, 0093) |

@@ -1,7 +1,8 @@
 # 0098. Moves in MIR
 
 - Status: Accepted; amended by 0103 (a struct's definition says whether it
-  is `#[linear]`)
+  is `#[linear]`), 0107 (the kind of a reference; a `&mut` argument lent
+  by a reborrow; a borrow is never a simple operand)
 - Date: 2026-11-09
 - Amends: 0095 (the operand `move`, and the rules M1 to M4 it must follow),
   0042 (a `match` on a place of a non-copy type tests the place itself, not

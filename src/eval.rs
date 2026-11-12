@@ -809,19 +809,24 @@ impl Interp<'_, '_> {
         for elem in place.projection {
             current = match (*elem, current.ty) {
                 (PlaceElem::Deref, Ty::Ptr(ptr)) => {
-                    let Scalar::Ptr(target) = self.read_at(current, span)? else {
-                        unreachable!("a pointer holds a pointer")
-                    };
+                    let target = self.read_address(current, span)?;
                     PlaceRef {
                         ptr: target,
                         volatile: ptr.volatile,
                         ty: *ptr.pointee,
                     }
                 }
+                // A reference holds an address as a pointer does (ADR 0107).
+                (PlaceElem::Deref, Ty::Ref(r)) => {
+                    let target = self.read_address(current, span)?;
+                    PlaceRef {
+                        ptr: target,
+                        volatile: false,
+                        ty: *r.referent,
+                    }
+                }
                 (PlaceElem::Offset(index), Ty::Ptr(ptr)) => {
-                    let Scalar::Ptr(target) = self.read_at(current, span)? else {
-                        unreachable!("a pointer holds a pointer")
-                    };
+                    let target = self.read_address(current, span)?;
                     let index = self.local_int(index, span)?;
                     let size = ptr.pointee.layout().size;
                     PlaceRef {
@@ -1020,6 +1025,14 @@ impl Interp<'_, '_> {
         Ok(())
     }
 
+    /// The address a pointer or a reference holds at `place`.
+    fn read_address(&mut self, place: PlaceRef, span: Span) -> EvalResult<Pointer> {
+        let Scalar::Ptr(address) = self.read_at(place, span)? else {
+            unreachable!("a pointer or a reference holds a pointer")
+        };
+        Ok(address)
+    }
+
     fn read_at(&mut self, place: PlaceRef, span: Span) -> EvalResult<Scalar> {
         let size = place.ty.layout().size;
         let Some((alloc, offset)) = self.access(place, size, span, false)? else {
@@ -1043,13 +1056,13 @@ impl Interp<'_, '_> {
         let pointer_at = object.pointers.range(..(offset + size) as u32).next_back();
         let overlaps = pointer_at.filter(|(at, _)| (**at as usize) + 4 > offset);
         match (place.ty, overlaps) {
-            (Ty::Ptr(_), Some((&at, &target))) if at as usize == offset => {
+            (Ty::Ptr(_) | Ty::Ref(_), Some((&at, &target))) if at as usize == offset => {
                 Ok(Scalar::Ptr(Pointer::Mem {
                     alloc: target,
                     offset: value as u32,
                 }))
             }
-            (Ty::Ptr(_), None) => Ok(Scalar::Ptr(Pointer::Addr(value as u32))),
+            (Ty::Ptr(_) | Ty::Ref(_), None) => Ok(Scalar::Ptr(Pointer::Addr(value as u32))),
             (_, Some(_)) => Err(self.error(
                 "eval::pointer-to-int",
                 "these bytes hold part of a pointer, whose address only exists after linking"
@@ -1213,7 +1226,9 @@ impl Interp<'_, '_> {
                 let value = self.operand(operand, span)?;
                 self.cast(value, from, *to, span)
             }
-            Rvalue::AddressOf { place, .. } => Ok(Scalar::Ptr(self.place(*place)?.ptr)),
+            Rvalue::AddressOf { place, .. } | Rvalue::Ref { place, .. } => {
+                Ok(Scalar::Ptr(self.place(*place)?.ptr))
+            }
             Rvalue::SliceAddress(place) => {
                 let (address, _) = slice_parts(self.place(*place)?);
                 self.read_at(address, span)
@@ -1371,6 +1386,8 @@ impl Interp<'_, '_> {
                 ));
             }
             (Ty::Ptr(_), Ty::Ptr(_), value) => value,
+            // As the raw pointer to the same place (ADR 0105, 0107).
+            (Ty::Ref(_), Ty::Ptr(_), value) => value,
             (from, to, _) => unreachable!("cast from `{from}` to `{to}`"),
         })
     }

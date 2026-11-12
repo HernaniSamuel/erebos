@@ -1,0 +1,98 @@
+// emit: mir
+// A `&mut` variable or parameter passed as an argument is lent to the call:
+// the call receives `&mut *r` and `r` is usable again after it. A `&mut T`
+// where a `&T` is expected converts to a shared borrow `&*q`, wherever it is,
+// and a `&mut` that is not a variable is moved (ADR 0094, 0105, 0107).
+struct Pair {
+    a: u32,
+    b: u32,
+}
+
+fn read(p: &u32) -> u32 {
+    *p
+}
+
+fn bump(p: &mut u32) {
+    *p = *p + 1;
+}
+
+fn sum(p: &Pair) -> u32 {
+    (*p).a + (*p).b
+}
+
+fn add(n: u32, p: &mut u32) {
+    *p = *p + n;
+}
+
+// Lent twice in a row, and in a loop.
+fn twice(r: &mut u32) {
+    bump(r);
+    bump(r);
+}
+
+fn looped(r: &mut u32, n: u32) {
+    let mut i: u32 = 0;
+    while i < n {
+        bump(r);
+        i = i + 1;
+    }
+}
+
+// Lent from a variable, then used after the calls.
+fn variable(mut x: u32) -> u32 {
+    let r: &mut u32 = &mut x;
+    bump(r);
+    bump(r);
+    *r = *r + 1;
+    x
+}
+
+// A `&mut` where a `&T` is expected: a variable, a parameter, `&mut x` and the
+// value of an `if`.
+fn shared_variable(mut x: u32) -> u32 {
+    let r: &mut u32 = &mut x;
+    let n: u32 = read(r);
+    bump(r);
+    n
+}
+
+fn shared_parameter(r: &mut u32) -> u32 {
+    read(r) + read(r)
+}
+
+fn shared_borrow(mut p: Pair) -> u32 {
+    sum(&mut p)
+}
+
+fn shared_if(a: &mut u32, b: &mut u32, c: bool) -> u32 {
+    read(if c { a } else { b })
+}
+
+// A `let` with a type converts, and the `&mut` is still usable.
+fn shared_let(r: &mut u32) -> u32 {
+    let q: &u32 = r;
+    let n: u32 = read(q);
+    *r = n;
+    n
+}
+
+// An argument that is not a variable is moved, not lent.
+fn moved_if(a: &mut u32, b: &mut u32, c: bool) {
+    bump(if c { a } else { b });
+}
+
+// A place read first, then the `&mut` lent: the place goes to a temporary.
+fn ordered(n: u32, r: &mut u32) {
+    add(n, r);
+}
+
+fn set(n: u32, p: &mut Pair) {
+    (*p).a = n;
+}
+
+fn lent_after_place(x: Pair, r: &mut Pair) {
+    set(x.a, r);
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

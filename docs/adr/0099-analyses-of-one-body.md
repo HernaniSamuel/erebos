@@ -2,7 +2,8 @@
 
 - Status: Accepted; amended by 0100 (the analysis of moves follows only
   variables and parameters), 0103 (`end` is an event of the analysis of
-  moves)
+  moves), 0107 (the place of a borrow is a use; `check_body` runs the
+  borrow analysis)
 - Date: 2026-11-09
 - Amends: 0063 (the module `query` uses `analysis`)
 

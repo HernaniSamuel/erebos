@@ -1,0 +1,82 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/reference_moves.ers
+---
+--- errors ---
+ty::move-out-of-place
+
+  × cannot move a value of the non-copy type `Token` out of a place through a reference
+    ╭─[reference_moves.ers:22:20]
+ 21 │ fn out_of_the_place(r: &Holder, m: &mut Holder) {
+ 22 │     let a: Token = (*r).token;
+    ·                    ─────┬────
+    ·                         ╰── `Token` is not copy, and this is a place through a reference
+ 23 │     let b: Holder = *r;
+    ╰────
+  help: mark `Token` with `#[copy]` if its values may be duplicated (ADR 0097)
+ty::move-out-of-place
+
+  × cannot move a value of the non-copy type `Holder` out of a place through a reference
+    ╭─[reference_moves.ers:23:21]
+ 22 │     let a: Token = (*r).token;
+ 23 │     let b: Holder = *r;
+    ·                     ─┬
+    ·                      ╰── `Holder` is not copy, and this is a place through a reference
+ 24 │     let c: Token = (*m).token;
+    ╰────
+  help: a non-copy value is moved out of a local, a parameter or their fields, and out of the
+        payloads a `match` binds from them (ADR 0097)
+ty::move-out-of-place
+
+  × cannot move a value of the non-copy type `Token` out of a place through a reference
+    ╭─[reference_moves.ers:24:20]
+ 23 │     let b: Holder = *r;
+ 24 │     let c: Token = (*m).token;
+    ·                    ─────┬────
+    ·                         ╰── `Token` is not copy, and this is a place through a reference
+ 25 │     let d: Flag = (*r).flag;
+    ╰────
+  help: mark `Token` with `#[copy]` if its values may be duplicated (ADR 0097)
+analysis::use-after-move
+
+  × use of moved value `t`
+    ╭─[reference_moves.ers:33:21]
+ 31 │     let t: Token = Token { id: 1 };
+ 32 │     let moved: Token = t;
+    ·                        ┬
+    ·                        ╰── moved here
+ 33 │     let r: &Token = &t;
+    ·                     ─┬
+    ·                      ╰── used here, after it was moved
+ 34 │ }
+    ╰────
+  help: mark `Token` with `#[copy]` if its values may be duplicated (ADR 0097)
+analysis::use-after-move
+
+  × assignment to a part of the moved value `a`
+    ╭─[reference_moves.ers:38:5]
+ 36 │ fn mutable_moved(a: &mut u32) {
+ 37 │     let b: &mut u32 = a;
+    ·                       ┬
+    ·                       ╰── moved here
+ 38 │     *a = 1;
+    ·     ───┬──
+    ·        ╰── assigned here
+ 39 │     *b = 2;
+    ╰────
+  help: a place that was moved is valid again once it is assigned a new value (ADR 0097)
+analysis::use-after-move
+
+  × use of moved value `h`
+    ╭─[reference_moves.ers:44:26]
+ 42 │ fn mutable_borrow_after_move(mut h: Holder) {
+ 43 │     let g: Holder = h;
+    ·                     ┬
+    ·                     ╰── moved here
+ 44 │     let r: &mut Holder = &mut h;
+    ·                          ───┬──
+    ·                             ╰── used here, after it was moved
+ 45 │ }
+    ╰────
+  help: a place that was moved is valid again once it is assigned a new value (ADR 0097)

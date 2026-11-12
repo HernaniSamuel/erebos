@@ -146,6 +146,7 @@ impl<'b> Flow<'b> {
                             self.operand(at, rhs);
                         }
                         Rvalue::AddressOf { place, .. }
+                        | Rvalue::Ref { place, .. }
                         | Rvalue::SliceAddress(place)
                         | Rvalue::SliceLen(place) => self.event(at, *place, Access::Use(None)),
                     }

@@ -9,7 +9,9 @@
 //! `Operand`, `PlaceElem` and `AsmOperandKind` name every variant and have
 //! no `_` arm, so that a new variant fails to compile here. The rules M1 to M4
 //! of ADR 0098 come after the rules of types, and L1 to L4 of ADR 0103 after
-//! them.
+//! them. R1 of ADR 0107 is checked through the types of locals and statics,
+//! R2 and R3 where the places they concern are: those written, and those a
+//! `Ref` borrows.
 
 use std::collections::HashSet;
 use std::fmt;
@@ -254,6 +256,7 @@ impl<'a> Checker<'a> {
         checker.at = Location::Body;
         checker.copy_kinds();
         checker.linear_kinds();
+        checker.reference_positions();
         checker.found
     }
 
@@ -490,7 +493,58 @@ impl<'a> Checker<'a> {
     fn written(&mut self, place: Place, how: &str) -> Option<Ty> {
         let typed = self.place(place);
         self.constant_write(place, how);
+        self.shared_write(place, how);
         self.whole(typed, "written")
+    }
+
+    /// R2: a place that is written, borrowed `&mut` or given to `&raw mut`
+    /// (`how` says which) does not go through the `Deref` of a shared
+    /// reference. A projection T1 rejected leaves nothing to judge.
+    fn shared_write(&mut self, place: Place, how: &str) {
+        let Some(mut ty) = self.local_ty(place.local) else {
+            return;
+        };
+        for elem in place.projection {
+            if let (PlaceElem::Deref, Ty::Ref(r)) = (elem, ty)
+                && !r.mutable
+            {
+                self.violation(
+                    "R2",
+                    format!(
+                        "{how} the place `{place}`, which goes through the shared reference `{ty}`"
+                    ),
+                );
+                return;
+            }
+            match project(ty, elem) {
+                Ok(next) => ty = next,
+                Err(_) => return,
+            }
+        }
+    }
+
+    /// R3: the place of a `Ref` is a local followed by `Field`, `Index`,
+    /// `ConstIndex`, `Deref` and `Offset` projections only.
+    fn ref_place(&mut self, place: Place) {
+        for elem in place.projection {
+            match elem {
+                PlaceElem::Field(_)
+                | PlaceElem::Index(_)
+                | PlaceElem::ConstIndex(_)
+                | PlaceElem::Deref
+                | PlaceElem::Offset(_) => {}
+                PlaceElem::Element(..)
+                | PlaceElem::ConstElement(..)
+                | PlaceElem::Tag
+                | PlaceElem::Payload { .. } => {
+                    self.violation(
+                        "R3",
+                        format!("a `Ref` of a place through `{elem:?}`, not a field, an element or a dereference"),
+                    );
+                    break;
+                }
+            }
+        }
     }
 
     /// S8: a constant local that is changed, as a place written, or taken
@@ -683,6 +737,7 @@ impl<'a> Checker<'a> {
             | Ty::Bool
             | Ty::Int(_)
             | Ty::Ptr(_)
+            | Ty::Ref(_)
             | Ty::Slice(_)
             | Ty::Peripheral(_) => {}
         }
@@ -702,6 +757,35 @@ impl<'a> Checker<'a> {
                     "L3",
                     format!(
                         "the local `{local}` of type `{}` reaches `{array}`, whose elements have the linear type `{elem}`",
+                        decl.ty
+                    ),
+                );
+            }
+        }
+    }
+
+    /// R1 for the type of every local: a reference is the type of a local
+    /// only, never of `_0`, the return value, and no type reaches one,
+    /// through arrays, slices, fields, payload values, pointees and
+    /// referents, each definition once. By it a place of a reference type is
+    /// a whole local.
+    fn reference_positions(&mut self) {
+        let body = self.body;
+        let mut seen = HashSet::new();
+        for (local, decl) in body.locals() {
+            if local == Local::RETURN && matches!(decl.ty, Ty::Ref(_)) {
+                self.violation(
+                    "R1",
+                    format!("the body returns the reference `{}`", decl.ty),
+                );
+            }
+            let mut found = Vec::new();
+            references_below(decl.ty, &mut seen, &mut found);
+            for reference in found {
+                self.violation(
+                    "R1",
+                    format!(
+                        "the local `{local}` of type `{}` reaches the reference `{reference}`",
                         decl.ty
                     ),
                 );
@@ -1077,6 +1161,18 @@ impl<'a> Checker<'a> {
                         "T5",
                         format!("a cast from `{from}` to `{target}`, one of them an aggregate"),
                     );
+                } else if let Ty::Ref(_) = target {
+                    self.violation(
+                        "T5",
+                        format!("a cast from `{from}` to the reference `{target}`"),
+                    );
+                } else if let Ty::Ref(_) = from
+                    && !matches!(target, Ty::Ptr(ptr) if thin(ptr))
+                {
+                    self.violation(
+                        "T5",
+                        format!("a cast from the reference `{from}` to `{target}`, not a thin raw pointer"),
+                    );
                 } else {
                     self.fit("a cast", *target, dest);
                 }
@@ -1087,6 +1183,7 @@ impl<'a> Checker<'a> {
             } => {
                 let typed = self.place(*place);
                 self.constant_write(*place, "`&raw mut` takes");
+                self.shared_write(*place, "`&raw mut` takes");
                 self.address_of(true, typed, dest);
             }
             Rvalue::AddressOf {
@@ -1095,6 +1192,15 @@ impl<'a> Checker<'a> {
             } => {
                 let typed = self.place(*place);
                 self.address_of(false, typed, dest);
+            }
+            Rvalue::Ref { mutable, place } => {
+                let typed = self.place(*place);
+                if *mutable {
+                    self.constant_write(*place, "`&mut` takes");
+                    self.shared_write(*place, "`&mut` takes");
+                }
+                self.ref_place(*place);
+                self.borrow(*mutable, typed, dest);
             }
             Rvalue::Slice { ptr, len } => {
                 let ptr = self.operand(ptr);
@@ -1176,6 +1282,8 @@ impl<'a> Checker<'a> {
                 Ty::Ptr(ptr) => thin(&ptr),
                 Ty::Unit | Ty::Never | Ty::Array(..) | Ty::Slice(_) | Ty::Struct(_) => false,
                 Ty::Enum(_) | Ty::Peripheral(_) => false,
+                // Neither the values nor the addresses are meant (ADR 0105).
+                Ty::Ref(_) => false,
             };
             if one_type && comparable {
                 self.fit("a comparison", Ty::Bool, dest);
@@ -1219,6 +1327,39 @@ impl<'a> Checker<'a> {
                 "T5",
                 format!(
                     "`&raw {how}` of a place of type `{}` does not fit the place's `{dest}`",
+                    typed.ty
+                ),
+            );
+        }
+    }
+
+    /// T5 for `&place` and `&mut place` of a place of type `typed.ty`: the
+    /// reference to it, `&mut` if written so, of a place that is not
+    /// volatile. A `&mut` does not fit a `&` place: the conversion is a `Ref`
+    /// (ADR 0107).
+    fn borrow(&mut self, mutable: bool, typed: Option<Typed>, dest: Option<Ty>) {
+        let Some(typed) = typed else {
+            return;
+        };
+        let how = if mutable { "&mut" } else { "&" };
+        if typed.volatile {
+            self.violation(
+                "T5",
+                format!("`{how}` of a volatile place of type `{}`", typed.ty),
+            );
+        }
+        let Some(dest) = dest else {
+            return;
+        };
+        let fits = matches!(
+            dest,
+            Ty::Ref(r) if r.referent == &typed.ty && r.mutable == mutable
+        );
+        if !fits {
+            self.violation(
+                "T5",
+                format!(
+                    "`{how}` of a place of type `{}` does not fit the place's `{dest}`",
                     typed.ty
                 ),
             );
@@ -1393,6 +1534,7 @@ impl<'a> Checker<'a> {
             Ty::Unit
             | Ty::Never
             | Ty::Ptr(_)
+            | Ty::Ref(_)
             | Ty::Array(..)
             | Ty::Slice(_)
             | Ty::Struct(_)
@@ -1484,6 +1626,7 @@ impl<'a> Checker<'a> {
             Ty::Unit
             | Ty::Never
             | Ty::Bool
+            | Ty::Ref(_)
             | Ty::Array(..)
             | Ty::Slice(_)
             | Ty::Struct(_)
@@ -1698,14 +1841,33 @@ impl Rules<'_> {
         }
     }
 
+    /// R1 for the type of a static: it is not a reference, and reaches none
+    /// (see `reference_positions`).
+    fn reference_static(&mut self, subject: &str, ty: Ty, seen: &mut HashSet<*const ()>) {
+        // One fault, whatever the reference reaches.
+        if let Ty::Ref(_) = ty {
+            let text = format!("its type `{ty}` is a reference");
+            self.of(subject, "R1", text);
+            return;
+        }
+        let mut found = Vec::new();
+        references_below(ty, seen, &mut found);
+        for reference in found {
+            let text = format!("its type `{ty}` reaches the reference `{reference}`");
+            self.of(subject, "R1", text);
+        }
+    }
+
     /// P6 and P7 for the statics, and P2 for the targets of their relocations.
     fn statics(&mut self) {
         let mir = self.mir;
         let mut seen = HashSet::new();
+        let mut seen_references = HashSet::new();
         for (index, held) in mir.statics.iter().enumerate() {
             let def = held.def.def();
             let subject = format!("static `{}`", def.name);
             self.linear_static(&subject, def.ty, &mut seen);
+            self.reference_static(&subject, def.ty, &mut seen_references);
             if def.id.0 as usize != index {
                 let text = format!("its id is {}, but it is at index {index}", def.id.0);
                 self.of(&subject, "P6", text);
@@ -1794,6 +1956,7 @@ fn linear_arrays(ty: Ty, seen: &mut HashSet<*const ()>, found: &mut Vec<(Ty, Ty)
             }
         }
         Ty::Ptr(ptr) => linear_arrays(*ptr.pointee, seen, found),
+        Ty::Ref(r) => linear_arrays(*r.referent, seen, found),
         Ty::Struct(s) => {
             let def = s.def();
             let Some(fields) = def.fields.get() else {
@@ -1820,13 +1983,65 @@ fn linear_arrays(ty: Ty, seen: &mut HashSet<*const ()>, found: &mut Vec<(Ty, Ty)
     }
 }
 
+/// R1: appends to `found` the references that `ty` reaches, through arrays,
+/// slices, fields, payload values, pointees and referents: a reference below
+/// the top of a type is never the type of anything. A reference is not looked
+/// into past the first one met. The structs and enums in `seen` were looked
+/// into already.
+fn references_below(ty: Ty, seen: &mut HashSet<*const ()>, found: &mut Vec<Ty>) {
+    match ty {
+        Ty::Array(elem, _) | Ty::Slice(elem) => reference_part(*elem, seen, found),
+        Ty::Ptr(ptr) => reference_part(*ptr.pointee, seen, found),
+        Ty::Ref(r) => reference_part(*r.referent, seen, found),
+        Ty::Struct(s) => {
+            let def = s.def();
+            let Some(fields) = def.fields.get() else {
+                return;
+            };
+            if seen.insert(ptr::from_ref(def).cast()) {
+                for field in fields {
+                    reference_part(field.ty, seen, found);
+                }
+            }
+        }
+        Ty::Enum(e) => {
+            let def = e.def();
+            let Some(variants) = def.variants.get() else {
+                return;
+            };
+            if seen.insert(ptr::from_ref(def).cast()) {
+                for value in variants.iter().flat_map(|variant| &variant.payload) {
+                    reference_part(value.ty, seen, found);
+                }
+            }
+        }
+        Ty::Unit | Ty::Never | Ty::Bool | Ty::Int(_) | Ty::Peripheral(_) => {}
+    }
+}
+
+/// A part of a type, for `references_below`: found if it is a reference,
+/// looked into otherwise.
+fn reference_part(part: Ty, seen: &mut HashSet<*const ()>, found: &mut Vec<Ty>) {
+    if let Ty::Ref(_) = part {
+        found.push(part);
+    } else {
+        references_below(part, seen, found);
+    }
+}
+
 /// Whether a static of this type is a type of values (as in T3) of a size:
 /// not `!`, `[T]` or a peripheral type, nor an array of the last two.
 fn values(ty: Ty) -> bool {
     match ty {
         Ty::Never | Ty::Slice(_) | Ty::Peripheral(_) => false,
         Ty::Array(item, _) => values(*item),
-        Ty::Unit | Ty::Bool | Ty::Int(_) | Ty::Ptr(_) | Ty::Struct(_) | Ty::Enum(_) => true,
+        Ty::Unit
+        | Ty::Bool
+        | Ty::Int(_)
+        | Ty::Ptr(_)
+        | Ty::Ref(_)
+        | Ty::Struct(_)
+        | Ty::Enum(_) => true,
     }
 }
 
@@ -1857,6 +2072,8 @@ fn fits(from: Ty, to: Ty) -> bool {
 fn volatile_after(from: Typed, elem: &PlaceElem) -> bool {
     match (elem, from.ty) {
         (PlaceElem::Deref | PlaceElem::Offset(_), Ty::Ptr(ptr)) => ptr.volatile,
+        // A reference is not volatile (ADR 0105).
+        (PlaceElem::Deref, Ty::Ref(_)) => false,
         (
             PlaceElem::Field(_) | PlaceElem::Element(..) | PlaceElem::ConstElement(..),
             Ty::Peripheral(_),
@@ -1874,6 +2091,7 @@ fn project(ty: Ty, elem: &PlaceElem) -> Result<Ty, String> {
     match elem {
         PlaceElem::Deref => match ty {
             Ty::Ptr(ptr) => Ok(*ptr.pointee),
+            Ty::Ref(r) => Ok(*r.referent),
             _ => wrong(),
         },
         PlaceElem::Offset(_) => match ty {
@@ -1974,8 +2192,8 @@ mod tests {
     use super::*;
     use crate::mir::{
         AsmOperand, AsmOptions, AsmReg, BasicBlockData, DataId, DefaultHandler, EnumId, EnumRef,
-        Field, Handler, Layout, LocalDecl, PanicSite, PeripheralLayout, Register, Static, StaticId,
-        StructRef, Variant, VectorTable,
+        Field, Handler, Layout, LocalDecl, PanicSite, PeripheralLayout, Ref, Register, Static,
+        StaticId, StructRef, Variant, VectorTable,
     };
     use crate::span::{SourceMap, Span};
 
@@ -2011,6 +2229,13 @@ mod tests {
 
     fn u32_ty() -> Ty {
         Ty::Int(IntTy::U32)
+    }
+
+    fn reference(mutable: bool, referent: Ty) -> Ty {
+        Ty::Ref(Ref {
+            mutable,
+            referent: Box::leak(Box::new(referent)),
+        })
     }
 
     fn usize_ty() -> Ty {
@@ -2750,6 +2975,15 @@ mod tests {
         // `Deref`: to a pointer, thin or slice.
         read(ptr(true, false, u32_ty()), &[PlaceElem::Deref], None);
         read(u32_ty(), &[PlaceElem::Deref], Some("T1"));
+        // `Deref` of a reference gives its referent; `Offset` does not apply to
+        // one (it is pointer arithmetic).
+        read(reference(false, u32_ty()), &[PlaceElem::Deref], None);
+        read(reference(true, u32_ty()), &[PlaceElem::Deref], None);
+        read(
+            reference(true, u32_ty()),
+            &[PlaceElem::Offset(usize_local)],
+            Some("T1"),
+        );
         // `Offset`: to a thin pointer to a sized type.
         let offset = [PlaceElem::Offset(usize_local)];
         read(ptr(true, false, u32_ty()), &offset, None);
@@ -3158,6 +3392,221 @@ mod tests {
         // The address of a register: the place is volatile, the pointer not.
         let register = projected(9, &[PlaceElem::Deref, PlaceElem::Field(0)]);
         accepts(assigning(ptr(true, false, u), of(true, register)));
+    }
+
+    /// The rules broken by `statements` in `bb0` of `valid` with `locals`
+    /// added after `_10`, numbered from 11.
+    fn with_locals(locals: &[Ty], statements: Vec<Statement>) -> Vec<&'static str> {
+        let mut body = valid();
+        body.locals.extend(locals.iter().copied().map(decl));
+        for statement in statements {
+            statement_of(&mut body, statement);
+        }
+        rules(&body)
+    }
+
+    #[test]
+    fn t5_ref() {
+        let u = u32_ty();
+        let shared = reference(false, u);
+        let mutable = reference(true, u);
+        let make = |mutable, place| Rvalue::Ref { mutable, place };
+        // `_11: &u32`, `_12: &mut u32`, `_13: &bool`, `_14: *mut volatile u32`.
+        let locals = [
+            shared,
+            mutable,
+            reference(false, Ty::Bool),
+            ptr(true, true, u),
+        ];
+        let assign = |dest, rvalue| Statement::Assign(local(dest), rvalue);
+        accepts(with_locals(
+            &locals,
+            vec![
+                assign(11, make(false, local(3))),
+                assign(12, make(true, local(3))),
+            ],
+        ));
+        // The type is a reference to the place's type, `&mut` if written so:
+        // a `&mut` does not fit a `&` place, nor the reverse.
+        let mismatches = [
+            assign(11, make(true, local(3))),
+            assign(12, make(false, local(3))),
+            assign(13, make(false, local(3))),
+            assign(3, make(false, local(3))),
+            assign(4, make(false, local(3))),
+        ];
+        for statement in mismatches {
+            let found = with_locals(&locals, vec![statement]);
+            assert!(found.contains(&"T5"), "{found:?}");
+        }
+        // A `&mut T` used as a `&T`: the conversion is a `Ref`, never a `Use`.
+        rejects(
+            with_locals(&locals, vec![assign(11, Rvalue::Use(moved(local(12))))]),
+            "T5",
+        );
+        // A reference fits the same reference type, copied if shared.
+        accepts(with_locals(
+            &[shared, shared],
+            vec![assign(12, Rvalue::Use(copy(11)))],
+        ));
+        // A volatile place has no reference.
+        let volatile = projected(14, &[PlaceElem::Deref]);
+        rejects(
+            with_locals(&locals, vec![assign(11, make(false, volatile))]),
+            "T5",
+        );
+        // The place of a reference through a reference is not volatile.
+        let through = projected(12, &[PlaceElem::Deref]);
+        accepts(with_locals(&locals, vec![assign(11, make(false, through))]));
+        // A cast from a reference goes to a raw pointer, never to a reference.
+        let pointer = ptr(false, false, u);
+        let cast = |from, to| Rvalue::Cast(copy(from), to);
+        accepts(with_locals(
+            &[shared, pointer],
+            vec![assign(12, cast(11, pointer))],
+        ));
+        rejects(
+            with_locals(&[pointer, shared], vec![assign(12, cast(11, shared))]),
+            "T5",
+        );
+        rejects(
+            with_locals(
+                &[shared, usize_ty()],
+                vec![assign(12, cast(11, usize_ty()))],
+            ),
+            "T5",
+        );
+    }
+
+    #[test]
+    fn r2_a_write_does_not_go_through_a_shared_reference() {
+        let u = u32_ty();
+        let shared = reference(false, u);
+        let mutable = reference(true, u);
+        // `_11: &u32`, `_12: &mut u32`, `_13: &u32`, `_14: &mut u32`.
+        let locals = [shared, mutable, shared, mutable];
+        let through = |n| projected(n, &[PlaceElem::Deref]);
+        let assign = |place, rvalue| Statement::Assign(place, rvalue);
+        // Reads and borrows `&` are fine through either.
+        accepts(with_locals(
+            &locals,
+            vec![
+                assign(local(3), Rvalue::Use(copy(1))),
+                assign(
+                    local(13),
+                    Rvalue::Ref {
+                        mutable: false,
+                        place: through(11),
+                    },
+                ),
+            ],
+        ));
+        // A write through `&mut` is fine; through `&` it is R2.
+        accepts(with_locals(
+            &locals,
+            vec![assign(through(12), Rvalue::Use(copy(1)))],
+        ));
+        rejects(
+            with_locals(&locals, vec![assign(through(11), Rvalue::Use(copy(1)))]),
+            "R2",
+        );
+        // So are `&mut` and `&raw mut` of a place through `&`.
+        rejects(
+            with_locals(
+                &locals,
+                vec![assign(
+                    local(14),
+                    Rvalue::Ref {
+                        mutable: true,
+                        place: through(11),
+                    },
+                )],
+            ),
+            "R2",
+        );
+        rejects(
+            with_locals(
+                &[shared, ptr(true, false, u)],
+                vec![assign(
+                    local(12),
+                    Rvalue::AddressOf {
+                        mutable: true,
+                        place: through(11),
+                    },
+                )],
+            ),
+            "R2",
+        );
+        // The destination of a call.
+        rejects(
+            with_locals(
+                &locals,
+                vec![Statement::Call {
+                    dest: Some(through(11)),
+                    callee: BodyId(0),
+                    args: vec![copy(1)],
+                }],
+            ),
+            "R2",
+        );
+        // A field of a struct held behind a shared reference.
+        let pair = Ty::Struct(pair());
+        rejects(
+            with_locals(
+                &[reference(false, pair)],
+                vec![assign(
+                    projected(11, &[PlaceElem::Deref, PlaceElem::Field(0)]),
+                    Rvalue::Use(copy(1)),
+                )],
+            ),
+            "R2",
+        );
+    }
+
+    #[test]
+    fn r3_the_place_of_a_ref_has_no_payload_or_tag() {
+        let option = Ty::Enum(option());
+        let u = u32_ty();
+        // `_11: Option`, `_12: &u32`, `_13: &Option`.
+        let locals = [option, reference(false, u), reference(false, option)];
+        let assign = |dest, place| {
+            Statement::Assign(
+                local(dest),
+                Rvalue::Ref {
+                    mutable: false,
+                    place,
+                },
+            )
+        };
+        accepts(with_locals(&locals, vec![assign(13, local(11))]));
+        // The payload of an enum is reached by a `match`, never borrowed.
+        let payload = PlaceElem::Payload {
+            variant: 1,
+            index: 0,
+        };
+        rejects(
+            with_locals(&locals, vec![assign(12, projected(11, &[payload]))]),
+            "R3",
+        );
+        let tag = Ty::Int(IntTy::U8);
+        rejects(
+            with_locals(
+                &[option, reference(false, tag)],
+                vec![assign(12, projected(11, &[PlaceElem::Tag]))],
+            ),
+            "R3",
+        );
+        // Fields, elements and dereferences are fine.
+        let pair = Ty::Struct(pair());
+        let array = Ty::Array(Box::leak(Box::new(u)), 4);
+        accepts(with_locals(
+            &[pair, reference(false, u)],
+            vec![assign(12, projected(11, &[PlaceElem::Field(1)]))],
+        ));
+        accepts(with_locals(
+            &[array, reference(false, u)],
+            vec![assign(12, projected(11, &[PlaceElem::ConstIndex(3)]))],
+        ));
     }
 
     #[test]
@@ -4042,6 +4491,112 @@ mod tests {
         assert_eq!(with(transfers(2)), ["L3"]);
         let table = kind("Table", false, false, vec![("slots", transfers(2))]);
         assert_eq!(with(Ty::Struct(table)), ["L3"]);
+    }
+
+    /// `struct Holder { n: u32, r: &u32 }` and `enum Held { Full(&u32) }`: the
+    /// definitions that hold a reference.
+    fn holding_references() -> (StructRef, EnumRef) {
+        let holder = kind(
+            "Holder",
+            false,
+            false,
+            vec![("r", reference(false, u32_ty()))],
+        );
+        let held = EnumRef::new(
+            EnumId(5),
+            "Held".to_owned(),
+            IntTy::U8,
+            Layout { size: 8, align: 4 },
+            false,
+        );
+        held.def().set_variants(vec![Variant {
+            name: "Full".to_owned(),
+            value: std::sync::OnceLock::from(0),
+            payload: vec![Field {
+                name: "0".to_owned(),
+                ty: reference(true, u32_ty()),
+                offset: 4,
+            }],
+        }]);
+        (holder, held)
+    }
+
+    #[test]
+    fn r1_a_reference_is_only_the_type_of_a_local() {
+        let array = |elem, len| Ty::Array(Box::leak(Box::new(elem)), len);
+        let slice = |elem| Ty::Slice(Box::leak(Box::new(elem)));
+        let shared = reference(false, u32_ty());
+        accepts(declaring(shared));
+        accepts(declaring(reference(true, Ty::Struct(pair()))));
+        accepts(declaring(reference(false, array(u32_ty(), 2))));
+        // A pointer to a reference's referent is a pointer to a `u32`.
+        accepts(declaring(ptr(false, false, u32_ty())));
+        // A referent, an element, a pointee.
+        rejects(declaring(reference(false, shared)), "R1");
+        rejects(declaring(reference(true, reference(true, u32_ty()))), "R1");
+        rejects(declaring(array(shared, 2)), "R1");
+        rejects(declaring(ptr(false, false, slice(shared))), "R1");
+        rejects(declaring(ptr(true, false, shared)), "R1");
+        // A field, and a payload value.
+        let (holder, held) = holding_references();
+        rejects(declaring(Ty::Struct(holder)), "R1");
+        rejects(declaring(Ty::Enum(held)), "R1");
+        // Through a pointer to a definition, and an array of one.
+        rejects(declaring(ptr(true, false, Ty::Struct(holder))), "R1");
+        rejects(declaring(array(Ty::Enum(held), 2)), "R1");
+        // Each definition once, however many locals reach it.
+        let mut body = valid();
+        body.locals.extend([
+            decl(Ty::Struct(holder)),
+            decl(Ty::Struct(holder)),
+            decl(ptr(true, false, Ty::Struct(holder))),
+        ]);
+        breaks_only(&body, "R1");
+    }
+
+    #[test]
+    fn r1_no_body_returns_a_reference() {
+        let shared = reference(false, u32_ty());
+        // `fn f(_1: &u32) -> &u32 { _0 = copy _1; return }`
+        let mut body = valid();
+        body.ret = shared;
+        body.locals[0] = decl(shared);
+        body.locals[1] = decl(shared);
+        breaks_only(&body, "R1");
+        // A return type that holds one is the type's fault as well, once.
+        let (holder, _) = holding_references();
+        let mut body = valid();
+        body.ret = Ty::Struct(holder);
+        body.locals[0] = decl(Ty::Struct(holder));
+        body.locals[1] = decl(Ty::Struct(holder));
+        body.blocks[0].statements[0] = Statement::Assign(local(0), Rvalue::Use(moved(local(1))));
+        breaks_only(&body, "R1");
+    }
+
+    #[test]
+    fn r1_no_static_is_a_reference_or_reaches_one() {
+        let with = |ty| {
+            let mut mir = program();
+            let id = mir.statics.len() as u32;
+            mir.statics.push(Static {
+                def: StaticRef::new(StaticId(id), "R".to_owned(), ty, false, true),
+                bytes: Vec::new(),
+                align: 4,
+                relocations: Vec::new(),
+            });
+            program_rules(&mir)
+        };
+        let shared = reference(false, u32_ty());
+        let (holder, held) = holding_references();
+        assert_eq!(with(u32_ty()), Vec::<&str>::new());
+        assert_eq!(with(ptr(false, false, u32_ty())), Vec::<&str>::new());
+        // The type itself, and what it reaches.
+        assert_eq!(with(shared), ["R1"]);
+        assert_eq!(with(reference(true, shared)), ["R1"]);
+        assert_eq!(with(ptr(false, false, shared)), ["R1"]);
+        assert_eq!(with(Ty::Struct(holder)), ["R1"]);
+        assert_eq!(with(Ty::Enum(held)), ["R1"]);
+        assert_eq!(with(Ty::Array(Box::leak(Box::new(shared)), 2)), ["R1"]);
     }
 
     /// The rules broken by a write to `projection` of a new local of type

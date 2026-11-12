@@ -1,0 +1,14 @@
+// The address of a `static` borrowed at compile time cannot become an integer:
+// it only exists after linking, as for `&raw const` of the static (ADR 0030,
+// 0105).
+static TABLE: [u32; 3] = [10, 20, 30];
+
+fn address_of_static() -> usize {
+    let r: &[u32; 3] = &TABLE;
+    r as *const [u32; 3] as usize
+}
+
+const ADDRESS: usize = address_of_static();
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

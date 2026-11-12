@@ -1,0 +1,75 @@
+// emit: mir
+// An element reached through a reference, at an index that is read through
+// the same reference: `(*r).buf[(*r).head]`. The index is not a simple
+// expression, so MIR building reads it first; `r` is bound once and cannot be
+// assigned meanwhile (ADR 0094, 0105), so the place stays `(*r).buf[_i]`: `r`
+// is neither moved nor reborrowed, which the borrow check would reject because
+// the index reads through `r` (ADR 0106, 0107). A `&` reference is copied.
+struct Ring {
+    buf: [u8; 4],
+    head: usize,
+}
+
+struct Outer {
+    ring: Ring,
+    n: u8,
+}
+
+fn read(r: &mut Ring) -> u8 {
+    (*r).buf[(*r).head]
+}
+
+fn write(r: &mut Ring, v: u8) {
+    (*r).buf[(*r).head] = v;
+}
+
+fn compound(r: &mut Ring, v: u8) {
+    (*r).buf[(*r).head] += v;
+}
+
+fn nested_read(o: &mut Outer) -> u8 {
+    (*o).ring.buf[(*o).ring.head]
+}
+
+fn nested_write(o: &mut Outer, v: u8) {
+    (*o).ring.buf[(*o).ring.head] = v;
+}
+
+// A borrow of such a place, used while no other use of `*r` is made.
+fn borrow(r: &mut Ring) -> u8 {
+    let p: &mut u8 = &mut (*r).buf[(*r).head];
+    *p = 3;
+    *p
+}
+
+fn borrow_shared(r: &Ring) -> u8 {
+    let p: &u8 = &(*r).buf[(*r).head];
+    *p
+}
+
+fn read_shared(r: &Ring) -> u8 {
+    (*r).buf[(*r).head]
+}
+
+// The reference is used again after the access.
+fn then_used(r: &mut Ring) -> usize {
+    (*r).buf[(*r).head] = 1;
+    (*r).head
+}
+
+// The index lends the reference to a call: the borrow ends when the call
+// returns, before the access.
+fn take(r: &mut Ring) -> usize {
+    (*r).head
+}
+
+fn read_lent(r: &mut Ring) -> u8 {
+    (*r).buf[take(r)]
+}
+
+fn write_lent(r: &mut Ring, v: u8) {
+    (*r).buf[take(r)] = v;
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

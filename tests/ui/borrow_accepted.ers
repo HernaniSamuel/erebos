@@ -1,0 +1,160 @@
+// emit: mir
+// What the borrow check accepts (ADR 0106, 0107): a borrow lasts to the last
+// use of what holds it, places that do not overlap are borrowed together, an
+// access through the borrow is no conflict, and the borrows the check does not
+// follow (raw pointers, statics, byte strings) conflict with nothing.
+// `borrow_conflict.ers` has the rejected cases.
+struct Pair {
+    a: u32,
+    b: u32,
+}
+
+static LIMIT: u32 = 7;
+
+fn consume(p: Pair) {}
+
+fn bump(p: &mut u32) {
+    *p = *p + 1;
+}
+
+fn next(p: &u32) -> u32 {
+    *p + 1
+}
+
+fn grow(p: &Pair) -> Pair {
+    Pair { a: (*p).a + 1, b: (*p).b }
+}
+
+fn two_mut(a: &mut u32, b: &mut u32) {}
+
+fn mut_and_shared(a: &mut u32, b: &u32) {}
+
+fn mut_and_value(a: &mut u32, n: u32) {}
+
+fn value_and_pair(n: u32, p: &mut Pair) {}
+
+fn bytes(b: &[u8; 3]) -> u8 {
+    (*b)[0]
+}
+
+// The borrow ends at the last use of the reference: no block is needed.
+fn last_use(mut x: u32) -> u32 {
+    let r: &mut u32 = &mut x;
+    *r = 1;
+    x = 2;
+    x
+}
+
+// A shared borrow used before the write, and shared borrows together.
+fn shared_then_write(mut x: u32) -> u32 {
+    let a: &u32 = &x;
+    let b: &u32 = &x;
+    let n: u32 = *a + *b + x;
+    x = 3;
+    n
+}
+
+// `f(x.a, &mut x)` reads `x.a` first; `f(&mut s.a, &mut s.b)` borrows two
+// fields, and a field and a shared borrow of another.
+fn read_then_borrow(mut p: Pair) {
+    value_and_pair(p.a, &mut p);
+}
+
+fn ordered(mut p: Pair) {
+    let n: u32 = p.a;
+    value_and_pair(n, &mut p);
+}
+
+fn fields(mut s: Pair) {
+    two_mut(&mut s.a, &mut s.b);
+    mut_and_shared(&mut s.a, &s.b);
+}
+
+// The result of a call is written after the callee returns.
+fn result(mut x: u32, mut p: Pair) -> u32 {
+    x = next(&x);
+    p = grow(&p);
+    x + p.a
+}
+
+// An access through the borrow is no conflict, and a reborrow is used before
+// its base.
+fn through(mut x: u32) -> u32 {
+    let r: &mut u32 = &mut x;
+    *r = 1;
+    let q: &mut u32 = &mut *r;
+    *q = 2;
+    *r = 3;
+    *r
+}
+
+// A `&mut` lent to calls is usable again after each, and a `&` converted from
+// it is used before the next write.
+fn lent(r: &mut u32) -> u32 {
+    bump(r);
+    bump(r);
+    let n: u32 = next(r);
+    *r = n;
+    mut_and_value(r, n);
+    n
+}
+
+// A `&mut` lent in a loop.
+fn looped(r: &mut u32, n: u32) {
+    let mut i: u32 = 0;
+    while i < n {
+        bump(r);
+        i = i + 1;
+    }
+}
+
+// A borrow made in a loop and used in it.
+fn per_iteration(mut x: u32, n: u32) {
+    let mut i: u32 = 0;
+    while i < n {
+        let r: &mut u32 = &mut x;
+        *r = i;
+        x = x + 1;
+        i = i + 1;
+    }
+}
+
+// A borrow through a raw pointer is not followed: `x` is written while `q`
+// is used, and `q` borrows what the address of `x` points to.
+fn raw(mut x: u32) {
+    let p: *mut u32 = &raw mut x;
+    let q: &mut u32 = &mut *p;
+    x = 5;
+    *q = 1;
+}
+
+// A static that is never written, and a byte string, borrowed together.
+fn read_only() -> u32 {
+    let a: &u32 = &LIMIT;
+    let b: &u32 = &LIMIT;
+    let s: &[u8; 3] = &b"abc";
+    let t: &[u8; 3] = &b"abc";
+    *a + *b + (bytes(s) + bytes(t)) as u32
+}
+
+// Paths that do not return use nothing after them.
+fn never(mut x: u32, c: bool) -> u32 {
+    let r: &mut u32 = &mut x;
+    if c {
+        x = 1;
+        loop {}
+    }
+    *r = 2;
+    x
+}
+
+// A value moved after the last use of a borrow of it.
+fn moved_after(p: Pair) -> u32 {
+    let r: &Pair = &p;
+    let n: u32 = (*r).a;
+    consume(p);
+    n
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

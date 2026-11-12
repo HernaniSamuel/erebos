@@ -1,0 +1,48 @@
+// emit: mir
+// A value of a non-copy type is not moved out of `*r` or a place through it
+// (`ty::move-out-of-place`), but a copy value is read as from any place. A
+// borrow of a moved place is a use of it, and a `&mut` moved by a `let` is
+// used after the move (ADR 0105, 0107).
+struct Token {
+    id: u32,
+}
+
+#[copy]
+struct Flag {
+    on: bool,
+}
+
+struct Holder {
+    token: Token,
+    flag: Flag,
+    count: u32,
+}
+
+fn out_of_the_place(r: &Holder, m: &mut Holder) {
+    let a: Token = (*r).token;
+    let b: Holder = *r;
+    let c: Token = (*m).token;
+    let d: Flag = (*r).flag;
+    let e: u32 = (*r).count;
+    let f: Flag = (*m).flag;
+}
+
+fn borrow_after_move() {
+    let t: Token = Token { id: 1 };
+    let moved: Token = t;
+    let r: &Token = &t;
+}
+
+fn mutable_moved(a: &mut u32) {
+    let b: &mut u32 = a;
+    *a = 1;
+    *b = 2;
+}
+
+fn mutable_borrow_after_move(mut h: Holder) {
+    let g: Holder = h;
+    let r: &mut Holder = &mut h;
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

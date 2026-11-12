@@ -1,0 +1,26 @@
+// emit: typeck
+// A `&T` never becomes a `&mut T`, and a `&mut T` becomes only a `&T` of the
+// same referent, in the outermost reference only (ADR 0105).
+fn takes_mut(p: &mut u32) {
+    *p = 1;
+}
+
+fn takes_shared(p: &u32) {}
+
+fn takes_other(p: &i32) {}
+
+fn takes_raw(p: *const u32) {}
+
+fn errors(a: &u32, b: &mut u32, c: &mut i32, mut x: u32) {
+    takes_mut(a);
+    takes_other(b);
+    takes_other(c);
+    takes_raw(b);
+    let d: &mut u32 = a;
+    let e: &u32 = &x;
+    takes_mut(e);
+    takes_shared(&mut x);
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

@@ -1,0 +1,42 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/reference_index_through_conflict.ers
+---
+--- errors ---
+analysis::borrow-conflict
+
+  × cannot use `(*r).buf[_]` while it is borrowed as mutable
+    ╭─[reference_index_through_conflict.ers:17:17]
+ 15 │ fn conflict(r: &mut Ring) -> u8 {
+ 16 │     let p: &mut u8 = &mut (*r).buf[take(r)];
+    ·                      ───────────┬──────────
+    ·                                 ╰── `(*r).buf[_]` is borrowed as mutable here
+ 17 │     let x: u8 = (*r).buf[take(r)];
+    ·                 ────────┬────────
+    ·                         ╰── used here
+ 18 │     *p
+    ·     ─┬
+    ·      ╰── the borrow is used later here
+ 19 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot lend `r` to this call while it is borrowed
+    ╭─[reference_index_through_conflict.ers:17:31]
+ 15 │ fn conflict(r: &mut Ring) -> u8 {
+ 16 │     let p: &mut u8 = &mut (*r).buf[take(r)];
+    ·                      ───────────┬──────────
+    ·                                 ╰── `(*r).buf[_]` is borrowed as mutable here
+ 17 │     let x: u8 = (*r).buf[take(r)];
+    ·                               ┬
+    ·                               ╰── lent to this call here
+ 18 │     *p
+    ·     ─┬
+    ·      ╰── the borrow is used later here
+ 19 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)

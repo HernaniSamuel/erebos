@@ -602,7 +602,7 @@ impl Checker<'_, '_> {
             Ty::BitStruct(s) => Some(Ty::Int(s.int)),
             // Reported, such as `as *const !` (ADR 0034), or below, `as !`
             // and `as Mode`, which a literal has no type to take for.
-            Ty::Error | Ty::Never | Ty::Enum(_) => Some(Ty::Error),
+            Ty::Error | Ty::Never | Ty::Enum(_) | Ty::Ref(_) => Some(Ty::Error),
             _ => None,
         };
         let expected = if takes_literal_type(operand) {
@@ -619,6 +619,15 @@ impl Checker<'_, '_> {
                 Diagnostic::error("ty::invalid-cast", "cannot cast to `!`")
                     .label(target_span, "no value of type `!` exists")
                     .help("`!` is the type of expressions that do not finish (ADR 0034)"),
+            );
+            return Ty::Error;
+        }
+        // A reference is made with `&`, never by a cast (ADR 0105).
+        if let Ty::Ref(_) = target {
+            self.q.diags.push(
+                Diagnostic::error("ty::invalid-cast", format!("cannot cast to `{target}`"))
+                    .label(target_span, "nothing converts to a reference")
+                    .help("a reference is made with `&place` or `&mut place`; to borrow what a raw pointer `p` points to, write `&*p` or `&mut *p` (ADR 0105)"),
             );
             return Ty::Error;
         }
@@ -752,6 +761,27 @@ impl Checker<'_, '_> {
             }
             return target;
         }
+        // A reference casts as the raw pointer to the same place would, and to
+        // nothing else (ADR 0105).
+        let from = if let Ty::Ref(r) = from {
+            let pointer = Ty::ptr(r.mutable, false, *r.referent);
+            if !matches!(target, Ty::Ptr(_) | Ty::Error) {
+                self.q.diags.push(
+                    Diagnostic::error(
+                        "ty::invalid-cast",
+                        format!("cannot cast `{from}` to `{target}`"),
+                    )
+                    .label(target_span, "a reference converts only to raw pointers")
+                    .help(format!(
+                        "cast it to a raw pointer first, as in `r as {pointer} as usize` (ADR 0105)"
+                    )),
+                );
+                return Ty::Error;
+            }
+            pointer
+        } else {
+            from
+        };
         if !castable(from) {
             self.q.diags.push(
                 Diagnostic::error("ty::invalid-cast", format!("cannot cast `{from}`")).label(

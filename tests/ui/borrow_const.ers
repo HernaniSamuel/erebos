@@ -1,0 +1,45 @@
+// emit: mir
+// The borrow check runs on a body before compile-time evaluation can run it
+// (ADR 0099, 0107), as the analysis of moves does (`use_after_move_const.ers`):
+// a `comptime` function with a conflict called from a `const` reports
+// `analysis::borrow-conflict` and nothing from the evaluation, here a division
+// by zero the body would reach.
+fn zero() -> u32 { 0 }
+
+// Rejected: `x` is written while `r` is used later; the division is not reached.
+fn conflict() -> u32 {
+    let mut x: u32 = 1;
+    let r: &mut u32 = &mut x;
+    x = 2;
+    *r = 3;
+    10 / zero()
+}
+
+const FROM_BODY: u32 = conflict();
+
+// Rejected: the body of the `comptime` expression is analysed before it is
+// evaluated, and the function's own body has no error of its own.
+fn expression() -> u32 {
+    let a: u32 = comptime {
+        let mut x: u32 = 1;
+        let r: &mut u32 = &mut x;
+        x = 2;
+        *r = 3;
+        7
+    };
+    a
+}
+
+// Accepted: the same body with the borrow ended before the write.
+fn accepted() -> u32 {
+    let mut x: u32 = 1;
+    let r: &mut u32 = &mut x;
+    *r = 3;
+    x = 2;
+    x
+}
+
+const FROM_ACCEPTED: u32 = accepted();
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }
