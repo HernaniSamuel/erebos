@@ -1,7 +1,7 @@
 # 0008. Explicit types, no inference
 
 - Status: Accepted; amended by 0024 (`*mut T` to `*const T`), 0031 (array pointers to slices),
-  0105 (`&mut T` to `&T`)
+  0105 (`&mut T` to `&T`), 0108 (`&[T; N]` to `&[T]`)
 - Date: 2026-10-12
 
 ## Context

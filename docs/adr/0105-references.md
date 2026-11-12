@@ -1,6 +1,7 @@
 # 0105. References
 
-- Status: Accepted
+- Status: Accepted; amended by 0108 (borrowing a place of type `[T]`; a reference to a
+  slice passed as a slice)
 - Date: 2026-11-11
 - Amends: 0008 (a `&mut T` converts to a `&T` where ADR 0024's conversion
   applies), 0097 ("Places a value is moved out of": not a place through a

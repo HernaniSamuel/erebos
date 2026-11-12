@@ -203,6 +203,47 @@ Agreed as useful, not yet scheduled:
     microcontrollers concurrency is mostly interrupts, which M4 covers.
   ADR 0094 says how ownership and references extend to both, as ADR 0078
   says for its own rule.
+- After M6: more architectures and the rest of the concurrency model.
+  The order is a suggestion, and each step needs its own `Proposed` ADR,
+  reviewed before any implementation:
+  1. Priorities and ceilings, as RTIC's stack resource policy, as an
+     analysis of the call graph that extends ADR 0093. Not a library:
+     `comptime` cannot see the whole call graph. The targets differ (the
+     NVIC has priorities; the CLINT of riscv32 has none; the PLIC has a
+     threshold for external interrupts only), so what the language says
+     must be what each target can give.
+  2. A 64-bit target simpler than x86-64 first: riscv64 on QEMU `virt`. It
+     forces pointer width to be a parameter of layout, types, the
+     interpreter and the ABI (the note under M3), which is the costly part,
+     and it reuses the CLINT and the PLIC, has an MMU (Sv39) to test
+     addresses with, and has several harts (`-smp`) to test cores with.
+  3. Address spaces as types: physical, virtual, bus (what a DMA engine
+     sees, which differs from physical behind an IOMMU) and, on x86, port
+     I/O; no implicit conversion between them (ADR 0008), and the type
+     parameterized by the space once M6 exists. It reads ADR 0002 ("the
+     physical machine is the only thing that exists") and ADR 0084 (paging
+     does not arise) in a new way, so it needs an ADR of its own.
+  4. A memory model and safe multicore: atomics and their ordering; what
+     may cross from one core to another (a `comptime` predicate, since the
+     language has no traits, in place of Rust's `Send` and `Sync`); statics
+     of one core and statics shared by several; DMA that is not coherent
+     with the caches; chips whose cores have different instruction sets.
+     References and moves never cross contexts (ADR 0094), which keeps this
+     smaller than it is in Rust.
+  5. x86-64: its ABI, long mode, the IDT and GDT and the rings, boot by
+     UEFI or Multiboot with the memory map coming from the firmware (the
+     `memory` block is fixed today), port I/O, and TSO as its memory model.
+     The note under M3 says it is not planned; amend it when it is.
+  A question to ask of each, and of any new construct: could this be a
+  library in `comptime` with errors as good as the compiler's? It is the
+  compiler's when it needs an analysis of the whole program or of the flow
+  of a body (ceilings, absence of data races, linearity), a primitive of
+  the machine (an instruction, an ordering, an address space, a layout or
+  a placement), or a guarantee and a diagnostic about hardware that a
+  library cannot state as precisely (ADR 0002). It is a question to
+  answer under "Alternatives considered" of the ADR, not a rule that
+  rejects a proposal: ADR 0002 already chooses language constructs for
+  hardware that `comptime` could partly express.
 - Ada-inspired types for hardware. Representation clauses are bit-field
   structs (ADR 0059), whose fields are checked against their bits at
   run time through the panic function; what remains is range types
@@ -240,6 +281,23 @@ Agreed as useful, not yet scheduled:
   size, the stack's bounds), for example to check stack use. Until then a
   value both need is a `const` used in the block and in the code
   (ADR 0057).
+- Returning a reference tied to the one reference parameter, as Rust's
+  lifetime elision does (`fn get(r: &Buf) -> &u8`): accessors and chaining
+  on `&mut self` with no lifetime ever written. ADR 0094 leaves it out of
+  M5 to keep the first checker small, and says it breaks no program when
+  added; the borrow analysis of ADR 0107 already tracks which borrows a
+  local may hold, so a call's result would take the set of its argument.
+  Not scheduled, but not to be forgotten: the evidence for it is
+  - M5.5, where a method `&self -> &T` is the same shape and the ADR of
+    methods must say what a getter is until this exists;
+  - M5.7, where the references that stay raw pointers are counted. If most
+    of them stay raw because the safe form returns or stores a reference,
+    open an ADR for this (a `Proposed` one, reviewed first). Storing a
+    reference in a struct is a larger step (it needs written lifetimes or
+    regions) and is not part of this idea.
+  The same step would let a `&mut [T]` be split in two halves in use
+  together, as Rust's `split_at_mut`, which ADR 0108 leaves out because the
+  two references could be neither returned nor bound in pairs.
 - Effects in function types ("reads MMIO", "disables interrupts", "may
   panic"), for example to forbid some calls inside interrupt handlers.
   A type-system feature of its own; not scheduled. Revisit after M6.
@@ -381,14 +439,21 @@ ADRs:
     `analysis::borrow-conflict`) and 0107 (`Ty::Ref`, `Rvalue::Ref`, the
     rules R1 to R3, what MIR building writes, the analysis over the locals
     that may hold a borrow and their liveness; amending 0095, 0098, 0099).
-  - M5.4b: sub-slices of a `&[T]` (a built-in, a range syntax) and whether
-    a `&mut` to an array or a slice can be split in two disjoint halves;
-    `(*s)[i]` through a reference to a slice (ADR 0105 writes fields and
-    elements through a reference as through a pointer); the conversion of
-    `&[T; N]` to `&[T]` (as ADR 0031's for pointers); `len` of a reference;
-    `&*s` and `&(*s)[i]` from a raw slice; slices behind references across
-    the C ABI (two words, ADR 0025, 0075); whether elements of a slice
-    overlap as array elements do (ADR 0106).
+  - M5.4b: settled by ADR 0108 (`&[T]` and `&mut [T]`, laid out and passed
+    as raw slices, `extern fn` and `#[export]` included; `&[T; N]` converts to
+    `&[T]` where ADR 0024 applies, amending ADR 0008; `(*s)[i]` checked, `len`
+    of a reference reading nothing and moving nothing; `&*s` and `&(*s)[i]`
+    from a raw slice that is not volatile; sub-slices as a range in an index,
+    `a..b`, `a..` and `..b`, a place of type `[T]` borrowed with `&`, `&mut`
+    or `&raw`, checked with the cause `IndexOutOfBounds`; no split of a
+    `&mut` in two halves; elements and sub-slices of one slice always overlap)
+    and 0109 (a reference to a slice in MIR; places of type `[T]`, `Index` on
+    them and the projections `Subslice` and `ConstSubslice`; the conversion as
+    a `Ref`; S7, T1, T2, T5, R3 and the rule U1; the paths of the borrow
+    analysis).
+  - Not yet scheduled, from M5.4b: splitting a `&mut [T]` in two halves in
+    use together (deferred ideas, with returning a reference); `base[..]` and
+    `base[a..=b]`, which can be added without breaking programs (ADR 0108).
   - M5.4c: references to a `static mut` or an `extern static mut` (an error
     in M5.4a, `ty::reference-to-static-mut`), inside `critical` and in
     handlers, with ADR 0093 amended so that a borrow names the static as
@@ -416,6 +481,9 @@ ADRs:
     lifetime or region, leave it raw. Whether to mark the dereference of a
     raw pointer (the language has no `unsafe`, ADR 0030) waits until it is
     clear what remains.
+    Whether `assert` takes a `&[u8]` message, so that `assert(c, &b"...")`
+    is written without `&raw const` (an amendment of ADR 0031; ADR 0108
+    leaves the message a `*const [u8]`).
   - Typestate written `Pin(comptime state: PinState)` waits for M6; M5.2's
     program uses one struct per state.
   - Not in M5: references returned or stored in structs (ADR 0094); function

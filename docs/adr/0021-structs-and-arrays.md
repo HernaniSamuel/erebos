@@ -1,6 +1,6 @@
 # 0021. Structs and arrays
 
-- Status: Accepted; amended by 0031 (indexing slice pointers), 0032 (indices known at compile time), 0034 (`!` as a field or element, and the type of array expressions), 0059 (`..` in a literal of a bit-field struct; bit fields are not taken by `&raw`)
+- Status: Accepted; amended by 0031 (indexing slice pointers), 0032 (indices known at compile time), 0034 (`!` as a field or element, and the type of array expressions), 0059 (`..` in a literal of a bit-field struct; bit fields are not taken by `&raw`), 0108 (an index may be a range)
 - Date: 2026-10-14
 
 ## Context

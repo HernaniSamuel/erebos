@@ -37,7 +37,7 @@ Do not write one for local implementation details that the code already explains
 | 0005 | [LLVM backend via inkwell](0005-llvm-backend-via-inkwell.md)     | Accepted |
 | 0006 | [C ABI as the only ABI](0006-c-abi-as-the-only-abi.md)           | Accepted |
 | 0007 | [Wrapping integer arithmetic](0007-wrapping-integer-arithmetic.md) | Accepted, amended by 0032 |
-| 0008 | [Explicit types, no inference](0008-explicit-types-no-inference.md) | Accepted, amended by 0024, 0031, 0105 |
+| 0008 | [Explicit types, no inference](0008-explicit-types-no-inference.md) | Accepted, amended by 0024, 0031, 0105, 0108 |
 | 0009 | [Defer borrow checking](0009-defer-borrow-checking.md)           | Accepted |
 | 0010 | [First target: riscv32 on QEMU `virt`](0010-first-target-riscv32-qemu-virt.md) | Accepted, amended by 0073, 0077 |
 | 0011 | [Development environment: native Windows with prebuilt LLVM 22](0011-development-environment.md) | Accepted |
@@ -50,7 +50,7 @@ Do not write one for local implementation details that the code already explains
 | 0018 | [Evaluation order](0018-evaluation-order.md)                   | Accepted, amended by 0031 |
 | 0019 | [Conversions, pointer representation and pointer validity](0019-integer-pointer-conversions-and-operator-details.md) | Accepted, amended by 0031, 0059 |
 | 0020 | [Runtime support functions written in Erebos](0020-runtime-support-functions-in-erebos.md) | Accepted, amended by 0052, 0076 |
-| 0021 | [Structs and arrays](0021-structs-and-arrays.md)               | Accepted, amended by 0031, 0032, 0034, 0059 |
+| 0021 | [Structs and arrays](0021-structs-and-arrays.md)               | Accepted, amended by 0031, 0032, 0034, 0059, 0108 |
 | 0022 | [Data layout and alignment control](0022-data-layout-and-alignment.md) | Accepted, amended by 0030, 0031, 0034, 0059, 0087 |
 | 0023 | [Volatile access guarantees](0023-volatile-access-guarantees.md) | Accepted, amended by 0031, 0035, 0039, 0058, 0059, 0081 |
 | 0024 | [Implicit conversion from `*mut T` to `*const T`](0024-mut-to-const-pointer-conversion.md) | Accepted |
@@ -60,8 +60,8 @@ Do not write one for local implementation details that the code already explains
 | 0028 | [On-demand type checking and evaluation](0028-on-demand-compilation.md) | Accepted, amended by 0033 |
 | 0029 | [Constants and comptime expressions](0029-constants-and-comptime-syntax.md) | Accepted, amended by 0030, 0031, 0034, 0049 |
 | 0030 | [Statics and startup initialization](0030-statics-and-startup-initialization.md) | Accepted, amended by 0034, 0051, 0057, 0074, 0083, 0085, 0086 |
-| 0031 | [Byte strings and slices](0031-byte-strings-and-slices.md) | Accepted, amended by 0053 |
-| 0032 | [Checks on values known at compile time](0032-checks-on-values-known-at-compile-time.md) | Accepted, amended by 0035, 0037, 0039, 0059 |
+| 0031 | [Byte strings and slices](0031-byte-strings-and-slices.md) | Accepted, amended by 0053, 0108 |
+| 0032 | [Checks on values known at compile time](0032-checks-on-values-known-at-compile-time.md) | Accepted, amended by 0035, 0037, 0039, 0059, 0108 |
 | 0033 | [The compiler pipeline with compile-time evaluation](0033-compiler-pipeline-with-evaluation.md) | Accepted, amended by 0063, 0094 |
 | 0034 | [`!` is not a type of memory](0034-never-is-not-a-type-of-memory.md) | Accepted, amended by 0039 |
 | 0035 | [Enums with explicit discriminants](0035-enums-with-explicit-discriminants.md) | Accepted, amended by 0038, 0039, 0044, 0049, 0059 |
@@ -124,7 +124,7 @@ Do not write one for local implementation details that the code already explains
 | 0092 | [Interrupts generated from SVD](0092-interrupts-generated-from-svd.md) | Accepted |
 | 0093 | [Shared statics checked](0093-shared-statics-checked.md) | Accepted |
 | 0094 | [Ownership: copies, moves and references](0094-ownership-moves-and-references.md) | Accepted |
-| 0095 | [MIR validation](0095-mir-validation.md) | Accepted, amended by 0098, 0103, 0104, 0107 |
+| 0095 | [MIR validation](0095-mir-validation.md) | Accepted, amended by 0098, 0103, 0104, 0107, 0109 |
 | 0096 | [Copy types and `#[copy]`](0096-copy-types.md) | Accepted |
 | 0097 | [Moves](0097-moves.md) | Accepted, amended by 0100, 0103, 0105 |
 | 0098 | [Moves in MIR](0098-moves-in-mir.md) | Accepted, amended by 0103, 0107 |
@@ -134,6 +134,8 @@ Do not write one for local implementation details that the code already explains
 | 0102 | [Consuming linear values, and `end`](0102-consuming-linear-values.md) | Accepted |
 | 0103 | [Linear values in MIR, and their analysis](0103-linear-values-in-mir.md) | Accepted |
 | 0104 | [Variant values in MIR](0104-variant-values-in-mir.md) | Accepted |
-| 0105 | [References](0105-references.md) | Accepted |
-| 0106 | [The borrow check](0106-the-borrow-check.md) | Accepted, amended 2026-11-11 |
-| 0107 | [References in MIR, and the borrow analysis](0107-references-in-mir-and-the-borrow-analysis.md) | Accepted, amended 2026-11-11 |
+| 0105 | [References](0105-references.md) | Accepted, amended by 0108 |
+| 0106 | [The borrow check](0106-the-borrow-check.md) | Accepted, amended 2026-11-11, amended by 0108 |
+| 0107 | [References in MIR, and the borrow analysis](0107-references-in-mir-and-the-borrow-analysis.md) | Accepted, amended 2026-11-11, amended by 0109 |
+| 0108 | [Slices behind references](0108-slices-behind-references.md) | Accepted |
+| 0109 | [Slices behind references in MIR](0109-slices-behind-references-in-mir.md) | Accepted |

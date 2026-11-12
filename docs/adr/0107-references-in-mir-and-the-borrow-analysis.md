@@ -1,6 +1,7 @@
 # 0107. References in MIR, and the borrow analysis
 
-- Status: Accepted; amended on 2026-11-11 (which later use is labelled; a `&mut` base is read in place)
+- Status: Accepted; amended on 2026-11-11 (which later use is labelled; a `&mut` base is read in place); amended by 0109 (a reference to a slice; the conversion to a slice;
+  R3; paths through `[T]` and how their sites are described)
 - Date: 2026-11-11
 - Amends: 0095 (T1 and T5 for references; the rules R1 to R3), 0098 ("Kinds
   in MIR": the kind of a reference; "Where MIR building moves": a `&mut`
