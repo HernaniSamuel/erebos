@@ -1,0 +1,272 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/slice_borrows.ers
+---
+--- mir ---
+fn fill(_1: &mut [u8], _2: usize) -> () {
+    let _0: ();
+    let _1: &mut [u8]; // s
+    let _2: usize; // n
+
+    bb0: {
+        return;
+    }
+}
+
+fn touch(_1: &mut u8, _2: &u8) -> () {
+    let _0: ();
+    let _1: &mut u8; // a
+    let _2: &u8; // b
+
+    bb0: {
+        return;
+    }
+}
+
+fn both(_1: &u8, _2: &u8) -> () {
+    let _0: ();
+    let _1: &u8; // a
+    let _2: &u8; // b
+
+    bb0: {
+        return;
+    }
+}
+
+fn one_after_the_other(_1: &mut [u8]) -> () {
+    let _0: ();
+    let _1: &mut [u8]; // s
+    let _2: usize;
+    let _3: usize;
+    let _4: bool;
+    let _5: &mut u8;
+    let _6: &mut u8;
+    let _7: u8;
+    let _8: &u8;
+    let _9: usize;
+    let _10: usize;
+    let _11: bool;
+    let _12: &u8;
+    let _13: &u8;
+    let _14: usize;
+    let _15: usize;
+    let _16: bool;
+    let _17: &u8;
+    let _18: usize;
+    let _19: usize;
+    let _20: bool;
+    let _21: &mut u8;
+    let _22: &mut u8;
+    let _23: u8;
+    let _24: &u8;
+
+    bb0: {
+        _2 = const 0_usize;
+        _3 = len(_1);
+        _4 = Lt(copy _2, copy _3);
+        if copy _4 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _5 = &mut (*_1)[_2];
+        _6 = move _5;
+        _7 = const 0_u8;
+        _8 = &_7;
+        call touch(move _6, copy _8);
+        _9 = const 1_usize;
+        _10 = len(_1);
+        _11 = Lt(copy _9, copy _10);
+        if copy _11 -> [true: bb3, false: bb4];
+    }
+
+    bb2: {
+        panic(index out of bounds);
+    }
+
+    bb3: {
+        _12 = &(*_1)[_9];
+        _13 = copy _12;
+        _14 = const 2_usize;
+        _15 = len(_1);
+        _16 = Lt(copy _14, copy _15);
+        if copy _16 -> [true: bb5, false: bb6];
+    }
+
+    bb4: {
+        panic(index out of bounds);
+    }
+
+    bb5: {
+        _17 = &(*_1)[_14];
+        call both(copy _13, copy _17);
+        _18 = const 3_usize;
+        _19 = len(_1);
+        _20 = Lt(copy _18, copy _19);
+        if copy _20 -> [true: bb7, false: bb8];
+    }
+
+    bb6: {
+        panic(index out of bounds);
+    }
+
+    bb7: {
+        _21 = &mut (*_1)[_18];
+        _22 = move _21;
+        _23 = const 0_u8;
+        _24 = &_23;
+        call touch(move _22, copy _24);
+        return;
+    }
+
+    bb8: {
+        panic(index out of bounds);
+    }
+}
+
+fn length_first(_1: &mut [u8]) -> () {
+    let _0: ();
+    let _1: &mut [u8]; // s
+    let _2: usize; // n
+    let _3: &mut [u8];
+    let _4: usize;
+    let _5: &mut [u8];
+
+    bb0: {
+        _3 = &mut (*_1);
+        call fill(move _3, const 0_usize);
+        _4 = len(_1);
+        _2 = copy _4;
+        _5 = &mut (*_1);
+        call fill(move _5, copy _2);
+        return;
+    }
+}
+
+fn reborrow_ends(_1: &mut [u8]) -> () {
+    let _0: ();
+    let _1: &mut [u8]; // s
+    let _2: &mut [u8]; // t
+    let _3: usize; // n
+    let _4: &mut [u8];
+    let _5: &mut [u8];
+    let _6: usize;
+    let _7: &mut [u8];
+
+    bb0: {
+        _4 = &mut (*_1);
+        _2 = move _4;
+        _5 = &mut (*_2);
+        call fill(move _5, const 1_usize);
+        _6 = len(_1);
+        _3 = copy _6;
+        _7 = &mut (*_1);
+        call fill(move _7, copy _3);
+        return;
+    }
+}
+
+fn write_through(_1: &mut [u8]) -> () {
+    let _0: ();
+    let _1: &mut [u8]; // s
+    let _2: usize;
+    let _3: usize;
+    let _4: bool;
+    let _5: usize;
+    let _6: usize;
+    let _7: bool;
+    let _8: u8;
+    let _9: usize;
+    let _10: usize;
+    let _11: bool;
+
+    bb0: {
+        _2 = const 0_usize;
+        _3 = len(_1);
+        _4 = Lt(copy _2, copy _3);
+        if copy _4 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        (*_1)[_2] = const 1_u8;
+        _5 = const 0_usize;
+        _6 = len(_1);
+        _7 = Lt(copy _5, copy _6);
+        if copy _7 -> [true: bb3, false: bb4];
+    }
+
+    bb2: {
+        panic(index out of bounds);
+    }
+
+    bb3: {
+        _8 = copy (*_1)[_5];
+        _9 = const 1_usize;
+        _10 = len(_1);
+        _11 = Lt(copy _9, copy _10);
+        if copy _11 -> [true: bb5, false: bb6];
+    }
+
+    bb4: {
+        panic(index out of bounds);
+    }
+
+    bb5: {
+        (*_1)[_9] = copy _8;
+        return;
+    }
+
+    bb6: {
+        panic(index out of bounds);
+    }
+}
+
+fn length_argument_first(_1: &mut [u8]) -> () {
+    let _0: ();
+    let _1: &mut [u8]; // s
+    let _2: usize;
+    let _3: usize;
+    let _4: &mut [u8];
+
+    bb0: {
+        _2 = len(_1);
+        _3 = copy _2;
+        _4 = &mut (*_1);
+        call swapped(copy _3, move _4);
+        return;
+    }
+}
+
+fn swapped(_1: usize, _2: &mut [u8]) -> () {
+    let _0: ();
+    let _1: usize; // n
+    let _2: &mut [u8]; // s
+
+    bb0: {
+        return;
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}

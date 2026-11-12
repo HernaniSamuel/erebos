@@ -1,0 +1,61 @@
+// emit: mir
+// A reference to a slice in MIR (ADR 0109). `(*s)[i]` through one is checked
+// against `len(s)` and is the place `(*s)[i]`, so that it has a path for the
+// borrow check; through a raw slice it is still `(*(address + i))`. `&*s` and
+// `&mut *s` are a `Ref` of the place of type `[T]`, from each kind of slice;
+// `len(s)` reads the reference and moves nothing; a reference casts to the
+// raw slice of its mutability first, and the rest is the raw slice's.
+fn read(s: &[u8], i: usize) -> u8 {
+    (*s)[i]
+}
+
+fn write(s: &mut [u8], i: usize, b: u8) {
+    (*s)[i] = b;
+}
+
+// The same through a raw slice: no `Deref` and `Index`.
+fn read_raw(p: *const [u8], i: usize) -> u8 {
+    (*p)[i]
+}
+
+// `&*s` from a raw `*const`, a raw `*mut`, a `&` and a `&mut`.
+fn make(raw: *const [u8], raw_mut: *mut [u8], shared: &[u8], unique: &mut [u8]) {
+    let a: &[u8] = &*raw;
+    let b: &mut [u8] = &mut *raw_mut;
+    let c: &[u8] = &*shared;
+    let d: &mut [u8] = &mut *unique;
+}
+
+fn use_it(n: usize, s: &mut [u8]) {}
+
+// `len(s)` of a `&mut [u8]` followed by a use of `s`, and as an argument.
+fn length_then_use(s: &mut [u8]) -> usize {
+    let n: usize = len(s);
+    use_it(n, s);
+    use_it(len(s), s);
+    len(s)
+}
+
+// An element borrowed, and its address taken.
+fn element(s: &mut [u32], i: usize) {
+    let a: &mut u32 = &mut (*s)[i];
+    let p: *const u32 = &raw const (*s)[1];
+    let q: *const [u32] = &raw const *s;
+}
+
+// The casts of a `&[u32]`: to the raw slice, to a pointer to its first
+// element, and to another thin pointer; and of a `&mut [u32]`, to the raw
+// slice of its own mutability.
+fn casts(s: &[u32], t: &mut [u32]) {
+    let a: *const [u32] = s as *const [u32];
+    let b: *mut [u32] = t as *mut [u32];
+    let c: *const u32 = s as *const u32;
+    let d: *const u8 = s as *const u8;
+}
+
+fn cast_unique(t: &mut [u32]) -> *const [u32] {
+    t as *const [u32]
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

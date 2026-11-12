@@ -799,10 +799,13 @@ impl Builder<'_, '_> {
                     self.temp(ty, Rvalue::Binary(*op, lhs, rhs))
                 }
             }
-            // What a slice points to has no address of its own: `&raw` of
-            // it is the slice, with the mutability asked for (ADR 0031).
+            // What a raw slice points to has no address of its own: `&raw` of
+            // it is the slice, with the mutability asked for (ADR 0031). What
+            // a reference to a slice refers to is a place of type `[T]`
+            // (ADR 0109), below.
             hir::ExprKind::AddrOf { place, .. }
                 if let hir::ExprKind::Deref(pointer) = &place.kind
+                    && let Ty::Ptr(_) = self.ty_of(pointer)
                     && self.ty_of(pointer).slice_elem().is_some() =>
             {
                 let slice = self.expr(pointer);
@@ -2341,7 +2344,11 @@ impl Builder<'_, '_> {
                         let hir::ExprKind::Deref(pointer) = &base.kind else {
                             unreachable!("only what a slice points to has type `[T]`")
                         };
-                        self.slice_index(pointer, index, later_writes, *open)
+                        if let Ty::Ref(_) = self.ty_of(pointer) {
+                            self.reference_slice_index(pointer, index, later_writes, *open)
+                        } else {
+                            self.slice_index(pointer, index, later_writes, *open)
+                        }
                     }
                     _ => {
                         let base = self.pointer_place(base, later_writes);
@@ -2452,6 +2459,31 @@ impl Builder<'_, '_> {
         self.temp_place(address_ty, Rvalue::SliceAddress(slice))
             .project(PlaceElem::Offset(index))
     }
+
+    /// `(*s)[index]` with `s` a reference to a slice (ADR 0108, 0109): the
+    /// index is checked against the length as through a raw slice, then the
+    /// element is the place `(*s)[index]`, so that it has a path rooted at
+    /// `s` for the borrow analysis. A `&mut` variable is read in place
+    /// (`pointer_place`).
+    fn reference_slice_index(
+        &mut self,
+        slice: &hir::Expr,
+        index: &hir::Expr,
+        later_writes: bool,
+        at: Span,
+    ) -> Place {
+        let slice = self.pointer_place(slice, later_writes);
+        let index = self.fixed_index(index);
+        let len = self.temp(Ty::Int(hir::IntTy::Usize), Rvalue::SliceLen(slice));
+        let in_bounds = self.temp(
+            Ty::Bool,
+            Rvalue::Binary(BinOp::Lt, Operand::Copy(Place::local(index)), len),
+        );
+        self.panic_unless(in_bounds, PanicCause::IndexOutOfBounds, at);
+        slice
+            .project(PlaceElem::Deref)
+            .project(PlaceElem::Index(index))
+    }
 }
 
 /// Whether the operand of `&` or `&mut` is a place (or a part of a value,
@@ -2491,6 +2523,7 @@ fn try_projected_ty(ty: Ty, elem: &PlaceElem) -> Option<Ty> {
         (PlaceElem::Deref | PlaceElem::Offset(_), Ty::Ptr(ptr)) => *ptr.pointee,
         (PlaceElem::Deref, Ty::Ref(r)) => *r.referent,
         (PlaceElem::Index(_) | PlaceElem::ConstIndex(_), Ty::Array(elem, _)) => *elem,
+        (PlaceElem::Index(_), Ty::Slice(elem)) => *elem,
         (PlaceElem::Field(index), Ty::Struct(s)) => s.def().fields()[*index as usize].ty,
         (
             PlaceElem::Field(index)

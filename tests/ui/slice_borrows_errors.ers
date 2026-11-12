@@ -1,0 +1,32 @@
+// emit: mir
+// The orders the borrow check refuses over a slice behind a `&mut`
+// (ADR 0108): a `&mut` element and another element of one slice in use
+// together, `len(s)` while a reborrow of `*s` is used later, `fill(s,
+// len(s))`, and an element borrowed while a `&mut` of the whole is in use.
+fn fill(s: &mut [u8], n: usize) {}
+
+fn touch(a: &mut u8, b: &u8) {}
+
+fn elements(s: &mut [u8]) {
+    touch(&mut (*s)[0], &(*s)[1]);
+}
+
+fn reborrow(s: &mut [u8]) {
+    let t: &mut [u8] = &mut *s;
+    let n: usize = len(s);
+    fill(t, n);
+}
+
+fn lent(s: &mut [u8]) {
+    fill(s, len(s));
+}
+
+fn whole_and_element(s: &mut [u8]) {
+    let t: &mut [u8] = &mut *s;
+    let a: &mut u8 = &mut (*s)[0];
+    fill(t, 0);
+    touch(a, &0);
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

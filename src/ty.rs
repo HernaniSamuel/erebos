@@ -249,11 +249,12 @@ fn unsized_ty(ty: Ty) -> Diagnostic {
 }
 
 /// `ty::unsized` for `place`, the `[T]` of type `ty` a slice points to,
-/// `accessed` whole: it can only be indexed or passed to `&raw` (ADR 0031).
+/// `accessed` whole: it can only be indexed, borrowed or passed to `&raw`
+/// (ADR 0031, 0108).
 fn whole_slice(ty: Ty, place: Span, accessed: &str) -> Diagnostic {
     unsized_ty(ty)
         .label(place, format!("what a slice points to, {accessed} whole"))
-        .help("it can only be indexed, as in `(*s)[i]`, or passed to `&raw`; its length, known only at run time, is `len(s)` (ADR 0031)")
+        .help("it can only be indexed, as in `(*s)[i]`, borrowed, as in `&*s`, or passed to `&raw`; its length, known only at run time, is `len(s)` (ADR 0031, 0108)")
 }
 
 /// `ty::peripheral-by-value` for `ty`, a peripheral type (ADR 0058),

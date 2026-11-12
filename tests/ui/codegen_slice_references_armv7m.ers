@@ -1,0 +1,36 @@
+// emit: llvm-ir
+// opt: both
+// target: thumbv7m-none-eabi
+// A reference to a slice is passed as the slice is: two words, the C struct
+// `{ ptr, len }` (ADR 0108, 0109, 0075), as in `codegen_slice_references.ers`.
+// `(*s)[i]` compares the index with the length and calls the panic function
+// when it is not below it; the element is then loaded through the address.
+// `&*s` stores the two parts of the slice it borrows.
+fn read(s: &[u8], i: usize) -> u8 {
+    (*s)[i]
+}
+
+fn write(s: &mut [u32], i: usize, value: u32) {
+    (*s)[i] = value;
+}
+
+fn length(s: &[u16]) -> usize {
+    len(s)
+}
+
+fn reborrow(raw: *const [u8], i: usize) -> u8 {
+    let s: &[u8] = &*raw;
+    read(s, i)
+}
+
+fn lend(s: &mut [u32]) {
+    write(s, 0, 1);
+    write(s, 1, 2);
+}
+
+fn cast(s: &[u32]) -> *const [u32] {
+    s as *const [u32]
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

@@ -233,7 +233,8 @@ ty::mismatched-types
     ·                        ╰── expected a slice, found `u32`
  46 │     let b: usize = len(p);
     ╰────
-  help: `len(s)` takes a slice, such as a `*const [u8]`, or a pointer to an array (ADR 0031)
+  help: `len(s)` takes a slice, such as a `*const [u8]` or a `&[u8]`, or a pointer to an array
+        (ADR 0031, 0108)
 ty::mismatched-types
 
   × mismatched types

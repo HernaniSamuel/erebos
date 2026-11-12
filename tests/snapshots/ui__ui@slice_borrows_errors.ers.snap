@@ -1,0 +1,102 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/slice_borrows_errors.ers
+---
+--- errors ---
+analysis::borrow-conflict
+
+  × cannot use `s` while it is borrowed as mutable
+    ╭─[slice_borrows_errors.ers:11:25]
+ 10 │ fn elements(s: &mut [u8]) {
+ 11 │     touch(&mut (*s)[0], &(*s)[1]);
+    ·     ──────────────┬──────────────┬┬
+    ·                   │              │╰── used here
+    ·                   │              ╰── `(*s)[_]` is borrowed as mutable here
+    ·                   ╰── the borrow is used later here
+ 12 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot borrow `(*s)[_]` while it is borrowed as mutable
+    ╭─[slice_borrows_errors.ers:11:25]
+ 10 │ fn elements(s: &mut [u8]) {
+ 11 │     touch(&mut (*s)[0], &(*s)[1]);
+    ·     ──────────────┬──────────────┬┬
+    ·                   │              │╰── borrowed here
+    ·                   │              ╰── `(*s)[_]` is borrowed as mutable here
+    ·                   ╰── the borrow is used later here
+ 12 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot use `s` while it is borrowed as mutable
+    ╭─[slice_borrows_errors.ers:16:20]
+ 14 │ fn reborrow(s: &mut [u8]) {
+ 15 │     let t: &mut [u8] = &mut *s;
+    ·                        ───┬───
+    ·                           ╰── `*s` is borrowed as mutable here
+ 16 │     let n: usize = len(s);
+    ·                    ───┬──
+    ·                       ╰── used here
+ 17 │     fill(t, n);
+    ·     ─────┬────
+    ·          ╰── the borrow is used later here
+ 18 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot use `s` while it is borrowed as mutable
+    ╭─[slice_borrows_errors.ers:21:13]
+ 20 │ fn lent(s: &mut [u8]) {
+ 21 │     fill(s, len(s));
+    ·     ───────┬───────┬┬
+    ·            │       │╰── used here
+    ·            │       ╰── `s` is lent to this call
+    ·            ╰── the borrow is used later here
+ 22 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot use `s` while it is borrowed as mutable
+    ╭─[slice_borrows_errors.ers:26:22]
+ 24 │ fn whole_and_element(s: &mut [u8]) {
+ 25 │     let t: &mut [u8] = &mut *s;
+    ·                        ───┬───
+    ·                           ╰── `*s` is borrowed as mutable here
+ 26 │     let a: &mut u8 = &mut (*s)[0];
+    ·                      ──────┬─────
+    ·                            ╰── used here
+ 27 │     fill(t, 0);
+    ·     ─────┬────
+    ·          ╰── the borrow is used later here
+ 28 │     touch(a, &0);
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot borrow `(*s)[_]` as mutable while it is borrowed
+    ╭─[slice_borrows_errors.ers:26:22]
+ 24 │ fn whole_and_element(s: &mut [u8]) {
+ 25 │     let t: &mut [u8] = &mut *s;
+    ·                        ───┬───
+    ·                           ╰── `*s` is borrowed as mutable here
+ 26 │     let a: &mut u8 = &mut (*s)[0];
+    ·                      ──────┬─────
+    ·                            ╰── borrowed as mutable here
+ 27 │     fill(t, 0);
+    ·     ─────┬────
+    ·          ╰── the borrow is used later here
+ 28 │     touch(a, &0);
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)

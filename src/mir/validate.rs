@@ -1119,10 +1119,11 @@ impl<'a> Checker<'a> {
                 let Some(ty) = self.operand(operand) else {
                     return;
                 };
-                // A slice into a slice of the same elements, whatever the
-                // mutability and volatility (ADR 0031).
-                let slices = ty.slice_elem().is_some()
-                    && dest.is_some_and(|dest| dest.slice_elem() == ty.slice_elem());
+                // A raw slice into a raw slice of the same elements, whatever
+                // the mutability and volatility (ADR 0031). A reference to a
+                // slice fits only its own type (ADR 0109, T5).
+                let slices = raw_slice_elem(ty).is_some()
+                    && dest.is_some_and(|dest| raw_slice_elem(dest) == raw_slice_elem(ty));
                 if !slices {
                     self.fit("`use`", ty, dest);
                 }
@@ -1156,7 +1157,17 @@ impl<'a> Checker<'a> {
                 let Some(from) = self.operand(operand) else {
                     return;
                 };
-                if from.is_aggregate() || target.is_aggregate() {
+                // The one cast whose sides are slices: a reference to a slice
+                // to the raw slice of its mutability and elements (ADR 0109).
+                if let Ty::Ref(r) = from
+                    && let Ty::Slice(elem) = r.referent
+                    && let Ty::Ptr(to) = target
+                    && to.pointee == &Ty::Slice(elem)
+                    && to.mutable == r.mutable
+                    && !to.volatile
+                {
+                    self.fit("a cast", *target, dest);
+                } else if from.is_aggregate() || target.is_aggregate() {
                     self.violation(
                         "T5",
                         format!("a cast from `{from}` to `{target}`, one of them an aggregate"),
@@ -1224,7 +1235,7 @@ impl<'a> Checker<'a> {
                 let Some(dest) = dest else {
                     return;
                 };
-                let by_elem = |elem: Ty| dest.slice_elem() == Some(elem);
+                let by_elem = |elem: Ty| raw_slice_elem(dest) == Some(elem);
                 let elements = by_elem(*from.pointee)
                     || matches!(from.pointee, Ty::Array(elem, _) if by_elem(**elem));
                 if !elements {
@@ -1238,6 +1249,10 @@ impl<'a> Checker<'a> {
                 let Some(typed) = self.place(*place) else {
                     return;
                 };
+                if let Ty::Slice(_) = typed.ty {
+                    self.unsized_operand("the address", typed.ty);
+                    return;
+                }
                 match typed.ty.slice_address_ty() {
                     Some(address) => self.fit("a slice's address", address, dest),
                     None => self.violation(
@@ -1250,7 +1265,9 @@ impl<'a> Checker<'a> {
                 let Some(typed) = self.place(*place) else {
                     return;
                 };
-                if typed.ty.slice_elem().is_some() {
+                if let Ty::Slice(_) = typed.ty {
+                    self.unsized_operand("the length", typed.ty);
+                } else if typed.ty.slice_elem().is_some() {
                     self.fit("a slice's length", Ty::Int(IntTy::Usize), dest);
                 } else {
                     self.violation(
@@ -1260,6 +1277,16 @@ impl<'a> Checker<'a> {
                 }
             }
         }
+    }
+
+    /// U1: `SliceAddress` and `SliceLen` read a slice, not the place of type
+    /// `[T]` that one points to or refers to (ADR 0109). The operands and
+    /// destinations that name such a place are T3's.
+    fn unsized_operand(&mut self, what: &str, ty: Ty) {
+        self.violation(
+            "U1",
+            format!("{what} of a place of type `{ty}`, which only `Index`, a sub-slice, `Ref` and `AddressOf` use"),
+        );
     }
 
     /// T5 for a binary operation on operands of valid types.
@@ -2102,7 +2129,7 @@ fn project(ty: Ty, elem: &PlaceElem) -> Result<Ty, String> {
             _ => wrong(),
         },
         PlaceElem::Index(_) => match ty {
-            Ty::Array(item, _) => Ok(*item),
+            Ty::Array(item, _) | Ty::Slice(item) => Ok(*item),
             _ => wrong(),
         },
         PlaceElem::ConstIndex(index) => match ty {
@@ -2180,6 +2207,15 @@ fn entry(p: PeripheralTypeRef, index: u32) -> Result<(Ty, Option<(u64, u64)>), S
 fn stack(open: &[Local]) -> String {
     let locals: Vec<String> = open.iter().map(ToString::to_string).collect();
     format!("[{}]", locals.join(", "))
+}
+
+/// The element type of a raw slice, `*const [T]` or `*mut [T]`; a reference
+/// to a slice has none, since it fits only its own type (ADR 0109, T5).
+fn raw_slice_elem(ty: Ty) -> Option<Ty> {
+    match ty {
+        Ty::Ptr(_) => ty.slice_elem(),
+        _ => None,
+    }
 }
 
 /// A pointer to a sized type, or to a slice's elements: one address.
@@ -3476,6 +3512,236 @@ mod tests {
             ),
             "T5",
         );
+    }
+
+    // ---- Places of type `[T]` and references to slices (ADR 0109) ----
+
+    /// `[u32]`.
+    fn unsized_u32() -> Ty {
+        Ty::Slice(Box::leak(Box::new(u32_ty())))
+    }
+
+    #[test]
+    fn t1_index_applies_to_the_place_of_a_slice() {
+        let usize_local = Local(8);
+        let index = [PlaceElem::Deref, PlaceElem::Index(usize_local)];
+        // `Index` of the `[T]` a raw slice points to, and a reference to a
+        // slice refers to.
+        accepts(reading(ptr(false, false, unsized_u32()), &index));
+        accepts(reading(ptr(true, true, unsized_u32()), &index));
+        accepts(reading(reference(false, unsized_u32()), &index));
+        accepts(reading(reference(true, unsized_u32()), &index));
+        // `ConstIndex` is for arrays.
+        let constant = [PlaceElem::Deref, PlaceElem::ConstIndex(0)];
+        rejects(reading(ptr(false, false, unsized_u32()), &constant), "T1");
+        rejects(reading(reference(false, unsized_u32()), &constant), "T1");
+        // `Index` of what is no array and no `[T]`.
+        rejects(reading(reference(false, u32_ty()), &index), "T1");
+        // The index is a `usize`, and the element's type is the slice's.
+        let wrong = [PlaceElem::Deref, PlaceElem::Index(Local(1))];
+        rejects(reading(reference(false, unsized_u32()), &wrong), "T2");
+        // A place of type `[T]` is read whole by no one (T3), and has no
+        // fields.
+        rejects(
+            reading(reference(false, unsized_u32()), &[PlaceElem::Deref]),
+            "T3",
+        );
+        rejects(
+            reading(
+                reference(false, unsized_u32()),
+                &[PlaceElem::Deref, PlaceElem::Field(0)],
+            ),
+            "T1",
+        );
+    }
+
+    #[test]
+    fn t5_ref_and_address_of_a_slice_place() {
+        let u = u32_ty();
+        let place = projected(10, &[PlaceElem::Deref]);
+        let borrow = |mutable| Rvalue::Ref { mutable, place };
+        let address = |mutable| Rvalue::AddressOf { mutable, place };
+        let slice = |mutable, elem| reference(mutable, Ty::Slice(Box::leak(Box::new(elem))));
+        let raw = |mutable, elem| ptr(mutable, false, Ty::Slice(Box::leak(Box::new(elem))));
+        // A reference to a slice, or a raw slice, of the place's elements.
+        accepts(assigning(slice(false, u), borrow(false)));
+        accepts(assigning(slice(true, u), borrow(true)));
+        accepts(assigning(raw(false, u), address(false)));
+        accepts(assigning(raw(true, u), address(true)));
+        // Not of other elements, a thin reference, or another mutability.
+        rejects(assigning(slice(false, Ty::Bool), borrow(false)), "T5");
+        rejects(assigning(reference(false, u), borrow(false)), "T5");
+        rejects(assigning(slice(true, u), borrow(false)), "T5");
+        rejects(assigning(slice(false, u), borrow(true)), "T5");
+        rejects(assigning(raw(true, u), address(false)), "T5");
+    }
+
+    #[test]
+    fn t5_a_reference_to_a_slice_fits_only_its_own_type() {
+        let u = u32_ty();
+        let shared = reference(false, unsized_u32());
+        let unique = reference(true, unsized_u32());
+        let raw_const = ptr(false, false, unsized_u32());
+        let raw_mut = ptr(true, false, unsized_u32());
+        let assign = |dest, rvalue| Statement::Assign(local(dest), rvalue);
+        // `_11: &[u32]`, `_12: &mut [u32]`, `_13: *const [u32]`, `_14: *mut
+        // [u32]`, `_15: &[u32]`.
+        let locals = [shared, unique, raw_const, raw_mut, shared];
+        accepts(with_locals(
+            &locals,
+            vec![assign(15, Rvalue::Use(copy(11)))],
+        ));
+        // Neither way between a reference and a raw slice is a `Use`: the
+        // way out is a `Cast`, and nothing goes in.
+        for (dest, from) in [(13, 11), (13, 12), (11, 13), (14, 12), (12, 14), (11, 12)] {
+            let operand = if from == 12 {
+                moved(local(from))
+            } else {
+                copy(from)
+            };
+            let found = with_locals(&locals, vec![assign(dest, Rvalue::Use(operand))]);
+            assert_eq!(found, ["T5"], "_{dest} = use _{from}");
+        }
+        // `SliceLen` and `SliceAddress` read a reference to a slice as they
+        // read a raw one; the address is a thin raw pointer of the same
+        // mutability.
+        let more = [
+            shared,
+            unique,
+            usize_ty(),
+            ptr(false, false, u),
+            ptr(true, false, u),
+        ];
+        accepts(with_locals(
+            &more,
+            vec![
+                assign(13, Rvalue::SliceLen(local(11))),
+                assign(13, Rvalue::SliceLen(local(12))),
+                assign(14, Rvalue::SliceAddress(local(11))),
+                assign(15, Rvalue::SliceAddress(local(12))),
+            ],
+        ));
+        let found = with_locals(
+            &more,
+            vec![
+                assign(15, Rvalue::SliceAddress(local(11))),
+                assign(13, Rvalue::SliceLen(local(1))),
+            ],
+        );
+        assert_eq!(found, ["T5", "T5"]);
+    }
+
+    #[test]
+    fn t5_a_reference_to_a_slice_casts_to_the_raw_slice_of_its_mutability() {
+        let shared = reference(false, unsized_u32());
+        let unique = reference(true, unsized_u32());
+        let raw_const = ptr(false, false, unsized_u32());
+        let raw_mut = ptr(true, false, unsized_u32());
+        let bytes = ptr(
+            false,
+            false,
+            Ty::Slice(Box::leak(Box::new(Ty::Int(IntTy::U8)))),
+        );
+        let volatile = ptr(false, true, unsized_u32());
+        let assign = |dest, from| {
+            // A `&mut` is moved, whatever else is read.
+            let operand = if from == 12 {
+                moved(local(from))
+            } else {
+                copy(from)
+            };
+            Statement::Assign(
+                local(dest),
+                Rvalue::Cast(
+                    operand,
+                    with_locals_ty(dest, &[shared, unique, raw_const, raw_mut, bytes, volatile]),
+                ),
+            )
+        };
+        // `_11: &[u32]`, `_12: &mut [u32]`, `_13: *const [u32]`, `_14: *mut
+        // [u32]`, `_15: *const [u8]`, `_16: *const volatile [u32]`.
+        let locals = [shared, unique, raw_const, raw_mut, bytes, volatile];
+        accepts(with_locals(&locals, vec![assign(13, 11)]));
+        accepts(with_locals(&locals, vec![assign(14, 12)]));
+        // Another mutability, other elements, a volatile slice: rejected.
+        for (dest, from) in [(14, 11), (13, 12), (15, 11), (16, 11)] {
+            let found = with_locals(&locals, vec![assign(dest, from)]);
+            assert_eq!(found, ["T5"], "_{dest} = _{from} as ..");
+        }
+        // Nothing casts to a reference, and a raw slice casts to no slice.
+        rejects(
+            with_locals(
+                &locals,
+                vec![Statement::Assign(local(11), Rvalue::Cast(copy(13), shared))],
+            ),
+            "T5",
+        );
+        rejects(
+            with_locals(
+                &locals,
+                vec![Statement::Assign(
+                    local(13),
+                    Rvalue::Cast(copy(14), raw_const),
+                )],
+            ),
+            "T5",
+        );
+        // A struct is no operand of a cast either, to a raw slice.
+        let aggregate = Ty::Struct(pair());
+        rejects(
+            with_locals(
+                &[aggregate, raw_const],
+                vec![Statement::Assign(
+                    local(12),
+                    Rvalue::Cast(copy(11), raw_const),
+                )],
+            ),
+            "T5",
+        );
+        // A reference to a slice casts to no thin pointer: MIR building goes
+        // through the raw slice.
+        let thin = ptr(false, false, u32_ty());
+        rejects(
+            with_locals(
+                &[shared, thin],
+                vec![Statement::Assign(local(12), Rvalue::Cast(copy(11), thin))],
+            ),
+            "T5",
+        );
+    }
+
+    /// The type of the new local `n` among `types`, which `with_locals` numbers
+    /// from 11.
+    fn with_locals_ty(n: u32, types: &[Ty]) -> Ty {
+        types[n as usize - 11]
+    }
+
+    #[test]
+    fn u1_a_place_of_type_unsized_is_read_by_no_slice_operation() {
+        let place = projected(10, &[PlaceElem::Deref]);
+        let usize_dest = usize_ty();
+        let address_dest = ptr(false, false, u32_ty());
+        // The length and the address are a slice's, not those of the `[T]`
+        // that a slice points to.
+        rejects(assigning(usize_dest, Rvalue::SliceLen(place)), "U1");
+        rejects(assigning(address_dest, Rvalue::SliceAddress(place)), "U1");
+        // The slice itself is read by both.
+        accepts(assigning(usize_dest, Rvalue::SliceLen(local(10))));
+        // As an operand, a destination, a `switch` or an `asm` operand, the
+        // place is read or written whole, which T3 says and reports.
+        let mut body = valid();
+        statement_of(
+            &mut body,
+            Statement::Assign(local(3), Rvalue::Use(Operand::Copy(place))),
+        );
+        breaks_only(&body, "T3");
+        let mut body = valid();
+        body.blocks[0].terminator = Terminator::Switch {
+            discr: Operand::Copy(place),
+            cases: &[(0, BasicBlock(1))],
+            otherwise: BasicBlock(1),
+        };
+        breaks_only(&body, "T3");
     }
 
     #[test]

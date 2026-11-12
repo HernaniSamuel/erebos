@@ -244,8 +244,9 @@ fn basic_type(context: &Context, ty: Ty) -> Option<BasicTypeEnum<'_>> {
     match ty {
         Ty::Bool => Some(context.bool_type().into()),
         Ty::Int(int) => Some(int_type(context, int).into()),
-        // A slice is an aggregate (ADR 0031).
-        Ty::Ptr(_) if ty.slice_elem().is_some() => None,
+        // A slice is an aggregate (ADR 0031), and so is a reference to one
+        // (ADR 0109).
+        Ty::Ptr(_) | Ty::Ref(_) if ty.slice_elem().is_some() => None,
         // A reference is a thin pointer (ADR 0105, 0107).
         Ty::Ptr(_) | Ty::Ref(_) => Some(context.ptr_type(AddressSpace::default()).into()),
         Ty::Unit
@@ -275,7 +276,7 @@ fn memory_type(context: &Context, ty: Ty) -> Option<BasicTypeEnum<'_>> {
             let len = u32::try_from(len).expect("the type checker limits sizes");
             Some(element_type(context, *elem).array_type(len).into())
         }
-        Ty::Ptr(_) if ty.slice_elem().is_some() => Some(slice_type(context).into()),
+        Ty::Ptr(_) | Ty::Ref(_) if ty.slice_elem().is_some() => Some(slice_type(context).into()),
         // Bytes laid out by MIR (ADR 0022, 0039); fields, tags and payload
         // values are reached by offset.
         Ty::Struct(_) | Ty::Enum(_) => {
@@ -284,6 +285,15 @@ fn memory_type(context: &Context, ty: Ty) -> Option<BasicTypeEnum<'_>> {
         }
         _ => basic_type(context, ty),
     }
+}
+
+/// Where the length of the place of type `[T]` that a slice at `address`
+/// points to is, if `pointee` is one (ADR 0109).
+fn length_through(address: Address<'_>, pointee: Ty) -> Option<Length<'_>> {
+    matches!(pointee, Ty::Slice(_)).then_some(Length {
+        slice: address.ptr,
+        volatile: address.volatile,
+    })
 }
 
 /// The type whose size is the distance between consecutive elements of
@@ -590,6 +600,17 @@ struct Address<'ctx> {
     /// The path from that pointer goes through a field of a `#[packed]`
     /// struct, so the place may be misaligned (ADR 0022).
     misaligned: bool,
+    /// For a place of type `[T]`: where the length of the slice it was reached
+    /// through is (ADR 0109).
+    len: Option<Length<'ctx>>,
+}
+
+/// The slice a place of type `[T]` was reached through: its length is the
+/// second part of the slice at `slice`.
+#[derive(Clone, Copy)]
+struct Length<'ctx> {
+    slice: PointerValue<'ctx>,
+    volatile: bool,
 }
 
 impl Address<'_> {
@@ -981,14 +1002,25 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                 }
                 if self.body.place_ty(*place).is_aggregate() {
                     match rvalue {
-                        Rvalue::Use(Operand::Copy(source) | Operand::Move(source, _)) => {
+                        Rvalue::Use(Operand::Copy(source) | Operand::Move(source, _))
+                        // A reference to a slice cast to the raw slice: the
+                        // same two words (ADR 0109).
+                        | Rvalue::Cast(Operand::Copy(source) | Operand::Move(source, _), _) => {
                             self.copy(*place, *source)
+                        }
+                        // The place of type `[T]` borrowed: its address and
+                        // the length it was reached with (ADR 0109).
+                        Rvalue::Ref { place: borrowed, .. }
+                        | Rvalue::AddressOf { place: borrowed, .. } => {
+                            let address = self.address(*borrowed);
+                            self.write_slice_part(*place, 0, address.ptr.into());
+                            self.write_slice_part(*place, 1, self.place_length(address));
                         }
                         Rvalue::Slice { ptr, len } => {
                             self.write_slice_part(*place, 0, self.operand(ptr));
                             self.write_slice_part(*place, 1, self.operand(len));
                         }
-                        _ => unreachable!("aggregates are only copied, and slices made"),
+                        _ => unreachable!("aggregates are only copied, and slices made or borrowed"),
                     }
                     return;
                 }
@@ -1043,12 +1075,14 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                 ptr: one.const_to_pointer(self.context.ptr_type(AddressSpace::default())),
                 volatile: false,
                 misaligned: false,
+                len: None,
             };
         };
         let mut address = Address {
             ptr: slot,
             volatile: false,
             misaligned: false,
+            len: None,
         };
         let mut ty = self.body.local_ty(place.local);
         let usize_type = int_type(self.context, IntTy::Usize);
@@ -1056,7 +1090,9 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
         for elem in place.projection {
             let (step, index) = match (elem, ty) {
                 (PlaceElem::Deref, Ty::Ptr(ptr)) => {
+                    let len = length_through(address, *ptr.pointee);
                     address = self.through(address, ptr);
+                    address.len = len;
                     ty = *ptr.pointee;
                     continue;
                 }
@@ -1068,7 +1104,9 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                         volatile: false,
                         pointee: r.referent,
                     };
+                    let len = length_through(address, *r.referent);
                     address = self.through(address, ptr);
+                    address.len = len;
                     ty = *r.referent;
                     continue;
                 }
@@ -1089,6 +1127,14 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                         element_type(self.context, ty),
                         usize_type.const_int(*index, false),
                     )
+                }
+                // An element of what a slice points to; MIR building checked
+                // the index against the length (ADR 0109).
+                (PlaceElem::Index(index), Ty::Slice(elem)) => {
+                    ty = *elem;
+                    address.len = None;
+                    let index = self.read(Place::local(*index)).into_int_value();
+                    (element_type(self.context, ty), index)
                 }
                 (PlaceElem::Field(index), Ty::Struct(s)) => {
                     let field = &s.def().fields()[*index as usize];
@@ -1182,6 +1228,7 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
             ptr: load.into_pointer_value(),
             volatile: ptr.volatile,
             misaligned: false,
+            len: None,
         }
     }
 
@@ -1203,12 +1250,33 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
     /// The address of part `index` of the slice in `place`: 0 for its
     /// address, 1 for its length (ADR 0031).
     fn slice_part(&self, place: Place, index: u32) -> Address<'ctx> {
-        let slice = self.address(place);
+        self.part_of(self.address(place), index)
+    }
+
+    /// The address of part `index` of the slice at `slice`.
+    fn part_of(&self, slice: Address<'ctx>, index: u32) -> Address<'ctx> {
         let ptr = self
             .builder
             .build_struct_gep(slice_type(self.context), slice.ptr, index, "")
             .expect("a slice has two parts");
-        Address { ptr, ..slice }
+        Address {
+            ptr,
+            len: None,
+            ..slice
+        }
+    }
+
+    /// The length of the place of type `[T]` at `address`: the second part of
+    /// the slice it was reached through (ADR 0109).
+    fn place_length(&self, address: Address<'ctx>) -> BasicValueEnum<'ctx> {
+        let length = address.len.expect("a place of type `[T]` has a length");
+        let slice = Address {
+            ptr: length.slice,
+            volatile: length.volatile,
+            misaligned: false,
+            len: None,
+        };
+        self.load_part(self.part_of(slice, 1), Ty::Int(IntTy::Usize))
     }
 
     /// The type of part `index` of a slice of type `ty`.
@@ -1238,6 +1306,11 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
     fn read_slice_part(&self, place: Place, index: u32) -> BasicValueEnum<'ctx> {
         let part = self.slice_part(place, index);
         let ty = Self::slice_part_ty(self.body.place_ty(place), index);
+        self.load_part(part, ty)
+    }
+
+    /// Loads the part of a slice at `part`, of type `ty`.
+    fn load_part(&self, part: Address<'ctx>, ty: Ty) -> BasicValueEnum<'ctx> {
         let memory = basic_type(self.context, ty).expect("the parts of a slice are scalars");
         let value = self
             .builder

@@ -20,8 +20,9 @@ impl Checker<'_, '_> {
     /// The place a pointer or reference of type `ty` leads to, for `*` and
     /// `[]` (a reference only for `*`, ADR 0105). A pointer of type `!` is
     /// never computed, so neither is the place.
-    /// What a slice points to is a place of type `[T]`, which can only be
-    /// indexed or passed to `&raw` (ADR 0031).
+    /// What a slice, raw or a reference, leads to is a place of type `[T]`,
+    /// which can only be indexed, borrowed or passed to `&raw` (ADR 0031,
+    /// 0108).
     fn through_pointer(&mut self, ty: Ty, pointer: &Expr, error: Diagnostic) -> PlaceInfo {
         match ty {
             Ty::Ptr(ptr) => PlaceInfo::through(ptr, pointer.span),
@@ -1187,14 +1188,6 @@ impl Checker<'_, '_> {
             };
         };
         if !self.has_address(place, &info, borrow_op(mutable)) {
-            return Ty::Error;
-        }
-        // What a slice points to has no reference yet: slices behind
-        // references are M5.4b's.
-        if let Ty::Slice(_) = info.ty {
-            self.q
-                .diags
-                .push(whole_slice(info.ty, place.span, "borrowed"));
             return Ty::Error;
         }
         // Nor have the places accessed volatile, or changed by interrupts:

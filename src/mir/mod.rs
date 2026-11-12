@@ -591,6 +591,7 @@ impl Body {
                 (PlaceElem::Deref | PlaceElem::Offset(_), Ty::Ptr(ptr)) => *ptr.pointee,
                 (PlaceElem::Deref, Ty::Ref(r)) => *r.referent,
                 (PlaceElem::Index(_) | PlaceElem::ConstIndex(_), Ty::Array(elem, _)) => *elem,
+                (PlaceElem::Index(_), Ty::Slice(elem)) => *elem,
                 (PlaceElem::Field(index), Ty::Struct(s)) => s.def().fields()[*index as usize].ty,
                 (
                     PlaceElem::Field(index)
@@ -1336,11 +1337,17 @@ impl Ty {
         matches!(self, Ty::Array(..) | Ty::Struct(_) | Ty::Enum(_)) || self.slice_elem().is_some()
     }
 
-    /// The element type of a slice, `*const [T]` or `*mut [T]`.
+    /// The element type of a slice, `*const [T]` or `*mut [T]`, or of a
+    /// reference to one, `&[T]` or `&mut [T]`, which is a slice too
+    /// (ADR 0109).
     pub fn slice_elem(self) -> Option<Ty> {
         match self {
             Ty::Ptr(Ptr {
                 pointee: Ty::Slice(elem),
+                ..
+            })
+            | Ty::Ref(Ref {
+                referent: Ty::Slice(elem),
                 ..
             }) => Some(**elem),
             _ => None,
@@ -1348,7 +1355,8 @@ impl Ty {
     }
 
     /// The thin pointer to the first element of a slice of this type, of
-    /// its mutability and volatility: the type of its address part.
+    /// its mutability and volatility (a reference's is not volatile): the
+    /// type of its address part.
     pub fn slice_address_ty(self) -> Option<Ty> {
         match self {
             Ty::Ptr(
@@ -1359,6 +1367,14 @@ impl Ty {
             ) => Some(Ty::Ptr(Ptr {
                 pointee: elem,
                 ..ptr
+            })),
+            Ty::Ref(Ref {
+                mutable,
+                referent: Ty::Slice(elem),
+            }) => Some(Ty::Ptr(Ptr {
+                mutable,
+                volatile: false,
+                pointee: elem,
             })),
             _ => None,
         }
@@ -1373,7 +1389,7 @@ impl Ty {
                 size: int.bytes(),
                 align: int.bytes(),
             },
-            Ty::Ptr(_) if self.slice_elem().is_some() => Layout {
+            Ty::Ptr(_) | Ty::Ref(_) if self.slice_elem().is_some() => Layout {
                 size: 2 * target::POINTER_BYTES,
                 align: target::POINTER_BYTES,
             },
@@ -1570,8 +1586,9 @@ pub enum PlaceElem {
     /// wraps and is never checked (ADR 0021); for an element of a slice,
     /// MIR building has already checked `i` against its length (ADR 0031).
     Offset(Local),
-    /// Element `i` of the array in the place, with `i` the `usize` in the
-    /// local. MIR building has already checked the bounds.
+    /// Element `i` of the array or of the slice `[T]` in the place, with `i`
+    /// the `usize` in the local. MIR building has already checked the
+    /// bounds, against the length the slice has (ADR 0109).
     Index(Local),
     /// Element `i` of the array in the place, for an `i` known in bounds.
     ConstIndex(u64),

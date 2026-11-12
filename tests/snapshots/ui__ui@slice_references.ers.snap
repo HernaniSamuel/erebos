@@ -1,0 +1,172 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/slice_references.ers
+---
+--- typeck ---
+struct Pair { a: u32 at 0, b: u32 at 4 } size 8, align 4
+fn read(s: &[u8], i: usize) -> u8
+    expr 0 index 626..633: u8
+    expr 1 deref 626..630: [u8]
+    expr 2 local s 628..629: &[u8]
+    expr 3 local i 631..632: usize
+fn read_mut(s: &mut [u8], i: usize) -> u8
+    expr 4 index 685..692: u8
+    expr 5 deref 685..689: [u8]
+    expr 6 local s 687..688: &mut [u8]
+    expr 7 local i 690..691: usize
+fn write(s: &mut [u8], i: usize, b: u8) -> ()
+    expr 8 assign 742..753: ()
+    expr 9 index 742..749: u8
+    expr 10 deref 742..746: [u8]
+    expr 11 local s 744..745: &mut [u8]
+    expr 12 local i 747..748: usize
+    expr 13 local b 752..753: u8
+    expr 14 assign += 759..771: ()
+    expr 15 index 759..766: u8
+    expr 16 deref 759..763: [u8]
+    expr 17 local s 761..762: &mut [u8]
+    expr 18 int 0 764..765: usize
+    expr 19 int 1 770..771: u8
+fn lengths(raw: *const [u8], shared: &[u8], unique: &mut [u8]) -> usize
+    expr 20 binary + 854..890: usize
+    expr 21 binary + 854..876: usize
+    expr 22 len 854..862: usize
+    expr 23 local raw 858..861: *const [u8]
+    expr 24 len 865..876: usize
+    expr 25 local shared 869..875: &[u8]
+    expr 26 len 879..890: usize
+    expr 27 local unique 883..889: &mut [u8]
+fn make(raw: *const [u8], raw_mut: *mut [u8], shared: &[u8], unique: &mut [u8]) -> ()
+    let a: &[u8]
+    let b: &mut [u8]
+    let c: &[u8]
+    let d: &[u8]
+    let e: &[u8]
+    let f: &mut [u8]
+    expr 28 & 1057..1062: &[u8]
+    expr 29 deref 1058..1062: [u8]
+    expr 30 local raw 1059..1062: *const [u8]
+    expr 31 &mut 1087..1100: &mut [u8]
+    expr 32 deref 1092..1100: [u8]
+    expr 33 local raw_mut 1093..1100: *mut [u8]
+    expr 34 & 1121..1130: &[u8]
+    expr 35 deref 1122..1130: [u8]
+    expr 36 local raw_mut 1123..1130: *mut [u8]
+    expr 37 & 1151..1159: &[u8]
+    expr 38 deref 1152..1159: [u8]
+    expr 39 local shared 1153..1159: &[u8]
+    expr 40 & 1180..1188: &[u8]
+    expr 41 deref 1181..1188: [u8]
+    expr 42 local unique 1182..1188: &mut [u8]
+    expr 43 &mut 1213..1225: &mut [u8]
+    expr 44 deref 1218..1225: [u8]
+    expr 45 local unique 1219..1225: &mut [u8]
+fn elements(shared: &[u32], unique: &mut [u32]) -> ()
+    let a: &u32
+    let b: &u32
+    let c: &mut u32
+    let d: *const u32
+    let e: *mut u32
+    let f: *const [u32]
+    let g: *mut [u32]
+    expr 46 & 1347..1360: &u32
+    expr 47 index 1348..1360: u32
+    expr 48 deref 1348..1357: [u32]
+    expr 49 local shared 1350..1356: &[u32]
+    expr 50 int 0 1358..1359: usize
+    expr 51 & 1380..1393: &u32
+    expr 52 index 1381..1393: u32
+    expr 53 deref 1381..1390: [u32]
+    expr 54 local unique 1383..1389: &mut [u32]
+    expr 55 int 1 1391..1392: usize
+    expr 56 &mut 1417..1434: &mut u32
+    expr 57 index 1422..1434: u32
+    expr 58 deref 1422..1431: [u32]
+    expr 59 local unique 1424..1430: &mut [u32]
+    expr 60 int 2 1432..1433: usize
+    expr 61 &raw const 1460..1483: *const u32
+    expr 62 index 1471..1483: u32
+    expr 63 deref 1471..1480: [u32]
+    expr 64 local shared 1473..1479: &[u32]
+    expr 65 int 0 1481..1482: usize
+    expr 66 &raw mut 1507..1528: *mut u32
+    expr 67 index 1516..1528: u32
+    expr 68 deref 1516..1525: [u32]
+    expr 69 local unique 1518..1524: &mut [u32]
+    expr 70 int 3 1526..1527: usize
+    expr 71 &raw const 1556..1574: *const [u32]
+    expr 72 deref 1567..1574: [u32]
+    expr 73 local shared 1568..1574: &[u32]
+    expr 74 &raw mut 1600..1616: *mut [u32]
+    expr 75 deref 1609..1616: [u32]
+    expr 76 local unique 1610..1616: &mut [u32]
+fn casts(shared: &[u32], unique: &mut [u32], other: &mut [u32]) -> ()
+    let a: *const [u32]
+    let b: *mut [u32]
+    let c: *const [u32]
+    let d: *const u32
+    expr 77 as *const [u32] 1770..1792: *const [u32]
+    expr 78 local shared 1770..1776: &[u32]
+    expr 79 as *mut [u32] 1818..1838: *mut [u32]
+    expr 80 local unique 1818..1824: &mut [u32]
+    expr 81 as *const [u32] 1866..1887: *const [u32]
+    expr 82 local other 1866..1871: &mut [u32]
+    expr 83 as *const u32 1913..1933: *const u32
+    expr 84 local shared 1913..1919: &[u32]
+fn cast_unique(unique: &mut [u32]) -> *const u32
+    expr 85 as *const u32 1993..2013: *const u32
+    expr 86 local unique 1993..1999: &mut [u32]
+fn pass(raw: *const [u8], unique: &mut [u8]) -> u8
+    let a: u8
+    let b: u8
+    expr 87 call 2164..2178: u8
+    expr 88 & 2169..2174: &[u8]
+    expr 89 deref 2170..2174: [u8]
+    expr 90 local raw 2171..2174: *const [u8]
+    expr 91 int 0 2176..2177: usize
+    expr 92 call 2196..2211: u8
+    expr 93 local unique 2201..2207: &mut [u8] as &[u8]
+    expr 94 int 1 2209..2210: usize
+    expr 95 call 2217..2240: ()
+    expr 96 local unique 2223..2229: &mut [u8]
+    expr 97 int 2 2231..2232: usize
+    expr 98 binary + 2234..2239: u8
+    expr 99 local a 2234..2235: u8
+    expr 100 local b 2238..2239: u8
+    expr 101 call 2246..2265: u8
+    expr 102 local unique 2255..2261: &mut [u8]
+    expr 103 int 3 2263..2264: usize
+fn from_static() -> u32
+    let raw: *const [u32]
+    let s: &[u32]
+    expr 104 as *const [u32] 2323..2355: *const [u32]
+    expr 105 &raw const 2323..2339: *const [u32; 4]
+    expr 106 static TABLE 2334..2339: [u32; 4]
+    expr 107 & 2377..2382: &[u32]
+    expr 108 deref 2378..2382: [u32]
+    expr 109 local raw 2379..2382: *const [u32]
+    expr 110 index 2388..2395: u32
+    expr 111 deref 2388..2392: [u32]
+    expr 112 local s 2390..2391: &[u32]
+    expr 113 int 2 2393..2394: usize
+fn in_a_struct(p: &Pair, s: &[Pair]) -> u32
+    expr 114 binary + 2449..2467: u32
+    expr 115 field a 2449..2455: u32
+    expr 116 deref 2449..2453: Pair
+    expr 117 local p 2451..2452: &Pair
+    expr 118 field b 2458..2467: u32
+    expr 119 index 2458..2465: Pair
+    expr 120 deref 2458..2462: [Pair]
+    expr 121 local s 2460..2461: &[Pair]
+    expr 122 int 0 2463..2464: usize
+entry fn main() -> !
+    expr 123 loop 2494..2501: !
+panic fn on_panic() -> !
+    expr 124 loop 2531..2538: !
+comptime fn TABLE() -> [u32; 4]
+    expr 125 array 571..583: [u32; 4]
+    expr 126 int 1 572..573: u32
+    expr 127 int 2 575..576: u32
+    expr 128 int 3 578..579: u32
+    expr 129 int 4 581..582: u32

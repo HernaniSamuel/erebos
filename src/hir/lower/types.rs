@@ -43,6 +43,20 @@ impl Lowerer<'_> {
         lowered
     }
 
+    /// `[elem]` written behind a pointer or a reference: the slice type,
+    /// which the type checker is given to judge its element (ADR 0031,
+    /// 0108), or `{error}` when the element type failed already.
+    fn slice_ty(&mut self, span: Span, elem: &ast::Ty) -> Ty {
+        match self.memory_ty(elem, NeverPosition::SliceElement) {
+            Ty::Error => Ty::Error,
+            elem => {
+                let slice = Ty::slice(elem);
+                self.array_types.push((span, slice));
+                slice
+            }
+        }
+    }
+
     /// `[elem]` written where a size is needed, at `position`: `{error}`,
     /// recorded for the type checker unless its element type failed
     /// already, which was reported (ADR 0031, 0034).
@@ -76,17 +90,9 @@ impl Lowerer<'_> {
             } => {
                 let pointee_span = pointee.span;
                 let pointee = match &pointee.kind {
-                    ast::TyKind::Slice(elem) => {
-                        match self.memory_ty(elem, NeverPosition::SliceElement) {
-                            Ty::Error => Ty::Error,
-                            elem => Ty::slice(elem),
-                        }
-                    }
+                    ast::TyKind::Slice(elem) => self.slice_ty(pointee_span, elem),
                     _ => self.memory_ty(pointee, NeverPosition::Pointee),
                 };
-                if let Ty::Slice(_) = pointee {
-                    self.array_types.push((pointee_span, pointee));
-                }
                 match pointee {
                     Ty::Error => Ty::Error,
                     // Accesses through it are volatile already (ADR 0058):
@@ -115,7 +121,12 @@ impl Lowerer<'_> {
                 .or(self.mut_binding.take())
                 .filter(|_| self.reference_reported == 0);
                 self.reference_reported += u32::from(forbidden.is_some());
-                let referent = self.memory_ty(referent, NeverPosition::Referent);
+                // Behind a reference, `[T]` is the referent of a slice
+                // (ADR 0108).
+                let referent = match &referent.kind {
+                    ast::TyKind::Slice(elem) => self.slice_ty(referent.span, elem),
+                    _ => self.memory_ty(referent, NeverPosition::Referent),
+                };
                 self.reference_reported -= u32::from(forbidden.is_some());
                 match referent {
                     Ty::Error => Ty::Error,

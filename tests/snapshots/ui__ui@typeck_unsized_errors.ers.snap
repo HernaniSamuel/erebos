@@ -194,8 +194,8 @@ ty::unsized
     ·                      ╰── what a slice points to, read whole
  39 │     *m = 0;
     ╰────
-  help: it can only be indexed, as in `(*s)[i]`, or passed to `&raw`; its length, known only at
-        run time, is `len(s)` (ADR 0031)
+  help: it can only be indexed, as in `(*s)[i]`, borrowed, as in `&*s`, or passed to `&raw`; its
+        length, known only at run time, is `len(s)` (ADR 0031, 0108)
 ty::unsized
 
   × `[u8]` has no size known at compile time
@@ -206,8 +206,8 @@ ty::unsized
     ·      ╰── what a slice points to, written whole
  40 │     *m += 1;
     ╰────
-  help: it can only be indexed, as in `(*s)[i]`, or passed to `&raw`; its length, known only at
-        run time, is `len(s)` (ADR 0031)
+  help: it can only be indexed, as in `(*s)[i]`, borrowed, as in `&*s`, or passed to `&raw`; its
+        length, known only at run time, is `len(s)` (ADR 0031, 0108)
 ty::unsized
 
   × `[u8]` has no size known at compile time
@@ -218,8 +218,8 @@ ty::unsized
     ·      ╰── what a slice points to, written whole
  41 │     let length: usize = len(*s);
     ╰────
-  help: it can only be indexed, as in `(*s)[i]`, or passed to `&raw`; its length, known only at
-        run time, is `len(s)` (ADR 0031)
+  help: it can only be indexed, as in `(*s)[i]`, borrowed, as in `&*s`, or passed to `&raw`; its
+        length, known only at run time, is `len(s)` (ADR 0031, 0108)
 ty::unsized
 
   × `[u8]` has no size known at compile time
@@ -230,8 +230,8 @@ ty::unsized
     ·                              ╰── what a slice points to, read whole
  42 │     let block: u8 = { *s };
     ╰────
-  help: it can only be indexed, as in `(*s)[i]`, or passed to `&raw`; its length, known only at
-        run time, is `len(s)` (ADR 0031)
+  help: it can only be indexed, as in `(*s)[i]`, borrowed, as in `&*s`, or passed to `&raw`; its
+        length, known only at run time, is `len(s)` (ADR 0031, 0108)
 ty::unsized
 
   × `[u8]` has no size known at compile time
@@ -242,8 +242,8 @@ ty::unsized
     ·                        ╰── what a slice points to, read whole
  43 │ }
     ╰────
-  help: it can only be indexed, as in `(*s)[i]`, or passed to `&raw`; its length, known only at
-        run time, is `len(s)` (ADR 0031)
+  help: it can only be indexed, as in `(*s)[i]`, borrowed, as in `&*s`, or passed to `&raw`; its
+        length, known only at run time, is `len(s)` (ADR 0031, 0108)
 ty::unsized
 
   × `[u8]` has no size known at compile time

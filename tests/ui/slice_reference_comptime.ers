@@ -1,0 +1,41 @@
+// emit: mir
+// A `comptime` function takes a `&[u32]` made from a raw slice of a `static`
+// and sums it: the evaluator runs the borrow of the slice, its length and
+// the reads through it (ADR 0108, 0109).
+static TABLE: [u32; 4] = [10, 20, 30, 40];
+
+fn sum(s: &[u32]) -> u32 {
+    let mut total: u32 = 0;
+    let mut i: usize = 0;
+    while i < len(s) {
+        total += (*s)[i];
+        i += 1;
+    }
+    total
+}
+
+fn sum_table() -> u32 {
+    let raw: *const [u32] = &raw const TABLE as *const [u32];
+    sum(&*raw)
+}
+
+const TOTAL: u32 = sum_table();
+
+fn write_in_a_buffer() -> u32 {
+    let mut buf: [u32; 3] = [0; 3];
+    let raw: *mut [u32] = &raw mut buf as *mut [u32];
+    let s: &mut [u32] = &mut *raw;
+    (*s)[1] = 7;
+    (*s)[2] = len(s) as u32;
+    buf[1] + buf[2]
+}
+
+const WRITTEN: u32 = write_in_a_buffer();
+
+// Expected: 100 and 10.
+fn answers() -> u32 {
+    TOTAL + WRITTEN
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

@@ -728,7 +728,10 @@ impl<'b> Flow<'b> {
                     let span = if stmt.call { stmt.span } else { access.span };
                     let found = (key(span), (block, index, k), span);
                     let starts_after = span.file == fault.span.file && span.lo >= fault.span.lo;
-                    if after || starts_after {
+                    // Outside a loop, whatever the access reaches comes after
+                    // it, wherever its span starts: a call starts before its
+                    // arguments, and a check of an index splits the blocks.
+                    if after || starts_after || !reached[fault_block] {
                         ahead.push(found);
                     } else {
                         round.push(found);

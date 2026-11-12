@@ -1,0 +1,289 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/codegen_slice_references.ers
+---
+--- llvm-ir ---
+; ModuleID = 'erebos'
+source_filename = "erebos"
+target datalayout = "e-m:e-p:32:32-i64:64-n32-S128"
+target triple = "riscv32-unknown-none-elf"
+
+; Function Attrs: nounwind null_pointer_is_valid
+define zeroext i8 @read([2 x i32] %0, i32 %1) #0 {
+bb0:
+  %2 = alloca [2 x i32], align 8
+  %_1 = alloca { ptr, i32 }, align 4
+  store [2 x i32] %0, ptr %2, align 4
+  call void @llvm.memcpy.p0.p0.i32(ptr align 4 %_1, ptr align 8 %2, i32 8, i1 false)
+  %3 = getelementptr inbounds nuw { ptr, i32 }, ptr %_1, i32 0, i32 1
+  %4 = load i32, ptr %3, align 4
+  %5 = icmp ult i32 %1, %4
+  br i1 %5, label %bb1, label %bb2
+
+bb1:                                              ; preds = %bb0
+  %6 = load ptr, ptr %_1, align 4
+  %7 = getelementptr i8, ptr %6, i32 %1
+  %8 = load i8, ptr %7, align 1
+  ret i8 %8
+
+bb2:                                              ; preds = %bb0
+  call void @on_panic()
+  unreachable
+}
+
+; Function Attrs: nounwind null_pointer_is_valid
+define void @write([2 x i32] %0, i32 %1, i32 %2) #0 {
+bb0:
+  %3 = alloca [2 x i32], align 8
+  %_1 = alloca { ptr, i32 }, align 4
+  store [2 x i32] %0, ptr %3, align 4
+  call void @llvm.memcpy.p0.p0.i32(ptr align 4 %_1, ptr align 8 %3, i32 8, i1 false)
+  %4 = getelementptr inbounds nuw { ptr, i32 }, ptr %_1, i32 0, i32 1
+  %5 = load i32, ptr %4, align 4
+  %6 = icmp ult i32 %1, %5
+  br i1 %6, label %bb1, label %bb2
+
+bb1:                                              ; preds = %bb0
+  %7 = load ptr, ptr %_1, align 4
+  %8 = getelementptr i32, ptr %7, i32 %1
+  store i32 %2, ptr %8, align 4
+  ret void
+
+bb2:                                              ; preds = %bb0
+  call void @on_panic()
+  unreachable
+}
+
+; Function Attrs: nounwind null_pointer_is_valid
+define i32 @length([2 x i32] %0) #0 {
+bb0:
+  %1 = alloca [2 x i32], align 8
+  %_1 = alloca { ptr, i32 }, align 4
+  store [2 x i32] %0, ptr %1, align 4
+  call void @llvm.memcpy.p0.p0.i32(ptr align 4 %_1, ptr align 8 %1, i32 8, i1 false)
+  %2 = getelementptr inbounds nuw { ptr, i32 }, ptr %_1, i32 0, i32 1
+  %3 = load i32, ptr %2, align 4
+  ret i32 %3
+}
+
+; Function Attrs: nounwind null_pointer_is_valid
+define zeroext i8 @reborrow([2 x i32] %0, i32 %1) #0 {
+bb0:
+  %2 = alloca [2 x i32], align 8
+  %3 = alloca [2 x i32], align 8
+  %_1 = alloca { ptr, i32 }, align 4
+  %_3 = alloca { ptr, i32 }, align 4
+  %_4 = alloca { ptr, i32 }, align 4
+  store [2 x i32] %0, ptr %3, align 4
+  call void @llvm.memcpy.p0.p0.i32(ptr align 4 %_1, ptr align 8 %3, i32 8, i1 false)
+  %4 = load ptr, ptr %_1, align 4
+  %5 = getelementptr inbounds nuw { ptr, i32 }, ptr %_4, i32 0, i32 0
+  store ptr %4, ptr %5, align 4
+  %6 = getelementptr inbounds nuw { ptr, i32 }, ptr %_1, i32 0, i32 1
+  %7 = load i32, ptr %6, align 4
+  %8 = getelementptr inbounds nuw { ptr, i32 }, ptr %_4, i32 0, i32 1
+  store i32 %7, ptr %8, align 4
+  call void @llvm.memcpy.p0.p0.i32(ptr align 4 %_3, ptr align 4 %_4, i32 8, i1 false)
+  call void @llvm.memcpy.p0.p0.i32(ptr align 8 %2, ptr align 4 %_3, i32 8, i1 false)
+  %9 = load [2 x i32], ptr %2, align 4
+  %10 = call i8 @read([2 x i32] %9, i32 %1)
+  ret i8 %10
+}
+
+; Function Attrs: nounwind null_pointer_is_valid
+define void @lend([2 x i32] %0) #0 {
+bb0:
+  %1 = alloca [2 x i32], align 8
+  %2 = alloca [2 x i32], align 8
+  %3 = alloca [2 x i32], align 8
+  %_1 = alloca { ptr, i32 }, align 4
+  %_2 = alloca { ptr, i32 }, align 4
+  %_3 = alloca { ptr, i32 }, align 4
+  store [2 x i32] %0, ptr %3, align 4
+  call void @llvm.memcpy.p0.p0.i32(ptr align 4 %_1, ptr align 8 %3, i32 8, i1 false)
+  %4 = load ptr, ptr %_1, align 4
+  %5 = getelementptr inbounds nuw { ptr, i32 }, ptr %_2, i32 0, i32 0
+  store ptr %4, ptr %5, align 4
+  %6 = getelementptr inbounds nuw { ptr, i32 }, ptr %_1, i32 0, i32 1
+  %7 = load i32, ptr %6, align 4
+  %8 = getelementptr inbounds nuw { ptr, i32 }, ptr %_2, i32 0, i32 1
+  store i32 %7, ptr %8, align 4
+  call void @llvm.memcpy.p0.p0.i32(ptr align 8 %2, ptr align 4 %_2, i32 8, i1 false)
+  %9 = load [2 x i32], ptr %2, align 4
+  call void @write([2 x i32] %9, i32 0, i32 1)
+  %10 = load ptr, ptr %_1, align 4
+  %11 = getelementptr inbounds nuw { ptr, i32 }, ptr %_3, i32 0, i32 0
+  store ptr %10, ptr %11, align 4
+  %12 = getelementptr inbounds nuw { ptr, i32 }, ptr %_1, i32 0, i32 1
+  %13 = load i32, ptr %12, align 4
+  %14 = getelementptr inbounds nuw { ptr, i32 }, ptr %_3, i32 0, i32 1
+  store i32 %13, ptr %14, align 4
+  call void @llvm.memcpy.p0.p0.i32(ptr align 8 %1, ptr align 4 %_3, i32 8, i1 false)
+  %15 = load [2 x i32], ptr %1, align 4
+  call void @write([2 x i32] %15, i32 1, i32 2)
+  ret void
+}
+
+; Function Attrs: nounwind null_pointer_is_valid
+define [2 x i32] @cast([2 x i32] %0) #0 {
+bb0:
+  %1 = alloca [2 x i32], align 8
+  %2 = alloca [2 x i32], align 8
+  %_0 = alloca { ptr, i32 }, align 4
+  %_1 = alloca { ptr, i32 }, align 4
+  %_2 = alloca { ptr, i32 }, align 4
+  store [2 x i32] %0, ptr %2, align 4
+  call void @llvm.memcpy.p0.p0.i32(ptr align 4 %_1, ptr align 8 %2, i32 8, i1 false)
+  call void @llvm.memcpy.p0.p0.i32(ptr align 4 %_2, ptr align 4 %_1, i32 8, i1 false)
+  call void @llvm.memcpy.p0.p0.i32(ptr align 4 %_0, ptr align 4 %_2, i32 8, i1 false)
+  call void @llvm.memcpy.p0.p0.i32(ptr align 8 %1, ptr align 4 %_0, i32 8, i1 false)
+  %3 = load [2 x i32], ptr %1, align 4
+  ret [2 x i32] %3
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @main() #1 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: noreturn nounwind null_pointer_is_valid
+define void @on_panic() #1 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: readwrite)
+declare void @llvm.memcpy.p0.p0.i32(ptr noalias writeonly captures(none), ptr noalias readonly captures(none), i32, i1 immarg) #2
+
+attributes #0 = { nounwind null_pointer_is_valid }
+attributes #1 = { noreturn nounwind null_pointer_is_valid }
+attributes #2 = { nocallback nofree nounwind willreturn memory(argmem: readwrite) }
+--- llvm-ir -O ---
+; ModuleID = 'erebos'
+source_filename = "erebos"
+target datalayout = "e-m:e-p:32:32-i64:64-n32-S128"
+target triple = "riscv32-unknown-none-elf"
+
+; Function Attrs: nofree norecurse nosync nounwind null_pointer_is_valid memory(read, inaccessiblemem: none, target_mem0: none, target_mem1: none)
+define zeroext i8 @read([2 x i32] %0, i32 %1) local_unnamed_addr #0 {
+bb0:
+  %.fca.1.extract = extractvalue [2 x i32] %0, 1
+  %2 = icmp ult i32 %1, %.fca.1.extract
+  br i1 %2, label %bb1, label %bb1.i
+
+bb1:                                              ; preds = %bb0
+  %.fca.0.extract = extractvalue [2 x i32] %0, 0
+  %3 = inttoptr i32 %.fca.0.extract to ptr
+  %4 = getelementptr i8, ptr %3, i32 %1
+  %5 = load i8, ptr %4, align 1
+  ret i8 %5
+
+bb1.i:                                            ; preds = %bb0, %bb1.i
+  br label %bb1.i
+}
+
+; Function Attrs: nofree norecurse nosync nounwind null_pointer_is_valid memory(write, inaccessiblemem: none, target_mem0: none, target_mem1: none)
+define void @write([2 x i32] %0, i32 %1, i32 %2) local_unnamed_addr #1 {
+bb0:
+  %.fca.1.extract = extractvalue [2 x i32] %0, 1
+  %3 = icmp ult i32 %1, %.fca.1.extract
+  br i1 %3, label %bb1, label %bb1.i
+
+bb1:                                              ; preds = %bb0
+  %.fca.0.extract = extractvalue [2 x i32] %0, 0
+  %4 = inttoptr i32 %.fca.0.extract to ptr
+  %5 = getelementptr i32, ptr %4, i32 %1
+  store i32 %2, ptr %5, align 4
+  ret void
+
+bb1.i:                                            ; preds = %bb0, %bb1.i
+  br label %bb1.i
+}
+
+; Function Attrs: mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(none)
+define i32 @length([2 x i32] %0) local_unnamed_addr #2 {
+bb0:
+  %.fca.1.extract = extractvalue [2 x i32] %0, 1
+  ret i32 %.fca.1.extract
+}
+
+; Function Attrs: nofree norecurse nosync nounwind null_pointer_is_valid memory(read, inaccessiblemem: none, target_mem0: none, target_mem1: none)
+define zeroext i8 @reborrow([2 x i32] %0, i32 %1) local_unnamed_addr #0 {
+bb0:
+  %.fca.1.extract.i = extractvalue [2 x i32] %0, 1
+  %2 = icmp ult i32 %1, %.fca.1.extract.i
+  br i1 %2, label %read.exit, label %bb1.i.i
+
+bb1.i.i:                                          ; preds = %bb0, %bb1.i.i
+  br label %bb1.i.i
+
+read.exit:                                        ; preds = %bb0
+  %.fca.0.extract.i = extractvalue [2 x i32] %0, 0
+  %3 = inttoptr i32 %.fca.0.extract.i to ptr
+  %4 = getelementptr i8, ptr %3, i32 %1
+  %5 = load i8, ptr %4, align 1
+  ret i8 %5
+}
+
+; Function Attrs: nofree norecurse nosync nounwind null_pointer_is_valid memory(write, inaccessiblemem: none, target_mem0: none, target_mem1: none)
+define void @lend([2 x i32] %0) local_unnamed_addr #1 {
+bb0:
+  %.fca.1.extract.i = extractvalue [2 x i32] %0, 1
+  %.not = icmp eq i32 %.fca.1.extract.i, 0
+  br i1 %.not, label %bb1.i.i, label %write.exit
+
+bb1.i.i:                                          ; preds = %bb0, %bb1.i.i
+  br label %bb1.i.i
+
+write.exit:                                       ; preds = %bb0
+  %.fca.0.extract.i = extractvalue [2 x i32] %0, 0
+  %1 = inttoptr i32 %.fca.0.extract.i to ptr
+  store i32 1, ptr %1, align 4
+  %.not13 = icmp eq i32 %.fca.1.extract.i, 1
+  br i1 %.not13, label %bb1.i.i10, label %write.exit12
+
+bb1.i.i10:                                        ; preds = %write.exit, %bb1.i.i10
+  br label %bb1.i.i10
+
+write.exit12:                                     ; preds = %write.exit
+  %2 = getelementptr i8, ptr %1, i32 4
+  store i32 2, ptr %2, align 4
+  ret void
+}
+
+; Function Attrs: mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(none)
+define [2 x i32] @cast([2 x i32] returned %0) local_unnamed_addr #2 {
+bb0:
+  ret [2 x i32] %0
+}
+
+; Function Attrs: nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none)
+define void @main() local_unnamed_addr #3 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+; Function Attrs: nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none)
+define void @on_panic() local_unnamed_addr #3 {
+bb0:
+  br label %bb1
+
+bb1:                                              ; preds = %bb1, %bb0
+  br label %bb1
+}
+
+attributes #0 = { nofree norecurse nosync nounwind null_pointer_is_valid memory(read, inaccessiblemem: none, target_mem0: none, target_mem1: none) }
+attributes #1 = { nofree norecurse nosync nounwind null_pointer_is_valid memory(write, inaccessiblemem: none, target_mem0: none, target_mem1: none) }
+attributes #2 = { mustprogress nofree norecurse nosync nounwind null_pointer_is_valid willreturn memory(none) }
+attributes #3 = { nofree norecurse noreturn nosync nounwind null_pointer_is_valid memory(none) }

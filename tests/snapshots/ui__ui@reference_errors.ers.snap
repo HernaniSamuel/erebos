@@ -367,70 +367,34 @@ ty::never-in-memory
   × `!` is not a type of memory
     ╭─[reference_errors.ers:91:18]
  90 │ 
- 91 │ fn referents(a: &!, b: &[u8], c: &Timer) {}
+ 91 │ fn referents(a: &!, c: &Timer) {}
     ·                  ┬
     ·                  ╰── `!` as the referent of a reference
  92 │ 
     ╰────
   help: `!` is the type of expressions that do not finish, so no memory holds one; for a type
         without data, use `()` (ADR 0034)
-ty::unsized
-
-  × `[u8]` has no size known at compile time
-    ╭─[reference_errors.ers:91:25]
- 90 │ 
- 91 │ fn referents(a: &!, b: &[u8], c: &Timer) {}
-    ·                         ──┬─
-    ·                           ╰── `[u8]` as the referent of a reference
- 92 │ 
-    ╰────
-  help: its length is known only at run time, so it exists only behind a pointer, as a slice:
-        `*const [T]` or `*mut [T]` (ADR 0031)
 ty::peripheral-by-value
 
   × `Timer` is a peripheral type, which no value has
-    ╭─[reference_errors.ers:91:35]
+    ╭─[reference_errors.ers:91:25]
  90 │ 
- 91 │ fn referents(a: &!, b: &[u8], c: &Timer) {}
-    ·                                   ──┬──
-    ·                                     ╰── `Timer` as the referent of a reference
+ 91 │ fn referents(a: &!, c: &Timer) {}
+    ·                         ──┬──
+    ·                           ╰── `Timer` as the referent of a reference
  92 │ 
     ╰────
   help: a peripheral type describes a device's registers, reached one at a time from a peripheral
         or through a pointer, such as `*mut Timer` (ADR 0058)
-ty::unsized
-
-  × `[u32]` has no size known at compile time
-    ╭─[reference_errors.ers:94:20]
- 93 │ fn borrowed_whole(s: *mut [u32]) {
- 94 │     let a: &u32 = &*s;
-    ·                    ─┬
-    ·                     ╰── what a slice points to, borrowed whole
- 95 │     let b: &mut u32 = &mut *s;
-    ╰────
-  help: it can only be indexed, as in `(*s)[i]`, or passed to `&raw`; its length, known only at
-        run time, is `len(s)` (ADR 0031)
-ty::unsized
-
-  × `[u32]` has no size known at compile time
-    ╭─[reference_errors.ers:95:28]
- 94 │     let a: &u32 = &*s;
- 95 │     let b: &mut u32 = &mut *s;
-    ·                            ─┬
-    ·                             ╰── what a slice points to, borrowed whole
- 96 │     let c: &u32 = &TIMER;
-    ╰────
-  help: it can only be indexed, as in `(*s)[i]`, or passed to `&raw`; its length, known only at
-        run time, is `len(s)` (ADR 0031)
 ty::reference-to-volatile
 
   × cannot borrow a peripheral or a cluster of type `Timer`
-    ╭─[reference_errors.ers:96:20]
- 95 │     let b: &mut u32 = &mut *s;
- 96 │     let c: &u32 = &TIMER;
+    ╭─[reference_errors.ers:94:20]
+ 93 │ fn borrowed_peripheral() {
+ 94 │     let c: &u32 = &TIMER;
     ·                    ──┬──
     ·                      ╰── its registers are accessed volatile
- 97 │ }
+ 95 │ }
     ╰────
   help: a reference lets the compiler assume the memory behind it only changes when the program
         changes it, which a device does not keep to (ADR 0058); use a pointer to it, such as a
@@ -438,24 +402,24 @@ ty::reference-to-volatile
 ty::never-in-memory
 
   × `!` is not a type of memory
-     ╭─[reference_errors.ers:100:20]
-  99 │ fn never_values() {
- 100 │     let a: &u32 = &loop {};
-     ·                    ───┬───
-     ·                       ╰── `!` as the type of a value under `&`
- 101 │     let b: &mut u32 = &mut loop {};
-     ╰────
+    ╭─[reference_errors.ers:98:20]
+ 97 │ fn never_values() {
+ 98 │     let a: &u32 = &loop {};
+    ·                    ───┬───
+    ·                       ╰── `!` as the type of a value under `&`
+ 99 │     let b: &mut u32 = &mut loop {};
+    ╰────
   help: `!` is the type of expressions that do not finish, so no memory holds one; for a type
         without data, use `()` (ADR 0034)
 ty::never-in-memory
 
   × `!` is not a type of memory
-     ╭─[reference_errors.ers:101:28]
- 100 │     let a: &u32 = &loop {};
- 101 │     let b: &mut u32 = &mut loop {};
+     ╭─[reference_errors.ers:99:28]
+  98 │     let a: &u32 = &loop {};
+  99 │     let b: &mut u32 = &mut loop {};
      ·                            ───┬───
      ·                               ╰── `!` as the type of a value under `&mut`
- 102 │ }
+ 100 │ }
      ╰────
   help: `!` is the type of expressions that do not finish, so no memory holds one; for a type
         without data, use `()` (ADR 0034)

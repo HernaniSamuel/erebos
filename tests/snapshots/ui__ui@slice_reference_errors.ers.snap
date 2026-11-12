@@ -1,0 +1,280 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/slice_reference_errors.ers
+---
+--- errors ---
+ty::reference-position
+
+  × a reference cannot be the type of a field
+    ╭─[slice_reference_errors.ers:10:8]
+  9 │ struct Holder {
+ 10 │     s: &mut [u8],
+    ·        ────┬────
+    ·            ╰── `&mut [u8]` is a reference
+ 11 │ }
+    ╰────
+  help: a reference is held only by a parameter or a `let` without `mut`, and lent to calls (ADR
+        0094, 0105); to keep an address, use a raw pointer, `*const T` or `*mut T`
+ty::cannot-index
+
+  × cannot index a value of type `&mut [u8]`
+    ╭─[slice_reference_errors.ers:18:5]
+ 17 │ fn index(s: &[u8], t: &mut [u8]) -> u8 {
+ 18 │     t[0] = 1;
+    ·     ┬
+    ·     ╰── a reference, not an array or a pointer
+ 19 │     s[0]
+    ╰────
+  help: dereference the reference first: `(*r)[i]`, which indexes the `[u8]` it refers to (ADR
+        0105)
+ty::cannot-index
+
+  × cannot index a value of type `&[u8]`
+    ╭─[slice_reference_errors.ers:19:5]
+ 18 │     t[0] = 1;
+ 19 │     s[0]
+    ·     ┬
+    ·     ╰── a reference, not an array or a pointer
+ 20 │ }
+    ╰────
+  help: dereference the reference first: `(*r)[i]`, which indexes the `[u8]` it refers to (ADR
+        0105)
+ty::unsized
+
+  × `[u8]` has no size known at compile time
+    ╭─[slice_reference_errors.ers:23:22]
+ 22 │ fn whole(s: &[u8], t: &mut [u8]) {
+ 23 │     let a: [u8; 1] = *s;
+    ·                      ─┬
+    ·                       ╰── what a slice points to, read whole
+ 24 │     *t = *s;
+    ╰────
+  help: it can only be indexed, as in `(*s)[i]`, borrowed, as in `&*s`, or passed to `&raw`; its
+        length, known only at run time, is `len(s)` (ADR 0031, 0108)
+ty::unsized
+
+  × `[u8]` has no size known at compile time
+    ╭─[slice_reference_errors.ers:24:5]
+ 23 │     let a: [u8; 1] = *s;
+ 24 │     *t = *s;
+    ·     ─┬
+    ·      ╰── what a slice points to, written whole
+ 25 │     *s;
+    ╰────
+  help: it can only be indexed, as in `(*s)[i]`, borrowed, as in `&*s`, or passed to `&raw`; its
+        length, known only at run time, is `len(s)` (ADR 0031, 0108)
+ty::unsized
+
+  × `[u8]` has no size known at compile time
+    ╭─[slice_reference_errors.ers:24:10]
+ 23 │     let a: [u8; 1] = *s;
+ 24 │     *t = *s;
+    ·          ─┬
+    ·           ╰── what a slice points to, read whole
+ 25 │     *s;
+    ╰────
+  help: it can only be indexed, as in `(*s)[i]`, borrowed, as in `&*s`, or passed to `&raw`; its
+        length, known only at run time, is `len(s)` (ADR 0031, 0108)
+ty::unsized
+
+  × `[u8]` has no size known at compile time
+    ╭─[slice_reference_errors.ers:25:5]
+ 24 │     *t = *s;
+ 25 │     *s;
+    ·     ─┬
+    ·      ╰── what a slice points to, read whole
+ 26 │ }
+    ╰────
+  help: it can only be indexed, as in `(*s)[i]`, borrowed, as in `&*s`, or passed to `&raw`; its
+        length, known only at run time, is `len(s)` (ADR 0031, 0108)
+ty::write-through-const
+
+  × cannot write through a `&` reference
+    ╭─[slice_reference_errors.ers:29:7]
+ 28 │ fn writes(s: &[u8], p: *const [u8]) {
+ 29 │     (*s)[0] = 1;
+    ·       ┬
+    ·       ╰── has type `&[u8]`
+ 30 │     let a: &mut [u8] = &mut *s;
+    ╰────
+  help: only `&mut` references can be written through (ADR 0105)
+ty::mut-borrow-of-immutable
+
+  × cannot borrow as `&mut` through a `&` reference
+    ╭─[slice_reference_errors.ers:30:30]
+ 29 │     (*s)[0] = 1;
+ 30 │     let a: &mut [u8] = &mut *s;
+    ·                              ┬
+    ·                              ╰── has type `&[u8]`
+ 31 │     let b: &mut [u8] = &mut *p;
+    ╰────
+  help: only `&mut` references can be borrowed through as `&mut` (ADR 0105)
+ty::mut-borrow-of-immutable
+
+  × cannot borrow as `&mut` through a `*const` pointer
+    ╭─[slice_reference_errors.ers:31:30]
+ 30 │     let a: &mut [u8] = &mut *s;
+ 31 │     let b: &mut [u8] = &mut *p;
+    ·                              ┬
+    ·                              ╰── has type `*const [u8]`
+ 32 │     let c: &mut u8 = &mut (*s)[0];
+    ╰────
+  help: only `*mut` pointers can be borrowed through as `&mut`
+ty::mut-borrow-of-immutable
+
+  × cannot borrow as `&mut` through a `&` reference
+    ╭─[slice_reference_errors.ers:32:29]
+ 31 │     let b: &mut [u8] = &mut *p;
+ 32 │     let c: &mut u8 = &mut (*s)[0];
+    ·                             ┬
+    ·                             ╰── has type `&[u8]`
+ 33 │ }
+    ╰────
+  help: only `&mut` references can be borrowed through as `&mut` (ADR 0105)
+ty::invalid-cast
+
+  × cannot cast `&[u8]` to `usize`
+    ╭─[slice_reference_errors.ers:36:25]
+ 35 │ fn casts(s: &[u8], t: &mut [u8]) {
+ 36 │     let a: usize = s as usize;
+    ·                         ──┬──
+    ·                           ╰── a reference converts only to raw pointers
+ 37 │     let b: *const [u16] = s as *const [u16];
+    ╰────
+  help: cast it to a raw pointer first, as in `r as *const [u8] as usize` (ADR 0105)
+ty::invalid-cast
+
+  × cannot cast `*const [u8]` to `*const [u16]`
+    ╭─[slice_reference_errors.ers:37:32]
+ 36 │     let a: usize = s as usize;
+ 37 │     let b: *const [u16] = s as *const [u16];
+    ·                                ──────┬─────
+    ·                                      ╰── a slice of other elements
+ 38 │     let c: &[u8] = t as &[u8];
+    ╰────
+  help: its length counts elements, so this would reinterpret it; cast to a pointer to the first
+        element, and make a new slice with `slice(p, n)` (ADR 0031)
+ty::invalid-cast
+
+  × cannot cast to `&[u8]`
+    ╭─[slice_reference_errors.ers:38:25]
+ 37 │     let b: *const [u16] = s as *const [u16];
+ 38 │     let c: &[u8] = t as &[u8];
+    ·                         ──┬──
+    ·                           ╰── nothing converts to a reference
+ 39 │ }
+    ╰────
+  help: a reference is made with `&place` or `&mut place`; to borrow what a raw pointer `p` points
+        to, write `&*p` or `&mut *p` (ADR 0105)
+ty::invalid-operand
+
+  × `==` needs integers, pointers, `bool` or enums, found `&[u8]`
+    ╭─[slice_reference_errors.ers:42:5]
+ 41 │ fn compares(s: &[u8], t: &[u8]) -> bool {
+ 42 │     s == t
+    ·     ───┬──
+    ·        ╰── has type `&[u8]`
+ 43 │ }
+    ╰────
+  help: neither meaning is implied: compare the values with `*a == *b`, or the addresses with `a
+        as *const [u8] == b as *const [u8]` (ADR 0105)
+ty::reference-to-volatile
+
+  × cannot borrow a place reached through a `volatile` pointer
+    ╭─[slice_reference_errors.ers:46:21]
+ 45 │ fn volatile_slices(v: *const volatile [u8], w: *mut volatile [u8]) {
+ 46 │     let a: &[u8] = &*v;
+    ·                     ─┬
+    ·                      ╰── reached through a `*const volatile [u8]`
+ 47 │     let b: &u8 = &(*v)[0];
+    ╰────
+  help: a reference lets the compiler assume the memory behind it only changes when the program
+        changes it, which a volatile access does not (ADR 0023); read and write through the
+        pointer, as `*p`, or take its address with `&raw` (ADR 0105)
+ty::reference-to-volatile
+
+  × cannot borrow a place reached through a `volatile` pointer
+    ╭─[slice_reference_errors.ers:47:19]
+ 46 │     let a: &[u8] = &*v;
+ 47 │     let b: &u8 = &(*v)[0];
+    ·                   ───┬───
+    ·                      ╰── reached through a `*const volatile [u8]`
+ 48 │     let c: &mut [u8] = &mut *w;
+    ╰────
+  help: a reference lets the compiler assume the memory behind it only changes when the program
+        changes it, which a volatile access does not (ADR 0023); read and write through the
+        pointer, as `*p`, or take its address with `&raw` (ADR 0105)
+ty::reference-to-volatile
+
+  × cannot borrow a place reached through a `volatile` pointer
+    ╭─[slice_reference_errors.ers:48:29]
+ 47 │     let b: &u8 = &(*v)[0];
+ 48 │     let c: &mut [u8] = &mut *w;
+    ·                             ─┬
+    ·                              ╰── reached through a `*mut volatile [u8]`
+ 49 │ }
+    ╰────
+  help: a reference lets the compiler assume the memory behind it only changes when the program
+        changes it, which a volatile access does not (ADR 0023); read and write through the
+        pointer, as `*p`, or take its address with `&raw` (ADR 0105)
+ty::reference-position
+
+  × a reference cannot be the type of a `mut` parameter
+    ╭─[slice_reference_errors.ers:51:25]
+ 50 │ 
+ 51 │ fn mut_parameter(mut s: &mut [u8]) {}
+    ·                         ────┬────
+    ·                             ╰── `&mut [u8]` is a reference
+ 52 │ 
+    ╰────
+  help: a reference is bound once (ADR 0094, 0105); declare a new `let` or parameter without `mut`
+        instead of changing this one
+ty::reference-position
+
+  × a reference cannot be the type of a `mut` variable
+    ╭─[slice_reference_errors.ers:54:16]
+ 53 │ fn mut_variable(t: &mut [u8]) {
+ 54 │     let mut s: &mut [u8] = t;
+    ·                ────┬────
+    ·                    ╰── `&mut [u8]` is a reference
+ 55 │ }
+    ╰────
+  help: a reference is bound once (ADR 0094, 0105); declare a new `let` or parameter without `mut`
+        instead of changing this one
+ty::reference-position
+
+  × a reference cannot be the element type of a slice
+    ╭─[slice_reference_errors.ers:57:18]
+ 56 │ 
+ 57 │ fn elements(a: &[&u8], b: &[Uart], c: &mut [!], d: &[Holder]) {}
+    ·                  ─┬─
+    ·                   ╰── `&u8` is a reference
+ 58 │ 
+    ╰────
+  help: a reference is held only by a parameter or a `let` without `mut`, and lent to calls (ADR
+        0094, 0105); to keep an address, use a raw pointer, `*const T` or `*mut T`
+ty::peripheral-by-value
+
+  × `Uart` is a peripheral type, which no value has
+    ╭─[slice_reference_errors.ers:57:29]
+ 56 │ 
+ 57 │ fn elements(a: &[&u8], b: &[Uart], c: &mut [!], d: &[Holder]) {}
+    ·                             ──┬─
+    ·                               ╰── `Uart` as the element type of a slice
+ 58 │ 
+    ╰────
+  help: a peripheral type describes a device's registers, reached one at a time from a peripheral
+        or through a pointer, such as `*mut Uart` (ADR 0058)
+ty::never-in-memory
+
+  × `!` is not a type of memory
+    ╭─[slice_reference_errors.ers:57:45]
+ 56 │ 
+ 57 │ fn elements(a: &[&u8], b: &[Uart], c: &mut [!], d: &[Holder]) {}
+    ·                                             ┬
+    ·                                             ╰── `!` as the element type of a slice
+ 58 │ 
+    ╰────
+  help: `!` is the type of expressions that do not finish, so no memory holds one; for a type
+        without data, use `()` (ADR 0034)

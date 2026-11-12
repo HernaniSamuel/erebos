@@ -146,6 +146,9 @@ struct PlaceRef {
     ptr: Pointer,
     volatile: bool,
     ty: Ty,
+    /// For a place of type `[T]`: where the length of the slice it was
+    /// reached through is, and whether that place is volatile (ADR 0109).
+    len: Option<(Pointer, bool)>,
 }
 
 struct Frame {
@@ -404,13 +407,37 @@ impl Interp<'_, '_> {
                     return self.write_at(len_part, len, span);
                 }
                 if ty.is_aggregate() {
-                    let Rvalue::Use(Operand::Copy(source) | Operand::Move(source, _)) = rvalue
-                    else {
-                        unreachable!("aggregates are only copied, and slices made")
-                    };
                     let to = self.place(*place)?;
-                    let from = self.place(*source)?;
-                    return self.copy_at(to, from, span);
+                    return match rvalue {
+                        Rvalue::Use(Operand::Copy(source) | Operand::Move(source, _))
+                        // A reference to a slice cast to the raw slice: the
+                        // same two words (ADR 0109).
+                        | Rvalue::Cast(Operand::Copy(source) | Operand::Move(source, _), _) => {
+                            let from = self.place(*source)?;
+                            self.copy_at(to, from, span)
+                        }
+                        // The place of type `[T]` borrowed: its address and
+                        // the length it was reached with (ADR 0109).
+                        Rvalue::Ref { place: borrowed, .. }
+                        | Rvalue::AddressOf { place: borrowed, .. } => {
+                            let borrowed = self.place(*borrowed)?;
+                            let (address_part, len_part) = slice_parts(to);
+                            self.write_at(address_part, Scalar::Ptr(borrowed.ptr), span)?;
+                            let (len_at, volatile) =
+                                borrowed.len.expect("a place of type `[T]` has a length");
+                            let len = PlaceRef {
+                                ptr: len_at,
+                                volatile,
+                                ty: Ty::Int(IntTy::Usize),
+                                len: None,
+                            };
+                            let len = self.read_at(len, span)?;
+                            self.write_at(len_part, len, span)
+                        }
+                        _ => unreachable!(
+                            "aggregates are only copied, and slices made or borrowed"
+                        ),
+                    };
                 }
                 let value = self.rvalue(rvalue, span)?;
                 let dest = self.place(*place)?;
@@ -557,6 +584,7 @@ impl Interp<'_, '_> {
                 ptr: start.add(i),
                 volatile: false,
                 ty: Ty::Int(IntTy::U8),
+                len: None,
             };
             match self.read_at(byte, span)?.int() as u8 {
                 byte @ b' '..=b'~' => text.push(char::from(byte)),
@@ -584,6 +612,7 @@ impl Interp<'_, '_> {
                 },
                 volatile: false,
                 ty: ret,
+                len: None,
             };
             let to = self.place(dest)?;
             self.copy_at(to, source, frame.call_span)?;
@@ -804,25 +833,28 @@ impl Interp<'_, '_> {
             },
             volatile: false,
             ty: frame.body.local_ty(place.local),
+            len: None,
         };
         let span = self.current_span();
         for elem in place.projection {
             current = match (*elem, current.ty) {
                 (PlaceElem::Deref, Ty::Ptr(ptr)) => {
-                    let target = self.read_address(current, span)?;
+                    let (target, len) = self.dereference(current, *ptr.pointee, span)?;
                     PlaceRef {
                         ptr: target,
                         volatile: ptr.volatile,
                         ty: *ptr.pointee,
+                        len,
                     }
                 }
                 // A reference holds an address as a pointer does (ADR 0107).
                 (PlaceElem::Deref, Ty::Ref(r)) => {
-                    let target = self.read_address(current, span)?;
+                    let (target, len) = self.dereference(current, *r.referent, span)?;
                     PlaceRef {
                         ptr: target,
                         volatile: false,
                         ty: *r.referent,
+                        len,
                     }
                 }
                 (PlaceElem::Offset(index), Ty::Ptr(ptr)) => {
@@ -833,6 +865,7 @@ impl Interp<'_, '_> {
                         ptr: target.add(index.wrapping_mul(size)),
                         volatile: ptr.volatile,
                         ty: *ptr.pointee,
+                        len: None,
                     }
                 }
                 (PlaceElem::Index(index), Ty::Array(elem, _)) => {
@@ -848,6 +881,17 @@ impl Interp<'_, '_> {
                     ty: *elem,
                     ..current
                 },
+                // An element of what a slice points to; MIR building checked
+                // the index against the length (ADR 0109).
+                (PlaceElem::Index(index), Ty::Slice(elem)) => {
+                    let index = self.local_int(index, span)?;
+                    PlaceRef {
+                        ptr: current.ptr.add(index.wrapping_mul(elem.layout().size)),
+                        ty: *elem,
+                        len: None,
+                        ..current
+                    }
+                }
                 (PlaceElem::Field(index), Ty::Struct(s)) => {
                     let field = &s.def().fields()[index as usize];
                     PlaceRef {
@@ -866,6 +910,7 @@ impl Interp<'_, '_> {
                         ptr: current.ptr.add(def.offset(index)),
                         volatile: true,
                         ty: def.registers[index as usize].ty,
+                        len: None,
                     }
                 }
                 // An element of a register array or a cluster array: at the
@@ -881,6 +926,7 @@ impl Interp<'_, '_> {
                             .add(offset.wrapping_add(index.wrapping_mul(def.step(entry)))),
                         volatile: true,
                         ty: def.registers[entry as usize].ty,
+                        len: None,
                     }
                 }
                 (PlaceElem::ConstElement(entry, index), Ty::Peripheral(p)) => {
@@ -892,6 +938,7 @@ impl Interp<'_, '_> {
                             .add(offset.wrapping_add(index.wrapping_mul(def.step(entry)))),
                         volatile: true,
                         ty: def.registers[entry as usize].ty,
+                        len: None,
                     }
                 }
                 // Reached by offset, as fields are (ADR 0039).
@@ -911,6 +958,22 @@ impl Interp<'_, '_> {
             };
         }
         Ok(current)
+    }
+
+    /// Where the pointer or reference at `place` leads, and for a `pointee` of
+    /// type `[T]`, where the length of the slice it is is (ADR 0109).
+    fn dereference(
+        &mut self,
+        place: PlaceRef,
+        pointee: Ty,
+        span: Span,
+    ) -> EvalResult<(Pointer, Option<(Pointer, bool)>)> {
+        if let Ty::Slice(_) = pointee {
+            let (address, len) = slice_parts(place);
+            let target = self.read_address(address, span)?;
+            return Ok((target, Some((len.ptr, len.volatile))));
+        }
+        Ok((self.read_address(place, span)?, None))
     }
 
     fn local_int(&mut self, local: Local, span: Span) -> EvalResult<u64> {

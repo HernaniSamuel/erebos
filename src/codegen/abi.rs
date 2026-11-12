@@ -270,6 +270,36 @@ mod tests {
         }
     }
 
+    /// A reference to a slice is passed as the raw slice of its mutability is:
+    /// two words, on both targets, as a parameter and as a return value
+    /// (ADR 0108, 0109).
+    #[test]
+    fn a_reference_to_a_slice_is_passed_as_a_slice() {
+        let elem = Ty::Slice(Box::leak(Box::new(Ty::Int(IntTy::U8))));
+        for mutable in [false, true] {
+            let raw = Ty::Ptr(Ptr {
+                mutable,
+                volatile: false,
+                pointee: Box::leak(Box::new(elem)),
+            });
+            let reference = Ty::Ref(crate::mir::Ref {
+                mutable,
+                referent: Box::leak(Box::new(elem)),
+            });
+            for arch in [Arch::Riscv32, Arch::Armv7m] {
+                for position in [Position::Param, Position::Return] {
+                    assert_eq!(
+                        super::classify(arch, reference, position),
+                        super::classify(arch, raw, position),
+                        "{reference} on {arch:?}"
+                    );
+                }
+            }
+            assert_eq!(classify(reference), PassMode::Cast(Cast::Words(2)));
+            assert_eq!(reference.layout(), raw.layout());
+        }
+    }
+
     /// riscv32 passes and returns an aggregate the same way.
     #[test]
     fn riscv32_does_not_tell_parameters_from_returns() {

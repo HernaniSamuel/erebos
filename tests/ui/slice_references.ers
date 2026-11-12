@@ -1,0 +1,85 @@
+// emit: typeck
+// A reference to a slice, `&[T]` or `&mut [T]`, is the type of a parameter or
+// of a `let` without `mut`. It is made from the slice a raw slice or another
+// reference leads to, whole (`&*s`, `&mut *s`), and used through `*s`: its
+// elements are `(*s)[i]`, read, written through a `&mut`, borrowed and passed
+// to `&raw`; its length is `len(s)`, as a raw slice's is; it casts to the raw
+// slice of its mutability, to a pointer to its first element, and to nothing
+// else (ADR 0108).
+struct Pair {
+    a: u32,
+    b: u32,
+}
+
+static TABLE: [u32; 4] = [1, 2, 3, 4];
+
+fn read(s: &[u8], i: usize) -> u8 {
+    (*s)[i]
+}
+
+fn read_mut(s: &mut [u8], i: usize) -> u8 {
+    (*s)[i]
+}
+
+fn write(s: &mut [u8], i: usize, b: u8) {
+    (*s)[i] = b;
+    (*s)[0] += 1;
+}
+
+fn lengths(raw: *const [u8], shared: &[u8], unique: &mut [u8]) -> usize {
+    len(raw) + len(shared) + len(unique)
+}
+
+// `&*s` and `&mut *s` from a raw slice and from a reference.
+fn make(raw: *const [u8], raw_mut: *mut [u8], shared: &[u8], unique: &mut [u8]) {
+    let a: &[u8] = &*raw;
+    let b: &mut [u8] = &mut *raw_mut;
+    let c: &[u8] = &*raw_mut;
+    let d: &[u8] = &*shared;
+    let e: &[u8] = &*unique;
+    let f: &mut [u8] = &mut *unique;
+}
+
+// The elements: borrowed, and passed to `&raw`.
+fn elements(shared: &[u32], unique: &mut [u32]) {
+    let a: &u32 = &(*shared)[0];
+    let b: &u32 = &(*unique)[1];
+    let c: &mut u32 = &mut (*unique)[2];
+    let d: *const u32 = &raw const (*shared)[0];
+    let e: *mut u32 = &raw mut (*unique)[3];
+    let f: *const [u32] = &raw const *shared;
+    let g: *mut [u32] = &raw mut *unique;
+}
+
+// Casts, as the raw slice of the same mutability casts.
+fn casts(shared: &[u32], unique: &mut [u32], other: &mut [u32]) {
+    let a: *const [u32] = shared as *const [u32];
+    let b: *mut [u32] = unique as *mut [u32];
+    let c: *const [u32] = other as *const [u32];
+    let d: *const u32 = shared as *const u32;
+}
+
+fn cast_unique(unique: &mut [u32]) -> *const u32 {
+    unique as *const u32
+}
+
+// Passed to a function that takes one, and a `&mut` lent to a `&` parameter.
+fn pass(raw: *const [u8], unique: &mut [u8]) -> u8 {
+    let a: u8 = read(&*raw, 0);
+    let b: u8 = read(unique, 1);
+    write(unique, 2, a + b);
+    read_mut(unique, 3)
+}
+
+fn from_static() -> u32 {
+    let raw: *const [u32] = &raw const TABLE as *const [u32];
+    let s: &[u32] = &*raw;
+    (*s)[2]
+}
+
+fn in_a_struct(p: &Pair, s: &[Pair]) -> u32 {
+    (*p).a + (*s)[0].b
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

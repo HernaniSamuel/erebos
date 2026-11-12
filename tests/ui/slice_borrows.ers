@@ -1,0 +1,47 @@
+// emit: mir
+// The borrow check over the elements and the whole of a slice behind a
+// `&mut` (ADR 0108): two elements of one slice are not in use together, a
+// reborrow of `*s` keeps `s` unusable (`len(s)` is a read of `s`), and
+// `fill(s, len(s))` reads `s` while it is lent. The same orders are accepted
+// when the first borrow ends first.
+fn fill(s: &mut [u8], n: usize) {}
+
+fn touch(a: &mut u8, b: &u8) {}
+
+fn both(a: &u8, b: &u8) {}
+
+// Accepted: the first borrow ends before the second begins.
+fn one_after_the_other(s: &mut [u8]) {
+    touch(&mut (*s)[0], &0);
+    both(&(*s)[1], &(*s)[2]);
+    touch(&mut (*s)[3], &0);
+}
+
+fn length_first(s: &mut [u8]) {
+    fill(s, 0);
+    let n: usize = len(s);
+    fill(s, n);
+}
+
+fn reborrow_ends(s: &mut [u8]) {
+    let t: &mut [u8] = &mut *s;
+    fill(t, 1);
+    let n: usize = len(s);
+    fill(s, n);
+}
+
+// Accepted: a write of `(*s)[i]` through `s` while nothing borrows it.
+fn write_through(s: &mut [u8]) {
+    (*s)[0] = 1;
+    (*s)[1] = (*s)[0];
+}
+
+// Accepted: the arguments in the order that reads the length first.
+fn length_argument_first(s: &mut [u8]) {
+    swapped(len(s), s);
+}
+
+fn swapped(n: usize, s: &mut [u8]) {}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }
