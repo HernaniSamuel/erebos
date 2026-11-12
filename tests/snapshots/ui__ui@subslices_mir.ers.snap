@@ -1,0 +1,524 @@
+---
+source: tests/ui.rs
+assertion_line: 24
+expression: output
+input_file: tests/ui/subslices_mir.ers
+---
+--- mir ---
+fn slice_forms(_1: &[u8], _2: usize, _3: usize) -> () {
+    let _0: ();
+    let _1: &[u8]; // s
+    let _2: usize; // a
+    let _3: usize; // b
+    let _4: &[u8]; // x
+    let _5: &[u8]; // y
+    let _6: &[u8]; // z
+    let _7: usize;
+    let _8: usize;
+    let _9: usize;
+    let _10: bool;
+    let _11: bool;
+    let _12: &[u8];
+    let _13: usize;
+    let _14: usize;
+    let _15: usize;
+    let _16: bool;
+    let _17: bool;
+    let _18: &[u8];
+    let _19: usize;
+    let _20: usize;
+    let _21: usize;
+    let _22: bool;
+    let _23: bool;
+    let _24: &[u8];
+
+    bb0: {
+        _7 = len(_1);
+        _8 = copy _2;
+        _9 = copy _3;
+        _10 = Le(copy _8, copy _9);
+        if copy _10 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _11 = Le(copy _9, copy _7);
+        if copy _11 -> [true: bb3, false: bb4];
+    }
+
+    bb2: {
+        panic(index out of bounds);
+    }
+
+    bb3: {
+        _12 = &(*_1)[_8.._9];
+        _4 = copy _12;
+        _13 = len(_1);
+        _14 = copy _2;
+        _15 = copy _13;
+        _16 = Le(copy _14, copy _15);
+        if copy _16 -> [true: bb5, false: bb6];
+    }
+
+    bb4: {
+        panic(index out of bounds);
+    }
+
+    bb5: {
+        _17 = Le(copy _15, copy _13);
+        if copy _17 -> [true: bb7, false: bb8];
+    }
+
+    bb6: {
+        panic(index out of bounds);
+    }
+
+    bb7: {
+        _18 = &(*_1)[_14.._15];
+        _5 = copy _18;
+        _19 = len(_1);
+        _20 = const 0_usize;
+        _21 = copy _3;
+        _22 = Le(copy _20, copy _21);
+        if copy _22 -> [true: bb9, false: bb10];
+    }
+
+    bb8: {
+        panic(index out of bounds);
+    }
+
+    bb9: {
+        _23 = Le(copy _21, copy _19);
+        if copy _23 -> [true: bb11, false: bb12];
+    }
+
+    bb10: {
+        panic(index out of bounds);
+    }
+
+    bb11: {
+        _24 = &(*_1)[_20.._21];
+        _6 = copy _24;
+        return;
+    }
+
+    bb12: {
+        panic(index out of bounds);
+    }
+}
+
+fn raw_forms(_1: *const [u8], _2: *mut [u8], _3: usize, _4: usize) -> () {
+    let _0: ();
+    let _1: *const [u8]; // p
+    let _2: *mut [u8]; // q
+    let _3: usize; // a
+    let _4: usize; // b
+    let _5: *const [u8]; // x
+    let _6: *mut [u8]; // y
+    let _7: &[u8]; // z
+    let _8: usize;
+    let _9: usize;
+    let _10: usize;
+    let _11: bool;
+    let _12: bool;
+    let _13: *const [u8];
+    let _14: usize;
+    let _15: usize;
+    let _16: usize;
+    let _17: bool;
+    let _18: bool;
+    let _19: *mut [u8];
+    let _20: usize;
+    let _21: usize;
+    let _22: usize;
+    let _23: bool;
+    let _24: bool;
+    let _25: &[u8];
+
+    bb0: {
+        _8 = len(_1);
+        _9 = copy _3;
+        _10 = copy _4;
+        _11 = Le(copy _9, copy _10);
+        if copy _11 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _12 = Le(copy _10, copy _8);
+        if copy _12 -> [true: bb3, false: bb4];
+    }
+
+    bb2: {
+        panic(index out of bounds);
+    }
+
+    bb3: {
+        _13 = &raw const (*_1)[_9.._10];
+        _5 = copy _13;
+        _14 = len(_2);
+        _15 = const 0_usize;
+        _16 = copy _4;
+        _17 = Le(copy _15, copy _16);
+        if copy _17 -> [true: bb5, false: bb6];
+    }
+
+    bb4: {
+        panic(index out of bounds);
+    }
+
+    bb5: {
+        _18 = Le(copy _16, copy _14);
+        if copy _18 -> [true: bb7, false: bb8];
+    }
+
+    bb6: {
+        panic(index out of bounds);
+    }
+
+    bb7: {
+        _19 = &raw mut (*_2)[_15.._16];
+        _6 = copy _19;
+        _20 = len(_1);
+        _21 = copy _3;
+        _22 = copy _20;
+        _23 = Le(copy _21, copy _22);
+        if copy _23 -> [true: bb9, false: bb10];
+    }
+
+    bb8: {
+        panic(index out of bounds);
+    }
+
+    bb9: {
+        _24 = Le(copy _22, copy _20);
+        if copy _24 -> [true: bb11, false: bb12];
+    }
+
+    bb10: {
+        panic(index out of bounds);
+    }
+
+    bb11: {
+        _25 = &(*_1)[_21.._22];
+        _7 = copy _25;
+        return;
+    }
+
+    bb12: {
+        panic(index out of bounds);
+    }
+}
+
+fn array_forms(_1: [u8; 8], _2: usize, _3: usize) -> () {
+    let _0: ();
+    let _1: [u8; 8]; // buf
+    let _2: usize; // a
+    let _3: usize; // b
+    let _4: &[u8]; // x
+    let _5: &mut [u8]; // y
+    let _6: usize;
+    let _7: usize;
+    let _8: bool;
+    let _9: bool;
+    let _10: &[u8];
+    let _11: usize;
+    let _12: usize;
+    let _13: bool;
+    let _14: bool;
+    let _15: &mut [u8];
+
+    bb0: {
+        _6 = copy _2;
+        _7 = copy _3;
+        _8 = Le(copy _6, copy _7);
+        if copy _8 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _9 = Le(copy _7, const 8_usize);
+        if copy _9 -> [true: bb3, false: bb4];
+    }
+
+    bb2: {
+        panic(index out of bounds);
+    }
+
+    bb3: {
+        _10 = &_1[_6.._7];
+        _4 = copy _10;
+        _11 = copy _2;
+        _12 = const 8_usize;
+        _13 = Le(copy _11, copy _12);
+        if copy _13 -> [true: bb5, false: bb6];
+    }
+
+    bb4: {
+        panic(index out of bounds);
+    }
+
+    bb5: {
+        _14 = Le(copy _12, const 8_usize);
+        if copy _14 -> [true: bb7, false: bb8];
+    }
+
+    bb6: {
+        panic(index out of bounds);
+    }
+
+    bb7: {
+        _15 = &mut _1[_11.._12];
+        _5 = move _15;
+        return;
+    }
+
+    bb8: {
+        panic(index out of bounds);
+    }
+}
+
+fn literal_forms(_1: [u8; 8]) -> () {
+    let _0: ();
+    let _1: [u8; 8]; // buf
+    let _2: &[u8]; // w
+    let _3: &[u8]; // x
+    let _4: &[u8]; // y
+    let _5: &[u8]; // z
+    let _6: &[u8];
+    let _7: &[u8];
+    let _8: &[u8];
+    let _9: &[u8];
+
+    bb0: {
+        _6 = &_1[2..6];
+        _2 = copy _6;
+        _7 = &_1[2..8];
+        _3 = copy _7;
+        _8 = &_1[0..4];
+        _4 = copy _8;
+        _9 = &_1[8..8];
+        _5 = copy _9;
+        return;
+    }
+}
+
+fn const_bound(_1: [u8; 8]) -> () {
+    let _0: ();
+    let _1: [u8; 8]; // buf
+    let _2: &[u8]; // x
+    let _3: usize;
+    let _4: usize;
+    let _5: bool;
+    let _6: bool;
+    let _7: &[u8];
+
+    bb0: {
+        _3 = const 2_usize;
+        _4 = const 6_usize;
+        _5 = Le(copy _3, copy _4);
+        if copy _5 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _6 = Le(copy _4, const 8_usize);
+        if copy _6 -> [true: bb3, false: bb4];
+    }
+
+    bb2: {
+        panic(index out of bounds);
+    }
+
+    bb3: {
+        _7 = &_1[_3.._4];
+        _2 = copy _7;
+        return;
+    }
+
+    bb4: {
+        panic(index out of bounds);
+    }
+}
+
+fn nested(_1: &[u8]) -> u8 {
+    let _0: u8;
+    let _1: &[u8]; // s
+    let _2: &[u8]; // x
+    let _3: usize;
+    let _4: usize;
+    let _5: usize;
+    let _6: bool;
+    let _7: bool;
+    let _8: usize;
+    let _9: usize;
+    let _10: usize;
+    let _11: bool;
+    let _12: bool;
+    let _13: &[u8];
+    let _14: usize;
+    let _15: usize;
+    let _16: usize;
+    let _17: bool;
+    let _18: bool;
+    let _19: usize;
+    let _20: usize;
+    let _21: bool;
+    let _22: u8;
+
+    bb0: {
+        _3 = len(_1);
+        _4 = const 2_usize;
+        _5 = const 4_usize;
+        _6 = Le(copy _4, copy _5);
+        if copy _6 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _7 = Le(copy _5, copy _3);
+        if copy _7 -> [true: bb3, false: bb4];
+    }
+
+    bb2: {
+        panic(index out of bounds);
+    }
+
+    bb3: {
+        _8 = Sub(copy _5, copy _4);
+        _9 = const 1_usize;
+        _10 = const 3_usize;
+        _11 = Le(copy _9, copy _10);
+        if copy _11 -> [true: bb5, false: bb6];
+    }
+
+    bb4: {
+        panic(index out of bounds);
+    }
+
+    bb5: {
+        _12 = Le(copy _10, copy _8);
+        if copy _12 -> [true: bb7, false: bb8];
+    }
+
+    bb6: {
+        panic(index out of bounds);
+    }
+
+    bb7: {
+        _13 = &(*_1)[_4.._5][_9.._10];
+        _2 = copy _13;
+        _14 = len(_1);
+        _15 = const 2_usize;
+        _16 = const 4_usize;
+        _17 = Le(copy _15, copy _16);
+        if copy _17 -> [true: bb9, false: bb10];
+    }
+
+    bb8: {
+        panic(index out of bounds);
+    }
+
+    bb9: {
+        _18 = Le(copy _16, copy _14);
+        if copy _18 -> [true: bb11, false: bb12];
+    }
+
+    bb10: {
+        panic(index out of bounds);
+    }
+
+    bb11: {
+        _19 = Sub(copy _16, copy _15);
+        _20 = const 3_usize;
+        _21 = Lt(copy _20, copy _19);
+        if copy _21 -> [true: bb13, false: bb14];
+    }
+
+    bb12: {
+        panic(index out of bounds);
+    }
+
+    bb13: {
+        _22 = copy (*_1)[_15.._16][_20];
+        _0 = copy _22;
+        return;
+    }
+
+    bb14: {
+        panic(index out of bounds);
+    }
+}
+
+fn effects(_1: &[u8], _2: usize) -> () {
+    let _0: ();
+    let _1: &[u8]; // s
+    let _2: usize; // a
+    let _3: &[u8]; // x
+    let _4: &[u8];
+    let _5: usize;
+    let _6: usize;
+    let _7: usize;
+    let _8: usize;
+    let _9: bool;
+    let _10: bool;
+    let _11: &[u8];
+
+    bb0: {
+        _4 = copy _1;
+        _5 = len(_4);
+        _6 = Add(copy _2, const 1_usize);
+        _2 = copy _6;
+        _7 = copy _2;
+        _8 = copy _5;
+        _9 = Le(copy _7, copy _8);
+        if copy _9 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _10 = Le(copy _8, copy _5);
+        if copy _10 -> [true: bb3, false: bb4];
+    }
+
+    bb2: {
+        panic(index out of bounds);
+    }
+
+    bb3: {
+        _11 = &(*_4)[_7.._8];
+        _3 = copy _11;
+        return;
+    }
+
+    bb4: {
+        panic(index out of bounds);
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+comptime fn START() -> usize {
+    let _0: usize;
+
+    bb0: {
+        _0 = const 2_usize;
+        return;
+    }
+}

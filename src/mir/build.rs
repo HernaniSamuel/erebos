@@ -813,6 +813,7 @@ impl Builder<'_, '_> {
             }
             hir::ExprKind::Deref(_)
             | hir::ExprKind::Index(..)
+            | hir::ExprKind::Subslice { .. }
             | hir::ExprKind::Field(..)
             | hir::ExprKind::Static(_)
             | hir::ExprKind::ByteString(_) => {
@@ -2400,22 +2401,40 @@ impl Builder<'_, '_> {
                         let elem = self.array_index(index, len, *open);
                         base.project(elem)
                     }
-                    Ty::Slice(_) => {
-                        let hir::ExprKind::Deref(pointer) = &base.kind else {
-                            unreachable!("only what a slice points to has type `[T]`")
-                        };
-                        if let Ty::Ref(_) = self.ty_of(pointer) {
-                            self.reference_slice_index(pointer, index, later_writes, *open)
-                        } else {
-                            self.slice_index(pointer, index, later_writes, *open)
+                    Ty::Slice(_) => match &base.kind {
+                        hir::ExprKind::Deref(pointer) => {
+                            if let Ty::Ref(_) = self.ty_of(pointer) {
+                                self.reference_slice_index(pointer, index, later_writes, *open)
+                            } else {
+                                self.slice_index(pointer, index, later_writes, *open)
+                            }
                         }
-                    }
+                        // An element of a sub-slice, checked against the
+                        // sub-slice's length (ADR 0108, 0109).
+                        _ => self.subslice_index(base, index, later_writes, address, *open),
+                    },
                     _ => {
                         let base = self.pointer_place(base, later_writes);
                         let index = self.fixed_index(index);
                         base.project(PlaceElem::Offset(index))
                     }
                 }
+            }
+            hir::ExprKind::Subslice {
+                base,
+                from,
+                to,
+                open,
+            } => {
+                self.subslice(
+                    base,
+                    from.as_deref(),
+                    to.as_deref(),
+                    *open,
+                    later_writes,
+                    address,
+                )
+                .0
             }
             // A bit field is a value, read below (ADR 0059).
             hir::ExprKind::Field(base, _, _) if self.q.tables.bit_field(expr.id).is_none() => {
@@ -2544,6 +2563,185 @@ impl Builder<'_, '_> {
             .project(PlaceElem::Deref)
             .project(PlaceElem::Index(index))
     }
+
+    /// `base[index]` with `base` a sub-slice (ADR 0108, 0109): the length of
+    /// the sub-slice is taken with it, before the index is evaluated, and the
+    /// index is checked against it, so that `(*s)[2..4][3]` is out of bounds
+    /// whatever `len(s)` is.
+    fn subslice_index(
+        &mut self,
+        base: &hir::Expr,
+        index: &hir::Expr,
+        later_writes: bool,
+        address: bool,
+        at: Span,
+    ) -> Place {
+        let (part, len) = self.slice_part(base, later_writes, address);
+        let len = self.length(len);
+        let index = self.fixed_index(index);
+        let in_bounds = self.temp(
+            Ty::Bool,
+            Rvalue::Binary(BinOp::Lt, Operand::Copy(Place::local(index)), len),
+        );
+        self.panic_unless(in_bounds, PanicCause::IndexOutOfBounds, at);
+        part.project(PlaceElem::Index(index))
+    }
+
+    /// The place of type `[T]` that `base`, an expression of that type, is,
+    /// and its length (ADR 0109): the slice's for what a slice points to or
+    /// refers to, read now, before anything that indexes it is evaluated
+    /// (ADR 0018, 0108); a sub-slice's own for a sub-slice.
+    fn slice_part(
+        &mut self,
+        base: &hir::Expr,
+        later_writes: bool,
+        address: bool,
+    ) -> (Place, Length) {
+        match &base.kind {
+            hir::ExprKind::Deref(pointer) => {
+                let slice = self.pointer_place(pointer, later_writes);
+                let len = self.temp(Ty::Int(hir::IntTy::Usize), Rvalue::SliceLen(slice));
+                (slice.project(PlaceElem::Deref), Length::Operand(len))
+            }
+            hir::ExprKind::Subslice {
+                base,
+                from,
+                to,
+                open,
+            } => self.subslice(
+                base,
+                from.as_deref(),
+                to.as_deref(),
+                *open,
+                later_writes,
+                address,
+            ),
+            _ => unreachable!("only what a slice points to, or part of one, has type `[T]`"),
+        }
+    }
+
+    /// `base[from..to]`, `base[from..]` or `base[..to]` (ADR 0108, 0109): the
+    /// place of the elements from `from` up to but not including `to`, and
+    /// its length. The base comes first, with the length it has (`N` for an
+    /// array); then `from` and `to` into new locals; then the checks that
+    /// `from <= to` and `to <= len`, located at `open`, the `[` (ADR 0053). On
+    /// an array, a bound known at compile time is checked while building
+    /// (ADR 0032), and two integer literals in range, an omitted bound being
+    /// the literal `0` or `N`, check nothing at run time.
+    fn subslice(
+        &mut self,
+        base: &hir::Expr,
+        from: Option<&hir::Expr>,
+        to: Option<&hir::Expr>,
+        open: Span,
+        later_writes: bool,
+        address: bool,
+    ) -> (Place, Length) {
+        let later_writes = later_writes || !from.is_none_or(is_simple) || !to.is_none_or(is_simple);
+        let (part, len, constant) = match self.ty_of(base) {
+            Ty::Array(_, len) => {
+                let array = self.place_then(base, later_writes, address);
+                self.check_range(from, to, len);
+                (array, Length::Constant(len), Some(len))
+            }
+            Ty::Slice(_) => {
+                let (slice, len) = self.slice_part(base, later_writes, address);
+                (slice, len, None)
+            }
+            // A base of type `!` is never computed.
+            _ => {
+                let part = self.place_then(base, later_writes, address);
+                return (part, Length::Constant(0));
+            }
+        };
+        if let Some(n) = constant
+            && let Some(start) = literal_bound(from, 0)
+            && let Some(end) = literal_bound(to, n)
+            && start <= end
+            && end <= n
+        {
+            return (
+                part.project(PlaceElem::ConstSubslice(start, end)),
+                Length::Constant(end - start),
+            );
+        }
+        let len_operand = self.length(len);
+        let start = self.bound(from, Operand::Const(Const::Int(0, hir::IntTy::Usize)));
+        let end = self.bound(to, len_operand);
+        let ordered = self.temp(
+            Ty::Bool,
+            Rvalue::Binary(
+                BinOp::Le,
+                Operand::Copy(Place::local(start)),
+                Operand::Copy(Place::local(end)),
+            ),
+        );
+        self.panic_unless(ordered, PanicCause::IndexOutOfBounds, open);
+        let within = self.temp(
+            Ty::Bool,
+            Rvalue::Binary(BinOp::Le, Operand::Copy(Place::local(end)), len_operand),
+        );
+        self.panic_unless(within, PanicCause::IndexOutOfBounds, open);
+        (
+            part.project(PlaceElem::Subslice(start, end)),
+            Length::Difference(start, end),
+        )
+    }
+
+    /// A bound of a range into a new local, so that a later write to its
+    /// variable does not move the place; `default` for one left out.
+    fn bound(&mut self, bound: Option<&hir::Expr>, default: Operand) -> Local {
+        match bound {
+            Some(bound) => self.fixed_index(bound),
+            None => {
+                let local = self.new_local(Ty::Int(hir::IntTy::Usize), None);
+                self.assign(Place::local(local), Rvalue::Use(default));
+                local
+            }
+        }
+    }
+
+    /// The length of a place of type `[T]` as an operand: the subtraction of
+    /// the bounds of a sub-slice is made when it is needed, and wraps like
+    /// every `-` (ADR 0007) though `from <= to` was checked.
+    fn length(&mut self, len: Length) -> Operand {
+        match len {
+            Length::Constant(len) => usize_const(len),
+            Length::Operand(len) => len,
+            Length::Difference(start, end) => self.temp(
+                Ty::Int(hir::IntTy::Usize),
+                Rvalue::Binary(
+                    BinOp::Sub,
+                    Operand::Copy(Place::local(end)),
+                    Operand::Copy(Place::local(start)),
+                ),
+            ),
+        }
+    }
+}
+
+/// The length of a place of type `[T]` while it is being built (ADR 0109).
+#[derive(Clone, Copy)]
+enum Length {
+    /// Known while building: an array's, or a `ConstSubslice`'s.
+    Constant(u64),
+    /// Read from a slice into an operand.
+    Operand(Operand),
+    /// `end - start` of a `Subslice`, which has not been computed yet.
+    Difference(Local, Local),
+}
+
+/// The value of a bound that is an integer literal, or `default` for one left
+/// out; `None` for any other bound, which is checked at run time (ADR 0108).
+fn literal_bound(bound: Option<&hir::Expr>, default: u64) -> Option<u64> {
+    match bound {
+        None => Some(default),
+        Some(hir::Expr {
+            kind: hir::ExprKind::Int(value),
+            ..
+        }) => Some(*value),
+        Some(_) => None,
+    }
 }
 
 /// Whether the operand of `&` or `&mut` is a place (or a part of a value,
@@ -2562,6 +2760,7 @@ fn is_place_expr(expr: &hir::Expr) -> bool {
             | hir::ExprKind::Static(_)
             | hir::ExprKind::Deref(_)
             | hir::ExprKind::Index(..)
+            | hir::ExprKind::Subslice { .. }
             | hir::ExprKind::Field(..)
     )
 }
@@ -2595,7 +2794,10 @@ fn try_projected_ty(ty: Ty, elem: &PlaceElem) -> Option<Ty> {
         (PlaceElem::Deref, Ty::Ref(r)) => *r.referent,
         (PlaceElem::Index(_) | PlaceElem::ConstIndex(_), Ty::Array(elem, _)) => *elem,
         (PlaceElem::Index(_), Ty::Slice(elem)) => *elem,
-        (PlaceElem::ConstSubslice(..), Ty::Array(elem, _)) => Ty::Slice(elem),
+        (
+            PlaceElem::Subslice(..) | PlaceElem::ConstSubslice(..),
+            Ty::Array(elem, _) | Ty::Slice(elem),
+        ) => Ty::Slice(elem),
         (PlaceElem::Field(index), Ty::Struct(s)) => s.def().fields()[*index as usize].ty,
         (
             PlaceElem::Field(index)

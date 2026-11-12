@@ -1,0 +1,31 @@
+// emit: mir
+// A range whose bounds are known at compile time is checked while building,
+// on an array (ADR 0108, 0032): each bound known must be at most the length,
+// on its own, and the start at most the end when both are known. A range on a
+// slice is never known, and a bound that is not known is checked at run time.
+const PAST: usize = 9;
+
+fn arrays(buf: [u8; 8], n: usize) {
+    let a: &[u8] = &buf[0..9];
+    let b: &[u8] = &buf[9..];
+    let c: &[u8] = &buf[..9];
+    let d: &[u8] = &buf[n..9];
+    let e: &[u8] = &buf[9..n];
+    let f: &[u8] = &buf[5..2];
+    let g: &[u8] = &buf[1..PAST];
+    let h: &[u8] = &buf[PAST..PAST];
+    let i: &[u8] = &buf[6 + 1..2 + 1];
+    let j: &[u8] = &buf[9..9];
+}
+
+// In range, or not known: no error.
+fn accepted(buf: [u8; 8], s: &[u8], n: usize) {
+    let a: &[u8] = &buf[8..8];
+    let b: &[u8] = &buf[2..2];
+    let c: &[u8] = &buf[n..];
+    let d: &[u8] = &buf[n..2];
+    let e: &[u8] = &(*s)[9..10];
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

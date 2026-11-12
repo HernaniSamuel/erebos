@@ -44,6 +44,12 @@ const CLUSTER_HELP: &str = "a cluster is written `NAME: TYPE at OFFSET`, optiona
 /// 0060).
 const BIT_FIELD_HELP: &str = "a bit field is written `NAME: TYPE at BITS`, optionally after `pub` and before the name `read` or `write`, then optionally a read effect, `read clears`, `read sets` or `read modifies`, a write effect, `write 0` or `write 1` followed by `clears`, `sets` or `toggles`, and a default, `= VALUE`, in that order; fields are separated by `,` (ADR 0059, 0060, 0065)";
 
+/// The help of `..=` in an index (ADR 0108).
+const CLOSED_RANGE_HELP: &str = "a range in an index is half-open: `base[a..b]` is the elements from `a` up to but not including `b`; write `base[a..b + 1]` to include `b` (ADR 0108)";
+
+/// The help of `..` alone in an index (ADR 0108).
+const WHOLE_RANGE_HELP: &str = "a range in an index needs a bound: write `&*s` for the whole of a slice `s`, or let a reference to an array convert to a `&[T]` (ADR 0108)";
+
 /// The help of the errors in the bits of a bit field (ADR 0059).
 const BITS_HELP: &str = "a bit field's bits are one bit, as `at 7`, or a range with both ends included, lowest first, as `at 0..=1` (ADR 0059)";
 
@@ -1917,12 +1923,7 @@ impl Parser<'_> {
         let mut expr = self.primary()?;
         loop {
             if let Some(open) = self.eat(TokenKind::LBracket) {
-                let index = self.nested_expr()?;
-                let close = self.expect(TokenKind::RBracket)?;
-                expr = Expr {
-                    span: expr.span.to(close.span),
-                    kind: ExprKind::Index(Box::new(expr), Box::new(index), open.span),
-                };
+                expr = self.index_or_range(expr, open.span)?;
             } else if self.eat(TokenKind::Dot).is_some() {
                 let field = self.ident()?;
                 expr = Expr {
@@ -1938,6 +1939,53 @@ impl Parser<'_> {
                 return Ok(expr);
             }
         }
+    }
+
+    /// The rest of `base[index]`, `base[a..b]`, `base[a..]` or `base[..b]`
+    /// after its `[`, which spans `open`. `..` binds more loosely than every
+    /// operator and `as`, and exists only here (ADR 0108); `..` alone and
+    /// `..=` are errors, with a help for each.
+    fn index_or_range(&mut self, base: Expr, open: Span) -> PResult<Expr> {
+        let from = if self.at(TokenKind::DotDot) || self.at(TokenKind::DotDotEq) {
+            None
+        } else {
+            let index = self.nested_expr()?;
+            if !self.at(TokenKind::DotDot) && !self.at(TokenKind::DotDotEq) {
+                let close = self.expect(TokenKind::RBracket)?;
+                return Ok(Expr {
+                    span: base.span.to(close.span),
+                    kind: ExprKind::Index(Box::new(base), Box::new(index), open),
+                });
+            }
+            Some(Box::new(index))
+        };
+        let dots = self.peek();
+        if dots.kind == TokenKind::DotDotEq {
+            return Err(self.report_unexpected_help("`..`", dots.span, CLOSED_RANGE_HELP));
+        }
+        self.bump();
+        let to = if self.at(TokenKind::RBracket) {
+            if from.is_none() {
+                return Err(self.report_unexpected_help(
+                    "a bound next to `..`",
+                    dots.span,
+                    WHOLE_RANGE_HELP,
+                ));
+            }
+            None
+        } else {
+            Some(Box::new(self.nested_expr()?))
+        };
+        let close = self.expect(TokenKind::RBracket)?;
+        Ok(Expr {
+            span: base.span.to(close.span),
+            kind: ExprKind::Subslice {
+                base: Box::new(base),
+                from,
+                to,
+                open,
+            },
+        })
     }
 
     fn primary(&mut self) -> PResult<Expr> {

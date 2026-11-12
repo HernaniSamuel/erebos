@@ -1,0 +1,53 @@
+---
+source: tests/ui.rs
+assertion_line: 24
+expression: output
+input_file: tests/ui/parse_subslice_errors.ers
+---
+--- errors ---
+parser::unexpected-token
+
+  × expected a bound next to `..`, found `]`
+   ╭─[parse_subslice_errors.ers:5:25]
+ 4 │ fn whole(buf: [u8; 8]) {
+ 5 │     let a: &[u8] = &buf[..];
+   ·                         ─┬
+   ·                          ╰── expected a bound next to `..`
+ 6 │ }
+   ╰────
+  help: a range in an index needs a bound: write `&*s` for the whole of a slice `s`, or let a
+        reference to an array convert to a `&[T]` (ADR 0108)
+parser::unexpected-token
+
+  × expected `..`, found `..=`
+    ╭─[parse_subslice_errors.ers:9:26]
+  8 │ fn closed(buf: [u8; 8], n: usize) {
+  9 │     let b: &[u8] = &buf[1..=n];
+    ·                          ─┬─
+    ·                           ╰── expected `..`
+ 10 │ }
+    ╰────
+  help: a range in an index is half-open: `base[a..b]` is the elements from `a` up to but not
+        including `b`; write `base[a..b + 1]` to include `b` (ADR 0108)
+parser::unexpected-token
+
+  × expected `..`, found `..=`
+    ╭─[parse_subslice_errors.ers:13:25]
+ 12 │ fn closed_from_start(buf: [u8; 8], n: usize) {
+ 13 │     let c: &[u8] = &buf[..=n];
+    ·                         ─┬─
+    ·                          ╰── expected `..`
+ 14 │ }
+    ╰────
+  help: a range in an index is half-open: `base[a..b]` is the elements from `a` up to but not
+        including `b`; write `base[a..b + 1]` to include `b` (ADR 0108)
+parser::unexpected-token
+
+  × expected `;`, found `..`
+    ╭─[parse_subslice_errors.ers:17:21]
+ 16 │ fn expression(n: usize) {
+ 17 │     let d: usize = 1..n;
+    ·                     ─┬
+    ·                      ╰── expected `;`
+ 18 │ }
+    ╰────

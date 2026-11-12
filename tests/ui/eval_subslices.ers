@@ -1,0 +1,64 @@
+// emit: mir
+// A sub-slice runs at compile time as at run time (ADR 0108): of a `static`
+// and of a byte string, through a `&[u8]` or a `&mut [u8]` in a `comptime`
+// function; of an array in a local, with run-time bounds and with literal
+// ones; an empty one at the length; and a sub-slice of a sub-slice.
+static TABLE: [u8; 6] = [10, 20, 30, 40, 50, 60];
+
+fn sum(s: &[u8]) -> u32 {
+    let mut total: u32 = 0;
+    let mut i: usize = 0;
+    while i < len(s) {
+        total += (*s)[i] as u32;
+        i += 1;
+    }
+    total
+}
+
+fn from_static() -> u32 {
+    sum(&TABLE[1..4]) * 1000 + sum(&TABLE[4..]) + sum(&TABLE[..2])
+}
+
+const STATIC: u32 = from_static();
+
+fn from_byte_string() -> u32 {
+    sum(&b"hello"[1..3]) + sum(&b"hello"[5..]) + sum(&b"hello"[..0])
+}
+
+const BYTES: u32 = from_byte_string();
+
+fn bounds(buf: [u8; 6], a: usize, b: usize) -> u32 {
+    sum(&buf[a..b]) + sum(&buf[a..]) * 100
+}
+
+fn from_array() -> u32 {
+    bounds([1, 2, 3, 4, 5, 6], 2, 4)
+}
+
+const ARRAY: u32 = from_array();
+
+fn write_through() -> u32 {
+    let mut buf: [u8; 6] = [0; 6];
+    let n: usize = 4;
+    let tail: &mut [u8] = &mut buf[2..n];
+    (*tail)[0] = 7;
+    (*tail)[1..2][0] = 9;
+    sum(&buf[1..5])
+}
+
+const WRITTEN: u32 = write_through();
+
+fn nested_and_empty() -> u32 {
+    let inner: &[u8] = &(*&TABLE[1..5])[1..3];
+    let raw: *const [u8] = &raw const (*inner)[0..0];
+    sum(inner) + len(inner) as u32 * 1000 + len(&TABLE[6..6]) as u32
+}
+
+const NESTED: u32 = nested_and_empty();
+
+fn answers() -> u32 {
+    STATIC + BYTES + ARRAY + WRITTEN + NESTED
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

@@ -1,0 +1,103 @@
+// emit: typeck
+// A range in an index where it cannot be (ADR 0108): on a base without a
+// length, read, written or matched whole, written through what cannot be
+// written, with a bound that is no `usize`, or where the elements have no
+// address.
+#[packed]
+struct Packed {
+    tag: u8,
+    words: [u32; 2],
+    bytes: [u8; 2],
+}
+
+peripheral Uart {
+    pub read write data: [u32; 4] at 0x00,
+    pub read status: u32 at 0x20,
+}
+
+peripheral UART: Uart at 0x4000_0000;
+
+static TABLE: [u8; 4] = [1, 2, 3, 4];
+static mut COUNTS: [u32; 4] = [0; 4];
+const MSG: [u8; 4] = [1, 2, 3, 4];
+
+fn make() -> [u8; 4] {
+    [1, 2, 3, 4]
+}
+
+// A thin pointer, a raw slice, a reference to a slice and to an array not
+// dereferenced, an integer: none has the length of an array or a slice.
+fn no_length(p: *const u8, s: *const [u8], r: &[u8], q: &[u8; 4], a: *const [u8; 4], n: usize) {
+    let b: &[u8] = &p[1..2];
+    let c: *const [u8] = &raw const s[1..2];
+    let d: &[u8] = &r[1..];
+    let e: &[u8] = &q[..2];
+    let f: &[u8] = &a[1..2];
+    let g: &[u8] = &n[0..1];
+}
+
+// Read, written or matched whole, and as a statement.
+fn whole(mut buf: [u8; 4], s: &mut [u8], t: &[u8]) {
+    let a: u8 = buf[1..2];
+    buf[1..2] = 7;
+    (*s)[1..] = (*t)[..2];
+    match buf[1..] {
+        _ => {}
+    }
+    let b: [u8; 2] = (*t)[..2];
+}
+
+// Written through what cannot be: a `&`, a `*const`, a variable without
+// `mut`, a `static`, a byte string, a part of a temporary.
+fn immutable(buf: [u8; 4], r: &[u8], s: *const [u8]) {
+    let a: &mut [u8] = &mut (*r)[1..];
+    let b: *mut [u8] = &raw mut (*s)[..2];
+    let c: &mut [u8] = &mut (*s)[..2];
+    let d: &mut [u8] = &mut buf[1..];
+    let e: *mut [u8] = &raw mut buf[1..];
+    let f: &mut [u8] = &mut TABLE[1..];
+    let g: *mut [u8] = &raw mut TABLE[..2];
+    let h: &mut [u8] = &mut b"text"[1..];
+    let i: *mut [u8] = &raw mut b"text"[1..];
+    let j: &mut [u8] = &mut MSG[1..3];
+    let k: &mut [u8] = &mut make()[1..3];
+    let l: *mut [u8] = &raw mut make()[1..3];
+}
+
+// A part of a constant has no address to take.
+fn constants() {
+    let a: *const [u8] = &raw const MSG[1..3];
+}
+
+// A bound that is no `usize`.
+fn bounds(buf: [u8; 4], a: u32, b: bool) {
+    let c: &[u8] = &buf[a..];
+    let d: &[u8] = &buf[..b];
+    let e: &[u8] = &buf[1..2 as u8];
+}
+
+// `slice` takes a raw pointer.
+fn slice_of_reference(r: &u8) {
+    let a: *const [u8] = slice(r, 2);
+}
+
+// No address, or none a reference may have yet (ADR 0105).
+fn addresses(
+    v: *const volatile [u8],
+    w: *const volatile [u8; 4],
+    h: *mut Packed,
+    n: usize,
+) {
+    let a: &[u8] = &(*v)[0..1];
+    let b: &[u8] = &(*w)[0..1];
+    let c: &[u32] = &UART.data[0..2];
+    let d: *const [u32] = &raw const UART.data[0..2];
+    let e: *const [u32] = &raw const (*h).words[1..];
+    let f: &[u32] = &(*h).words[1..];
+    let g: &[u8] = &(*h).bytes[1..];
+    let i: &[u32] = &COUNTS[1..n];
+    let j: *const [u32] = &raw const COUNTS[1..n];
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

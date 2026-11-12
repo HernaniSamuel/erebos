@@ -563,6 +563,15 @@ pub enum ExprKind {
     /// `base[index]`, with the span of the `[`, where the bounds check is
     /// located (ADR 0053).
     Index(Box<Expr>, Box<Expr>, Span),
+    /// `base[from..to]`, `base[from..]` or `base[..to]` (ADR 0108), with the
+    /// span of the `[`, where the checks are located. A range exists only
+    /// inside `[ ]`: it is a node of the index, not an expression.
+    Subslice {
+        base: Box<Expr>,
+        from: Option<Box<Expr>>,
+        to: Option<Box<Expr>>,
+        open: Span,
+    },
     /// `operand?`: the value of an `Option` or a `Result`, or a return of
     /// its failure (ADR 0046), with the span of the `?`, where the check of
     /// its tag is located (ADR 0053).

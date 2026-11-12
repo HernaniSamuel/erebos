@@ -248,12 +248,18 @@ fn unsized_ty(ty: Ty) -> Diagnostic {
     )
 }
 
-/// `ty::unsized` for `place`, the `[T]` of type `ty` a slice points to,
-/// `accessed` whole: it can only be indexed, borrowed or passed to `&raw`
-/// (ADR 0031, 0108).
-fn whole_slice(ty: Ty, place: Span, accessed: &str) -> Diagnostic {
+/// `ty::unsized` for `place`, the `[T]` of type `ty` a slice points to or a
+/// range of an array or a slice, `accessed` whole: it can only be indexed,
+/// borrowed or passed to `&raw` (ADR 0031, 0108).
+fn whole_slice(ty: Ty, place: &Expr, accessed: &str) -> Diagnostic {
+    // A range is part of an array or of a slice (ADR 0108).
+    let what = if matches!(place.kind, ExprKind::Subslice { .. }) {
+        "part of an array or a slice"
+    } else {
+        "what a slice points to"
+    };
     unsized_ty(ty)
-        .label(place, format!("what a slice points to, {accessed} whole"))
+        .label(place.span, format!("{what}, {accessed} whole"))
         .help("it can only be indexed, as in `(*s)[i]`, borrowed, as in `&*s`, or passed to `&raw`; its length, known only at run time, is `len(s)` (ADR 0031, 0108)")
 }
 
@@ -1126,6 +1132,7 @@ impl Checker<'_, '_> {
             }
             ExprKind::Deref(_)
             | ExprKind::Index(..)
+            | ExprKind::Subslice { .. }
             | ExprKind::Field(..)
             | ExprKind::Static(_)
             | ExprKind::Peripheral(_)
@@ -1134,7 +1141,7 @@ impl Checker<'_, '_> {
                     "dereferences, indexing, fields, statics, peripherals and byte strings are places",
                 );
                 if let Ty::Slice(_) = info.ty {
-                    self.q.diags.push(whole_slice(info.ty, expr.span, "read"));
+                    self.q.diags.push(whole_slice(info.ty, expr, "read"));
                     return Ty::Error;
                 }
                 if let (Some(register), Ty::Array(..)) = (info.register, info.ty) {

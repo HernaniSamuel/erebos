@@ -1,0 +1,56 @@
+// emit: mir
+// A sub-slice in MIR (ADR 0109): the base is built with its length, then the
+// bounds into new `usize` locals, then the two checks (`from <= to`, `to <=
+// len`), both `IndexOutOfBounds` at the `[`, then the place `base[_a.._b]`.
+// On an array, two integer literals in range, an omitted bound being `0` or
+// `N`, make `ConstSubslice` with no check; a bound that is a `const` item is
+// checked at run time. An index or a range on a sub-slice is checked against
+// its length, `_b - _a`, not the base's.
+const START: usize = 2;
+
+// The three forms on a slice reached through a reference, a raw slice read
+// into a temporary by a later write, and `&raw const` of one.
+fn slice_forms(s: &[u8], a: usize, b: usize) {
+    let x: &[u8] = &(*s)[a..b];
+    let y: &[u8] = &(*s)[a..];
+    let z: &[u8] = &(*s)[..b];
+}
+
+fn raw_forms(p: *const [u8], q: *mut [u8], a: usize, b: usize) {
+    let x: *const [u8] = &raw const (*p)[a..b];
+    let y: *mut [u8] = &raw mut (*q)[..b];
+    let z: &[u8] = &(*p)[a..];
+}
+
+// An array with run-time bounds: checked against `N`.
+fn array_forms(mut buf: [u8; 8], a: usize, b: usize) {
+    let x: &[u8] = &buf[a..b];
+    let y: &mut [u8] = &mut buf[a..];
+}
+
+// Literal bounds in range cost nothing, an omitted one included.
+fn literal_forms(buf: [u8; 8]) {
+    let w: &[u8] = &buf[2..6];
+    let x: &[u8] = &buf[2..];
+    let y: &[u8] = &buf[..4];
+    let z: &[u8] = &buf[8..8];
+}
+
+// A `const` bound is known, but is not a literal: checked at run time.
+fn const_bound(buf: [u8; 8]) {
+    let x: &[u8] = &buf[START..6];
+}
+
+// A range or an index on a sub-slice: against `_b - _a`.
+fn nested(s: &[u8]) -> u8 {
+    let x: &[u8] = &(*s)[2..4][1..3];
+    (*s)[2..4][3]
+}
+
+// A bound with effects is evaluated once, after the base, before the checks.
+fn effects(s: &[u8], mut a: usize) {
+    let x: &[u8] = &(*s)[{ a = a + 1; a }..];
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

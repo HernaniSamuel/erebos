@@ -258,6 +258,7 @@ impl Checker<'_, '_> {
                 | ExprKind::ByteString(_)
                 | ExprKind::Deref(_)
                 | ExprKind::Index(..)
+                | ExprKind::Subslice { .. }
                 | ExprKind::Field(..)
         );
         if !is_place {

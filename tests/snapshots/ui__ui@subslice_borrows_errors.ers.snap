@@ -1,0 +1,95 @@
+---
+source: tests/ui.rs
+assertion_line: 24
+expression: output
+input_file: tests/ui/subslice_borrows_errors.ers
+---
+--- errors ---
+analysis::borrow-conflict
+
+  × cannot borrow `buf[_.._]` as mutable while it is borrowed
+    ╭─[subslice_borrows_errors.ers:16:25]
+ 15 │ fn halves(mut buf: [u8; 8]) {
+ 16 │     two(&mut buf[0..4], &mut buf[4..8]);
+    ·     ─────────────────┬─────────────────┬┬
+    ·                      │                 │╰── borrowed as mutable here
+    ·                      │                 ╰── `buf[_.._]` is borrowed as mutable here
+    ·                      ╰── the borrow is used later here
+ 17 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot borrow `buf[_.._]` while it is borrowed as mutable
+    ╭─[subslice_borrows_errors.ers:20:24]
+ 19 │ fn range_and_element(mut buf: [u8; 8]) {
+ 20 │     touch(&mut buf[1], &buf[4..8]);
+    ·     ───────────────┬──────────────┬┬
+    ·                    │              │╰── borrowed here
+    ·                    │              ╰── `buf[_]` is borrowed as mutable here
+    ·                    ╰── the borrow is used later here
+ 21 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot borrow `buf[_.._]` while it is borrowed as mutable
+    ╭─[subslice_borrows_errors.ers:24:35]
+ 23 │ fn range_and_whole(mut buf: [u8; 8]) {
+ 24 │     read_and_write(&mut buf[..4], &buf[4..]);
+    ·     ────────────────────┬───────────────────┬┬
+    ·                         │                   │╰── borrowed here
+    ·                         │                   ╰── `buf[_.._]` is borrowed as mutable here
+    ·                         ╰── the borrow is used later here
+ 25 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot use `s` while it is borrowed as mutable
+    ╭─[subslice_borrows_errors.ers:28:25]
+ 27 │ fn through_reference(s: &mut [u8]) {
+ 28 │     two(&mut (*s)[..4], &mut (*s)[4..]);
+    ·     ─────────────────┬─────────────────┬┬
+    ·                      │                 │╰── used here
+    ·                      │                 ╰── `(*s)[_.._]` is borrowed as mutable here
+    ·                      ╰── the borrow is used later here
+ 29 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot borrow `(*s)[_.._]` as mutable while it is borrowed
+    ╭─[subslice_borrows_errors.ers:28:25]
+ 27 │ fn through_reference(s: &mut [u8]) {
+ 28 │     two(&mut (*s)[..4], &mut (*s)[4..]);
+    ·     ─────────────────┬─────────────────┬┬
+    ·                      │                 │╰── borrowed as mutable here
+    ·                      │                 ╰── `(*s)[_.._]` is borrowed as mutable here
+    ·                      ╰── the borrow is used later here
+ 29 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot use `s` while it is borrowed as mutable
+    ╭─[subslice_borrows_errors.ers:33:20]
+ 31 │ fn reborrow(s: &mut [u8]) {
+ 32 │     let t: &mut [u8] = &mut (*s)[1..];
+    ·                        ───────┬──────
+    ·                               ╰── `(*s)[_.._]` is borrowed as mutable here
+ 33 │     let n: usize = len(s);
+    ·                    ───┬──
+    ·                       ╰── used here
+ 34 │     fill(t, 1);
+    ·     ─────┬────
+    ·          ╰── the borrow is used later here
+ 35 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)

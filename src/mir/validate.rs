@@ -405,38 +405,40 @@ impl<'a> Checker<'a> {
 
     /// S7, T1 and T2 for a place: its type and whether accessing it is
     /// volatile, if its base exists and every projection applies to the type
-    /// before it. Each index local that exists is checked for T2, whatever
-    /// became of the walk; the walk stops at the first projection that does
-    /// not apply.
+    /// before it. Each index local that exists, the two bounds of a
+    /// `Subslice` included, is checked for T2, whatever became of the walk; the
+    /// walk stops at the first projection that does not apply.
     fn place(&mut self, place: Place) -> Option<Typed> {
         let mut typed = self.local(place.local, "a place").then(|| Typed {
             ty: self.body.locals[place.local.0 as usize].ty,
             volatile: false,
         });
         for elem in place.projection {
-            let index = match elem {
+            let indexes = match elem {
                 PlaceElem::Offset(index)
                 | PlaceElem::Index(index)
-                | PlaceElem::Element(_, index) => Some(*index),
+                | PlaceElem::Element(_, index) => [Some(*index), None],
+                PlaceElem::Subslice(from, to) => [Some(*from), Some(*to)],
                 PlaceElem::Deref
                 | PlaceElem::ConstIndex(_)
                 | PlaceElem::ConstSubslice(..)
                 | PlaceElem::Field(_)
                 | PlaceElem::ConstElement(..)
                 | PlaceElem::Tag
-                | PlaceElem::Payload { .. } => None,
+                | PlaceElem::Payload { .. } => [None, None],
             };
-            if let Some(index) = index
-                && self.local(index, "a projection")
-                && self.local_ty(index) != Some(Ty::Int(IntTy::Usize))
-            {
-                self.violation(
-                    "T2",
-                    format!(
-                        "the index `{index}` has type `{}`, not `usize`",
-                        self.body.locals[index.0 as usize].ty
-                    ),
-                );
+            for index in indexes.into_iter().flatten() {
+                if self.local(index, "a projection")
+                    && self.local_ty(index) != Some(Ty::Int(IntTy::Usize))
+                {
+                    self.violation(
+                        "T2",
+                        format!(
+                            "the index `{index}` has type `{}`, not `usize`",
+                            self.body.locals[index.0 as usize].ty
+                        ),
+                    );
+                }
             }
             if let Some(from) = typed {
                 typed = match project(from.ty, elem) {
@@ -525,13 +527,15 @@ impl<'a> Checker<'a> {
     }
 
     /// R3: the place of a `Ref` is a local followed by `Field`, `Index`,
-    /// `ConstIndex`, `ConstSubslice`, `Deref` and `Offset` projections only.
+    /// `ConstIndex`, `Subslice`, `ConstSubslice`, `Deref` and `Offset`
+    /// projections only.
     fn ref_place(&mut self, place: Place) {
         for elem in place.projection {
             match elem {
                 PlaceElem::Field(_)
                 | PlaceElem::Index(_)
                 | PlaceElem::ConstIndex(_)
+                | PlaceElem::Subslice(..)
                 | PlaceElem::ConstSubslice(..)
                 | PlaceElem::Deref
                 | PlaceElem::Offset(_) => {}
@@ -653,6 +657,7 @@ impl<'a> Checker<'a> {
                 | PlaceElem::Offset(_)
                 | PlaceElem::Index(_)
                 | PlaceElem::ConstIndex(_)
+                | PlaceElem::Subslice(..)
                 | PlaceElem::ConstSubslice(..)
                 | PlaceElem::Element(..)
                 | PlaceElem::ConstElement(..)
@@ -1046,6 +1051,7 @@ impl<'a> Checker<'a> {
                 | PlaceElem::Offset(_)
                 | PlaceElem::Index(_)
                 | PlaceElem::ConstIndex(_)
+                | PlaceElem::Subslice(..)
                 | PlaceElem::ConstSubslice(..)
                 | PlaceElem::Element(..)
                 | PlaceElem::ConstElement(..)
@@ -2143,6 +2149,10 @@ fn project(ty: Ty, elem: &PlaceElem) -> Result<Ty, String> {
             )),
             _ => wrong(),
         },
+        PlaceElem::Subslice(..) => match ty {
+            Ty::Array(item, _) | Ty::Slice(item) => Ok(Ty::Slice(item)),
+            _ => wrong(),
+        },
         PlaceElem::ConstSubslice(from, to) => match ty {
             Ty::Array(item, len) if from <= to && *to <= len => Ok(Ty::Slice(item)),
             Ty::Array(_, len) => Err(format!(
@@ -2575,6 +2585,28 @@ mod tests {
                 Rvalue::Use(Operand::Copy(projected(
                     9,
                     &[PlaceElem::Deref, PlaceElem::Element(1, Local(ghost))],
+                ))),
+            ),
+            // Either bound of a sub-slice, followed by the element that makes
+            // the `[T]` in between a place that can be read.
+            Statement::Assign(
+                local(3),
+                Rvalue::Use(Operand::Copy(projected(
+                    5,
+                    &[
+                        PlaceElem::Subslice(Local(ghost), Local(8)),
+                        PlaceElem::Index(Local(8)),
+                    ],
+                ))),
+            ),
+            Statement::Assign(
+                local(3),
+                Rvalue::Use(Operand::Copy(projected(
+                    5,
+                    &[
+                        PlaceElem::Subslice(Local(8), Local(ghost)),
+                        PlaceElem::Index(Local(8)),
+                    ],
                 ))),
             ),
             Statement::Call {
@@ -3597,7 +3629,63 @@ mod tests {
     }
 
     #[test]
-    fn r3_the_place_of_a_ref_may_be_a_const_subslice_of_an_array() {
+    fn t1_subslice_applies_to_an_array_or_a_slice_with_two_usize_bounds() {
+        let usize_local = Local(8);
+        let array = Ty::Array(Box::leak(Box::new(u32_ty())), 4);
+        // Followed by `Index`, so that the `[T]` in between is not read whole.
+        let element = [
+            PlaceElem::Subslice(usize_local, usize_local),
+            PlaceElem::Index(usize_local),
+        ];
+        accepts(reading(array, &element));
+        // Of the `[T]` a raw slice points to and a reference to a slice
+        // refers to, and of a sub-slice.
+        let through = [
+            PlaceElem::Deref,
+            PlaceElem::Subslice(usize_local, usize_local),
+            PlaceElem::Index(usize_local),
+        ];
+        accepts(reading(ptr(false, false, unsized_u32()), &through));
+        accepts(reading(reference(true, unsized_u32()), &through));
+        let nested = [
+            PlaceElem::Deref,
+            PlaceElem::Subslice(usize_local, usize_local),
+            PlaceElem::Subslice(usize_local, usize_local),
+            PlaceElem::Index(usize_local),
+        ];
+        accepts(reading(reference(false, unsized_u32()), &nested));
+        // Of what is neither: the pointee of a thin pointer, an integer.
+        rejects(reading(ptr(false, false, u32_ty()), &through), "T1");
+        rejects(reading(reference(false, u32_ty()), &through), "T1");
+        rejects(reading(u32_ty(), &element), "T1");
+        // The bounds are `usize` (T2), each of them.
+        let wrong = Local(1);
+        for bounds in [(wrong, usize_local), (usize_local, wrong)] {
+            let place = [
+                PlaceElem::Subslice(bounds.0, bounds.1),
+                PlaceElem::Index(usize_local),
+            ];
+            rejects(reading(array, &place), "T2");
+        }
+        // The `[T]` it makes is no value, and has no fields (U1, T1, T3).
+        rejects(
+            reading(array, &[PlaceElem::Subslice(usize_local, usize_local)]),
+            "T3",
+        );
+        rejects(
+            reading(
+                array,
+                &[
+                    PlaceElem::Subslice(usize_local, usize_local),
+                    PlaceElem::Field(0),
+                ],
+            ),
+            "T1",
+        );
+    }
+
+    #[test]
+    fn r3_the_place_of_a_ref_may_be_a_subslice_of_an_array_or_a_slice() {
         let array = Ty::Array(Box::leak(Box::new(u32_ty())), 4);
         let slice = |mutable| reference(mutable, unsized_u32());
         let borrow =
@@ -3615,6 +3703,21 @@ mod tests {
                     12,
                     false,
                     projected(14, &[PlaceElem::Deref, PlaceElem::ConstSubslice(0, 4)]),
+                ),
+                // And a `Subslice`, of an array and of a `[T]` a reference
+                // refers to.
+                borrow(
+                    13,
+                    true,
+                    projected(11, &[PlaceElem::Subslice(Local(8), Local(8))]),
+                ),
+                borrow(
+                    12,
+                    false,
+                    projected(
+                        12,
+                        &[PlaceElem::Deref, PlaceElem::Subslice(Local(8), Local(8))],
+                    ),
                 ),
             ],
         ));

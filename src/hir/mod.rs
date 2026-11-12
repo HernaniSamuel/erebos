@@ -1472,6 +1472,15 @@ pub enum ExprKind {
     /// `base[index]`, with the span of the `[`, where the bounds check is
     /// located (ADR 0053).
     Index(Box<Expr>, Box<Expr>, Span),
+    /// `base[from..to]`, `base[from..]` or `base[..to]` (ADR 0108), a place of
+    /// type `[T]`; `open` is the span of the `[`, where the checks are
+    /// located (ADR 0053).
+    Subslice {
+        base: Box<Expr>,
+        from: Option<Box<Expr>>,
+        to: Option<Box<Expr>>,
+        open: Span,
+    },
     /// `operand?` (ADR 0046): the payload of an `Option`'s `Some` or a
     /// `Result`'s `Ok`, or else a return of its `.None` or `.Err(x)`; with
     /// the span of the `?`, where the check of its tag is located
@@ -1710,6 +1719,12 @@ impl Expr {
             | ExprKind::End(e)
             | ExprKind::Comptime(e)
             | ExprKind::Try(e, _) => e.walk(f),
+            ExprKind::Subslice { base, from, to, .. } => {
+                base.walk(f);
+                for bound in [from, to].into_iter().flatten() {
+                    bound.walk(f);
+                }
+            }
             ExprKind::StructLit(_, fields) => {
                 for (_, value) in fields {
                     value.walk(f);

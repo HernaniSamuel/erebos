@@ -1,0 +1,73 @@
+// emit: typeck
+// A range in an index makes a place of type `[T]`, part of an array or of a
+// slice (ADR 0108): `&` and `&mut` of it are `&[T]` and `&mut [T]`, `&raw
+// const` and `&raw mut` a `*const [T]` and a `*mut [T]`, and it is indexed
+// and sub-sliced again. It is never read or written whole. Here, each form on
+// each base the language has.
+struct Pair {
+    items: [u8; 4],
+    tag: u8,
+}
+
+static TABLE: [u8; 8] = [1, 2, 3, 4, 5, 6, 7, 8];
+static mut COUNTS: [u32; 4] = [0; 4];
+const MSG: [u8; 4] = [1, 2, 3, 4];
+
+fn make() -> [u8; 4] {
+    [1, 2, 3, 4]
+}
+
+// An array variable, a field, an element and a pointer to an array.
+fn arrays(mut buf: [u8; 8], mut pair: Pair, grid: [[u8; 4]; 2], p: *mut [u8; 8], n: usize) {
+    let a: &[u8] = &buf[2..6];
+    let b: &[u8] = &buf[n..];
+    let c: &[u8] = &buf[..n];
+    let d: &mut [u8] = &mut buf[1..n];
+    let e: &mut [u8] = &mut pair.items[..2];
+    let f: &[u8] = &grid[1][2..];
+    let g: &mut [u8] = &mut (*p)[3..4];
+    let h: *const [u8] = &raw const buf[n..n];
+    let i: *mut [u8] = &raw mut pair.items[1..];
+}
+
+// What a slice points to, raw and by reference, and a sub-slice of one.
+fn slices(s: *const [u8], t: *mut [u8], r: &[u8], u: &mut [u8], n: usize) {
+    let a: &[u8] = &(*s)[1..n];
+    let b: &mut [u8] = &mut (*t)[..n];
+    let c: &[u8] = &(*r)[n..];
+    let d: &mut [u8] = &mut (*u)[2..n];
+    let e: *const [u8] = &raw const (*s)[..2];
+    let f: *mut [u8] = &raw mut (*u)[n..];
+    let g: &[u8] = &(*r)[1..][..n][1..2];
+    let h: u8 = (*r)[2..n][0];
+    (*u)[1..3][1] = h;
+}
+
+// Statics, byte strings, and the parts of values that are no place.
+fn values(n: usize) {
+    let a: &[u8] = &TABLE[1..n];
+    let b: &[u8] = &b"hello"[1..];
+    let c: *const [u8] = &raw const TABLE[..4];
+    let d: *const [u8] = &raw const b"hello"[1..n];
+    let e: &[u8] = &MSG[1..3];
+    let f: &[u8] = &make()[1..3];
+    let g: *const [u8] = &raw const make()[1..3];
+    let h: *const [u8] = &raw const [1 as u8, 2, 3][1..];
+}
+
+// A `static mut` has its address taken, not borrowed (ADR 0105).
+fn counts(n: usize) {
+    let a: *mut [u32] = &raw mut COUNTS[1..n];
+    let b: *const [u32] = &raw const COUNTS[..2];
+}
+
+// A bound is any `usize` expression.
+fn bounds(buf: [u8; 8], a: usize, b: u32) {
+    let c: &[u8] = &buf[a + 1..b as usize];
+    let d: &[u8] = &buf[buf[0] as usize..];
+    let e: &[u8] = &buf[0..8];
+    let f: &[u8] = &buf[8..8];
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

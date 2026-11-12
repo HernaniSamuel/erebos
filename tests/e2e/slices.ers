@@ -6,6 +6,7 @@
 // expect-output: len 5 0 3
 // expect-output: hello
 // expect-output: part ell
+// expect-output: range ell
 // expect-output: sum 500
 // expect-output: tail ello
 // expect-output: late o
@@ -64,6 +65,10 @@ entry fn main() -> ! {
     print(whole);
     print(&raw const b"part ");
     print(slice(&raw const word[1], 3));
+    putc(b'\n');
+    // The checked form of the same part (ADR 0108).
+    print(&raw const b"range ");
+    print(&raw const (*whole)[1..4]);
     putc(b'\n');
 
     let hundreds: [u8; 4] = [200, 100, 150, 50];

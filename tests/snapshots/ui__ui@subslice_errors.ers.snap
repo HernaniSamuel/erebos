@@ -1,0 +1,456 @@
+---
+source: tests/ui.rs
+assertion_line: 24
+expression: output
+input_file: tests/ui/subslice_errors.ers
+---
+--- errors ---
+ty::cannot-index
+
+  × cannot take a range of a value of type `*const u8`
+    ╭─[subslice_errors.ers:31:21]
+ 30 │ fn no_length(p: *const u8, s: *const [u8], r: &[u8], q: &[u8; 4], a: *const [u8; 4], n: usize) {
+ 31 │     let b: &[u8] = &p[1..2];
+    ·                     ┬
+    ·                     ╰── a range needs the length of an array or a slice
+ 32 │     let c: *const [u8] = &raw const s[1..2];
+    ╰────
+  help: `slice(p, n)` makes a slice from a pointer and a length, unchecked (ADR 0031, 0108)
+ty::slice-pointer-index
+
+  × cannot take a range of the slice `*const [u8]` itself
+    ╭─[subslice_errors.ers:32:37]
+ 31 │     let b: &[u8] = &p[1..2];
+ 32 │     let c: *const [u8] = &raw const s[1..2];
+    ·                                     ┬
+    ·                                     ╰── a slice, not an array or a place of type `[T]`
+ 33 │     let d: &[u8] = &r[1..];
+    ╰────
+  help: take the range of what it points to, checked against its length: `(*s)[a..b]` (ADR 0031,
+        0108)
+ty::cannot-index
+
+  × cannot take a range of a value of type `&[u8]`
+    ╭─[subslice_errors.ers:33:21]
+ 32 │     let c: *const [u8] = &raw const s[1..2];
+ 33 │     let d: &[u8] = &r[1..];
+    ·                     ┬
+    ·                     ╰── a reference, not an array or a place of type `[T]`
+ 34 │     let e: &[u8] = &q[..2];
+    ╰────
+  help: dereference the reference first: `(*s)[a..b]`, which takes the range of the slice it
+        refers to (ADR 0105, 0108)
+ty::cannot-index
+
+  × cannot take a range of a value of type `&[u8; 4]`
+    ╭─[subslice_errors.ers:34:21]
+ 33 │     let d: &[u8] = &r[1..];
+ 34 │     let e: &[u8] = &q[..2];
+    ·                     ┬
+    ·                     ╰── a range needs the length of an array or a slice
+ 35 │     let f: &[u8] = &a[1..2];
+    ╰────
+  help: dereference the reference first: `(*r)[a..b]`, which takes the range of the array it
+        refers to (ADR 0105, 0108)
+ty::cannot-index
+
+  × cannot take a range of a value of type `*const [u8; 4]`
+    ╭─[subslice_errors.ers:35:21]
+ 34 │     let e: &[u8] = &q[..2];
+ 35 │     let f: &[u8] = &a[1..2];
+    ·                     ┬
+    ·                     ╰── a range needs the length of an array or a slice
+ 36 │     let g: &[u8] = &n[0..1];
+    ╰────
+  help: dereference the pointer first: `(*p)[a..b]`, which takes the range of the array it points
+        to (ADR 0108)
+ty::cannot-index
+
+  × cannot take a range of a value of type `usize`
+    ╭─[subslice_errors.ers:36:21]
+ 35 │     let f: &[u8] = &a[1..2];
+ 36 │     let g: &[u8] = &n[0..1];
+    ·                     ┬
+    ·                     ╰── a range needs the length of an array or a slice
+ 37 │ }
+    ╰────
+ty::unsized
+
+  × `[u8]` has no size known at compile time
+    ╭─[subslice_errors.ers:41:17]
+ 40 │ fn whole(mut buf: [u8; 4], s: &mut [u8], t: &[u8]) {
+ 41 │     let a: u8 = buf[1..2];
+    ·                 ────┬────
+    ·                     ╰── part of an array or a slice, read whole
+ 42 │     buf[1..2] = 7;
+    ╰────
+  help: it can only be indexed, as in `(*s)[i]`, borrowed, as in `&*s`, or passed to `&raw`; its
+        length, known only at run time, is `len(s)` (ADR 0031, 0108)
+ty::unsized
+
+  × `[u8]` has no size known at compile time
+    ╭─[subslice_errors.ers:42:5]
+ 41 │     let a: u8 = buf[1..2];
+ 42 │     buf[1..2] = 7;
+    ·     ────┬────
+    ·         ╰── part of an array or a slice, written whole
+ 43 │     (*s)[1..] = (*t)[..2];
+    ╰────
+  help: it can only be indexed, as in `(*s)[i]`, borrowed, as in `&*s`, or passed to `&raw`; its
+        length, known only at run time, is `len(s)` (ADR 0031, 0108)
+ty::unsized
+
+  × `[u8]` has no size known at compile time
+    ╭─[subslice_errors.ers:43:5]
+ 42 │     buf[1..2] = 7;
+ 43 │     (*s)[1..] = (*t)[..2];
+    ·     ────┬────
+    ·         ╰── part of an array or a slice, written whole
+ 44 │     match buf[1..] {
+    ╰────
+  help: it can only be indexed, as in `(*s)[i]`, borrowed, as in `&*s`, or passed to `&raw`; its
+        length, known only at run time, is `len(s)` (ADR 0031, 0108)
+ty::unsized
+
+  × `[u8]` has no size known at compile time
+    ╭─[subslice_errors.ers:43:17]
+ 42 │     buf[1..2] = 7;
+ 43 │     (*s)[1..] = (*t)[..2];
+    ·                 ────┬────
+    ·                     ╰── part of an array or a slice, read whole
+ 44 │     match buf[1..] {
+    ╰────
+  help: it can only be indexed, as in `(*s)[i]`, borrowed, as in `&*s`, or passed to `&raw`; its
+        length, known only at run time, is `len(s)` (ADR 0031, 0108)
+ty::unsized
+
+  × `[u8]` has no size known at compile time
+    ╭─[subslice_errors.ers:44:11]
+ 43 │     (*s)[1..] = (*t)[..2];
+ 44 │     match buf[1..] {
+    ·           ────┬───
+    ·               ╰── part of an array or a slice, read whole
+ 45 │         _ => {}
+    ╰────
+  help: it can only be indexed, as in `(*s)[i]`, borrowed, as in `&*s`, or passed to `&raw`; its
+        length, known only at run time, is `len(s)` (ADR 0031, 0108)
+ty::unsized
+
+  × `[u8]` has no size known at compile time
+    ╭─[subslice_errors.ers:47:22]
+ 46 │     }
+ 47 │     let b: [u8; 2] = (*t)[..2];
+    ·                      ────┬────
+    ·                          ╰── part of an array or a slice, read whole
+ 48 │ }
+    ╰────
+  help: it can only be indexed, as in `(*s)[i]`, borrowed, as in `&*s`, or passed to `&raw`; its
+        length, known only at run time, is `len(s)` (ADR 0031, 0108)
+ty::mut-borrow-of-immutable
+
+  × cannot borrow as `&mut` through a `&` reference
+    ╭─[subslice_errors.ers:53:31]
+ 52 │ fn immutable(buf: [u8; 4], r: &[u8], s: *const [u8]) {
+ 53 │     let a: &mut [u8] = &mut (*r)[1..];
+    ·                               ┬
+    ·                               ╰── has type `&[u8]`
+ 54 │     let b: *mut [u8] = &raw mut (*s)[..2];
+    ╰────
+  help: only `&mut` references can be borrowed through as `&mut` (ADR 0105)
+ty::address-of-immutable
+
+  × cannot take a `*mut` address through a `*const` pointer
+    ╭─[subslice_errors.ers:54:35]
+ 53 │     let a: &mut [u8] = &mut (*r)[1..];
+ 54 │     let b: *mut [u8] = &raw mut (*s)[..2];
+    ·                                   ┬
+    ·                                   ╰── has type `*const [u8]`
+ 55 │     let c: &mut [u8] = &mut (*s)[..2];
+    ╰────
+  help: use `&raw const`, or a `*mut` pointer
+ty::mut-borrow-of-immutable
+
+  × cannot borrow as `&mut` through a `*const` pointer
+    ╭─[subslice_errors.ers:55:31]
+ 54 │     let b: *mut [u8] = &raw mut (*s)[..2];
+ 55 │     let c: &mut [u8] = &mut (*s)[..2];
+    ·                               ┬
+    ·                               ╰── has type `*const [u8]`
+ 56 │     let d: &mut [u8] = &mut buf[1..];
+    ╰────
+  help: only `*mut` pointers can be borrowed through as `&mut`
+ty::mut-borrow-of-immutable
+
+  × cannot borrow `buf` as `&mut`, which is not `mut`
+    ╭─[subslice_errors.ers:56:29]
+ 51 │ // `mut`, a `static`, a byte string, a part of a temporary.
+ 52 │ fn immutable(buf: [u8; 4], r: &[u8], s: *const [u8]) {
+    ·              ─┬─
+    ·               ╰── help: declare it `let mut buf`
+ 53 │     let a: &mut [u8] = &mut (*r)[1..];
+ 54 │     let b: *mut [u8] = &raw mut (*s)[..2];
+ 55 │     let c: &mut [u8] = &mut (*s)[..2];
+ 56 │     let d: &mut [u8] = &mut buf[1..];
+    ·                             ────┬───
+    ·                                 ╰── borrowed here
+ 57 │     let e: *mut [u8] = &raw mut buf[1..];
+    ╰────
+ty::address-of-immutable
+
+  × cannot take a `*mut` address of `buf`, which is not `mut`
+    ╭─[subslice_errors.ers:57:33]
+ 51 │ // `mut`, a `static`, a byte string, a part of a temporary.
+ 52 │ fn immutable(buf: [u8; 4], r: &[u8], s: *const [u8]) {
+    ·              ─┬─
+    ·               ╰── help: declare it `let mut buf`
+ 53 │     let a: &mut [u8] = &mut (*r)[1..];
+ 54 │     let b: *mut [u8] = &raw mut (*s)[..2];
+ 55 │     let c: &mut [u8] = &mut (*s)[..2];
+ 56 │     let d: &mut [u8] = &mut buf[1..];
+ 57 │     let e: *mut [u8] = &raw mut buf[1..];
+    ·                                 ────┬───
+    ·                                     ╰── address taken here
+ 58 │     let f: &mut [u8] = &mut TABLE[1..];
+    ╰────
+ty::mut-borrow-of-immutable
+
+  × cannot borrow `TABLE` as `&mut`, which is not `mut`
+    ╭─[subslice_errors.ers:20:8]
+ 19 │ 
+ 20 │ static TABLE: [u8; 4] = [1, 2, 3, 4];
+    ·        ──┬──
+    ·          ╰── help: declare it `static mut TABLE`
+ 21 │ static mut COUNTS: [u32; 4] = [0; 4];
+    ╰────
+    ╭─[subslice_errors.ers:58:29]
+ 57 │     let e: *mut [u8] = &raw mut buf[1..];
+ 58 │     let f: &mut [u8] = &mut TABLE[1..];
+    ·                             ─────┬────
+    ·                                  ╰── borrowed here
+ 59 │     let g: *mut [u8] = &raw mut TABLE[..2];
+    ╰────
+ty::address-of-immutable
+
+  × cannot take a `*mut` address of `TABLE`, which is not `mut`
+    ╭─[subslice_errors.ers:20:8]
+ 19 │ 
+ 20 │ static TABLE: [u8; 4] = [1, 2, 3, 4];
+    ·        ──┬──
+    ·          ╰── help: declare it `static mut TABLE`
+ 21 │ static mut COUNTS: [u32; 4] = [0; 4];
+    ╰────
+    ╭─[subslice_errors.ers:59:33]
+ 58 │     let f: &mut [u8] = &mut TABLE[1..];
+ 59 │     let g: *mut [u8] = &raw mut TABLE[..2];
+    ·                                 ─────┬────
+    ·                                      ╰── address taken here
+ 60 │     let h: &mut [u8] = &mut b"text"[1..];
+    ╰────
+ty::mut-borrow-of-immutable
+
+  × cannot borrow a byte string as `&mut`
+    ╭─[subslice_errors.ers:60:29]
+ 59 │     let g: *mut [u8] = &raw mut TABLE[..2];
+ 60 │     let h: &mut [u8] = &mut b"text"[1..];
+    ·                             ───┬───
+    ·                                ╰── in read-only memory
+ 61 │     let i: *mut [u8] = &raw mut b"text"[1..];
+    ╰────
+  help: copy it into a `let mut` to change it (ADR 0031)
+ty::address-of-immutable
+
+  × cannot take a `*mut` address of a byte string
+    ╭─[subslice_errors.ers:61:33]
+ 60 │     let h: &mut [u8] = &mut b"text"[1..];
+ 61 │     let i: *mut [u8] = &raw mut b"text"[1..];
+    ·                                 ───┬───
+    ·                                    ╰── in read-only memory
+ 62 │     let j: &mut [u8] = &mut MSG[1..3];
+    ╰────
+  help: use `&raw const`, or copy it into a `let mut` (ADR 0031)
+ty::mut-borrow-of-immutable
+
+  × cannot borrow a temporary value as `&mut`
+    ╭─[subslice_errors.ers:62:29]
+ 61 │     let i: *mut [u8] = &raw mut b"text"[1..];
+ 62 │     let j: &mut [u8] = &mut MSG[1..3];
+    ·                             ─┬─
+    ·                              ╰── this value lives in no variable
+ 63 │     let k: &mut [u8] = &mut make()[1..3];
+    ╰────
+  help: a write through the reference would reach nothing the program can read; store it in a `let
+        mut` first and borrow that (ADR 0105)
+ty::mut-borrow-of-immutable
+
+  × cannot borrow a temporary value as `&mut`
+    ╭─[subslice_errors.ers:63:29]
+ 62 │     let j: &mut [u8] = &mut MSG[1..3];
+ 63 │     let k: &mut [u8] = &mut make()[1..3];
+    ·                             ───┬──
+    ·                                ╰── this value lives in no variable
+ 64 │     let l: *mut [u8] = &raw mut make()[1..3];
+    ╰────
+  help: a write through the reference would reach nothing the program can read; store it in a `let
+        mut` first and borrow that (ADR 0105)
+ty::address-of-immutable
+
+  × cannot take a `*mut` address of part of a temporary value
+    ╭─[subslice_errors.ers:64:33]
+ 63 │     let k: &mut [u8] = &mut make()[1..3];
+ 64 │     let l: *mut [u8] = &raw mut make()[1..3];
+    ·                                 ───┬──
+    ·                                    ╰── this value lives in no variable
+ 65 │ }
+    ╰────
+  help: store it in a `let mut` first
+ty::not-a-place
+
+  × `&raw` needs a place in memory
+    ╭─[subslice_errors.ers:69:37]
+ 68 │ fn constants() {
+ 69 │     let a: *const [u8] = &raw const MSG[1..3];
+    ·                                     ────┬────
+    ·                                         ╰── a value, not a place
+ 70 │ }
+    ╰────
+  help: take the address of a variable, `*pointer` or `a[index]`; to point at a value, store it in
+        a `let` first
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[subslice_errors.ers:74:25]
+ 73 │ fn bounds(buf: [u8; 4], a: u32, b: bool) {
+ 74 │     let c: &[u8] = &buf[a..];
+    ·                         ┬
+    ·                         ╰── expected `usize`, found `u32`
+ 75 │     let d: &[u8] = &buf[..b];
+    ╰────
+  help: integer types never convert implicitly; use `as usize` (ADR 0008)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[subslice_errors.ers:75:27]
+ 74 │     let c: &[u8] = &buf[a..];
+ 75 │     let d: &[u8] = &buf[..b];
+    ·                           ┬
+    ·                           ╰── expected `usize`, found `bool`
+ 76 │     let e: &[u8] = &buf[1..2 as u8];
+    ╰────
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[subslice_errors.ers:76:28]
+ 75 │     let d: &[u8] = &buf[..b];
+ 76 │     let e: &[u8] = &buf[1..2 as u8];
+    ·                            ───┬───
+    ·                               ╰── expected `usize`, found `u8`
+ 77 │ }
+    ╰────
+  help: integer types never convert implicitly; use `as usize` (ADR 0008)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[subslice_errors.ers:81:32]
+ 80 │ fn slice_of_reference(r: &u8) {
+ 81 │     let a: *const [u8] = slice(r, 2);
+    ·                                ┬
+    ·                                ╰── expected a pointer, found `&u8`
+ 82 │ }
+    ╰────
+  help: `slice(p, n)` takes a raw pointer; for part of a slice or an array that a reference refers
+        to, write `&(*s)[a..b]`, checked against its length (ADR 0108)
+ty::reference-to-volatile
+
+  × cannot borrow a place reached through a `volatile` pointer
+    ╭─[subslice_errors.ers:91:21]
+ 90 │ ) {
+ 91 │     let a: &[u8] = &(*v)[0..1];
+    ·                     ─────┬────
+    ·                          ╰── reached through a `*const volatile [u8]`
+ 92 │     let b: &[u8] = &(*w)[0..1];
+    ╰────
+  help: a reference lets the compiler assume the memory behind it only changes when the program
+        changes it, which a volatile access does not (ADR 0023); read and write through the
+        pointer, as `*p`, or take its address with `&raw` (ADR 0105)
+ty::reference-to-volatile
+
+  × cannot borrow a place reached through a `volatile` pointer
+    ╭─[subslice_errors.ers:92:21]
+ 91 │     let a: &[u8] = &(*v)[0..1];
+ 92 │     let b: &[u8] = &(*w)[0..1];
+    ·                     ─────┬────
+    ·                          ╰── reached through a `*const volatile [u8; 4]`
+ 93 │     let c: &[u32] = &UART.data[0..2];
+    ╰────
+  help: a reference lets the compiler assume the memory behind it only changes when the program
+        changes it, which a volatile access does not (ADR 0023); read and write through the
+        pointer, as `*p`, or take its address with `&raw` (ADR 0105)
+ty::register-address
+
+  × cannot take the address of the register array `data` of `Uart`
+    ╭─[subslice_errors.ers:93:22]
+ 92 │     let b: &[u8] = &(*w)[0..1];
+ 93 │     let c: &[u32] = &UART.data[0..2];
+    ·                      ────┬────
+    ·                          ╰── a register array
+ 94 │     let d: *const [u32] = &raw const UART.data[0..2];
+    ╰────
+  help: no pointer type holds the step of an array, and a pointer to an element would reach the
+        register without its access mode; read or write the elements where they are named (ADR
+        0064)
+ty::register-address
+
+  × cannot take the address of the register array `data` of `Uart`
+    ╭─[subslice_errors.ers:94:38]
+ 93 │     let c: &[u32] = &UART.data[0..2];
+ 94 │     let d: *const [u32] = &raw const UART.data[0..2];
+    ·                                      ────┬────
+    ·                                          ╰── a register array
+ 95 │     let e: *const [u32] = &raw const (*h).words[1..];
+    ╰────
+  help: no pointer type holds the step of an array, and a pointer to an element would reach the
+        register without its access mode; read or write the elements where they are named (ADR
+        0064)
+ty::packed-field-address
+
+  × cannot take the address of a `[u32]` that may be misaligned
+    ╭─[subslice_errors.ers:95:38]
+ 94 │     let d: *const [u32] = &raw const UART.data[0..2];
+ 95 │     let e: *const [u32] = &raw const (*h).words[1..];
+    ·                                      ───────┬───────
+    ·                                             ╰── reached through a field of a `#[packed]` struct
+ 96 │     let f: &[u32] = &(*h).words[1..];
+    ╰────
+  help: a `*const u32` promises alignment, and dereferencing a misaligned one may trap; copy the
+        array into a `let` first (ADR 0022, 0108)
+ty::packed-field-address
+
+  × cannot take the address of a `[u32]` that may be misaligned
+    ╭─[subslice_errors.ers:96:22]
+ 95 │     let e: *const [u32] = &raw const (*h).words[1..];
+ 96 │     let f: &[u32] = &(*h).words[1..];
+    ·                      ───────┬───────
+    ·                             ╰── reached through a field of a `#[packed]` struct
+ 97 │     let g: &[u8] = &(*h).bytes[1..];
+    ╰────
+  help: a `*const u32` promises alignment, and dereferencing a misaligned one may trap; copy the
+        array into a `let` first (ADR 0022, 0108)
+ty::reference-to-static-mut
+
+  × cannot borrow the static mut `COUNTS`
+    ╭─[subslice_errors.ers:21:12]
+ 20 │ static TABLE: [u8; 4] = [1, 2, 3, 4];
+ 21 │ static mut COUNTS: [u32; 4] = [0; 4];
+    ·            ───┬──
+    ·               ╰── declared `static mut COUNTS`
+ 22 │ const MSG: [u8; 4] = [1, 2, 3, 4];
+    ╰────
+    ╭─[subslice_errors.ers:98:22]
+ 97 │     let g: &[u8] = &(*h).bytes[1..];
+ 98 │     let i: &[u32] = &COUNTS[1..n];
+    ·                      ──────┬─────
+    ·                            ╰── borrowed here
+ 99 │     let j: *const [u32] = &raw const COUNTS[1..n];
+    ╰────
+  help: an interrupt can change a `static mut` while the reference to it is in use; inside a
+        `critical` block, take its address with `&raw const` or `&raw mut` (ADR 0078, 0093, 0105)

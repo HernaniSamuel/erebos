@@ -1,0 +1,38 @@
+// emit: mir
+// The orders the borrow check refuses over sub-slices (ADR 0108,
+// "Splitting"): a sub-slice overlaps every element and every sub-slice of the
+// same base and the base itself, whatever its bounds, so two halves of one
+// buffer are not lent `&mut` together; a reborrow of `(*s)[1..]` keeps `s`
+// in use while it is.
+fn fill(s: &mut [u8], n: u8) {}
+
+fn two(a: &mut [u8], b: &mut [u8]) {}
+
+fn read_and_write(a: &mut [u8], b: &[u8]) {}
+
+fn touch(a: &mut u8, b: &[u8]) {}
+
+fn halves(mut buf: [u8; 8]) {
+    two(&mut buf[0..4], &mut buf[4..8]);
+}
+
+fn range_and_element(mut buf: [u8; 8]) {
+    touch(&mut buf[1], &buf[4..8]);
+}
+
+fn range_and_whole(mut buf: [u8; 8]) {
+    read_and_write(&mut buf[..4], &buf[4..]);
+}
+
+fn through_reference(s: &mut [u8]) {
+    two(&mut (*s)[..4], &mut (*s)[4..]);
+}
+
+fn reborrow(s: &mut [u8]) {
+    let t: &mut [u8] = &mut (*s)[1..];
+    let n: usize = len(s);
+    fill(t, 1);
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

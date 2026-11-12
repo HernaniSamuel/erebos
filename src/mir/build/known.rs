@@ -282,6 +282,56 @@ impl Builder<'_, '_> {
         );
     }
 
+    /// The known bounds of a range on an array of `len` elements must be at
+    /// most `len`, and the start at most the end when both are known
+    /// (ADR 0108, 0032). Each bound is checked on its own; the order of the
+    /// two is reported only if both are inside the array.
+    pub(super) fn check_range(
+        &mut self,
+        from: Option<&hir::Expr>,
+        to: Option<&hir::Expr>,
+        len: u64,
+    ) {
+        if !self.checks {
+            return;
+        }
+        let mut past = false;
+        let mut values = [None, None];
+        for (value, bound) in values.iter_mut().zip([from, to]) {
+            let Some(bound) = bound else {
+                continue;
+            };
+            let Known::Value(known) = self.known(bound) else {
+                continue;
+            };
+            *value = Some(known);
+            if known > len {
+                past = true;
+                self.report(
+                    Diagnostic::error("ty::index-out-of-bounds", "range out of bounds")
+                        .label(
+                            bound.span,
+                            format!("the length is {len} but the bound is {known}"),
+                        )
+                        .help("at run time this would call the panic function (ADR 0108)"),
+                );
+            }
+        }
+        if !past
+            && let (Some(start), Some(end), Some(from), Some(to)) = (values[0], values[1], from, to)
+            && start > end
+        {
+            self.report(
+                Diagnostic::error("ty::index-out-of-bounds", "range out of bounds")
+                    .label(
+                        from.span.to(to.span),
+                        format!("the range starts at {start} but ends at {end}"),
+                    )
+                    .help("at run time this would call the panic function (ADR 0108)"),
+            );
+        }
+    }
+
     /// Reports a failed check; the body is not used (ADR 0032).
     pub(super) fn report(&mut self, diag: Diagnostic) {
         self.q.diags.push(diag);

@@ -1,0 +1,254 @@
+---
+source: tests/ui.rs
+assertion_line: 24
+expression: output
+input_file: tests/ui/subslice_borrows.ers
+---
+--- mir ---
+fn fill(_1: &mut [u8], _2: u8) -> () {
+    let _0: ();
+    let _1: &mut [u8]; // s
+    let _2: u8; // n
+
+    bb0: {
+        return;
+    }
+}
+
+fn show(_1: &[u8]) -> () {
+    let _0: ();
+    let _1: &[u8]; // s
+
+    bb0: {
+        return;
+    }
+}
+
+fn two(_1: &mut [u8], _2: &[u8]) -> () {
+    let _0: ();
+    let _1: &mut [u8]; // a
+    let _2: &[u8]; // b
+
+    bb0: {
+        return;
+    }
+}
+
+fn one_after_the_other(_1: [u8; 8]) -> () {
+    let _0: ();
+    let _1: [u8; 8]; // buf
+    let _2: &mut [u8];
+    let _3: &mut [u8];
+    let _4: &[u8];
+    let _5: &mut [u8];
+    let _6: &mut [u8];
+    let _7: *const [u8; 3];
+    let _8: &[u8];
+
+    bb0: {
+        _2 = &mut _1[0..4];
+        call fill(move _2, const 1_u8);
+        _3 = &mut _1[4..8];
+        call fill(move _3, const 2_u8);
+        _4 = &_1[2..6];
+        call show(copy _4);
+        _5 = &mut _1[0..2];
+        _6 = move _5;
+        _7 = const b"abc";
+        _8 = &(*_7)[1..3];
+        call two(move _6, copy _8);
+        return;
+    }
+}
+
+fn element_then_range(_1: [u8; 8], _2: &mut [u8]) -> () {
+    let _0: ();
+    let _1: [u8; 8]; // buf
+    let _2: &mut [u8]; // s
+    let _3: usize;
+    let _4: bool;
+    let _5: usize;
+    let _6: usize;
+    let _7: usize;
+    let _8: bool;
+    let _9: bool;
+    let _10: &mut [u8];
+    let _11: usize;
+    let _12: usize;
+    let _13: bool;
+    let _14: usize;
+    let _15: usize;
+    let _16: usize;
+    let _17: bool;
+    let _18: bool;
+    let _19: &[u8];
+
+    bb0: {
+        _3 = const 1_usize;
+        _4 = Lt(copy _3, const 4_usize);
+        if copy _4 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _1[0..4][_3] = const 3_u8;
+        _1[5] = const 4_u8;
+        _5 = len(_2);
+        _6 = const 1_usize;
+        _7 = copy _5;
+        _8 = Le(copy _6, copy _7);
+        if copy _8 -> [true: bb3, false: bb4];
+    }
+
+    bb2: {
+        panic(index out of bounds);
+    }
+
+    bb3: {
+        _9 = Le(copy _7, copy _5);
+        if copy _9 -> [true: bb5, false: bb6];
+    }
+
+    bb4: {
+        panic(index out of bounds);
+    }
+
+    bb5: {
+        _10 = &mut (*_2)[_6.._7];
+        call fill(move _10, const 5_u8);
+        _11 = const 0_usize;
+        _12 = len(_2);
+        _13 = Lt(copy _11, copy _12);
+        if copy _13 -> [true: bb7, false: bb8];
+    }
+
+    bb6: {
+        panic(index out of bounds);
+    }
+
+    bb7: {
+        (*_2)[_11] = const 6_u8;
+        _14 = len(_2);
+        _15 = const 2_usize;
+        _16 = copy _14;
+        _17 = Le(copy _15, copy _16);
+        if copy _17 -> [true: bb9, false: bb10];
+    }
+
+    bb8: {
+        panic(index out of bounds);
+    }
+
+    bb9: {
+        _18 = Le(copy _16, copy _14);
+        if copy _18 -> [true: bb11, false: bb12];
+    }
+
+    bb10: {
+        panic(index out of bounds);
+    }
+
+    bb11: {
+        _19 = &(*_2)[_15.._16];
+        call show(copy _19);
+        return;
+    }
+
+    bb12: {
+        panic(index out of bounds);
+    }
+}
+
+fn reborrow_ends(_1: &mut [u8]) -> () {
+    let _0: ();
+    let _1: &mut [u8]; // s
+    let _2: &mut [u8]; // t
+    let _3: usize; // n
+    let _4: usize;
+    let _5: usize;
+    let _6: usize;
+    let _7: bool;
+    let _8: bool;
+    let _9: &mut [u8];
+    let _10: &mut [u8];
+    let _11: usize;
+    let _12: &mut [u8];
+
+    bb0: {
+        _4 = len(_1);
+        _5 = const 1_usize;
+        _6 = copy _4;
+        _7 = Le(copy _5, copy _6);
+        if copy _7 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _8 = Le(copy _6, copy _4);
+        if copy _8 -> [true: bb3, false: bb4];
+    }
+
+    bb2: {
+        panic(index out of bounds);
+    }
+
+    bb3: {
+        _9 = &mut (*_1)[_5.._6];
+        _2 = move _9;
+        _10 = &mut (*_2);
+        call fill(move _10, const 7_u8);
+        _11 = len(_1);
+        _3 = copy _11;
+        _12 = &mut (*_1);
+        call fill(move _12, const 8_u8);
+        return;
+    }
+
+    bb4: {
+        panic(index out of bounds);
+    }
+}
+
+fn shared_ranges(_1: [u8; 8]) -> () {
+    let _0: ();
+    let _1: [u8; 8]; // buf
+    let _2: &[u8]; // a
+    let _3: &[u8]; // b
+    let _4: &[u8];
+    let _5: &[u8];
+    let _6: &[u8];
+
+    bb0: {
+        _4 = &_1[0..4];
+        call show(copy _4);
+        _5 = &_1[2..6];
+        _2 = copy _5;
+        _6 = &_1[1..3];
+        _3 = copy _6;
+        call show(copy _2);
+        call show(copy _3);
+        return;
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}

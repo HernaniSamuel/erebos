@@ -1,0 +1,251 @@
+---
+source: tests/ui.rs
+assertion_line: 24
+expression: output
+input_file: tests/ui/subslices.ers
+---
+--- typeck ---
+struct Pair { items: [u8; 4] at 0, tag: u8 at 4 } size 5, align 1
+fn make() -> [u8; 4]
+    expr 0 array 555..567: [u8; 4]
+    expr 1 int 1 556..557: u8
+    expr 2 int 2 559..560: u8
+    expr 3 int 3 562..563: u8
+    expr 4 int 4 565..566: u8
+fn arrays(buf: [u8; 8], pair: Pair, grid: [[u8; 4]; 2], p: *mut [u8; 8], n: usize) -> ()
+    let a: &[u8]
+    let b: &[u8]
+    let c: &[u8]
+    let d: &mut [u8]
+    let e: &mut [u8]
+    let f: &[u8]
+    let g: &mut [u8]
+    let h: *const [u8]
+    let i: *mut [u8]
+    expr 5 & 752..762: &[u8]
+    expr 6 subslice 753..762: [u8]
+    expr 7 local buf 753..756: [u8; 8]
+    expr 8 int 2 757..758: usize
+    expr 9 int 6 760..761: usize
+    expr 10 & 783..792: &[u8]
+    expr 11 subslice 784..792: [u8]
+    expr 12 local buf 784..787: [u8; 8]
+    expr 13 local n 788..789: usize
+    expr 14 & 813..822: &[u8]
+    expr 15 subslice 814..822: [u8]
+    expr 16 local buf 814..817: [u8; 8]
+    expr 17 local n 820..821: usize
+    expr 18 &mut 847..861: &mut [u8]
+    expr 19 subslice 852..861: [u8]
+    expr 20 local buf 852..855: [u8; 8]
+    expr 21 int 1 856..857: usize
+    expr 22 local n 859..860: usize
+    expr 23 &mut 886..906: &mut [u8]
+    expr 24 subslice 891..906: [u8]
+    expr 25 field items 891..901: [u8; 4]
+    expr 26 local pair 891..895: Pair
+    expr 27 int 2 904..905: usize
+    expr 28 & 927..940: &[u8]
+    expr 29 subslice 928..940: [u8]
+    expr 30 index 928..935: [u8; 4]
+    expr 31 local grid 928..932: [[u8; 4]; 2]
+    expr 32 int 1 933..934: usize
+    expr 33 int 2 936..937: usize
+    expr 34 &mut 965..980: &mut [u8]
+    expr 35 subslice 970..980: [u8]
+    expr 36 deref 970..974: [u8; 8]
+    expr 37 local p 972..973: *mut [u8; 8]
+    expr 38 int 3 975..976: usize
+    expr 39 int 4 978..979: usize
+    expr 40 &raw const 1007..1027: *const [u8]
+    expr 41 subslice 1018..1027: [u8]
+    expr 42 local buf 1018..1021: [u8; 8]
+    expr 43 local n 1022..1023: usize
+    expr 44 local n 1025..1026: usize
+    expr 45 &raw mut 1052..1076: *mut [u8]
+    expr 46 subslice 1061..1076: [u8]
+    expr 47 field items 1061..1071: [u8; 4]
+    expr 48 local pair 1061..1065: Pair
+    expr 49 int 1 1072..1073: usize
+fn slices(s: *const [u8], t: *mut [u8], r: &[u8], u: &mut [u8], n: usize) -> ()
+    let a: &[u8]
+    let b: &mut [u8]
+    let c: &[u8]
+    let d: &mut [u8]
+    let e: *const [u8]
+    let f: *mut [u8]
+    let g: &[u8]
+    let h: u8
+    expr 50 & 1249..1260: &[u8]
+    expr 51 subslice 1250..1260: [u8]
+    expr 52 deref 1250..1254: [u8]
+    expr 53 local s 1252..1253: *const [u8]
+    expr 54 int 1 1255..1256: usize
+    expr 55 local n 1258..1259: usize
+    expr 56 &mut 1285..1299: &mut [u8]
+    expr 57 subslice 1290..1299: [u8]
+    expr 58 deref 1290..1294: [u8]
+    expr 59 local t 1292..1293: *mut [u8]
+    expr 60 local n 1297..1298: usize
+    expr 61 & 1320..1330: &[u8]
+    expr 62 subslice 1321..1330: [u8]
+    expr 63 deref 1321..1325: [u8]
+    expr 64 local r 1323..1324: &[u8]
+    expr 65 local n 1326..1327: usize
+    expr 66 &mut 1355..1370: &mut [u8]
+    expr 67 subslice 1360..1370: [u8]
+    expr 68 deref 1360..1364: [u8]
+    expr 69 local u 1362..1363: &mut [u8]
+    expr 70 int 2 1365..1366: usize
+    expr 71 local n 1368..1369: usize
+    expr 72 &raw const 1397..1417: *const [u8]
+    expr 73 subslice 1408..1417: [u8]
+    expr 74 deref 1408..1412: [u8]
+    expr 75 local s 1410..1411: *const [u8]
+    expr 76 int 2 1415..1416: usize
+    expr 77 &raw mut 1442..1460: *mut [u8]
+    expr 78 subslice 1451..1460: [u8]
+    expr 79 deref 1451..1455: [u8]
+    expr 80 local u 1453..1454: &mut [u8]
+    expr 81 local n 1456..1457: usize
+    expr 82 & 1481..1502: &[u8]
+    expr 83 subslice 1482..1502: [u8]
+    expr 84 subslice 1482..1496: [u8]
+    expr 85 subslice 1482..1491: [u8]
+    expr 86 deref 1482..1486: [u8]
+    expr 87 local r 1484..1485: &[u8]
+    expr 88 int 1 1487..1488: usize
+    expr 89 local n 1494..1495: usize
+    expr 90 int 1 1497..1498: usize
+    expr 91 int 2 1500..1501: usize
+    expr 92 index 1520..1533: u8
+    expr 93 subslice 1520..1530: [u8]
+    expr 94 deref 1520..1524: [u8]
+    expr 95 local r 1522..1523: &[u8]
+    expr 96 int 2 1525..1526: usize
+    expr 97 local n 1528..1529: usize
+    expr 98 int 0 1531..1532: usize
+    expr 99 assign 1539..1556: ()
+    expr 100 index 1539..1552: u8
+    expr 101 subslice 1539..1549: [u8]
+    expr 102 deref 1539..1543: [u8]
+    expr 103 local u 1541..1542: &mut [u8]
+    expr 104 int 1 1544..1545: usize
+    expr 105 int 3 1547..1548: usize
+    expr 106 int 1 1550..1551: usize
+    expr 107 local h 1555..1556: u8
+fn values(n: usize) -> ()
+    let a: &[u8]
+    let b: &[u8]
+    let c: *const [u8]
+    let d: *const [u8]
+    let e: &[u8]
+    let f: &[u8]
+    let g: *const [u8]
+    let h: *const [u8]
+    expr 108 & 1671..1683: &[u8]
+    expr 109 subslice 1672..1683: [u8]
+    expr 110 static TABLE 1672..1677: [u8; 8]
+    expr 111 int 1 1678..1679: usize
+    expr 112 local n 1681..1682: usize
+    expr 113 & 1704..1718: &[u8]
+    expr 114 subslice 1705..1718: [u8]
+    expr 115 byte string b"hello" 1705..1713: [u8; 5]
+    expr 116 int 1 1714..1715: usize
+    expr 117 &raw const 1745..1766: *const [u8]
+    expr 118 subslice 1756..1766: [u8]
+    expr 119 static TABLE 1756..1761: [u8; 8]
+    expr 120 int 4 1764..1765: usize
+    expr 121 &raw const 1793..1818: *const [u8]
+    expr 122 subslice 1804..1818: [u8]
+    expr 123 byte string b"hello" 1804..1812: [u8; 5]
+    expr 124 int 1 1813..1814: usize
+    expr 125 local n 1816..1817: usize
+    expr 126 & 1839..1849: &[u8]
+    expr 127 subslice 1840..1849: [u8]
+    expr 128 const MSG 1840..1843: [u8; 4]
+    expr 129 int 1 1844..1845: usize
+    expr 130 int 3 1847..1848: usize
+    expr 131 & 1870..1883: &[u8]
+    expr 132 subslice 1871..1883: [u8]
+    expr 133 call 1871..1877: [u8; 4]
+    expr 134 int 1 1878..1879: usize
+    expr 135 int 3 1881..1882: usize
+    expr 136 &raw const 1910..1933: *const [u8]
+    expr 137 subslice 1921..1933: [u8]
+    expr 138 call 1921..1927: [u8; 4]
+    expr 139 int 1 1928..1929: usize
+    expr 140 int 3 1931..1932: usize
+    expr 141 &raw const 1960..1991: *const [u8]
+    expr 142 subslice 1971..1991: [u8]
+    expr 143 array 1971..1986: [u8; 3]
+    expr 144 as u8 1972..1979: u8
+    expr 145 int 1 1972..1973: u8
+    expr 146 int 2 1981..1982: u8
+    expr 147 int 3 1984..1985: u8
+    expr 148 int 1 1987..1988: usize
+fn counts(n: usize) -> ()
+    let a: *mut [u32]
+    let b: *const [u32]
+    expr 149 &raw mut 2108..2129: *mut [u32]
+    expr 150 subslice 2117..2129: [u32]
+    expr 151 static COUNTS 2117..2123: [u32; 4]
+    expr 152 int 1 2124..2125: usize
+    expr 153 local n 2127..2128: usize
+    expr 154 &raw const 2157..2179: *const [u32]
+    expr 155 subslice 2168..2179: [u32]
+    expr 156 static COUNTS 2168..2174: [u32; 4]
+    expr 157 int 2 2177..2178: usize
+fn bounds(buf: [u8; 8], a: usize, b: u32) -> ()
+    let c: &[u8]
+    let d: &[u8]
+    let e: &[u8]
+    let f: &[u8]
+    expr 158 & 2285..2308: &[u8]
+    expr 159 subslice 2286..2308: [u8]
+    expr 160 local buf 2286..2289: [u8; 8]
+    expr 161 binary + 2290..2295: usize
+    expr 162 local a 2290..2291: usize
+    expr 163 int 1 2294..2295: usize
+    expr 164 as usize 2297..2307: usize
+    expr 165 local b 2297..2298: u32
+    expr 166 & 2329..2352: &[u8]
+    expr 167 subslice 2330..2352: [u8]
+    expr 168 local buf 2330..2333: [u8; 8]
+    expr 169 as usize 2334..2349: usize
+    expr 170 index 2334..2340: u8
+    expr 171 local buf 2334..2337: [u8; 8]
+    expr 172 int 0 2338..2339: usize
+    expr 173 & 2373..2383: &[u8]
+    expr 174 subslice 2374..2383: [u8]
+    expr 175 local buf 2374..2377: [u8; 8]
+    expr 176 int 0 2378..2379: usize
+    expr 177 int 8 2381..2382: usize
+    expr 178 & 2404..2414: &[u8]
+    expr 179 subslice 2405..2414: [u8]
+    expr 180 local buf 2405..2408: [u8; 8]
+    expr 181 int 8 2409..2410: usize
+    expr 182 int 8 2412..2413: usize
+entry fn main() -> !
+    expr 183 loop 2442..2449: !
+panic fn on_panic() -> !
+    expr 184 loop 2479..2486: !
+comptime fn MSG() -> [u8; 4]
+    expr 185 array 513..525: [u8; 4]
+    expr 186 int 1 514..515: u8
+    expr 187 int 2 517..518: u8
+    expr 188 int 3 520..521: u8
+    expr 189 int 4 523..524: u8
+comptime fn TABLE() -> [u8; 8]
+    expr 190 array 428..452: [u8; 8]
+    expr 191 int 1 429..430: u8
+    expr 192 int 2 432..433: u8
+    expr 193 int 3 435..436: u8
+    expr 194 int 4 438..439: u8
+    expr 195 int 5 441..442: u8
+    expr 196 int 6 444..445: u8
+    expr 197 int 7 447..448: u8
+    expr 198 int 8 450..451: u8
+comptime fn COUNTS() -> [u32; 4]
+    expr 199 repeat 484..490: [u32; 4]
+    expr 200 int 0 485..486: u32

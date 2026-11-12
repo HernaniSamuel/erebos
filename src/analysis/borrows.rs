@@ -426,6 +426,7 @@ impl<'b> Flow<'b> {
                 PlaceElem::Field(index) => Step::Field(*index),
                 PlaceElem::Index(_)
                 | PlaceElem::ConstIndex(_)
+                | PlaceElem::Subslice(..)
                 | PlaceElem::ConstSubslice(..)
                 | PlaceElem::Element(..)
                 | PlaceElem::ConstElement(..) => Step::Elem,
@@ -940,7 +941,9 @@ impl<'b> Flow<'b> {
                 // All the elements of an array are the array, as a name tells:
                 // the conversion of a `&buf` is a borrow of `buf` (ADR 0108).
                 (PlaceElem::ConstSubslice(0, to), Ty::Array(_, len)) if *to == len => text,
-                (PlaceElem::ConstSubslice(..), _) => format!("{}[_.._]", paren(text)),
+                (PlaceElem::Subslice(..) | PlaceElem::ConstSubslice(..), _) => {
+                    format!("{}[_.._]", paren(text))
+                }
                 (PlaceElem::Tag | PlaceElem::Payload { .. }, _) => text,
             };
         }

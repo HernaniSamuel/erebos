@@ -571,6 +571,17 @@ impl Lowerer<'_> {
             ast::ExprKind::Index(base, index, open) => {
                 ExprKind::Index(self.boxed(base), self.boxed(index), *open)
             }
+            ast::ExprKind::Subslice {
+                base,
+                from,
+                to,
+                open,
+            } => ExprKind::Subslice {
+                base: self.boxed(base),
+                from: from.as_ref().map(|bound| self.boxed(bound)),
+                to: to.as_ref().map(|bound| self.boxed(bound)),
+                open: *open,
+            },
             ast::ExprKind::AddrOf { mutable, place } => ExprKind::AddrOf {
                 mutable: *mutable,
                 place: self.boxed(place),

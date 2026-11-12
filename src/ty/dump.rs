@@ -388,6 +388,7 @@ fn expr_label(q: &Queries, f: &Fn, expr: &Expr) -> String {
         ExprKind::Unary(op, _) => format!("{op:?}").to_lowercase(),
         ExprKind::Deref(_) => "deref".to_owned(),
         ExprKind::Index(..) => "index".to_owned(),
+        ExprKind::Subslice { .. } => "subslice".to_owned(),
         ExprKind::Try(..) => "try".to_owned(),
         ExprKind::AddrOf { mutable: true, .. } => "&raw mut".to_owned(),
         ExprKind::AddrOf { mutable: false, .. } => "&raw const".to_owned(),

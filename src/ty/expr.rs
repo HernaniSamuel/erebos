@@ -345,6 +345,16 @@ impl Checker<'_, '_> {
             },
             Ty::Never => Ty::Never,
             Ty::Error => Ty::Error,
+            // A part of a slice or an array through a reference is a range,
+            // checked (ADR 0108).
+            Ty::Ref(_) => {
+                self.q.diags.push(
+                    Diagnostic::error("ty::mismatched-types", "mismatched types")
+                        .label(pointer.span, format!("expected a pointer, found `{ty}`"))
+                        .help("`slice(p, n)` takes a raw pointer; for part of a slice or an array that a reference refers to, write `&(*s)[a..b]`, checked against its length (ADR 0108)"),
+                );
+                Ty::Error
+            }
             other => {
                 self.q.diags.push(
                     Diagnostic::error("ty::mismatched-types", "mismatched types")

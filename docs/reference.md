@@ -3076,7 +3076,7 @@ These are errors when the operand is known, not only when it is a literal:
 |-------|------|
 | a shift amount outside 0 to the width of the shifted type minus 1, taken with its own type's sign (a negative amount is out of range) | `ty::shift-out-of-range` |
 | a divisor of `/` or `%` that is zero | `ty::division-by-zero` |
-| an array index not below the array's length, a register array's or a cluster array's included | `ty::index-out-of-bounds` |
+| an array index not below the array's length, a register array's or a cluster array's included; a bound of a range of an array (`a[x..y]`) past the length, or the start after the end when both are known | `ty::index-out-of-bounds` |
 | a value written to a bit field, by a literal or an assignment (not a compound assignment), that does not fit in the field's bits | `ty::field-value-out-of-range` |
 
 The compound assignments (`<<=`, `>>=`, `/=`, `%=`) are checked too. When
@@ -5644,7 +5644,7 @@ When code is type checked:
 | `ty::private-register` | an entry not visible where it is named |
 | `ty::write-to-read-only` | a write, a compound assignment or a field assignment to a `read` register; a field assignment or a compound assignment to a `read` field in a volatile place |
 | `ty::read-of-write-only` | a read, a compound assignment or a field assignment of a `write` register, or a field read from one; a read of a `write` field, or a compound assignment to one, in a volatile place |
-| `ty::register-address` | `&raw`, `&` or `&mut` of a register, of a register array or a cluster array taken whole, or of an element of a register array |
+| `ty::register-address` | `&raw`, `&` or `&mut` of a register, of a register array or a cluster array taken whole, of an element of a register array, or of a range of one |
 | `ty::bit-field-address` | `&raw`, `&` or `&mut` of a bit field, a register's too |
 | `ty::read-with-effects` | a field assignment or a compound assignment to a place whose reads have effects, or to one of its fields |
 | `ty::compound-write-effect` | a compound assignment to a field with a write effect in a volatile place |
@@ -6459,7 +6459,7 @@ Every error has a stable code, shown with the message.
 | `lexer::invalid-byte` | malformed byte literal, or a character or escape not allowed in a byte literal, byte string or string literal |
 | `lexer::unterminated-byte` | byte literal without closing `'` |
 | `lexer::unterminated-byte-string` | `b"` or `"` without its closing `"` on the same line |
-| `parser::unexpected-token` | a token where it cannot appear, such as `_` as a name or a value, `pub` before a variant, or a `use` of a path made only of `crate`, `super` or `core`; in a bit-field struct, a field without `at`, half-open bits (`at 0..1`), a second effect of a kind, an effect word that is none, `write 2 clears`; in an ordinary struct, `at` or `=` after a field's type; a `..` that is not last in a literal; in a peripheral type, an entry that starts with neither an access mode nor a name followed by `:`, a `step` without its value or after the read effect or the group, a read effect on a cluster, `over` without a path or after the `;`; `read write` on a bit field, or a mode after its name; in `asm`, a missing template, a word that is no operand or option, a missing `,` or `)`, an empty `options()`, an operand out of its group or after `options(...)`, a name on an operand with an explicit register or on `clobber_abi`; an `interrupt fn` without `at`, `at` on any other function, `extern interrupt fn`, a shorthand or an integer after `at`; a statement that starts with a `critical` block and goes on with an operator |
+| `parser::unexpected-token` | a token where it cannot appear, such as `_` as a name or a value, `pub` before a variant, or a `use` of a path made only of `crate`, `super` or `core`; in a bit-field struct, a field without `at`, half-open bits (`at 0..1`), a second effect of a kind, an effect word that is none, `write 2 clears`; in an ordinary struct, `at` or `=` after a field's type; a `..` that is not last in a literal; `..=` or `..` alone in an index; in a peripheral type, an entry that starts with neither an access mode nor a name followed by `:`, a `step` without its value or after the read effect or the group, a read effect on a cluster, `over` without a path or after the `;`; `read write` on a bit field, or a mode after its name; in `asm`, a missing template, a word that is no operand or option, a missing `,` or `)`, an empty `options()`, an operand out of its group or after `options(...)`, a name on an operand with an explicit register or on `clobber_abi`; an `interrupt fn` without `at`, `at` on any other function, `extern interrupt fn`, a shorthand or an integer after `at`; a statement that starts with a `critical` block and goes on with an operator |
 | `parser::unclosed-block` | `{` without its `}` |
 | `parser::let-without-type` | `let` without `: Type`, also in a pattern |
 | `parser::chained-comparison` | `a < b < c` |
@@ -6548,9 +6548,9 @@ Every error has a stable code, shown with the message.
 | `ty::invalid-cast` | `as` between types that do not convert, a slice cast the table refuses, any cast to `!`, to an enum or to a reference, or from an enum with payloads; a reference to anything but a raw pointer; to a bit-field struct from anything but its integer type (itself included), or from one to anything but an integer type |
 | `ty::pointer-cast-width` | thin pointer cast to or from an integer type other than `usize` |
 | `ty::deref-non-pointer` | `*` on a value that is not a pointer or a reference |
-| `ty::cannot-index` | indexing a value that is not an array or a pointer, a register, a single cluster or a reference included |
-| `ty::index-out-of-bounds` | index known at compile time not below the array's length, a register array's or a cluster array's included |
-| `ty::slice-pointer-index` | indexing a slice pointer directly (`s[i]`); write `(*s)[i]` |
+| `ty::cannot-index` | indexing a value that is not an array or a pointer, a register, a single cluster or a reference included; a range of a value without the length of an array or a slice (a thin pointer, a reference, a pointer to an array, an integer) |
+| `ty::index-out-of-bounds` | index known at compile time not below the array's length, a register array's or a cluster array's included; a bound of a range of an array known at compile time past the length, or a known start after a known end |
+| `ty::slice-pointer-index` | indexing a slice pointer directly (`s[i]`, `s[a..b]`); write `(*s)[i]` |
 | `ty::no-fields` | field access on a value with neither fields nor registers, a reference included |
 | `ty::unknown-field` | field access to a field the struct does not have |
 | `ty::private-field` | a place or `offset_of` naming a field that is not visible here |
@@ -6558,7 +6558,7 @@ Every error has a stable code, shown with the message.
 | `ty::write-through-const` | assignment through a `*const` pointer or a `&` reference |
 | `ty::not-assignable` | assignment to something that is not a place, or to part of a temporary; an `inout` operand of `asm` without `=>` whose expression is not a place |
 | `ty::assign-immutable` | assignment to a variable without `mut`, a `static`, an `extern static` without `mut`, or a byte string |
-| `ty::not-a-place` | `&raw` of a value that is not a place, or of a constant or any element or field of it |
+| `ty::not-a-place` | `&raw` of a value that is not a place, or of a constant or any element, range or field of it |
 | `ty::address-of-immutable` | `&raw mut` of a place that cannot be written, one through a `&` reference included |
 | `ty::mut-borrow-of-immutable` | `&mut` of a place that cannot be written (a variable or parameter without `mut`, a `static`, an `extern static` without `mut`, a byte string, a place through a `&` reference or a `*const` pointer), of a value that is not a place, or of a part of one (`&mut f().x`) |
 | `ty::reference-position` | a reference type written as the type of a field, a payload value, an array or slice element, a type argument, a layout query operand, a return type, a `static`, `extern static` or `const`, a pointee or a referent (`&&T`), or of a `mut` parameter or `let mut`, once per type at the outermost reference; an expression that makes an array of references, `&`, `&mut` or `&raw` of a reference, the value of a `critical` block, or a `comptime` expression of a reference type, at the innermost |
@@ -6570,7 +6570,7 @@ Every error has a stable code, shown with the message.
 | `ty::volatile-packed-field` | volatile access to a possibly misaligned place inside a packed struct, a bit-field struct on `u16` or `u32` included |
 | `ty::too-large` | a value larger than half the address space |
 | `ty::infinite-size` | structs and enums that contain themselves, directly, through each other or through `Option` and `Result`; peripheral types that contain themselves through clusters |
-| `ty::unsized` | `[T]` where a size is needed, or `*s` read or written whole |
+| `ty::unsized` | `[T]` where a size is needed, or `*s` or a range of an array or a slice read or written whole |
 | `ty::copy-field-not-copy` | a field of a `#[copy]` struct, or a payload value of a `#[copy]` enum, whose type is not copy |
 | `ty::non-copy-constant` | a `const` whose type is not copy, or a `comptime` expression of a type that is not copy; a static's initializer is neither |
 | `ty::non-copy-repeat` | `[v; N]` with `v` of a type that is not copy, whatever `N` is, unless `v` is a variant written without payload values |
@@ -6625,7 +6625,7 @@ Every error has a stable code, shown with the message.
 | `ty::private-register` | an entry that is not visible here |
 | `ty::write-to-read-only` | a write, a compound assignment or a field assignment to a `read` register; a field assignment or a compound assignment to a `read` field in a volatile place |
 | `ty::read-of-write-only` | a read, a compound assignment or a field assignment of a `write` register, or a field read from one; a read of a `write` field, or a compound assignment to one, in a volatile place |
-| `ty::register-address` | `&raw`, `&` or `&mut` of a register, of a register array or a cluster array taken whole, or of an element of a register array |
+| `ty::register-address` | `&raw`, `&` or `&mut` of a register, of a register array or a cluster array taken whole, of an element of a register array, or of a range of one |
 | `ty::bit-field-address` | `&raw`, `&` or `&mut` of a bit field, a register's too |
 | `ty::read-with-effects` | a field assignment or a compound assignment to a place whose reads have effects, or to one of its fields |
 | `ty::compound-write-effect` | a compound assignment to a field with a write effect in a volatile place |

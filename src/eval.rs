@@ -914,6 +914,18 @@ impl Interp<'_, '_> {
                     len: Some(Length::Known(to - from)),
                     ..current
                 },
+                // The same, with the bounds in locals, of an array or of what a
+                // slice points to.
+                (PlaceElem::Subslice(from, to), Ty::Array(elem, _) | Ty::Slice(elem)) => {
+                    let from = self.local_int(from, span)?;
+                    let to = self.local_int(to, span)?;
+                    PlaceRef {
+                        ptr: current.ptr.add(from.wrapping_mul(elem.layout().size)),
+                        ty: Ty::Slice(elem),
+                        len: Some(Length::Known(to.wrapping_sub(from))),
+                        ..current
+                    }
+                }
                 (PlaceElem::Field(index), Ty::Struct(s)) => {
                     let field = &s.def().fields()[index as usize];
                     PlaceRef {

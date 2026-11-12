@@ -615,6 +615,9 @@ enum Length<'ctx> {
     },
     /// The bounds of a `ConstSubslice`.
     Known(u64),
+    /// The bounds of a `Subslice`, in locals: `to - from` once the length is
+    /// needed.
+    Between { from: Local, to: Local },
 }
 
 impl Address<'_> {
@@ -1150,6 +1153,17 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                         usize_type.const_int(*from, false),
                     )
                 }
+                // The same, with the bounds in locals, of an array or of what a
+                // slice points to.
+                (PlaceElem::Subslice(from, to), Ty::Array(elem, _) | Ty::Slice(elem)) => {
+                    ty = Ty::Slice(elem);
+                    address.len = Some(Length::Between {
+                        from: *from,
+                        to: *to,
+                    });
+                    let from = self.read(Place::local(*from)).into_int_value();
+                    (element_type(self.context, *elem), from)
+                }
                 (PlaceElem::Field(index), Ty::Struct(s)) => {
                     let field = &s.def().fields()[*index as usize];
                     ty = field.ty;
@@ -1298,6 +1312,12 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
             Length::Known(len) => int_type(self.context, IntTy::Usize)
                 .const_int(len, false)
                 .into(),
+            // `from <= to` was checked, so this does not wrap.
+            Length::Between { from, to } => self.rvalue(&Rvalue::Binary(
+                BinOp::Sub,
+                Operand::Copy(Place::local(to)),
+                Operand::Copy(Place::local(from)),
+            )),
         }
     }
 

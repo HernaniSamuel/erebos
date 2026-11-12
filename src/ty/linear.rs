@@ -440,6 +440,11 @@ fn operands_of<'a>(expr: &'a Expr, operands: &mut Vec<&'a Expr>, blocks: &mut Ve
         ExprKind::BitStructLit(_, fields, _) => {
             operands.extend(fields.iter().map(|(_, _, value)| value));
         }
+        ExprKind::Subslice { base, from, to, .. } => {
+            operands.push(base);
+            operands.extend(from.as_deref());
+            operands.extend(to.as_deref());
+        }
         ExprKind::Binary(_, a, b, _)
         | ExprKind::Index(a, b, _)
         | ExprKind::Slice(a, b)

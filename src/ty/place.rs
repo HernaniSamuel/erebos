@@ -520,10 +520,83 @@ impl Checker<'_, '_> {
                     self.through_pointer(ty, base, error)
                 }
             }
+            ExprKind::Subslice { base, from, to, .. } => {
+                self.subslice(f, base, from.as_deref(), to.as_deref())
+            }
             _ => return None,
         };
         self.q.tables.expr_types[expr.id.0 as usize] = info.ty;
         Some(info)
+    }
+
+    /// `base[from..to]`, `base[from..]` or `base[..to]` (ADR 0108): the place
+    /// of type `[T]` that is part of the array or slice `base`. It is
+    /// reached as an element is, so it is written, borrowed and volatile as
+    /// the base says; the bounds are `usize`. Anything else cannot have a
+    /// range taken of it.
+    fn subslice(
+        &mut self,
+        f: &Fn,
+        base: &Expr,
+        from: Option<&Expr>,
+        to: Option<&Expr>,
+    ) -> PlaceInfo {
+        let base_place = self.place_info(f, base);
+        let ty = match base_place {
+            Some(info) => info.ty,
+            None => self.check(f, base, None),
+        };
+        for bound in [from, to].into_iter().flatten() {
+            self.check(f, bound, Some(Ty::Int(IntTy::Usize)));
+        }
+        match (ty, base_place) {
+            // A register array is reached one entry at a time (ADR 0064): a
+            // range of it has no address, and no place to index.
+            (Ty::Array(..), Some(info)) if info.register.is_some() => {
+                self.has_address(base, &info, "a range");
+                PlaceInfo::ERROR
+            }
+            (Ty::Array(elem, _), _) => {
+                let base_place = base_place.unwrap_or_else(|| PlaceInfo::temporary(ty, base));
+                PlaceInfo {
+                    ty: Ty::slice(*elem),
+                    ..base_place
+                }
+            }
+            // `(*s)[a..b]` or `(*s)[a..b][c..d]`: part of the slice, reached
+            // through its pointer or reference, so volatile if that is.
+            (Ty::Slice(elem), Some(base_place)) => {
+                if self.q.layout_of(*elem).is_none() {
+                    self.too_large(
+                        *elem,
+                        base.span,
+                        "the distance between elements does not fit in the address space",
+                    );
+                }
+                PlaceInfo {
+                    ty: Ty::slice(*elem),
+                    ..base_place
+                }
+            }
+            (Ty::Error, _) => PlaceInfo::ERROR,
+            (Ty::Never, _) => PlaceInfo {
+                ty: Ty::Never,
+                ..PlaceInfo::ERROR
+            },
+            _ => {
+                // The value is read to be reported as no array: not a
+                // peripheral or a register, which are not read (as for an
+                // index).
+                if let Some(info) = base_place
+                    && !matches!(info.ty, Ty::Peripheral(_))
+                    && info.register.is_none()
+                {
+                    self.access_place(&info, base.span, AccessMode::Read, None);
+                }
+                self.q.diags.push(range_of_no_array(ty, base));
+                PlaceInfo::ERROR
+            }
+        }
     }
 
     /// The type of the base of a field access or of indexing, and its
@@ -768,9 +841,7 @@ impl Checker<'_, '_> {
             return (Ty::Error, None);
         };
         if let Ty::Slice(_) = info.ty {
-            self.q
-                .diags
-                .push(whole_slice(info.ty, place.span, "written"));
+            self.q.diags.push(whole_slice(info.ty, place, "written"));
             return (Ty::Error, None);
         }
         // A register array or a cluster array is reached through an index
@@ -947,9 +1018,14 @@ impl Checker<'_, '_> {
         }
     }
 
-    /// A place inside a packed struct whose type needs alignment.
+    /// A place inside a packed struct whose type needs alignment; for a
+    /// place of type `[T]`, the elements' type (ADR 0108).
     fn may_be_misaligned(&mut self, place: &PlaceInfo) -> bool {
-        place.misaligned && self.q.layout_of(place.ty).is_some_and(|l| l.align > 1)
+        let ty = match place.ty {
+            Ty::Slice(elem) => *elem,
+            ty => ty,
+        };
+        place.misaligned && self.q.layout_of(ty).is_some_and(|l| l.align > 1)
     }
 
     /// `&raw const place` or `&raw mut place` (ADR 0021). The address of a
@@ -1147,10 +1223,14 @@ impl Checker<'_, '_> {
                     format!("cannot take the address of a `{}` that may be misaligned", info.ty),
                 )
                 .label(place.span, "reached through a field of a `#[packed]` struct")
-                .help(format!(
-                    "a `*const {}` promises alignment, and dereferencing a misaligned one may trap; copy the value into a `let` first (ADR 0022)",
-                    info.ty
-                )),
+                .help(match info.ty {
+                    Ty::Slice(elem) => format!(
+                        "a `*const {elem}` promises alignment, and dereferencing a misaligned one may trap; copy the array into a `let` first (ADR 0022, 0108)"
+                    ),
+                    ty => format!(
+                        "a `*const {ty}` promises alignment, and dereferencing a misaligned one may trap; copy the value into a `let` first (ADR 0022)"
+                    ),
+                }),
             );
         }
     }
@@ -1328,6 +1408,48 @@ impl Checker<'_, '_> {
     }
 }
 
+/// `base[a..b]` where `base` has type `ty`, which is neither an array nor a
+/// `[T]` (ADR 0108): a slice or a reference not dereferenced, a pointer, an
+/// integer.
+fn range_of_no_array(ty: Ty, base: &Expr) -> Diagnostic {
+    match ty {
+        Ty::Ptr(ptr) if matches!(*ptr.pointee, Ty::Slice(_)) => Diagnostic::error(
+            "ty::slice-pointer-index",
+            format!("cannot take a range of the slice `{ty}` itself"),
+        )
+        .label(base.span, "a slice, not an array or a place of type `[T]`")
+        .help("take the range of what it points to, checked against its length: `(*s)[a..b]` (ADR 0031, 0108)"),
+        Ty::Ref(r) if matches!(*r.referent, Ty::Slice(_)) => Diagnostic::error(
+            "ty::cannot-index",
+            format!("cannot take a range of a value of type `{ty}`"),
+        )
+        .label(base.span, "a reference, not an array or a place of type `[T]`")
+        .help("dereference the reference first: `(*s)[a..b]`, which takes the range of the slice it refers to (ADR 0105, 0108)"),
+        _ => {
+            let diag = Diagnostic::error(
+                "ty::cannot-index",
+                format!("cannot take a range of a value of type `{ty}`"),
+            )
+            .label(
+                base.span,
+                "a range needs the length of an array or a slice",
+            );
+            match ty {
+                Ty::Ptr(ptr) if matches!(*ptr.pointee, Ty::Array(..)) => diag.help(
+                    "dereference the pointer first: `(*p)[a..b]`, which takes the range of the array it points to (ADR 0108)",
+                ),
+                Ty::Ref(r) if matches!(*r.referent, Ty::Array(..)) => diag.help(
+                    "dereference the reference first: `(*r)[a..b]`, which takes the range of the array it refers to (ADR 0105, 0108)",
+                ),
+                Ty::Ptr(ptr) if !matches!(*ptr.pointee, Ty::Peripheral(_)) => diag.help(
+                    "`slice(p, n)` makes a slice from a pointer and a length, unchecked (ADR 0031, 0108)",
+                ),
+                _ => diag,
+            }
+        }
+    }
+}
+
 /// How `&` and `&mut` are written, for messages.
 fn borrow_op(mutable: bool) -> &'static str {
     if mutable { "&mut" } else { "&" }
@@ -1380,6 +1502,7 @@ pub(super) fn is_place(expr: &Expr) -> bool {
             | ExprKind::Deref(_)
             | ExprKind::Field(..)
             | ExprKind::Index(..)
+            | ExprKind::Subslice { .. }
     )
 }
 
@@ -1412,8 +1535,19 @@ impl Checker<'_, '_> {
                     root => root,
                 },
                 Ty::Array(..) => Root::Unmovable(Unmovable::ArrayElement),
+                // An element of a part of an array or of a slice, which is
+                // where the part is.
+                Ty::Slice(_) if matches!(base.kind, ExprKind::Subslice { .. }) => self.root(base),
                 // A pointer to a slice's elements, or a slice place `(*s)`.
                 _ => Root::Unmovable(Unmovable::Pointer),
+            },
+            ExprKind::Subslice { base, .. } => match self.q.tables.expr_types[base.id.0 as usize] {
+                Ty::Array(..) if is_place(base) => match self.root(base) {
+                    Root::Local | Root::Temporary => Root::Unmovable(Unmovable::ArrayElement),
+                    root => root,
+                },
+                Ty::Array(..) => Root::Unmovable(Unmovable::ArrayElement),
+                _ => self.root(base),
             },
             ExprKind::Local(_) => Root::Local,
             _ => Root::Temporary,

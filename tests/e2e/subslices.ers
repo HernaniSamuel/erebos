@@ -1,0 +1,142 @@
+// Sub-slices at run time (ADR 0108): a range in an index of an array and of
+// a slice, read through a `&[T]` and written through a `&mut [T]`. Elements of
+// four bytes (a `u32`), of a struct of two `u16`, and of no size at all (a
+// `()`); a range with a bound left out, a range of a range, an element of a
+// sub-slice, and an empty range at the length.
+// expect-output: words 46
+// expect-output: mid 10
+// expect-output: tail 13
+// expect-output: head 0
+// expect-output: after 54
+// expect-output: last 7
+// expect-output: inner 23
+// expect-output: empty 0
+// expect-output: pairs 1122
+// expect-output: pair tail 612
+// expect-output: units 2
+// expect-output: no units 0
+// expect-exit: 0
+
+mod board;
+use board::{exit, putc};
+
+#[copy]
+struct Pair {
+    a: u16,
+    b: u16,
+}
+
+fn print(s: &[u8]) {
+    let mut i: usize = 0;
+    while i < len(s) {
+        putc((*s)[i]);
+        i += 1;
+    }
+}
+
+// The decimal digits are written at the end of a buffer and printed from
+// where they start, with a range whose start is not known.
+fn print_u32(value: u32) {
+    let mut digits: [u8; 10] = [0; 10];
+    let mut n: usize = 0;
+    let mut rest: u32 = value;
+    loop {
+        digits[9 - n] = b'0' + (rest % 10) as u8;
+        n += 1;
+        rest /= 10;
+        if rest == 0 {
+            break;
+        }
+    }
+    print(&digits[10 - n..]);
+}
+
+fn show(label: &[u8], value: u32) {
+    print(label);
+    print_u32(value);
+    putc(b'\n');
+}
+
+fn sum(s: &[u32]) -> u32 {
+    let mut total: u32 = 0;
+    let mut i: usize = 0;
+    while i < len(s) {
+        total += (*s)[i];
+        i += 1;
+    }
+    total
+}
+
+fn fill(s: &mut [u32], first: u32) {
+    let mut i: usize = 0;
+    while i < len(s) {
+        (*s)[i] = first + i as u32;
+        i += 1;
+    }
+}
+
+fn pairs_sum(s: &[Pair]) -> u32 {
+    let mut total: u32 = 0;
+    let mut i: usize = 0;
+    while i < len(s) {
+        total += (*s)[i].a as u32 * 100 + (*s)[i].b as u32;
+        i += 1;
+    }
+    total
+}
+
+fn set_pairs(s: &mut [Pair], first: u16) {
+    let mut i: usize = 0;
+    while i < len(s) {
+        (*s)[i].a = first + i as u16;
+        (*s)[i].b = (*s)[i].a * 2;
+        i += 1;
+    }
+}
+
+fn count(s: &[()]) -> usize {
+    len(s)
+}
+
+entry fn main() -> ! {
+    let mut words: [u32; 8] = [0; 8];
+    // 0 0 10 11 12 13 0 0
+    fill(&mut words[2..6], 10);
+    show(&b"words ", sum(&words));
+    show(&b"mid ", sum(&words[1..3]));
+    show(&b"tail ", sum(&words[5..]));
+    show(&b"head ", sum(&words[..2]));
+
+    // Written through a sub-slice of a sub-slice and an element of one:
+    // 0 0 10 11 12 14 0 7
+    let n: usize = 4;
+    {
+        let part: &mut [u32] = &mut words[n..8];
+        (*part)[2..4][1] = 7;
+        (*part)[1..][0] += 1;
+    }
+    show(&b"after ", sum(&words));
+    show(&b"last ", sum(&words[7..8]));
+
+    // A range of a range through a reference: the elements 3 and 4.
+    let all: &[u32] = &words;
+    let inner: &[u32] = &(*all)[2..7][1..3];
+    show(&b"inner ", sum(inner));
+    show(&b"empty ", len(&(*all)[8..8]) as u32);
+
+    // Two `u16` in each element: (5, 10) and (6, 12) in the middle.
+    let mut pairs: [Pair; 4] = [Pair { a: 0, b: 0 }; 4];
+    set_pairs(&mut pairs[1..3], 5);
+    show(&b"pairs ", pairs_sum(&pairs));
+    show(&b"pair tail ", pairs_sum(&pairs[2..]));
+
+    // Elements with no size: only the length is there.
+    let units: [(); 4] = [(); 4];
+    show(&b"units ", count(&units[1..3]) as u32);
+    show(&b"no units ", count(&units[4..4]) as u32);
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(1)
+}

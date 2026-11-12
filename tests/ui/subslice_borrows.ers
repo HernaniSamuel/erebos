@@ -1,0 +1,44 @@
+// emit: mir
+// The borrow check over sub-slices accepted (ADR 0108): a sub-slice and an
+// element or another sub-slice of one base are never in use together (see
+// `subslice_borrows_errors.ers`), so the orders accepted are those where the
+// first borrow ends first, a reborrow of `(*s)[1..]` that ends before `s` is
+// used, and a sub-slice read through a reference that is used on its own.
+fn fill(s: &mut [u8], n: u8) {}
+
+fn show(s: &[u8]) {}
+
+fn two(a: &mut [u8], b: &[u8]) {}
+
+fn one_after_the_other(mut buf: [u8; 8]) {
+    fill(&mut buf[0..4], 1);
+    fill(&mut buf[4..8], 2);
+    show(&buf[2..6]);
+    two(&mut buf[..2], &b"abc"[1..]);
+}
+
+fn element_then_range(mut buf: [u8; 8], s: &mut [u8]) {
+    (buf[0..4])[1] = 3;
+    buf[5] = 4;
+    fill(&mut (*s)[1..], 5);
+    (*s)[0] = 6;
+    show(&(*s)[2..]);
+}
+
+fn reborrow_ends(s: &mut [u8]) {
+    let t: &mut [u8] = &mut (*s)[1..];
+    fill(t, 7);
+    let n: usize = len(s);
+    fill(s, 8);
+}
+
+fn shared_ranges(buf: [u8; 8]) {
+    show(&buf[0..4]);
+    let a: &[u8] = &buf[2..6];
+    let b: &[u8] = &buf[1..3];
+    show(a);
+    show(b);
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

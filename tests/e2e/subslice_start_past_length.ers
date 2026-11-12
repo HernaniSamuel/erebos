@@ -1,0 +1,31 @@
+// A range whose start is past the length calls the panic function (ADR
+// 0108): an empty range at the length is valid and gives length 0, then `5..5`
+// of four elements panics, though its start is not after its end.
+// expect-output: 0
+// expect-output: panic
+// expect-exit: 1
+
+mod board;
+use board::{exit, putc};
+
+// The elements `a..b` of the slice, as a digit: the length of the sub-slice.
+fn part(s: &[u8], a: usize, b: usize) -> u8 {
+    let t: &[u8] = &(*s)[a..b];
+    len(t) as u8
+}
+
+entry fn main() -> ! {
+    let buf: [u8; 4] = [1, 2, 3, 4];
+    let s: &[u8] = &buf;
+    putc(b'0' + part(s, 4, 4));
+    putc(b'\n');
+    putc(b'0' + part(s, 5, 5));
+    putc(b'\n');
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    putc(b'p'); putc(b'a'); putc(b'n'); putc(b'i'); putc(b'c');
+    putc(b'\n');
+    exit(1)
+}

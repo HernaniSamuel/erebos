@@ -1,0 +1,139 @@
+---
+source: tests/ui.rs
+assertion_line: 24
+expression: output
+input_file: tests/ui/subslice_bounds_errors.ers
+---
+--- errors ---
+ty::index-out-of-bounds
+
+  × range out of bounds
+    ╭─[subslice_bounds_errors.ers:9:28]
+  8 │ fn arrays(buf: [u8; 8], n: usize) {
+  9 │     let a: &[u8] = &buf[0..9];
+    ·                            ┬
+    ·                            ╰── the length is 8 but the bound is 9
+ 10 │     let b: &[u8] = &buf[9..];
+    ╰────
+  help: at run time this would call the panic function (ADR 0108)
+ty::index-out-of-bounds
+
+  × range out of bounds
+    ╭─[subslice_bounds_errors.ers:10:25]
+  9 │     let a: &[u8] = &buf[0..9];
+ 10 │     let b: &[u8] = &buf[9..];
+    ·                         ┬
+    ·                         ╰── the length is 8 but the bound is 9
+ 11 │     let c: &[u8] = &buf[..9];
+    ╰────
+  help: at run time this would call the panic function (ADR 0108)
+ty::index-out-of-bounds
+
+  × range out of bounds
+    ╭─[subslice_bounds_errors.ers:11:27]
+ 10 │     let b: &[u8] = &buf[9..];
+ 11 │     let c: &[u8] = &buf[..9];
+    ·                           ┬
+    ·                           ╰── the length is 8 but the bound is 9
+ 12 │     let d: &[u8] = &buf[n..9];
+    ╰────
+  help: at run time this would call the panic function (ADR 0108)
+ty::index-out-of-bounds
+
+  × range out of bounds
+    ╭─[subslice_bounds_errors.ers:12:28]
+ 11 │     let c: &[u8] = &buf[..9];
+ 12 │     let d: &[u8] = &buf[n..9];
+    ·                            ┬
+    ·                            ╰── the length is 8 but the bound is 9
+ 13 │     let e: &[u8] = &buf[9..n];
+    ╰────
+  help: at run time this would call the panic function (ADR 0108)
+ty::index-out-of-bounds
+
+  × range out of bounds
+    ╭─[subslice_bounds_errors.ers:13:25]
+ 12 │     let d: &[u8] = &buf[n..9];
+ 13 │     let e: &[u8] = &buf[9..n];
+    ·                         ┬
+    ·                         ╰── the length is 8 but the bound is 9
+ 14 │     let f: &[u8] = &buf[5..2];
+    ╰────
+  help: at run time this would call the panic function (ADR 0108)
+ty::index-out-of-bounds
+
+  × range out of bounds
+    ╭─[subslice_bounds_errors.ers:14:25]
+ 13 │     let e: &[u8] = &buf[9..n];
+ 14 │     let f: &[u8] = &buf[5..2];
+    ·                         ──┬─
+    ·                           ╰── the range starts at 5 but ends at 2
+ 15 │     let g: &[u8] = &buf[1..PAST];
+    ╰────
+  help: at run time this would call the panic function (ADR 0108)
+ty::index-out-of-bounds
+
+  × range out of bounds
+    ╭─[subslice_bounds_errors.ers:15:28]
+ 14 │     let f: &[u8] = &buf[5..2];
+ 15 │     let g: &[u8] = &buf[1..PAST];
+    ·                            ──┬─
+    ·                              ╰── the length is 8 but the bound is 9
+ 16 │     let h: &[u8] = &buf[PAST..PAST];
+    ╰────
+  help: at run time this would call the panic function (ADR 0108)
+ty::index-out-of-bounds
+
+  × range out of bounds
+    ╭─[subslice_bounds_errors.ers:16:25]
+ 15 │     let g: &[u8] = &buf[1..PAST];
+ 16 │     let h: &[u8] = &buf[PAST..PAST];
+    ·                         ──┬─
+    ·                           ╰── the length is 8 but the bound is 9
+ 17 │     let i: &[u8] = &buf[6 + 1..2 + 1];
+    ╰────
+  help: at run time this would call the panic function (ADR 0108)
+ty::index-out-of-bounds
+
+  × range out of bounds
+    ╭─[subslice_bounds_errors.ers:16:31]
+ 15 │     let g: &[u8] = &buf[1..PAST];
+ 16 │     let h: &[u8] = &buf[PAST..PAST];
+    ·                               ──┬─
+    ·                                 ╰── the length is 8 but the bound is 9
+ 17 │     let i: &[u8] = &buf[6 + 1..2 + 1];
+    ╰────
+  help: at run time this would call the panic function (ADR 0108)
+ty::index-out-of-bounds
+
+  × range out of bounds
+    ╭─[subslice_bounds_errors.ers:17:25]
+ 16 │     let h: &[u8] = &buf[PAST..PAST];
+ 17 │     let i: &[u8] = &buf[6 + 1..2 + 1];
+    ·                         ──────┬─────
+    ·                               ╰── the range starts at 7 but ends at 3
+ 18 │     let j: &[u8] = &buf[9..9];
+    ╰────
+  help: at run time this would call the panic function (ADR 0108)
+ty::index-out-of-bounds
+
+  × range out of bounds
+    ╭─[subslice_bounds_errors.ers:18:25]
+ 17 │     let i: &[u8] = &buf[6 + 1..2 + 1];
+ 18 │     let j: &[u8] = &buf[9..9];
+    ·                         ┬
+    ·                         ╰── the length is 8 but the bound is 9
+ 19 │ }
+    ╰────
+  help: at run time this would call the panic function (ADR 0108)
+ty::index-out-of-bounds
+
+  × range out of bounds
+    ╭─[subslice_bounds_errors.ers:18:28]
+ 17 │     let i: &[u8] = &buf[6 + 1..2 + 1];
+ 18 │     let j: &[u8] = &buf[9..9];
+    ·                            ┬
+    ·                            ╰── the length is 8 but the bound is 9
+ 19 │ }
+    ╰────
+  help: at run time this would call the panic function (ADR 0108)
