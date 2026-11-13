@@ -25,13 +25,11 @@ fn make() -> [u8; 4] {
     [1, 2, 3, 4]
 }
 
-// A thin pointer, a raw slice, a reference to a slice and to an array not
-// dereferenced, an integer: none has the length of an array or a slice.
-fn no_length(p: *const u8, s: *const [u8], r: &[u8], q: &[u8; 4], a: *const [u8; 4], n: usize) {
+// A thin pointer, a raw slice, a pointer to an array, an integer: none has the
+// length of an array or a slice.
+fn no_length(p: *const u8, s: *const [u8], a: *const [u8; 4], n: usize) {
     let b: &[u8] = &p[1..2];
     let c: *const [u8] = &raw const s[1..2];
-    let d: &[u8] = &r[1..];
-    let e: &[u8] = &q[..2];
     let f: &[u8] = &a[1..2];
     let g: &[u8] = &n[0..1];
 }

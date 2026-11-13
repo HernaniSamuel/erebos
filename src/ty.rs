@@ -51,6 +51,10 @@ pub struct Tables {
     /// (ADR 0064). MIR building finds them here: they step by the entry's
     /// step, not by the size of an element.
     entry_accesses: HashSet<ExprId>,
+    /// The bases of a field, an index or a range in an index that are of a
+    /// reference type, and are dereferenced there: `r.f` is `(*r).f`
+    /// (ADR 0114). MIR building finds them here, and writes the `Deref`.
+    derefed: HashSet<ExprId>,
     /// The bit-field struct and the field index of each access to a bit
     /// field, read or written (ADR 0059).
     bit_fields: HashMap<ExprId, (BitStructId, u32)>,
@@ -75,6 +79,7 @@ impl Tables {
             expr_types: vec![Ty::Error; expr_count as usize],
             fields: HashMap::new(),
             entry_accesses: HashSet::new(),
+            derefed: HashSet::new(),
             bit_fields: HashMap::new(),
             coercions: HashMap::new(),
             variants: HashMap::new(),
@@ -98,6 +103,23 @@ impl Tables {
     /// array or a cluster array (ADR 0064).
     pub fn is_entry_access(&self, id: ExprId) -> bool {
         self.entry_accesses.contains(&id)
+    }
+
+    /// Whether `id`, the base of a field, an index or a range in an index,
+    /// is a reference that is dereferenced there (ADR 0114): its type is the
+    /// reference's, and the place the base stands for is what it refers to.
+    pub fn is_derefed(&self, id: ExprId) -> bool {
+        self.derefed.contains(&id)
+    }
+
+    /// The type of the place that the base `id` of a field, an index or a
+    /// range in an index stands for: what a dereferenced reference refers
+    /// to, or else the type of the expression.
+    pub fn base_ty(&self, id: ExprId) -> Ty {
+        match self.expr_ty(id) {
+            Ty::Ref(r) if self.is_derefed(id) => *r.referent,
+            ty => ty,
+        }
     }
 
     /// The bit-field struct and the index of the field that the field

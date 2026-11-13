@@ -1,0 +1,321 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/reference_place_errors.ers
+---
+--- errors ---
+ty::write-through-const
+
+  × cannot write through a `&` reference
+    ╭─[reference_place_errors.ers:36:5]
+ 35 │ fn writes(r: &Ring, s: &[u8], a: &[u32; 2]) {
+ 36 │     r.count = 1;
+    ·     ┬
+    ·     ╰── has type `&Ring`
+ 37 │     r.count += 1;
+    ╰────
+  help: only `&mut` references can be written through (ADR 0105)
+ty::write-through-const
+
+  × cannot write through a `&` reference
+    ╭─[reference_place_errors.ers:37:5]
+ 36 │     r.count = 1;
+ 37 │     r.count += 1;
+    ·     ┬
+    ·     ╰── has type `&Ring`
+ 38 │     r.buf[0] = 1;
+    ╰────
+  help: only `&mut` references can be written through (ADR 0105)
+ty::write-through-const
+
+  × cannot write through a `&` reference
+    ╭─[reference_place_errors.ers:38:5]
+ 37 │     r.count += 1;
+ 38 │     r.buf[0] = 1;
+    ·     ┬
+    ·     ╰── has type `&Ring`
+ 39 │     r.inner.x = 2;
+    ╰────
+  help: only `&mut` references can be written through (ADR 0105)
+ty::write-through-const
+
+  × cannot write through a `&` reference
+    ╭─[reference_place_errors.ers:39:5]
+ 38 │     r.buf[0] = 1;
+ 39 │     r.inner.x = 2;
+    ·     ┬
+    ·     ╰── has type `&Ring`
+ 40 │     s[0] = 1;
+    ╰────
+  help: only `&mut` references can be written through (ADR 0105)
+ty::write-through-const
+
+  × cannot write through a `&` reference
+    ╭─[reference_place_errors.ers:40:5]
+ 39 │     r.inner.x = 2;
+ 40 │     s[0] = 1;
+    ·     ┬
+    ·     ╰── has type `&[u8]`
+ 41 │     s[1] += 1;
+    ╰────
+  help: only `&mut` references can be written through (ADR 0105)
+ty::write-through-const
+
+  × cannot write through a `&` reference
+    ╭─[reference_place_errors.ers:41:5]
+ 40 │     s[0] = 1;
+ 41 │     s[1] += 1;
+    ·     ┬
+    ·     ╰── has type `&[u8]`
+ 42 │     a[0] = 5;
+    ╰────
+  help: only `&mut` references can be written through (ADR 0105)
+ty::write-through-const
+
+  × cannot write through a `&` reference
+    ╭─[reference_place_errors.ers:42:5]
+ 41 │     s[1] += 1;
+ 42 │     a[0] = 5;
+    ·     ┬
+    ·     ╰── has type `&[u32; 2]`
+ 43 │ }
+    ╰────
+  help: only `&mut` references can be written through (ADR 0105)
+ty::mut-borrow-of-immutable
+
+  × cannot borrow as `&mut` through a `&` reference
+    ╭─[reference_place_errors.ers:46:30]
+ 45 │ fn borrows(r: &Ring, s: &[u8]) {
+ 46 │     let a: &mut usize = &mut r.count;
+    ·                              ┬
+    ·                              ╰── has type `&Ring`
+ 47 │     let b: &mut u8 = &mut r.buf[1];
+    ╰────
+  help: only `&mut` references can be borrowed through as `&mut` (ADR 0105)
+ty::mut-borrow-of-immutable
+
+  × cannot borrow as `&mut` through a `&` reference
+    ╭─[reference_place_errors.ers:47:27]
+ 46 │     let a: &mut usize = &mut r.count;
+ 47 │     let b: &mut u8 = &mut r.buf[1];
+    ·                           ┬
+    ·                           ╰── has type `&Ring`
+ 48 │     let c: &mut [u8] = &mut r.buf[0..2];
+    ╰────
+  help: only `&mut` references can be borrowed through as `&mut` (ADR 0105)
+ty::mut-borrow-of-immutable
+
+  × cannot borrow as `&mut` through a `&` reference
+    ╭─[reference_place_errors.ers:48:29]
+ 47 │     let b: &mut u8 = &mut r.buf[1];
+ 48 │     let c: &mut [u8] = &mut r.buf[0..2];
+    ·                             ┬
+    ·                             ╰── has type `&Ring`
+ 49 │     let d: &mut u8 = &mut s[0];
+    ╰────
+  help: only `&mut` references can be borrowed through as `&mut` (ADR 0105)
+ty::mut-borrow-of-immutable
+
+  × cannot borrow as `&mut` through a `&` reference
+    ╭─[reference_place_errors.ers:49:27]
+ 48 │     let c: &mut [u8] = &mut r.buf[0..2];
+ 49 │     let d: &mut u8 = &mut s[0];
+    ·                           ┬
+    ·                           ╰── has type `&[u8]`
+ 50 │ }
+    ╰────
+  help: only `&mut` references can be borrowed through as `&mut` (ADR 0105)
+ty::unknown-field
+
+  × `Ring` has no field `missing`
+    ╭─[reference_place_errors.ers:53:22]
+ 52 │ fn fields(r: &Ring, h: &hidden::Secret) {
+ 53 │     let a: usize = r.missing;
+    ·                      ───┬───
+    ·                         ╰── unknown field
+ 54 │     let b: u32 = r.inner.y;
+    ╰────
+  help: its fields are `buf`, `count`, `inner`
+ty::unknown-field
+
+  × `Inner` has no field `y`
+    ╭─[reference_place_errors.ers:54:26]
+ 53 │     let a: usize = r.missing;
+ 54 │     let b: u32 = r.inner.y;
+    ·                          ┬
+    ·                          ╰── unknown field
+ 55 │     let c: u32 = h.open;
+    ╰────
+  help: its fields are `x`
+ty::private-field
+
+  × the field `locked` of `hidden::Secret` is private
+    ╭─[reference_place_errors.ers:12:9]
+ 11 │         pub open: u32,
+ 12 │         locked: u32,
+    ·         ───┬──
+    ·            ╰── declared here without `pub`
+ 13 │     }
+    ╰────
+    ╭─[reference_place_errors.ers:56:20]
+ 55 │     let c: u32 = h.open;
+ 56 │     let d: u32 = h.locked;
+    ·                    ───┬──
+    ·                       ╰── not visible here
+ 57 │ }
+    ╰────
+  help: a private field is visible only in module `hidden` and the modules inside it; declare it
+        `pub` to use it elsewhere (ADR 0050)
+ty::no-fields
+
+  × `u32` has no fields
+    ╭─[reference_place_errors.ers:60:20]
+ 59 │ fn no_fields(n: &u32, a: &[u8; 4], s: &[u8], m: &Mode, p: *const Ring, q: *const [u8]) {
+ 60 │     let x: u32 = n.f;
+    ·                  ┬ ┬
+    ·                  │ ╰── no such field
+    ·                  ╰── `u32`, reached through this `&u32`
+ 61 │     let y: u8 = a.f;
+    ╰────
+ty::no-fields
+
+  × `[u8; 4]` has no fields
+    ╭─[reference_place_errors.ers:61:19]
+ 60 │     let x: u32 = n.f;
+ 61 │     let y: u8 = a.f;
+    ·                 ┬ ┬
+    ·                 │ ╰── no such field
+    ·                 ╰── `[u8; 4]`, reached through this `&[u8; 4]`
+ 62 │     let z: usize = s.len;
+    ╰────
+ty::no-fields
+
+  × `[u8]` has no fields
+    ╭─[reference_place_errors.ers:62:22]
+ 61 │     let y: u8 = a.f;
+ 62 │     let z: usize = s.len;
+    ·                    ┬ ─┬─
+    ·                    │  ╰── no such field
+    ·                    ╰── `[u8]`, reached through this `&[u8]`
+ 63 │     let w: u32 = m.f;
+    ╰────
+  help: the length of a slice `s` is `len(s)` (ADR 0031)
+ty::no-fields
+
+  × `Mode` has no fields
+    ╭─[reference_place_errors.ers:63:20]
+ 62 │     let z: usize = s.len;
+ 63 │     let w: u32 = m.f;
+    ·                  ┬ ┬
+    ·                  │ ╰── no such field
+    ·                  ╰── `Mode`, reached through this `&Mode`
+ 64 │     let v: usize = p.count;
+    ╰────
+  help: the values of an enum's payload have no names, and are reached only by patterns (ADR 0039,
+        0040)
+ty::no-fields
+
+  × `*const Ring` has no fields
+    ╭─[reference_place_errors.ers:64:22]
+ 63 │     let w: u32 = m.f;
+ 64 │     let v: usize = p.count;
+    ·                      ──┬──
+    ·                        ╰── no such field
+ 65 │     let u: usize = q.len;
+    ╰────
+  help: dereference the pointer first: `(*p).count` (ADR 0021)
+ty::no-fields
+
+  × `*const [u8]` has no fields
+    ╭─[reference_place_errors.ers:65:22]
+ 64 │     let v: usize = p.count;
+ 65 │     let u: usize = q.len;
+    ·                      ─┬─
+    ·                       ╰── no such field
+ 66 │ }
+    ╰────
+  help: the length of a slice `s` is `len(s)` (ADR 0031)
+ty::cannot-index
+
+  × cannot index a value of type `u32`
+    ╭─[reference_place_errors.ers:69:18]
+ 68 │ fn no_index(n: &u32, r: &Ring, m: &Mode, q: *const [u8]) {
+ 69 │     let a: u32 = n[0];
+    ·                  ┬
+    ·                  ╰── `u32`, reached through this `&u32`, is not an array or a pointer
+ 70 │     let b: u8 = r[0];
+    ╰────
+ty::cannot-index
+
+  × cannot index a value of type `Ring`
+    ╭─[reference_place_errors.ers:70:17]
+ 69 │     let a: u32 = n[0];
+ 70 │     let b: u8 = r[0];
+    ·                 ┬
+    ·                 ╰── `Ring`, reached through this `&Ring`, is not an array or a pointer
+ 71 │     let c: u32 = m[1];
+    ╰────
+ty::cannot-index
+
+  × cannot index a value of type `Mode`
+    ╭─[reference_place_errors.ers:71:18]
+ 70 │     let b: u8 = r[0];
+ 71 │     let c: u32 = m[1];
+    ·                  ┬
+    ·                  ╰── `Mode`, reached through this `&Mode`, is not an array or a pointer
+ 72 │     let d: u8 = q[0];
+    ╰────
+ty::slice-pointer-index
+
+  × cannot index the slice `*const [u8]` itself
+    ╭─[reference_place_errors.ers:72:17]
+ 71 │     let c: u32 = m[1];
+ 72 │     let d: u8 = q[0];
+    ·                 ┬
+    ·                 ╰── a slice, not a pointer to its elements
+ 73 │ }
+    ╰────
+  help: index what it points to, checked against its length: `(*s)[i]`; or, unchecked, a pointer
+        to its first element: `(s as *const u8)[i]` (ADR 0031)
+ty::cannot-index
+
+  × cannot take a range of a value of type `u32`
+    ╭─[reference_place_errors.ers:76:21]
+ 75 │ fn no_range(n: &u32, r: &Ring) {
+ 76 │     let a: &[u8] = &n[0..1];
+    ·                     ┬
+    ·                     ╰── `u32`, reached through this `&u32`, is not an array or a slice
+ 77 │     let b: &[u8] = &r[1..];
+    ╰────
+ty::cannot-index
+
+  × cannot take a range of a value of type `Ring`
+    ╭─[reference_place_errors.ers:77:21]
+ 76 │     let a: &[u8] = &n[0..1];
+ 77 │     let b: &[u8] = &r[1..];
+    ·                     ┬
+    ·                     ╰── `Ring`, reached through this `&Ring`, is not an array or a slice
+ 78 │ }
+    ╰────
+ty::move-out-of-place
+
+  × cannot move a value of the non-copy type `Inner` out of a place through a reference
+    ╭─[reference_place_errors.ers:81:20]
+ 80 │ fn moves(r: &Ring, m: &mut Ring) {
+ 81 │     let a: Inner = r.inner;
+    ·                    ───┬───
+    ·                       ╰── `Inner` is not copy, and this is a place through a reference
+ 82 │     let b: [u8; 4] = m.buf;
+    ╰────
+  help: mark `Inner` with `#[copy]` if its values may be duplicated (ADR 0097)
+ty::move-out-of-place
+
+  × cannot move a value of the non-copy type `Inner` out of a place through a reference
+    ╭─[reference_place_errors.ers:83:20]
+ 82 │     let b: [u8; 4] = m.buf;
+ 83 │     let c: Inner = m.inner;
+    ·                    ───┬───
+    ·                       ╰── `Inner` is not copy, and this is a place through a reference
+ 84 │ }
+    ╰────
+  help: mark `Inner` with `#[copy]` if its values may be duplicated (ADR 0097)

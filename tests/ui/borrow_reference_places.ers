@@ -1,0 +1,60 @@
+// emit: mir
+// The borrow check over fields and indexes through a reference (ADR 0114): `r.f`
+// is the place `(*r).f`, so a borrow of one is a borrow of that place, and an
+// access to an overlapping place while it is in use is
+// `analysis::borrow-conflict` (ADR 0106, 0107). Each function is one case, and
+// every one is rejected except `disjoint`, which touches other fields and is
+// accepted.
+struct Ring {
+    buf: [u8; 4],
+    count: usize,
+}
+
+// A field written while an element of another field is borrowed: accepted.
+fn disjoint(r: &mut Ring) -> u8 {
+    let a: &mut u8 = &mut r.buf[0];
+    r.count = 1;
+    *a = 2;
+    r.buf[1]
+}
+
+// The same field written while an element of it is borrowed.
+fn element_then_whole(r: &mut Ring) {
+    let a: &mut u8 = &mut r.buf[0];
+    r.buf[1] = 1;
+    *a = 2;
+}
+
+// A range borrowed while an element of it is.
+fn range_then_element(r: &mut Ring) {
+    let a: &mut [u8] = &mut r.buf[0..2];
+    r.buf[0] = 1;
+    a[0] = 2;
+}
+
+// A field read while it is borrowed `&mut`.
+fn read_while_mut(r: &mut Ring) -> usize {
+    let a: &mut usize = &mut r.count;
+    let n: usize = r.count;
+    *a = n;
+    n
+}
+
+// A field written while a shared borrow of it is in use.
+fn mut_while_shared(r: &mut Ring) -> usize {
+    let a: &usize = &r.count;
+    r.count = 5;
+    *a
+}
+
+// The reference itself used whole while a borrow of its field is in use.
+fn whole_while_field(r: &mut Ring) {
+    let a: &mut usize = &mut r.count;
+    take(r);
+    *a = 1;
+}
+
+fn take(r: &mut Ring) {}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

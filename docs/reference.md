@@ -7288,10 +7288,10 @@ Every error has a stable code, shown with the message.
 | `ty::invalid-cast` | `as` between types that do not convert, a slice cast the table refuses, any cast to `!`, to an enum or to a reference, or from an enum with payloads; a reference to anything but a raw pointer; to a bit-field struct from anything but its integer type (itself included), or from one to anything but an integer type |
 | `ty::pointer-cast-width` | thin pointer cast to or from an integer type other than `usize` |
 | `ty::deref-non-pointer` | `*` on a value that is not a pointer or a reference |
-| `ty::cannot-index` | indexing a value that is not an array or a pointer, a register, a single cluster or a reference included; a range of a value without the length of an array or a slice (a thin pointer, a reference, a pointer to an array, an integer) |
+| `ty::cannot-index` | indexing a value that is not an array or a pointer, a register or a single cluster included, or a reference whose referent is none; a range of a value without the length of an array or a slice (a thin pointer, a pointer to an array, an integer, or a reference whose referent is none) |
 | `ty::index-out-of-bounds` | index known at compile time not below the array's length, a register array's or a cluster array's included; a bound of a range of an array known at compile time past the length, or a known start after a known end |
 | `ty::slice-pointer-index` | indexing a slice pointer directly (`s[i]`, `s[a..b]`); write `(*s)[i]` |
-| `ty::no-fields` | field access on a value with neither fields nor registers, a reference included |
+| `ty::no-fields` | field access on a value with neither fields nor registers, or on a reference to one |
 | `ty::unknown-field` | field access to a field the struct does not have |
 | `ty::private-field` | a place or `offset_of` naming a field that is not visible here |
 | `ty::private-variant` | `.V` naming a variant of an enum that is not reachable here |

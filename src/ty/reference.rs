@@ -1,7 +1,8 @@
 //! Where a reference may be (ADR 0094, 0105): only the type of a parameter or
 //! of a `let` that is not `mut`, and the value of an expression that is an
-//! argument, an initializer, the operand of `*` or `as`, or yields one of
-//! those. A reference held anywhere else is `ty::reference-position`.
+//! argument, an initializer, the operand of `*` or `as`, the base of a field,
+//! an index or a range in an index (ADR 0114), or yields one of those. A
+//! reference held anywhere else is `ty::reference-position`.
 
 use std::collections::HashSet;
 

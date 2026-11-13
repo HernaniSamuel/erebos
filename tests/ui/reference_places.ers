@@ -1,0 +1,129 @@
+// emit: typeck
+// Fields and indexes through a reference (ADR 0114). `r.f`, `r[i]` and
+// `r[a..b]` with `r` a reference are `(*r).f`, `(*r)[i]` and `(*r)[a..b]`: the
+// place `*r` gives, with its mutability and volatility. Read, written, compound
+// assigned, borrowed, and passed to `len`; a field of a field; through `&T`,
+// `&mut T`, a reference to a slice, a reference to a peripheral type and a
+// volatile reference; on any expression of a reference type, such as the value
+// of an `if`. The dump marks each base that is dereferenced.
+struct Inner {
+    x: u32,
+    y: u32,
+}
+
+struct Ring {
+    buf: [u8; 8],
+    count: usize,
+    inner: Inner,
+}
+
+struct Holder {
+    p: *const u8,
+}
+
+peripheral Uart {
+    read rbr: u8 at 0,
+    write thr: u8 at 0,
+    read lsr: u8 at 5,
+    read write regs: [u32; 4] at 0x10 step 4,
+}
+
+peripheral UART0: Uart at 0x1000_0000;
+
+// Reads.
+fn read(r: &Ring, m: &mut Ring) -> usize {
+    let a: usize = r.count;
+    let b: u8 = r.buf[1];
+    let c: u32 = r.inner.x;
+    let d: usize = m.count;
+    let e: u8 = m.buf[2];
+    a + d + (b as usize) + (e as usize) + (c as usize)
+}
+
+// Writes and compound assignments through a `&mut`.
+fn write(m: &mut Ring, n: usize) {
+    m.count = n;
+    m.count += 1;
+    m.buf[0] = 7;
+    m.buf[1] += 1;
+    m.inner.x = 3;
+    m.inner.y -= 1;
+}
+
+// Borrows of such places, and `len`.
+fn borrow(r: &Ring, m: &mut Ring) -> usize {
+    let a: &usize = &r.count;
+    let b: &[u8] = &r.buf[1..4];
+    let c: &mut u8 = &mut m.buf[0];
+    *c = 1;
+    let d: &mut [u8] = &mut m.buf[0..4];
+    d[0] = 2;
+    let e: &Inner = &r.inner;
+    let f: &mut u32 = &mut m.inner.x;
+    len(&r.buf) + len(&m.buf) + len(b) + *a + (e.x as usize) + (*f as usize)
+}
+
+// A reference to a slice and to an array.
+fn slices(s: &[u8], t: &mut [u8], a: &[u32; 4], u: &mut [u32; 4]) -> u8 {
+    let x: u8 = s[0];
+    t[1] = x;
+    t[2] += s[3];
+    let tail: &[u8] = &s[1..];
+    let head: &mut [u8] = &mut t[..2];
+    head[0] = tail[0];
+    u[3] = a[0];
+    let part: &[u32] = &a[1..3];
+    let n: usize = len(s) + len(t) + len(part);
+    s[n]
+}
+
+// A reference to a peripheral type: registers and a register array, as through
+// `(*u)`.
+fn device(u: &mut Uart, v: &Uart) -> u8 {
+    u.thr = 1;
+    u.regs[1] = 2;
+    u.regs[2] += 3;
+    let status: u8 = v.lsr;
+    let word: u32 = v.regs[0];
+    status + u.rbr + (word as u8)
+}
+
+// A volatile reference: the place is volatile.
+fn through_volatile(r: &volatile Ring, m: &mut volatile Ring) -> usize {
+    let a: usize = r.count;
+    let b: u8 = r.buf[0];
+    m.count = a + (b as usize);
+    m.buf[1] = b;
+    m.inner.x += 1;
+    m.count
+}
+
+// A reference to a pointer is indexed as the pointer is.
+fn pointers(r: &*const u8, h: &Holder) -> u8 {
+    r[1] + h.p[0]
+}
+
+// The base is any expression of a reference type.
+fn choose(c: bool, a: &Ring, b: &Ring) -> usize {
+    let x: usize = (if c { a } else { b }).count;
+    let y: u8 = (if c { a } else { b }).buf[1];
+    x + (y as usize)
+}
+
+// The explicit forms stay valid and mean the same.
+fn explicit(m: &mut Ring) -> usize {
+    (*m).count = 1;
+    m.count += (*m).buf[0] as usize;
+    (*m).buf[1] = m.buf[0];
+    (*m).count
+}
+
+// A raw pointer to an array keeps its arithmetic: `p[i]` is the next array.
+fn raw(p: *const [u8; 4], q: *mut [u8; 4]) -> u8 {
+    q[1][0] = 1;
+    (*q)[0] = 1;
+    p[1][0] + (*p)[2]
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

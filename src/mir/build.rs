@@ -2263,6 +2263,14 @@ impl Builder<'_, '_> {
         self.q.mir_ty(ty)
     }
 
+    /// The MIR type of the place that `base`, the base of a field, an index or
+    /// a range in an index, stands for: what a reference refers to, if it is
+    /// dereferenced there (ADR 0114), or else its own type.
+    fn base_ty(&mut self, base: &hir::Expr) -> Ty {
+        let ty = self.q.tables.base_ty(base.id);
+        self.q.mir_ty(ty)
+    }
+
     fn local(&self, local: hir::LocalId) -> Place {
         Place::local(self.hir_locals[local.0 as usize])
     }
@@ -2346,6 +2354,14 @@ impl Builder<'_, '_> {
     /// address is taken, so a value computed at compile time is copied
     /// into a local first: its data has no address (ADR 0029).
     fn place_then(&mut self, expr: &hir::Expr, later_writes: bool, address: bool) -> Place {
+        // The base of a field, an index or a range in an index that is a
+        // reference stands for what it refers to: `r.f` is `(*r).f`, with the
+        // `Deref` that `*r` makes (ADR 0114).
+        if self.q.tables.is_derefed(expr.id) {
+            return self
+                .pointer_place(expr, later_writes)
+                .project(PlaceElem::Deref);
+        }
         match &expr.kind {
             hir::ExprKind::Local(local) => self.local(*local),
             // Reached through its address, so that every access happens
@@ -2378,7 +2394,7 @@ impl Builder<'_, '_> {
             hir::ExprKind::Index(array, index, open)
                 if self.q.tables.is_entry_access(expr.id)
                     && let hir::ExprKind::Field(owner, _, _) = &array.kind
-                    && let Ty::Peripheral(p) = self.ty_of(owner) =>
+                    && let Ty::Peripheral(p) = self.base_ty(owner) =>
             {
                 let entry = self.q.tables.field(array.id);
                 let later_writes = later_writes || !is_simple(index);
@@ -2395,11 +2411,16 @@ impl Builder<'_, '_> {
             }
             hir::ExprKind::Index(base, index, open) => {
                 let later_writes = later_writes || !is_simple(index);
-                match self.ty_of(base) {
+                let derefed = self.q.tables.is_derefed(base.id);
+                match self.base_ty(base) {
                     Ty::Array(_, len) => {
                         let base = self.place_then(base, later_writes, address);
                         let elem = self.array_index(index, len, *open);
                         base.project(elem)
+                    }
+                    // `r[i]` with `r` a reference to a slice is `(*r)[i]`.
+                    Ty::Slice(_) if derefed => {
+                        self.reference_slice_index(base, index, later_writes, *open)
                     }
                     Ty::Slice(_) => match &base.kind {
                         hir::ExprKind::Deref(pointer) => {
@@ -2413,6 +2434,18 @@ impl Builder<'_, '_> {
                         // sub-slice's length (ADR 0108, 0109).
                         _ => self.subslice_index(base, index, later_writes, address, *open),
                     },
+                    // `r[i]` with `r` a reference to a pointer: the pointer
+                    // `*r` holds, read now if a later write could change it.
+                    pointee if derefed => {
+                        let pointer = self.place_then(base, later_writes, address);
+                        let pointer = if later_writes {
+                            self.temp_place(pointee, Rvalue::Use(Operand::Copy(pointer)))
+                        } else {
+                            pointer
+                        };
+                        let index = self.fixed_index(index);
+                        pointer.project(PlaceElem::Offset(index))
+                    }
                     _ => {
                         let base = self.pointer_place(base, later_writes);
                         let index = self.fixed_index(index);
@@ -2597,12 +2630,19 @@ impl Builder<'_, '_> {
         later_writes: bool,
         address: bool,
     ) -> (Place, Length) {
+        // `r[i]` and `r[a..b]` with `r` a reference to a slice are those of
+        // `*r` (ADR 0114): the base is the reference itself.
+        let pointer = match &base.kind {
+            _ if self.q.tables.is_derefed(base.id) => Some(base),
+            hir::ExprKind::Deref(pointer) => Some(&**pointer),
+            _ => None,
+        };
+        if let Some(pointer) = pointer {
+            let slice = self.pointer_place(pointer, later_writes);
+            let len = self.temp(Ty::Int(hir::IntTy::Usize), Rvalue::SliceLen(slice));
+            return (slice.project(PlaceElem::Deref), Length::Operand(len));
+        }
         match &base.kind {
-            hir::ExprKind::Deref(pointer) => {
-                let slice = self.pointer_place(pointer, later_writes);
-                let len = self.temp(Ty::Int(hir::IntTy::Usize), Rvalue::SliceLen(slice));
-                (slice.project(PlaceElem::Deref), Length::Operand(len))
-            }
             hir::ExprKind::Subslice {
                 base,
                 from,
@@ -2638,7 +2678,7 @@ impl Builder<'_, '_> {
         address: bool,
     ) -> (Place, Length) {
         let later_writes = later_writes || !from.is_none_or(is_simple) || !to.is_none_or(is_simple);
-        let (part, len, constant) = match self.ty_of(base) {
+        let (part, len, constant) = match self.base_ty(base) {
             Ty::Array(_, len) => {
                 let array = self.place_then(base, later_writes, address);
                 self.check_range(from, to, len);

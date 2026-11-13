@@ -1,0 +1,760 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/reference_places_mir.ers
+---
+--- mir ---
+struct Inner { 0 x: u32 at 0, 1 y: u32 at 4 } // size 8, align 4
+struct Ring { 0 buf: [u8; 8] at 0, 1 count: usize at 8, 2 inner: Inner at 12 } // size 20, align 4
+struct Holder { 0 p: *const u8 at 0 } // size 4, align 4
+
+peripheral Uart { 0 rbr: u8 at 0x0, 1 thr: u8 at 0x0, 2 lsr: u8 at 0x5, 3 regs: [u32; 4] step 0x4 at 0x10 } // extent 32, align 4
+peripheral UART0: Uart at 0x10000000;
+
+fn read(_1: &Ring, _2: &mut Ring) -> usize {
+    let _0: usize;
+    let _1: &Ring; // r
+    let _2: &mut Ring; // m
+    let _3: usize; // a
+    let _4: u8; // b
+    let _5: u32; // c
+    let _6: usize; // d
+    let _7: u8; // e
+    let _8: usize;
+    let _9: u8;
+    let _10: u32;
+    let _11: usize;
+    let _12: u8;
+    let _13: usize;
+    let _14: usize;
+    let _15: usize;
+    let _16: usize;
+    let _17: usize;
+    let _18: usize;
+    let _19: usize;
+    let _20: usize;
+    let _21: usize;
+    let _22: usize;
+
+    bb0: {
+        _8 = copy (*_1).1;
+        _3 = copy _8;
+        _9 = copy (*_1).0[1];
+        _4 = copy _9;
+        _10 = copy (*_1).2.0;
+        _5 = copy _10;
+        _11 = copy (*_2).1;
+        _6 = copy _11;
+        _12 = copy (*_2).0[2];
+        _7 = copy _12;
+        _13 = Add(copy _3, copy _6);
+        _14 = copy _13;
+        _15 = copy _4 as usize;
+        _16 = Add(copy _14, copy _15);
+        _17 = copy _16;
+        _18 = copy _7 as usize;
+        _19 = Add(copy _17, copy _18);
+        _20 = copy _19;
+        _21 = copy _5 as usize;
+        _22 = Add(copy _20, copy _21);
+        _0 = copy _22;
+        return;
+    }
+}
+
+fn write(_1: &mut Ring, _2: usize) -> () {
+    let _0: ();
+    let _1: &mut Ring; // m
+    let _2: usize; // n
+
+    bb0: {
+        (*_1).1 = copy _2;
+        (*_1).1 = Add(copy (*_1).1, const 1_usize);
+        (*_1).0[0] = const 7_u8;
+        (*_1).0[1] = Add(copy (*_1).0[1], const 1_u8);
+        (*_1).2.0 = const 3_u32;
+        (*_1).2.1 = Sub(copy (*_1).2.1, const 1_u32);
+        return;
+    }
+}
+
+fn borrow(_1: &Ring, _2: &mut Ring) -> usize {
+    let _0: usize;
+    let _1: &Ring; // r
+    let _2: &mut Ring; // m
+    let _3: &usize; // a
+    let _4: &[u8]; // b
+    let _5: &mut u8; // c
+    let _6: &mut [u8]; // d
+    let _7: &Inner; // e
+    let _8: &mut u32; // f
+    let _9: &usize;
+    let _10: &[u8];
+    let _11: &mut u8;
+    let _12: &mut [u8];
+    let _13: usize;
+    let _14: usize;
+    let _15: bool;
+    let _16: &Inner;
+    let _17: &mut u32;
+    let _18: &[u8; 8];
+    let _19: &[u8; 8];
+    let _20: usize;
+    let _21: usize;
+    let _22: usize;
+    let _23: usize;
+    let _24: usize;
+    let _25: usize;
+    let _26: usize;
+    let _27: usize;
+    let _28: u32;
+    let _29: usize;
+    let _30: usize;
+    let _31: usize;
+    let _32: u32;
+    let _33: usize;
+    let _34: usize;
+
+    bb0: {
+        _9 = &(*_1).1;
+        _3 = copy _9;
+        _10 = &(*_1).0[1..4];
+        _4 = copy _10;
+        _11 = &mut (*_2).0[0];
+        _5 = move _11;
+        (*_5) = const 1_u8;
+        _12 = &mut (*_2).0[0..4];
+        _6 = move _12;
+        _13 = const 0_usize;
+        _14 = len(_6);
+        _15 = Lt(copy _13, copy _14);
+        if copy _15 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        (*_6)[_13] = const 2_u8;
+        _16 = &(*_1).2;
+        _7 = copy _16;
+        _17 = &mut (*_2).2.0;
+        _8 = move _17;
+        _18 = &(*_1).0;
+        _19 = &(*_2).0;
+        _20 = Add(const 8_usize, const 8_usize);
+        _21 = copy _20;
+        _22 = len(_4);
+        _23 = Add(copy _21, copy _22);
+        _24 = copy _23;
+        _25 = copy (*_3);
+        _26 = Add(copy _24, copy _25);
+        _27 = copy _26;
+        _28 = copy (*_7).0;
+        _29 = copy _28 as usize;
+        _30 = Add(copy _27, copy _29);
+        _31 = copy _30;
+        _32 = copy (*_8);
+        _33 = copy _32 as usize;
+        _34 = Add(copy _31, copy _33);
+        _0 = copy _34;
+        return;
+    }
+
+    bb2: {
+        panic(index out of bounds);
+    }
+}
+
+fn slices(_1: &[u8], _2: &mut [u8], _3: &[u32; 4], _4: &mut [u32; 4]) -> u8 {
+    let _0: u8;
+    let _1: &[u8]; // s
+    let _2: &mut [u8]; // t
+    let _3: &[u32; 4]; // a
+    let _4: &mut [u32; 4]; // u
+    let _5: u8; // x
+    let _6: &[u8]; // tail
+    let _7: &mut [u8]; // head
+    let _8: &[u32]; // part
+    let _9: usize; // n
+    let _10: usize;
+    let _11: usize;
+    let _12: bool;
+    let _13: u8;
+    let _14: usize;
+    let _15: usize;
+    let _16: bool;
+    let _17: usize;
+    let _18: usize;
+    let _19: bool;
+    let _20: u8;
+    let _21: usize;
+    let _22: usize;
+    let _23: bool;
+    let _24: usize;
+    let _25: usize;
+    let _26: usize;
+    let _27: bool;
+    let _28: bool;
+    let _29: &[u8];
+    let _30: usize;
+    let _31: usize;
+    let _32: usize;
+    let _33: bool;
+    let _34: bool;
+    let _35: &mut [u8];
+    let _36: usize;
+    let _37: usize;
+    let _38: bool;
+    let _39: u8;
+    let _40: usize;
+    let _41: usize;
+    let _42: bool;
+    let _43: u32;
+    let _44: &[u32];
+    let _45: usize;
+    let _46: usize;
+    let _47: usize;
+    let _48: usize;
+    let _49: usize;
+    let _50: usize;
+    let _51: usize;
+    let _52: usize;
+    let _53: usize;
+    let _54: bool;
+    let _55: u8;
+
+    bb0: {
+        _10 = const 0_usize;
+        _11 = len(_1);
+        _12 = Lt(copy _10, copy _11);
+        if copy _12 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _13 = copy (*_1)[_10];
+        _5 = copy _13;
+        _14 = const 1_usize;
+        _15 = len(_2);
+        _16 = Lt(copy _14, copy _15);
+        if copy _16 -> [true: bb3, false: bb4];
+    }
+
+    bb2: {
+        panic(index out of bounds);
+    }
+
+    bb3: {
+        (*_2)[_14] = copy _5;
+        _17 = const 3_usize;
+        _18 = len(_1);
+        _19 = Lt(copy _17, copy _18);
+        if copy _19 -> [true: bb5, false: bb6];
+    }
+
+    bb4: {
+        panic(index out of bounds);
+    }
+
+    bb5: {
+        _20 = copy (*_1)[_17];
+        _21 = const 2_usize;
+        _22 = len(_2);
+        _23 = Lt(copy _21, copy _22);
+        if copy _23 -> [true: bb7, false: bb8];
+    }
+
+    bb6: {
+        panic(index out of bounds);
+    }
+
+    bb7: {
+        (*_2)[_21] = Add(copy (*_2)[_21], copy _20);
+        _24 = len(_1);
+        _25 = const 1_usize;
+        _26 = copy _24;
+        _27 = Le(copy _25, copy _26);
+        if copy _27 -> [true: bb9, false: bb10];
+    }
+
+    bb8: {
+        panic(index out of bounds);
+    }
+
+    bb9: {
+        _28 = Le(copy _26, copy _24);
+        if copy _28 -> [true: bb11, false: bb12];
+    }
+
+    bb10: {
+        panic(index out of bounds);
+    }
+
+    bb11: {
+        _29 = &(*_1)[_25.._26];
+        _6 = copy _29;
+        _30 = len(_2);
+        _31 = const 0_usize;
+        _32 = const 2_usize;
+        _33 = Le(copy _31, copy _32);
+        if copy _33 -> [true: bb13, false: bb14];
+    }
+
+    bb12: {
+        panic(index out of bounds);
+    }
+
+    bb13: {
+        _34 = Le(copy _32, copy _30);
+        if copy _34 -> [true: bb15, false: bb16];
+    }
+
+    bb14: {
+        panic(index out of bounds);
+    }
+
+    bb15: {
+        _35 = &mut (*_2)[_31.._32];
+        _7 = move _35;
+        _36 = const 0_usize;
+        _37 = len(_6);
+        _38 = Lt(copy _36, copy _37);
+        if copy _38 -> [true: bb17, false: bb18];
+    }
+
+    bb16: {
+        panic(index out of bounds);
+    }
+
+    bb17: {
+        _39 = copy (*_6)[_36];
+        _40 = const 0_usize;
+        _41 = len(_7);
+        _42 = Lt(copy _40, copy _41);
+        if copy _42 -> [true: bb19, false: bb20];
+    }
+
+    bb18: {
+        panic(index out of bounds);
+    }
+
+    bb19: {
+        (*_7)[_40] = copy _39;
+        _43 = copy (*_3)[0];
+        (*_4)[3] = copy _43;
+        _44 = &(*_3)[1..3];
+        _8 = copy _44;
+        _45 = len(_1);
+        _46 = copy _45;
+        _47 = len(_2);
+        _48 = Add(copy _46, copy _47);
+        _49 = copy _48;
+        _50 = len(_8);
+        _51 = Add(copy _49, copy _50);
+        _9 = copy _51;
+        _52 = copy _9;
+        _53 = len(_1);
+        _54 = Lt(copy _52, copy _53);
+        if copy _54 -> [true: bb21, false: bb22];
+    }
+
+    bb20: {
+        panic(index out of bounds);
+    }
+
+    bb21: {
+        _55 = copy (*_1)[_52];
+        _0 = copy _55;
+        return;
+    }
+
+    bb22: {
+        panic(index out of bounds);
+    }
+}
+
+fn device(_1: &mut Uart, _2: &Uart) -> u8 {
+    let _0: u8;
+    let _1: &mut Uart; // u
+    let _2: &Uart; // v
+    let _3: u8; // status
+    let _4: u32; // word
+    let _5: u8;
+    let _6: u32;
+    let _7: u8;
+    let _8: u8;
+    let _9: u8;
+    let _10: u8;
+    let _11: u8;
+    let _12: u8;
+
+    bb0: {
+        (*_1).1 = const 1_u8;
+        (*_1).3[1] = const 2_u32;
+        (*_1).3[2] = Add(copy (*_1).3[2], const 3_u32);
+        _5 = copy (*_2).2;
+        _3 = copy _5;
+        _6 = copy (*_2).3[0];
+        _4 = copy _6;
+        _7 = copy _3;
+        _8 = copy (*_1).0;
+        _9 = Add(copy _7, copy _8);
+        _10 = copy _9;
+        _11 = copy _4 as u8;
+        _12 = Add(copy _10, copy _11);
+        _0 = copy _12;
+        return;
+    }
+}
+
+fn through_volatile(_1: &volatile Ring, _2: &mut volatile Ring) -> usize {
+    let _0: usize;
+    let _1: &volatile Ring; // r
+    let _2: &mut volatile Ring; // m
+    let _3: usize; // a
+    let _4: u8; // b
+    let _5: usize;
+    let _6: u8;
+    let _7: usize;
+    let _8: usize;
+    let _9: usize;
+    let _10: usize;
+
+    bb0: {
+        _5 = copy (*_1).1;
+        _3 = copy _5;
+        _6 = copy (*_1).0[0];
+        _4 = copy _6;
+        _7 = copy _3;
+        _8 = copy _4 as usize;
+        _9 = Add(copy _7, copy _8);
+        (*_2).1 = copy _9;
+        (*_2).0[1] = copy _4;
+        (*_2).2.0 = Add(copy (*_2).2.0, const 1_u32);
+        _10 = copy (*_2).1;
+        _0 = copy _10;
+        return;
+    }
+}
+
+fn pointers(_1: &*const u8, _2: &Holder) -> u8 {
+    let _0: u8;
+    let _1: &*const u8; // r
+    let _2: &Holder; // h
+    let _3: usize;
+    let _4: u8;
+    let _5: u8;
+    let _6: *const u8;
+    let _7: usize;
+    let _8: u8;
+    let _9: u8;
+
+    bb0: {
+        _3 = const 1_usize;
+        _4 = copy (*((*_1) + _3));
+        _5 = copy _4;
+        _6 = copy (*_2).0;
+        _7 = const 0_usize;
+        _8 = copy (*(_6 + _7));
+        _9 = Add(copy _5, copy _8);
+        _0 = copy _9;
+        return;
+    }
+}
+
+fn choose(_1: bool, _2: &Ring, _3: &Ring) -> usize {
+    let _0: usize;
+    let _1: bool; // c
+    let _2: &Ring; // a
+    let _3: &Ring; // b
+    let _4: usize; // x
+    let _5: u8; // y
+    let _6: &Ring;
+    let _7: usize;
+    let _8: &Ring;
+    let _9: u8;
+    let _10: usize;
+    let _11: usize;
+    let _12: usize;
+
+    bb0: {
+        if copy _1 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _6 = copy _2;
+        goto -> bb3;
+    }
+
+    bb2: {
+        _6 = copy _3;
+        goto -> bb3;
+    }
+
+    bb3: {
+        _7 = copy (*_6).1;
+        _4 = copy _7;
+        if copy _1 -> [true: bb4, false: bb5];
+    }
+
+    bb4: {
+        _8 = copy _2;
+        goto -> bb6;
+    }
+
+    bb5: {
+        _8 = copy _3;
+        goto -> bb6;
+    }
+
+    bb6: {
+        _9 = copy (*_8).0[1];
+        _5 = copy _9;
+        _10 = copy _4;
+        _11 = copy _5 as usize;
+        _12 = Add(copy _10, copy _11);
+        _0 = copy _12;
+        return;
+    }
+}
+
+fn explicit(_1: &mut Ring) -> usize {
+    let _0: usize;
+    let _1: &mut Ring; // m
+    let _2: u8;
+    let _3: usize;
+    let _4: u8;
+    let _5: usize;
+
+    bb0: {
+        (*_1).1 = const 1_usize;
+        _2 = copy (*_1).0[0];
+        _3 = copy _2 as usize;
+        (*_1).1 = Add(copy (*_1).1, copy _3);
+        _4 = copy (*_1).0[0];
+        (*_1).0[1] = copy _4;
+        _5 = copy (*_1).1;
+        _0 = copy _5;
+        return;
+    }
+}
+
+fn raw(_1: *const [u8; 4], _2: *mut [u8; 4]) -> u8 {
+    let _0: u8;
+    let _1: *const [u8; 4]; // p
+    let _2: *mut [u8; 4]; // q
+    let _3: usize;
+    let _4: usize;
+    let _5: u8;
+    let _6: u8;
+    let _7: u8;
+    let _8: u8;
+
+    bb0: {
+        _3 = const 1_usize;
+        (*(_2 + _3))[0] = const 1_u8;
+        (*_2)[0] = const 1_u8;
+        _4 = const 1_usize;
+        _5 = copy (*(_1 + _4))[0];
+        _6 = copy _5;
+        _7 = copy (*_1)[2];
+        _8 = Add(copy _6, copy _7);
+        _0 = copy _8;
+        return;
+    }
+}
+
+fn implicit(_1: &mut Ring, _2: &mut [u8], _3: usize) -> u8 {
+    let _0: u8;
+    let _1: &mut Ring; // r
+    let _2: &mut [u8]; // s
+    let _3: usize; // n
+    let _4: &mut [u8]; // part
+    let _5: u8;
+    let _6: usize;
+    let _7: u8;
+    let _8: usize;
+    let _9: usize;
+    let _10: bool;
+    let _11: &mut [u8];
+    let _12: usize;
+    let _13: usize;
+    let _14: bool;
+    let _15: u8;
+    let _16: usize;
+    let _17: usize;
+    let _18: bool;
+    let _19: usize;
+    let _20: usize;
+    let _21: bool;
+    let _22: u8;
+
+    bb0: {
+        (*_1).1 = copy _3;
+        _5 = copy (*_1).0[1];
+        _6 = copy _5 as usize;
+        (*_1).1 = Add(copy (*_1).1, copy _6);
+        (*_1).2.0 = const 1_u32;
+        _7 = copy (*_1).0[0];
+        _8 = copy _3;
+        _9 = len(_2);
+        _10 = Lt(copy _8, copy _9);
+        if copy _10 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        (*_2)[_8] = copy _7;
+        _11 = &mut (*_1).0[1..3];
+        _4 = move _11;
+        _12 = const 0_usize;
+        _13 = len(_2);
+        _14 = Lt(copy _12, copy _13);
+        if copy _14 -> [true: bb3, false: bb4];
+    }
+
+    bb2: {
+        panic(index out of bounds);
+    }
+
+    bb3: {
+        _15 = copy (*_2)[_12];
+        _16 = const 0_usize;
+        _17 = len(_4);
+        _18 = Lt(copy _16, copy _17);
+        if copy _18 -> [true: bb5, false: bb6];
+    }
+
+    bb4: {
+        panic(index out of bounds);
+    }
+
+    bb5: {
+        (*_4)[_16] = copy _15;
+        _19 = const 1_usize;
+        _20 = len(_2);
+        _21 = Lt(copy _19, copy _20);
+        if copy _21 -> [true: bb7, false: bb8];
+    }
+
+    bb6: {
+        panic(index out of bounds);
+    }
+
+    bb7: {
+        _22 = copy (*_2)[_19];
+        _0 = copy _22;
+        return;
+    }
+
+    bb8: {
+        panic(index out of bounds);
+    }
+}
+
+fn spelled_out(_1: &mut Ring, _2: &mut [u8], _3: usize) -> u8 {
+    let _0: u8;
+    let _1: &mut Ring; // r
+    let _2: &mut [u8]; // s
+    let _3: usize; // n
+    let _4: &mut [u8]; // part
+    let _5: u8;
+    let _6: usize;
+    let _7: u8;
+    let _8: usize;
+    let _9: usize;
+    let _10: bool;
+    let _11: &mut [u8];
+    let _12: usize;
+    let _13: usize;
+    let _14: bool;
+    let _15: u8;
+    let _16: usize;
+    let _17: usize;
+    let _18: bool;
+    let _19: usize;
+    let _20: usize;
+    let _21: bool;
+    let _22: u8;
+
+    bb0: {
+        (*_1).1 = copy _3;
+        _5 = copy (*_1).0[1];
+        _6 = copy _5 as usize;
+        (*_1).1 = Add(copy (*_1).1, copy _6);
+        (*_1).2.0 = const 1_u32;
+        _7 = copy (*_1).0[0];
+        _8 = copy _3;
+        _9 = len(_2);
+        _10 = Lt(copy _8, copy _9);
+        if copy _10 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        (*_2)[_8] = copy _7;
+        _11 = &mut (*_1).0[1..3];
+        _4 = move _11;
+        _12 = const 0_usize;
+        _13 = len(_2);
+        _14 = Lt(copy _12, copy _13);
+        if copy _14 -> [true: bb3, false: bb4];
+    }
+
+    bb2: {
+        panic(index out of bounds);
+    }
+
+    bb3: {
+        _15 = copy (*_2)[_12];
+        _16 = const 0_usize;
+        _17 = len(_4);
+        _18 = Lt(copy _16, copy _17);
+        if copy _18 -> [true: bb5, false: bb6];
+    }
+
+    bb4: {
+        panic(index out of bounds);
+    }
+
+    bb5: {
+        (*_4)[_16] = copy _15;
+        _19 = const 1_usize;
+        _20 = len(_2);
+        _21 = Lt(copy _19, copy _20);
+        if copy _21 -> [true: bb7, false: bb8];
+    }
+
+    bb6: {
+        panic(index out of bounds);
+    }
+
+    bb7: {
+        _22 = copy (*_2)[_19];
+        _0 = copy _22;
+        return;
+    }
+
+    bb8: {
+        panic(index out of bounds);
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}

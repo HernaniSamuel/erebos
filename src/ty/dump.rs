@@ -284,10 +284,13 @@ pub fn dump(q: &mut Queries) -> String {
         };
         body.walk(&mut |e| {
             let ty = q.tables.expr_ty(e.id);
-            let converted = match q.tables.coercion(e.id) {
+            let mut converted = match q.tables.coercion(e.id) {
                 Some(to) => format!(" as {to}"),
                 None => String::new(),
             };
+            if q.tables.is_derefed(e.id) {
+                converted.push_str(", dereferenced");
+            }
             writeln!(
                 out,
                 "    expr {} {} {:?}: {ty}{converted}",
@@ -374,7 +377,7 @@ fn expr_label(q: &Queries, f: &Fn, expr: &Expr) -> String {
         ExprKind::BitStructLit(s, _, Some(_)) => format!("struct {} ..", s.name),
         // A register when the base is of a peripheral type (ADR 0058), a
         // bit field when it is of a bit-field struct type (ADR 0059).
-        ExprKind::Field(base, name, _) => match q.tables.expr_ty(base.id) {
+        ExprKind::Field(base, name, _) => match q.tables.base_ty(base.id) {
             Ty::Peripheral(_) => format!("register {name}"),
             _ if q.tables.bit_field(expr.id).is_some() => format!("bit field {name}"),
             _ => format!("field {name}"),

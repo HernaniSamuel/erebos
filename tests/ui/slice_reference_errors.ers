@@ -1,6 +1,6 @@
 // emit: typeck
-// What a reference to a slice cannot do. `s[i]` needs the `*` first; `*s` is
-// no value; a `&` is not written through, nor borrowed `&mut`; a reference
+// What a reference to a slice cannot do. `*s` is no value; a `&` is not
+// written through, nor borrowed `&mut`; a reference
 // casts to the raw slice and a pointer to its first element, not to an
 // integer, and is not compared; `[&u8]`, `[Uart]` and `[!]` are the errors
 // they are behind a pointer; and a reference is held only by a parameter or a
@@ -11,11 +11,6 @@ struct Holder {
 
 peripheral Uart {
     read write data: u32 at 0,
-}
-
-fn index(s: &[u8], t: &mut [u8]) -> u8 {
-    t[0] = 1;
-    s[0]
 }
 
 fn whole(s: &[u8], t: &mut [u8]) {

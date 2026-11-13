@@ -1,0 +1,87 @@
+// emit: typeck
+// What fields and indexes through a reference do not allow (ADR 0114). The
+// place is `*r`, so a `&T` is not written or borrowed `&mut` through, a field
+// that is not there or not visible is the error it is for `(*r).f`, and a
+// referent without fields or elements is reported as the referent, naming the
+// reference it was reached through. A non-copy value is not moved out. A raw
+// pointer is unchanged: `p.f` is `ty::no-fields` with its help, and `s[i]` on
+// a raw slice is `ty::slice-pointer-index`.
+mod hidden {
+    pub struct Secret {
+        pub open: u32,
+        locked: u32,
+    }
+
+    pub fn make() -> Secret {
+        Secret { open: 1, locked: 2 }
+    }
+}
+
+struct Inner {
+    x: u32,
+}
+
+struct Ring {
+    buf: [u8; 4],
+    count: usize,
+    inner: Inner,
+}
+
+enum Mode: u8 {
+    Idle = 0,
+    Run(u32) = 1,
+}
+
+fn writes(r: &Ring, s: &[u8], a: &[u32; 2]) {
+    r.count = 1;
+    r.count += 1;
+    r.buf[0] = 1;
+    r.inner.x = 2;
+    s[0] = 1;
+    s[1] += 1;
+    a[0] = 5;
+}
+
+fn borrows(r: &Ring, s: &[u8]) {
+    let a: &mut usize = &mut r.count;
+    let b: &mut u8 = &mut r.buf[1];
+    let c: &mut [u8] = &mut r.buf[0..2];
+    let d: &mut u8 = &mut s[0];
+}
+
+fn fields(r: &Ring, h: &hidden::Secret) {
+    let a: usize = r.missing;
+    let b: u32 = r.inner.y;
+    let c: u32 = h.open;
+    let d: u32 = h.locked;
+}
+
+fn no_fields(n: &u32, a: &[u8; 4], s: &[u8], m: &Mode, p: *const Ring, q: *const [u8]) {
+    let x: u32 = n.f;
+    let y: u8 = a.f;
+    let z: usize = s.len;
+    let w: u32 = m.f;
+    let v: usize = p.count;
+    let u: usize = q.len;
+}
+
+fn no_index(n: &u32, r: &Ring, m: &Mode, q: *const [u8]) {
+    let a: u32 = n[0];
+    let b: u8 = r[0];
+    let c: u32 = m[1];
+    let d: u8 = q[0];
+}
+
+fn no_range(n: &u32, r: &Ring) {
+    let a: &[u8] = &n[0..1];
+    let b: &[u8] = &r[1..];
+}
+
+fn moves(r: &Ring, m: &mut Ring) {
+    let a: Inner = r.inner;
+    let b: [u8; 4] = m.buf;
+    let c: Inner = m.inner;
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

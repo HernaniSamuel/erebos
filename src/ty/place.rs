@@ -18,8 +18,9 @@ use super::{
 
 impl Checker<'_, '_> {
     /// The place a pointer or reference of type `ty` leads to, for `*` and
-    /// `[]` (a reference only for `*`, ADR 0105). A pointer of type `!` is
-    /// never computed, so neither is the place.
+    /// `[]` (a reference only for `*`: the base of a field or an index is
+    /// dereferenced by `dereferenced`, ADR 0105, 0114). A pointer of type `!`
+    /// is never computed, so neither is the place.
     /// What a slice, raw or a reference, leads to is a place of type `[T]`,
     /// which can only be indexed, borrowed or passed to `&raw` (ADR 0031,
     /// 0108).
@@ -391,16 +392,41 @@ impl Checker<'_, '_> {
             }
             ExprKind::Field(base, name, name_span) => {
                 let (ty, base_place) = self.base(f, base);
-                self.field(f, expr, ty, base_place, name, *name_span)
+                // `r.f` is `(*r).f` (ADR 0114): the field of what `r` refers
+                // to, which must have fields.
+                if let Ty::Ref(r) = ty {
+                    let (referent, base_place) = self.dereferenced(base, r);
+                    match referent {
+                        Ty::Struct(_)
+                        | Ty::BitStruct(_)
+                        | Ty::Peripheral(_)
+                        | Ty::Never
+                        | Ty::Error => self.field(f, expr, referent, base_place, name, *name_span),
+                        other => {
+                            self.no_fields(other, name, *name_span, Some((base.span, ty)));
+                            PlaceInfo::ERROR
+                        }
+                    }
+                } else {
+                    self.field(f, expr, ty, base_place, name, *name_span)
+                }
             }
             ExprKind::Index(base, index, _) => {
                 // An array is indexed where it is; anything else is read as
                 // a value, which must be a pointer.
-                let base_place = self.place_info(f, base);
-                let ty = match base_place {
+                let mut base_place = self.place_info(f, base);
+                let mut ty = match base_place {
                     Some(info) => info.ty,
                     None => self.check(f, base, None),
                 };
+                // `r[i]` is `(*r)[i]` (ADR 0114), indexing what `r` refers to.
+                let mut reached = None;
+                if let Ty::Ref(r) = ty {
+                    reached = Some(ty);
+                    let (referent, place) = self.dereferenced(base, r);
+                    ty = referent;
+                    base_place = Some(place);
+                }
                 self.check(f, index, Some(Ty::Int(IntTy::Usize)));
                 if let Ty::Array(elem, _) = ty {
                     let base_place = base_place.unwrap_or_else(|| PlaceInfo::temporary(ty, base));
@@ -453,24 +479,6 @@ impl Checker<'_, '_> {
                         )),
                     );
                     PlaceInfo::ERROR
-                } else if let Ty::Ref(r) = ty {
-                    if let Some(info) = base_place {
-                        self.access_place(&info, base.span, AccessMode::Read, None);
-                    }
-                    // Fields and elements through a reference are written as
-                    // through a pointer (ADR 0105).
-                    self.q.diags.push(
-                        Diagnostic::error(
-                            "ty::cannot-index",
-                            format!("cannot index a value of type `{ty}`"),
-                        )
-                        .label(base.span, "a reference, not an array or a pointer")
-                        .help(format!(
-                            "dereference the reference first: `(*r)[i]`, which indexes the `{}` it refers to (ADR 0105)",
-                            r.referent
-                        )),
-                    );
-                    PlaceInfo::ERROR
                 } else if let Ty::Ptr(ptr) = ty
                     && let Ty::Peripheral(_) = *ptr.pointee
                 {
@@ -514,8 +522,14 @@ impl Checker<'_, '_> {
                     let error = Diagnostic::error(
                         "ty::cannot-index",
                         format!("cannot index a value of type `{ty}`"),
-                    )
-                    .label(base.span, "not an array or a pointer");
+                    );
+                    let error = match reached {
+                        Some(reference) => error.label(
+                            base.span,
+                            format!("`{ty}`, reached through this `{reference}`, is not an array or a pointer"),
+                        ),
+                        None => error.label(base.span, "not an array or a pointer"),
+                    };
                     // Unchecked, as in C (ADR 0021).
                     self.through_pointer(ty, base, error)
                 }
@@ -541,11 +555,19 @@ impl Checker<'_, '_> {
         from: Option<&Expr>,
         to: Option<&Expr>,
     ) -> PlaceInfo {
-        let base_place = self.place_info(f, base);
-        let ty = match base_place {
+        let mut base_place = self.place_info(f, base);
+        let mut ty = match base_place {
             Some(info) => info.ty,
             None => self.check(f, base, None),
         };
+        // `r[a..b]` is `(*r)[a..b]` (ADR 0114).
+        let mut reached = None;
+        if let Ty::Ref(r) = ty {
+            reached = Some(ty);
+            let (referent, place) = self.dereferenced(base, r);
+            ty = referent;
+            base_place = Some(place);
+        }
         for bound in [from, to].into_iter().flatten() {
             self.check(f, bound, Some(Ty::Int(IntTy::Usize)));
         }
@@ -593,7 +615,7 @@ impl Checker<'_, '_> {
                 {
                     self.access_place(&info, base.span, AccessMode::Read, None);
                 }
-                self.q.diags.push(range_of_no_array(ty, base));
+                self.q.diags.push(range_of_no_array(ty, base, reached));
                 PlaceInfo::ERROR
             }
         }
@@ -610,6 +632,42 @@ impl Checker<'_, '_> {
                 (ty, PlaceInfo::temporary(ty, base))
             }
         }
+    }
+
+    /// The base `base` of a field, an index or a range in an index, of the
+    /// reference type `r`, dereferenced there (ADR 0114): the type of what it
+    /// refers to, and the place `(*base)`, with its mutability, volatility
+    /// and checks. The base is read as the operand of `*` is, and
+    /// recorded for MIR building.
+    fn dereferenced(&mut self, base: &Expr, r: hir::Ref) -> (Ty, PlaceInfo) {
+        self.q.tables.derefed.insert(base.id);
+        let place = PlaceInfo::through_ref(r, base.span);
+        (place.ty, place)
+    }
+
+    /// `ty::no-fields`: a value of type `other` has no field `name`, named at
+    /// `name_span`. `reached` is the base and the type of the reference it
+    /// was reached through, if it was (ADR 0114).
+    fn no_fields(&mut self, other: Ty, name: &str, name_span: Span, reached: Option<(Span, Ty)>) {
+        let mut diag = Diagnostic::error("ty::no-fields", format!("`{other}` has no fields"))
+            .label(name_span, "no such field");
+        if let Some((base, reference)) = reached {
+            diag = diag.label(
+                base,
+                format!("`{other}`, reached through this `{reference}`"),
+            );
+        }
+        if let Ty::Ptr(ptr) = other
+            && let Ty::Struct(_) | Ty::BitStruct(_) | Ty::Peripheral(_) = *ptr.pointee
+        {
+            diag = diag.help(format!(
+                "dereference the pointer first: `(*p).{name}` (ADR 0021)"
+            ));
+        }
+        if (other.slice_elem().is_some() || matches!(other, Ty::Slice(_))) && name == "len" {
+            diag = diag.help("the length of a slice `s` is `len(s)` (ADR 0031)");
+        }
+        self.q.diags.push(payload_values_help(diag, other));
     }
 
     /// `base.name`, where `base` has type `ty` and place `base_place`, in
@@ -637,28 +695,7 @@ impl Checker<'_, '_> {
             Ty::Error => return PlaceInfo::ERROR,
             Ty::Peripheral(p) => return self.register(f, expr, p, base_place, name, name_span),
             other => {
-                let mut diag =
-                    Diagnostic::error("ty::no-fields", format!("`{other}` has no fields"))
-                        .label(name_span, "no such field");
-                if let Ty::Ptr(ptr) = other
-                    && let Ty::Struct(_) | Ty::BitStruct(_) | Ty::Peripheral(_) = *ptr.pointee
-                {
-                    diag = diag.help(format!(
-                        "dereference the pointer first: `(*p).{name}` (ADR 0021)"
-                    ));
-                }
-                if let Ty::Ref(r) = other
-                    && let Ty::Struct(_) | Ty::BitStruct(_) | Ty::Peripheral(_) = *r.referent
-                {
-                    diag = diag.help(format!(
-                        "dereference the reference first: `(*r).{name}` (ADR 0105)"
-                    ));
-                }
-                if (other.slice_elem().is_some() || matches!(other, Ty::Slice(_))) && name == "len"
-                {
-                    diag = diag.help("the length of a slice `s` is `len(s)` (ADR 0031)");
-                }
-                self.q.diags.push(payload_values_help(diag, other));
+                self.no_fields(other, name, name_span, None);
                 return PlaceInfo::ERROR;
             }
         };
@@ -1360,9 +1397,9 @@ impl Checker<'_, '_> {
 }
 
 /// `base[a..b]` where `base` has type `ty`, which is neither an array nor a
-/// `[T]` (ADR 0108): a slice or a reference not dereferenced, a pointer, an
-/// integer.
-fn range_of_no_array(ty: Ty, base: &Expr) -> Diagnostic {
+/// `[T]` (ADR 0108): a pointer, an integer. `reached` is the type of the
+/// reference `base` is, if its referent has type `ty` (ADR 0114).
+fn range_of_no_array(ty: Ty, base: &Expr, reached: Option<Ty>) -> Diagnostic {
     match ty {
         Ty::Ptr(ptr) if matches!(*ptr.pointee, Ty::Slice(_)) => Diagnostic::error(
             "ty::slice-pointer-index",
@@ -1370,27 +1407,23 @@ fn range_of_no_array(ty: Ty, base: &Expr) -> Diagnostic {
         )
         .label(base.span, "a slice, not an array or a place of type `[T]`")
         .help("take the range of what it points to, checked against its length: `(*s)[a..b]` (ADR 0031, 0108)"),
-        Ty::Ref(r) if matches!(*r.referent, Ty::Slice(_)) => Diagnostic::error(
-            "ty::cannot-index",
-            format!("cannot take a range of a value of type `{ty}`"),
-        )
-        .label(base.span, "a reference, not an array or a place of type `[T]`")
-        .help("dereference the reference first: `(*s)[a..b]`, which takes the range of the slice it refers to (ADR 0105, 0108)"),
         _ => {
             let diag = Diagnostic::error(
                 "ty::cannot-index",
                 format!("cannot take a range of a value of type `{ty}`"),
-            )
-            .label(
-                base.span,
-                "a range needs the length of an array or a slice",
             );
+            let diag = match reached {
+                Some(reference) => diag.label(
+                    base.span,
+                    format!(
+                        "`{ty}`, reached through this `{reference}`, is not an array or a slice"
+                    ),
+                ),
+                None => diag.label(base.span, "a range needs the length of an array or a slice"),
+            };
             match ty {
                 Ty::Ptr(ptr) if matches!(*ptr.pointee, Ty::Array(..)) => diag.help(
                     "dereference the pointer first: `(*p)[a..b]`, which takes the range of the array it points to (ADR 0108)",
-                ),
-                Ty::Ref(r) if matches!(*r.referent, Ty::Array(..)) => diag.help(
-                    "dereference the reference first: `(*r)[a..b]`, which takes the range of the array it refers to (ADR 0105, 0108)",
                 ),
                 Ty::Ptr(ptr) if !matches!(*ptr.pointee, Ty::Peripheral(_)) => diag.help(
                     "`slice(p, n)` makes a slice from a pointer and a length, unchecked (ADR 0031, 0108)",
@@ -1471,6 +1504,14 @@ impl Checker<'_, '_> {
 
     fn root(&self, expr: &Expr) -> Root {
         match &expr.kind {
+            // `r.f`, `r[i]` and `r[a..b]` are places through `*r` (ADR 0114).
+            ExprKind::Field(base, ..)
+            | ExprKind::Index(base, ..)
+            | ExprKind::Subslice { base, .. }
+                if self.q.tables.is_derefed(base.id) =>
+            {
+                Root::Unmovable(Unmovable::Reference)
+            }
             ExprKind::Static(_) => Root::Unmovable(Unmovable::Static),
             ExprKind::Deref(pointer) => match self.q.tables.expr_types[pointer.id.0 as usize] {
                 Ty::Ref(_) => Root::Unmovable(Unmovable::Reference),

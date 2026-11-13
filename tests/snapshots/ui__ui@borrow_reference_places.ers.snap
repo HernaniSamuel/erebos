@@ -1,0 +1,96 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/borrow_reference_places.ers
+---
+--- errors ---
+analysis::borrow-conflict
+
+  × cannot assign to `(*r).buf[_]` while it is borrowed
+    ╭─[borrow_reference_places.ers:24:5]
+ 22 │ fn element_then_whole(r: &mut Ring) {
+ 23 │     let a: &mut u8 = &mut r.buf[0];
+    ·                      ──────┬──────
+    ·                            ╰── `(*r).buf[_]` is borrowed as mutable here
+ 24 │     r.buf[1] = 1;
+    ·     ──────┬─────
+    ·           ╰── assigned here
+ 25 │     *a = 2;
+    ·     ───┬──
+    ·        ╰── the borrow is used later here
+ 26 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot assign to `(*r).buf[_]` while it is borrowed
+    ╭─[borrow_reference_places.ers:31:5]
+ 29 │ fn range_then_element(r: &mut Ring) {
+ 30 │     let a: &mut [u8] = &mut r.buf[0..2];
+    ·                        ────────┬───────
+    ·                                ╰── `(*r).buf[_.._]` is borrowed as mutable here
+ 31 │     r.buf[0] = 1;
+    ·     ──────┬─────
+    ·           ╰── assigned here
+ 32 │     a[0] = 2;
+    ·     ────┬───
+    ·         ╰── the borrow is used later here
+ 33 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot use `(*r).count` while it is borrowed as mutable
+    ╭─[borrow_reference_places.ers:38:20]
+ 36 │ fn read_while_mut(r: &mut Ring) -> usize {
+ 37 │     let a: &mut usize = &mut r.count;
+    ·                         ──────┬─────
+    ·                               ╰── `(*r).count` is borrowed as mutable here
+ 38 │     let n: usize = r.count;
+    ·                    ───┬───
+    ·                       ╰── used here
+ 39 │     *a = n;
+    ·     ───┬──
+    ·        ╰── the borrow is used later here
+ 40 │     n
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot assign to `(*r).count` while it is borrowed
+    ╭─[borrow_reference_places.ers:46:5]
+ 44 │ fn mut_while_shared(r: &mut Ring) -> usize {
+ 45 │     let a: &usize = &r.count;
+    ·                     ────┬───
+    ·                         ╰── `(*r).count` is borrowed here
+ 46 │     r.count = 5;
+    ·     ─────┬─────
+    ·          ╰── assigned here
+ 47 │     *a
+    ·     ─┬
+    ·      ╰── the borrow is used later here
+ 48 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot lend `r` to this call while it is borrowed
+    ╭─[borrow_reference_places.ers:53:10]
+ 51 │ fn whole_while_field(r: &mut Ring) {
+ 52 │     let a: &mut usize = &mut r.count;
+    ·                         ──────┬─────
+    ·                               ╰── `(*r).count` is borrowed as mutable here
+ 53 │     take(r);
+    ·          ┬
+    ·          ╰── lent to this call here
+ 54 │     *a = 1;
+    ·     ───┬──
+    ·        ╰── the borrow is used later here
+ 55 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)

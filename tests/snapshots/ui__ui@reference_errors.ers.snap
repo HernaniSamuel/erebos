@@ -166,163 +166,151 @@ ty::write-through-const
   help: only `&mut` references can be written through (ADR 0105)
 ty::no-fields
 
-  × `&Pair` has no fields
+  × `*const Pair` has no fields
     ╭─[reference_errors.ers:57:20]
- 56 │ fn not_automatic(r: &Pair, a: &[u32; 2], n: u32) {
- 57 │     let x: u32 = r.a;
+ 56 │ fn not_automatic(p: *const Pair, n: u32) {
+ 57 │     let x: u32 = p.a;
     ·                    ┬
     ·                    ╰── no such field
- 58 │     let y: u32 = a[0];
+ 58 │     let z: u32 = *n;
     ╰────
-  help: dereference the reference first: `(*r).a` (ADR 0105)
-ty::cannot-index
-
-  × cannot index a value of type `&[u32; 2]`
-    ╭─[reference_errors.ers:58:18]
- 57 │     let x: u32 = r.a;
- 58 │     let y: u32 = a[0];
-    ·                  ┬
-    ·                  ╰── a reference, not an array or a pointer
- 59 │     let z: u32 = *n;
-    ╰────
-  help: dereference the reference first: `(*r)[i]`, which indexes the `[u32; 2]` it refers to (ADR
-        0105)
+  help: dereference the pointer first: `(*p).a` (ADR 0021)
 ty::deref-non-pointer
 
   × cannot dereference `u32`
-    ╭─[reference_errors.ers:59:19]
- 58 │     let y: u32 = a[0];
- 59 │     let z: u32 = *n;
+    ╭─[reference_errors.ers:58:19]
+ 57 │     let x: u32 = p.a;
+ 58 │     let z: u32 = *n;
     ·                   ┬
     ·                   ╰── not a pointer or a reference
- 60 │ }
+ 59 │ }
     ╰────
 ty::invalid-operand
 
   × `==` needs integers, pointers, `bool` or enums, found `&u32`
-    ╭─[reference_errors.ers:63:19]
- 62 │ fn comparisons(a: &u32, b: &u32) {
- 63 │     let x: bool = a == b;
+    ╭─[reference_errors.ers:62:19]
+ 61 │ fn comparisons(a: &u32, b: &u32) {
+ 62 │     let x: bool = a == b;
     ·                   ───┬──
     ·                      ╰── has type `&u32`
- 64 │     let y: bool = a < b;
+ 63 │     let y: bool = a < b;
     ╰────
   help: neither meaning is implied: compare the values with `*a == *b`, or the addresses with `a
         as *const u32 == b as *const u32` (ADR 0105)
 ty::invalid-operand
 
   × `<` needs integers or pointers, found `&u32`
-    ╭─[reference_errors.ers:64:19]
- 63 │     let x: bool = a == b;
- 64 │     let y: bool = a < b;
+    ╭─[reference_errors.ers:63:19]
+ 62 │     let x: bool = a == b;
+ 63 │     let y: bool = a < b;
     ·                   ──┬──
     ·                     ╰── has type `&u32`
- 65 │ }
+ 64 │ }
     ╰────
   help: neither meaning is implied: compare the values with `*a == *b`, or the addresses with `a
         as *const u32 == b as *const u32` (ADR 0105)
 ty::invalid-cast
 
   × cannot cast `&u32` to `usize`
-    ╭─[reference_errors.ers:68:25]
- 67 │ fn casts(r: &u32, p: *const u32) {
- 68 │     let a: usize = r as usize;
+    ╭─[reference_errors.ers:67:25]
+ 66 │ fn casts(r: &u32, p: *const u32) {
+ 67 │     let a: usize = r as usize;
     ·                         ──┬──
     ·                           ╰── a reference converts only to raw pointers
- 69 │     let b: bool = r as bool;
+ 68 │     let b: bool = r as bool;
     ╰────
   help: cast it to a raw pointer first, as in `r as *const u32 as usize` (ADR 0105)
 ty::invalid-cast
 
   × cannot cast `&u32` to `bool`
-    ╭─[reference_errors.ers:69:24]
- 68 │     let a: usize = r as usize;
- 69 │     let b: bool = r as bool;
+    ╭─[reference_errors.ers:68:24]
+ 67 │     let a: usize = r as usize;
+ 68 │     let b: bool = r as bool;
     ·                        ──┬─
     ·                          ╰── a reference converts only to raw pointers
- 70 │     let c: u8 = r as u8;
+ 69 │     let c: u8 = r as u8;
     ╰────
   help: cast it to a raw pointer first, as in `r as *const u32 as usize` (ADR 0105)
 ty::invalid-cast
 
   × cannot cast `&u32` to `u8`
-    ╭─[reference_errors.ers:70:22]
- 69 │     let b: bool = r as bool;
- 70 │     let c: u8 = r as u8;
+    ╭─[reference_errors.ers:69:22]
+ 68 │     let b: bool = r as bool;
+ 69 │     let c: u8 = r as u8;
     ·                      ─┬
     ·                       ╰── a reference converts only to raw pointers
- 71 │     let d: &u32 = 5 as &u32;
+ 70 │     let d: &u32 = 5 as &u32;
     ╰────
   help: cast it to a raw pointer first, as in `r as *const u32 as usize` (ADR 0105)
 ty::invalid-cast
 
   × cannot cast to `&u32`
-    ╭─[reference_errors.ers:71:24]
- 70 │     let c: u8 = r as u8;
- 71 │     let d: &u32 = 5 as &u32;
+    ╭─[reference_errors.ers:70:24]
+ 69 │     let c: u8 = r as u8;
+ 70 │     let d: &u32 = 5 as &u32;
     ·                        ──┬─
     ·                          ╰── nothing converts to a reference
- 72 │     let e: &u32 = (&raw const *r) as &u32;
+ 71 │     let e: &u32 = (&raw const *r) as &u32;
     ╰────
   help: a reference is made with `&place` or `&mut place`; to borrow what a raw pointer `p` points
         to, write `&*p` or `&mut *p` (ADR 0105)
 ty::invalid-cast
 
   × cannot cast to `&u32`
-    ╭─[reference_errors.ers:72:38]
- 71 │     let d: &u32 = 5 as &u32;
- 72 │     let e: &u32 = (&raw const *r) as &u32;
+    ╭─[reference_errors.ers:71:38]
+ 70 │     let d: &u32 = 5 as &u32;
+ 71 │     let e: &u32 = (&raw const *r) as &u32;
     ·                                      ──┬─
     ·                                        ╰── nothing converts to a reference
- 73 │     let f: &u32 = p as &u32;
+ 72 │     let f: &u32 = p as &u32;
     ╰────
   help: a reference is made with `&place` or `&mut place`; to borrow what a raw pointer `p` points
         to, write `&*p` or `&mut *p` (ADR 0105)
 ty::invalid-cast
 
   × cannot cast to `&u32`
-    ╭─[reference_errors.ers:73:24]
- 72 │     let e: &u32 = (&raw const *r) as &u32;
- 73 │     let f: &u32 = p as &u32;
+    ╭─[reference_errors.ers:72:24]
+ 71 │     let e: &u32 = (&raw const *r) as &u32;
+ 72 │     let f: &u32 = p as &u32;
     ·                        ──┬─
     ·                          ╰── nothing converts to a reference
- 74 │ }
+ 73 │ }
     ╰────
   help: a reference is made with `&place` or `&mut place`; to borrow what a raw pointer `p` points
         to, write `&*p` or `&mut *p` (ADR 0105)
 ty::bit-field-address
 
   × cannot take the address of a field of `Flags`
-    ╭─[reference_errors.ers:77:19]
- 76 │ fn addresses(f: Flags, p: &Packed) {
- 77 │     let a: &u8 = &f.low;
+    ╭─[reference_errors.ers:76:19]
+ 75 │ fn addresses(f: Flags, p: &Packed) {
+ 76 │     let a: &u8 = &f.low;
     ·                   ──┬──
     ·                     ╰── a bit field, not a place in memory
- 78 │     let b: &u32 = &(*p).word;
+ 77 │     let b: &u32 = &(*p).word;
     ╰────
   help: a field of a bit-field struct is a range of bits of its `u8`; copy it into a `let` and
         take that address, or take the address of the whole value (ADR 0059)
 ty::packed-field-address
 
   × cannot take the address of a `u32` that may be misaligned
-    ╭─[reference_errors.ers:78:20]
- 77 │     let a: &u8 = &f.low;
- 78 │     let b: &u32 = &(*p).word;
+    ╭─[reference_errors.ers:77:20]
+ 76 │     let a: &u8 = &f.low;
+ 77 │     let b: &u32 = &(*p).word;
     ·                    ────┬────
     ·                        ╰── reached through a field of a `#[packed]` struct
- 79 │     let c: &u32 = &TIMER.count;
+ 78 │     let c: &u32 = &TIMER.count;
     ╰────
   help: a `*const u32` promises alignment, and dereferencing a misaligned one may trap; copy the
         value into a `let` first (ADR 0022)
 ty::register-address
 
   × cannot take the address of the register `count` of `Timer`
-    ╭─[reference_errors.ers:79:20]
- 78 │     let b: &u32 = &(*p).word;
- 79 │     let c: &u32 = &TIMER.count;
+    ╭─[reference_errors.ers:78:20]
+ 77 │     let b: &u32 = &(*p).word;
+ 78 │     let c: &u32 = &TIMER.count;
     ·                    ─────┬─────
     ·                         ╰── a register
- 80 │     let d: &u32 = &*loop {};
+ 79 │     let d: &u32 = &*loop {};
     ╰────
   help: a pointer to it would reach it without its access mode, `read write`; read or write it
         where it is named, or pass the whole device with a pointer to its peripheral, as `&raw mut
@@ -330,71 +318,71 @@ ty::register-address
 ty::never-in-memory
 
   × `!` is not a type of memory
-    ╭─[reference_errors.ers:80:20]
- 79 │     let c: &u32 = &TIMER.count;
- 80 │     let d: &u32 = &*loop {};
+    ╭─[reference_errors.ers:79:20]
+ 78 │     let c: &u32 = &TIMER.count;
+ 79 │     let d: &u32 = &*loop {};
     ·                    ────┬───
     ·                        ╰── `!` as the type of a place under `&`
- 81 │ }
+ 80 │ }
     ╰────
   help: `!` is the type of expressions that do not finish, so no memory holds one; for a type
         without data, use `()` (ADR 0034)
 ty::asm-operand-type
 
   × `&u32` cannot be the operand of a register
-    ╭─[reference_errors.ers:84:23]
- 83 │ fn asm_operand(r: &u32) {
- 84 │     asm("{}", in(reg) r);
+    ╭─[reference_errors.ers:83:23]
+ 82 │ fn asm_operand(r: &u32) {
+ 83 │     asm("{}", in(reg) r);
     ·                       ┬
     ·                       ╰── has type `&u32`
- 85 │ }
+ 84 │ }
     ╰────
   help: an operand is an integer of at most 32 bits or a thin pointer; convert other values with
         `as` (ADR 0008, 0079)
 ty::address-of-immutable
 
   × cannot take a `*mut` address through a `&` reference
-    ╭─[reference_errors.ers:88:33]
- 87 │ fn raw_mut_through_shared(r: &u32) {
- 88 │     let p: *mut u32 = &raw mut *r;
+    ╭─[reference_errors.ers:87:33]
+ 86 │ fn raw_mut_through_shared(r: &u32) {
+ 87 │     let p: *mut u32 = &raw mut *r;
     ·                                 ┬
     ·                                 ╰── has type `&u32`
- 89 │ }
+ 88 │ }
     ╰────
   help: use `&raw const`, or a `&mut` reference (ADR 0105)
 ty::never-in-memory
 
   × `!` is not a type of memory
-    ╭─[reference_errors.ers:91:18]
- 90 │ 
- 91 │ fn referents(a: &!) {}
+    ╭─[reference_errors.ers:90:18]
+ 89 │ 
+ 90 │ fn referents(a: &!) {}
     ·                  ┬
     ·                  ╰── `!` as the referent of a reference
- 92 │ 
+ 91 │ 
     ╰────
   help: `!` is the type of expressions that do not finish, so no memory holds one; for a type
         without data, use `()` (ADR 0034)
 ty::never-in-memory
 
   × `!` is not a type of memory
-    ╭─[reference_errors.ers:94:20]
- 93 │ fn never_values() {
- 94 │     let a: &u32 = &loop {};
+    ╭─[reference_errors.ers:93:20]
+ 92 │ fn never_values() {
+ 93 │     let a: &u32 = &loop {};
     ·                    ───┬───
     ·                       ╰── `!` as the type of a value under `&`
- 95 │     let b: &mut u32 = &mut loop {};
+ 94 │     let b: &mut u32 = &mut loop {};
     ╰────
   help: `!` is the type of expressions that do not finish, so no memory holds one; for a type
         without data, use `()` (ADR 0034)
 ty::never-in-memory
 
   × `!` is not a type of memory
-    ╭─[reference_errors.ers:95:28]
- 94 │     let a: &u32 = &loop {};
- 95 │     let b: &mut u32 = &mut loop {};
+    ╭─[reference_errors.ers:94:28]
+ 93 │     let a: &u32 = &loop {};
+ 94 │     let b: &mut u32 = &mut loop {};
     ·                            ───┬───
     ·                               ╰── `!` as the type of a value under `&mut`
- 96 │ }
+ 95 │ }
     ╰────
   help: `!` is the type of expressions that do not finish, so no memory holds one; for a type
         without data, use `()` (ADR 0034)

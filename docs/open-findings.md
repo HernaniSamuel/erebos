@@ -213,8 +213,7 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   reads `s` through `len(s)`, then the elements overlap), one on an array; it
   follows ADR 0108 and is only noisy. In `two(&mut (*s)[..4], &mut (*s)[4..])`
   the message is "cannot use `s`", where "cannot borrow `(*s)[_.._]`" would
-  match the other cases. `s[i]` on a reference to a slice keeps the
-  `ty::cannot-index` help that writes `(*r)[i]` for any reference. (M5.4b)
+  match the other cases. (M5.4b)
 - `src/layout.rs`: `layout::of` works on `hir::Ty`, whose `slice_elem` and
   `is_aggregate` stay raw-only, so a HIR `&[T]` would get a thin pointer's
   layout; no input reaches it today, a latent trap if references become

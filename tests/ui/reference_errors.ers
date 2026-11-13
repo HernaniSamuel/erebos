@@ -1,8 +1,8 @@
 // emit: typeck
 // What a reference cannot do. `&mut` needs a place that can be written; `*r`
-// through a `&T` cannot be; `r.f` and `r[i]` are not automatic; a reference
-// casts to a raw pointer and to nothing else, is never the target of a cast,
-// and is not compared; it has no address in a bit field, a register, a
+// through a `&T` cannot be; `p.f` through a raw pointer is not automatic; a
+// reference casts to a raw pointer and to nothing else, is never the target of
+// a cast, and is not compared; it has no address in a bit field, a register, a
 // misaligned field, or a place of type `!` (ADR 0105).
 extern static EXTERNAL: u32;
 static TABLE: [u32; 2] = [1, 2];
@@ -53,9 +53,8 @@ fn writes(r: &u32, s: &mut u32) {
     *s = 5;
 }
 
-fn not_automatic(r: &Pair, a: &[u32; 2], n: u32) {
-    let x: u32 = r.a;
-    let y: u32 = a[0];
+fn not_automatic(p: *const Pair, n: u32) {
+    let x: u32 = p.a;
     let z: u32 = *n;
 }
 
