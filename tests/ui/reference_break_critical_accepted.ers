@@ -1,0 +1,76 @@
+// emit: mir
+// What ADR 0110 leaves alone: a `break` with a reference whose loop is inside
+// the `critical` block, a `break` out of the block with a value that is not a
+// reference, and the wait of ADR 0086 (a `break` with no value).
+static mut READY: bool = false;
+
+fn take(r: &u32) -> u32 {
+    *r
+}
+
+fn loop_inside_block() -> u32 {
+    let x: u32 = 1;
+    critical {
+        let r: &u32 = loop {
+            break &x;
+        };
+        take(r)
+    }
+}
+
+fn nested_inside_block(c: bool) -> u32 {
+    let x: u32 = 1;
+    let y: u32 = 2;
+    critical {
+        let r: &u32 = loop {
+            let inner: &u32 = loop {
+                break &x;
+            };
+            if c {
+                break inner;
+            }
+            break &y;
+        };
+        take(r)
+    }
+}
+
+fn value_not_a_reference() -> u32 {
+    let x: u32 = 1;
+    loop {
+        critical {
+            break x;
+        }
+    }
+}
+
+fn reference_after_block() -> u32 {
+    let x: u32 = 1;
+    let r: &u32 = loop {
+        critical {
+            take(&x);
+        }
+        break &x;
+    };
+    take(r)
+}
+
+fn wait() {
+    loop {
+        critical {
+            if READY {
+                READY = false;
+                break;
+            }
+        }
+    }
+}
+
+entry fn main() -> ! {
+    wait();
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    loop {}
+}

@@ -1,0 +1,78 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/reference_break_critical.ers
+---
+--- errors ---
+ty::reference-position
+
+  × a reference cannot be the value of a `break` out of a `critical` block
+    ╭─[reference_break_critical.ers:10:19]
+  9 │         critical {
+ 10 │             break &x;
+    ·                   ─┬
+    ·                    ╰── `&u32` would outlive the critical section
+ 11 │         }
+    ╰────
+  help: a reference must not outlive the protection it was taken in (ADR 0094, 0105, 0110); use
+        the value inside the block, or break with a copy of what it refers to
+ty::reference-position
+
+  × a reference cannot be the value of a `break` out of a `critical` block
+    ╭─[reference_break_critical.ers:20:19]
+ 19 │         critical {
+ 20 │             break &mut x;
+    ·                   ───┬──
+    ·                      ╰── `&mut u32` would outlive the critical section
+ 21 │         }
+    ╰────
+  help: a reference must not outlive the protection it was taken in (ADR 0094, 0105, 0110); use
+        the value inside the block, or break with a copy of what it refers to
+ty::reference-position
+
+  × a reference cannot be the value of a `break` out of a `critical` block
+    ╭─[reference_break_critical.ers:29:19]
+ 28 │         critical {
+ 29 │             break p;
+    ·                   ┬
+    ·                   ╰── `&u32` would outlive the critical section
+ 30 │         }
+    ╰────
+  help: a reference must not outlive the protection it was taken in (ADR 0094, 0105, 0110); use
+        the value inside the block, or break with a copy of what it refers to
+ty::reference-position
+
+  × a reference cannot be the value of a `break` out of a `critical` block
+    ╭─[reference_break_critical.ers:40:23]
+ 39 │             critical {
+ 40 │                 break &x;
+    ·                       ─┬
+    ·                        ╰── `&u32` would outlive the critical section
+ 41 │             }
+    ╰────
+  help: a reference must not outlive the protection it was taken in (ADR 0094, 0105, 0110); use
+        the value inside the block, or break with a copy of what it refers to
+ty::reference-position
+
+  × a reference cannot be the value of a `break` out of a `critical` block
+    ╭─[reference_break_critical.ers:59:23]
+ 58 │             if inner == 0 {
+ 59 │                 break &x;
+    ·                       ─┬
+    ·                        ╰── `&u32` would outlive the critical section
+ 60 │             }
+    ╰────
+  help: a reference must not outlive the protection it was taken in (ADR 0094, 0105, 0110); use
+        the value inside the block, or break with a copy of what it refers to
+ty::reference-position
+
+  × a reference cannot be the value of a `break` out of a `critical` block
+    ╭─[reference_break_critical.ers:88:23]
+ 87 │                 // Its loop is inside the outer block, outside the inner.
+ 88 │                 break &x;
+    ·                       ─┬
+    ·                        ╰── `&u32` would outlive the critical section
+ 89 │             }
+    ╰────
+  help: a reference must not outlive the protection it was taken in (ADR 0094, 0105, 0110); use
+        the value inside the block, or break with a copy of what it refers to

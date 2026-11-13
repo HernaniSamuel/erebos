@@ -3,8 +3,10 @@
 //! argument, an initializer, the operand of `*` or `as`, or yields one of
 //! those. A reference held anywhere else is `ty::reference-position`.
 
+use std::collections::HashSet;
+
 use crate::diag::Diagnostic;
-use crate::hir::{Block, ExprKind, NeverPosition, ReferencePosition, Ty};
+use crate::hir::{Block, ExprId, ExprKind, NeverPosition, ReferencePosition, Ty};
 use crate::query::Queries;
 
 use super::{Checker, memory_position};
@@ -70,17 +72,46 @@ pub(super) fn is_reference(ty: Ty) -> bool {
     matches!(ty, Ty::Ref(_))
 }
 
+/// The `break`s in `block` that leave it: those whose loop is not inside it.
+/// Erebos has no labels, so a `break` targets the innermost loop around it,
+/// and when that loop is outside the block, the `break` crosses the block's
+/// end. A `break` that leaves a `critical` block nested in `block` too leaves
+/// the innermost one first, and is found for each block it leaves.
+fn breaks_out_of(block: &Block) -> Vec<ExprId> {
+    let mut loops: HashSet<ExprId> = HashSet::new();
+    let mut breaks: Vec<(ExprId, ExprId)> = Vec::new();
+    block.walk(&mut |expr| match &expr.kind {
+        ExprKind::Loop(_) | ExprKind::While { .. } => {
+            loops.insert(expr.id);
+        }
+        ExprKind::Break { target, .. } => breaks.push((expr.id, *target)),
+        _ => {}
+    });
+    breaks
+        .into_iter()
+        .filter(|(_, target)| !loops.contains(target))
+        .map(|(id, _)| id)
+        .collect()
+}
+
 impl Checker<'_, '_> {
     /// Reports, in the body of a function, the expressions that make a type
     /// holding a reference below its top, at the innermost one, and the
     /// values of a `critical` block and of a `comptime` expression that are
-    /// references (ADR 0105). The expressions above an expression reported
-    /// are not: their types come from it. A type that was written is reported
-    /// at its text (`report_reference_types`).
+    /// references (ADR 0105), and the values of a `break` that are references
+    /// and leave a `critical` block (ADR 0110). The expressions above an
+    /// expression reported are not: their types come from it. A type that was
+    /// written is reported at its text (`report_reference_types`).
     pub(super) fn report_made_references(&mut self, body: &Block) {
         let mut found: Vec<Diagnostic> = Vec::new();
+        // The `break`s, found at the `critical` block they leave, which the
+        // walk reaches before them (ADR 0110).
+        let mut leaving: HashSet<ExprId> = HashSet::new();
         let tables = &self.q.tables;
         body.walk(&mut |expr| {
+            if let ExprKind::Critical(block) = &expr.kind {
+                leaving.extend(breaks_out_of(block));
+            }
             let ty = tables.expr_ty(expr.id);
             // Its own error was reported, as `&mut` of a variable that is
             // not `mut`.
@@ -118,6 +149,19 @@ impl Checker<'_, '_> {
                         diagnostic("the value of a `critical` block")
                             .label(at, format!("`{ty}` would outlive the critical section"))
                             .help("a reference must not outlive the protection it was taken in (ADR 0094, 0105); use the value inside the block, or end the block with a copy of what it refers to"),
+                    );
+                    return;
+                }
+                // `loop { critical { break &x; } }`, with the `break` inside
+                // the block and its loop outside it
+                ExprKind::Break {
+                    value: Some(value), ..
+                } if leaving.contains(&expr.id) && is_reference(tables.expr_ty(value.id)) => {
+                    let ty = tables.expr_ty(value.id);
+                    found.push(
+                        diagnostic("the value of a `break` out of a `critical` block")
+                            .label(value.span, format!("`{ty}` would outlive the critical section"))
+                            .help("a reference must not outlive the protection it was taken in (ADR 0094, 0105, 0110); use the value inside the block, or break with a copy of what it refers to"),
                     );
                     return;
                 }

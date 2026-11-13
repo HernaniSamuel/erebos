@@ -1,0 +1,244 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/reference_break_critical_accepted.ers
+---
+--- mir ---
+static mut READY: bool; // align 1
+
+fn take(_1: &u32) -> u32 {
+    let _0: u32;
+    let _1: &u32; // r
+    let _2: u32;
+
+    bb0: {
+        _2 = copy (*_1);
+        _0 = copy _2;
+        return;
+    }
+}
+
+fn loop_inside_block() -> u32 {
+    let _0: u32;
+    let _1: u32; // x
+    let _2: &u32; // r
+    let _3: u32;
+    let _4: &u32;
+    let _5: &u32;
+    let _6: u32;
+
+    bb0: {
+        _1 = const 1_u32;
+        critical_enter _3;
+        goto -> bb1;
+    }
+
+    bb1: {
+        _5 = &_1;
+        _4 = copy _5;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _2 = copy _4;
+        _6 = call take(copy _2);
+        critical_exit _3;
+        _0 = copy _6;
+        return;
+    }
+}
+
+fn nested_inside_block(_1: bool) -> u32 {
+    let _0: u32;
+    let _1: bool; // c
+    let _2: u32; // x
+    let _3: u32; // y
+    let _4: &u32; // inner
+    let _5: &u32; // r
+    let _6: u32;
+    let _7: &u32;
+    let _8: &u32;
+    let _9: &u32;
+    let _10: &u32;
+    let _11: u32;
+
+    bb0: {
+        _2 = const 1_u32;
+        _3 = const 2_u32;
+        critical_enter _6;
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        _9 = &_2;
+        _8 = copy _9;
+        goto -> bb3;
+    }
+
+    bb3: {
+        _4 = copy _8;
+        if copy _1 -> [true: bb4, false: bb5];
+    }
+
+    bb4: {
+        _7 = copy _4;
+        goto -> bb6;
+    }
+
+    bb5: {
+        goto -> bb7;
+    }
+
+    bb6: {
+        _5 = copy _7;
+        _11 = call take(copy _5);
+        critical_exit _6;
+        _0 = copy _11;
+        return;
+    }
+
+    bb7: {
+        _10 = &_3;
+        _7 = copy _10;
+        goto -> bb6;
+    }
+}
+
+fn value_not_a_reference() -> u32 {
+    let _0: u32;
+    let _1: u32; // x
+    let _2: u32;
+    let _3: u32;
+
+    bb0: {
+        _1 = const 1_u32;
+        goto -> bb1;
+    }
+
+    bb1: {
+        critical_enter _3;
+        _2 = copy _1;
+        critical_exit _3;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _0 = copy _2;
+        return;
+    }
+}
+
+fn reference_after_block() -> u32 {
+    let _0: u32;
+    let _1: u32; // x
+    let _2: &u32; // r
+    let _3: &u32;
+    let _4: u32;
+    let _5: &u32;
+    let _6: u32;
+    let _7: &u32;
+    let _8: u32;
+
+    bb0: {
+        _1 = const 1_u32;
+        goto -> bb1;
+    }
+
+    bb1: {
+        critical_enter _4;
+        _5 = &_1;
+        _6 = call take(copy _5);
+        critical_exit _4;
+        _7 = &_1;
+        _3 = copy _7;
+        goto -> bb2;
+    }
+
+    bb2: {
+        _2 = copy _3;
+        _8 = call take(copy _2);
+        _0 = copy _8;
+        return;
+    }
+}
+
+fn wait() -> () {
+    let _0: ();
+    let _1: u32;
+    let _2: *mut bool;
+    let _3: bool;
+    let _4: *mut bool;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        critical_enter _1;
+        _2 = const static READY;
+        _3 = copy (*_2);
+        if copy _3 -> [true: bb2, false: bb3];
+    }
+
+    bb2: {
+        _4 = const static READY;
+        (*_4) = const false;
+        critical_exit _1;
+        goto -> bb4;
+    }
+
+    bb3: {
+        goto -> bb5;
+    }
+
+    bb4: {
+        return;
+    }
+
+    bb5: {
+        critical_exit _1;
+        goto -> bb1;
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+
+    bb0: {
+        call wait();
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+comptime fn READY() -> bool {
+    let _0: bool;
+
+    bb0: {
+        _0 = const false;
+        return;
+    }
+}
+
+extern fn core.arch.__critical_enter() -> u32;
+
+extern fn core.arch.__critical_exit(_1: u32) -> ();

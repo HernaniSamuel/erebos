@@ -1,0 +1,101 @@
+// A `break` whose value is a reference cannot leave a `critical` block (ADR
+// 0110): the block's protection would end while the reference lives. One
+// error each, at the value. The rejected `break`s are those whose loop is
+// outside the `critical` block around them; the accepted ones, beside them,
+// have their loop inside it, or are outside every block.
+fn local() -> u32 {
+    let x: u32 = 1;
+    let r: &u32 = loop {
+        critical {
+            break &x;
+        }
+    };
+    *r
+}
+
+fn unique() -> u32 {
+    let mut x: u32 = 1;
+    let r: &mut u32 = loop {
+        critical {
+            break &mut x;
+        }
+    };
+    *r
+}
+
+fn passed_on(p: &u32) -> u32 {
+    let r: &u32 = loop {
+        critical {
+            break p;
+        }
+    };
+    *r
+}
+
+fn two_blocks_deep() -> u32 {
+    let x: u32 = 1;
+    let r: &u32 = loop {
+        critical {
+            critical {
+                break &x;
+            }
+        }
+    };
+    *r
+}
+
+fn nested_loops() -> u32 {
+    let x: u32 = 1;
+    let r: &u32 = loop {
+        critical {
+            // Its loop is inside the block: accepted.
+            let inner: u32 = loop {
+                break *loop {
+                    break &x;
+                };
+            };
+            // Its loop is the outer one, outside the block: rejected.
+            if inner == 0 {
+                break &x;
+            }
+        }
+    };
+    *r
+}
+
+fn inner_block_of_inner_loop() -> u32 {
+    let x: u32 = 1;
+    let r: &u32 = loop {
+        critical {
+            loop {
+                critical {
+                    // Leaves the inner block, whose loop is inside the outer.
+                    break;
+                }
+            }
+        }
+        break &x;
+    };
+    *r
+}
+
+fn loop_between_two_blocks() -> u32 {
+    let x: u32 = 1;
+    critical {
+        let r: &u32 = loop {
+            critical {
+                // Its loop is inside the outer block, outside the inner.
+                break &x;
+            }
+        };
+        *r
+    }
+}
+
+entry fn main() -> ! {
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    loop {}
+}
