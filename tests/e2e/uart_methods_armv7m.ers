@@ -1,0 +1,75 @@
+// The CMSDK UART driver of `peripheral_references_armv7m.ers` written as
+// methods (ADR 0113, 0114) on QEMU `mps2-an385`. `impl Cmsdk` in module `uart`
+// has `init(&mut self)`, `ready(&self)`, `putc(&mut self, byte)`, which calls
+// `self.ready()` on its `&mut` receiver as a `&self`, and `write(&mut self, s:
+// &[u8])`, which calls `self.putc(s[i])`. Every register access through them
+// is volatile and 32 bits wide. `init` sets the baud divisor, which QEMU needs
+// before the transmitter is enabled, and `ready` reads the state register with
+// no other access. `main` calls them on the peripheral, `UART.init()`, and
+// calls `ready` through a `&uart::Cmsdk` too; it prints through the driver,
+// not the board's `putc`.
+// targets: thumbv7m-none-eabi
+// expect-output: peripheral methods
+// expect-output: line 2
+// expect-exit: 0
+
+mod board;
+use board::exit;
+
+mod uart {
+    pub peripheral Cmsdk {
+        pub read write data: u32 at 0x00,
+        pub read write state: u32 at 0x04,
+        pub read write ctrl: u32 at 0x08,
+        pub read write bauddiv: u32 at 0x10,
+    }
+
+    pub peripheral UART: Cmsdk at 0x4000_4000;
+
+    // Bit 0 of `state`: the transmit buffer is full.
+    const TX_FULL: u32 = 1;
+
+    impl Cmsdk {
+        pub fn init(&mut self) {
+            self.bauddiv = 16;
+            self.ctrl = 1;
+        }
+
+        pub fn ready(&self) -> bool {
+            (self.state & TX_FULL) == 0
+        }
+
+        pub fn putc(&mut self, byte: u8) {
+            while !self.ready() {}
+            self.data = byte as u32;
+        }
+
+        pub fn write(&mut self, s: &[u8]) {
+            let mut i: usize = 0;
+            while i < len(s) {
+                self.putc(s[i]);
+                i += 1;
+            }
+        }
+    }
+}
+
+use uart::UART;
+
+entry fn main() -> ! {
+    UART.init();
+    if !UART.ready() {
+        exit(2)
+    }
+    UART.write(&b"peripheral methods\n");
+    let shared: &uart::Cmsdk = &UART;
+    if !shared.ready() {
+        exit(3)
+    }
+    UART.write(&b"line 2\n");
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(99)
+}

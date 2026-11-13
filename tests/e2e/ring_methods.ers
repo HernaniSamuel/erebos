@@ -1,0 +1,163 @@
+// The M5.5 milestone program: the ring buffer of `ring_references.ers` written
+// with methods (ADR 0113, 0114). `impl Ring` in module `ring` holds the
+// functions: `new` has no receiver and is called `Ring::new()`; `push`, `pop`
+// and `fill` take `&mut self`, `count`, `is_full` and `show` take `&self`, and
+// `into_count` takes `self`, which consumes the ring. The fields are private,
+// so the rest of the program can only call them. The methods read and write
+// their fields as `self.count` and `self.buf[at]`, and call each other on
+// `self`: `fill` calls `push` in a loop, `drain` calls `pop`, `show` calls
+// `count` and `is_full`, and `count` is a method and a field at once.
+//
+// `main` holds the ring in a `let mut` and calls methods on it; `cycle` takes a
+// `&mut Ring` and calls methods through the reference, `show` among them, which
+// takes a `&self`. The second fill wraps around the end of the array. The
+// output is that of `ring_references.ers`, with a line more for `into_count`.
+// expect-output: 8 8 F
+// expect-output: ref
+// expect-output: 5 -
+// expect-output: 3 8 F
+// expect-output: erenc012
+// expect-output: 0 -
+// expect-output: empty
+// expect-output: 2
+// expect-exit: 0
+
+mod board;
+use board::{exit, putc};
+
+fn print_u32(n: u32) {
+    if n >= 10 {
+        print_u32(n / 10);
+    }
+    putc(b'0' + (n % 10) as u8);
+}
+
+mod ring {
+    use super::board::putc;
+    use super::print_u32;
+
+    pub struct Ring {
+        buf: [u8; 8],
+        // Where the oldest byte is.
+        head: usize,
+        count: usize,
+    }
+
+    impl Ring {
+        pub fn new() -> Ring {
+            Ring { buf: [0; 8], head: 0, count: 0 }
+        }
+
+        pub fn push(&mut self, b: u8) -> bool {
+            if self.count == 8 {
+                return false;
+            }
+            let at: usize = (self.head + self.count) % 8;
+            self.buf[at] = b;
+            self.count += 1;
+            true
+        }
+
+        pub fn pop(&mut self) -> Option(u8) {
+            if self.count == 0 {
+                return .None;
+            }
+            let b: u8 = self.buf[self.head];
+            self.head = (self.head + 1) % 8;
+            self.count -= 1;
+            .Some(b)
+        }
+
+        pub fn count(&self) -> usize {
+            self.count
+        }
+
+        pub fn is_full(&self) -> bool {
+            self.count == 8
+        }
+
+        // Pushes the bytes of `text` until the ring is full; returns how many
+        // went in.
+        pub fn fill(&mut self, text: &[u8]) -> usize {
+            let mut i: usize = 0;
+            while i < len(text) {
+                if !self.push(text[i]) {
+                    return i;
+                }
+                i += 1;
+            }
+            len(text)
+        }
+
+        // Prints up to `n` bytes, as the ring gives them.
+        pub fn drain(&mut self, n: usize) {
+            let mut i: usize = 0;
+            while i < n {
+                match self.pop() {
+                    .Some(let b: u8) => putc(b),
+                    .None => return,
+                }
+                i += 1;
+            }
+        }
+
+        // The count, then `F` for a full ring and `-` for one that is not.
+        pub fn show(&self) {
+            print_u32(self.count() as u32);
+            putc(b' ');
+            if self.is_full() {
+                putc(b'F');
+            } else {
+                putc(b'-');
+            }
+            putc(b'\n');
+        }
+
+        // Consumes the ring.
+        pub fn into_count(self) -> usize {
+            self.count
+        }
+    }
+}
+
+use ring::Ring;
+
+// One `&mut Ring`, lent to the calls that write and to the ones that read.
+fn cycle(r: &mut Ring) {
+    r.drain(3);
+    putc(b'\n');
+    r.show();
+    print_u32(r.fill(&b"0123456789") as u32);
+    putc(b' ');
+    r.show();
+    r.drain(100);
+    putc(b'\n');
+    r.show();
+}
+
+entry fn main() -> ! {
+    let mut buffer: Ring = Ring::new();
+    print_u32(buffer.fill(&b"references") as u32);
+    putc(b' ');
+    buffer.show();
+    cycle(&mut buffer);
+    match buffer.pop() {
+        .Some(let b: u8) => putc(b),
+        .None => {
+            putc(b'e');
+            putc(b'm');
+            putc(b'p');
+            putc(b't');
+            putc(b'y');
+            putc(b'\n');
+        }
+    }
+    buffer.fill(&b"xy");
+    print_u32(buffer.into_count() as u32);
+    putc(b'\n');
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(1)
+}

@@ -1526,12 +1526,14 @@ struct Block {
     naked: bool,
 }
 
-/// The names of the functions of `text` that return `!`.
+/// The names of the functions of `text` that return `!`, and `exit` of the
+/// board module (`mod board;`, which is not in `text`), which does.
 fn never_functions(text: &str) -> Vec<&str> {
     text.lines()
         .filter(|line| line.contains("-> !"))
         .filter_map(|line| line.split("fn ").nth(1))
         .filter_map(|rest| rest.split('(').next())
+        .chain(["exit"])
         .collect()
 }
 
