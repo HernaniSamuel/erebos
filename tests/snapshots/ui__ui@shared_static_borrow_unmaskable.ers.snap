@@ -1,0 +1,26 @@
+---
+source: tests/ui.rs
+assertion_line: 24
+expression: output
+input_file: tests/ui/shared_static_borrow_unmaskable.ers
+---
+--- errors ---
+analysis::unmaskable-static
+
+  × `BUF` is reached from the unmaskable handler `nmi`, and the thread context reaches it too
+    ╭─[shared_static_borrow_unmaskable.ers:14:11]
+ 13 │ interrupt fn nmi() at Vector::NMI {
+ 14 │     clear(&mut BUF);
+    ·           ────┬───
+    ·               ╰── reached here; `critical` does not stop this handler
+ 15 │ }
+ 16 │ 
+ 17 │ entry fn main() -> ! {
+ 18 │     critical {
+ 19 │         clear(&mut BUF);
+    ·               ────┬───
+    ·                   ╰── the thread context reaches it here
+ 20 │     }
+    ╰────
+  help: give the handler a static of its own, or reach this memory through a pointer from a
+        `const`

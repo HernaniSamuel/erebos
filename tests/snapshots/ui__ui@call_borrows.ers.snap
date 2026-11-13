@@ -1,0 +1,429 @@
+---
+source: tests/ui.rs
+assertion_line: 24
+expression: output
+input_file: tests/ui/call_borrows.ers
+---
+--- errors ---
+analysis::borrow-conflict-in-call
+
+  × `COUNT` is borrowed during this call, and the callee writes it
+    ╭─[call_borrows.ers:19:5]
+ 18 │ fn writes(r: &mut u32) {
+ 19 │     COUNT = 1;
+    ·     ────┬────
+    ·         ╰── `COUNT` is written here
+ 20 │     *r += 1;
+    ╰────
+    ╭─[call_borrows.ers:69:5]
+ 68 │ fn lend() {
+ 69 │     writes(&mut COUNT);
+    ·     ─────────┬────────┬
+    ·              │        ╰── `COUNT` is borrowed `&mut` here
+    ·              ╰── `writes` reaches `COUNT` while it is borrowed
+ 70 │     reads(&mut TOTAL);
+    ╰────
+  help: pass the reference on instead of naming `COUNT` in the callee, or end the borrow before
+        the call
+analysis::borrow-conflict-in-call
+
+  × `TOTAL` is borrowed during this call, and the callee reads it
+    ╭─[call_borrows.ers:24:18]
+ 23 │ fn reads(r: &mut u32) {
+ 24 │     let x: u32 = TOTAL;
+    ·                  ──┬──
+    ·                    ╰── `TOTAL` is read here
+ 25 │     *r += x;
+    ╰────
+    ╭─[call_borrows.ers:70:5]
+ 69 │     writes(&mut COUNT);
+ 70 │     reads(&mut TOTAL);
+    ·     ────────┬────────┬
+    ·             │        ╰── `TOTAL` is borrowed `&mut` here
+    ·             ╰── `reads` reaches `TOTAL` while it is borrowed
+ 71 │     down(&mut COUNT);
+    ╰────
+  help: pass the reference on instead of naming `TOTAL` in the callee, or end the borrow before
+        the call
+analysis::borrow-conflict-in-call
+
+  × `COUNT` is borrowed during this call, and the callee writes it
+    ╭─[call_borrows.ers:29:5]
+ 28 │ fn down(r: &mut u32) {
+ 29 │     middle();
+    ·     ────┬───
+    ·         ╰── `middle` is called here
+ 30 │     *r += 1;
+ 31 │ }
+ 32 │ 
+ 33 │ fn middle() {
+ 34 │     bottom();
+    ·     ────┬───
+    ·         ╰── `bottom` is called here
+ 35 │ }
+ 36 │ 
+ 37 │ fn bottom() {
+ 38 │     COUNT = 3;
+    ·     ────┬────
+    ·         ╰── `COUNT` is written here
+ 39 │ }
+    ╰────
+    ╭─[call_borrows.ers:71:5]
+ 70 │     reads(&mut TOTAL);
+ 71 │     down(&mut COUNT);
+    ·     ────────┬───────┬
+    ·             │       ╰── `COUNT` is borrowed `&mut` here
+    ·             ╰── `down` reaches `COUNT` while it is borrowed
+ 72 │ }
+    ╰────
+  help: pass the reference on instead of naming `COUNT` in the callee, or end the borrow before
+        the call
+analysis::borrow-conflict-in-call
+
+  × `BUF` is borrowed during this call, and the callee writes `BUF[_]`
+    ╭─[call_borrows.ers:75:5]
+ 41 │ fn writes_buf(r: &[u32; 4]) {
+ 42 │     BUF[0] = 1;
+    ·     ─────┬────
+    ·          ╰── `BUF[_]` is written here
+ 43 │ }
+ 44 │ 
+ 45 │ fn address_of_buf(r: &[u32; 4]) {
+ 46 │     let p: *mut [u32; 4] = &raw mut BUF;
+ 47 │ }
+ 48 │ 
+ 49 │ fn sym_of_buf(r: &[u32; 4]) {
+ 50 │     asm("la {}, {}", out(reg) _, sym BUF);
+ 51 │ }
+ 52 │ 
+ 53 │ fn refill() {
+ 54 │     COUNT = 0;
+ 55 │ }
+ 56 │ 
+ 57 │ fn fail(r: &mut u32) -> ! {
+ 58 │     COUNT = 1;
+ 59 │     *r = 2;
+ 60 │     loop {}
+ 61 │ }
+ 62 │ 
+ 63 │ fn both(a: &u32, b: &u32) {
+ 64 │     LEFT = 1;
+ 65 │     RIGHT = 1;
+ 66 │ }
+ 67 │ 
+ 68 │ fn lend() {
+ 69 │     writes(&mut COUNT);
+ 70 │     reads(&mut TOTAL);
+ 71 │     down(&mut COUNT);
+ 72 │ }
+ 73 │ 
+ 74 │ fn lend_buf() {
+ 75 │     writes_buf(&BUF);
+    ·     ────────┬───────┬
+    ·             │       ╰── `BUF` is borrowed here
+    ·             ╰── `writes_buf` reaches `BUF[_]` while `BUF` is borrowed
+ 76 │     address_of_buf(&BUF);
+    ╰────
+  help: pass the reference on instead of naming `BUF` in the callee, or end the borrow before the
+        call
+analysis::borrow-conflict-in-call
+
+  × `BUF` is borrowed during this call, and the callee takes the address of it
+    ╭─[call_borrows.ers:76:5]
+ 45 │ fn address_of_buf(r: &[u32; 4]) {
+ 46 │     let p: *mut [u32; 4] = &raw mut BUF;
+    ·                            ──────┬─────
+    ·                                  ╰── `BUF` has its address taken (`&raw mut`) here
+ 47 │ }
+ 48 │ 
+ 49 │ fn sym_of_buf(r: &[u32; 4]) {
+ 50 │     asm("la {}, {}", out(reg) _, sym BUF);
+ 51 │ }
+ 52 │ 
+ 53 │ fn refill() {
+ 54 │     COUNT = 0;
+ 55 │ }
+ 56 │ 
+ 57 │ fn fail(r: &mut u32) -> ! {
+ 58 │     COUNT = 1;
+ 59 │     *r = 2;
+ 60 │     loop {}
+ 61 │ }
+ 62 │ 
+ 63 │ fn both(a: &u32, b: &u32) {
+ 64 │     LEFT = 1;
+ 65 │     RIGHT = 1;
+ 66 │ }
+ 67 │ 
+ 68 │ fn lend() {
+ 69 │     writes(&mut COUNT);
+ 70 │     reads(&mut TOTAL);
+ 71 │     down(&mut COUNT);
+ 72 │ }
+ 73 │ 
+ 74 │ fn lend_buf() {
+ 75 │     writes_buf(&BUF);
+ 76 │     address_of_buf(&BUF);
+    ·     ──────────┬─────────┬
+    ·               │         ╰── `BUF` is borrowed here
+    ·               ╰── `address_of_buf` reaches `BUF` while it is borrowed
+ 77 │     sym_of_buf(&BUF);
+    ╰────
+  help: pass the reference on instead of naming `BUF` in the callee, or end the borrow before the
+        call
+analysis::borrow-conflict-in-call
+
+  × `BUF` is borrowed during this call, and the callee passes it to `asm` as `sym`
+    ╭─[call_borrows.ers:77:5]
+ 49 │ fn sym_of_buf(r: &[u32; 4]) {
+ 50 │     asm("la {}, {}", out(reg) _, sym BUF);
+    ·     ──────────────────┬──────────────────
+    ·                       ╰── `BUF` is passed as `sym` here
+ 51 │ }
+ 52 │ 
+ 53 │ fn refill() {
+ 54 │     COUNT = 0;
+ 55 │ }
+ 56 │ 
+ 57 │ fn fail(r: &mut u32) -> ! {
+ 58 │     COUNT = 1;
+ 59 │     *r = 2;
+ 60 │     loop {}
+ 61 │ }
+ 62 │ 
+ 63 │ fn both(a: &u32, b: &u32) {
+ 64 │     LEFT = 1;
+ 65 │     RIGHT = 1;
+ 66 │ }
+ 67 │ 
+ 68 │ fn lend() {
+ 69 │     writes(&mut COUNT);
+ 70 │     reads(&mut TOTAL);
+ 71 │     down(&mut COUNT);
+ 72 │ }
+ 73 │ 
+ 74 │ fn lend_buf() {
+ 75 │     writes_buf(&BUF);
+ 76 │     address_of_buf(&BUF);
+ 77 │     sym_of_buf(&BUF);
+    ·     ────────┬───────┬
+    ·             │       ╰── `BUF` is borrowed here
+    ·             ╰── `sym_of_buf` reaches `BUF` while it is borrowed
+ 78 │ }
+    ╰────
+  help: pass the reference on instead of naming `BUF` in the callee, or end the borrow before the
+        call
+analysis::borrow-conflict-in-call
+
+  × `COUNT` is borrowed during this call, and the callee writes it
+    ╭─[call_borrows.ers:82:5]
+ 53 │ fn refill() {
+ 54 │     COUNT = 0;
+    ·     ────┬────
+    ·         ╰── `COUNT` is written here
+ 55 │ }
+ 56 │ 
+ 57 │ fn fail(r: &mut u32) -> ! {
+ 58 │     COUNT = 1;
+ 59 │     *r = 2;
+ 60 │     loop {}
+ 61 │ }
+ 62 │ 
+ 63 │ fn both(a: &u32, b: &u32) {
+ 64 │     LEFT = 1;
+ 65 │     RIGHT = 1;
+ 66 │ }
+ 67 │ 
+ 68 │ fn lend() {
+ 69 │     writes(&mut COUNT);
+ 70 │     reads(&mut TOTAL);
+ 71 │     down(&mut COUNT);
+ 72 │ }
+ 73 │ 
+ 74 │ fn lend_buf() {
+ 75 │     writes_buf(&BUF);
+ 76 │     address_of_buf(&BUF);
+ 77 │     sym_of_buf(&BUF);
+ 78 │ }
+ 79 │ 
+ 80 │ fn held() {
+ 81 │     let r: &mut u32 = &mut COUNT;
+    ·                       ─────┬────
+    ·                            ╰── `COUNT` is borrowed `&mut` here
+ 82 │     refill();
+    ·     ────┬───
+    ·         ╰── `refill` reaches `COUNT` while it is borrowed
+ 83 │     *r = 1;
+    ·     ───┬──
+    ·        ╰── the borrow is used later here
+ 84 │ }
+    ╰────
+  help: pass the reference on instead of naming `COUNT` in the callee, or end the borrow before
+        the call
+analysis::borrow-conflict-in-call
+
+  × `COUNT` is borrowed during this call, and the callee writes it
+    ╭─[call_borrows.ers:87:5]
+ 57 │ fn fail(r: &mut u32) -> ! {
+ 58 │     COUNT = 1;
+    ·     ────┬────
+    ·         ╰── `COUNT` is written here
+ 59 │     *r = 2;
+ 60 │     loop {}
+ 61 │ }
+ 62 │ 
+ 63 │ fn both(a: &u32, b: &u32) {
+ 64 │     LEFT = 1;
+ 65 │     RIGHT = 1;
+ 66 │ }
+ 67 │ 
+ 68 │ fn lend() {
+ 69 │     writes(&mut COUNT);
+ 70 │     reads(&mut TOTAL);
+ 71 │     down(&mut COUNT);
+ 72 │ }
+ 73 │ 
+ 74 │ fn lend_buf() {
+ 75 │     writes_buf(&BUF);
+ 76 │     address_of_buf(&BUF);
+ 77 │     sym_of_buf(&BUF);
+ 78 │ }
+ 79 │ 
+ 80 │ fn held() {
+ 81 │     let r: &mut u32 = &mut COUNT;
+ 82 │     refill();
+ 83 │     *r = 1;
+ 84 │ }
+ 85 │ 
+ 86 │ fn diverges() {
+ 87 │     fail(&mut COUNT);
+    ·     ────────┬───────┬
+    ·             │       ╰── `COUNT` is borrowed `&mut` here
+    ·             ╰── `fail` reaches `COUNT` while it is borrowed
+ 88 │ }
+    ╰────
+  help: pass the reference on instead of naming `COUNT` in the callee, or end the borrow before
+        the call
+analysis::borrow-conflict-in-call
+
+  × `LEFT` is borrowed during this call, and the callee writes it
+    ╭─[call_borrows.ers:91:5]
+ 63 │ fn both(a: &u32, b: &u32) {
+ 64 │     LEFT = 1;
+    ·     ────┬───
+    ·         ╰── `LEFT` is written here
+ 65 │     RIGHT = 1;
+ 66 │ }
+ 67 │ 
+ 68 │ fn lend() {
+ 69 │     writes(&mut COUNT);
+ 70 │     reads(&mut TOTAL);
+ 71 │     down(&mut COUNT);
+ 72 │ }
+ 73 │ 
+ 74 │ fn lend_buf() {
+ 75 │     writes_buf(&BUF);
+ 76 │     address_of_buf(&BUF);
+ 77 │     sym_of_buf(&BUF);
+ 78 │ }
+ 79 │ 
+ 80 │ fn held() {
+ 81 │     let r: &mut u32 = &mut COUNT;
+ 82 │     refill();
+ 83 │     *r = 1;
+ 84 │ }
+ 85 │ 
+ 86 │ fn diverges() {
+ 87 │     fail(&mut COUNT);
+ 88 │ }
+ 89 │ 
+ 90 │ fn two() {
+ 91 │     both(&LEFT, &RIGHT);
+    ·     ─────────┬─────────┬
+    ·              │         ╰── `LEFT` is borrowed here
+    ·              ╰── `both` reaches `LEFT` while it is borrowed
+ 92 │ }
+    ╰────
+  help: pass the reference on instead of naming `LEFT` in the callee, or end the borrow before the
+        call
+analysis::borrow-conflict-in-call
+
+  × `RIGHT` is borrowed during this call, and the callee writes it
+    ╭─[call_borrows.ers:91:5]
+ 64 │     LEFT = 1;
+ 65 │     RIGHT = 1;
+    ·     ────┬────
+    ·         ╰── `RIGHT` is written here
+ 66 │ }
+ 67 │ 
+ 68 │ fn lend() {
+ 69 │     writes(&mut COUNT);
+ 70 │     reads(&mut TOTAL);
+ 71 │     down(&mut COUNT);
+ 72 │ }
+ 73 │ 
+ 74 │ fn lend_buf() {
+ 75 │     writes_buf(&BUF);
+ 76 │     address_of_buf(&BUF);
+ 77 │     sym_of_buf(&BUF);
+ 78 │ }
+ 79 │ 
+ 80 │ fn held() {
+ 81 │     let r: &mut u32 = &mut COUNT;
+ 82 │     refill();
+ 83 │     *r = 1;
+ 84 │ }
+ 85 │ 
+ 86 │ fn diverges() {
+ 87 │     fail(&mut COUNT);
+ 88 │ }
+ 89 │ 
+ 90 │ fn two() {
+ 91 │     both(&LEFT, &RIGHT);
+    ·     ─────────┬─────────┬
+    ·              │         ╰── `RIGHT` is borrowed here
+    ·              ╰── `both` reaches `RIGHT` while it is borrowed
+ 92 │ }
+    ╰────
+  help: pass the reference on instead of naming `RIGHT` in the callee, or end the borrow before
+        the call
+analysis::borrow-conflict-in-call
+
+  × `COUNT` is borrowed during this call, and the callee writes it
+    ╭─[call_borrows.ers:19:5]
+ 18 │ fn writes(r: &mut u32) {
+ 19 │     COUNT = 1;
+    ·     ────┬────
+    ·         ╰── `COUNT` is written here
+ 20 │     *r += 1;
+    ╰────
+    ╭─[call_borrows.ers:95:5]
+ 94 │ fn nothing_calls_this() {
+ 95 │     writes(&mut COUNT);
+    ·     ─────────┬────────┬
+    ·              │        ╰── `COUNT` is borrowed `&mut` here
+    ·              ╰── `writes` reaches `COUNT` while it is borrowed
+ 96 │ }
+    ╰────
+  help: pass the reference on instead of naming `COUNT` in the callee, or end the borrow before
+        the call
+analysis::borrow-conflict-in-call
+
+  × `TICKS` is borrowed during this call, and the callee writes it
+     ╭─[call_borrows.ers:104:5]
+  98 │ fn restart(r: &mut u32) {
+  99 │     TICKS = 0;
+     ·     ────┬────
+     ·         ╰── `TICKS` is written here
+ 100 │     *r += 1;
+ 101 │ }
+ 102 │ 
+ 103 │ interrupt fn tick() at Vector::MachineTimer {
+ 104 │     restart(&mut TICKS);
+     ·     ─────────┬─────────┬
+     ·              │         ╰── `TICKS` is borrowed `&mut` here
+     ·              ╰── `restart` reaches `TICKS` while it is borrowed
+ 105 │ }
+     ╰────
+  help: pass the reference on instead of naming `TICKS` in the callee, or end the borrow before
+        the call

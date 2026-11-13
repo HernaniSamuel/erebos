@@ -1,0 +1,30 @@
+// emit: mir
+// A borrow of a `static mut` at compile time is what `&raw` of it is (ADR
+// 0110): the reference can be taken, and a read or a write through it is
+// `eval::static-mut`, or `eval::extern-static` for an `extern static mut`,
+// as the read of the static itself is.
+static mut COUNT: u32 = 0;
+extern static mut OUTSIDE: u32;
+
+const READ: u32 = read();
+const WRITE: u32 = write();
+const OUTER: u32 = outer();
+
+fn read() -> u32 {
+    let r: &u32 = &COUNT;
+    *r
+}
+
+fn write() -> u32 {
+    let r: &mut u32 = &mut COUNT;
+    *r = 1;
+    0
+}
+
+fn outer() -> u32 {
+    let r: &u32 = &OUTSIDE;
+    *r
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

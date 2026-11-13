@@ -869,9 +869,9 @@ of a slice. It has no value, no type of its own and no meaning outside `[ ]`:
   of `&raw`, with the same codes: a range on a register array or a cluster
   array is `ty::register-address`, on an array field of a `#[packed]` struct
   that may be misaligned `ty::packed-field-address`. `&` and `&mut` of a range
-  on an array behind a volatile pointer, a volatile raw slice, a peripheral or
-  a `static mut` are `ty::reference-to-volatile` and
-  `ty::reference-to-static-mut` until M5.4c, while `&raw` of it is allowed.
+  on an array behind a volatile pointer, a volatile raw slice or a peripheral
+  are `ty::reference-to-volatile` until M5.4c, while `&raw` of it is allowed;
+  on a `static mut` they are allowed (ADR 0110).
 - **Checks.** The base is evaluated first, and with it its length (the length
   of a slice is read then, so code in the bounds that assigns the variable
   holding a raw slice does not change it); then `a`, then `b`. The place
@@ -2373,13 +2373,14 @@ pointer.
   register array or a cluster array `ty::register-address`, a possibly
   misaligned field of a `#[packed]` struct `ty::packed-field-address`, and a
   place of type `!` `ty::never-in-memory`.
-- **Not yet** (M5.4c), and errors until then: `&` or `&mut` of a `static mut`
-  or an `extern static mut`, or of a field or an element of one, is
-  `ty::reference-to-static-mut`; the help says to use `&raw` inside
-  `critical` (ADR 0078, 0093). `&` or `&mut` of a place reached through a
-  `volatile` pointer, or of a peripheral or a cluster, is
+- **Not yet** (M5.4c), and errors until then: `&` or `&mut` of a place reached
+  through a `volatile` pointer, or of a peripheral or a cluster, is
   `ty::reference-to-volatile`; the help says to use the pointer. A register
-  has no address and is `ty::register-address` first.
+  has no address and is `ty::register-address` first. `&` and `&mut` of a
+  `static mut` or an `extern static mut`, or of a field or an element of one,
+  are allowed (ADR 0110): the borrow check follows them, across calls too
+  (`analysis::borrow-conflict`, `analysis::borrow-conflict-in-call`, ADR
+  0111).
 
 ### Where a reference may be (ADR 0105)
 
@@ -6947,7 +6948,6 @@ Every error has a stable code, shown with the message.
 | `ty::address-of-immutable` | `&raw mut` of a place that cannot be written, one through a `&` reference included |
 | `ty::mut-borrow-of-immutable` | `&mut` of a place that cannot be written (a variable or parameter without `mut`, a `static`, an `extern static` without `mut`, a byte string, a place through a `&` reference or a `*const` pointer), of a value that is not a place, or of a part of one (`&mut f().x`, `&mut f()[1..3]`) |
 | `ty::reference-position` | a reference type written as the type of a field, a payload value, an array or slice element, a type argument, a layout query operand, a return type, a `static`, `extern static` or `const`, a pointee or a referent (`&&T`), or of a `mut` parameter or `let mut`, once per type at the outermost reference; an expression that makes an array of references, `&`, `&mut` or `&raw` of a reference, the value of a `critical` block, the value of a `break` that leaves a `critical` block, or a `comptime` expression of a reference type, at the innermost |
-| `ty::reference-to-static-mut` | `&` or `&mut` of a `static mut` or `extern static mut`, or of a field, an element or a range of one; use `&raw` inside `critical` (M5.4c) |
 | `ty::reference-to-volatile` | `&` or `&mut` of a place reached through a `volatile` pointer or a volatile raw slice (`&*v`, `&(*v)[i]`, a range of one), or of a peripheral or a cluster (M5.4c) |
 | `ty::packed-field-address` | `&raw`, `&` or `&mut` of a possibly misaligned place inside a packed struct |
 | `ty::volatile-too-wide` | volatile access wider than the target's widest access, a bit-field struct on `u64` included |
@@ -7045,7 +7045,8 @@ Every error has a stable code, shown with the message.
 | `eval::pointer-escapes` | a compile-time result holding a pointer into the evaluation's own memory |
 | `eval::pointer-out-of-bounds` | a compile-time result holding a pointer outside its object and not one past its end, or a slice not inside its object |
 | `analysis::use-after-move` | a place read, moved, assigned a part of, borrowed or whose address is taken, after the value in it, in a part of it or in a place that contains it was moved, on some path from the move and with no assignment to it since, in a loop's next iteration too; each move that reaches the use is a label; once a use is reported, a later use that does not itself move is not reported again, while one that is a move makes its own move and so is reported after it; only named variables and parameters are followed, not temporaries (ADR 0097, 0099) |
-| `analysis::borrow-conflict` | an access to a place while a borrow of an overlapping place is in use, with a borrow in use as long as what holds the reference, or a reference made through it, is used later: a read, a `&` borrow, a `&raw const` or a conversion of a `&mut` to a `&`, or of a reference to an array to a `&[T]`, while a `&mut` borrow is in use; a write (an assignment, a call's result, an `asm` output, `&raw mut`), a move, an `end` or a `&mut` borrow (a `&mut` lent to a call, or a `&mut [T; N]` converted to a `&mut [T]`, too) while a `&` or a `&mut` borrow is in use; two arguments of one call are held until it returns, so `f(&mut x, &x)` and `f(&mut x, x.a)` are errors and `f(x.a, &mut x)` and `x = f(&x)` are not; two different fields do not overlap, two elements of an array or a slice always do, and so does a sub-slice with every element and sub-slice of its base; a place through a raw pointer is not followed; one error per access, at the access, labeling each borrow in conflict and one later use that keeps it in use, or the use in the next iteration of the loop when it comes only round one, with a help to end the borrow first; the analysis runs only on a body with no use after a move, and the analysis of linearity runs on the same bodies (ADR 0106, 0107) |
+| `analysis::borrow-conflict` | an access to a place while a borrow of an overlapping place is in use, with a borrow in use as long as what holds the reference, or a reference made through it, is used later: a read, a `&` borrow, a `&raw const` or a conversion of a `&mut` to a `&`, or of a reference to an array to a `&[T]`, while a `&mut` borrow is in use; a write (an assignment, a call's result, an `asm` output, a `sym` operand naming a `static mut`, `&raw mut`), a move, an `end` or a `&mut` borrow (a `&mut` lent to a call, or a `&mut [T; N]` converted to a `&mut [T]`, too) while a `&` or a `&mut` borrow is in use; two arguments of one call are held until it returns, so `f(&mut x, &x)` and `f(&mut x, x.a)` are errors and `f(x.a, &mut x)` and `x = f(&x)` are not; two different fields do not overlap, two elements of an array or a slice always do, and so does a sub-slice with every element and sub-slice of its base; a place through a raw pointer is not followed; one error per access, at the access, labeling each borrow in conflict and one later use that keeps it in use, or the use in the next iteration of the loop when it comes only round one, with a help to end the borrow first; the analysis runs only on a body with no use after a move, and the analysis of linearity runs on the same bodies (ADR 0106, 0107) |
+| `analysis::borrow-conflict-in-call` | a call during which a borrow of a `static mut`, an `extern static mut`, a `static` or a peripheral is in use, whose callee, or a function the callee reaches through calls, has an access to an overlapping place that conflicts with it; the panic function that a check calls is not followed (ADR 0111) |
 | `analysis::linear-not-consumed` | a linear value still held where the function returns (a `return`, the end of the body, a `?` that returns), by a variable, a parameter or a temporary: a variable never moved, a parameter, the result of a call that is discarded, a literal that is discarded, a value consumed on some paths only, a `.Some(_)` or `_` arm that leaves a payload held, a value that comes round a loop (`let t: Transfer = start(1);` or `start(1);` in a loop) before it is consumed, or a value written over a place that holds one of the same origin (two parts of one call's result); or a linear field still held when its struct is ended by `end`; one error per value, at the call, the literal or the function (a parameter) where it came in, naming the place that holds it, with a label at each return it reaches, and where it was moved to that place; paths that do not return owe nothing (ADR 0102, 0103) |
 | `analysis::linear-overwritten` | a write to a place that holds a linear value, or a part of it, made elsewhere: `t = start(2);` over the `t` of `start(1)`, `s.h = v` over a held field; at the write, labeling where the value it would overwrite came in; a copy field written is no overwrite; a value already reported as not consumed is not reported again; the analysis runs only on a body with no use after a move (ADR 0102, 0103) |
 | `analysis::unprotected-static` | a place in the thread context, outside `critical`, naming a `static mut` or `extern static mut` that the handler context also reaches (ADR 0078, 0093) |

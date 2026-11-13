@@ -1,0 +1,102 @@
+// emit: mir
+// What the check of the conflicts across calls accepts (ADR 0111): a read of a
+// static under a `&` borrow of it; a write of one field under a borrow of
+// another; a borrow that ends before the call; a callee that reaches the
+// static only through its reference parameter, or through a raw pointer from a
+// `const`; an `extern fn` given a borrow; a recursion over a reference to a
+// static; a callee with a check whose panic function writes the lent static;
+// a body holding `&mut S` with a check of its own and such a panic function;
+// `f(&TABLE)` with `f` passing `sym TABLE`.
+struct Pair {
+    a: u32,
+    b: u32,
+}
+
+static mut COUNT: u32 = 0;
+static mut BUF: [u32; 4] = [0; 4];
+static mut PAIR: Pair = Pair { a: 0, b: 0 };
+static mut CAUGHT: u32 = 0;
+static TABLE: [u32; 2] = [1, 2];
+
+const COUNT_POINTER: *mut u32 = &raw mut COUNT;
+
+extern fn outside(r: &mut u32);
+
+fn reads_buf(r: &[u32; 4]) -> u32 {
+    BUF[0] + (*r)[1]
+}
+
+fn writes_b(r: &mut u32) {
+    PAIR.b = 5;
+    *r += 1;
+}
+
+fn only_through(r: &mut u32) {
+    *r += 1;
+}
+
+fn through_pointer(r: &mut u32) {
+    *COUNT_POINTER = 1;
+    *r += 1;
+}
+
+fn recurse(r: &mut u32, n: u32) {
+    if n != 0 {
+        *r += 1;
+        recurse(r, n - 1);
+    }
+}
+
+fn index(s: &mut [u32; 4], i: usize) {
+    (*s)[i] = 1;
+}
+
+fn passes_sym(r: &[u32; 2]) {
+    asm("la {}, {}", out(reg) _, sym TABLE);
+}
+
+fn lend() {
+    reads_buf(&BUF);
+    writes_b(&mut PAIR.a);
+    only_through(&mut COUNT);
+    through_pointer(&mut COUNT);
+    outside(&mut COUNT);
+    recurse(&mut COUNT, 3);
+    passes_sym(&TABLE);
+}
+
+fn ends_first() {
+    let r: &mut u32 = &mut COUNT;
+    *r = 1;
+    reset();
+}
+
+fn reset() {
+    COUNT = 0;
+}
+
+// The callee has a check, and the panic function writes the lent static: no
+// reference is used once the panic function runs.
+fn checked() {
+    index(&mut BUF, 2);
+}
+
+fn own_check(i: usize) {
+    let r: &mut [u32; 4] = &mut BUF;
+    (*r)[i] = 1;
+}
+
+entry fn main() -> ! {
+    lend();
+    ends_first();
+    checked();
+    own_check(1);
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    COUNT = 9;
+    BUF[0] = 9;
+    CAUGHT = 1;
+    loop {}
+}

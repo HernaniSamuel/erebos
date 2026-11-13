@@ -1,0 +1,5 @@
+use super::store;
+
+pub fn run() {
+    store::update(&mut store::COUNT);
+}

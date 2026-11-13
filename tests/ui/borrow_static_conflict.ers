@@ -1,0 +1,45 @@
+// emit: mir
+// The borrow check over statics (ADR 0111): a `static mut` is a place like a
+// variable. A write of it while a `&mut` of it is used later; a shared and a
+// mutable borrow of one array in one call; a `sym` of it, a write of the whole
+// static (ADR 0111), while a `&mut` of it is used later. A `sym` of a `static`
+// without `mut`, and a write once the reference is dead, are accepted.
+static mut COUNT: u32 = 0;
+static mut BUF: [u32; 4] = [0; 4];
+static TABLE: [u32; 2] = [1, 2];
+
+fn both(a: &mut [u32; 4], b: &u32) {}
+
+fn write_while_borrowed() {
+    let r: &mut u32 = &mut COUNT;
+    COUNT = 2;
+    *r = 1;
+}
+
+fn two_in_one_call() {
+    both(&mut BUF, &BUF[0]);
+}
+
+fn sym_while_borrowed() {
+    let r: &mut u32 = &mut COUNT;
+    asm("la {}, {}", out(reg) _, sym COUNT);
+    *r = 1;
+}
+
+fn accepted() {
+    let r: &mut u32 = &mut COUNT;
+    *r = 1;
+    COUNT = 2;
+    asm("la {}, {}", out(reg) _, sym COUNT);
+    let t: &u32 = &TABLE[0];
+    asm("la {}, {}", out(reg) _, sym TABLE);
+    let x: u32 = *t;
+}
+
+entry fn main() -> ! {
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    loop {}
+}

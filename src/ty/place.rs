@@ -334,7 +334,6 @@ impl Checker<'_, '_> {
                     register: None,
                     bit_field: None,
                     via_ref: false,
-                    static_mut: None,
                 }
             }
             ExprKind::ByteString(bytes) => PlaceInfo {
@@ -346,7 +345,6 @@ impl Checker<'_, '_> {
                 register: None,
                 bit_field: None,
                 via_ref: false,
-                static_mut: None,
             },
             ExprKind::Static(id) => {
                 let def = self.hir.static_(*id);
@@ -364,7 +362,6 @@ impl Checker<'_, '_> {
                     register: None,
                     bit_field: None,
                     via_ref: false,
-                    static_mut: def.mutable.then_some(*id),
                 }
             }
             // Not `mut`: what may be written is its registers' business, so
@@ -378,7 +375,6 @@ impl Checker<'_, '_> {
                 register: None,
                 bit_field: None,
                 via_ref: false,
-                static_mut: None,
             },
             ExprKind::Deref(pointer) => {
                 let ty = self.check(f, pointer, None);
@@ -1270,8 +1266,7 @@ impl Checker<'_, '_> {
         if !self.has_address(place, &info, borrow_op(mutable)) {
             return Ty::Error;
         }
-        // Nor have the places accessed volatile, or changed by interrupts:
-        // M5.4c's (ADR 0105).
+        // Nor have the places accessed volatile: M5.4c's (ADR 0105, 0110).
         if let Some(diag) = self.not_borrowed_yet(place, &info) {
             self.q.diags.push(diag);
             return Ty::Error;
@@ -1288,9 +1283,8 @@ impl Checker<'_, '_> {
     }
 
     /// `ty::reference-to-volatile` for a peripheral or a cluster, or a place
-    /// reached through a `volatile` pointer, and `ty::reference-to-static-mut`
-    /// for a `static mut` or part of one: what a reference to it would let
-    /// the program assume, M5.4c settles (ADR 0105, 0106).
+    /// reached through a `volatile` pointer: what a reference to it would let
+    /// the program assume, which the rest of M5.4c settles (ADR 0105, 0110).
     fn not_borrowed_yet(&self, place: &Expr, info: &PlaceInfo) -> Option<Diagnostic> {
         if let Ty::Peripheral(_) = info.ty {
             return Some(
@@ -1315,23 +1309,6 @@ impl Checker<'_, '_> {
                 )
                 .label(place.span, format!("reached through a `{}`", Ty::Ptr(ptr)))
                 .help("a reference lets the compiler assume the memory behind it only changes when the program changes it, which a volatile access does not (ADR 0023); read and write through the pointer, as `*p`, or take its address with `&raw` (ADR 0105)"),
-            );
-        }
-        if let Some(id) = info.static_mut {
-            let def = self.hir.static_(id);
-            let what = if def.init.is_none() {
-                "extern static mut"
-            } else {
-                "static mut"
-            };
-            return Some(
-                Diagnostic::error(
-                    "ty::reference-to-static-mut",
-                    format!("cannot borrow the {what} `{}`", def.path),
-                )
-                .label(place.span, "borrowed here")
-                .label(def.name_span, format!("declared `{}`", mutable_static(def)))
-                .help("an interrupt can change a `static mut` while the reference to it is in use; inside a `critical` block, take its address with `&raw const` or `&raw mut` (ADR 0078, 0093, 0105)"),
             );
         }
         None

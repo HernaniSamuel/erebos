@@ -548,15 +548,6 @@ let injected_r: &mut u32 = &mut injected_n;"
 fn injected_use(injected_h: InjHolder) {}"
     ),
     s!(
-        "ty::reference-to-static-mut",
-        Mir,
-        Items,
-        "static mut INJ_COUNTER: u32 = 0;
-fn injected_use() {
-    let injected_r: &u32 = &INJ_COUNTER;
-}"
-    ),
-    s!(
         "ty::reference-to-volatile",
         Mir,
         Items,
@@ -951,6 +942,19 @@ fn injected_f(injected_h: InjHandle6) {
     injected_x = 2;
     *injected_r = 3;
     injected_x
+}"
+    ),
+    s!(
+        "analysis::borrow-conflict-in-call",
+        Mir,
+        Items,
+        "static mut INJ_COUNT: u32 = 0;
+fn injected_bump(injected_r: &mut u32) {
+    INJ_COUNT = 1;
+    *injected_r = 2;
+}
+fn injected_f() {
+    injected_bump(&mut INJ_COUNT);
 }"
     ),
     s!(

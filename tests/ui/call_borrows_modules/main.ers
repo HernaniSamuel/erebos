@@ -1,0 +1,15 @@
+// emit: mir
+// A path across files (ADR 0049, 0111): the call in this file, the calls in
+// `drivers.ers` and `store.ers`, and the access in `store.ers` each show in
+// the snippet of their file, and the names are written with `::`.
+mod drivers;
+mod store;
+
+entry fn main() -> ! {
+    drivers::run();
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    loop {}
+}

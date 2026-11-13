@@ -1,0 +1,128 @@
+// emit: mir
+// References to a `static mut` (ADR 0110): `&` and `&mut` of one and of a
+// field, an element and a sub-slice of one, and of an `extern static mut`; a
+// borrow of a static shared with a handler, inside `critical`, lent to
+// functions that name no static; a static one context reaches, borrowed
+// outside `critical`; a borrow in a function called only inside `critical`; a
+// borrow in a maskable handler, with no `critical` (rule 3 of ADR 0078); the
+// wait of ADR 0086 with a borrow in the block; a reference cast to a raw
+// pointer that is used after the block.
+use core::arch::Vector;
+
+struct Pair {
+    a: u32,
+    b: u32,
+}
+
+static mut ALONE: u32 = 0;
+static mut PAIR: Pair = Pair { a: 1, b: 2 };
+static mut TABLE: [u32; 8] = [0; 8];
+extern static mut OUTSIDE: u32;
+extern static mut OUTSIDE_TABLE: [u32; 4];
+
+static mut SAMPLES: [u32; 8] = [0; 8];
+static mut FILLED: usize = 0;
+static mut READY: bool = false;
+static mut TICKS: u32 = 0;
+static mut HELPED: u32 = 0;
+
+fn take(r: &u32) -> u32 {
+    *r
+}
+
+fn add(r: &mut u32) {
+    *r += 1;
+}
+
+fn sum(s: &[u32]) -> u32 {
+    (*s)[0]
+}
+
+fn clear(s: &mut [u32]) {}
+
+fn push(s: &mut [u32; 8], at: usize, v: u32) {
+    (*s)[at] = v;
+}
+
+// A static that only the thread context reaches: borrowed anywhere.
+fn parts() {
+    take(&ALONE);
+    add(&mut ALONE);
+    take(&PAIR.a);
+    add(&mut PAIR.b);
+    let pair: &mut Pair = &mut PAIR;
+    (*pair).a = 3;
+    let e: &u32 = &TABLE[3];
+    sum(&TABLE[2..6]);
+    clear(&mut TABLE[0..4]);
+    take(&OUTSIDE);
+    add(&mut OUTSIDE);
+    sum(&OUTSIDE_TABLE[1..3]);
+}
+
+// A shared static, borrowed inside `critical` and lent to functions that name
+// no static.
+fn read_buffer() -> u32 {
+    critical {
+        let total: u32 = sum(&SAMPLES[0..FILLED]);
+        clear(&mut SAMPLES);
+        FILLED = 0;
+        total
+    }
+}
+
+// A function called only inside `critical`.
+fn bump_helped() {
+    add(&mut HELPED);
+}
+
+fn inside() {
+    critical {
+        bump_helped();
+    }
+}
+
+// The wait of ADR 0086, with a borrow in the block.
+fn wait() {
+    loop {
+        critical {
+            if READY {
+                let flag: &mut bool = &mut READY;
+                *flag = false;
+                break;
+            }
+        }
+    }
+}
+
+// A reference cast to a raw pointer, used after the block.
+fn escape() -> u32 {
+    let p: *const u32 = critical {
+        let r: &u32 = &TICKS;
+        r as *const u32
+    };
+    *p
+}
+
+interrupt fn tick() at Vector::MachineTimer {
+    if FILLED < 8 {
+        push(&mut SAMPLES, FILLED, 1);
+        FILLED += 1;
+    }
+    add(&mut TICKS);
+    add(&mut HELPED);
+    READY = true;
+}
+
+entry fn main() -> ! {
+    parts();
+    read_buffer();
+    inside();
+    wait();
+    escape();
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    loop {}
+}

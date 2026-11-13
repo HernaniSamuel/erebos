@@ -57,10 +57,6 @@ pub fn check(body: &Body, diags: &mut Diagnostics) -> bool {
 
 /// An access rooted at a static or a peripheral, as the check of the
 /// conflicts across calls reads it (ADR 0112).
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the conflicts across calls read it")
-)]
 pub(super) struct Touch {
     pub(super) how: How,
     pub(super) path: Path,
@@ -71,10 +67,6 @@ pub(super) struct Touch {
 
 /// A site rooted at a static or a peripheral that is in use during a call,
 /// and where the borrow is used after it, if it is.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the conflicts across calls read it")
-)]
 pub(super) struct Held {
     pub(super) how: How,
     pub(super) path: Path,
@@ -88,10 +80,6 @@ pub(super) struct Held {
     pub(super) later: Option<(Span, bool)>,
 }
 
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the conflicts across calls read it")
-)]
 impl Held {
     /// Whether an access of `how` at `path` conflicts with the site (ADR
     /// 0106).
@@ -102,15 +90,9 @@ impl Held {
 
 /// A `Statement::Call` of a body and the sites rooted at a static or a
 /// peripheral in use during it (ADR 0107, "In use": what its reference
-/// arguments may hold, what the locals live after it hold).
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the conflicts across calls read it")
-)]
+/// arguments may hold, what the locals live after it hold). `Facts::calls`
+/// lists them in the order of the blocks and the statements.
 pub(super) struct CallUse {
-    pub(super) block: usize,
-    /// The index of the statement in its block.
-    pub(super) statement: usize,
     pub(super) callee: BodyId,
     pub(super) span: Span,
     /// In the order the sites are made: blocks, then statements.
@@ -133,10 +115,6 @@ pub(super) struct Facts {
 /// The accesses of `body` rooted at a static or a peripheral, and, when it
 /// makes a site rooted at one, the sites in use at each call. The fixed
 /// points are those of `check`, computed again; none of it is stored.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the conflicts across calls call it")
-)]
 pub(super) fn facts(body: &Body) -> Facts {
     if body.external || body.blocks.is_empty() {
         return Facts::default();
@@ -1008,8 +986,6 @@ impl<'b> Flow<'b> {
                 };
                 let reached = reached.get_or_insert_with(|| self.reach_from(block));
                 calls.push(CallUse {
-                    block,
-                    statement: index,
                     callee: *callee,
                     span: stmt.span,
                     held: sites
@@ -1338,6 +1314,14 @@ impl Stmt {
     }
 }
 
+/// The builders of the hand-built bodies of the tests below, which the tests of
+/// `call_borrows` use too.
+#[cfg(test)]
+pub(super) use tests::{
+    address, asm_sym, block, body, decl, deref, device_address, local, mut_ref, mutable,
+    peripheral, raw, set, shared, span, static_, through,
+};
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1347,12 +1331,12 @@ mod tests {
     };
     use crate::span::SourceMap;
 
-    fn span(lo: usize) -> Span {
+    pub(in crate::analysis) fn span(lo: usize) -> Span {
         let file = SourceMap::default().add("main.ers", "");
         Span::new(file, lo, lo + 1)
     }
 
-    fn u32_ty() -> Ty {
+    pub(in crate::analysis) fn u32_ty() -> Ty {
         Ty::Int(IntTy::U32)
     }
 
@@ -1363,15 +1347,15 @@ mod tests {
         })
     }
 
-    fn mut_ref() -> Ty {
+    pub(in crate::analysis) fn mut_ref() -> Ty {
         reference(true, u32_ty())
     }
 
-    fn shared_ref() -> Ty {
+    pub(in crate::analysis) fn shared_ref() -> Ty {
         reference(false, u32_ty())
     }
 
-    fn raw() -> Ty {
+    pub(in crate::analysis) fn raw() -> Ty {
         Ty::Ptr(crate::mir::Ptr {
             mutable: true,
             volatile: false,
@@ -1407,7 +1391,7 @@ mod tests {
         Ty::Array(Box::leak(Box::new(u32_ty())), 4)
     }
 
-    fn decl(ty: Ty, name: Option<&str>) -> LocalDecl {
+    pub(in crate::analysis) fn decl(ty: Ty, name: Option<&str>) -> LocalDecl {
         LocalDecl {
             ty,
             name: name.map(str::to_owned),
@@ -1415,11 +1399,11 @@ mod tests {
         }
     }
 
-    fn local(n: u32) -> Place {
+    pub(in crate::analysis) fn local(n: u32) -> Place {
         Place::local(Local(n))
     }
 
-    fn projected(n: u32, projection: &[PlaceElem]) -> Place {
+    pub(in crate::analysis) fn projected(n: u32, projection: &[PlaceElem]) -> Place {
         Place {
             local: Local(n),
             projection: Box::leak(projection.to_vec().into_boxed_slice()),
@@ -1427,17 +1411,17 @@ mod tests {
     }
 
     /// `*_n`.
-    fn deref(n: u32) -> Place {
+    pub(in crate::analysis) fn deref(n: u32) -> Place {
         projected(n, &[PlaceElem::Deref])
     }
 
     /// `_n.field`.
-    fn field(n: u32, index: u32) -> Place {
+    pub(in crate::analysis) fn field(n: u32, index: u32) -> Place {
         projected(n, &[PlaceElem::Field(index)])
     }
 
     /// `(*_n).index`.
-    fn through(n: u32, index: u32) -> Place {
+    pub(in crate::analysis) fn through(n: u32, index: u32) -> Place {
         projected(n, &[PlaceElem::Deref, PlaceElem::Field(index)])
     }
 
@@ -1451,12 +1435,12 @@ mod tests {
     }
 
     /// `_dest = &place`.
-    fn shared(dest: u32, place: Place) -> Statement {
+    pub(in crate::analysis) fn shared(dest: u32, place: Place) -> Statement {
         ref_(dest, false, place)
     }
 
     /// `_dest = &mut place`.
-    fn mutable(dest: u32, place: Place) -> Statement {
+    pub(in crate::analysis) fn mutable(dest: u32, place: Place) -> Statement {
         ref_(dest, true, place)
     }
 
@@ -1465,12 +1449,12 @@ mod tests {
     }
 
     /// `place = const 1`.
-    fn set(place: Place) -> Statement {
+    pub(in crate::analysis) fn set(place: Place) -> Statement {
         Statement::Assign(place, Rvalue::Use(one()))
     }
 
     /// `_dest = copy place`.
-    fn read(dest: u32, place: Place) -> Statement {
+    pub(in crate::analysis) fn read(dest: u32, place: Place) -> Statement {
         Statement::Assign(local(dest), Rvalue::Use(Operand::Copy(place)))
     }
 
@@ -1504,7 +1488,7 @@ mod tests {
     }
 
     /// Statements at `start`, `start + 1`, ...; the terminator at `start + 50`.
-    fn block_at(
+    pub(in crate::analysis) fn block_at(
         start: usize,
         statements: Vec<Statement>,
         terminator: Terminator,
@@ -1517,7 +1501,10 @@ mod tests {
         }
     }
 
-    fn block(statements: Vec<Statement>, terminator: Terminator) -> BasicBlockData {
+    pub(in crate::analysis) fn block(
+        statements: Vec<Statement>,
+        terminator: Terminator,
+    ) -> BasicBlockData {
         block_at(100, statements, terminator)
     }
 
@@ -1533,7 +1520,7 @@ mod tests {
         }
     }
 
-    fn body(locals: Vec<LocalDecl>, blocks: Vec<BasicBlockData>) -> Body {
+    pub(in crate::analysis) fn body(locals: Vec<LocalDecl>, blocks: Vec<BasicBlockData>) -> Body {
         let mut all = vec![decl(Ty::Unit, None)];
         all.extend(locals);
         Body {
@@ -2404,17 +2391,17 @@ mod tests {
     }
 
     /// `static mut name: u32` (or `static`), numbered `id`.
-    fn static_(id: u32, name: &str, mutable: bool) -> StaticRef {
+    pub(in crate::analysis) fn static_(id: u32, name: &str, mutable: bool) -> StaticRef {
         StaticRef::new(StaticId(id), name.to_owned(), u32_ty(), mutable, false)
     }
 
     /// `_n = const static s`, the temporary of rule R4 that holds its address.
-    fn address(n: u32, s: StaticRef) -> Statement {
+    pub(in crate::analysis) fn address(n: u32, s: StaticRef) -> Statement {
         Statement::Assign(local(n), Rvalue::Use(Operand::Const(Const::Static(s))))
     }
 
     /// A peripheral type with two registers `ctrl` and `data`, 8 bytes long.
-    fn device() -> PeripheralTypeRef {
+    pub(in crate::analysis) fn device() -> PeripheralTypeRef {
         let register = |name: &str| Register {
             name: name.to_owned(),
             ty: u32_ty(),
@@ -2433,17 +2420,17 @@ mod tests {
         p
     }
 
-    fn peripheral(name: &str, at: u64) -> PeripheralRef {
+    pub(in crate::analysis) fn peripheral(name: &str, at: u64) -> PeripheralRef {
         PeripheralRef::new(name.to_owned(), at, device())
     }
 
     /// `_n = const peripheral p`, the temporary that holds its address.
-    fn device_address(n: u32, p: PeripheralRef) -> Statement {
+    pub(in crate::analysis) fn device_address(n: u32, p: PeripheralRef) -> Statement {
         Statement::Assign(local(n), Rvalue::Use(Operand::Const(Const::Peripheral(p))))
     }
 
     /// A pointer to `pointee`, `*mut`.
-    fn pointer_to(pointee: Ty) -> Ty {
+    pub(in crate::analysis) fn pointer_to(pointee: Ty) -> Ty {
         Ty::Ptr(crate::mir::Ptr {
             mutable: true,
             volatile: false,
@@ -2675,7 +2662,7 @@ mod tests {
     }
 
     /// An `asm` statement with one `sym` operand for `s`.
-    fn asm_sym(s: StaticRef) -> Statement {
+    pub(in crate::analysis) fn asm_sym(s: StaticRef) -> Statement {
         Statement::InlineAsm(Box::new(InlineAsm {
             pieces: Vec::new(),
             operands: vec![AsmOperand {
@@ -2842,7 +2829,6 @@ mod tests {
         let seen = facts(&lent);
         assert_eq!(seen.calls.len(), 1);
         let used = &seen.calls[0];
-        assert_eq!((used.block, used.statement), (0, 2));
         assert_eq!(used.callee, BodyId(0));
         assert_eq!(used.span, span(102));
         assert_eq!(used.held.len(), 1);

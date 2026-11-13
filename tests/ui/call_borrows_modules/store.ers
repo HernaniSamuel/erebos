@@ -1,0 +1,10 @@
+pub static mut COUNT: u32 = 0;
+
+pub fn update(r: &mut u32) {
+    refresh();
+    *r += 1;
+}
+
+fn refresh() {
+    COUNT = 0;
+}

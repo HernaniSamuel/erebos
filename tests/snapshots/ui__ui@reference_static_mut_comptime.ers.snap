@@ -1,0 +1,71 @@
+---
+source: tests/ui.rs
+assertion_line: 24
+expression: output
+input_file: tests/ui/reference_static_mut_comptime.ers
+---
+--- errors ---
+eval::static-mut
+
+  × `COUNT` is a `static mut`, whose value is only known when the program runs
+    ╭─[reference_static_mut_comptime.ers:15:5]
+  8 │ 
+  9 │ const READ: u32 = read();
+    ·       ──┬─        ───┬──
+    ·         │            ╰── called here
+    ·         ╰── while evaluating the constant `READ`
+ 10 │ const WRITE: u32 = write();
+ 11 │ const OUTER: u32 = outer();
+ 12 │ 
+ 13 │ fn read() -> u32 {
+ 14 │     let r: &u32 = &COUNT;
+ 15 │     *r
+    ·     ─┬
+    ·      ╰── read here
+ 16 │ }
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::static-mut
+
+  × `COUNT` is a `static mut`, whose value is only known when the program runs
+    ╭─[reference_static_mut_comptime.ers:20:5]
+  9 │ const READ: u32 = read();
+ 10 │ const WRITE: u32 = write();
+    ·       ──┬──        ───┬───
+    ·         │             ╰── called here
+    ·         ╰── while evaluating the constant `WRITE`
+ 11 │ const OUTER: u32 = outer();
+ 12 │ 
+ 13 │ fn read() -> u32 {
+ 14 │     let r: &u32 = &COUNT;
+ 15 │     *r
+ 16 │ }
+ 17 │ 
+ 18 │ fn write() -> u32 {
+ 19 │     let r: &mut u32 = &mut COUNT;
+ 20 │     *r = 1;
+    ·     ───┬──
+    ·        ╰── written here
+ 21 │     0
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::extern-static
+
+  × `OUTSIDE` is an `extern static`, defined outside the program, so it cannot be read or written
+  │ at compile time
+    ╭─[reference_static_mut_comptime.ers:11:7]
+ 10 │ const WRITE: u32 = write();
+ 11 │ const OUTER: u32 = outer();
+    ·       ──┬──        ───┬───
+    ·         │             ╰── called here
+    ·         ╰── while evaluating the constant `OUTER`
+ 12 │ 
+    ╰────
+    ╭─[reference_static_mut_comptime.ers:26:5]
+ 25 │     let r: &u32 = &OUTSIDE;
+ 26 │     *r
+    ·     ─┬
+    ·      ╰── read here
+ 27 │ }
+    ╰────
+  help: this code runs at compile time (ADR 0027)

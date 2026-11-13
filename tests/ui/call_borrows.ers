@@ -1,0 +1,113 @@
+// emit: mir
+// A borrow of a static lent to a call, or held across it, whose callee reaches
+// the static (ADR 0111): a write and a read by the callee; the access two
+// calls down; `&BUF` lent to a function that writes `BUF`, takes `&raw mut
+// BUF` or names it in `sym`; a borrow held across a call, with its later use;
+// `fail(&mut COUNT)` with `fail` returning `!`; two borrows in one call, two
+// errors; the same conflict in a function nothing calls and in a maskable
+// handler.
+use core::arch::Vector;
+
+static mut COUNT: u32 = 0;
+static mut TOTAL: u32 = 0;
+static mut BUF: [u32; 4] = [0; 4];
+static mut LEFT: u32 = 0;
+static mut RIGHT: u32 = 0;
+static mut TICKS: u32 = 0;
+
+fn writes(r: &mut u32) {
+    COUNT = 1;
+    *r += 1;
+}
+
+fn reads(r: &mut u32) {
+    let x: u32 = TOTAL;
+    *r += x;
+}
+
+fn down(r: &mut u32) {
+    middle();
+    *r += 1;
+}
+
+fn middle() {
+    bottom();
+}
+
+fn bottom() {
+    COUNT = 3;
+}
+
+fn writes_buf(r: &[u32; 4]) {
+    BUF[0] = 1;
+}
+
+fn address_of_buf(r: &[u32; 4]) {
+    let p: *mut [u32; 4] = &raw mut BUF;
+}
+
+fn sym_of_buf(r: &[u32; 4]) {
+    asm("la {}, {}", out(reg) _, sym BUF);
+}
+
+fn refill() {
+    COUNT = 0;
+}
+
+fn fail(r: &mut u32) -> ! {
+    COUNT = 1;
+    *r = 2;
+    loop {}
+}
+
+fn both(a: &u32, b: &u32) {
+    LEFT = 1;
+    RIGHT = 1;
+}
+
+fn lend() {
+    writes(&mut COUNT);
+    reads(&mut TOTAL);
+    down(&mut COUNT);
+}
+
+fn lend_buf() {
+    writes_buf(&BUF);
+    address_of_buf(&BUF);
+    sym_of_buf(&BUF);
+}
+
+fn held() {
+    let r: &mut u32 = &mut COUNT;
+    refill();
+    *r = 1;
+}
+
+fn diverges() {
+    fail(&mut COUNT);
+}
+
+fn two() {
+    both(&LEFT, &RIGHT);
+}
+
+fn nothing_calls_this() {
+    writes(&mut COUNT);
+}
+
+fn restart(r: &mut u32) {
+    TICKS = 0;
+    *r += 1;
+}
+
+interrupt fn tick() at Vector::MachineTimer {
+    restart(&mut TICKS);
+}
+
+entry fn main() -> ! {
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    loop {}
+}

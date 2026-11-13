@@ -1,0 +1,57 @@
+---
+source: tests/ui.rs
+assertion_line: 24
+expression: output
+input_file: tests/ui/borrow_static_conflict.ers
+---
+--- errors ---
+analysis::borrow-conflict
+
+  × cannot assign to `COUNT` while it is borrowed
+    ╭─[borrow_static_conflict.ers:15:5]
+ 13 │ fn write_while_borrowed() {
+ 14 │     let r: &mut u32 = &mut COUNT;
+    ·                       ─────┬────
+    ·                            ╰── `COUNT` is borrowed as mutable here
+ 15 │     COUNT = 2;
+    ·     ────┬────
+    ·         ╰── assigned here
+ 16 │     *r = 1;
+    ·     ───┬──
+    ·        ╰── the borrow is used later here
+ 17 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot borrow `BUF[_]` while it is borrowed as mutable
+    ╭─[borrow_static_conflict.ers:20:20]
+ 19 │ fn two_in_one_call() {
+ 20 │     both(&mut BUF, &BUF[0]);
+    ·     ───────────┬───────────┬┬
+    ·                │           │╰── borrowed here
+    ·                │           ╰── `BUF` is borrowed as mutable here
+    ·                ╰── the borrow is used later here
+ 21 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot pass `COUNT` to `asm` as `sym` while it is borrowed
+    ╭─[borrow_static_conflict.ers:25:5]
+ 23 │ fn sym_while_borrowed() {
+ 24 │     let r: &mut u32 = &mut COUNT;
+    ·                       ─────┬────
+    ·                            ╰── `COUNT` is borrowed as mutable here
+ 25 │     asm("la {}, {}", out(reg) _, sym COUNT);
+    ·     ───────────────────┬───────────────────
+    ·                        ╰── passed as `sym` here
+ 26 │     *r = 1;
+    ·     ───┬──
+    ·        ╰── the borrow is used later here
+ 27 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)

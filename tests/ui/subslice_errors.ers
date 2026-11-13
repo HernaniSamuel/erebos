@@ -95,7 +95,6 @@ fn addresses(
     let e: *const [u32] = &raw const (*h).words[1..];
     let f: &[u32] = &(*h).words[1..];
     let g: &[u8] = &(*h).bytes[1..];
-    let i: &[u32] = &COUNTS[1..n];
     let j: *const [u32] = &raw const COUNTS[1..n];
 }
 

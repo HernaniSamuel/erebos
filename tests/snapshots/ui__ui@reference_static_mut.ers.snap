@@ -1,0 +1,520 @@
+---
+source: tests/ui.rs
+assertion_line: 24
+expression: output
+input_file: tests/ui/reference_static_mut.ers
+---
+--- mir ---
+struct Pair { 0 a: u32 at 0, 1 b: u32 at 4 } // size 8, align 4
+
+static mut ALONE: u32; // align 4
+static mut PAIR: Pair; // align 4
+static mut TABLE: [u32; 8]; // align 4
+extern static mut OUTSIDE: u32; // align 4
+extern static mut OUTSIDE_TABLE: [u32; 4]; // align 4
+static mut SAMPLES: [u32; 8]; // align 4
+static mut FILLED: usize; // align 4
+static mut READY: bool; // align 1
+static mut TICKS: u32; // align 4
+static mut HELPED: u32; // align 4
+
+fn take(_1: &u32) -> u32 {
+    let _0: u32;
+    let _1: &u32; // r
+    let _2: u32;
+
+    bb0: {
+        _2 = copy (*_1);
+        _0 = copy _2;
+        return;
+    }
+}
+
+fn add(_1: &mut u32) -> () {
+    let _0: ();
+    let _1: &mut u32; // r
+
+    bb0: {
+        (*_1) = Add(copy (*_1), const 1_u32);
+        return;
+    }
+}
+
+fn sum(_1: &[u32]) -> u32 {
+    let _0: u32;
+    let _1: &[u32]; // s
+    let _2: usize;
+    let _3: usize;
+    let _4: bool;
+    let _5: u32;
+
+    bb0: {
+        _2 = const 0_usize;
+        _3 = len(_1);
+        _4 = Lt(copy _2, copy _3);
+        if copy _4 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _5 = copy (*_1)[_2];
+        _0 = copy _5;
+        return;
+    }
+
+    bb2: {
+        panic(index out of bounds);
+    }
+}
+
+fn clear(_1: &mut [u32]) -> () {
+    let _0: ();
+    let _1: &mut [u32]; // s
+
+    bb0: {
+        return;
+    }
+}
+
+fn push(_1: &mut [u32; 8], _2: usize, _3: u32) -> () {
+    let _0: ();
+    let _1: &mut [u32; 8]; // s
+    let _2: usize; // at
+    let _3: u32; // v
+    let _4: usize;
+    let _5: bool;
+
+    bb0: {
+        _4 = copy _2;
+        _5 = Lt(copy _4, const 8_usize);
+        if copy _5 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        (*_1)[_4] = copy _3;
+        return;
+    }
+
+    bb2: {
+        panic(index out of bounds);
+    }
+}
+
+fn parts() -> () {
+    let _0: ();
+    let _1: &mut Pair; // pair
+    let _2: &u32; // e
+    let _3: *mut u32;
+    let _4: &u32;
+    let _5: u32;
+    let _6: *mut u32;
+    let _7: &mut u32;
+    let _8: *mut Pair;
+    let _9: &u32;
+    let _10: u32;
+    let _11: *mut Pair;
+    let _12: &mut u32;
+    let _13: *mut Pair;
+    let _14: &mut Pair;
+    let _15: *mut [u32; 8];
+    let _16: &u32;
+    let _17: *mut [u32; 8];
+    let _18: &[u32];
+    let _19: u32;
+    let _20: *mut [u32; 8];
+    let _21: &mut [u32];
+    let _22: *mut u32;
+    let _23: &u32;
+    let _24: u32;
+    let _25: *mut u32;
+    let _26: &mut u32;
+    let _27: *mut [u32; 4];
+    let _28: &[u32];
+    let _29: u32;
+
+    bb0: {
+        _3 = const static ALONE;
+        _4 = &(*_3);
+        _5 = call take(copy _4);
+        _6 = const static ALONE;
+        _7 = &mut (*_6);
+        call add(move _7);
+        _8 = const static PAIR;
+        _9 = &(*_8).0;
+        _10 = call take(copy _9);
+        _11 = const static PAIR;
+        _12 = &mut (*_11).1;
+        call add(move _12);
+        _13 = const static PAIR;
+        _14 = &mut (*_13);
+        _1 = move _14;
+        (*_1).0 = const 3_u32;
+        _15 = const static TABLE;
+        _16 = &(*_15)[3];
+        _2 = copy _16;
+        _17 = const static TABLE;
+        _18 = &(*_17)[2..6];
+        _19 = call sum(copy _18);
+        _20 = const static TABLE;
+        _21 = &mut (*_20)[0..4];
+        call clear(move _21);
+        _22 = const static OUTSIDE;
+        _23 = &(*_22);
+        _24 = call take(copy _23);
+        _25 = const static OUTSIDE;
+        _26 = &mut (*_25);
+        call add(move _26);
+        _27 = const static OUTSIDE_TABLE;
+        _28 = &(*_27)[1..3];
+        _29 = call sum(copy _28);
+        return;
+    }
+}
+
+fn read_buffer() -> u32 {
+    let _0: u32;
+    let _1: u32; // total
+    let _2: u32;
+    let _3: *mut [u32; 8];
+    let _4: usize;
+    let _5: *mut usize;
+    let _6: usize;
+    let _7: usize;
+    let _8: bool;
+    let _9: bool;
+    let _10: &[u32];
+    let _11: u32;
+    let _12: *mut [u32; 8];
+    let _13: &mut [u32];
+    let _14: *mut usize;
+
+    bb0: {
+        critical_enter _2;
+        _3 = const static SAMPLES;
+        _4 = const 0_usize;
+        _5 = const static FILLED;
+        _6 = copy (*_5);
+        _7 = copy _6;
+        _8 = Le(copy _4, copy _7);
+        if copy _8 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _9 = Le(copy _7, const 8_usize);
+        if copy _9 -> [true: bb3, false: bb4];
+    }
+
+    bb2: {
+        panic(index out of bounds);
+    }
+
+    bb3: {
+        _10 = &(*_3)[_4.._7];
+        _11 = call sum(copy _10);
+        _1 = copy _11;
+        _12 = const static SAMPLES;
+        _13 = &mut (*_12)[0..8];
+        call clear(move _13);
+        _14 = const static FILLED;
+        (*_14) = const 0_usize;
+        critical_exit _2;
+        _0 = copy _1;
+        return;
+    }
+
+    bb4: {
+        panic(index out of bounds);
+    }
+}
+
+fn bump_helped() -> () {
+    let _0: ();
+    let _1: *mut u32;
+    let _2: &mut u32;
+
+    bb0: {
+        _1 = const static HELPED;
+        _2 = &mut (*_1);
+        call add(move _2);
+        return;
+    }
+}
+
+fn inside() -> () {
+    let _0: ();
+    let _1: u32;
+
+    bb0: {
+        critical_enter _1;
+        call bump_helped();
+        critical_exit _1;
+        return;
+    }
+}
+
+fn wait() -> () {
+    let _0: ();
+    let _1: &mut bool; // flag
+    let _2: u32;
+    let _3: *mut bool;
+    let _4: bool;
+    let _5: *mut bool;
+    let _6: &mut bool;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        critical_enter _2;
+        _3 = const static READY;
+        _4 = copy (*_3);
+        if copy _4 -> [true: bb2, false: bb3];
+    }
+
+    bb2: {
+        _5 = const static READY;
+        _6 = &mut (*_5);
+        _1 = move _6;
+        (*_1) = const false;
+        critical_exit _2;
+        goto -> bb4;
+    }
+
+    bb3: {
+        goto -> bb5;
+    }
+
+    bb4: {
+        return;
+    }
+
+    bb5: {
+        critical_exit _2;
+        goto -> bb1;
+    }
+}
+
+fn escape() -> u32 {
+    let _0: u32;
+    let _1: &u32; // r
+    let _2: *const u32; // p
+    let _3: u32;
+    let _4: *mut u32;
+    let _5: &u32;
+    let _6: *const u32;
+    let _7: u32;
+
+    bb0: {
+        critical_enter _3;
+        _4 = const static TICKS;
+        _5 = &(*_4);
+        _1 = copy _5;
+        _6 = copy _1 as *const u32;
+        critical_exit _3;
+        _2 = copy _6;
+        _7 = copy (*_2);
+        _0 = copy _7;
+        return;
+    }
+}
+
+interrupt fn tick() -> () at MachineTimer {
+    let _0: ();
+    let _1: *mut usize;
+    let _2: usize;
+    let _3: bool;
+    let _4: *mut [u32; 8];
+    let _5: &mut [u32; 8];
+    let _6: &mut [u32; 8];
+    let _7: *mut usize;
+    let _8: usize;
+    let _9: *mut usize;
+    let _10: *mut u32;
+    let _11: &mut u32;
+    let _12: *mut u32;
+    let _13: &mut u32;
+    let _14: *mut bool;
+
+    bb0: {
+        _1 = const static FILLED;
+        _2 = copy (*_1);
+        _3 = Lt(copy _2, const 8_usize);
+        if copy _3 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _4 = const static SAMPLES;
+        _5 = &mut (*_4);
+        _6 = move _5;
+        _7 = const static FILLED;
+        _8 = copy (*_7);
+        call push(move _6, copy _8, const 1_u32);
+        _9 = const static FILLED;
+        (*_9) = Add(copy (*_9), const 1_usize);
+        goto -> bb3;
+    }
+
+    bb2: {
+        goto -> bb3;
+    }
+
+    bb3: {
+        _10 = const static TICKS;
+        _11 = &mut (*_10);
+        call add(move _11);
+        _12 = const static HELPED;
+        _13 = &mut (*_12);
+        call add(move _13);
+        _14 = const static READY;
+        (*_14) = const true;
+        return;
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+    let _1: u32;
+    let _2: u32;
+
+    bb0: {
+        call parts();
+        _1 = call read_buffer();
+        call inside();
+        call wait();
+        _2 = call escape();
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+comptime fn ALONE() -> u32 {
+    let _0: u32;
+
+    bb0: {
+        _0 = const 0_u32;
+        return;
+    }
+}
+
+comptime fn PAIR() -> Pair {
+    let _0: Pair;
+    let _1: Pair;
+
+    bb0: {
+        _1.0 = const 1_u32;
+        _1.1 = const 2_u32;
+        _0 = move _1;
+        return;
+    }
+}
+
+comptime fn TABLE() -> [u32; 8] {
+    let _0: [u32; 8];
+    let _1: [u32; 8];
+    let _2: usize;
+    let _3: bool;
+
+    bb0: {
+        _2 = const 0_usize;
+        goto -> bb1;
+    }
+
+    bb1: {
+        _3 = Lt(copy _2, const 8_usize);
+        if copy _3 -> [true: bb2, false: bb3];
+    }
+
+    bb2: {
+        _1[_2] = const 0_u32;
+        _2 = Add(copy _2, const 1_usize);
+        goto -> bb1;
+    }
+
+    bb3: {
+        _0 = copy _1;
+        return;
+    }
+}
+
+comptime fn SAMPLES() -> [u32; 8] {
+    let _0: [u32; 8];
+    let _1: [u32; 8];
+    let _2: usize;
+    let _3: bool;
+
+    bb0: {
+        _2 = const 0_usize;
+        goto -> bb1;
+    }
+
+    bb1: {
+        _3 = Lt(copy _2, const 8_usize);
+        if copy _3 -> [true: bb2, false: bb3];
+    }
+
+    bb2: {
+        _1[_2] = const 0_u32;
+        _2 = Add(copy _2, const 1_usize);
+        goto -> bb1;
+    }
+
+    bb3: {
+        _0 = copy _1;
+        return;
+    }
+}
+
+comptime fn FILLED() -> usize {
+    let _0: usize;
+
+    bb0: {
+        _0 = const 0_usize;
+        return;
+    }
+}
+
+comptime fn READY() -> bool {
+    let _0: bool;
+
+    bb0: {
+        _0 = const false;
+        return;
+    }
+}
+
+comptime fn TICKS() -> u32 {
+    let _0: u32;
+
+    bb0: {
+        _0 = const 0_u32;
+        return;
+    }
+}
+
+comptime fn HELPED() -> u32 {
+    let _0: u32;
+
+    bb0: {
+        _0 = const 0_u32;
+        return;
+    }
+}
+
+extern fn core.arch.__critical_enter() -> u32;
+
+extern fn core.arch.__critical_exit(_1: u32) -> ();

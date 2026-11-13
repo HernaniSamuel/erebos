@@ -1,0 +1,17 @@
+// emit: llvm-ir
+// The check is made on MIR (ADR 0111), before code generation: a program that
+// breaks it has no code, and `--emit=llvm-ir` reports the error that
+// `--emit=mir` does (`call_borrows.ers`).
+static mut COUNT: u32 = 0;
+
+fn bump(r: &mut u32) {
+    COUNT += 1;
+    *r += 1;
+}
+
+entry fn main() -> ! {
+    bump(&mut COUNT);
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

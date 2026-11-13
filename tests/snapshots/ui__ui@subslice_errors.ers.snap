@@ -435,22 +435,3 @@ ty::packed-field-address
     ╰────
   help: a `*const u32` promises alignment, and dereferencing a misaligned one may trap; copy the
         array into a `let` first (ADR 0022, 0108)
-ty::reference-to-static-mut
-
-  × cannot borrow the static mut `COUNTS`
-    ╭─[subslice_errors.ers:21:12]
- 20 │ static TABLE: [u8; 4] = [1, 2, 3, 4];
- 21 │ static mut COUNTS: [u32; 4] = [0; 4];
-    ·            ───┬──
-    ·               ╰── declared `static mut COUNTS`
- 22 │ const MSG: [u8; 4] = [1, 2, 3, 4];
-    ╰────
-    ╭─[subslice_errors.ers:98:22]
- 97 │     let g: &[u8] = &(*h).bytes[1..];
- 98 │     let i: &[u32] = &COUNTS[1..n];
-    ·                      ──────┬─────
-    ·                            ╰── borrowed here
- 99 │     let j: *const [u32] = &raw const COUNTS[1..n];
-    ╰────
-  help: an interrupt can change a `static mut` while the reference to it is in use; inside a
-        `critical` block, take its address with `&raw const` or `&raw mut` (ADR 0078, 0093, 0105)

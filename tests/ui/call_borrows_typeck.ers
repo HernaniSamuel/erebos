@@ -1,0 +1,16 @@
+// emit: typeck
+// The check is made on MIR (ADR 0111), so a program that breaks it still has a
+// dump at `--emit=typeck` and earlier stages, as for shared statics.
+static mut COUNT: u32 = 0;
+
+fn bump(r: &mut u32) {
+    COUNT += 1;
+    *r += 1;
+}
+
+entry fn main() -> ! {
+    bump(&mut COUNT);
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

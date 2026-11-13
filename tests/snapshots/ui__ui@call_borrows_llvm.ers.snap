@@ -1,0 +1,27 @@
+---
+source: tests/ui.rs
+assertion_line: 24
+expression: output
+input_file: tests/ui/call_borrows_llvm.ers
+---
+--- errors ---
+analysis::borrow-conflict-in-call
+
+  × `COUNT` is borrowed during this call, and the callee reads it
+    ╭─[call_borrows_llvm.ers:13:5]
+  7 │ fn bump(r: &mut u32) {
+  8 │     COUNT += 1;
+    ·     ─────┬────
+    ·          ╰── `COUNT` is read here
+  9 │     *r += 1;
+ 10 │ }
+ 11 │ 
+ 12 │ entry fn main() -> ! {
+ 13 │     bump(&mut COUNT);
+    ·     ────────┬───────┬
+    ·             │       ╰── `COUNT` is borrowed `&mut` here
+    ·             ╰── `bump` reaches `COUNT` while it is borrowed
+ 14 │     loop {}
+    ╰────
+  help: pass the reference on instead of naming `COUNT` in the callee, or end the borrow before
+        the call

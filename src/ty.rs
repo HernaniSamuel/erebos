@@ -491,10 +491,6 @@ struct PlaceInfo {
     /// The path to the place goes through the `*` of a reference (ADR 0105):
     /// a value is not moved out of it, and a linear value not written to it.
     via_ref: bool,
-    /// The place is a `static mut`, or part of one, with no pointer or
-    /// reference between: a reference to it is `ty::reference-to-static-mut`
-    /// until M5.4c (ADR 0105).
-    static_mut: Option<StaticId>,
 }
 
 /// The register `index` of the peripheral type `id`.
@@ -515,7 +511,6 @@ impl PlaceInfo {
         register: None,
         bit_field: None,
         via_ref: false,
-        static_mut: None,
     };
 
     /// The value of `base`, which is not a place expression, indexed or
@@ -530,7 +525,6 @@ impl PlaceInfo {
             register: None,
             bit_field: None,
             via_ref: false,
-            static_mut: None,
         }
     }
 
@@ -546,7 +540,6 @@ impl PlaceInfo {
             register: None,
             bit_field: None,
             via_ref: false,
-            static_mut: None,
         }
     }
 
@@ -563,7 +556,6 @@ impl PlaceInfo {
             register: None,
             bit_field: None,
             via_ref: true,
-            static_mut: None,
         }
     }
 }

@@ -1,0 +1,34 @@
+---
+source: tests/ui.rs
+assertion_line: 31
+expression: output
+input_file: tests/ui/call_borrows_modules/main.ers
+---
+--- errors ---
+analysis::borrow-conflict-in-call
+
+  × `store::COUNT` is borrowed during this call, and the callee writes it
+   ╭─[drivers.ers:4:5]
+ 3 │ pub fn run() {
+ 4 │     store::update(&mut store::COUNT);
+   ·     ────────────────┬───────────────┬
+   ·                     │               ╰── `store::COUNT` is borrowed `&mut` here
+   ·                     ╰── `store::update` reaches `store::COUNT` while it is borrowed
+ 5 │ }
+   ╰────
+    ╭─[store.ers:4:5]
+  3 │ pub fn update(r: &mut u32) {
+  4 │     refresh();
+    ·     ────┬────
+    ·         ╰── `store::refresh` is called here
+  5 │     *r += 1;
+  6 │ }
+  7 │ 
+  8 │ fn refresh() {
+  9 │     COUNT = 0;
+    ·     ────┬────
+    ·         ╰── `store::COUNT` is written here
+ 10 │ }
+    ╰────
+  help: pass the reference on instead of naming `store::COUNT` in the callee, or end the borrow
+        before the call

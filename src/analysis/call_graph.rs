@@ -47,6 +47,9 @@ struct Found {
 /// The bodies a search reaches, each with the shortest path found.
 pub(super) struct Reach {
     found: Vec<Option<Found>>,
+    /// The bodies reached, in the order the search found them: the roots,
+    /// then by the length of their path.
+    order: Vec<BodyId>,
 }
 
 impl Reach {
@@ -61,11 +64,13 @@ impl Reach {
         outside_only: bool,
     ) -> Reach {
         let mut found: Vec<Option<Found>> = vec![None; calls.len()];
+        let mut order = Vec::new();
         let mut queue = VecDeque::new();
         for &root in roots {
             if found[root.0 as usize].is_none() {
                 found[root.0 as usize] = Some(Found { root, via: None });
                 queue.push_back(root);
+                order.push(root);
             }
         }
         while let Some(body) = queue.pop_front() {
@@ -86,10 +91,16 @@ impl Reach {
                         via: Some((body, k)),
                     });
                     queue.push_back(call.callee);
+                    order.push(call.callee);
                 }
             }
         }
-        Reach { found }
+        Reach { found, order }
+    }
+
+    /// The bodies the search reached, in the order it found them.
+    pub(super) fn order(&self) -> &[BodyId] {
+        &self.order
     }
 
     pub(super) fn reaches(&self, body: BodyId) -> bool {
@@ -153,6 +164,7 @@ mod tests {
         assert!(without.reaches(BodyId(3)) && !without.reaches(BodyId(2)));
         assert_eq!(without.root(BodyId(3)), Some(BodyId(0)));
         assert_eq!(without.root(BodyId(2)), None);
+        assert_eq!(without.order(), [BodyId(0), BodyId(1), BodyId(3)]);
     }
 
     #[test]

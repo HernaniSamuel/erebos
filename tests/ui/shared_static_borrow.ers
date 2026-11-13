@@ -1,0 +1,41 @@
+// emit: mir
+// A borrow names its static (ADR 0110), so the rule of ADR 0093 applies to it:
+// `&mut` of a static the handler also reaches, outside `critical` in the
+// thread context, directly and in a function called once outside `critical`
+// (with the path), is an error, and the same borrow inside `critical` is not.
+use core::arch::Vector;
+
+static mut SAMPLES: [u32; 8] = [0; 8];
+static mut FILLED: usize = 0;
+static mut LENT: u32 = 0;
+
+fn clear(s: &mut [u32]) {}
+
+fn add(r: &mut u32) {
+    *r += 1;
+}
+
+fn lend() {
+    add(&mut LENT);
+}
+
+interrupt fn tick() at Vector::MachineTimer {
+    SAMPLES[0] = 1;
+    FILLED = 1;
+    LENT = 1;
+}
+
+entry fn main() -> ! {
+    clear(&mut SAMPLES);
+    let n: usize = len(&SAMPLES[0..FILLED]);
+    critical {
+        clear(&mut SAMPLES);
+        lend();
+    }
+    lend();
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    loop {}
+}

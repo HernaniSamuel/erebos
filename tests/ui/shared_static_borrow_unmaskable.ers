@@ -1,0 +1,26 @@
+// emit: mir
+// target: thumbv7m-none-eabi
+// A borrow in an unmaskable handler of a static another context reaches
+// (ADR 0110, 0093): `critical` does not stop the NMI, so the thread's borrow
+// inside it is an error too; the error is at the NMI's borrow, and the
+// thread's is the label.
+use core::arch::Vector;
+
+static mut BUF: [u32; 4] = [0; 4];
+
+fn clear(s: &mut [u32]) {}
+
+interrupt fn nmi() at Vector::NMI {
+    clear(&mut BUF);
+}
+
+entry fn main() -> ! {
+    critical {
+        clear(&mut BUF);
+    }
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    loop {}
+}

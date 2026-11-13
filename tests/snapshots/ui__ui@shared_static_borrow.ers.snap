@@ -1,0 +1,96 @@
+---
+source: tests/ui.rs
+assertion_line: 24
+expression: output
+input_file: tests/ui/shared_static_borrow.ers
+---
+--- errors ---
+analysis::unprotected-static
+
+  × `LENT` is reached outside `critical` in the thread context, and a handler reaches it too
+    ╭─[shared_static_borrow.ers:19:9]
+ 18 │ fn lend() {
+ 19 │     add(&mut LENT);
+    ·         ────┬────
+    ·             ╰── reached here, outside `critical`
+ 20 │ }
+ 21 │ 
+ 22 │ interrupt fn tick() at Vector::MachineTimer {
+ 23 │     SAMPLES[0] = 1;
+ 24 │     FILLED = 1;
+ 25 │     LENT = 1;
+    ·     ────┬───
+    ·         ╰── the handler `tick` reaches it here
+ 26 │ }
+ 27 │ 
+ 28 │ entry fn main() -> ! {
+ 29 │     clear(&mut SAMPLES);
+ 30 │     let n: usize = len(&SAMPLES[0..FILLED]);
+ 31 │     critical {
+ 32 │         clear(&mut SAMPLES);
+ 33 │         lend();
+ 34 │     }
+ 35 │     lend();
+    ·     ───┬──
+    ·        ╰── called here, outside `critical`
+ 36 │     loop {}
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block
+analysis::unprotected-static
+
+  × `SAMPLES` is reached outside `critical` in the thread context, and a handler reaches it too
+    ╭─[shared_static_borrow.ers:29:11]
+ 22 │ interrupt fn tick() at Vector::MachineTimer {
+ 23 │     SAMPLES[0] = 1;
+    ·     ───────┬──────
+    ·            ╰── the handler `tick` reaches it here
+ 24 │     FILLED = 1;
+ 25 │     LENT = 1;
+ 26 │ }
+ 27 │ 
+ 28 │ entry fn main() -> ! {
+ 29 │     clear(&mut SAMPLES);
+    ·           ──────┬─────
+    ·                 ╰── reached here, outside `critical`
+ 30 │     let n: usize = len(&SAMPLES[0..FILLED]);
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block
+analysis::unprotected-static
+
+  × `SAMPLES` is reached outside `critical` in the thread context, and a handler reaches it too
+    ╭─[shared_static_borrow.ers:30:24]
+ 22 │ interrupt fn tick() at Vector::MachineTimer {
+ 23 │     SAMPLES[0] = 1;
+    ·     ───────┬──────
+    ·            ╰── the handler `tick` reaches it here
+ 24 │     FILLED = 1;
+ 25 │     LENT = 1;
+ 26 │ }
+ 27 │ 
+ 28 │ entry fn main() -> ! {
+ 29 │     clear(&mut SAMPLES);
+ 30 │     let n: usize = len(&SAMPLES[0..FILLED]);
+    ·                        ─────────┬─────────
+    ·                                 ╰── reached here, outside `critical`
+ 31 │     critical {
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block
+analysis::unprotected-static
+
+  × `FILLED` is reached outside `critical` in the thread context, and a handler reaches it too
+    ╭─[shared_static_borrow.ers:30:36]
+ 23 │     SAMPLES[0] = 1;
+ 24 │     FILLED = 1;
+    ·     ─────┬────
+    ·          ╰── the handler `tick` reaches it here
+ 25 │     LENT = 1;
+ 26 │ }
+ 27 │ 
+ 28 │ entry fn main() -> ! {
+ 29 │     clear(&mut SAMPLES);
+ 30 │     let n: usize = len(&SAMPLES[0..FILLED]);
+    ·                                    ───┬──
+    ·                                       ╰── reached here, outside `critical`
+ 31 │     critical {
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block

@@ -1,0 +1,24 @@
+---
+source: tests/ui.rs
+assertion_line: 24
+expression: output
+input_file: tests/ui/call_borrows_typeck.ers
+---
+--- typeck ---
+fn bump(r: &mut u32) -> ()
+    expr 0 assign += 221..231: ()
+    expr 1 static COUNT 221..226: u32
+    expr 2 int 1 230..231: u32
+    expr 3 assign += 237..244: ()
+    expr 4 deref 237..239: u32
+    expr 5 local r 238..239: &mut u32
+    expr 6 int 1 243..244: u32
+entry fn main() -> !
+    expr 7 call 276..292: ()
+    expr 8 &mut 281..291: &mut u32
+    expr 9 static COUNT 286..291: u32
+    expr 10 loop 298..305: !
+panic fn on_panic() -> !
+    expr 11 loop 336..343: !
+comptime fn COUNT() -> u32
+    expr 12 int 0 190..191: u32
