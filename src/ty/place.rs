@@ -1266,7 +1266,8 @@ impl Checker<'_, '_> {
         if !self.has_address(place, &info, borrow_op(mutable)) {
             return Ty::Error;
         }
-        // Nor have the places accessed volatile: M5.4c's (ADR 0105, 0110).
+        // Nor have the places reached through a volatile pointer: M5.4c's
+        // (ADR 0105, 0110).
         if let Some(diag) = self.not_borrowed_yet(place, &info) {
             self.q.diags.push(diag);
             return Ty::Error;
@@ -1282,23 +1283,10 @@ impl Checker<'_, '_> {
         }
     }
 
-    /// `ty::reference-to-volatile` for a peripheral or a cluster, or a place
-    /// reached through a `volatile` pointer: what a reference to it would let
-    /// the program assume, which the rest of M5.4c settles (ADR 0105, 0110).
+    /// `ty::reference-to-volatile` for a place reached through a `volatile`
+    /// pointer: what a reference to it would let the program assume, which
+    /// the rest of M5.4c settles (ADR 0105, 0110).
     fn not_borrowed_yet(&self, place: &Expr, info: &PlaceInfo) -> Option<Diagnostic> {
-        if let Ty::Peripheral(_) = info.ty {
-            return Some(
-                Diagnostic::error(
-                    "ty::reference-to-volatile",
-                    format!("cannot borrow a peripheral or a cluster of type `{}`", info.ty),
-                )
-                .label(place.span, "its registers are accessed volatile")
-                .help(format!(
-                    "a reference lets the compiler assume the memory behind it only changes when the program changes it, which a device does not keep to (ADR 0058); use a pointer to it, such as a `*mut {}`, `&raw mut P` (ADR 0105)",
-                    info.ty
-                )),
-            );
-        }
         if let Some(ptr) = info.via
             && ptr.volatile
         {

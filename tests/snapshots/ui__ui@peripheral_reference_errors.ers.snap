@@ -1,0 +1,185 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/peripheral_reference_errors.ers
+---
+--- errors ---
+ty::write-through-const
+
+  × cannot write through a `&` reference
+    ╭─[peripheral_reference_errors.ers:28:7]
+ 27 │ fn writes(u: &Uart16550, m: &mut Uart16550) {
+ 28 │     (*u).ier = 1;
+    ·       ┬
+    ·       ╰── has type `&Uart16550`
+ 29 │     (*u).ier |= 1;
+    ╰────
+  help: only `&mut` references can be written through (ADR 0105)
+ty::write-through-const
+
+  × cannot write through a `&` reference
+    ╭─[peripheral_reference_errors.ers:29:7]
+ 28 │     (*u).ier = 1;
+ 29 │     (*u).ier |= 1;
+    ·       ┬
+    ·       ╰── has type `&Uart16550`
+ 30 │     (*m).rbr = 1;
+    ╰────
+  help: only `&mut` references can be written through (ADR 0105)
+ty::write-to-read-only
+
+  × the register `rbr` of `Uart16550` is read-only
+    ╭─[peripheral_reference_errors.ers:10:10]
+  9 │ peripheral Uart16550 {
+ 10 │     read rbr: u8 at 0,
+    ·          ─┬─
+    ·           ╰── declared `read`
+ 11 │     write thr: u8 at 0,
+    ╰────
+    ╭─[peripheral_reference_errors.ers:30:5]
+ 29 │     (*u).ier |= 1;
+ 30 │     (*m).rbr = 1;
+    ·     ────┬───
+    ·         ╰── written here
+ 31 │     (*m).thr = 1;
+    ╰────
+  help: a `read` register can only be read; declare it `read write` if the device also lets it be
+        written (ADR 0058)
+ty::read-of-write-only
+
+  × the register `thr` of `Uart16550` is write-only
+    ╭─[peripheral_reference_errors.ers:11:11]
+ 10 │     read rbr: u8 at 0,
+ 11 │     write thr: u8 at 0,
+    ·           ─┬─
+    ·            ╰── declared `write`
+ 12 │     read write ier: u8 at 1,
+    ╰────
+    ╭─[peripheral_reference_errors.ers:35:5]
+ 34 │ fn reads(m: &mut Uart16550) -> u8 {
+ 35 │     (*m).thr
+    ·     ────┬───
+    ·         ╰── read here
+ 36 │ }
+    ╰────
+  help: a `write` register can only be assigned with `=`, since a compound assignment reads it
+        first; declare it `read write` if the device also lets it be read (ADR 0058)
+ty::peripheral-by-value
+
+  × `Uart16550` is a peripheral type, which no value has
+    ╭─[peripheral_reference_errors.ers:39:12]
+ 38 │ fn whole(u: &Uart16550, m: &mut Uart16550) {
+ 39 │     let a: Uart16550 = *u;
+    ·            ────┬────
+    ·                ╰── `Uart16550` as the type of a variable
+ 40 │     *m = *u;
+    ╰────
+  help: a peripheral type describes a device's registers, reached one at a time from a peripheral
+        or through a pointer, such as `*mut Uart16550` (ADR 0058)
+ty::peripheral-by-value
+
+  × `Uart16550` is a peripheral type, which no value has
+    ╭─[peripheral_reference_errors.ers:39:24]
+ 38 │ fn whole(u: &Uart16550, m: &mut Uart16550) {
+ 39 │     let a: Uart16550 = *u;
+    ·                        ─┬
+    ·                         ╰── a device, read as a whole
+ 40 │     *m = *u;
+    ╰────
+  help: its registers are read and written one at a time, as in `P.NAME` or `(*u).NAME`; a
+        function is given the device as a `*mut Uart16550`, such as `&raw mut P` (ADR 0058)
+ty::peripheral-by-value
+
+  × `Uart16550` is a peripheral type, which no value has
+    ╭─[peripheral_reference_errors.ers:40:5]
+ 39 │     let a: Uart16550 = *u;
+ 40 │     *m = *u;
+    ·     ─┬
+    ·      ╰── a device, written as a whole
+ 41 │     (*u)[0];
+    ╰────
+  help: its registers are read and written one at a time, as in `P.NAME` or `(*u).NAME`; a
+        function is given the device as a `*mut Uart16550`, such as `&raw mut P` (ADR 0058)
+ty::peripheral-by-value
+
+  × `Uart16550` is a peripheral type, which no value has
+    ╭─[peripheral_reference_errors.ers:40:10]
+ 39 │     let a: Uart16550 = *u;
+ 40 │     *m = *u;
+    ·          ─┬
+    ·           ╰── a device, read as a whole
+ 41 │     (*u)[0];
+    ╰────
+  help: its registers are read and written one at a time, as in `P.NAME` or `(*u).NAME`; a
+        function is given the device as a `*mut Uart16550`, such as `&raw mut P` (ADR 0058)
+ty::cannot-index
+
+  × cannot index a value of type `Uart16550`
+    ╭─[peripheral_reference_errors.ers:41:5]
+ 40 │     *m = *u;
+ 41 │     (*u)[0];
+    ·     ──┬─
+    ·       ╰── not an array or a pointer
+ 42 │     (*m)[1];
+    ╰────
+ty::cannot-index
+
+  × cannot index a value of type `Uart16550`
+    ╭─[peripheral_reference_errors.ers:42:5]
+ 41 │     (*u)[0];
+ 42 │     (*m)[1];
+    ·     ──┬─
+    ·       ╰── not an array or a pointer
+ 43 │ }
+    ╰────
+ty::register-address
+
+  × cannot take the address of the register `thr` of `Uart16550`
+    ╭─[peripheral_reference_errors.ers:46:10]
+ 45 │ fn no_address() {
+ 46 │     &mut UART0.thr;
+    ·          ────┬────
+    ·              ╰── a register
+ 47 │     &UART0.ier;
+    ╰────
+  help: a pointer to it would reach it without its access mode, `write`; read or write it where it
+        is named, or pass the whole device with a pointer to its peripheral, as `&raw mut P` (ADR
+        0058)
+ty::register-address
+
+  × cannot take the address of the register `ier` of `Uart16550`
+    ╭─[peripheral_reference_errors.ers:47:6]
+ 46 │     &mut UART0.thr;
+ 47 │     &UART0.ier;
+    ·      ────┬────
+    ·          ╰── a register
+ 48 │     &PLIC.regs;
+    ╰────
+  help: a pointer to it would reach it without its access mode, `read write`; read or write it
+        where it is named, or pass the whole device with a pointer to its peripheral, as `&raw mut
+        P` (ADR 0058)
+ty::register-address
+
+  × cannot take the address of the register array `regs` of `Plic`
+    ╭─[peripheral_reference_errors.ers:48:6]
+ 47 │     &UART0.ier;
+ 48 │     &PLIC.regs;
+    ·      ────┬────
+    ·          ╰── a register array
+ 49 │     &mut PLIC.ctx;
+    ╰────
+  help: no pointer type holds the step of an array, and a pointer to an element would reach the
+        register without its access mode; read or write the elements where they are named (ADR
+        0064)
+ty::register-address
+
+  × cannot take the address of the cluster array `ctx` of `Plic`
+    ╭─[peripheral_reference_errors.ers:49:10]
+ 48 │     &PLIC.regs;
+ 49 │     &mut PLIC.ctx;
+    ·          ────┬───
+    ·              ╰── a cluster array
+ 50 │ }
+    ╰────
+  help: a pointer to the whole array would not hold its step; take the address of one element,
+        `&raw mut P.ctx[i]`, which a driver of its type serves (ADR 0064)

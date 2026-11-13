@@ -157,12 +157,17 @@ impl Lowerer<'_> {
             }
             ast::TyKind::Applied(path, args) => self.applied_ty(ty, path, args),
             ast::TyKind::Named(path) => match self.named_ty(path) {
-                // Only behind a pointer, or as a register's type, which is
-                // checked once types are computed (ADR 0058).
+                // Only behind a pointer or a reference, or as a register's
+                // type, which is checked once types are computed (ADR 0058,
+                // 0110).
                 peripheral @ Ty::Peripheral(_)
                     if !matches!(
                         position,
-                        UnsizedPosition::Memory(NeverPosition::Pointee | NeverPosition::Register)
+                        UnsizedPosition::Memory(
+                            NeverPosition::Pointee
+                                | NeverPosition::Referent
+                                | NeverPosition::Register
+                        )
                     ) =>
                 {
                     self.peripherals_by_value.push(PeripheralByValue {

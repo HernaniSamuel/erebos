@@ -2748,7 +2748,11 @@ fn literal_bound(bound: Option<&hir::Expr>, default: u64) -> Option<u64> {
 /// which `place_then` holds in a local), rather than a value to be written to
 /// a new local first (ADR 0105, 0107).
 fn is_borrowed_place(expr: &hir::Expr) -> bool {
-    is_place_expr(expr) || matches!(expr.kind, hir::ExprKind::ByteString(_))
+    is_place_expr(expr)
+        || matches!(
+            expr.kind,
+            hir::ExprKind::ByteString(_) | hir::ExprKind::Peripheral(_)
+        )
 }
 
 /// Whether `expr` is a place: a local, a static, `*pointer`, `base[index]` or

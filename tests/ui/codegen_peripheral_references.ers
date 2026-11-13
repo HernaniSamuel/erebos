@@ -1,0 +1,61 @@
+// emit: llvm-ir
+// opt: both
+// ADR 0110: a register reached through a reference to a peripheral type is
+// one volatile load or store of the register's width at the reference's
+// address plus the register's offset, as through a pointer to the type
+// (ADR 0058), with or without `-O`. A `&mut` of a peripheral or a cluster is
+// its address; a register array of a cluster reached through one adds the index
+// times the step; a compound assignment is one load then one store; two reads
+// of one register stay two, and none is merged or removed.
+peripheral Uart {
+    read rbr: u8 at 0,
+    write thr: u8 at 0,
+    read write ier: u8 at 1,
+    read lsr: u8 at 5,
+}
+
+peripheral Context {
+    read write threshold: u32 at 0,
+    read write words: [u16; 3] at 0x10 step 4,
+}
+
+peripheral Plic {
+    ctx: [Context; 2] at 0x1000 step 0x100,
+    first: Context at 0x2000,
+}
+
+peripheral UART0: Uart at 0x1000_0000;
+peripheral PLIC: Plic at 0x0C00_0000;
+
+// A load of `i8` at offset 5, then a store of `i8` at offset 0, through a
+// `&mut`; a compound assignment, one load and one store, at offset 1.
+fn putc(u: &mut Uart, byte: u8) {
+    while ((*u).lsr & 0x20) == 0 {}
+    (*u).thr = byte;
+    (*u).ier |= 1;
+}
+
+// Two loads through a `&`, neither merged nor removed.
+fn twice(u: &Uart) -> u8 {
+    let first: u8 = (*u).lsr;
+    let second: u8 = (*u).lsr;
+    first + second
+}
+
+// A cluster: stores of `i32` at offset 0 and `i16` at offset 0x10 + 4 * j.
+fn arm(c: &mut Context, j: usize) {
+    (*c).threshold = 1;
+    (*c).words[j] = 2;
+}
+
+// The peripheral and its clusters lent: each address is a constant, or the
+// base plus the element's step.
+fn lend(i: usize) {
+    putc(&mut UART0, 1);
+    arm(&mut PLIC.first, 0);
+    arm(&mut PLIC.ctx[i], 1);
+    arm(&mut PLIC.ctx[1], 2);
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

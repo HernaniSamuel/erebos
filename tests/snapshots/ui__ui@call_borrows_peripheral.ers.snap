@@ -1,0 +1,131 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/call_borrows_peripheral.ers
+---
+--- errors ---
+analysis::borrow-conflict-in-call
+
+  × `UART0` is borrowed during this call, and the callee writes `UART0.ctrl`
+    ╭─[call_borrows_peripheral.ers:23:5]
+ 22 │ fn restart(r: &mut Uart) {
+ 23 │     UART0.ctrl = 0;
+    ·     ───────┬──────
+    ·            ╰── `UART0.ctrl` is written here
+ 24 │     (*r).ctrl = 1;
+    ╰────
+    ╭─[call_borrows_peripheral.ers:48:5]
+ 47 │ fn lend() {
+ 48 │     restart(&mut UART0);
+    ·     ─────────┬─────────┬
+    ·              │         ╰── `UART0` is borrowed `&mut` here
+    ·              ╰── `restart` reaches `UART0.ctrl` while `UART0` is borrowed
+ 49 │     peek(&mut UART0);
+    ╰────
+  help: pass the reference on instead of naming `UART0` in the callee, or end the borrow before
+        the call
+analysis::borrow-conflict-in-call
+
+  × `UART0` is borrowed during this call, and the callee reads `UART0.ctrl`
+    ╭─[call_borrows_peripheral.ers:49:5]
+ 27 │ fn peek(r: &mut Uart) {
+ 28 │     let c: u32 = UART0.ctrl;
+    ·                  ─────┬────
+    ·                       ╰── `UART0.ctrl` is read here
+ 29 │     (*r).ctrl = c;
+ 30 │ }
+ 31 │ 
+ 32 │ fn restart_alias(r: &mut Uart) {
+ 33 │     ALIAS.ctrl = 0;
+ 34 │     (*r).ctrl = 1;
+ 35 │ }
+ 36 │ 
+ 37 │ fn clear(c: &mut Channel) {
+ 38 │     UART0.ctrl = 0;
+ 39 │     (*c).data = 1;
+ 40 │ }
+ 41 │ 
+ 42 │ fn other(r: &mut Uart) {
+ 43 │     UART2.ctrl = 0;
+ 44 │     (*r).ctrl = 1;
+ 45 │ }
+ 46 │ 
+ 47 │ fn lend() {
+ 48 │     restart(&mut UART0);
+ 49 │     peek(&mut UART0);
+    ·     ────────┬───────┬
+    ·             │       ╰── `UART0` is borrowed `&mut` here
+    ·             ╰── `peek` reaches `UART0.ctrl` while `UART0` is borrowed
+ 50 │ }
+    ╰────
+  help: pass the reference on instead of naming `UART0` in the callee, or end the borrow before
+        the call
+analysis::borrow-conflict-in-call
+
+  × `UART1` is borrowed during this call, and the callee writes `ALIAS.ctrl`
+    ╭─[call_borrows_peripheral.ers:53:5]
+ 32 │ fn restart_alias(r: &mut Uart) {
+ 33 │     ALIAS.ctrl = 0;
+    ·     ───────┬──────
+    ·            ╰── `ALIAS.ctrl` is written here
+ 34 │     (*r).ctrl = 1;
+ 35 │ }
+ 36 │ 
+ 37 │ fn clear(c: &mut Channel) {
+ 38 │     UART0.ctrl = 0;
+ 39 │     (*c).data = 1;
+ 40 │ }
+ 41 │ 
+ 42 │ fn other(r: &mut Uart) {
+ 43 │     UART2.ctrl = 0;
+ 44 │     (*r).ctrl = 1;
+ 45 │ }
+ 46 │ 
+ 47 │ fn lend() {
+ 48 │     restart(&mut UART0);
+ 49 │     peek(&mut UART0);
+ 50 │ }
+ 51 │ 
+ 52 │ fn lend_over() {
+ 53 │     restart_alias(&mut UART1);
+    ·     ────────────┬────────────┬
+    ·                 │            ╰── `UART1` is borrowed `&mut` here
+    ·                 ╰── `restart_alias` reaches `ALIAS.ctrl` while `UART1` is borrowed
+ 54 │ }
+    ╰────
+  help: pass the reference on instead of naming `UART1` in the callee, or end the borrow before
+        the call
+analysis::borrow-conflict-in-call
+
+  × `UART0.ch[_]` is borrowed during this call, and the callee writes `UART0.ctrl`
+    ╭─[call_borrows_peripheral.ers:57:5]
+ 37 │ fn clear(c: &mut Channel) {
+ 38 │     UART0.ctrl = 0;
+    ·     ───────┬──────
+    ·            ╰── `UART0.ctrl` is written here
+ 39 │     (*c).data = 1;
+ 40 │ }
+ 41 │ 
+ 42 │ fn other(r: &mut Uart) {
+ 43 │     UART2.ctrl = 0;
+ 44 │     (*r).ctrl = 1;
+ 45 │ }
+ 46 │ 
+ 47 │ fn lend() {
+ 48 │     restart(&mut UART0);
+ 49 │     peek(&mut UART0);
+ 50 │ }
+ 51 │ 
+ 52 │ fn lend_over() {
+ 53 │     restart_alias(&mut UART1);
+ 54 │ }
+ 55 │ 
+ 56 │ fn lend_cluster() {
+ 57 │     clear(&mut UART0.ch[1]);
+    ·     ───────────┬───────────┬
+    ·                │           ╰── `UART0.ch[_]` is borrowed `&mut` here
+    ·                ╰── `clear` reaches `UART0.ctrl` while `UART0.ch[_]` is borrowed
+ 58 │ }
+    ╰────
+  help: pass the reference on instead of naming `UART0.ch[_]` in the callee, or end the borrow
+        before the call

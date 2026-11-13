@@ -1,0 +1,61 @@
+// emit: mir
+// References to peripherals and clusters in MIR (ADR 0110, 0112). `&P` and
+// `&mut P` are a `Ref` of `(*_t)`, with `_t` the temporary that holds the
+// peripheral's address (R4); a cluster is a `Ref` of `(*_t).first`, and an
+// element of a cluster array one of `(*_t).ctx[i]` or `(*_t).ctx[1]`
+// (`Element` and `ConstElement`, R3). None is a register, so T5 accepts them.
+// A register reached through the reference is `(*_r).thr`, accessed as through
+// a pointer to the type; a reference lent on is a reborrow.
+peripheral Uart16550 {
+    read rbr: u8 at 0,
+    write thr: u8 at 0,
+    read write ier: u8 at 1,
+    read lsr: u8 at 5,
+}
+
+peripheral Context {
+    read write threshold: u32 at 0,
+    read write words: [u16; 3] at 0x10 step 4,
+}
+
+peripheral Plic {
+    ctx: [Context; 2] at 0x1000 step 0x100,
+    first: Context at 0x2000,
+}
+
+peripheral UART0: Uart16550 at 0x1000_0000;
+peripheral PLIC: Plic at 0x0C00_0000;
+
+fn ready(u: &Uart16550) -> bool {
+    ((*u).lsr & 0x20) != 0
+}
+
+fn putc(u: &mut Uart16550, byte: u8) {
+    while !ready(u) {}
+    (*u).thr = byte;
+}
+
+fn threshold(c: &mut Context, j: usize, v: u32) {
+    (*c).threshold = v;
+    (*c).words[j] = v as u16;
+}
+
+fn uart() {
+    putc(&mut UART0, b'h');
+    let shared: &Uart16550 = &UART0;
+    let ok: bool = ready(shared);
+}
+
+fn clusters(i: usize) {
+    threshold(&mut PLIC.first, 0, 1);
+    threshold(&mut PLIC.ctx[i], 1, 2);
+    threshold(&mut PLIC.ctx[1], 2, 3);
+}
+
+fn plic(p: &mut Plic, i: usize) {
+    threshold(&mut (*p).first, 0, 4);
+    threshold(&mut (*p).ctx[i], 0, 5);
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

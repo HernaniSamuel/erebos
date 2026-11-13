@@ -528,8 +528,8 @@ impl<'a> Checker<'a> {
     }
 
     /// R3: the place of a `Ref` is a local followed by `Field`, `Index`,
-    /// `ConstIndex`, `Subslice`, `ConstSubslice`, `Deref` and `Offset`
-    /// projections only.
+    /// `ConstIndex`, `Subslice`, `ConstSubslice`, `Element`, `ConstElement`,
+    /// `Deref` and `Offset` projections only (ADR 0112).
     fn ref_place(&mut self, place: Place) {
         for elem in place.projection {
             match elem {
@@ -538,12 +538,11 @@ impl<'a> Checker<'a> {
                 | PlaceElem::ConstIndex(_)
                 | PlaceElem::Subslice(..)
                 | PlaceElem::ConstSubslice(..)
+                | PlaceElem::Element(..)
+                | PlaceElem::ConstElement(..)
                 | PlaceElem::Deref
                 | PlaceElem::Offset(_) => {}
-                PlaceElem::Element(..)
-                | PlaceElem::ConstElement(..)
-                | PlaceElem::Tag
-                | PlaceElem::Payload { .. } => {
+                PlaceElem::Tag | PlaceElem::Payload { .. } => {
                     self.violation(
                         "R3",
                         format!("a `Ref` of a place through `{elem:?}`, not a field, an element or a dereference"),
@@ -1467,14 +1466,17 @@ impl<'a> Checker<'a> {
 
     /// T5 for `&place` and `&mut place` of a place of type `typed.ty`: the
     /// reference to it, `&mut` if written so, of a place that is not
-    /// volatile. A `&mut` does not fit a `&` place: the conversion is a `Ref`
-    /// (ADR 0107).
+    /// volatile and no register. A peripheral, a cluster and an element of a
+    /// cluster array have a peripheral type, and are not registers (ADR 0110,
+    /// 0112); a register is reached through one with its access mode, so a
+    /// volatile place of any other type is rejected. A `&mut` does not fit a
+    /// `&` place: the conversion is a `Ref` (ADR 0107).
     fn borrow(&mut self, mutable: bool, typed: Option<Typed>, dest: Option<Ty>) {
         let Some(typed) = typed else {
             return;
         };
         let how = if mutable { "&mut" } else { "&" };
-        if typed.volatile {
+        if typed.volatile && !matches!(typed.ty, Ty::Peripheral(_)) {
             self.violation(
                 "T5",
                 format!("`{how}` of a volatile place of type `{}`", typed.ty),
@@ -2446,6 +2448,40 @@ mod tests {
             align: 4,
         });
         p
+    }
+
+    /// A peripheral type with a cluster: entry 0 a register `u32`, entry 1 a
+    /// register array `[u32; 4]`, entry 2 a cluster of the type `inner` (a
+    /// register), entry 3 an array of two of them, laid out (ADR 0064).
+    fn peripheral_with_clusters() -> (PeripheralTypeRef, PeripheralTypeRef) {
+        let register = |name: &str, ty| Register {
+            name: name.to_owned(),
+            ty,
+            group: None,
+        };
+        let inner = PeripheralTypeRef::new("Inner".to_owned(), vec![register("r", u32_ty())]);
+        inner.def().set_layout(PeripheralLayout {
+            offsets: vec![0],
+            arrays: vec![None],
+            extent: 4,
+            align: 4,
+        });
+        let outer = PeripheralTypeRef::new(
+            "Outer".to_owned(),
+            vec![
+                register("a", u32_ty()),
+                register("regs", u32_ty()),
+                register("inner", Ty::Peripheral(inner)),
+                register("inners", Ty::Peripheral(inner)),
+            ],
+        );
+        outer.def().set_layout(PeripheralLayout {
+            offsets: vec![0, 4, 0x100, 0x200],
+            arrays: vec![None, Some((4, 4)), None, Some((2, 0x10))],
+            extent: 0x220,
+            align: 4,
+        });
+        (outer, inner)
     }
 
     /// A local number that `valid` has no local for.
@@ -3671,6 +3707,68 @@ mod tests {
         );
     }
 
+    #[test]
+    fn t5_ref_of_a_peripheral_or_a_cluster_is_accepted_and_of_a_register_is_not() {
+        let (outer, inner) = peripheral_with_clusters();
+        let (outer, inner) = (Ty::Peripheral(outer), Ty::Peripheral(inner));
+        let u = u32_ty();
+        // `_11: *mut Outer`, `_12: &mut Outer`, `_13: &mut Inner`, `_14: &Inner`,
+        // `_15: &u32`, `_16: &mut u32`.
+        let locals = [
+            ptr(true, false, outer),
+            reference(true, outer),
+            reference(true, inner),
+            reference(false, inner),
+            reference(false, u),
+            reference(true, u),
+        ];
+        let borrow = |dest, mutable, projection: &[PlaceElem]| {
+            with_locals(
+                &locals,
+                vec![Statement::Assign(
+                    local(dest),
+                    Rvalue::Ref {
+                        mutable,
+                        place: projected(11, projection),
+                    },
+                )],
+            )
+        };
+        let deref = PlaceElem::Deref;
+        let index = Local(8);
+        // A peripheral, a cluster, an element of a cluster array.
+        accepts(borrow(12, true, &[deref]));
+        accepts(borrow(13, true, &[deref, PlaceElem::Field(2)]));
+        accepts(borrow(14, false, &[deref, PlaceElem::Field(2)]));
+        accepts(borrow(13, true, &[deref, PlaceElem::ConstElement(3, 1)]));
+        accepts(borrow(13, true, &[deref, PlaceElem::Element(3, index)]));
+        // A register, an element of a register array, and a register of a
+        // cluster: a reference would reach them without their access mode.
+        rejects(borrow(15, false, &[deref, PlaceElem::Field(0)]), "T5");
+        rejects(
+            borrow(16, true, &[deref, PlaceElem::ConstElement(1, 2)]),
+            "T5",
+        );
+        rejects(
+            borrow(15, false, &[deref, PlaceElem::Element(1, index)]),
+            "T5",
+        );
+        rejects(
+            borrow(16, true, &[deref, PlaceElem::Field(2), PlaceElem::Field(0)]),
+            "T5",
+        );
+        rejects(
+            borrow(
+                15,
+                false,
+                &[deref, PlaceElem::ConstElement(3, 0), PlaceElem::Field(0)],
+            ),
+            "T5",
+        );
+        // The type is the place's: a cluster is no `&Outer`.
+        rejects(borrow(12, true, &[deref, PlaceElem::Field(2)]), "T5");
+    }
+
     // ---- Places of type `[T]` and references to slices (ADR 0109) ----
 
     /// `[u32]`.
@@ -4179,6 +4277,19 @@ mod tests {
             &[array, reference(false, u)],
             vec![assign(12, projected(11, &[PlaceElem::ConstIndex(3)]))],
         ));
+        // The element of a cluster array, by a constant or by a local
+        // (ADR 0064, 0112).
+        let (outer, inner) = peripheral_with_clusters();
+        let (outer, inner) = (Ty::Peripheral(outer), Ty::Peripheral(inner));
+        for element in [
+            PlaceElem::ConstElement(3, 1),
+            PlaceElem::Element(3, Local(8)),
+        ] {
+            accepts(with_locals(
+                &[ptr(true, false, outer), reference(false, inner)],
+                vec![assign(12, projected(11, &[PlaceElem::Deref, element]))],
+            ));
+        }
     }
 
     #[test]

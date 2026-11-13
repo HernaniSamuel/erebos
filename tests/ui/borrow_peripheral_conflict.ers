@@ -1,0 +1,44 @@
+// emit: mir
+// The borrow check over peripherals (ADR 0111). The parts of a peripheral are
+// one place: `&mut UART0.ch[0]` in use while a register of `UART0` is written;
+// the same below a reference to a peripheral type, `let a = &mut (*u).ch[0];
+// (*u).ctrl = 1;` with `a` used after. A borrow that ends first, and a
+// register of another peripheral, are accepted. The conflicts across calls are
+// `call_borrows_peripheral.ers`'s: the per-function check stops the program
+// before they are looked for.
+peripheral Channel {
+    read write data: u32 at 0,
+}
+
+peripheral Uart {
+    read write ctrl: u32 at 0,
+    ch: [Channel; 2] at 0x10 step 0x10,
+}
+
+peripheral UART0: Uart at 0x1000_0000;
+peripheral UART1: Uart at 0x2000_0000;
+
+fn in_one_function() {
+    let a: &mut Channel = &mut UART0.ch[0];
+    UART0.ctrl = 1;
+    (*a).data = 2;
+}
+
+fn through_a_reference(u: &mut Uart) {
+    let a: &mut Channel = &mut (*u).ch[0];
+    (*u).ctrl = 1;
+    (*a).data = 2;
+}
+
+fn accepted(u: &mut Uart) {
+    let a: &mut Channel = &mut (*u).ch[0];
+    (*a).data = 2;
+    (*u).ctrl = 1;
+    let b: &mut Channel = &mut UART0.ch[1];
+    UART1.ctrl = 3;
+    (*b).data = 4;
+    UART0.ctrl = 5;
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

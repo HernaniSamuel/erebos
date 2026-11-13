@@ -1,0 +1,61 @@
+// emit: mir
+// What the check of the conflicts across calls accepts for a peripheral (ADR
+// 0111): `write(&mut UART0, s)` with `write` indexing `s`, a check that may
+// call the panic function, which writes `UART0.thr`: no reference is used once
+// the panic function runs, so that edge is not followed. A peripheral lent to a
+// callee that reaches it only through the reference, and a cluster lent to a
+// function that reaches another peripheral.
+peripheral Uart {
+    read lsr: u8 at 5,
+    write thr: u8 at 0,
+}
+
+peripheral Context {
+    read write threshold: u32 at 0,
+}
+
+peripheral Plic {
+    ctx: [Context; 2] at 0x1000 step 0x100,
+}
+
+peripheral UART0: Uart at 0x1000_0000;
+peripheral PLIC: Plic at 0x0C00_0000;
+
+fn write(u: &mut Uart, s: &[u8]) {
+    let mut i: usize = 0;
+    while i < len(s) {
+        while ((*u).lsr & 0x20) == 0 {}
+        (*u).thr = (*s)[i];
+        i += 1;
+    }
+}
+
+fn say(s: &[u8]) {
+    write(&mut UART0, s);
+}
+
+fn through_the_reference(u: &mut Uart) {
+    (*u).thr = 1;
+}
+
+fn lend() {
+    through_the_reference(&mut UART0);
+}
+
+fn arm(c: &mut Context) {
+    UART0.thr = 0;
+    (*c).threshold = 1;
+}
+
+fn lend_cluster() {
+    arm(&mut PLIC.ctx[0]);
+}
+
+entry fn main() -> ! {
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    UART0.thr = b'!';
+    loop {}
+}

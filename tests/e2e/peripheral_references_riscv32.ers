@@ -1,0 +1,105 @@
+// References to peripherals and clusters (ADR 0110) on QEMU `virt`. Module
+// `uart` is a driver for the 16550 whose functions take the peripheral's type
+// by reference: `write` and `putc` a `&mut Uart16550`, `ready` a `&Uart16550`,
+// which `putc` calls with its `&mut` converted. Every register access through
+// them is volatile, with the register's access mode: `ready` waits on `lsr`
+// with no `thr` access, and `putc` writes `thr`.
+//
+// Module `plic` reaches a cluster the same way: the PLIC's priority threshold
+// of each context is the register of a cluster array's element, which `set`
+// writes through a `&mut Context` and `get` reads through a `&Context`; `main`
+// lends `&mut PLIC.ctx[0]` and `&PLIC.ctx[0]`, the second context through the
+// reference to the whole PLIC, and checks that each context keeps its own
+// value. The thresholds are put back to zero.
+// Only on riscv32 (ADR 0077, reason 1): the 16550 and the PLIC are devices of
+// `virt`. The program prints through its own driver, not the board's `putc`.
+// targets: riscv32imac-unknown-none-elf
+// expect-output: peripheral references
+// expect-output: thresholds 3 and 5
+// expect-exit: 0
+
+mod board;
+use board::exit;
+
+mod uart {
+    pub peripheral Uart16550 {
+        pub write thr: u8 at 0x00,
+        pub read lsr: u8 at 0x05,
+    }
+
+    pub peripheral UART0: Uart16550 at 0x1000_0000;
+
+    // Bit 5 of `lsr`: the transmit holding register is empty.
+    const THR_EMPTY: u8 = 0x20;
+
+    pub fn ready(u: &Uart16550) -> bool {
+        ((*u).lsr & THR_EMPTY) != 0
+    }
+
+    pub fn putc(u: &mut Uart16550, byte: u8) {
+        while !ready(u) {}
+        (*u).thr = byte;
+    }
+
+    pub fn write(u: &mut Uart16550, s: &[u8]) {
+        let mut i: usize = 0;
+        while i < len(s) {
+            putc(u, (*s)[i]);
+            i += 1;
+        }
+    }
+}
+
+mod plic {
+    // One context of the PLIC: its priority threshold (the claim register
+    // that follows it is not used).
+    pub peripheral Context {
+        pub read write threshold: u32 at 0x0,
+    }
+
+    pub peripheral Plic {
+        pub ctx: [Context; 2] at 0x20_0000 step 0x1000,
+    }
+
+    pub peripheral PLIC: Plic at 0x0C00_0000;
+
+    pub fn set(c: &mut Context, value: u32) {
+        (*c).threshold = value;
+    }
+
+    pub fn get(c: &Context) -> u32 {
+        (*c).threshold
+    }
+
+    // The second context, reached from the reference to the whole PLIC.
+    pub fn set_second(p: &mut Plic, value: u32) {
+        set(&mut (*p).ctx[1], value);
+    }
+}
+
+use plic::PLIC;
+use uart::UART0;
+
+entry fn main() -> ! {
+    if !uart::ready(&UART0) {
+        exit(2)
+    }
+    uart::write(&mut UART0, &b"peripheral references\n");
+
+    plic::set(&mut PLIC.ctx[0], 3);
+    plic::set_second(&mut PLIC, 5);
+    if plic::get(&PLIC.ctx[0]) != 3 || plic::get(&PLIC.ctx[1]) != 5 {
+        exit(3)
+    }
+    uart::write(&mut UART0, &b"thresholds 3 and 5\n");
+    plic::set(&mut PLIC.ctx[0], 0);
+    plic::set(&mut PLIC.ctx[1], 0);
+    if plic::get(&PLIC.ctx[0]) != 0 || plic::get(&PLIC.ctx[1]) != 0 {
+        exit(4)
+    }
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(99)
+}

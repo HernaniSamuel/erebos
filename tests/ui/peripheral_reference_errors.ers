@@ -1,0 +1,53 @@
+// emit: typeck
+// What a reference to a peripheral type cannot do (ADR 0110). A register is
+// accessed through it as through a pointer to the type: written through a `&T`
+// is `ty::write-through-const`, written through a `&mut T` only where its mode
+// has `write` and read only where it has `read`; `*r` whole, read, written or
+// passed, and `(*r)[i]`, are the errors they are through a pointer. A register,
+// a register array and a cluster array as a whole have no address
+// (`ty::register-address`).
+peripheral Uart16550 {
+    read rbr: u8 at 0,
+    write thr: u8 at 0,
+    read write ier: u8 at 1,
+}
+
+peripheral Context {
+    read write threshold: u32 at 0,
+}
+
+peripheral Plic {
+    read write regs: [u32; 4] at 0,
+    ctx: [Context; 2] at 0x1000 step 0x100,
+}
+
+peripheral UART0: Uart16550 at 0x1000_0000;
+peripheral PLIC: Plic at 0x0C00_0000;
+
+fn writes(u: &Uart16550, m: &mut Uart16550) {
+    (*u).ier = 1;
+    (*u).ier |= 1;
+    (*m).rbr = 1;
+    (*m).thr = 1;
+}
+
+fn reads(m: &mut Uart16550) -> u8 {
+    (*m).thr
+}
+
+fn whole(u: &Uart16550, m: &mut Uart16550) {
+    let a: Uart16550 = *u;
+    *m = *u;
+    (*u)[0];
+    (*m)[1];
+}
+
+fn no_address() {
+    &mut UART0.thr;
+    &UART0.ier;
+    &PLIC.regs;
+    &mut PLIC.ctx;
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

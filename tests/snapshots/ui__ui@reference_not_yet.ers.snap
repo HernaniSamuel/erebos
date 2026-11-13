@@ -1,6 +1,5 @@
 ---
 source: tests/ui.rs
-assertion_line: 24
 expression: output
 input_file: tests/ui/reference_not_yet.ers
 ---
@@ -8,12 +7,12 @@ input_file: tests/ui/reference_not_yet.ers
 ty::reference-to-volatile
 
   × cannot borrow a place reached through a `volatile` pointer
-    ╭─[reference_not_yet.ers:33:6]
- 32 │ fn volatile_pointer(v: *mut volatile u32, w: *const volatile Pair) {
- 33 │     &*v;
+    ╭─[reference_not_yet.ers:22:6]
+ 21 │ fn volatile_pointer(v: *mut volatile u32, w: *const volatile Pair) {
+ 22 │     &*v;
     ·      ─┬
     ·       ╰── reached through a `*mut volatile u32`
- 34 │     &mut *v;
+ 23 │     &mut *v;
     ╰────
   help: a reference lets the compiler assume the memory behind it only changes when the program
         changes it, which a volatile access does not (ADR 0023); read and write through the
@@ -21,12 +20,12 @@ ty::reference-to-volatile
 ty::reference-to-volatile
 
   × cannot borrow a place reached through a `volatile` pointer
-    ╭─[reference_not_yet.ers:34:10]
- 33 │     &*v;
- 34 │     &mut *v;
+    ╭─[reference_not_yet.ers:23:10]
+ 22 │     &*v;
+ 23 │     &mut *v;
     ·          ─┬
     ·           ╰── reached through a `*mut volatile u32`
- 35 │     &(*w).a;
+ 24 │     &(*w).a;
     ╰────
   help: a reference lets the compiler assume the memory behind it only changes when the program
         changes it, which a volatile access does not (ADR 0023); read and write through the
@@ -34,52 +33,13 @@ ty::reference-to-volatile
 ty::reference-to-volatile
 
   × cannot borrow a place reached through a `volatile` pointer
-    ╭─[reference_not_yet.ers:35:6]
- 34 │     &mut *v;
- 35 │     &(*w).a;
+    ╭─[reference_not_yet.ers:24:6]
+ 23 │     &mut *v;
+ 24 │     &(*w).a;
     ·      ───┬──
     ·         ╰── reached through a `*const volatile Pair`
- 36 │ }
+ 25 │ }
     ╰────
   help: a reference lets the compiler assume the memory behind it only changes when the program
         changes it, which a volatile access does not (ADR 0023); read and write through the
         pointer, as `*p`, or take its address with `&raw` (ADR 0105)
-ty::reference-to-volatile
-
-  × cannot borrow a peripheral or a cluster of type `Uart`
-    ╭─[reference_not_yet.ers:39:6]
- 38 │ fn devices() {
- 39 │     &UART0;
-    ·      ──┬──
-    ·        ╰── its registers are accessed volatile
- 40 │     &PLIC.ctx[1];
-    ╰────
-  help: a reference lets the compiler assume the memory behind it only changes when the program
-        changes it, which a device does not keep to (ADR 0058); use a pointer to it, such as a
-        `*mut Uart`, `&raw mut P` (ADR 0105)
-ty::reference-to-volatile
-
-  × cannot borrow a peripheral or a cluster of type `Context`
-    ╭─[reference_not_yet.ers:40:6]
- 39 │     &UART0;
- 40 │     &PLIC.ctx[1];
-    ·      ─────┬─────
-    ·           ╰── its registers are accessed volatile
- 41 │     &PLIC.first;
-    ╰────
-  help: a reference lets the compiler assume the memory behind it only changes when the program
-        changes it, which a device does not keep to (ADR 0058); use a pointer to it, such as a
-        `*mut Context`, `&raw mut P` (ADR 0105)
-ty::reference-to-volatile
-
-  × cannot borrow a peripheral or a cluster of type `Context`
-    ╭─[reference_not_yet.ers:41:6]
- 40 │     &PLIC.ctx[1];
- 41 │     &PLIC.first;
-    ·      ─────┬────
-    ·           ╰── its registers are accessed volatile
- 42 │ }
-    ╰────
-  help: a reference lets the compiler assume the memory behind it only changes when the program
-        changes it, which a device does not keep to (ADR 0058); use a pointer to it, such as a
-        `*mut Context`, `&raw mut P` (ADR 0105)

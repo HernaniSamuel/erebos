@@ -367,59 +367,34 @@ ty::never-in-memory
   × `!` is not a type of memory
     ╭─[reference_errors.ers:91:18]
  90 │ 
- 91 │ fn referents(a: &!, c: &Timer) {}
+ 91 │ fn referents(a: &!) {}
     ·                  ┬
     ·                  ╰── `!` as the referent of a reference
  92 │ 
     ╰────
   help: `!` is the type of expressions that do not finish, so no memory holds one; for a type
         without data, use `()` (ADR 0034)
-ty::peripheral-by-value
-
-  × `Timer` is a peripheral type, which no value has
-    ╭─[reference_errors.ers:91:25]
- 90 │ 
- 91 │ fn referents(a: &!, c: &Timer) {}
-    ·                         ──┬──
-    ·                           ╰── `Timer` as the referent of a reference
- 92 │ 
-    ╰────
-  help: a peripheral type describes a device's registers, reached one at a time from a peripheral
-        or through a pointer, such as `*mut Timer` (ADR 0058)
-ty::reference-to-volatile
-
-  × cannot borrow a peripheral or a cluster of type `Timer`
-    ╭─[reference_errors.ers:94:20]
- 93 │ fn borrowed_peripheral() {
- 94 │     let c: &u32 = &TIMER;
-    ·                    ──┬──
-    ·                      ╰── its registers are accessed volatile
- 95 │ }
-    ╰────
-  help: a reference lets the compiler assume the memory behind it only changes when the program
-        changes it, which a device does not keep to (ADR 0058); use a pointer to it, such as a
-        `*mut Timer`, `&raw mut P` (ADR 0105)
 ty::never-in-memory
 
   × `!` is not a type of memory
-    ╭─[reference_errors.ers:98:20]
- 97 │ fn never_values() {
- 98 │     let a: &u32 = &loop {};
+    ╭─[reference_errors.ers:94:20]
+ 93 │ fn never_values() {
+ 94 │     let a: &u32 = &loop {};
     ·                    ───┬───
     ·                       ╰── `!` as the type of a value under `&`
- 99 │     let b: &mut u32 = &mut loop {};
+ 95 │     let b: &mut u32 = &mut loop {};
     ╰────
   help: `!` is the type of expressions that do not finish, so no memory holds one; for a type
         without data, use `()` (ADR 0034)
 ty::never-in-memory
 
   × `!` is not a type of memory
-     ╭─[reference_errors.ers:99:28]
-  98 │     let a: &u32 = &loop {};
-  99 │     let b: &mut u32 = &mut loop {};
-     ·                            ───┬───
-     ·                               ╰── `!` as the type of a value under `&mut`
- 100 │ }
-     ╰────
+    ╭─[reference_errors.ers:95:28]
+ 94 │     let a: &u32 = &loop {};
+ 95 │     let b: &mut u32 = &mut loop {};
+    ·                            ───┬───
+    ·                               ╰── `!` as the type of a value under `&mut`
+ 96 │ }
+    ╰────
   help: `!` is the type of expressions that do not finish, so no memory holds one; for a type
         without data, use `()` (ADR 0034)

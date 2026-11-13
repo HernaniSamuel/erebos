@@ -1,0 +1,167 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/call_borrows_accepted_peripheral.ers
+---
+--- mir ---
+peripheral Uart { 0 lsr: u8 at 0x5, 1 thr: u8 at 0x0 } // extent 6, align 1
+peripheral Context { 0 threshold: u32 at 0x0 } // extent 4, align 4
+peripheral Plic { 0 ctx: [Context; 2] step 0x100 at 0x1000 } // extent 4356, align 4
+peripheral UART0: Uart at 0x10000000;
+peripheral PLIC: Plic at 0xc000000;
+
+fn write(_1: &mut Uart, _2: &[u8]) -> () {
+    let _0: ();
+    let _1: &mut Uart; // u
+    let _2: &[u8]; // s
+    let _3: usize; // i
+    let _4: usize;
+    let _5: usize;
+    let _6: bool;
+    let _7: u8;
+    let _8: u8;
+    let _9: bool;
+    let _10: usize;
+    let _11: usize;
+    let _12: bool;
+    let _13: u8;
+
+    bb0: {
+        _3 = const 0_usize;
+        goto -> bb1;
+    }
+
+    bb1: {
+        _4 = copy _3;
+        _5 = len(_2);
+        _6 = Lt(copy _4, copy _5);
+        if copy _6 -> [true: bb2, false: bb3];
+    }
+
+    bb2: {
+        goto -> bb4;
+    }
+
+    bb3: {
+        return;
+    }
+
+    bb4: {
+        _7 = copy (*_1).0;
+        _8 = BitAnd(copy _7, const 32_u8);
+        _9 = Eq(copy _8, const 0_u8);
+        if copy _9 -> [true: bb5, false: bb6];
+    }
+
+    bb5: {
+        goto -> bb4;
+    }
+
+    bb6: {
+        _10 = copy _3;
+        _11 = len(_2);
+        _12 = Lt(copy _10, copy _11);
+        if copy _12 -> [true: bb7, false: bb8];
+    }
+
+    bb7: {
+        _13 = copy (*_2)[_10];
+        (*_1).1 = copy _13;
+        _3 = Add(copy _3, const 1_usize);
+        goto -> bb1;
+    }
+
+    bb8: {
+        panic(index out of bounds);
+    }
+}
+
+fn say(_1: &[u8]) -> () {
+    let _0: ();
+    let _1: &[u8]; // s
+    let _2: *mut Uart;
+    let _3: &mut Uart;
+
+    bb0: {
+        _2 = const peripheral UART0;
+        _3 = &mut (*_2);
+        call write(move _3, copy _1);
+        return;
+    }
+}
+
+fn through_the_reference(_1: &mut Uart) -> () {
+    let _0: ();
+    let _1: &mut Uart; // u
+
+    bb0: {
+        (*_1).1 = const 1_u8;
+        return;
+    }
+}
+
+fn lend() -> () {
+    let _0: ();
+    let _1: *mut Uart;
+    let _2: &mut Uart;
+
+    bb0: {
+        _1 = const peripheral UART0;
+        _2 = &mut (*_1);
+        call through_the_reference(move _2);
+        return;
+    }
+}
+
+fn arm(_1: &mut Context) -> () {
+    let _0: ();
+    let _1: &mut Context; // c
+    let _2: *mut Uart;
+
+    bb0: {
+        _2 = const peripheral UART0;
+        (*_2).1 = const 0_u8;
+        (*_1).0 = const 1_u32;
+        return;
+    }
+}
+
+fn lend_cluster() -> () {
+    let _0: ();
+    let _1: *mut Plic;
+    let _2: &mut Context;
+
+    bb0: {
+        _1 = const peripheral PLIC;
+        _2 = &mut (*_1).0[0];
+        call arm(move _2);
+        return;
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+    let _1: *mut Uart;
+
+    bb0: {
+        _1 = const peripheral UART0;
+        (*_1).1 = const 33_u8;
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}

@@ -1,0 +1,65 @@
+// emit: mir
+// A borrow of a peripheral lent to a call whose callee reaches the peripheral
+// (ADR 0111): `&mut UART0` lent to a function that writes a register of
+// `UART0`, and to one that reads one; a peripheral declared `over` another,
+// whose bytes are the other's, lent to a function that writes the other; a
+// cluster lent to a function that writes a register of its peripheral. A
+// register of a peripheral whose bytes are not the borrowed one's is accepted.
+peripheral Channel {
+    read write data: u32 at 0,
+}
+
+peripheral Uart {
+    read write ctrl: u32 at 0,
+    ch: [Channel; 2] at 0x10 step 0x10,
+}
+
+peripheral UART0: Uart at 0x1000_0000;
+peripheral UART1: Uart at 0x2000_0000;
+peripheral ALIAS: Uart at 0x2000_0000 over UART1;
+peripheral UART2: Uart at 0x3000_0000;
+
+fn restart(r: &mut Uart) {
+    UART0.ctrl = 0;
+    (*r).ctrl = 1;
+}
+
+fn peek(r: &mut Uart) {
+    let c: u32 = UART0.ctrl;
+    (*r).ctrl = c;
+}
+
+fn restart_alias(r: &mut Uart) {
+    ALIAS.ctrl = 0;
+    (*r).ctrl = 1;
+}
+
+fn clear(c: &mut Channel) {
+    UART0.ctrl = 0;
+    (*c).data = 1;
+}
+
+fn other(r: &mut Uart) {
+    UART2.ctrl = 0;
+    (*r).ctrl = 1;
+}
+
+fn lend() {
+    restart(&mut UART0);
+    peek(&mut UART0);
+}
+
+fn lend_over() {
+    restart_alias(&mut UART1);
+}
+
+fn lend_cluster() {
+    clear(&mut UART0.ch[1]);
+}
+
+fn accepted() {
+    other(&mut UART0);
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

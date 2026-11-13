@@ -1,0 +1,42 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/borrow_peripheral_conflict.ers
+---
+--- errors ---
+analysis::borrow-conflict
+
+  × cannot assign to `UART0.ctrl` while it is borrowed
+    ╭─[borrow_peripheral_conflict.ers:23:5]
+ 21 │ fn in_one_function() {
+ 22 │     let a: &mut Channel = &mut UART0.ch[0];
+    ·                           ────────┬───────
+    ·                                   ╰── `UART0.ch[_]` is borrowed as mutable here
+ 23 │     UART0.ctrl = 1;
+    ·     ───────┬──────
+    ·            ╰── assigned here
+ 24 │     (*a).data = 2;
+    ·     ──────┬──────
+    ·           ╰── the borrow is used later here
+ 25 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot assign to `(*u).ctrl` while it is borrowed
+    ╭─[borrow_peripheral_conflict.ers:29:5]
+ 27 │ fn through_a_reference(u: &mut Uart) {
+ 28 │     let a: &mut Channel = &mut (*u).ch[0];
+    ·                           ───────┬───────
+    ·                                  ╰── `(*u).ch[_]` is borrowed as mutable here
+ 29 │     (*u).ctrl = 1;
+    ·     ──────┬──────
+    ·           ╰── assigned here
+ 30 │     (*a).data = 2;
+    ·     ──────┬──────
+    ·           ╰── the borrow is used later here
+ 31 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)

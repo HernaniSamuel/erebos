@@ -1,0 +1,71 @@
+// References to peripherals (ADR 0110) on QEMU `mps2-an385`. Module `uart` is a
+// driver for the board's CMSDK UART whose functions take the peripheral's type
+// by reference: `init` and `write` a `&mut Cmsdk`, `ready` a `&Cmsdk`, which
+// `putc` calls with its `&mut` converted. Every register access through them
+// is volatile and 32 bits wide. `init` sets the baud divisor, which QEMU needs
+// before the transmitter is enabled, and `ready` reads the state register with
+// no other access; `main` reads it through `&UART` too, and prints through the
+// driver, not the board's `putc`.
+// targets: thumbv7m-none-eabi
+// expect-output: peripheral references
+// expect-output: line 2
+// expect-exit: 0
+
+mod board;
+use board::exit;
+
+mod uart {
+    pub peripheral Cmsdk {
+        pub read write data: u32 at 0x00,
+        pub read write state: u32 at 0x04,
+        pub read write ctrl: u32 at 0x08,
+        pub read write bauddiv: u32 at 0x10,
+    }
+
+    pub peripheral UART: Cmsdk at 0x4000_4000;
+
+    // Bit 0 of `state`: the transmit buffer is full.
+    const TX_FULL: u32 = 1;
+
+    pub fn init(u: &mut Cmsdk) {
+        (*u).bauddiv = 16;
+        (*u).ctrl = 1;
+    }
+
+    pub fn ready(u: &Cmsdk) -> bool {
+        ((*u).state & TX_FULL) == 0
+    }
+
+    pub fn putc(u: &mut Cmsdk, byte: u8) {
+        while !ready(u) {}
+        (*u).data = byte as u32;
+    }
+
+    pub fn write(u: &mut Cmsdk, s: &[u8]) {
+        let mut i: usize = 0;
+        while i < len(s) {
+            putc(u, (*s)[i]);
+            i += 1;
+        }
+    }
+}
+
+use uart::UART;
+
+entry fn main() -> ! {
+    uart::init(&mut UART);
+    if !uart::ready(&UART) {
+        exit(2)
+    }
+    uart::write(&mut UART, &b"peripheral references\n");
+    let shared: &uart::Cmsdk = &UART;
+    if !uart::ready(shared) {
+        exit(3)
+    }
+    uart::write(&mut UART, &b"line 2\n");
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(99)
+}

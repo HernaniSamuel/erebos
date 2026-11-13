@@ -1,0 +1,229 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/peripheral_references.ers
+---
+--- typeck ---
+peripheral Uart16550 { read rbr: u8 at 0x0, write thr: u8 at 0x0, read write ier: u8 at 0x1, read lsr: u8 at 0x5 } extent 6, align 1
+peripheral Context { read write threshold: u32 at 0x0, read claim: u32 at 0x4, read write words: [u16; 3] at 0x10 step 0x4 } extent 26, align 4
+peripheral Plic { read write priority: [u32; 96] at 0x0 step 0x4, ctx: [Context; 2] at 0x1000 step 0x100, first: Context at 0x2000 } extent 8218, align 4
+peripheral UART0: Uart16550 at 0x10000000 covers [0x10000000, 0x10000006)
+peripheral PLIC: Plic at 0xc000000 covers [0xc000000, 0xc00201a)
+fn ready(u: &Uart16550) -> bool
+    expr 0 binary != 1301..1323: bool
+    expr 1 binary & 1301..1318: u8
+    expr 2 register lsr 1302..1310: u8
+    expr 3 deref 1302..1306: Uart16550
+    expr 4 local u 1304..1305: &Uart16550
+    expr 5 int 32 1313..1317: u8
+    expr 6 int 0 1322..1323: u8
+fn putc(u: &mut Uart16550, byte: u8) -> ()
+    expr 7 while 1370..1388: ()
+    expr 8 not 1376..1385: bool
+    expr 9 call 1377..1385: bool
+    expr 10 local u 1383..1384: &mut Uart16550 as &Uart16550
+    expr 11 assign 1393..1408: ()
+    expr 12 register thr 1393..1401: u8
+    expr 13 deref 1393..1397: Uart16550
+    expr 14 local u 1395..1396: &mut Uart16550
+    expr 15 local byte 1404..1408: u8
+    expr 16 assign |= 1414..1427: ()
+    expr 17 register ier 1414..1422: u8
+    expr 18 deref 1414..1418: Uart16550
+    expr 19 local u 1416..1417: &mut Uart16550
+    expr 20 int 1 1426..1427: u8
+fn peripheral() -> u8
+    let shared: &Uart16550
+    let byte: u8
+    let mutable: &mut Uart16550
+    expr 21 call 1528..1550: ()
+    expr 22 &mut 1533..1543: &mut Uart16550
+    expr 23 peripheral UART0 1538..1543: Uart16550
+    expr 24 byte 104 1545..1549: u8
+    expr 25 & 1581..1587: &Uart16550
+    expr 26 peripheral UART0 1582..1587: Uart16550
+    expr 27 register rbr 1608..1621: u8
+    expr 28 deref 1608..1617: Uart16550
+    expr 29 local shared 1610..1616: &Uart16550
+    expr 30 &mut 1657..1667: &mut Uart16550
+    expr 31 peripheral UART0 1662..1667: Uart16550
+    expr 32 assign 1673..1691: ()
+    expr 33 register ier 1673..1687: u8
+    expr 34 deref 1673..1683: Uart16550
+    expr 35 local mutable 1675..1682: &mut Uart16550
+    expr 36 int 0 1690..1691: u8
+    expr 37 call 1697..1716: ()
+    expr 38 local mutable 1702..1709: &mut Uart16550
+    expr 39 local byte 1711..1715: u8
+    expr 40 local byte 1722..1726: u8
+fn reborrow(u: &mut Uart16550) -> bool
+    let r: &Uart16550
+    let p: *mut Uart16550
+    expr 41 call 1849..1865: ()
+    expr 42 &mut 1854..1861: &mut Uart16550
+    expr 43 deref 1859..1861: Uart16550
+    expr 44 local u 1860..1861: &mut Uart16550
+    expr 45 int 1 1863..1864: u8
+    expr 46 & 1891..1894: &Uart16550
+    expr 47 deref 1892..1894: Uart16550
+    expr 48 local u 1893..1894: &mut Uart16550
+    expr 49 &raw mut 1924..1935: *mut Uart16550
+    expr 50 deref 1933..1935: Uart16550
+    expr 51 local u 1934..1935: &mut Uart16550
+    expr 52 assign 1941..1953: ()
+    expr 53 register ier 1941..1949: u8
+    expr 54 deref 1941..1945: Uart16550
+    expr 55 local p 1943..1944: *mut Uart16550
+    expr 56 int 2 1952..1953: u8
+    expr 57 call 1959..1967: bool
+    expr 58 local r 1965..1966: &Uart16550
+fn cast(u: &mut Uart16550) -> *mut Uart16550
+    expr 59 as *mut Uart16550 2022..2041: *mut Uart16550
+    expr 60 local u 2022..2023: &mut Uart16550
+fn threshold(c: &mut Context, j: usize, v: u32) -> u32
+    expr 61 assign 2253..2271: ()
+    expr 62 register threshold 2253..2267: u32
+    expr 63 deref 2253..2257: Context
+    expr 64 local c 2255..2256: &mut Context
+    expr 65 local v 2270..2271: u32
+    expr 66 assign += 2277..2296: ()
+    expr 67 register threshold 2277..2291: u32
+    expr 68 deref 2277..2281: Context
+    expr 69 local c 2279..2280: &mut Context
+    expr 70 int 1 2295..2296: u32
+    expr 71 assign 2302..2326: ()
+    expr 72 index 2302..2315: u16
+    expr 73 register words 2302..2312: [u16; 3]
+    expr 74 deref 2302..2306: Context
+    expr 75 local c 2304..2305: &mut Context
+    expr 76 local j 2313..2314: usize
+    expr 77 as u16 2318..2326: u16
+    expr 78 local v 2318..2319: u32
+    expr 79 binary + 2332..2365: u32
+    expr 80 register claim 2332..2342: u32
+    expr 81 deref 2332..2336: Context
+    expr 82 local c 2334..2335: &mut Context
+    expr 83 as u32 2345..2365: u32
+    expr 84 index 2345..2358: u16
+    expr 85 register words 2345..2355: [u16; 3]
+    expr 86 deref 2345..2349: Context
+    expr 87 local c 2347..2348: &mut Context
+    expr 88 int 1 2356..2357: usize
+fn claim(c: &Context) -> u32
+    expr 89 binary + 2404..2431: u32
+    expr 90 register claim 2404..2414: u32
+    expr 91 deref 2404..2408: Context
+    expr 92 local c 2406..2407: &Context
+    expr 93 register threshold 2417..2431: u32
+    expr 94 deref 2417..2421: Context
+    expr 95 local c 2419..2420: &Context
+fn clusters(i: usize) -> u32
+    let a: u32
+    let b: u32
+    let c: u32
+    let d: &Context
+    let e: &Context
+    let f: &mut Context
+    expr 96 call 2483..2515: u32
+    expr 97 &mut 2493..2508: &mut Context
+    expr 98 register first 2498..2508: Context
+    expr 99 peripheral PLIC 2498..2502: Plic
+    expr 100 local i 2510..2511: usize
+    expr 101 int 1 2513..2514: u32
+    expr 102 call 2534..2567: u32
+    expr 103 &mut 2544..2560: &mut Context
+    expr 104 index 2549..2560: Context
+    expr 105 register ctx 2549..2557: [Context; 2]
+    expr 106 peripheral PLIC 2549..2553: Plic
+    expr 107 local i 2558..2559: usize
+    expr 108 int 0 2562..2563: usize
+    expr 109 int 2 2565..2566: u32
+    expr 110 call 2586..2619: u32
+    expr 111 &mut 2596..2612: &mut Context
+    expr 112 index 2601..2612: Context
+    expr 113 register ctx 2601..2609: [Context; 2]
+    expr 114 peripheral PLIC 2601..2605: Plic
+    expr 115 int 1 2610..2611: usize
+    expr 116 int 1 2614..2615: usize
+    expr 117 int 3 2617..2618: u32
+    expr 118 & 2643..2654: &Context
+    expr 119 register first 2644..2654: Context
+    expr 120 peripheral PLIC 2644..2648: Plic
+    expr 121 & 2678..2690: &Context
+    expr 122 index 2679..2690: Context
+    expr 123 register ctx 2679..2687: [Context; 2]
+    expr 124 peripheral PLIC 2679..2683: Plic
+    expr 125 local i 2688..2689: usize
+    expr 126 &mut 2718..2734: &mut Context
+    expr 127 index 2723..2734: Context
+    expr 128 register ctx 2723..2731: [Context; 2]
+    expr 129 peripheral PLIC 2723..2727: Plic
+    expr 130 int 0 2732..2733: usize
+    expr 131 assign 2740..2758: ()
+    expr 132 register threshold 2740..2754: u32
+    expr 133 deref 2740..2744: Context
+    expr 134 local f 2742..2743: &mut Context
+    expr 135 int 4 2757..2758: u32
+    expr 136 binary + 2764..2806: u32
+    expr 137 binary + 2764..2795: u32
+    expr 138 binary + 2764..2784: u32
+    expr 139 binary + 2764..2773: u32
+    expr 140 binary + 2764..2769: u32
+    expr 141 local a 2764..2765: u32
+    expr 142 local b 2768..2769: u32
+    expr 143 local c 2772..2773: u32
+    expr 144 call 2776..2784: u32
+    expr 145 local d 2782..2783: &Context
+    expr 146 call 2787..2795: u32
+    expr 147 local e 2793..2794: &Context
+    expr 148 call 2798..2806: u32
+    expr 149 local f 2804..2805: &mut Context as &Context
+fn plic(p: &mut Plic, i: usize) -> u32
+    let c: &mut Context
+    let d: &Context
+    expr 150 assign 2982..3002: ()
+    expr 151 index 2982..2998: u32
+    expr 152 register priority 2982..2995: [u32; 96]
+    expr 153 deref 2982..2986: Plic
+    expr 154 local p 2984..2985: &mut Plic
+    expr 155 local i 2996..2997: usize
+    expr 156 int 1 3001..3002: u32
+    expr 157 assign 3008..3032: ()
+    expr 158 register threshold 3008..3028: u32
+    expr 159 register first 3008..3018: Context
+    expr 160 deref 3008..3012: Plic
+    expr 161 local p 3010..3011: &mut Plic
+    expr 162 int 2 3031..3032: u32
+    expr 163 assign 3038..3063: ()
+    expr 164 register threshold 3038..3059: u32
+    expr 165 index 3038..3049: Context
+    expr 166 register ctx 3038..3046: [Context; 2]
+    expr 167 deref 3038..3042: Plic
+    expr 168 local p 3040..3041: &mut Plic
+    expr 169 local i 3047..3048: usize
+    expr 170 int 3 3062..3063: u32
+    expr 171 &mut 3091..3107: &mut Context
+    expr 172 index 3096..3107: Context
+    expr 173 register ctx 3096..3104: [Context; 2]
+    expr 174 deref 3096..3100: Plic
+    expr 175 local p 3098..3099: &mut Plic
+    expr 176 local i 3105..3106: usize
+    expr 177 & 3131..3142: &Context
+    expr 178 register first 3132..3142: Context
+    expr 179 deref 3132..3136: Plic
+    expr 180 local p 3134..3135: &mut Plic
+    expr 181 binary + 3148..3173: u32
+    expr 182 register threshold 3148..3162: u32
+    expr 183 deref 3148..3152: Context
+    expr 184 local c 3150..3151: &mut Context
+    expr 185 call 3165..3173: u32
+    expr 186 local d 3171..3172: &Context
+fn lend_plic() -> u32
+    expr 187 call 3205..3223: u32
+    expr 188 &mut 3210..3219: &mut Plic
+    expr 189 peripheral PLIC 3215..3219: Plic
+    expr 190 int 1 3221..3222: usize
+entry fn main() -> !
+    expr 191 loop 3250..3257: !
+panic fn on_panic() -> !
+    expr 192 loop 3287..3294: !

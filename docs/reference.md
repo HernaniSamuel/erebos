@@ -189,9 +189,9 @@ read or written whole (see "Slices"). `[[u8; 4]]` is a slice of arrays, and
 fine.
 
 **A peripheral type is no type of a value** (ADR 0058). Like `[T]`, it
-exists only behind a pointer (`*mut Uart`, a thin pointer), and as the
-type of a peripheral. As the type of a variable, parameter, return value,
-field, array or slice element, payload value or type argument of `Option`
+exists only behind a pointer (`*mut Uart`, a thin pointer) or a reference
+(`&mut Uart`, ADR 0110), and as the type of a peripheral. As the type of a
+variable, parameter, return value, field, array or slice element, payload value or type argument of `Option`
 or `Result`, the type of a `static`, `extern static` or `const`, an
 operand of `size_of`, `align_of` or `offset_of`, or the target of a cast
 (`0 as Uart`), it is `ty::peripheral-by-value`, reported once, and the
@@ -869,7 +869,7 @@ of a slice. It has no value, no type of its own and no meaning outside `[ ]`:
   of `&raw`, with the same codes: a range on a register array or a cluster
   array is `ty::register-address`, on an array field of a `#[packed]` struct
   that may be misaligned `ty::packed-field-address`. `&` and `&mut` of a range
-  on an array behind a volatile pointer, a volatile raw slice or a peripheral
+  on an array behind a volatile pointer or a volatile raw slice
   are `ty::reference-to-volatile` until M5.4c, while `&raw` of it is allowed;
   on a `static mut` they are allowed (ADR 0110).
 - **Checks.** The base is evaluated first, and with it its length (the length
@@ -2306,9 +2306,9 @@ that made it and no lifetime is ever written.
   `ty::deref-non-pointer`. `(*r)[i]` with `r: &[T; N]` is checked as an array
   index is (see "Structs and arrays").
 - The referent is a sized type with values, or `[T]`, a slice (see "Slices
-  behind references"). `&!` is `ty::never-in-memory` and `&Timer`, with `Timer`
-  a peripheral type, is `ty::peripheral-by-value`, each labeled "as the
-  referent of a reference". `[T]` follows the rules of the slice behind a
+  behind references"). `&!` is `ty::never-in-memory`, labeled "as the referent
+  of a reference"; `&Timer`, with `Timer` a peripheral type, is allowed (ADR
+  0110), as `*mut Timer` is. `[T]` follows the rules of the slice behind a
   pointer for its element: `&[&u8]` is `ty::reference-position`, `&[Timer]` is
   `ty::peripheral-by-value` and `&[!]` is `ty::never-in-memory`.
 - A literal under `&` takes the referent of the expected type
@@ -2373,14 +2373,18 @@ pointer.
   register array or a cluster array `ty::register-address`, a possibly
   misaligned field of a `#[packed]` struct `ty::packed-field-address`, and a
   place of type `!` `ty::never-in-memory`.
-- **Not yet** (M5.4c), and errors until then: `&` or `&mut` of a place reached
-  through a `volatile` pointer, or of a peripheral or a cluster, is
-  `ty::reference-to-volatile`; the help says to use the pointer. A register
-  has no address and is `ty::register-address` first. `&` and `&mut` of a
-  `static mut` or an `extern static mut`, or of a field or an element of one,
-  are allowed (ADR 0110): the borrow check follows them, across calls too
-  (`analysis::borrow-conflict`, `analysis::borrow-conflict-in-call`, ADR
-  0111).
+- **Not yet** (M5.4c), and an error until then: `&` or `&mut` of a place
+  reached through a `volatile` pointer is `ty::reference-to-volatile`; the help
+  says to use the pointer. A register has no address and is
+  `ty::register-address` first. `&` and `&mut` of a `static mut` or an `extern
+  static mut`, or of a field or an element of one, are allowed (ADR 0110): the
+  borrow check follows them, across calls too (`analysis::borrow-conflict`,
+  `analysis::borrow-conflict-in-call`, ADR 0111). So are `&` and `&mut` of a
+  peripheral, of a cluster and of an element of a cluster array: the reference
+  is `&T` or `&mut T` with `T` the peripheral type, and a register is reached
+  through it as through a pointer to `T`, `(*u).thr`, volatile and with its
+  access mode, written through a `&mut` only (`ty::write-through-const` for a
+  `&`). `*u` whole is `ty::peripheral-by-value`, as through a pointer.
 
 ### Where a reference may be (ADR 0105)
 
@@ -6948,7 +6952,7 @@ Every error has a stable code, shown with the message.
 | `ty::address-of-immutable` | `&raw mut` of a place that cannot be written, one through a `&` reference included |
 | `ty::mut-borrow-of-immutable` | `&mut` of a place that cannot be written (a variable or parameter without `mut`, a `static`, an `extern static` without `mut`, a byte string, a place through a `&` reference or a `*const` pointer), of a value that is not a place, or of a part of one (`&mut f().x`, `&mut f()[1..3]`) |
 | `ty::reference-position` | a reference type written as the type of a field, a payload value, an array or slice element, a type argument, a layout query operand, a return type, a `static`, `extern static` or `const`, a pointee or a referent (`&&T`), or of a `mut` parameter or `let mut`, once per type at the outermost reference; an expression that makes an array of references, `&`, `&mut` or `&raw` of a reference, the value of a `critical` block, the value of a `break` that leaves a `critical` block, or a `comptime` expression of a reference type, at the innermost |
-| `ty::reference-to-volatile` | `&` or `&mut` of a place reached through a `volatile` pointer or a volatile raw slice (`&*v`, `&(*v)[i]`, a range of one), or of a peripheral or a cluster (M5.4c) |
+| `ty::reference-to-volatile` | `&` or `&mut` of a place reached through a `volatile` pointer or a volatile raw slice (`&*v`, `&(*v)[i]`, a range of one) (M5.4c) |
 | `ty::packed-field-address` | `&raw`, `&` or `&mut` of a possibly misaligned place inside a packed struct |
 | `ty::volatile-too-wide` | volatile access wider than the target's widest access, a bit-field struct on `u64` included |
 | `ty::volatile-aggregate` | volatile access to a whole struct, array or enum with payloads, or to a slice stored in memory |

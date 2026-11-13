@@ -1,0 +1,194 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/peripheral_references_mir.ers
+---
+--- mir ---
+peripheral Uart16550 { 0 rbr: u8 at 0x0, 1 thr: u8 at 0x0, 2 ier: u8 at 0x1, 3 lsr: u8 at 0x5 } // extent 6, align 1
+peripheral Context { 0 threshold: u32 at 0x0, 1 words: [u16; 3] step 0x4 at 0x10 } // extent 26, align 4
+peripheral Plic { 0 ctx: [Context; 2] step 0x100 at 0x1000, 1 first: Context at 0x2000 } // extent 8218, align 4
+peripheral UART0: Uart16550 at 0x10000000;
+peripheral PLIC: Plic at 0xc000000;
+
+fn ready(_1: &Uart16550) -> bool {
+    let _0: bool;
+    let _1: &Uart16550; // u
+    let _2: u8;
+    let _3: u8;
+    let _4: bool;
+
+    bb0: {
+        _2 = copy (*_1).3;
+        _3 = BitAnd(copy _2, const 32_u8);
+        _4 = Ne(copy _3, const 0_u8);
+        _0 = copy _4;
+        return;
+    }
+}
+
+fn putc(_1: &mut Uart16550, _2: u8) -> () {
+    let _0: ();
+    let _1: &mut Uart16550; // u
+    let _2: u8; // byte
+    let _3: &Uart16550;
+    let _4: bool;
+    let _5: bool;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        _3 = &(*_1);
+        _4 = call ready(copy _3);
+        _5 = Not(copy _4);
+        if copy _5 -> [true: bb2, false: bb3];
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+
+    bb3: {
+        (*_1).1 = copy _2;
+        return;
+    }
+}
+
+fn threshold(_1: &mut Context, _2: usize, _3: u32) -> () {
+    let _0: ();
+    let _1: &mut Context; // c
+    let _2: usize; // j
+    let _3: u32; // v
+    let _4: u16;
+    let _5: usize;
+    let _6: bool;
+
+    bb0: {
+        (*_1).0 = copy _3;
+        _4 = copy _3 as u16;
+        _5 = copy _2;
+        _6 = Lt(copy _5, const 3_usize);
+        if copy _6 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        (*_1).1[_5] = copy _4;
+        return;
+    }
+
+    bb2: {
+        panic(index out of bounds);
+    }
+}
+
+fn uart() -> () {
+    let _0: ();
+    let _1: &Uart16550; // shared
+    let _2: bool; // ok
+    let _3: *mut Uart16550;
+    let _4: &mut Uart16550;
+    let _5: *mut Uart16550;
+    let _6: &Uart16550;
+    let _7: bool;
+
+    bb0: {
+        _3 = const peripheral UART0;
+        _4 = &mut (*_3);
+        call putc(move _4, const 104_u8);
+        _5 = const peripheral UART0;
+        _6 = &(*_5);
+        _1 = copy _6;
+        _7 = call ready(copy _1);
+        _2 = copy _7;
+        return;
+    }
+}
+
+fn clusters(_1: usize) -> () {
+    let _0: ();
+    let _1: usize; // i
+    let _2: *mut Plic;
+    let _3: &mut Context;
+    let _4: *mut Plic;
+    let _5: usize;
+    let _6: bool;
+    let _7: &mut Context;
+    let _8: *mut Plic;
+    let _9: &mut Context;
+
+    bb0: {
+        _2 = const peripheral PLIC;
+        _3 = &mut (*_2).1;
+        call threshold(move _3, const 0_usize, const 1_u32);
+        _4 = const peripheral PLIC;
+        _5 = copy _1;
+        _6 = Lt(copy _5, const 2_usize);
+        if copy _6 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _7 = &mut (*_4).0[_5];
+        call threshold(move _7, const 1_usize, const 2_u32);
+        _8 = const peripheral PLIC;
+        _9 = &mut (*_8).0[1];
+        call threshold(move _9, const 2_usize, const 3_u32);
+        return;
+    }
+
+    bb2: {
+        panic(index out of bounds);
+    }
+}
+
+fn plic(_1: &mut Plic, _2: usize) -> () {
+    let _0: ();
+    let _1: &mut Plic; // p
+    let _2: usize; // i
+    let _3: &mut Context;
+    let _4: usize;
+    let _5: bool;
+    let _6: &mut Context;
+
+    bb0: {
+        _3 = &mut (*_1).1;
+        call threshold(move _3, const 0_usize, const 4_u32);
+        _4 = copy _2;
+        _5 = Lt(copy _4, const 2_usize);
+        if copy _5 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _6 = &mut (*_1).0[_4];
+        call threshold(move _6, const 0_usize, const 5_u32);
+        return;
+    }
+
+    bb2: {
+        panic(index out of bounds);
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}

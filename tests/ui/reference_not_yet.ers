@@ -1,6 +1,6 @@
 // emit: mir
 // What cannot be borrowed yet (ADR 0105, left to M5.4c): a place through a
-// `volatile` pointer, a peripheral and a cluster. A `static`, a `static mut`
+// `volatile` pointer. A `static`, a `static mut`, a peripheral and a cluster
 // (ADR 0110) and a place through a pointer that is not `volatile` can; so can
 // the address of any of these with `&raw`.
 static mut COUNTER: u32 = 0;
@@ -12,17 +12,6 @@ struct Pair {
     b: u32,
 }
 
-peripheral Context {
-    read write threshold: u32 at 0,
-}
-
-peripheral Plic {
-    ctx: [Context; 2] at 0x1000 step 0x100,
-    first: Context at 0x2000,
-}
-
-peripheral PLIC: Plic at 0x0C00_0000;
-
 peripheral Uart {
     read write data: u32 at 0,
 }
@@ -33,12 +22,6 @@ fn volatile_pointer(v: *mut volatile u32, w: *const volatile Pair) {
     &*v;
     &mut *v;
     &(*w).a;
-}
-
-fn devices() {
-    &UART0;
-    &PLIC.ctx[1];
-    &PLIC.first;
 }
 
 fn accepted(p: *mut u32) -> u32 {

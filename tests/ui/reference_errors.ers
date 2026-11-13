@@ -88,11 +88,7 @@ fn raw_mut_through_shared(r: &u32) {
     let p: *mut u32 = &raw mut *r;
 }
 
-fn referents(a: &!, c: &Timer) {}
-
-fn borrowed_peripheral() {
-    let c: &u32 = &TIMER;
-}
+fn referents(a: &!) {}
 
 fn never_values() {
     let a: &u32 = &loop {};
