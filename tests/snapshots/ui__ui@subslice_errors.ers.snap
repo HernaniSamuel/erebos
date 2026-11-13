@@ -1,6 +1,5 @@
 ---
 source: tests/ui.rs
-assertion_line: 24
 expression: output
 input_file: tests/ui/subslice_errors.ers
 ---
@@ -359,41 +358,15 @@ ty::mismatched-types
     ╰────
   help: `slice(p, n)` takes a raw pointer; for part of a slice or an array that a reference refers
         to, write `&(*s)[a..b]`, checked against its length (ADR 0108)
-ty::reference-to-volatile
-
-  × cannot borrow a place reached through a `volatile` pointer
-    ╭─[subslice_errors.ers:91:21]
- 90 │ ) {
- 91 │     let a: &[u8] = &(*v)[0..1];
-    ·                     ─────┬────
-    ·                          ╰── reached through a `*const volatile [u8]`
- 92 │     let b: &[u8] = &(*w)[0..1];
-    ╰────
-  help: a reference lets the compiler assume the memory behind it only changes when the program
-        changes it, which a volatile access does not (ADR 0023); read and write through the
-        pointer, as `*p`, or take its address with `&raw` (ADR 0105)
-ty::reference-to-volatile
-
-  × cannot borrow a place reached through a `volatile` pointer
-    ╭─[subslice_errors.ers:92:21]
- 91 │     let a: &[u8] = &(*v)[0..1];
- 92 │     let b: &[u8] = &(*w)[0..1];
-    ·                     ─────┬────
-    ·                          ╰── reached through a `*const volatile [u8; 4]`
- 93 │     let c: &[u32] = &UART.data[0..2];
-    ╰────
-  help: a reference lets the compiler assume the memory behind it only changes when the program
-        changes it, which a volatile access does not (ADR 0023); read and write through the
-        pointer, as `*p`, or take its address with `&raw` (ADR 0105)
 ty::register-address
 
   × cannot take the address of the register array `data` of `Uart`
-    ╭─[subslice_errors.ers:93:22]
- 92 │     let b: &[u8] = &(*w)[0..1];
- 93 │     let c: &[u32] = &UART.data[0..2];
+    ╭─[subslice_errors.ers:86:22]
+ 85 │ fn addresses(h: *mut Packed, n: usize) {
+ 86 │     let c: &[u32] = &UART.data[0..2];
     ·                      ────┬────
     ·                          ╰── a register array
- 94 │     let d: *const [u32] = &raw const UART.data[0..2];
+ 87 │     let d: *const [u32] = &raw const UART.data[0..2];
     ╰────
   help: no pointer type holds the step of an array, and a pointer to an element would reach the
         register without its access mode; read or write the elements where they are named (ADR
@@ -401,12 +374,12 @@ ty::register-address
 ty::register-address
 
   × cannot take the address of the register array `data` of `Uart`
-    ╭─[subslice_errors.ers:94:38]
- 93 │     let c: &[u32] = &UART.data[0..2];
- 94 │     let d: *const [u32] = &raw const UART.data[0..2];
+    ╭─[subslice_errors.ers:87:38]
+ 86 │     let c: &[u32] = &UART.data[0..2];
+ 87 │     let d: *const [u32] = &raw const UART.data[0..2];
     ·                                      ────┬────
     ·                                          ╰── a register array
- 95 │     let e: *const [u32] = &raw const (*h).words[1..];
+ 88 │     let e: *const [u32] = &raw const (*h).words[1..];
     ╰────
   help: no pointer type holds the step of an array, and a pointer to an element would reach the
         register without its access mode; read or write the elements where they are named (ADR
@@ -414,24 +387,24 @@ ty::register-address
 ty::packed-field-address
 
   × cannot take the address of a `[u32]` that may be misaligned
-    ╭─[subslice_errors.ers:95:38]
- 94 │     let d: *const [u32] = &raw const UART.data[0..2];
- 95 │     let e: *const [u32] = &raw const (*h).words[1..];
+    ╭─[subslice_errors.ers:88:38]
+ 87 │     let d: *const [u32] = &raw const UART.data[0..2];
+ 88 │     let e: *const [u32] = &raw const (*h).words[1..];
     ·                                      ───────┬───────
     ·                                             ╰── reached through a field of a `#[packed]` struct
- 96 │     let f: &[u32] = &(*h).words[1..];
+ 89 │     let f: &[u32] = &(*h).words[1..];
     ╰────
   help: a `*const u32` promises alignment, and dereferencing a misaligned one may trap; copy the
         array into a `let` first (ADR 0022, 0108)
 ty::packed-field-address
 
   × cannot take the address of a `[u32]` that may be misaligned
-    ╭─[subslice_errors.ers:96:22]
- 95 │     let e: *const [u32] = &raw const (*h).words[1..];
- 96 │     let f: &[u32] = &(*h).words[1..];
+    ╭─[subslice_errors.ers:89:22]
+ 88 │     let e: *const [u32] = &raw const (*h).words[1..];
+ 89 │     let f: &[u32] = &(*h).words[1..];
     ·                      ───────┬───────
     ·                             ╰── reached through a field of a `#[packed]` struct
- 97 │     let g: &[u8] = &(*h).bytes[1..];
+ 90 │     let g: &[u8] = &(*h).bytes[1..];
     ╰────
   help: a `*const u32` promises alignment, and dereferencing a misaligned one may trap; copy the
         array into a `let` first (ADR 0022, 0108)

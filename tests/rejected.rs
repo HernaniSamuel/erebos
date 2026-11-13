@@ -548,14 +548,6 @@ let injected_r: &mut u32 = &mut injected_n;"
 fn injected_use(injected_h: InjHolder) {}"
     ),
     s!(
-        "ty::reference-to-volatile",
-        Mir,
-        Items,
-        "fn injected_use(injected_p: *mut volatile u32) {
-    let injected_r: &u32 = &*injected_p;
-}"
-    ),
-    s!(
         "ty::never-in-memory",
         Mir,
         Items,

@@ -1,0 +1,219 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/parse_volatile_references.ers
+---
+--- ast ---
+File {
+    items: [
+        Fn(
+            FnDecl {
+                attrs: [],
+                vis: Private,
+                kind: Plain,
+                name: Ident {
+                    name: "types",
+                    span: 185..190,
+                },
+                params: [
+                    Param {
+                        mutable: false,
+                        name: Ident {
+                            name: "a",
+                            span: 191..192,
+                        },
+                        ty: Ty {
+                            kind: Ref {
+                                mutable: false,
+                                volatile: true,
+                                referent: Ty {
+                                    kind: Named(
+                                        Path {
+                                            segments: [
+                                                Ident {
+                                                    name: "u32",
+                                                    span: 204..207,
+                                                },
+                                            ],
+                                            span: 204..207,
+                                        },
+                                    ),
+                                    span: 204..207,
+                                },
+                            },
+                            span: 194..207,
+                        },
+                    },
+                    Param {
+                        mutable: false,
+                        name: Ident {
+                            name: "b",
+                            span: 209..210,
+                        },
+                        ty: Ty {
+                            kind: Ref {
+                                mutable: true,
+                                volatile: true,
+                                referent: Ty {
+                                    kind: Named(
+                                        Path {
+                                            segments: [
+                                                Ident {
+                                                    name: "u32",
+                                                    span: 226..229,
+                                                },
+                                            ],
+                                            span: 226..229,
+                                        },
+                                    ),
+                                    span: 226..229,
+                                },
+                            },
+                            span: 212..229,
+                        },
+                    },
+                    Param {
+                        mutable: false,
+                        name: Ident {
+                            name: "c",
+                            span: 231..232,
+                        },
+                        ty: Ty {
+                            kind: Ref {
+                                mutable: false,
+                                volatile: true,
+                                referent: Ty {
+                                    kind: Slice(
+                                        Ty {
+                                            kind: Named(
+                                                Path {
+                                                    segments: [
+                                                        Ident {
+                                                            name: "u8",
+                                                            span: 245..247,
+                                                        },
+                                                    ],
+                                                    span: 245..247,
+                                                },
+                                            ),
+                                            span: 245..247,
+                                        },
+                                    ),
+                                    span: 244..248,
+                                },
+                            },
+                            span: 234..248,
+                        },
+                    },
+                    Param {
+                        mutable: false,
+                        name: Ident {
+                            name: "d",
+                            span: 250..251,
+                        },
+                        ty: Ty {
+                            kind: Ref {
+                                mutable: false,
+                                volatile: false,
+                                referent: Ty {
+                                    kind: Ref {
+                                        mutable: false,
+                                        volatile: true,
+                                        referent: Ty {
+                                            kind: Named(
+                                                Path {
+                                                    segments: [
+                                                        Ident {
+                                                            name: "u32",
+                                                            span: 264..267,
+                                                        },
+                                                    ],
+                                                    span: 264..267,
+                                                },
+                                            ),
+                                            span: 264..267,
+                                        },
+                                    },
+                                    span: 254..267,
+                                },
+                            },
+                            span: 253..267,
+                        },
+                    },
+                    Param {
+                        mutable: false,
+                        name: Ident {
+                            name: "e",
+                            span: 269..270,
+                        },
+                        ty: Ty {
+                            kind: Ref {
+                                mutable: false,
+                                volatile: true,
+                                referent: Ty {
+                                    kind: Ref {
+                                        mutable: false,
+                                        volatile: false,
+                                        referent: Ty {
+                                            kind: Named(
+                                                Path {
+                                                    segments: [
+                                                        Ident {
+                                                            name: "u32",
+                                                            span: 283..286,
+                                                        },
+                                                    ],
+                                                    span: 283..286,
+                                                },
+                                            ),
+                                            span: 283..286,
+                                        },
+                                    },
+                                    span: 282..286,
+                                },
+                            },
+                            span: 272..286,
+                        },
+                    },
+                    Param {
+                        mutable: false,
+                        name: Ident {
+                            name: "f",
+                            span: 288..289,
+                        },
+                        ty: Ty {
+                            kind: Ptr {
+                                mutable: true,
+                                volatile: true,
+                                pointee: Ty {
+                                    kind: Named(
+                                        Path {
+                                            segments: [
+                                                Ident {
+                                                    name: "u32",
+                                                    span: 305..308,
+                                                },
+                                            ],
+                                            span: 305..308,
+                                        },
+                                    ),
+                                    span: 305..308,
+                                },
+                            },
+                            span: 291..308,
+                        },
+                    },
+                ],
+                ret: None,
+                body: Some(
+                    Block {
+                        stmts: [],
+                        tail: None,
+                        span: 310..312,
+                    },
+                ),
+                span: 182..312,
+            },
+        ),
+    ],
+}

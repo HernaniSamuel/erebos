@@ -108,7 +108,11 @@ impl Lowerer<'_> {
                     pointee => Ty::ptr(*mutable, *volatile, pointee),
                 }
             }
-            ast::TyKind::Ref { mutable, referent } => {
+            ast::TyKind::Ref {
+                mutable,
+                volatile: volatile_written,
+                referent,
+            } => {
                 // Where none may be (ADR 0105), once per written type: what
                 // is inside a reference recorded is not recorded again.
                 let forbidden = match position {
@@ -131,7 +135,19 @@ impl Lowerer<'_> {
                 match referent {
                     Ty::Error => Ty::Error,
                     referent => {
-                        let lowered = Ty::reference(*mutable, referent);
+                        // The accesses through a reference to a peripheral
+                        // type reach registers, which are volatile already
+                        // (ADR 0110): reported, and lowered as written
+                        // without the word.
+                        let peripheral = matches!(referent, Ty::Peripheral(_));
+                        let lowered =
+                            Ty::reference(*mutable, *volatile_written && !peripheral, referent);
+                        if *volatile_written && peripheral {
+                            self.volatile_peripherals.push(VolatilePeripheral {
+                                span: ty.span,
+                                ty: lowered,
+                            });
+                        }
                         if let Some(position) = forbidden {
                             self.reference_types.push(ReferenceType {
                                 span: ty.span,

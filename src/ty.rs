@@ -185,25 +185,25 @@ pub fn report_peripherals_by_value(q: &mut Queries) {
     }
 }
 
-/// Reports each pointer to a peripheral type written `volatile`, which HIR
-/// lowering made the pointer without it (ADR 0058).
+/// Reports each pointer or reference to a peripheral type written `volatile`,
+/// which HIR lowering made the pointer or reference without it (ADR 0058,
+/// 0110).
 pub fn report_volatile_peripherals(q: &mut Queries) {
     let hir = q.hir;
     for found in &hir.volatile_peripherals {
-        let Ty::Ptr(ptr) = found.ty else {
-            unreachable!("lowered as a pointer to a peripheral type")
+        let (what, pointee, adr) = match found.ty {
+            Ty::Ptr(ptr) => ("pointer", ptr.pointee, "ADR 0058"),
+            Ty::Ref(r) => ("reference", r.referent, "ADR 0058, 0110"),
+            _ => unreachable!("lowered as a pointer or a reference to a peripheral type"),
         };
         q.diags.push(
             Diagnostic::error(
                 "ty::volatile-peripheral",
-                format!(
-                    "a pointer to the peripheral type `{}` cannot be `volatile`",
-                    ptr.pointee
-                ),
+                format!("a {what} to the peripheral type `{pointee}` cannot be `volatile`"),
             )
             .label(found.span, "its accesses are volatile without the word")
             .help(format!(
-                "accesses through a pointer to a peripheral type reach its registers, which are always accessed volatile: write `{}` (ADR 0058)",
+                "accesses through a {what} to a peripheral type reach its registers, which are always accessed volatile: write `{}` ({adr})",
                 found.ty
             )),
         );
@@ -340,7 +340,8 @@ pub fn check_fn(q: &mut Queries, f: &Fn) -> usize {
 /// The conversions are from `*mut T` to `*const T` (ADR 0024), from a
 /// pointer to an array to a slice of its elements (ADR 0031), both of the
 /// outermost pointer only and keeping volatility, and from `&mut T` to `&T`
-/// (ADR 0105).
+/// and from `&mut volatile T` to `&volatile T` (ADR 0105, 0110). A volatile
+/// reference never converts to one that is not, nor the other way.
 fn coerces(from: Ty, to: Ty) -> bool {
     from == to
         || matches!(from, Ty::Never | Ty::Error)
@@ -353,18 +354,19 @@ fn coerces(from: Ty, to: Ty) -> bool {
         || shares(from, to)
 }
 
-/// Whether `from` is a `&mut T` that converts to the `&T` `to` (ADR 0105):
-/// the one conversion that is not free, since it is a borrow of `*from` that
-/// MIR building writes (ADR 0107).
+/// Whether `from` is a `&mut T` that converts to the `&T` `to`, both volatile
+/// or neither (ADR 0105, 0110): the one conversion that is not free, since it
+/// is a borrow of `*from` that MIR building writes (ADR 0107).
 fn shares(from: Ty, to: Ty) -> bool {
     matches!((from, to), (Ty::Ref(from), Ty::Ref(to))
-        if from.mutable && !to.mutable && from.referent == to.referent)
+        if from.mutable && !to.mutable && from.volatile == to.volatile
+            && from.referent == to.referent)
 }
 
 /// Whether `from` is a pointer or a reference to an array that converts to
 /// the slice `to`: of the same elements, mutability and volatility, or from
 /// `*mut` to `*const` (ADR 0031); from `&[T; N]` to `&[T]` and from `&mut [T;
-/// N]` to `&mut [T]` or `&[T]` (ADR 0108).
+/// N]` to `&mut [T]` or `&[T]` (ADR 0108), of the same volatility (ADR 0110).
 fn unsizes(from: Ty, to: Ty) -> bool {
     match (from, to) {
         (Ty::Ptr(from), Ty::Ptr(to)) => {
@@ -375,6 +377,7 @@ fn unsizes(from: Ty, to: Ty) -> bool {
         (Ty::Ref(from), Ty::Ref(to)) => {
             matches!((*from.referent, *to.referent), (Ty::Array(elem, _), Ty::Slice(want)) if elem == want)
                 && (from.mutable || !to.mutable)
+                && from.volatile == to.volatile
         }
         _ => false,
     }
@@ -471,9 +474,11 @@ struct PlaceInfo {
     ty: Ty,
     /// Why the place cannot be written, if it cannot.
     immutable: Option<Immutable>,
-    /// The last pointer on the path to the place, which decides whether
-    /// accesses are volatile (ADR 0023).
-    via: Option<Ptr>,
+    /// The last pointer or reference on the path to the place is a pointer.
+    via_ptr: bool,
+    /// The last pointer or reference on the path to the place is volatile,
+    /// which decides whether accesses are volatile (ADR 0023, 0110).
+    volatile: bool,
     /// The path from that pointer goes through a field of a `#[packed]`
     /// struct, so the place may be misaligned (ADR 0022).
     misaligned: bool,
@@ -505,7 +510,8 @@ impl PlaceInfo {
     const ERROR: PlaceInfo = PlaceInfo {
         ty: Ty::Error,
         immutable: None,
-        via: None,
+        via_ptr: false,
+        volatile: false,
         misaligned: false,
         constant: false,
         register: None,
@@ -519,7 +525,8 @@ impl PlaceInfo {
         PlaceInfo {
             ty,
             immutable: Some(Immutable::Temporary(base.span)),
-            via: None,
+            via_ptr: false,
+            volatile: false,
             misaligned: false,
             constant: matches!(base.kind, ExprKind::Const(_)),
             register: None,
@@ -533,7 +540,8 @@ impl PlaceInfo {
         PlaceInfo {
             ty: *ptr.pointee,
             immutable: (!ptr.mutable).then_some(Immutable::ConstPointer(ptr, pointer)),
-            via: Some(ptr),
+            via_ptr: true,
+            volatile: ptr.volatile,
             // Pointers are assumed aligned (ADR 0019).
             misaligned: false,
             constant: false,
@@ -544,13 +552,14 @@ impl PlaceInfo {
     }
 
     /// The place a reference refers to; `reference` is the reference's
-    /// expression. It is not volatile (ADR 0105), and written only through a
-    /// `&mut`.
+    /// expression. It is volatile when the reference is (ADR 0110), and
+    /// written only through a `&mut`.
     fn through_ref(r: Ref, reference: Span) -> PlaceInfo {
         PlaceInfo {
             ty: *r.referent,
             immutable: (!r.mutable).then_some(Immutable::SharedRef(r, reference)),
-            via: None,
+            via_ptr: false,
+            volatile: r.volatile,
             misaligned: false,
             constant: false,
             register: None,
@@ -962,13 +971,16 @@ impl Checker<'_, '_> {
                 "a `*const` pointer never becomes `*mut` implicitly; cast with `as` if writing through it is allowed",
             );
         }
-        if let (Ty::Ref(want), Ty::Ref(have)) = (expected, found)
-            && want.mutable
-            && !have.mutable
-        {
-            diag = diag.help(
-                "a `&` reference never becomes `&mut`; borrow the place with `&mut` if it may be written",
-            );
+        if let (Ty::Ref(want), Ty::Ref(have)) = (expected, found) {
+            if want.volatile != have.volatile {
+                diag = diag.help(
+                    "a volatile reference never becomes one that is not, nor the other way: it would hide whether accesses are volatile (ADR 0110)",
+                );
+            } else if want.mutable && !have.mutable {
+                diag = diag.help(
+                    "a `&` reference never becomes `&mut`; borrow the place with `&mut` if it may be written",
+                );
+            }
         }
         if expected == Ty::Never && matches!(expr.kind, ExprKind::While { .. }) {
             diag =
@@ -1567,8 +1579,8 @@ mod tests {
     #[test]
     fn mut_references_coerce_to_shared() {
         let u8_ = Ty::Int(IntTy::U8);
-        let mut_ = Ty::reference(true, u8_);
-        let shared = Ty::reference(false, u8_);
+        let mut_ = Ty::reference(true, false, u8_);
+        let shared = Ty::reference(false, false, u8_);
         assert!(coerces(mut_, shared));
         assert!(shares(mut_, shared));
         // Never the other way, and a reference is not its own conversion.
@@ -1576,18 +1588,51 @@ mod tests {
         assert!(!shares(shared, shared));
         assert!(!shares(mut_, mut_));
         // Not to another referent, nor to or from a raw pointer.
-        assert!(!coerces(mut_, Ty::reference(false, Ty::Int(IntTy::I8))));
+        assert!(!coerces(
+            mut_,
+            Ty::reference(false, false, Ty::Int(IntTy::I8))
+        ));
         assert!(!coerces(mut_, Ty::ptr(false, false, u8_)));
         assert!(!coerces(Ty::ptr(true, false, u8_), shared));
         // Only the outermost reference converts.
         assert!(coerces(
-            Ty::reference(true, mut_),
-            Ty::reference(false, mut_)
+            Ty::reference(true, false, mut_),
+            Ty::reference(false, false, mut_)
         ));
         assert!(!coerces(
-            Ty::reference(true, mut_),
-            Ty::reference(false, shared)
+            Ty::reference(true, false, mut_),
+            Ty::reference(false, false, shared)
         ));
+    }
+
+    /// A volatile reference converts as one that is not does, and only to a
+    /// volatile one (ADR 0110): `&mut volatile T` to `&volatile T`, never the
+    /// other way round in volatility.
+    #[test]
+    fn volatile_references_coerce_as_the_others_do() {
+        let u8_ = Ty::Int(IntTy::U8);
+        let reference = Ty::reference;
+        let mut_ = reference(true, true, u8_);
+        let shared = reference(false, true, u8_);
+        assert!(coerces(mut_, shared));
+        assert!(shares(mut_, shared));
+        assert!(!coerces(shared, mut_));
+        assert!(!shares(shared, shared));
+        // Volatility is never added or removed, in either direction, shared or
+        // mutable.
+        for (from, to) in [
+            (reference(false, false, u8_), shared),
+            (shared, reference(false, false, u8_)),
+            (reference(true, false, u8_), mut_),
+            (mut_, reference(true, false, u8_)),
+            (reference(true, false, u8_), shared),
+            (mut_, reference(false, false, u8_)),
+        ] {
+            assert!(!coerces(from, to), "{from} to {to}");
+        }
+        // Nor from or to a volatile pointer.
+        assert!(!coerces(mut_, Ty::ptr(false, true, u8_)));
+        assert!(!coerces(Ty::ptr(true, true, u8_), shared));
     }
 
     #[test]
@@ -1623,7 +1668,7 @@ mod tests {
         let u8_ = Ty::Int(IntTy::U8);
         let array = Ty::array(u8_, 4);
         let slice = Ty::slice(u8_);
-        let reference = Ty::reference;
+        let reference = |mutable, referent| Ty::reference(mutable, false, referent);
         assert!(unsizes(reference(false, array), reference(false, slice)));
         assert!(unsizes(reference(true, array), reference(true, slice)));
         assert!(unsizes(reference(true, array), reference(false, slice)));
@@ -1648,6 +1693,45 @@ mod tests {
         assert!(!coerces(
             reference(false, reference(false, array)),
             reference(false, reference(false, slice))
+        ));
+    }
+
+    /// A volatile reference to an array converts to the volatile reference to
+    /// the slice of its elements, of the same volatility only (ADR 0110).
+    #[test]
+    fn volatile_array_references_coerce_to_volatile_slice_references() {
+        let u8_ = Ty::Int(IntTy::U8);
+        let array = Ty::array(u8_, 4);
+        let slice = Ty::slice(u8_);
+        let reference = Ty::reference;
+        assert!(coerces(
+            reference(false, true, array),
+            reference(false, true, slice)
+        ));
+        assert!(coerces(
+            reference(true, true, array),
+            reference(true, true, slice)
+        ));
+        assert!(coerces(
+            reference(true, true, array),
+            reference(false, true, slice)
+        ));
+        // Never changing volatility, nor to `&mut` from `&`.
+        assert!(!coerces(
+            reference(false, true, array),
+            reference(false, false, slice)
+        ));
+        assert!(!coerces(
+            reference(false, false, array),
+            reference(false, true, slice)
+        ));
+        assert!(!coerces(
+            reference(true, true, array),
+            reference(false, false, slice)
+        ));
+        assert!(!coerces(
+            reference(false, true, array),
+            reference(true, true, slice)
         ));
     }
 }

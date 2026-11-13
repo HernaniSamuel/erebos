@@ -781,7 +781,7 @@ impl Checker<'_, '_> {
         // A reference casts as the raw pointer to the same place would, and to
         // nothing else (ADR 0105).
         let from = if let Ty::Ref(r) = from {
-            let pointer = Ty::ptr(r.mutable, false, *r.referent);
+            let pointer = Ty::ptr(r.mutable, r.volatile, *r.referent);
             if !matches!(target, Ty::Ptr(_) | Ty::Error) {
                 self.q.diags.push(
                     Diagnostic::error(

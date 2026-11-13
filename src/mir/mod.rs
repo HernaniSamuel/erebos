@@ -1359,8 +1359,7 @@ impl Ty {
     }
 
     /// The thin pointer to the first element of a slice of this type, of
-    /// its mutability and volatility (a reference's is not volatile): the
-    /// type of its address part.
+    /// its mutability and volatility: the type of its address part.
     pub fn slice_address_ty(self) -> Option<Ty> {
         match self {
             Ty::Ptr(
@@ -1374,10 +1373,11 @@ impl Ty {
             })),
             Ty::Ref(Ref {
                 mutable,
+                volatile,
                 referent: Ty::Slice(elem),
             }) => Some(Ty::Ptr(Ptr {
                 mutable,
-                volatile: false,
+                volatile,
                 pointee: elem,
             })),
             _ => None,
@@ -1425,10 +1425,12 @@ pub struct Ptr {
     pub pointee: &'static Ty,
 }
 
-/// A reference type (ADR 0107), leaked like pointees.
+/// A reference type (ADR 0107), volatile or not (ADR 0110, 0112), leaked
+/// like pointees.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Ref {
     pub mutable: bool,
+    pub volatile: bool,
     pub referent: &'static Ty,
 }
 
@@ -1834,7 +1836,8 @@ impl fmt::Display for Ty {
             }
             Ty::Ref(r) => {
                 let mutability = if r.mutable { "mut " } else { "" };
-                write!(f, "&{mutability}{}", r.referent)
+                let volatile = if r.volatile { "volatile " } else { "" };
+                write!(f, "&{mutability}{volatile}{}", r.referent)
             }
             Ty::Array(elem, len) => write!(f, "[{elem}; {len}]"),
             Ty::Slice(elem) => write!(f, "[{elem}]"),

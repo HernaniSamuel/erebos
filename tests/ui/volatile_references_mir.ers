@@ -1,0 +1,146 @@
+// emit: mir
+// Volatile references (ADR 0110). `&place` and `&mut place` give a volatile
+// reference exactly when the place is volatile: when the last pointer or
+// reference on its path, through `*` or an index, is a volatile one. So `&*p`
+// and `&mut (*p).desc[i]` with `p: *mut volatile Ring` are `&volatile Ring`
+// and `&mut volatile Desc`, `&(*s)[i]` through a volatile raw slice is
+// `&volatile T`, and `&(*r).len` with `r: &volatile Ring` is `&volatile u32`.
+// A variable, a static and a place behind a reference that is not volatile
+// give references that are not. A `&mut volatile T` converts to
+// `&volatile T`, and a volatile reference to an array to the volatile
+// reference to its elements; a volatile reference casts as the volatile raw
+// pointer of its mutability does; `len` of a `&volatile [T]` reads nothing.
+static mut RING: Ring = Ring {
+    head: 0,
+    tail: 0,
+    desc: [Desc { addr: 0, len: 0 }, Desc { addr: 0, len: 0 }],
+};
+
+struct Desc {
+    addr: u32,
+    len: u32,
+}
+
+struct Ring {
+    head: u32,
+    tail: u32,
+    desc: [Desc; 2],
+}
+
+// Through a volatile pointer: the whole, a field, an element and a field of
+// an element.
+fn from_pointer(p: *mut volatile Ring, q: *const volatile Ring) {
+    let a: &volatile Ring = &*p;
+    let b: &mut volatile Ring = &mut *p;
+    let c: &mut volatile Desc = &mut (*p).desc[1];
+    let d: &volatile u32 = &(*q).head;
+    let e: &volatile Desc = &(*q).desc[0];
+    let f: &mut volatile u32 = &mut (*p).desc[0].len;
+}
+
+// Through a volatile raw slice: an element, the slice itself, a sub-slice.
+fn from_slice(s: *mut volatile [u32], t: *const volatile [u32]) {
+    let a: &volatile u32 = &(*s)[0];
+    let b: &mut volatile u32 = &mut (*s)[1];
+    let c: &volatile [u32] = &*t;
+    let d: &mut volatile [u32] = &mut *s;
+    let e: &volatile [u32] = &(*t)[1..3];
+    let f: &mut volatile [u32] = &mut (*s)[..2];
+}
+
+// Through a volatile reference, shared or mutable.
+fn from_reference(r: &volatile Ring, m: &mut volatile Ring) {
+    let a: &volatile u32 = &(*r).head;
+    let b: &volatile Desc = &(*r).desc[1];
+    let c: &mut volatile u32 = &mut (*m).tail;
+    let d: &volatile Ring = &*r;
+    let e: &mut volatile Desc = &mut (*m).desc[0];
+    let f: &volatile Ring = &*m;
+}
+
+// Not volatile: a variable, a static, a pointer or a reference that is not,
+// even below a volatile one.
+fn not_volatile(p: *mut Ring, r: &Ring, q: *mut volatile *mut Ring) {
+    let x: u32 = 0;
+    let a: &u32 = &x;
+    let b: &Ring = &RING;
+    let c: &mut Ring = &mut *p;
+    let d: &u32 = &(*r).head;
+    let e: &mut Ring = &mut **q;
+}
+
+// An access through one is volatile: a scalar, a field, an element, a
+// compound assignment.
+fn access(r: &mut volatile Ring, s: &mut volatile [u32], n: &volatile u32) -> u32 {
+    (*r).head = 1;
+    (*r).desc[0].len += 2;
+    (*s)[1] = (*n);
+    (*r).tail + (*s)[0] + (*r).desc[1].addr
+}
+
+// `&mut volatile T` is `&volatile T` where `&mut T` is `&T`: lent, returned
+// to a variable, and passed on.
+fn read(r: &volatile Ring) -> u32 {
+    (*r).head
+}
+
+fn convert(m: &mut volatile Ring) -> u32 {
+    let a: &volatile Ring = m;
+    read(m) + read(a)
+}
+
+// A volatile reference to an array is a volatile reference to its elements,
+// and so is a `&mut` to a `&`.
+fn sum(s: &volatile [u32]) -> u32 {
+    (*s)[0] + (*s)[1]
+}
+
+fn fill(s: &mut volatile [u32]) {
+    (*s)[0] = 7;
+}
+
+fn arrays(a: &volatile [u32; 4], b: &mut volatile [u32; 4]) -> u32 {
+    fill(b);
+    let c: &volatile [u32] = b;
+    sum(a) + sum(b) + sum(c)
+}
+
+// The length of a volatile slice is the slice's own: nothing is read behind it.
+fn length(a: &volatile [u8], b: &mut volatile [u8], c: &volatile [u8; 6]) -> usize {
+    len(a) + len(b) + len(c)
+}
+
+// A cast to the volatile raw pointer of its mutability, and on from there.
+fn casts(
+    r: &volatile Ring,
+    m: &mut volatile Ring,
+    s: &volatile [u32],
+    t: &mut volatile [u32],
+    u: &mut volatile [u32],
+) {
+    let a: *const volatile Ring = r as *const volatile Ring;
+    let b: *mut volatile Ring = m as *mut volatile Ring;
+    let c: *const Ring = r as *const Ring;
+    let d: usize = r as *const volatile Ring as usize;
+    let e: *const volatile [u32] = s as *const volatile [u32];
+    let f: *mut volatile [u32] = t as *mut volatile [u32];
+    let g: *const volatile u32 = s as *const volatile u32;
+    let h: *mut volatile u32 = u as *mut volatile u32;
+    let i: *const [u32] = s as *const [u32];
+}
+
+// Passed where a signature names one, and out of a static's address made in
+// a `const`.
+const WINDOW: *mut volatile Ring = &raw mut RING as *mut volatile Ring;
+
+fn lend(p: *mut volatile Ring) -> u32 {
+    let a: &mut volatile Ring = &mut *p;
+    let n: u32 = read(a);
+    (*a).tail = n;
+    n + read(&*WINDOW)
+}
+
+extern fn device(r: &mut volatile Ring, s: &volatile [u32]);
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

@@ -1343,6 +1343,7 @@ mod tests {
     fn reference(mutable: bool, referent: Ty) -> Ty {
         Ty::Ref(Ref {
             mutable,
+            volatile: false,
             referent: Box::leak(Box::new(referent)),
         })
     }

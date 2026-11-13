@@ -1,0 +1,5 @@
+// emit: ast
+// `volatile` follows `&` and `&mut` in a type, as it follows `*const` and
+// `*mut` (ADR 0110): `&volatile T`, `&mut volatile T`; `&&volatile T` is
+// `& &volatile T`.
+fn types(a: &volatile u32, b: &mut volatile u32, c: &volatile [u8], d: &&volatile u32, e: &volatile &u32, f: *mut volatile u32) {}

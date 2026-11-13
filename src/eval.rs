@@ -861,12 +861,13 @@ impl Interp<'_, '_> {
                         len,
                     }
                 }
-                // A reference holds an address as a pointer does (ADR 0107).
+                // A reference holds an address as a pointer does, and is
+                // volatile when it is (ADR 0107, 0110).
                 (PlaceElem::Deref, Ty::Ref(r)) => {
                     let (target, len) = self.dereference(current, *r.referent, span)?;
                     PlaceRef {
                         ptr: target,
-                        volatile: false,
+                        volatile: r.volatile,
                         ty: *r.referent,
                         len,
                     }

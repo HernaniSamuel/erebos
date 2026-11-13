@@ -25,6 +25,7 @@ File {
                         ty: Ty {
                             kind: Ref {
                                 mutable: false,
+                                volatile: false,
                                 referent: Ty {
                                     kind: Named(
                                         Path {
@@ -52,6 +53,7 @@ File {
                         ty: Ty {
                             kind: Ref {
                                 mutable: true,
+                                volatile: false,
                                 referent: Ty {
                                     kind: Named(
                                         Path {
@@ -79,6 +81,7 @@ File {
                         ty: Ty {
                             kind: Ref {
                                 mutable: false,
+                                volatile: false,
                                 referent: Ty {
                                     kind: Array {
                                         elem: Ty {
@@ -123,6 +126,7 @@ File {
                                 pointee: Ty {
                                     kind: Ref {
                                         mutable: false,
+                                        volatile: false,
                                         referent: Ty {
                                             kind: Named(
                                                 Path {
@@ -153,9 +157,11 @@ File {
                         ty: Ty {
                             kind: Ref {
                                 mutable: false,
+                                volatile: false,
                                 referent: Ty {
                                     kind: Ref {
                                         mutable: false,
+                                        volatile: false,
                                         referent: Ty {
                                             kind: Named(
                                                 Path {
@@ -186,9 +192,11 @@ File {
                         ty: Ty {
                             kind: Ref {
                                 mutable: true,
+                                volatile: false,
                                 referent: Ty {
                                     kind: Ref {
                                         mutable: false,
+                                        volatile: false,
                                         referent: Ty {
                                             kind: Named(
                                                 Path {
@@ -310,6 +318,7 @@ File {
                                     ty: Ty {
                                         kind: Ref {
                                             mutable: false,
+                                            volatile: false,
                                             referent: Ty {
                                                 kind: Named(
                                                     Path {
@@ -360,6 +369,7 @@ File {
                                     ty: Ty {
                                         kind: Ref {
                                             mutable: true,
+                                            volatile: false,
                                             referent: Ty {
                                                 kind: Named(
                                                     Path {
@@ -512,6 +522,7 @@ File {
                                     ty: Ty {
                                         kind: Ref {
                                             mutable: false,
+                                            volatile: false,
                                             referent: Ty {
                                                 kind: Named(
                                                     Path {
@@ -562,6 +573,7 @@ File {
                                     ty: Ty {
                                         kind: Ref {
                                             mutable: false,
+                                            volatile: false,
                                             referent: Ty {
                                                 kind: Named(
                                                     Path {
@@ -621,6 +633,7 @@ File {
                                     ty: Ty {
                                         kind: Ref {
                                             mutable: true,
+                                            volatile: false,
                                             referent: Ty {
                                                 kind: Named(
                                                     Path {
@@ -671,9 +684,11 @@ File {
                                     ty: Ty {
                                         kind: Ref {
                                             mutable: false,
+                                            volatile: false,
                                             referent: Ty {
                                                 kind: Ref {
                                                     mutable: false,
+                                                    volatile: false,
                                                     referent: Ty {
                                                         kind: Named(
                                                             Path {
@@ -733,9 +748,11 @@ File {
                                     ty: Ty {
                                         kind: Ref {
                                             mutable: false,
+                                            volatile: false,
                                             referent: Ty {
                                                 kind: Ref {
                                                     mutable: true,
+                                                    volatile: false,
                                                     referent: Ty {
                                                         kind: Named(
                                                             Path {
@@ -795,9 +812,11 @@ File {
                                     ty: Ty {
                                         kind: Ref {
                                             mutable: true,
+                                            volatile: false,
                                             referent: Ty {
                                                 kind: Ref {
                                                     mutable: false,
+                                                    volatile: false,
                                                     referent: Ty {
                                                         kind: Named(
                                                             Path {
@@ -857,6 +876,7 @@ File {
                                     ty: Ty {
                                         kind: Ref {
                                             mutable: false,
+                                            volatile: false,
                                             referent: Ty {
                                                 kind: Named(
                                                     Path {
@@ -912,6 +932,7 @@ File {
                                     ty: Ty {
                                         kind: Ref {
                                             mutable: true,
+                                            volatile: false,
                                             referent: Ty {
                                                 kind: Named(
                                                     Path {
@@ -971,6 +992,7 @@ File {
                                     ty: Ty {
                                         kind: Ref {
                                             mutable: false,
+                                            volatile: false,
                                             referent: Ty {
                                                 kind: Named(
                                                     Path {

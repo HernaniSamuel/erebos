@@ -413,6 +413,7 @@ impl<'a> Checker<'a> {
         let mut typed = self.local(place.local, "a place").then(|| Typed {
             ty: self.body.locals[place.local.0 as usize].ty,
             volatile: false,
+            register: false,
         });
         for elem in place.projection {
             let indexes = match elem {
@@ -446,6 +447,7 @@ impl<'a> Checker<'a> {
                     Ok(ty) => Some(Typed {
                         ty,
                         volatile: volatile_after(from, elem),
+                        register: register_after(from, elem, ty),
                     }),
                     Err(text) => {
                         self.violation("T1", text);
@@ -1268,7 +1270,7 @@ impl<'a> Checker<'a> {
                     && let Ty::Ptr(to) = target
                     && to.pointee == &Ty::Slice(elem)
                     && to.mutable == r.mutable
-                    && !to.volatile
+                    && to.volatile == r.volatile
                 {
                     self.fit("a cast", *target, dest);
                 } else if from.is_aggregate() || target.is_aggregate() {
@@ -1465,35 +1467,45 @@ impl<'a> Checker<'a> {
     }
 
     /// T5 for `&place` and `&mut place` of a place of type `typed.ty`: the
-    /// reference to it, `&mut` if written so, of a place that is not
-    /// volatile and no register. A peripheral, a cluster and an element of a
+    /// reference to it, `&mut` if written so, volatile exactly when the place
+    /// is, and not a register. A peripheral, a cluster and an element of a
     /// cluster array have a peripheral type, and are not registers (ADR 0110,
     /// 0112); a register is reached through one with its access mode, so a
-    /// volatile place of any other type is rejected. A `&mut` does not fit a
-    /// `&` place: the conversion is a `Ref` (ADR 0107).
+    /// place that is a register or part of one is rejected, whatever its
+    /// type. A `&mut` does not fit a `&` place: the conversion is a `Ref`
+    /// (ADR 0107), and a volatile reference fits only the same volatile
+    /// reference type.
     fn borrow(&mut self, mutable: bool, typed: Option<Typed>, dest: Option<Ty>) {
         let Some(typed) = typed else {
             return;
         };
         let how = if mutable { "&mut" } else { "&" };
-        if typed.volatile && !matches!(typed.ty, Ty::Peripheral(_)) {
+        if typed.register {
             self.violation(
                 "T5",
-                format!("`{how}` of a volatile place of type `{}`", typed.ty),
+                format!("`{how}` of a register, a place of type `{}`", typed.ty),
             );
+            return;
         }
         let Some(dest) = dest else {
             return;
         };
         let fits = matches!(
             dest,
-            Ty::Ref(r) if r.referent == &typed.ty && r.mutable == mutable
+            Ty::Ref(r) if r.referent == &typed.ty
+                && r.mutable == mutable
+                && r.volatile == typed.reference_volatile()
         );
         if !fits {
+            let volatile = if typed.reference_volatile() {
+                " volatile"
+            } else {
+                ""
+            };
             self.violation(
                 "T5",
                 format!(
-                    "`{how}` of a place of type `{}` does not fit the place's `{dest}`",
+                    "`{how}` of a{volatile} place of type `{}` does not fit the place's `{dest}`",
                     typed.ty
                 ),
             );
@@ -2198,11 +2210,23 @@ fn values(ty: Ty) -> bool {
     }
 }
 
-/// A place's type, and whether accessing it is volatile.
+/// A place's type, whether accessing it is volatile, and whether it is a
+/// register or part of one.
 #[derive(Clone, Copy)]
 struct Typed {
     ty: Ty,
     volatile: bool,
+    register: bool,
+}
+
+impl Typed {
+    /// Whether a reference to the place is volatile (ADR 0110, 0112): when
+    /// the place is, except a peripheral or a cluster, whose registers are
+    /// volatile whatever reaches them, and whose reference is written without
+    /// the word.
+    fn reference_volatile(self) -> bool {
+        self.volatile && !matches!(self.ty, Ty::Peripheral(_))
+    }
 }
 
 /// Whether `from` fits a place of type `to` (ADR 0095, "Types"): the same
@@ -2220,18 +2244,32 @@ fn fits(from: Ty, to: Ty) -> bool {
 
 /// Whether accessing the place after `elem` is volatile, as code generation
 /// decides it (`address` in `src/codegen/mod.rs`, `Builder::is_volatile`):
-/// the last pointer dereferenced sets it, a register of a peripheral type
-/// makes it so.
+/// the last pointer or reference dereferenced sets it (ADR 0110), a register
+/// of a peripheral type makes it so.
 fn volatile_after(from: Typed, elem: &PlaceElem) -> bool {
     match (elem, from.ty) {
         (PlaceElem::Deref | PlaceElem::Offset(_), Ty::Ptr(ptr)) => ptr.volatile,
-        // A reference is not volatile (ADR 0105).
-        (PlaceElem::Deref, Ty::Ref(_)) => false,
+        (PlaceElem::Deref, Ty::Ref(r)) => r.volatile,
         (
             PlaceElem::Field(_) | PlaceElem::Element(..) | PlaceElem::ConstElement(..),
             Ty::Peripheral(_),
         ) => true,
         _ => from.volatile,
+    }
+}
+
+/// Whether the place after `elem`, of type `ty`, is a register or part of
+/// one (ADR 0112, T5): a projection applied to a peripheral type that gives
+/// another type, since a cluster and an element of a cluster array have a
+/// peripheral type. What a pointer or a reference leads to is no register.
+fn register_after(from: Typed, elem: &PlaceElem, ty: Ty) -> bool {
+    match (elem, from.ty) {
+        (PlaceElem::Deref | PlaceElem::Offset(_), Ty::Ptr(_) | Ty::Ref(_)) => false,
+        (
+            PlaceElem::Field(_) | PlaceElem::Element(..) | PlaceElem::ConstElement(..),
+            Ty::Peripheral(_),
+        ) => !matches!(ty, Ty::Peripheral(_)),
+        _ => from.register,
     }
 }
 
@@ -2407,6 +2445,16 @@ mod tests {
     fn reference(mutable: bool, referent: Ty) -> Ty {
         Ty::Ref(Ref {
             mutable,
+            volatile: false,
+            referent: Box::leak(Box::new(referent)),
+        })
+    }
+
+    /// `&volatile T` or `&mut volatile T`.
+    fn volatile_reference(mutable: bool, referent: Ty) -> Ty {
+        Ty::Ref(Ref {
+            mutable,
+            volatile: true,
             referent: Box::leak(Box::new(referent)),
         })
     }
@@ -3412,7 +3460,13 @@ mod tests {
             rejects(reading(ptr(true, true, pointee), &deref), "T4");
             // Not volatile, it is a value like any other.
             accepts(reading(ptr(true, false, pointee), &deref));
+            // A volatile reference makes its referent volatile as a volatile
+            // pointer does (ADR 0110, 0112); a reference that is not does not.
+            rejects(reading(volatile_reference(false, pointee), &deref), "T4");
+            rejects(reading(volatile_reference(true, pointee), &deref), "T4");
+            accepts(reading(reference(false, pointee), &deref));
         }
+        accepts(reading(volatile_reference(false, u32_ty()), &deref));
         // Written whole: `*p = x`, with `x` of the pointee's type.
         let mut body = valid();
         body.locals.push(decl(pair));
@@ -3678,7 +3732,8 @@ mod tests {
             &[shared, shared],
             vec![assign(12, Rvalue::Use(copy(11)))],
         ));
-        // A volatile place has no reference.
+        // A volatile place has a reference that is volatile, which no other
+        // fits (the other way is the next test's).
         let volatile = projected(14, &[PlaceElem::Deref]);
         rejects(
             with_locals(&locals, vec![assign(11, make(false, volatile))]),
@@ -3705,6 +3760,114 @@ mod tests {
             ),
             "T5",
         );
+    }
+
+    /// The type of a `Ref` is volatile exactly when its place is (ADR 0112,
+    /// T5): when the last pointer or reference on the path is volatile.
+    #[test]
+    fn t5_a_ref_is_volatile_exactly_when_its_place_is() {
+        let u = u32_ty();
+        // `_11: &u32`, `_12: &mut u32`, `_13: &volatile u32`,
+        // `_14: &mut volatile u32`, `_15: *mut volatile u32`,
+        // `_16: *mut u32`, `_17: *mut volatile *mut u32`.
+        let locals = [
+            reference(false, u),
+            reference(true, u),
+            volatile_reference(false, u),
+            volatile_reference(true, u),
+            ptr(true, true, u),
+            ptr(true, false, u),
+            ptr(true, true, ptr(true, false, u)),
+        ];
+        let borrow = |dest, mutable, from, projection: &[PlaceElem]| {
+            with_locals(
+                &locals,
+                vec![Statement::Assign(
+                    local(dest),
+                    Rvalue::Ref {
+                        mutable,
+                        place: projected(from, projection),
+                    },
+                )],
+            )
+        };
+        let deref = [PlaceElem::Deref];
+        // Through a volatile pointer: `&volatile u32`, `&mut volatile u32`.
+        accepts(borrow(13, false, 15, &deref));
+        accepts(borrow(14, true, 15, &deref));
+        rejects(borrow(11, false, 15, &deref), "T5");
+        rejects(borrow(12, true, 15, &deref), "T5");
+        rejects(borrow(14, false, 15, &deref), "T5");
+        // Through a pointer that is not volatile: the reference is not.
+        accepts(borrow(11, false, 16, &deref));
+        accepts(borrow(12, true, 16, &deref));
+        rejects(borrow(13, false, 16, &deref), "T5");
+        rejects(borrow(14, true, 16, &deref), "T5");
+        // Through a volatile reference, shared or mutable, and a shared
+        // borrow of the mutable one.
+        accepts(borrow(13, false, 13, &deref));
+        accepts(borrow(14, true, 14, &deref));
+        accepts(borrow(13, false, 14, &deref));
+        rejects(borrow(11, false, 13, &deref), "T5");
+        rejects(borrow(11, false, 14, &deref), "T5");
+        // Through a reference that is not volatile.
+        accepts(borrow(11, false, 12, &deref));
+        rejects(borrow(13, false, 12, &deref), "T5");
+        // The last pointer or reference decides: what a pointer reached
+        // through a volatile one points to is not volatile.
+        accepts(borrow(11, false, 17, &[PlaceElem::Deref, PlaceElem::Deref]));
+        accepts(borrow(12, true, 17, &[PlaceElem::Deref, PlaceElem::Deref]));
+        rejects(
+            borrow(13, false, 17, &[PlaceElem::Deref, PlaceElem::Deref]),
+            "T5",
+        );
+        // A volatile reference fits only its own type when copied or moved.
+        let copied = |dest, from| {
+            with_locals(
+                &locals,
+                vec![Statement::Assign(local(dest), Rvalue::Use(copy(from)))],
+            )
+        };
+        accepts(copied(13, 13));
+        rejects(copied(11, 13), "T5");
+        rejects(copied(13, 11), "T5");
+    }
+
+    /// A volatile reference casts to the raw pointer of its volatility, and a
+    /// volatile reference to a slice to the volatile raw slice (ADR 0112).
+    #[test]
+    fn t5_a_volatile_reference_casts_to_the_raw_pointer_of_its_volatility() {
+        let u = u32_ty();
+        let raw_slice = |volatile| ptr(false, volatile, unsized_u32());
+        // `_11: &volatile u32`, `_12: *const volatile u32`, `_13: usize`,
+        // `_14: &volatile [u32]`, `_15: *const volatile [u32]`,
+        // `_16: *const [u32]`, `_17: &[u32]`.
+        let locals = [
+            volatile_reference(false, u),
+            ptr(false, true, u),
+            usize_ty(),
+            volatile_reference(false, unsized_u32()),
+            raw_slice(true),
+            raw_slice(false),
+            reference(false, unsized_u32()),
+        ];
+        let cast = |dest, from| {
+            with_locals(
+                &locals,
+                vec![Statement::Assign(
+                    local(dest),
+                    Rvalue::Cast(copy(from), locals[dest as usize - 11]),
+                )],
+            )
+        };
+        accepts(cast(12, 11));
+        // Not to an integer, which a reference does not cast to.
+        rejects(cast(13, 11), "T5");
+        // The raw slice of its mutability and volatility, no other.
+        accepts(cast(15, 14));
+        rejects(cast(16, 14), "T5");
+        rejects(cast(15, 17), "T5");
+        accepts(cast(16, 17));
     }
 
     #[test]

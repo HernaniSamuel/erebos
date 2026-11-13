@@ -1,6 +1,5 @@
 ---
 source: tests/ui.rs
-assertion_line: 24
 expression: output
 input_file: tests/ui/parse_subslices.ers
 ---
@@ -135,6 +134,7 @@ File {
                         ty: Ty {
                             kind: Ref {
                                 mutable: false,
+                                volatile: false,
                                 referent: Ty {
                                     kind: Slice(
                                         Ty {
@@ -194,6 +194,7 @@ File {
                                     ty: Ty {
                                         kind: Ref {
                                             mutable: false,
+                                            volatile: false,
                                             referent: Ty {
                                                 kind: Slice(
                                                     Ty {
@@ -275,6 +276,7 @@ File {
                                     ty: Ty {
                                         kind: Ref {
                                             mutable: false,
+                                            volatile: false,
                                             referent: Ty {
                                                 kind: Slice(
                                                     Ty {
@@ -347,6 +349,7 @@ File {
                                     ty: Ty {
                                         kind: Ref {
                                             mutable: false,
+                                            volatile: false,
                                             referent: Ty {
                                                 kind: Slice(
                                                     Ty {
@@ -419,6 +422,7 @@ File {
                                     ty: Ty {
                                         kind: Ref {
                                             mutable: false,
+                                            volatile: false,
                                             referent: Ty {
                                                 kind: Slice(
                                                     Ty {
@@ -506,6 +510,7 @@ File {
                                     ty: Ty {
                                         kind: Ref {
                                             mutable: false,
+                                            volatile: false,
                                             referent: Ty {
                                                 kind: Slice(
                                                     Ty {
@@ -598,6 +603,7 @@ File {
                                     ty: Ty {
                                         kind: Ref {
                                             mutable: false,
+                                            volatile: false,
                                             referent: Ty {
                                                 kind: Slice(
                                                     Ty {
@@ -681,6 +687,7 @@ File {
                                     ty: Ty {
                                         kind: Ref {
                                             mutable: false,
+                                            volatile: false,
                                             referent: Ty {
                                                 kind: Slice(
                                                     Ty {
@@ -762,6 +769,7 @@ File {
                                     ty: Ty {
                                         kind: Ref {
                                             mutable: false,
+                                            volatile: false,
                                             referent: Ty {
                                                 kind: Slice(
                                                     Ty {
@@ -834,6 +842,7 @@ File {
                                     ty: Ty {
                                         kind: Ref {
                                             mutable: false,
+                                            volatile: false,
                                             referent: Ty {
                                                 kind: Slice(
                                                     Ty {
@@ -907,6 +916,7 @@ File {
                                     ty: Ty {
                                         kind: Ref {
                                             mutable: false,
+                                            volatile: false,
                                             referent: Ty {
                                                 kind: Slice(
                                                     Ty {
@@ -1001,6 +1011,7 @@ File {
                                     ty: Ty {
                                         kind: Ref {
                                             mutable: false,
+                                            volatile: false,
                                             referent: Ty {
                                                 kind: Slice(
                                                     Ty {
@@ -1212,6 +1223,7 @@ File {
                                     ty: Ty {
                                         kind: Ref {
                                             mutable: false,
+                                            volatile: false,
                                             referent: Ty {
                                                 kind: Slice(
                                                     Ty {
@@ -1491,6 +1503,7 @@ File {
                                     ty: Ty {
                                         kind: Ref {
                                             mutable: false,
+                                            volatile: false,
                                             referent: Ty {
                                                 kind: Slice(
                                                     Ty {
@@ -1618,6 +1631,7 @@ File {
                                     ty: Ty {
                                         kind: Ref {
                                             mutable: false,
+                                            volatile: false,
                                             referent: Ty {
                                                 kind: Slice(
                                                     Ty {
@@ -1741,6 +1755,7 @@ File {
                                     ty: Ty {
                                         kind: Ref {
                                             mutable: false,
+                                            volatile: false,
                                             referent: Ty {
                                                 kind: Slice(
                                                     Ty {
@@ -1838,6 +1853,7 @@ File {
                                     ty: Ty {
                                         kind: Ref {
                                             mutable: false,
+                                            volatile: false,
                                             referent: Ty {
                                                 kind: Slice(
                                                     Ty {
@@ -1937,6 +1953,7 @@ File {
                                     ty: Ty {
                                         kind: Ref {
                                             mutable: false,
+                                            volatile: false,
                                             referent: Ty {
                                                 kind: Slice(
                                                     Ty {

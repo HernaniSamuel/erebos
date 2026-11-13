@@ -246,14 +246,16 @@ mod tests {
     fn a_reference_is_passed_as_a_thin_pointer() {
         let big = strukt(&[], 64, 4, false);
         for referent in [Ty::Int(IntTy::U8), big, bytes(0), bytes(3), Ty::Unit] {
-            let pointer = Ty::Ptr(Ptr {
-                mutable: true,
-                volatile: false,
-                pointee: Box::leak(Box::new(referent)),
-            });
-            for mutable in [false, true] {
+            for (mutable, volatile) in [(false, false), (true, false), (false, true), (true, true)]
+            {
+                let pointer = Ty::Ptr(Ptr {
+                    mutable: true,
+                    volatile,
+                    pointee: Box::leak(Box::new(referent)),
+                });
                 let reference = Ty::Ref(crate::mir::Ref {
                     mutable,
+                    volatile,
                     referent: Box::leak(Box::new(referent)),
                 });
                 for arch in [Arch::Riscv32, Arch::Armv7m] {
@@ -270,20 +272,21 @@ mod tests {
         }
     }
 
-    /// A reference to a slice is passed as the raw slice of its mutability is:
-    /// two words, on both targets, as a parameter and as a return value
-    /// (ADR 0108, 0109).
+    /// A reference to a slice is passed as the raw slice of its mutability and
+    /// volatility is: two words, on both targets, as a parameter and as a
+    /// return value (ADR 0108, 0109, 0112).
     #[test]
     fn a_reference_to_a_slice_is_passed_as_a_slice() {
         let elem = Ty::Slice(Box::leak(Box::new(Ty::Int(IntTy::U8))));
-        for mutable in [false, true] {
+        for (mutable, volatile) in [(false, false), (true, false), (false, true), (true, true)] {
             let raw = Ty::Ptr(Ptr {
                 mutable,
-                volatile: false,
+                volatile,
                 pointee: Box::leak(Box::new(elem)),
             });
             let reference = Ty::Ref(crate::mir::Ref {
                 mutable,
+                volatile,
                 referent: Box::leak(Box::new(elem)),
             });
             for arch in [Arch::Riscv32, Arch::Armv7m] {

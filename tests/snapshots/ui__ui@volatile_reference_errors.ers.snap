@@ -1,0 +1,376 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/volatile_reference_errors.ers
+---
+--- errors ---
+ty::volatile-peripheral
+
+  × a reference to the peripheral type `Uart16550` cannot be `volatile`
+    ╭─[volatile_reference_errors.ers:39:19]
+ 38 │ // without it, so that nothing more is reported where it is used.
+ 39 │ fn peripherals(a: &volatile Uart16550, b: &mut volatile Uart16550) {
+    ·                   ─────────┬─────────
+    ·                            ╰── its accesses are volatile without the word
+ 40 │     (*a).thr;
+    ╰────
+  help: accesses through a reference to a peripheral type reach its registers, which are always
+        accessed volatile: write `&Uart16550` (ADR 0058, 0110)
+ty::volatile-peripheral
+
+  × a reference to the peripheral type `Uart16550` cannot be `volatile`
+    ╭─[volatile_reference_errors.ers:39:43]
+ 38 │ // without it, so that nothing more is reported where it is used.
+ 39 │ fn peripherals(a: &volatile Uart16550, b: &mut volatile Uart16550) {
+    ·                                           ───────────┬───────────
+    ·                                                      ╰── its accesses are volatile without the word
+ 40 │     (*a).thr;
+    ╰────
+  help: accesses through a reference to a peripheral type reach its registers, which are always
+        accessed volatile: write `&mut Uart16550` (ADR 0058, 0110)
+ty::volatile-aggregate
+
+  × a volatile `Pair` cannot be accessed as a whole
+    ╭─[volatile_reference_errors.ers:45:19]
+ 44 │ fn aggregates(r: &volatile Pair, m: &mut volatile Pair, n: &volatile [u32; 2]) {
+ 45 │     let a: Pair = *r;
+    ·                   ─┬
+    ·                    ╰── access its elements or fields one at a time
+ 46 │     *m = Pair { a: 1, b: 2 };
+    ╰────
+  help: the width and number of the bus accesses would be up to the compiler (ADR 0023)
+ty::volatile-aggregate
+
+  × a volatile `Pair` cannot be accessed as a whole
+    ╭─[volatile_reference_errors.ers:46:5]
+ 45 │     let a: Pair = *r;
+ 46 │     *m = Pair { a: 1, b: 2 };
+    ·     ─┬
+    ·      ╰── access its elements or fields one at a time
+ 47 │     let b: [u32; 2] = *n;
+    ╰────
+  help: the width and number of the bus accesses would be up to the compiler (ADR 0023)
+ty::volatile-aggregate
+
+  × a volatile `[u32; 2]` cannot be accessed as a whole
+    ╭─[volatile_reference_errors.ers:47:23]
+ 46 │     *m = Pair { a: 1, b: 2 };
+ 47 │     let b: [u32; 2] = *n;
+    ·                       ─┬
+    ·                        ╰── access its elements or fields one at a time
+ 48 │ }
+    ╰────
+  help: the width and number of the bus accesses would be up to the compiler (ADR 0023)
+ty::volatile-too-wide
+
+  × a volatile `u64` cannot be accessed in one instruction
+    ╭─[volatile_reference_errors.ers:51:18]
+ 50 │ fn too_wide(r: &volatile u64, m: &mut volatile u64) {
+ 51 │     let a: u64 = *r;
+    ·                  ─┬
+    ·                   ╰── the widest single access is 32 bits
+ 52 │     *m = 1;
+    ╰────
+  help: access it as `u32` halves, in the order the device needs (ADR 0023)
+ty::volatile-too-wide
+
+  × a volatile `u64` cannot be accessed in one instruction
+    ╭─[volatile_reference_errors.ers:52:5]
+ 51 │     let a: u64 = *r;
+ 52 │     *m = 1;
+    ·     ─┬
+    ·      ╰── the widest single access is 32 bits
+ 53 │     *m += 2;
+    ╰────
+  help: access it as `u32` halves, in the order the device needs (ADR 0023)
+ty::volatile-too-wide
+
+  × a volatile `u64` cannot be accessed in one instruction
+    ╭─[volatile_reference_errors.ers:53:5]
+ 52 │     *m = 1;
+ 53 │     *m += 2;
+    ·     ─┬
+    ·      ╰── the widest single access is 32 bits
+ 54 │ }
+    ╰────
+  help: access it as `u32` halves, in the order the device needs (ADR 0023)
+ty::volatile-packed-field
+
+  × a volatile `u32` here may be misaligned
+    ╭─[volatile_reference_errors.ers:57:18]
+ 56 │ fn packed(r: &volatile Packed, m: &mut volatile Packed) {
+ 57 │     let a: u32 = (*r).word;
+    ·                  ────┬────
+    ·                      ╰── reached through a field of a `#[packed]` struct
+ 58 │     (*m).word = 1;
+    ╰────
+  help: it would be split into several accesses; register blocks use the default layout, with
+        explicit padding fields (ADR 0022, 0023)
+ty::volatile-packed-field
+
+  × a volatile `u32` here may be misaligned
+    ╭─[volatile_reference_errors.ers:58:5]
+ 57 │     let a: u32 = (*r).word;
+ 58 │     (*m).word = 1;
+    ·     ────┬────
+    ·         ╰── reached through a field of a `#[packed]` struct
+ 59 │ }
+    ╰────
+  help: it would be split into several accesses; register blocks use the default layout, with
+        explicit padding fields (ADR 0022, 0023)
+ty::read-with-effects
+
+  × reading `Lsr` through a volatile reference has effects
+    ╭─[volatile_reference_errors.ers:12:28]
+ 11 │     pub data_ready: bool at 0,
+ 12 │     pub overrun: bool at 1 read clears,
+    ·                            ─────┬─────
+    ·                                 ╰── a read has effects
+ 13 │     pub count: u8 at 4..=6,
+    ╰────
+    ╭─[volatile_reference_errors.ers:66:5]
+ 65 │ fn effects(l: &mut volatile Lsr, p: &mut volatile Pending) {
+ 66 │     (*l).data_ready = false;
+    ·     ───────┬───────
+    ·            ╰── read by this field assignment
+ 67 │     (*l).count += 1;
+    ╰────
+  help: the read would go unseen, and what it returned lost; read the value into a `let` first,
+        which shows the read, then write the whole value meant (ADR 0060)
+ty::read-with-effects
+
+  × reading `Lsr` through a volatile reference has effects
+    ╭─[volatile_reference_errors.ers:12:28]
+ 11 │     pub data_ready: bool at 0,
+ 12 │     pub overrun: bool at 1 read clears,
+    ·                            ─────┬─────
+    ·                                 ╰── a read has effects
+ 13 │     pub count: u8 at 4..=6,
+    ╰────
+    ╭─[volatile_reference_errors.ers:67:5]
+ 66 │     (*l).data_ready = false;
+ 67 │     (*l).count += 1;
+    ·     ─────┬────
+    ·          ╰── read by this compound assignment
+ 68 │     (*p).mask |= 1;
+    ╰────
+  help: the read would go unseen, and what it returned lost; read the value into a `let` first,
+        which shows the read, then write the whole value meant (ADR 0060)
+ty::compound-write-effect
+
+  × cannot compound-assign the field `mask` of `Pending`, which has a write effect
+    ╭─[volatile_reference_errors.ers:18:28]
+ 17 │     pub enable: bool at 0 = false,
+ 18 │     pub mask: u8 at 8..=15 write 1 clears,
+    ·                            ───────┬──────
+    ·                                   ╰── declared here
+ 19 │ }
+    ╰────
+    ╭─[volatile_reference_errors.ers:68:5]
+ 67 │     (*l).count += 1;
+ 68 │     (*p).mask |= 1;
+    ·     ────┬────
+    ·         ╰── read and written back through a volatile reference
+ 69 │ }
+    ╰────
+  help: every `1` written to it clears its bit, so writing back the bits read clears each one read
+        as `1`; assign the field the bits meant with `=` (ADR 0060)
+ty::write-through-const
+
+  × cannot write through a `&` reference
+    ╭─[volatile_reference_errors.ers:72:6]
+ 71 │ fn shared(r: &volatile u32, s: &volatile [u32]) {
+ 72 │     *r = 1;
+    ·      ┬
+    ·      ╰── has type `&volatile u32`
+ 73 │     (*s)[0] = 2;
+    ╰────
+  help: only `&mut` references can be written through (ADR 0105)
+ty::write-through-const
+
+  × cannot write through a `&` reference
+    ╭─[volatile_reference_errors.ers:73:7]
+ 72 │     *r = 1;
+ 73 │     (*s)[0] = 2;
+    ·       ┬
+    ·       ╰── has type `&volatile [u32]`
+ 74 │     let a: &mut volatile u32 = &mut *r;
+    ╰────
+  help: only `&mut` references can be written through (ADR 0105)
+ty::mut-borrow-of-immutable
+
+  × cannot borrow as `&mut` through a `&` reference
+    ╭─[volatile_reference_errors.ers:74:38]
+ 73 │     (*s)[0] = 2;
+ 74 │     let a: &mut volatile u32 = &mut *r;
+    ·                                      ┬
+    ·                                      ╰── has type `&volatile u32`
+ 75 │     let b: &mut volatile u32 = &mut (*s)[1];
+    ╰────
+  help: only `&mut` references can be borrowed through as `&mut` (ADR 0105)
+ty::mut-borrow-of-immutable
+
+  × cannot borrow as `&mut` through a `&` reference
+    ╭─[volatile_reference_errors.ers:75:39]
+ 74 │     let a: &mut volatile u32 = &mut *r;
+ 75 │     let b: &mut volatile u32 = &mut (*s)[1];
+    ·                                       ┬
+    ·                                       ╰── has type `&volatile [u32]`
+ 76 │ }
+    ╰────
+  help: only `&mut` references can be borrowed through as `&mut` (ADR 0105)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[volatile_reference_errors.ers:97:19]
+ 96 │ ) {
+ 97 │     take_volatile(r);
+    ·                   ┬
+    ·                   ╰── expected `&volatile u32`, found `&u32`
+ 98 │     take(v);
+    ╰────
+  help: a volatile reference never becomes one that is not, nor the other way: it would hide
+        whether accesses are volatile (ADR 0110)
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[volatile_reference_errors.ers:98:10]
+ 97 │     take_volatile(r);
+ 98 │     take(v);
+    ·          ┬
+    ·          ╰── expected `&u32`, found `&volatile u32`
+ 99 │     take_volatile_mut(m);
+    ╰────
+  help: a volatile reference never becomes one that is not, nor the other way: it would hide
+        whether accesses are volatile (ADR 0110)
+ty::mismatched-types
+
+  × mismatched types
+     ╭─[volatile_reference_errors.ers:99:23]
+  98 │     take(v);
+  99 │     take_volatile_mut(m);
+     ·                       ┬
+     ·                       ╰── expected `&mut volatile u32`, found `&mut u32`
+ 100 │     take_mut(w);
+     ╰────
+  help: a volatile reference never becomes one that is not, nor the other way: it would hide
+        whether accesses are volatile (ADR 0110)
+ty::mismatched-types
+
+  × mismatched types
+     ╭─[volatile_reference_errors.ers:100:14]
+  99 │     take_volatile_mut(m);
+ 100 │     take_mut(w);
+     ·              ┬
+     ·              ╰── expected `&mut u32`, found `&mut volatile u32`
+ 101 │     take(w);
+     ╰────
+  help: a volatile reference never becomes one that is not, nor the other way: it would hide
+        whether accesses are volatile (ADR 0110)
+ty::mismatched-types
+
+  × mismatched types
+     ╭─[volatile_reference_errors.ers:101:10]
+ 100 │     take_mut(w);
+ 101 │     take(w);
+     ·          ┬
+     ·          ╰── expected `&u32`, found `&mut volatile u32`
+ 102 │     take_volatile(m);
+     ╰────
+  help: a volatile reference never becomes one that is not, nor the other way: it would hide
+        whether accesses are volatile (ADR 0110)
+ty::mismatched-types
+
+  × mismatched types
+     ╭─[volatile_reference_errors.ers:102:19]
+ 101 │     take(w);
+ 102 │     take_volatile(m);
+     ·                   ┬
+     ·                   ╰── expected `&volatile u32`, found `&mut u32`
+ 103 │     take_volatile_slice(s);
+     ╰────
+  help: a volatile reference never becomes one that is not, nor the other way: it would hide
+        whether accesses are volatile (ADR 0110)
+ty::mismatched-types
+
+  × mismatched types
+     ╭─[volatile_reference_errors.ers:103:25]
+ 102 │     take_volatile(m);
+ 103 │     take_volatile_slice(s);
+     ·                         ┬
+     ·                         ╰── expected `&volatile [u32]`, found `&[u32]`
+ 104 │     take_slice(t);
+     ╰────
+  help: a volatile reference never becomes one that is not, nor the other way: it would hide
+        whether accesses are volatile (ADR 0110)
+ty::mismatched-types
+
+  × mismatched types
+     ╭─[volatile_reference_errors.ers:104:16]
+ 103 │     take_volatile_slice(s);
+ 104 │     take_slice(t);
+     ·                ┬
+     ·                ╰── expected `&[u32]`, found `&volatile [u32]`
+ 105 │     take_volatile_slice(a);
+     ╰────
+  help: a volatile reference never becomes one that is not, nor the other way: it would hide
+        whether accesses are volatile (ADR 0110)
+ty::mismatched-types
+
+  × mismatched types
+     ╭─[volatile_reference_errors.ers:105:25]
+ 104 │     take_slice(t);
+ 105 │     take_volatile_slice(a);
+     ·                         ┬
+     ·                         ╰── expected `&volatile [u32]`, found `&[u32; 2]`
+ 106 │     take_slice(b);
+     ╰────
+  help: a volatile reference never becomes one that is not, nor the other way: it would hide
+        whether accesses are volatile (ADR 0110)
+ty::mismatched-types
+
+  × mismatched types
+     ╭─[volatile_reference_errors.ers:106:16]
+ 105 │     take_volatile_slice(a);
+ 106 │     take_slice(b);
+     ·                ┬
+     ·                ╰── expected `&[u32]`, found `&volatile [u32; 2]`
+ 107 │     let c: &volatile u32 = r;
+     ╰────
+  help: a volatile reference never becomes one that is not, nor the other way: it would hide
+        whether accesses are volatile (ADR 0110)
+ty::mismatched-types
+
+  × mismatched types
+     ╭─[volatile_reference_errors.ers:107:28]
+ 106 │     take_slice(b);
+ 107 │     let c: &volatile u32 = r;
+     ·                            ┬
+     ·                            ╰── expected `&volatile u32`, found `&u32`
+ 108 │     let d: &u32 = v;
+     ╰────
+  help: a volatile reference never becomes one that is not, nor the other way: it would hide
+        whether accesses are volatile (ADR 0110)
+ty::mismatched-types
+
+  × mismatched types
+     ╭─[volatile_reference_errors.ers:108:19]
+ 107 │     let c: &volatile u32 = r;
+ 108 │     let d: &u32 = v;
+     ·                   ┬
+     ·                   ╰── expected `&u32`, found `&volatile u32`
+ 109 │     take_volatile_mut(v);
+     ╰────
+  help: a volatile reference never becomes one that is not, nor the other way: it would hide
+        whether accesses are volatile (ADR 0110)
+ty::mismatched-types
+
+  × mismatched types
+     ╭─[volatile_reference_errors.ers:109:23]
+ 108 │     let d: &u32 = v;
+ 109 │     take_volatile_mut(v);
+     ·                       ┬
+     ·                       ╰── expected `&mut volatile u32`, found `&volatile u32`
+ 110 │ }
+     ╰────
+  help: a `&` reference never becomes `&mut`; borrow the place with `&mut` if it may be written

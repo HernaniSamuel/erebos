@@ -1535,6 +1535,7 @@ impl Parser<'_> {
                     span: outer.to(referent.span),
                     kind: TyKind::Ref {
                         mutable: false,
+                        volatile: false,
                         referent: Box::new(referent),
                     },
                 });
@@ -1547,14 +1548,17 @@ impl Parser<'_> {
         })
     }
 
-    /// The rest of `&T` or `&mut T` after its `&`, which spans `amp`.
+    /// The rest of `&T`, `&mut T`, `&volatile T` or `&mut volatile T` after
+    /// its `&`, which spans `amp` (ADR 0110).
     fn ref_ty(&mut self, amp: Span) -> PResult<Ty> {
         let mutable = self.eat(TokenKind::Mut).is_some();
+        let volatile = self.eat(TokenKind::Volatile).is_some();
         let referent = self.ty()?;
         Ok(Ty {
             span: amp.to(referent.span),
             kind: TyKind::Ref {
                 mutable,
+                volatile,
                 referent: Box::new(referent),
             },
         })

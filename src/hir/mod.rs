@@ -646,13 +646,13 @@ pub struct PeripheralByValue {
     pub position: UnsizedPosition,
 }
 
-/// `*mut volatile T` or `*const volatile T` with `T` a peripheral type
-/// (ADR 0058).
+/// `*mut volatile T`, `*const volatile T`, `&volatile T` or `&mut volatile T`
+/// with `T` a peripheral type (ADR 0058, 0110).
 #[derive(Clone, Copy, Debug)]
 pub struct VolatilePeripheral {
     /// The span of the pointer type.
     pub span: Span,
-    /// The pointer type, as lowered: without `volatile`.
+    /// The pointer or reference type, as lowered: without `volatile`.
     pub ty: Ty,
 }
 
@@ -1254,18 +1254,21 @@ pub struct Ptr {
     pub pointee: &'static Ty,
 }
 
-/// A reference type (ADR 0105).
+/// A reference type (ADR 0105), volatile or not (ADR 0110).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Ref {
     pub mutable: bool,
+    pub volatile: bool,
     pub referent: &'static Ty,
 }
 
 impl Ty {
-    /// `&referent` or `&mut referent`; leaked like `ptr`.
-    pub fn reference(mutable: bool, referent: Ty) -> Ty {
+    /// `&referent`, `&mut referent`, `&volatile referent` or `&mut volatile
+    /// referent`; leaked like `ptr`.
+    pub fn reference(mutable: bool, volatile: bool, referent: Ty) -> Ty {
         Ty::Ref(Ref {
             mutable,
+            volatile,
             referent: Box::leak(Box::new(referent)),
         })
     }
@@ -1351,7 +1354,8 @@ impl fmt::Display for Ptr {
 impl fmt::Display for Ref {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mutability = if self.mutable { "mut " } else { "" };
-        write!(f, "&{mutability}{}", self.referent)
+        let volatile = if self.volatile { "volatile " } else { "" };
+        write!(f, "&{mutability}{volatile}{}", self.referent)
     }
 }
 

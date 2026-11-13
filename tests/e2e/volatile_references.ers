@@ -1,0 +1,119 @@
+// Volatile references (ADR 0110) to memory that is not a register. A ring
+// lives in a `static mut`, and the program reaches it only through
+// `RING`, a `*mut volatile Ring` made from the static's address in a `const`:
+// the way memory shared with a device is reached. Borrowing a place through
+// that pointer gives a volatile reference, so `fill` takes a `&mut volatile
+// Desc` and `total` a `&volatile Desc`, `sum` a `&volatile [u32]` and `bump`
+// a `&mut volatile [u32]`, to which a volatile reference to an array and a
+// sub-slice convert. Every access in them is a volatile load or store, and a
+// `&mut volatile Ring` kept in a variable reaches the head and the tail. The
+// results are printed, and the static read directly shows the same memory.
+// expect-output: 261 31 3
+// expect-output: 10 14 7
+// expect-output: 7 8 0
+// expect-output: 2 8 0
+// expect-exit: 0
+
+mod board;
+use board::{exit, putc};
+
+struct Desc {
+    addr: u32,
+    len: u32,
+}
+
+struct Ring {
+    head: u32,
+    tail: u32,
+    desc: [Desc; 3],
+    words: [u32; 4],
+}
+
+static mut MEMORY: Ring = Ring {
+    head: 0,
+    tail: 0,
+    desc: [
+        Desc { addr: 0, len: 0 },
+        Desc { addr: 0, len: 0 },
+        Desc { addr: 0, len: 0 },
+    ],
+    words: [0; 4],
+};
+
+const RING: *mut volatile Ring = &raw mut MEMORY as *mut volatile Ring;
+
+// A store of each field, then a compound assignment: a load and a store.
+fn fill(d: &mut volatile Desc, addr: u32, len: u32) {
+    (*d).addr = addr;
+    (*d).len = len;
+    (*d).len += 1;
+}
+
+fn total(d: &volatile Desc) -> u32 {
+    (*d).addr + (*d).len
+}
+
+fn sum(s: &volatile [u32]) -> u32 {
+    let mut total: u32 = 0;
+    let mut i: usize = 0;
+    while i < len(s) {
+        total += (*s)[i];
+        i += 1;
+    }
+    total
+}
+
+fn bump(s: &mut volatile [u32]) {
+    let mut i: usize = 0;
+    while i < len(s) {
+        (*s)[i] += 1;
+        i += 1;
+    }
+}
+
+fn print_u32(n: u32) {
+    if n >= 10 {
+        print_u32(n / 10);
+    }
+    putc(b'0' + (n % 10) as u8);
+}
+
+fn print_line(a: u32, b: u32, c: u32) {
+    print_u32(a);
+    putc(b' ');
+    print_u32(b);
+    putc(b' ');
+    print_u32(c);
+    putc(b'\n');
+}
+
+entry fn main() -> ! {
+    fill(&mut (*RING).desc[0], 0x100, 4);
+    fill(&mut (*RING).desc[1], 10, 20);
+    fill(&mut (*RING).desc[2], 1, 1);
+    print_line(
+        total(&(*RING).desc[0]),
+        total(&(*RING).desc[1]),
+        total(&(*RING).desc[2]),
+    );
+
+    let mut i: usize = 0;
+    while i < 4 {
+        (*RING).words[i] = i as u32 + 1;
+        i += 1;
+    }
+    let before: u32 = sum(&(*RING).words);
+    bump(&mut (*RING).words);
+    print_line(before, sum(&(*RING).words), sum(&(*RING).words[1..3]));
+
+    let ring: &mut volatile Ring = &mut *RING;
+    (*ring).head = 7;
+    (*ring).tail = (*ring).head + 1;
+    print_line(MEMORY.head, MEMORY.tail, 0);
+    print_line(MEMORY.words[0], MEMORY.tail, 0);
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(1)
+}

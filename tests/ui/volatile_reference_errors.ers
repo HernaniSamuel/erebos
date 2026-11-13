@@ -1,0 +1,113 @@
+// emit: typeck
+// What a volatile reference cannot do (ADR 0110). A reference to a peripheral
+// type is written without `volatile`, as a pointer to one is; a struct is not
+// read or written whole through one, a `u64` is wider than the target's
+// widest access, and a field of a `#[packed]` struct may be misaligned
+// (ADR 0023), and a type whose reads or writes have effects is the error it is
+// through a volatile pointer (ADR 0060); a `&volatile T` is not written through, nor borrowed `&mut`;
+// and a volatile reference never converts to one that is not, nor the other
+// way, whatever else differs.
+struct Lsr: u8 {
+    pub data_ready: bool at 0,
+    pub overrun: bool at 1 read clears,
+    pub count: u8 at 4..=6,
+}
+
+struct Pending: u32 {
+    pub enable: bool at 0 = false,
+    pub mask: u8 at 8..=15 write 1 clears,
+}
+
+peripheral Uart16550 {
+    read write thr: u8 at 0,
+}
+
+#[copy]
+struct Pair {
+    a: u32,
+    b: u32,
+}
+
+#[packed]
+struct Packed {
+    tag: u8,
+    word: u32,
+}
+
+// The word is dropped, as for a pointer, and the type is then the reference
+// without it, so that nothing more is reported where it is used.
+fn peripherals(a: &volatile Uart16550, b: &mut volatile Uart16550) {
+    (*a).thr;
+    (*b).thr = 1;
+}
+
+fn aggregates(r: &volatile Pair, m: &mut volatile Pair, n: &volatile [u32; 2]) {
+    let a: Pair = *r;
+    *m = Pair { a: 1, b: 2 };
+    let b: [u32; 2] = *n;
+}
+
+fn too_wide(r: &volatile u64, m: &mut volatile u64) {
+    let a: u64 = *r;
+    *m = 1;
+    *m += 2;
+}
+
+fn packed(r: &volatile Packed, m: &mut volatile Packed) {
+    let a: u32 = (*r).word;
+    (*m).word = 1;
+}
+
+// The effects of ADR 0060 hold through a volatile reference as through a
+// volatile pointer: a field assignment or a compound assignment to a type
+// whose reads have effects, and a compound assignment to a field with a
+// write effect, are the errors they are there, with the reference named.
+fn effects(l: &mut volatile Lsr, p: &mut volatile Pending) {
+    (*l).data_ready = false;
+    (*l).count += 1;
+    (*p).mask |= 1;
+}
+
+fn shared(r: &volatile u32, s: &volatile [u32]) {
+    *r = 1;
+    (*s)[0] = 2;
+    let a: &mut volatile u32 = &mut *r;
+    let b: &mut volatile u32 = &mut (*s)[1];
+}
+
+fn take(r: &u32) {}
+fn take_mut(r: &mut u32) {}
+fn take_volatile(r: &volatile u32) {}
+fn take_volatile_mut(r: &mut volatile u32) {}
+fn take_slice(s: &[u32]) {}
+fn take_volatile_slice(s: &volatile [u32]) {}
+
+// Neither converts to the other, the shared or the mutable, the array or the
+// slice, and a `&mut volatile` is no `&`.
+fn mismatches(
+    r: &u32,
+    v: &volatile u32,
+    m: &mut u32,
+    w: &mut volatile u32,
+    s: &[u32],
+    t: &volatile [u32],
+    a: &[u32; 2],
+    b: &volatile [u32; 2],
+) {
+    take_volatile(r);
+    take(v);
+    take_volatile_mut(m);
+    take_mut(w);
+    take(w);
+    take_volatile(m);
+    take_volatile_slice(s);
+    take_slice(t);
+    take_volatile_slice(a);
+    take_slice(b);
+    let c: &volatile u32 = r;
+    let d: &u32 = v;
+    take_volatile_mut(v);
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

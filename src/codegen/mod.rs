@@ -1067,8 +1067,9 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
             .0 as usize
     }
 
-    /// The address of a place. A place is volatile when the last pointer on
-    /// its path is (ADR 0023), and a register always is (ADR 0058). MIR
+    /// The address of a place. A place is volatile when the last pointer or
+    /// reference on its path is (ADR 0023, 0110), and a register always is
+    /// (ADR 0058). MIR
     /// building repeats this rule in `Builder::is_volatile`
     /// (`src/mir/build.rs`), to give a field written in a volatile place,
     /// and only there, the masks that keep the other fields' write effects
@@ -1103,12 +1104,12 @@ impl<'a, 'ctx> FnCodegen<'a, 'ctx> {
                     ty = *ptr.pointee;
                     continue;
                 }
-                // A reference holds an address as a pointer does, and is never
-                // volatile (ADR 0107).
+                // A reference holds an address as a pointer does, and is
+                // volatile when it is (ADR 0107, 0110).
                 (PlaceElem::Deref, Ty::Ref(r)) => {
                     let ptr = Ptr {
                         mutable: r.mutable,
-                        volatile: false,
+                        volatile: r.volatile,
                         pointee: r.referent,
                     };
                     let len = length_through(address, *r.referent);

@@ -81,15 +81,8 @@ fn slice_of_reference(r: &u8) {
     let a: *const [u8] = slice(r, 2);
 }
 
-// No address, or none a reference may have yet (ADR 0105).
-fn addresses(
-    v: *const volatile [u8],
-    w: *const volatile [u8; 4],
-    h: *mut Packed,
-    n: usize,
-) {
-    let a: &[u8] = &(*v)[0..1];
-    let b: &[u8] = &(*w)[0..1];
+// No address (ADR 0105).
+fn addresses(h: *mut Packed, n: usize) {
     let c: &[u32] = &UART.data[0..2];
     let d: *const [u32] = &raw const UART.data[0..2];
     let e: *const [u32] = &raw const (*h).words[1..];

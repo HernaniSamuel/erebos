@@ -204,10 +204,7 @@ M3.1 to M3.3 on 2026-10-28; these remain.
 - `src/ty.rs` (around lines 959-966): the help "a `&` reference never becomes
   `&mut`..." is also given when the referents differ (`&i32` where `&mut u32`
   is expected), where it misleads; add `want.referent == have.referent` to the
-  condition. `src/ty/place.rs`, `not_borrowed_yet`: the help for a peripheral
-  reads "use a pointer to it, such as a `*mut {}`, `&raw mut P`", with `P` a
-  placeholder; the two snapshots `reference_errors` and `reference_not_yet`
-  change with it. (M5.4a)
+  condition. (M5.4a)
 - `src/mir/build.rs`: `argument` falls back to `self.expr` when
   `self.current` is `None`, a path that cannot happen and that no Decision
   records; `is_mut_variable` takes `&mut self` only because `ty_of` does.

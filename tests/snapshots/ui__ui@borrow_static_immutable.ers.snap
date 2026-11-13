@@ -9,6 +9,7 @@ struct Pair { 0 a: u32 at 0, 1 b: u32 at 4 } // size 8, align 4
 static LIMIT: u32; // align 4
 static ORIGIN: Pair; // align 4
 static TABLE: [u32; 4]; // align 4
+extern static OUTSIDE: u32; // align 4
 
 fn read(_1: &u32) -> u32 {
     let _0: u32;
@@ -187,16 +188,53 @@ fn table() -> u32 {
     }
 }
 
+fn outside() -> u32 {
+    let _0: u32;
+    let _1: &u32; // r
+    let _2: *const u32;
+    let _3: &u32;
+    let _4: *const u32;
+    let _5: u32;
+    let _6: u32;
+    let _7: *const u32;
+    let _8: &u32;
+    let _9: u32;
+    let _10: u32;
+    let _11: u32;
+    let _12: u32;
+    let _13: u32;
+
+    bb0: {
+        _2 = const static OUTSIDE;
+        _3 = &(*_2);
+        _1 = copy _3;
+        _4 = const static OUTSIDE;
+        _5 = copy (*_4);
+        _6 = copy _5;
+        _7 = const static OUTSIDE;
+        _8 = &(*_7);
+        _9 = call read(copy _8);
+        _10 = Add(copy _6, copy _9);
+        _11 = copy _10;
+        _12 = copy (*_1);
+        _13 = Add(copy _11, copy _12);
+        _0 = copy _13;
+        return;
+    }
+}
+
 entry fn main() -> ! {
     let _0: !;
     let _1: u32;
     let _2: u32;
     let _3: u32;
+    let _4: u32;
 
     bb0: {
         _1 = call held();
         _2 = call parts();
         _3 = call table();
+        _4 = call outside();
         goto -> bb1;
     }
 

@@ -832,7 +832,7 @@ impl<'h> Queries<'h> {
             },
             hir::Ty::Ref(r) => match self.normalize(*r.referent) {
                 hir::Ty::Error => hir::Ty::Error,
-                referent => hir::Ty::reference(r.mutable, referent),
+                referent => hir::Ty::reference(r.mutable, r.volatile, referent),
             },
             hir::Ty::Slice(elem) => match self.normalize(*elem) {
                 hir::Ty::Error => hir::Ty::Error,
@@ -1659,6 +1659,7 @@ impl<'h> Queries<'h> {
             }),
             hir::Ty::Ref(r) => mir::Ty::Ref(mir::Ref {
                 mutable: r.mutable,
+                volatile: r.volatile,
                 referent: Box::leak(Box::new(self.mir_ty(*r.referent))),
             }),
             hir::Ty::Array(elem, len) => {

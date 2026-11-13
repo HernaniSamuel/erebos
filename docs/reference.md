@@ -869,9 +869,9 @@ of a slice. It has no value, no type of its own and no meaning outside `[ ]`:
   of `&raw`, with the same codes: a range on a register array or a cluster
   array is `ty::register-address`, on an array field of a `#[packed]` struct
   that may be misaligned `ty::packed-field-address`. `&` and `&mut` of a range
-  on an array behind a volatile pointer or a volatile raw slice
-  are `ty::reference-to-volatile` until M5.4c, while `&raw` of it is allowed;
-  on a `static mut` they are allowed (ADR 0110).
+  on an array behind a volatile pointer or a volatile raw slice give a
+  volatile reference to a slice (ADR 0110), while `&raw` of it is a pointer
+  that is not volatile; on a `static mut` they are allowed (ADR 0110).
 - **Checks.** The base is evaluated first, and with it its length (the length
   of a slice is read then, so code in the bounds that assigns the variable
   holding a raw slice does not change it); then `a`, then `b`. The place
@@ -2373,10 +2373,11 @@ pointer.
   register array or a cluster array `ty::register-address`, a possibly
   misaligned field of a `#[packed]` struct `ty::packed-field-address`, and a
   place of type `!` `ty::never-in-memory`.
-- **Not yet** (M5.4c), and an error until then: `&` or `&mut` of a place
-  reached through a `volatile` pointer is `ty::reference-to-volatile`; the help
-  says to use the pointer. A register has no address and is
-  `ty::register-address` first. `&` and `&mut` of a `static mut` or an `extern
+- `&` or `&mut` of a place reached through a `volatile` pointer, a volatile raw
+  slice or a volatile reference gives a volatile reference, `&volatile T` or
+  `&mut volatile T` (ADR 0110); any other place gives one that is not. A
+  register has no address and is `ty::register-address`. `&` and `&mut` of a
+  `static mut` or an `extern
   static mut`, or of a field or an element of one, are allowed (ADR 0110): the
   borrow check follows them, across calls too (`analysis::borrow-conflict`,
   `analysis::borrow-conflict-in-call`, ADR 0111). So are `&` and `&mut` of a
@@ -2544,8 +2545,8 @@ debug type is not emitted.
 - **From a place of type `[T]`.** `&*s` and `&mut *s` borrow the slice `s`
   points to or refers to, whole. Through a raw slice the reference is the
   program's word, as `&*p` is for a thin pointer, and the borrow check follows
-  nothing; through a volatile one it is `ty::reference-to-volatile` until
-  M5.4c. Through a reference it is a reborrow. `&mut *s` needs a `*mut [T]` or
+  nothing; through a volatile one it is a volatile reference to a slice
+  (ADR 0110). Through a reference it is a reborrow. `&mut *s` needs a `*mut [T]` or
   a `&mut [T]` (`ty::mut-borrow-of-immutable` otherwise). `&a[2..5]` and
   `&mut a[2..5]` borrow a sub-slice (see "Sub-slices").
 - **Conversion.** A reference to an array **converts implicitly** to a
@@ -2582,8 +2583,9 @@ debug type is not emitted.
   reference to an array, whose length is `N` (the operand is evaluated for its
   effects). It reads the reference, never the elements, and moves nothing:
   `len(s)` with `s: &mut [T]` leaves `s` usable.
-- `&(*s)[i]` and `&*s` through a raw slice that is not volatile are allowed;
-  through a volatile one they are `ty::reference-to-volatile` until M5.4c.
+- `&(*s)[i]` and `&*s` through a raw slice that is not volatile are references
+  that are not; through a volatile one they are volatile references (ADR
+  0110).
 
 ```
 fn casts(s: &[u32], m: &mut [u32]) {
@@ -6027,7 +6029,7 @@ When code is type checked:
 | Code | Case |
 |------|------|
 | `ty::peripheral-by-value` | a peripheral type where a value would have it (see "Types"), an array of one anywhere but as a cluster's type, or a peripheral, `*u`, register array, cluster or cluster array's element read, written or passed as a whole |
-| `ty::volatile-peripheral` | `volatile` on a pointer to a peripheral type |
+| `ty::volatile-peripheral` | `volatile` on a pointer or a reference to a peripheral type |
 | `ty::peripheral-index` | indexing a pointer to a peripheral type |
 | `ty::cannot-index` | an index of an entry that is no array (and of any value that is no array or pointer) |
 | `ty::unknown-register` | a name that is no entry of the peripheral type |
@@ -6926,7 +6928,7 @@ Every error has a stable code, shown with the message.
 | `resolve::outside-loop` | `break`/`continue` outside a loop |
 | `resolve::break-value-in-while` | `break value` in a `while` |
 | `resolve::return-in-comptime` | `return` or `?` in code run at compile time on its own: a `comptime` expression or block, the initializer of a constant or static, a variant's value, an array length, a repeat count, an `#[align(N)]` argument, a value of a `memory` block, a register's offset or a peripheral's address |
-| `ty::mismatched-types` | a value of the wrong type, a `&T` where a `&mut T` is expected, a reference to an array that does not convert (another element type, a `&[T; N]` for a `&mut [T]`, a raw slice for a reference), a bound of a range that is not a `usize`, a reference given to `slice`, or a `.V` where the expected type, or the position's type, is not an enum |
+| `ty::mismatched-types` | a value of the wrong type, a `&T` where a `&mut T` is expected, a reference to an array that does not convert (another element type, a `&[T; N]` for a `&mut [T]`, a raw slice for a reference), a volatile reference where one that is not is expected and the other way (neither converts to the other, with a help), a bound of a range that is not a `usize`, a reference given to `slice`, or a `.V` where the expected type, or the position's type, is not an enum |
 | `ty::untyped-literal` | a literal or array literal with no expected type |
 | `ty::untyped-variant` | a `.V` with no expected type, as a `match` scrutinee, the operand of `as` or `?`, or an expression statement |
 | `ty::unknown-variant` | a `.V` where the expected enum, or the position's enum, has no variant of that name |
@@ -6952,7 +6954,6 @@ Every error has a stable code, shown with the message.
 | `ty::address-of-immutable` | `&raw mut` of a place that cannot be written, one through a `&` reference included |
 | `ty::mut-borrow-of-immutable` | `&mut` of a place that cannot be written (a variable or parameter without `mut`, a `static`, an `extern static` without `mut`, a byte string, a place through a `&` reference or a `*const` pointer), of a value that is not a place, or of a part of one (`&mut f().x`, `&mut f()[1..3]`) |
 | `ty::reference-position` | a reference type written as the type of a field, a payload value, an array or slice element, a type argument, a layout query operand, a return type, a `static`, `extern static` or `const`, a pointee or a referent (`&&T`), or of a `mut` parameter or `let mut`, once per type at the outermost reference; an expression that makes an array of references, `&`, `&mut` or `&raw` of a reference, the value of a `critical` block, the value of a `break` that leaves a `critical` block, or a `comptime` expression of a reference type, at the innermost |
-| `ty::reference-to-volatile` | `&` or `&mut` of a place reached through a `volatile` pointer or a volatile raw slice (`&*v`, `&(*v)[i]`, a range of one) (M5.4c) |
 | `ty::packed-field-address` | `&raw`, `&` or `&mut` of a possibly misaligned place inside a packed struct |
 | `ty::volatile-too-wide` | volatile access wider than the target's widest access, a bit-field struct on `u64` included |
 | `ty::volatile-aggregate` | volatile access to a whole struct, array or enum with payloads, or to a slice stored in memory |
@@ -7008,7 +7009,7 @@ Every error has a stable code, shown with the message.
 | `ty::peripheral-out-of-range` | a peripheral whose end is above `0x1_0000_0000` |
 | `ty::peripheral-overlap` | two peripherals sharing a byte, unless one is `over` the other or both are `over` the same one |
 | `ty::peripheral-by-value` | a peripheral type where a value would have it, an array of one anywhere but as a cluster's type, or a peripheral, `*u`, register array, cluster or cluster array's element read, written or passed as a whole |
-| `ty::volatile-peripheral` | `volatile` on a pointer to a peripheral type |
+| `ty::volatile-peripheral` | `volatile` on a pointer or a reference to a peripheral type |
 | `ty::peripheral-index` | indexing a pointer to a peripheral type |
 | `ty::unknown-register` | a name that is no entry of the peripheral type |
 | `ty::private-register` | an entry that is not visible here |

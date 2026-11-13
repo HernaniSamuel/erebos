@@ -11,6 +11,7 @@ struct Pair {
 static LIMIT: u32 = 7;
 static ORIGIN: Pair = Pair { a: 1, b: 2 };
 static TABLE: [u32; 4] = [1, 2, 3, 4];
+extern static OUTSIDE: u32;
 
 fn read(r: &u32) -> u32 {
     *r
@@ -43,10 +44,17 @@ fn table() -> u32 {
     TABLE[1] + sum(t) + sum(&TABLE) + *e
 }
 
+// An `extern static` that is not `mut` is borrowed the same way.
+fn outside() -> u32 {
+    let r: &u32 = &OUTSIDE;
+    OUTSIDE + read(&OUTSIDE) + *r
+}
+
 entry fn main() -> ! {
     held();
     parts();
     table();
+    outside();
     loop {}
 }
 

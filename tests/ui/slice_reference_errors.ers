@@ -2,10 +2,9 @@
 // What a reference to a slice cannot do. `s[i]` needs the `*` first; `*s` is
 // no value; a `&` is not written through, nor borrowed `&mut`; a reference
 // casts to the raw slice and a pointer to its first element, not to an
-// integer, and is not compared; `&*v` through a volatile raw slice waits
-// for M5.4c; `[&u8]`, `[Uart]` and `[!]` are the errors they are behind a
-// pointer; and a reference is held only by a parameter or a `let` without
-// `mut` (ADR 0105, 0108).
+// integer, and is not compared; `[&u8]`, `[Uart]` and `[!]` are the errors
+// they are behind a pointer; and a reference is held only by a parameter or a
+// `let` without `mut` (ADR 0105, 0108).
 struct Holder {
     s: &mut [u8],
 }
@@ -40,12 +39,6 @@ fn casts(s: &[u8], t: &mut [u8]) {
 
 fn compares(s: &[u8], t: &[u8]) -> bool {
     s == t
-}
-
-fn volatile_slices(v: *const volatile [u8], w: *mut volatile [u8]) {
-    let a: &[u8] = &*v;
-    let b: &u8 = &(*v)[0];
-    let c: &mut [u8] = &mut *w;
 }
 
 fn mut_parameter(mut s: &mut [u8]) {}

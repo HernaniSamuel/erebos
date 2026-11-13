@@ -473,8 +473,13 @@ pub enum TyKind {
         volatile: bool,
         pointee: Box<Ty>,
     },
-    /// `&T` or `&mut T` (ADR 0105). `&&T` is two of them.
-    Ref { mutable: bool, referent: Box<Ty> },
+    /// `&T`, `&mut T`, `&volatile T` or `&mut volatile T` (ADR 0105, 0110).
+    /// `&&T` is two of them.
+    Ref {
+        mutable: bool,
+        volatile: bool,
+        referent: Box<Ty>,
+    },
     /// `[T; N]`, where `N` is computed at compile time (ADR 0029).
     Array { elem: Box<Ty>, len: Box<Expr> },
     /// `[T]`, of a length known only at run time: it exists only behind a

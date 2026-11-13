@@ -1,0 +1,44 @@
+// emit: mir
+// A read or write through a volatile reference cannot happen at compile time
+// (ADR 0027, 0110), as through a volatile pointer: the access is the error,
+// and making the reference is not. A reference that is not volatile, to
+// memory of the evaluation, is read as usual.
+const READ: u32 = read_through();
+const WRITE: u32 = write_through();
+const FIELD: u32 = field_through();
+const FINE: u32 = fine();
+
+struct Ring {
+    head: u32,
+    tail: u32,
+}
+
+fn read_through() -> u32 {
+    let p: *mut volatile u32 = 0x2000_0000 as *mut volatile u32;
+    let r: &volatile u32 = &*p;
+    *r
+}
+
+fn write_through() -> u32 {
+    let p: *mut volatile u32 = 0x2000_0000 as *mut volatile u32;
+    let r: &mut volatile u32 = &mut *p;
+    *r = 1;
+    0
+}
+
+fn field_through() -> u32 {
+    let p: *mut volatile Ring = 0x2000_0000 as *mut volatile Ring;
+    let r: &mut volatile Ring = &mut *p;
+    let t: &volatile u32 = &(*r).tail;
+    *t
+}
+
+fn fine() -> u32 {
+    let mut x: u32 = 5;
+    let r: &mut u32 = &mut x;
+    *r += 1;
+    *r
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

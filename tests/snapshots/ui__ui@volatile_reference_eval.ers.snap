@@ -1,0 +1,63 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/volatile_reference_eval.ers
+---
+--- errors ---
+eval::volatile-access
+
+  × a volatile access cannot happen at compile time
+   ╭─[volatile_reference_eval.ers:6:7]
+ 5 │ // memory of the evaluation, is read as usual.
+ 6 │ const READ: u32 = read_through();
+   ·       ──┬─        ───────┬──────
+   ·         │                ╰── called here
+   ·         ╰── while evaluating the constant `READ`
+ 7 │ const WRITE: u32 = write_through();
+   ╰────
+    ╭─[volatile_reference_eval.ers:19:5]
+ 18 │     let r: &volatile u32 = &*p;
+ 19 │     *r
+    ·     ─┬
+    ·      ╰── accessed here
+ 20 │ }
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::volatile-access
+
+  × a volatile access cannot happen at compile time
+   ╭─[volatile_reference_eval.ers:7:7]
+ 6 │ const READ: u32 = read_through();
+ 7 │ const WRITE: u32 = write_through();
+   ·       ──┬──        ───────┬───────
+   ·         │                 ╰── called here
+   ·         ╰── while evaluating the constant `WRITE`
+ 8 │ const FIELD: u32 = field_through();
+   ╰────
+    ╭─[volatile_reference_eval.ers:25:5]
+ 24 │     let r: &mut volatile u32 = &mut *p;
+ 25 │     *r = 1;
+    ·     ───┬──
+    ·        ╰── accessed here
+ 26 │     0
+    ╰────
+  help: this code runs at compile time (ADR 0027)
+eval::volatile-access
+
+  × a volatile access cannot happen at compile time
+   ╭─[volatile_reference_eval.ers:8:7]
+ 7 │ const WRITE: u32 = write_through();
+ 8 │ const FIELD: u32 = field_through();
+   ·       ──┬──        ───────┬───────
+   ·         │                 ╰── called here
+   ·         ╰── while evaluating the constant `FIELD`
+ 9 │ const FINE: u32 = fine();
+   ╰────
+    ╭─[volatile_reference_eval.ers:33:5]
+ 32 │     let t: &volatile u32 = &(*r).tail;
+ 33 │     *t
+    ·     ─┬
+    ·      ╰── accessed here
+ 34 │ }
+    ╰────
+  help: this code runs at compile time (ADR 0027)

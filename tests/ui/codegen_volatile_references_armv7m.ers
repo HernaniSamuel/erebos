@@ -1,0 +1,55 @@
+// emit: llvm-ir
+// opt: both
+// target: thumbv7m-none-eabi
+// ADR 0110: an access through a volatile reference is one volatile load or
+// store of the scalar's width, with or without `-O`, as through a volatile
+// pointer (ADR 0023). A scalar, a field, an element of a slice and a compound
+// assignment (one load, then one store) are each volatile; two reads of one
+// place stay two and a write nobody reads is kept; a reference that is not
+// volatile has plain accesses, which `-O` may merge.
+struct Ring {
+    head: u32,
+    flags: u16,
+    tail: u8,
+}
+
+// `load volatile i32`, twice.
+fn twice(r: &volatile u32) -> u32 {
+    let first: u32 = *r;
+    let second: u32 = *r;
+    first + second
+}
+
+// A store of `i32` at offset 0 and of `i16` at offset 4, a load of `i8` at 6,
+// and a compound assignment: a volatile load then a volatile store of `i32`.
+fn fields(r: &mut volatile Ring) -> u8 {
+    (*r).head = 1;
+    (*r).flags = 2;
+    (*r).head += 3;
+    (*r).tail
+}
+
+// An element of a slice: the length is read from the slice, the element
+// volatile; a store nobody reads is kept.
+fn elements(s: &mut volatile [u16], i: usize) -> u16 {
+    (*s)[i] = 7;
+    (*s)[0]
+}
+
+// Made from a volatile pointer, and lent: the reference keeps the pointer's
+// accesses volatile.
+fn lend(p: *mut volatile Ring) -> u32 {
+    let r: &mut volatile Ring = &mut *p;
+    (*r).head = 5;
+    (*r).head
+}
+
+// Not volatile: the same shape with plain accesses.
+fn plain(r: &u32) -> u32 {
+    let first: u32 = *r;
+    let second: u32 = *r;
+    first + second
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

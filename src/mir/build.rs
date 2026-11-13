@@ -1951,13 +1951,14 @@ impl Builder<'_, '_> {
             return Operand::Const(Const::Unit);
         }
         let mut from = self.operand_ty(operand);
-        // A reference casts as the raw pointer to its referent (ADR 0105): the
-        // rest of the cast, to a slice among them, is that pointer's.
+        // A reference casts as the raw pointer of its mutability and volatility
+        // to its referent (ADR 0105, 0110): the rest of the cast, to a slice
+        // among them, is that pointer's.
         let mut operand = operand;
         if let Ty::Ref(r) = from {
             from = Ty::Ptr(Ptr {
                 mutable: r.mutable,
-                volatile: false,
+                volatile: r.volatile,
                 pointee: r.referent,
             });
             operand = self.temp(from, Rvalue::Cast(operand, from));
@@ -2286,16 +2287,15 @@ impl Builder<'_, '_> {
 
     /// Whether accesses to `place` are volatile, as code generation makes
     /// them in `address` (`src/codegen/mod.rs`), which must agree: when
-    /// the last pointer on its path is volatile (ADR 0023), or
-    /// when it is a register (ADR 0058).
+    /// the last pointer or reference on its path is volatile (ADR 0023,
+    /// 0110), or when it is a register (ADR 0058).
     fn is_volatile(&self, place: Place) -> bool {
         let mut ty = self.locals[place.local.0 as usize].ty;
         let mut volatile = false;
         for elem in place.projection {
             match (elem, ty) {
                 (PlaceElem::Deref | PlaceElem::Offset(_), Ty::Ptr(ptr)) => volatile = ptr.volatile,
-                // A reference is never volatile (ADR 0105).
-                (PlaceElem::Deref, Ty::Ref(_)) => volatile = false,
+                (PlaceElem::Deref, Ty::Ref(r)) => volatile = r.volatile,
                 (
                     PlaceElem::Field(_) | PlaceElem::Element(..) | PlaceElem::ConstElement(..),
                     Ty::Peripheral(_),

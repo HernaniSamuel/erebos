@@ -52,7 +52,7 @@ impl Checker<'_, '_> {
     /// `expr` is the place expression: in a volatile place, the access mode
     /// of the bit field it names is checked too (ADR 0065).
     pub(super) fn access(&mut self, place: &PlaceInfo, expr: &Expr, kind: AccessMode) {
-        let volatile = place.register.is_some() || place.via.is_some_and(|ptr| ptr.volatile);
+        let volatile = place.register.is_some() || place.volatile;
         let field = if volatile {
             self.field_mode(expr, kind)
         } else {
@@ -85,7 +85,7 @@ impl Checker<'_, '_> {
             ..*place
         };
         let place = &whole;
-        let volatile = place.via.is_some_and(|ptr| ptr.volatile);
+        let volatile = place.volatile;
         if volatile && !place.ty.is_aggregate() && self.may_be_misaligned(place) {
             self.q.diags.push(
                 Diagnostic::error(
@@ -328,7 +328,8 @@ impl Checker<'_, '_> {
                 PlaceInfo {
                     ty: self.norm(local.ty),
                     immutable: (!local.mutable).then_some(Immutable::Local(*id)),
-                    via: None,
+                    via_ptr: false,
+                    volatile: false,
                     misaligned: false,
                     constant: false,
                     register: None,
@@ -339,7 +340,8 @@ impl Checker<'_, '_> {
             ExprKind::ByteString(bytes) => PlaceInfo {
                 ty: Ty::array(Ty::Int(IntTy::U8), bytes.len() as u64),
                 immutable: Some(Immutable::ByteString(expr.span)),
-                via: None,
+                via_ptr: false,
+                volatile: false,
                 misaligned: false,
                 constant: false,
                 register: None,
@@ -356,7 +358,8 @@ impl Checker<'_, '_> {
                         ty => ty,
                     },
                     immutable: (!def.mutable).then_some(Immutable::Static(*id)),
-                    via: None,
+                    via_ptr: false,
+                    volatile: false,
                     misaligned: false,
                     constant: false,
                     register: None,
@@ -369,7 +372,8 @@ impl Checker<'_, '_> {
             ExprKind::Peripheral(id) => PlaceInfo {
                 ty: self.hir.peripheral(*id).ty,
                 immutable: None,
-                via: None,
+                via_ptr: false,
+                volatile: false,
                 misaligned: false,
                 constant: false,
                 register: None,
@@ -934,7 +938,7 @@ impl Checker<'_, '_> {
         let through = if info.via_ref {
             Some(Through::Reference)
         } else {
-            info.via.map(|_| Through::Pointer)
+            info.via_ptr.then_some(Through::Pointer)
         };
         (info.ty, through)
     }
@@ -949,7 +953,7 @@ impl Checker<'_, '_> {
     fn assignment_effects(&mut self, place: &Expr, info: &PlaceInfo, kind: AccessMode) {
         let field = self.q.tables.bit_field(place.id);
         let compound = kind == AccessMode::ReadWrite;
-        let volatile = info.register.is_some() || info.via.is_some_and(|ptr| ptr.volatile);
+        let volatile = info.register.is_some() || info.volatile;
         if !volatile || !(compound || field.is_some()) {
             return;
         }
@@ -974,7 +978,10 @@ impl Checker<'_, '_> {
                 let whole = info.bit_field.map_or(info.ty, Ty::BitStruct);
                 (
                     self.q.type_read_effect(whole),
-                    format!("`{whole}` through a volatile pointer"),
+                    format!(
+                        "`{whole}` through a volatile {}",
+                        if info.via_ref { "reference" } else { "pointer" }
+                    ),
                 )
             }
         };
@@ -994,6 +1001,7 @@ impl Checker<'_, '_> {
                 let bit = effect.bit;
                 let place_words = match info.register {
                     Some(_) => "read and written back to the register",
+                    None if info.via_ref => "read and written back through a volatile reference",
                     None => "read and written back through a volatile pointer",
                 };
                 self.q.diags.push(
@@ -1260,16 +1268,10 @@ impl Checker<'_, '_> {
             }
             return match ty {
                 Ty::Error => Ty::Error,
-                ty => Ty::reference(false, ty),
+                ty => Ty::reference(false, false, ty),
             };
         };
         if !self.has_address(place, &info, borrow_op(mutable)) {
-            return Ty::Error;
-        }
-        // Nor have the places reached through a volatile pointer: M5.4c's
-        // (ADR 0105, 0110).
-        if let Some(diag) = self.not_borrowed_yet(place, &info) {
-            self.q.diags.push(diag);
             return Ty::Error;
         }
         if mutable && let Some(immutable) = info.immutable {
@@ -1277,29 +1279,13 @@ impl Checker<'_, '_> {
             return Ty::Error;
         }
         self.check_aligned_address(&info, place);
+        // Volatile exactly when the place is (ADR 0110): nothing converts a
+        // raw pointer to a reference, so the borrow keeps what a use would
+        // need to show.
         match info.ty {
             Ty::Error => Ty::Error,
-            ty => Ty::reference(mutable, ty),
+            ty => Ty::reference(mutable, info.volatile, ty),
         }
-    }
-
-    /// `ty::reference-to-volatile` for a place reached through a `volatile`
-    /// pointer: what a reference to it would let the program assume, which
-    /// the rest of M5.4c settles (ADR 0105, 0110).
-    fn not_borrowed_yet(&self, place: &Expr, info: &PlaceInfo) -> Option<Diagnostic> {
-        if let Some(ptr) = info.via
-            && ptr.volatile
-        {
-            return Some(
-                Diagnostic::error(
-                    "ty::reference-to-volatile",
-                    "cannot borrow a place reached through a `volatile` pointer",
-                )
-                .label(place.span, format!("reached through a `{}`", Ty::Ptr(ptr)))
-                .help("a reference lets the compiler assume the memory behind it only changes when the program changes it, which a volatile access does not (ADR 0023); read and write through the pointer, as `*p`, or take its address with `&raw` (ADR 0105)"),
-            );
-        }
-        None
     }
 
     /// `ty::mut-borrow-of-immutable` for `&mut` of a value that is not a
