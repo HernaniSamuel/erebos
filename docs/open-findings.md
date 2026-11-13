@@ -193,10 +193,6 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   loop" whether or not the body has a loop, so
   `(*r).buf[{ let q: &mut Ring = r; (*q).head }]` says so. The rule is
   textual and dates from the analysis of moves (ADR 0097, 0099). (M5.4a)
-- `src/analysis/borrows.rs`: a static has no path, since its place is a
-  `Deref` of the pointer from a `Const::Static` temporary. That is sound only
-  while a `static mut` cannot be borrowed; M5.4c, which allows it, must give
-  statics a path. (M5.4a)
 - References have no debug type (`&T` named in the pointer type): there is no
   debug-info emission in `src/codegen/` to attach it to. The `comptime`
   parameter and `comptime T: type` positions of ADR 0105 have no check or test,
@@ -233,6 +229,21 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   index before reading `len(s)`, where ADR 0109 writes `len(s)` first
   (ranges do it as the ADR says); observable only through a raw-slice
   variable reassigned inside the index. (M5.4b)
+- `src/ty/reference.rs`: ADR 0110 asks for a label "the value of a `break`
+  out of a `critical` block"; the code puts that wording in the message, as
+  the other `ty::reference-position` cases do, and keeps the tail case's
+  label. (M5.4c, step 1)
+- `src/analysis/borrows.rs`: `Flow::name` indexes `registers[*index]`
+  directly where the neighbouring `Struct` arm uses `.get()`, so a hand-built
+  test with a wrong index would panic; the doc comment of `later_use` does not
+  mention `Point::whole_call`. `src/mir/validate.rs`, `address_temporaries`:
+  `addressed.contains` and the filter over `written` are quadratic in a
+  body's static references times its writes, harmless at current sizes. The
+  `bytes` of a peripheral saturates on overflow, and a `sym` access carries
+  `reads: None`; step 2's Decisions do not list these two. (M5.4c, steps 2 and 3)
+- `src/analysis/call_graph.rs`: `Reach::search` and `path` take `C:
+  AsRef<[Call]>` so that `Scan` and a plain `Vec<Vec<Call>>` both serve;
+  CONTRIBUTING prefers plain data before generics. (M5.4c, step 3)
 
 ## Tests
 
@@ -371,6 +382,12 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   The comment in `tests/e2e/slice_driver.ers` says the checksum wraps in 32
   bits, but no payload wraps; drop the word or add a payload that does.
   (M5.4b)
+- `tests/e2e/static_buffer_riscv32.ers` and `static_buffer_armv7m.ers` exit
+  with 4 when `clear` did not zero the buffer, a code no header comment
+  names; the programs declare their own 16550 and CMSDK peripheral types
+  where ADR 0110 says the board's. The 10 new snapshots of step 4 carry an
+  `assertion_line` header, which 23 of the tracked snapshots now have; strip it with the next snapshot update. (M5.4c,
+  steps 4 and 7)
 
 ## Docs
 
