@@ -1052,8 +1052,9 @@ Documentation owed:
   is borrowed `&` from a local of its own, `&mut` of one is
   `ty::mut-borrow-of-immutable`; a `static mut`, a volatile place, a peripheral
   and a cluster were errors until M5.4c (`ty::reference-to-static-mut`,
-  `ty::reference-to-volatile`, both removed there). A reference crosses the C ABI as a pointer, in
-  `extern fn`, `#[export]` and `#[naked]` signatures. The borrow check is an
+  `ty::reference-to-volatile`, both removed there). A reference crosses the C
+  ABI as a pointer, in `extern fn`, `#[export]` and `#[naked]` signatures. The
+  borrow check is an
   analysis of each body in `src/analysis/borrows.rs`, run by `check_body` after
   the analysis of moves and with the analysis of linearity: a borrow lasts until
   the last use of what holds it, two fields of one struct do not overlap and two

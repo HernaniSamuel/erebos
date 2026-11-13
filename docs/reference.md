@@ -192,12 +192,13 @@ fine.
 **A peripheral type is no type of a value** (ADR 0058). Like `[T]`, it
 exists only behind a pointer (`*mut Uart`, a thin pointer) or a reference
 (`&mut Uart`, ADR 0110), and as the type of a peripheral. As the type of a
-variable, parameter, return value, field, array or slice element, payload value or type argument of `Option`
-or `Result`, the type of a `static`, `extern static` or `const`, an
-operand of `size_of`, `align_of` or `offset_of`, or the target of a cast
-(`0 as Uart`), it is `ty::peripheral-by-value`, reported once, and the
-type containing it causes no further error. `Option(*mut Uart)` and a
-field of type `*mut Uart` are fine. As a register's type it is
+variable, parameter, return value, field, array or slice element, payload
+value or type argument of `Option` or `Result`, the type of a `static`,
+`extern static` or `const`, an operand of `size_of`, `align_of` or
+`offset_of`, or the target of a cast (`0 as Uart`), it is
+`ty::peripheral-by-value`, reported once, and the type containing it causes
+no further error. `Option(*mut Uart)` and a field of type `*mut Uart` are
+fine. As a register's type it is
 `ty::register-type` (see "Peripherals"). The one place a peripheral type
 is a type besides these is a cluster's type in another peripheral type,
 alone or as the element of one array, `[Context; 2]` (ADR 0064): an array
@@ -2491,9 +2492,10 @@ through it a program reaches registers as through a pointer to `T`.
   through a pointer. Writing one through a `&T` is `ty::write-through-const`,
   and writing a `read` register through a `&mut T` is the error it is through a
   `*mut T`.
-- `*u` read or written whole, a peripheral type as the type of a value, and
-  `(*u)[i]` are the errors they are through a pointer
-  (`ty::peripheral-by-value`, `ty::peripheral-index`).
+- `*u` read or written whole and a peripheral type as the type of a value are
+  `ty::peripheral-by-value`, as through a pointer; `(*u)[i]` is
+  `ty::cannot-index`, since `*u` is no array (`ty::peripheral-index` is for
+  indexing the pointer itself, `p[i]`).
 - A register, a register array, a cluster array taken whole and a bit field
   have no address: `&mut UART0.thr` and `&UART0.cs` are `ty::register-address`
   (`ty::bit-field-address`), because a reference to one would reach it without
@@ -2733,9 +2735,9 @@ debug type is not emitted.
   points to or refers to, whole. Through a raw slice the reference is the
   program's word, as `&*p` is for a thin pointer, and the borrow check follows
   nothing; through a volatile one it is a volatile reference to a slice
-  (ADR 0110). Through a reference it is a reborrow. `&mut *s` needs a `*mut [T]` or
-  a `&mut [T]` (`ty::mut-borrow-of-immutable` otherwise). `&a[2..5]` and
-  `&mut a[2..5]` borrow a sub-slice (see "Sub-slices").
+  (ADR 0110). Through a reference it is a reborrow. `&mut *s` needs a
+  `*mut [T]` or a `&mut [T]` (`ty::mut-borrow-of-immutable` otherwise).
+  `&a[2..5]` and `&mut a[2..5]` borrow a sub-slice (see "Sub-slices").
 - **Conversion.** A reference to an array **converts implicitly** to a
   reference to a slice of the same elements, with length `N`: `&[T; N]` to
   `&[T]`, and `&mut [T; N]` to `&mut [T]` or `&[T]`. It applies where `&mut T`
@@ -5594,9 +5596,9 @@ through an address are not followed: raw pointers wait for the ownership of M5
 followed by this check: the borrow is the place, and what the reference is
 used for is the business of the borrow check (see "The borrow check"). The
 check does not accept an access before `enable_interrupts` or after the last
-interrupt: those need `critical` too, which costs two or three instructions at `-O`. It does not check
-priorities, nor a handler that enables interrupts, which leave the one-level model
-(ADR 0078).
+interrupt: those need `critical` too, which costs two or three instructions at
+`-O`. It does not check priorities, nor a handler that enables interrupts,
+which leave the one-level model (ADR 0078).
 
 **The way out.** What the rule cannot express is written visibly, with the pointer
 made at compile time, from a `const` and not one taken in a function:
