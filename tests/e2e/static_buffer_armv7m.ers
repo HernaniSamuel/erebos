@@ -1,0 +1,150 @@
+// A buffer in a `static mut`, filled by SysTick's handler and read by the entry
+// function through references taken in `critical` (ADR 0110, 0111, 0078,
+// 0086). The handler appends the next value of a sequence it keeps to
+// `SAMPLES` while `FILLED < 8`, lending `&mut SAMPLES` to `push` with no
+// `critical` (rule 3 of ADR 0078). The entry function waits for a full buffer
+// with the wait of ADR 0086, then in one block passes `&SAMPLES[0..FILLED]` to
+// `sum` and `&SAMPLES` to `max`, lends `&mut SAMPLES` to `clear` and sets
+// `FILLED = 0`; the handler fills it again meanwhile. The sequence advances
+// only when a value is appended, so the rounds hold 1 to 8 and 9 to 16
+// whenever the ticks land. SysTick is stopped in the last block.
+// takes-exceptions: yes
+// targets: thumbv7m-none-eabi
+// expect-output: round 1 sum 36 max 8
+// expect-output: round 2 sum 100 max 16
+// expect-exit: 0
+
+mod board;
+use board::{exit, putc};
+use core::arch::Vector;
+
+// SysTick (ARMv7-M): control and status (bit 0 enables the counter, bit 1 the
+// interrupt, bit 2 selects the processor clock), reload value and current value.
+const SYST_CSR: *mut volatile u32 = 0xE000_E010 as *mut volatile u32;
+const SYST_RVR: *mut volatile u32 = 0xE000_E014 as *mut volatile u32;
+const SYST_CVR: *mut volatile u32 = 0xE000_E018 as *mut volatile u32;
+// PENDSTCLR, bit 25 of the interrupt control and state register, clears a pending
+// SysTick.
+const ICSR: *mut volatile u32 = 0xE000_ED04 as *mut volatile u32;
+
+const CAPACITY: usize = 8;
+
+static mut SAMPLES: [u32; 8] = [0; 8];
+static mut FILLED: usize = 0;
+static mut SEQ: u32 = 0;
+
+fn push(s: &mut [u32; 8], at: usize, v: u32) {
+    (*s)[at] = v;
+}
+
+fn sum(s: &[u32]) -> u32 {
+    let mut total: u32 = 0;
+    let mut i: usize = 0;
+    while i < len(s) {
+        total += (*s)[i];
+        i += 1;
+    }
+    total
+}
+
+fn max(s: &[u32; 8]) -> u32 {
+    let mut top: u32 = 0;
+    let mut i: usize = 0;
+    while i < 8 {
+        if (*s)[i] > top {
+            top = (*s)[i];
+        }
+        i += 1;
+    }
+    top
+}
+
+fn clear(s: &mut [u32]) {
+    let mut i: usize = 0;
+    while i < len(s) {
+        (*s)[i] = 0;
+        i += 1;
+    }
+}
+
+interrupt fn tick() at Vector::SysTick {
+    if FILLED < CAPACITY {
+        SEQ += 1;
+        push(&mut SAMPLES, FILLED, SEQ);
+        FILLED += 1;
+    }
+}
+
+fn print(s: &[u8]) {
+    let mut i: usize = 0;
+    while i < len(s) {
+        putc((*s)[i]);
+        i += 1;
+    }
+}
+
+fn print_u32(value: u32) {
+    let mut digits: [u8; 10] = [0; 10];
+    let mut n: usize = 0;
+    let mut rest: u32 = value;
+    loop {
+        digits[9 - n] = b'0' + (rest % 10) as u8;
+        n += 1;
+        rest /= 10;
+        if rest == 0 {
+            break;
+        }
+    }
+    let from: usize = 10 - n;
+    print(&digits[from..10]);
+}
+
+// Waits for a full buffer, reads it and empties it, then prints the sum and the
+// maximum of what it held.
+fn round(number: u32, last: bool) {
+    loop {
+        critical {
+            if FILLED == CAPACITY {
+                break;
+            }
+            core::arch::wait_for_interrupt();
+        }
+    }
+    let mut total: u32 = 0;
+    let mut top: u32 = 0;
+    critical {
+        total = sum(&SAMPLES[0..FILLED]);
+        top = max(&SAMPLES);
+        clear(&mut SAMPLES);
+        if sum(&SAMPLES[0..CAPACITY]) != 0 {
+            exit(4)
+        }
+        FILLED = 0;
+        if last {
+            // No tick is left to run when the block ends.
+            *SYST_CSR = 0;
+            *ICSR = 1 << 25;
+        }
+    }
+    print(&b"round ");
+    print_u32(number);
+    print(&b" sum ");
+    print_u32(total);
+    print(&b" max ");
+    print_u32(top);
+    print(&b"\n");
+}
+
+entry fn main() -> ! {
+    *SYST_RVR = 2_000;
+    *SYST_CVR = 0;
+    *SYST_CSR = 7;
+    core::arch::enable_interrupts();
+    round(1, false);
+    round(2, true);
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(99)
+}
