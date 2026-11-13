@@ -87,12 +87,12 @@ Decisions already agreed for the later steps:
 - **M4.5:** only `static mut` and `extern static mut` named in the
   program are checked; peripherals and raw pointers wait for M5.
 
-Until M5, there are no methods: functions are free and take their receiver
+Until M5.5, there were no methods: functions were free and took their receiver
 explicitly (`fn rect_area(r: *const Rect) -> u32`), and modules (M2.6)
-provide namespacing. Method receivers are references (`&self`,
-`&mut self`), and taking an address implicitly at `x.f()` would be an
-implicit conversion (ADR 0008), so methods wait for references instead of
-being designed twice.
+provided namespacing. Method receivers are references (`&self`,
+`&mut self`), and taking an address implicitly at `x.f()` would have been an
+implicit conversion (ADR 0008), so methods waited for references instead of
+being designed twice (ADR 0113, 0114).
 
 ## M5 steps
 
@@ -108,7 +108,7 @@ QEMU. The ownership model they share is ADR 0094.
 | **M5.4a** ✅ References | `&T`, `&mut T`, `&place`, `*r`; second-class references; the borrow check; references to places that are not volatile and not `static mut`, `&*p`; references across the C ABI | a ring buffer with free functions over `&mut Ring` and `&Ring` |
 | **M5.4b** ✅ Slices behind references | `&[T]`, `&mut [T]`, `len`, `(*s)[i]`, arrays to slices, sub-slices | a driver writing and filling buffers passed as `&[u8]` and `&mut [u8]` |
 | **M5.4c** ✅ References, statics and handlers | references to `static mut` inside `critical`; a `&mut` passed for a static its callee also names; references to volatile places, peripherals and clusters (a register keeps no address) | a buffer in a `static mut` filled by a handler and read by the thread through a reference taken in `critical` |
-| **M5.5** Methods | `impl`, `self`, `&self`, `&mut self`, `x.f()`, functions of a type | the ring buffer and the UART driver written as methods |
+| **M5.5** ✅ Methods | `impl`, `self`, `&self`, `&mut self`, `x.f()`, functions of a type | the ring buffer and the UART driver written as methods |
 | **M5.6** Ownership of peripherals | handles to peripherals that one context owns; races on registers between contexts (ADR 0078) | a UART owned by its handler, with the thread context sending through it |
 | **M5.7** Fewer raw pointers | `core` and the tests moved to references where they can; what stays raw, measured | the e2e programs with references, the same output |
 
@@ -288,8 +288,8 @@ Agreed as useful, not yet scheduled:
   added; the borrow analysis of ADR 0107 already tracks which borrows a
   local may hold, so a call's result would take the set of its argument.
   Not scheduled, but not to be forgotten: the evidence for it is
-  - M5.5, where a method `&self -> &T` is the same shape and the ADR of
-    methods must say what a getter is until this exists;
+  - M5.5, where a method `&self -> &T` is the same shape; ADR 0113 says a
+    getter returns a copy until this exists;
   - M5.7, where the references that stay raw pointers are counted. If most
     of them stay raw because the safe form returns or stores a reference,
     open an ADR for this (a `Proposed` one, reviewed first). Storing a
@@ -1190,5 +1190,42 @@ Documentation owed:
   (ADR 0094); and the generated programs of ADR 0068 have only scalar types, so
   references to statics, peripherals and volatile places are tested by
   hand-written ui and e2e programs only.
-- **Next: M5.5** (methods), the fifth step of M5 (moves, ownership, references
-  and methods), whose steps and model are above (ADR 0094).
+- **M5.5 done.** A struct, a bit-field struct, an enum or a peripheral type has
+  functions, written in `impl Name { ... }` blocks in the module that declares
+  it, several per type (ADR 0113). `Self` names the type inside; a function whose
+  first parameter is `self`, `mut self`, `&self` or `&mut self` is a method. Every
+  function of a type is called `T::f(...)`, methods too, with the receiver as the
+  first argument; none is named by `use`; their names may be those of the
+  built-ins (`end`, `len`); their visibility is that of items; their symbols are
+  `ring.Ring.push` (`Ring.push` in the root module), and `llvm` is reserved for a
+  type of the root module as for a module. `x.f(args)` makes its receiver from
+  `x`, or from `*x` through a reference, as `P`, `&P` or `&mut P`, with the rules
+  and codes of those expressions (ADR 0114, amending ADR 0008); the receiver runs
+  first and its borrow is taken there, with no two-phase borrow, so `v.push(v.len())`
+  is `analysis::borrow-conflict` and is written with a `let`; a bit-field struct's
+  method called on a register works by value (one volatile read) and is
+  `ty::register-address` by reference. `r.f`, `r[i]` and `r[a..b]` through a
+  reference are those of `(*r)` (ADR 0114, amending ADR 0105), so `ty::no-fields`
+  and `ty::cannot-index` arise for the referent and lose their `(*r)` helps; raw
+  pointers are unchanged. Nothing is new in MIR beyond the `Deref` a base gets and
+  the call with its receiver first. New diagnostic codes: `parser::local-impl`,
+  `parser::impl-item`, `parser::misplaced-self`, `resolve::impl-type`,
+  `resolve::unknown-self`, `resolve::use-type-function`, `ty::unknown-method`,
+  `ty::not-a-method` and `ty::private-method`. `tests/e2e/ring_methods.ers`
+  (both targets), `uart_methods_riscv32.ers` and `uart_methods_armv7m.ers` write
+  the ring buffer and the UART drivers as methods, at both levels; the wrong uses
+  are ui tests and snippets of `tests/rejected.rs`. `PANICS` grew by one in
+  `src/hir/lower.rs` and in `src/hir/lower/resolve.rs` (no user input reaches
+  either). Left open, for the planner: an `impl` outside the module of its type
+  (a peripheral type generated by `erebos svd` takes wrapper functions until
+  then), two-phase borrows of the receiver, volatile receivers and associated
+  constants and types are not scheduled, as above (ADR 0113, 0114); a getter
+  returns a copy until references can be returned (ADR 0094); `core` and the
+  existing tests keep their free functions, which M5.7 measures; the generated
+  programs of ADR 0068 have only scalar types, so methods are tested by
+  hand-written ui and e2e programs only; the harness of ADR 0069 now counts
+  `exit` among the functions that do not finish, since the seeded places moved
+  when the programs were added.
+- **Next: M5.6** (ownership of peripherals), the sixth step of M5 (moves,
+  ownership, references and methods), whose steps and model are above (ADR
+  0094).

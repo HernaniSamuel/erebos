@@ -80,13 +80,17 @@ block.
 - **Identifiers:** `[A-Za-z_][A-Za-z0-9_]*`, except `_` alone. No item,
   module or `use` of the program may take a name starting with `__`, which
   the runtime support functions of `core` use, nor `_start`, nor `core`, in
-  any module (`resolve::reserved-name`, ADR 0020, 0052); a module of the
-  root module may not be named `llvm` (see "Symbols") or `rt` (see
-  "Modules and paths").
+  any module (`resolve::reserved-name`, ADR 0020, 0052); a function of a type
+  may not take a name starting with `__` or `_start` either, but may be named
+  `core` (ADR 0113); a module of the root module may not be named `llvm` (see "Symbols")
+  or `rt` (see "Modules and paths"), nor may a struct, enum or peripheral type
+  of it be named `llvm`.
 - **Keywords:** `align_of as asm break comptime const continue crate critical
-  else entry enum extern false fn if interrupt let loop match mod mut
-  offset_of panic pub return size_of static struct super true use volatile
-  while`. `raw` is a keyword only right after `&`. `memory`, and the words inside a `memory`
+  else entry enum extern false fn if impl interrupt let loop match mod mut
+  offset_of panic pub return self Self size_of static struct super true use
+  volatile while`. `self` and `Self` name the receiver and the type of an
+  `impl` (see "Functions of a type and methods"); `impl` starts an item.
+  `raw` is a keyword only right after `&`. `memory`, and the words inside a `memory`
   block (`region`, `origin`, `size`, `code`, `data`, `stack`, `in`), are no
   keywords: they are recognized only in their place (see "Memory maps"),
   and are ordinary names elsewhere. Nor are `peripheral`, which starts an
@@ -233,13 +237,18 @@ fn add(a: u32, mut b: u32) -> u32 {
 - Arguments are checked against parameter types with no conversion other
   than the pointer conversions of "Typing".
 - Parameters cannot have type `()` or `!`.
-- There are no methods: functions take their receiver explicitly, such as
-  `fn area(r: &Rect) -> u32` (methods come in M5.5).
+- A function may belong to a struct, an enum or a peripheral type, written in
+  an `impl` block and called `Rect::new(...)`; one whose first parameter is
+  `self`, `&self` or `&mut self` is a method, called `r.area()` (see
+  "Functions of a type and methods"). A function outside an `impl` is
+  an item of its module, and takes its parameters explicitly, such as
+  `fn area(r: &Rect) -> u32`.
 - All functions use the C ABI of the target (ADR 0006): the riscv32 one or
   the AAPCS (see "Targets"). A function of the root module has its own
   name as its symbol, and so has one marked `#[export]`, so C code can call
   it by that name; a function of another module is named by its path,
-  `uart.init` (ADR 0051, see "Symbols").
+  `uart.init`, and a function of a type by the path of its type and its
+  name, `uart.Uart16550.putc` (ADR 0051, 0113, see "Symbols").
 - `#[naked]` makes a function whose body is one `asm` expression and has no
   code of the compiler's around it (ADR 0079, see "Inline assembly").
 - `#[align(N)]` before a function with a body, `N` a power of two, says that
@@ -352,8 +361,10 @@ buf[i] = buf[0];
   copy type (`ty::non-copy-repeat`, see "Copies and moves").
 - `s.field` and `a[i]` are places when `s` and `a` are: reading or writing
   one reaches only that field or element. `(*p).field` and `(*p)[i]` reach
-  one part through a pointer, or a reference, without copying the whole;
-  there is no automatic dereference (`p.field` and `r.field` are errors).
+  one part through a pointer, or a reference, without copying the whole. A
+  reference is dereferenced by the field and the index themselves, `r.field`
+  and `r[i]` (ADR 0114, see "References"); a raw pointer is not, and `p.field`
+  is `ty::no-fields`.
 - **Array indexing is checked.** The index has type `usize`; if it is not
   below the length, the program calls the panic function. An index known
   at compile time that is out of bounds is a compile-time error (see
@@ -775,9 +786,12 @@ print(&raw const b"hello\n");
   written through a `*mut [T]` (`ty::write-through-const` through a
   `*const [T]`), borrowed (see "References") and passed to `&raw`. `s` may
   be a reference to a slice as well as a raw one.
-- `s[i]` on a slice is an error (`ty::slice-pointer-index`): indexing a
-  pointer steps over whole pointees, and `[T]` has no size. Write
-  `(*s)[i]`, or `(s as *const T)[i]` for an unchecked access.
+- `s[i]` on a raw slice (`*const [T]`, `*mut [T]`) is an error
+  (`ty::slice-pointer-index`): indexing a pointer steps over whole pointees,
+  and `[T]` has no size. Write `(*s)[i]`, or `(s as *const T)[i]` for an
+  unchecked access. A reference to a slice is not a raw slice: with `s` of type
+  `&[T]` or `&mut [T]`, `s[i]` is accepted and is `(*s)[i]` (see "Slices behind
+  references").
 - `*s` is a place of type `[T]`. It can be indexed, sub-sliced, borrowed
   (`&*s` and `&mut *s` are references to a slice, see "Slices behind
   references") and passed to `&raw` (`&raw const *s` is the slice again);
@@ -853,13 +867,14 @@ of a slice. It has no value, no type of its own and no meaning outside `[ ]`:
   `ty::mut-borrow-of-immutable`; `&raw const` of a part of a `const` is
   `ty::not-a-place`, and of a part of a call's result or an array literal it
   points into a temporary, where `&raw mut` is `ty::address-of-immutable`.
-  A range on a slice that is not dereferenced is the error an index there is:
-  `ty::slice-pointer-index` on a raw slice, `ty::cannot-index` on a reference,
-  each with the help `(*s)[a..b]`. A range on anything else (a thin pointer, a
-  reference or a pointer to an array, an integer) is `ty::cannot-index`, with a
-  label saying a range needs the length of an array or a slice, and the help
-  `(*p)[a..b]` for a pointer or reference to an array or `slice(p, n)` for a
-  thin pointer to another type.
+  A range on a reference is the range of what it refers to (`s[a..b]` is
+  `(*s)[a..b]`, for a reference to an array or to a slice; ADR 0114). A range
+  on a raw slice that is not dereferenced is the error an index there is,
+  `ty::slice-pointer-index`, with the help `(*s)[a..b]`. A range on anything
+  else (a thin pointer, a pointer to an array, an integer, a reference whose
+  referent is none of these) is `ty::cannot-index`, with a label saying a
+  range needs the length of an array or a slice, and the help `(*p)[a..b]` for
+  a pointer to an array or `slice(p, n)` for a thin pointer to another type.
 - **What a sub-slice is.** A place of type `[T]`, like `*s`: it is indexed,
   sub-sliced again, borrowed with `&` or `&mut` (giving `&[T]` or `&mut [T]`)
   and given to `&raw` (giving `*const [T]` or `*mut [T]`, not volatile, as
@@ -1011,10 +1026,13 @@ let w: Msg = Msg::Write(3, 0x1234);
   `uart::Mode::Run`: the name before `::` is looked up among items only,
   as the name of a struct literal is, so a local variable named `Mode`
   does not hide the enum. A name that is nothing there is
-  `resolve::unknown-path`, an item that is neither a module nor an enum is
-  `resolve::not-an-enum`, and `Mode::Walk`, with no such variant, is
-  `resolve::unknown-variant`. A variant ends the path: `Mode::Run::x` is
-  `resolve::not-an-enum`. `Option` and `Result` are no items, and their
+  `resolve::unknown-path`, an item that is none of a module, an enum and a
+  type with functions (a constant, a static) is `resolve::not-an-enum`, and
+  `Mode::Walk`, with no such variant and no function of the enum (see
+  "Functions of a type and methods"), is `resolve::unknown-function` in a
+  call and `resolve::unknown-variant` elsewhere. A variant or a function ends
+  the path: `Mode::Run::x` is `resolve::not-an-enum`. `Option` and `Result`
+  are no items, and their
   variants have no path: `Option::None` is `resolve::not-an-enum` (see
   "`Option` and `Result`").
 - Variants are visible wherever their enum is reachable, and only there;
@@ -1902,7 +1920,7 @@ It may not be moved out of:
 - an element of an array, by `a[i]` whatever `i` is, also when the array is a
   temporary's (`make().items[i]`);
 - a place through a pointer or a reference: `*p`, `p[i]`, `(*p).f`, `(*s)[i]`,
-  `*r`, `(*r).f`;
+  `*r`, `(*r).f`, and so `r.f` and `r[i]`;
 - a static, or a part of one.
 
 Reading such a place whole when its type is non-copy is
@@ -2202,8 +2220,10 @@ value reports `analysis::linear-not-consumed` and nothing from the evaluation.
 `end(e)` ends the value of a `#[linear]` struct: it is the way a module that
 may build one takes it out of the program. It is a built-in like `len`: a call
 by that name is always it, no item (a function, a static, a module, a `use`)
-may be named `end` (`resolve::reserved-name`), while locals, parameters and
-fields may. It is an expression of type `()` and does nothing at run time.
+may be named `end` (`resolve::reserved-name`), while locals, parameters,
+fields and functions of a type may: `end(x)` is the built-in and `t.end()` or
+`Transfer::end(t)` the function of the type. A method taking `self` is how a
+module consumes a linear value it was handed: `fn wait(self) { ...; end(self); }`. It is an expression of type `()` and does nothing at run time.
 
 - `e` must be of a `#[linear]` struct, else `ty::end-type`: not an integer, a
   pointer, a struct that is not marked, nor an `Option`, a `Result`, an enum
@@ -2252,21 +2272,21 @@ struct Ring {
 }
 
 fn push(r: &mut Ring, b: u8) -> bool {
-    if (*r).count == 8 {
+    if r.count == 8 {
         return false;
     }
-    let at: usize = ((*r).head + (*r).count) % 8;
-    (*r).buf[at] = b;
-    (*r).count += 1;
+    let at: usize = (r.head + r.count) % 8;
+    r.buf[at] = b;
+    r.count += 1;
     true
 }
 
 fn peek(r: &Ring) -> u8 {
-    (*r).buf[(*r).head]
+    r.buf[r.head]
 }
 
 fn count(r: &Ring) -> usize {
-    (*r).count
+    (*r).count                              // the same as `r.count`
 }
 
 fn demo() -> usize {
@@ -2306,12 +2326,26 @@ peripherals and clusters" and "Volatile references").
 - `*r` is the place `r` refers to, as `*p` is for a pointer: it is read, it is
   written when `r` is a `&mut`, it is borrowed again, and it is given to
   `&raw`. Writing through a `&` is `ty::write-through-const`.
-- Fields and elements through a reference are written as through a pointer,
-  `(*r).f` and `(*r)[i]`; there is no automatic dereference. `r.f` is
-  `ty::no-fields` and `r[i]` is `ty::cannot-index`, each with a help that
-  writes `(*r)`; `*e` on a value that is neither a pointer nor a reference is
-  `ty::deref-non-pointer`. `(*r)[i]` with `r: &[T; N]` is checked as an array
-  index is (see "Structs and arrays").
+- **Fields and elements through a reference** (ADR 0114). A field `r.f`, an
+  index `r[i]` and a range `r[a..b]` with `r` of a reference type, `&T`, `&mut
+  T` or a volatile one, are those of what it refers to, `(*r).f`, `(*r)[i]`
+  and `(*r)[a..b]`: the place is the one `(*r)` gives, with its mutability
+  (`r.f = 1` needs a `&mut`; through a `&` it is `ty::write-through-const`),
+  its volatility, its checks and its borrows (`&mut r.buf[0..4]` borrows
+  `(*r).buf`). One level only, since a reference never refers to a reference.
+  `(*r).f` and `(*r)[i]` stay valid and mean the same, and a program may mix
+  both. The base may be any expression of a reference type, `(if c { &a } else
+  { &b }).count`. What is reached must have the field or admit the index: `r.f`
+  with `r: &u32` is `ty::no-fields` and `r[i]` is `ty::cannot-index`, naming
+  `u32` and saying it is reached through the reference. A **raw pointer** is
+  not followed: `p.f` is `ty::no-fields`, with the help `(*p).f`, `p[i]` steps
+  over whole pointees (see "Pointers"), and `s[i]` on a raw slice is
+  `ty::slice-pointer-index`; the dereference of a pointer stays written, as it
+  is the one access the compiler does not check. With `p: *const [u8; 4]` the
+  place `p[1]` is the next array after `*p`, while with `r: &[u8; 4]`, `r[1]`
+  is an element of `*r`. `*e` on a value that is neither a pointer nor a
+  reference is `ty::deref-non-pointer`. `(*r)[i]` with `r: &[T; N]` is
+  checked as an array index is (see "Structs and arrays").
 - The referent is a sized type with values, or `[T]`, a slice (see "Slices
   behind references"). `&!` is `ty::never-in-memory`, labeled "as the referent
   of a reference"; `&Timer`, with `Timer` a peripheral type, is allowed (ADR
@@ -2466,12 +2500,12 @@ peripheral Uart16550 {
 peripheral UART0: Uart16550 at 0x1000_0000;
 
 fn putc(u: &mut Uart16550, byte: u8) {
-    while (*u).lsr & 0x20 == 0 {}
-    (*u).thr = byte;
+    while u.lsr & 0x20 == 0 {}
+    u.thr = byte;                           // the same as `(*u).thr = byte`
 }
 
 fn ready(u: &Uart16550) -> bool {
-    (*u).lsr & 0x20 != 0
+    u.lsr & 0x20 != 0
 }
 
 fn demo() {
@@ -2607,9 +2641,10 @@ forbidden position (`&&u32` as a field is one error, at the whole), and a type
 that failed already, as `&!`, is not reported again.
 
 The expressions of a reference type are an argument of a call, the initializer
-of a `let`, the operand of `*`, `as` or an expression statement, and the value
-of an `if`, a `match`, a block or a `loop` through its `break` values, itself
-in one of these positions:
+of a `let`, the operand of `*`, `as` or an expression statement, the base of a
+field, an index, a range in an index or a method call (ADR 0114), and the
+value of an `if`, a `match`, a block or a `loop` through its `break` values,
+itself in one of these positions:
 
 ```
 fn positions(a: u32, b: u32, c: bool) -> u32 {
@@ -2694,7 +2729,7 @@ fn sum(bytes: &[u8]) -> u32 {
     let mut total: u32 = 0;
     let mut i: usize = 0;
     while i < len(bytes) {
-        total += (*bytes)[i] as u32;
+        total += bytes[i] as u32;           // the same as `(*bytes)[i]`
         i += 1;
     }
     total
@@ -2703,7 +2738,7 @@ fn sum(bytes: &[u8]) -> u32 {
 fn fill(out: &mut [u8], b: u8) {
     let mut i: usize = 0;
     while i < len(out) {
-        (*out)[i] = b;
+        out[i] = b;
         i += 1;
     }
 }
@@ -2764,8 +2799,10 @@ debug type is not emitted.
   through a raw slice: an index not below `len(s)` calls the panic function,
   with the cause `IndexOutOfBounds`. It can be read, written through a `&mut
   [T]` (`ty::write-through-const` through a `&[T]`), borrowed and given to
-  `&raw`. `s[i]` is `ty::cannot-index`, with the help `(*s)[i]`: there is no
-  automatic dereference.
+  `&raw`. `s[i]` is `(*s)[i]`: an index, like a field, dereferences the
+  reference (ADR 0114, see "Types and expressions"), and `s[a..b]` is
+  `(*s)[a..b]`. Through a raw slice the dereference stays written
+  (`ty::slice-pointer-index`).
 - `*s` can be indexed, sub-sliced, borrowed (`&*s`, `&mut *s`) and given to
   `&raw`; reading or copying all of it is `ty::unsized`.
 - `len(s)` takes a reference to a slice, as it takes a raw slice, and a
@@ -2789,7 +2826,7 @@ fn lengths(buf: [u8; 4], r: &[u8; 4], s: &mut [u8]) -> usize {
 }
 
 fn errors(s: &[u8], raw: *const [u8]) {
-    let a: u8 = s[0];                       // error: ty::cannot-index
+    let a: u8 = raw[0];                     // error: ty::slice-pointer-index
     let b: [u8; 4] = *s;                    // error: ty::unsized
     let c: &mut [u8] = &mut *s;             // error: ty::mut-borrow-of-immutable
     (*s)[0] = 1;                            // error: ty::write-through-const
@@ -2835,7 +2872,8 @@ const MIDDLE: u32 = first_and_last(&TABLE[1..3]);       // 5
 - A value of a non-copy type is not moved out of `*r` or a place through it,
   as it is not out of a place through a pointer: the owner would hold a value
   that is gone. It is `ty::move-out-of-place`, whose label names the
-  reference. A copy value is read as from any place, and a non-copy value is
+  reference; so is `r.f`, and a method taking `self` called on `r` (see
+  "Functions of a type and methods"). A copy value is read as from any place, and a non-copy value is
   written through a `&mut` (`*r = v` moves `v`).
 - A value of a linear type is not written to `*r` or a place through it: the
   value already there would be dropped without being consumed. It is
@@ -2922,8 +2960,8 @@ fn late_use() {
 - A reference copied (`let b: &u32 = a;`) or moved keeps the borrows it may hold
   in use while either copy is used. One that may hold one of several, such as
   `if c { &a } else { &b }`, keeps all of them in use.
-- A borrow through a reference, `&mut *r` or `&(*r).f`, keeps in use the borrows
-  `r` may hold for as long as it is itself in use.
+- A borrow through a reference, `&mut *r` or `&(*r).f` (`&r.f`), keeps in use
+  the borrows `r` may hold for as long as it is itself in use.
 - Uses follow control flow: a use in a later iteration of a loop keeps a borrow
   in use across the back edge.
 
@@ -3216,6 +3254,14 @@ fn lend(r: &mut u32, mut x: Pair) -> u32 {
   conversion of a `&mut` is `_t = &*q`. A borrow is never a simple operand: a
   place argument before it is read into a temporary first, so `first(p.a, &mut
   p)` reads `p.a`, then borrows `p`.
+- **Through a reference, and method calls** (ADR 0114). `r.f` and `r[i]` build
+  what `(*r).f` and `(*r)[i]` build: one `Deref` projection of the reference.
+  A method call builds the call of its explicit form, `Ring::push(&mut r, 7)`:
+  the receiver first, a borrow of its place made at the receiver (`_6 = &mut
+  _1`, and for a reference `r`, `_3 = &mut (*_1)`, a reborrow), or its value for
+  `self`, then the other arguments left to right
+  (`_7 = call ring.Ring.push(move _6, const 7_u8)`). Nothing in MIR tells the
+  two forms apart.
 - **Slices.** A place of type `[T]` is reached by the `Deref` of a slice, raw or
   a reference, or by a sub-slice, and is followed by `Index` or a sub-slice, or
   is the whole place of a `Ref` or an `AddressOf`, which then gives a reference
@@ -3321,6 +3367,404 @@ fn lend(r: &mut u32, mut x: Pair) -> u32 {
   length (the slice's for a `Deref`, `to - from` for a sub-slice), and a `Ref`
   or an `AddressOf` of one stores both. The length is loaded only where it is
   stored, so `(*s)[i]` loads none.
+
+## Functions of a type and methods (ADR 0113, 0114)
+
+```
+mod ring {
+    pub struct Ring {
+        buf: [u8; 8],
+        head: usize,
+        count: usize,
+    }
+
+    impl Ring {
+        pub fn new() -> Self {
+            Self { buf: [0; 8], head: 0, count: 0 }
+        }
+
+        pub fn push(&mut self, b: u8) -> bool {
+            if self.count == 8 {
+                return false;
+            }
+            let at: usize = (self.head + self.count) % 8;
+            self.buf[at] = b;
+            self.count += 1;
+            true
+        }
+
+        pub fn count(&self) -> usize {
+            self.count
+        }
+
+        pub fn into_count(self) -> usize {
+            self.count
+        }
+    }
+}
+
+use ring::Ring;
+
+fn demo() -> usize {
+    let mut r: Ring = Ring::new();
+    let ok: bool = r.push(7);               // Ring::push(&mut r, 7)
+    let n: usize = r.count();               // Ring::count(&r)
+    let same: usize = Ring::count(&r);      // the call written out
+    r.into_count()                          // Ring::into_count(r): moves r
+}
+
+fn lend(r: &mut Ring, shared: &Ring) -> usize {
+    r.push(1);                              // Ring::push(&mut *r, 1): lent for the call
+    shared.count() + r.count()
+}
+```
+
+A **function of a type** is a function written in an `impl` block and
+belonging to a struct, an enum or a peripheral type. A driver groups its
+functions with its type, and its callers write `Ring::new()` and `r.push(1)`
+instead of naming the module and the function. A function of a type is a
+function: MIR, compile-time evaluation, code generation and the C ABI see one
+whose first parameter is the receiver, as if it were written `fn push(r: &mut
+Ring, b: u8)`.
+
+**`impl` blocks.**
+
+- `impl Name { fns }` is an item. `Name` is one name, never a path, and must
+  name a **struct** (a bit-field struct too), an **enum** or a **peripheral
+  type** (a cluster's type too) **declared in the module of the `impl`**: not
+  one brought in with `use`. Anything else, a built-in type, `Option`, a type
+  of another module, a constant, a static, a peripheral such as `UART0` rather
+  than its type, a function or a module, is `resolve::impl-type`; a name that
+  names nothing is `resolve::unknown-type`. Either is reported once, at the
+  name, and the functions of the block are not lowered, so that their `Self`
+  and `self` give no further error.
+- A type may have **several** `impl` blocks, in its module, in any order, as
+  items may be in any order.
+- An `impl` takes no `pub` (`parser::misplaced-pub`) and no attribute
+  (`resolve::misplaced-attribute`), and inside a function body it is
+  `parser::local-impl`, as `mod` and `use` are. `core` may have `impl` blocks
+  for its own types, under the same rules.
+- Between its braces are **functions with a body** only: `fn` and `pub fn`,
+  with the attributes `#[align(N)]` and `#[naked]`. Any other item, an `extern
+  fn`, an `entry fn`, a `panic fn` or an `interrupt fn` is `parser::impl-item`;
+  `#[export]` on a function of a type is `resolve::misplaced-attribute` (C
+  calls a function of a type through a plain `#[export]` function that calls
+  it).
+- The functions of the type are **not items of the module**: the module's
+  namespace does not hold them, and a single name never names one. Each type
+  has a namespace of its functions, shared, for an enum, with its variants
+  (`Mode::Run` and `Mode::parse`): two functions of a type with one name, in
+  one `impl` or in two, or a function and a variant, are
+  `resolve::duplicate-item`. A function may have the name of a field: `x.count`
+  is the field and `x.count()` the function.
+- An `impl` must be in the module of its type: a driver cannot add functions to
+  a type another module declares, such as a peripheral type that `erebos svd`
+  generates; it wraps the calls in functions of its own.
+
+**Receivers.** A function of a type whose first parameter is written in one of
+these four forms has a **receiver**, and is a **method**:
+
+| Written | Parameter | Type |
+|---------|-----------|------|
+| `self` | `self` | `Self` |
+| `mut self` | `self`, assignable | `Self` |
+| `&self` | `self` | `&Self` |
+| `&mut self` | `self` | `&mut Self` |
+
+- The receiver is the **first parameter**, written without a type, which comes
+  from the `impl`; it is an ordinary parameter, a local named `self`. The rules
+  of parameters hold: a reference receiver is bound once (it is not `mut`), and
+  `self` by value of a peripheral type is `ty::peripheral-by-value`, so the
+  methods of a peripheral type take `&self` or `&mut self`.
+- `self` by value moves the value, or copies it if the type is copy. It is how
+  a method consumes a linear value: `fn wait(self) { ...; end(self); }`.
+- A receiver that is not the first parameter, or is in a function that is not
+  in an `impl`, is `parser::misplaced-self`. The other forms, `self: Ring`,
+  `&volatile self` and `&&self`, are not receivers and are
+  `parser::unexpected-token`: there is no volatile receiver.
+- A function of a type without a receiver, such as `new`, is called `T::f(...)`
+  only.
+
+**`Self`.** Inside an `impl`, `Self` is its type, wherever the type's name
+could be written: in signatures and bodies, as a type (`-> Self`, `&mut Self`,
+`*const Self`), in a struct literal (`Self { .. }`) and before `::` (`Self::new()`,
+`Self::Run` for an enum). `Self` outside an `impl`, and `self` in an
+expression of a function that has no receiver, are `resolve::unknown-self`.
+
+```
+enum Mode: u8 {
+    Idle = 0,
+    Run(u32) = 1,
+}
+
+impl Mode {
+    fn start(n: u32) -> Self {
+        Self::Run(n)
+    }
+
+    fn parse(n: u32) -> Self {
+        if n == 0 { Self::Idle } else { Mode::start(n) }
+    }
+
+    fn is_run(&self) -> bool {
+        match *self {
+            .Run(_) => true,
+            .Idle => false,
+        }
+    }
+}
+```
+
+**Naming a function: `T::f`.**
+
+- A path whose segment names a struct, a bit-field struct or a peripheral type,
+  followed by `::`, names a function of that type with its next segment, which
+  ends the path: `Ring::new()`, `ring::Ring::new()`, `Self::new()`. Before an
+  enum the next segment is a variant or a function.
+- **Every** function of a type is callable so, methods included, with the
+  receiver passed as the first argument, of exactly its parameter's type:
+  `Ring::push(&mut r, 1)`, `Ring::count(&r)`. This is an ordinary call, and
+  nothing is borrowed for it.
+- A function of a type is named in a call, and in the `sym` operand of an
+  `asm` (`sym Ring::push`, which is its symbol). It is a function like any
+  other: there are no function values, and it may run at compile time, as the
+  initializer of a `static` does: `static mut R: Ring = Ring::new();`.
+- A segment after a type that names no function (and, for an enum, no variant)
+  is `resolve::unknown-function` in a call, saying in which type it was looked
+  up, and the error of its position elsewhere. A function of a type named
+  where a type, a value or a pattern is expected (`let x: Ring::new`, `Ring::new`
+  as a value) is the error of that position, with a label calling it "a
+  function of `Ring`". A segment after a name that is neither a module, an
+  enum nor a type that may have functions is `resolve::not-an-enum`.
+- A `use` cannot name a function of a type (`resolve::use-type-function`), as
+  it cannot name a variant: the type is always written, `Ring::new()`, or
+  `use ring::Ring;` first.
+
+### The call `x.f(args)` (ADR 0114)
+
+`x.f(a, b)` calls the function `f` of the type of `x`, passing a receiver made
+from `x`, then `a` and `b`. What `f` does to `x`, whether it moves, copies or
+borrows it, and mutably or not, is in `f`'s signature and not written at the
+call.
+
+1. **The type.** If the type of `x` is a reference, `&T`, `&mut T` or a
+   volatile one, the type is its referent `T` and the **receiver place** is
+   `*x`; otherwise the type is that of `x` and the receiver place is `x`. One
+   level only, since a reference never refers to a reference. A raw pointer is
+   never followed: `p.f()` is an error whose help writes `(*p).f()`.
+2. **The function.** `f` is looked up among the functions of that type. A type
+   that has none, or none named `f`, is `ty::unknown-method`; when the type
+   has a field named `f` the help says that a field is not called, and on a
+   slice or an array `x.len()` gets the help that the length is the built-in
+   `len(x)`. A function without a receiver is `ty::not-a-method`, whose help
+   writes `T::f(...)`. A function not visible where the call is written is
+   `ty::private-method`, pointing at the call and at the function.
+3. **The receiver.** With `P` the receiver place, the first argument is:
+
+   | Receiver | First argument |
+   |----------|----------------|
+   | `self`, `mut self` | `P`, moved or copied |
+   | `&self` | `&P` |
+   | `&mut self` | `&mut P` |
+
+   exactly as if it were written there, so every rule of those expressions
+   holds, with its code. `&mut P` of a place that cannot be written (a `let`
+   without `mut`, a `static`, a place through a `&T`) or of a value that is not
+   a place is `ty::mut-borrow-of-immutable`; `&P` of a value that is not a
+   place borrows a local of its own; `P` of a non-copy type through a reference
+   is `ty::move-out-of-place`; `&mut P` of a `static mut` is a borrow of it,
+   with the rules of "References to a `static mut`"; `&mut UART0` of a
+   peripheral is a reference to its type.
+4. **The arguments** are checked against the other parameters as in any call;
+   `ty::wrong-arg-count` counts them without the receiver.
+
+So `r.push(1)` with `r: Ring` is `Ring::push(&mut r, 1)`, and with `r: &mut
+Ring` it is `Ring::push(&mut *r, 1)`, a reborrow that lends `r` for the call.
+`UART0.putc(b'x')` is `Uart16550::putc(&mut UART0, b'x')`, and inside a method
+`self.push(b)` reborrows `*self`.
+
+```
+peripheral Uart16550 {
+    write thr: u8 at 0x0,
+    read lsr: Lsr at 0x5,
+}
+
+struct Lsr: u8 {
+    pub data_ready: bool at 0,
+    pub thr_empty: bool at 5,
+}
+
+impl Lsr {
+    fn can_send(self) -> bool {
+        self.thr_empty
+    }
+}
+
+peripheral UART0: Uart16550 at 0x1000_0000;
+
+impl Uart16550 {
+    fn ready(&self) -> bool {
+        self.lsr.can_send()                 // `self` by value: one read of the register
+    }
+
+    fn putc(&mut self, byte: u8) {
+        while !self.ready() {}
+        self.thr = byte;
+    }
+}
+
+fn hello() {
+    UART0.putc(b'h');                       // Uart16550::putc(&mut UART0, b'h')
+}
+```
+
+- **Registers.** A register keeps no address (see "Peripherals"), so a method
+  of a bit-field struct called on a register, `UART0.lsr.can_send()`, works
+  with `self` by value: one volatile read of the register, then a copy. With
+  `&self` or `&mut self` it is `ty::register-address`, whose help says that a
+  method taking `self` by value reads a register, and a bit field of a register
+  is `ty::bit-field-address`, as for `&`. A register reached through a pointer
+  or a reference is still a register. Bit-field structs are copy, so `self` by
+  value is the natural receiver of their methods; on one held in a variable
+  every receiver works.
+- **Volatile places.** `&P` and `&mut P` of a volatile place are volatile
+  references, which no receiver takes: a method called through a volatile
+  reference, or on a volatile place, is `ty::mismatched-types`, with a help
+  saying that a method has no volatile receiver.
+- **Linear values.** A method taking `self` consumes a linear value, and the
+  value is moved at the call, so a use after it is `analysis::use-after-move`:
+  `t.wait()` and then `t.wait()` again.
+
+**Order, and the borrow check.** The receiver is the first argument, and the
+arguments run left to right (see "Evaluation order"): `x` runs first, and its
+borrow is taken there, before the other arguments. The borrow check sees the
+call as written with the receiver explicit: a borrow of `P`, made where `x` is
+written and lent to the call, in use until it returns. There is **no two-phase
+borrow**, so an argument that reads the receiver while a `&mut` borrow of it
+is in use is `analysis::borrow-conflict`, with the borrow labelled at the
+receiver. `v.push(v.len())` and `self.set(self.get() + 1)` are written with a
+`let` that splits them:
+
+```
+struct Counter {
+    n: u32,
+}
+
+impl Counter {
+    fn get(&self) -> u32 {
+        self.n
+    }
+
+    fn set(&mut self, v: u32) {
+        self.n = v;
+    }
+
+    fn bump(&mut self) {
+        let next: u32 = self.get() + 1;
+        self.set(next);
+    }
+
+    fn bump_wrong(&mut self) {
+        self.set(self.get() + 1);           // error: analysis::borrow-conflict
+    }
+}
+```
+
+**Names.**
+
+- A function of a type may have the name of a built-in function or type (`end`,
+  `len`, `assert`, `slice`, `u32`, `Option`): it is named only after `T::` or
+  `x.`, so `end(x)` written alone is still the built-in, and `t.end()` or
+  `Transfer::end(t)` the function of the type.
+- `_start` and the names starting with `__` stay reserved
+  (`resolve::reserved-name`). `llvm` is reserved for a struct, a bit-field
+  struct, an enum and a peripheral type of the root module, as for a module
+  there, whether or not it has functions (see "Symbols").
+- In diagnostics and in the `hir` and `typeck` dumps a function of a type is
+  shown by the path of its type and its name, `ring::Ring::push`, and
+  `Ring::push` for a type of the root module. The functions of a type come in
+  the order of their `impl` blocks, blocks ordered by file and offset, and
+  within a block as written. The `typeck` dump shows a method call as `method
+  ring::Ring::push (&mut self)`, and marks a receiver that is a reference, as
+  any base dereferenced for a field or an index, with `, dereferenced`.
+
+```
+struct Config {
+    baud: u32,
+}
+
+impl Config {
+    fn len(&self) -> u32 { self.baud }
+    fn end(self) -> u32 { self.baud }
+}
+
+fn names(c: Config) -> u32 {
+    let a: u32 = c.len();
+    let n: u32 = len(&b"abc") as u32;      // the built-in
+    a + n + c.end()
+}
+```
+
+**Visibility.** A function of a type without `pub` is visible in the module
+that declares the type and in that module's descendants, as a private item is.
+One with `pub` is visible wherever the type is reachable, and only there, so a
+module keeps the operations of its private types to itself: `m::make().f()`
+is `ty::private-method` when `m`'s type is private, whether or not `f` is
+`pub`. `T::f` is usable where each segment is visible, `f` included, else
+`resolve::private-item`, pointing at the use and at the function; `x.f()` is
+judged the same way, with `ty::private-method`. As for other items, visibility
+is checked where a name is used, never in signatures, and changes no symbol.
+
+**Symbols.** The symbol of a function of a type is the path of its type joined
+by dots, then its name: `push` of `Ring` in module `ring` is `ring.Ring.push`,
+and of a `Ring` of the root module `Ring.push` (see "Symbols"). A type and a
+module of one name cannot share a module's namespace, so such a symbol never
+equals the symbol of an item or of another function of a type.
+
+**Getters.** References are not returned (see "References"), so a getter
+returns a copy: `fn count(&self) -> usize`. A part of a non-copy type has no
+getter: the type offers methods that do the work in place through `&self` or
+`&mut self`, or makes the field `pub` so that callers borrow it (`&r.buf`).
+
+```
+#[linear]
+struct Transfer {
+    channel: u32,
+}
+
+impl Transfer {
+    fn start(channel: u32) -> Self {
+        Transfer { channel: channel }
+    }
+
+    fn wait(self) -> u32 {
+        let c: u32 = self.channel;
+        end(self);                          // the built-in; `self.end()` would be a method
+        c
+    }
+}
+
+struct Counter {
+    n: u32,
+}
+
+impl Counter {
+    fn new() -> Self {
+        Counter { n: 0 }
+    }
+}
+
+static mut TICKS: Counter = Counter::new();     // a function of a type runs at compile time
+
+fn run() -> u32 {
+    Transfer::start(1).wait()
+}
+```
+
+**What there is not.** No `impl` outside the module of its type; no two-phase
+borrow of the receiver; no volatile receiver; no associated constants or
+types; no functions of `Option`, `Result`, arrays or built-in types, and no
+generic types; no function returning a reference to its receiver.
 
 ## Layout (ADR 0022, 0039)
 
@@ -3956,7 +4400,10 @@ then the place, then the read of the whole value, then the write; in `l.f
 op= v` the check of the new field value comes after the read (ADR 0059,
 see "Bit-field structs"). In `base[index]`, the base runs before the
 index, and the bounds check before the access; so it is for the index of a
-register array or a cluster array (ADR 0064). A `match` runs its
+register array or a cluster array (ADR 0064). In a method call `x.f(a, b)`
+the receiver runs first and its borrow is taken there, then `a` and `b`, so
+the receiver is a place in use while they run (ADR 0114, see "Functions of a
+type and methods"). A `match` runs its
 scrutinee once, before any arm, and its patterns run no code (ADR 0037,
 0040). A read through a pointer, a read of a static (ADR 0030) and a read
 of a register (ADR 0058) happen exactly where they are written. A value
@@ -4266,8 +4713,8 @@ fn base() -> usize {
 - Every kind of item may appear in any module, `comptime` blocks, modules,
   `use` declarations and the `memory` block included, and the entry and
   panic functions may be in any module. A `mod` inside a function body is
-  `parser::local-mod`. No attribute applies to a module
-  (`resolve::misplaced-attribute`).
+  `parser::local-mod`, as an `impl` is `parser::local-impl`. No attribute
+  applies to a module (`resolve::misplaced-attribute`).
 - Module files are read even when a file has syntax errors, so that the
   syntax errors of every file are reported; any of them stops the
   compilation before names are resolved.
@@ -4281,11 +4728,15 @@ fn base() -> usize {
   (ADR 0058): a peripheral type named like a struct of its module, or a
   peripheral named like its own type, is `resolve::duplicate-item`.
   The names of a peripheral type's entries (registers, register arrays and
-  clusters) belong to it, as field names to their struct.
+  clusters) belong to it, as field names to their struct. So do the names of
+  the functions of a type, written in its `impl` blocks (see "Functions of a
+  type and methods"): the namespace of the module does not hold them, and a
+  type has a namespace of its own for them, shared with an enum's variants.
 - The **built-in names**, the types `bool`, the integer types, `Option`
   and `Result`, and the functions `assert`, `len`, `slice` and `end`, are seen
   from every module, as single names, and no item, module or `use` may
-  take one (`resolve::duplicate-type`, `resolve::reserved-name`). Nor may
+  take one (`resolve::duplicate-type`, `resolve::reserved-name`); a function
+  of a type may, as it is named only after `T::` or `x.`. Nor may
   any take `core`, the name by which every module names the module `core`
   (ADR 0052).
 - A **single name**, such as `x` or `Config`, is looked up among the
@@ -4309,19 +4760,24 @@ fn base() -> usize {
     as a built-in name, never among locals.
 - Each following segment is looked up in the namespace of the module
   named so far. When the path so far names an enum, the next segment is
-  one of its variants and ends the path: `uart::Mode::Run`,
-  `uart::Mode::Write(3, 4)`.
+  one of its variants, or one of its functions, and ends the path:
+  `uart::Mode::Run`, `uart::Mode::Write(3, 4)`, `uart::Mode::parse(3)`. When
+  it names a struct, a bit-field struct or a peripheral type, the next segment
+  is one of its functions and ends the path: `uart::Uart16550::new()` (see
+  "Functions of a type and methods"). `Self` is a first segment too, inside an
+  `impl`, and names its type.
 - Each segment must be visible from the module the path is written in
   (see "Visibility").
 - Paths go wherever an item is named: types (`uart::Config`,
   `Option(uart::Config)`, `*const uart::regs::Block`, `*mut
   uart::Uart16550`), constants, statics, peripherals (`uart::UART0.thr`),
-  calls, struct literals (`uart::Config { baud: 115_200 }`), variants and
-  patterns (`uart::Mode::Run`), and the type operand of `size_of`,
-  `align_of` and `offset_of`. Locals, fields and the names declarations
-  give are single names.
-- `crate`, `super`, `mod`, `use` and `pub` are keywords; `core` is a
-  reserved name.
+  calls (also of a function of a type, `uart::Config::new()`), struct literals
+  (`uart::Config { baud: 115_200 }`), variants and patterns
+  (`uart::Mode::Run`), and the type operand of `size_of`, `align_of` and
+  `offset_of`. Locals, fields and the names declarations give are single
+  names.
+- `crate`, `super`, `self`, `Self`, `impl`, `mod`, `use` and `pub` are
+  keywords; `core` is a reserved name.
 
 The errors of a path say in which module each name was looked up ("not
 found in module `uart`"):
@@ -4339,8 +4795,10 @@ found in module `uart`"):
 shown by its path from the root, `uart::init`, `uart::Config`,
 `core::PanicInfo`, in diagnostics and in the `hir` and `typeck` dumps;
 items of the root module keep their own names, so one-file programs show
-what they showed before modules. The `mir` and `llvm-ir` dumps name
-functions and statics by their symbols, `uart.init` (see "Symbols").
+what they showed before modules. A function of a type is shown by the path of
+its type and its name, `uart::Config::new`, and `Config::new` for a type of
+the root module. The `mir` and `llvm-ir` dumps name functions and statics by
+their symbols, `uart.init`, `uart.Config.new` (see "Symbols").
 
 ## `use` (ADR 0049, 0050)
 
@@ -4372,6 +4830,11 @@ pub use regs::Block;
   reported once, and the built-in names are seen from every module
   already. A last segment that names nothing is
   `resolve::unknown-path` too.
+- A `use` names no function of a type either (`resolve::use-type-function`,
+  ADR 0113): `use ring::Ring::new;` would make a bare `new()` hide the type the
+  call is about. Bring in the type, `use ring::Ring;`, and write `Ring::new()`.
+  `self` and `Self` name no item, and start no `use` path that resolves
+  (`resolve::unknown-path` for `self`, `resolve::unknown-self` for `Self`).
 - The name a `use` brings in is in its module's one namespace: no item,
   module or other `use` of that module may have it
   (`resolve::duplicate-item`), and it cannot be a reserved name or a
@@ -4413,9 +4876,10 @@ pub fn config(baud: u32) -> Config {
 - `pub` comes after the attributes and before the item's keywords: `pub
   fn`, `pub extern fn`, `pub static mut`, `pub extern static`, `pub
   struct`, `pub enum`, `pub const`, `pub peripheral`, `pub mod`, `pub
-  use`, `pub panic fn`, `#[export] pub fn`. On a `comptime` or `memory`
-  block, which has no name, and on the entry function, which nothing may
-  call, it is `parser::misplaced-pub`. Before a field or a register it is
+  use`, `pub panic fn`, `#[export] pub fn`, and before a function of an `impl`
+  (below). On a `comptime` or `memory` block, which has no name, on an `impl`
+  block, whose functions carry their own, and on the entry function, which
+  nothing may call, it is `parser::misplaced-pub`. Before a field or a register it is
   allowed (below); before anything else, such as a variant, a parameter, a
   `let` or another `pub`, it is `parser::unexpected-token`.
 - A path is usable where **each of its segments** is visible: a `pub` item
@@ -4471,6 +4935,21 @@ pub fn config(baud: u32) -> Config {
   are not. A driver module can keep its registers private and offer
   functions.
 
+**Functions of a type (ADR 0113, 0114).**
+
+- A function of a type without `pub` is visible in the module that declares
+  the type (the `impl`'s module) and its descendants, as a private item is. One
+  with `pub` is visible wherever the type is reachable, and only there: a
+  `pub` method of a type that is not reachable is not called through a value
+  either, so `m::make().f()` is `ty::private-method` when `m`'s type is
+  private, and a module keeps the operations of its private types to itself.
+- `T::f` is usable where each segment is visible, `f` included (otherwise
+  `resolve::private-item`, pointing at the use and at the function). A method
+  named by `x.f()` is judged the same way and is `ty::private-method`, pointing
+  at the call and at the function.
+- Like other items, a function of a type is checked where it is named, never in
+  signatures, and its visibility changes no symbol.
+
 **Variants.**
 
 - The variants of an enum, and their payloads, are visible wherever the
@@ -4514,6 +4993,14 @@ pub fn config(baud: u32) -> Config {
   `uart.init`; `static BASE` in `uart::regs` is `uart.regs.BASE`. The root
   module contributes no name, so **items of the root module have their own
   names** as symbols. The root of `core` contributes `core`.
+- The symbol of a **function of a type** is the path of its type joined by
+  dots, then its name, the type counting as the last module (ADR 0113): `push`
+  of `Ring` in module `ring` is `ring.Ring.push`, and of a `Ring` of the root
+  module `Ring.push`. A type and a module of one name cannot share a module's
+  namespace (`resolve::duplicate-item`), so such a symbol never equals the
+  symbol of an item, nor of another function of a type. `#[export]` does not
+  apply to one (`resolve::misplaced-attribute`), so every function of a type
+  has a path symbol, and `sym Ring::push` in an `asm` is that symbol.
 - **`#[export]`** before a function with a body or a static gives it its
   **own name** as its symbol, whatever its module:
 
@@ -4550,9 +5037,11 @@ pub fn config(baud: u32) -> Config {
   not reported again, nor is an item whose name starts with `__`, already
   `resolve::reserved-name`.
 - **Reserved names.** LLVM gives symbols starting with `llvm.` a meaning
-  of their own, so `llvm` is a reserved module name in the root module
-  (`resolve::reserved-name`); a module of another module, or a root item,
-  may be named `llvm`. `_start` stays reserved in every module, with or
+  of their own, so `llvm` is a reserved name in the root module for a module
+  and for a struct, a bit-field struct, an enum and a peripheral type, whose
+  functions would have such symbols (`resolve::reserved-name`, ADR 0113); a
+  module or a type of another module, or any other root item, may be named
+  `llvm`. `_start` stays reserved in every module, with or
   without `#[export]`, as a function, a `static`, an `extern fn` or an
   `extern static`, because `core::arch` defines it (ADR 0083): the program gets the one
   `resolve::reserved-name`, whose help says so, and not also a
@@ -5828,7 +6317,8 @@ the register's type:
 - A name that is no entry of the type is `ty::unknown-register`, whose
   help lists the entries visible there; an entry that is not visible
   there is `ty::private-register`. `u.thr`, with `u` a pointer, is
-  `ty::no-fields`: dereference it first, `(*u).thr`.
+  `ty::no-fields`: dereference it first, `(*u).thr`; with `u` a reference it is
+  `(*u).thr` (see "References to peripherals and clusters").
 - `&raw` of a register is `ty::register-address`: the pointer would reach
   the register without its access mode. Pass the device instead, as
   `&raw mut UART0`.
@@ -7128,7 +7618,11 @@ a name. `--emit` prints a compiler stage instead: `tokens`, `ast`, `hir`,
   (ADR 0085); every executable has them.
 - `hir` and `typeck` show the items outside the root module by their
   paths, and `mir` and `llvm-ir` show functions and statics by their
-  symbols (see "Symbols"); the `hir` dump starts with the module tree.
+  symbols (see "Symbols"); the `hir` dump starts with the module tree. A
+  function of a type is shown by its type's path and its name
+  (`ring::Ring::push`), and `typeck` shows a method call as `method
+  ring::Ring::push (&mut self)` and marks the base of a field, an index or a
+  method call that is a reference with `, dereferenced`.
 - `typeck` and `mir` start with the `memory` block, as written but with
   its values computed and its placements in the order `code`, `data`,
   `stack`, then every struct's layout, every bit-field struct (see below)
