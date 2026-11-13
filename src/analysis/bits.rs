@@ -1,5 +1,6 @@
 //! What the analyses of one body share (ADR 0099, 0103): bit sets, the
-//! order of spans, and the blocks a body's first block reaches.
+//! order of spans, the blocks a body's first block reaches, and how a symbol is
+//! shown.
 
 use crate::mir::Body;
 use crate::span::{FileId, Span};
@@ -70,4 +71,10 @@ pub(super) fn reachable(body: &Body) -> (Vec<usize>, Vec<Vec<usize>>) {
     }
     let blocks = (0..body.blocks.len()).filter(|&b| reached[b]).collect();
     (blocks, successors)
+}
+
+/// A symbol as diagnostics show it: the dots of a path written `::`
+/// (ADR 0051).
+pub(super) fn shown(symbol: &str) -> String {
+    symbol.replace('.', "::")
 }

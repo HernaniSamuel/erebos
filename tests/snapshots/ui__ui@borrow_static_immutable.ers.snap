@@ -1,0 +1,253 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/borrow_static_immutable.ers
+---
+--- mir ---
+struct Pair { 0 a: u32 at 0, 1 b: u32 at 4 } // size 8, align 4
+
+static LIMIT: u32; // align 4
+static ORIGIN: Pair; // align 4
+static TABLE: [u32; 4]; // align 4
+
+fn read(_1: &u32) -> u32 {
+    let _0: u32;
+    let _1: &u32; // r
+    let _2: u32;
+
+    bb0: {
+        _2 = copy (*_1);
+        _0 = copy _2;
+        return;
+    }
+}
+
+fn sum(_1: &[u32; 4]) -> u32 {
+    let _0: u32;
+    let _1: &[u32; 4]; // t
+    let _2: u32;
+    let _3: u32;
+    let _4: u32;
+    let _5: u32;
+    let _6: u32;
+    let _7: u32;
+    let _8: u32;
+    let _9: u32;
+    let _10: u32;
+    let _11: u32;
+
+    bb0: {
+        _2 = copy (*_1)[0];
+        _3 = copy _2;
+        _4 = copy (*_1)[1];
+        _5 = Add(copy _3, copy _4);
+        _6 = copy _5;
+        _7 = copy (*_1)[2];
+        _8 = Add(copy _6, copy _7);
+        _9 = copy _8;
+        _10 = copy (*_1)[3];
+        _11 = Add(copy _9, copy _10);
+        _0 = copy _11;
+        return;
+    }
+}
+
+fn held() -> u32 {
+    let _0: u32;
+    let _1: &u32; // r
+    let _2: u32; // n
+    let _3: u32; // m
+    let _4: *const u32;
+    let _5: &u32;
+    let _6: *const u32;
+    let _7: u32;
+    let _8: *const u32;
+    let _9: &u32;
+    let _10: u32;
+    let _11: u32;
+    let _12: u32;
+    let _13: u32;
+    let _14: u32;
+    let _15: u32;
+    let _16: u32;
+
+    bb0: {
+        _4 = const static LIMIT;
+        _5 = &(*_4);
+        _1 = copy _5;
+        _6 = const static LIMIT;
+        _7 = copy (*_6);
+        _2 = copy _7;
+        _8 = const static LIMIT;
+        _9 = &(*_8);
+        _10 = call read(copy _9);
+        _3 = copy _10;
+        _11 = copy (*_1);
+        _12 = Add(copy _11, copy _2);
+        _13 = Add(copy _12, copy _3);
+        _14 = copy _13;
+        _15 = call read(copy _1);
+        _16 = Add(copy _14, copy _15);
+        _0 = copy _16;
+        return;
+    }
+}
+
+fn parts() -> u32 {
+    let _0: u32;
+    let _1: &u32; // a
+    let _2: &Pair; // whole
+    let _3: u32; // b
+    let _4: *const Pair;
+    let _5: &u32;
+    let _6: *const Pair;
+    let _7: &Pair;
+    let _8: *const Pair;
+    let _9: u32;
+    let _10: u32;
+    let _11: u32;
+    let _12: u32;
+    let _13: u32;
+    let _14: u32;
+    let _15: u32;
+    let _16: *const Pair;
+    let _17: &u32;
+    let _18: u32;
+    let _19: u32;
+
+    bb0: {
+        _4 = const static ORIGIN;
+        _5 = &(*_4).0;
+        _1 = copy _5;
+        _6 = const static ORIGIN;
+        _7 = &(*_6);
+        _2 = copy _7;
+        _8 = const static ORIGIN;
+        _9 = copy (*_8).1;
+        _3 = copy _9;
+        _10 = copy (*_1);
+        _11 = copy _10;
+        _12 = copy (*_2).1;
+        _13 = Add(copy _11, copy _12);
+        _14 = Add(copy _13, copy _3);
+        _15 = copy _14;
+        _16 = const static ORIGIN;
+        _17 = &(*_16).0;
+        _18 = call read(copy _17);
+        _19 = Add(copy _15, copy _18);
+        _0 = copy _19;
+        return;
+    }
+}
+
+fn table() -> u32 {
+    let _0: u32;
+    let _1: &[u32; 4]; // t
+    let _2: &u32; // e
+    let _3: *const [u32; 4];
+    let _4: &[u32; 4];
+    let _5: *const [u32; 4];
+    let _6: &u32;
+    let _7: *const [u32; 4];
+    let _8: u32;
+    let _9: u32;
+    let _10: u32;
+    let _11: u32;
+    let _12: u32;
+    let _13: *const [u32; 4];
+    let _14: &[u32; 4];
+    let _15: u32;
+    let _16: u32;
+    let _17: u32;
+    let _18: u32;
+    let _19: u32;
+
+    bb0: {
+        _3 = const static TABLE;
+        _4 = &(*_3);
+        _1 = copy _4;
+        _5 = const static TABLE;
+        _6 = &(*_5)[2];
+        _2 = copy _6;
+        _7 = const static TABLE;
+        _8 = copy (*_7)[1];
+        _9 = copy _8;
+        _10 = call sum(copy _1);
+        _11 = Add(copy _9, copy _10);
+        _12 = copy _11;
+        _13 = const static TABLE;
+        _14 = &(*_13);
+        _15 = call sum(copy _14);
+        _16 = Add(copy _12, copy _15);
+        _17 = copy _16;
+        _18 = copy (*_2);
+        _19 = Add(copy _17, copy _18);
+        _0 = copy _19;
+        return;
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+    let _1: u32;
+    let _2: u32;
+    let _3: u32;
+
+    bb0: {
+        _1 = call held();
+        _2 = call parts();
+        _3 = call table();
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+comptime fn LIMIT() -> u32 {
+    let _0: u32;
+
+    bb0: {
+        _0 = const 7_u32;
+        return;
+    }
+}
+
+comptime fn ORIGIN() -> Pair {
+    let _0: Pair;
+    let _1: Pair;
+
+    bb0: {
+        _1.0 = const 1_u32;
+        _1.1 = const 2_u32;
+        _0 = move _1;
+        return;
+    }
+}
+
+comptime fn TABLE() -> [u32; 4] {
+    let _0: [u32; 4];
+    let _1: [u32; 4];
+
+    bb0: {
+        _1[0] = const 1_u32;
+        _1[1] = const 2_u32;
+        _1[2] = const 3_u32;
+        _1[3] = const 4_u32;
+        _0 = copy _1;
+        return;
+    }
+}

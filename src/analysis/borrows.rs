@@ -2,9 +2,12 @@
 //! an overlapping place is in use.
 //!
 //! A **site** is a `Ref` statement of a reachable block whose place has a
-//! **path**: a root local followed by `Field`, `Elem` (an index, whatever it
-//! is) and `Deref` of a reference. A place that goes through a raw pointer has
-//! no path, and neither a borrow of it nor an access to it is followed.
+//! **path**: a root followed by `Field`, `Elem` (an index, whatever it is, and
+//! any part of a peripheral) and `Deref` of a reference. The root is a local, a
+//! static or a peripheral (ADR 0111, 0112): the last two are reached through
+//! the address a temporary of rule R4 holds, so `(*_t)` is the root itself. A
+//! place that goes through any other raw pointer has no path, and neither a
+//! borrow of it nor an access to it is followed.
 //!
 //! Two forward and backward analyses over the blocks `bb0` reaches, in bit
 //! sets, give what the check needs: which sites each local of a reference type
@@ -17,11 +20,11 @@
 
 use std::collections::HashSet;
 
-use super::bits::{Bits, key, reachable};
+use super::bits::{Bits, key, reachable, shown};
 use crate::diag::{Diagnostic, Diagnostics};
 use crate::mir::{
-    AsmOperandKind, Body, InlineAsm, Local, Operand, PanicCause, Place, PlaceElem, Ref, Rvalue,
-    Statement, Terminator, Ty,
+    AsmOperandKind, AsmSym, Body, Const, InlineAsm, Local, Operand, PanicCause, PeripheralRef,
+    Place, PlaceElem, Ref, Rvalue, Statement, StaticRef, Terminator, Ty,
 };
 use crate::span::Span;
 
@@ -66,20 +69,59 @@ enum Step {
     Other,
 }
 
-/// A root local and the steps from it.
+/// Where a path starts: a local, a static or a peripheral (ADR 0111).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Root {
+    Local(Local),
+    Static(StaticRef),
+    Peripheral(PeripheralRef),
+}
+
+impl Root {
+    /// A static or a peripheral as labels name it: its path with `::`.
+    /// `None` for a local, which the body names.
+    fn name(self) -> Option<String> {
+        match self {
+            Root::Local(_) => None,
+            // A byte string has no path: its bytes, as written.
+            Root::Static(s) if s.def().byte_string.is_some() => Some(s.def().name.clone()),
+            Root::Static(s) => Some(shown(&s.def().name)),
+            Root::Peripheral(p) => Some(shown(&p.def().name)),
+        }
+    }
+}
+
+/// A root and the steps from it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Path {
-    root: Local,
+    root: Root,
     steps: Vec<Step>,
+}
+
+/// The bytes a peripheral occupies, from its address to the end of its type's
+/// last register; empty while its type has no layout.
+fn bytes(p: PeripheralRef) -> (u64, u64) {
+    let def = p.def();
+    let extent = def.ty.def().layout().map_or(0, |layout| layout.extent);
+    (def.address, def.address.saturating_add(extent))
 }
 
 /// Whether one path contains the other, or both are the same: compared step by
 /// step from the root, they meet two different fields nowhere before one of
-/// them ends (ADR 0106).
+/// them ends (ADR 0106). Paths of different roots meet only when both roots
+/// are peripherals whose bytes meet, whatever the steps (ADR 0111).
 fn overlap(a: &Path, b: &Path) -> bool {
-    a.root == b.root
-        && !(a.steps.iter().zip(&b.steps))
-            .any(|pair| matches!(pair, (Step::Field(i), Step::Field(j)) if i != j))
+    match (a.root, b.root) {
+        (Root::Peripheral(p), Root::Peripheral(q)) if p != q => {
+            let (p, q) = (bytes(p), bytes(q));
+            p.0 < q.1 && q.0 < p.1
+        }
+        (p, q) => {
+            p == q
+                && !(a.steps.iter().zip(&b.steps))
+                    .any(|pair| matches!(pair, (Step::Field(i), Step::Field(j)) if i != j))
+        }
+    }
 }
 
 /// What an access does to its place, as the table of ADR 0106 and the
@@ -108,6 +150,9 @@ enum How {
     /// The `&mut (*q)[0..N]` of a `&mut [T; N]` converted to a `&mut [T]`
     /// that is not lent to a call (ADR 0108).
     ConvertSliceMut,
+    /// A `sym` operand naming a `static mut`: a write of the whole static
+    /// (ADR 0111).
+    Sym,
 }
 
 impl How {
@@ -148,6 +193,9 @@ struct Access {
     site: Option<usize>,
     /// The write of a call's result, which happens after the callee returns.
     after_call: bool,
+    /// For `How::Sym`, the static it names, in place of `place`, which is then
+    /// a filler.
+    sym: Option<StaticRef>,
 }
 
 /// What a statement makes a whole local of a reference type hold.
@@ -185,6 +233,7 @@ struct Fault {
     how: How,
     place: Place,
     span: Span,
+    sym: Option<StaticRef>,
     sites: Vec<usize>,
 }
 
@@ -197,6 +246,9 @@ struct Flow<'b> {
     /// The locals moved into a call as an argument, as the temporary of a lent
     /// borrow is.
     passed: HashSet<u32>,
+    /// For each local, the static or peripheral it holds the address of, if it
+    /// is a temporary of rule R4 (ADR 0112).
+    addresses: Vec<Option<Root>>,
     sites: Vec<Site>,
     /// The blocks reachable from the first, in ascending order.
     blocks: Vec<usize>,
@@ -231,11 +283,27 @@ impl<'b> Flow<'b> {
                 }
             }
         }
+        let mut addresses = vec![None; body.locals.len()];
+        for statement in body.blocks.iter().flat_map(|block| &block.statements) {
+            if let Statement::Assign(dest, Rvalue::Use(Operand::Const(address))) = statement
+                && dest.projection.is_empty()
+            {
+                let root = match address {
+                    Const::Static(s) => Root::Static(*s),
+                    Const::Peripheral(p) => Root::Peripheral(*p),
+                    Const::Int(..) | Const::Bool(_) | Const::Unit => continue,
+                };
+                if let Some(slot) = addresses.get_mut(dest.local.0 as usize) {
+                    *slot = Some(root);
+                }
+            }
+        }
         let mut flow = Flow {
             body,
             refs,
             ref_index,
             passed,
+            addresses,
             sites: Vec::new(),
             blocks,
             successors,
@@ -348,6 +416,25 @@ impl<'b> Flow<'b> {
                 | AsmOperandKind::Const(..) => {}
             }
         }
+        for sym in asm.syms() {
+            if let AsmSym::Static(s) = sym
+                && s.def().mutable
+            {
+                stmt.accesses.push(Access {
+                    how: How::Sym,
+                    place: Place::local(Local::RETURN),
+                    path: Some(Path {
+                        root: Root::Static(s),
+                        steps: Vec::new(),
+                    }),
+                    reads: None,
+                    span,
+                    site: None,
+                    after_call: false,
+                    sym: Some(s),
+                });
+            }
+        }
     }
 
     fn operand(&self, stmt: &mut Stmt, operand: &Operand) {
@@ -403,26 +490,48 @@ impl<'b> Flow<'b> {
             span,
             site,
             after_call,
+            sym: None,
         });
     }
 
+    /// The root of a place and the number of projections it takes: the static
+    /// or peripheral whose address a temporary of rule R4 holds, when the
+    /// place is that temporary's `Deref`, and the local otherwise.
+    fn root(&self, place: Place) -> (Root, usize) {
+        match (
+            self.addresses[place.local.0 as usize],
+            place.projection.first(),
+        ) {
+            (Some(root), Some(PlaceElem::Deref)) => (root, 1),
+            _ => (Root::Local(place.local), 0),
+        }
+    }
+
     /// The path of a place, if it has one: it has none after the `Deref` of a
-    /// raw pointer or an `Offset`.
+    /// raw pointer other than the address of a static or a peripheral, or an
+    /// `Offset`. A field or an element of a peripheral type is an `Elem`: its
+    /// parts always overlap (ADR 0111).
     fn path(&self, place: Place) -> Option<Path> {
+        let (root, from) = self.root(place);
         let mut steps = Vec::new();
-        for (k, elem) in place.projection.iter().enumerate() {
+        for (k, elem) in place.projection.iter().enumerate().skip(from) {
+            let base = Place {
+                local: place.local,
+                projection: &place.projection[..k],
+            };
             steps.push(match elem {
                 PlaceElem::Deref => {
-                    let base = Place {
-                        local: place.local,
-                        projection: &place.projection[..k],
-                    };
                     if !matches!(self.body.place_ty(base), Ty::Ref(_)) {
                         return None;
                     }
                     Step::Deref
                 }
                 PlaceElem::Offset(_) => return None,
+                PlaceElem::Field(_) | PlaceElem::Element(..) | PlaceElem::ConstElement(..)
+                    if matches!(self.body.place_ty(base), Ty::Peripheral(_)) =>
+                {
+                    Step::Elem
+                }
                 PlaceElem::Field(index) => Step::Field(*index),
                 PlaceElem::Index(_)
                 | PlaceElem::ConstIndex(_)
@@ -433,10 +542,7 @@ impl<'b> Flow<'b> {
                 PlaceElem::Tag | PlaceElem::Payload { .. } => Step::Other,
             });
         }
-        Some(Path {
-            root: place.local,
-            steps,
-        })
+        Some(Path { root, steps })
     }
 
     fn named(&self, local: Local) -> bool {
@@ -680,6 +786,7 @@ impl<'b> Flow<'b> {
                             how: access.how,
                             place: access.place,
                             span: access.span,
+                            sym: access.sym,
                             sites,
                         });
                     }
@@ -822,7 +929,10 @@ impl<'b> Flow<'b> {
 
     /// The message of an access in conflict, and the label at the access.
     fn message(&self, fault: &Fault) -> (String, &'static str) {
-        let name = self.name(fault.place);
+        let name = match fault.sym {
+            Some(s) => format!("`{}`", Root::Static(s).name().unwrap_or_default()),
+            None => self.name(fault.place),
+        };
         let holder = self.name(Place::local(fault.place.local));
         match fault.how {
             How::Use => (
@@ -873,6 +983,10 @@ impl<'b> Flow<'b> {
                 format!("cannot convert {holder} to a mutable slice while it is borrowed"),
                 "converted to a slice here",
             ),
+            How::Sym => (
+                format!("cannot pass {name} to `asm` as `sym` while it is borrowed"),
+                "passed as `sym` here",
+            ),
         }
     }
 
@@ -893,9 +1007,10 @@ impl<'b> Flow<'b> {
     /// The place as the source names it, in backquotes (`x`, `s.f`, `a[_]`,
     /// `*r`, `(*r).f`), or "this value" for one the compiler keeps.
     fn name(&self, place: Place) -> String {
-        let Some(base) =
+        let (root, from) = self.root(place);
+        let Some(base) = root.name().or_else(|| {
             (self.body.locals.get(place.local.0 as usize)).and_then(|d| d.name.clone())
-        else {
+        }) else {
             return "this value".to_owned();
         };
         let mut text = base;
@@ -906,7 +1021,7 @@ impl<'b> Flow<'b> {
                 text
             }
         };
-        for (k, elem) in place.projection.iter().enumerate() {
+        for (k, elem) in place.projection.iter().enumerate().skip(from) {
             let before = Place {
                 local: place.local,
                 projection: &place.projection[..k],
@@ -914,6 +1029,21 @@ impl<'b> Flow<'b> {
             let ty = self.body.place_ty(before);
             text = match (elem, ty) {
                 (PlaceElem::Deref, _) => format!("*{text}"),
+                (PlaceElem::Field(index), Ty::Peripheral(p)) => {
+                    format!(
+                        "{}.{}",
+                        paren(text),
+                        p.def().registers[*index as usize].name
+                    )
+                }
+                (
+                    PlaceElem::Element(index, _) | PlaceElem::ConstElement(index, _),
+                    Ty::Peripheral(p),
+                ) => format!(
+                    "{}.{}[_]",
+                    paren(text),
+                    p.def().registers[*index as usize].name
+                ),
                 (PlaceElem::Field(index), Ty::Struct(s)) => {
                     match s.def().fields().get(*index as usize) {
                         Some(field) => format!("{}.{}", paren(text), field.name),
@@ -967,7 +1097,8 @@ impl Stmt {
 mod tests {
     use super::*;
     use crate::mir::{
-        BasicBlock, BasicBlockData, BodyId, Const, Field, IntTy, Layout, LocalDecl, Ref, StructRef,
+        AsmOperand, AsmOptions, AsmReg, BasicBlock, BasicBlockData, BodyId, Const, Field, IntTy,
+        Layout, LocalDecl, PeripheralLayout, PeripheralTypeRef, Ref, Register, StaticId, StructRef,
     };
     use crate::span::SourceMap;
 
@@ -2025,5 +2156,369 @@ mod tests {
         // `r` is live at the start of bb1 and bb2 only.
         assert!(backward[1].contains(0) && backward[2].contains(0));
         assert!(!backward[3].contains(0) && !backward[0].contains(0));
+    }
+
+    /// `static mut name: u32` (or `static`), numbered `id`.
+    fn static_(id: u32, name: &str, mutable: bool) -> StaticRef {
+        StaticRef::new(StaticId(id), name.to_owned(), u32_ty(), mutable, false)
+    }
+
+    /// `_n = const static s`, the temporary of rule R4 that holds its address.
+    fn address(n: u32, s: StaticRef) -> Statement {
+        Statement::Assign(local(n), Rvalue::Use(Operand::Const(Const::Static(s))))
+    }
+
+    /// A peripheral type with two registers `ctrl` and `data`, 8 bytes long.
+    fn device() -> PeripheralTypeRef {
+        let register = |name: &str| Register {
+            name: name.to_owned(),
+            ty: u32_ty(),
+            group: None,
+        };
+        let p = PeripheralTypeRef::new(
+            "Device".to_owned(),
+            vec![register("ctrl"), register("data")],
+        );
+        p.def().set_layout(PeripheralLayout {
+            offsets: vec![0, 4],
+            arrays: vec![None, None],
+            extent: 8,
+            align: 4,
+        });
+        p
+    }
+
+    fn peripheral(name: &str, at: u64) -> PeripheralRef {
+        PeripheralRef::new(name.to_owned(), at, device())
+    }
+
+    /// `_n = const peripheral p`, the temporary that holds its address.
+    fn device_address(n: u32, p: PeripheralRef) -> Statement {
+        Statement::Assign(local(n), Rvalue::Use(Operand::Const(Const::Peripheral(p))))
+    }
+
+    /// A pointer to `pointee`, `*mut`.
+    fn pointer_to(pointee: Ty) -> Ty {
+        Ty::Ptr(crate::mir::Ptr {
+            mutable: true,
+            volatile: false,
+            pointee: Box::leak(Box::new(pointee)),
+        })
+    }
+
+    #[test]
+    fn a_static_is_a_root_and_a_write_of_it_while_it_is_borrowed_is_a_conflict() {
+        // r = &mut m.COUNT; m.COUNT = 1; *r = 2, with an address temporary
+        // for each place the static is named in.
+        let count = static_(0, "m.COUNT", true);
+        let held = body(
+            vec![
+                decl(raw(), None),
+                decl(mut_ref(), Some("r")),
+                decl(raw(), None),
+            ],
+            vec![block(
+                vec![
+                    address(1, count),
+                    mutable(2, deref(1)),
+                    address(3, count),
+                    set(deref(3)),
+                    set(deref(2)),
+                ],
+                Terminator::Return,
+            )],
+        );
+        let (message, labels) = only(&held);
+        assert_eq!(message, "cannot assign to `m::COUNT` while it is borrowed");
+        assert_eq!(
+            labels,
+            [
+                "assigned here",
+                "`m::COUNT` is borrowed as mutable here",
+                "the borrow is used later here"
+            ]
+        );
+        assert_eq!(Flow::of(&held).sites.len(), 1);
+        // After the last use of the reference, and another static, are free.
+        let ends = body(
+            vec![
+                decl(raw(), None),
+                decl(mut_ref(), Some("r")),
+                decl(raw(), None),
+            ],
+            vec![block(
+                vec![
+                    address(1, count),
+                    mutable(2, deref(1)),
+                    set(deref(2)),
+                    address(3, count),
+                    set(deref(3)),
+                ],
+                Terminator::Return,
+            )],
+        );
+        accepted(&ends);
+        let other = static_(1, "OTHER", true);
+        let apart = body(
+            vec![
+                decl(raw(), None),
+                decl(mut_ref(), Some("r")),
+                decl(raw(), None),
+            ],
+            vec![block(
+                vec![
+                    address(1, count),
+                    mutable(2, deref(1)),
+                    address(3, other),
+                    set(deref(3)),
+                    set(deref(2)),
+                ],
+                Terminator::Return,
+            )],
+        );
+        accepted(&apart);
+        // A field of a static is a path below it: `P.a` and `P.b` are apart,
+        // `P` and `P.a` are not.
+        let record = StaticRef::new(StaticId(2), "P".to_owned(), pair(), true, false);
+        let below = |first: &[PlaceElem], second: &[PlaceElem]| {
+            body(
+                vec![
+                    decl(pointer_to(pair()), None),
+                    decl(mut_ref(), Some("r")),
+                    decl(pointer_to(pair()), None),
+                ],
+                vec![block(
+                    vec![
+                        address(1, record),
+                        mutable(2, projected(1, first)),
+                        address(3, record),
+                        set(projected(3, second)),
+                        set(deref(2)),
+                    ],
+                    Terminator::Return,
+                )],
+            )
+        };
+        let a = [PlaceElem::Deref, PlaceElem::Field(0)];
+        let b = [PlaceElem::Deref, PlaceElem::Field(1)];
+        accepted(&below(&a, &b));
+        let (message, _) = only(&below(&a, &[PlaceElem::Deref]));
+        assert_eq!(message, "cannot assign to `P` while it is borrowed");
+        let (message, _) = only(&below(&[PlaceElem::Deref], &a));
+        assert_eq!(message, "cannot assign to `P.a` while it is borrowed");
+    }
+
+    #[test]
+    fn two_registers_of_one_peripheral_overlap_below_a_deref_too() {
+        let uart = peripheral("main.UART0", 0x1000);
+        // r = &mut UART0.ctrl; s = &mut UART0.data; *r = 1; *s = 1.
+        let at_the_peripheral = body(
+            vec![
+                decl(uart.def().address_ty(), None),
+                decl(mut_ref(), Some("r")),
+                decl(uart.def().address_ty(), None),
+                decl(mut_ref(), Some("s")),
+            ],
+            vec![block(
+                vec![
+                    device_address(1, uart),
+                    mutable(2, through(1, 0)),
+                    device_address(3, uart),
+                    mutable(4, through(3, 1)),
+                    set(deref(2)),
+                    set(deref(4)),
+                ],
+                Terminator::Return,
+            )],
+        );
+        let (message, labels) = only(&at_the_peripheral);
+        assert_eq!(
+            message,
+            "cannot borrow `main::UART0.data` as mutable while it is borrowed"
+        );
+        assert_eq!(
+            labels,
+            [
+                "borrowed as mutable here",
+                "`main::UART0.ctrl` is borrowed as mutable here",
+                "the borrow is used later here"
+            ]
+        );
+        // Through `u: &mut Device`: `(*u).ctrl` and `(*u).data` are one place.
+        let device_ref = reference(true, Ty::Peripheral(uart.def().ty));
+        let through_a_reference = body(
+            vec![
+                decl(device_ref, Some("u")),
+                decl(mut_ref(), Some("r")),
+                decl(mut_ref(), Some("s")),
+            ],
+            vec![block(
+                vec![mutable(2, through(1, 0)), set(through(1, 1)), set(deref(2))],
+                Terminator::Return,
+            )],
+        );
+        let (message, labels) = only(&through_a_reference);
+        assert_eq!(message, "cannot assign to `(*u).data` while it is borrowed");
+        assert_eq!(labels[1], "`(*u).ctrl` is borrowed as mutable here");
+        // The element of an array of registers or clusters is a part too.
+        let element = projected(1, &[PlaceElem::Deref, PlaceElem::ConstElement(1, 3)]);
+        let elements = body(
+            vec![decl(device_ref, Some("u")), decl(mut_ref(), Some("r"))],
+            vec![block(
+                vec![mutable(2, element), set(through(1, 0)), set(deref(2))],
+                Terminator::Return,
+            )],
+        );
+        let (message, labels) = only(&elements);
+        assert_eq!(message, "cannot assign to `(*u).ctrl` while it is borrowed");
+        assert_eq!(labels[1], "`(*u).data[_]` is borrowed as mutable here");
+        // Once the borrow is dead, a register is free.
+        let released = body(
+            vec![decl(device_ref, Some("u")), decl(mut_ref(), Some("r"))],
+            vec![block(
+                vec![mutable(2, through(1, 0)), set(deref(2)), set(through(1, 1))],
+                Terminator::Return,
+            )],
+        );
+        accepted(&released);
+    }
+
+    #[test]
+    fn peripherals_conflict_when_their_bytes_meet() {
+        let write_while_held = |held: PeripheralRef, written: PeripheralRef| {
+            body(
+                vec![
+                    decl(held.def().address_ty(), None),
+                    decl(mut_ref(), Some("r")),
+                    decl(written.def().address_ty(), None),
+                ],
+                vec![block(
+                    vec![
+                        device_address(1, held),
+                        mutable(2, through(1, 0)),
+                        device_address(3, written),
+                        set(through(3, 1)),
+                        set(deref(2)),
+                    ],
+                    Terminator::Return,
+                )],
+            )
+        };
+        let uart = peripheral("UART0", 0x1000);
+        // `over` it, sharing its last four bytes.
+        let alias = peripheral("ALIAS", 0x1004);
+        let (message, labels) = only(&write_while_held(uart, alias));
+        assert_eq!(
+            message,
+            "cannot assign to `ALIAS.data` while it is borrowed"
+        );
+        assert_eq!(labels[1], "`UART0.ctrl` is borrowed as mutable here");
+        let (message, _) = only(&write_while_held(alias, uart));
+        assert_eq!(
+            message,
+            "cannot assign to `UART0.data` while it is borrowed"
+        );
+        // Right after its last byte, and far away: apart.
+        accepted(&write_while_held(uart, peripheral("NEXT", 0x1008)));
+        accepted(&write_while_held(uart, peripheral("FAR", 0x2000)));
+        // The same peripheral named in two temporaries is the same root.
+        let (message, _) = only(&write_while_held(uart, uart));
+        assert_eq!(
+            message,
+            "cannot assign to `UART0.data` while it is borrowed"
+        );
+    }
+
+    /// An `asm` statement with one `sym` operand for `s`.
+    fn asm_sym(s: StaticRef) -> Statement {
+        Statement::InlineAsm(Box::new(InlineAsm {
+            pieces: Vec::new(),
+            operands: vec![AsmOperand {
+                reg: AsmReg::Any,
+                kind: AsmOperandKind::Sym(AsmSym::Static(s)),
+            }],
+            clobbers: Vec::new(),
+            options: AsmOptions::default(),
+            span: span(0),
+        }))
+    }
+
+    #[test]
+    fn a_sym_of_a_static_mut_is_a_write_of_the_whole_static_and_of_a_static_is_nothing() {
+        let sym_while_held = |s: StaticRef| {
+            body(
+                vec![decl(raw(), None), decl(mut_ref(), Some("r"))],
+                vec![block(
+                    vec![
+                        address(1, s),
+                        mutable(2, deref(1)),
+                        asm_sym(s),
+                        set(deref(2)),
+                    ],
+                    Terminator::Return,
+                )],
+            )
+        };
+        let (message, labels) = only(&sym_while_held(static_(0, "COUNT", true)));
+        assert_eq!(
+            message,
+            "cannot pass `COUNT` to `asm` as `sym` while it is borrowed"
+        );
+        assert_eq!(
+            labels,
+            [
+                "passed as `sym` here",
+                "`COUNT` is borrowed as mutable here",
+                "the borrow is used later here"
+            ]
+        );
+        // A `static` that is not `mut` is no access, and neither is another
+        // static, or one the reference is dead for.
+        let table = static_(1, "TABLE", false);
+        let shared_table = body(
+            vec![
+                decl(shared_ref(), Some("q")),
+                decl(raw(), None),
+                decl(u32_ty(), None),
+            ],
+            vec![block(
+                vec![
+                    address(2, table),
+                    shared(1, deref(2)),
+                    asm_sym(table),
+                    read(3, deref(1)),
+                ],
+                Terminator::Return,
+            )],
+        );
+        accepted(&shared_table);
+        let count = static_(0, "COUNT", true);
+        let other = static_(2, "OTHER", true);
+        let elsewhere = body(
+            vec![decl(raw(), None), decl(mut_ref(), Some("r"))],
+            vec![block(
+                vec![
+                    address(1, count),
+                    mutable(2, deref(1)),
+                    asm_sym(other),
+                    set(deref(2)),
+                ],
+                Terminator::Return,
+            )],
+        );
+        accepted(&elsewhere);
+        let dead = body(
+            vec![decl(raw(), None), decl(mut_ref(), Some("r"))],
+            vec![block(
+                vec![
+                    address(1, count),
+                    mutable(2, deref(1)),
+                    set(deref(2)),
+                    asm_sym(count),
+                ],
+                Terminator::Return,
+            )],
+        );
+        accepted(&dead);
     }
 }

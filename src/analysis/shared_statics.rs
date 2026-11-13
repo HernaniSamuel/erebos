@@ -12,6 +12,7 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 
+use super::bits::shown;
 use crate::diag::{Diagnostic, Diagnostics};
 use crate::mir::{
     AsmSym, Body, BodyId, Const, Mir, Operand, Statement, StaticId, StaticRef, Terminator,
@@ -507,10 +508,4 @@ fn unmaskable_statics(
             ));
         }
     }
-}
-
-/// A symbol as diagnostics show it: the dots of a path written `::`
-/// (ADR 0051).
-fn shown(symbol: &str) -> String {
-    symbol.replace('.', "::")
 }

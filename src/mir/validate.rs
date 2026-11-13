@@ -11,7 +11,7 @@
 //! of ADR 0098 come after the rules of types, and L1 to L4 of ADR 0103 after
 //! them. R1 of ADR 0107 is checked through the types of locals and statics,
 //! R2 and R3 where the places they concern are: those written, and those a
-//! `Ref` borrows.
+//! `Ref` borrows. R4 of ADR 0112 is checked once per body, over its statements.
 
 use std::collections::HashSet;
 use std::fmt;
@@ -257,6 +257,7 @@ impl<'a> Checker<'a> {
         checker.copy_kinds();
         checker.linear_kinds();
         checker.reference_positions();
+        checker.address_temporaries();
         checker.found
     }
 
@@ -799,6 +800,100 @@ impl<'a> Checker<'a> {
                 );
             }
         }
+    }
+
+    /// R4: a local assigned the address of a static or a peripheral
+    /// (`Use(const static S)` or `Use(const peripheral P)`) is a temporary: it
+    /// has no name, is neither a parameter nor the return place, no other
+    /// statement, call destination or `asm` output writes it, and no `Ref` or
+    /// `AddressOf` takes its own place. The analyses read `(*_t)` as the
+    /// static or peripheral `_t` holds the address of (ADR 0112).
+    fn address_temporaries(&mut self) {
+        let body = self.body;
+        let mut addressed: Vec<Local> = Vec::new();
+        // The writes of whole locals, and the borrows of whole locals, in the
+        // order of the body.
+        let mut written: Vec<(Local, Location)> = Vec::new();
+        let mut taken: Vec<(Local, Location)> = Vec::new();
+        for (block, data) in body.blocks() {
+            for (index, statement) in data.statements.iter().enumerate() {
+                let at = Location::Statement(block, index);
+                match statement {
+                    Statement::Assign(dest, rvalue) => {
+                        if dest.projection.is_empty() {
+                            written.push((dest.local, at));
+                            if matches!(
+                                rvalue,
+                                Rvalue::Use(Operand::Const(
+                                    Const::Static(_) | Const::Peripheral(_)
+                                ))
+                            ) && !addressed.contains(&dest.local)
+                            {
+                                addressed.push(dest.local);
+                            }
+                        }
+                        if let Rvalue::Ref { place, .. } | Rvalue::AddressOf { place, .. } = rvalue
+                            && place.projection.is_empty()
+                        {
+                            taken.push((place.local, at));
+                        }
+                    }
+                    Statement::Call {
+                        dest: Some(dest), ..
+                    } if dest.projection.is_empty() => written.push((dest.local, at)),
+                    Statement::Call { .. }
+                    | Statement::InlineAsm(_)
+                    | Statement::CriticalEnter(_)
+                    | Statement::CriticalExit(_)
+                    | Statement::New(..)
+                    | Statement::End(..) => {}
+                }
+                if let Some(asm) = statement.asm() {
+                    asm_outputs(asm, at, &mut written);
+                }
+            }
+            if let Some(asm) = data.terminator.asm() {
+                asm_outputs(asm, Location::Terminator(block), &mut written);
+            }
+        }
+        for &local in &addressed {
+            let writes: Vec<Location> = (written.iter())
+                .filter(|&&(written, _)| written == local)
+                .map(|&(_, at)| at)
+                .collect();
+            let named = (body.locals.get(local.0 as usize)).is_some_and(|decl| decl.name.is_some())
+                || local.0 as usize <= body.param_count;
+            if named {
+                self.at = writes[0];
+                self.violation(
+                    "R4",
+                    format!(
+                        "the local `{local}` is assigned the address of a static or a peripheral, but is named, a parameter or the return place"
+                    ),
+                );
+            }
+            for &at in &writes[1..] {
+                self.at = at;
+                self.violation(
+                    "R4",
+                    format!(
+                        "the local `{local}`, which holds the address of a static or a peripheral, is written again"
+                    ),
+                );
+            }
+        }
+        for &(local, at) in &taken {
+            if addressed.contains(&local) {
+                self.at = at;
+                self.violation(
+                    "R4",
+                    format!(
+                        "the place of the local `{local}`, which holds the address of a static or a peripheral, is borrowed or has its address taken"
+                    ),
+                );
+            }
+        }
+        self.at = Location::Body;
     }
 
     /// P2: `s` is the static of `Mir::statics` at its id, as the same leaked
@@ -1677,6 +1772,25 @@ impl<'a> Checker<'a> {
                     "{what} has type `{ty}`, not an integer of at most 32 bits or a thin pointer"
                 ),
             );
+        }
+    }
+}
+
+/// Adds to `written` the whole locals the outputs of `asm` write, at `at`.
+fn asm_outputs(asm: &InlineAsm, at: Location, written: &mut Vec<(Local, Location)>) {
+    for operand in &asm.operands {
+        match &operand.kind {
+            AsmOperandKind::Out {
+                place: Some(place), ..
+            }
+            | AsmOperandKind::InOut {
+                place: Some(place), ..
+            } if place.projection.is_empty() => written.push((place.local, at)),
+            AsmOperandKind::In(_)
+            | AsmOperandKind::Out { .. }
+            | AsmOperandKind::InOut { .. }
+            | AsmOperandKind::Sym(_)
+            | AsmOperandKind::Const(..) => {}
         }
     }
 }
@@ -4064,6 +4178,142 @@ mod tests {
         accepts(with_locals(
             &[array, reference(false, u)],
             vec![assign(12, projected(11, &[PlaceElem::ConstIndex(3)]))],
+        ));
+    }
+
+    #[test]
+    fn r4_the_address_of_a_static_or_a_peripheral_is_held_by_a_temporary_written_once() {
+        let u = u32_ty();
+        let s = StaticRef::new(StaticId(0), "S".to_owned(), u, true, false);
+        let p = PeripheralRef::new("UART".to_owned(), 0x4000_0000, peripheral());
+        let address_of_s = || Rvalue::Use(Operand::Const(Const::Static(s)));
+        let address_of_p = || Rvalue::Use(Operand::Const(Const::Peripheral(p)));
+        let assign = |dest, rvalue| Statement::Assign(local(dest), rvalue);
+        // `_11: *mut u32` and `_12: *mut P`; the temporaries are read through.
+        let locals = [ptr(true, false, u), p.def().address_ty()];
+        accepts(with_locals(
+            &locals,
+            vec![
+                assign(11, address_of_s()),
+                assign(
+                    0,
+                    Rvalue::Use(Operand::Copy(projected(11, &[PlaceElem::Deref]))),
+                ),
+                assign(12, address_of_p()),
+                assign(
+                    0,
+                    Rvalue::Use(Operand::Copy(projected(
+                        12,
+                        &[PlaceElem::Deref, PlaceElem::Field(0)],
+                    ))),
+                ),
+            ],
+        ));
+        // Not a named local: a `const static` assigned to a variable.
+        let mut named = valid();
+        named.locals.push(decl(locals[0]));
+        named.locals[11].name = Some("x".to_owned());
+        statement_of(&mut named, assign(11, address_of_s()));
+        breaks_only(&named, "R4");
+        // Nor a parameter.
+        let mut param = valid();
+        param.locals.push(decl(locals[0]));
+        param.param_count = 11;
+        statement_of(&mut param, assign(11, address_of_s()));
+        breaks_only(&param, "R4");
+        // Written a second time: by another address, a copy, a call's
+        // destination or an `asm` output.
+        let again =
+            |second: Statement| with_locals(&locals, vec![assign(11, address_of_s()), second]);
+        rejects(again(assign(11, address_of_s())), "R4");
+        rejects(again(assign(11, Rvalue::Use(copy(4)))), "R4");
+        rejects(
+            again(Statement::Call {
+                dest: Some(local(11)),
+                callee: BodyId(0),
+                args: Vec::new(),
+            }),
+            "R4",
+        );
+        let out = AsmOperand {
+            reg: AsmReg::Any,
+            kind: AsmOperandKind::Out {
+                late: false,
+                place: Some(local(11)),
+            },
+        };
+        let writes = asm(AsmOptions::default(), Vec::new(), vec![out]);
+        assert_eq!(again(Statement::InlineAsm(Box::new(writes))), ["R4"]);
+        // A write through the pointer is no write of the temporary.
+        accepts(again(assign(
+            0,
+            Rvalue::Use(Operand::Copy(projected(11, &[PlaceElem::Deref]))),
+        )));
+        // The place of the temporary itself is borrowed or its address taken.
+        let borrowed = [locals[0], reference(false, locals[0])];
+        rejects(
+            with_locals(
+                &borrowed,
+                vec![
+                    assign(11, address_of_s()),
+                    assign(
+                        12,
+                        Rvalue::Ref {
+                            mutable: false,
+                            place: local(11),
+                        },
+                    ),
+                ],
+            ),
+            "R4",
+        );
+        let taken = [locals[0], ptr(false, false, locals[0])];
+        rejects(
+            with_locals(
+                &taken,
+                vec![
+                    assign(11, address_of_s()),
+                    assign(
+                        12,
+                        Rvalue::AddressOf {
+                            mutable: false,
+                            place: local(11),
+                        },
+                    ),
+                ],
+            ),
+            "R4",
+        );
+        // A peripheral's temporary is the same: a second write and `&raw const
+        // _t` are rejected; `&raw mut P` copies it, which is no write of it.
+        let twice = with_locals(
+            &locals[1..],
+            vec![assign(11, address_of_p()), assign(11, address_of_p())],
+        );
+        rejects(twice, "R4");
+        let taken = [locals[1], ptr(false, false, locals[1])];
+        rejects(
+            with_locals(
+                &taken,
+                vec![
+                    assign(11, address_of_p()),
+                    assign(
+                        12,
+                        Rvalue::AddressOf {
+                            mutable: false,
+                            place: local(11),
+                        },
+                    ),
+                ],
+            ),
+            "R4",
+        );
+        accepts(with_locals(
+            &[locals[1], locals[1]],
+            vec![
+                assign(11, address_of_p()),
+                assign(12, Rvalue::Use(copy(11))),
+            ],
         ));
     }
 

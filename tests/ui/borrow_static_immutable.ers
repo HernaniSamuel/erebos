@@ -1,0 +1,55 @@
+// emit: mir
+// A `static` that is not `mut` is a root of the borrow check (ADR 0111): `&S`
+// of it and of a field is a borrow of a place that starts at the static, held
+// while the static is read and lent to calls. Nothing writes it, so nothing
+// conflicts; the dump shows the `Ref` of the place `(*_t)` of its address.
+struct Pair {
+    a: u32,
+    b: u32,
+}
+
+static LIMIT: u32 = 7;
+static ORIGIN: Pair = Pair { a: 1, b: 2 };
+static TABLE: [u32; 4] = [1, 2, 3, 4];
+
+fn read(r: &u32) -> u32 {
+    *r
+}
+
+fn sum(t: &[u32; 4]) -> u32 {
+    (*t)[0] + (*t)[1] + (*t)[2] + (*t)[3]
+}
+
+// `&LIMIT` held while `LIMIT` is read, and lent to a call.
+fn held() -> u32 {
+    let r: &u32 = &LIMIT;
+    let n: u32 = LIMIT;
+    let m: u32 = read(&LIMIT);
+    *r + n + m + read(r)
+}
+
+// A field and the whole static, borrowed together and read in between.
+fn parts() -> u32 {
+    let a: &u32 = &ORIGIN.a;
+    let whole: &Pair = &ORIGIN;
+    let b: u32 = ORIGIN.b;
+    *a + (*whole).b + b + read(&ORIGIN.a)
+}
+
+// An array static, borrowed whole and by element.
+fn table() -> u32 {
+    let t: &[u32; 4] = &TABLE;
+    let e: &u32 = &TABLE[2];
+    TABLE[1] + sum(t) + sum(&TABLE) + *e
+}
+
+entry fn main() -> ! {
+    held();
+    parts();
+    table();
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    loop {}
+}
