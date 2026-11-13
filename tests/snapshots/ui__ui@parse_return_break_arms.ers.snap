@@ -70,6 +70,7 @@ File {
                     name: "take",
                     span: 385..389,
                 },
+                receiver: None,
                 params: [
                     Param {
                         mutable: false,
@@ -164,6 +165,7 @@ File {
                     name: "arms",
                     span: 420..424,
                 },
+                receiver: None,
                 params: [
                     Param {
                         mutable: false,
@@ -356,6 +358,7 @@ File {
                     name: "last_arm_without_comma",
                     span: 635..657,
                 },
+                receiver: None,
                 params: [
                     Param {
                         mutable: false,
@@ -451,6 +454,7 @@ File {
                     name: "neighbours",
                     span: 734..744,
                 },
+                receiver: None,
                 params: [
                     Param {
                         mutable: false,
@@ -888,6 +892,7 @@ File {
                     name: "main",
                     span: 1009..1013,
                 },
+                receiver: None,
                 params: [],
                 ret: Some(
                     Ty {
@@ -925,6 +930,7 @@ File {
                     name: "on_panic",
                     span: 1042..1050,
                 },
+                receiver: None,
                 params: [],
                 ret: Some(
                     Ty {

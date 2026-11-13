@@ -15,6 +15,7 @@ File {
                     name: "slices",
                     span: 86..92,
                 },
+                receiver: None,
                 params: [
                     Param {
                         mutable: false,

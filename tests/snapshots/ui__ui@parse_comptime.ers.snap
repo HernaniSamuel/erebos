@@ -125,6 +125,7 @@ File {
                     name: "f",
                     span: 168..169,
                 },
+                receiver: None,
                 params: [
                     Param {
                         mutable: false,

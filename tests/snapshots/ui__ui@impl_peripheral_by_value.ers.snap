@@ -1,0 +1,42 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/impl_peripheral_by_value.ers
+---
+--- errors ---
+ty::peripheral-by-value
+
+  × `Uart` is a peripheral type, which no value has
+    ╭─[impl_peripheral_by_value.ers:13:17]
+ 12 │ impl Uart {
+ 13 │     fn by_value(self) {}
+    ·                 ──┬─
+    ·                   ╰── `Uart` as the type of a parameter
+ 14 │ 
+    ╰────
+  help: a peripheral type describes a device's registers, reached one at a time from a peripheral
+        or through a pointer, such as `*mut Uart` (ADR 0058)
+ty::peripheral-by-value
+
+  × `Uart` is a peripheral type, which no value has
+    ╭─[impl_peripheral_by_value.ers:15:21]
+ 14 │ 
+ 15 │     fn by_mut_value(mut self) {}
+    ·                     ────┬───
+    ·                         ╰── `Uart` as the type of a parameter
+ 16 │ 
+    ╰────
+  help: a peripheral type describes a device's registers, reached one at a time from a peripheral
+        or through a pointer, such as `*mut Uart` (ADR 0058)
+ty::peripheral-by-value
+
+  × `Uart` is a peripheral type, which no value has
+    ╭─[impl_peripheral_by_value.ers:26:13]
+ 25 │ 
+ 26 │ fn param(u: Uart) {}
+    ·             ──┬─
+    ·               ╰── `Uart` as the type of a parameter
+ 27 │ 
+    ╰────
+  help: a peripheral type describes a device's registers, reached one at a time from a peripheral
+        or through a pointer, such as `*mut Uart` (ADR 0058)

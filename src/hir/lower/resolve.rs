@@ -3,13 +3,13 @@
 
 use crate::builtin::builtin_variant_help;
 use crate::diag::Diagnostic;
-use crate::hir::{self, BuiltinEnum, EnumId, FnId, ModuleId, Visibility};
+use crate::hir::{self, BuiltinEnum, EnumId, FnId, ModuleId, Ty, Visibility};
 use crate::span::Span;
 use crate::syntax::ast;
 
 use super::{
-    Binding, Def, Lookup, Lowerer, Named, UseState, builtin_fn, builtin_what, is_builtin_type,
-    item_path, plain_name, visibility, written, written_segments,
+    Binding, Def, Lookup, Lowerer, Named, TypeName, UseState, builtin_fn, builtin_what,
+    is_builtin_type, item_path, plain_name, visibility, written, written_segments,
 };
 
 impl Lowerer<'_> {
@@ -163,6 +163,10 @@ impl Lowerer<'_> {
                 self.use_variant(id, enum_id);
                 UseState::Failed
             }
+            Named::TypeFn(def, _) => {
+                self.use_type_function(id, def);
+                UseState::Failed
+            }
             Named::Missing(module) => {
                 let diag = Diagnostic::error(
                     "resolve::unknown-path",
@@ -170,6 +174,15 @@ impl Lowerer<'_> {
                 );
                 let diag = self.missing(diag, path, module, "not found");
                 self.diags.push(diag);
+                UseState::Failed
+            }
+            Named::NoFunction(def) => {
+                let diag = Diagnostic::error(
+                    "resolve::unknown-path",
+                    format!("cannot find `{}`", written(path)),
+                );
+                let last = &path.segments[path.segments.len() - 1];
+                self.no_function(Some(diag), def, last);
                 UseState::Failed
             }
             Named::Failed => UseState::Failed,
@@ -197,6 +210,31 @@ impl Lowerer<'_> {
             .help(format!(
                 "a variant is written with its enum, or as `.{}` where the enum is the expected type: bring in the enum with `use {written_enum};` and write `{as_used}::{}` (ADR 0044, 0049)",
                 variant.name, variant.name
+            )),
+        );
+    }
+
+    /// `resolve::use-type-function` for the `use` `id`, which names a
+    /// function of the type `def` (ADR 0113).
+    fn use_type_function(&mut self, id: usize, def: Def) {
+        let u = &self.uses[id];
+        let path = &u.path;
+        // A function follows its type in the path.
+        let Some((function, prefix)) = path.segments.split_last() else {
+            return;
+        };
+        let type_name = self.type_name(def);
+        let written_type = written_segments(prefix);
+        let as_used = &prefix[prefix.len() - 1].name;
+        self.diags.push(
+            Diagnostic::error(
+                "resolve::use-type-function",
+                format!("`{}` is a function of a type, which `use` cannot bring in", written(path)),
+            )
+            .label(u.span, format!("a function of `{type_name}`"))
+            .help(format!(
+                "a function of a type is written with its type, so that the call says what it is about: bring in the type with `use {written_type};` and write `{as_used}::{}` (ADR 0113)",
+                function.name
             )),
         );
     }
@@ -380,9 +418,11 @@ impl Lowerer<'_> {
     }
 
     /// What `path` names, from the current module (ADR 0049): each segment
-    /// before the last names a module or an enum, and is looked up in the
-    /// module named before it, the first in the current one; after an enum
-    /// comes a variant, which ends the path. Errors of a segment before the
+    /// before the last names a module, an enum, or a struct, bit-field struct
+    /// or peripheral type, and is looked up in the module named before it, the
+    /// first in the current one; after an enum comes a variant or a function,
+    /// after another type a function, which ends the path (ADR 0113). `Self`
+    /// first names the type of the `impl`. Errors of a segment before the
     /// last are reported; a last segment that names nothing is left to the
     /// caller, as the error of its position. Locals and the built-in names
     /// of a single name are the caller's to try first.
@@ -395,16 +435,39 @@ impl Lowerer<'_> {
         for (i, segment) in init.iter().enumerate() {
             let module = match at {
                 Prefix::Module(module) => module,
-                // `E::V::x`: a variant ends a path.
+                // `E::V::x`, `T::f::x`: a variant or a function ends a path.
                 Prefix::Enum(id) => {
-                    if self.variant_index(id, segment).is_some() {
+                    if self.find_variant(id, segment).is_some() {
                         self.not_an_enum(&path.segments[..=i], "a variant");
+                    } else if self.type_fn(Def::Enum(id), segment).is_some() {
+                        let what = self.type_fn_what(Def::Enum(id));
+                        self.not_an_enum(&path.segments[..=i], &what);
+                    } else {
+                        self.unknown_variant(id, segment);
+                    }
+                    return Named::Failed;
+                }
+                Prefix::Type(def) => {
+                    if self.type_fn(def, segment).is_some() {
+                        let what = self.type_fn_what(def);
+                        self.not_an_enum(&path.segments[..=i], &what);
+                    } else {
+                        self.no_function(None, def, segment);
                     }
                     return Named::Failed;
                 }
             };
             at = match segment.name.as_str() {
                 "crate" => Prefix::Module(self.crate_root(module)),
+                // The type of the `impl` (ADR 0113).
+                "Self" if i == 0 => match self.self_ty {
+                    Some(Def::Enum(id)) => Prefix::Enum(id),
+                    Some(def) => Prefix::Type(def),
+                    None => {
+                        self.unknown_self(segment);
+                        return Named::Failed;
+                    }
+                },
                 // `core` names `core` in every module, `core`'s included;
                 // no item can take the name (ADR 0052).
                 "core" if i == 0 => Prefix::Module(self.core_root),
@@ -445,6 +508,9 @@ impl Lowerer<'_> {
                 _ => match self.lookup(module, segment) {
                     Lookup::Found(Def::Module(module)) => Prefix::Module(module),
                     Lookup::Found(Def::Enum(id)) => Prefix::Enum(id),
+                    Lookup::Found(
+                        def @ (Def::Struct(_) | Def::BitStruct(_) | Def::PeripheralType(_)),
+                    ) => Prefix::Type(def),
                     Lookup::Found(def) => {
                         self.not_an_enum(&path.segments[..=i], def.what());
                         return Named::Failed;
@@ -470,12 +536,26 @@ impl Lowerer<'_> {
             };
         }
         match at {
-            Prefix::Enum(id) => match self.variant_index(id, last) {
+            Prefix::Enum(id) => match self.find_variant(id, last) {
                 Some(index) => Named::Variant(id, index),
-                None => Named::Failed,
+                None => match self.type_fn(Def::Enum(id), last) {
+                    Some(function) => Named::TypeFn(Def::Enum(id), function),
+                    None => Named::NoFunction(Def::Enum(id)),
+                },
+            },
+            Prefix::Type(def) => match self.type_fn(def, last) {
+                Some(function) => Named::TypeFn(def, function),
+                None => Named::NoFunction(def),
             },
             Prefix::Module(module) => match last.name.as_str() {
                 "crate" => Named::Item(Def::Module(self.crate_root(module))),
+                "Self" if init.is_empty() => match self.self_ty {
+                    Some(def) => Named::Item(def),
+                    None => {
+                        self.unknown_self(last);
+                        Named::Failed
+                    }
+                },
                 "core" if init.is_empty() => Named::Item(Def::Module(self.core_root)),
                 "super" => match self.parent(module, last) {
                     Some(parent) => Named::Item(Def::Module(parent)),
@@ -498,12 +578,12 @@ impl Lowerer<'_> {
             Diagnostic::error(
                 "resolve::not-an-enum",
                 format!(
-                    "`{}` is neither a module nor an enum",
+                    "`{}` is neither a module, an enum nor a type with functions",
                     written_segments(segments)
                 ),
             )
             .label(segment.span, what)
-            .help("`::` follows a module, to name one of its items, or an enum, to name one of its variants, as in `Mode::Run` (ADR 0035, 0049)"),
+            .help("`::` follows a module, to name one of its items, an enum, to name one of its variants or functions, or a struct, bit-field struct or peripheral type, to name one of its functions, as in `Mode::Run` or `Ring::new()` (ADR 0035, 0049, 0113)"),
         );
     }
 
@@ -571,18 +651,20 @@ impl Lowerer<'_> {
         );
     }
 
-    /// The index of the variant `variant` of the enum `id`; one it does not
-    /// have is reported (ADR 0035).
-    fn variant_index(&mut self, id: EnumId, variant: &ast::Ident) -> Option<u32> {
+    /// The index of the variant `variant` of the enum `id`, if it has one.
+    fn find_variant(&self, id: EnumId, variant: &ast::Ident) -> Option<u32> {
         let decl = self.enum_decls[id.0 as usize].0;
         // A variant declared twice was reported; its first counts.
-        if let Some(index) = decl
-            .variants
+        decl.variants
             .iter()
             .position(|v| v.name.name == variant.name)
-        {
-            return Some(index as u32);
-        }
+            .map(|index| index as u32)
+    }
+
+    /// `resolve::unknown-variant` for `variant`, which the enum `id` does
+    /// not have (ADR 0035).
+    pub(super) fn unknown_variant(&mut self, id: EnumId, variant: &ast::Ident) {
+        let decl = self.enum_decls[id.0 as usize].0;
         // A variant declared twice is listed once.
         let mut names: Vec<String> = Vec::new();
         for v in &decl.variants {
@@ -602,8 +684,197 @@ impl Lowerer<'_> {
             diag = diag.help(format!("its variants are {}", names.join(", ")));
         }
         self.diags.push(diag);
-        None
     }
+
+    /// What is known of the type `def`, a struct, bit-field struct, enum or
+    /// peripheral type: `Def`s of anything else never reach here, since only
+    /// a type has functions (ADR 0113).
+    fn type_info(&self, def: Def) -> TypeInfo {
+        match def {
+            Def::Struct(id) => {
+                let (decl, module) = self.struct_decls[id.0 as usize];
+                let ty = self.struct_tys[id.0 as usize];
+                TypeInfo {
+                    name: ty.name,
+                    ty: Ty::Struct(ty),
+                    module,
+                    name_span: decl.name.span,
+                }
+            }
+            Def::BitStruct(id) => {
+                let (decl, module) = self.bit_struct_decls[id.0 as usize];
+                let ty = self.bit_struct_tys[id.0 as usize];
+                TypeInfo {
+                    name: ty.name,
+                    ty: Ty::BitStruct(ty),
+                    module,
+                    name_span: decl.name.span,
+                }
+            }
+            Def::Enum(id) => {
+                let (decl, module) = self.enum_decls[id.0 as usize];
+                let ty = self.enum_tys[id.0 as usize];
+                TypeInfo {
+                    name: ty.name,
+                    ty: Ty::Enum(ty),
+                    module,
+                    name_span: decl.name.span,
+                }
+            }
+            Def::PeripheralType(id) => {
+                let (decl, module) = self.peripheral_type_decls[id.0 as usize];
+                let ty = self.peripheral_tys[id.0 as usize];
+                TypeInfo {
+                    name: ty.name,
+                    ty: Ty::Peripheral(ty),
+                    module,
+                    name_span: decl.name.span,
+                }
+            }
+            _ => unreachable!("only a type has functions"),
+        }
+    }
+
+    /// The path of the type `def`, as diagnostics show it.
+    pub(super) fn type_name(&self, def: Def) -> &'static str {
+        self.type_info(def).name
+    }
+
+    /// The type `def` as a type of the HIR.
+    pub(super) fn def_ty(&self, def: Def) -> Ty {
+        self.type_info(def).ty
+    }
+
+    /// The module the type `def` is declared in, and the span of its name.
+    fn type_declared(&self, def: Def) -> (ModuleId, Span) {
+        let info = self.type_info(def);
+        (info.module, info.name_span)
+    }
+
+    /// How diagnostics say that a path names a function of the type `def`.
+    pub(super) fn type_fn_what(&self, def: Def) -> String {
+        format!("a function of `{}`", self.type_name(def))
+    }
+
+    /// The function `name` of the type `def`. Naming one that is not visible
+    /// from the current module is reported (ADR 0113); it is still what the
+    /// name means, so nothing more is reported about it.
+    fn type_fn(&mut self, def: Def, name: &ast::Ident) -> Option<FnId> {
+        let Some(&TypeName::Fn(function)) = self
+            .type_namespaces
+            .get(&def)
+            .and_then(|names| names.get(&name.name))
+        else {
+            return None;
+        };
+        let (module, _) = self.type_declared(def);
+        if function.vis == Visibility::Private && !self.is_within(self.module, module) {
+            self.diags.push(
+                Diagnostic::error(
+                    "resolve::private-item",
+                    format!("`{}::{}` is private", self.type_name(def), name.name),
+                )
+                .label(name.span, "not visible here")
+                .label(function.name_span, "declared here without `pub`")
+                .help(format!(
+                    "a private function of a type is visible only in {}, which declares the type, and the modules inside it; declare it `pub` to use it elsewhere (ADR 0113)",
+                    self.module_name(module)
+                )),
+            );
+        }
+        Some(function.id)
+    }
+
+    /// The error of `name`, which the type `def` has no function of, nor,
+    /// for an enum, a variant. With the `position` error of a path used
+    /// elsewhere than in a call, that is the error of its position
+    /// (ADR 0113), but for an enum, whose paths name variants everywhere:
+    /// `resolve::unknown-variant`. Without it, in a call, or in the middle
+    /// of a path, `resolve::unknown-function`.
+    pub(super) fn no_function(
+        &mut self,
+        position: Option<Diagnostic>,
+        def: Def,
+        name: &ast::Ident,
+    ) {
+        if let (Some(_), Def::Enum(id)) = (&position, def) {
+            return self.unknown_variant(id, name);
+        }
+        let type_name = self.type_name(def);
+        let enum_ = matches!(def, Def::Enum(_));
+        let (_, declared) = self.type_declared(def);
+        let mut functions: Vec<(Span, &str)> = self
+            .type_namespaces
+            .get(&def)
+            .into_iter()
+            .flatten()
+            .filter_map(|(name, entry)| match entry {
+                TypeName::Fn(f) => Some((f.name_span, name.as_str())),
+                TypeName::Variant(_) => None,
+            })
+            .collect();
+        functions.sort_by_key(|(span, _)| (span.file, span.lo));
+        let help = if functions.is_empty() {
+            format!(
+                "`{type_name}` has no functions: they are declared in an `impl` block (ADR 0113)"
+            )
+        } else {
+            let names: Vec<String> = functions
+                .iter()
+                .map(|(_, name)| format!("`{name}`"))
+                .collect();
+            format!("its functions are {}", names.join(", "))
+        };
+        let diag = match position {
+            Some(diag) => diag.label(
+                name.span,
+                format!("`{type_name}` has no function `{}`", name.name),
+            ),
+            None => {
+                let what = if enum_ {
+                    "variant or function"
+                } else {
+                    "function"
+                };
+                Diagnostic::error(
+                    "resolve::unknown-function",
+                    format!("`{type_name}` has no {what} `{}`", name.name),
+                )
+                .label(name.span, format!("unknown {what}"))
+            }
+        };
+        self.diags.push(
+            diag.label(declared, format!("`{type_name}` is declared here"))
+                .help(help),
+        );
+    }
+
+    /// `resolve::unknown-self` for `Self` or `self`, `name`, used where the
+    /// type of an `impl` or a receiver is not (ADR 0113).
+    pub(super) fn unknown_self(&mut self, name: &ast::Ident) {
+        let diag = if name.name == "Self" {
+            Diagnostic::error("resolve::unknown-self", "`Self` is used outside an `impl`")
+                .label(name.span, "no type here")
+                .help("`Self` names the type of the `impl` block it is written in (ADR 0113)")
+        } else {
+            Diagnostic::error(
+                "resolve::unknown-self",
+                "`self` is used in a function without a receiver",
+            )
+            .label(name.span, "no receiver here")
+            .help("`self` is the receiver of a function in an `impl` block, written as its first parameter: `self`, `mut self`, `&self` or `&mut self` (ADR 0113)")
+        };
+        self.diags.push(diag);
+    }
+}
+
+/// What is known of a type that has functions.
+struct TypeInfo {
+    /// Its path, as diagnostics show it.
+    name: &'static str,
+    ty: Ty,
+    module: ModuleId,
+    name_span: Span,
 }
 
 /// Where the segments of a path read so far lead.
@@ -611,4 +882,6 @@ impl Lowerer<'_> {
 enum Prefix {
     Module(ModuleId),
     Enum(EnumId),
+    /// A struct, bit-field struct or peripheral type.
+    Type(Def),
 }

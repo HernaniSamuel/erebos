@@ -87,6 +87,7 @@ Hir {
             runtime: false,
             comptime: None,
             align: None,
+            owner: None,
         },
         Fn {
             name: "on_panic",
@@ -131,6 +132,7 @@ Hir {
             runtime: false,
             comptime: None,
             align: None,
+            owner: None,
         },
         Fn {
             name: "LSR",
@@ -177,6 +179,7 @@ Hir {
                 ),
             ),
             align: None,
+            owner: None,
         },
         Fn {
             name: "UART1_BASE",
@@ -223,6 +226,7 @@ Hir {
                 ),
             ),
             align: None,
+            owner: None,
         },
         Fn {
             name: "offset",
@@ -265,6 +269,7 @@ Hir {
                 Value,
             ),
             align: None,
+            owner: None,
         },
         Fn {
             name: "address",
@@ -307,6 +312,7 @@ Hir {
                 Value,
             ),
             align: None,
+            owner: None,
         },
     ],
     consts: [
@@ -451,6 +457,7 @@ Hir {
                     group: None,
                 },
             ],
+            fns: [],
         },
     ],
     peripherals: [

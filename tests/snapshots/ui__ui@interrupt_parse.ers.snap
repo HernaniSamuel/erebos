@@ -59,6 +59,7 @@ File {
                     name: "tick",
                     span: 299..303,
                 },
+                receiver: None,
                 params: [],
                 ret: None,
                 body: Some(
@@ -129,6 +130,7 @@ File {
                     name: "crash",
                     span: 359..364,
                 },
+                receiver: None,
                 params: [],
                 ret: Some(
                     Ty {
@@ -188,6 +190,7 @@ File {
                     name: "pend",
                     span: 427..431,
                 },
+                receiver: None,
                 params: [],
                 ret: Some(
                     Ty {
@@ -262,6 +265,7 @@ File {
                     name: "svc",
                     span: 510..513,
                 },
+                receiver: None,
                 params: [],
                 ret: None,
                 body: Some(
@@ -337,6 +341,7 @@ File {
                                     name: "bus",
                                     span: 615..618,
                                 },
+                                receiver: None,
                                 params: [],
                                 ret: Some(
                                     Ty {
@@ -379,6 +384,7 @@ File {
                     name: "at",
                     span: 739..741,
                 },
+                receiver: None,
                 params: [
                     Param {
                         mutable: false,
@@ -528,6 +534,7 @@ File {
                     name: "main",
                     span: 835..839,
                 },
+                receiver: None,
                 params: [],
                 ret: Some(
                     Ty {
@@ -565,6 +572,7 @@ File {
                     name: "on_panic",
                     span: 869..877,
                 },
+                receiver: None,
                 params: [],
                 ret: Some(
                     Ty {

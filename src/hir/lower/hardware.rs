@@ -10,7 +10,7 @@ use crate::hir::{
 use crate::span::Span;
 use crate::syntax::ast;
 
-use super::{Def, Lowerer, Named, visibility, written};
+use super::{Def, Lowerer, Named, last_segment, visibility, written};
 
 impl Lowerer<'_> {
     /// A `memory` block (ADR 0057), checked on its own: each region name
@@ -215,6 +215,8 @@ impl Lowerer<'_> {
             // Filled in once every `use` is resolved, by `reachability`.
             reachable: Vec::new(),
             entries,
+            // Filled in by `lower`, from the `impl` blocks.
+            fns: Vec::new(),
         }
     }
 
@@ -459,6 +461,13 @@ impl Lowerer<'_> {
             }
             Named::Item(def) => not_a_peripheral(def.what()),
             Named::Variant(..) => not_a_peripheral("a variant"),
+            Named::TypeFn(def, _) => not_a_peripheral(&self.type_fn_what(def)),
+            Named::NoFunction(def) => {
+                let message = format!("cannot find `{}`", written(path));
+                let diag = Diagnostic::error("resolve::unknown-name", message);
+                self.no_function(Some(diag), def, last_segment(path));
+                return None;
+            }
             Named::Missing(module) => {
                 let message = if path.segments.len() == 1 {
                     format!("cannot find `{}` in this scope", written(path))

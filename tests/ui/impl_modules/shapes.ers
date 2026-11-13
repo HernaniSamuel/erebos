@@ -1,0 +1,34 @@
+pub struct Circle {
+    pub radius: u32,
+}
+
+struct Hidden {
+    value: u32,
+}
+
+impl Circle {
+    pub fn new() -> Self {
+        Circle { radius: 1 }
+    }
+
+    fn secret(&self) -> u32 {
+        Self::reveal(self)
+    }
+
+    fn reveal(&self) -> u32 {
+        (*self).radius
+    }
+}
+
+impl Hidden {
+    pub fn new() -> Self {
+        Hidden { value: 1 }
+    }
+}
+
+pub mod inner {
+    // A module inside the one of the type sees its private functions.
+    pub fn area(c: &super::Circle) -> u32 {
+        super::Circle::reveal(c)
+    }
+}

@@ -4331,7 +4331,7 @@ found in module `uart`"):
 | a last segment that names nothing | the code of its position: `resolve::unknown-type` for a type or a struct literal, `resolve::unknown-function` for a callee, `resolve::unknown-name` for a value or a pattern, `resolve::unknown-variant` after an enum |
 | a last segment that names an item of another kind, such as a constant as a type | the code of its position, labelled with what the item is ("a constant, not a type"); in a pattern, `resolve::not-a-constant` |
 | a segment followed by `::` that names nothing | `resolve::unknown-path` |
-| a segment followed by `::` that names neither a module nor an enum: a struct, a constant, a variant (`Mode::Run::x`), a built-in type or function (`u8::MAX`) | `resolve::not-an-enum` |
+| a segment followed by `::` that names neither a module, an enum nor a type with functions: a constant, a variant or a function of a type (`Mode::Run::x`, `Ring::new::x`), a built-in type or function (`u8::MAX`) | `resolve::not-an-enum` |
 | a module where a type, a value, a function, a struct or, in a pattern, a constant or a variant is expected (`let x: uart`, `uart()`, `uart { }`) | `resolve::misused-module` |
 | `super` in the root module, or `super::super` one level below it | `resolve::super-at-root` |
 
@@ -7201,9 +7201,12 @@ Every error has a stable code, shown with the message.
 | `parser::local-static` | `static` or `extern static` inside a function body |
 | `parser::local-mod` | `mod` inside a function body |
 | `parser::local-use` | `use` inside a function body |
+| `parser::local-impl` | `impl` inside a function body |
 | `parser::local-memory` | a `memory` block inside a function body: `memory {` followed by `region` and a name, or by `code`, `data` or `stack` and `in` |
 | `parser::local-peripheral` | a peripheral type or a peripheral inside a function body: `peripheral` followed by a name |
-| `parser::misplaced-pub` | `pub` on a `comptime` block, a `memory` block or the entry function |
+| `parser::misplaced-pub` | `pub` on a `comptime` block, a `memory` block, an `impl` block or the entry function |
+| `parser::impl-item` | an item other than a function with a body inside an `impl`: a constant, a struct, an `extern fn`, the entry or panic function, an interrupt handler, a static, a module, a `use`, a `comptime` block, a `memory` block, a peripheral item or another `impl` |
+| `parser::misplaced-self` | a receiver (`self`, `mut self`, `&self`, `&mut self`) that is not the first parameter of a function in an `impl`, or is in a function that is not in one |
 | `parser::enum-without-type` | an enum without `: Type` |
 | `parser::variant-without-value` | a variant without `= value` |
 | `parser::empty-payload` | a variant written `V()`, a payload without types |
@@ -7215,14 +7218,17 @@ Every error has a stable code, shown with the message.
 | `resolve::misused-module` | a module where a type, a value, a function, a struct or, in a pattern, a constant or a variant is expected |
 | `resolve::super-at-root` | `super` in the root module, or `super::super` one level below it |
 | `resolve::type-argument-count` | `Option` or `Result` with the wrong number of type arguments, as `Option`, `Option()` or `Result(u32)`, or parentheses after a type that takes none, as `u32(u8)` |
-| `resolve::unknown-function` | call to a function that does not exist, or to an item that is not a function |
+| `resolve::unknown-function` | call to a function that does not exist, or to an item that is not a function; `T::f` where the struct, bit-field struct or peripheral type `T`, or the enum `T` (which has no variant `f` either), has no function `f` |
+| `resolve::impl-type` | `impl` of a name that is not a struct, bit-field struct, enum or peripheral type declared in the module of the `impl`: a built-in type, `Option`, a type brought in with `use`, a constant, a static, a peripheral, a function or a module; a name that names nothing is `resolve::unknown-type` |
+| `resolve::unknown-self` | `Self` outside an `impl`, or `self` in a function of a type without a receiver or in a function that is not in an `impl` |
+| `resolve::use-type-function` | a `use` naming a function of a type (`use ring::Ring::new;`) |
 | `resolve::not-a-function` | call to a variable |
 | `resolve::call-entry` | call to the entry function |
 | `resolve::call-interrupt` | call to an `interrupt fn`, from a function or at compile time |
 | `resolve::not-a-vector` | the path after `at` of an `interrupt fn` names something other than a variant of `core::arch::Vector` or of an enum with `#[interrupts]`: a variant of another enum, a struct, a function, a constant, a static, an enum, a module or a peripheral |
 | `resolve::duplicate-vector` | a second `interrupt fn` at one vector (an enum and a variant); once per extra handler, labelling the first |
 | `resolve::duplicate-interrupts` | a second enum with `#[interrupts]` in a program; once per extra enum, labelling the first |
-| `resolve::duplicate-item` | two items, modules or `use` names with one name in one module |
+| `resolve::duplicate-item` | two items, modules or `use` names with one name in one module; two functions of one type with one name, in one `impl` or in two, or a function and a variant of one enum |
 | `resolve::duplicate-symbol` | two items of the program, `core` included, with one symbol |
 | `resolve::duplicate-type` | any item, module or `use` name named like a built-in type: `bool`, an integer type, `Option` or `Result` |
 | `resolve::use-variant` | a `use` naming an enum variant |
@@ -7243,13 +7249,13 @@ Every error has a stable code, shown with the message.
 | `resolve::duplicate-variant` | two variants with one name |
 | `resolve::empty-enum` | an enum without variants |
 | `resolve::unknown-variant` | `E::V` where `E` has no variant `V`; a path followed by patterns in parentheses that names no variant |
-| `resolve::not-an-enum` | `X::V` where `X` names neither a module nor an enum: a struct, a constant, a variant, a built-in type or function, or `Option` or `Result`, which are no items and whose variants are written `.V` |
+| `resolve::not-an-enum` | `X::V` where `X` names neither a module, an enum nor a type with functions (a struct, bit-field struct or peripheral type): a constant, a variant or function (`Mode::Run::x`, `Ring::new::x`), a built-in type or function, or `Option` or `Result`, which are no items and whose variants are written `.V` |
 | `resolve::not-a-constant` | a name or path in a pattern that is not a constant: a local variable, parameter, static, peripheral, function, struct or enum |
 | `resolve::duplicate-binding` | one name bound twice in one pattern, or in one alternative of an or-pattern |
 | `resolve::inconsistent-binding` | a name not bound by every alternative of an or-pattern, or bound with `let mut` by only some |
-| `resolve::reserved-name` | an item, module or `use` named `_start`, `core`, with a name starting with `__`, or like a built-in function (`assert`, `len`, `slice`, `end`); a module of the root module named `llvm` or `rt`; a region named `INCLUDE` |
+| `resolve::reserved-name` | an item, module or `use` named `_start`, `core`, with a name starting with `__`, or like a built-in function (`assert`, `len`, `slice`, `end`); a module of the root module named `llvm` or `rt`, or a struct, bit-field struct, enum or peripheral type of the root module named `llvm`; a function of a type named `_start` or with a name starting with `__`; a region named `INCLUDE` |
 | `resolve::unknown-attribute` | an attribute that does not exist |
-| `resolve::misplaced-attribute` | an attribute on an item it does not apply to, as `#[packed]` or `#[align(N)]` on a bit-field struct, `#[align(N)]` on an `extern fn`, or `#[naked]` on an `extern fn`, the entry function, the panic function, an interrupt handler or anything but a function with a body, `#[interrupts]` on anything but an enum, `#[copy]` on a bit-field struct, an enum without payloads or anything but a struct or an enum, or `#[linear]` on anything but a struct that is not a bit-field struct (an enum included) |
+| `resolve::misplaced-attribute` | an attribute on an item it does not apply to, as `#[packed]` or `#[align(N)]` on a bit-field struct, `#[align(N)]` on an `extern fn`, or `#[naked]` on an `extern fn`, the entry function, the panic function, an interrupt handler or anything but a function with a body, `#[interrupts]` on anything but an enum, `#[copy]` on a bit-field struct, an enum without payloads or anything but a struct or an enum, or `#[linear]` on anything but a struct that is not a bit-field struct (an enum included); any attribute on an `impl` block; `#[export]` on a function of a type |
 | `resolve::attribute-argument` | an attribute with a missing or extra argument |
 | `resolve::duplicate-attribute` | an attribute given twice |
 | `resolve::conflicting-attributes` | `#[packed]` with `#[align(N)]`, or `#[copy]` with `#[linear]` |

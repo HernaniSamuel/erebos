@@ -74,6 +74,7 @@ Hir {
             runtime: false,
             comptime: None,
             align: None,
+            owner: None,
         },
         Fn {
             name: "on_panic",
@@ -118,6 +119,7 @@ Hir {
             runtime: false,
             comptime: None,
             align: None,
+            owner: None,
         },
         Fn {
             name: "KIB",
@@ -164,6 +166,7 @@ Hir {
                 ),
             ),
             align: None,
+            owner: None,
         },
         Fn {
             name: "size",
@@ -225,6 +228,7 @@ Hir {
                 Value,
             ),
             align: None,
+            owner: None,
         },
         Fn {
             name: "size",
@@ -286,6 +290,7 @@ Hir {
                 Value,
             ),
             align: None,
+            owner: None,
         },
         Fn {
             name: "stack_size",
@@ -347,6 +352,7 @@ Hir {
                 Value,
             ),
             align: None,
+            owner: None,
         },
     ],
     consts: [

@@ -15,6 +15,7 @@ File {
                     name: "f",
                     span: 16..17,
                 },
+                receiver: None,
                 params: [],
                 ret: None,
                 body: Some(

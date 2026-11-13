@@ -15,6 +15,7 @@ File {
                     name: "forms",
                     span: 311..316,
                 },
+                receiver: None,
                 params: [
                     Param {
                         mutable: false,
@@ -1390,6 +1391,7 @@ File {
                     name: "bounds",
                     span: 952..958,
                 },
+                receiver: None,
                 params: [
                     Param {
                         mutable: false,

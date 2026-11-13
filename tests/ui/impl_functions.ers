@@ -1,0 +1,227 @@
+// emit: typeck
+// Accepted: the functions of a type (ADR 0113). An `impl` of a struct, a
+// bit-field struct, an enum with payloads, a peripheral type and the type of a
+// cluster; two blocks of one type; a function named by its type, `T::f`,
+// `Self::f`, `ring::Ring::f` and through `use ring::Ring;`; a private
+// function called from a descendant module; a method called with its receiver
+// as the first argument, with the explicit `(*self).f` in its body; names of
+// the built-ins, which only mean the built-in when written alone; a `struct
+// llvm` in a submodule; a `#[linear]` struct consumed by a `self` function; a
+// function of a type as a static's initializer and as a `sym` operand. The
+// dump names a function by the path of its type.
+mod ring {
+    pub struct Ring {
+        buf: [u8; 4],
+        head: usize,
+        count: usize,
+    }
+
+    impl Ring {
+        pub fn new() -> Self {
+            Ring { buf: [0; 4], head: 0, count: 0 }
+        }
+
+        pub fn push(&mut self, b: u8) -> bool {
+            if (*self).count == 4 {
+                return false;
+            }
+            (*self).buf[((*self).head + (*self).count) % 4] = b;
+            (*self).count += 1;
+            true
+        }
+
+        pub fn count(&self) -> usize {
+            (*self).count
+        }
+    }
+
+    // A second block of the type, in the same module.
+    impl Ring {
+        // Private: visible here and in the modules inside this one.
+        fn clear(&mut self) {
+            (*self).head = 0;
+            (*self).count = 0;
+        }
+
+        pub fn reset(&mut self) {
+            Self::clear(&mut *self);
+        }
+
+        pub fn fresh() -> Ring {
+            let mut r: Ring = Self::new();
+            Self::clear(&mut r);
+            r
+        }
+    }
+
+    pub mod inner {
+        pub fn clear_it(r: &mut super::Ring) {
+            super::Ring::clear(r);
+        }
+    }
+}
+
+use ring::Ring;
+
+// A function of a type is not an item of the module: `new` and `count` are
+// free for the module's own functions.
+fn new() -> u32 { 1 }
+fn count() -> u32 { 2 }
+
+fn calls() -> usize {
+    let mut r: Ring = Ring::new();
+    Ring::push(&mut r, 1);
+    ring::Ring::push(&mut r, 2);
+    let mut s: ring::Ring = ring::Ring::fresh();
+    Ring::reset(&mut s);
+    ring::inner::clear_it(&mut s);
+    Ring::count(&r) + Ring::count(&s)
+}
+
+// A struct of a submodule named `llvm` is allowed: the symbols of its
+// functions start with the path of the module.
+mod chips {
+    pub struct llvm {
+        pub x: u8,
+    }
+
+    impl llvm {
+        pub fn make() -> Self {
+            Self { x: 1 }
+        }
+    }
+}
+
+fn from_chips() -> chips::llvm {
+    chips::llvm::make()
+}
+
+// An enum with payloads: its variants and functions share a namespace.
+enum Mode: u8 {
+    Off = 0,
+    Run(u32) = 1,
+    Idle = 2,
+}
+
+impl Mode {
+    fn idle() -> Self {
+        Self::Idle
+    }
+
+    fn running(n: u32) -> Mode {
+        Mode::Run(n)
+    }
+}
+
+// A bit-field struct.
+struct Control: u8 {
+    enable: bool at 0 = false,
+    mode: u8 at 1..=2 = 0,
+}
+
+impl Control {
+    fn on() -> Self {
+        Control { enable: true, mode: 0 }
+    }
+
+    fn enabled(self) -> bool {
+        self.enable
+    }
+
+    fn with_mode(mut self, mode: u8) -> Control {
+        self.mode = mode;
+        self
+    }
+}
+
+// A peripheral type, and the type of one of its clusters.
+peripheral Context {
+    read write threshold: u32 at 0,
+}
+
+peripheral Plic {
+    read write enable: u32 at 0,
+    ctx: [Context; 2] at 0x1000 step 0x100,
+}
+
+peripheral PLIC: Plic at 0x0C00_0000;
+
+impl Context {
+    fn set(&mut self, v: u32) {
+        (*self).threshold = v;
+    }
+
+    fn get(&self) -> u32 {
+        (*self).threshold
+    }
+}
+
+impl Plic {
+    fn set_second(&mut self, v: u32) {
+        Context::set(&mut (*self).ctx[1], v);
+    }
+}
+
+fn hardware() -> u32 {
+    Plic::set_second(&mut PLIC, 3);
+    Context::get(&PLIC.ctx[1])
+}
+
+// Names of the built-ins: `end(t)` alone is the built-in, `Transfer::end(t)`
+// the function of the type.
+#[linear]
+struct Transfer {
+    channel: u32,
+}
+
+impl Transfer {
+    fn start(channel: u32) -> Transfer {
+        Transfer { channel: channel }
+    }
+
+    fn wait(self) -> u32 {
+        let c: u32 = self.channel;
+        end(self);
+        c
+    }
+
+    fn end(self) {
+        end(self);
+    }
+}
+
+struct Names {
+    n: u32,
+}
+
+impl Names {
+    fn len(&self) -> u32 {
+        (*self).n
+    }
+
+    fn u32(&self) -> u32 {
+        (*self).n
+    }
+}
+
+fn consume() -> u32 {
+    let t: Transfer = Transfer::start(1);
+    let u: Transfer = Transfer::start(2);
+    Transfer::end(u);
+    Transfer::wait(t)
+}
+
+fn builtins() -> u32 {
+    let n: Names = Names { n: 4 };
+    Names::len(&n) + Names::u32(&n)
+}
+
+// As a static's initializer, which runs at compile time, and as `sym`.
+static mut R: Ring = Ring::new();
+
+fn symbol() {
+    asm("call {f}", f = sym Ring::push, clobber_abi("C"));
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

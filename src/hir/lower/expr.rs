@@ -12,7 +12,7 @@ use crate::hir::{
 use crate::span::Span;
 use crate::syntax::ast;
 
-use super::{Def, Lowerer, Named, plain_name, written};
+use super::{Def, Lowerer, Named, last_segment, plain_name, written};
 
 impl Lowerer<'_> {
     /// `Name { field: value, ... }`: every field exactly once, in any order;
@@ -43,6 +43,14 @@ impl Lowerer<'_> {
                     Named::Missing(module) => self.missing(diag, path, module, "not a struct"),
                     Named::Item(def) => {
                         diag.label(path.span, format!("{}, not a struct", def.what()))
+                    }
+                    Named::TypeFn(def, _) => diag.label(
+                        path.span,
+                        format!("{}, not a struct", self.type_fn_what(def)),
+                    ),
+                    Named::NoFunction(def) => {
+                        self.no_function(Some(diag), def, last_segment(path));
+                        return ExprKind::Unit;
                     }
                     _ => diag.label(path.span, "a variant, not a struct"),
                 };
@@ -339,6 +347,13 @@ impl Lowerer<'_> {
             }
             return Some(ExprKind::Local(local));
         }
+        // A receiver is a local named `self` (ADR 0113).
+        if let Some(name) = path.as_single()
+            && name.name == "self"
+        {
+            self.unknown_self(name);
+            return None;
+        }
         let named = self.lookup_path(path);
         let message = if path.segments.len() == 1 {
             format!("cannot find `{}` in this scope", written(path))
@@ -362,7 +377,17 @@ impl Lowerer<'_> {
             Named::Item(def) => {
                 diag.label(path.span, format!("{}, which is not a value", def.what()))
             }
+            Named::TypeFn(def, _) => diag
+                .label(
+                    path.span,
+                    format!("{}, which is not a value", self.type_fn_what(def)),
+                )
+                .help(format!("call it: `{}(...)`", written(path))),
             Named::Missing(module) => self.missing(diag, path, module, "not found"),
+            Named::NoFunction(def) => {
+                self.no_function(Some(diag), def, last_segment(path));
+                return None;
+            }
         };
         self.diags.push(diag);
         None
@@ -426,7 +451,12 @@ impl Lowerer<'_> {
                 return None;
             }
             Named::Item(def) => diag.label(path.span, format!("{}, not a function", def.what())),
+            Named::TypeFn(_, id) => return Some(Callee::Fn(id)),
             Named::Missing(module) => self.missing(diag, path, module, "not found"),
+            Named::NoFunction(def) => {
+                self.no_function(None, def, last_segment(path));
+                return None;
+            }
         };
         self.diags.push(diag);
         None
@@ -789,12 +819,19 @@ impl Lowerer<'_> {
     fn asm_sym(&mut self, path: &ast::Path) -> AsmSym {
         let other = |what| AsmSym::Other(what, path.span);
         match self.lookup_path(path) {
-            Named::Item(Def::Fn(id)) => AsmSym::Fn(id),
+            Named::Item(Def::Fn(id)) | Named::TypeFn(_, id) => AsmSym::Fn(id),
             Named::Item(Def::Static(id)) => AsmSym::Static(id),
             Named::Item(def) => other(def.what()),
             Named::Variant(..) => other("an enum variant"),
             // Reported; lowering errors stop the pipeline.
             Named::Failed => other("an item"),
+            Named::NoFunction(def) => {
+                let message = format!("cannot find `{}`", written(path));
+                let diag = Diagnostic::error("resolve::unknown-name", message)
+                    .help("`sym` names a function or a static by its path (ADR 0079)");
+                self.no_function(Some(diag), def, last_segment(path));
+                other("an item")
+            }
             Named::Missing(module) => {
                 let message = if path.segments.len() == 1 {
                     format!("cannot find `{}` in this scope", written(path))

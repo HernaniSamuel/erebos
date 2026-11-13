@@ -15,6 +15,7 @@ File {
                     name: "patterns",
                     span: 454..462,
                 },
+                receiver: None,
                 params: [
                     Param {
                         mutable: false,
@@ -428,6 +429,7 @@ File {
                     name: "after_block",
                     span: 743..754,
                 },
+                receiver: None,
                 params: [
                     Param {
                         mutable: false,

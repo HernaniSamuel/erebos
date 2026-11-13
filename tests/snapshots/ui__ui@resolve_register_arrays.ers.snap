@@ -100,6 +100,7 @@ Hir {
             runtime: false,
             comptime: None,
             align: None,
+            owner: None,
         },
         Fn {
             name: "on_panic",
@@ -144,6 +145,7 @@ Hir {
             runtime: false,
             comptime: None,
             align: None,
+            owner: None,
         },
         Fn {
             name: "SOURCES",
@@ -190,6 +192,7 @@ Hir {
                 ),
             ),
             align: None,
+            owner: None,
         },
         Fn {
             name: "CONTEXT_STEP",
@@ -236,6 +239,7 @@ Hir {
                 ),
             ),
             align: None,
+            owner: None,
         },
         Fn {
             name: "length",
@@ -278,6 +282,7 @@ Hir {
                 Value,
             ),
             align: None,
+            owner: None,
         },
         Fn {
             name: "step",
@@ -320,6 +325,7 @@ Hir {
                 Value,
             ),
             align: None,
+            owner: None,
         },
     ],
     consts: [
@@ -428,6 +434,7 @@ Hir {
                     group: None,
                 },
             ],
+            fns: [],
         },
         PeripheralTypeDef {
             path: "plic::Enables",
@@ -478,6 +485,7 @@ Hir {
                     group: None,
                 },
             ],
+            fns: [],
         },
         PeripheralTypeDef {
             path: "plic::Plic",
@@ -686,6 +694,7 @@ Hir {
                     group: None,
                 },
             ],
+            fns: [],
         },
         PeripheralTypeDef {
             path: "board::Board",
@@ -791,6 +800,7 @@ Hir {
                     group: None,
                 },
             ],
+            fns: [],
         },
     ],
     peripherals: [

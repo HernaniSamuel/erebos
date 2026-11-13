@@ -12,7 +12,8 @@ pub use crate::int::IntTy;
 pub use crate::ops::{BinOp, LogicalOp, UnOp};
 use crate::span::Span;
 pub use crate::syntax::ast::{
-    AccessMode, AsmOption, AsmOptionKind, ReadEffect, StrLit, WriteAction, WriteEffect,
+    AccessMode, AsmOption, AsmOptionKind, ReadEffect, ReceiverKind, StrLit, WriteAction,
+    WriteEffect,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -539,6 +540,9 @@ pub struct PeripheralTypeDef {
     /// Registers, register arrays and clusters, in source order; a name
     /// declared twice was reported (ADR 0064).
     pub entries: Vec<EntryDef>,
+    /// The functions of the type, in the order of its `impl` blocks and, within
+    /// one, as written (ADR 0113).
+    pub fns: Vec<FnId>,
 }
 
 impl PeripheralTypeDef {
@@ -785,6 +789,9 @@ pub struct StructDef {
     /// `#[linear]`, with the span of the attribute: its values must be
     /// consumed (ADR 0101).
     pub linear: Option<Span>,
+    /// The functions of the type, in the order of its `impl` blocks and, within
+    /// one, as written (ADR 0113).
+    pub fns: Vec<FnId>,
 }
 
 impl StructDef {
@@ -816,6 +823,9 @@ pub struct BitStructDef {
     pub int_span: Span,
     /// In source order; a name declared twice was reported.
     pub fields: Vec<BitFieldDef>,
+    /// The functions of the type, in the order of its `impl` blocks and, within
+    /// one, as written (ADR 0113).
+    pub fns: Vec<FnId>,
 }
 
 impl BitStructDef {
@@ -890,6 +900,10 @@ pub struct EnumDef {
     /// copy when their arguments are, and for an enum without payloads, which
     /// is copy whatever this says.
     pub copy: Option<Span>,
+    /// The functions of the enum, in the order of its `impl` blocks and,
+    /// within one, as written; they share its namespace with its variants
+    /// (ADR 0113). None for an `Option(T)` or a `Result(T, E)`.
+    pub fns: Vec<FnId>,
 }
 
 impl EnumDef {
@@ -1050,6 +1064,7 @@ impl BuiltinEnum {
             ty,
             variants,
             copy: None,
+            fns: Vec::new(),
         }
     }
 }
@@ -1122,6 +1137,19 @@ pub struct Fn {
     pub comptime: Option<Comptime>,
     /// `#[align(N)]` (ADR 0087), with the span of `N`.
     pub align: Option<(ArrayLen, Span)>,
+    /// The type a function of a type belongs to, and the form of its
+    /// receiver (ADR 0113). `None` for any other function.
+    pub owner: Option<FnOwner>,
+}
+
+/// What makes a function a function of a type (ADR 0113).
+#[derive(Clone, Copy, Debug)]
+pub struct FnOwner {
+    /// The type of its `impl`, `Self` in its signature and body.
+    pub ty: Ty,
+    /// How the first parameter is written, if it is a receiver: that
+    /// parameter is then a local named `self`.
+    pub receiver: Option<ReceiverKind>,
 }
 
 impl Fn {

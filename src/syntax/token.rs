@@ -36,6 +36,8 @@ pub enum TokenKind {
     False,
     Fn,
     If,
+    /// `impl`, which declares the functions of a type (ADR 0113).
+    Impl,
     /// `interrupt`, which declares a handler: `interrupt fn NAME() at VECTOR`
     /// (ADR 0084).
     Interrupt,
@@ -50,6 +52,11 @@ pub enum TokenKind {
     /// `pub`, which makes an item visible outside its module (ADR 0050).
     Pub,
     Return,
+    /// `self`, the receiver of a method and the name of its parameter
+    /// (ADR 0113).
+    SelfValue,
+    /// `Self`, the type of an `impl` (ADR 0113).
+    SelfType,
     SizeOf,
     Static,
     Struct,
@@ -144,6 +151,7 @@ impl TokenKind {
             "false" => TokenKind::False,
             "fn" => TokenKind::Fn,
             "if" => TokenKind::If,
+            "impl" => TokenKind::Impl,
             "interrupt" => TokenKind::Interrupt,
             "let" => TokenKind::Let,
             "loop" => TokenKind::Loop,
@@ -154,6 +162,8 @@ impl TokenKind {
             "panic" => TokenKind::Panic,
             "pub" => TokenKind::Pub,
             "return" => TokenKind::Return,
+            "self" => TokenKind::SelfValue,
+            "Self" => TokenKind::SelfType,
             "size_of" => TokenKind::SizeOf,
             "static" => TokenKind::Static,
             "struct" => TokenKind::Struct,
@@ -191,6 +201,7 @@ impl TokenKind {
             TokenKind::False => "`false`",
             TokenKind::Fn => "`fn`",
             TokenKind::If => "`if`",
+            TokenKind::Impl => "`impl`",
             TokenKind::Interrupt => "`interrupt`",
             TokenKind::Let => "`let`",
             TokenKind::Loop => "`loop`",
@@ -201,6 +212,8 @@ impl TokenKind {
             TokenKind::Panic => "`panic`",
             TokenKind::Pub => "`pub`",
             TokenKind::Return => "`return`",
+            TokenKind::SelfValue => "`self`",
+            TokenKind::SelfType => "`Self`",
             TokenKind::SizeOf => "`size_of`",
             TokenKind::Static => "`static`",
             TokenKind::Struct => "`struct`",

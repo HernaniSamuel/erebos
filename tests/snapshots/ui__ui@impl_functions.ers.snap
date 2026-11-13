@@ -1,0 +1,225 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/impl_functions.ers
+---
+--- typeck ---
+peripheral Context { read write threshold: u32 at 0x0 } extent 4, align 4
+peripheral Plic { read write enable: u32 at 0x0, ctx: [Context; 2] at 0x1000 step 0x100 } extent 4356, align 4
+peripheral PLIC: Plic at 0xc000000 covers [0xc000000, 0xc001104)
+struct ring::Ring { buf: [u8; 4] at 0, head: usize at 4, count: usize at 8 } size 12, align 4
+struct chips::llvm { x: u8 at 0 } size 1, align 1
+struct Transfer { channel: u32 at 0 } size 4, align 4
+struct Names { n: u32 at 0 } size 4, align 4
+struct Control: u8 { enable: bool at 0 = false, mode: u8 at 1..=2 = 0 }
+enum Mode: u8 { Off = 0, Run(u32 at 4) = 1, Idle = 2 } size 8, align 4
+fn ring::Ring::new() -> ring::Ring
+    expr 2 struct ring::Ring 918..957: ring::Ring
+    expr 3 repeat 930..936: [u8; 4]
+    expr 4 int 0 931..932: u8
+    expr 5 int 0 944..945: usize
+    expr 6 int 0 954..955: usize
+fn ring::Ring::push(self: &mut ring::Ring, b: u8) -> bool
+    expr 7 if 1029..1096: ()
+    expr 8 binary == 1032..1050: bool
+    expr 9 field count 1032..1045: usize
+    expr 10 deref 1032..1039: ring::Ring
+    expr 11 local self 1034..1038: &mut ring::Ring
+    expr 12 int 4 1049..1050: usize
+    expr 13 return 1069..1081: !
+    expr 14 bool false 1076..1081: bool
+    expr 15 assign 1109..1160: ()
+    expr 16 index 1109..1156: u8
+    expr 17 field buf 1109..1120: [u8; 4]
+    expr 18 deref 1109..1116: ring::Ring
+    expr 19 local self 1111..1115: &mut ring::Ring
+    expr 20 binary % 1121..1155: usize
+    expr 21 binary + 1121..1151: usize
+    expr 22 field head 1122..1134: usize
+    expr 23 deref 1122..1129: ring::Ring
+    expr 24 local self 1124..1128: &mut ring::Ring
+    expr 25 field count 1137..1150: usize
+    expr 26 deref 1137..1144: ring::Ring
+    expr 27 local self 1139..1143: &mut ring::Ring
+    expr 28 int 4 1154..1155: usize
+    expr 29 local b 1159..1160: u8
+    expr 30 assign += 1174..1192: ()
+    expr 31 field count 1174..1187: usize
+    expr 32 deref 1174..1181: ring::Ring
+    expr 33 local self 1176..1180: &mut ring::Ring
+    expr 34 int 1 1191..1192: usize
+    expr 35 bool true 1206..1210: bool
+fn ring::Ring::count(self: &ring::Ring) -> usize
+    expr 36 field count 1273..1286: usize
+    expr 37 deref 1273..1280: ring::Ring
+    expr 38 local self 1275..1279: &ring::Ring
+fn ring::Ring::clear(self: &mut ring::Ring) -> ()
+    expr 39 assign 1486..1502: ()
+    expr 40 field head 1486..1498: usize
+    expr 41 deref 1486..1493: ring::Ring
+    expr 42 local self 1488..1492: &mut ring::Ring
+    expr 43 int 0 1501..1502: usize
+    expr 44 assign 1516..1533: ()
+    expr 45 field count 1516..1529: usize
+    expr 46 deref 1516..1523: ring::Ring
+    expr 47 local self 1518..1522: &mut ring::Ring
+    expr 48 int 0 1532..1533: usize
+fn ring::Ring::reset(self: &mut ring::Ring) -> ()
+    expr 49 call 1592..1615: ()
+    expr 50 &mut 1604..1614: &mut ring::Ring
+    expr 51 deref 1609..1614: ring::Ring
+    expr 52 local self 1610..1614: &mut ring::Ring
+fn ring::Ring::fresh() -> ring::Ring
+    let mut r: ring::Ring
+    expr 53 call 1691..1702: ring::Ring
+    expr 54 call 1716..1735: ()
+    expr 55 &mut 1728..1734: &mut ring::Ring
+    expr 56 local r 1733..1734: ring::Ring
+    expr 57 local r 1749..1750: ring::Ring
+fn ring::inner::clear_it(r: &mut ring::Ring) -> ()
+    expr 58 call 1847..1868: ()
+    expr 59 local r 1866..1867: &mut ring::Ring
+fn new() -> u32
+    expr 60 int 1 2040..2041: u32
+fn count() -> u32
+    expr 61 int 2 2064..2065: u32
+fn calls() -> usize
+    let mut r: ring::Ring
+    let mut s: ring::Ring
+    expr 62 call 2113..2124: ring::Ring
+    expr 63 call 2130..2151: bool
+    expr 64 &mut 2141..2147: &mut ring::Ring
+    expr 65 local r 2146..2147: ring::Ring
+    expr 66 int 1 2149..2150: u8
+    expr 67 call 2157..2184: bool
+    expr 68 &mut 2174..2180: &mut ring::Ring
+    expr 69 local r 2179..2180: ring::Ring
+    expr 70 int 2 2182..2183: u8
+    expr 71 call 2214..2233: ring::Ring
+    expr 72 call 2239..2258: ()
+    expr 73 &mut 2251..2257: &mut ring::Ring
+    expr 74 local s 2256..2257: ring::Ring
+    expr 75 call 2264..2293: ()
+    expr 76 &mut 2286..2292: &mut ring::Ring
+    expr 77 local s 2291..2292: ring::Ring
+    expr 78 binary + 2299..2332: usize
+    expr 79 call 2299..2314: usize
+    expr 80 & 2311..2313: &ring::Ring
+    expr 81 local r 2312..2313: ring::Ring
+    expr 82 call 2317..2332: usize
+    expr 83 & 2329..2331: &ring::Ring
+    expr 84 local s 2330..2331: ring::Ring
+fn chips::llvm::make() -> chips::llvm
+    expr 85 struct chips::llvm 2575..2588: chips::llvm
+    expr 86 int 1 2585..2586: u8
+fn from_chips() -> chips::llvm
+    expr 87 call 2645..2664: chips::llvm
+fn Mode::idle() -> Mode
+    expr 88 variant Mode::Idle 2848..2858: Mode
+fn Mode::running(n: u32) -> Mode
+    expr 89 variant Mode::Run 2907..2919: Mode
+    expr 90 local n 2917..2918: u32
+fn Control::on() -> Control
+    expr 91 struct Control 3079..3112: Control
+    expr 92 bool true 3097..3101: bool
+    expr 93 int 0 3109..3110: u8
+fn Control::enabled(self: Control) -> bool
+    expr 94 bit field enable 3159..3170: bool
+    expr 95 local self 3159..3163: Control
+fn Control::with_mode(self: Control, mode: u8) -> Control
+    expr 96 assign 3236..3252: ()
+    expr 97 bit field mode 3236..3245: u8
+    expr 98 local self 3236..3240: Control
+    expr 99 local mode 3248..3252: u8
+    expr 100 local self 3262..3266: Control
+fn Context::set(self: &mut Context, v: u32) -> ()
+    expr 101 assign 3587..3608: ()
+    expr 102 register threshold 3587..3604: u32
+    expr 103 deref 3587..3594: Context
+    expr 104 local self 3589..3593: &mut Context
+    expr 105 local v 3607..3608: u32
+fn Context::get(self: &Context) -> u32
+    expr 106 register threshold 3652..3669: u32
+    expr 107 deref 3652..3659: Context
+    expr 108 local self 3654..3658: &Context
+fn Plic::set_second(self: &mut Plic, v: u32) -> ()
+    expr 109 call 3738..3774: ()
+    expr 110 &mut 3751..3770: &mut Context
+    expr 111 index 3756..3770: Context
+    expr 112 register ctx 3756..3767: [Context; 2]
+    expr 113 deref 3756..3763: Plic
+    expr 114 local self 3758..3762: &mut Plic
+    expr 115 int 1 3768..3769: usize
+    expr 116 local v 3772..3773: u32
+fn hardware() -> u32
+    expr 117 call 3812..3842: ()
+    expr 118 &mut 3829..3838: &mut Plic
+    expr 119 peripheral PLIC 3834..3838: Plic
+    expr 120 int 3 3840..3841: u32
+    expr 121 call 3848..3874: u32
+    expr 122 & 3861..3873: &Context
+    expr 123 index 3862..3873: Context
+    expr 124 register ctx 3862..3870: [Context; 2]
+    expr 125 peripheral PLIC 3862..3866: Plic
+    expr 126 int 1 3871..3872: usize
+fn Transfer::start(channel: u32) -> Transfer
+    expr 127 struct Transfer 4099..4128: Transfer
+    expr 128 local channel 4119..4126: u32
+fn Transfer::wait(self: Transfer) -> u32
+    let c: u32
+    expr 129 field channel 4184..4196: u32
+    expr 130 local self 4184..4188: Transfer
+    expr 131 end 4206..4215: ()
+    expr 132 local self 4210..4214: Transfer
+    expr 133 local c 4225..4226: u32
+fn Transfer::end(self: Transfer) -> ()
+    expr 134 end 4261..4270: ()
+    expr 135 local self 4265..4269: Transfer
+fn Names::len(self: &Names) -> u32
+    expr 136 field n 4359..4368: u32
+    expr 137 deref 4359..4366: Names
+    expr 138 local self 4361..4365: &Names
+fn Names::u32(self: &Names) -> u32
+    expr 139 field n 4411..4420: u32
+    expr 140 deref 4411..4418: Names
+    expr 141 local self 4413..4417: &Names
+fn consume() -> u32
+    let t: Transfer
+    let u: Transfer
+    expr 142 call 4474..4492: Transfer
+    expr 143 int 1 4490..4491: u32
+    expr 144 call 4516..4534: Transfer
+    expr 145 int 2 4532..4533: u32
+    expr 146 call 4540..4556: ()
+    expr 147 local u 4554..4555: Transfer
+    expr 148 call 4562..4579: u32
+    expr 149 local t 4577..4578: Transfer
+fn builtins() -> u32
+    let n: Names
+    expr 150 struct Names 4625..4639: Names
+    expr 151 int 4 4636..4637: u32
+    expr 152 binary + 4645..4676: u32
+    expr 153 call 4645..4659: u32
+    expr 154 & 4656..4658: &Names
+    expr 155 local n 4657..4658: Names
+    expr 156 call 4662..4676: u32
+    expr 157 & 4673..4675: &Names
+    expr 158 local n 4674..4675: Names
+fn symbol() -> ()
+    expr 159 asm 4805..4858: ()
+entry fn main() -> !
+    expr 160 loop 4886..4893: !
+panic fn on_panic() -> !
+    expr 161 loop 4923..4930: !
+comptime fn R() -> ring::Ring
+    expr 162 call 4773..4784: ring::Ring
+comptime fn Mode::Off() -> u8
+    expr 163 int 0 2766..2767: u8
+comptime fn Mode::Run() -> u8
+    expr 164 int 1 2784..2785: u8
+comptime fn Mode::Idle() -> u8
+    expr 165 int 2 2798..2799: u8
+comptime fn default() -> bool
+    expr 0 bool false 2997..3002: bool
+comptime fn default() -> u8
+    expr 1 int 0 3028..3029: u8

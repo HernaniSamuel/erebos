@@ -1258,6 +1258,7 @@ File {
                     name: "literals",
                     span: 1558..1566,
                 },
+                receiver: None,
                 params: [],
                 ret: Some(
                     Ty {

@@ -97,6 +97,7 @@ File {
                     name: "paths",
                     span: 392..397,
                 },
+                receiver: None,
                 params: [
                     Param {
                         mutable: false,

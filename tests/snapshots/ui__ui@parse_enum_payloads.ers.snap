@@ -131,6 +131,7 @@ File {
                     name: "build",
                     span: 342..347,
                 },
+                receiver: None,
                 params: [],
                 ret: None,
                 body: Some(

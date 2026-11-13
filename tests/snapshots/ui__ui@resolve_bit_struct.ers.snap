@@ -225,6 +225,7 @@ Hir {
                     default: None,
                 },
             ],
+            fns: [],
         },
     ],
     enums: [
@@ -307,6 +308,7 @@ Hir {
                 },
             ],
             copy: None,
+            fns: [],
         },
     ],
     fns: [
@@ -435,6 +437,7 @@ Hir {
             runtime: false,
             comptime: None,
             align: None,
+            owner: None,
         },
         Fn {
             name: "configure",
@@ -584,6 +587,7 @@ Hir {
             runtime: false,
             comptime: None,
             align: None,
+            owner: None,
         },
         Fn {
             name: "main",
@@ -628,6 +632,7 @@ Hir {
             runtime: false,
             comptime: None,
             align: None,
+            owner: None,
         },
         Fn {
             name: "on_panic",
@@ -672,6 +677,7 @@ Hir {
             runtime: false,
             comptime: None,
             align: None,
+            owner: None,
         },
         Fn {
             name: "STOP",
@@ -718,6 +724,7 @@ Hir {
                 ),
             ),
             align: None,
+            owner: None,
         },
         Fn {
             name: "DLAB",
@@ -764,6 +771,7 @@ Hir {
                 ),
             ),
             align: None,
+            owner: None,
         },
         Fn {
             name: "NO_PARITY",
@@ -808,6 +816,7 @@ Hir {
                 ),
             ),
             align: None,
+            owner: None,
         },
         Fn {
             name: "WordLength::Five",
@@ -855,6 +864,7 @@ Hir {
                 ),
             ),
             align: None,
+            owner: None,
         },
         Fn {
             name: "WordLength::Six",
@@ -902,6 +912,7 @@ Hir {
                 ),
             ),
             align: None,
+            owner: None,
         },
         Fn {
             name: "WordLength::Seven",
@@ -949,6 +960,7 @@ Hir {
                 ),
             ),
             align: None,
+            owner: None,
         },
         Fn {
             name: "WordLength::Eight",
@@ -996,6 +1008,7 @@ Hir {
                 ),
             ),
             align: None,
+            owner: None,
         },
         Fn {
             name: "default",
@@ -1050,6 +1063,7 @@ Hir {
                 ),
             ),
             align: None,
+            owner: None,
         },
         Fn {
             name: "bits",
@@ -1097,6 +1111,7 @@ Hir {
                 ),
             ),
             align: None,
+            owner: None,
         },
         Fn {
             name: "default",
@@ -1140,6 +1155,7 @@ Hir {
                 ),
             ),
             align: None,
+            owner: None,
         },
         Fn {
             name: "bits",
@@ -1206,6 +1222,7 @@ Hir {
                 ),
             ),
             align: None,
+            owner: None,
         },
         Fn {
             name: "bits",
@@ -1272,6 +1289,7 @@ Hir {
                 ),
             ),
             align: None,
+            owner: None,
         },
         Fn {
             name: "default",
@@ -1317,6 +1335,7 @@ Hir {
                 ),
             ),
             align: None,
+            owner: None,
         },
         Fn {
             name: "bits",
@@ -1364,6 +1383,7 @@ Hir {
                 ),
             ),
             align: None,
+            owner: None,
         },
     ],
     consts: [
@@ -1639,6 +1659,7 @@ Hir {
                     ),
                 },
             ],
+            fns: [],
         },
     ],
     peripherals: [],

@@ -177,6 +177,7 @@ const CATALOG: &[Snippet] = &[
         Statements,
         "use core::injected_m;"
     ),
+    s!("parser::local-impl", Ast, Statements, "impl InjS {}"),
     s!(
         "parser::local-memory",
         Ast,
@@ -194,6 +195,24 @@ const CATALOG: &[Snippet] = &[
         Ast,
         Items,
         "pub entry fn injected_entry() -> ! {\n    loop {}\n}"
+    ),
+    s!(
+        "parser::misplaced-pub",
+        Ast,
+        Items,
+        "struct InjS {}\npub impl InjS {}"
+    ),
+    s!(
+        "parser::impl-item",
+        Ast,
+        Items,
+        "struct InjS {}\nimpl InjS {\n    const INJ_A: u8 = 1;\n}"
+    ),
+    s!(
+        "parser::misplaced-self",
+        Ast,
+        Items,
+        "fn injected_f(&self) {}"
     ),
     s!(
         "parser::enum-without-type",
@@ -389,9 +408,57 @@ const CATALOG: &[Snippet] = &[
         "resolve::not-an-enum",
         Hir,
         Items,
-        "struct InjS { a: u8 }\nfn injected_f() {\n    let injected_e: u8 = InjS::B;\n}"
+        "const INJ_C: u8 = 1;\nfn injected_f() {\n    let injected_e: u8 = INJ_C::B;\n}"
     ),
     s!("resolve::reserved-name", Hir, Items, "fn __injected() {}"),
+    s!(
+        "resolve::reserved-name",
+        Hir,
+        Items,
+        "struct llvm { a: u8 }\nimpl llvm {\n    fn injected_f() {}\n}"
+    ),
+    s!(
+        "resolve::impl-type",
+        Hir,
+        Items,
+        "impl u32 {\n    fn injected_f() {}\n}"
+    ),
+    s!(
+        "resolve::unknown-self",
+        Hir,
+        Items,
+        "fn injected_f(x: Self) {}"
+    ),
+    s!(
+        "resolve::use-type-function",
+        Hir,
+        Items,
+        "struct InjS { a: u8 }\nimpl InjS {\n    pub fn injected_new() {}\n}\nuse InjS::injected_new;"
+    ),
+    s!(
+        "resolve::unknown-function",
+        Hir,
+        Items,
+        "struct InjS { a: u8 }\nfn injected_f() {\n    InjS::injected_missing();\n}"
+    ),
+    s!(
+        "resolve::duplicate-item",
+        Hir,
+        Items,
+        "struct InjS { a: u8 }\nimpl InjS {\n    fn injected_f() {}\n    fn injected_f() {}\n}"
+    ),
+    s!(
+        "resolve::misplaced-attribute",
+        Hir,
+        Items,
+        "struct InjS { a: u8 }\n#[packed]\nimpl InjS {}"
+    ),
+    s!(
+        "resolve::misplaced-attribute",
+        Hir,
+        Items,
+        "struct InjS { a: u8 }\nimpl InjS {\n    #[export]\n    fn injected_f() {}\n}"
+    ),
     s!(
         "resolve::unknown-attribute",
         Hir,

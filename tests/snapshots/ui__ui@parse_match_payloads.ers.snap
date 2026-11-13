@@ -15,6 +15,7 @@ File {
                     name: "patterns",
                     span: 247..255,
                 },
+                receiver: None,
                 params: [
                     Param {
                         mutable: false,

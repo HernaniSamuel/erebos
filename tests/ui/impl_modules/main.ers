@@ -1,0 +1,19 @@
+// emit: hir
+// The functions of a type across modules (ADR 0113). An `impl` is written in
+// the module of its type: for a type another module declares it is
+// `resolve::unknown-type` when the name is not in scope, and `resolve::impl-type`
+// when a `use` brings it in. A function of a type without `pub` is visible in
+// the module of the type and the modules inside it, so a sibling that names it
+// gets `resolve::private-item`, pointing at the use and at the function; one
+// with `pub` is visible wherever the type is reachable, and a private type's
+// is not reachable from outside its module.
+mod shapes;
+mod drivers;
+
+entry fn main() -> ! {
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    loop {}
+}

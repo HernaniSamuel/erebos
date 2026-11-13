@@ -1,0 +1,57 @@
+// emit: ast
+// What an `impl` does not take (ADR 0113). `pub impl` is
+// `parser::misplaced-pub`; an `impl` inside a function is `parser::local-impl`;
+// an item other than a function with a body between its braces, an `extern
+// fn`, `entry fn`, `panic fn` or `interrupt fn` included, is
+// `parser::impl-item`; a receiver that is not the first parameter of a
+// function in an `impl`, in a function elsewhere too, is
+// `parser::misplaced-self`. Other forms of a receiver, and the name of the
+// type written as a path, are `parser::unexpected-token`.
+struct S {}
+
+pub impl S {}
+
+fn local() {
+    impl S {}
+}
+
+impl S {
+    const LIMIT: u8 = 1;
+    struct Inner {}
+    extern fn outside();
+    entry fn main() -> ! { loop {} }
+    panic fn on_panic() -> ! { loop {} }
+    interrupt fn tick() at Vector::SysTick {}
+    static COUNT: u8 = 0;
+    mod inner {}
+    use a::b;
+    comptime {}
+    impl S {}
+    fn after(&self) {}
+}
+
+impl S {
+    fn second(x: u8, &self) {}
+    fn third(x: u8, self) {}
+    fn fourth(&mut self, mut self) {}
+}
+
+fn free(&self) {}
+fn free_value(self) {}
+
+impl S {
+    fn typed(self: S) {}
+}
+
+impl S {
+    fn volatile(&volatile self) {}
+}
+
+impl S {
+    fn double(&&self) {}
+}
+
+impl a::S {}
+
+impl S
+fn after_path() {}

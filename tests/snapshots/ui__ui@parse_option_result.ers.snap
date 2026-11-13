@@ -440,6 +440,7 @@ File {
                     name: "ext",
                     span: 605..608,
                 },
+                receiver: None,
                 params: [
                     Param {
                         mutable: false,
@@ -535,6 +536,7 @@ File {
                     name: "f",
                     span: 652..653,
                 },
+                receiver: None,
                 params: [
                     Param {
                         mutable: false,

@@ -87,6 +87,7 @@ File {
                     name: "parse",
                     span: 252..257,
                 },
+                receiver: None,
                 params: [],
                 ret: Some(
                     Ty {
@@ -583,6 +584,7 @@ File {
                     name: "main",
                     span: 642..646,
                 },
+                receiver: None,
                 params: [],
                 ret: Some(
                     Ty {
@@ -620,6 +622,7 @@ File {
                     name: "on_panic",
                     span: 676..684,
                 },
+                receiver: None,
                 params: [],
                 ret: Some(
                     Ty {

@@ -1,0 +1,113 @@
+// emit: hir
+// What an `impl` and a path to a function of a type get wrong (ADR 0113).
+// `impl` of a name that is not a struct, an enum or a peripheral type of the
+// module is `resolve::impl-type`, or `resolve::unknown-type` when it names
+// nothing; its functions are not lowered, so a body that uses `Self` and `self`
+// gives no further error. An `impl` takes no attribute, nor `#[export]` on its
+// functions. Two functions of a type with one name, or a function and a
+// variant, are `resolve::duplicate-item`. A path to a function of a type that
+// has none by that name is `resolve::unknown-function`; as a type or as a value
+// it is the error of that position. `use` cannot name one. `Self` and `self`
+// outside an `impl` and a receiver are `resolve::unknown-self`; `_start`, names
+// starting with `__` and a root type named `llvm` are reserved.
+struct Ring {
+    count: usize,
+}
+
+enum Mode: u8 {
+    Off = 0,
+    Run = 1,
+}
+
+const LIMIT: u8 = 3;
+
+peripheral Uart {
+    read write data: u8 at 0,
+}
+
+peripheral UART0: Uart at 0x1000;
+
+mod inner {}
+
+mod ring {
+    pub struct Ring {}
+
+    impl Ring {
+        pub fn new() {}
+    }
+}
+
+use ring::Ring::new;
+
+impl u32 {}
+
+impl Option {}
+
+impl LIMIT {}
+
+impl UART0 {}
+
+impl inner {}
+
+impl Missing {}
+
+impl u8 {
+    fn bump(&mut self) -> Self {
+        Self::bump(self)
+    }
+}
+
+#[packed]
+impl Ring {
+    #[export]
+    fn exported(&self) {}
+
+    fn push(&mut self) {}
+
+    fn _start() {}
+
+    fn __hidden() {}
+
+    fn assoc() -> usize {
+        self.count
+    }
+}
+
+impl Ring {
+    fn push(&mut self) {}
+}
+
+impl Mode {
+    fn Run() {}
+}
+
+struct llvm {
+    x: u8,
+}
+
+impl llvm {
+    fn f() {}
+}
+
+fn calls() {
+    Ring::missing();
+    Mode::missing();
+    let a: Ring::push = 1;
+    let b: u8 = Ring::push;
+    let c: u8 = Mode::missing;
+    let d: Ring = Ring::missing { count: 1 };
+    LIMIT::f();
+    Ring::push::again();
+    asm("call {}", sym Ring::missing);
+}
+
+fn outside() -> Self {
+    Self::new()
+}
+
+fn no_receiver() -> usize {
+    self.count
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

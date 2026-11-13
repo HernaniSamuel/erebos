@@ -222,6 +222,7 @@ File {
                     name: "build",
                     span: 553..558,
                 },
+                receiver: None,
                 params: [
                     Param {
                         mutable: false,

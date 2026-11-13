@@ -15,6 +15,7 @@ File {
                     name: "forms",
                     span: 254..259,
                 },
+                receiver: None,
                 params: [
                     Param {
                         mutable: false,
@@ -1322,6 +1323,7 @@ File {
                     name: "tail",
                     span: 1307..1311,
                 },
+                receiver: None,
                 params: [],
                 ret: None,
                 body: Some(
@@ -1359,6 +1361,7 @@ File {
                     name: "nested",
                     span: 1357..1363,
                 },
+                receiver: None,
                 params: [],
                 ret: Some(
                     Ty {

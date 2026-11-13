@@ -122,18 +122,23 @@ resolve::unknown-variant
  17 │     let b: u8 = Point::Origin;
     ╰────
   help: its variants are `Off`, `Run`
-resolve::not-an-enum
+resolve::unknown-name
 
-  × `Point` is neither a module nor an enum
-    ╭─[resolve_enum_errors.ers:17:17]
+  × cannot find `Point::Origin`
+    ╭─[resolve_enum_errors.ers:17:24]
+ 12 │ enum bool: u8 { B = 0 }
+ 13 │ struct Point { x: u8 }
+    ·        ──┬──
+    ·          ╰── `Point` is declared here
+ 14 │ 
+ 15 │ fn f() {
  16 │     let a: Mode = Mode::Walk;
  17 │     let b: u8 = Point::Origin;
-    ·                 ──┬──
-    ·                   ╰── a struct
+    ·                        ───┬──
+    ·                           ╰── `Point` has no function `Origin`
  18 │     let c: u8 = Nowhere::Thing;
     ╰────
-  help: `::` follows a module, to name one of its items, or an enum, to name one of its variants,
-        as in `Mode::Run` (ADR 0035, 0049)
+  help: `Point` has no functions: they are declared in an `impl` block (ADR 0113)
 resolve::unknown-path
 
   × cannot find `Nowhere`

@@ -8,7 +8,7 @@ use crate::hir::{
 use crate::span::Span;
 use crate::syntax::ast;
 
-use super::{Def, Lowerer, Named, plain_name, written};
+use super::{Def, Lowerer, Named, last_segment, plain_name, written};
 
 impl Lowerer<'_> {
     /// A type that memory has: `!` there is `{error}`, recorded for the
@@ -323,6 +323,12 @@ impl Lowerer<'_> {
             Named::Missing(module) => self.missing(diag, path, module, "not a type"),
             Named::Item(def) => diag.label(path.span, format!("{}, not a type", def.what())),
             Named::Variant(..) => diag.label(path.span, "a variant, not a type"),
+            Named::TypeFn(def, _) => {
+                diag.label(path.span, format!("{}, not a type", self.type_fn_what(def)))
+            }
+            Named::NoFunction(def) => {
+                return self.no_function(Some(diag), def, last_segment(path));
+            }
         };
         self.diags.push(diag);
     }

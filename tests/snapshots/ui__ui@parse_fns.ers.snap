@@ -15,6 +15,7 @@ File {
                     name: "main",
                     span: 22..26,
                 },
+                receiver: None,
                 params: [],
                 ret: Some(
                     Ty {
@@ -52,6 +53,7 @@ File {
                     name: "helper",
                     span: 54..60,
                 },
+                receiver: None,
                 params: [],
                 ret: None,
                 body: Some(

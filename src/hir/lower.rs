@@ -49,6 +49,10 @@ pub fn lower(
         core_fns: usize::MAX,
         core_fn_base: 0,
         fns: Vec::new(),
+        fn_owners: Vec::new(),
+        impls: Vec::new(),
+        type_namespaces: HashMap::new(),
+        type_fns: HashMap::new(),
         structs: Vec::new(),
         bit_structs: Vec::new(),
         enums: Vec::new(),
@@ -83,12 +87,17 @@ pub fn lower(
     // Values computed at compile time get bodies after every other.
     let value_base = items.core_fn_base + items.bodies(program_end, core_end);
     items.declare_uses(diags);
+    items.resolve_impls(diags);
     let Items {
         modules,
         namespaces,
         core_fns,
         core_fn_base,
         fns: fn_decls,
+        fn_owners,
+        impls,
+        type_namespaces,
+        type_fns,
         structs: struct_decls,
         bit_structs: bit_struct_decls,
         enums: enum_decls,
@@ -270,6 +279,8 @@ pub fn lower(
         core_root,
         vector,
         fn_decls: &fn_decls,
+        type_namespaces,
+        self_ty: None,
         core_fns,
         core_fn_base,
         value_base,
@@ -310,6 +321,10 @@ pub fn lower(
         lowerer.mod_decl(decl);
     }
     lowerer.use_decls(&use_decls);
+    for impl_item in &impls {
+        lowerer.module = impl_item.module;
+        lowerer.impl_decl(impl_item.decl);
+    }
 
     // The program's items, then `core`'s, each part lowered whole, so that
     // the program's expression ids are those of the program alone.
@@ -354,9 +369,9 @@ pub fn lower(
             lowerer.module = module;
             bit_structs.push(lowerer.bit_struct_decl(decl, BitStructId(i as u32)));
         }
-        for &(decl, module) in &fn_decls[from.fns..to.fns] {
+        for (i, &(decl, module)) in fn_decls.iter().enumerate().take(to.fns).skip(from.fns) {
             lowerer.module = module;
-            let mut f = lowerer.fn_decl(decl);
+            let mut f = lowerer.fn_decl(decl, fn_owners[i]);
             // LLVM must not turn the loops of `core` into calls to `core`
             // (ADR 0020).
             f.runtime = in_core;
@@ -434,7 +449,18 @@ pub fn lower(
     let reference_types = lowerer.reference_types;
     let modules = lowerer.modules;
     let namespaces = lowerer.namespaces;
+    let type_namespaces = lowerer.type_namespaces;
     let uses = lowerer.uses;
+    // The functions of each type, in the order of its `impl` blocks.
+    for (def, ids) in type_fns {
+        match def {
+            Def::Struct(id) => structs[id.0 as usize].fns = ids,
+            Def::BitStruct(id) => bit_structs[id.0 as usize].fns = ids,
+            Def::Enum(id) => enums[id.0 as usize].fns = ids,
+            Def::PeripheralType(id) => peripheral_types[id.0 as usize].fns = ids,
+            _ => unreachable!("only a type has functions"),
+        }
+    }
     reachability(
         &modules,
         &namespaces,
@@ -453,7 +479,15 @@ pub fn lower(
     }
     let memory = memory_map(maps, diags);
     check_start(&fns, &statics, core_root, diags);
-    check_symbols(&fns, &statics, &namespaces, &uses, core_root, diags);
+    check_symbols(
+        &fns,
+        &statics,
+        &namespaces,
+        &type_namespaces,
+        &uses,
+        core_root,
+        diags,
+    );
     // In any module, whatever their visibility (ADR 0049, 0050).
     let entry = find_unique(&fns, FnKind::Entry, diags);
     let panic = find_unique(&fns, FnKind::Panic, diags);
@@ -593,7 +627,7 @@ fn reachability(
 }
 
 /// What a name in a module's namespace is (ADR 0049).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum Def {
     Fn(FnId),
     Struct(StructId),
@@ -642,6 +676,54 @@ struct Entry {
     span: Span,
 }
 
+/// What a function declared in the program is: one of a module, or one of a
+/// type (ADR 0113).
+#[derive(Clone, Copy)]
+enum Owner {
+    /// A function of a module.
+    Free,
+    /// A function of the type of its `impl`.
+    Type(Def),
+    /// A function of an `impl` whose type was reported: not lowered.
+    Skipped,
+}
+
+/// An `impl` block, in the module it is written in.
+#[derive(Clone, Copy)]
+struct ImplItem<'a> {
+    decl: &'a ast::ImplDecl,
+    module: ModuleId,
+    /// The index in `Items::fns` of its first function.
+    first_fn: usize,
+    /// Written in `core` (ADR 0052).
+    in_core: bool,
+}
+
+/// A name in the namespace of a type (ADR 0113).
+#[derive(Clone, Copy)]
+enum TypeName {
+    Fn(TypeFn),
+    /// A variant of an enum, with the span of its name.
+    Variant(Span),
+}
+
+impl TypeName {
+    fn name_span(self) -> Span {
+        match self {
+            TypeName::Fn(f) => f.name_span,
+            TypeName::Variant(span) => span,
+        }
+    }
+}
+
+/// A function of a type, as the namespace of the type holds it.
+#[derive(Clone, Copy)]
+struct TypeFn {
+    id: FnId,
+    vis: Visibility,
+    name_span: Span,
+}
+
 /// A name a `use` brings in (ADR 0049): one per path of the declaration.
 struct Use {
     /// The path from the module of the `use`, the prefix before braces
@@ -681,7 +763,18 @@ struct Items<'a> {
     /// their index.
     core_fns: usize,
     core_fn_base: u32,
+    /// The functions of modules and, at the position of their `impl` block,
+    /// the functions of types (ADR 0113), so that ids follow the source.
     fns: Vec<(&'a ast::FnDecl, ModuleId)>,
+    /// What each of `fns` is: a function of a module, or of a type, once its
+    /// `impl` is resolved (`resolve_impls`).
+    fn_owners: Vec<Owner>,
+    impls: Vec<ImplItem<'a>>,
+    /// The namespace of the functions of each type, with an enum's variants
+    /// (ADR 0113).
+    type_namespaces: HashMap<Def, HashMap<String, TypeName>>,
+    /// The functions of each type, in the order of its `impl` blocks.
+    type_fns: HashMap<Def, Vec<FnId>>,
     structs: Vec<(&'a ast::StructDecl, ModuleId)>,
     bit_structs: Vec<(&'a ast::BitStructDecl, ModuleId)>,
     enums: Vec<(&'a ast::EnumDecl, ModuleId)>,
@@ -756,12 +849,23 @@ impl<'a> Items<'a> {
                 }
                 ast::Item::Fn(decl) => {
                     self.fns.push((decl, module));
-                    let index = self.fns.len() - 1;
-                    let id = match index.checked_sub(self.core_fns) {
-                        Some(i) => FnId(self.core_fn_base + i as u32),
-                        None => FnId(index as u32),
-                    };
+                    self.fn_owners.push(Owner::Free);
+                    let id = self.fn_id(self.fns.len() - 1);
                     (&decl.name, decl.vis, Def::Fn(id))
+                }
+                ast::Item::Impl(decl) => {
+                    self.impls.push(ImplItem {
+                        decl,
+                        module,
+                        first_fn: self.fns.len(),
+                        in_core,
+                    });
+                    for f in &decl.fns {
+                        self.fns.push((f, module));
+                        // Until the type of the `impl` is resolved.
+                        self.fn_owners.push(Owner::Skipped);
+                    }
+                    continue;
                 }
                 ast::Item::Struct(decl) => {
                     self.structs.push((decl, module));
@@ -840,6 +944,171 @@ impl<'a> Items<'a> {
                 diags,
             );
         }
+    }
+
+    /// The id of the function at `index` of `fns`: its index, but for
+    /// `core`'s, which come after every body of the program.
+    fn fn_id(&self, index: usize) -> FnId {
+        match index.checked_sub(self.core_fns) {
+            Some(i) => FnId(self.core_fn_base + i as u32),
+            None => FnId(index as u32),
+        }
+    }
+
+    /// Resolves the type of each `impl` and gives its functions the
+    /// namespace of that type, once every item is declared (ADR 0113). The
+    /// type is a struct, a bit-field struct, an enum or a peripheral type
+    /// declared in the module of the `impl`, not one a `use` brings in; any
+    /// other name is reported once, at the name, and the functions of the
+    /// block are skipped, so that their `Self` and `self` give no further
+    /// errors.
+    fn resolve_impls(&mut self, diags: &mut Diagnostics) {
+        for i in 0..self.impls.len() {
+            let ImplItem {
+                decl,
+                module,
+                first_fn,
+                in_core,
+            } = self.impls[i];
+            let Some(def) = self.impl_type(&decl.name, module, diags) else {
+                continue;
+            };
+            for (j, f) in decl.fns.iter().enumerate() {
+                let index = first_fn + j;
+                self.fn_owners[index] = Owner::Type(def);
+                let id = self.fn_id(index);
+                self.type_fns.entry(def).or_default().push(id);
+                self.declare_type_fn(def, f, id, in_core, diags);
+            }
+        }
+    }
+
+    /// The type that the `impl` of `name`, in `module`, is for, or `None`
+    /// once reported (`resolve::impl-type`, `resolve::unknown-type`).
+    fn impl_type(
+        &self,
+        name: &ast::Ident,
+        module: ModuleId,
+        diags: &mut Diagnostics,
+    ) -> Option<Def> {
+        let what = if is_builtin_type(&name.name) {
+            "a built-in type".to_owned()
+        } else if name.name == "core" {
+            "a module".to_owned()
+        } else {
+            match self.namespaces[module.0 as usize].get(&name.name) {
+                None => {
+                    diags.push(
+                        Diagnostic::error(
+                            "resolve::unknown-type",
+                            format!("unknown type `{}`", name.name),
+                        )
+                        .label(
+                            name.span,
+                            format!(
+                                "not found in {}",
+                                self.modules[module.0 as usize].describe()
+                            ),
+                        )
+                        .help("an `impl` block is written in the module that declares its type (ADR 0113)"),
+                    );
+                    return None;
+                }
+                Some(Entry {
+                    binding:
+                        Binding::Def(
+                            def @ (Def::Struct(_)
+                            | Def::BitStruct(_)
+                            | Def::Enum(_)
+                            | Def::PeripheralType(_)),
+                        ),
+                    ..
+                }) => return Some(*def),
+                Some(Entry {
+                    binding: Binding::Use(_),
+                    ..
+                }) => "brought in by a `use`, not declared here".to_owned(),
+                Some(Entry {
+                    binding: Binding::Def(def),
+                    ..
+                }) => format!("{}, not a type declared here", def.what()),
+            }
+        };
+        diags.push(
+            Diagnostic::error(
+                "resolve::impl-type",
+                format!(
+                    "`{}` is not a struct, an enum or a peripheral type declared in this module",
+                    name.name
+                ),
+            )
+            .label(name.span, what)
+            .help("an `impl` block gives functions to a struct, a bit-field struct, an enum or a peripheral type declared in the module it is written in: not to a built-in type, nor to a type brought in with `use`, nor to a peripheral (ADR 0113)"),
+        );
+        None
+    }
+
+    /// Adds the function `f`, whose id is `id`, to the namespace of the
+    /// type `def`: an enum's variants are in it too, so a function named
+    /// like one, or like another function, is a duplicate (ADR 0113). A
+    /// name starting with `__` is reserved in the program (ADR 0020); a
+    /// function of a type may otherwise have any name, a built-in one
+    /// included.
+    fn declare_type_fn(
+        &mut self,
+        def: Def,
+        f: &ast::FnDecl,
+        id: FnId,
+        in_core: bool,
+        diags: &mut Diagnostics,
+    ) {
+        let name = f.name.name.as_str();
+        if !in_core && name.starts_with("__") {
+            diags.push(
+                Diagnostic::error(
+                    "resolve::reserved-name",
+                    format!("`{name}` is a reserved name"),
+                )
+                .label(f.name.span, "names starting with `__` are reserved")
+                .help("the runtime support functions of `core` use them (ADR 0020, 0052)"),
+            );
+        }
+        let namespace = self.type_namespaces.entry(def).or_insert_with(|| {
+            let mut names = HashMap::new();
+            if let Def::Enum(e) = def {
+                for variant in &self.enums[e.0 as usize].0.variants {
+                    names
+                        .entry(variant.name.name.clone())
+                        .or_insert(TypeName::Variant(variant.name.span));
+                }
+            }
+            names
+        });
+        let entry = TypeName::Fn(TypeFn {
+            id,
+            vis: visibility(f.vis),
+            name_span: f.name.span,
+        });
+        let Some(first) = namespace.get(name) else {
+            namespace.insert(name.to_owned(), entry);
+            return;
+        };
+        let first = first.name_span();
+        let span = f.name.span;
+        let (again, before) = if (span.file, span.lo) < (first.file, first.lo) {
+            (first, span)
+        } else {
+            (span, first)
+        };
+        self.duplicates.push(
+            Diagnostic::error(
+                "resolve::duplicate-item",
+                format!("`{name}` is defined more than once"),
+            )
+            .label(again, "redefined here")
+            .label(before, "first defined here")
+            .help("the functions of a type, and the variants of an enum, share one namespace (ADR 0113)"),
+        );
     }
 
     /// Gathers the names the `use` declaration `decl`, of `module`, brings
@@ -931,6 +1200,19 @@ impl<'a> Items<'a> {
                 Some((
                     "reserved for LLVM in the root module".to_owned(),
                     "the symbols of its items would start with `llvm.`, which LLVM reserves for its intrinsics (ADR 0051)".to_owned(),
+                ))
+            } else if name == "llvm"
+                && module == ModuleId::ROOT
+                && matches!(
+                    binding,
+                    Binding::Def(
+                        Def::Struct(_) | Def::BitStruct(_) | Def::Enum(_) | Def::PeripheralType(_)
+                    )
+                )
+            {
+                Some((
+                    "reserved for LLVM in the root module".to_owned(),
+                    "the symbols of the functions of a type start with its name, so those of `llvm` would start with `llvm.`, which LLVM reserves for its intrinsics (ADR 0051, 0113)".to_owned(),
                 ))
             } else if name == "rt"
                 && module == ModuleId::ROOT
@@ -1071,13 +1353,36 @@ fn plain_name(path: &ast::Path) -> Option<&ast::Ident> {
         .filter(|name| !matches!(name.name.as_str(), "crate" | "super"))
 }
 
+/// The struct, bit-field struct, enum or peripheral type that `ty` is, if it
+/// is one: what has functions (ADR 0113).
+fn type_def(ty: Ty) -> Option<Def> {
+    match ty {
+        Ty::Struct(s) => Some(Def::Struct(s.id)),
+        Ty::BitStruct(s) => Some(Def::BitStruct(s.id)),
+        Ty::Enum(e) => Some(Def::Enum(e.id)),
+        Ty::Peripheral(p) => Some(Def::PeripheralType(p.id)),
+        _ => None,
+    }
+}
+
+/// The last segment of `path`, which names what the path does.
+fn last_segment(path: &ast::Path) -> &ast::Ident {
+    &path.segments[path.segments.len() - 1]
+}
+
 /// What a path names (ADR 0049).
 enum Named {
     Item(Def),
     Variant(EnumId, u32),
+    /// A function of the type, which the last segment names (ADR 0113).
+    TypeFn(Def, FnId),
     /// The last segment names nothing in this module; the caller reports
     /// it, as the error of its position.
     Missing(ModuleId),
+    /// The last segment names no function of the type, nor, for an enum, a
+    /// variant; the caller reports it, as the error of its position
+    /// (`Lowerer::no_function`).
+    NoFunction(Def),
     /// Reported.
     Failed,
 }
@@ -1140,6 +1445,7 @@ fn check_symbols(
     fns: &[Fn],
     statics: &[StaticDef],
     namespaces: &[HashMap<String, Entry>],
+    type_namespaces: &HashMap<Def, HashMap<String, TypeName>>,
     uses: &[Use],
     core_root: ModuleId,
     diags: &mut Diagnostics,
@@ -1153,11 +1459,23 @@ fn check_symbols(
                 .get(name)
                 .is_some_and(|entry| entry.binding == Binding::Def(def))
     };
+    // A function of a type holds its name in the namespace of the type.
+    let type_checked = |f: &Fn, owner: hir::FnOwner, id: FnId| {
+        (in_core(f.module) || !(f.name.starts_with("__") || f.name == "_start"))
+            && type_def(owner.ty)
+                .and_then(|def| type_namespaces.get(&def))
+                .and_then(|names| names.get(&f.name))
+                .is_some_and(|name| matches!(name, TypeName::Fn(held) if held.id == id))
+    };
     let mut items: Vec<Symbol> = Vec::new();
     for (i, f) in fns.iter().enumerate() {
         let Some(symbol) = &f.symbol else { continue };
         let def = Def::Fn(FnId(i as u32));
-        if checked(f.module, &f.name, def) {
+        let held = match f.owner {
+            Some(owner) => type_checked(f, owner, FnId(i as u32)),
+            None => checked(f.module, &f.name, def),
+        };
+        if held {
             let item = Symbol {
                 symbol,
                 path: &f.path,
@@ -1374,6 +1692,10 @@ struct Lowerer<'a> {
     /// Every function's declaration, the program's then `core`'s, with its
     /// module; `fn_decl` finds one by id.
     fn_decls: &'a [(&'a ast::FnDecl, ModuleId)],
+    /// The namespace of the functions of each type (ADR 0113).
+    type_namespaces: HashMap<Def, HashMap<String, TypeName>>,
+    /// Inside a function of a type, its type: what `Self` names.
+    self_ty: Option<Def>,
     /// The index in `fn_decls` of `core`'s first function, and its id.
     core_fns: usize,
     core_fn_base: u32,

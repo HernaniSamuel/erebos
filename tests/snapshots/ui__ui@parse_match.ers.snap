@@ -49,6 +49,7 @@ File {
                     name: "arms",
                     span: 477..481,
                 },
+                receiver: None,
                 params: [
                     Param {
                         mutable: false,
@@ -457,6 +458,7 @@ File {
                     name: "statement",
                     span: 755..764,
                 },
+                receiver: None,
                 params: [
                     Param {
                         mutable: false,
@@ -640,6 +642,7 @@ File {
                     name: "main",
                     span: 895..899,
                 },
+                receiver: None,
                 params: [],
                 ret: Some(
                     Ty {
@@ -677,6 +680,7 @@ File {
                     name: "on_panic",
                     span: 928..936,
                 },
+                receiver: None,
                 params: [],
                 ret: Some(
                     Ty {

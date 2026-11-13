@@ -82,6 +82,7 @@ File {
                     name: "f",
                     span: 199..200,
                 },
+                receiver: None,
                 params: [
                     Param {
                         mutable: false,

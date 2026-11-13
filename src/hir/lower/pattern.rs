@@ -6,7 +6,9 @@ use crate::diag::Diagnostic;
 use crate::hir::{Arm, ConstId, EnumId, Pattern, PatternId, PatternKind, UnsizedPosition};
 use crate::syntax::ast;
 
-use super::{Binding, Bound, Def, Later, Lookup, Lowerer, Named, plain_name, written};
+use super::{
+    Binding, Bound, Def, Later, Lookup, Lowerer, Named, last_segment, plain_name, written,
+};
 
 impl Lowerer<'_> {
     /// An arm of a `match`, in a scope of its own: the variables its
@@ -258,6 +260,17 @@ impl Lowerer<'_> {
                 let diag = self.not_a_constant(path, def);
                 self.diags.push(diag);
             }
+            Named::TypeFn(def, _) => {
+                let diag = Diagnostic::error(
+                    "resolve::not-a-constant",
+                    format!("`{}` is a function, not a constant", written(path)),
+                )
+                .label(
+                    path.span,
+                    format!("{}, not a constant", self.type_fn_what(def)),
+                );
+                self.diags.push(diag);
+            }
             Named::Missing(module) => {
                 let diag = Diagnostic::error(
                     "resolve::unknown-name",
@@ -265,6 +278,13 @@ impl Lowerer<'_> {
                 );
                 let diag = self.missing(diag, path, module, "not found");
                 self.diags.push(diag);
+            }
+            Named::NoFunction(def) => {
+                let diag = Diagnostic::error(
+                    "resolve::unknown-name",
+                    format!("cannot find `{}`", written(path)),
+                );
+                self.no_function(Some(diag), def, last_segment(path));
             }
         }
         // Reported; lowering errors stop the pipeline.
@@ -287,12 +307,29 @@ impl Lowerer<'_> {
             )
             .label(path.span, format!("{}, not a variant", def.what()))
             .help("patterns in parentheses match the values of a variant's payload, as in `E::V(p)` (ADR 0040)"),
+            Named::TypeFn(def, _) => Diagnostic::error(
+                "resolve::unknown-variant",
+                format!("`{}` is not a variant", written(path)),
+            )
+            .label(
+                path.span,
+                format!("{}, not a variant", self.type_fn_what(def)),
+            )
+            .help("patterns in parentheses match the values of a variant payload, as in `E::V(p)` (ADR 0040)"),
             Named::Missing(module) => {
                 let diag = Diagnostic::error(
                     "resolve::unknown-name",
                     format!("cannot find `{}`", written(path)),
                 );
                 self.missing(diag, path, module, "not found")
+            }
+            Named::NoFunction(def) => {
+                let diag = Diagnostic::error(
+                    "resolve::unknown-name",
+                    format!("cannot find `{}`", written(path)),
+                );
+                self.no_function(Some(diag), def, last_segment(path));
+                return None;
             }
         };
         self.diags.push(diag);

@@ -15,6 +15,7 @@ File {
                     name: "arrays",
                     span: 16..22,
                 },
+                receiver: None,
                 params: [
                     Param {
                         mutable: false,

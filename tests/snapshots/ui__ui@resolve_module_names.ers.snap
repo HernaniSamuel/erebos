@@ -119,7 +119,7 @@ resolve::unknown-type
     ╰────
 resolve::not-an-enum
 
-  × `u8` is neither a module nor an enum
+  × `u8` is neither a module, an enum nor a type with functions
     ╭─[resolve_module_names.ers:25:17]
  24 │     a::E::V {};
  25 │     let m: u8 = u8::MAX;
@@ -127,11 +127,12 @@ resolve::not-an-enum
     ·                  ╰── a built-in type
  26 │     let n: u8 = len::x;
     ╰────
-  help: `::` follows a module, to name one of its items, or an enum, to name one of its variants,
-        as in `Mode::Run` (ADR 0035, 0049)
+  help: `::` follows a module, to name one of its items, an enum, to name one of its variants or
+        functions, or a struct, bit-field struct or peripheral type, to name one of its functions,
+        as in `Mode::Run` or `Ring::new()` (ADR 0035, 0049, 0113)
 resolve::not-an-enum
 
-  × `len` is neither a module nor an enum
+  × `len` is neither a module, an enum nor a type with functions
     ╭─[resolve_module_names.ers:26:17]
  25 │     let m: u8 = u8::MAX;
  26 │     let n: u8 = len::x;
@@ -139,5 +140,6 @@ resolve::not-an-enum
     ·                  ╰── a built-in function
  27 │ }
     ╰────
-  help: `::` follows a module, to name one of its items, or an enum, to name one of its variants,
-        as in `Mode::Run` (ADR 0035, 0049)
+  help: `::` follows a module, to name one of its items, an enum, to name one of its variants or
+        functions, or a struct, bit-field struct or peripheral type, to name one of its functions,
+        as in `Mode::Run` or `Ring::new()` (ADR 0035, 0049, 0113)

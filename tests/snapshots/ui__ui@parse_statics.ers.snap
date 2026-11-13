@@ -189,6 +189,7 @@ File {
                     name: "main",
                     span: 275..279,
                 },
+                receiver: None,
                 params: [],
                 ret: Some(
                     Ty {
@@ -226,6 +227,7 @@ File {
                     name: "on_panic",
                     span: 308..316,
                 },
+                receiver: None,
                 params: [],
                 ret: Some(
                     Ty {

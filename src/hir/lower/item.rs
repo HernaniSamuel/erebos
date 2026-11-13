@@ -6,14 +6,14 @@ use std::collections::HashMap;
 use crate::diag::Diagnostic;
 use crate::hir::{
     ArrayLen, BitFieldDef, BitStructDef, BitStructId, Block, Comptime, ConstDef, ConstId, EnumDef,
-    EnumId, FieldDef, Fn, FnId, FnKind, HandlerVector, IntTy, ModuleDef, ModuleId, NeverPosition,
-    PayloadDef, StaticDef, StaticId, StructDef, Ty, UnsizedPosition, VariantDef, VariantValue,
-    Visibility,
+    EnumId, FieldDef, Fn, FnId, FnKind, FnOwner, HandlerVector, IntTy, ModuleDef, ModuleId,
+    NeverPosition, PayloadDef, PeripheralByValue, StaticDef, StaticId, StructDef, Ty,
+    UnsizedPosition, VariantDef, VariantValue, Visibility,
 };
 use crate::span::Span;
 use crate::syntax::ast;
 
-use super::{Lowerer, Named, visibility, written};
+use super::{Def, Lowerer, Named, Owner, last_segment, visibility, written};
 
 /// The attributes of a struct, as `struct_attrs` found them.
 struct StructAttrs {
@@ -38,6 +38,8 @@ impl Lowerer<'_> {
             vis: visibility(decl.vis),
             // Filled in once every `use` is resolved, by `reachability`.
             reachable: Vec::new(),
+            // Filled in by `lower`, from the `impl` blocks.
+            fns: Vec::new(),
             fields: decl
                 .fields
                 .iter()
@@ -149,6 +151,8 @@ impl Lowerer<'_> {
             ty,
             int_span: decl.ty.span,
             fields,
+            // Filled in by `lower`, from the `impl` blocks.
+            fns: Vec::new(),
         }
     }
 
@@ -372,6 +376,7 @@ impl Lowerer<'_> {
         attrs: &[ast::Attr],
         external: bool,
         kind: &ast::FnKind,
+        of_type: bool,
     ) -> (bool, bool, Option<(ArrayLen, Span)>) {
         if external {
             self.no_attrs(attrs, "an `extern fn`");
@@ -383,6 +388,7 @@ impl Lowerer<'_> {
         let mut align_attr: Option<Span> = None;
         for attr in attrs {
             match attr.name.name.as_str() {
+                "export" if of_type => self.export_of_type(attr),
                 "export" => self.flag_attr(attr, &mut export),
                 "naked" => match kind {
                     ast::FnKind::Plain => self.flag_attr(attr, &mut naked),
@@ -417,6 +423,19 @@ impl Lowerer<'_> {
             }
         }
         (export.is_some(), naked.is_some(), align)
+    }
+
+    /// `#[export]` on a function of a type: its symbol is its path, and
+    /// nothing needs another (ADR 0113).
+    fn export_of_type(&mut self, attr: &ast::Attr) {
+        self.diags.push(
+            Diagnostic::error(
+                "resolve::misplaced-attribute",
+                "`#[export]` does not apply to a function of a type",
+            )
+            .label(attr.span, "not allowed on a function of a type")
+            .help("a function of a type has its path as its symbol, as in `Ring.push`; a plain function with `#[export]` that calls it gives C a name of its own (ADR 0051, 0113)"),
+        );
     }
 
     /// `#[align(N)]` and `#[export]`, at most once each, are the attributes
@@ -520,6 +539,7 @@ impl Lowerer<'_> {
             runtime: false,
             comptime: Some(Comptime::Static(id)),
             align: None,
+            owner: None,
         };
         (def, Some(body))
     }
@@ -564,6 +584,7 @@ impl Lowerer<'_> {
             runtime: false,
             comptime: Some(Comptime::Const(id)),
             align: None,
+            owner: None,
         };
         (def, body)
     }
@@ -650,6 +671,7 @@ impl Lowerer<'_> {
                 runtime: false,
                 comptime: Some(Comptime::Discriminant(id, i as u32)),
                 align: None,
+                owner: None,
             });
         }
         let def = EnumDef {
@@ -662,6 +684,8 @@ impl Lowerer<'_> {
             ty,
             variants,
             copy,
+            // Filled in by `lower`, from the `impl` blocks.
+            fns: Vec::new(),
         };
         (def, bodies)
     }
@@ -699,6 +723,7 @@ impl Lowerer<'_> {
             runtime: false,
             comptime: Some(Comptime::Block),
             align: None,
+            owner: None,
         }
     }
 
@@ -780,6 +805,7 @@ impl Lowerer<'_> {
             runtime: false,
             comptime: Some(comptime),
             align: None,
+            owner: None,
         });
         id
     }
@@ -855,6 +881,19 @@ impl Lowerer<'_> {
                 not_a_vector(self, def.what().to_owned());
                 None
             }
+            Named::TypeFn(def, _) => {
+                let what = self.type_fn_what(def);
+                not_a_vector(self, what);
+                None
+            }
+            Named::NoFunction(def) => {
+                let diag = Diagnostic::error(
+                    "resolve::unknown-path",
+                    format!("cannot find `{}`", written(at)),
+                );
+                self.no_function(Some(diag), def, last_segment(at));
+                None
+            }
             Named::Missing(module) => {
                 let diag = Diagnostic::error(
                     "resolve::unknown-path",
@@ -875,9 +914,25 @@ impl Lowerer<'_> {
         decl.attrs.iter().any(|attr| attr.name.name == "interrupts")
     }
 
-    pub(super) fn fn_decl(&mut self, decl: &ast::FnDecl) -> Fn {
+    /// An `impl` block takes no attributes (ADR 0113); its functions are
+    /// lowered as the functions of the type it is for.
+    pub(super) fn impl_decl(&mut self, decl: &ast::ImplDecl) {
+        self.no_attrs(&decl.attrs, "an `impl` block");
+    }
+
+    /// A function of a module or, with its `owner`, of a type (ADR 0113):
+    /// its receiver is its first parameter, a local named `self`. A function
+    /// of an `impl` whose type was reported is skipped.
+    pub(super) fn fn_decl(&mut self, decl: &ast::FnDecl, owner: Owner) -> Fn {
+        let def = match owner {
+            Owner::Free => None,
+            Owner::Type(def) => Some(def),
+            Owner::Skipped => return self.skipped_fn(decl),
+        };
+        self.self_ty = def;
         let external = decl.body.is_none();
-        let (export, naked, align) = self.fn_attrs(&decl.attrs, external, &decl.kind);
+        let (export, naked, align) =
+            self.fn_attrs(&decl.attrs, external, &decl.kind, def.is_some());
         let vector = match &decl.kind {
             ast::FnKind::Interrupt(at) => self.handler_vector(at),
             _ => None,
@@ -890,6 +945,9 @@ impl Lowerer<'_> {
             .as_ref()
             .map_or(Ty::Unit, |ty| self.ty(ty, UnsizedPosition::Return));
         self.scopes.push(HashMap::new());
+        if let (Some(receiver), Some(def)) = (&decl.receiver, def) {
+            self.receiver_param(receiver, def);
+        }
         let mut param_names: HashMap<&str, Span> = HashMap::new();
         for param in &decl.params {
             if let Some(&first) = param_names.get(param.name.name.as_str()) {
@@ -930,27 +988,104 @@ impl Lowerer<'_> {
             // lowering errors stop the pipeline: any kind works.
             ast::FnKind::Interrupt(_) => vector.map_or(FnKind::Plain, FnKind::Interrupt),
         };
+        // The path of a function of a type is its type's and its name; its
+        // symbol is that path joined by dots (ADR 0113).
+        let (path, symbol) = match def {
+            Some(def) => {
+                let path = format!("{}::{}", self.type_name(def), decl.name.name);
+                let symbol = path.replace("::", ".");
+                (path, symbol)
+            }
+            None => (
+                self.path_of(self.module, &decl.name.name),
+                if external || export {
+                    decl.name.name.clone()
+                } else {
+                    path_symbol(&self.modules, self.module, &decl.name.name)
+                },
+            ),
+        };
+        let owner = def.map(|def| FnOwner {
+            ty: self.def_ty(def),
+            receiver: decl.receiver.map(|receiver| receiver.kind),
+        });
+        self.self_ty = None;
         Fn {
             name: decl.name.name.clone(),
-            path: self.path_of(self.module, &decl.name.name),
-            symbol: Some(if external || export {
-                decl.name.name.clone()
-            } else {
-                path_symbol(&self.modules, self.module, &decl.name.name)
-            }),
+            path,
+            symbol: Some(symbol),
             name_span: decl.name.span,
             module: self.module,
             vis: visibility(decl.vis),
             kind,
             ret,
             ret_span: decl.ret.as_ref().map(|ty| ty.span),
-            param_count: decl.params.len(),
+            param_count: decl.params.len() + usize::from(decl.receiver.is_some()),
             locals: std::mem::take(&mut self.locals),
             body,
             span: decl.span,
             runtime: false,
             comptime: None,
             align,
+            owner,
+        }
+    }
+
+    /// The receiver of a function of the type `def`, declared as its first
+    /// parameter: a local named `self` of type `Self`, `&Self` or `&mut
+    /// Self`, assignable for `mut self` (ADR 0113). A peripheral type by
+    /// value is recorded as any parameter of one is (ADR 0058).
+    fn receiver_param(&mut self, receiver: &ast::Receiver, def: Def) {
+        let self_ty = self.def_ty(def);
+        let ty = match receiver.kind {
+            ast::ReceiverKind::Value | ast::ReceiverKind::MutValue => {
+                if let Ty::Peripheral(_) = self_ty {
+                    self.peripherals_by_value.push(PeripheralByValue {
+                        span: receiver.span,
+                        ty: self_ty,
+                        position: UnsizedPosition::Parameter,
+                    });
+                    Ty::Error
+                } else {
+                    self_ty
+                }
+            }
+            ast::ReceiverKind::Ref => Ty::reference(false, false, self_ty),
+            ast::ReceiverKind::RefMut => Ty::reference(true, false, self_ty),
+        };
+        let name = ast::Ident {
+            name: "self".to_owned(),
+            span: receiver.span,
+        };
+        self.declare(&name, ty, receiver.kind == ast::ReceiverKind::MutValue);
+    }
+
+    /// The stand-in for a function of an `impl` whose type was reported:
+    /// neither its signature nor its body is lowered, so that its `Self` and
+    /// `self` give no further errors; lowering errors stop the pipeline.
+    fn skipped_fn(&mut self, decl: &ast::FnDecl) -> Fn {
+        Fn {
+            name: decl.name.name.clone(),
+            path: self.path_of(self.module, &decl.name.name),
+            symbol: None,
+            name_span: decl.name.span,
+            module: self.module,
+            vis: visibility(decl.vis),
+            kind: FnKind::Plain,
+            ret: Ty::Unit,
+            ret_span: None,
+            param_count: 0,
+            locals: Vec::new(),
+            body: Some(Block {
+                stmts: Vec::new(),
+                tail: None,
+                span: decl.span,
+            }),
+            span: decl.span,
+            runtime: false,
+            comptime: None,
+            align: None,
+            owner: None,
         }
     }
 }

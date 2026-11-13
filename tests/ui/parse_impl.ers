@@ -1,0 +1,71 @@
+// emit: ast
+// `impl Name { fns }` (ADR 0113): functions with a body, `fn` and `pub fn`,
+// with the attributes `#[align(N)]` and `#[naked]`. The first parameter may be
+// a receiver, written without a type: `self`, `mut self`, `&self` or
+// `&mut self`. `Self` is a type, a struct literal's name and the start of a
+// path; `self` is an expression and a path of its own. Several blocks may
+// follow one another.
+struct Ring {
+    count: usize,
+}
+
+impl Ring {
+    pub fn new() -> Self {
+        Self { count: 0 }
+    }
+
+    fn take(self) -> usize {
+        self.count
+    }
+
+    pub fn grow(mut self, by: usize) -> Self {
+        self.count = self.count + by;
+        self
+    }
+
+    pub fn count(&self) -> usize {
+        self.count
+    }
+
+    #[align(16)]
+    pub fn push(&mut self, n: usize,) {
+        self.count += n;
+    }
+
+    #[naked]
+    fn raw(&self) -> ! {
+        asm("ret", options(noreturn));
+    }
+
+    fn pointers(a: *const Self, b: &mut Self) -> Self {
+        Self::new()
+    }
+}
+
+impl Ring {}
+
+enum Mode: u8 {
+    Off = 0,
+    Run = 1,
+}
+
+impl Mode {
+    fn default() -> Self {
+        Self::Run
+    }
+
+    fn is_off(&self) -> bool {
+        match *self {
+            Self::Off => true,
+            Self::Run => false,
+        }
+    }
+}
+
+entry fn main() -> ! {
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    loop {}
+}

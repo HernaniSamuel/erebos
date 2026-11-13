@@ -191,21 +191,27 @@ resolve::unknown-name
     ·              ╰── not found in module `a`
  39 │         _ => 1,
     ╰────
-resolve::not-an-enum
+resolve::unknown-name
 
-  × `Point` is neither a module nor an enum
-    ╭─[resolve_module_errors.ers:44:17]
+  × cannot find `Point::Origin`
+    ╭─[resolve_module_errors.ers:12:8]
+ 11 │ const LIMIT: u32 = 10;
+ 12 │ struct Point { x: u8 }
+    ·        ──┬──
+    ·          ╰── `Point` is declared here
+ 13 │ mod file;
+    ╰────
+    ╭─[resolve_module_errors.ers:44:24]
  43 │ fn not_enums() {
  44 │     let x: u8 = Point::Origin;
-    ·                 ──┬──
-    ·                   ╰── a struct
+    ·                        ───┬──
+    ·                           ╰── `Point` has no function `Origin`
  45 │     let y: u8 = a::C::X;
     ╰────
-  help: `::` follows a module, to name one of its items, or an enum, to name one of its variants,
-        as in `Mode::Run` (ADR 0035, 0049)
+  help: `Point` has no functions: they are declared in an `impl` block (ADR 0113)
 resolve::not-an-enum
 
-  × `a::C` is neither a module nor an enum
+  × `a::C` is neither a module, an enum nor a type with functions
     ╭─[resolve_module_errors.ers:45:20]
  44 │     let x: u8 = Point::Origin;
  45 │     let y: u8 = a::C::X;
@@ -213,11 +219,12 @@ resolve::not-an-enum
     ·                    ╰── a constant
  46 │     let z: u8 = LIMIT::X;
     ╰────
-  help: `::` follows a module, to name one of its items, or an enum, to name one of its variants,
-        as in `Mode::Run` (ADR 0035, 0049)
+  help: `::` follows a module, to name one of its items, an enum, to name one of its variants or
+        functions, or a struct, bit-field struct or peripheral type, to name one of its functions,
+        as in `Mode::Run` or `Ring::new()` (ADR 0035, 0049, 0113)
 resolve::not-an-enum
 
-  × `LIMIT` is neither a module nor an enum
+  × `LIMIT` is neither a module, an enum nor a type with functions
     ╭─[resolve_module_errors.ers:46:17]
  45 │     let y: u8 = a::C::X;
  46 │     let z: u8 = LIMIT::X;
@@ -225,8 +232,9 @@ resolve::not-an-enum
     ·                   ╰── a constant
  47 │     let o: Option(u8) = Option::None;
     ╰────
-  help: `::` follows a module, to name one of its items, or an enum, to name one of its variants,
-        as in `Mode::Run` (ADR 0035, 0049)
+  help: `::` follows a module, to name one of its items, an enum, to name one of its variants or
+        functions, or a struct, bit-field struct or peripheral type, to name one of its functions,
+        as in `Mode::Run` or `Ring::new()` (ADR 0035, 0049, 0113)
 resolve::not-an-enum
 
   × `Option` is not an enum
@@ -241,7 +249,7 @@ resolve::not-an-enum
         that type gives it its enum (ADR 0044, 0045)
 resolve::not-an-enum
 
-  × `a::E::V` is neither a module nor an enum
+  × `a::E::V` is neither a module, an enum nor a type with functions
     ╭─[resolve_module_errors.ers:48:23]
  47 │     let o: Option(u8) = Option::None;
  48 │     let v: u8 = a::E::V::X;
@@ -249,8 +257,9 @@ resolve::not-an-enum
     ·                       ╰── a variant
  49 │ }
     ╰────
-  help: `::` follows a module, to name one of its items, or an enum, to name one of its variants,
-        as in `Mode::Run` (ADR 0035, 0049)
+  help: `::` follows a module, to name one of its items, an enum, to name one of its variants or
+        functions, or a struct, bit-field struct or peripheral type, to name one of its functions,
+        as in `Mode::Run` or `Ring::new()` (ADR 0035, 0049, 0113)
 resolve::misused-module
 
   × `a` is a module, not a type

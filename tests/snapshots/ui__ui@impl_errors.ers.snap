@@ -1,0 +1,390 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/impl_errors.ers
+---
+--- errors ---
+resolve::use-type-function
+
+  × `ring::Ring::new` is a function of a type, which `use` cannot bring in
+    ╭─[impl_errors.ers:40:5]
+ 39 │ 
+ 40 │ use ring::Ring::new;
+    ·     ───────┬───────
+    ·            ╰── a function of `ring::Ring`
+ 41 │ 
+    ╰────
+  help: a function of a type is written with its type, so that the call says what it is about:
+        bring in the type with `use ring::Ring;` and write `Ring::new` (ADR 0113)
+resolve::impl-type
+
+  × `u32` is not a struct, an enum or a peripheral type declared in this module
+    ╭─[impl_errors.ers:42:6]
+ 41 │ 
+ 42 │ impl u32 {}
+    ·      ─┬─
+    ·       ╰── a built-in type
+ 43 │ 
+    ╰────
+  help: an `impl` block gives functions to a struct, a bit-field struct, an enum or a peripheral
+        type declared in the module it is written in: not to a built-in type, nor to a type
+        brought in with `use`, nor to a peripheral (ADR 0113)
+resolve::impl-type
+
+  × `Option` is not a struct, an enum or a peripheral type declared in this module
+    ╭─[impl_errors.ers:44:6]
+ 43 │ 
+ 44 │ impl Option {}
+    ·      ───┬──
+    ·         ╰── a built-in type
+ 45 │ 
+    ╰────
+  help: an `impl` block gives functions to a struct, a bit-field struct, an enum or a peripheral
+        type declared in the module it is written in: not to a built-in type, nor to a type
+        brought in with `use`, nor to a peripheral (ADR 0113)
+resolve::impl-type
+
+  × `LIMIT` is not a struct, an enum or a peripheral type declared in this module
+    ╭─[impl_errors.ers:46:6]
+ 45 │ 
+ 46 │ impl LIMIT {}
+    ·      ──┬──
+    ·        ╰── a constant, not a type declared here
+ 47 │ 
+    ╰────
+  help: an `impl` block gives functions to a struct, a bit-field struct, an enum or a peripheral
+        type declared in the module it is written in: not to a built-in type, nor to a type
+        brought in with `use`, nor to a peripheral (ADR 0113)
+resolve::impl-type
+
+  × `UART0` is not a struct, an enum or a peripheral type declared in this module
+    ╭─[impl_errors.ers:48:6]
+ 47 │ 
+ 48 │ impl UART0 {}
+    ·      ──┬──
+    ·        ╰── a peripheral, not a type declared here
+ 49 │ 
+    ╰────
+  help: an `impl` block gives functions to a struct, a bit-field struct, an enum or a peripheral
+        type declared in the module it is written in: not to a built-in type, nor to a type
+        brought in with `use`, nor to a peripheral (ADR 0113)
+resolve::impl-type
+
+  × `inner` is not a struct, an enum or a peripheral type declared in this module
+    ╭─[impl_errors.ers:50:6]
+ 49 │ 
+ 50 │ impl inner {}
+    ·      ──┬──
+    ·        ╰── a module, not a type declared here
+ 51 │ 
+    ╰────
+  help: an `impl` block gives functions to a struct, a bit-field struct, an enum or a peripheral
+        type declared in the module it is written in: not to a built-in type, nor to a type
+        brought in with `use`, nor to a peripheral (ADR 0113)
+resolve::unknown-type
+
+  × unknown type `Missing`
+    ╭─[impl_errors.ers:52:6]
+ 51 │ 
+ 52 │ impl Missing {}
+    ·      ───┬───
+    ·         ╰── not found in the root module
+ 53 │ 
+    ╰────
+  help: an `impl` block is written in the module that declares its type (ADR 0113)
+resolve::impl-type
+
+  × `u8` is not a struct, an enum or a peripheral type declared in this module
+    ╭─[impl_errors.ers:54:6]
+ 53 │ 
+ 54 │ impl u8 {
+    ·      ─┬
+    ·       ╰── a built-in type
+ 55 │     fn bump(&mut self) -> Self {
+    ╰────
+  help: an `impl` block gives functions to a struct, a bit-field struct, an enum or a peripheral
+        type declared in the module it is written in: not to a built-in type, nor to a type
+        brought in with `use`, nor to a peripheral (ADR 0113)
+resolve::misplaced-attribute
+
+  × `#[packed]` applies only to structs
+    ╭─[impl_errors.ers:60:1]
+ 59 │ 
+ 60 │ #[packed]
+    · ────┬────
+    ·     ╰── not allowed on an `impl` block
+ 61 │ impl Ring {
+    ╰────
+resolve::misplaced-attribute
+
+  × `#[export]` does not apply to a function of a type
+    ╭─[impl_errors.ers:62:5]
+ 61 │ impl Ring {
+ 62 │     #[export]
+    ·     ────┬────
+    ·         ╰── not allowed on a function of a type
+ 63 │     fn exported(&self) {}
+    ╰────
+  help: a function of a type has its path as its symbol, as in `Ring.push`; a plain function with
+        `#[export]` that calls it gives C a name of its own (ADR 0051, 0113)
+resolve::reserved-name
+
+  × `_start` is a reserved name
+    ╭─[impl_errors.ers:67:8]
+ 66 │ 
+ 67 │     fn _start() {}
+    ·        ───┬──
+    ·           ╰── reserved for the startup code
+ 68 │ 
+    ╰────
+  help: `core::arch` defines `_start`, which sets up the stack and jumps to the entry function
+        (ADR 0083)
+resolve::reserved-name
+
+  × `__hidden` is a reserved name
+    ╭─[impl_errors.ers:69:8]
+ 68 │ 
+ 69 │     fn __hidden() {}
+    ·        ────┬───
+    ·            ╰── names starting with `__` are reserved
+ 70 │ 
+    ╰────
+  help: the runtime support functions of `core` use them (ADR 0020, 0052)
+resolve::unknown-self
+
+  × `self` is used in a function without a receiver
+    ╭─[impl_errors.ers:72:9]
+ 71 │     fn assoc() -> usize {
+ 72 │         self.count
+    ·         ──┬─
+    ·           ╰── no receiver here
+ 73 │     }
+    ╰────
+  help: `self` is the receiver of a function in an `impl` block, written as its first parameter:
+        `self`, `mut self`, `&self` or `&mut self` (ADR 0113)
+resolve::duplicate-item
+
+  × `push` is defined more than once
+    ╭─[impl_errors.ers:77:8]
+ 64 │ 
+ 65 │     fn push(&mut self) {}
+    ·        ──┬─
+    ·          ╰── first defined here
+ 66 │ 
+ 67 │     fn _start() {}
+ 68 │ 
+ 69 │     fn __hidden() {}
+ 70 │ 
+ 71 │     fn assoc() -> usize {
+ 72 │         self.count
+ 73 │     }
+ 74 │ }
+ 75 │ 
+ 76 │ impl Ring {
+ 77 │     fn push(&mut self) {}
+    ·        ──┬─
+    ·          ╰── redefined here
+ 78 │ }
+    ╰────
+  help: the functions of a type, and the variants of an enum, share one namespace (ADR 0113)
+resolve::duplicate-item
+
+  × `Run` is defined more than once
+    ╭─[impl_errors.ers:19:5]
+ 18 │     Off = 0,
+ 19 │     Run = 1,
+    ·     ─┬─
+    ·      ╰── first defined here
+ 20 │ }
+    ╰────
+    ╭─[impl_errors.ers:81:8]
+ 80 │ impl Mode {
+ 81 │     fn Run() {}
+    ·        ─┬─
+    ·         ╰── redefined here
+ 82 │ }
+    ╰────
+  help: the functions of a type, and the variants of an enum, share one namespace (ADR 0113)
+resolve::reserved-name
+
+  × `llvm` is a reserved name
+    ╭─[impl_errors.ers:84:8]
+ 83 │ 
+ 84 │ struct llvm {
+    ·        ──┬─
+    ·          ╰── reserved for LLVM in the root module
+ 85 │     x: u8,
+    ╰────
+  help: the symbols of the functions of a type start with its name, so those of `llvm` would start
+        with `llvm.`, which LLVM reserves for its intrinsics (ADR 0051, 0113)
+resolve::unknown-function
+
+  × `Ring` has no function `missing`
+    ╭─[impl_errors.ers:13:8]
+ 12 │ // starting with `__` and a root type named `llvm` are reserved.
+ 13 │ struct Ring {
+    ·        ──┬─
+    ·          ╰── `Ring` is declared here
+ 14 │     count: usize,
+    ╰────
+    ╭─[impl_errors.ers:93:11]
+ 92 │ fn calls() {
+ 93 │     Ring::missing();
+    ·           ───┬───
+    ·              ╰── unknown function
+ 94 │     Mode::missing();
+    ╰────
+  help: its functions are `exported`, `push`, `_start`, `__hidden`, `assoc`
+resolve::unknown-function
+
+  × `Mode` has no variant or function `missing`
+    ╭─[impl_errors.ers:17:6]
+ 16 │ 
+ 17 │ enum Mode: u8 {
+    ·      ──┬─
+    ·        ╰── `Mode` is declared here
+ 18 │     Off = 0,
+    ╰────
+    ╭─[impl_errors.ers:94:11]
+ 93 │     Ring::missing();
+ 94 │     Mode::missing();
+    ·           ───┬───
+    ·              ╰── unknown variant or function
+ 95 │     let a: Ring::push = 1;
+    ╰────
+  help: `Mode` has no functions: they are declared in an `impl` block (ADR 0113)
+resolve::unknown-type
+
+  × unknown type `Ring::push`
+    ╭─[impl_errors.ers:95:12]
+ 94 │     Mode::missing();
+ 95 │     let a: Ring::push = 1;
+    ·            ─────┬────
+    ·                 ╰── a function of `Ring`, not a type
+ 96 │     let b: u8 = Ring::push;
+    ╰────
+resolve::unknown-name
+
+  × cannot find `Ring::push`
+    ╭─[impl_errors.ers:96:17]
+ 95 │     let a: Ring::push = 1;
+ 96 │     let b: u8 = Ring::push;
+    ·                 ─────┬────
+    ·                      ╰── a function of `Ring`, which is not a value
+ 97 │     let c: u8 = Mode::missing;
+    ╰────
+  help: call it: `Ring::push(...)`
+resolve::unknown-variant
+
+  × `Mode` has no variant `missing`
+    ╭─[impl_errors.ers:17:6]
+ 16 │ 
+ 17 │ enum Mode: u8 {
+    ·      ──┬─
+    ·        ╰── `Mode` is declared here
+ 18 │     Off = 0,
+    ╰────
+    ╭─[impl_errors.ers:97:23]
+ 96 │     let b: u8 = Ring::push;
+ 97 │     let c: u8 = Mode::missing;
+    ·                       ───┬───
+    ·                          ╰── unknown variant
+ 98 │     let d: Ring = Ring::missing { count: 1 };
+    ╰────
+  help: its variants are `Off`, `Run`
+resolve::unknown-type
+
+  × unknown struct `Ring::missing`
+    ╭─[impl_errors.ers:13:8]
+ 12 │ // starting with `__` and a root type named `llvm` are reserved.
+ 13 │ struct Ring {
+    ·        ──┬─
+    ·          ╰── `Ring` is declared here
+ 14 │     count: usize,
+    ╰────
+    ╭─[impl_errors.ers:98:25]
+ 97 │     let c: u8 = Mode::missing;
+ 98 │     let d: Ring = Ring::missing { count: 1 };
+    ·                         ───┬───
+    ·                            ╰── `Ring` has no function `missing`
+ 99 │     LIMIT::f();
+    ╰────
+  help: its functions are `exported`, `push`, `_start`, `__hidden`, `assoc`
+resolve::not-an-enum
+
+  × `LIMIT` is neither a module, an enum nor a type with functions
+     ╭─[impl_errors.ers:99:5]
+  98 │     let d: Ring = Ring::missing { count: 1 };
+  99 │     LIMIT::f();
+     ·     ──┬──
+     ·       ╰── a constant
+ 100 │     Ring::push::again();
+     ╰────
+  help: `::` follows a module, to name one of its items, an enum, to name one of its variants or
+        functions, or a struct, bit-field struct or peripheral type, to name one of its functions,
+        as in `Mode::Run` or `Ring::new()` (ADR 0035, 0049, 0113)
+resolve::not-an-enum
+
+  × `Ring::push` is neither a module, an enum nor a type with functions
+     ╭─[impl_errors.ers:100:11]
+  99 │     LIMIT::f();
+ 100 │     Ring::push::again();
+     ·           ──┬─
+     ·             ╰── a function of `Ring`
+ 101 │     asm("call {}", sym Ring::missing);
+     ╰────
+  help: `::` follows a module, to name one of its items, an enum, to name one of its variants or
+        functions, or a struct, bit-field struct or peripheral type, to name one of its functions,
+        as in `Mode::Run` or `Ring::new()` (ADR 0035, 0049, 0113)
+resolve::unknown-name
+
+  × cannot find `Ring::missing`
+    ╭─[impl_errors.ers:13:8]
+ 12 │ // starting with `__` and a root type named `llvm` are reserved.
+ 13 │ struct Ring {
+    ·        ──┬─
+    ·          ╰── `Ring` is declared here
+ 14 │     count: usize,
+    ╰────
+     ╭─[impl_errors.ers:101:30]
+ 100 │     Ring::push::again();
+ 101 │     asm("call {}", sym Ring::missing);
+     ·                              ───┬───
+     ·                                 ╰── `Ring` has no function `missing`
+ 102 │ }
+     ╰────
+  help: its functions are `exported`, `push`, `_start`, `__hidden`, `assoc`
+resolve::unknown-self
+
+  × `Self` is used outside an `impl`
+     ╭─[impl_errors.ers:104:17]
+ 103 │ 
+ 104 │ fn outside() -> Self {
+     ·                 ──┬─
+     ·                   ╰── no type here
+ 105 │     Self::new()
+     ╰────
+  help: `Self` names the type of the `impl` block it is written in (ADR 0113)
+resolve::unknown-self
+
+  × `Self` is used outside an `impl`
+     ╭─[impl_errors.ers:105:5]
+ 104 │ fn outside() -> Self {
+ 105 │     Self::new()
+     ·     ──┬─
+     ·       ╰── no type here
+ 106 │ }
+     ╰────
+  help: `Self` names the type of the `impl` block it is written in (ADR 0113)
+resolve::unknown-self
+
+  × `self` is used in a function without a receiver
+     ╭─[impl_errors.ers:109:5]
+ 108 │ fn no_receiver() -> usize {
+ 109 │     self.count
+     ·     ──┬─
+     ·       ╰── no receiver here
+ 110 │ }
+     ╰────
+  help: `self` is the receiver of a function in an `impl` block, written as its first parameter:
+        `self`, `mut self`, `&self` or `&mut self` (ADR 0113)

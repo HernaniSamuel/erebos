@@ -1,0 +1,60 @@
+// emit: llvm-ir
+// The symbol of a function of a type is the path of its type joined by dots,
+// then its name (ADR 0051, 0113): `Ring.push` for a type of the root module,
+// `ring.Ring.push` for a type of a module, whether the function is `pub` or
+// not, and a call between them names the symbol it calls. A function named like
+// a function of the root module has a different symbol.
+struct Ring {
+    count: usize,
+}
+
+impl Ring {
+    pub fn push(&mut self) {
+        (*self).count += 1;
+    }
+
+    fn peek(&self) -> usize {
+        (*self).count
+    }
+}
+
+mod ring {
+    pub struct Ring {
+        count: usize,
+    }
+
+    impl Ring {
+        pub fn new() -> Self {
+            Self { count: 0 }
+        }
+
+        pub fn push(&mut self) {
+            (*self).count += 2;
+        }
+
+        fn peek(&self) -> usize {
+            (*self).count
+        }
+
+        pub fn both(&mut self) -> usize {
+            Self::push(self);
+            Self::peek(self)
+        }
+    }
+}
+
+fn push() -> usize {
+    let mut r: Ring = Ring { count: 0 };
+    let mut s: ring::Ring = ring::Ring::new();
+    Ring::push(&mut r);
+    ring::Ring::both(&mut s) + Ring::peek(&r)
+}
+
+entry fn main() -> ! {
+    push();
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    loop {}
+}

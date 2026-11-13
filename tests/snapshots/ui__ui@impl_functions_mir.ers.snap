@@ -1,0 +1,579 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/impl_functions_mir.ers
+---
+--- mir ---
+struct ring::Ring { 0 buf: [u8; 4] at 0, 1 head: usize at 4, 2 count: usize at 8 } // size 12, align 4
+struct chips::llvm { 0 x: u8 at 0 } // size 1, align 1
+struct Transfer { 0 channel: u32 at 0 } // size 4, align 4
+struct Names { 0 n: u32 at 0 } // size 4, align 4
+struct Control: u8 { enable: bool at 0, mode: u8 at 1..=2 }
+enum Mode: u8 { 0 Off = 0, 1 Run(0 u32 at 4) = 1, 2 Idle = 2 } // size 8, align 4
+
+peripheral Context { 0 threshold: u32 at 0x0 } // extent 4, align 4
+peripheral Plic { 0 enable: u32 at 0x0, 1 ctx: [Context; 2] step 0x100 at 0x1000 } // extent 4356, align 4
+peripheral PLIC: Plic at 0xc000000;
+
+static mut R: ring::Ring; // align 4
+
+fn ring.Ring.new() -> ring::Ring {
+    let _0: ring::Ring;
+    let _1: ring::Ring;
+    let _2: [u8; 4];
+    let _3: usize;
+    let _4: bool;
+
+    bb0: {
+        _3 = const 0_usize;
+        goto -> bb1;
+    }
+
+    bb1: {
+        _4 = Lt(copy _3, const 4_usize);
+        if copy _4 -> [true: bb2, false: bb3];
+    }
+
+    bb2: {
+        _2[_3] = const 0_u8;
+        _3 = Add(copy _3, const 1_usize);
+        goto -> bb1;
+    }
+
+    bb3: {
+        _1.0 = copy _2;
+        _1.1 = const 0_usize;
+        _1.2 = const 0_usize;
+        _0 = move _1;
+        return;
+    }
+}
+
+fn ring.Ring.push(_1: &mut ring::Ring, _2: u8) -> bool {
+    let _0: bool;
+    let _1: &mut ring::Ring; // self
+    let _2: u8; // b
+    let _3: usize;
+    let _4: bool;
+    let _5: usize;
+    let _6: usize;
+    let _7: usize;
+    let _8: usize;
+    let _9: usize;
+    let _10: usize;
+    let _11: bool;
+
+    bb0: {
+        _3 = copy (*_1).2;
+        _4 = Eq(copy _3, const 4_usize);
+        if copy _4 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _0 = const false;
+        return;
+    }
+
+    bb2: {
+        goto -> bb3;
+    }
+
+    bb3: {
+        _5 = copy (*_1).1;
+        _6 = copy _5;
+        _7 = copy (*_1).2;
+        _8 = Add(copy _6, copy _7);
+        _9 = Rem(copy _8, const 4_usize);
+        _10 = copy _9;
+        _11 = Lt(copy _10, const 4_usize);
+        if copy _11 -> [true: bb4, false: bb5];
+    }
+
+    bb4: {
+        (*_1).0[_10] = copy _2;
+        (*_1).2 = Add(copy (*_1).2, const 1_usize);
+        _0 = const true;
+        return;
+    }
+
+    bb5: {
+        panic(index out of bounds);
+    }
+}
+
+fn ring.Ring.count(_1: &ring::Ring) -> usize {
+    let _0: usize;
+    let _1: &ring::Ring; // self
+    let _2: usize;
+
+    bb0: {
+        _2 = copy (*_1).2;
+        _0 = copy _2;
+        return;
+    }
+}
+
+fn ring.Ring.clear(_1: &mut ring::Ring) -> () {
+    let _0: ();
+    let _1: &mut ring::Ring; // self
+
+    bb0: {
+        (*_1).1 = const 0_usize;
+        (*_1).2 = const 0_usize;
+        return;
+    }
+}
+
+fn ring.Ring.reset(_1: &mut ring::Ring) -> () {
+    let _0: ();
+    let _1: &mut ring::Ring; // self
+    let _2: &mut ring::Ring;
+
+    bb0: {
+        _2 = &mut (*_1);
+        call ring.Ring.clear(move _2);
+        return;
+    }
+}
+
+fn ring.Ring.fresh() -> ring::Ring {
+    let _0: ring::Ring;
+    let _1: ring::Ring; // r
+    let _2: ring::Ring;
+    let _3: &mut ring::Ring;
+
+    bb0: {
+        _2 = call ring.Ring.new();
+        _1 = move _2;
+        _3 = &mut _1;
+        call ring.Ring.clear(move _3);
+        _0 = move _1;
+        return;
+    }
+}
+
+fn ring.inner.clear_it(_1: &mut ring::Ring) -> () {
+    let _0: ();
+    let _1: &mut ring::Ring; // r
+    let _2: &mut ring::Ring;
+
+    bb0: {
+        _2 = &mut (*_1);
+        call ring.Ring.clear(move _2);
+        return;
+    }
+}
+
+fn new() -> u32 {
+    let _0: u32;
+
+    bb0: {
+        _0 = const 1_u32;
+        return;
+    }
+}
+
+fn count() -> u32 {
+    let _0: u32;
+
+    bb0: {
+        _0 = const 2_u32;
+        return;
+    }
+}
+
+fn calls() -> usize {
+    let _0: usize;
+    let _1: ring::Ring; // r
+    let _2: ring::Ring; // s
+    let _3: ring::Ring;
+    let _4: &mut ring::Ring;
+    let _5: bool;
+    let _6: &mut ring::Ring;
+    let _7: bool;
+    let _8: ring::Ring;
+    let _9: &mut ring::Ring;
+    let _10: &mut ring::Ring;
+    let _11: &ring::Ring;
+    let _12: usize;
+    let _13: usize;
+    let _14: &ring::Ring;
+    let _15: usize;
+    let _16: usize;
+
+    bb0: {
+        _3 = call ring.Ring.new();
+        _1 = move _3;
+        _4 = &mut _1;
+        _5 = call ring.Ring.push(move _4, const 1_u8);
+        _6 = &mut _1;
+        _7 = call ring.Ring.push(move _6, const 2_u8);
+        _8 = call ring.Ring.fresh();
+        _2 = move _8;
+        _9 = &mut _2;
+        call ring.Ring.reset(move _9);
+        _10 = &mut _2;
+        call ring.inner.clear_it(move _10);
+        _11 = &_1;
+        _12 = call ring.Ring.count(copy _11);
+        _13 = copy _12;
+        _14 = &_2;
+        _15 = call ring.Ring.count(copy _14);
+        _16 = Add(copy _13, copy _15);
+        _0 = copy _16;
+        return;
+    }
+}
+
+fn chips.llvm.make() -> chips::llvm {
+    let _0: chips::llvm;
+    let _1: chips::llvm;
+
+    bb0: {
+        _1.0 = const 1_u8;
+        _0 = move _1;
+        return;
+    }
+}
+
+fn from_chips() -> chips::llvm {
+    let _0: chips::llvm;
+    let _1: chips::llvm;
+
+    bb0: {
+        _1 = call chips.llvm.make();
+        _0 = move _1;
+        return;
+    }
+}
+
+fn Mode.idle() -> Mode {
+    let _0: Mode;
+    let _1: Mode;
+
+    bb0: {
+        _1.tag = const 2_u8;
+        _0 = move _1;
+        return;
+    }
+}
+
+fn Mode.running(_1: u32) -> Mode {
+    let _0: Mode;
+    let _1: u32; // n
+    let _2: Mode;
+
+    bb0: {
+        (_2 as 1).0 = copy _1;
+        _2.tag = const 1_u8;
+        _0 = move _2;
+        return;
+    }
+}
+
+fn Control.on() -> u8 {
+    let _0: u8;
+
+    bb0: {
+        _0 = const 1_u8;
+        return;
+    }
+}
+
+fn Control.enabled(_1: u8) -> bool {
+    let _0: bool;
+    let _1: u8; // self
+    let _2: u8;
+    let _3: u8;
+    let _4: bool;
+
+    bb0: {
+        _2 = copy _1;
+        _3 = BitAnd(copy _2, const 1_u8);
+        _4 = Ne(copy _3, const 0_u8);
+        _0 = copy _4;
+        return;
+    }
+}
+
+fn Control.with_mode(_1: u8, _2: u8) -> u8 {
+    let _0: u8;
+    let _1: u8; // self
+    let _2: u8; // mode
+    let _3: bool;
+    let _4: u8;
+    let _5: u8;
+    let _6: u8;
+    let _7: u8;
+
+    bb0: {
+        _3 = Le(copy _2, const 3_u8);
+        if copy _3 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _4 = copy _1;
+        _5 = BitAnd(copy _4, const 249_u8);
+        _6 = Shl(copy _2, const 1_u32);
+        _7 = BitOr(copy _5, copy _6);
+        _1 = copy _7;
+        _0 = copy _1;
+        return;
+    }
+
+    bb2: {
+        panic(value does not fit its field);
+    }
+}
+
+fn Context.set(_1: &mut Context, _2: u32) -> () {
+    let _0: ();
+    let _1: &mut Context; // self
+    let _2: u32; // v
+
+    bb0: {
+        (*_1).0 = copy _2;
+        return;
+    }
+}
+
+fn Context.get(_1: &Context) -> u32 {
+    let _0: u32;
+    let _1: &Context; // self
+    let _2: u32;
+
+    bb0: {
+        _2 = copy (*_1).0;
+        _0 = copy _2;
+        return;
+    }
+}
+
+fn Plic.set_second(_1: &mut Plic, _2: u32) -> () {
+    let _0: ();
+    let _1: &mut Plic; // self
+    let _2: u32; // v
+    let _3: &mut Context;
+
+    bb0: {
+        _3 = &mut (*_1).1[1];
+        call Context.set(move _3, copy _2);
+        return;
+    }
+}
+
+fn hardware() -> u32 {
+    let _0: u32;
+    let _1: *mut Plic;
+    let _2: &mut Plic;
+    let _3: *mut Plic;
+    let _4: &Context;
+    let _5: u32;
+
+    bb0: {
+        _1 = const peripheral PLIC;
+        _2 = &mut (*_1);
+        call Plic.set_second(move _2, const 3_u32);
+        _3 = const peripheral PLIC;
+        _4 = &(*_3).1[1];
+        _5 = call Context.get(copy _4);
+        _0 = copy _5;
+        return;
+    }
+}
+
+fn Transfer.start(_1: u32) -> Transfer {
+    let _0: Transfer;
+    let _1: u32; // channel
+    let _2: Transfer;
+
+    bb0: {
+        _2.0 = copy _1;
+        new _2;
+        _0 = move _2;
+        return;
+    }
+}
+
+fn Transfer.wait(_1: Transfer) -> u32 {
+    let _0: u32;
+    let _1: Transfer; // self
+    let _2: u32; // c
+    let _3: u32;
+
+    bb0: {
+        _3 = copy _1.0;
+        _2 = copy _3;
+        end _1;
+        _0 = copy _2;
+        return;
+    }
+}
+
+fn Transfer.end(_1: Transfer) -> () {
+    let _0: ();
+    let _1: Transfer; // self
+
+    bb0: {
+        end _1;
+        return;
+    }
+}
+
+fn Names.len(_1: &Names) -> u32 {
+    let _0: u32;
+    let _1: &Names; // self
+    let _2: u32;
+
+    bb0: {
+        _2 = copy (*_1).0;
+        _0 = copy _2;
+        return;
+    }
+}
+
+fn Names.u32(_1: &Names) -> u32 {
+    let _0: u32;
+    let _1: &Names; // self
+    let _2: u32;
+
+    bb0: {
+        _2 = copy (*_1).0;
+        _0 = copy _2;
+        return;
+    }
+}
+
+fn consume() -> u32 {
+    let _0: u32;
+    let _1: Transfer; // t
+    let _2: Transfer; // u
+    let _3: Transfer;
+    let _4: Transfer;
+    let _5: u32;
+
+    bb0: {
+        _3 = call Transfer.start(const 1_u32);
+        _1 = move _3;
+        _4 = call Transfer.start(const 2_u32);
+        _2 = move _4;
+        call Transfer.end(move _2);
+        _5 = call Transfer.wait(move _1);
+        _0 = copy _5;
+        return;
+    }
+}
+
+fn builtins() -> u32 {
+    let _0: u32;
+    let _1: Names; // n
+    let _2: Names;
+    let _3: &Names;
+    let _4: u32;
+    let _5: u32;
+    let _6: &Names;
+    let _7: u32;
+    let _8: u32;
+
+    bb0: {
+        _2.0 = const 4_u32;
+        _1 = move _2;
+        _3 = &_1;
+        _4 = call Names.len(copy _3);
+        _5 = copy _4;
+        _6 = &_1;
+        _7 = call Names.u32(copy _6);
+        _8 = Add(copy _5, copy _7);
+        _0 = copy _8;
+        return;
+    }
+}
+
+fn symbol() -> () {
+    let _0: ();
+
+    bb0: {
+        asm("call {0}", sym ring.Ring.push, clobber(x1, x5, x6, x7, x10, x11, x12, x13, x14, x15, x16, x17, x28, x29, x30, x31));
+        return;
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+comptime fn R() -> ring::Ring {
+    let _0: ring::Ring;
+    let _1: ring::Ring;
+
+    bb0: {
+        _1 = call ring.Ring.new();
+        _0 = move _1;
+        return;
+    }
+}
+
+comptime fn Mode::Off() -> u8 {
+    let _0: u8;
+
+    bb0: {
+        _0 = const 0_u8;
+        return;
+    }
+}
+
+comptime fn Mode::Run() -> u8 {
+    let _0: u8;
+
+    bb0: {
+        _0 = const 1_u8;
+        return;
+    }
+}
+
+comptime fn Mode::Idle() -> u8 {
+    let _0: u8;
+
+    bb0: {
+        _0 = const 2_u8;
+        return;
+    }
+}
+
+comptime fn default() -> bool {
+    let _0: bool;
+
+    bb0: {
+        _0 = const false;
+        return;
+    }
+}
+
+comptime fn default() -> u8 {
+    let _0: u8;
+
+    bb0: {
+        _0 = const 0_u8;
+        return;
+    }
+}

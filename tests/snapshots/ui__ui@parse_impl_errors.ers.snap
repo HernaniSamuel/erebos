@@ -1,0 +1,271 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/parse_impl_errors.ers
+---
+--- errors ---
+parser::misplaced-pub
+
+  × `pub` does not apply to an `impl` block
+    ╭─[parse_impl_errors.ers:12:1]
+ 11 │ 
+ 12 │ pub impl S {}
+    · ─┬─
+    ·  ╰── not allowed here
+ 13 │ 
+    ╰────
+  help: an `impl` block has no name for other modules to use; `pub` goes on each function in it,
+        to make it visible wherever the type is (ADR 0113)
+parser::local-impl
+
+  × `impl` blocks cannot be declared inside a function
+    ╭─[parse_impl_errors.ers:15:5]
+ 14 │ fn local() {
+ 15 │     impl S {}
+    ·     ──┬─
+    ·       ╰── inside a function
+ 16 │ }
+    ╰────
+  help: move the `impl` out of the function, to the module of its type (ADR 0113)
+parser::impl-item
+
+  × a constant cannot be declared inside an `impl`
+    ╭─[parse_impl_errors.ers:19:5]
+ 18 │ impl S {
+ 19 │     const LIMIT: u8 = 1;
+    ·     ──┬──
+    ·       ╰── inside an `impl`
+ 20 │     struct Inner {}
+    ╰────
+  help: an `impl` block holds only functions with a body, `fn` and `pub fn`; declare other items
+        outside it, in the module (ADR 0113)
+parser::impl-item
+
+  × a struct cannot be declared inside an `impl`
+    ╭─[parse_impl_errors.ers:20:5]
+ 19 │     const LIMIT: u8 = 1;
+ 20 │     struct Inner {}
+    ·     ───┬──
+    ·        ╰── inside an `impl`
+ 21 │     extern fn outside();
+    ╰────
+  help: an `impl` block holds only functions with a body, `fn` and `pub fn`; declare other items
+        outside it, in the module (ADR 0113)
+parser::impl-item
+
+  × an `extern fn` cannot be declared inside an `impl`
+    ╭─[parse_impl_errors.ers:21:5]
+ 20 │     struct Inner {}
+ 21 │     extern fn outside();
+    ·     ───┬──
+    ·        ╰── inside an `impl`
+ 22 │     entry fn main() -> ! { loop {} }
+    ╰────
+  help: an `impl` block holds only functions with a body, `fn` and `pub fn`; declare other items
+        outside it, in the module (ADR 0113)
+parser::impl-item
+
+  × the entry function cannot be declared inside an `impl`
+    ╭─[parse_impl_errors.ers:22:5]
+ 21 │     extern fn outside();
+ 22 │     entry fn main() -> ! { loop {} }
+    ·     ──┬──
+    ·       ╰── inside an `impl`
+ 23 │     panic fn on_panic() -> ! { loop {} }
+    ╰────
+  help: an `impl` block holds only functions with a body, `fn` and `pub fn`; declare other items
+        outside it, in the module (ADR 0113)
+parser::impl-item
+
+  × the panic function cannot be declared inside an `impl`
+    ╭─[parse_impl_errors.ers:23:5]
+ 22 │     entry fn main() -> ! { loop {} }
+ 23 │     panic fn on_panic() -> ! { loop {} }
+    ·     ──┬──
+    ·       ╰── inside an `impl`
+ 24 │     interrupt fn tick() at Vector::SysTick {}
+    ╰────
+  help: an `impl` block holds only functions with a body, `fn` and `pub fn`; declare other items
+        outside it, in the module (ADR 0113)
+parser::impl-item
+
+  × an interrupt handler cannot be declared inside an `impl`
+    ╭─[parse_impl_errors.ers:24:5]
+ 23 │     panic fn on_panic() -> ! { loop {} }
+ 24 │     interrupt fn tick() at Vector::SysTick {}
+    ·     ────┬────
+    ·         ╰── inside an `impl`
+ 25 │     static COUNT: u8 = 0;
+    ╰────
+  help: an `impl` block holds only functions with a body, `fn` and `pub fn`; declare other items
+        outside it, in the module (ADR 0113)
+parser::impl-item
+
+  × a `static` cannot be declared inside an `impl`
+    ╭─[parse_impl_errors.ers:25:5]
+ 24 │     interrupt fn tick() at Vector::SysTick {}
+ 25 │     static COUNT: u8 = 0;
+    ·     ───┬──
+    ·        ╰── inside an `impl`
+ 26 │     mod inner {}
+    ╰────
+  help: an `impl` block holds only functions with a body, `fn` and `pub fn`; declare other items
+        outside it, in the module (ADR 0113)
+parser::impl-item
+
+  × a module cannot be declared inside an `impl`
+    ╭─[parse_impl_errors.ers:26:5]
+ 25 │     static COUNT: u8 = 0;
+ 26 │     mod inner {}
+    ·     ─┬─
+    ·      ╰── inside an `impl`
+ 27 │     use a::b;
+    ╰────
+  help: an `impl` block holds only functions with a body, `fn` and `pub fn`; declare other items
+        outside it, in the module (ADR 0113)
+parser::impl-item
+
+  × a `use` cannot be declared inside an `impl`
+    ╭─[parse_impl_errors.ers:27:5]
+ 26 │     mod inner {}
+ 27 │     use a::b;
+    ·     ─┬─
+    ·      ╰── inside an `impl`
+ 28 │     comptime {}
+    ╰────
+  help: an `impl` block holds only functions with a body, `fn` and `pub fn`; declare other items
+        outside it, in the module (ADR 0113)
+parser::impl-item
+
+  × a `comptime` block cannot be declared inside an `impl`
+    ╭─[parse_impl_errors.ers:28:5]
+ 27 │     use a::b;
+ 28 │     comptime {}
+    ·     ────┬───
+    ·         ╰── inside an `impl`
+ 29 │     impl S {}
+    ╰────
+  help: an `impl` block holds only functions with a body, `fn` and `pub fn`; declare other items
+        outside it, in the module (ADR 0113)
+parser::impl-item
+
+  × an `impl` block cannot be declared inside an `impl`
+    ╭─[parse_impl_errors.ers:29:5]
+ 28 │     comptime {}
+ 29 │     impl S {}
+    ·     ──┬─
+    ·       ╰── inside an `impl`
+ 30 │     fn after(&self) {}
+    ╰────
+  help: an `impl` block holds only functions with a body, `fn` and `pub fn`; declare other items
+        outside it, in the module (ADR 0113)
+parser::misplaced-self
+
+  × `&self` can only be the first parameter of a function in an `impl`
+    ╭─[parse_impl_errors.ers:34:22]
+ 33 │ impl S {
+ 34 │     fn second(x: u8, &self) {}
+    ·                      ──┬──
+    ·                        ╰── not allowed here
+ 35 │     fn third(x: u8, self) {}
+    ╰────
+  help: a receiver is the first parameter of a function in an `impl` block, as in `fn count(&self)
+        -> usize`; it names the value the function is called on (ADR 0113)
+parser::misplaced-self
+
+  × `self` can only be the first parameter of a function in an `impl`
+    ╭─[parse_impl_errors.ers:35:21]
+ 34 │     fn second(x: u8, &self) {}
+ 35 │     fn third(x: u8, self) {}
+    ·                     ──┬─
+    ·                       ╰── not allowed here
+ 36 │     fn fourth(&mut self, mut self) {}
+    ╰────
+  help: a receiver is the first parameter of a function in an `impl` block, as in `fn count(&self)
+        -> usize`; it names the value the function is called on (ADR 0113)
+parser::misplaced-self
+
+  × `mut self` can only be the first parameter of a function in an `impl`
+    ╭─[parse_impl_errors.ers:36:26]
+ 35 │     fn third(x: u8, self) {}
+ 36 │     fn fourth(&mut self, mut self) {}
+    ·                          ────┬───
+    ·                              ╰── not allowed here
+ 37 │ }
+    ╰────
+  help: a receiver is the first parameter of a function in an `impl` block, as in `fn count(&self)
+        -> usize`; it names the value the function is called on (ADR 0113)
+parser::misplaced-self
+
+  × `&self` can only be the first parameter of a function in an `impl`
+    ╭─[parse_impl_errors.ers:39:9]
+ 38 │ 
+ 39 │ fn free(&self) {}
+    ·         ──┬──
+    ·           ╰── not allowed here
+ 40 │ fn free_value(self) {}
+    ╰────
+  help: a receiver is the first parameter of a function in an `impl` block, as in `fn count(&self)
+        -> usize`; it names the value the function is called on (ADR 0113)
+parser::misplaced-self
+
+  × `self` can only be the first parameter of a function in an `impl`
+    ╭─[parse_impl_errors.ers:40:15]
+ 39 │ fn free(&self) {}
+ 40 │ fn free_value(self) {}
+    ·               ──┬─
+    ·                 ╰── not allowed here
+ 41 │ 
+    ╰────
+  help: a receiver is the first parameter of a function in an `impl` block, as in `fn count(&self)
+        -> usize`; it names the value the function is called on (ADR 0113)
+parser::unexpected-token
+
+  × expected `)`, found `:`
+    ╭─[parse_impl_errors.ers:43:18]
+ 42 │ impl S {
+ 43 │     fn typed(self: S) {}
+    ·                  ┬
+    ·                  ╰── expected `)`
+ 44 │ }
+    ╰────
+parser::unexpected-token
+
+  × expected identifier, found `volatile`
+    ╭─[parse_impl_errors.ers:47:8]
+ 46 │ impl S {
+ 47 │     fn volatile(&volatile self) {}
+    ·        ────┬───
+    ·            ╰── expected identifier
+ 48 │ }
+    ╰────
+parser::unexpected-token
+
+  × expected identifier, found `&&`
+    ╭─[parse_impl_errors.ers:51:15]
+ 50 │ impl S {
+ 51 │     fn double(&&self) {}
+    ·               ─┬
+    ·                ╰── expected identifier
+ 52 │ }
+    ╰────
+parser::unexpected-token
+
+  × expected `{`, found `::`
+    ╭─[parse_impl_errors.ers:54:7]
+ 53 │ 
+ 54 │ impl a::S {}
+    ·       ─┬
+    ·        ╰── expected `{`
+ 55 │ 
+    ╰────
+parser::unexpected-token
+
+  × expected `{`, found `fn`
+    ╭─[parse_impl_errors.ers:56:7]
+ 55 │ 
+ 56 │ impl S
+    ·       ▲
+    ·       ╰── expected `{`
+ 57 │ fn after_path() {}
+    ╰────

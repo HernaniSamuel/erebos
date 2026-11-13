@@ -144,21 +144,27 @@ resolve::unknown-path
     ·           ╰── not found in the root module
  38 │         Point::A => 3,
     ╰────
-resolve::not-an-enum
+resolve::unknown-name
 
-  × `Point` is neither a module nor an enum
-    ╭─[resolve_match_errors.ers:38:9]
+  × cannot find `Point::A`
+    ╭─[resolve_match_errors.ers:9:8]
+  8 │ static LEVEL: u8 = 3;
+  9 │ struct Point { x: u8 }
+    ·        ──┬──
+    ·          ╰── `Point` is declared here
+ 10 │ enum Mode: u8 { Off = 0 }
+    ╰────
+    ╭─[resolve_match_errors.ers:38:16]
  37 │         Moder::Off => 2,
  38 │         Point::A => 3,
-    ·         ──┬──
-    ·           ╰── a struct
+    ·                ┬
+    ·                ╰── `Point` has no function `A`
  39 │         LIMIT::A => 4,
     ╰────
-  help: `::` follows a module, to name one of its items, or an enum, to name one of its variants,
-        as in `Mode::Run` (ADR 0035, 0049)
+  help: `Point` has no functions: they are declared in an `impl` block (ADR 0113)
 resolve::not-an-enum
 
-  × `LIMIT` is neither a module nor an enum
+  × `LIMIT` is neither a module, an enum nor a type with functions
     ╭─[resolve_match_errors.ers:39:9]
  38 │         Point::A => 3,
  39 │         LIMIT::A => 4,
@@ -166,11 +172,12 @@ resolve::not-an-enum
     ·           ╰── a constant
  40 │         LEVEL::A => 5,
     ╰────
-  help: `::` follows a module, to name one of its items, or an enum, to name one of its variants,
-        as in `Mode::Run` (ADR 0035, 0049)
+  help: `::` follows a module, to name one of its items, an enum, to name one of its variants or
+        functions, or a struct, bit-field struct or peripheral type, to name one of its functions,
+        as in `Mode::Run` or `Ring::new()` (ADR 0035, 0049, 0113)
 resolve::not-an-enum
 
-  × `LEVEL` is neither a module nor an enum
+  × `LEVEL` is neither a module, an enum nor a type with functions
     ╭─[resolve_match_errors.ers:40:9]
  39 │         LIMIT::A => 4,
  40 │         LEVEL::A => 5,
@@ -178,11 +185,12 @@ resolve::not-an-enum
     ·           ╰── a static
  41 │         helper::A => 6,
     ╰────
-  help: `::` follows a module, to name one of its items, or an enum, to name one of its variants,
-        as in `Mode::Run` (ADR 0035, 0049)
+  help: `::` follows a module, to name one of its items, an enum, to name one of its variants or
+        functions, or a struct, bit-field struct or peripheral type, to name one of its functions,
+        as in `Mode::Run` or `Ring::new()` (ADR 0035, 0049, 0113)
 resolve::not-an-enum
 
-  × `helper` is neither a module nor an enum
+  × `helper` is neither a module, an enum nor a type with functions
     ╭─[resolve_match_errors.ers:41:9]
  40 │         LEVEL::A => 5,
  41 │         helper::A => 6,
@@ -190,5 +198,6 @@ resolve::not-an-enum
     ·            ╰── a function
  42 │         _ => 7,
     ╰────
-  help: `::` follows a module, to name one of its items, or an enum, to name one of its variants,
-        as in `Mode::Run` (ADR 0035, 0049)
+  help: `::` follows a module, to name one of its items, an enum, to name one of its variants or
+        functions, or a struct, bit-field struct or peripheral type, to name one of its functions,
+        as in `Mode::Run` or `Ring::new()` (ADR 0035, 0049, 0113)

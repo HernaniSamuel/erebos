@@ -12,6 +12,7 @@ pub struct File {
 #[derive(Debug)]
 pub enum Item {
     Fn(FnDecl),
+    Impl(ImplDecl),
     Struct(StructDecl),
     BitStruct(BitStructDecl),
     Enum(EnumDecl),
@@ -43,6 +44,21 @@ pub struct ModDecl {
     /// name;`, and the driver replaces it with the items of the module's
     /// file, when it can read it.
     pub items: Option<Vec<Item>>,
+    pub span: Span,
+}
+
+/// `impl Name { fns }`: the functions of a type (ADR 0113). Attributes and
+/// `pub` do not apply to it; they are kept to be reported.
+#[derive(Debug)]
+pub struct ImplDecl {
+    pub attrs: Vec<Attr>,
+    pub vis: Visibility,
+    /// The type's name: one name, never a path. That it names a struct, an
+    /// enum or a peripheral type of the module is checked when names are
+    /// resolved.
+    pub name: Ident,
+    /// Functions with a body, in source order.
+    pub fns: Vec<FnDecl>,
     pub span: Span,
 }
 
@@ -384,6 +400,10 @@ pub struct FnDecl {
     pub vis: Visibility,
     pub kind: FnKind,
     pub name: Ident,
+    /// The first parameter of a function in an `impl`, written without a
+    /// type: `self`, `mut self`, `&self` or `&mut self` (ADR 0113). `params`
+    /// holds the others.
+    pub receiver: Option<Receiver>,
     pub params: Vec<Param>,
     /// `None` when the `-> Type` part is omitted.
     pub ret: Option<Ty>,
@@ -406,6 +426,40 @@ pub enum FnKind {
     Interrupt(Path),
 }
 
+/// The receiver of a function of a type, with the span of its words
+/// (ADR 0113).
+#[derive(Clone, Copy, Debug)]
+pub struct Receiver {
+    pub kind: ReceiverKind,
+    pub span: Span,
+}
+
+/// How a receiver is written (ADR 0113): its type is the `impl`'s, `Self`,
+/// or a reference to it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ReceiverKind {
+    /// `self`
+    Value,
+    /// `mut self`
+    MutValue,
+    /// `&self`
+    Ref,
+    /// `&mut self`
+    RefMut,
+}
+
+impl ReceiverKind {
+    /// As written.
+    pub fn written(self) -> &'static str {
+        match self {
+            ReceiverKind::Value => "self",
+            ReceiverKind::MutValue => "mut self",
+            ReceiverKind::Ref => "&self",
+            ReceiverKind::RefMut => "&mut self",
+        }
+    }
+}
+
 /// `[mut] name: Type`
 #[derive(Debug)]
 pub struct Param {
@@ -425,9 +479,9 @@ pub struct Ident {
 /// later.
 #[derive(Clone, Debug)]
 pub struct Path {
-    /// At least one. The keywords `crate` and `super` are segments named
-    /// so, which no other name can be: `crate` only first, `super` only in
-    /// a run at the start.
+    /// At least one. The keywords `crate`, `super`, `self` and `Self` are
+    /// segments named so, which no other name can be: `crate`, `self` and
+    /// `Self` only first, `super` only in a run at the start (ADR 0113).
     pub segments: Vec<Ident>,
     pub span: Span,
 }

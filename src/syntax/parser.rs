@@ -7,11 +7,11 @@ use crate::span::Span;
 use crate::syntax::ast::{
     AccessMode, Arm, AsmExpr, AsmOperand, AsmOperandKind, AsmOption, AsmOptionKind, AsmReg, Attr,
     BinOp, BitFieldDecl, BitStructDecl, Block, ClusterDecl, ComptimeDecl, ConstDecl, EntryDecl,
-    EnumDecl, Expr, ExprKind, FieldDecl, FieldInit, File, FnDecl, FnKind, Ident, Item, Let,
-    LogicalOp, MemoryDecl, ModDecl, Param, Path, Pattern, PatternKind, PeripheralDecl,
-    PeripheralTypeDecl, Placement, PlacementKind, ReadEffect, RegionDecl, RegisterDecl, StaticDecl,
-    Stmt, StrLit, StructDecl, SymTarget, Ty, TyKind, UnOp, UseDecl, UseName, VariantDecl,
-    Visibility, WriteAction, WriteEffect,
+    EnumDecl, Expr, ExprKind, FieldDecl, FieldInit, File, FnDecl, FnKind, Ident, ImplDecl, Item,
+    Let, LogicalOp, MemoryDecl, ModDecl, Param, Path, Pattern, PatternKind, PeripheralDecl,
+    PeripheralTypeDecl, Placement, PlacementKind, ReadEffect, Receiver, ReceiverKind, RegionDecl,
+    RegisterDecl, StaticDecl, Stmt, StrLit, StructDecl, SymTarget, Ty, TyKind, UnOp, UseDecl,
+    UseName, VariantDecl, Visibility, WriteAction, WriteEffect,
 };
 use crate::syntax::lexer;
 use crate::syntax::token::{Token, TokenKind};
@@ -310,6 +310,7 @@ impl Parser<'_> {
                     | TokenKind::Panic
                     | TokenKind::Fn
                     | TokenKind::Extern
+                    | TokenKind::Impl
                     | TokenKind::Struct
                     | TokenKind::Enum
                     | TokenKind::Const
@@ -345,6 +346,12 @@ impl Parser<'_> {
     }
 
     fn item(&mut self) -> PResult<Item> {
+        let (attrs, vis) = self.attrs_and_vis()?;
+        self.item_after(attrs, vis)
+    }
+
+    /// The attributes and the `pub` before an item or a function of a type.
+    fn attrs_and_vis(&mut self) -> PResult<(Vec<Attr>, Visibility)> {
         let mut attrs = Vec::new();
         while self.at(TokenKind::Pound) {
             attrs.push(self.attr()?);
@@ -357,6 +364,11 @@ impl Parser<'_> {
             }
             None => Visibility::Private,
         };
+        Ok((attrs, vis))
+    }
+
+    /// The item after its attributes and `pub`.
+    fn item_after(&mut self, attrs: Vec<Attr>, vis: Visibility) -> PResult<Item> {
         if self.at_static() {
             return Ok(Item::Static(self.static_decl(attrs, vis)?));
         }
@@ -371,7 +383,8 @@ impl Parser<'_> {
             | TokenKind::Panic
             | TokenKind::Interrupt
             | TokenKind::Fn
-            | TokenKind::Extern => Ok(Item::Fn(self.fn_decl(attrs, vis)?)),
+            | TokenKind::Extern => Ok(Item::Fn(self.fn_decl(attrs, vis, false)?)),
+            TokenKind::Impl => Ok(Item::Impl(self.impl_decl(attrs, vis)?)),
             TokenKind::Struct => self.struct_item(attrs, vis),
             TokenKind::Enum => Ok(Item::Enum(self.enum_decl(attrs, vis)?)),
             TokenKind::Const => Ok(Item::Const(self.const_decl(attrs, vis)?)),
@@ -409,6 +422,10 @@ impl Parser<'_> {
             TokenKind::Comptime => (
                 "a `comptime` block",
                 "a `comptime` block has no name for other modules to use; remove `pub` (ADR 0050)",
+            ),
+            TokenKind::Impl => (
+                "an `impl` block",
+                "an `impl` block has no name for other modules to use; `pub` goes on each function in it, to make it visible wherever the type is (ADR 0113)",
             ),
             TokenKind::Entry => (
                 "the entry function",
@@ -568,7 +585,94 @@ impl Parser<'_> {
         })
     }
 
-    fn fn_decl(&mut self, attrs: Vec<Attr>, vis: Visibility) -> PResult<FnDecl> {
+    /// `impl Name { fns }` (ADR 0113): functions with a body, each with the
+    /// attributes and the `pub` it takes; anything else between the braces
+    /// is reported and parsed to the end of the item.
+    fn impl_decl(&mut self, attrs: Vec<Attr>, vis: Visibility) -> PResult<ImplDecl> {
+        let start = self.bump().span;
+        let name = self.ident()?;
+        let Some(open) = self.eat(TokenKind::LBrace) else {
+            return Err(self.error_expected("`{`"));
+        };
+        // A `}` met while recovering from an error in a function closes the
+        // `impl`, as it closes a module.
+        let saved = self.module_depth.replace(self.depth);
+        let fns = self.impl_items(open);
+        self.module_depth = saved;
+        let fns = fns?;
+        let close = self.bump();
+        Ok(ImplDecl {
+            attrs,
+            vis,
+            name,
+            fns,
+            span: start.to(close.span),
+        })
+    }
+
+    /// The functions of an `impl`, after its `{`, which is `open`, up to its
+    /// `}`.
+    fn impl_items(&mut self, open: Token) -> PResult<Vec<FnDecl>> {
+        let mut fns = Vec::new();
+        loop {
+            if self.at(TokenKind::RBrace) {
+                return Ok(fns);
+            }
+            if self.at(TokenKind::Eof) {
+                self.diags.push(
+                    Diagnostic::error("parser::unclosed-block", "unclosed block")
+                        .label(open.span, "this `{` is never closed")
+                        .label(self.missing_token_span(), "expected `}`"),
+                );
+                return Err(Reported);
+            }
+            match self.impl_item() {
+                Ok(Some(decl)) => fns.push(decl),
+                Ok(None) => {}
+                Err(Reported) => self.recover_to_item(),
+            }
+        }
+    }
+
+    /// One item between the braces of an `impl`: a function with a body, or
+    /// `None` for what is reported as not being one (ADR 0113).
+    fn impl_item(&mut self) -> PResult<Option<FnDecl>> {
+        let (attrs, vis) = self.attrs_and_vis()?;
+        if self.at(TokenKind::Fn) {
+            return Ok(Some(self.fn_decl(attrs, vis, true)?));
+        }
+        let token = self.peek();
+        let what = match token.kind {
+            _ if self.at_static() => "a `static`",
+            _ if self.at_memory() => "a `memory` block",
+            _ if self.at_peripheral() => "a peripheral item",
+            TokenKind::Extern => "an `extern fn`",
+            TokenKind::Entry => "the entry function",
+            TokenKind::Panic => "the panic function",
+            TokenKind::Interrupt => "an interrupt handler",
+            TokenKind::Struct => "a struct",
+            TokenKind::Enum => "an enum",
+            TokenKind::Const => "a constant",
+            TokenKind::Mod => "a module",
+            TokenKind::Use => "a `use`",
+            TokenKind::Comptime => "a `comptime` block",
+            TokenKind::Impl => "an `impl` block",
+            _ => return Err(self.error_expected("`fn` or `}`")),
+        };
+        self.diags.push(
+            Diagnostic::error(
+                "parser::impl-item",
+                format!("{what} cannot be declared inside an `impl`"),
+            )
+            .label(token.span, "inside an `impl`")
+            .help("an `impl` block holds only functions with a body, `fn` and `pub fn`; declare other items outside it, in the module (ADR 0113)"),
+        );
+        // Consumed, so that the rest of the block parses.
+        self.item_after(attrs, vis)?;
+        Ok(None)
+    }
+
+    fn fn_decl(&mut self, attrs: Vec<Attr>, vis: Visibility, in_impl: bool) -> PResult<FnDecl> {
         let start = self.peek().span;
         let external = self.eat(TokenKind::Extern).is_some();
         let mut interrupt = false;
@@ -589,7 +693,7 @@ impl Parser<'_> {
         self.expect(TokenKind::Fn)?;
         let name = self.ident()?;
         self.expect(TokenKind::LParen)?;
-        let params = self.comma_list(Self::param)?;
+        let (receiver, params) = self.params(in_impl)?;
         let ret = match self.eat(TokenKind::Arrow) {
             Some(_) => Some(self.ty()?),
             None => None,
@@ -601,6 +705,7 @@ impl Parser<'_> {
                 vis,
                 kind,
                 name,
+                receiver,
                 params,
                 ret,
                 span: start.to(semi.span),
@@ -632,6 +737,7 @@ impl Parser<'_> {
             vis,
             kind,
             name,
+            receiver,
             params,
             ret,
             span: start.to(body.span),
@@ -1372,7 +1478,90 @@ impl Parser<'_> {
         Ok(items)
     }
 
+    /// The parameters after the `(` of a function: in an `impl`, the first
+    /// may be a receiver (ADR 0113). Consumes the `)`.
+    fn params(&mut self, in_impl: bool) -> PResult<(Option<Receiver>, Vec<Param>)> {
+        let mut receiver = None;
+        if in_impl && self.at_receiver() {
+            receiver = Some(self.receiver());
+            if self.eat(TokenKind::Comma).is_none() {
+                self.expect(TokenKind::RParen)?;
+                return Ok((receiver, Vec::new()));
+            }
+        }
+        let params = self.comma_list(Self::param)?;
+        Ok((receiver, params))
+    }
+
+    /// At `self`, `mut self`, `&self` or `&mut self`: the forms of a
+    /// receiver (ADR 0113).
+    fn at_receiver(&self) -> bool {
+        let at = |offset: usize, kind: TokenKind| {
+            self.tokens
+                .get(self.pos + offset)
+                .is_some_and(|token| token.kind == kind)
+        };
+        match self.peek().kind {
+            TokenKind::SelfValue => true,
+            TokenKind::Mut => at(1, TokenKind::SelfValue),
+            TokenKind::Amp => {
+                at(1, TokenKind::SelfValue)
+                    || (at(1, TokenKind::Mut) && at(2, TokenKind::SelfValue))
+            }
+            _ => false,
+        }
+    }
+
+    /// The receiver at `at_receiver`.
+    fn receiver(&mut self) -> Receiver {
+        let start = self.peek().span;
+        let kind = if self.eat(TokenKind::Amp).is_some() {
+            if self.eat(TokenKind::Mut).is_some() {
+                ReceiverKind::RefMut
+            } else {
+                ReceiverKind::Ref
+            }
+        } else if self.eat(TokenKind::Mut).is_some() {
+            ReceiverKind::MutValue
+        } else {
+            ReceiverKind::Value
+        };
+        let word = self.bump();
+        Receiver {
+            kind,
+            span: start.to(word.span),
+        }
+    }
+
     fn param(&mut self) -> PResult<Param> {
+        // A receiver is the first parameter of a function of a type, and
+        // nothing else (ADR 0113): reported, and parsed as the parameter it
+        // would be named for, so that the rest of the signature parses.
+        if self.at_receiver() {
+            let receiver = self.receiver();
+            self.diags.push(
+                Diagnostic::error(
+                    "parser::misplaced-self",
+                    format!(
+                        "`{}` can only be the first parameter of a function in an `impl`",
+                        receiver.kind.written()
+                    ),
+                )
+                .label(receiver.span, "not allowed here")
+                .help("a receiver is the first parameter of a function in an `impl` block, as in `fn count(&self) -> usize`; it names the value the function is called on (ADR 0113)"),
+            );
+            return Ok(Param {
+                mutable: false,
+                name: Ident {
+                    name: "self".to_owned(),
+                    span: receiver.span,
+                },
+                ty: Ty {
+                    kind: TyKind::Unit,
+                    span: receiver.span,
+                },
+            });
+        }
         let mutable = self.eat(TokenKind::Mut).is_some();
         let name = self.ident()?;
         self.expect(TokenKind::Colon)?;
@@ -1416,7 +1605,9 @@ impl Parser<'_> {
     /// the caller, and the second value says so.
     fn path_until_brace(&mut self, brace: bool) -> PResult<(Path, bool)> {
         let first = match self.peek().kind {
-            TokenKind::Crate | TokenKind::Super => self.keyword_segment(),
+            TokenKind::Crate | TokenKind::Super | TokenKind::SelfValue | TokenKind::SelfType => {
+                self.keyword_segment()
+            }
             _ => self.ident()?,
         };
         let mut supers = first.name == "super";
@@ -1442,7 +1633,8 @@ impl Parser<'_> {
         Ok((path, braces))
     }
 
-    /// `crate` or `super` as a segment of a path, named by its keyword.
+    /// `crate`, `super`, `self` or `Self` as a segment of a path, named by
+    /// its keyword.
     fn keyword_segment(&mut self) -> Ident {
         let token = self.bump();
         Ident {
@@ -1466,7 +1658,7 @@ impl Parser<'_> {
                     span: token.span.to(close.span),
                 });
             }
-            TokenKind::Ident | TokenKind::Crate | TokenKind::Super => {
+            TokenKind::Ident | TokenKind::Crate | TokenKind::Super | TokenKind::SelfType => {
                 let path = self.path()?;
                 // Type arguments, as `Option(u32)`; `Name()` parses, and is
                 // a count error (ADR 0045).
@@ -1651,6 +1843,18 @@ impl Parser<'_> {
                         .help("move the `mod` out of the function (ADR 0049)"),
                     );
                     self.mod_decl(Vec::new(), Visibility::Private)?;
+                }
+                TokenKind::Impl => {
+                    let token = self.peek();
+                    self.diags.push(
+                        Diagnostic::error(
+                            "parser::local-impl",
+                            "`impl` blocks cannot be declared inside a function",
+                        )
+                        .label(token.span, "inside a function")
+                        .help("move the `impl` out of the function, to the module of its type (ADR 0113)"),
+                    );
+                    self.impl_decl(Vec::new(), Visibility::Private)?;
                 }
                 TokenKind::Use => {
                     let token = self.peek();
@@ -2061,7 +2265,11 @@ impl Parser<'_> {
                     kind: ExprKind::While { cond, body },
                 });
             }
-            TokenKind::Ident | TokenKind::Crate | TokenKind::Super => {
+            TokenKind::Ident
+            | TokenKind::Crate
+            | TokenKind::Super
+            | TokenKind::SelfValue
+            | TokenKind::SelfType => {
                 let path = self.path()?;
                 // Arguments as a call's, whatever the path names
                 // (ADR 0039).
@@ -2376,7 +2584,7 @@ impl Parser<'_> {
             },
             TokenKind::Byte => PatternKind::Byte(lexer::byte_value(text).ok()),
             TokenKind::True | TokenKind::False => PatternKind::Bool(token.kind == TokenKind::True),
-            TokenKind::Ident | TokenKind::Crate | TokenKind::Super => {
+            TokenKind::Ident | TokenKind::Crate | TokenKind::Super | TokenKind::SelfType => {
                 let path = self.path()?;
                 // `Enum::Variant()` parses, and is a count error
                 // (ADR 0040); a bare name takes no patterns.

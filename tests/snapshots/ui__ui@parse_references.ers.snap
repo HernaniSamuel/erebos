@@ -15,6 +15,7 @@ File {
                     name: "types",
                     span: 307..312,
                 },
+                receiver: None,
                 params: [
                     Param {
                         mutable: false,
@@ -239,6 +240,7 @@ File {
                     name: "expressions",
                     span: 395..406,
                 },
+                receiver: None,
                 params: [
                     Param {
                         mutable: false,

@@ -1,0 +1,87 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/impl_modules/main.ers
+---
+--- errors ---
+resolve::unknown-type
+
+  × unknown type `Square`
+   ╭─[drivers.ers:4:6]
+ 3 │ // A type of another module: not in scope, then brought in by a `use`.
+ 4 │ impl Square {}
+   ·      ───┬──
+   ·         ╰── not found in module `drivers`
+ 5 │ 
+   ╰────
+  help: an `impl` block is written in the module that declares its type (ADR 0113)
+resolve::impl-type
+
+  × `Circle` is not a struct, an enum or a peripheral type declared in this module
+   ╭─[drivers.ers:6:6]
+ 5 │ 
+ 6 │ impl Circle {
+   ·      ───┬──
+   ·         ╰── brought in by a `use`, not declared here
+ 7 │     pub fn grow(&mut self) {}
+   ╰────
+  help: an `impl` block gives functions to a struct, a bit-field struct, an enum or a peripheral
+        type declared in the module it is written in: not to a built-in type, nor to a type
+        brought in with `use`, nor to a peripheral (ADR 0113)
+resolve::private-item
+
+  × `shapes::Circle::secret` is private
+    ╭─[drivers.ers:12:13]
+ 11 │     let c: Circle = Circle::new();
+ 12 │     Circle::secret(&c);
+    ·             ───┬──
+    ·                ╰── not visible here
+ 13 │     super::shapes::Circle::reveal(&c);
+    ╰────
+    ╭─[shapes.ers:14:8]
+ 13 │ 
+ 14 │     fn secret(&self) -> u32 {
+    ·        ───┬──
+    ·           ╰── declared here without `pub`
+ 15 │         Self::reveal(self)
+    ╰────
+  help: a private function of a type is visible only in module `shapes`, which declares the type,
+        and the modules inside it; declare it `pub` to use it elsewhere (ADR 0113)
+resolve::private-item
+
+  × `shapes::Circle::reveal` is private
+    ╭─[drivers.ers:13:28]
+ 12 │     Circle::secret(&c);
+ 13 │     super::shapes::Circle::reveal(&c);
+    ·                            ───┬──
+    ·                               ╰── not visible here
+ 14 │     super::shapes::Hidden::new();
+    ╰────
+    ╭─[shapes.ers:18:8]
+ 17 │ 
+ 18 │     fn reveal(&self) -> u32 {
+    ·        ───┬──
+    ·           ╰── declared here without `pub`
+ 19 │         (*self).radius
+    ╰────
+  help: a private function of a type is visible only in module `shapes`, which declares the type,
+        and the modules inside it; declare it `pub` to use it elsewhere (ADR 0113)
+resolve::private-item
+
+  × `shapes::Hidden` is private
+    ╭─[drivers.ers:14:20]
+ 13 │     super::shapes::Circle::reveal(&c);
+ 14 │     super::shapes::Hidden::new();
+    ·                    ───┬──
+    ·                       ╰── not visible here
+ 15 │     super::shapes::inner::area(&c);
+    ╰────
+   ╭─[shapes.ers:5:8]
+ 4 │ 
+ 5 │ struct Hidden {
+   ·        ───┬──
+   ·           ╰── declared here without `pub`
+ 6 │     value: u32,
+   ╰────
+  help: a private item of module `shapes` is visible only there and in the modules inside it;
+        declare it `pub` to use it elsewhere (ADR 0050)

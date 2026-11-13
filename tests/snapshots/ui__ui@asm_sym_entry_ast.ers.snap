@@ -15,6 +15,7 @@ File {
                     name: "forms",
                     span: 187..192,
                 },
+                receiver: None,
                 params: [
                     Param {
                         mutable: false,
@@ -283,6 +284,7 @@ File {
                     name: "entry_like",
                     span: 438..448,
                 },
+                receiver: None,
                 params: [],
                 ret: None,
                 body: Some(

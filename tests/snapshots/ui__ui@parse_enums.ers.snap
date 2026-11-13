@@ -203,6 +203,7 @@ File {
                     name: "f",
                     span: 349..350,
                 },
+                receiver: None,
                 params: [],
                 ret: Some(
                     Ty {

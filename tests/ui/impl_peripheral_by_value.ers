@@ -1,0 +1,29 @@
+// emit: typeck
+// A peripheral type is never held by value (ADR 0058), and a receiver is a
+// parameter: `self` and `mut self` of a peripheral type are
+// `ty::peripheral-by-value`, as a parameter written `u: Uart` is (ADR 0113).
+// `&self` and `&mut self` are the receivers of a peripheral type.
+peripheral Uart {
+    read write data: u8 at 0,
+}
+
+peripheral UART0: Uart at 0x1000;
+
+impl Uart {
+    fn by_value(self) {}
+
+    fn by_mut_value(mut self) {}
+
+    fn by_ref(&self) -> u8 {
+        (*self).data
+    }
+
+    fn by_mut_ref(&mut self) {
+        (*self).data = 1;
+    }
+}
+
+fn param(u: Uart) {}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

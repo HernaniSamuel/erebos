@@ -195,6 +195,7 @@ Hir {
                     default: None,
                 },
             ],
+            fns: [],
         },
     ],
     enums: [],
@@ -242,6 +243,7 @@ Hir {
             runtime: false,
             comptime: None,
             align: None,
+            owner: None,
         },
         Fn {
             name: "on_panic",
@@ -286,6 +288,7 @@ Hir {
             runtime: false,
             comptime: None,
             align: None,
+            owner: None,
         },
         Fn {
             name: "default",
@@ -331,6 +334,7 @@ Hir {
                 ),
             ),
             align: None,
+            owner: None,
         },
     ],
     consts: [],

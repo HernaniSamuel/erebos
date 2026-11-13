@@ -1,0 +1,16 @@
+use super::shapes::Circle;
+
+// A type of another module: not in scope, then brought in by a `use`.
+impl Square {}
+
+impl Circle {
+    pub fn grow(&mut self) {}
+}
+
+pub fn run() {
+    let c: Circle = Circle::new();
+    Circle::secret(&c);
+    super::shapes::Circle::reveal(&c);
+    super::shapes::Hidden::new();
+    super::shapes::inner::area(&c);
+}
