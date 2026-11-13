@@ -10,9 +10,10 @@
 //! reaches it outside every `critical` block. The searches over the call
 //! graph then work on those scans alone.
 
-use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use super::bits::shown;
+use super::call_graph::{Call, Edges, Reach, Site};
 use crate::diag::{Diagnostic, Diagnostics};
 use crate::mir::{
     AsmSym, Body, BodyId, Const, Mir, Operand, Statement, StaticId, StaticRef, Terminator,
@@ -46,27 +47,10 @@ pub fn check(mir: &Mir, diags: &mut Diagnostics) {
     unmaskable_statics(mir, &scans, &thread, &handler, &unmaskable, diags);
 }
 
-/// Where something is in a body.
-#[derive(Clone, Copy)]
-struct Site {
-    span: Span,
-    /// Some path from the start of the body reaches it outside every
-    /// `critical` block (ADR 0093, "Inside or outside `critical`").
-    outside: bool,
-}
-
 /// A statement or terminator that names a `static mut`.
 struct Place {
     site: Site,
     stat: StaticRef,
-}
-
-/// A call MIR shows: a `Statement::Call`, or a check that calls the panic
-/// function.
-struct Call {
-    site: Site,
-    callee: BodyId,
-    check: bool,
 }
 
 /// What one body holds, in the order of its blocks, then its statements.
@@ -74,6 +58,12 @@ struct Call {
 struct Scan {
     places: Vec<Place>,
     calls: Vec<Call>,
+}
+
+impl AsRef<[Call]> for Scan {
+    fn as_ref(&self) -> &[Call] {
+        &self.calls
+    }
 }
 
 /// What a statement or terminator names or calls.
@@ -214,74 +204,6 @@ fn syms(syms: impl Iterator<Item = AsmSym>, statics: &mut Vec<StaticRef>) {
     }
 }
 
-/// How a search reached a body: from the root it started at, through the
-/// call at `via` in the body it came from; none for a root.
-#[derive(Clone, Copy)]
-struct Found {
-    root: BodyId,
-    via: Option<(BodyId, usize)>,
-}
-
-/// The bodies a context reaches, each with the shortest path found.
-struct Reach {
-    found: Vec<Option<Found>>,
-}
-
-impl Reach {
-    /// A breadth-first search from `roots`, in order, over the calls of the
-    /// scans in order. With `outside_only` it follows the calls that some
-    /// path reaches outside `critical`, and no others.
-    fn search(scans: &[Scan], roots: &[BodyId], outside_only: bool) -> Reach {
-        let mut found: Vec<Option<Found>> = vec![None; scans.len()];
-        let mut queue = VecDeque::new();
-        for &root in roots {
-            if found[root.0 as usize].is_none() {
-                found[root.0 as usize] = Some(Found { root, via: None });
-                queue.push_back(root);
-            }
-        }
-        while let Some(body) = queue.pop_front() {
-            let Some(here) = found[body.0 as usize] else {
-                continue;
-            };
-            for (k, call) in scans[body.0 as usize].calls.iter().enumerate() {
-                if outside_only && !call.site.outside {
-                    continue;
-                }
-                let slot = &mut found[call.callee.0 as usize];
-                if slot.is_none() {
-                    *slot = Some(Found {
-                        root: here.root,
-                        via: Some((body, k)),
-                    });
-                    queue.push_back(call.callee);
-                }
-            }
-        }
-        Reach { found }
-    }
-
-    fn reaches(&self, body: BodyId) -> bool {
-        self.found[body.0 as usize].is_some()
-    }
-
-    /// The calls from a root to `body`, in order, as the search followed them.
-    fn path<'a>(&self, scans: &'a [Scan], body: BodyId) -> Vec<&'a Call> {
-        let mut path = Vec::new();
-        let mut at = body;
-        while let Some(Found {
-            via: Some((from, k)),
-            ..
-        }) = self.found[at.0 as usize]
-        {
-            path.push(&scans[from.0 as usize].calls[k]);
-            at = from;
-        }
-        path.reverse();
-        path
-    }
-}
-
 /// What a context reaches, and its first place of each static: the place in
 /// the lowest body, then block, then statement (ADR 0093).
 struct Context {
@@ -291,7 +213,7 @@ struct Context {
 
 impl Context {
     fn of(mir: &Mir, scans: &[Scan], roots: &[BodyId]) -> Context {
-        let reach = Reach::search(scans, roots, false);
+        let reach = Reach::search(scans, roots, Edges::CallsAndPanics, false);
         let mut first: HashMap<StaticId, (BodyId, usize)> = HashMap::new();
         for (id, _) in mir.bodies() {
             if !reach.reaches(id) {
@@ -306,7 +228,7 @@ impl Context {
 
     /// The handler the search found `body` from.
     fn root(&self, body: BodyId) -> Option<BodyId> {
-        self.reach.found[body.0 as usize].map(|found| found.root)
+        self.reach.root(body)
     }
 }
 
@@ -333,7 +255,7 @@ fn unprotected(
         return;
     }
     let first = &handler.first;
-    let open = Reach::search(scans, &[mir.entry], true);
+    let open = Reach::search(scans, &[mir.entry], Edges::CallsAndPanics, true);
     for (id, _) in mir.bodies() {
         if !open.reaches(id) {
             continue;

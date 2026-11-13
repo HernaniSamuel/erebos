@@ -17,14 +17,18 @@
 //! arguments hold. The errors are found in one pass from the fixed points. As
 //! in the analysis of moves, the transfers kill and generate, so the fixed
 //! points do not depend on the order the blocks are visited in.
+//!
+//! The same collection feeds the check of the conflicts across calls (ADR
+//! 0112): `facts` gives, for a body, its accesses rooted at a static or a
+//! peripheral and the sites rooted at one that are in use at each call.
 
 use std::collections::HashSet;
 
 use super::bits::{Bits, key, reachable, shown};
 use crate::diag::{Diagnostic, Diagnostics};
 use crate::mir::{
-    AsmOperandKind, AsmSym, Body, Const, InlineAsm, Local, Operand, PanicCause, PeripheralRef,
-    Place, PlaceElem, Ref, Rvalue, Statement, StaticRef, Terminator, Ty,
+    AsmOperandKind, AsmSym, Body, BodyId, Const, InlineAsm, Local, Operand, PanicCause,
+    PeripheralRef, Place, PlaceElem, Ref, Rvalue, Statement, StaticRef, Terminator, Ty,
 };
 use crate::span::Span;
 
@@ -51,6 +55,122 @@ pub fn check(body: &Body, diags: &mut Diagnostics) -> bool {
     passed
 }
 
+/// An access rooted at a static or a peripheral, as the check of the
+/// conflicts across calls reads it (ADR 0112).
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "the conflicts across calls read it")
+)]
+pub(super) struct Touch {
+    pub(super) how: How,
+    pub(super) path: Path,
+    /// The place as messages name it, in backquotes (`COUNT`, `UART0.thr`).
+    pub(super) name: String,
+    pub(super) span: Span,
+}
+
+/// A site rooted at a static or a peripheral that is in use during a call,
+/// and where the borrow is used after it, if it is.
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "the conflicts across calls read it")
+)]
+pub(super) struct Held {
+    pub(super) how: How,
+    pub(super) path: Path,
+    /// The place the site borrows, as messages name it.
+    pub(super) name: String,
+    /// The `Ref` statement that made the site.
+    pub(super) span: Span,
+    /// A read, after the call, of a local holding the site, and whether it is
+    /// reached in a later iteration of a loop; none when the call is the
+    /// last use.
+    pub(super) later: Option<(Span, bool)>,
+}
+
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "the conflicts across calls read it")
+)]
+impl Held {
+    /// Whether an access of `how` at `path` conflicts with the site (ADR
+    /// 0106).
+    pub(super) fn conflicts(&self, how: How, path: &Path) -> bool {
+        in_conflict(how, path, self.how, &self.path)
+    }
+}
+
+/// A `Statement::Call` of a body and the sites rooted at a static or a
+/// peripheral in use during it (ADR 0107, "In use": what its reference
+/// arguments may hold, what the locals live after it hold).
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "the conflicts across calls read it")
+)]
+pub(super) struct CallUse {
+    pub(super) block: usize,
+    /// The index of the statement in its block.
+    pub(super) statement: usize,
+    pub(super) callee: BodyId,
+    pub(super) span: Span,
+    /// In the order the sites are made: blocks, then statements.
+    pub(super) held: Vec<Held>,
+}
+
+/// What the borrow analysis tells the check of the conflicts across calls
+/// about one body (ADR 0112).
+#[derive(Default)]
+pub(super) struct Facts {
+    /// The accesses rooted at a static or a peripheral, in the blocks `bb0`
+    /// reaches, in the order of the blocks, the statements and the accesses
+    /// of each (`sym` operands included).
+    pub(super) accesses: Vec<Touch>,
+    /// The calls during which such a site is in use, in the order of the
+    /// blocks and the statements; empty when the body makes no such site.
+    pub(super) calls: Vec<CallUse>,
+}
+
+/// The accesses of `body` rooted at a static or a peripheral, and, when it
+/// makes a site rooted at one, the sites in use at each call. The fixed
+/// points are those of `check`, computed again; none of it is stored.
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "the conflicts across calls call it")
+)]
+pub(super) fn facts(body: &Body) -> Facts {
+    if body.external || body.blocks.is_empty() {
+        return Facts::default();
+    }
+    let flow = Flow::of(body);
+    let rooted = |path: &Path| !matches!(path.root, Root::Local(_));
+    let mut facts = Facts::default();
+    for &block in &flow.blocks {
+        for stmt in &flow.code[block] {
+            for access in &stmt.accesses {
+                if let Some(path) = access.path.as_ref().filter(|path| rooted(path)) {
+                    facts.accesses.push(Touch {
+                        how: access.how,
+                        path: path.clone(),
+                        name: flow.access_name(access.sym, access.place),
+                        span: access.span,
+                    });
+                }
+            }
+        }
+    }
+    let sites: Vec<usize> = (0..flow.sites.len())
+        .filter(|&site| rooted(&flow.sites[site].path))
+        .collect();
+    if sites.is_empty() {
+        return facts;
+    }
+    let held = flow.solve_held(&flow.blocks);
+    let backwards: Vec<usize> = flow.blocks.iter().rev().copied().collect();
+    let live = flow.solve_live(&backwards);
+    facts.calls = flow.calls_in_use(&sites, &held, &live);
+    facts
+}
+
 /// A block, a statement of it (the terminator last) and an access of that.
 type Loc = (usize, usize, usize);
 
@@ -59,7 +179,7 @@ type Loc = (usize, usize, usize);
 type State = Vec<Bits>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Step {
+pub(super) enum Step {
     Field(u32),
     /// An element of an array, whatever its index (ADR 0106).
     Elem,
@@ -71,7 +191,7 @@ enum Step {
 
 /// Where a path starts: a local, a static or a peripheral (ADR 0111).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Root {
+pub(super) enum Root {
     Local(Local),
     Static(StaticRef),
     Peripheral(PeripheralRef),
@@ -93,7 +213,7 @@ impl Root {
 
 /// A root and the steps from it.
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct Path {
+pub(super) struct Path {
     root: Root,
     steps: Vec<Step>,
 }
@@ -104,6 +224,13 @@ fn bytes(p: PeripheralRef) -> (u64, u64) {
     let def = p.def();
     let extent = def.ty.def().layout().map_or(0, |layout| layout.extent);
     (def.address, def.address.saturating_add(extent))
+}
+
+/// Whether an access of `how` at `path` conflicts with a site in use that
+/// `held` is borrowed with at `site` (ADR 0106): the access writes or the site
+/// is mutable, and the paths overlap.
+fn in_conflict(how: How, path: &Path, site: How, held: &Path) -> bool {
+    (how.writes() || site.mutable()) && overlap(path, held)
 }
 
 /// Whether one path contains the other, or both are the same: compared step by
@@ -127,7 +254,7 @@ fn overlap(a: &Path, b: &Path) -> bool {
 /// What an access does to its place, as the table of ADR 0106 and the
 /// messages tell them apart.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum How {
+pub(super) enum How {
     /// A copy, a test of a tag, the place of `SliceAddress` or `SliceLen`.
     Use,
     RawConst,
@@ -158,7 +285,7 @@ enum How {
 impl How {
     /// Whether it conflicts with a shared borrow in use too: every access but
     /// those that read (ADR 0106).
-    fn writes(self) -> bool {
+    pub(super) fn writes(self) -> bool {
         !matches!(
             self,
             How::Use | How::RawConst | How::Borrow | How::Convert | How::ConvertSlice
@@ -166,7 +293,7 @@ impl How {
     }
 
     /// Whether it makes a mutable borrow.
-    fn mutable(self) -> bool {
+    pub(super) fn mutable(self) -> bool {
         matches!(self, How::BorrowMut | How::Lend | How::ConvertSliceMut)
     }
 }
@@ -226,6 +353,17 @@ struct Stmt {
     args: Vec<usize>,
 }
 
+/// Where later uses are looked for from: an access, or a whole call.
+#[derive(Clone, Copy)]
+struct Point {
+    at: Loc,
+    after_call: bool,
+    span: Span,
+    /// The point is a whole call: the write of its result, which happens
+    /// after the callee returns, is a later use.
+    whole_call: bool,
+}
+
 /// An access in conflict, and the sites in use it conflicts with.
 struct Fault {
     at: Loc,
@@ -235,6 +373,17 @@ struct Fault {
     span: Span,
     sym: Option<StaticRef>,
     sites: Vec<usize>,
+}
+
+impl Fault {
+    fn point(&self) -> Point {
+        Point {
+            at: self.at,
+            after_call: self.after_call,
+            span: self.span,
+            whole_call: false,
+        }
+    }
 }
 
 struct Flow<'b> {
@@ -728,15 +877,21 @@ impl<'b> Flow<'b> {
         after
     }
 
+    /// What the live locals hold.
+    fn live_holds(&self, held: &State, live: &Bits) -> Bits {
+        let mut holds = Bits::new(self.sites.len());
+        for local in (0..self.refs).filter(|&local| live.contains(local)) {
+            holds.union(&held[local]);
+        }
+        holds
+    }
+
     /// The sites in use at access `k` of a statement (ADR 0107): what the
     /// locals live after the statement hold, what the locals read by its later
     /// accesses hold, and, for all of a call's accesses but the write of its
     /// result, what its arguments hold.
     fn in_use(&self, stmt: &Stmt, k: usize, before: &State, after: &State, live: &Bits) -> Bits {
-        let mut in_use = Bits::new(self.sites.len());
-        for local in (0..self.refs).filter(|&local| live.contains(local)) {
-            in_use.union(&after[local]);
-        }
+        let mut in_use = self.live_holds(after, live);
         for later in &stmt.accesses[k + 1..] {
             if let Some(local) = later.reads {
                 in_use.union(&before[local]);
@@ -752,7 +907,7 @@ impl<'b> Flow<'b> {
 
     /// Whether an access conflicts with a site in use (ADR 0106).
     fn conflicts(&self, how: How, path: &Path, site: &Site) -> bool {
-        (how.writes() || site.how.mutable()) && overlap(path, &site.path)
+        in_conflict(how, path, site.how, &site.path)
     }
 
     /// Every access in conflict, found in one pass over the reachable blocks
@@ -796,6 +951,86 @@ impl<'b> Flow<'b> {
         faults
     }
 
+    /// The sites in use during a call (ADR 0112): what the locals live after
+    /// it hold, what its reference arguments hold, and what the write of its
+    /// result reads.
+    fn during_call(&self, stmt: &Stmt, before: &State, after: &State, live: &Bits) -> Bits {
+        let mut in_use = self.live_holds(after, live);
+        for access in stmt.accesses.iter().filter(|access| access.after_call) {
+            if let Some(local) = access.reads {
+                in_use.union(&before[local]);
+            }
+        }
+        for &local in &stmt.args {
+            in_use.union(&before[local]);
+        }
+        in_use
+    }
+
+    /// For every call of a reachable block, the sites among `rooted` in use
+    /// during it, each with a later use of the borrow if there is one.
+    fn calls_in_use(
+        &self,
+        rooted: &[usize],
+        held: &[Option<State>],
+        live: &[Bits],
+    ) -> Vec<CallUse> {
+        let before_all = self.held_before(held);
+        let mut calls = Vec::new();
+        for &block in &self.blocks {
+            let Some(mut state) = held[block].clone() else {
+                continue;
+            };
+            let after = self.live_after(block, live);
+            let mut reached = None;
+            for (index, stmt) in self.code[block].iter().enumerate() {
+                let before = state.clone();
+                self.apply(&mut state, stmt);
+                let Some(Statement::Call { callee, .. }) =
+                    self.body.blocks[block].statements.get(index)
+                else {
+                    continue;
+                };
+                let in_use = self.during_call(stmt, &before, &state, &after[index]);
+                let sites: Vec<usize> = (rooted.iter().copied())
+                    .filter(|&site| in_use.contains(site))
+                    .collect();
+                if sites.is_empty() {
+                    continue;
+                }
+                // Looked for from after the reads of the arguments, which are
+                // no later use, but before the write of the result, which is.
+                let point = Point {
+                    at: (block, index, stmt.accesses.len()),
+                    after_call: true,
+                    span: stmt.span,
+                    whole_call: true,
+                };
+                let reached = reached.get_or_insert_with(|| self.reach_from(block));
+                calls.push(CallUse {
+                    block,
+                    statement: index,
+                    callee: *callee,
+                    span: stmt.span,
+                    held: sites
+                        .into_iter()
+                        .map(|site| {
+                            let made = &self.sites[site];
+                            Held {
+                                how: made.how,
+                                path: made.path.clone(),
+                                name: self.name(made.place),
+                                span: made.span,
+                                later: self.later_use(point, site, &before_all, reached),
+                            }
+                        })
+                        .collect(),
+                });
+            }
+        }
+        calls
+    }
+
     /// What the locals hold before each statement of each reachable block.
     fn held_before(&self, held: &[Option<State>]) -> Vec<Vec<State>> {
         let mut all = vec![Vec::new(); self.body.blocks.len()];
@@ -832,7 +1067,7 @@ impl<'b> Flow<'b> {
     /// its span.
     fn later_use(
         &self,
-        fault: &Fault,
+        fault: Point,
         site: usize,
         before: &[Vec<State>],
         reached: &[bool],
@@ -854,7 +1089,10 @@ impl<'b> Flow<'b> {
                     let after = block == fault_block && (index, k) > (fault_index, fault_access)
                         || (block, index) == (fault_block, fault_index)
                             && stmt.call
-                            && !fault.after_call;
+                            && !fault.after_call
+                        || (block, index) == (fault_block, fault_index)
+                            && fault.whole_call
+                            && access.after_call;
                     if !after && !reached[block] {
                         continue;
                     }
@@ -900,7 +1138,8 @@ impl<'b> Flow<'b> {
             sites.sort_by_key(|&site| (key(self.sites[site].span), site));
             for site in sites {
                 labels.push((self.sites[site].span, self.site_label(&self.sites[site])));
-                if let Some((span, round)) = self.later_use(&fault, site, &before, &reached) {
+                if let Some((span, round)) = self.later_use(fault.point(), site, &before, &reached)
+                {
                     labels.push((
                         span,
                         if round {
@@ -929,10 +1168,7 @@ impl<'b> Flow<'b> {
 
     /// The message of an access in conflict, and the label at the access.
     fn message(&self, fault: &Fault) -> (String, &'static str) {
-        let name = match fault.sym {
-            Some(s) => format!("`{}`", Root::Static(s).name().unwrap_or_default()),
-            None => self.name(fault.place),
-        };
+        let name = self.access_name(fault.sym, fault.place);
         let holder = self.name(Place::local(fault.place.local));
         match fault.how {
             How::Use => (
@@ -987,6 +1223,15 @@ impl<'b> Flow<'b> {
                 format!("cannot pass {name} to `asm` as `sym` while it is borrowed"),
                 "passed as `sym` here",
             ),
+        }
+    }
+
+    /// The name an access has in messages: the static of a `sym`, else its
+    /// place.
+    fn access_name(&self, sym: Option<StaticRef>, place: Place) -> String {
+        match sym {
+            Some(s) => format!("`{}`", Root::Static(s).name().unwrap_or_default()),
+            None => self.name(place),
         }
     }
 
@@ -2520,5 +2765,251 @@ mod tests {
             )],
         );
         accepted(&dead);
+    }
+
+    /// `r = &mut COUNT` with the address temporary `_1` and `r` as `_2`, then
+    /// `after`, in one block.
+    fn holding(count: StaticRef, after: Vec<Statement>) -> Body {
+        let mut statements = vec![address(1, count), mutable(2, deref(1))];
+        statements.extend(after);
+        body(
+            vec![decl(raw(), None), decl(mut_ref(), Some("r"))],
+            vec![block(statements, Terminator::Return)],
+        )
+    }
+
+    fn whole(s: StaticRef) -> Path {
+        Path {
+            root: Root::Static(s),
+            steps: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn the_accesses_rooted_at_a_static_or_a_peripheral_are_exposed_with_their_kind_and_path() {
+        let count = static_(0, "m.COUNT", true);
+        let uart = peripheral("UART0", 0x1000);
+        // Only blocks `bb0` reaches count; accesses of locals do not.
+        let seen = facts(&body(
+            vec![
+                decl(raw(), None),
+                decl(u32_ty(), Some("x")),
+                decl(pointer_to(Ty::Peripheral(uart.def().ty)), None),
+            ],
+            vec![
+                block(
+                    vec![
+                        address(1, count),
+                        set(deref(1)),
+                        set(local(2)),
+                        read(2, deref(1)),
+                        device_address(3, uart),
+                        set(projected(3, &[PlaceElem::Deref, PlaceElem::Field(1)])),
+                        asm_sym(count),
+                    ],
+                    Terminator::Return,
+                ),
+                block_at(300, vec![set(deref(1))], Terminator::Return),
+            ],
+        ));
+        let found: Vec<_> = (seen.accesses.iter())
+            .map(|touch| (touch.how, touch.path.clone(), touch.name.as_str()))
+            .collect();
+        let register = Path {
+            root: Root::Peripheral(uart),
+            steps: vec![Step::Elem],
+        };
+        assert_eq!(
+            found,
+            [
+                (How::Assign, whole(count), "`m::COUNT`"),
+                (How::Use, whole(count), "`m::COUNT`"),
+                (How::Assign, register, "`UART0.data`"),
+                (How::Sym, whole(count), "`m::COUNT`"),
+            ]
+        );
+        assert_eq!(seen.accesses[0].span, span(101));
+        assert_eq!(seen.accesses[3].span, span(106));
+        // No site rooted at one: no call is looked at.
+        assert!(seen.calls.is_empty());
+    }
+
+    #[test]
+    fn the_sites_in_use_at_a_call_are_those_it_lends_and_those_held_across_it() {
+        let count = static_(0, "m.COUNT", true);
+        // `f(&mut COUNT)`: lent, used by nothing after the call.
+        let lent = holding(count, vec![call(None, vec![mv(2)])]);
+        let seen = facts(&lent);
+        assert_eq!(seen.calls.len(), 1);
+        let used = &seen.calls[0];
+        assert_eq!((used.block, used.statement), (0, 2));
+        assert_eq!(used.callee, BodyId(0));
+        assert_eq!(used.span, span(102));
+        assert_eq!(used.held.len(), 1);
+        let held = &used.held[0];
+        assert_eq!(held.how, How::BorrowMut);
+        assert_eq!(held.name, "`m::COUNT`");
+        assert_eq!(held.span, span(101));
+        assert_eq!(held.later, None);
+        assert!(held.conflicts(How::Use, &whole(count)));
+        assert!(!held.conflicts(How::Use, &whole(static_(1, "OTHER", true))));
+        // `r` held across a call that is not given it, and used after it.
+        let across = holding(count, vec![call(None, Vec::new()), set(deref(2))]);
+        let seen = facts(&across);
+        assert_eq!(seen.calls.len(), 1);
+        assert_eq!(seen.calls[0].held.len(), 1);
+        assert_eq!(seen.calls[0].held[0].later, Some((span(103), false)));
+        // A shared borrow held across a call is in use too, and says so.
+        let shared_held = body(
+            vec![
+                decl(raw(), None),
+                decl(shared_ref(), Some("q")),
+                decl(u32_ty(), None),
+            ],
+            vec![block(
+                vec![
+                    address(1, count),
+                    shared(2, deref(1)),
+                    call(None, Vec::new()),
+                    read(3, deref(2)),
+                ],
+                Terminator::Return,
+            )],
+        );
+        let seen = facts(&shared_held);
+        let held = &seen.calls[0].held[0];
+        assert_eq!(held.how, How::Borrow);
+        assert_eq!(held.later, Some((span(103), false)));
+        assert!(!held.conflicts(How::Use, &whole(count)));
+        assert!(held.conflicts(How::Assign, &whole(count)));
+    }
+
+    #[test]
+    fn the_write_of_a_calls_result_through_a_borrow_is_a_later_use_of_it() {
+        // `r = &mut P; (*r).a = f()`: the write reads `r` after the callee
+        // returns, so the borrow is used after the call, and the call's own
+        // statement is where.
+        let record = StaticRef::new(StaticId(2), "P".to_owned(), pair(), true, false);
+        let locals = || {
+            vec![
+                decl(pointer_to(pair()), None),
+                decl(reference(true, pair()), Some("r")),
+            ]
+        };
+        let straight = body(
+            locals(),
+            vec![block(
+                vec![
+                    address(1, record),
+                    mutable(2, deref(1)),
+                    call(Some(through(2, 0)), Vec::new()),
+                ],
+                Terminator::Return,
+            )],
+        );
+        let seen = facts(&straight);
+        assert_eq!(seen.calls.len(), 1);
+        assert_eq!(seen.calls[0].held.len(), 1);
+        assert_eq!(seen.calls[0].held[0].later, Some((span(102), false)));
+        // In a loop it is the same: not "the next iteration".
+        let looped = body(
+            locals(),
+            vec![
+                block_at(100, vec![address(1, record), mutable(2, deref(1))], goto(1)),
+                block_at(
+                    200,
+                    vec![call(Some(through(2, 0)), Vec::new())],
+                    branch(1, 2),
+                ),
+                block_at(400, vec![], Terminator::Return),
+            ],
+        );
+        let seen = facts(&looped);
+        assert_eq!(seen.calls[0].held[0].later, Some((span(200), false)));
+        // A result written to a local that holds nothing is no use of it.
+        let apart = body(
+            vec![
+                decl(pointer_to(pair()), None),
+                decl(reference(true, pair()), Some("r")),
+                decl(u32_ty(), Some("x")),
+            ],
+            vec![block(
+                vec![
+                    address(1, record),
+                    mutable(2, deref(1)),
+                    call(Some(local(3)), vec![mv(2)]),
+                ],
+                Terminator::Return,
+            )],
+        );
+        let seen = facts(&apart);
+        assert_eq!(seen.calls[0].held[0].later, None);
+    }
+
+    #[test]
+    fn no_site_is_in_use_at_a_call_after_the_last_use_of_the_borrow() {
+        let count = static_(0, "m.COUNT", true);
+        let done = holding(count, vec![set(deref(2)), call(None, Vec::new())]);
+        assert!(facts(&done).calls.is_empty());
+        // A site of a local is none of the rooted sites.
+        let local_site = body(
+            vec![decl(u32_ty(), Some("x")), decl(mut_ref(), Some("r"))],
+            vec![block(
+                vec![mutable(2, local(1)), call(None, vec![mv(2)])],
+                Terminator::Return,
+            )],
+        );
+        assert!(facts(&local_site).calls.is_empty());
+        // Nor is anything in a block `bb0` does not reach.
+        let apart = body(
+            vec![decl(raw(), None), decl(mut_ref(), Some("r"))],
+            vec![
+                block(vec![], Terminator::Return),
+                block_at(
+                    300,
+                    vec![
+                        address(1, count),
+                        mutable(2, deref(1)),
+                        call(None, vec![mv(2)]),
+                    ],
+                    Terminator::Return,
+                ),
+            ],
+        );
+        let seen = facts(&apart);
+        assert!(seen.accesses.is_empty() && seen.calls.is_empty());
+    }
+
+    #[test]
+    fn a_borrow_used_in_the_next_iteration_of_a_loop_is_a_later_use_of_the_call() {
+        let count = static_(0, "m.COUNT", true);
+        // bb0: r = &mut COUNT. bb1: call f(). bb2: *r = 1; back to bb1 or out.
+        let looped = body(
+            vec![decl(raw(), None), decl(mut_ref(), Some("r"))],
+            vec![
+                block_at(100, vec![address(1, count), mutable(2, deref(1))], goto(1)),
+                block_at(200, vec![call(None, Vec::new())], goto(2)),
+                block_at(300, vec![set(deref(2))], branch(1, 3)),
+                block_at(400, vec![], Terminator::Return),
+            ],
+        );
+        let seen = facts(&looped);
+        assert_eq!(seen.calls.len(), 1);
+        assert_eq!(seen.calls[0].held[0].later, Some((span(300), false)));
+        // Used before the call in the body of a loop: reached in a later round.
+        let round = body(
+            vec![decl(raw(), None), decl(mut_ref(), Some("r"))],
+            vec![
+                block_at(100, vec![address(1, count), mutable(2, deref(1))], goto(1)),
+                block_at(
+                    200,
+                    vec![set(deref(2)), call(None, Vec::new())],
+                    branch(1, 2),
+                ),
+                block_at(400, vec![], Terminator::Return),
+            ],
+        );
+        let seen = facts(&round);
+        assert_eq!(seen.calls[0].held[0].later, Some((span(200), true)));
     }
 }

@@ -12,6 +12,7 @@
 
 mod bits;
 mod borrows;
+mod call_graph;
 mod linear;
 mod moves;
 mod shared_statics;
