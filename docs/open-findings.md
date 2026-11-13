@@ -243,6 +243,22 @@ M3.1 to M3.3 on 2026-10-28; these remain.
 - `src/analysis/call_graph.rs`: `Reach::search` and `path` take `C:
   AsRef<[Call]>` so that `Scan` and a plain `Vec<Vec<Call>>` both serve;
   CONTRIBUTING prefers plain data before generics. (M5.4c, step 3)
+- `src/ty/method.rs`, `method_call` (about lines 83 to 98): with `fn g(s: &&S)
+  -> u32 { s.f() }` the compiler reports `ty::reference-position` and then
+  `ty::unknown-method` ("`&S` has no method `f`"), a cascade of the first
+  error. A `Ty::Ref` referent could be taken as `Ty::Error` there; `s.n` on
+  such a base may do the same and was not checked. (M5.5)
+- `src/ty/place.rs`, the doc comment of `dereferenced` (around line 641) says
+  the base "is read as the operand of `*` is", but the function reads
+  nothing: it records the base in `Tables::derefed` and builds the place.
+  (M5.5, step 2)
+- `src/hir/lower/resolve.rs`, `no_function`: the help "its functions are ..."
+  also lists reserved or already-reported names, such as `__bad` in
+  `Q::missing()`. `use self;` in a module gives `resolve::use-cycle`
+  ("brings in `m::self` through itself") and `use self::a;` gives
+  `resolve::unknown-path`; the plan says such a path "is judged when
+  resolved", so both follow it, but the first message is confusing.
+  (M5.5, step 1)
 
 ## Tests
 
@@ -387,6 +403,18 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   where ADR 0110 says the board's. The 10 new snapshots of step 4 carry an
   `assertion_line` header, which 23 of the tracked snapshots now have; strip it with the next snapshot update. (M5.4c,
   steps 4 and 7)
+- `tests/rejected.rs`, `never_functions`: `.chain(["exit"])` hard-codes the
+  name of the board's terminator, so a board that names it otherwise has the
+  same blind spot that step 4 fixed for `exit`; reading the signature of the
+  board's function would be sturdier. (M5.5, step 4)
+- `tests/ui/parse_impl.ers`: `#[align(N)]` and `#[naked]` on a function of a
+  type (ADR 0113, "What does not change") have only a parser snapshot, and
+  nothing tests that they reach codegen (`#[align(64)]` gives `define void
+  @S.f() #1 align 64` by hand). One line in `codegen_impl_symbols.ers` would
+  pin it. (M5.5, final review)
+- `tests/ui/reference_places.ers`: `&mut r[i]` through a `&mut [T]` has no
+  direct case (`&mut t[..2]`, `t[1] = x` and `&mut m.buf[0]` are there); the
+  code path is shared. (M5.5, step 2)
 
 ## Docs
 
@@ -515,3 +543,8 @@ M3.1 to M3.3 on 2026-10-28; these remain.
   a `&[u8]` (it takes a `&mut [u8]`); the plan's test bullet for
   `slice_borrows_conversion.ers` expects "converted to a slice here" for
   `held`, where the snapshot has "`buf` is borrowed here". (M5.4b)
+- `docs/reference.md`, the `ty::move-out-of-place` row of the check tables
+  (around line 7812) names `(*p).f`, `(*s)[i]` and `(*r).f` as places through
+  a pointer or reference; the prose and the Decisions of M5.5 step 2 say that
+  `r.f`, `r[i]` and a method call with a `self` receiver give the same error,
+  and the row should list them. (M5.5, final review)
