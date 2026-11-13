@@ -1,4 +1,4 @@
-# Erebos language reference (M5.4b)
+# Erebos language reference (M5.4c)
 
 This describes the language as the compiler implements it today. The
 reasoning behind each rule lives in the ADRs (`docs/adr/`), cited as
@@ -151,6 +151,7 @@ block.
 | `!` | never: the type of an expression that does not finish, never of memory (ADR 0034) |
 | `*const T`, `*mut T` | raw pointers |
 | `&T`, `&mut T` | a shared and a mutable reference to a `T`: a thin pointer that the compiler checks (ADR 0105, see "References") |
+| `&volatile T`, `&mut volatile T` | references whose accesses are volatile, made by borrowing a volatile place; never to a peripheral type, whose references are volatile without the word (ADR 0110, see "Volatile references") |
 | `&[T]`, `&mut [T]` | a shared and a mutable reference to a slice: the address of `T` values and how many there are, laid out and passed as the slice `*const [T]` or `*mut [T]` (ADR 0108, see "Slices behind references") |
 | `*const volatile T`, `*mut volatile T` | raw pointers whose accesses are volatile (ADR 0013, 0023); never to a peripheral type, whose pointers are volatile without the word (ADR 0058) |
 | `[T; N]` | an array of `N` values of type `T`; `N` is a `usize` computed at compile time (ADR 0021, 0029), so a literal too large for `usize` is `ty::literal-out-of-range`, as it is in `#[align(N)]` |
@@ -661,10 +662,11 @@ extern static crc_lookup: [u32; 256];
 - A `static` cannot be assigned (`ty::assign-immutable`) nor have its
   address taken with `&raw mut` (`ty::address-of-immutable`). A
   `static mut` is read and written like a `mut` variable (`TICKS += 1`,
-  `&raw mut DMA_BUF`), with ordinary loads and stores. A handler and the
-  code it interrupts may share one; the ordinary access is then a race
-  unless it is inside a `critical` block, and the compiler rejects the
-  program otherwise (`analysis::unprotected-static`,
+  `&raw mut DMA_BUF`), with ordinary loads and stores, and borrowed like
+  one (`&mut DMA_BUF`, `&TICKS`; see "References to a `static mut`"). A
+  handler and the code it interrupts may share one; the ordinary access is
+  then a race unless it is inside a `critical` block, and the compiler
+  rejects the program otherwise (`analysis::unprotected-static`,
   `analysis::unmaskable-static`; see "Shared statics").
 - **A static is read where the read is written**, like a read through a
   pointer, never deferred: in `TICKS + bump()`, where `bump` changes
@@ -2239,7 +2241,7 @@ nothing of a linear type is written through a pointer (L4); and each case of a
 variants (E1). They judge the compiler, as every rule of the validator does:
 type checking rejects the programs that would break them.
 
-## References (ADR 0105 to 0109)
+## References (ADR 0105 to 0112)
 
 ```
 struct Ring {
@@ -2285,11 +2287,15 @@ refers to is used only in ways that cannot disagree with it (see "The borrow
 check"). References are **second-class** (ADR 0094): they are held by a
 parameter or a `let` and lent to calls, and they are never stored in a field,
 returned, or held in a variable that changes, so none outlives the function
-that made it and no lifetime is ever written.
+that made it and no lifetime is ever written. A reference may refer to a
+`static mut`, to a peripheral or a cluster, and to a volatile place, in which
+case it is itself volatile (see "References to a `static mut`", "References to
+peripherals and clusters" and "Volatile references").
 
 ### Types and expressions (ADR 0105)
 
-- `&T` and `&mut T` are types. `&e` and `&mut e` make a reference to the place
+- `&T` and `&mut T` are types, and so are `&volatile T` and `&mut volatile T`
+  (see "Volatile references"). `&e` and `&mut e` make a reference to the place
   `e`; they are prefix operators at the precedence of `*` and `&raw`, so
   `&a.b` borrows the field and `&x as *const u32` casts the reference. `&raw`
   followed by `const` or `mut` is still a raw address (see "Addresses:
@@ -2343,13 +2349,14 @@ fn values() {
 ```
 
 `&place` borrows a place: a variable, a parameter, a field or an element of
-one, a `static` or an `extern static` without `mut`, a byte string, or a place
-through a reference or through a raw pointer that is not `volatile` (`&*p`,
-`&(*p).f`, `&p[i]`). A place of type `[T]` can be borrowed too, `&*s` for a
-slice `s` or a sub-slice `&a[2..5]`, and gives a reference to a slice (see
-"Slices behind references"). A reference made through a raw pointer is the program's
-word, as `slice(p, n)` is: the borrow check follows nothing through a raw
-pointer.
+one, a `static`, an `extern static`, a `static mut` or an `extern static mut`,
+a peripheral, a cluster or an element of a cluster array, a byte string, or a
+place through a reference or through a raw pointer (`&*p`, `&(*p).f`, `&p[i]`;
+a reference made through a volatile one is volatile). A place of type `[T]`
+can be borrowed too, `&*s` for a slice `s` or a sub-slice `&a[2..5]`, and
+gives a reference to a slice (see "Slices behind references"). A reference
+made through a raw pointer is the program's word, as `slice(p, n)` is: the
+borrow check follows nothing through a raw pointer.
 
 - `&mut place` needs a place that can be written, by the rules of `&raw mut`:
   not a variable or parameter without `mut`, a `static`, an `extern static`
@@ -2375,17 +2382,195 @@ pointer.
   place of type `!` `ty::never-in-memory`.
 - `&` or `&mut` of a place reached through a `volatile` pointer, a volatile raw
   slice or a volatile reference gives a volatile reference, `&volatile T` or
-  `&mut volatile T` (ADR 0110); any other place gives one that is not. A
-  register has no address and is `ty::register-address`. `&` and `&mut` of a
-  `static mut` or an `extern
-  static mut`, or of a field or an element of one, are allowed (ADR 0110): the
-  borrow check follows them, across calls too (`analysis::borrow-conflict`,
-  `analysis::borrow-conflict-in-call`, ADR 0111). So are `&` and `&mut` of a
-  peripheral, of a cluster and of an element of a cluster array: the reference
-  is `&T` or `&mut T` with `T` the peripheral type, and a register is reached
-  through it as through a pointer to `T`, `(*u).thr`, volatile and with its
-  access mode, written through a `&mut` only (`ty::write-through-const` for a
-  `&`). `*u` whole is `ty::peripheral-by-value`, as through a pointer.
+  `&mut volatile T` (ADR 0110); any other place gives one that is not (see
+  "Volatile references"). A register has no address and is
+  `ty::register-address`.
+- `&` and `&mut` of a `static mut` or an `extern static mut`, or of a field, an
+  element or a sub-slice of one, are allowed (ADR 0110; see "References to a
+  `static mut`"). So are `&` and `&mut` of a peripheral, of a cluster and of an
+  element of a cluster array (see "References to peripherals and clusters").
+  The borrow check follows them, across calls too (`analysis::borrow-conflict`,
+  `analysis::borrow-conflict-in-call`, ADR 0111).
+
+### References to a `static mut` (ADR 0110, 0111)
+
+```
+static mut SAMPLES: [u32; 8] = [0; 8];
+static mut FILLED: usize = 0;
+
+fn sum(s: &[u32]) -> u32 { /* ... */ }
+fn clear(s: &mut [u32]) { /* ... */ }
+
+fn total() -> u32 {
+    let mut t: u32 = 0;
+    critical {
+        t = sum(&SAMPLES[0..FILLED]);   // a handler fills SAMPLES
+        clear(&mut SAMPLES);
+        FILLED = 0;
+    }
+    t
+}
+```
+
+`&X` and `&mut X`, with `X` a `static mut` or an `extern static mut`, are
+allowed, and so are `&X.f`, `&mut X[i]` and the sub-slice `&mut X[0..n]`. The
+rules that hold for any place hold for them; `&mut` of a `static` or an `extern
+static` without `mut` is `ty::mut-borrow-of-immutable`. At compile time a
+borrow of a `static mut` is what `&raw` of it is, and a read or write through
+the reference is `eval::static-mut`, or `eval::extern-static` for an `extern
+static mut`.
+
+A borrow **names** the static at the place of the borrow, as `&raw` does, and
+the check of shared statics counts it as a place (see "Shared statics"). In the
+thread context, a borrow of a static that a handler also reaches must be inside
+a `critical` block, or on a path of calls that passes through one
+(`analysis::unprotected-static`); a borrow in an unmaskable handler of a static
+another context reaches is `analysis::unmaskable-static`; a borrow in a
+maskable handler needs nothing, as the other accesses there. A **use** of the
+reference names nothing: `*r`, `(*r)[i]` and passing `r` on are not places of
+that check, because the reference was taken where the static was protected and
+cannot leave that protection. A static reached from one context only is not
+shared, and its borrows are allowed anywhere.
+
+**No reference leaves a `critical` block.** A reference is not the value of the
+block (see "Where a reference may be"), and a `break` whose value is a reference
+is `ty::reference-position`, at the value, when its loop is outside the
+innermost `critical` block around it, whatever the reference borrows:
+
+```
+fn leaves(x: u32) -> u32 {
+    let a: &u32 = loop {
+        critical { break &x; }          // error: ty::reference-position
+    };
+    critical {
+        let b: &u32 = loop { break &x; };   // fine: the loop is inside
+        *b + *a
+    }
+}
+```
+
+A `break` to a loop inside the block, one out of the block with a value that
+is not a reference, and a `break` with no value (the wait of "Enabling, waiting
+and testing") are unchanged. A reference cast to a raw pointer with `as` and
+used outside the block is allowed: a raw pointer is the program's word, as one
+taken with `&raw` is.
+
+### References to peripherals and clusters (ADR 0110, 0111)
+
+```
+peripheral Uart16550 {
+    write thr: u8 at 0x0,
+    read lsr: u8 at 0x5,
+}
+peripheral UART0: Uart16550 at 0x1000_0000;
+
+fn putc(u: &mut Uart16550, byte: u8) {
+    while (*u).lsr & 0x20 == 0 {}
+    (*u).thr = byte;
+}
+
+fn ready(u: &Uart16550) -> bool {
+    (*u).lsr & 0x20 != 0
+}
+
+fn demo() {
+    putc(&mut UART0, b'h');
+    let r: bool = ready(&UART0);
+}
+```
+
+`&P` and `&mut P`, with `P` a peripheral, and `&P.c`, `&mut P.c` and `&mut
+P.cs[i]`, with `c` a cluster and `cs` a cluster array (see "Peripherals"), are
+allowed. The reference is `&T` or `&mut T` with `T` the peripheral type, and
+through it a program reaches registers as through a pointer to `T`.
+
+- A peripheral is not `mut`, and `&mut` of one is allowed, as `&raw mut` is:
+  what may be written is the registers' business.
+- A register reached through the reference is accessed volatile, one load or
+  store of its width (see "Volatile accesses"), with its access mode checked as
+  through a pointer. Writing one through a `&T` is `ty::write-through-const`,
+  and writing a `read` register through a `&mut T` is the error it is through a
+  `*mut T`.
+- `*u` read or written whole, a peripheral type as the type of a value, and
+  `(*u)[i]` are the errors they are through a pointer
+  (`ty::peripheral-by-value`, `ty::peripheral-index`).
+- A register, a register array, a cluster array taken whole and a bit field
+  have no address: `&mut UART0.thr` and `&UART0.cs` are `ty::register-address`
+  (`ty::bit-field-address`), because a reference to one would reach it without
+  its access mode.
+- A reference to a peripheral type is written without `volatile`:
+  `&volatile Uart16550` and `&mut volatile Uart16550` are
+  `ty::volatile-peripheral`.
+- The borrow check follows a peripheral inside a function and across calls
+  (see "The borrow check"): `putc(&mut UART0, &mut UART0)` and a `&mut` of a
+  cluster in use while a register of the same peripheral is written are errors.
+  What it does not do is check which context reaches a peripheral: a borrow of
+  one names no static, and sharing peripherals between contexts is left to M5.6
+  (ADR 0078).
+- At compile time a borrow of a peripheral is what `&raw` of it is, and a
+  register access through it is `eval::volatile-access`.
+
+### Volatile references (ADR 0110, 0112)
+
+```
+struct Desc { addr: u32, len: u32 }
+struct Ring { head: u32, desc: [Desc; 4] }
+
+fn head(r: &volatile Ring) -> u32 {
+    (*r).head                           // one volatile load
+}
+
+fn next(d: &mut volatile Desc) {
+    (*d).len += 1;                      // one volatile load and one store
+}
+
+fn pass(p: *mut volatile Ring) -> u32 {
+    next(&mut (*p).desc[1]);            // a `&mut volatile Desc`
+    head(&*p)
+}
+```
+
+A reference may be **volatile**, as a pointer may (ADR 0013, 0023):
+`&volatile T` and `&mut volatile T` are the shared and the mutable volatile
+reference to `T`; the word follows `&` and `mut`, as it follows `*const` and
+`*mut`.
+
+- **Making one.** `&place` and `&mut place` give a volatile reference exactly
+  when the place is volatile: when the last pointer or reference on its path,
+  through `*` or an index of a pointer or a slice, is a volatile one. `&*p` and
+  `&mut (*p).desc[i]` with `p: *mut volatile Ring` give `&volatile Ring` and
+  `&mut volatile Desc`; `&(*r).head` with `r: &volatile Ring` gives
+  `&volatile u32`; `&(*s)[i]` through a `*const volatile [T]` gives
+  `&volatile T`. A variable, a parameter, a static and a peripheral are never
+  volatile places, so their borrows never give one. This differs from `&raw`,
+  whose pointer is never volatile: a program converts that pointer with `as`,
+  and nothing converts to a reference, so the borrow keeps the volatility or it
+  would be lost with nothing at the use to show it.
+- **Using one.** An access through one is volatile, with the guarantee and the
+  errors of "Volatile accesses": `*r` of a struct is `ty::volatile-aggregate`,
+  a `u64` is `ty::volatile-too-wide`, a field of a packed struct that needs
+  alignment is `ty::volatile-packed-field`, and a write through a `&volatile`
+  is `ty::write-through-const`.
+- **Slices.** `&volatile [T]` and `&mut volatile [T]` are laid out and passed
+  as `*const volatile [T]` and `*mut volatile [T]`; `(*s)[i]` is checked against
+  the length and is one volatile access, `len(s)` reads nothing.
+- **Conversions.** `&mut volatile T` converts to `&volatile T` where `&mut T`
+  converts to `&T`, and `&volatile [T; N]` and `&mut volatile [T; N]` to the
+  volatile references to `[T]` where arrays convert to slices. A volatile
+  reference never converts to one that is not, nor the other way, for the
+  reason ADR 0024 gives for pointers: `ty::mismatched-types`, with a help that
+  says neither converts to the other.
+- **Casts.** A volatile reference casts where the volatile raw pointer of its
+  mutability casts: `r as *mut volatile T`, and on to any pointer `as` reaches.
+  Nothing casts to a reference.
+- **Kinds and positions.** `&volatile T` is copy and `&mut volatile T` is not,
+  and they may be where any reference may be, an `extern fn` or `#[export]`
+  signature included, passed as the pointer of their mutability.
+- **At compile time** an access through one is `eval::volatile-access`.
+
+The borrow check treats a volatile reference as any other: what it borrows
+through a raw pointer it does not follow, and what it borrows through a
+reference it follows from that reference.
 
 ### Where a reference may be (ADR 0105)
 
@@ -2439,9 +2624,11 @@ Those that would make a type with a reference below its top are
 type and not at those above it: an array literal of references (`[&a, &b]`),
 and `&`, `&mut` or `&raw` of an operand that is a reference (`&r`, `&&a`,
 `&raw const r`). So are the value of a `critical` block, which would outlive the
-protection it was taken in, and a `comptime` expression of a reference type,
-since a value computed at compile time is never a reference. `&f(&x)` is not
-one of these: no function returns a reference, so `f`'s result is borrowed.
+protection it was taken in (and the value of a `break` out of one, see
+"References to a `static mut`"), and a `comptime` expression of a reference
+type, since a value computed at compile time is never a reference. `&f(&x)`
+is not one of these: no function returns a reference, so `f`'s result is
+borrowed.
 Each place is reported: `let a: [&u32; 2] = [&x, &y];` has an error at the
 written type and another at the literal. A constant or a static of a reference
 type has no value, and its uses report nothing more. The panic function keeps
@@ -2686,9 +2873,11 @@ what the borrow check proves is not passed to the optimizer.
 A function that takes and uses references runs at compile time as any
 function does, and the evaluator runs a borrow as it runs `&raw`: a borrow of a
 `static` is what `&raw const` of it is (see "Compile-time execution"), and a
-read through it is what a read through that pointer is. The address of a
-static cannot become an integer before linking (`eval::pointer-to-int`). No
-evaluation gives a reference as its result.
+read through it is what a read through that pointer is. So a read through a
+borrow of a `static mut` is `eval::static-mut`, and an access through a borrow
+of a peripheral, or through a volatile reference, `eval::volatile-access`. The
+address of a static cannot become an integer before linking
+(`eval::pointer-to-int`). No evaluation gives a reference as its result.
 
 ```
 static TABLE: [u32; 3] = [10, 20, 30];
@@ -2696,11 +2885,14 @@ fn middle(r: &[u32; 3]) -> u32 { (*r)[1] }
 const MIDDLE: u32 = middle(&TABLE);             // 20
 ```
 
-### The borrow check (ADR 0106)
+### The borrow check (ADR 0106, 0111)
 
 Each `&place` and `&mut place` that runs makes a **borrow** of the place,
 shared or mutable. The check is an analysis of one function (ADR 0107), with no
-lifetime written, that finds the accesses that conflict with a borrow in use.
+lifetime written, that finds the accesses that conflict with a borrow in use;
+a second analysis of the whole program finds the conflicts between a borrow of
+a static or a peripheral and what the functions it is lent to reach (see
+"Across calls", below).
 
 **How long a borrow lasts.** A borrow is **in use** at a point when a variable,
 a parameter or a value the compiler keeps that may hold the reference, or a
@@ -2734,17 +2926,27 @@ fn late_use() {
   in use across the back edge.
 
 **Places and overlap.** The check follows places made of a variable, a
-parameter, a value the compiler keeps or a static, then fields, elements, and
-dereferences of a reference. Two places **overlap** when one contains the
+parameter, a value the compiler keeps, a static (with or without `mut`) or a
+peripheral, then fields, elements, and dereferences of a reference. Two
+places **overlap** when one contains the
 other or both are the same, compared part by part from their root. Two
 different fields of one struct do not overlap (`&mut s.a` and `&s.b` may be in
 use together); two elements of one array always do, whatever their indexes,
 even constant ones (`&mut a[0]` and `&a[1]` may not), and so do the elements
 and sub-slices of one array or slice (see "Slices and sub-slices", below).
-`*r` and the places through it are places of their own, rooted at `r`: using
-`*r` is using the borrow `r` holds, never a conflict with it. A place through a
-**raw pointer** is not followed: borrowing it makes a reference the check holds
-nothing for, and accessing it conflicts with no borrow.
+Two different statics never overlap, and a static and a peripheral never do.
+**Parts of a peripheral always overlap**, as elements of an array do: two
+registers, two clusters, two elements of a register or cluster array, and a
+register and a cluster, whatever their offsets, because two registers may share
+bytes (a `read` and a `write` register at one offset, alternate registers), so
+`&mut UART0.ch[0]` and `UART0.ctrl = 1` conflict while the borrow is in use, as
+do `(*u).thr` and `(*u).lsr` through a `u: &mut Uart16550`. Two peripherals
+overlap when their bytes meet, which only `over` allows (ADR 0066), whatever
+the parts. `*r` and the places through it are places of their own, rooted at
+`r`: using `*r` is using the borrow `r` holds, never a conflict with it. A
+place through a **raw pointer** is not followed: borrowing it makes a
+reference the check holds nothing for, and accessing it conflicts with no
+borrow.
 
 **Conflicts.** An access to a place conflicts with a borrow in use of an
 overlapping place:
@@ -2879,7 +3081,11 @@ moves': the borrow check runs only on a body that analysis accepted, and the
 analysis of linearity runs on the same bodies (a borrow neither gives nor
 consumes a linear value). Paths that do not return use nothing after them, so no
 borrow is in use there. `critical` blocks change nothing: a borrow taken inside
-one is checked like any other. Elements of one array cannot be borrowed `&mut`
+one is checked like any other. A `sym` operand naming a `static mut` or an
+`extern static mut` counts as a write of the whole static, since assembly may do
+anything with the address (`let r: &mut u32 = &mut COUNT; asm(..., sym COUNT);
+*r = 1;` is `analysis::borrow-conflict`); a `sym` of a `static` without `mut`
+is no access. Elements of one array cannot be borrowed `&mut`
 together, nor two sub-slices of it; a program that needs two borrows the array
 whole or copies one out.
 
@@ -2917,10 +3123,79 @@ says to end the borrow first: use the reference before, or take the value out
 into a `let` before borrowing it. Errors are ordered by the span of the access,
 and those with the same span, message and labels are dropped.
 
-### References in MIR (ADR 0107, 0109)
+**Across calls (ADR 0111, 0112).** A static or a peripheral is named by any
+function, so a callee can reach what its caller lent it, with no reference in
+between. A borrow of one is therefore checked against the functions it is lent
+to, and against any function called while it is held:
 
-`--emit=mir` prints a reference type as `&T`, `&mut T`, `&[T]` or `&mut [T]`
-and a borrow as `&_1` or `&mut (*_2).0`:
+```
+static mut COUNT: u32 = 0;
+static mut BUF: [u8; 16] = [0; 16];
+
+fn bump(r: &mut u32) {
+    COUNT += 1;                         // the same memory as *r
+    *r += 1;
+}
+
+fn refill() { BUF[0] = 1; }
+
+fn lend() {
+    bump(&mut COUNT);                   // error: borrow-conflict-in-call
+}
+
+fn held() {
+    let r: &mut [u8; 16] = &mut BUF;
+    refill();                           // error: it writes BUF
+    (*r)[0] = 2;
+}
+```
+
+During a call, the borrows in use are those "Calls" above says: what the
+arguments may hold, and what is held by anything used after the call. For each
+whose place starts at a static or a peripheral, the accesses of the callee, and
+of every function the callee reaches through calls, to an overlapping place
+conflict with it by the table above: `bump(&mut COUNT)` with `bump` reading or
+writing `COUNT`, a `&BUF` lent to a function that writes `BUF`, takes `&raw
+mut BUF` or names it in `sym`. An access through the callee's own reference
+parameters is an access through the borrow, as in one function: `*r += 1` is
+what the borrow is for. These are accepted, as in one function: `f(&BUF)` with
+`f` reading `BUF`, `f(&mut S.a)` with `f` touching only `S.b`, a callee that
+reaches the static through its reference only, and a borrow that ends before
+the call.
+
+- The panic function is **not followed** from a check: it never returns and is
+  given no reference, so once it runs no borrow is used again. A driver
+  `write(u: &mut Uart16550, s: &[u8])` indexing `s` has a check, and a panic
+  function that prints through `UART0` does not make `write(&mut UART0, s)` an
+  error. A call of the panic function written by name, and a call of another
+  function returning `!`, are followed as any call is.
+- What is reached through a raw pointer is not followed, nor is code outside the
+  program: an `extern fn` reaches nothing, and `sym f` is no call.
+- The check does not depend on contexts. It holds in the thread context, in
+  handlers and in functions nothing calls, and a conflict of this kind is found
+  whatever the shared-static check reported.
+
+`analysis::borrow-conflict-in-call` is one error per call and borrow in use. The
+message names the place and what the callee does ("`COUNT` is borrowed during
+this call, and the callee reads it"); the primary label is on the call ("`bump`
+reaches `COUNT` while it is borrowed"), with a label on the borrow ("`COUNT` is
+borrowed `&mut` here"), one on the later use when the borrow is held across the
+call, one on each further call of the shortest path to the access ("`g` is
+called here"), in their own files when the path crosses files, and one on the
+access ("`COUNT` is read here"). The first access in the order of the search is
+the one labelled. The help says to pass the reference on instead of naming the
+static in the callee, or to end the borrow before the call. The error needs a
+program without errors in any body, as the check of shared statics does: it is
+reported at `--emit=mir` and every later stage, after the analyses of one body
+passed. Compile-time evaluation runs bodies before this check has seen the
+whole program, and runs a conflict as the program says it; the program is
+rejected afterwards.
+
+### References in MIR (ADR 0107, 0109, 0112)
+
+`--emit=mir` prints a reference type as `&T`, `&mut T`, `&[T]` or `&mut [T]`,
+with `volatile` after `&` or `&mut` for a volatile one (`&volatile T`, `&mut
+volatile T`), and a borrow as `&_1` or `&mut (*_2).0`:
 
 ```
 fn lend(r: &mut u32, mut x: Pair) -> u32 {
@@ -2971,9 +3246,11 @@ fn lend(r: &mut u32, mut x: Pair) -> u32 {
   result and its argument.
 - **The validator** (ADR 0095) has, for references, T1 (`Deref` applies to a
   reference, giving its referent; `Offset` does not), T5 (the type of a borrow
-  is the reference to its place's type with the same mutability, the place is
-  not volatile, a `&mut T` does not fit a `&T`, a cast goes from a reference to
-  a thin raw pointer and never to a reference; for a slice, a `Ref` or an
+  is the reference to its place's type with the same mutability and the
+  volatility of the place, the place is not a register, a `&mut T` does not fit
+  a `&T`, a volatile reference fits only the same volatile reference type, a
+  cast goes from a reference to a thin raw pointer and never to a reference;
+  for a slice, a `Ref` or an
   `AddressOf` of a place of type `[T]` gives a reference to a slice or a raw
   slice, a reference to a slice fits only its own type, and a `Cast` goes from
   `&[T]` or `&mut [T]` to the raw slice of the same mutability and elements)
@@ -2982,9 +3259,13 @@ fn lend(r: &mut u32, mut x: Pair) -> u32 {
   a payload value, an array or slice element, a pointee or a referent), nor the
   type of a static, nor a body's return type; R2, no place that is written,
   borrowed `&mut` or given to `&raw mut` goes through the `Deref` of a shared
-  reference; R3, the place of a borrow is a local or a static followed by
-  `Field`, `Index`, `ConstIndex`, `Subslice`, `ConstSubslice`, `Deref` and
-  `Offset` projections only; U1, a place of type `[T]` is followed only by
+  reference; R3, the place of a borrow is a local followed by `Field`,
+  `Index`, `ConstIndex`, `Element`, `ConstElement`, `Subslice`,
+  `ConstSubslice`, `Deref` and `Offset` projections only; R4, a local
+  assigned the address of a static or of a peripheral (`const static S`,
+  `const peripheral P`) is a temporary: nothing else writes it, and no `&` or
+  `&raw` takes its own place, so that the analyses can read `(*_t)` as the
+  static or the peripheral; U1, a place of type `[T]` is followed only by
   `Index` or a sub-slice, or is the whole place of a `Ref` or an `AddressOf`,
   and no operand, destination, `asm` operand, `SliceAddress`, `SliceLen` or
   `switch` names one. T1 says where `Index`, `Subslice` and `ConstSubslice`
@@ -3002,9 +3283,38 @@ fn lend(r: &mut u32, mut x: Pair) -> u32 {
   of moves it runs on the MIR of each body before anything evaluates it, so a
   `const` that calls a function with a conflict reports
   `analysis::borrow-conflict` and nothing from the evaluation.
+- **Statics and peripherals** (ADR 0111, 0112). A static is reached through
+  its address, `_t = const static S`, then `(*_t)`; a peripheral the same way,
+  with `const peripheral P`. By R4 the analysis reads a place whose base is
+  such a temporary followed by `Deref` as rooted at the static or the
+  peripheral, so a path's root is a variable, a static or a peripheral, named
+  in a label by its path with `::` (`COUNT`, `uart::BUF[_]`, `UART0.thr`).
+  `Field`, `Element` and `ConstElement` of a place of a peripheral type are
+  element steps, also below a `Deref` of a reference to the type, so two parts
+  of one peripheral always overlap; two different peripherals overlap when
+  their bytes meet, which `over` allows. A `sym` of a `static mut` or an
+  `extern static mut` is a write of the whole static. A `Ref` dumps as `&mut
+  (*_9)`, `_9` being the temporary of the static or the peripheral, and
+  `&volatile T` and `&mut volatile T` are printed as written.
+- **Across calls** is `src/analysis/call_borrows.rs`, run on the assembled MIR
+  by `analysis::check` after the check of shared statics, whatever that
+  reported. For each `Statement::Call` of a body that holds a borrow rooted at
+  a static or a peripheral, it takes the borrows in use during the call (the
+  ones the arguments may hold and those held by what is live after it, from the
+  fixed points of the borrow analysis) and searches the calls the callee
+  reaches, breadth first, in the order of the check of shared statics (the two
+  share one walk of the call graph, which differs in its edges: this one follows
+  `Statement::Call` only). The first access in that order to an overlapping
+  place that conflicts by the table above is the error. A `Terminator::Panic`
+  is not an edge, since once the panic function runs no borrow is used again; a
+  call of the panic function written by name is. The search is kept per callee.
 - **Code generation** lowers a reference as a pointer (`ptr` in LLVM IR), a
   borrow as the address of its place, and keeps in memory a local whose place a
-  borrow names, as it does for `&raw`. A reference to a slice is the slice
+  borrow names, as it does for `&raw`. An access through a volatile reference is
+  a volatile access, and a volatile reference to a slice has the layout of the
+  volatile raw slice. The evaluator runs a borrow of a volatile place as
+  `&raw`, and an access through a volatile reference or a register is
+  `eval::volatile-access`. A reference to a slice is the slice
   struct of two words; a place of type `[T]` is lowered to an address and a
   length (the slice's for a `Deref`, `to - from` for a sub-slice), and a `Ref`
   or an `AddressOf` of one stores both. The length is loaded only where it is
@@ -3590,6 +3900,12 @@ load of the whole value, and written with one load and one store of it:
 fields are written with a neutral value is a matter of write effects (see
 "Peripherals").
 
+An access through a **volatile reference** (`&volatile T`, `&mut volatile T`,
+see "Volatile references") is volatile in the same way, with the same guarantee
+and the same errors: `(*r).len` is one access of its width and `*r` of a struct
+is `ty::volatile-aggregate`. A place reached through a reference to a
+peripheral type is volatile only at its registers, as through a pointer to one.
+
 Volatile accesses are not ordered against ordinary ones, and the compiler
 emits no fence of its own. Handing memory to a device (DMA), or reading
 memory a device wrote, is written with the fences of `core::arch` (ADR
@@ -3618,7 +3934,8 @@ hardware (`fence iorw, iorw` on riscv32, `dmb sy` on thumbv7m). Both are
 - `loop { ... }` runs until `break`. Its type is that of its `break` values,
   or `!` if it has no `break`. `break value` is only allowed in `loop`.
 - `continue` jumps to the next iteration; `break` and `continue` refer to
-  the innermost loop.
+  the innermost loop. A `break` whose value is a reference is not allowed out
+  of a `critical` block (see "`critical` blocks").
 - `critical { ... }` runs its block with interrupts masked and has the
   block's value and type; see "Interrupts".
 - `return` or `return value` leaves the function.
@@ -4956,9 +5273,11 @@ value of its block, usable wherever an expression is, a `while` condition
 included (`while !critical { DONE } {}`). As a statement it ends with its
 block, like `if` and `loop`: no `;` is needed after it, its type must be `()`
 or `!`, and `critical { X } + 1` as a statement is
-`parser::unexpected-token`. A value of any type may leave it, as from any
-block, and `break` and `continue` to a loop outside it, `return` and `?` are
-allowed inside.
+`parser::unexpected-token`. A value of any type but a reference may leave it,
+as from any block, and `break` and `continue` to a loop outside it, `return`
+and `?` are allowed inside. A reference is not the value of the block, nor of a
+`break` that leaves it, because it must not outlive the protection it was taken
+in (`ty::reference-position`, see "References to a `static mut`").
 
 - On entry it records whether maskable interrupts were enabled and masks them;
   on **every** way out of the block it puts back what it recorded: the end of
@@ -5162,9 +5481,13 @@ Nothing else is an edge:
 
 **What names a static.** A **place** is a statement of a reachable block that holds
 an operand naming a `static mut` or an `extern static mut`: a read, a write, a
-compound assignment, `&raw const` or `&raw mut` of it, or a `sym` operand of `asm`,
-including the `asm` of a naked function. A statement that names one static twice is
-one place. A `static` (without `mut`) and a byte string are not checked. The
+compound assignment, `&raw const` or `&raw mut` of it, `&` or `&mut` of it or
+of a part of it (ADR 0110), or a `sym` operand of `asm`, including the `asm`
+of a naked function. A statement that names one static twice is one place. A
+borrow names the static where it is taken; a use of the reference (`*r`,
+`(*r)[i]`, passing `r` on) names none, because `critical` keeps every
+reference inside the protection it was taken in (see "References to a `static
+mut`"). A `static` (without `mut`) and a byte string are not checked. The
 check does not read types: a static of size 0 is a static like any other. Code
 after a `return` or a diverging call has no MIR and holds no places; the blocks of
 `if false { ... }` are reachable and count.
@@ -5267,9 +5590,11 @@ to what it did before.
 **What it does not see.** Only a `static mut` and an `extern static mut` named in
 the program are checked. A raw pointer to one, a peripheral, assembly and a call
 through an address are not followed: raw pointers wait for the ownership of M5
-(ADR 0078), and there are no function pointers yet. The check does not accept an
-access before `enable_interrupts` or after the last interrupt: those need
-`critical` too, which costs two or three instructions at `-O`. It does not check
+(ADR 0078), and there are no function pointers yet. A reference is not
+followed by this check: the borrow is the place, and what the reference is
+used for is the business of the borrow check (see "The borrow check"). The
+check does not accept an access before `enable_interrupts` or after the last
+interrupt: those need `critical` too, which costs two or three instructions at `-O`. It does not check
 priorities, nor a handler that enables interrupts, which leave the one-level model
 (ADR 0078).
 
@@ -5637,6 +5962,9 @@ fn setup(source: usize) {
   static's initializer or a `comptime` block is a pointer made from an
   integer, as `&raw` of a peripheral is: `&raw const PLIC.ctx[1] as usize`
   is `0x0C20_1000`. An index out of bounds there is `eval::panic`.
+- **`&P.c` and `&mut P.c[i]`** give a `&T` or a `&mut T` with `T` the cluster's
+  type (see "References to peripherals and clusters"); `&P.cs` of a cluster
+  array taken whole is `ty::register-address`, as `&raw` of it is.
 
 **Registers with fields (ADR 0060).** With `WordLength` and `Lcr` as in
 "Bit-field structs":
@@ -5913,15 +6241,27 @@ serves any instance, as `putc` above does:
   written is: a peripheral type is no slice element. It is reported once,
   and `len` of the slice, or indexing it, adds no error.
 
+**References to peripheral types.** `&UART0` and `&mut UART0` give a
+`&Uart16550` and a `&mut Uart16550` (ADR 0110), through which a driver serves
+any instance and the borrow check sees how it is lent (see "References to
+peripherals and clusters"). A reference to a peripheral type is written
+without `volatile` as a pointer to one is: `&volatile Uart16550` is
+`ty::volatile-peripheral`, and is then taken as `&Uart16550`. The registers
+reached through a reference are accessed volatile because of the type, written
+only through a `&mut` (`ty::write-through-const` for a `&`), and the access
+mode is checked as through a pointer. Which contexts reach a peripheral stays
+unchecked until M5.6 (ADR 0078): a borrow of one names no static.
+
 **At compile time.**
 
 - A register access is `eval::volatile-access`, as any volatile access
-  is, through a pointer made from an integer too.
+  is, through a pointer made from an integer too, and through a reference.
 - `&raw const UART0` and `&raw mut UART0` are pointers made from an
   integer, the peripheral's address (ADR 0030): `&raw mut UART0 as usize
   == 0x1000_0000` holds in a `comptime` block, and a constant or a static
   may hold one, as `static CONSOLE: *mut Uart16550 = &raw mut UART0;`,
-  emitted as that address.
+  emitted as that address. `&UART0` is that pointer under a reference (see
+  "References"), and a constant or a static holds no reference.
 - An offset or an address whose computation needs itself, as `peripheral
   A: T at &raw const A as usize;`, is `ty::cycle`, as any value computed
   at compile time. So is an offset whose computation names a pointer to

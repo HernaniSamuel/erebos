@@ -107,7 +107,7 @@ QEMU. The ownership model they share is ADR 0094.
 | **M5.3** ✅ Linear values | types that must be consumed; the check on every path that returns | a transfer to a device whose handle must be waited for |
 | **M5.4a** ✅ References | `&T`, `&mut T`, `&place`, `*r`; second-class references; the borrow check; references to places that are not volatile and not `static mut`, `&*p`; references across the C ABI | a ring buffer with free functions over `&mut Ring` and `&Ring` |
 | **M5.4b** ✅ Slices behind references | `&[T]`, `&mut [T]`, `len`, `(*s)[i]`, arrays to slices, sub-slices | a driver writing and filling buffers passed as `&[u8]` and `&mut [u8]` |
-| **M5.4c** References, statics and handlers | references to `static mut` inside `critical`; a `&mut` passed for a static its callee also names; references to volatile places, peripherals and registers | a buffer in a `static mut` filled by a handler and read by the thread through a reference taken in `critical` |
+| **M5.4c** ✅ References, statics and handlers | references to `static mut` inside `critical`; a `&mut` passed for a static its callee also names; references to volatile places, peripherals and clusters (a register keeps no address) | a buffer in a `static mut` filled by a handler and read by the thread through a reference taken in `critical` |
 | **M5.5** Methods | `impl`, `self`, `&self`, `&mut self`, `x.f()`, functions of a type | the ring buffer and the UART driver written as methods |
 | **M5.6** Ownership of peripherals | handles to peripherals that one context owns; races on registers between contexts (ADR 0078) | a UART owned by its handler, with the thread context sending through it |
 | **M5.7** Fewer raw pointers | `core` and the tests moved to references where they can; what stays raw, measured | the e2e programs with references, the same output |
@@ -1051,8 +1051,8 @@ Documentation owed:
   `*r` and a linear one is not written through it. A value that is not a place
   is borrowed `&` from a local of its own, `&mut` of one is
   `ty::mut-borrow-of-immutable`; a `static mut`, a volatile place, a peripheral
-  and a cluster are errors until M5.4c (`ty::reference-to-static-mut`,
-  `ty::reference-to-volatile`). A reference crosses the C ABI as a pointer, in
+  and a cluster were errors until M5.4c (`ty::reference-to-static-mut`,
+  `ty::reference-to-volatile`, both removed there). A reference crosses the C ABI as a pointer, in
   `extern fn`, `#[export]` and `#[naked]` signatures. The borrow check is an
   analysis of each body in `src/analysis/borrows.rs`, run by `check_body` after
   the analysis of moves and with the analysis of linearity: a borrow lasts until
@@ -1074,7 +1074,7 @@ Documentation owed:
   unused, to lift later without breaking programs; the `comptime` parameter and
   `comptime T: type` positions of ADR 0105 have no code, since the language has
   neither parameter yet; a static has no path in the borrow analysis, which
-  M5.4c must give when it allows a borrow of a `static mut`; the debug type of
+  M5.4c gave when it allowed a borrow of a `static mut`; the debug type of
   a reference (`&T`) is not emitted, since `src/codegen/` emits no debug
   types; and the generated programs of ADR 0068 have only scalar types, so
   references are tested by hand-written ui and e2e programs only; and two
@@ -1127,7 +1127,56 @@ Documentation owed:
   array of `!` has no code, since the array type is `ty::never-in-memory` first;
   and the generated programs of ADR 0068 have only scalar types, so slices are
   tested by hand-written ui and e2e programs only.
-- **Next: M5.4c** (references, statics and handlers), the last of the three
-  parts of M5.4 (references, then slices behind them, then statics and
-  handlers), in the fourth step of M5 (moves, ownership, references and
-  methods), whose steps and model are above (ADR 0094).
+- **M5.4c done.** `&` and `&mut` of a `static mut`, an `extern static mut` and
+  their fields, elements and sub-slices are allowed, and so are those of a
+  peripheral, a cluster and an element of a cluster array, whose reference is
+  `&T` or `&mut T` with `T` the peripheral type and through which registers are
+  reached volatile and with their access mode (ADR 0110). A register, a register
+  array, a cluster array taken whole and a bit field keep no address. A
+  reference may be volatile, `&volatile T` and `&mut volatile T`, made exactly
+  by borrowing a volatile place (through a volatile pointer, a volatile raw
+  slice or a volatile reference), with no conversion to or from references that
+  are not; `&volatile` of a peripheral type is `ty::volatile-peripheral`.
+  `ty::reference-to-static-mut` and `ty::reference-to-volatile` are removed. A
+  borrow names its static where it is taken, so the check of shared statics
+  counts it as a place and a use of the reference as none; a `break` whose value
+  is a reference, out of a `critical` block, is `ty::reference-position`, which
+  closes ADR 0094's argument (a loop inside the block is unchanged). Statics and
+  peripherals are roots of the borrow analysis, behind the rule R4 of the
+  validator (the temporary holding a static's or a peripheral's address is
+  written once and never borrowed); parts of one peripheral always overlap, two
+  peripherals when their bytes meet, and a `sym` of a `static mut` is a write
+  (ADR 0111, 0112). A new analysis of the whole program, `call_borrows`,
+  finds a call during which a borrow of a static or a peripheral is in use
+  while the callee, or a function it reaches, accesses an overlapping place
+  against the table of ADR 0106: `analysis::borrow-conflict-in-call`, with the
+  path of calls; the panic function that a check calls is not followed. It
+  shares with the check of shared statics one walk of the call graph, and with
+  the borrow analysis the collection of accesses and of the borrows in use at a
+  call. MIR's `Ref` carries volatility (T5 and R3 changed, ADR 0112), and the
+  type checker, MIR, code generation and the evaluator agree on it. `tests/e2e/
+  static_buffer_riscv32.ers` and `static_buffer_armv7m.ers` fill a `static mut`
+  buffer from the machine timer's and SysTick's handler and read it in `critical`
+  through `&SAMPLES[0..FILLED]`, `&SAMPLES` and `&mut SAMPLES`, over two rounds;
+  `peripheral_references_*.ers` drive the 16550 and the CMSDK UART through `&mut`
+  of their peripheral types, and `volatile_references.ers` lends the descriptors of
+  a ring in memory reached through a `*mut volatile`, on both targets at both
+  levels; the wrong uses are ui tests. A peripheral type is now allowed as the
+  referent of a written reference (`&Uart16550`), not only as a pointee, in
+  `hir/lower/types.rs`; `PANICS` is unchanged. Left open, for the planner:
+  sharing peripherals between contexts, and handles to them, is M5.6's (ADR
+  0078, 0110); comparing the registers and clusters of one peripheral by their
+  bytes in the borrow check, instead of always overlapping, and accepting a
+  `break` with a reference out of `critical` when the reference holds no borrow
+  of a static, are not scheduled, as above (ADR 0110, 0111); a function
+  returning `!` that is reached by an ordinary call is checked, which rejects a
+  callee writing a lent static on a path that then diverges without using the
+  reference (ADR 0111); a callee that only reads a static is rejected under a
+  `&mut` borrow of it, even of a part the caller does not touch through the
+  reference; `core` and the tests keep `&raw` and raw pointers, and `assert` its
+  `*const [u8]` message, until M5.7; references returned or stored stay out of M5
+  (ADR 0094); and the generated programs of ADR 0068 have only scalar types, so
+  references to statics, peripherals and volatile places are tested by
+  hand-written ui and e2e programs only.
+- **Next: M5.5** (methods), the fifth step of M5 (moves, ownership, references
+  and methods), whose steps and model are above (ADR 0094).
