@@ -1,6 +1,6 @@
 # 0051. Symbol names
 
-- Status: Accepted
+- Status: Accepted; amended by 0113 (the symbols of functions of a type)
 - Date: 2026-10-20
 - Amends: 0026 (which functions C can call by their name), 0030 (the
   symbols of statics)

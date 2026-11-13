@@ -37,7 +37,7 @@ Do not write one for local implementation details that the code already explains
 | 0005 | [LLVM backend via inkwell](0005-llvm-backend-via-inkwell.md)     | Accepted |
 | 0006 | [C ABI as the only ABI](0006-c-abi-as-the-only-abi.md)           | Accepted |
 | 0007 | [Wrapping integer arithmetic](0007-wrapping-integer-arithmetic.md) | Accepted, amended by 0032 |
-| 0008 | [Explicit types, no inference](0008-explicit-types-no-inference.md) | Accepted, amended by 0024, 0031, 0105, 0108 |
+| 0008 | [Explicit types, no inference](0008-explicit-types-no-inference.md) | Accepted, amended by 0024, 0031, 0105, 0108, 0114 |
 | 0009 | [Defer borrow checking](0009-defer-borrow-checking.md)           | Accepted |
 | 0010 | [First target: riscv32 on QEMU `virt`](0010-first-target-riscv32-qemu-virt.md) | Accepted, amended by 0073, 0077 |
 | 0011 | [Development environment: native Windows with prebuilt LLVM 22](0011-development-environment.md) | Accepted |
@@ -78,9 +78,9 @@ Do not write one for local implementation details that the code already explains
 | 0046 | [The `?` operator](0046-the-question-mark-operator.md) | Accepted |
 | 0047 | [Zero-sized payloads have an offset](0047-zero-sized-payloads-have-an-offset.md) | Accepted |
 | 0048 | [Types with a failed length or alignment are erroneous](0048-types-with-a-failed-length-or-alignment-are-erroneous.md) | Accepted, amended by 0055, 0058, 0059, 0064 |
-| 0049 | [Modules and paths](0049-modules-and-paths.md) | Accepted |
-| 0050 | [Visibility](0050-visibility.md) | Accepted, amended by 0054, 0059 |
-| 0051 | [Symbol names](0051-symbol-names.md) | Accepted |
+| 0049 | [Modules and paths](0049-modules-and-paths.md) | Accepted, amended by 0113 |
+| 0050 | [Visibility](0050-visibility.md) | Accepted, amended by 0054, 0059, 0113 |
+| 0051 | [Symbol names](0051-symbol-names.md) | Accepted, amended by 0113 |
 | 0052 | [The `core` module](0052-the-core-module.md) | Accepted, amended by 0056, 0080, 0083, 0084, 0086 |
 | 0053 | [Panic information](0053-panic-information.md) | Accepted, amended by 0059, 0085 |
 | 0054 | [Only `_` covers an enum that is not reachable](0054-only-wildcards-cover-unreachable-enums.md) | Accepted |
@@ -131,10 +131,10 @@ Do not write one for local implementation details that the code already explains
 | 0099 | [The analyses of one body](0099-analyses-of-one-body.md) | Accepted, amended by 0100, 0103, 0107 |
 | 0100 | [Moves as built in M5.2](0100-moves-as-built.md) | Accepted |
 | 0101 | [Linear types and `#[linear]`](0101-linear-types.md) | Accepted, amended by 0105 |
-| 0102 | [Consuming linear values, and `end`](0102-consuming-linear-values.md) | Accepted |
+| 0102 | [Consuming linear values, and `end`](0102-consuming-linear-values.md) | Accepted, amended by 0113 |
 | 0103 | [Linear values in MIR, and their analysis](0103-linear-values-in-mir.md) | Accepted |
 | 0104 | [Variant values in MIR](0104-variant-values-in-mir.md) | Accepted |
-| 0105 | [References](0105-references.md) | Accepted, amended by 0108, 0110 |
+| 0105 | [References](0105-references.md) | Accepted, amended by 0108, 0110, 0114 |
 | 0106 | [The borrow check](0106-the-borrow-check.md) | Accepted, amended 2026-11-11, amended by 0108, 0111 |
 | 0107 | [References in MIR, and the borrow analysis](0107-references-in-mir-and-the-borrow-analysis.md) | Accepted, amended 2026-11-11, amended by 0109, 0112 |
 | 0108 | [Slices behind references](0108-slices-behind-references.md) | Accepted, amended by 0110 |
@@ -142,3 +142,5 @@ Do not write one for local implementation details that the code already explains
 | 0110 | [References to statics, peripherals and volatile places](0110-references-to-statics-peripherals-and-volatile-places.md) | Accepted |
 | 0111 | [Borrows of statics and peripherals, across calls](0111-borrows-of-statics-and-peripherals-across-calls.md) | Accepted |
 | 0112 | [Borrows of statics, peripherals and volatile places in MIR](0112-borrows-of-statics-in-mir-and-the-analyses.md) | Accepted |
+| 0113 | [Functions of a type](0113-functions-of-a-type.md) | Accepted |
+| 0114 | [Method calls, and places through a reference](0114-method-calls-and-places-through-references.md) | Accepted |

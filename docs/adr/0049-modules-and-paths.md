@@ -1,6 +1,6 @@
 # 0049. Modules and paths
 
-- Status: Accepted
+- Status: Accepted; amended by 0113 (a type before `::` names one of its functions; `use` of one rejected; `self`, `Self` and `impl` keywords)
 - Date: 2026-10-20
 - Amends: 0029 (the one namespace of items becomes one namespace per
   module), 0035 (the code for an unknown name before `::`)

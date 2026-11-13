@@ -1,6 +1,6 @@
 # 0102. Consuming linear values, and `end`
 
-- Status: Accepted
+- Status: Accepted; amended by 0113 (a function of a type may be named `end`)
 - Date: 2026-11-10
 
 ## Context
