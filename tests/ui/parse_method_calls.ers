@@ -1,0 +1,35 @@
+// emit: ast
+// A method call is a name after a `.` followed by an argument list (ADR 0114):
+// `x.f()`, `x.f(a, b)`, a call on a field (`a.b.f()`), chained calls
+// (`x.f().g()`), and with `?` or an index after it. The same name without
+// parentheses is still a field, and a call may start with a path, `self` or a
+// parenthesized expression.
+struct Ring {
+    count: usize,
+}
+
+fn chain(x: u32, a: Ring, p: Ring) -> u32 {
+    let call: u32 = x.f();
+    let args: u32 = x.f(1, call + 2);
+    let nested: u32 = a.b.f();
+    let chained: u32 = x.f().g();
+    let tried: u32 = x.f()?;
+    let indexed: u32 = x.f()[3];
+    let field: usize = a.count;
+    let after: usize = a.count.f();
+    let path: u32 = ring::Ring::new().push(1);
+    let paren: u32 = (x + 1).f(x.g(2));
+    let both: u32 = x.f().count.g()[1]?;
+    p.f()
+}
+
+impl Ring {
+    pub fn count(&self) -> usize {
+        self.count
+    }
+
+    pub fn twice(&mut self) {
+        self.push(1);
+        self.push(self.count);
+    }
+}

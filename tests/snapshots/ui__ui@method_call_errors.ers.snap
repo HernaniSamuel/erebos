@@ -1,0 +1,376 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/method_call_errors.ers
+---
+--- errors ---
+ty::unknown-method
+
+  × `Ring` has no method `missing`
+    ╭─[method_call_errors.ers:41:7]
+ 40 │ fn unknown(r: &Ring, plain: Plain) {
+ 41 │     r.missing();
+    ·     ┬ ───┬───
+    ·     │    ╰── no such method
+    ·     ╰── `Ring`, reached through this `&Ring`
+ 42 │     r.buf();
+    ╰────
+  help: its methods are `push`, `count`, `into_count`
+ty::unknown-method
+
+  × `Ring` has no method `buf`
+    ╭─[method_call_errors.ers:42:7]
+ 41 │     r.missing();
+ 42 │     r.buf();
+    ·     ┬ ─┬─
+    ·     │  ╰── no such method
+    ·     ╰── `Ring`, reached through this `&Ring`
+ 43 │     plain.n();
+    ╰────
+  help: `buf` is a field of `Ring`, not a function, and a field is not called; read it as `x.buf`
+        (ADR 0114)
+ty::unknown-method
+
+  × `Plain` has no method `n`
+    ╭─[method_call_errors.ers:43:11]
+ 42 │     r.buf();
+ 43 │     plain.n();
+    ·           ┬
+    ·           ╰── no such method
+ 44 │ }
+    ╰────
+  help: `n` is a field of `Plain`, not a function, and a field is not called; read it as `x.n`
+        (ADR 0114)
+ty::unknown-method
+
+  × `Plain` has no method `f`
+    ╭─[method_call_errors.ers:48:11]
+ 47 │ fn no_functions(plain: Plain, n: u32, flag: bool) {
+ 48 │     plain.f();
+    ·           ┬
+    ·           ╰── no such method
+ 49 │     n.f();
+    ╰────
+  help: `Plain` has no methods: a method is a function of an `impl` block whose first parameter is
+        `self`, `mut self`, `&self` or `&mut self` (ADR 0113)
+ty::unknown-method
+
+  × `u32` has no method `f`
+    ╭─[method_call_errors.ers:49:7]
+ 48 │     plain.f();
+ 49 │     n.f();
+    ·       ┬
+    ·       ╰── no such method
+ 50 │     flag.f();
+    ╰────
+  help: only a struct, a bit-field struct, an enum or a peripheral type has functions, declared in
+        an `impl` block (ADR 0113)
+ty::unknown-method
+
+  × `bool` has no method `f`
+    ╭─[method_call_errors.ers:50:10]
+ 49 │     n.f();
+ 50 │     flag.f();
+    ·          ┬
+    ·          ╰── no such method
+ 51 │ }
+    ╰────
+  help: only a struct, a bit-field struct, an enum or a peripheral type has functions, declared in
+        an `impl` block (ADR 0113)
+ty::unknown-method
+
+  × `*mut Ring` has no method `push`
+    ╭─[method_call_errors.ers:55:7]
+ 54 │ fn pointer(p: *mut Ring, q: *const [u8]) {
+ 55 │     p.push(1);
+    ·     ┬ ──┬─
+    ·     │   ╰── no such method
+    ·     ╰── this is a `*mut Ring`
+ 56 │     q.len();
+    ╰────
+  help: a raw pointer is never followed to a method, as its dereference is the one access the
+        compiler does not check; write it: `(*p).push(...)` (ADR 0114)
+ty::unknown-method
+
+  × `*const [u8]` has no method `len`
+    ╭─[method_call_errors.ers:56:7]
+ 55 │     p.push(1);
+ 56 │     q.len();
+    ·     ┬ ─┬─
+    ·     │  ╰── no such method
+    ·     ╰── this is a `*const [u8]`
+ 57 │ }
+    ╰────
+  help: the length of a slice or an array is the built-in `len(s)`, not a method (ADR 0031, 0108)
+ty::unknown-method
+
+  × `[u8]` has no method `len`
+    ╭─[method_call_errors.ers:61:7]
+ 60 │ fn lengths(s: &[u8], a: [u8; 4], b: &[u8; 4]) -> usize {
+ 61 │     s.len() + a.len() + b.len()
+    ·     ┬ ─┬─
+    ·     │  ╰── no such method
+    ·     ╰── `[u8]`, reached through this `&[u8]`
+ 62 │ }
+    ╰────
+  help: the length of a slice or an array is the built-in `len(s)`, not a method (ADR 0031, 0108)
+ty::unknown-method
+
+  × `[u8; 4]` has no method `len`
+    ╭─[method_call_errors.ers:61:17]
+ 60 │ fn lengths(s: &[u8], a: [u8; 4], b: &[u8; 4]) -> usize {
+ 61 │     s.len() + a.len() + b.len()
+    ·                 ─┬─
+    ·                  ╰── no such method
+ 62 │ }
+    ╰────
+  help: the length of a slice or an array is the built-in `len(s)`, not a method (ADR 0031, 0108)
+ty::unknown-method
+
+  × `[u8; 4]` has no method `len`
+    ╭─[method_call_errors.ers:61:27]
+ 60 │ fn lengths(s: &[u8], a: [u8; 4], b: &[u8; 4]) -> usize {
+ 61 │     s.len() + a.len() + b.len()
+    ·                         ┬ ─┬─
+    ·                         │  ╰── no such method
+    ·                         ╰── `[u8; 4]`, reached through this `&[u8; 4]`
+ 62 │ }
+    ╰────
+  help: the length of a slice or an array is the built-in `len(s)`, not a method (ADR 0031, 0108)
+ty::not-a-method
+
+  × `Ring::new` is not a method
+    ╭─[method_call_errors.ers:17:8]
+ 16 │ impl Ring {
+ 17 │     fn new() -> Ring {
+    ·        ─┬─
+    ·         ╰── declared without a receiver
+ 18 │         Ring { buf: [0; 4], count: 0 }
+    ╰────
+    ╭─[method_call_errors.ers:66:7]
+ 65 │ fn not_a_method(r: &mut Ring) {
+ 66 │     r.new();
+    ·       ─┬─
+    ·        ╰── called as a method
+ 67 │ }
+    ╰────
+  help: a function without a receiver is called through its type: `Ring::new(...)`; to make it a
+        method, give it `self`, `&self` or `&mut self` as its first parameter (ADR 0113, 0114)
+ty::mut-borrow-of-immutable
+
+  × cannot borrow `r` as `&mut`, which is not `mut`
+    ╭─[method_call_errors.ers:72:5]
+ 70 │ fn immutable_local() {
+ 71 │     let r: Ring = Ring::new();
+    ·         ┬
+    ·         ╰── help: declare it `let mut r`
+ 72 │     r.push(1);
+    ·     ┬
+    ·     ╰── borrowed here
+ 73 │ }
+    ╰────
+ty::mut-borrow-of-immutable
+
+  × cannot borrow as `&mut` through a `&` reference
+    ╭─[method_call_errors.ers:76:5]
+ 75 │ fn shared_reference(r: &Ring) {
+ 76 │     r.push(1);
+    ·     ┬
+    ·     ╰── has type `&Ring`
+ 77 │ }
+    ╰────
+  help: only `&mut` references can be borrowed through as `&mut` (ADR 0105)
+ty::mut-borrow-of-immutable
+
+  × cannot borrow a temporary value as `&mut`
+    ╭─[method_call_errors.ers:80:5]
+ 79 │ fn temporary() {
+ 80 │     Ring::new().push(1);
+    ·     ─────┬─────
+    ·          ╰── this value lives in no variable
+ 81 │ }
+    ╰────
+  help: a write through the reference would reach nothing the program can read; store it in a `let
+        mut` first and borrow that (ADR 0105)
+ty::move-out-of-place
+
+  × cannot move a value of the non-copy type `Ring` out of a place through a reference
+    ╭─[method_call_errors.ers:85:5]
+ 84 │ fn move_out(r: &Ring, m: &mut Ring) -> usize {
+ 85 │     r.into_count() + m.into_count()
+    ·     ┬
+    ·     ╰── `Ring` is not copy, and this is a place through a reference
+ 86 │ }
+    ╰────
+  help: mark `Ring` with `#[copy]` if its values may be duplicated (ADR 0097)
+ty::move-out-of-place
+
+  × cannot move a value of the non-copy type `Ring` out of a place through a reference
+    ╭─[method_call_errors.ers:85:22]
+ 84 │ fn move_out(r: &Ring, m: &mut Ring) -> usize {
+ 85 │     r.into_count() + m.into_count()
+    ·                      ┬
+    ·                      ╰── `Ring` is not copy, and this is a place through a reference
+ 86 │ }
+    ╰────
+  help: mark `Ring` with `#[copy]` if its values may be duplicated (ADR 0097)
+ty::wrong-arg-count
+
+  × `Ring::push` takes 1 argument, but 0 were given
+    ╭─[method_call_errors.ers:21:8]
+ 20 │ 
+ 21 │     fn push(&mut self, b: u8) -> bool {
+    ·        ──┬─
+    ·          ╰── declared here
+ 22 │         self.count += 1;
+    ╰────
+    ╭─[method_call_errors.ers:90:5]
+ 89 │ fn counts(r: &mut Ring) {
+ 90 │     r.push();
+    ·     ────┬───
+    ·         ╰── in this call
+ 91 │     r.push(1, 2);
+    ╰────
+ty::wrong-arg-count
+
+  × `Ring::push` takes 1 argument, but 2 were given
+    ╭─[method_call_errors.ers:21:8]
+ 20 │ 
+ 21 │     fn push(&mut self, b: u8) -> bool {
+    ·        ──┬─
+    ·          ╰── declared here
+ 22 │         self.count += 1;
+    ╰────
+    ╭─[method_call_errors.ers:91:5]
+ 90 │     r.push();
+ 91 │     r.push(1, 2);
+    ·     ──────┬─────
+    ·           ╰── in this call
+ 92 │     r.count(1);
+    ╰────
+ty::wrong-arg-count
+
+  × `Ring::count` takes 0 arguments, but 1 was given
+    ╭─[method_call_errors.ers:26:8]
+ 25 │ 
+ 26 │     fn count(&self) -> usize {
+    ·        ──┬──
+    ·          ╰── declared here
+ 27 │         self.count
+    ╰────
+    ╭─[method_call_errors.ers:92:5]
+ 91 │     r.push(1, 2);
+ 92 │     r.count(1);
+    ·     ─────┬────
+    ·          ╰── in this call
+ 93 │ }
+    ╰────
+ty::mismatched-types
+
+  × mismatched types
+    ╭─[method_call_errors.ers:97:12]
+ 96 │ fn argument(r: &mut Ring) {
+ 97 │     r.push(true);
+    ·            ──┬─
+    ·              ╰── expected `u8`, found `bool`
+ 98 │     r.push(300);
+    ╰────
+ty::literal-out-of-range
+
+  × literal out of range for `u8`
+    ╭─[method_call_errors.ers:98:12]
+ 97 │     r.push(true);
+ 98 │     r.push(300);
+    ·            ─┬─
+    ·             ╰── `300` does not fit in `u8`
+ 99 │ }
+    ╰────
+ty::mismatched-types
+
+  × mismatched types
+     ╭─[method_call_errors.ers:103:5]
+ 102 │ fn volatile_places(r: &volatile Ring, m: &mut volatile Ring) {
+ 103 │     r.count();
+     ·     ┬
+     ·     ╰── expected `&Ring`, found `&volatile Ring`
+ 104 │     m.push(1);
+     ╰────
+  help: a method has no volatile receiver: `&self` is not a volatile reference, and a volatile one
+        never becomes one that is not (ADR 0110, 0114); a method that takes `self` by value reads
+        the place with one volatile access
+ty::mismatched-types
+
+  × mismatched types
+     ╭─[method_call_errors.ers:104:5]
+ 103 │     r.count();
+ 104 │     m.push(1);
+     ·     ┬
+     ·     ╰── expected `&mut Ring`, found `&mut volatile Ring`
+ 105 │ }
+     ╰────
+  help: a method has no volatile receiver: `&mut self` is not a volatile reference, and a volatile
+        one never becomes one that is not (ADR 0110, 0114); a method that takes `self` by value
+        reads the place with one volatile access
+ty::register-address
+
+  × cannot take the address of the register `status` of `Dev`
+     ╭─[method_call_errors.ers:145:5]
+ 144 │ fn registers(d: &Dev) -> bool {
+ 145 │     DEV.status.peek();
+     ·     ─────┬────
+     ·          ╰── a register, but the method takes `&self`
+ 146 │     DEV.status.reset();
+     ╰────
+  help: a method that takes `&self` or `&mut self` is lent the address of what it is called on,
+        and a register has none, as it must be reached with its access mode; a method that takes
+        `self` by value reads the register once and works on the copy (ADR 0058, 0110, 0114)
+ty::register-address
+
+  × cannot take the address of the register `status` of `Dev`
+     ╭─[method_call_errors.ers:146:5]
+ 145 │     DEV.status.peek();
+ 146 │     DEV.status.reset();
+     ·     ─────┬────
+     ·          ╰── a register, but the method takes `&mut self`
+ 147 │     d.status.peek();
+     ╰────
+  help: a method that takes `&self` or `&mut self` is lent the address of what it is called on,
+        and a register has none, as it must be reached with its access mode; a method that takes
+        `self` by value reads the register once and works on the copy (ADR 0058, 0110, 0114)
+ty::register-address
+
+  × cannot take the address of the register `status` of `Dev`
+     ╭─[method_call_errors.ers:147:5]
+ 146 │     DEV.status.reset();
+ 147 │     d.status.peek();
+     ·     ────┬───
+     ·         ╰── a register, but the method takes `&self`
+ 148 │     DEV.status.is_ready()
+     ╰────
+  help: a method that takes `&self` or `&mut self` is lent the address of what it is called on,
+        and a register has none, as it must be reached with its access mode; a method that takes
+        `self` by value reads the register once and works on the copy (ADR 0058, 0110, 0114)
+ty::bit-field-address
+
+  × cannot take the address of a field of `Status`
+     ╭─[method_call_errors.ers:155:5]
+ 154 │     let s: Status = Status { ready: true, mode: Mode::On };
+ 155 │     DEV.status.mode.is_on() || s.mode.is_on()
+     ·     ───────┬───────
+     ·            ╰── a bit field, not a place in memory
+ 156 │ }
+     ╰────
+  help: a field of a bit-field struct is a range of bits of its `u8`; copy it into a `let` and
+        take that address, or take the address of the whole value (ADR 0059)
+ty::bit-field-address
+
+  × cannot take the address of a field of `Status`
+     ╭─[method_call_errors.ers:155:32]
+ 154 │     let s: Status = Status { ready: true, mode: Mode::On };
+ 155 │     DEV.status.mode.is_on() || s.mode.is_on()
+     ·                                ───┬──
+     ·                                   ╰── a bit field, not a place in memory
+ 156 │ }
+     ╰────
+  help: a field of a bit-field struct is a range of bits of its `u8`; copy it into a `let` and
+        take that address, or take the address of the whole value (ADR 0059)

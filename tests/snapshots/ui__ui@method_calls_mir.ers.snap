@@ -1,0 +1,1081 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/method_calls_mir.ers
+---
+--- mir ---
+struct Point { 0 x: u32 at 0, 1 y: u32 at 4 } // size 8, align 4
+struct Ring { 0 buf: [u8; 4] at 0, 1 count: usize at 4 } // size 8, align 4
+struct Pair { 0 a: Ring at 0, 1 rings: [Ring; 2] at 8 } // size 24, align 4
+struct Transfer { 0 channel: u32 at 0 } // size 4, align 4
+struct Status: u8 { ready: bool at 0, failed: bool at 1 }
+
+peripheral Uart { 0 thr: u8 at 0x0, 1 lsr: u8 at 0x5 } // extent 6, align 1
+peripheral Context { 0 threshold: u32 at 0x0 } // extent 4, align 4
+peripheral Plic { 0 ctx: [Context; 2] step 0x100 at 0x1000 } // extent 4356, align 4
+peripheral Dev { 0 status: u8 at 0x0 } // extent 1, align 1
+peripheral UART0: Uart at 0x10000000;
+peripheral PLIC: Plic at 0xc000000;
+peripheral DEV: Dev at 0x20000000;
+
+static mut SHARED: Ring; // align 4
+
+fn Point.sum(_1: Point) -> u32 {
+    let _0: u32;
+    let _1: Point; // self
+    let _2: u32;
+    let _3: u32;
+    let _4: u32;
+    let _5: u32;
+
+    bb0: {
+        _2 = copy _1.0;
+        _3 = copy _2;
+        _4 = copy _1.1;
+        _5 = Add(copy _3, copy _4);
+        _0 = copy _5;
+        return;
+    }
+}
+
+fn Point.moved(_1: &mut Point, _2: u32) -> () {
+    let _0: ();
+    let _1: &mut Point; // self
+    let _2: u32; // dx
+
+    bb0: {
+        (*_1).0 = Add(copy (*_1).0, copy _2);
+        return;
+    }
+}
+
+fn Point.dup(_1: &Point) -> Point {
+    let _0: Point;
+    let _1: &Point; // self
+    let _2: Point;
+    let _3: u32;
+    let _4: u32;
+
+    bb0: {
+        _3 = copy (*_1).0;
+        _2.0 = copy _3;
+        _4 = copy (*_1).1;
+        _2.1 = copy _4;
+        _0 = copy _2;
+        return;
+    }
+}
+
+fn Ring.new() -> Ring {
+    let _0: Ring;
+    let _1: Ring;
+    let _2: [u8; 4];
+    let _3: usize;
+    let _4: bool;
+
+    bb0: {
+        _3 = const 0_usize;
+        goto -> bb1;
+    }
+
+    bb1: {
+        _4 = Lt(copy _3, const 4_usize);
+        if copy _4 -> [true: bb2, false: bb3];
+    }
+
+    bb2: {
+        _2[_3] = const 0_u8;
+        _3 = Add(copy _3, const 1_usize);
+        goto -> bb1;
+    }
+
+    bb3: {
+        _1.0 = copy _2;
+        _1.1 = const 0_usize;
+        _0 = move _1;
+        return;
+    }
+}
+
+fn Ring.push(_1: &mut Ring, _2: u8) -> bool {
+    let _0: bool;
+    let _1: &mut Ring; // self
+    let _2: u8; // b
+    let _3: usize;
+    let _4: bool;
+    let _5: usize;
+    let _6: usize;
+    let _7: bool;
+
+    bb0: {
+        _3 = copy (*_1).1;
+        _4 = Eq(copy _3, const 4_usize);
+        if copy _4 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _0 = const false;
+        return;
+    }
+
+    bb2: {
+        goto -> bb3;
+    }
+
+    bb3: {
+        _5 = copy (*_1).1;
+        _6 = copy _5;
+        _7 = Lt(copy _6, const 4_usize);
+        if copy _7 -> [true: bb4, false: bb5];
+    }
+
+    bb4: {
+        (*_1).0[_6] = copy _2;
+        (*_1).1 = Add(copy (*_1).1, const 1_usize);
+        _0 = const true;
+        return;
+    }
+
+    bb5: {
+        panic(index out of bounds);
+    }
+}
+
+fn Ring.count(_1: &Ring) -> usize {
+    let _0: usize;
+    let _1: &Ring; // self
+    let _2: usize;
+
+    bb0: {
+        _2 = copy (*_1).1;
+        _0 = copy _2;
+        return;
+    }
+}
+
+fn Ring.fill(_1: &mut Ring, _2: u8) -> () {
+    let _0: ();
+    let _1: &mut Ring; // self
+    let _2: u8; // b
+    let _3: usize; // i
+    let _4: bool;
+    let _5: &mut Ring;
+    let _6: bool;
+
+    bb0: {
+        _3 = const 0_usize;
+        goto -> bb1;
+    }
+
+    bb1: {
+        _4 = Lt(copy _3, const 4_usize);
+        if copy _4 -> [true: bb2, false: bb3];
+    }
+
+    bb2: {
+        _5 = &mut (*_1);
+        _6 = call Ring.push(move _5, copy _2);
+        _3 = Add(copy _3, const 1_usize);
+        goto -> bb1;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn Ring.total(_1: &Ring) -> usize {
+    let _0: usize;
+    let _1: &Ring; // self
+    let _2: &Ring;
+    let _3: usize;
+
+    bb0: {
+        _2 = &(*_1);
+        _3 = call Ring.count(copy _2);
+        _0 = copy _3;
+        return;
+    }
+}
+
+fn Ring.into_count(_1: Ring) -> usize {
+    let _0: usize;
+    let _1: Ring; // self
+    let _2: &Ring;
+    let _3: usize;
+
+    bb0: {
+        _2 = &_1;
+        _3 = call Ring.count(copy _2);
+        _0 = copy _3;
+        return;
+    }
+}
+
+fn Ring.twice(_1: Ring) -> usize {
+    let _0: usize;
+    let _1: Ring; // self
+    let _2: &mut Ring;
+    let _3: bool;
+    let _4: &mut Ring;
+    let _5: bool;
+    let _6: &Ring;
+    let _7: usize;
+
+    bb0: {
+        _2 = &mut _1;
+        _3 = call Ring.push(move _2, const 1_u8);
+        _4 = &mut _1;
+        _5 = call Ring.push(move _4, const 2_u8);
+        _6 = &_1;
+        _7 = call Ring.count(copy _6);
+        _0 = copy _7;
+        return;
+    }
+}
+
+fn places(_1: &Ring, _2: &mut Ring, _3: Ring, _4: Ring, _5: &mut Pair, _6: Pair) -> usize {
+    let _0: usize;
+    let _1: &Ring; // p
+    let _2: &mut Ring; // q
+    let _3: Ring; // m
+    let _4: Ring; // n
+    let _5: &mut Pair; // pair
+    let _6: Pair; // own
+    let _7: Ring; // r
+    let _8: usize; // c
+    let _9: usize; // a
+    let _10: usize; // b
+    let _11: usize; // d
+    let _12: usize; // e
+    let _13: usize; // f
+    let _14: Ring;
+    let _15: &mut Ring;
+    let _16: bool;
+    let _17: &mut Ring;
+    let _18: bool;
+    let _19: &mut Ring;
+    let _20: bool;
+    let _21: &mut Ring;
+    let _22: bool;
+    let _23: &mut Ring;
+    let _24: bool;
+    let _25: &mut Ring;
+    let _26: bool;
+    let _27: &mut Ring;
+    let _28: bool;
+    let _29: &mut Ring;
+    let _30: bool;
+    let _31: &Ring;
+    let _32: usize;
+    let _33: &Ring;
+    let _34: usize;
+    let _35: &Ring;
+    let _36: usize;
+    let _37: &Ring;
+    let _38: usize;
+    let _39: &Ring;
+    let _40: usize;
+    let _41: &Ring;
+    let _42: usize;
+    let _43: usize;
+    let _44: &Ring;
+    let _45: usize;
+    let _46: usize;
+    let _47: usize;
+    let _48: usize;
+    let _49: usize;
+    let _50: usize;
+    let _51: usize;
+    let _52: usize;
+    let _53: Ring;
+    let _54: Ring;
+    let _55: &Ring;
+    let _56: usize;
+    let _57: usize;
+    let _58: usize;
+    let _59: Ring;
+    let _60: usize;
+    let _61: usize;
+    let _62: usize;
+    let _63: usize;
+    let _64: usize;
+
+    bb0: {
+        _14 = call Ring.new();
+        _7 = move _14;
+        _15 = &mut _7;
+        _16 = call Ring.push(move _15, const 1_u8);
+        _17 = &mut _3;
+        _18 = call Ring.push(move _17, const 2_u8);
+        _19 = &mut (*_2);
+        _20 = call Ring.push(move _19, const 3_u8);
+        _21 = &mut (*_2);
+        _22 = call Ring.push(move _21, const 4_u8);
+        _23 = &mut _6.0;
+        _24 = call Ring.push(move _23, const 5_u8);
+        _25 = &mut _6.1[1];
+        _26 = call Ring.push(move _25, const 6_u8);
+        _27 = &mut (*_5).0;
+        _28 = call Ring.push(move _27, const 7_u8);
+        _29 = &mut (*_5).1[0];
+        _30 = call Ring.push(move _29, const 8_u8);
+        _31 = &_7;
+        _32 = call Ring.count(copy _31);
+        _8 = copy _32;
+        _33 = &(*_1);
+        _34 = call Ring.count(copy _33);
+        _9 = copy _34;
+        _35 = &(*_2);
+        _36 = call Ring.count(copy _35);
+        _10 = copy _36;
+        _37 = &(*_1);
+        _38 = call Ring.count(copy _37);
+        _11 = copy _38;
+        _39 = &_4;
+        _40 = call Ring.count(copy _39);
+        _12 = copy _40;
+        _41 = &(*_5).0;
+        _42 = call Ring.count(copy _41);
+        _43 = copy _42;
+        _44 = &_6.1[0];
+        _45 = call Ring.count(copy _44);
+        _46 = Add(copy _43, copy _45);
+        _13 = copy _46;
+        _47 = Add(copy _8, copy _9);
+        _48 = Add(copy _47, copy _10);
+        _49 = Add(copy _48, copy _11);
+        _50 = Add(copy _49, copy _12);
+        _51 = Add(copy _50, copy _13);
+        _52 = copy _51;
+        _53 = call Ring.new();
+        _54 = move _53;
+        _55 = &_54;
+        _56 = call Ring.count(copy _55);
+        _57 = Add(copy _52, copy _56);
+        _58 = copy _57;
+        _59 = call Ring.new();
+        _60 = call Ring.into_count(move _59);
+        _61 = Add(copy _58, copy _60);
+        _62 = copy _61;
+        _63 = call Ring.twice(move _3);
+        _64 = Add(copy _62, copy _63);
+        _0 = copy _64;
+        return;
+    }
+}
+
+fn pick(_1: bool, _2: &Ring, _3: &Ring) -> usize {
+    let _0: usize;
+    let _1: bool; // c
+    let _2: &Ring; // a
+    let _3: &Ring; // b
+    let _4: &Ring;
+    let _5: &Ring;
+    let _6: usize;
+
+    bb0: {
+        if copy _1 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _4 = copy _2;
+        goto -> bb3;
+    }
+
+    bb2: {
+        _4 = copy _3;
+        goto -> bb3;
+    }
+
+    bb3: {
+        _5 = &(*_4);
+        _6 = call Ring.count(copy _5);
+        _0 = copy _6;
+        return;
+    }
+}
+
+fn diverging_receiver(_1: &Ring) -> usize {
+    let _0: usize;
+    let _1: &Ring; // r
+
+    bb0: {
+        _0 = const 1_usize;
+        return;
+    }
+}
+
+fn diverging_argument(_1: Ring) -> usize {
+    let _0: usize;
+    let _1: Ring; // r
+    let _2: &mut Ring;
+    let _3: &mut Ring;
+    let _4: bool;
+
+    bb0: {
+        _2 = &mut _1;
+        _3 = move _2;
+        _0 = const 5_usize;
+        return;
+    }
+}
+
+fn points(_1: &Point, _2: &mut Point, _3: Point) -> u32 {
+    let _0: u32;
+    let _1: &Point; // p
+    let _2: &mut Point; // m
+    let _3: Point; // q
+    let _4: &mut Point;
+    let _5: &mut Point;
+    let _6: &Point;
+    let _7: Point;
+    let _8: u32;
+    let _9: u32;
+    let _10: Point;
+    let _11: u32;
+    let _12: u32;
+    let _13: u32;
+    let _14: Point;
+    let _15: u32;
+    let _16: u32;
+    let _17: u32;
+    let _18: u32;
+    let _19: u32;
+    let _20: u32;
+    let _21: Point;
+    let _22: u32;
+    let _23: u32;
+
+    bb0: {
+        _4 = &mut (*_2);
+        call Point.moved(move _4, const 1_u32);
+        _5 = &mut _3;
+        call Point.moved(move _5, const 2_u32);
+        _6 = &(*_1);
+        _7 = call Point.dup(copy _6);
+        _8 = call Point.sum(copy _7);
+        _9 = copy _8;
+        _10 = copy (*_1);
+        _11 = call Point.sum(copy _10);
+        _12 = Add(copy _9, copy _11);
+        _13 = copy _12;
+        _14 = copy (*_2);
+        _15 = call Point.sum(copy _14);
+        _16 = Add(copy _13, copy _15);
+        _17 = copy _16;
+        _18 = call Point.sum(copy _3);
+        _19 = Add(copy _17, copy _18);
+        _20 = copy _19;
+        _21.0 = const 1_u32;
+        _21.1 = const 2_u32;
+        _22 = call Point.sum(copy _21);
+        _23 = Add(copy _20, copy _22);
+        _0 = copy _23;
+        return;
+    }
+}
+
+fn shared() -> usize {
+    let _0: usize;
+    let _1: u32;
+    let _2: *mut Ring;
+    let _3: &mut Ring;
+    let _4: bool;
+    let _5: *mut Ring;
+    let _6: &Ring;
+    let _7: usize;
+
+    bb0: {
+        critical_enter _1;
+        _2 = const static SHARED;
+        _3 = &mut (*_2);
+        _4 = call Ring.push(move _3, const 1_u8);
+        _5 = const static SHARED;
+        _6 = &(*_5);
+        _7 = call Ring.count(copy _6);
+        critical_exit _1;
+        _0 = copy _7;
+        return;
+    }
+}
+
+fn Transfer.start(_1: u32) -> Transfer {
+    let _0: Transfer;
+    let _1: u32; // channel
+    let _2: Transfer;
+
+    bb0: {
+        _2.0 = copy _1;
+        new _2;
+        _0 = move _2;
+        return;
+    }
+}
+
+fn Transfer.wait(_1: Transfer) -> u32 {
+    let _0: u32;
+    let _1: Transfer; // self
+    let _2: u32; // c
+    let _3: u32;
+
+    bb0: {
+        _3 = copy _1.0;
+        _2 = copy _3;
+        end _1;
+        _0 = copy _2;
+        return;
+    }
+}
+
+fn transfer() -> u32 {
+    let _0: u32;
+    let _1: Transfer; // t
+    let _2: Transfer;
+    let _3: u32;
+
+    bb0: {
+        _2 = call Transfer.start(const 1_u32);
+        _1 = move _2;
+        _3 = call Transfer.wait(move _1);
+        _0 = copy _3;
+        return;
+    }
+}
+
+fn Uart.ready(_1: &Uart) -> bool {
+    let _0: bool;
+    let _1: &Uart; // self
+    let _2: u8;
+    let _3: u8;
+    let _4: bool;
+
+    bb0: {
+        _2 = copy (*_1).1;
+        _3 = BitAnd(copy _2, const 32_u8);
+        _4 = Ne(copy _3, const 0_u8);
+        _0 = copy _4;
+        return;
+    }
+}
+
+fn Uart.putc(_1: &mut Uart, _2: u8) -> () {
+    let _0: ();
+    let _1: &mut Uart; // self
+    let _2: u8; // byte
+    let _3: &Uart;
+    let _4: bool;
+    let _5: bool;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        _3 = &(*_1);
+        _4 = call Uart.ready(copy _3);
+        _5 = Not(copy _4);
+        if copy _5 -> [true: bb2, false: bb3];
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+
+    bb3: {
+        (*_1).0 = copy _2;
+        return;
+    }
+}
+
+fn Context.set(_1: &mut Context, _2: u32) -> () {
+    let _0: ();
+    let _1: &mut Context; // self
+    let _2: u32; // v
+
+    bb0: {
+        (*_1).0 = copy _2;
+        return;
+    }
+}
+
+fn Context.get(_1: &Context) -> u32 {
+    let _0: u32;
+    let _1: &Context; // self
+    let _2: u32;
+
+    bb0: {
+        _2 = copy (*_1).0;
+        _0 = copy _2;
+        return;
+    }
+}
+
+fn Plic.set_second(_1: &mut Plic, _2: u32) -> () {
+    let _0: ();
+    let _1: &mut Plic; // self
+    let _2: u32; // v
+    let _3: &mut Context;
+
+    bb0: {
+        _3 = &mut (*_1).0[1];
+        call Context.set(move _3, copy _2);
+        return;
+    }
+}
+
+fn device(_1: &mut Uart, _2: &Uart) -> bool {
+    let _0: bool;
+    let _1: &mut Uart; // u
+    let _2: &Uart; // v
+    let _3: &Uart; // shared
+    let _4: &mut Uart;
+    let _5: *mut Uart;
+    let _6: &mut Uart;
+    let _7: *mut Uart;
+    let _8: &Uart;
+    let _9: *mut Plic;
+    let _10: &mut Context;
+    let _11: *mut Plic;
+    let _12: &mut Plic;
+    let _13: *mut Plic;
+    let _14: &Context;
+    let _15: u32;
+    let _16: bool;
+    let _17: bool;
+    let _18: &Uart;
+    let _19: bool;
+    let _20: bool;
+    let _21: &Uart;
+    let _22: bool;
+    let _23: bool;
+    let _24: &Uart;
+    let _25: bool;
+    let _26: bool;
+    let _27: *mut Uart;
+    let _28: &Uart;
+    let _29: bool;
+
+    bb0: {
+        _4 = &mut (*_1);
+        call Uart.putc(move _4, const 1_u8);
+        _5 = const peripheral UART0;
+        _6 = &mut (*_5);
+        call Uart.putc(move _6, const 2_u8);
+        _7 = const peripheral UART0;
+        _8 = &(*_7);
+        _3 = copy _8;
+        _9 = const peripheral PLIC;
+        _10 = &mut (*_9).0[0];
+        call Context.set(move _10, const 3_u32);
+        _11 = const peripheral PLIC;
+        _12 = &mut (*_11);
+        call Plic.set_second(move _12, const 4_u32);
+        _13 = const peripheral PLIC;
+        _14 = &(*_13).0[1];
+        _15 = call Context.get(copy _14);
+        _16 = Eq(copy _15, const 4_u32);
+        if copy _16 -> [true: bb1, false: bb2];
+    }
+
+    bb1: {
+        _18 = &(*_2);
+        _19 = call Uart.ready(copy _18);
+        _17 = copy _19;
+        goto -> bb3;
+    }
+
+    bb2: {
+        _17 = const false;
+        goto -> bb3;
+    }
+
+    bb3: {
+        if copy _17 -> [true: bb4, false: bb5];
+    }
+
+    bb4: {
+        _21 = &(*_3);
+        _22 = call Uart.ready(copy _21);
+        _20 = copy _22;
+        goto -> bb6;
+    }
+
+    bb5: {
+        _20 = const false;
+        goto -> bb6;
+    }
+
+    bb6: {
+        if copy _20 -> [true: bb7, false: bb8];
+    }
+
+    bb7: {
+        _24 = &(*_1);
+        _25 = call Uart.ready(copy _24);
+        _23 = copy _25;
+        goto -> bb9;
+    }
+
+    bb8: {
+        _23 = const false;
+        goto -> bb9;
+    }
+
+    bb9: {
+        if copy _23 -> [true: bb10, false: bb11];
+    }
+
+    bb10: {
+        _27 = const peripheral UART0;
+        _28 = &(*_27);
+        _29 = call Uart.ready(copy _28);
+        _26 = copy _29;
+        goto -> bb12;
+    }
+
+    bb11: {
+        _26 = const false;
+        goto -> bb12;
+    }
+
+    bb12: {
+        _0 = copy _26;
+        return;
+    }
+}
+
+fn Status.is_ready(_1: u8) -> bool {
+    let _0: bool;
+    let _1: u8; // self
+    let _2: u8;
+    let _3: u8;
+    let _4: bool;
+
+    bb0: {
+        _2 = copy _1;
+        _3 = BitAnd(copy _2, const 1_u8);
+        _4 = Ne(copy _3, const 0_u8);
+        _0 = copy _4;
+        return;
+    }
+}
+
+fn Status.has_failed(_1: &u8) -> bool {
+    let _0: bool;
+    let _1: &u8; // self
+    let _2: u8;
+    let _3: u8;
+    let _4: bool;
+
+    bb0: {
+        _2 = copy (*_1);
+        _3 = BitAnd(copy _2, const 2_u8);
+        _4 = Ne(copy _3, const 0_u8);
+        _0 = copy _4;
+        return;
+    }
+}
+
+fn Status.clear(_1: &mut u8) -> () {
+    let _0: ();
+    let _1: &mut u8; // self
+    let _2: u8;
+    let _3: u8;
+    let _4: u8;
+
+    bb0: {
+        _2 = copy (*_1);
+        _3 = BitAnd(copy _2, const 253_u8);
+        _4 = BitOr(copy _3, const 0_u8);
+        (*_1) = copy _4;
+        return;
+    }
+}
+
+fn bits() -> bool {
+    let _0: bool;
+    let _1: u8; // s
+    let _2: &mut u8;
+    let _3: *mut Dev;
+    let _4: u8;
+    let _5: bool;
+    let _6: bool;
+    let _7: bool;
+    let _8: bool;
+    let _9: &u8;
+    let _10: bool;
+
+    bb0: {
+        _1 = const 3_u8;
+        _2 = &mut _1;
+        call Status.clear(move _2);
+        _3 = const peripheral DEV;
+        _4 = copy (*_3).0;
+        _5 = call Status.is_ready(copy _4);
+        if copy _5 -> [true: bb2, false: bb1];
+    }
+
+    bb1: {
+        _7 = call Status.is_ready(copy _1);
+        _6 = copy _7;
+        goto -> bb3;
+    }
+
+    bb2: {
+        _6 = const true;
+        goto -> bb3;
+    }
+
+    bb3: {
+        if copy _6 -> [true: bb5, false: bb4];
+    }
+
+    bb4: {
+        _9 = &_1;
+        _10 = call Status.has_failed(copy _9);
+        _8 = copy _10;
+        goto -> bb6;
+    }
+
+    bb5: {
+        _8 = const true;
+        goto -> bb6;
+    }
+
+    bb6: {
+        _0 = copy _8;
+        return;
+    }
+}
+
+fn implicit_reference(_1: &mut Ring) -> bool {
+    let _0: bool;
+    let _1: &mut Ring; // r
+    let _2: &mut Ring;
+    let _3: bool;
+
+    bb0: {
+        _2 = &mut (*_1);
+        _3 = call Ring.push(move _2, const 1_u8);
+        _0 = copy _3;
+        return;
+    }
+}
+
+fn explicit_reference(_1: &mut Ring) -> bool {
+    let _0: bool;
+    let _1: &mut Ring; // r
+    let _2: &mut Ring;
+    let _3: bool;
+
+    bb0: {
+        _2 = &mut (*_1);
+        _3 = call Ring.push(move _2, const 1_u8);
+        _0 = copy _3;
+        return;
+    }
+}
+
+fn implicit_local() -> usize {
+    let _0: usize;
+    let _1: Ring; // x
+    let _2: Ring;
+    let _3: &mut Ring;
+    let _4: bool;
+    let _5: &Ring;
+    let _6: usize;
+
+    bb0: {
+        _2 = call Ring.new();
+        _1 = move _2;
+        _3 = &mut _1;
+        _4 = call Ring.push(move _3, const 1_u8);
+        _5 = &_1;
+        _6 = call Ring.count(copy _5);
+        _0 = copy _6;
+        return;
+    }
+}
+
+fn explicit_local() -> usize {
+    let _0: usize;
+    let _1: Ring; // x
+    let _2: Ring;
+    let _3: &mut Ring;
+    let _4: bool;
+    let _5: &Ring;
+    let _6: usize;
+
+    bb0: {
+        _2 = call Ring.new();
+        _1 = move _2;
+        _3 = &mut _1;
+        _4 = call Ring.push(move _3, const 1_u8);
+        _5 = &_1;
+        _6 = call Ring.count(copy _5);
+        _0 = copy _6;
+        return;
+    }
+}
+
+fn implicit_value(_1: Ring) -> usize {
+    let _0: usize;
+    let _1: Ring; // x
+    let _2: usize;
+
+    bb0: {
+        _2 = call Ring.into_count(move _1);
+        _0 = copy _2;
+        return;
+    }
+}
+
+fn explicit_value(_1: Ring) -> usize {
+    let _0: usize;
+    let _1: Ring; // x
+    let _2: usize;
+
+    bb0: {
+        _2 = call Ring.into_count(move _1);
+        _0 = copy _2;
+        return;
+    }
+}
+
+fn implicit_copy(_1: &Point) -> u32 {
+    let _0: u32;
+    let _1: &Point; // p
+    let _2: Point;
+    let _3: u32;
+
+    bb0: {
+        _2 = copy (*_1);
+        _3 = call Point.sum(copy _2);
+        _0 = copy _3;
+        return;
+    }
+}
+
+fn explicit_copy(_1: &Point) -> u32 {
+    let _0: u32;
+    let _1: &Point; // p
+    let _2: Point;
+    let _3: u32;
+
+    bb0: {
+        _2 = copy (*_1);
+        _3 = call Point.sum(copy _2);
+        _0 = copy _3;
+        return;
+    }
+}
+
+fn implicit_args(_1: &mut Ring) -> bool {
+    let _0: bool;
+    let _1: &mut Ring; // r
+    let _2: &mut Ring;
+    let _3: &mut Ring;
+    let _4: Ring;
+    let _5: Ring;
+    let _6: &Ring;
+    let _7: usize;
+    let _8: u8;
+    let _9: bool;
+
+    bb0: {
+        _2 = &mut (*_1);
+        _3 = move _2;
+        _4 = call Ring.new();
+        _5 = move _4;
+        _6 = &_5;
+        _7 = call Ring.count(copy _6);
+        _8 = copy _7 as u8;
+        _9 = call Ring.push(move _3, copy _8);
+        _0 = copy _9;
+        return;
+    }
+}
+
+fn explicit_args(_1: &mut Ring) -> bool {
+    let _0: bool;
+    let _1: &mut Ring; // r
+    let _2: &mut Ring;
+    let _3: &mut Ring;
+    let _4: Ring;
+    let _5: Ring;
+    let _6: &Ring;
+    let _7: usize;
+    let _8: u8;
+    let _9: bool;
+
+    bb0: {
+        _2 = &mut (*_1);
+        _3 = move _2;
+        _4 = call Ring.new();
+        _5 = move _4;
+        _6 = &_5;
+        _7 = call Ring.count(copy _6);
+        _8 = copy _7 as u8;
+        _9 = call Ring.push(move _3, copy _8);
+        _0 = copy _9;
+        return;
+    }
+}
+
+entry fn main() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+panic fn on_panic() -> ! {
+    let _0: !;
+
+    bb0: {
+        goto -> bb1;
+    }
+
+    bb1: {
+        goto -> bb1;
+    }
+}
+
+comptime fn SHARED() -> Ring {
+    let _0: Ring;
+    let _1: Ring;
+
+    bb0: {
+        _1 = call Ring.new();
+        _0 = move _1;
+        return;
+    }
+}
+
+extern fn core.arch.__critical_enter() -> u32;
+
+extern fn core.arch.__critical_exit(_1: u32) -> ();
+
+comptime fn default() -> bool {
+    let _0: bool;
+
+    bb0: {
+        _0 = const false;
+        return;
+    }
+}
+
+comptime fn default() -> bool {
+    let _0: bool;
+
+    bb0: {
+        _0 = const false;
+        return;
+    }
+}

@@ -621,10 +621,10 @@ impl Checker<'_, '_> {
         }
     }
 
-    /// The type of the base of a field access or of indexing, and its
-    /// place: the base's own if it is a place expression, or else a
-    /// temporary holding its value.
-    fn base(&mut self, f: &Fn, base: &Expr) -> (Ty, PlaceInfo) {
+    /// The type of the base of a field access, of indexing, or the receiver
+    /// of a method call, and its place: its own if it is a place expression,
+    /// or else a temporary holding its value.
+    pub(super) fn base(&mut self, f: &Fn, base: &Expr) -> (Ty, PlaceInfo) {
         match self.place_info(f, base) {
             Some(info) => (info.ty, info),
             None => {
@@ -634,12 +634,13 @@ impl Checker<'_, '_> {
         }
     }
 
-    /// The base `base` of a field, an index or a range in an index, of the
+    /// The base `base` of a field, an index or a range in an index, or the
+    /// receiver of a method call, of the
     /// reference type `r`, dereferenced there (ADR 0114): the type of what it
     /// refers to, and the place `(*base)`, with its mutability, volatility
     /// and checks. The base is read as the operand of `*` is, and
     /// recorded for MIR building.
-    fn dereferenced(&mut self, base: &Expr, r: hir::Ref) -> (Ty, PlaceInfo) {
+    pub(super) fn dereferenced(&mut self, base: &Expr, r: hir::Ref) -> (Ty, PlaceInfo) {
         self.q.tables.derefed.insert(base.id);
         let place = PlaceInfo::through_ref(r, base.span);
         (place.ty, place)
@@ -1308,14 +1309,27 @@ impl Checker<'_, '_> {
                 ty => Ty::reference(false, false, ty),
             };
         };
-        if !self.has_address(place, &info, borrow_op(mutable)) {
+        self.borrow_place(f, mutable, place, &info)
+    }
+
+    /// `&place` or `&mut place` of a place `place` that has been typed, with
+    /// the `info` it gave (or a temporary's): the checks of `borrow`, which a
+    /// method call's receiver goes through as well (ADR 0114).
+    pub(super) fn borrow_place(
+        &mut self,
+        f: &Fn,
+        mutable: bool,
+        place: &Expr,
+        info: &PlaceInfo,
+    ) -> Ty {
+        if !self.has_address(place, info, borrow_op(mutable)) {
             return Ty::Error;
         }
         if mutable && let Some(immutable) = info.immutable {
             self.report_mut_borrow(f, place, immutable);
             return Ty::Error;
         }
-        self.check_aligned_address(&info, place);
+        self.check_aligned_address(info, place);
         // Volatile exactly when the place is (ADR 0110): nothing converts a
         // raw pointer to a reference, so the borrow keeps what a use would
         // need to show.

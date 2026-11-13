@@ -1,0 +1,344 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/method_calls.ers
+---
+--- typeck ---
+peripheral Uart { write thr: u8 at 0x0, read lsr: u8 at 0x5 } extent 6, align 1
+peripheral Context { read write threshold: u32 at 0x0 } extent 4, align 4
+peripheral Plic { ctx: [Context; 2] at 0x1000 step 0x100 } extent 4356, align 4
+peripheral Dev { read status: Status at 0x0 } extent 1, align 1
+peripheral UART0: Uart at 0x10000000 covers [0x10000000, 0x10000006)
+peripheral PLIC: Plic at 0xc000000 covers [0xc000000, 0xc001104)
+peripheral DEV: Dev at 0x20000000 covers [0x20000000, 0x20000001)
+struct Point { x: u32 at 0, y: u32 at 4 } size 8, align 4
+struct Ring { buf: [u8; 4] at 0, count: usize at 4 } size 8, align 4
+struct Pair { a: Ring at 0, rings: [Ring; 2] at 8 } size 24, align 4
+struct Transfer { channel: u32 at 0 } size 4, align 4
+struct Status: u8 { ready: bool at 0 = false, failed: bool at 1 = false }
+fn Point::sum(self: Point) -> u32
+    expr 2 binary + 898..913: u32
+    expr 3 field x 898..904: u32
+    expr 4 local self 898..902: Point
+    expr 5 field y 907..913: u32
+    expr 6 local self 907..911: Point
+fn Point::moved(self: &mut Point, dx: u32) -> ()
+    expr 7 assign += 964..976: ()
+    expr 8 field x 964..970: u32
+    expr 9 local self 964..968: &mut Point, dereferenced
+    expr 10 local dx 974..976: u32
+fn Point::dup(self: &Point) -> Point
+    expr 11 struct Point 1022..1052: Point
+    expr 12 field x 1033..1039: u32
+    expr 13 local self 1033..1037: &Point, dereferenced
+    expr 14 field y 1044..1050: u32
+    expr 15 local self 1044..1048: &Point, dereferenced
+fn Ring::new() -> Ring
+    expr 16 struct Ring 1158..1188: Ring
+    expr 17 repeat 1170..1176: [u8; 4]
+    expr 18 int 0 1171..1172: u8
+    expr 19 int 0 1185..1186: usize
+fn Ring::push(self: &mut Ring, b: u8) -> bool
+    expr 20 if 1244..1300: ()
+    expr 21 binary == 1247..1262: bool
+    expr 22 field count 1247..1257: usize
+    expr 23 local self 1247..1251: &mut Ring, dereferenced
+    expr 24 int 4 1261..1262: usize
+    expr 25 return 1277..1289: !
+    expr 26 bool false 1284..1289: bool
+    expr 27 assign 1309..1333: ()
+    expr 28 index 1309..1329: u8
+    expr 29 field buf 1309..1317: [u8; 4]
+    expr 30 local self 1309..1313: &mut Ring, dereferenced
+    expr 31 field count 1318..1328: usize
+    expr 32 local self 1318..1322: &mut Ring, dereferenced
+    expr 33 local b 1332..1333: u8
+    expr 34 assign += 1343..1358: ()
+    expr 35 field count 1343..1353: usize
+    expr 36 local self 1343..1347: &mut Ring, dereferenced
+    expr 37 int 1 1357..1358: usize
+    expr 38 bool true 1368..1372: bool
+fn Ring::count(self: &Ring) -> usize
+    expr 39 field count 1460..1470: usize
+    expr 40 local self 1460..1464: &Ring, dereferenced
+fn Ring::fill(self: &mut Ring, b: u8) -> ()
+    let mut i: usize
+    expr 41 int 0 1596..1597: usize
+    expr 42 while 1607..1676: ()
+    expr 43 binary < 1613..1618: bool
+    expr 44 local i 1613..1614: usize
+    expr 45 int 4 1617..1618: usize
+    expr 46 method Ring::push (&mut self) 1633..1645: bool
+    expr 47 local self 1633..1637: &mut Ring, dereferenced
+    expr 48 local b 1643..1644: u8
+    expr 49 assign += 1659..1665: ()
+    expr 50 local i 1659..1660: usize
+    expr 51 int 1 1664..1665: usize
+fn Ring::total(self: &Ring) -> usize
+    expr 52 method Ring::count (&self) 1723..1735: usize
+    expr 53 local self 1723..1727: &Ring, dereferenced
+fn Ring::into_count(self: Ring) -> usize
+    expr 54 method Ring::count (&self) 1786..1798: usize
+    expr 55 local self 1786..1790: Ring
+fn Ring::twice(self: Ring) -> usize
+    expr 56 method Ring::push (&mut self) 1848..1860: bool
+    expr 57 local self 1848..1852: Ring
+    expr 58 int 1 1858..1859: u8
+    expr 59 method Ring::push (&mut self) 1870..1882: bool
+    expr 60 local self 1870..1874: Ring
+    expr 61 int 2 1880..1881: u8
+    expr 62 method Ring::count (&self) 1892..1904: usize
+    expr 63 local self 1892..1896: Ring
+fn places(p: &Ring, q: &mut Ring, m: Ring, n: Ring, pair: &mut Pair, own: Pair) -> usize
+    let mut r: Ring
+    let c: usize
+    let a: usize
+    let b: usize
+    let d: usize
+    let e: usize
+    let f: usize
+    expr 64 call 2120..2131: Ring
+    expr 65 method Ring::push (&mut self) 2137..2146: bool
+    expr 66 local r 2137..2138: Ring
+    expr 67 int 1 2144..2145: u8
+    expr 68 method Ring::push (&mut self) 2152..2161: bool
+    expr 69 local m 2152..2153: Ring
+    expr 70 int 2 2159..2160: u8
+    expr 71 method Ring::push (&mut self) 2167..2176: bool
+    expr 72 local q 2167..2168: &mut Ring, dereferenced
+    expr 73 int 3 2174..2175: u8
+    expr 74 method Ring::push (&mut self) 2182..2194: bool
+    expr 75 deref 2182..2186: Ring
+    expr 76 local q 2184..2185: &mut Ring
+    expr 77 int 4 2192..2193: u8
+    expr 78 method Ring::push (&mut self) 2200..2213: bool
+    expr 79 field a 2200..2205: Ring
+    expr 80 local own 2200..2203: Pair
+    expr 81 int 5 2211..2212: u8
+    expr 82 method Ring::push (&mut self) 2219..2239: bool
+    expr 83 index 2219..2231: Ring
+    expr 84 field rings 2219..2228: [Ring; 2]
+    expr 85 local own 2219..2222: Pair
+    expr 86 int 1 2229..2230: usize
+    expr 87 int 6 2237..2238: u8
+    expr 88 method Ring::push (&mut self) 2245..2259: bool
+    expr 89 field a 2245..2251: Ring
+    expr 90 local pair 2245..2249: &mut Pair, dereferenced
+    expr 91 int 7 2257..2258: u8
+    expr 92 method Ring::push (&mut self) 2265..2286: bool
+    expr 93 index 2265..2278: Ring
+    expr 94 field rings 2265..2275: [Ring; 2]
+    expr 95 local pair 2265..2269: &mut Pair, dereferenced
+    expr 96 int 0 2276..2277: usize
+    expr 97 int 8 2284..2285: u8
+    expr 98 method Ring::count (&self) 2307..2316: usize
+    expr 99 local r 2307..2308: Ring
+    expr 100 method Ring::count (&self) 2337..2346: usize
+    expr 101 local p 2337..2338: &Ring, dereferenced
+    expr 102 method Ring::count (&self) 2367..2376: usize
+    expr 103 local q 2367..2368: &mut Ring, dereferenced
+    expr 104 method Ring::count (&self) 2397..2409: usize
+    expr 105 deref 2397..2401: Ring
+    expr 106 local p 2399..2400: &Ring
+    expr 107 method Ring::count (&self) 2430..2439: usize
+    expr 108 local n 2430..2431: Ring
+    expr 109 binary + 2460..2497: usize
+    expr 110 method Ring::count (&self) 2460..2474: usize
+    expr 111 field a 2460..2466: Ring
+    expr 112 local pair 2460..2464: &mut Pair, dereferenced
+    expr 113 method Ring::count (&self) 2477..2497: usize
+    expr 114 index 2477..2489: Ring
+    expr 115 field rings 2477..2486: [Ring; 2]
+    expr 116 local own 2477..2480: Pair
+    expr 117 int 0 2487..2488: usize
+    expr 118 binary + 2503..2585: usize
+    expr 119 binary + 2503..2573: usize
+    expr 120 binary + 2503..2546: usize
+    expr 121 binary + 2503..2524: usize
+    expr 122 binary + 2503..2520: usize
+    expr 123 binary + 2503..2516: usize
+    expr 124 binary + 2503..2512: usize
+    expr 125 binary + 2503..2508: usize
+    expr 126 local c 2503..2504: usize
+    expr 127 local a 2507..2508: usize
+    expr 128 local b 2511..2512: usize
+    expr 129 local d 2515..2516: usize
+    expr 130 local e 2519..2520: usize
+    expr 131 local f 2523..2524: usize
+    expr 132 method Ring::count (&self) 2527..2546: usize
+    expr 133 call 2527..2538: Ring
+    expr 134 method Ring::into_count (self) 2549..2573: usize
+    expr 135 call 2549..2560: Ring
+    expr 136 method Ring::twice (mut self) 2576..2585: usize
+    expr 137 local m 2576..2577: Ring
+fn pick(c: bool, a: &Ring, b: &Ring) -> usize
+    expr 138 method Ring::count (&self) 2705..2736: usize
+    expr 139 if 2705..2728: &Ring, dereferenced
+    expr 140 local c 2709..2710: bool
+    expr 141 local a 2713..2714: &Ring
+    expr 142 block 2722..2727: &Ring
+    expr 143 local b 2724..2725: &Ring
+fn diverging_receiver(r: &Ring) -> usize
+    expr 144 method 2932..2950: !
+    expr 145 return 2932..2942: !
+    expr 146 int 1 2940..2941: usize
+fn diverging_argument(r: Ring) -> usize
+    expr 147 method Ring::push (&mut self) 3004..3020: bool
+    expr 148 local r 3004..3005: Ring
+    expr 149 return 3011..3019: !
+    expr 150 int 5 3018..3019: usize
+    expr 151 method Ring::count (&self) 3026..3035: usize
+    expr 152 local r 3026..3027: Ring
+fn points(p: &Point, m: &mut Point, q: Point) -> u32
+    expr 153 method Point::moved (&mut self) 3168..3178: ()
+    expr 154 local m 3168..3169: &mut Point, dereferenced
+    expr 155 int 1 3176..3177: u32
+    expr 156 method Point::moved (&mut self) 3184..3194: ()
+    expr 157 local q 3184..3185: Point
+    expr 158 int 2 3192..3193: u32
+    expr 159 binary + 3200..3272: u32
+    expr 160 binary + 3200..3243: u32
+    expr 161 binary + 3200..3233: u32
+    expr 162 binary + 3200..3223: u32
+    expr 163 method Point::sum (self) 3200..3213: u32
+    expr 164 method Point::dup (&self) 3200..3207: Point
+    expr 165 local p 3200..3201: &Point, dereferenced
+    expr 166 method Point::sum (self) 3216..3223: u32
+    expr 167 local p 3216..3217: &Point, dereferenced
+    expr 168 method Point::sum (self) 3226..3233: u32
+    expr 169 local m 3226..3227: &mut Point, dereferenced
+    expr 170 method Point::sum (self) 3236..3243: u32
+    expr 171 local q 3236..3237: Point
+    expr 172 method Point::sum (self) 3246..3272: u32
+    expr 173 struct Point 3246..3266: Point
+    expr 174 int 1 3257..3258: u32
+    expr 175 int 2 3263..3264: u32
+fn shared() -> usize
+    expr 176 critical 3392..3455: usize
+    expr 177 method Ring::push (&mut self) 3411..3425: bool
+    expr 178 static SHARED 3411..3417: Ring
+    expr 179 int 1 3423..3424: u8
+    expr 180 method Ring::count (&self) 3435..3449: usize
+    expr 181 static SHARED 3435..3441: Ring
+fn Transfer::start(channel: u32) -> Transfer
+    expr 182 struct Transfer 3613..3642: Transfer
+    expr 183 local channel 3633..3640: u32
+fn Transfer::wait(self: Transfer) -> u32
+    let c: u32
+    expr 184 field channel 3698..3710: u32
+    expr 185 local self 3698..3702: Transfer
+    expr 186 end 3720..3729: ()
+    expr 187 local self 3724..3728: Transfer
+    expr 188 local c 3739..3740: u32
+fn transfer() -> u32
+    let t: Transfer
+    expr 189 call 3795..3813: Transfer
+    expr 190 int 1 3811..3812: u32
+    expr 191 method Transfer::wait (self) 3819..3827: u32
+    expr 192 local t 3819..3820: Transfer
+fn Uart::ready(self: &Uart) -> bool
+    expr 193 binary != 4020..4042: bool
+    expr 194 binary & 4020..4037: u8
+    expr 195 register lsr 4021..4029: u8
+    expr 196 local self 4021..4025: &Uart, dereferenced
+    expr 197 int 32 4032..4036: u8
+    expr 198 int 0 4041..4042: u8
+fn Uart::putc(self: &mut Uart, byte: u8) -> ()
+    expr 199 while 4093..4115: ()
+    expr 200 not 4099..4112: bool
+    expr 201 method Uart::ready (&self) 4100..4112: bool
+    expr 202 local self 4100..4104: &mut Uart, dereferenced
+    expr 203 assign 4124..4139: ()
+    expr 204 register thr 4124..4132: u8
+    expr 205 local self 4124..4128: &mut Uart, dereferenced
+    expr 206 local byte 4135..4139: u8
+fn Context::set(self: &mut Context, v: u32) -> ()
+    expr 207 assign 4369..4387: ()
+    expr 208 register threshold 4369..4383: u32
+    expr 209 local self 4369..4373: &mut Context, dereferenced
+    expr 210 local v 4386..4387: u32
+fn Context::get(self: &Context) -> u32
+    expr 211 register threshold 4431..4445: u32
+    expr 212 local self 4431..4435: &Context, dereferenced
+fn Plic::set_second(self: &mut Plic, v: u32) -> ()
+    expr 213 method Context::set (&mut self) 4514..4532: ()
+    expr 214 index 4514..4525: Context
+    expr 215 register ctx 4514..4522: [Context; 2]
+    expr 216 local self 4514..4518: &mut Plic, dereferenced
+    expr 217 int 1 4523..4524: usize
+    expr 218 local v 4530..4531: u32
+fn device(u: &mut Uart, v: &Uart) -> bool
+    let shared: &Uart
+    expr 219 method Uart::putc (&mut self) 4591..4600: ()
+    expr 220 local u 4591..4592: &mut Uart, dereferenced
+    expr 221 int 1 4598..4599: u8
+    expr 222 method Uart::putc (&mut self) 4606..4619: ()
+    expr 223 peripheral UART0 4606..4611: Uart
+    expr 224 int 2 4617..4618: u8
+    expr 225 & 4645..4651: &Uart
+    expr 226 peripheral UART0 4646..4651: Uart
+    expr 227 method Context::set (&mut self) 4657..4675: ()
+    expr 228 index 4657..4668: Context
+    expr 229 register ctx 4657..4665: [Context; 2]
+    expr 230 peripheral PLIC 4657..4661: Plic
+    expr 231 int 0 4666..4667: usize
+    expr 232 int 3 4673..4674: u32
+    expr 233 method Plic::set_second (&mut self) 4681..4699: ()
+    expr 234 peripheral PLIC 4681..4685: Plic
+    expr 235 int 4 4697..4698: u32
+    expr 236 logical && 4705..4788: bool
+    expr 237 logical && 4705..4771: bool
+    expr 238 logical && 4705..4758: bool
+    expr 239 logical && 4705..4740: bool
+    expr 240 binary == 4705..4727: bool
+    expr 241 method Context::get (&self) 4705..4722: u32
+    expr 242 index 4705..4716: Context
+    expr 243 register ctx 4705..4713: [Context; 2]
+    expr 244 peripheral PLIC 4705..4709: Plic
+    expr 245 int 1 4714..4715: usize
+    expr 246 int 4 4726..4727: u32
+    expr 247 method Uart::ready (&self) 4731..4740: bool
+    expr 248 local v 4731..4732: &Uart, dereferenced
+    expr 249 method Uart::ready (&self) 4744..4758: bool
+    expr 250 local shared 4744..4750: &Uart, dereferenced
+    expr 251 method Uart::ready (&self) 4762..4771: bool
+    expr 252 local u 4762..4763: &mut Uart, dereferenced
+    expr 253 method Uart::ready (&self) 4775..4788: bool
+    expr 254 peripheral UART0 4775..4780: Uart
+fn Status::is_ready(self: Status) -> bool
+    expr 255 bit field ready 5030..5040: bool
+    expr 256 local self 5030..5034: Status
+fn Status::has_failed(self: &Status) -> bool
+    expr 257 bit field failed 5091..5102: bool
+    expr 258 local self 5091..5095: &Status, dereferenced
+fn Status::clear(self: &mut Status) -> ()
+    expr 259 assign 5144..5163: ()
+    expr 260 bit field failed 5144..5155: bool
+    expr 261 local self 5144..5148: &mut Status, dereferenced
+    expr 262 bool false 5158..5163: bool
+fn bits() -> bool
+    let mut s: Status
+    expr 263 struct Status 5305..5341: Status
+    expr 264 bool true 5321..5325: bool
+    expr 265 bool true 5335..5339: bool
+    expr 266 method Status::clear (&mut self) 5347..5356: ()
+    expr 267 local s 5347..5348: Status
+    expr 268 logical || 5362..5417: bool
+    expr 269 logical || 5362..5399: bool
+    expr 270 method Status::is_ready (self) 5362..5383: bool
+    expr 271 register status 5362..5372: Status
+    expr 272 peripheral DEV 5362..5365: Dev
+    expr 273 method Status::is_ready (self) 5387..5399: bool
+    expr 274 local s 5387..5388: Status
+    expr 275 method Status::has_failed (&self) 5403..5417: bool
+    expr 276 local s 5403..5404: Status
+entry fn main() -> !
+    expr 277 loop 5444..5451: !
+panic fn on_panic() -> !
+    expr 278 loop 5481..5488: !
+comptime fn SHARED() -> Ring
+    expr 279 call 3351..3362: Ring
+comptime fn default() -> bool
+    expr 0 bool false 4935..4940: bool
+comptime fn default() -> bool
+    expr 1 bool false 4966..4971: bool

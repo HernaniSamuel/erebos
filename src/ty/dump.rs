@@ -2,7 +2,9 @@
 
 use std::fmt::Write;
 
-use crate::hir::{self, EnumId, Expr, ExprKind, Fn, FnKind, ReadEffect, Ty, WriteEffect};
+use crate::hir::{
+    self, EnumId, Expr, ExprKind, Fn, FnKind, ReadEffect, ReceiverKind, Ty, WriteEffect,
+};
 use crate::layout::PAST_ADDRESS_SPACE;
 use crate::query::Queries;
 
@@ -388,6 +390,20 @@ fn expr_label(q: &Queries, f: &Fn, expr: &Expr) -> String {
         ExprKind::Repeat(..) => "repeat".to_owned(),
         ExprKind::Local(id) => format!("local {}", f.local(*id).name),
         ExprKind::Call { .. } => "call".to_owned(),
+        // The function it calls and the form of its receiver (ADR 0114); a
+        // receiver that is a reference is marked on its own line.
+        ExprKind::MethodCall { .. } => match q.tables.methods.get(&expr.id) {
+            Some(&callee) => {
+                let target = hir.fn_(callee);
+                let receiver = target.owner.and_then(|owner| owner.receiver);
+                format!(
+                    "method {} ({})",
+                    target.path,
+                    receiver.map_or("", ReceiverKind::written)
+                )
+            }
+            None => "method".to_owned(),
+        },
         ExprKind::Unary(op, _) => format!("{op:?}").to_lowercase(),
         ExprKind::Deref(_) => "deref".to_owned(),
         ExprKind::Index(..) => "index".to_owned(),

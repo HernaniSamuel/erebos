@@ -1,0 +1,1084 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/parse_method_calls.ers
+---
+--- ast ---
+File {
+    items: [
+        Struct(
+            StructDecl {
+                attrs: [],
+                vis: Private,
+                name: Ident {
+                    name: "Ring",
+                    span: 353..357,
+                },
+                fields: [
+                    FieldDecl {
+                        vis: Private,
+                        name: Ident {
+                            name: "count",
+                            span: 364..369,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Path {
+                                    segments: [
+                                        Ident {
+                                            name: "usize",
+                                            span: 371..376,
+                                        },
+                                    ],
+                                    span: 371..376,
+                                },
+                            ),
+                            span: 371..376,
+                        },
+                    },
+                ],
+                span: 346..379,
+            },
+        ),
+        Fn(
+            FnDecl {
+                attrs: [],
+                vis: Private,
+                kind: Plain,
+                name: Ident {
+                    name: "chain",
+                    span: 384..389,
+                },
+                receiver: None,
+                params: [
+                    Param {
+                        mutable: false,
+                        name: Ident {
+                            name: "x",
+                            span: 390..391,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Path {
+                                    segments: [
+                                        Ident {
+                                            name: "u32",
+                                            span: 393..396,
+                                        },
+                                    ],
+                                    span: 393..396,
+                                },
+                            ),
+                            span: 393..396,
+                        },
+                    },
+                    Param {
+                        mutable: false,
+                        name: Ident {
+                            name: "a",
+                            span: 398..399,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Path {
+                                    segments: [
+                                        Ident {
+                                            name: "Ring",
+                                            span: 401..405,
+                                        },
+                                    ],
+                                    span: 401..405,
+                                },
+                            ),
+                            span: 401..405,
+                        },
+                    },
+                    Param {
+                        mutable: false,
+                        name: Ident {
+                            name: "p",
+                            span: 407..408,
+                        },
+                        ty: Ty {
+                            kind: Named(
+                                Path {
+                                    segments: [
+                                        Ident {
+                                            name: "Ring",
+                                            span: 410..414,
+                                        },
+                                    ],
+                                    span: 410..414,
+                                },
+                            ),
+                            span: 410..414,
+                        },
+                    },
+                ],
+                ret: Some(
+                    Ty {
+                        kind: Named(
+                            Path {
+                                segments: [
+                                    Ident {
+                                        name: "u32",
+                                        span: 419..422,
+                                    },
+                                ],
+                                span: 419..422,
+                            },
+                        ),
+                        span: 419..422,
+                    },
+                ),
+                body: Some(
+                    Block {
+                        stmts: [
+                            Let(
+                                Let {
+                                    mutable: false,
+                                    name: Ident {
+                                        name: "call",
+                                        span: 433..437,
+                                    },
+                                    ty: Ty {
+                                        kind: Named(
+                                            Path {
+                                                segments: [
+                                                    Ident {
+                                                        name: "u32",
+                                                        span: 439..442,
+                                                    },
+                                                ],
+                                                span: 439..442,
+                                            },
+                                        ),
+                                        span: 439..442,
+                                    },
+                                    init: Expr {
+                                        kind: MethodCall(
+                                            Expr {
+                                                kind: Name(
+                                                    Path {
+                                                        segments: [
+                                                            Ident {
+                                                                name: "x",
+                                                                span: 445..446,
+                                                            },
+                                                        ],
+                                                        span: 445..446,
+                                                    },
+                                                ),
+                                                span: 445..446,
+                                            },
+                                            Ident {
+                                                name: "f",
+                                                span: 447..448,
+                                            },
+                                            [],
+                                        ),
+                                        span: 445..450,
+                                    },
+                                    span: 429..451,
+                                },
+                            ),
+                            Let(
+                                Let {
+                                    mutable: false,
+                                    name: Ident {
+                                        name: "args",
+                                        span: 460..464,
+                                    },
+                                    ty: Ty {
+                                        kind: Named(
+                                            Path {
+                                                segments: [
+                                                    Ident {
+                                                        name: "u32",
+                                                        span: 466..469,
+                                                    },
+                                                ],
+                                                span: 466..469,
+                                            },
+                                        ),
+                                        span: 466..469,
+                                    },
+                                    init: Expr {
+                                        kind: MethodCall(
+                                            Expr {
+                                                kind: Name(
+                                                    Path {
+                                                        segments: [
+                                                            Ident {
+                                                                name: "x",
+                                                                span: 472..473,
+                                                            },
+                                                        ],
+                                                        span: 472..473,
+                                                    },
+                                                ),
+                                                span: 472..473,
+                                            },
+                                            Ident {
+                                                name: "f",
+                                                span: 474..475,
+                                            },
+                                            [
+                                                Expr {
+                                                    kind: Int(
+                                                        Some(
+                                                            1,
+                                                        ),
+                                                    ),
+                                                    span: 476..477,
+                                                },
+                                                Expr {
+                                                    kind: Binary(
+                                                        Add,
+                                                        Expr {
+                                                            kind: Name(
+                                                                Path {
+                                                                    segments: [
+                                                                        Ident {
+                                                                            name: "call",
+                                                                            span: 479..483,
+                                                                        },
+                                                                    ],
+                                                                    span: 479..483,
+                                                                },
+                                                            ),
+                                                            span: 479..483,
+                                                        },
+                                                        Expr {
+                                                            kind: Int(
+                                                                Some(
+                                                                    2,
+                                                                ),
+                                                            ),
+                                                            span: 486..487,
+                                                        },
+                                                        484..485,
+                                                    ),
+                                                    span: 479..487,
+                                                },
+                                            ],
+                                        ),
+                                        span: 472..488,
+                                    },
+                                    span: 456..489,
+                                },
+                            ),
+                            Let(
+                                Let {
+                                    mutable: false,
+                                    name: Ident {
+                                        name: "nested",
+                                        span: 498..504,
+                                    },
+                                    ty: Ty {
+                                        kind: Named(
+                                            Path {
+                                                segments: [
+                                                    Ident {
+                                                        name: "u32",
+                                                        span: 506..509,
+                                                    },
+                                                ],
+                                                span: 506..509,
+                                            },
+                                        ),
+                                        span: 506..509,
+                                    },
+                                    init: Expr {
+                                        kind: MethodCall(
+                                            Expr {
+                                                kind: Field(
+                                                    Expr {
+                                                        kind: Name(
+                                                            Path {
+                                                                segments: [
+                                                                    Ident {
+                                                                        name: "a",
+                                                                        span: 512..513,
+                                                                    },
+                                                                ],
+                                                                span: 512..513,
+                                                            },
+                                                        ),
+                                                        span: 512..513,
+                                                    },
+                                                    Ident {
+                                                        name: "b",
+                                                        span: 514..515,
+                                                    },
+                                                ),
+                                                span: 512..515,
+                                            },
+                                            Ident {
+                                                name: "f",
+                                                span: 516..517,
+                                            },
+                                            [],
+                                        ),
+                                        span: 512..519,
+                                    },
+                                    span: 494..520,
+                                },
+                            ),
+                            Let(
+                                Let {
+                                    mutable: false,
+                                    name: Ident {
+                                        name: "chained",
+                                        span: 529..536,
+                                    },
+                                    ty: Ty {
+                                        kind: Named(
+                                            Path {
+                                                segments: [
+                                                    Ident {
+                                                        name: "u32",
+                                                        span: 538..541,
+                                                    },
+                                                ],
+                                                span: 538..541,
+                                            },
+                                        ),
+                                        span: 538..541,
+                                    },
+                                    init: Expr {
+                                        kind: MethodCall(
+                                            Expr {
+                                                kind: MethodCall(
+                                                    Expr {
+                                                        kind: Name(
+                                                            Path {
+                                                                segments: [
+                                                                    Ident {
+                                                                        name: "x",
+                                                                        span: 544..545,
+                                                                    },
+                                                                ],
+                                                                span: 544..545,
+                                                            },
+                                                        ),
+                                                        span: 544..545,
+                                                    },
+                                                    Ident {
+                                                        name: "f",
+                                                        span: 546..547,
+                                                    },
+                                                    [],
+                                                ),
+                                                span: 544..549,
+                                            },
+                                            Ident {
+                                                name: "g",
+                                                span: 550..551,
+                                            },
+                                            [],
+                                        ),
+                                        span: 544..553,
+                                    },
+                                    span: 525..554,
+                                },
+                            ),
+                            Let(
+                                Let {
+                                    mutable: false,
+                                    name: Ident {
+                                        name: "tried",
+                                        span: 563..568,
+                                    },
+                                    ty: Ty {
+                                        kind: Named(
+                                            Path {
+                                                segments: [
+                                                    Ident {
+                                                        name: "u32",
+                                                        span: 570..573,
+                                                    },
+                                                ],
+                                                span: 570..573,
+                                            },
+                                        ),
+                                        span: 570..573,
+                                    },
+                                    init: Expr {
+                                        kind: Try(
+                                            Expr {
+                                                kind: MethodCall(
+                                                    Expr {
+                                                        kind: Name(
+                                                            Path {
+                                                                segments: [
+                                                                    Ident {
+                                                                        name: "x",
+                                                                        span: 576..577,
+                                                                    },
+                                                                ],
+                                                                span: 576..577,
+                                                            },
+                                                        ),
+                                                        span: 576..577,
+                                                    },
+                                                    Ident {
+                                                        name: "f",
+                                                        span: 578..579,
+                                                    },
+                                                    [],
+                                                ),
+                                                span: 576..581,
+                                            },
+                                            581..582,
+                                        ),
+                                        span: 576..582,
+                                    },
+                                    span: 559..583,
+                                },
+                            ),
+                            Let(
+                                Let {
+                                    mutable: false,
+                                    name: Ident {
+                                        name: "indexed",
+                                        span: 592..599,
+                                    },
+                                    ty: Ty {
+                                        kind: Named(
+                                            Path {
+                                                segments: [
+                                                    Ident {
+                                                        name: "u32",
+                                                        span: 601..604,
+                                                    },
+                                                ],
+                                                span: 601..604,
+                                            },
+                                        ),
+                                        span: 601..604,
+                                    },
+                                    init: Expr {
+                                        kind: Index(
+                                            Expr {
+                                                kind: MethodCall(
+                                                    Expr {
+                                                        kind: Name(
+                                                            Path {
+                                                                segments: [
+                                                                    Ident {
+                                                                        name: "x",
+                                                                        span: 607..608,
+                                                                    },
+                                                                ],
+                                                                span: 607..608,
+                                                            },
+                                                        ),
+                                                        span: 607..608,
+                                                    },
+                                                    Ident {
+                                                        name: "f",
+                                                        span: 609..610,
+                                                    },
+                                                    [],
+                                                ),
+                                                span: 607..612,
+                                            },
+                                            Expr {
+                                                kind: Int(
+                                                    Some(
+                                                        3,
+                                                    ),
+                                                ),
+                                                span: 613..614,
+                                            },
+                                            612..613,
+                                        ),
+                                        span: 607..615,
+                                    },
+                                    span: 588..616,
+                                },
+                            ),
+                            Let(
+                                Let {
+                                    mutable: false,
+                                    name: Ident {
+                                        name: "field",
+                                        span: 625..630,
+                                    },
+                                    ty: Ty {
+                                        kind: Named(
+                                            Path {
+                                                segments: [
+                                                    Ident {
+                                                        name: "usize",
+                                                        span: 632..637,
+                                                    },
+                                                ],
+                                                span: 632..637,
+                                            },
+                                        ),
+                                        span: 632..637,
+                                    },
+                                    init: Expr {
+                                        kind: Field(
+                                            Expr {
+                                                kind: Name(
+                                                    Path {
+                                                        segments: [
+                                                            Ident {
+                                                                name: "a",
+                                                                span: 640..641,
+                                                            },
+                                                        ],
+                                                        span: 640..641,
+                                                    },
+                                                ),
+                                                span: 640..641,
+                                            },
+                                            Ident {
+                                                name: "count",
+                                                span: 642..647,
+                                            },
+                                        ),
+                                        span: 640..647,
+                                    },
+                                    span: 621..648,
+                                },
+                            ),
+                            Let(
+                                Let {
+                                    mutable: false,
+                                    name: Ident {
+                                        name: "after",
+                                        span: 657..662,
+                                    },
+                                    ty: Ty {
+                                        kind: Named(
+                                            Path {
+                                                segments: [
+                                                    Ident {
+                                                        name: "usize",
+                                                        span: 664..669,
+                                                    },
+                                                ],
+                                                span: 664..669,
+                                            },
+                                        ),
+                                        span: 664..669,
+                                    },
+                                    init: Expr {
+                                        kind: MethodCall(
+                                            Expr {
+                                                kind: Field(
+                                                    Expr {
+                                                        kind: Name(
+                                                            Path {
+                                                                segments: [
+                                                                    Ident {
+                                                                        name: "a",
+                                                                        span: 672..673,
+                                                                    },
+                                                                ],
+                                                                span: 672..673,
+                                                            },
+                                                        ),
+                                                        span: 672..673,
+                                                    },
+                                                    Ident {
+                                                        name: "count",
+                                                        span: 674..679,
+                                                    },
+                                                ),
+                                                span: 672..679,
+                                            },
+                                            Ident {
+                                                name: "f",
+                                                span: 680..681,
+                                            },
+                                            [],
+                                        ),
+                                        span: 672..683,
+                                    },
+                                    span: 653..684,
+                                },
+                            ),
+                            Let(
+                                Let {
+                                    mutable: false,
+                                    name: Ident {
+                                        name: "path",
+                                        span: 693..697,
+                                    },
+                                    ty: Ty {
+                                        kind: Named(
+                                            Path {
+                                                segments: [
+                                                    Ident {
+                                                        name: "u32",
+                                                        span: 699..702,
+                                                    },
+                                                ],
+                                                span: 699..702,
+                                            },
+                                        ),
+                                        span: 699..702,
+                                    },
+                                    init: Expr {
+                                        kind: MethodCall(
+                                            Expr {
+                                                kind: Call(
+                                                    Path {
+                                                        segments: [
+                                                            Ident {
+                                                                name: "ring",
+                                                                span: 705..709,
+                                                            },
+                                                            Ident {
+                                                                name: "Ring",
+                                                                span: 711..715,
+                                                            },
+                                                            Ident {
+                                                                name: "new",
+                                                                span: 717..720,
+                                                            },
+                                                        ],
+                                                        span: 705..720,
+                                                    },
+                                                    [],
+                                                ),
+                                                span: 705..722,
+                                            },
+                                            Ident {
+                                                name: "push",
+                                                span: 723..727,
+                                            },
+                                            [
+                                                Expr {
+                                                    kind: Int(
+                                                        Some(
+                                                            1,
+                                                        ),
+                                                    ),
+                                                    span: 728..729,
+                                                },
+                                            ],
+                                        ),
+                                        span: 705..730,
+                                    },
+                                    span: 689..731,
+                                },
+                            ),
+                            Let(
+                                Let {
+                                    mutable: false,
+                                    name: Ident {
+                                        name: "paren",
+                                        span: 740..745,
+                                    },
+                                    ty: Ty {
+                                        kind: Named(
+                                            Path {
+                                                segments: [
+                                                    Ident {
+                                                        name: "u32",
+                                                        span: 747..750,
+                                                    },
+                                                ],
+                                                span: 747..750,
+                                            },
+                                        ),
+                                        span: 747..750,
+                                    },
+                                    init: Expr {
+                                        kind: MethodCall(
+                                            Expr {
+                                                kind: Binary(
+                                                    Add,
+                                                    Expr {
+                                                        kind: Name(
+                                                            Path {
+                                                                segments: [
+                                                                    Ident {
+                                                                        name: "x",
+                                                                        span: 754..755,
+                                                                    },
+                                                                ],
+                                                                span: 754..755,
+                                                            },
+                                                        ),
+                                                        span: 754..755,
+                                                    },
+                                                    Expr {
+                                                        kind: Int(
+                                                            Some(
+                                                                1,
+                                                            ),
+                                                        ),
+                                                        span: 758..759,
+                                                    },
+                                                    756..757,
+                                                ),
+                                                span: 753..760,
+                                            },
+                                            Ident {
+                                                name: "f",
+                                                span: 761..762,
+                                            },
+                                            [
+                                                Expr {
+                                                    kind: MethodCall(
+                                                        Expr {
+                                                            kind: Name(
+                                                                Path {
+                                                                    segments: [
+                                                                        Ident {
+                                                                            name: "x",
+                                                                            span: 763..764,
+                                                                        },
+                                                                    ],
+                                                                    span: 763..764,
+                                                                },
+                                                            ),
+                                                            span: 763..764,
+                                                        },
+                                                        Ident {
+                                                            name: "g",
+                                                            span: 765..766,
+                                                        },
+                                                        [
+                                                            Expr {
+                                                                kind: Int(
+                                                                    Some(
+                                                                        2,
+                                                                    ),
+                                                                ),
+                                                                span: 767..768,
+                                                            },
+                                                        ],
+                                                    ),
+                                                    span: 763..769,
+                                                },
+                                            ],
+                                        ),
+                                        span: 753..770,
+                                    },
+                                    span: 736..771,
+                                },
+                            ),
+                            Let(
+                                Let {
+                                    mutable: false,
+                                    name: Ident {
+                                        name: "both",
+                                        span: 780..784,
+                                    },
+                                    ty: Ty {
+                                        kind: Named(
+                                            Path {
+                                                segments: [
+                                                    Ident {
+                                                        name: "u32",
+                                                        span: 786..789,
+                                                    },
+                                                ],
+                                                span: 786..789,
+                                            },
+                                        ),
+                                        span: 786..789,
+                                    },
+                                    init: Expr {
+                                        kind: Try(
+                                            Expr {
+                                                kind: Index(
+                                                    Expr {
+                                                        kind: MethodCall(
+                                                            Expr {
+                                                                kind: Field(
+                                                                    Expr {
+                                                                        kind: MethodCall(
+                                                                            Expr {
+                                                                                kind: Name(
+                                                                                    Path {
+                                                                                        segments: [
+                                                                                            Ident {
+                                                                                                name: "x",
+                                                                                                span: 792..793,
+                                                                                            },
+                                                                                        ],
+                                                                                        span: 792..793,
+                                                                                    },
+                                                                                ),
+                                                                                span: 792..793,
+                                                                            },
+                                                                            Ident {
+                                                                                name: "f",
+                                                                                span: 794..795,
+                                                                            },
+                                                                            [],
+                                                                        ),
+                                                                        span: 792..797,
+                                                                    },
+                                                                    Ident {
+                                                                        name: "count",
+                                                                        span: 798..803,
+                                                                    },
+                                                                ),
+                                                                span: 792..803,
+                                                            },
+                                                            Ident {
+                                                                name: "g",
+                                                                span: 804..805,
+                                                            },
+                                                            [],
+                                                        ),
+                                                        span: 792..807,
+                                                    },
+                                                    Expr {
+                                                        kind: Int(
+                                                            Some(
+                                                                1,
+                                                            ),
+                                                        ),
+                                                        span: 808..809,
+                                                    },
+                                                    807..808,
+                                                ),
+                                                span: 792..810,
+                                            },
+                                            810..811,
+                                        ),
+                                        span: 792..811,
+                                    },
+                                    span: 776..812,
+                                },
+                            ),
+                        ],
+                        tail: Some(
+                            Expr {
+                                kind: MethodCall(
+                                    Expr {
+                                        kind: Name(
+                                            Path {
+                                                segments: [
+                                                    Ident {
+                                                        name: "p",
+                                                        span: 817..818,
+                                                    },
+                                                ],
+                                                span: 817..818,
+                                            },
+                                        ),
+                                        span: 817..818,
+                                    },
+                                    Ident {
+                                        name: "f",
+                                        span: 819..820,
+                                    },
+                                    [],
+                                ),
+                                span: 817..822,
+                            },
+                        ),
+                        span: 423..824,
+                    },
+                ),
+                span: 381..824,
+            },
+        ),
+        Impl(
+            ImplDecl {
+                attrs: [],
+                vis: Private,
+                name: Ident {
+                    name: "Ring",
+                    span: 831..835,
+                },
+                fns: [
+                    FnDecl {
+                        attrs: [],
+                        vis: Pub,
+                        kind: Plain,
+                        name: Ident {
+                            name: "count",
+                            span: 849..854,
+                        },
+                        receiver: Some(
+                            Receiver {
+                                kind: Ref,
+                                span: 855..860,
+                            },
+                        ),
+                        params: [],
+                        ret: Some(
+                            Ty {
+                                kind: Named(
+                                    Path {
+                                        segments: [
+                                            Ident {
+                                                name: "usize",
+                                                span: 865..870,
+                                            },
+                                        ],
+                                        span: 865..870,
+                                    },
+                                ),
+                                span: 865..870,
+                            },
+                        ),
+                        body: Some(
+                            Block {
+                                stmts: [],
+                                tail: Some(
+                                    Expr {
+                                        kind: Field(
+                                            Expr {
+                                                kind: Name(
+                                                    Path {
+                                                        segments: [
+                                                            Ident {
+                                                                name: "self",
+                                                                span: 881..885,
+                                                            },
+                                                        ],
+                                                        span: 881..885,
+                                                    },
+                                                ),
+                                                span: 881..885,
+                                            },
+                                            Ident {
+                                                name: "count",
+                                                span: 886..891,
+                                            },
+                                        ),
+                                        span: 881..891,
+                                    },
+                                ),
+                                span: 871..897,
+                            },
+                        ),
+                        span: 846..897,
+                    },
+                    FnDecl {
+                        attrs: [],
+                        vis: Pub,
+                        kind: Plain,
+                        name: Ident {
+                            name: "twice",
+                            span: 910..915,
+                        },
+                        receiver: Some(
+                            Receiver {
+                                kind: RefMut,
+                                span: 916..925,
+                            },
+                        ),
+                        params: [],
+                        ret: None,
+                        body: Some(
+                            Block {
+                                stmts: [
+                                    Expr {
+                                        expr: Expr {
+                                            kind: MethodCall(
+                                                Expr {
+                                                    kind: Name(
+                                                        Path {
+                                                            segments: [
+                                                                Ident {
+                                                                    name: "self",
+                                                                    span: 937..941,
+                                                                },
+                                                            ],
+                                                            span: 937..941,
+                                                        },
+                                                    ),
+                                                    span: 937..941,
+                                                },
+                                                Ident {
+                                                    name: "push",
+                                                    span: 942..946,
+                                                },
+                                                [
+                                                    Expr {
+                                                        kind: Int(
+                                                            Some(
+                                                                1,
+                                                            ),
+                                                        ),
+                                                        span: 947..948,
+                                                    },
+                                                ],
+                                            ),
+                                            span: 937..949,
+                                        },
+                                        semi: Some(
+                                            949..950,
+                                        ),
+                                    },
+                                    Expr {
+                                        expr: Expr {
+                                            kind: MethodCall(
+                                                Expr {
+                                                    kind: Name(
+                                                        Path {
+                                                            segments: [
+                                                                Ident {
+                                                                    name: "self",
+                                                                    span: 959..963,
+                                                                },
+                                                            ],
+                                                            span: 959..963,
+                                                        },
+                                                    ),
+                                                    span: 959..963,
+                                                },
+                                                Ident {
+                                                    name: "push",
+                                                    span: 964..968,
+                                                },
+                                                [
+                                                    Expr {
+                                                        kind: Field(
+                                                            Expr {
+                                                                kind: Name(
+                                                                    Path {
+                                                                        segments: [
+                                                                            Ident {
+                                                                                name: "self",
+                                                                                span: 969..973,
+                                                                            },
+                                                                        ],
+                                                                        span: 969..973,
+                                                                    },
+                                                                ),
+                                                                span: 969..973,
+                                                            },
+                                                            Ident {
+                                                                name: "count",
+                                                                span: 974..979,
+                                                            },
+                                                        ),
+                                                        span: 969..979,
+                                                    },
+                                                ],
+                                            ),
+                                            span: 959..980,
+                                        },
+                                        semi: Some(
+                                            980..981,
+                                        ),
+                                    },
+                                ],
+                                tail: None,
+                                span: 927..987,
+                            },
+                        ),
+                        span: 907..987,
+                    },
+                ],
+                span: 826..989,
+            },
+        ),
+    ],
+}

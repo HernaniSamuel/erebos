@@ -1,0 +1,159 @@
+// emit: typeck
+// Method calls (ADR 0114) that are rejected, each function one case.
+// `ty::unknown-method`: a function that does not exist, a field called, a type
+// with no functions, a raw pointer (never followed), a slice and an array
+// asked for `len`. `ty::not-a-method`. The receiver made as `&P` and `&mut P`
+// of the place, with the codes of those expressions: `&mut` of a `let` without
+// `mut`, through a `&T`, of a temporary; `self` by value of a non-copy type
+// through a reference; a method that borrows a register; a volatile receiver
+// place. `ty::wrong-arg-count` counts the arguments without the receiver.
+// `method_calls_modules/` has `ty::private-method`.
+struct Ring {
+    buf: [u8; 4],
+    count: usize,
+}
+
+impl Ring {
+    fn new() -> Ring {
+        Ring { buf: [0; 4], count: 0 }
+    }
+
+    fn push(&mut self, b: u8) -> bool {
+        self.count += 1;
+        true
+    }
+
+    fn count(&self) -> usize {
+        self.count
+    }
+
+    fn into_count(self) -> usize {
+        self.count
+    }
+}
+
+struct Plain {
+    n: u32,
+}
+
+// No function of that name; a field is not called.
+fn unknown(r: &Ring, plain: Plain) {
+    r.missing();
+    r.buf();
+    plain.n();
+}
+
+// A type with no functions, and types that cannot have any.
+fn no_functions(plain: Plain, n: u32, flag: bool) {
+    plain.f();
+    n.f();
+    flag.f();
+}
+
+// A raw pointer is never followed.
+fn pointer(p: *mut Ring, q: *const [u8]) {
+    p.push(1);
+    q.len();
+}
+
+// The length of a slice or an array is `len`.
+fn lengths(s: &[u8], a: [u8; 4], b: &[u8; 4]) -> usize {
+    s.len() + a.len() + b.len()
+}
+
+// A function without a receiver.
+fn not_a_method(r: &mut Ring) {
+    r.new();
+}
+
+// `&mut self` needs a place that can be written.
+fn immutable_local() {
+    let r: Ring = Ring::new();
+    r.push(1);
+}
+
+fn shared_reference(r: &Ring) {
+    r.push(1);
+}
+
+fn temporary() {
+    Ring::new().push(1);
+}
+
+// `self` by value of a non-copy type, through a reference.
+fn move_out(r: &Ring, m: &mut Ring) -> usize {
+    r.into_count() + m.into_count()
+}
+
+// Wrong argument counts, without the receiver.
+fn counts(r: &mut Ring) {
+    r.push();
+    r.push(1, 2);
+    r.count(1);
+}
+
+// An argument of the wrong type is checked as in any call.
+fn argument(r: &mut Ring) {
+    r.push(true);
+    r.push(300);
+}
+
+// A volatile receiver place.
+fn volatile_places(r: &volatile Ring, m: &mut volatile Ring) {
+    r.count();
+    m.push(1);
+}
+
+// A register keeps no address, reached through a reference too.
+enum Mode: u8 {
+    Off = 0,
+    On = 1,
+}
+
+impl Mode {
+    fn is_on(&self) -> bool {
+        *self == Mode::On
+    }
+}
+
+struct Status: u8 {
+    ready: bool at 0 = false,
+    mode: Mode at 1 = Mode::Off,
+}
+
+impl Status {
+    fn is_ready(self) -> bool {
+        self.ready
+    }
+
+    fn peek(&self) -> bool {
+        self.ready
+    }
+
+    fn reset(&mut self) {
+        self.ready = false;
+    }
+}
+
+peripheral Dev {
+    read write status: Status at 0,
+}
+
+peripheral DEV: Dev at 0x2000_0000;
+
+fn registers(d: &Dev) -> bool {
+    DEV.status.peek();
+    DEV.status.reset();
+    d.status.peek();
+    DEV.status.is_ready()
+}
+
+// A bit field has no address, in a register or in a local: that is the error,
+// not the register's.
+fn bit_fields() -> bool {
+    let s: Status = Status { ready: true, mode: Mode::On };
+    DEV.status.mode.is_on() || s.mode.is_on()
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

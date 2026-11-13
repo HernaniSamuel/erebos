@@ -1,0 +1,53 @@
+// emit: mir
+// A method called on a `static mut` borrows it by name (ADR 0114, 0111), so the
+// rules of statics hold for it. `COUNTER.bump()` lends `&mut COUNTER` to
+// `bump`, which also names `COUNTER`: `analysis::borrow-conflict-in-call`.
+// `TICKS.tick()` outside `critical` on a static a handler also reaches is
+// `analysis::unprotected-static`, and inside `critical` it is not.
+use core::arch::Vector;
+
+struct Count {
+    n: u32,
+}
+
+static mut COUNTER: Count = Count { n: 0 };
+static mut TICKS: Count = Count { n: 0 };
+
+impl Count {
+    fn bump(&mut self) {
+        COUNTER.n += 1;
+        self.n += 1;
+    }
+
+    fn tick(&mut self) {
+        self.n += 1;
+    }
+}
+
+fn names_itself() {
+    COUNTER.bump();
+}
+
+fn unprotected() {
+    TICKS.tick();
+}
+
+fn protected() {
+    critical {
+        TICKS.tick();
+    }
+}
+
+interrupt fn timer() at Vector::MachineTimer {
+    TICKS.n = 0;
+}
+
+entry fn main() -> ! {
+    unprotected();
+    protected();
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    loop {}
+}

@@ -570,6 +570,25 @@ const CATALOG: &[Snippet] = &[
         "let injected_n: u32 = 1;\nlet injected_a: u32 = injected_n.x;"
     ),
     s!(
+        "ty::unknown-method",
+        Mir,
+        Items,
+        "struct InjS { a: u8 }\nfn injected_f(s: InjS) {\n    s.injected_missing();\n}"
+    ),
+    s!(
+        "ty::not-a-method",
+        Mir,
+        Items,
+        "struct InjS { a: u8 }\nimpl InjS {\n    fn injected_new() {}\n}\nfn injected_f(s: InjS) {\n    s.injected_new();\n}"
+    ),
+    s!(
+        "ty::private-method",
+        Mir,
+        Items,
+        "mod injected_m {\n    pub struct InjS { pub a: u8 }\n    impl InjS {\n        fn injected_secret(&self) {}\n    }\n}\n\
+         fn injected_f(s: &injected_m::InjS) {\n    s.injected_secret();\n}"
+    ),
+    s!(
         "ty::unknown-field",
         Mir,
         Items,

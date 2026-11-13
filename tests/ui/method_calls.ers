@@ -1,0 +1,250 @@
+// emit: typeck
+// Accepted: method calls (ADR 0114). `x.f(args)` calls the function `f` of the
+// type of `x` with a receiver made from `x`: `x` moved or copied for `self`,
+// `&x` for `&self`, `&mut x` for `&mut self`; for a reference `r`, from `*r`.
+// Called on a local, a `let mut`, a parameter, a field, an array element, a
+// temporary, a `&T` and a `&mut T`, `(*r)`, a `static mut` in `critical`, a
+// peripheral, a cluster, the value of an `if` of a reference type; inside
+// methods of each receiver, on `self`; a copy type by value through a
+// reference; a linear value consumed; a bit-field struct's method by value on a
+// register and by each receiver on a local. The dump names the function and
+// the form of its receiver, and marks a receiver that is a reference as
+// dereferenced.
+#[copy]
+struct Point {
+    x: u32,
+    y: u32,
+}
+
+impl Point {
+    fn sum(self) -> u32 {
+        self.x + self.y
+    }
+
+    fn moved(&mut self, dx: u32) {
+        self.x += dx;
+    }
+
+    fn dup(&self) -> Point {
+        Point { x: self.x, y: self.y }
+    }
+}
+
+struct Ring {
+    buf: [u8; 4],
+    count: usize,
+}
+
+impl Ring {
+    fn new() -> Ring {
+        Ring { buf: [0; 4], count: 0 }
+    }
+
+    fn push(&mut self, b: u8) -> bool {
+        if self.count == 4 {
+            return false;
+        }
+        self.buf[self.count] = b;
+        self.count += 1;
+        true
+    }
+
+    // A method and a field of one name.
+    fn count(&self) -> usize {
+        self.count
+    }
+
+    // Methods called on `self`, whatever its receiver is.
+    fn fill(&mut self, b: u8) {
+        let mut i: usize = 0;
+        while i < 4 {
+            self.push(b);
+            i += 1;
+        }
+    }
+
+    fn total(&self) -> usize {
+        self.count()
+    }
+
+    fn into_count(self) -> usize {
+        self.count()
+    }
+
+    fn twice(mut self) -> usize {
+        self.push(1);
+        self.push(2);
+        self.count()
+    }
+}
+
+struct Pair {
+    a: Ring,
+    rings: [Ring; 2],
+}
+
+// Each place a receiver can be.
+fn places(p: &Ring, q: &mut Ring, mut m: Ring, n: Ring, pair: &mut Pair, mut own: Pair) -> usize {
+    let mut r: Ring = Ring::new();
+    r.push(1);
+    m.push(2);
+    q.push(3);
+    (*q).push(4);
+    own.a.push(5);
+    own.rings[1].push(6);
+    pair.a.push(7);
+    pair.rings[0].push(8);
+    let c: usize = r.count();
+    let a: usize = p.count();
+    let b: usize = q.count();
+    let d: usize = (*p).count();
+    let e: usize = n.count();
+    let f: usize = pair.a.count() + own.rings[0].count();
+    c + a + b + d + e + f + Ring::new().count() + Ring::new().into_count() + m.twice()
+}
+
+// A receiver that is the value of an `if` of a reference type.
+fn pick(c: bool, a: &Ring, b: &Ring) -> usize {
+    (if c { a } else { b }).count()
+}
+
+// A receiver that does not finish: the call, and its arguments, never run. An
+// argument that does not finish after the receiver was borrowed.
+fn diverging_receiver(r: &Ring) -> usize {
+    (return 1).count()
+}
+
+fn diverging_argument(mut r: Ring) -> usize {
+    r.push(return 5);
+    r.count()
+}
+
+// `self` by value through a reference, for a copy type; a chain.
+fn points(p: &Point, m: &mut Point, mut q: Point) -> u32 {
+    m.moved(1);
+    q.moved(2);
+    p.dup().sum() + p.sum() + m.sum() + q.sum() + Point { x: 1, y: 2 }.sum()
+}
+
+// A `static mut` is borrowed inside `critical`.
+static mut SHARED: Ring = Ring::new();
+
+fn shared() -> usize {
+    critical {
+        SHARED.push(1);
+        SHARED.count()
+    }
+}
+
+// A linear value consumed by a method.
+#[linear]
+struct Transfer {
+    channel: u32,
+}
+
+impl Transfer {
+    fn start(channel: u32) -> Transfer {
+        Transfer { channel: channel }
+    }
+
+    fn wait(self) -> u32 {
+        let c: u32 = self.channel;
+        end(self);
+        c
+    }
+}
+
+fn transfer() -> u32 {
+    let t: Transfer = Transfer::start(1);
+    t.wait()
+}
+
+// A peripheral and a cluster.
+peripheral Uart {
+    write thr: u8 at 0,
+    read lsr: u8 at 5,
+}
+
+peripheral UART0: Uart at 0x1000_0000;
+
+impl Uart {
+    fn ready(&self) -> bool {
+        (self.lsr & 0x20) != 0
+    }
+
+    fn putc(&mut self, byte: u8) {
+        while !self.ready() {}
+        self.thr = byte;
+    }
+}
+
+peripheral Context {
+    read write threshold: u32 at 0,
+}
+
+peripheral Plic {
+    ctx: [Context; 2] at 0x1000 step 0x100,
+}
+
+peripheral PLIC: Plic at 0x0C00_0000;
+
+impl Context {
+    fn set(&mut self, v: u32) {
+        self.threshold = v;
+    }
+
+    fn get(&self) -> u32 {
+        self.threshold
+    }
+}
+
+impl Plic {
+    fn set_second(&mut self, v: u32) {
+        self.ctx[1].set(v);
+    }
+}
+
+fn device(u: &mut Uart, v: &Uart) -> bool {
+    u.putc(1);
+    UART0.putc(2);
+    let shared: &Uart = &UART0;
+    PLIC.ctx[0].set(3);
+    PLIC.set_second(4);
+    PLIC.ctx[1].get() == 4 && v.ready() && shared.ready() && u.ready() && UART0.ready()
+}
+
+// A bit-field struct: by value on a register (one volatile read), and each
+// receiver on a local.
+struct Status: u8 {
+    ready: bool at 0 = false,
+    failed: bool at 1 = false,
+}
+
+impl Status {
+    fn is_ready(self) -> bool {
+        self.ready
+    }
+
+    fn has_failed(&self) -> bool {
+        self.failed
+    }
+
+    fn clear(&mut self) {
+        self.failed = false;
+    }
+}
+
+peripheral Dev {
+    read status: Status at 0,
+}
+
+peripheral DEV: Dev at 0x2000_0000;
+
+fn bits() -> bool {
+    let mut s: Status = Status { ready: true, failed: true };
+    s.clear();
+    DEV.status.is_ready() || s.is_ready() || s.has_failed()
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

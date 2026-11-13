@@ -1,0 +1,45 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/method_calls_modules/main.ers
+---
+--- errors ---
+ty::private-method
+
+  × `shapes::Circle::secret` is private
+   ╭─[drivers.ers:5:18]
+ 4 │ pub fn area(c: &Circle) -> u32 {
+ 5 │     c.area() + c.secret()
+   ·                  ───┬──
+   ·                     ╰── not visible here
+ 6 │ }
+   ╰────
+    ╭─[shapes.ers:18:8]
+ 17 │ 
+ 18 │     fn secret(&self) -> u32 {
+    ·        ───┬──
+    ·           ╰── declared here without `pub`
+ 19 │         self.radius
+    ╰────
+  help: a private function of a type is visible only in module `shapes`, which declares the type,
+        and the modules inside it; declare it `pub` to call it elsewhere (ADR 0050, 0113)
+ty::private-method
+
+  × `shapes::Hidden::id` is not visible here
+    ╭─[drivers.ers:10:27]
+  9 │ pub fn hidden() -> u32 {
+ 10 │     super::shapes::make().id()
+    ·                           ─┬
+    ·                            ╰── not visible here
+ 11 │ }
+    ╰────
+    ╭─[shapes.ers:24:12]
+ 23 │ impl Hidden {
+ 24 │     pub fn id(&self) -> u32 {
+    ·            ─┬
+    ·             ╰── declared `pub` here
+ 25 │         self.value
+    ╰────
+  help: a `pub` function of a type is visible wherever a path can name the type, and none written
+        in module `drivers` can name `shapes::Hidden`; calling it on a value does not change that
+        (ADR 0050, 0113)

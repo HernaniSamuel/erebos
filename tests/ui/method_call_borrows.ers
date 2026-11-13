@@ -1,0 +1,106 @@
+// emit: mir
+// The borrow check over method calls (ADR 0114, 0106, 0107). The call is
+// checked as written with the receiver explicit: its borrow is taken where the
+// receiver is written, before the arguments run, and is in use to the call,
+// so `v.push(v.len())` reads `v` while it is mutably borrowed
+// (`analysis::borrow-conflict`, labelled at the receiver and at the read), and
+// there is no two-phase borrow. The same with the length first is accepted. A
+// reference made from the receiver's place, held while the place is used, is a
+// conflict. A method that takes `self` moves the receiver
+// (`analysis::use-after-move`). Each function is one case, and `split`,
+// `reborrow` and `shared_twice` are accepted.
+struct Vec4 {
+    items: [u8; 4],
+    len: usize,
+}
+
+impl Vec4 {
+    fn push(&mut self, b: u8) {
+        self.items[self.len] = b;
+        self.len += 1;
+    }
+
+    fn len(&self) -> usize {
+        self.len
+    }
+
+    fn first(&self) -> u8 {
+        self.items[0]
+    }
+}
+
+// The argument reads the receiver while it is borrowed.
+fn argument_reads(mut v: Vec4) {
+    v.push(v.len() as u8);
+}
+
+fn argument_reads_through_reference(v: &mut Vec4) {
+    v.push(v.first());
+}
+
+// Accepted: the length is taken first.
+fn split(mut v: Vec4) {
+    let n: usize = v.len();
+    v.push(n as u8);
+}
+
+// Accepted: the receiver is reborrowed for the call, and `r` is usable after.
+fn reborrow(r: &mut Vec4) -> usize {
+    r.push(1);
+    r.push(2);
+    r.len()
+}
+
+// Accepted: two shared borrows may be in use together.
+fn shared_twice(r: &Vec4) -> usize {
+    r.len() + r.first() as usize
+}
+
+// A reference made from the receiver's place, held while the place is used.
+fn held(mut v: Vec4) -> u8 {
+    let first: &u8 = &v.items[0];
+    v.push(1);
+    *first
+}
+
+fn held_through_reference(v: &mut Vec4) -> usize {
+    let n: &usize = &v.len;
+    v.push(1);
+    *n
+}
+
+// A mutable borrow held while a method reads the place.
+fn mutably_held(mut v: Vec4) -> usize {
+    let first: &mut u8 = &mut v.items[0];
+    let n: usize = v.len();
+    *first = 1;
+    n
+}
+
+// A method that takes `self` moves its receiver.
+#[linear]
+struct Transfer {
+    channel: u32,
+}
+
+impl Transfer {
+    fn wait(self) -> u32 {
+        let c: u32 = self.channel;
+        end(self);
+        c
+    }
+}
+
+fn moved(t: Transfer) -> u32 {
+    let a: u32 = t.wait();
+    let b: u32 = t.wait();
+    a + b
+}
+
+entry fn main() -> ! {
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    loop {}
+}

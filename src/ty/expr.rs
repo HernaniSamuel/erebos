@@ -241,7 +241,22 @@ impl Checker<'_, '_> {
     /// Each argument is checked against its parameter's type.
     pub(super) fn call(&mut self, f: &Fn, expr: &Expr, callee: hir::FnId, args: &[Expr]) -> Ty {
         let target = self.hir.fn_(callee);
-        let params = target.params();
+        self.call_args(f, expr, target, 0, args);
+        self.norm(target.ret)
+    }
+
+    /// The arguments `args` of the call `expr` of `target`, checked against
+    /// its parameters after the first `skip`, which a method call's receiver
+    /// takes (ADR 0114): `ty::wrong-arg-count` counts only the others.
+    pub(super) fn call_args(
+        &mut self,
+        f: &Fn,
+        expr: &Expr,
+        target: &Fn,
+        skip: usize,
+        args: &[Expr],
+    ) {
+        let params = &target.params()[skip..];
         if args.len() != params.len() {
             let plural = if params.len() == 1 { "" } else { "s" };
             self.q.diags.push(
@@ -265,7 +280,6 @@ impl Checker<'_, '_> {
             let expected = self.norm(expected);
             self.check(f, arg, Some(expected));
         }
-        self.norm(target.ret)
     }
 
     /// `len(s)` takes any slice, or a pointer to an array, which converts

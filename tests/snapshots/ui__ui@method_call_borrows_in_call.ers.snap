@@ -1,0 +1,60 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/method_call_borrows_in_call.ers
+---
+--- errors ---
+analysis::borrow-conflict-in-call
+
+  × `COUNTER` is borrowed during this call, and the callee reads `COUNTER.n`
+    ╭─[method_call_borrows_in_call.ers:28:5]
+ 17 │     fn bump(&mut self) {
+ 18 │         COUNTER.n += 1;
+    ·         ───────┬──────
+    ·                ╰── `COUNTER.n` is read here
+ 19 │         self.n += 1;
+ 20 │     }
+ 21 │ 
+ 22 │     fn tick(&mut self) {
+ 23 │         self.n += 1;
+ 24 │     }
+ 25 │ }
+ 26 │ 
+ 27 │ fn names_itself() {
+ 28 │     COUNTER.bump();
+    ·     ───────┬──────┬
+    ·            │      ╰── `COUNTER` is borrowed `&mut` here
+    ·            ╰── `Count::bump` reaches `COUNTER.n` while `COUNTER` is borrowed
+ 29 │ }
+    ╰────
+  help: pass the reference on instead of naming `COUNTER` in the callee, or end the borrow before
+        the call
+analysis::unprotected-static
+
+  × `TICKS` is reached outside `critical` in the thread context, and a handler reaches it too
+    ╭─[method_call_borrows_in_call.ers:32:5]
+ 31 │ fn unprotected() {
+ 32 │     TICKS.tick();
+    ·     ──┬──
+    ·       ╰── reached here, outside `critical`
+ 33 │ }
+ 34 │ 
+ 35 │ fn protected() {
+ 36 │     critical {
+ 37 │         TICKS.tick();
+ 38 │     }
+ 39 │ }
+ 40 │ 
+ 41 │ interrupt fn timer() at Vector::MachineTimer {
+ 42 │     TICKS.n = 0;
+    ·     ─────┬─────
+    ·          ╰── the handler `timer` reaches it here
+ 43 │ }
+ 44 │ 
+ 45 │ entry fn main() -> ! {
+ 46 │     unprotected();
+    ·     ──────┬──────
+    ·           ╰── called here, outside `critical`
+ 47 │     protected();
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block

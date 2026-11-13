@@ -436,6 +436,10 @@ fn operands_of<'a>(expr: &'a Expr, operands: &mut Vec<&'a Expr>, blocks: &mut Ve
         | ExprKind::Array(args)
         | ExprKind::Variant(_, _, Some(args))
         | ExprKind::ContextVariant(_, _, Some(args)) => operands.extend(args),
+        ExprKind::MethodCall { receiver, args, .. } => {
+            operands.push(receiver);
+            operands.extend(args);
+        }
         ExprKind::StructLit(_, fields) => operands.extend(fields.iter().map(|(_, value)| value)),
         ExprKind::BitStructLit(_, fields, _) => {
             operands.extend(fields.iter().map(|(_, _, value)| value));

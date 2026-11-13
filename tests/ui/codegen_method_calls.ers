@@ -1,0 +1,53 @@
+// emit: llvm-ir
+// A method call and the explicit call it stands for give the same IR at `-O0`
+// (ADR 0114): each pair below is one function written both ways, and their
+// bodies are the same instructions. The receiver of `&self` and `&mut self`
+// is the address of the place, and of `self` its value.
+struct Ring {
+    buf: [u8; 4],
+    count: usize,
+}
+
+impl Ring {
+    fn push(&mut self, b: u8) {
+        self.buf[self.count] = b;
+        self.count += 1;
+    }
+
+    fn count(&self) -> usize {
+        self.count
+    }
+
+    fn into_count(self) -> usize {
+        self.count
+    }
+}
+
+fn implicit_mut(r: &mut Ring) {
+    r.push(1);
+}
+
+fn explicit_mut(r: &mut Ring) {
+    Ring::push(&mut *r, 1);
+}
+
+fn implicit_local(mut r: Ring) -> usize {
+    r.push(2);
+    r.count()
+}
+
+fn explicit_local(mut r: Ring) -> usize {
+    Ring::push(&mut r, 2);
+    Ring::count(&r)
+}
+
+fn implicit_value(r: Ring) -> usize {
+    r.into_count()
+}
+
+fn explicit_value(r: Ring) -> usize {
+    Ring::into_count(r)
+}
+
+entry fn main() -> ! { loop {} }
+panic fn on_panic() -> ! { loop {} }

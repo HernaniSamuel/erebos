@@ -608,6 +608,10 @@ pub enum ExprKind {
     StructLit(Path, Vec<FieldInit>, Option<Span>),
     /// `base.field`
     Field(Box<Expr>, Ident),
+    /// `base.name(args)`, a call of a function of the type of `base`, with
+    /// `base` as its receiver (ADR 0114). `base.name` without parentheses is
+    /// a `Field`.
+    MethodCall(Box<Expr>, Ident, Vec<Expr>),
     /// `size_of(T)` (ADR 0022)
     SizeOf(Ty),
     /// `align_of(T)` (ADR 0022)

@@ -14,8 +14,8 @@ use std::collections::{HashMap, HashSet};
 use crate::diag::Diagnostic;
 use crate::hir::{
     self, AccessMode, BinOp, BitStructId, BitStructTy, Block, EnumId, EnumTy, Expr, ExprId,
-    ExprKind, Fn, FnKind, HandlerVector, Hir, IntTy, LocalId, ModuleId, NeverPosition, PatternId,
-    PeripheralTypeId, Ptr, Ref, StaticId, Stmt, Ty, UnsizedPosition,
+    ExprKind, Fn, FnId, FnKind, HandlerVector, Hir, IntTy, LocalId, ModuleId, NeverPosition,
+    PatternId, PeripheralTypeId, Ptr, Ref, StaticId, Stmt, Ty, UnsizedPosition,
 };
 use crate::layout;
 use crate::query::Queries;
@@ -34,6 +34,7 @@ mod copy;
 mod dump;
 mod expr;
 mod linear;
+mod method;
 mod pattern;
 mod place;
 mod reference;
@@ -55,6 +56,10 @@ pub struct Tables {
     /// reference type, and are dereferenced there: `r.f` is `(*r).f`
     /// (ADR 0114). MIR building finds them here, and writes the `Deref`.
     derefed: HashSet<ExprId>,
+    /// The function each method call `x.f(args)` calls (ADR 0114). Its
+    /// receiver is made from `x` as that function's receiver says, and from
+    /// `*x` when `x` is in `derefed`.
+    methods: HashMap<ExprId, FnId>,
     /// The bit-field struct and the field index of each access to a bit
     /// field, read or written (ADR 0059).
     bit_fields: HashMap<ExprId, (BitStructId, u32)>,
@@ -80,6 +85,7 @@ impl Tables {
             fields: HashMap::new(),
             entry_accesses: HashSet::new(),
             derefed: HashSet::new(),
+            methods: HashMap::new(),
             bit_fields: HashMap::new(),
             coercions: HashMap::new(),
             variants: HashMap::new(),
@@ -110,6 +116,11 @@ impl Tables {
     /// reference's, and the place the base stands for is what it refers to.
     pub fn is_derefed(&self, id: ExprId) -> bool {
         self.derefed.contains(&id)
+    }
+
+    /// The function that the method call `id` calls (ADR 0114).
+    pub fn method(&self, id: ExprId) -> FnId {
+        self.methods[&id]
     }
 
     /// The type of the place that the base `id` of a field, an index or a
@@ -1111,6 +1122,12 @@ impl Checker<'_, '_> {
                 Ty::BitStruct(*s)
             }
             ExprKind::Call { callee, args } => self.call(f, expr, *callee, args),
+            ExprKind::MethodCall {
+                receiver,
+                name,
+                name_span,
+                args,
+            } => self.method_call(f, expr, receiver, name, *name_span, args),
             ExprKind::Unary(op, operand) => self.unary(f, expr, *op, operand, expected),
             ExprKind::Binary(op, lhs, rhs, _) if op.is_shift() => {
                 let lhs_ty = self.check(f, lhs, expected);

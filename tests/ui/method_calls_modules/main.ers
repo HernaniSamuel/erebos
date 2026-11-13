@@ -1,0 +1,18 @@
+// emit: typeck
+// Method calls across modules (ADR 0050, 0113, 0114). A function of a type
+// without `pub` is visible in the module of the type and the modules inside it:
+// a sibling that calls it is `ty::private-method`, pointing at the call and at
+// the function, while `shapes::inner` sees it. One with `pub` is visible
+// wherever the type is reachable, and the type of a value need not be named to
+// call a function on it: `shapes::make().id()` has a value of `Hidden`, a type
+// no path in `drivers` can name, so it is `ty::private-method` too.
+mod shapes;
+mod drivers;
+
+entry fn main() -> ! {
+    loop {}
+}
+
+panic fn on_panic() -> ! {
+    loop {}
+}

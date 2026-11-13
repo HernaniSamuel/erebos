@@ -2125,8 +2125,8 @@ impl Parser<'_> {
         })
     }
 
-    /// A primary expression followed by any indexing, field accesses and
-    /// `?` (ADR 0046), which all bind as tightly.
+    /// A primary expression followed by any indexing, field accesses, method
+    /// calls (ADR 0114) and `?` (ADR 0046), which all bind as tightly.
     fn postfix(&mut self) -> PResult<Expr> {
         let mut expr = self.primary()?;
         loop {
@@ -2134,10 +2134,20 @@ impl Parser<'_> {
                 expr = self.index_or_range(expr, open.span)?;
             } else if self.eat(TokenKind::Dot).is_some() {
                 let field = self.ident()?;
-                expr = Expr {
-                    span: expr.span.to(field.span),
-                    kind: ExprKind::Field(Box::new(expr), field),
-                };
+                // `.name(` is a method call (ADR 0114), `.name` a field.
+                if self.eat(TokenKind::LParen).is_some() {
+                    let args = self.comma_list(Self::nested_expr)?;
+                    let end = self.tokens[self.pos - 1].span;
+                    expr = Expr {
+                        span: expr.span.to(end),
+                        kind: ExprKind::MethodCall(Box::new(expr), field, args),
+                    };
+                } else {
+                    expr = Expr {
+                        span: expr.span.to(field.span),
+                        kind: ExprKind::Field(Box::new(expr), field),
+                    };
+                }
             } else if let Some(question) = self.eat(TokenKind::Question) {
                 expr = Expr {
                     span: expr.span.to(question.span),

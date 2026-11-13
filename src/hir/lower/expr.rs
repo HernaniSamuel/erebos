@@ -588,6 +588,14 @@ impl Lowerer<'_> {
             ast::ExprKind::Field(base, field) => {
                 ExprKind::Field(self.boxed(base), field.name.clone(), field.span)
             }
+            // The receiver first, then the arguments, in the order they run
+            // (ADR 0114).
+            ast::ExprKind::MethodCall(receiver, name, args) => ExprKind::MethodCall {
+                receiver: self.boxed(receiver),
+                name: name.name.clone(),
+                name_span: name.span,
+                args: args.iter().map(|arg| self.expr(arg)).collect(),
+            },
             ast::ExprKind::SizeOf(ty) => {
                 ExprKind::SizeOf(self.memory_ty(ty, NeverPosition::LayoutQuery("size_of")))
             }

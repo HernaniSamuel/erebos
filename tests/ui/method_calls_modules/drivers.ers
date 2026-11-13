@@ -1,0 +1,11 @@
+use super::shapes::Circle;
+
+// `pub` functions are visible; a private one is not.
+pub fn area(c: &Circle) -> u32 {
+    c.area() + c.secret()
+}
+
+// The type is private to its module, so no path here names it.
+pub fn hidden() -> u32 {
+    super::shapes::make().id()
+}

@@ -1482,6 +1482,15 @@ pub enum ExprKind {
     BitStructLit(BitStructTy, Vec<(u32, Span, Expr)>, Option<Span>),
     /// `base.field`; the type checker resolves the field.
     Field(Box<Expr>, String, Span),
+    /// `receiver.name(args)` (ADR 0114): the type checker finds the function
+    /// `name` of the type of `receiver` and makes the receiver its first
+    /// argument; `name_span` is the span of the name.
+    MethodCall {
+        receiver: Box<Expr>,
+        name: String,
+        name_span: Span,
+        args: Vec<Expr>,
+    },
     /// `assert(cond)` or `assert(cond, msg)`, built in (ADR 0029, 0031),
     /// with the span of `assert`, where its check is located (ADR 0053).
     Assert(Box<Expr>, Option<Box<Expr>>, Span),
@@ -1736,6 +1745,12 @@ impl Expr {
             | ExprKind::Break { value: None, .. }
             | ExprKind::Return(None) => {}
             ExprKind::Break { value: Some(e), .. } | ExprKind::Return(Some(e)) => e.walk(f),
+            ExprKind::MethodCall { receiver, args, .. } => {
+                receiver.walk(f);
+                for arg in args {
+                    arg.walk(f);
+                }
+            }
             ExprKind::Call { args, .. }
             | ExprKind::Array(args)
             | ExprKind::Variant(_, _, Some(args))

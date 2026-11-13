@@ -785,6 +785,21 @@ impl Builder<'_, '_> {
                 self.call(dest, BodyId(callee.0), args);
                 self.read_result(dest)
             }
+            // The call as written with the receiver explicit, first
+            // (ADR 0114). A receiver that does not finish ends the value, and
+            // the arguments never run.
+            hir::ExprKind::MethodCall { receiver, args, .. } => {
+                if self.ty_of(receiver) == Ty::Never {
+                    self.expr(receiver);
+                    return Operand::Const(Const::Unit);
+                }
+                let callee = self.q.tables.method(expr.id);
+                let receiver = self.receiver(receiver, callee);
+                let args = self.method_operands(receiver, args);
+                let dest = self.result_place(ty);
+                self.call(dest, BodyId(callee.0), args);
+                self.read_result(dest)
+            }
             hir::ExprKind::StructLit(_, fields) => {
                 let value = Place::local(self.new_local(ty, None));
                 // In the order written, each stored as soon as it is
@@ -2012,6 +2027,71 @@ impl Builder<'_, '_> {
             }
             operands.push(operand);
         }
+        operands
+    }
+
+    /// The first argument of the call of `callee` by the method call whose
+    /// receiver is `receiver` (ADR 0114), as the type checker made it: the
+    /// value of the receiver place `P`, a `Ref` of `P` with the span of the
+    /// receiver, as `&P` and `&mut P` would be, where `P` is `*receiver` when
+    /// the receiver is a reference.
+    fn receiver(&mut self, receiver: &hir::Expr, callee: hir::FnId) -> Operand {
+        let derefed = self.q.tables.is_derefed(receiver.id);
+        let kind = self
+            .q
+            .hir
+            .fn_(callee)
+            .owner
+            .and_then(|owner| owner.receiver);
+        let mutable = match kind {
+            Some(hir::ReceiverKind::Ref) => false,
+            Some(hir::ReceiverKind::RefMut) => true,
+            // `self` and `mut self`: the value of the place, moved or copied.
+            _ if derefed => {
+                let outer = std::mem::replace(&mut self.span, receiver.span);
+                let place = self.place_then(receiver, false, false);
+                let ty = self.q.tables.base_ty(receiver.id);
+                let ty = self.q.mir_ty(ty);
+                let read = self.read(place);
+                let value = self.temp(ty, Rvalue::Use(read));
+                self.span = outer;
+                return value;
+            }
+            _ => return self.argument(receiver),
+        };
+        let outer = std::mem::replace(&mut self.span, receiver.span);
+        let place = if derefed {
+            Some(self.place_then(receiver, false, true))
+        } else {
+            self.borrowed_place(receiver)
+        };
+        let value = match place {
+            Some(place) => {
+                let referent = self.q.tables.base_ty(receiver.id);
+                let ty = self.q.mir_ty(hir::Ty::reference(mutable, false, referent));
+                self.temp(ty, Rvalue::Ref { mutable, place })
+            }
+            // The value did not finish, and nothing follows.
+            None => Operand::Const(Const::Unit),
+        };
+        self.span = outer;
+        value
+    }
+
+    /// `operands` for a method call: the operand of the receiver, then the
+    /// arguments, left to right. As in any call, a deferred read is taken
+    /// before a later argument that could assign it.
+    fn method_operands(&mut self, receiver: Operand, args: &[hir::Expr]) -> Vec<Operand> {
+        let mut first = receiver;
+        if first.place().is_some()
+            && !args
+                .iter()
+                .all(|e| !self.is_mut_variable(e) && is_simple(e))
+        {
+            first = self.spill(first);
+        }
+        let mut operands = vec![first];
+        operands.extend(self.operands(args));
         operands
     }
 

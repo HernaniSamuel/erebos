@@ -1,0 +1,102 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/method_call_borrows.ers
+---
+--- errors ---
+analysis::borrow-conflict
+
+  × cannot borrow `v` while it is borrowed as mutable
+    ╭─[method_call_borrows.ers:34:12]
+ 33 │ fn argument_reads(mut v: Vec4) {
+ 34 │     v.push(v.len() as u8);
+    ·     ┬──────────┬─────────┬
+    ·     │          │         ╰── borrowed here
+    ·     │          ╰── the borrow is used later here
+    ·     ╰── `v` is borrowed as mutable here
+ 35 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot convert `v` to `&` while it is borrowed as mutable
+    ╭─[method_call_borrows.ers:38:12]
+ 37 │ fn argument_reads_through_reference(v: &mut Vec4) {
+ 38 │     v.push(v.first());
+    ·     ┬────────┬───────┬
+    ·     │        │       ╰── converted to `&` here
+    ·     │        ╰── the borrow is used later here
+    ·     ╰── `*v` is borrowed as mutable here
+ 39 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot borrow `v` as mutable while it is borrowed
+    ╭─[method_call_borrows.ers:62:5]
+ 60 │ fn held(mut v: Vec4) -> u8 {
+ 61 │     let first: &u8 = &v.items[0];
+    ·                      ─────┬─────
+    ·                           ╰── `v.items[_]` is borrowed here
+ 62 │     v.push(1);
+    ·     ┬
+    ·     ╰── borrowed as mutable here
+ 63 │     *first
+    ·     ───┬──
+    ·        ╰── the borrow is used later here
+ 64 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot lend `v` to this call while it is borrowed
+    ╭─[method_call_borrows.ers:68:5]
+ 66 │ fn held_through_reference(v: &mut Vec4) -> usize {
+ 67 │     let n: &usize = &v.len;
+    ·                     ───┬──
+    ·                        ╰── `(*v).len` is borrowed here
+ 68 │     v.push(1);
+    ·     ┬
+    ·     ╰── lent to this call here
+ 69 │     *n
+    ·     ─┬
+    ·      ╰── the borrow is used later here
+ 70 │ }
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::borrow-conflict
+
+  × cannot borrow `v` while it is borrowed as mutable
+    ╭─[method_call_borrows.ers:75:20]
+ 73 │ fn mutably_held(mut v: Vec4) -> usize {
+ 74 │     let first: &mut u8 = &mut v.items[0];
+    ·                          ───────┬───────
+    ·                                 ╰── `v.items[_]` is borrowed as mutable here
+ 75 │     let n: usize = v.len();
+    ·                    ┬
+    ·                    ╰── borrowed here
+ 76 │     *first = 1;
+    ·     ─────┬────
+    ·          ╰── the borrow is used later here
+ 77 │     n
+    ╰────
+  help: end the borrow first: use the reference before this point, or take the value out into a
+        `let` before borrowing it (ADR 0106)
+analysis::use-after-move
+
+  × use of moved value `t`
+    ╭─[method_call_borrows.ers:96:18]
+ 94 │ fn moved(t: Transfer) -> u32 {
+ 95 │     let a: u32 = t.wait();
+    ·                  ┬
+    ·                  ╰── moved here
+ 96 │     let b: u32 = t.wait();
+    ·                  ┬
+    ·                  ╰── used here, after it was moved
+ 97 │     a + b
+    ╰────
+  help: a place that was moved is valid again once it is assigned a new value (ADR 0097)

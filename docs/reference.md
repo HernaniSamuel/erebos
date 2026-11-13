@@ -6378,7 +6378,7 @@ When code is type checked:
 | `ty::private-register` | an entry not visible where it is named |
 | `ty::write-to-read-only` | a write, a compound assignment or a field assignment to a `read` register; a field assignment or a compound assignment to a `read` field in a volatile place |
 | `ty::read-of-write-only` | a read, a compound assignment or a field assignment of a `write` register, or a field read from one; a read of a `write` field, or a compound assignment to one, in a volatile place |
-| `ty::register-address` | `&raw`, `&` or `&mut` of a register, of a register array or a cluster array taken whole, of an element of a register array, or of a range of one |
+| `ty::register-address` | `&raw`, `&` or `&mut` of a register, of a register array or a cluster array taken whole, of an element of a register array, or of a range of one; a method taking `&self` or `&mut self` called on a register (one taking `self` reads it) |
 | `ty::bit-field-address` | `&raw`, `&` or `&mut` of a bit field, a register's too |
 | `ty::read-with-effects` | a field assignment or a compound assignment to a place whose reads have effects, or to one of its fields |
 | `ty::compound-write-effect` | a compound assignment to a field with a write effect in a volatile place |
@@ -7276,7 +7276,7 @@ Every error has a stable code, shown with the message.
 | `resolve::outside-loop` | `break`/`continue` outside a loop |
 | `resolve::break-value-in-while` | `break value` in a `while` |
 | `resolve::return-in-comptime` | `return` or `?` in code run at compile time on its own: a `comptime` expression or block, the initializer of a constant or static, a variant's value, an array length, a repeat count, an `#[align(N)]` argument, a value of a `memory` block, a register's offset or a peripheral's address |
-| `ty::mismatched-types` | a value of the wrong type, a `&T` where a `&mut T` is expected, a reference to an array that does not convert (another element type, a `&[T; N]` for a `&mut [T]`, a raw slice for a reference), a volatile reference where one that is not is expected and the other way (neither converts to the other, with a help), a bound of a range that is not a `usize`, a reference given to `slice`, or a `.V` where the expected type, or the position's type, is not an enum |
+| `ty::mismatched-types` | a value of the wrong type, a `&T` where a `&mut T` is expected, a reference to an array that does not convert (another element type, a `&[T; N]` for a `&mut [T]`, a raw slice for a reference), a volatile reference where one that is not is expected and the other way (neither converts to the other, with a help), a method called on a volatile place with `&self` or `&mut self`, which no receiver takes (with a help), a bound of a range that is not a `usize`, a reference given to `slice`, or a `.V` where the expected type, or the position's type, is not an enum |
 | `ty::untyped-literal` | a literal or array literal with no expected type |
 | `ty::untyped-variant` | a `.V` with no expected type, as a `match` scrutinee, the operand of `as` or `?`, or an expression statement |
 | `ty::unknown-variant` | a `.V` where the expected enum, or the position's enum, has no variant of that name |
@@ -7294,6 +7294,9 @@ Every error has a stable code, shown with the message.
 | `ty::no-fields` | field access on a value with neither fields nor registers, or on a reference to one |
 | `ty::unknown-field` | field access to a field the struct does not have |
 | `ty::private-field` | a place or `offset_of` naming a field that is not visible here |
+| `ty::unknown-method` | `x.f()` where the type of `x`, or what it refers to, has no function `f`; a field called, a raw pointer (never followed), `x.len()` on a slice or an array |
+| `ty::not-a-method` | `x.f()` where `f` is a function of the type without a receiver |
+| `ty::private-method` | `x.f()` where `f` is not visible here, a `pub` `f` of a type that is not reachable here included |
 | `ty::private-variant` | `.V` naming a variant of an enum that is not reachable here |
 | `ty::write-through-const` | assignment through a `*const` pointer or a `&` reference |
 | `ty::not-assignable` | assignment to something that is not a place, or to part of a temporary; an `inout` operand of `asm` without `=>` whose expression is not a place |
@@ -7363,7 +7366,7 @@ Every error has a stable code, shown with the message.
 | `ty::private-register` | an entry that is not visible here |
 | `ty::write-to-read-only` | a write, a compound assignment or a field assignment to a `read` register; a field assignment or a compound assignment to a `read` field in a volatile place |
 | `ty::read-of-write-only` | a read, a compound assignment or a field assignment of a `write` register, or a field read from one; a read of a `write` field, or a compound assignment to one, in a volatile place |
-| `ty::register-address` | `&raw`, `&` or `&mut` of a register, of a register array or a cluster array taken whole, of an element of a register array, or of a range of one |
+| `ty::register-address` | `&raw`, `&` or `&mut` of a register, of a register array or a cluster array taken whole, of an element of a register array, or of a range of one; a method taking `&self` or `&mut self` called on a register (one taking `self` reads it) |
 | `ty::bit-field-address` | `&raw`, `&` or `&mut` of a bit field, a register's too |
 | `ty::read-with-effects` | a field assignment or a compound assignment to a place whose reads have effects, or to one of its fields |
 | `ty::compound-write-effect` | a compound assignment to a field with a write effect in a volatile place |
