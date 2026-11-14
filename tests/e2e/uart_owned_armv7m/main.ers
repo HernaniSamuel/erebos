@@ -1,0 +1,118 @@
+// A UART owned by its handler (ADR 0115) on thumbv7m. QEMU `mps2-an385`'s CMSDK
+// UART 0 is declared in `an385.svd`, and `an385.ers` is what `erebos svd` writes
+// from it, kept (`tests/svd.rs` requires that they agree), the chip's list
+// `Interrupt` included. Only the handler, at `Interrupt::Uart0Tx`, names `UART0`:
+// it sets the device up on its first run (`bauddiv`, then `ctrl` with the
+// transmitter and its interrupt), clears the interrupt in `INTSTATUS` and writes
+// the next byte, counting the bytes sent. The entry function never names the
+// UART, so the handler context owns it and nothing is written to say so: the
+// entry function queues a message of 26 bytes in a `static mut` ring buffer of
+// 16, inside `critical`, and when the transmitter is idle (`ACTIVE`) pends the
+// line with `core::arch::nvic_pend`, an address in `core` and no peripheral, so
+// that the first run of the handler is that request. It waits in `critical`
+// (`wait_for_interrupt`) while the ring is full and, at the end, until the queue
+// is empty and the last byte has been sent, and compares the count of the
+// handler with the message's length. The static `READY` is named by the handler
+// alone, as `UART0` is; `SENT` is read by the entry function too. A thread that wrote `UART0` outside `critical` would be
+// rejected: `tests/ui/shared_peripheral_owned.ers` is that program.
+// takes-exceptions: yes
+// targets: thumbv7m-none-eabi
+// expect-output: uart owned by its handler
+// expect-exit: 0
+mod an385;
+mod board;
+
+use an385::uart0::Ctrl;
+use an385::{Interrupt, UART0};
+use board::exit;
+
+const SLOTS: usize = 16;
+
+// The ring: `HEAD` counts the bytes queued and `TAIL` the bytes taken, and the
+// slot of each is the count modulo `SLOTS`. `ACTIVE` is true from the request
+// that starts the handler until the run that finds the queue empty.
+static mut QUEUE: [u8; 16] = [0; 16];
+static mut HEAD: usize = 0;
+static mut TAIL: usize = 0;
+static mut ACTIVE: bool = false;
+// Whether the UART is set up (named by the handler alone), and the bytes sent
+// (read by the entry function at the end).
+static mut READY: bool = false;
+static mut SENT: u32 = 0;
+
+interrupt fn transmitted() at Interrupt::Uart0Tx {
+    if core::arch::interrupts_enabled() {
+        exit(10)
+    }
+    let mut ipsr: u32 = 0;
+    asm("mrs {}, ipsr", out(reg) ipsr, options(nostack, preserves_flags));
+    if ipsr != 16 + Interrupt::Uart0Tx as u32 {
+        exit(11)
+    }
+    // The first run is the entry function's request: the divisor is set before
+    // the transmitter is enabled.
+    if !READY {
+        UART0.bauddiv = 16;
+        UART0.ctrl = Ctrl { tx_en: true, tx_inten: true, .. };
+        READY = true;
+    }
+    // The level of the line follows this bit: it must be cleared before the
+    // handler returns, or the handler runs again.
+    UART0.intstatus.tx = true;
+    if TAIL != HEAD {
+        let byte: u8 = QUEUE[TAIL % SLOTS];
+        TAIL += 1;
+        SENT += 1;
+        UART0.data = byte as u32;
+    } else {
+        ACTIVE = false;
+    }
+}
+
+// Queues `text`, a part at a time when the ring is full.
+fn send(text: *const [u8]) {
+    let mut i: usize = 0;
+    while i < len(text) {
+        critical {
+            while i < len(text) && HEAD - TAIL < SLOTS {
+                QUEUE[HEAD % SLOTS] = (*text)[i];
+                HEAD += 1;
+                i += 1;
+            }
+            // The transmitter is idle: the handler is asked to start it.
+            if !ACTIVE {
+                ACTIVE = true;
+                core::arch::nvic_pend(Interrupt::Uart0Tx as u32);
+            }
+            if i < len(text) {
+                core::arch::wait_for_interrupt();
+            }
+        }
+    }
+}
+
+entry fn main() -> ! {
+    core::arch::nvic_enable(Interrupt::Uart0Tx as u32);
+    core::arch::enable_interrupts();
+
+    send(&raw const b"uart owned by its handler\n");
+
+    // The last byte is sent when its interrupt has been served.
+    loop {
+        critical {
+            if !ACTIVE && TAIL == HEAD {
+                break;
+            }
+            core::arch::wait_for_interrupt();
+        }
+    }
+    let sent: u32 = critical { SENT };
+    if sent != 26 {
+        exit(2)
+    }
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(99)
+}

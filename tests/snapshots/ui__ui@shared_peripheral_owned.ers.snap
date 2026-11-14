@@ -1,0 +1,49 @@
+---
+source: tests/ui.rs
+expression: output
+input_file: tests/ui/shared_peripheral_owned.ers
+---
+--- errors ---
+analysis::unprotected-peripheral
+
+  × `UART0` is reached outside `critical` in the thread context, and a handler reaches it too
+    ╭─[shared_peripheral_owned.ers:66:5]
+ 45 │     if !READY {
+ 46 │         UART0.ier = Ier { .. };
+    ·         ───────────┬──────────
+    ·                    ╰── the handler `software` reaches it here
+ 47 │         READY = true;
+ 48 │     }
+ 49 │     UART0.ier.thri = true;
+ 50 │ }
+ 51 │ 
+ 52 │ interrupt fn external() at Vector::MachineExternal {
+ 53 │     let source: u32 = PLIC.claim;
+ 54 │     PLIC.claim = source;
+ 55 │ }
+ 56 │ 
+ 57 │ fn send(byte: u8) {
+ 58 │     critical {
+ 59 │         QUEUE[HEAD % 16] = byte;
+ 60 │         HEAD += 1;
+ 61 │         if !ACTIVE {
+ 62 │             ACTIVE = true;
+ 63 │             CLINT.msip = 1;
+ 64 │         }
+ 65 │     }
+ 66 │     UART0.ier.thri = true;
+    ·     ──────────┬──────────
+    ·               ╰── reached here, outside `critical`
+ 67 │ }
+ 68 │ 
+ 69 │ entry fn main() -> ! {
+ 70 │     critical {
+ 71 │         PLIC.priority[10] = 1;
+ 72 │     }
+ 73 │     send(b'x');
+    ·     ─────┬────
+    ·          ╰── called here, outside `critical`
+ 74 │     loop {}
+    ╰────
+  help: put the access, or one call on the path to it, in a `critical` block, or leave the device
+        to one context

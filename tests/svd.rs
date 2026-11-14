@@ -286,12 +286,16 @@ fn summary(module: &str, diags: &[diag::Diagnostic], sources: &SourceMap) -> Str
 
 /// The e2e programs that declare a module generated from an SVD file kept
 /// beside it: the directory under `tests/e2e/` and the file's stem. QEMU
-/// `virt`'s devices (ADR 0070), and the UART of each target driven by its
-/// interrupt (ADR 0092).
-const KEPT: [(&str, &str); 3] = [
+/// `virt`'s devices (ADR 0070), the UART of each target driven by its
+/// interrupt (ADR 0092), and the UART of each target owned by its handler
+/// (ADR 0115, with the CLINT's `msip` on riscv32), whose modules are copies
+/// that would otherwise drift from the generator.
+const KEPT: [(&str, &str); 5] = [
     ("svd_virt", "virt"),
     ("uart_interrupt_riscv32", "virt"),
     ("uart_interrupt_armv7m", "an385"),
+    ("uart_owned_riscv32", "virt"),
+    ("uart_owned_armv7m", "an385"),
 ];
 
 /// Each kept module (`virt.ers`, `an385.ers`), the one an e2e program

@@ -1,0 +1,77 @@
+// emit: mir
+// The program of `tests/e2e/uart_owned_riscv32/` cut to what the check needs
+// (ADR 0115), with the UART, the PLIC and the CLINT declared here and not
+// copied from a generated module, and with the entry function writing the UART
+// outside `critical` after queueing: `UART0` is not owned by the handler
+// context any more, and the write is `analysis::unprotected-peripheral`. In
+// this cut only the handler at `Vector::MachineSoftware` names `UART0` (the one
+// at `Vector::MachineExternal` claims and completes a source of the PLIC and
+// calls nothing that names the UART), so the other label is on the first place
+// of that handler, its setup `UART0.ier = Ier { .. }`, whatever the order of the
+// bodies. The thread's accesses of `PLIC` and
+// `CLINT`, which the handlers name too, are inside `critical` and no error.
+use core::arch::Vector;
+
+peripheral Uart {
+    write thr: u8 at 0x0,
+    read write ier: Ier at 0x1,
+}
+
+struct Ier: u8 {
+    rdi: bool at 0 = false,
+    thri: bool at 1 = false,
+}
+
+peripheral Plic {
+    read write priority: [u32; 96] at 0x0,
+    read write claim: u32 at 0x20_0004,
+}
+
+peripheral Clint {
+    read write msip: u32 at 0x0,
+}
+
+peripheral UART0: Uart at 0x1000_0000;
+peripheral PLIC: Plic at 0xC00_0000;
+peripheral CLINT: Clint at 0x200_0000;
+
+static mut QUEUE: [u8; 16] = [0; 16];
+static mut HEAD: usize = 0;
+static mut ACTIVE: bool = false;
+static mut READY: bool = false;
+
+interrupt fn software() at Vector::MachineSoftware {
+    CLINT.msip = 0;
+    if !READY {
+        UART0.ier = Ier { .. };
+        READY = true;
+    }
+    UART0.ier.thri = true;
+}
+
+interrupt fn external() at Vector::MachineExternal {
+    let source: u32 = PLIC.claim;
+    PLIC.claim = source;
+}
+
+fn send(byte: u8) {
+    critical {
+        QUEUE[HEAD % 16] = byte;
+        HEAD += 1;
+        if !ACTIVE {
+            ACTIVE = true;
+            CLINT.msip = 1;
+        }
+    }
+    UART0.ier.thri = true;
+}
+
+entry fn main() -> ! {
+    critical {
+        PLIC.priority[10] = 1;
+    }
+    send(b'x');
+    loop {}
+}
+
+panic fn on_panic() -> ! { loop {} }

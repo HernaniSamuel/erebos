@@ -1,0 +1,163 @@
+// A UART owned by its handler (ADR 0115) on riscv32. QEMU `virt`'s 16550, its
+// PLIC, its test finisher and its CLINT are declared in `virt.svd`, and
+// `virt.ers` is what `erebos svd` writes from it, kept (`tests/svd.rs` requires
+// that they agree), the chip's list `Interrupt` included: the UART is its
+// source 10. Only the handlers name `UART0`: the one at
+// `Vector::MachineSoftware` sets the device up on its first run and starts the
+// transmission (`IER.THRI`), and the one at `Vector::MachineExternal` claims
+// source 10 and serves the UART, as `uart_interrupt_riscv32` does, sending the
+// next byte and counting the bytes sent. The entry function never names the
+// UART, so the handler context owns it and nothing is written to say so: it
+// queues a message of 26 bytes in a `static mut` ring buffer of 16, inside
+// `critical`, and when the transmitter is idle (`ACTIVE`) writes `CLINT.msip`
+// in the same block, which raises the software interrupt; the handler clears
+// it first. It waits in `critical` (`wait_for_interrupt`) while the ring is full
+// and, at the end, until the queue is empty and the last byte has been sent, and
+// compares the count of the handlers with the message's length. `PLIC` and
+// `CLINT` are shared (the handlers name them too), so the entry function sets
+// up the first and writes the second inside `critical`; `READY` is named by the
+// handlers alone, as `UART0` is, and `SENT` is read by the entry function too.
+// The program exits through `board::exit`, which
+// writes the test finisher through a `const` pointer. A thread that wrote
+// `UART0` outside `critical` would be rejected:
+// `tests/ui/shared_peripheral_owned.ers` is that program.
+// takes-exceptions: yes
+// targets: riscv32imac-unknown-none-elf
+// expect-output: uart owned by its handler
+// expect-exit: 0
+mod board;
+mod virt;
+
+use board::exit;
+use core::arch::Vector;
+use virt::uart0::Ier;
+use virt::{CLINT, Interrupt, PLIC, UART0};
+
+const UART_SOURCE: u32 = Interrupt::Uart0 as u32;
+const SLOTS: usize = 16;
+
+// The ring: `HEAD` counts the bytes queued and `TAIL` the bytes taken, and the
+// slot of each is the count modulo `SLOTS`. `ACTIVE` is true from the request
+// that starts the transmission until the interrupt that finds the queue empty.
+static mut QUEUE: [u8; 16] = [0; 16];
+static mut HEAD: usize = 0;
+static mut TAIL: usize = 0;
+static mut ACTIVE: bool = false;
+// Whether the UART is set up (named by the handlers alone), and the bytes sent
+// (read by the entry function at the end).
+static mut READY: bool = false;
+static mut SENT: u32 = 0;
+
+// The UART's interrupt: THR is empty, so the byte before it has been sent.
+fn uart_interrupt() {
+    // 1 is "no interrupt", 2 "THR empty"; the other causes are not enabled.
+    let cause: u8 = UART0.iir.cause;
+    if cause == 1 {
+        return;
+    }
+    if cause != 2 {
+        exit(12)
+    }
+    if !READY {
+        exit(13)
+    }
+    if TAIL != HEAD {
+        let byte: u8 = QUEUE[TAIL % SLOTS];
+        TAIL += 1;
+        SENT += 1;
+        UART0.thr = byte;
+    } else {
+        UART0.ier.thri = false;
+        ACTIVE = false;
+    }
+}
+
+// The entry function's request: it starts the transmission.
+interrupt fn software() at Vector::MachineSoftware {
+    if core::arch::interrupts_enabled() {
+        exit(14)
+    }
+    // The request is taken: it must be cleared before the handler returns, or
+    // the handler runs again.
+    CLINT.msip = 0;
+    if !READY {
+        UART0.ier = Ier { .. };
+        READY = true;
+    }
+    // THR is empty: the interrupt of the UART comes at once.
+    UART0.ier.thri = true;
+}
+
+interrupt fn external() at Vector::MachineExternal {
+    if core::arch::interrupts_enabled() {
+        exit(10)
+    }
+    loop {
+        let source: u32 = PLIC.ctx[0].claim;
+        if source == 0 {
+            break;
+        }
+        match source {
+            UART_SOURCE => uart_interrupt(),
+            _ => exit(11),
+        }
+        PLIC.ctx[0].claim = source;
+    }
+}
+
+// Queues `text`, a part at a time when the ring is full.
+fn send(text: *const [u8]) {
+    let mut i: usize = 0;
+    while i < len(text) {
+        critical {
+            while i < len(text) && HEAD - TAIL < SLOTS {
+                QUEUE[HEAD % SLOTS] = (*text)[i];
+                HEAD += 1;
+                i += 1;
+            }
+            // The transmitter is idle: the handler is asked to start it.
+            if !ACTIVE {
+                ACTIVE = true;
+                CLINT.msip = 1;
+            }
+            if i < len(text) {
+                core::arch::wait_for_interrupt();
+            }
+        }
+    }
+}
+
+entry fn main() -> ! {
+    // The handlers name `PLIC` too, so the entry function's setup is inside
+    // `critical` (ADR 0115).
+    critical {
+        PLIC.priority[UART_SOURCE as usize] = 1;
+        PLIC.enable[0].sources[0] = 1 << UART_SOURCE;
+        PLIC.ctx[0].threshold = 0;
+    }
+    // `mie.MEIE` and `mie.MSIE`: the machine external and software interrupts
+    // are enabled.
+    asm("csrs mie, {}", in(reg) 0x808 as u32, options(nostack, preserves_flags));
+    core::arch::enable_interrupts();
+
+    send(&raw const b"uart owned by its handler\n");
+
+    // The last byte is sent when its interrupt has been served.
+    loop {
+        critical {
+            if !ACTIVE && TAIL == HEAD {
+                break;
+            }
+            core::arch::wait_for_interrupt();
+        }
+    }
+    let sent: u32 = critical { SENT };
+    if sent != 26 {
+        exit(2)
+    }
+    exit(0)
+}
+
+panic fn on_panic() -> ! {
+    exit(99)
+}
