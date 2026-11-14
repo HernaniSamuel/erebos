@@ -24,7 +24,7 @@
 
 use std::collections::HashSet;
 
-use super::bits::{Bits, key, reachable, shown};
+use super::bits::{Bits, key, meet, reachable, shown};
 use crate::diag::{Diagnostic, Diagnostics};
 use crate::mir::{
     AsmOperandKind, AsmSym, Body, BodyId, Const, InlineAsm, Local, Operand, PanicCause,
@@ -196,14 +196,6 @@ pub(super) struct Path {
     steps: Vec<Step>,
 }
 
-/// The bytes a peripheral occupies, from its address to the end of its type's
-/// last register; empty while its type has no layout.
-fn bytes(p: PeripheralRef) -> (u64, u64) {
-    let def = p.def();
-    let extent = def.ty.def().layout().map_or(0, |layout| layout.extent);
-    (def.address, def.address.saturating_add(extent))
-}
-
 /// Whether an access of `how` at `path` conflicts with a site in use that
 /// `held` is borrowed with at `site` (ADR 0106): the access writes or the site
 /// is mutable, and the paths overlap.
@@ -217,10 +209,7 @@ fn in_conflict(how: How, path: &Path, site: How, held: &Path) -> bool {
 /// are peripherals whose bytes meet, whatever the steps (ADR 0111).
 fn overlap(a: &Path, b: &Path) -> bool {
     match (a.root, b.root) {
-        (Root::Peripheral(p), Root::Peripheral(q)) if p != q => {
-            let (p, q) = (bytes(p), bytes(q));
-            p.0 < q.1 && q.0 < p.1
-        }
+        (Root::Peripheral(p), Root::Peripheral(q)) if p != q => meet(p, q),
         (p, q) => {
             p == q
                 && !(a.steps.iter().zip(&b.steps))
@@ -2659,6 +2648,59 @@ mod tests {
         assert_eq!(
             message,
             "cannot assign to `UART0.data` while it is borrowed"
+        );
+    }
+
+    #[test]
+    fn an_empty_peripheral_conflicts_with_no_other() {
+        // A device whose type has the registers of `device()` but no byte.
+        let empty = |name: &str, at: u64| {
+            let register = |name: &str| Register {
+                name: name.to_owned(),
+                ty: u32_ty(),
+                group: None,
+            };
+            let ty = PeripheralTypeRef::new(
+                "Empty".to_owned(),
+                vec![register("ctrl"), register("data")],
+            );
+            ty.def().set_layout(PeripheralLayout {
+                offsets: vec![0, 4],
+                arrays: vec![None, None],
+                extent: 0,
+                align: 4,
+            });
+            PeripheralRef::new(name.to_owned(), at, ty)
+        };
+        let write_while_held = |held: PeripheralRef, written: PeripheralRef| {
+            body(
+                vec![
+                    decl(held.def().address_ty(), None),
+                    decl(mut_ref(), Some("r")),
+                    decl(written.def().address_ty(), None),
+                ],
+                vec![block(
+                    vec![
+                        device_address(1, held),
+                        mutable(2, through(1, 0)),
+                        device_address(3, written),
+                        set(through(3, 1)),
+                        set(deref(2)),
+                    ],
+                    Terminator::Return,
+                )],
+            )
+        };
+        let uart = peripheral("UART0", 0x1000);
+        // Strictly inside the other's range, whichever is borrowed.
+        accepted(&write_while_held(uart, empty("EMPTY", 0x1004)));
+        accepted(&write_while_held(empty("EMPTY", 0x1004), uart));
+        // The same empty peripheral is still one root.
+        let same = empty("EMPTY", 0x1004);
+        let (message, _) = only(&write_while_held(same, same));
+        assert_eq!(
+            message,
+            "cannot assign to `EMPTY.data` while it is borrowed"
         );
     }
 

@@ -2,7 +2,7 @@
 //! order of spans, the blocks a body's first block reaches, and how a symbol is
 //! shown.
 
-use crate::mir::Body;
+use crate::mir::{Body, PeripheralRef};
 use crate::span::{FileId, Span};
 
 /// A set of small numbers, such as the sites or the facts that reach a point.
@@ -77,4 +77,76 @@ pub(super) fn reachable(body: &Body) -> (Vec<usize>, Vec<Vec<usize>>) {
 /// (ADR 0051).
 pub(super) fn shown(symbol: &str) -> String {
     symbol.replace('.', "::")
+}
+
+/// The bytes a peripheral occupies, from its address to the end of its type's
+/// last register; empty while its type has no layout.
+fn bytes(p: PeripheralRef) -> (u64, u64) {
+    let def = p.def();
+    let extent = def.ty.def().layout().map_or(0, |layout| layout.extent);
+    (def.address, def.address.saturating_add(extent))
+}
+
+/// Whether two peripherals share a byte (ADR 0111, 0115). A peripheral with no
+/// byte meets none, even one whose address lies inside the other's range.
+pub(super) fn meet(p: PeripheralRef, q: PeripheralRef) -> bool {
+    let (p, q) = (bytes(p), bytes(q));
+    p.0 < p.1 && q.0 < q.1 && p.0 < q.1 && q.0 < p.1
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::mir::{PeripheralLayout, PeripheralTypeRef};
+
+    /// A peripheral of `extent` bytes at `at`.
+    fn device(at: u64, extent: u64) -> PeripheralRef {
+        let ty = PeripheralTypeRef::new("Device".to_owned(), Vec::new());
+        ty.def().set_layout(PeripheralLayout {
+            offsets: Vec::new(),
+            arrays: Vec::new(),
+            extent,
+            align: 4,
+        });
+        PeripheralRef::new("D".to_owned(), at, ty)
+    }
+
+    /// `meet` is symmetric: both orders are checked.
+    fn meets(p: PeripheralRef, q: PeripheralRef) -> bool {
+        let forward = meet(p, q);
+        assert_eq!(forward, meet(q, p), "meet is symmetric");
+        forward
+    }
+
+    #[test]
+    fn peripherals_sharing_a_byte_meet() {
+        assert!(meets(device(0x1000, 8), device(0x1004, 8)));
+        assert!(meets(device(0x1000, 8), device(0x1007, 8)));
+        assert!(meets(device(0x1000, 8), device(0x1000, 8)));
+    }
+
+    #[test]
+    fn adjacent_or_distant_peripherals_do_not_meet() {
+        assert!(!meets(device(0x1000, 8), device(0x1008, 8)));
+        assert!(!meets(device(0x1000, 8), device(0x2000, 8)));
+    }
+
+    #[test]
+    fn a_peripheral_inside_another_meets_it() {
+        assert!(meets(device(0x1000, 16), device(0x1004, 4)));
+        assert!(meets(device(0x1000, 16), device(0x1000, 4)));
+        assert!(meets(device(0x1000, 16), device(0x100c, 4)));
+    }
+
+    #[test]
+    fn an_empty_peripheral_meets_no_other() {
+        let outer = device(0x1000, 16);
+        // Strictly inside, at the start, at the end, and just after.
+        assert!(!meets(outer, device(0x1008, 0)));
+        assert!(!meets(outer, device(0x1000, 0)));
+        assert!(!meets(outer, device(0x100f, 0)));
+        assert!(!meets(outer, device(0x1010, 0)));
+        // Two at one address.
+        assert!(!meets(device(0x1000, 0), device(0x1000, 0)));
+    }
 }
